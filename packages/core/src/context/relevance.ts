@@ -3,22 +3,17 @@
 // ============================================================================
 
 import type {
-  NarrativeEvent,
-  WorldState,
-  EntityRegistry,
   Entity,
-  RelevanceScore,
   EntityId,
+  NarrativeEvent,
+  RelevanceScore,
   ThreadProgressEntry,
+  WorldState,
 } from '../types/index.js';
 
-export interface RelevanceContext {
-  currentEvent: NarrativeEvent;
-  worldState: WorldState;
-  entityRegistry: EntityRegistry;
-  recentEntities: EntityId[];
-  activeThreads: string[];
-}
+import { type RelevanceContext } from './types.ts';
+
+export { type RelevanceContext } from './types.ts';
 
 export class RelevanceEngine {
   /**

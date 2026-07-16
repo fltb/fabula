@@ -3,22 +3,23 @@
 // ============================================================================
 
 import type {
-  NarrativeEvent,
-  WorldState,
-  EntityRegistry,
-  EntityId,
-  RelevanceScore,
-  ContextPackage,
-  SystemContext,
-  SceneSpecification,
   CharacterSnapshot,
-  RelationshipContext,
-  WorldFact,
+  ContextPackage,
+  EntityId,
+  EntityRegistry,
   KnowledgeBoundary,
+  NarrativeEvent,
+  RelationshipContext,
+  RelevanceScore,
+  SceneSpecification,
+  SystemContext,
   ThreadStatus,
+  WorldFact,
+  WorldState,
 } from '../types/index.js';
 
-import { RelevanceEngine, type RelevanceContext } from './relevance.js';
+import { type RelevanceContext } from './types.ts';
+import { RelevanceEngine } from './relevance.ts';
 
 export class ContextAssembler {
   private relevanceEngine: RelevanceEngine;

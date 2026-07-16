@@ -1,0 +1,401 @@
+{
+  "schemaVersion": 1,
+  "eventId": "E6",
+  "renderedAt": "2026-07-16T13:20:37.452Z",
+  "sourceEvent": {
+    "id": "E6",
+    "event": "E6",
+    "title": "Outdoor Chess",
+    "narrativeOrder": 7,
+    "storyTime": {
+      "type": "absolute",
+      "value": "day_2_evening"
+    },
+    "sceneType": "action",
+    "pov": {
+      "character": "rainsford",
+      "type": "third_person_limited"
+    },
+    "sceneBrief": "At dusk, Zaroff releases Rainsford into the jungle with a three-hour head start. Rainsford runs — not a straight flight, but a calculated series of fox-like dodges, doubling back on his trail, executing intricate loops. His only goal: put distance and confusion between himself and Zaroff. When night falls, he climbs a large tree with a thick trunk and outspread branches, settling into a crotch to rest. During the night, Zaroff passes beneath the tree, tracking Rainsford's trail. Rainsford considers attacking but sees the glint of a small automatic pistol in Zaroff's hand. Zaroff studies the ground, then looks up — inch by inch — but stops before reaching Rainsford's branch. He smiles, blows a smoke ring, and walks away. Rainsford realizes with horror: Zaroff is playing with him.",
+    "preconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "jungle",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.chose_hunt",
+        "entityId": "rainsford",
+        "attribute": "chose_hunt",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.zaroff_hunt_active",
+        "entityId": "world",
+        "attribute": "zaroff_hunt_active",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.time",
+        "entityId": "world",
+        "attribute": "time",
+        "value": "day_2_evening",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "expectedPostconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "jungle",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.condition",
+        "entityId": "rainsford",
+        "attribute": "condition",
+        "value": "exhausted_but_alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.knows_zaroff_tracking",
+        "entityId": "rainsford",
+        "attribute": "knows_zaroff_tracking",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.knows_zaroff_toying_with_him",
+        "entityId": "rainsford",
+        "attribute": "knows_zaroff_toying_with_him",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.emotionalState",
+        "entityId": "rainsford",
+        "attribute": "emotionalState",
+        "value": "terrified",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "threadProgress": [
+      {
+        "thread": "T1",
+        "advancement": "The hunt is active. Rainsford survives the first night but realizes Zaroff is toying with him.",
+        "progressAfter": 40,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T2",
+        "advancement": "Rainsford feels the 'full meaning of terror.' He is now the hunted, experiencing exactly the fear Whitney attributed to the jaguar.",
+        "progressAfter": 25,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T3",
+        "advancement": "Zaroff demonstrates his superiority — he tracks Rainsford through the night and finds him in the tree. But he spares him, wanting more sport.",
+        "progressAfter": 50,
+        "progressTotal": 100
+      }
+    ],
+    "foreshadowing": [
+      {
+        "id": "cat_and_mouse",
+        "hint": "Rainsford realizes Zaroff is the cat and he is the mouse. This foreshadows the final inversion where Rainsford becomes the predator in Zaroff's bedroom.",
+        "targetRevealChapter": 5,
+        "thread": "T2"
+      }
+    ],
+    "relationshipEffects": [],
+    "ruleEffects": [
+      {
+        "rule": "zaroff_hunt_3day",
+        "effect": "reinforce",
+        "evidence": "The hunt is underway. Zaroff follows Rainsford's trail at night with only a small pistol."
+      }
+    ],
+    "styleGuidance": "Tense cat-and-mouse sequence. The night in the tree should feel endless. Zaroff's arrival should be almost silent — a presence felt before seen. His deliberate retreat is more terrifying than any attack.",
+    "branchExistence": {
+      "type": "all"
+    },
+    "participants": {
+      "entities": [
+        "rainsford",
+        "world"
+      ]
+    }
+  },
+  "appliedStyle": {
+    "tone": "literary",
+    "scenePacing": "medium"
+  },
+  "contextSummary": {
+    "eventId": "E6",
+    "characterCount": 3,
+    "relationshipCount": 2,
+    "worldFactCount": 20,
+    "threadCount": 3,
+    "knownFactCount": 0,
+    "characterNames": [
+      "Sanger Rainsford",
+      "Whitney",
+      "General Zaroff"
+    ],
+    "worldFactIds": [
+      "rainsford.knows_ship_trap_island",
+      "rainsford.heard_gunshots",
+      "rainsford.location",
+      "rainsford.status",
+      "rainsford.condition",
+      "rainsford.inventory",
+      "rainsford.location",
+      "rainsford.found_hunting_trail",
+      "rainsford.knows_island_inhabited",
+      "rainsford.met_zaroff",
+      "rainsford.met_ivan",
+      "rainsford.knows_ivan_deaf_mute",
+      "rainsford.location",
+      "rainsford.knows_zaroff_hunts_men",
+      "rainsford.refused_hunt",
+      "rainsford.location",
+      "rainsford.door_locked",
+      "rainsford.chose_hunt",
+      "rainsford.location",
+      "rainsford.inventory"
+    ]
+  },
+  "worldStateBefore": {
+    "entityCount": 6,
+    "factCount": 40,
+    "relationshipCount": 2,
+    "threadCount": 3,
+    "preconditionsSatisfied": [
+      {
+        "entity": "rainsford",
+        "attribute": "location",
+        "expectedValue": "jungle",
+        "currentValue": "jungle",
+        "satisfied": true
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "status",
+        "expectedValue": "alive",
+        "currentValue": "alive",
+        "satisfied": true
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "chose_hunt",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "zaroff_hunt_active",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "time",
+        "expectedValue": "day_2_evening",
+        "currentValue": "night_0",
+        "satisfied": false
+      }
+    ]
+  },
+  "llmCall": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "temperature": 0.8,
+    "maxTokens": 1500,
+    "promptMessages": 2,
+    "promptChars": 10105,
+    "usage": {
+      "promptTokens": 2963,
+      "completionTokens": 992,
+      "totalTokens": 3955
+    },
+    "finishReason": "stop",
+    "requestId": "3437508c-49d6-4d5d-b93b-efb0dc752a1e",
+    "latencyMs": 15462
+  },
+  "prose": "The dusk came on like a slow bleed through the canopy, the light draining green to grey to a deeper absence of color. Rainsford ran.\n\nHe ran not with the blind panic of a driven beast but with the cold calculation of a man who had spent years reading the signatures of flight—the bent blade of grass, the displaced leaf, the faint depression in soft earth where a hoof or a foot had fallen. He knew what a trail told, and he knew how to lie.\n\nHe doubled back through a dry creek bed, the gravel shifting under his boots, then cut hard east along a ridge of exposed rock where no print would hold. He looped in a wide, patient arc through a stand of mangrove-like trees, their aerial roots grasping at the dark soil like the fingers of drowned men. He waded upstream for a hundred yards in a shallow, cold stream, the water numbing his calves, the current erasing his passage. Then he climbed a fallen log and walked its length before dropping to the forest floor again, breaking his line.\n\nHis breath came in ragged, controlled bursts. The muscles of his thighs burned. The small food pack slapped against his hip. He did not stop.\n\nHe ran until the light failed entirely, until the jungle became a labyrinth of black shapes and deeper black absences, until the sounds of the day - the rustle of birds, the chatter of small things - gave way to the hum of insects and the distant, rhythmic pulse of the surf against the cliffs. Only then did he let himself slow.\n\nHe found the tree by touch more than sight. A great hardwood, its trunk thicker than a man's chest, its branches spreading in a broad, open crown. He climbed with the careful, economical movements of exhaustion, finding holds in the bark, pulling himself up through the darkness until he reached a fork where two massive limbs met the trunk. He settled into the crotch, his back against the bole, his legs drawn up, his hands resting on his knees. The knife was still at his belt.\n\nHe did not sleep. He waited. The jungle breathed around him, and he listened.\n\nThe sound came from the south - a soft, regular crunch of leaves, the measured tread of a man who was not hurrying. Rainsford's fingers closed around the knife hilt. He shifted his weight forward, peering down into the blackness.\n\nA light bloomed below. The orange glow of a cigarette, cupped in a hand. Then the hand lowered, and the cigarette glowed again, and he saw the silhouette of General Zaroff outlined against the faint luminescence of the sky.\n\nThe general stopped beneath the tree. He studied the ground with the patience of a man reading a familiar book. Then he raised his head.\n\nRainsford watched the face tilt upward, inch by inch, the cigarette glowing and dimming. The eyes moved across the branches, pausing, searching. They reached Rainsford's branch. They stopped.\n\nThe general smiled. He took a long drag on the cigarette, held it, and then exhaled a perfect smoke ring that rose like a ghost through the leaves.\n\n\"Good night, Mr. Rainsford,\" he said softly, and walked on.\n\nThe horror settled over Rainsford not as a sudden shock but as a slow, drenching cold. He understood now. He was not being hunted. He was being *played*.",
+  "wordCount": 569,
+  "charCount": 3175,
+  "postRenderValidation": {
+    "passed": false,
+    "confidence": 0.39999999999999997,
+    "coverage": {
+      "postconditionsStated": 1,
+      "postconditionsTotal": 5,
+      "preconditionsPreserved": 5,
+      "preconditionsTotal": 5
+    },
+    "issueCount": 4,
+    "errorCount": 0,
+    "warningCount": 4,
+    "issues": [
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.condition = exhausted_but_alive",
+        "expected": "rainsford.condition = exhausted_but_alive"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.knows_zaroff_tracking = true",
+        "expected": "rainsford.knows_zaroff_tracking = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.knows_zaroff_toying_with_him = true",
+        "expected": "rainsford.knows_zaroff_toying_with_him = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.emotionalState = terrified",
+        "expected": "rainsford.emotionalState = terrified"
+      }
+    ]
+  }
+}

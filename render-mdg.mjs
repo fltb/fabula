@@ -20,6 +20,7 @@ dotenvConfig({ path: path.join(projectRoot, '.env') });
 const PROVIDER_BASE_URL = process.env.OPENCODE_GO_BASE_URL ?? 'http://127.0.0.1:25793/v1';
 const PROVIDER_API_KEY = process.env.OPENCODE_GO_API_KEY ?? 'ocg-6f87c1b4-38c9158a';
 const PROVIDER_MODEL = process.env.OPENCODE_GO_MODEL ?? 'deepseek-v4-flash';
+console.log(`[debug] PROVIDER_API_KEY = ${PROVIDER_API_KEY.slice(0, 12)}..., BASE_URL = ${PROVIDER_BASE_URL}`);
 
 const core = await import(path.join(projectRoot, 'packages/core/dist/index.js'));
 const {
@@ -29,10 +30,16 @@ const {
   ContextCompiler,
   OpencodeGoProvider,
   OpencodeZenProvider,
+  PostRenderValidator,
   buildSceneRenderPrompt,
   MockProvider,
   assembleNovel,
 } = core;
+
+// Post-render validator — checks LLM output against source event claims
+const postValidator = new PostRenderValidator({
+  canonicalNames: ['Rainsford', 'Whitney', 'Zaroff', 'Ivan', 'Lazarus'],
+});
 
 const projectDir = process.argv[2] ?? path.join(projectRoot, 'fixtures/most-dangerous-game');
 const outputDir = process.argv[3] ?? path.join(projectDir, 'scenes');
@@ -118,8 +125,14 @@ for (const { ev, chapterNum } of eventList) {
   fs.mkdirSync(sceneDir, { recursive: true });
   const scenePath = path.join(sceneDir, `${ev.id}.md`);
 
-  // Skip if prose already exists and is non-empty (idempotent re-runs)
-  if (fs.existsSync(scenePath) && fs.statSync(scenePath).size > 0 && !process.env.FORCE) {
+  // Skip if BOTH prose AND render record exist and are non-empty (idempotent re-runs)
+  const recordPath = path.join(sceneDir, `${ev.id}.render.json`);
+  if (
+    fs.existsSync(scenePath) &&
+    fs.statSync(scenePath).size > 0 &&
+    fs.existsSync(recordPath) &&
+    !process.env.FORCE
+  ) {
     const wordCount = fs.readFileSync(scenePath, 'utf-8').split(/\s+/).filter(Boolean).length;
     const elapsed = ((Date.now() - renderStart) / 1000).toFixed(1);
     console.log(`   ${ev.id} ch${chapterStr}: ${wordCount} words (skipped — already rendered), ${elapsed}s elapsed`);
@@ -136,43 +149,160 @@ for (const { ev, chapterNum } of eventList) {
     targetLengthWords: 400,
   });
 
-  const result = await provider.complete({
-    messages,
-    model: PROVIDER_MODEL,
-    temperature: 0.8,
-    maxTokens: 1500,
-  });
+  // Capture the WorldState snapshot BEFORE rendering — so we can later
+  // diff (state-after-render) vs (state-before-render) to verify the LLM
+  // actually wrote what we expected.
+  const stateBefore = stateManager.getStateAt(ev.narrativeOrder);
+
+  const llmStart = Date.now();
+  let result;
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      result = await provider.complete({
+        messages,
+        model: PROVIDER_MODEL,
+        temperature: 0.8,
+        maxTokens: 3000,  // deepseek reasoning_content consumes budget; allow more
+      });
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+      console.log(`   (attempt ${attempt + 1} failed: ${err.message.slice(0, 80)}, retrying in ${(attempt + 1) * 2}s)`);
+      await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+    }
+  }
+  if (!result) {
+    console.error(`   E${ev.id} FAILED after 3 attempts: ${lastError?.message}`);
+    result = { content: '(LLM call failed after retries)', model: PROVIDER_MODEL, usage: { totalTokens: 0 }, finishReason: 'error', id: null };
+  }
+  const llmLatencyMs = Date.now() - llmStart;
   totalTokens += result.usage?.totalTokens ?? 0;
 
   const prose = result.content ?? '(empty)';
   fs.writeFileSync(scenePath, prose, 'utf-8');
 
-  // Also write scene metadata YAML (assembler requires E*.yaml with narrativeOrder)
-  const metaPath = path.join(sceneDir, `${ev.id}.yaml`);
-  const metadata = {
+  // ── Run PostRenderValidator (THE core meaning: verify LLM output) ──
+  const postRenderResult = postValidator.validate(prose, ev, stateBefore);
+
+  // ─── Comprehensive machine-readable render record ─────────────
+  // This is the "data the user wants" — everything a future graph
+  // detector or anomaly check needs to verify the render:
+  //   - source event (full: preconditions, postconditions, threads, etc.)
+  //   - context package summary (so we know what the LLM saw)
+  //   - world state snapshot (what was true when rendered)
+  //   - LLM call metadata (model, tokens, latency, finishReason)
+  //   - rendered prose (for diff against canonical)
+  //   - style guidance + style notes actually applied
+  //   - condition checks: which preconditions were satisfied at render
+  //     time (vs the postconditions the event claims to establish)
+  const renderRecord = {
+    schemaVersion: 1,
     eventId: ev.id,
-    title: ev.title,
-    narrativeOrder: ev.narrativeOrder,
-    sceneType: ev.sceneType,
-    pov: ev.pov,
-    sceneBrief: ev.sceneBrief,
-    generatedAt: new Date().toISOString(),
+    renderedAt: new Date().toISOString(),
+
+    // 1. Source event — full canonical record
+    sourceEvent: {
+      id: ev.id,
+      event: ev.event,
+      title: ev.title,
+      narrativeOrder: ev.narrativeOrder,
+      storyTime: ev.storyTime,
+      sceneType: ev.sceneType,
+      pov: ev.pov,
+      sceneBrief: ev.sceneBrief,
+      preconditions: ev.preconditions,
+      expectedPostconditions: ev.postconditions,
+      threadProgress: ev.threadProgress,
+      foreshadowing: ev.foreshadowing,
+      relationshipEffects: ev.relationshipEffects,
+      ruleEffects: ev.ruleEffects,
+      styleGuidance: ev.styleGuidance,
+      branchExistence: ev.branchExistence,
+      participants: ev.participants,
+    },
+
+    // 2. Style guidance actually applied (may differ from event default)
+    appliedStyle: style,
+
+    // 3. Context package — summary form (full pkg is large)
+    contextSummary: {
+      eventId: ctx.eventId,
+      characterCount: ctx.characterSnapshots?.length ?? 0,
+      relationshipCount: ctx.relationshipContext?.length ?? 0,
+      worldFactCount: ctx.worldFacts?.length ?? 0,
+      threadCount: ctx.activeThreads?.length ?? 0,
+      knownFactCount: ctx.knowledgeBoundary?.knownFacts?.length ?? 0,
+      // Include the character names so we can verify the LLM was told about them
+      characterNames: (ctx.characterSnapshots ?? []).map((c) => c.name ?? c.id),
+      // World facts the LLM was given
+      worldFactIds: (ctx.worldFacts ?? []).map((f) => f.id),
+    },
+
+    // 4. World state snapshot at render time (only counts, full state is large)
+    worldStateBefore: {
+      entityCount: Object.keys(stateBefore.entities ?? {}).length,
+      factCount: (stateBefore.facts ?? []).length,
+      relationshipCount: Object.keys(stateBefore.relationships ?? {}).length,
+      threadCount: Object.keys(stateBefore.threads ?? {}).length,
+      // Which preconditions were satisfied before render
+      preconditionsSatisfied: (ev.preconditions ?? []).map((pc) => ({
+        entity: pc.entityId,
+        attribute: pc.attribute,
+        expectedValue: pc.value,
+        currentValue: stateBefore.entities?.[pc.entityId]?.[pc.attribute] ?? null,
+        satisfied:
+          JSON.stringify(stateBefore.entities?.[pc.entityId]?.[pc.attribute]) ===
+          JSON.stringify(pc.value),
+      })),
+    },
+
+    // 5. LLM call — full metadata for reproducibility
+    llmCall: {
+      provider: provider.name ?? 'unknown',
+      model: result.model ?? PROVIDER_MODEL,
+      temperature: 0.8,
+      maxTokens: 1500,
+      promptMessages: messages.length,
+      promptChars: messages.reduce((acc, m) => acc + (m.content?.length ?? 0), 0),
+      usage: {
+        promptTokens: result.usage?.promptTokens ?? 0,
+        completionTokens: result.usage?.completionTokens ?? 0,
+        totalTokens: result.usage?.totalTokens ?? 0,
+      },
+      finishReason: result.finishReason ?? 'unknown',
+      requestId: result.id ?? null,
+      latencyMs: llmLatencyMs,
+    },
+
+    // 6. Rendered prose
+    prose: prose,
+    wordCount: prose.split(/\s+/).filter(Boolean).length,
+    charCount: prose.length,
+
+    // 7. POST-RENDER VALIDATION (the core meaning of the system)
+    //    This is what makes the renderer trustworthy: every render is
+    //    checked against the event's claims, and any divergence is recorded
+    //    in the record so downstream anomaly detection / graph checks can
+    //    use it.
+    postRenderValidation: {
+      passed: postRenderResult.passed,
+      confidence: postRenderResult.confidence,
+      coverage: postRenderResult.coverage,
+      issueCount: postRenderResult.issues.length,
+      errorCount: postRenderResult.issues.filter((i) => i.severity === 'error').length,
+      warningCount: postRenderResult.issues.filter((i) => i.severity === 'warning').length,
+      issues: postRenderResult.issues,
+    },
   };
-  // simple YAML serializer (no external dep)
-  const yamlStr = [
-    `eventId: ${JSON.stringify(ev.id)}`,
-    `title: ${JSON.stringify(ev.title)}`,
-    `narrativeOrder: ${ev.narrativeOrder}`,
-    `sceneType: ${ev.sceneType}`,
-    `pov: ${JSON.stringify(ev.pov)}`,
-    `sceneBrief: ${JSON.stringify(ev.sceneBrief ?? '')}`,
-    `generatedAt: ${JSON.stringify(metadata.generatedAt)}`,
-  ].join('\n') + '\n';
-  fs.writeFileSync(metaPath, yamlStr, 'utf-8');
+
+  fs.writeFileSync(recordPath, JSON.stringify(renderRecord, null, 2), 'utf-8');
 
   const wordCount = prose.split(/\s+/).filter(Boolean).length;
   const elapsed = ((Date.now() - renderStart) / 1000).toFixed(1);
-  console.log(`   ${ev.id} ch${chapterStr}: ${wordCount} words, ${result.usage?.totalTokens ?? '?'} tokens, ${elapsed}s elapsed`);
+  const vIcon = postRenderResult.passed ? '✅' : '⚠';
+  console.log(`   ${ev.id} ch${chapterStr}: ${wordCount} words, ${result.usage?.totalTokens ?? '?'} tokens, ${elapsed}s elapsed, ${vIcon}val conf=${postRenderResult.confidence.toFixed(2)} (${postRenderResult.issues.length} issues)`);
 }
 console.log(`   Total tokens: ${totalTokens}, elapsed: ${((Date.now() - renderStart) / 1000).toFixed(1)}s`);
 

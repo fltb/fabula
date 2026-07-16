@@ -1,0 +1,375 @@
+{
+  "schemaVersion": 1,
+  "eventId": "E11",
+  "renderedAt": "2026-07-16T13:22:14.881Z",
+  "sourceEvent": {
+    "id": "E11",
+    "event": "E11",
+    "title": "The Leap from the Cliffs",
+    "narrativeOrder": 12,
+    "storyTime": {
+      "type": "absolute",
+      "value": "day_3_night"
+    },
+    "sceneType": "action",
+    "pov": {
+      "character": "rainsford",
+      "type": "third_person_limited"
+    },
+    "sceneBrief": "The hounds resume the chase. Rainsford, unarmed and exhausted, runs toward a gap of blue showing between the trees — the sea. He reaches the edge of the cliffs and looks down: twenty feet below, the sea rumbles and hisses against jagged rocks. Across a cove he can see the gloomy gray stone of the château. He hesitates, hearing the hounds behind him. He leaps far out into the sea, cutting his cheek on a jagged rock as he enters the water. Zaroff and the hounds arrive at the cliff edge. Zaroff shrugs, sits down, takes a drink of brandy, lights a cigarette, and hums an aria from Madama Butterfly. Rainsford has escaped — for now.",
+    "preconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "jungle",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.knife_lost_to_trap",
+        "entityId": "rainsford",
+        "attribute": "knife_lost_to_trap",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.zaroff_hunt_active",
+        "entityId": "world",
+        "attribute": "zaroff_hunt_active",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "expectedPostconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "sea_cliffs",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.condition",
+        "entityId": "rainsford",
+        "attribute": "condition",
+        "value": "injured_cheek",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.in_water",
+        "entityId": "rainsford",
+        "attribute": "in_water",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "zaroff.believes_rainsford_dead",
+        "entityId": "zaroff",
+        "attribute": "believes_rainsford_dead",
+        "value": true,
+        "confidence": 0.8,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "threadProgress": [
+      {
+        "thread": "T1",
+        "advancement": "Rainsford leaps from the sea cliffs rather than face the hounds. He is in the water, swimming toward the château.",
+        "progressAfter": 90,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T2",
+        "advancement": "Rainsford has now experienced the ultimate animal terror — the cornered beast making a desperate gamble for survival. Whitney's jaguar has been vindicated.",
+        "progressAfter": 80,
+        "progressTotal": 100
+      }
+    ],
+    "foreshadowing": [
+      {
+        "id": "bed_foreshadow",
+        "hint": "The château across the cove, with its 'good bed,' awaits Rainsford. The story began with Whitney and Rainsford discussing the island; it will end in that bed.",
+        "targetRevealChapter": 5,
+        "thread": "T2"
+      }
+    ],
+    "relationshipEffects": [],
+    "ruleEffects": [
+      {
+        "rule": "zaroff_hunt_3day",
+        "effect": "weaken",
+        "evidence": "Rainsford escapes the immediate chase by leaping into the sea. Zaroff believes the game is over."
+      }
+    ],
+    "styleGuidance": "Desperate climax. The leap should feel like a final, irrational act of defiance — choosing the sea over the hounds. Zaroff's casual response (brandy, cigarette, opera) should feel more chilling than any rage.",
+    "branchExistence": {
+      "type": "all"
+    },
+    "participants": {
+      "entities": [
+        "rainsford",
+        "world",
+        "zaroff"
+      ]
+    }
+  },
+  "appliedStyle": {
+    "tone": "literary",
+    "scenePacing": "medium"
+  },
+  "contextSummary": {
+    "eventId": "E11",
+    "characterCount": 2,
+    "relationshipCount": 3,
+    "worldFactCount": 20,
+    "threadCount": 3,
+    "knownFactCount": 0,
+    "characterNames": [
+      "Sanger Rainsford",
+      "General Zaroff"
+    ],
+    "worldFactIds": [
+      "rainsford.knows_ship_trap_island",
+      "rainsford.heard_gunshots",
+      "rainsford.location",
+      "rainsford.status",
+      "rainsford.condition",
+      "rainsford.inventory",
+      "rainsford.location",
+      "rainsford.found_hunting_trail",
+      "rainsford.knows_island_inhabited",
+      "rainsford.met_zaroff",
+      "rainsford.met_ivan",
+      "rainsford.knows_ivan_deaf_mute",
+      "rainsford.location",
+      "zaroff.knows_rainsford_identity",
+      "rainsford.knows_zaroff_hunts_men",
+      "rainsford.refused_hunt",
+      "rainsford.location",
+      "rainsford.door_locked",
+      "zaroff.true_nature_revealed",
+      "rainsford.chose_hunt"
+    ]
+  },
+  "worldStateBefore": {
+    "entityCount": 7,
+    "factCount": 65,
+    "relationshipCount": 3,
+    "threadCount": 3,
+    "preconditionsSatisfied": [
+      {
+        "entity": "rainsford",
+        "attribute": "location",
+        "expectedValue": "jungle",
+        "currentValue": "sea_cliffs",
+        "satisfied": false
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "status",
+        "expectedValue": "alive",
+        "currentValue": "alive",
+        "satisfied": true
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "knife_lost_to_trap",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "zaroff_hunt_active",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      }
+    ]
+  },
+  "llmCall": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "temperature": 0.8,
+    "maxTokens": 1500,
+    "promptMessages": 2,
+    "promptChars": 10004,
+    "usage": {
+      "promptTokens": 2987,
+      "completionTokens": 1418,
+      "totalTokens": 4405
+    },
+    "finishReason": "stop",
+    "requestId": "e2c46efb-bd3c-492a-91ac-1f309abfe5bf",
+    "latencyMs": 18398
+  },
+  "prose": "The baying erupted behind him, closer now—the pack had found the trail again, their voices weaving through the trees like a tightening net. Rainsford drove his legs forward, each breath a blade in his chest, the food pack thudding against his spine. The jungle around him had thinned; he could see sky ahead, a blue gap between the trunks, and he aimed for it as a drowning man aims for the surface.\n\nThe ground fell away. He burst from the treeline onto a lip of rock and stopped, his heels skidding on the edge. Below him, twenty feet down, the sea churned against a chaos of black teeth—jagged shards of reef that broke the swell into white foam and sucking hollows. The water heaved and hissed, dark as slate, flecked with spume. Across the cove, rising from the island's shoulder like a tombstone, stood the château—its gray stone catching the last of the afternoon light, the windows dark and empty.\n\nHe had run in a circle. Or the island had bent him back. It didn't matter.\n\nThe hounds were close now—he could hear their panting, the crash of their bodies through the underbrush, the wet excitement in their throats. A man's voice called out, calm and clear, cutting through the din: a single word of command in Russian. The dogs surged.\n\nRainsford did not think. He leaped.\n\nHis body arced out over the rocks, arms spread, the air cold against his skin. For a moment he hung suspended, the sea below him a dark mirror, the château a distant smear of gray—and then he struck.\n\nThe water was not water but a wall. It drove the breath from him, the cold so immediate it felt like fire. A jagged edge of rock caught his cheek as he plunged, tearing through skin, and the taste of salt and blood flooded his mouth. He sank, limbs thrashing, the current tugging at him, the light above him a wavering silver coin.\n\nHe broke the surface gasping, sputtering, and pulled for the shelter of a ledge that overhung the water to his right. His arms felt like lead. The cold was eating into his bones. But he reached the shadow of the rock and clung there, his fingers numb against the barnacles, his breath coming in raw heaves.\n\nAbove, the hounds reached the cliff edge. He heard their frantic barking, the scrape of their claws on stone. Then Zaroff's voice, unhurried, almost bored: \"Enough.\"\n\nThe barking subsided. Rainsford pressed himself deeper into the shadow, the water slapping at his chin, and looked up through the spray. Zaroff stood at the edge of the cliff, silhouetted against the pale sky, the wounded arm held stiff at his side. For a long moment he stared down at the churning water. Then he shrugged—a small, elegant gesture. He sat down on the grass, crossing his legs, and produced a flask from his pocket. He drank. He lit a cigarette, the match flaring in the gloom, and the smoke curled up around his head.\n\nAnd then, faintly at first, Rainsford heard the general humming—a melody sweet and sorrowful, the aria of a woman waiting for her lover to return from the sea.\n\nRainsford crouched in the black water, his cheek bleeding, his body trembling, and did not dare to breathe.",
+  "wordCount": 552,
+  "charCount": 3097,
+  "postRenderValidation": {
+    "passed": false,
+    "confidence": 0.25,
+    "coverage": {
+      "postconditionsStated": 0,
+      "postconditionsTotal": 5,
+      "preconditionsPreserved": 4,
+      "preconditionsTotal": 4
+    },
+    "issueCount": 5,
+    "errorCount": 0,
+    "warningCount": 5,
+    "issues": [
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.location = sea_cliffs",
+        "expected": "rainsford.location = sea_cliffs"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.status = alive",
+        "expected": "rainsford.status = alive"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.condition = injured_cheek",
+        "expected": "rainsford.condition = injured_cheek"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.in_water = true",
+        "expected": "rainsford.in_water = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: zaroff.believes_rainsford_dead = true",
+        "expected": "zaroff.believes_rainsford_dead = true"
+      }
+    ]
+  }
+}

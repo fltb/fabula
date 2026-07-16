@@ -14,3 +14,9 @@ export { VoiceDriftDetector } from './voice-drift.js';
 export { BranchMergeValidator } from './branch-merge.js';
 export { ReachabilityValidator } from './reachability.js';
 export { ResultAggregator } from './aggregator.js';
+export { PostRenderValidator } from './post-render.js';
+export type {
+  PostRenderIssue,
+  PostRenderResult,
+  PostRenderValidatorOptions,
+} from './post-render.js';

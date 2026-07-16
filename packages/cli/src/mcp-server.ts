@@ -235,7 +235,7 @@ export function mcpNovaValidate(
   const overrides = ctx.data.config?.validatorOverrides;
 
   if (eventId) {
-    const event = ctx.events.find((e) => e.id === eventId);
+    const event = ctx.events.find((e: { id: string }) => e.id === eventId);
     if (!event) throw new Error(`Event "${eventId}" not found`);
     const chapter = Math.max(1, Math.ceil(event.narrativeOrder / 3));
     const result = aggregator.validate(event, state, ctx.registry, ctx.events, chapter, overrides);
@@ -323,7 +323,7 @@ export function mcpNovaThreadStatus(projectPath: string, threadId?: string) {
 export function mcpNovaRender(projectPath: string, eventId: string) {
   const ctx = initializeContext(projectPath);
 
-  const targetEvent = ctx.events.find((e) => e.id === eventId);
+  const targetEvent = ctx.events.find((e: { id: string }) => e.id === eventId);
   if (!targetEvent) throw new Error(`Event "${eventId}" not found`);
 
   const state = ctx.stateManager.getStateAt(targetEvent.narrativeOrder - 1);

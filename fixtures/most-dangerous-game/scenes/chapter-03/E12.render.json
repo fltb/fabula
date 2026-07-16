@@ -1,0 +1,422 @@
+{
+  "schemaVersion": 1,
+  "eventId": "E12",
+  "renderedAt": "2026-07-16T13:22:26.228Z",
+  "sourceEvent": {
+    "id": "E12",
+    "event": "E12",
+    "title": "A Better Bed",
+    "narrativeOrder": 13,
+    "storyTime": {
+      "type": "absolute",
+      "value": "day_3_night"
+    },
+    "sceneType": "action",
+    "pov": {
+      "character": "rainsford",
+      "type": "third_person_limited"
+    },
+    "sceneBrief": "Rainsford swims around the island and infiltrates Zaroff's château. He hides in the curtains of Zaroff's bedroom. Zaroff, having dined well, retires at ten o'clock. He looks out at the courtyard, calls to his hounds, and switches on the light. Rainsford steps from the curtains. Zaroff is shocked but recovers quickly, congratulating Rainsford on winning the game. Rainsford refuses the victory: 'I am still a beast at bay.' 'One of us is to furnish a repast for the hounds,' says Zaroff. 'The other will sleep in this very excellent bed. On guard, Rainsford.' They fight. Rainsford wins. The story ends as it began: 'He had never slept in a better bed.'",
+    "preconditions": [
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.in_water",
+        "entityId": "rainsford",
+        "attribute": "in_water",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.time",
+        "entityId": "world",
+        "attribute": "time",
+        "value": "day_3_night",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "expectedPostconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "chateau",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.won_fight",
+        "entityId": "rainsford",
+        "attribute": "won_fight",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.emotionalState",
+        "entityId": "rainsford",
+        "attribute": "emotionalState",
+        "value": "exhausted_victorious",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "zaroff.status",
+        "entityId": "zaroff",
+        "attribute": "status",
+        "value": "dead",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "zaroff.cause_of_death",
+        "entityId": "zaroff",
+        "attribute": "cause_of_death",
+        "value": "killed_by_rainsford",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.zaroff_hunt_active",
+        "entityId": "world",
+        "attribute": "zaroff_hunt_active",
+        "value": false,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "threadProgress": [
+      {
+        "thread": "T1",
+        "advancement": "Rainsford kills Zaroff and survives. The game is won.",
+        "progressAfter": 100,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T2",
+        "advancement": "Rainsford completes his transformation. He has killed a man in cold blood and will sleep in the dead man's bed. The hunter has become the huntee and the killer. Whitney's moral question has been answered in blood.",
+        "progressAfter": 100,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T3",
+        "advancement": "Zaroff's need for a worthy opponent leads to his death. His curse — boredom — is ended permanently.",
+        "progressAfter": 100,
+        "progressTotal": 100
+      }
+    ],
+    "foreshadowing": [
+      {
+        "id": "hunters_huntees_final",
+        "hint": "Rainsford declared the world divided into hunters and huntees. In the end, he is both — hunter in the château, huntee in the jungle. The line has blurred to nothing.",
+        "targetRevealChapter": 5,
+        "thread": "T2"
+      },
+      {
+        "id": "bed_frame",
+        "hint": "The story's opening described the château as having a 'good bed.' The closing line reveals Rainsford's final judgment: 'He had never slept in a better bed.' The frame is complete.",
+        "targetRevealChapter": 5,
+        "thread": "T2"
+      }
+    ],
+    "relationshipEffects": [
+      {
+        "participants": [
+          "rainsford",
+          "zaroff"
+        ],
+        "effect": "dissolve",
+        "direction": "prey_kills_predator"
+      }
+    ],
+    "ruleEffects": [
+      {
+        "rule": "zaroff_hunt_3day",
+        "effect": "nullify",
+        "evidence": "Rainsford survives and kills Zaroff. The game is over. Rainsford wins."
+      }
+    ],
+    "styleGuidance": "Tense, intimate confrontation. The bedroom should feel like a trap that has snapped shut. Zaroff's politeness should remain until the very end — he is a sportsman to the last. The fight itself can be brief; the meaning of the moment is in the dialogue and the closing line.",
+    "branchExistence": {
+      "type": "all"
+    },
+    "participants": {
+      "entities": [
+        "rainsford",
+        "world",
+        "zaroff"
+      ]
+    }
+  },
+  "appliedStyle": {
+    "tone": "literary",
+    "scenePacing": "medium"
+  },
+  "contextSummary": {
+    "eventId": "E12",
+    "characterCount": 4,
+    "relationshipCount": 3,
+    "worldFactCount": 20,
+    "threadCount": 3,
+    "knownFactCount": 0,
+    "characterNames": [
+      "Sanger Rainsford",
+      "General Zaroff",
+      "Ivan",
+      "Whitney"
+    ],
+    "worldFactIds": [
+      "rainsford.knows_ship_trap_island",
+      "rainsford.heard_gunshots",
+      "rainsford.location",
+      "rainsford.status",
+      "rainsford.condition",
+      "rainsford.inventory",
+      "rainsford.location",
+      "rainsford.found_hunting_trail",
+      "rainsford.knows_island_inhabited",
+      "rainsford.met_zaroff",
+      "rainsford.met_ivan",
+      "rainsford.knows_ivan_deaf_mute",
+      "rainsford.location",
+      "zaroff.knows_rainsford_identity",
+      "rainsford.knows_zaroff_hunts_men",
+      "rainsford.refused_hunt",
+      "rainsford.location",
+      "rainsford.door_locked",
+      "zaroff.true_nature_revealed",
+      "rainsford.chose_hunt"
+    ]
+  },
+  "worldStateBefore": {
+    "entityCount": 7,
+    "factCount": 72,
+    "relationshipCount": 3,
+    "threadCount": 3,
+    "preconditionsSatisfied": [
+      {
+        "entity": "rainsford",
+        "attribute": "status",
+        "expectedValue": "alive",
+        "currentValue": "alive",
+        "satisfied": true
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "in_water",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "time",
+        "expectedValue": "day_3_night",
+        "currentValue": "night_0",
+        "satisfied": false
+      }
+    ]
+  },
+  "llmCall": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "temperature": 0.8,
+    "maxTokens": 1500,
+    "promptMessages": 2,
+    "promptChars": 11132,
+    "usage": {
+      "promptTokens": 3350,
+      "completionTokens": 742,
+      "totalTokens": 4092
+    },
+    "finishReason": "stop",
+    "requestId": "929013a8-a343-416c-b488-913bdc54711d",
+    "latencyMs": 11342
+  },
+  "prose": "The salt still clung to his skin, a fine grit that had worked itself into every crease and fold until he felt less a man than a piece of driftwood cast upon an alien shore. The château had risen before him like a fever dream, its towers black against the bruised sky, and he had found a way in—through a window left ajar, perhaps by some careless servant who could not imagine that the night's quarry might double back and breach the very walls of the hunter's keep. He had moved through corridors lined with trophies, his bare feet silent on the Persian rugs, and found the bedroom at last. The curtains were of heavy velvet, the color of old blood, and they received him as the sea receives the drowned.\n\nHe stood now behind them, breathing shallowly, his injured cheek pressed against the cool fabric. Through the gap he watched Zaroff enter, watched the general unbutton his coat with the unhurried precision of a man who has dined well and expects to sleep better. The man paused at the window, looked out at the courtyard, and whistled—a low, summoning note that brought the answering baying of the hounds. Zaroff smiled. He turned and switched on the light.\n\nRainsford stepped from the curtains.\n\nThe general's hand stopped mid-motion, frozen on its way to the collar of his shirt. For the space of two heartbeats, his face was a canvas of pure astonishment—the eyes wide, the mouth slightly parted. But the mask was quick to reassemble itself. He smiled, and it was almost genuine.\n\n\"Rainsford,\" he said, and the name seemed to please him. \"You have won the game.\"\n\nRainsford shook his head. The motion cost him something; the world swam at the edges. \"I am still a beast at bay.\"\n\nZaroff inclined his head, a gentleman acknowledging a point of etiquette. \"One of us is to furnish a repast for the hounds. The other will sleep in this very excellent bed. On guard, Rainsford.\"\n\nThey fought.\n\nIt was not a clean thing, nor a noble thing. It was the thing that happens when the last boundaries have been crossed and there is nothing left but the animal truth of two bodies contending in a room that smelled of wine and leather and old death. Rainsford had no knife. He had no weapon but his hands and the fury that had carried him through the jungle and the sea and the dark. Zaroff was older, wounded in the shoulder, but he was strong and he was desperate, and desperation has its own kind of cunning.\n\nBut Rainsford had been the beast at bay longer.\n\nWhen it was over, he stood above the general, breathing in great ragged gasps that tasted of copper and salt. He did not look at what his hands had done. He crossed to the great canopied bed, and he lay down upon it, and the sheets were cool and clean against his salt-crusted skin.\n\nHe had never slept in a better bed.",
+  "wordCount": 505,
+  "charCount": 2779,
+  "postRenderValidation": {
+    "passed": false,
+    "confidence": 0.14999999999999997,
+    "coverage": {
+      "postconditionsStated": 0,
+      "postconditionsTotal": 7,
+      "preconditionsPreserved": 3,
+      "preconditionsTotal": 3
+    },
+    "issueCount": 7,
+    "errorCount": 0,
+    "warningCount": 7,
+    "issues": [
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.location = chateau",
+        "expected": "rainsford.location = chateau"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.status = alive",
+        "expected": "rainsford.status = alive"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.won_fight = true",
+        "expected": "rainsford.won_fight = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.emotionalState = exhausted_victorious",
+        "expected": "rainsford.emotionalState = exhausted_victorious"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: zaroff.status = dead",
+        "expected": "zaroff.status = dead"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: zaroff.cause_of_death = killed_by_rainsford",
+        "expected": "zaroff.cause_of_death = killed_by_rainsford"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: world.zaroff_hunt_active = false",
+        "expected": "world.zaroff_hunt_active = false"
+      }
+    ]
+  }
+}

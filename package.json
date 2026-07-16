@@ -7,14 +7,14 @@
   ],
   "scripts": {
     "build": "npm run build:types && npm run build:js",
-    "build:types": "tsc -b packages/core packages/cli",
-    "build:js": "node packages/core/build.mjs && node packages/cli/build.mjs",
+    "build:types": "tsc -b packages/core packages/bench packages/cli",
+    "build:js": "node packages/core/build.mjs && node packages/bench/build.mjs && node packages/cli/build.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "bench": "npm run -w @novalistically/core bench",
+    "bench": "npm run -w @novalistically/bench bench",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "typecheck": "tsc -b --noEmit packages/core packages/cli"
+    "typecheck": "tsc -b --noEmit packages/core packages/bench packages/cli"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.8",

@@ -63,7 +63,11 @@ interface OpenAIChatResponse {
   model: string;
   choices: Array<{
     index: number;
-    message: { role: 'assistant'; content: string };
+    message: {
+      role: 'assistant';
+      content: string;
+      reasoning_content?: string;  // deepseek models may emit chain-of-thought here
+    };
     finish_reason: string;
   }>;
   usage?: {
@@ -155,10 +159,20 @@ export class OpencodeGoProvider implements LLMProvider {
       );
     }
 
+    // Some deepseek models use chain-of-thought reasoning that goes into
+    // reasoning_content. The reasoning often contains the actual prose
+    // interleaved with planning and self-correction. We try multiple
+    // extraction strategies to find the actual narrative prose.
+    let content = choice.message.content;
+    const reasoning = choice.message.reasoning_content;
+    if ((!content || content.trim() === '') && reasoning) {
+      content = extractProseFromReasoning(reasoning) ?? reasoning;
+    }
+
     return {
       id: data.id,
       model: data.model,
-      content: choice.message.content,
+      content,
       usage: {
         promptTokens: data.usage?.prompt_tokens ?? 0,
         completionTokens: data.usage?.completion_tokens ?? 0,
@@ -180,4 +194,60 @@ export class OpencodeGoProvider implements LLMProvider {
     onChunk(result.content);
     return result;
   }
+}
+
+/**
+ * Extract actual narrative prose from a deepseek chain-of-thought response.
+ *
+ * Deepseek's reasoning_content often contains the prose interleaved with
+ * planning bullets, self-correction comments, and section headers. This
+ * function tries several strategies to isolate the actual narrative.
+ */
+function extractProseFromReasoning(reasoning: string): string | null {
+  // Strategy 1: explicit "**Drafting the Scene:**" / "**Final Scene:**" section
+  const headerPatterns = [
+    /\*\*Drafting the Scene:\*\*\s*\n([\s\S]*?)(?=\n\s*\d+\.\s*\*\*|\n\s*\*\*[^*]+:\*\*\s*\n[^*]|$)/,
+    /\*\*Final Scene:\*\*\s*\n([\s\S]*?)(?=\n\s*\d+\.\s*\*\*|\n\s*\*\*[^*]+:\*\*\s*\n[^*]|$)/,
+    /\*\*Draft:\*\*\s*\n([\s\S]*?)(?=\n\s*\d+\.\s*\*\*|\n\s*\*\*[^*]+:\*\*\s*\n[^*]|$)/,
+  ];
+  for (const pattern of headerPatterns) {
+    const match = reasoning.match(pattern);
+    if (match && match[1].trim().length > 200) {
+      return match[1].trim();
+    }
+  }
+
+  // Strategy 2: longest block of text that isn't bullets or headers
+  // Split on lines, group by "non-bullet" / "non-header" runs
+  const lines = reasoning.split('\n');
+  let bestBlock = '';
+  let currentBlock = '';
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const isBullet = /^\s*[-*]\s/.test(line) || /^\s*\d+\.\s/.test(line);
+    const isHeader = /^\*\*[^*]+\*\*\s*:?\s*$/.test(trimmed);
+    const isBlank = trimmed === '';
+
+    if (isBullet || isHeader || isBlank) {
+      if (currentBlock.length > bestBlock.length) {
+        bestBlock = currentBlock;
+      }
+      currentBlock = '';
+    } else {
+      currentBlock += (currentBlock ? '\n' : '') + line;
+    }
+  }
+  if (currentBlock.length > bestBlock.length) {
+    bestBlock = currentBlock;
+  }
+
+  // Validate: the block should have multiple sentences and paragraphs
+  if (bestBlock.length > 200) {
+    const sentenceCount = (bestBlock.match(/[.!?]\s/g) ?? []).length;
+    if (sentenceCount >= 3) {
+      return bestBlock.trim();
+    }
+  }
+
+  return null;
 }

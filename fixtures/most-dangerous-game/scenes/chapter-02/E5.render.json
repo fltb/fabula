@@ -1,0 +1,422 @@
+{
+  "schemaVersion": 1,
+  "eventId": "E5",
+  "renderedAt": "2026-07-16T13:20:21.987Z",
+  "sourceEvent": {
+    "id": "E5",
+    "event": "E5",
+    "title": "The Choice",
+    "narrativeOrder": 6,
+    "storyTime": {
+      "type": "absolute",
+      "value": "day_2_morning"
+    },
+    "sceneType": "dialogue",
+    "pov": {
+      "character": "rainsford",
+      "type": "third_person_limited"
+    },
+    "sceneBrief": "At luncheon, Zaroff appears in country tweeds, complaining of boredom with last night's hunt. Rainsford demands to leave. Zaroff refuses — and forces the choice: hunt with Zaroff, starting tonight, or be turned over to Ivan, who will kill him slowly. Rainsford, seeing Ivan's massive form in the corner, chooses the hunt. Zaroff is delighted: at last, a foeman worthy of his steel. Rainsford is given a three-hour head start, khaki hunting clothes, food, and a hunting knife. He is led to the gate and released into the jungle.",
+    "preconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "chateau",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_morning"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_morning"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.door_locked",
+        "entityId": "rainsford",
+        "attribute": "door_locked",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_morning"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.time",
+        "entityId": "world",
+        "attribute": "time",
+        "value": "day_2_morning",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_morning"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "expectedPostconditions": [
+      {
+        "id": "rainsford.chose_hunt",
+        "entityId": "rainsford",
+        "attribute": "chose_hunt",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_morning"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "jungle",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_morning"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.inventory",
+        "entityId": "rainsford",
+        "attribute": "inventory",
+        "value": "has_hunting_knife",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_morning"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.inventory",
+        "entityId": "rainsford",
+        "attribute": "inventory",
+        "value": "has_food_pack",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_morning"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "zaroff.hunt_commenced",
+        "entityId": "zaroff",
+        "attribute": "hunt_commenced",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_morning"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.zaroff_hunt_active",
+        "entityId": "world",
+        "attribute": "zaroff_hunt_active",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_2_morning"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "threadProgress": [
+      {
+        "thread": "T1",
+        "advancement": "Rainsford chooses the hunt. The game is on. Survival is now the only goal.",
+        "progressAfter": 35,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T2",
+        "advancement": "Rainsford is forced to become the huntee — exactly what Whitney warned him about. He now understands what it means to be prey.",
+        "progressAfter": 15,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T3",
+        "advancement": "Zaroff gets his worthy opponent. His ennui is temporarily cured.",
+        "progressAfter": 40,
+        "progressTotal": 100
+      }
+    ],
+    "foreshadowing": [
+      {
+        "id": "death_swamp_warning",
+        "hint": "Zaroff warns Rainsford to avoid the big swamp in the southeast corner — Death Swamp. He mentions quicksand and his lost hound Lazarus.",
+        "targetRevealChapter": 3,
+        "thread": "T1"
+      }
+    ],
+    "relationshipEffects": [
+      {
+        "participants": [
+          "rainsford",
+          "zaroff"
+        ],
+        "effect": "change",
+        "direction": "host_guest_to_predator_prey"
+      }
+    ],
+    "ruleEffects": [
+      {
+        "rule": "zaroff_hunt_3day",
+        "effect": "introduce_exception",
+        "evidence": "Rainsford accepts the hunt. The three-day game begins at dusk."
+      },
+      {
+        "rule": "no_other_weapon",
+        "effect": "reinforce",
+        "evidence": "Rainsford receives only a hunting knife — no firearm."
+      }
+    ],
+    "styleGuidance": "Tense confrontation. The luncheon scene should feel civilized and horrifying — Zaroff eating Crêpes Suzette while describing how he will hunt Rainsford. The release into the jungle should feel like a door slamming on freedom.",
+    "branchExistence": {
+      "type": "all"
+    },
+    "participants": {
+      "entities": [
+        "rainsford",
+        "world",
+        "zaroff"
+      ]
+    }
+  },
+  "appliedStyle": {
+    "tone": "literary",
+    "scenePacing": "medium"
+  },
+  "contextSummary": {
+    "eventId": "E5",
+    "characterCount": 3,
+    "relationshipCount": 2,
+    "worldFactCount": 20,
+    "threadCount": 3,
+    "knownFactCount": 0,
+    "characterNames": [
+      "Sanger Rainsford",
+      "General Zaroff",
+      "Whitney"
+    ],
+    "worldFactIds": [
+      "rainsford.knows_ship_trap_island",
+      "rainsford.heard_gunshots",
+      "rainsford.location",
+      "rainsford.status",
+      "rainsford.condition",
+      "rainsford.inventory",
+      "rainsford.location",
+      "rainsford.found_hunting_trail",
+      "rainsford.knows_island_inhabited",
+      "rainsford.met_zaroff",
+      "rainsford.met_ivan",
+      "rainsford.knows_ivan_deaf_mute",
+      "rainsford.location",
+      "zaroff.knows_rainsford_identity",
+      "rainsford.knows_zaroff_hunts_men",
+      "rainsford.refused_hunt",
+      "rainsford.location",
+      "rainsford.door_locked",
+      "zaroff.true_nature_revealed",
+      "rainsford.chose_hunt"
+    ]
+  },
+  "worldStateBefore": {
+    "entityCount": 6,
+    "factCount": 35,
+    "relationshipCount": 2,
+    "threadCount": 3,
+    "preconditionsSatisfied": [
+      {
+        "entity": "rainsford",
+        "attribute": "location",
+        "expectedValue": "chateau",
+        "currentValue": "jungle",
+        "satisfied": false
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "status",
+        "expectedValue": "alive",
+        "currentValue": "alive",
+        "satisfied": true
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "door_locked",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "time",
+        "expectedValue": "day_2_morning",
+        "currentValue": "night_0",
+        "satisfied": false
+      }
+    ]
+  },
+  "llmCall": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "temperature": 0.8,
+    "maxTokens": 1500,
+    "promptMessages": 2,
+    "promptChars": 9360,
+    "usage": {
+      "promptTokens": 2796,
+      "completionTokens": 1185,
+      "totalTokens": 3981
+    },
+    "finishReason": "stop",
+    "requestId": "4721d328-a5ba-494d-924f-c9051e2196a1",
+    "latencyMs": 14652
+  },
+  "prose": "The luncheon table was laid with linen and silver, a centerpiece of hothouse orchids bleeding purple and white across the crystal. Rainsford sat rigid, his untouched plate before him, watching General Zaroff enter in country tweeds of heather-brown wool, a scarlet ascot tucked at his throat like a wound. The general moved with the loose-limbed ease of a man who had slept well and breakfasted better.\n\n“I confess myself disappointed,” Zaroff said, settling into his chair with a sigh that carried the weight of genuine ennui. “Last night’s sport was—how shall I put it?—uninspired. The fellow lacked imagination. Ran in straight lines. Quite tedious, really.”\n\nRainsford’s hands were flat on the table, fingers spread. “I want to leave this island.”\n\nZaroff looked up from his wine glass, one eyebrow arched in faint amusement. “Leave? My dear fellow, we’ve only just become acquainted.”\n\n“Now. Today. I demand it.”\n\nThe general set down his glass with precise care. A smile touched his lips but did not reach his eyes. “Ah. The direct approach. I respect that, Mr. Rainsford. I do.” He folded his hands. “But I’m afraid I cannot accommodate you. You see, you’ve stumbled upon a rather exclusive preserve, and I have certain—traditions.”\n\nRainsford began to rise.\n\n“I would not,” Zaroff said softly, and Rainsford followed his gaze to the corner where Ivan stood, a mountain of flesh and silence, his small eyes fixed on Rainsford with the patient attention of a butcher appraising a carcass.\n\nRainsford sat back down.\n\n“You have a choice,” Zaroff continued, his voice taking on the warmth of a man discussing his favorite hobby. “Tonight, you will hunt with me. I will give you a three-hour start, a good knife, food, clothing suited to the terrain. You will be my guest in the jungle, and if you survive until dawn—if you are still alive when I find you—I shall release you from the island.”\n\n“And if I refuse?”\n\nZaroff’s smile thinned. “Then I shall turn you over to Ivan. He is not a hunter. He is—a connoisseur of suffering. It would take him a very long time to finish with you.”\n\nRainsford looked at Ivan again. The man had not moved. His hands hung at his sides like smoked hams. There was no intelligence in his face, only appetite.\n\n“I see you understand,” Zaroff murmured.\n\nRainsford’s throat worked. He had killed animals all over the world, had tracked them through every kind of country, had written books about the clean kill and the hunter’s code. He understood now that he had never understood anything.\n\n“I’ll hunt,” he said.\n\nZaroff’s face transformed. A genuine delight kindled behind his gray eyes, a boy’s joy at an unexpected gift.\n\n“Splendid!” He clapped his hands once. “I knew you would not disappoint me. At last—a foeman worthy of my steel.”\n\nWithin the hour, Rainsford stood at the chateau’s rear gate, dressed in khaki, a hunting knife sheathed at his belt, a packet of food wedged into his pocket. The jungle yawned before him, green and hungry and full of shadows.\n\nIvan unlatched the gate. Zaroff nodded from the terrace, a cigarette burning between his fingers.\n\n“You have three hours,” he called. “I suggest you use them wisely.”\n\nRainsford stepped through the gate. The jungle swallowed him whole.",
+  "wordCount": 547,
+  "charCount": 3235,
+  "postRenderValidation": {
+    "passed": false,
+    "confidence": 0.2833333333333333,
+    "coverage": {
+      "postconditionsStated": 1,
+      "postconditionsTotal": 6,
+      "preconditionsPreserved": 4,
+      "preconditionsTotal": 4
+    },
+    "issueCount": 6,
+    "errorCount": 0,
+    "warningCount": 6,
+    "issues": [
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.chose_hunt = true",
+        "expected": "rainsford.chose_hunt = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.inventory = has_hunting_knife",
+        "expected": "rainsford.inventory = has_hunting_knife"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.inventory = has_food_pack",
+        "expected": "rainsford.inventory = has_food_pack"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: zaroff.hunt_commenced = true",
+        "expected": "zaroff.hunt_commenced = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: world.zaroff_hunt_active = true",
+        "expected": "world.zaroff_hunt_active = true"
+      },
+      {
+        "rule": "name_typo",
+        "severity": "warning",
+        "message": "Possible name typo: \"Ran\" — did you mean \"Ivan\"?",
+        "expected": "Ivan",
+        "actual": "Ran"
+      }
+    ]
+  }
+}

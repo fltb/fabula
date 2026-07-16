@@ -5,6 +5,10 @@ dist/
 .nova/index.sqlite
 output/
 
+# Bench results — regenerated every run, not source-controlled
+packages/bench/results/
+packages/*/bench/results/
+
 # Environment files
 .env
 .env.local

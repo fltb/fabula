@@ -1,0 +1,347 @@
+{
+  "schemaVersion": 1,
+  "eventId": "E3",
+  "renderedAt": "2026-07-16T13:19:33.001Z",
+  "sourceEvent": {
+    "id": "E3",
+    "event": "E3",
+    "title": "The Château",
+    "narrativeOrder": 4,
+    "storyTime": {
+      "type": "absolute",
+      "value": "day_1_evening"
+    },
+    "sceneType": "dialogue",
+    "pov": {
+      "character": "rainsford",
+      "type": "third_person_limited"
+    },
+    "sceneBrief": "Rainsford lifts the heavy knocker on the massive door of the château. The door opens to reveal a giant black-bearded man holding a revolver aimed at Rainsford's heart — Ivan. Rainsford explains he fell off a yacht. Ivan does not respond; he cocks his revolver. Then General Zaroff appears, an erect, slender man in evening clothes, and welcomes Rainsford by name, having recognized him from his book on hunting snow leopards in Tibet. Ivan is dismissed with a silent gesture.",
+    "preconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "chateau",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.time",
+        "entityId": "world",
+        "attribute": "time",
+        "value": "day_1_evening",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "expectedPostconditions": [
+      {
+        "id": "rainsford.met_zaroff",
+        "entityId": "rainsford",
+        "attribute": "met_zaroff",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.met_ivan",
+        "entityId": "rainsford",
+        "attribute": "met_ivan",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.knows_ivan_deaf_mute",
+        "entityId": "rainsford",
+        "attribute": "knows_ivan_deaf_mute",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "chateau",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "zaroff.knows_rainsford_identity",
+        "entityId": "zaroff",
+        "attribute": "knows_rainsford_identity",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "threadProgress": [
+      {
+        "thread": "T1",
+        "advancement": "Rainsford meets Zaroff and Ivan. He is now inside the château — safe for the moment.",
+        "progressAfter": 25,
+        "progressTotal": 100
+      }
+    ],
+    "foreshadowing": [
+      {
+        "id": "ivan_revolver",
+        "hint": "Ivan's revolver trained on Rainsford's heart. The deaf-mute giant is a gatekeeper of death.",
+        "targetRevealChapter": 4,
+        "thread": "T1"
+      },
+      {
+        "id": "zaroff_recognition",
+        "hint": "Zaroff recognizes Rainsford from his book. This is not coincidence — Zaroff knows exactly who has arrived on his island.",
+        "targetRevealChapter": 5,
+        "thread": "T3"
+      }
+    ],
+    "relationshipEffects": [
+      {
+        "participants": [
+          "rainsford",
+          "zaroff"
+        ],
+        "effect": "establish",
+        "direction": "host_guest"
+      }
+    ],
+    "ruleEffects": [],
+    "styleGuidance": "Gothic tension. The door opening to reveal Ivan and his revolver should be a jump-scare moment. Zaroff's entrance should feel like a relief that curdles into unease — he is too smooth, too welcoming, too interested in Rainsford.",
+    "branchExistence": {
+      "type": "all"
+    },
+    "participants": {
+      "entities": [
+        "rainsford",
+        "world",
+        "zaroff"
+      ]
+    }
+  },
+  "appliedStyle": {
+    "tone": "literary",
+    "scenePacing": "medium"
+  },
+  "contextSummary": {
+    "eventId": "E3",
+    "characterCount": 3,
+    "relationshipCount": 2,
+    "worldFactCount": 14,
+    "threadCount": 2,
+    "knownFactCount": 0,
+    "characterNames": [
+      "Sanger Rainsford",
+      "General Zaroff",
+      "Ivan"
+    ],
+    "worldFactIds": [
+      "rainsford.knows_ship_trap_island",
+      "rainsford.heard_gunshots",
+      "rainsford.location",
+      "rainsford.status",
+      "rainsford.condition",
+      "rainsford.inventory",
+      "rainsford.location",
+      "rainsford.found_hunting_trail",
+      "rainsford.knows_island_inhabited",
+      "rainsford.met_zaroff",
+      "rainsford.met_ivan",
+      "rainsford.knows_ivan_deaf_mute",
+      "rainsford.location",
+      "zaroff.knows_rainsford_identity"
+    ]
+  },
+  "worldStateBefore": {
+    "entityCount": 6,
+    "factCount": 24,
+    "relationshipCount": 2,
+    "threadCount": 2,
+    "preconditionsSatisfied": [
+      {
+        "entity": "rainsford",
+        "attribute": "location",
+        "expectedValue": "chateau",
+        "currentValue": "chateau",
+        "satisfied": true
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "status",
+        "expectedValue": "alive",
+        "currentValue": "alive",
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "time",
+        "expectedValue": "day_1_evening",
+        "currentValue": "night_0",
+        "satisfied": false
+      }
+    ]
+  },
+  "llmCall": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "temperature": 0.8,
+    "maxTokens": 1500,
+    "promptMessages": 2,
+    "promptChars": 8581,
+    "usage": {
+      "promptTokens": 2523,
+      "completionTokens": 3000,
+      "totalTokens": 5523
+    },
+    "finishReason": "length",
+    "requestId": "78128d91-c0aa-4f2f-b83c-de61b136e59e",
+    "latencyMs": 35019
+  },
+  "prose": "*Revised Snippet for Zaroff's Entrance:*\n    \"Then a voice came from the shadows beyond the servant. It was a cultivated voice, soft and urbane, carrying an accent that was neither wholly Russian nor American. 'I am very sorry, but do not be alarmed.'\n    A man stepped around the edge of the door. He was slender, wonderfully erect, dressed in immaculate evening clothes. His face was high-cheekboned, his hair was white and straight, and he smiled.\n    'I am General Zaroff,' he said. His gaze was calm, appraising, respectful. 'I know you. You are Sanger Rainsford. I have read your book — *The Snow Leopards of Tibet*. I was not sure my island would ever have the pleasure.' He did not ask how Rainsford arrived. It was as if he had been expecting the interruption.\n    'Your man...' Rainsford started.\n    Zaroff made a simple, silent gesture of dismissal. A flick of the fingers. The giant, Ivan, immediately stepped back, the revolver lowering. He shut the great door. The echo of the lock engaging rolled through the hall like a stone falling into a deep well.\"",
+  "wordCount": 181,
+  "charCount": 1069,
+  "postRenderValidation": {
+    "passed": false,
+    "confidence": 0.25,
+    "coverage": {
+      "postconditionsStated": 0,
+      "postconditionsTotal": 5,
+      "preconditionsPreserved": 3,
+      "preconditionsTotal": 3
+    },
+    "issueCount": 5,
+    "errorCount": 0,
+    "warningCount": 5,
+    "issues": [
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.met_zaroff = true",
+        "expected": "rainsford.met_zaroff = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.met_ivan = true",
+        "expected": "rainsford.met_ivan = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.knows_ivan_deaf_mute = true",
+        "expected": "rainsford.knows_ivan_deaf_mute = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.location = chateau",
+        "expected": "rainsford.location = chateau"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: zaroff.knows_rainsford_identity = true",
+        "expected": "zaroff.knows_rainsford_identity = true"
+      }
+    ]
+  }
+}

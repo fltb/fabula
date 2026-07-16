@@ -1,0 +1,380 @@
+{
+  "schemaVersion": 1,
+  "eventId": "E9",
+  "renderedAt": "2026-07-16T13:21:43.619Z",
+  "sourceEvent": {
+    "id": "E9",
+    "event": "E9",
+    "title": "The Burmese Tiger Pit",
+    "narrativeOrder": 10,
+    "storyTime": {
+      "type": "absolute",
+      "value": "day_3_dusk"
+    },
+    "sceneType": "action",
+    "pov": {
+      "character": "rainsford",
+      "type": "third_person_limited"
+    },
+    "sceneBrief": "At dusk, Rainsford reaches Death Swamp. The ground is soft and treacherous; his foot sinks into quicksand. He wrenches it free and, inspired by the soft earth, begins to dig. He has dug foxholes in France under fire, but this is different — this is a pit to kill. He digs until it is above his shoulders, then cuts hard saplings and sharpens them to fine points, planting them in the pit floor. He covers the mouth with a carpet of weeds and branches. Crouching behind a lightning-charred stump, he waits. Zaroff approaches with unusual swiftness. The pit cover gives way — but it is not Zaroff who falls in. It is Lazarus, Zaroff's finest hound, impaled on the stakes. Zaroff calls out his congratulations, then announces he will return with the whole pack.",
+    "preconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "jungle",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dusk"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dusk"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.zaroff_hunt_active",
+        "entityId": "world",
+        "attribute": "zaroff_hunt_active",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dusk"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.time",
+        "entityId": "world",
+        "attribute": "time",
+        "value": "day_3_dusk",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dusk"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "expectedPostconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "death_swamp",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dusk"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dusk"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.condition",
+        "entityId": "rainsford",
+        "attribute": "condition",
+        "value": "exhausted",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dusk"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "zaroff.lost_best_hound",
+        "entityId": "zaroff",
+        "attribute": "lost_best_hound",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dusk"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.lazarus_killed_in_pit",
+        "entityId": "world",
+        "attribute": "lazarus_killed_in_pit",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dusk"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "threadProgress": [
+      {
+        "thread": "T1",
+        "advancement": "Rainsford kills Zaroff's best hound. The hunt becomes more dangerous as Zaroff commits the whole pack.",
+        "progressAfter": 65,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T3",
+        "advancement": "Zaroff loses Lazarus, his finest hound. He is impressed but angered — he will now use the entire pack.",
+        "progressAfter": 75,
+        "progressTotal": 100
+      }
+    ],
+    "foreshadowing": [
+      {
+        "id": "hound_death",
+        "hint": "The hound's death foreshadows the final confrontation where the remaining hounds will be fed.",
+        "targetRevealChapter": 5,
+        "thread": "T1"
+      }
+    ],
+    "relationshipEffects": [],
+    "ruleEffects": [
+      {
+        "rule": "zaroff_hunt_3day",
+        "effect": "reinforce",
+        "evidence": "The hunt continues. Rainsford has survived into what Zaroff calls 'most amusing evening.'"
+      },
+      {
+        "rule": "no_other_weapon",
+        "effect": "reinforce",
+        "evidence": "Rainsford uses only his hunting knife to dig and sharpen stakes."
+      }
+    ],
+    "styleGuidance": "Desperate construction. The pit-digging should feel primal — Rainsford becoming the animal he once hunted, using earth and wood as his only weapons. The hound's death scream is a victory that tastes like ash.",
+    "branchExistence": {
+      "type": "all"
+    },
+    "participants": {
+      "entities": [
+        "rainsford",
+        "world",
+        "zaroff"
+      ]
+    }
+  },
+  "appliedStyle": {
+    "tone": "literary",
+    "scenePacing": "medium"
+  },
+  "contextSummary": {
+    "eventId": "E9",
+    "characterCount": 2,
+    "relationshipCount": 2,
+    "worldFactCount": 20,
+    "threadCount": 3,
+    "knownFactCount": 0,
+    "characterNames": [
+      "Sanger Rainsford",
+      "General Zaroff"
+    ],
+    "worldFactIds": [
+      "rainsford.knows_ship_trap_island",
+      "rainsford.heard_gunshots",
+      "rainsford.location",
+      "rainsford.status",
+      "rainsford.condition",
+      "rainsford.inventory",
+      "rainsford.location",
+      "rainsford.found_hunting_trail",
+      "rainsford.knows_island_inhabited",
+      "rainsford.met_zaroff",
+      "rainsford.met_ivan",
+      "rainsford.knows_ivan_deaf_mute",
+      "rainsford.location",
+      "zaroff.knows_rainsford_identity",
+      "rainsford.knows_zaroff_hunts_men",
+      "rainsford.refused_hunt",
+      "rainsford.location",
+      "rainsford.door_locked",
+      "zaroff.true_nature_revealed",
+      "rainsford.chose_hunt"
+    ]
+  },
+  "worldStateBefore": {
+    "entityCount": 6,
+    "factCount": 55,
+    "relationshipCount": 2,
+    "threadCount": 3,
+    "preconditionsSatisfied": [
+      {
+        "entity": "rainsford",
+        "attribute": "location",
+        "expectedValue": "jungle",
+        "currentValue": "death_swamp",
+        "satisfied": false
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "status",
+        "expectedValue": "alive",
+        "currentValue": "alive",
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "zaroff_hunt_active",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "time",
+        "expectedValue": "day_3_dusk",
+        "currentValue": "night_0",
+        "satisfied": false
+      }
+    ]
+  },
+  "llmCall": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "temperature": 0.8,
+    "maxTokens": 1500,
+    "promptMessages": 2,
+    "promptChars": 9849,
+    "usage": {
+      "promptTokens": 2912,
+      "completionTokens": 921,
+      "totalTokens": 3833
+    },
+    "finishReason": "stop",
+    "requestId": "ee2f572c-1a0e-485f-80fe-4d068d8f3c1c",
+    "latencyMs": 14635
+  },
+  "prose": "The swamp swallowed the light before it swallowed him. Dusk came not as a gradual dimming but as a curtain dropped, the canopy of cypress and willow knitting the last gray threads of sky into a ceiling of near-total black. Rainsford moved forward because stopping meant death, and each step became its own negotiation with the earth.\n\nThe ground gave under his weight like a living thing. Not the firm mud of riverbanks he knew, but something deeper, breathless—a bog that sucked at his boots with every stride. He took another step and the world fell away beneath his left foot. The quicksand took him to the knee before he understood what was happening, a cold grip that pulled with the patient strength of gravity itself. He threw himself backward, clawing at roots, at air, at anything, and wrenched his leg free with a sound like a cork from a bottle.\n\nHe lay there, chest heaving, and looked at the hole his foot had made. The dark water trembled, then stilled. And in that stillness, he saw it: a weapon.\n\nHe had dug foxholes in France. Shallow graves where men crouched while the shells walked closer. He had dug them with his hands and with entrenching tools, digging not to kill but to survive. This was different. This was architecture of a darker kind.\n\nHe began with his hands, scooping the soft earth until his fingers bled. The pit grew slowly, then faster as he found the rhythm of it—the dig, the toss, the dig again. The hole deepened until the lip rose above his head and he stood in a grave of his own making, the swamp breathing its damp breath down his neck. He found saplings, hard wood that would hold an edge, and he sharpened them with his pocket knife until the points were thin as needles, wet with sap. He set them in the floor of the pit, angled up, and tamped the earth around their bases.\n\nThe covering was delicate work. Weeds, branches, a carpet of deception laid over the mouth of the pit. He crawled backward, smoothing his tracks, and settled behind the blackened stump of an old oak, split by lightning and burned to charcoal.\n\nThe waiting was the worst part. The sounds of the swamp became the sounds of his own pulse.\n\nAnd then Zaroff came. Fast. Too fast. The general moved through the dying light with a swiftness that spoke of certainty, of a man who knew exactly where his quarry lay. Rainsford held his breath. The footsteps approached the pit—\n\nThe cover collapsed. But the cry that rose was not a man's voice. It was a scream, high and terrible, the scream of a dog who has found the thing he sought and found it sharper than he knew.\n\nLazarus. The great hound writhed on the stakes, his blood black in the twilight, his whimpers fading.\n\nZaroff's voice came from the darkness, calm and amused.\n\n\"Congratulations, Rainsford. You have killed my best dog.\"\n\nA pause. The swamp held its breath.\n\n\"I will return with the pack.\"",
+  "wordCount": 516,
+  "charCount": 2870,
+  "postRenderValidation": {
+    "passed": false,
+    "confidence": 0.25,
+    "coverage": {
+      "postconditionsStated": 0,
+      "postconditionsTotal": 5,
+      "preconditionsPreserved": 4,
+      "preconditionsTotal": 4
+    },
+    "issueCount": 5,
+    "errorCount": 0,
+    "warningCount": 5,
+    "issues": [
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.location = death_swamp",
+        "expected": "rainsford.location = death_swamp"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.status = alive",
+        "expected": "rainsford.status = alive"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.condition = exhausted",
+        "expected": "rainsford.condition = exhausted"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: zaroff.lost_best_hound = true",
+        "expected": "zaroff.lost_best_hound = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: world.lazarus_killed_in_pit = true",
+        "expected": "world.lazarus_killed_in_pit = true"
+      }
+    ]
+  }
+}

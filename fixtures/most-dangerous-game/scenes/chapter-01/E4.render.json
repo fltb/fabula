@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 1,
+  "eventId": "E4",
+  "renderedAt": "2026-07-16T13:20:07.334Z",
+  "sourceEvent": {
+    "id": "E4",
+    "event": "E4",
+    "title": "The Most Dangerous Game",
+    "narrativeOrder": 5,
+    "storyTime": {
+      "type": "absolute",
+      "value": "day_1_evening"
+    },
+    "sceneType": "dialogue",
+    "pov": {
+      "character": "rainsford",
+      "type": "third_person_limited"
+    },
+    "sceneBrief": "Zaroff hosts Rainsford at a magnificent dinner in the medieval dining hall, surrounded by mounted animal heads. Over borsch, filet mignon, champagne, and port, Zaroff reveals his life story: his Cossack youth, his military service, his worldwide hunting career. He confesses that hunting had begun to bore him — and that he invented a new animal to hunt. The animal is man. Rainsford is horrified, calling it murder. Zaroff explains his philosophy: life is for the strong. He offers Rainsford the chance to hunt with him tomorrow. Rainsford refuses and is escorted to his room, where he finds the door locked from the outside.",
+    "preconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "chateau",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.time",
+        "entityId": "world",
+        "attribute": "time",
+        "value": "day_1_evening",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "expectedPostconditions": [
+      {
+        "id": "rainsford.knows_zaroff_hunts_men",
+        "entityId": "rainsford",
+        "attribute": "knows_zaroff_hunts_men",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.refused_hunt",
+        "entityId": "rainsford",
+        "attribute": "refused_hunt",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "chateau",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.door_locked",
+        "entityId": "rainsford",
+        "attribute": "door_locked",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "zaroff.true_nature_revealed",
+        "entityId": "zaroff",
+        "attribute": "true_nature_revealed",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_1_evening"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "threadProgress": [
+      {
+        "thread": "T1",
+        "advancement": "Rainsford learns the truth about Zaroff's game and refuses to participate. He is now trapped.",
+        "progressAfter": 30,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T2",
+        "advancement": "Rainsford calls it murder. His moral line is drawn — but he does not yet understand what it means to be prey.",
+        "progressAfter": 10,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T3",
+        "advancement": "Zaroff reveals his philosophy and his ennui. He sees Rainsford as a potential worthy opponent.",
+        "progressAfter": 30,
+        "progressTotal": 100
+      }
+    ],
+    "foreshadowing": [
+      {
+        "id": "zaroff_boredom",
+        "hint": "Zaroff's ennui — he is bored with all animals. Only a worthy human opponent can excite him. This need will lead him to give Rainsford chances he should not.",
+        "targetRevealChapter": 5,
+        "thread": "T3"
+      },
+      {
+        "id": "hounds_revealed",
+        "hint": "Zaroff shows Rainsford the hounds from the window — twelve enormous black shapes with glittering green eyes.",
+        "targetRevealChapter": 4,
+        "thread": "T1"
+      },
+      {
+        "id": "three_day_rule",
+        "hint": "Zaroff explains the three-day hunt rules. Rainsford does not yet know he will be forced to play.",
+        "targetRevealChapter": 5,
+        "thread": "T1"
+      }
+    ],
+    "relationshipEffects": [
+      {
+        "participants": [
+          "rainsford",
+          "zaroff"
+        ],
+        "effect": "change",
+        "direction": "hospitality_turns_to_threat"
+      }
+    ],
+    "ruleEffects": [
+      {
+        "rule": "zaroff_hunt_3day",
+        "effect": "introduce_exception",
+        "evidence": "Zaroff explains the three-day hunt rules to Rainsford over dinner"
+      },
+      {
+        "rule": "ivan_alternative",
+        "effect": "reinforce",
+        "evidence": "Zaroff explains that if the quarry refuses, he is turned over to Ivan"
+      },
+      {
+        "rule": "no_other_weapon",
+        "effect": "reinforce",
+        "evidence": "Zaroff explains the quarry receives only a hunting knife, no firearm"
+      }
+    ],
+    "styleGuidance": "Drawing-room horror. The dinner should feel opulent and civilized — the finest linen, crystal, silver, china, perfectly cooked food — while Zaroff calmly describes mass murder. The mounting heads on the walls take on new meaning. Rainsford's horror should grow as Zaroff's pleasantness never wavers.",
+    "branchExistence": {
+      "type": "all"
+    },
+    "participants": {
+      "entities": [
+        "rainsford",
+        "world",
+        "zaroff"
+      ]
+    }
+  },
+  "appliedStyle": {
+    "tone": "literary",
+    "scenePacing": "medium"
+  },
+  "contextSummary": {
+    "eventId": "E4",
+    "characterCount": 4,
+    "relationshipCount": 2,
+    "worldFactCount": 19,
+    "threadCount": 3,
+    "knownFactCount": 0,
+    "characterNames": [
+      "Sanger Rainsford",
+      "General Zaroff",
+      "Ivan",
+      "Whitney"
+    ],
+    "worldFactIds": [
+      "rainsford.knows_ship_trap_island",
+      "rainsford.heard_gunshots",
+      "rainsford.location",
+      "rainsford.status",
+      "rainsford.condition",
+      "rainsford.inventory",
+      "rainsford.location",
+      "rainsford.found_hunting_trail",
+      "rainsford.knows_island_inhabited",
+      "rainsford.met_zaroff",
+      "rainsford.met_ivan",
+      "rainsford.knows_ivan_deaf_mute",
+      "rainsford.location",
+      "zaroff.knows_rainsford_identity",
+      "rainsford.knows_zaroff_hunts_men",
+      "rainsford.refused_hunt",
+      "rainsford.location",
+      "rainsford.door_locked",
+      "zaroff.true_nature_revealed"
+    ]
+  },
+  "worldStateBefore": {
+    "entityCount": 6,
+    "factCount": 29,
+    "relationshipCount": 2,
+    "threadCount": 3,
+    "preconditionsSatisfied": [
+      {
+        "entity": "rainsford",
+        "attribute": "location",
+        "expectedValue": "chateau",
+        "currentValue": "chateau",
+        "satisfied": true
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "status",
+        "expectedValue": "alive",
+        "currentValue": "alive",
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "time",
+        "expectedValue": "day_1_evening",
+        "currentValue": "night_0",
+        "satisfied": false
+      }
+    ]
+  },
+  "llmCall": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "temperature": 0.8,
+    "maxTokens": 1500,
+    "promptMessages": 2,
+    "promptChars": 10387,
+    "usage": {
+      "promptTokens": 3056,
+      "completionTokens": 2990,
+      "totalTokens": 6046
+    },
+    "finishReason": "stop",
+    "requestId": "f90d06a4-b831-4eaf-89c2-950ebba903e6",
+    "latencyMs": 34331
+  },
+  "prose": "The dining hall was a cathedral of slaughter. The heads of a hundred beasts lined the walls in concentric rows—elk, lion, Cape buffalo, tiger—their glass eyes gleaming in the candlelight like frozen accusations. Rainsford sat at the long oak table, exhaustion a leaden weight in his bones, yet his mind had never been more alive. Across the gulf of linen and silver, General Zaroff ate with the studied reverence of a man performing a sacrament.\n\nIvan served the borsch in silence, the earthy tang of beets and dill rising with the steam. Zaroff talked as he ate, his voice a smooth baritone that filled the hall. His Cossack youth. The blade and the horse. The fever of battle in the Tsar's army. Then the grand circumnavigation—shikar on every continent, the mastery of every beast that walked or crawled.\n\nA shadow passed over the General's face as he poured the champagne.\n\n\"It ceased to amuse me,\" he said simply. \"The plateau. The inevitable boredom of perfection.\" He leaned forward, his pale eyes luminous in the quivering light. \"Can you understand that, Mr. Rainsford? A hunter of your caliber?\"\n\n\"A hunter never loses the thrill,\" Rainsford heard himself say.\n\nZaroff smiled, slow and patient. \"A hunter must have a worthy quarry. And I found that all animals, in the end, are the same. They lack the one element that makes the chase divine.\" He paused, savoring the silence. \"Reason. Courage. The will to fight back. So I invented a new animal.\"\n\nA terrible stillness crept into the room. Rainsford's hand, reaching for his glass, froze. The wine glowed like blood in the candlelight.\n\n\"What animal?\" he whispered.\n\n\"Man,\" said Zaroff. \"The most dangerous game.\"\n\nThe chair scraped against the stone as Rainsford rose. \"You're a murderer.\"\n\n\"I am a huntsman,\" Zaroff corrected, his voice smooth as oil. \"The weak exist for the amusement of the strong. It is the law of nature. You do not scruple over shooting a stag. Why should I scruple over a sailor who gives me a moment's true sport?\"\n\n\"They are men. You run them down with hounds.\"\n\"My prey is given food, clothing, a head start. A fighting chance. It is fairer than war. If he eludes me for three days, he is freed.\"\n\n\"Have many won?\"\nZaroff's smile deepened. \"I have yet to lose one. You will hunt with me tomorrow, Sanger Rainsford.\"\n\n\"No. I will not.\"\n\nZaroff shrugged with perfect calm. \"Ivan will take you to your room. We will speak again in the morning.\"\n\nIvan led him up a winding staircase to a room that was rich and cold—tapestries, a massive bed, a fire laid but unlit. The giant turned the key in the lock, and the heavy click echoed like a gunshot. Rainsford stood motionless in the center of the room, dressed in his host's fine clothes, listening to the footsteps fade down the corridor. He did not have to try the door. He already knew the shape of his cage.",
+  "wordCount": 499,
+  "charCount": 2844,
+  "postRenderValidation": {
+    "passed": true,
+    "confidence": 0.75,
+    "coverage": {
+      "postconditionsStated": 4,
+      "postconditionsTotal": 5,
+      "preconditionsPreserved": 3,
+      "preconditionsTotal": 3
+    },
+    "issueCount": 3,
+    "errorCount": 0,
+    "warningCount": 3,
+    "issues": [
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.location = chateau",
+        "expected": "rainsford.location = chateau"
+      },
+      {
+        "rule": "name_typo",
+        "severity": "warning",
+        "message": "Possible name typo: \"Can\" — did you mean \"Ivan\"?",
+        "expected": "Ivan",
+        "actual": "Can"
+      },
+      {
+        "rule": "name_typo",
+        "severity": "warning",
+        "message": "Possible name typo: \"Man\" — did you mean \"Ivan\"?",
+        "expected": "Ivan",
+        "actual": "Man"
+      }
+    ]
+  }
+}

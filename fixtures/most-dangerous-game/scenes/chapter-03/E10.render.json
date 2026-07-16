@@ -1,0 +1,361 @@
+{
+  "schemaVersion": 1,
+  "eventId": "E10",
+  "renderedAt": "2026-07-16T13:21:56.478Z",
+  "sourceEvent": {
+    "id": "E10",
+    "event": "E10",
+    "title": "The Ugandan Knife Trap",
+    "narrativeOrder": 11,
+    "storyTime": {
+      "type": "absolute",
+      "value": "day_3_night"
+    },
+    "sceneType": "action",
+    "pov": {
+      "character": "rainsford",
+      "type": "third_person_limited"
+    },
+    "sceneBrief": "At daybreak, Rainsford is awakened by the baying of hounds. Zaroff has released the whole pack. Rainsford knows the end is near. Fleeing through the jungle, he remembers a native trick from Uganda: he bends a springy sapling, ties his hunting knife to it with wild grapevine, blade pointing down the trail, and releases the tension. He runs. The baying grows closer. When it stops abruptly, Rainsford climbs a tree and looks back. General Zaroff is still standing — but Ivan lies dead, the knife having found his heart. Rainsford is now unarmed, and the hounds pick up the cry again.",
+    "preconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "death_swamp",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.zaroff_hunt_active",
+        "entityId": "world",
+        "attribute": "zaroff_hunt_active",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.lazarus_killed_in_pit",
+        "entityId": "world",
+        "attribute": "lazarus_killed_in_pit",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "expectedPostconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "jungle",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.knife_lost_to_trap",
+        "entityId": "rainsford",
+        "attribute": "knife_lost_to_trap",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "ivan.status",
+        "entityId": "ivan",
+        "attribute": "status",
+        "value": "dead",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "ivan.cause_of_death",
+        "entityId": "ivan",
+        "attribute": "cause_of_death",
+        "value": "ugandan_knife_trap",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_night"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "threadProgress": [
+      {
+        "thread": "T1",
+        "advancement": "Rainsford kills Ivan but loses his knife. Unarmed and pursued by hounds, his survival odds are at their lowest.",
+        "progressAfter": 80,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T3",
+        "advancement": "Zaroff loses his faithful servant Ivan. The general is now truly alone.",
+        "progressAfter": 85,
+        "progressTotal": 100
+      }
+    ],
+    "foreshadowing": [],
+    "relationshipEffects": [
+      {
+        "participants": [
+          "zaroff",
+          "ivan"
+        ],
+        "effect": "dissolve",
+        "direction": "master_loses_servant"
+      }
+    ],
+    "ruleEffects": [],
+    "styleGuidance": "Frantic, desperate. The knife trap should feel like throwing the last card in a losing hand. The moment Ivan dies is a split-second triumph swallowed by the continuing baying of the hounds.",
+    "branchExistence": {
+      "type": "all"
+    },
+    "participants": {
+      "entities": [
+        "rainsford",
+        "world",
+        "ivan",
+        "zaroff"
+      ]
+    }
+  },
+  "appliedStyle": {
+    "tone": "literary",
+    "scenePacing": "medium"
+  },
+  "contextSummary": {
+    "eventId": "E10",
+    "characterCount": 3,
+    "relationshipCount": 3,
+    "worldFactCount": 20,
+    "threadCount": 3,
+    "knownFactCount": 0,
+    "characterNames": [
+      "Sanger Rainsford",
+      "General Zaroff",
+      "Ivan"
+    ],
+    "worldFactIds": [
+      "rainsford.knows_ship_trap_island",
+      "rainsford.heard_gunshots",
+      "rainsford.location",
+      "rainsford.status",
+      "rainsford.condition",
+      "rainsford.inventory",
+      "rainsford.location",
+      "rainsford.found_hunting_trail",
+      "rainsford.knows_island_inhabited",
+      "rainsford.met_zaroff",
+      "rainsford.met_ivan",
+      "rainsford.knows_ivan_deaf_mute",
+      "rainsford.location",
+      "zaroff.knows_rainsford_identity",
+      "rainsford.knows_zaroff_hunts_men",
+      "rainsford.refused_hunt",
+      "rainsford.location",
+      "rainsford.door_locked",
+      "zaroff.true_nature_revealed",
+      "rainsford.chose_hunt"
+    ]
+  },
+  "worldStateBefore": {
+    "entityCount": 7,
+    "factCount": 60,
+    "relationshipCount": 3,
+    "threadCount": 3,
+    "preconditionsSatisfied": [
+      {
+        "entity": "rainsford",
+        "attribute": "location",
+        "expectedValue": "death_swamp",
+        "currentValue": "jungle",
+        "satisfied": false
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "status",
+        "expectedValue": "alive",
+        "currentValue": "alive",
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "zaroff_hunt_active",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "lazarus_killed_in_pit",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      }
+    ]
+  },
+  "llmCall": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "temperature": 0.8,
+    "maxTokens": 1500,
+    "promptMessages": 2,
+    "promptChars": 10159,
+    "usage": {
+      "promptTokens": 3046,
+      "completionTokens": 826,
+      "totalTokens": 3872
+    },
+    "finishReason": "stop",
+    "requestId": "bd11df3c-75af-432c-a681-813486b5cec6",
+    "latencyMs": 12856
+  },
+  "prose": "The baying of the hounds tore him from a sleep he had not known he’d taken. It was not a dream-sound, not the lingering echo of terror that had dogged his fitful rest—it was real, and it was near. Rainsford’s eyes flew open to the grey light of dawn filtering through the canopy, and for one sickening moment he could not remember where he was, only that he must move.\n\nHe was on his feet before consciousness fully returned, the cold dew soaking through his tattered clothes. The pack had been loosed. He heard it in the chorus—not three hounds now, nor five, but a dozen voices at least, their cries weaving together into a single fabric of blood and purpose. Zaroff had grown tired of the game.\n\nRainsford ran.\n\nThe jungle blurred past him, each breath a knife in his chest. He had no plan now, no clever ruse left to throw them off. His mind, stripped of all but the raw instinct to survive, reached back through years of travel and stumbled upon a memory: Uganda, a village elder showing him how a man might kill with nothing but a sapling and a blade.\n\nHe found the tree before he found the hope to use it—a young ironwood, springy and full of tension. His hunting knife was still at his belt. His hands, shaking with exhaustion and fear, worked the wild grapevine free from a nearby trunk. He tied the knife to the bent sapling, blade angled downward, pointing like a fang along the trail. The vine trembled as he released the tension. The trap was set.\n\nHe ran again.\n\nThe baying grew louder, closer, until he could hear the crashing of bodies through underbrush, the panting of beasts made for killing. And then—silence.\n\nNot the silence of respite. The silence of something ended.\n\nRainsford climbed. His arms screamed as he hauled himself into the crotch of a mangrove, his body moving on memory alone. He looked back.\n\nGeneral Zaroff stood in a clearing, his wounded shoulder held stiffly, his rifle lowered. He was not smiling. At his feet lay Ivan, the great mute giant, sprawled on his back. The hunting knife stood upright from his chest, buried to the hilt in the place where a man’s heart beats its last. The hounds milled about, confused, their cries dying in their throats.\n\nRainsford had no weapon now. He was unarmed, and the dead man’s blood soaked into the jungle floor.\n\nThen one of the hounds lifted its head. It sniffed the air. Its ears went forward.\n\nThe baying began again.",
+  "wordCount": 432,
+  "charCount": 2403,
+  "postRenderValidation": {
+    "passed": true,
+    "confidence": 0.5499999999999999,
+    "coverage": {
+      "postconditionsStated": 2,
+      "postconditionsTotal": 5,
+      "preconditionsPreserved": 4,
+      "preconditionsTotal": 4
+    },
+    "issueCount": 3,
+    "errorCount": 0,
+    "warningCount": 3,
+    "issues": [
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.status = alive",
+        "expected": "rainsford.status = alive"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.knife_lost_to_trap = true",
+        "expected": "rainsford.knife_lost_to_trap = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: ivan.cause_of_death = ugandan_knife_trap",
+        "expected": "ivan.cause_of_death = ugandan_knife_trap"
+      }
+    ]
+  }
+}

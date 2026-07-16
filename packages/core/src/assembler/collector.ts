@@ -57,18 +57,32 @@ export class SceneCollector {
       // Gather scene metadata YAMLs (E*.yaml, skipping *render_request* etc.)
       const metadataFiles = this._listSceneMetadataFiles(chapterDir, st);
 
-      for (const yamlPath of metadataFiles) {
-        const yamlBaseName = path.basename(yamlPath);
-        const eventId = yamlBaseName.replace(/\.yaml$/i, '');
+      for (const metadataPath of metadataFiles) {
+        const metadataBaseName = path.basename(metadataPath);
+        // Accept both .yaml and .render.json — strip the right suffix
+        const isJson = metadataBaseName.endsWith('.render.json');
+        const eventId = isJson
+          ? metadataBaseName.replace(/\.render\.json$/i, '')
+          : metadataBaseName.replace(/\.yaml$/i, '');
 
         try {
-          const rawYaml = st.read(yamlPath);
-          const metadataRaw = parseYaml(rawYaml) as Record<string, unknown>;
+          const rawMetadata = st.read(metadataPath);
+          // Parse YAML or JSON based on extension
+          const metadataRaw = isJson
+            ? (JSON.parse(rawMetadata) as Record<string, unknown>)
+            : (parseYaml(rawMetadata) as Record<string, unknown>);
 
-          // — narrativeOrder —
-          let narrativeOrder: number | undefined =
-            (metadataRaw.narrativeOrder as number | undefined) ??
-            (metadataRaw.narrative_order as number | undefined);
+          // — narrativeOrder — read from sourceEvent.narrativeOrder for JSON,
+          //   or top-level for YAML
+          let narrativeOrder: number | undefined;
+          if (isJson) {
+            const sourceEvent = metadataRaw.sourceEvent as Record<string, unknown> | undefined;
+            narrativeOrder = (sourceEvent?.narrativeOrder as number | undefined);
+          }
+          if (narrativeOrder === undefined) {
+            narrativeOrder = (metadataRaw.narrativeOrder as number | undefined) ??
+              (metadataRaw.narrative_order as number | undefined);
+          }
 
           if (narrativeOrder === undefined && chaptersDir) {
             narrativeOrder = this._extractNarrativeOrder(
@@ -114,7 +128,7 @@ export class SceneCollector {
           });
         } catch (err) {
           console.warn(
-            `[Assembler] Error processing scene ${yamlBaseName}: ` +
+            `[Assembler] Error processing scene ${metadataBaseName}: ` +
             `${(err as Error).message}`,
           );
         }
@@ -145,7 +159,7 @@ export class SceneCollector {
       .filter(
         (e) =>
           e.isFile() &&
-          /^E[\w-]+\.yaml$/i.test(e.name) &&
+          (/^E[\w-]+\.yaml$/i.test(e.name) || /^E[\w-]+\.render\.json$/i.test(e.name)) &&
           !/render_request/i.test(e.name),
       )
       .map((e) => path.join(dir, e.name))

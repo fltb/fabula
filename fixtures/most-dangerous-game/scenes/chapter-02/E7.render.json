@@ -1,0 +1,388 @@
+{
+  "schemaVersion": 1,
+  "eventId": "E7",
+  "renderedAt": "2026-07-16T13:21:12.688Z",
+  "sourceEvent": {
+    "id": "E7",
+    "event": "E7",
+    "title": "The Cat and the Mouse",
+    "narrativeOrder": 8,
+    "storyTime": {
+      "type": "absolute",
+      "value": "day_3_dawn"
+    },
+    "sceneType": "linear",
+    "pov": {
+      "character": "rainsford",
+      "type": "third_person_limited"
+    },
+    "sceneBrief": "Rainsford slides down from the tree after Zaroff's retreat, sick with the knowledge that he is being saved for another day's sport. He forces himself to think. Three hundred yards from his hiding place, he finds a huge dead tree leaning precariously on a smaller living one. He works frantically with his knife, constructing a Malay man-catcher — a trap that will drop the dead tree on anyone who trips its trigger. He hides behind a fallen log and waits. Zaroff returns, tracking with bloodhound precision. He steps on the trigger bough and senses danger at the last instant, leaping back — but the dead tree still strikes him a glancing blow on the shoulder. Zaroff laughs, congratulates Rainsford, and retreats to dress his wound.",
+    "preconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "jungle",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dawn"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dawn"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.knows_zaroff_toying_with_him",
+        "entityId": "rainsford",
+        "attribute": "knows_zaroff_toying_with_him",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dawn"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.zaroff_hunt_active",
+        "entityId": "world",
+        "attribute": "zaroff_hunt_active",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dawn"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.time",
+        "entityId": "world",
+        "attribute": "time",
+        "value": "day_3_dawn",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dawn"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "expectedPostconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "jungle",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dawn"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dawn"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "zaroff.condition",
+        "entityId": "zaroff",
+        "attribute": "condition",
+        "value": "wounded_shoulder",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dawn"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "zaroff.emotionalState",
+        "entityId": "zaroff",
+        "attribute": "emotionalState",
+        "value": "amused",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dawn"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.man_catcher_constructed",
+        "entityId": "world",
+        "attribute": "man_catcher_constructed",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "day_3_dawn"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "threadProgress": [
+      {
+        "thread": "T1",
+        "advancement": "Rainsford wounds Zaroff with the Malay man-catcher. He scores his first hit against the hunter.",
+        "progressAfter": 50,
+        "progressTotal": 100
+      },
+      {
+        "thread": "T3",
+        "advancement": "Zaroff is wounded for the first time in years. He finds it amusing — Rainsford is proving interesting.",
+        "progressAfter": 60,
+        "progressTotal": 100
+      }
+    ],
+    "foreshadowing": [],
+    "relationshipEffects": [],
+    "ruleEffects": [
+      {
+        "rule": "no_other_weapon",
+        "effect": "reinforce",
+        "evidence": "Rainsford uses only his hunting knife to construct the trap — no firearms involved."
+      }
+    ],
+    "styleGuidance": "Desperate ingenuity. Rainsford's construction of the trap should feel methodical, almost mechanical — he is falling back on skills he never thought he would use for this purpose. Zaroff's laugh should be the most chilling sound in the story.",
+    "branchExistence": {
+      "type": "all"
+    },
+    "participants": {
+      "entities": [
+        "rainsford",
+        "world",
+        "zaroff"
+      ]
+    }
+  },
+  "appliedStyle": {
+    "tone": "literary",
+    "scenePacing": "medium"
+  },
+  "contextSummary": {
+    "eventId": "E7",
+    "characterCount": 2,
+    "relationshipCount": 2,
+    "worldFactCount": 20,
+    "threadCount": 3,
+    "knownFactCount": 0,
+    "characterNames": [
+      "Sanger Rainsford",
+      "General Zaroff"
+    ],
+    "worldFactIds": [
+      "rainsford.knows_ship_trap_island",
+      "rainsford.heard_gunshots",
+      "rainsford.location",
+      "rainsford.status",
+      "rainsford.condition",
+      "rainsford.inventory",
+      "rainsford.location",
+      "rainsford.found_hunting_trail",
+      "rainsford.knows_island_inhabited",
+      "rainsford.met_zaroff",
+      "rainsford.met_ivan",
+      "rainsford.knows_ivan_deaf_mute",
+      "rainsford.location",
+      "zaroff.knows_rainsford_identity",
+      "rainsford.knows_zaroff_hunts_men",
+      "rainsford.refused_hunt",
+      "rainsford.location",
+      "rainsford.door_locked",
+      "zaroff.true_nature_revealed",
+      "rainsford.chose_hunt"
+    ]
+  },
+  "worldStateBefore": {
+    "entityCount": 6,
+    "factCount": 45,
+    "relationshipCount": 2,
+    "threadCount": 3,
+    "preconditionsSatisfied": [
+      {
+        "entity": "rainsford",
+        "attribute": "location",
+        "expectedValue": "jungle",
+        "currentValue": "jungle",
+        "satisfied": true
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "status",
+        "expectedValue": "alive",
+        "currentValue": "alive",
+        "satisfied": true
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "knows_zaroff_toying_with_him",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "zaroff_hunt_active",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "time",
+        "expectedValue": "day_3_dawn",
+        "currentValue": "night_0",
+        "satisfied": false
+      }
+    ]
+  },
+  "llmCall": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "temperature": 0.8,
+    "maxTokens": 1500,
+    "promptMessages": 2,
+    "promptChars": 9755,
+    "usage": {
+      "promptTokens": 2851,
+      "completionTokens": 3000,
+      "totalTokens": 5851
+    },
+    "finishReason": "length",
+    "requestId": "9c7ee7f2-8cfa-452f-bf1d-7a9efa02ac87",
+    "latencyMs": 35232
+  },
+  "prose": "The footsteps were unhurried. A soft, rhythmic crunch of leaves. Through the tangle of ferns, Rainsford saw him. Zaroff walked with his rifle slung, his head tilted, reading the ground. He was a hound on a scent, beautiful and terrible in his focus. He paused, his polished boot hovering over the trigger bough.\n        Rainsford's heart stopped.\n        Zaroff’s head snapped up. A flicker of pure danger crossed his face. He didn't look at the tree; he felt it. He threw himself backward with a speed that defied his size.\n        The dead tree groaned, fell. The air was displaced in a rush. The massive trunk caught Zaroff’s shoulder, a glancing, thunderous blow that spun him into the mud.\n        Silence. A bird called out, startled.\n        Then, a sound that cut through the jungle deeper than any gunshot. Laughter. A deep, rolling chuckle that grew into a full-bodied roar.\n        Zaroff rose, brushing dirt from his impeccable coat. His shoulder was stained with blood.\n        “Good God, Rainsford,” he called out, his voice carrying through the trees with awful cheerfulness. “A Malay man-catcher! You are full of surprises. You have managed to touch my shoulder. Bravo.” He chuckled, a warm, appreciative sound. “I will have to dress this. Such a clever fellow. Tomorrow, then.”\n        He turned and walked away, his step light, his laugh echoing through the trees long after he was gone.",
+  "wordCount": 227,
+  "charCount": 1405,
+  "postRenderValidation": {
+    "passed": false,
+    "confidence": 0.39999999999999997,
+    "coverage": {
+      "postconditionsStated": 1,
+      "postconditionsTotal": 5,
+      "preconditionsPreserved": 5,
+      "preconditionsTotal": 5
+    },
+    "issueCount": 4,
+    "errorCount": 0,
+    "warningCount": 4,
+    "issues": [
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.status = alive",
+        "expected": "rainsford.status = alive"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: zaroff.condition = wounded_shoulder",
+        "expected": "zaroff.condition = wounded_shoulder"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: zaroff.emotionalState = amused",
+        "expected": "zaroff.emotionalState = amused"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: world.man_catcher_constructed = true",
+        "expected": "world.man_catcher_constructed = true"
+      }
+    ]
+  }
+}

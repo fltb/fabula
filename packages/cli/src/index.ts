@@ -15,10 +15,9 @@ import {
   calculateISS,
   detectAntiPatterns,
   validateStrict,
-  runAll,
-  runFunctionalBench,
-  runPerformanceBench,
+  PostRenderValidator,
 } from '@novalistically/core';
+import { runAll, runFunctionalBench, runPerformanceBench } from '@novalistically/bench';
 
 // ============================================================================
 // Helpers

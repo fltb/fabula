@@ -51,6 +51,10 @@ export {
   BranchMergeValidator,
   ReachabilityValidator,
   ResultAggregator,
+  PostRenderValidator,
+  type PostRenderIssue,
+  type PostRenderResult,
+  type PostRenderValidatorOptions,
 } from './validator/index.js';
 
 // Context
@@ -99,20 +103,5 @@ export { buildSceneRenderPrompt, buildThreadStatusPrompt } from './ai/index.ts';
 export type { MockProviderOptions, OpencodeZenOptions, OpencodeGoOptions, OpencodeGoModel } from './ai/index.ts';
 export type { SceneRenderInput, ThreadStatusInput } from './ai/index.ts';
 
-// Bench (functional + performance)
-export {
-  runFunctionalBench,
-  runPerformanceBench,
-  runAll,
-  toJson,
-  toMarkdown,
-  writeResults,
-} from './bench/index.js';
-export type {
-  FunctionalResults,
-  FunctionalStageResult,
-  PerfResults,
-  PerfMeasurement,
-  BenchResults,
-  BenchMeasurement,
-} from './bench/index.js';
+// Bench (functional + performance) is in @novalistically/bench, NOT core.
+// Bench calls core to do measurements; bench itself is not part of core.

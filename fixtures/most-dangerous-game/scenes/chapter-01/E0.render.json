@@ -1,0 +1,339 @@
+{
+  "schemaVersion": 1,
+  "eventId": "E0",
+  "renderedAt": "2026-07-16T13:18:33.018Z",
+  "sourceEvent": {
+    "id": "E0",
+    "event": "E0",
+    "title": "The Hunters and the Huntees",
+    "narrativeOrder": 1,
+    "storyTime": {
+      "type": "absolute",
+      "value": "night_0"
+    },
+    "sceneType": "linear",
+    "pov": {
+      "character": "rainsford",
+      "type": "third_person_limited"
+    },
+    "sceneBrief": "On the deck of the yacht cutting through the moonless Caribbean night, Whitney and Rainsford smoke their pipes and discuss Ship-Trap Island — a place the crew fears. Whitney reproaches Rainsford's dismissive attitude toward the animals they hunt, suggesting that the jaguar feels fear and pain. Rainsford laughs it off: 'The world is made up of two classes — the hunters and the huntees. Luckily, you and I are hunters.' Whitney goes to bed uneasy. Rainsford, alone, hears three gunshots in the darkness.",
+    "preconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "yacht_caribbean",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "whitney.location",
+        "entityId": "whitney",
+        "attribute": "location",
+        "value": "yacht_caribbean",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "yacht_caribbean.status",
+        "entityId": "yacht_caribbean",
+        "attribute": "status",
+        "value": "underway",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "world.time",
+        "entityId": "world",
+        "attribute": "time",
+        "value": "night_0",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "expectedPostconditions": [
+      {
+        "id": "rainsford.knows_ship_trap_island",
+        "entityId": "rainsford",
+        "attribute": "knows_ship_trap_island",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.heard_gunshots",
+        "entityId": "rainsford",
+        "attribute": "heard_gunshots",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "whitney.location",
+        "entityId": "whitney",
+        "attribute": "location",
+        "value": "yacht_caribbean",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "threadProgress": [
+      {
+        "thread": "T2",
+        "advancement": "Whitney plants the seed — 'Perhaps the jaguar does' care about fear and pain. Rainsford dismisses it.",
+        "progressAfter": 5,
+        "progressTotal": 100
+      }
+    ],
+    "foreshadowing": [
+      {
+        "id": "hunters_and_huntees",
+        "hint": "Rainsford declares the world divided into hunters and huntees — a worldview that will be violently inverted when he becomes the hunted.",
+        "targetRevealChapter": 5,
+        "thread": "T2"
+      },
+      {
+        "id": "whitney_jaguar",
+        "hint": "Whitney insists the jaguar feels fear. Rainsford dismisses him. This moral question is the story's thematic core.",
+        "targetRevealChapter": 5,
+        "thread": "T2"
+      },
+      {
+        "id": "three_gunshots",
+        "hint": "Three gunshots ring out in the night — Zaroff hunting his current quarry.",
+        "targetRevealChapter": 5,
+        "thread": "T1"
+      }
+    ],
+    "relationshipEffects": [
+      {
+        "participants": [
+          "rainsford",
+          "whitney"
+        ],
+        "effect": "reinforce",
+        "direction": "friendly_debate"
+      }
+    ],
+    "ruleEffects": [],
+    "styleGuidance": "Atmospheric, languid opening. Build the Caribbean night as a tangible presence — thick, warm, black. The dialogue should establish Rainsford's confidence and Whitney's unease. The gunshots arrive as an abrupt intrusion.",
+    "branchExistence": {
+      "type": "all"
+    },
+    "participants": {
+      "entities": [
+        "rainsford",
+        "whitney",
+        "yacht_caribbean",
+        "world"
+      ]
+    }
+  },
+  "appliedStyle": {
+    "tone": "literary",
+    "scenePacing": "medium"
+  },
+  "contextSummary": {
+    "eventId": "E0",
+    "characterCount": 3,
+    "relationshipCount": 1,
+    "worldFactCount": 3,
+    "threadCount": 1,
+    "knownFactCount": 0,
+    "characterNames": [
+      "Sanger Rainsford",
+      "Whitney",
+      "Captain Nielsen"
+    ],
+    "worldFactIds": [
+      "rainsford.knows_ship_trap_island",
+      "rainsford.heard_gunshots",
+      "whitney.location"
+    ]
+  },
+  "worldStateBefore": {
+    "entityCount": 4,
+    "factCount": 9,
+    "relationshipCount": 1,
+    "threadCount": 1,
+    "preconditionsSatisfied": [
+      {
+        "entity": "rainsford",
+        "attribute": "location",
+        "expectedValue": "yacht_caribbean",
+        "currentValue": "yacht_caribbean",
+        "satisfied": true
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "status",
+        "expectedValue": "alive",
+        "currentValue": "alive",
+        "satisfied": true
+      },
+      {
+        "entity": "whitney",
+        "attribute": "location",
+        "expectedValue": "yacht_caribbean",
+        "currentValue": "yacht_caribbean",
+        "satisfied": true
+      },
+      {
+        "entity": "yacht_caribbean",
+        "attribute": "status",
+        "expectedValue": "underway",
+        "currentValue": "underway",
+        "satisfied": true
+      },
+      {
+        "entity": "world",
+        "attribute": "time",
+        "expectedValue": "night_0",
+        "currentValue": "night_0",
+        "satisfied": true
+      }
+    ]
+  },
+  "llmCall": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "temperature": 0.8,
+    "maxTokens": 1500,
+    "promptMessages": 2,
+    "promptChars": 5483,
+    "usage": {
+      "promptTokens": 1585,
+      "completionTokens": 611,
+      "totalTokens": 2196
+    },
+    "finishReason": "stop",
+    "requestId": "7a1d3162-b05e-4a09-9aaa-f6a9437130b1",
+    "latencyMs": 9435
+  },
+  "prose": "The sea was as black as ink, a great expanse of nothingness stretching out on all sides, and the yacht cut through it with a soft, rhythmic hiss. The air was warm and thick, heavy with salt and the faint, sickly-sweet smell of tropical decay. Rainsford leaned against the rail, his pipe cupped in his hand, the bowl a tiny orange coal in the darkness. Beside him, Whitney did the same, the glow of his own pipe illuminating his face in brief, flickering intervals.",
+  "wordCount": 84,
+  "charCount": 464,
+  "postRenderValidation": {
+    "passed": true,
+    "confidence": 0.5666666666666667,
+    "coverage": {
+      "postconditionsStated": 1,
+      "postconditionsTotal": 3,
+      "preconditionsPreserved": 5,
+      "preconditionsTotal": 5
+    },
+    "issueCount": 2,
+    "errorCount": 0,
+    "warningCount": 2,
+    "issues": [
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.heard_gunshots = true",
+        "expected": "rainsford.heard_gunshots = true"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: whitney.location = yacht_caribbean",
+        "expected": "whitney.location = yacht_caribbean"
+      }
+    ]
+  }
+}

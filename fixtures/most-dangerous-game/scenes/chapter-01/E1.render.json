@@ -1,0 +1,317 @@
+{
+  "schemaVersion": 1,
+  "eventId": "E1",
+  "renderedAt": "2026-07-16T13:18:46.183Z",
+  "sourceEvent": {
+    "id": "E1",
+    "event": "E1",
+    "title": "Overboard",
+    "narrativeOrder": 2,
+    "storyTime": {
+      "type": "absolute",
+      "value": "night_0"
+    },
+    "sceneType": "action",
+    "pov": {
+      "character": "rainsford",
+      "type": "third_person_limited"
+    },
+    "sceneBrief": "After hearing the gunshots, Rainsford springs to the rail to peer into the darkness. His pipe is knocked from his mouth by a rope; he lunges for it and loses his balance, falling into the blood-warm Caribbean. The yacht speeds away. Rainsford strips off his clothes and swims toward the direction of the shots. He hears an animal scream cut short by a pistol shot. After a desperate swim, he drags himself onto the rocky shore of Ship-Trap Island and collapses into exhausted sleep.",
+    "preconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "yacht_caribbean",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.heard_gunshots",
+        "entityId": "rainsford",
+        "attribute": "heard_gunshots",
+        "value": true,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "yacht_caribbean.status",
+        "entityId": "yacht_caribbean",
+        "attribute": "status",
+        "value": "underway",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "expectedPostconditions": [
+      {
+        "id": "rainsford.location",
+        "entityId": "rainsford",
+        "attribute": "location",
+        "value": "ship_trap_shore",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.status",
+        "entityId": "rainsford",
+        "attribute": "status",
+        "value": "alive",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.condition",
+        "entityId": "rainsford",
+        "attribute": "condition",
+        "value": "exhausted",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "rainsford.inventory",
+        "entityId": "rainsford",
+        "attribute": "inventory",
+        "value": "clothes_lost",
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      },
+      {
+        "id": "yacht_caribbean.rainsford_on_board",
+        "entityId": "yacht_caribbean",
+        "attribute": "rainsford_on_board",
+        "value": false,
+        "confidence": 1,
+        "validity": {
+          "temporal": {
+            "start": {
+              "type": "absolute",
+              "value": "night_0"
+            },
+            "end": null
+          },
+          "branches": {
+            "type": "all"
+          }
+        }
+      }
+    ],
+    "threadProgress": [
+      {
+        "thread": "T1",
+        "advancement": "Rainsford falls overboard and reaches the island. Survival begins.",
+        "progressAfter": 15,
+        "progressTotal": 100
+      }
+    ],
+    "foreshadowing": [],
+    "relationshipEffects": [],
+    "ruleEffects": [],
+    "styleGuidance": "Action sequence — sudden, disorienting. The fall should feel abrupt and shocking after the languid opening. The swim is a desperate, methodical fight for survival. End on exhausted collapse.",
+    "branchExistence": {
+      "type": "all"
+    },
+    "participants": {
+      "entities": [
+        "rainsford",
+        "yacht_caribbean"
+      ]
+    }
+  },
+  "appliedStyle": {
+    "tone": "literary",
+    "scenePacing": "medium"
+  },
+  "contextSummary": {
+    "eventId": "E1",
+    "characterCount": 3,
+    "relationshipCount": 1,
+    "worldFactCount": 7,
+    "threadCount": 2,
+    "knownFactCount": 0,
+    "characterNames": [
+      "Sanger Rainsford",
+      "Whitney",
+      "Captain Nielsen"
+    ],
+    "worldFactIds": [
+      "rainsford.knows_ship_trap_island",
+      "rainsford.heard_gunshots",
+      "rainsford.location",
+      "rainsford.status",
+      "rainsford.condition",
+      "rainsford.inventory",
+      "yacht_caribbean.rainsford_on_board"
+    ]
+  },
+  "worldStateBefore": {
+    "entityCount": 4,
+    "factCount": 14,
+    "relationshipCount": 1,
+    "threadCount": 2,
+    "preconditionsSatisfied": [
+      {
+        "entity": "rainsford",
+        "attribute": "location",
+        "expectedValue": "yacht_caribbean",
+        "currentValue": "ship_trap_shore",
+        "satisfied": false
+      },
+      {
+        "entity": "rainsford",
+        "attribute": "heard_gunshots",
+        "expectedValue": true,
+        "currentValue": true,
+        "satisfied": true
+      },
+      {
+        "entity": "yacht_caribbean",
+        "attribute": "status",
+        "expectedValue": "underway",
+        "currentValue": "underway",
+        "satisfied": true
+      }
+    ]
+  },
+  "llmCall": {
+    "provider": "opencode-go",
+    "model": "deepseek-v4-flash",
+    "temperature": 0.8,
+    "maxTokens": 1500,
+    "promptMessages": 2,
+    "promptChars": 6488,
+    "usage": {
+      "promptTokens": 1865,
+      "completionTokens": 895,
+      "totalTokens": 2760
+    },
+    "finishReason": "stop",
+    "requestId": "50cb9929-8031-48d1-b7f2-6c7366c95d51",
+    "latencyMs": 13163
+  },
+  "prose": "The sound came again—sharp, distinct, unmistakable. Three shots in rapid succession, ripping through the velvet night from somewhere ahead and to starboard. Rainsford was already moving, his body responding before his mind had fully registered the report. He sprang to the rail, peering into the absolute blackness that pressed against the yacht's running lights like a living thing.\n\nThe pipe fell from his lips, knocked away by a rope that whipped past in the darkness—a line gone slack, or perhaps the peak halyard come loose. He lunged for it, that foolish instinct to save a trifle, and felt the world tilt. The rail was not where his hand expected it. The deck slid away beneath him, and he was falling, the warm heavy air rushing past his face, the yacht's hull a dark wall receding above him.\n\nThe water took him like a mouth. Blood-warm, almost shockingly so, it closed over his head and he came up gasping, the salt bitter on his lips. Above, the yacht's lights were already diminishing, sliding away into the dark with terrible speed. He called out—once, twice—but his voice was swallowed by the slap of water and the dying hum of engines. No one had seen. No one would hear.\n\nHe trod water, forcing calm into his lungs, and assessed. The shots had come from that direction—the south, perhaps, or the southeast. There was land there. Ship-Trap Island. The crew had spoken of it in whispers, and Whitney had pointed it out on the chart with something like unease. Rainsford did not believe in nameless dreads. He believed in what he could see, and hold, and hunt.\n\nHe stripped off his clothes, letting them fall away into the warm dark, and began to swim.\n\nThe stroke was steady, economical. A hunter knows how to pace himself. The water was silken against his skin, and the stars wheeled overhead in constellations he knew by heart. Then came another sound, nearer now—a high, terrible scream, not human, yet almost human in its agony, cut short by the flat crack of a pistol.\n\nHe swam harder.\n\nThe shore rose out of the darkness like a bruise, black against black. Rocks scraped his knees, his palms, as he dragged himself out of the suck and swell of the tide. The island air was thick with the smell of damp earth and something else—something metallic, like old blood.\n\nHe crawled a little way up the stones, his breath coming in ragged bursts, his limbs leaden and useless. The night pressed down on him, warm and absolute. He thought, with the last fragment of clarity that remained, that he would rest. Just for a moment.\n\nThen the darkness swallowed everything.",
+  "wordCount": 450,
+  "charCount": 2579,
+  "postRenderValidation": {
+    "passed": false,
+    "confidence": 0.25,
+    "coverage": {
+      "postconditionsStated": 0,
+      "postconditionsTotal": 5,
+      "preconditionsPreserved": 3,
+      "preconditionsTotal": 3
+    },
+    "issueCount": 5,
+    "errorCount": 0,
+    "warningCount": 5,
+    "issues": [
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.location = ship_trap_shore",
+        "expected": "rainsford.location = ship_trap_shore"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.status = alive",
+        "expected": "rainsford.status = alive"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.condition = exhausted",
+        "expected": "rainsford.condition = exhausted"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: rainsford.inventory = clothes_lost",
+        "expected": "rainsford.inventory = clothes_lost"
+      },
+      {
+        "rule": "postcondition_missing",
+        "severity": "warning",
+        "message": "Postcondition not stated: yacht_caribbean.rainsford_on_board = false",
+        "expected": "yacht_caribbean.rainsford_on_board = false"
+      }
+    ]
+  }
+}

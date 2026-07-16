@@ -6,12 +6,14 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "tsc -b packages/core packages/cli",
+    "build": "npm run build:types && npm run build:js",
+    "build:types": "tsc -b packages/core packages/cli",
+    "build:js": "node packages/core/build.mjs && node packages/cli/build.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit packages/core packages/cli"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.8",

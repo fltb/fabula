@@ -12,6 +12,7 @@ import {
   assembleNovel,
   calculateISS,
   detectAntiPatterns,
+  type AssembleResult,
 } from '@novalistically/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -342,7 +343,7 @@ export function mcpNovaRender(projectPath: string, eventId: string) {
 // mcp_nova_assemble — Assemble the novel
 // ============================================================================
 
-export function mcpNovaAssemble(projectPath: string, outputPath?: string) {
+export function mcpNovaAssemble(projectPath: string, outputPath?: string): AssembleResult {
   const ctx = initializeContext(projectPath);
   return assembleNovel({
     projectDir: projectPath,
@@ -480,7 +481,9 @@ function generateGuidance(
 // MCP Server entry point (for standalone process)
 // ============================================================================
 
-export function createMCPServer(projectPath: string) {
+export function createMCPServer(projectPath: string): {
+  tools: Record<string, (...args: any[]) => Promise<unknown> | unknown>;
+} {
   return {
     tools: {
       nova_status: () => mcpNovaStatus(projectPath),

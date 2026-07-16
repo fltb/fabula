@@ -68,6 +68,8 @@ export {
   ProseConcatenator,
   assembleNovel,
   countWords,
+  type AssembleOptions,
+  type AssembleResult,
 } from './assembler/index.js';
 
 // ISS

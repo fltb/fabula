@@ -15,7 +15,7 @@ import {
 } from '@novalistically/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { StatusReport, NextAction, ISSGap, ValidationIssue, ThreadSnapshot, Blocker } from '@novalistically/core';
+import type { StatusReport, NextAction, ISSGap, ValidationIssue, ThreadSnapshot, Blocker, ISSDimension } from '@novalistically/core';
 
 // ============================================================================
 // MCP Tool Implementations
@@ -268,11 +268,9 @@ export function mcpNovaIss(projectPath: string) {
   });
 
   const antiPatterns = detectAntiPatterns({
-    projectDir: projectPath,
     entityRegistry: ctx.registry,
     events: ctx.events,
     threads: threads.map((t) => ({ id: t.id, name: t.name })),
-    rules: ctx.data.rules,
   });
 
   return { iss: issResult, antiPatterns };

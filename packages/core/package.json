@@ -11,7 +11,9 @@
     }
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --emitDeclarationOnly && node build.mjs",
+    "build:js": "node build.mjs",
+    "build:types": "tsc --emitDeclarationOnly",
     "test": "vitest run"
   },
   "dependencies": {

@@ -672,7 +672,7 @@ describe('ReplayEngine', () => {
 
       const relKey = ['camille', 'npc_gear'].sort().join('_');
       expect(state.relationships[relKey]).toBeDefined();
-      expect(state.relationships[relKey].direction['camille']).toEqual({
+      expect(state.relationships[relKey].direction['camille'].dimensions).toEqual({
         type: 'friend',
         intensity: 5,
       });

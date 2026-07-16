@@ -265,11 +265,16 @@ export class ReplayEngine {
         if (dirMatch) {
           const from = dirMatch[1];
           if (!state.relationships[relKey].direction[from]) {
-            state.relationships[relKey].direction[from] = {};
+            state.relationships[relKey].direction[from] = { dimensions: {}, perceivedBy: {} };
           }
           if (re.newState) {
-            state.relationships[relKey].direction[from].type = re.newState.type;
-            state.relationships[relKey].direction[from].intensity = re.newState.intensity;
+            const dirEntry = state.relationships[relKey].direction[from]!;
+            if (re.newState.type !== undefined) {
+              dirEntry.dimensions['type'] = re.newState.type;
+            }
+            if (re.newState.intensity !== undefined) {
+              dirEntry.dimensions['intensity'] = re.newState.intensity;
+            }
           }
         }
       }

@@ -84,6 +84,7 @@ export class ReviewManager {
       blocking: 0,
       addressed: 0,
       resolved: 0,
+      wontfix: 0,
     };
     for (const c of this.comments) {
       byStatus[c.status]++;

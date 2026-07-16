@@ -46,7 +46,7 @@ program
 program
   .command('project init <name>')
   .description('Initialize a new novalistically project')
-  .action((name: string) => {
+  .action(async (name: string) => {
     const projectDir = path.join(process.cwd(), name);
     if (fs.existsSync(projectDir)) {
       console.error(`Error: Directory "${name}" already exists.`);
@@ -231,11 +231,9 @@ program
 
         // Anti-patterns
         const antiPatterns = detectAntiPatterns({
-          projectDir,
           entityRegistry: registry,
           events,
           threads: threads.map((t) => ({ id: t.id, name: t.name })),
-          rules: data.rules,
         });
         for (const ap of antiPatterns) {
           console.log(`  ⚠️ Anti-pattern: ${ap.message}`);
@@ -247,7 +245,6 @@ program
           entityRegistry: registry,
           threads: threads,
           rules: data.rules,
-          currentChapter: Math.max(1, ...events.map((e) => Math.ceil(e.narrativeOrder / 3))),
         });
         for (const issue of strictIssues) {
           console.log(`  ❌ Strict: ${issue.message}`);

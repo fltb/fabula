@@ -284,7 +284,7 @@ export type ArbitrationStrategy =
 
 export interface WorldState {
   entities: Record<EntityId, Record<string, unknown>>;
-  relationships: Record<string, { direction: Record<string, Record<string, unknown>> }>;
+  relationships: Record<string, RelationshipState>;
   knowledge: Record<EntityId, { knownFacts: FactId[] }>;
   threads: Record<string, { progress: number; total: number }>;
   rules: Record<string, { activeEvidence: number }>;
@@ -323,7 +323,7 @@ export interface ValidationIssue {
   attribute?: string;
   message: string;
   fixSuggestion: string;
-  fixAction: 'add_knowledge' | 'remove_line' | 'change_value' | 'add_precondition' | 'declare_flashback' | 'manual';
+  fixAction: 'add_knowledge' | 'remove_line' | 'change_value' | 'add_precondition' | 'declare_flashback' | 'manual' | 'add_field' | 'create_file' | 'edit_file';
   fixTarget: {
     file: string;
     field?: string;

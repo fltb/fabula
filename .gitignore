@@ -4,3 +4,8 @@ dist/
 .nova/snapshots/
 .nova/index.sqlite
 output/
+
+# Environment files
+.env
+.env.local
+.env.*.local

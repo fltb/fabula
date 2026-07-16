@@ -1,0 +1,22 @@
+// ============================================================================
+// Novalistically — Character Definition Schema
+// ============================================================================
+
+import { z } from 'zod';
+
+export const characterDefinitionSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    type: z.string(),
+    archetype: z.string().optional(),
+    faction: z.string().optional(),
+    role: z.enum(['minor', 'supporting', 'antagonist', 'background']).optional(),
+    description: z.string(),
+    initialState: z.record(z.string(), z.unknown()),
+    traits: z.array(z.string()),
+    voiceNotes: z.string().optional(),
+    backstory: z.string().optional(),
+    knownSecrets: z.array(z.string()).optional(),
+  })
+  .strict();

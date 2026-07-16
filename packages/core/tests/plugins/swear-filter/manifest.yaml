@@ -1,0 +1,12 @@
+name: swear-filter
+version: 0.1.0
+priority: 50
+provides: [profanity-detection]
+requires: []
+conflicts: []
+authority:
+  dimensions: [comment-text]
+  exclusive: false
+observes:
+  eventTypes: [review.comment.added]
+  stateDomains: []

@@ -93,9 +93,10 @@ export type {
   CompletionResponse,
 } from './ai/index.ts';
 export { LLMError } from './ai/index.ts';
-export { MockProvider, OpencodeZenProvider } from './ai/index.ts';
+export { MockProvider, OpencodeZenProvider, OpencodeGoProvider } from './ai/index.ts';
+export { OPENCODE_GO_MODELS } from './ai/index.ts';
 export { buildSceneRenderPrompt, buildThreadStatusPrompt } from './ai/index.ts';
-export type { MockProviderOptions, OpencodeZenOptions } from './ai/index.ts';
+export type { MockProviderOptions, OpencodeZenOptions, OpencodeGoOptions, OpencodeGoModel } from './ai/index.ts';
 export type { SceneRenderInput, ThreadStatusInput } from './ai/index.ts';
 
 // Bench (functional + performance)

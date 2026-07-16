@@ -20,8 +20,8 @@ export interface OpencodeZenOptions {
 }
 
 const DEFAULTS = {
-  baseUrl: 'http://127.0.0.1:25793/v1',
-  model: 'deepseek-v4-flash',
+  baseUrl: 'https://opencode.ai/zen/v1',
+  model: 'deepseek-v4-flash-free',
 } as const;
 
 interface OpenAIChatResponse {

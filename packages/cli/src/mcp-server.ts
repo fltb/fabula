@@ -62,7 +62,7 @@ export function mcpNovaStatus(projectPath: string): StatusReport {
     projectDir: projectPath,
     entityRegistry: ctx.registry,
     events: ctx.events,
-    threads: threads.map((t) => ({ id: t.id, name: t.name })),
+    threads: threads.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name })),
     rules: ctx.data.rules,
   });
 
@@ -80,7 +80,7 @@ export function mcpNovaStatus(projectPath: string): StatusReport {
 
   // Threads
   const threadSnapshots: ThreadSnapshot[] = [];
-  for (const t of threads) {
+    for (const t of threads) {
     const progress = state.threads[t.id];
     const progressStr = progress
       ? `${progress.progress}/${progress.total}`
@@ -88,7 +88,7 @@ export function mcpNovaStatus(projectPath: string): StatusReport {
     const [cur, total] = progressStr.split('/').map(Number);
     const currentChapter = Math.max(
       1,
-      ...ctx.events.map((e) => Math.ceil(e.narrativeOrder / 3)),
+      ...ctx.events.map((e: { narrativeOrder: number }) => Math.ceil(e.narrativeOrder / 3)),
     );
 
     let risk: ThreadSnapshot['risk'] = 'on_track';
@@ -146,7 +146,7 @@ export function mcpNovaStatus(projectPath: string): StatusReport {
     } else {
       // Check precondition satisfaction
       let allPreconditionsMet = true;
-      for (const pc of event.preconditions) {
+      for (const pc of (event.preconditions as Array<{ entityId: string; attribute: string; value: unknown }>)) {
         const currentVal = state.entities[pc.entityId]?.[pc.attribute];
         if (currentVal === undefined || currentVal === null) {
           allPreconditionsMet = false;
@@ -167,7 +167,7 @@ export function mcpNovaStatus(projectPath: string): StatusReport {
     if (event.id === 'system:genesis') continue;
     const eventResult = validationResults.get(event.id);
     if (eventResult && !eventResult.passed) {
-      const missingPreconditions = event.preconditions.filter((pc) => {
+      const missingPreconditions = event.preconditions.filter((pc: { entityId: string; attribute: string; value: unknown }) => {
         const currentVal = state.entities[pc.entityId]?.[pc.attribute];
         return currentVal === undefined || currentVal === null;
       });
@@ -264,14 +264,14 @@ export function mcpNovaIss(projectPath: string) {
     projectDir: projectPath,
     entityRegistry: ctx.registry,
     events: ctx.events,
-    threads: threads.map((t) => ({ id: t.id, name: t.name })),
+    threads: threads.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name })),
     rules: ctx.data.rules,
   });
 
   const antiPatterns = detectAntiPatterns({
     entityRegistry: ctx.registry,
     events: ctx.events,
-    threads: threads.map((t) => ({ id: t.id, name: t.name })),
+    threads: threads.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name })),
   });
 
   return { iss: issResult, antiPatterns };

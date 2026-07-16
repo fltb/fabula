@@ -1,0 +1,7 @@
+eventId: "E2"
+title: "The Trail of the Hunted"
+narrativeOrder: 3
+sceneType: linear
+pov: {"character":"rainsford","type":"third_person_limited"}
+sceneBrief: "Rainsford wakes late in the afternoon, hungry but refreshed. He follows the shore and finds evidence of a chase: crushed underbrush, bloodstained weeds, an empty .22 cartridge. He finds the print of hunting boots and follows the trail, noticing the peculiar tree-skeleton warning left behind. As darkness falls, he sights the lights of an enormous château on a high bluff. He approaches the spiked iron gate, exhausted but hopeful."
+generatedAt: "2026-07-16T12:15:25.335Z"

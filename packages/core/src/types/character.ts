@@ -1,0 +1,42 @@
+// ============================================================================
+// Novalistically — Character, Faction & Relationship Definition Types
+// ============================================================================
+
+// ——— Character Definition (YAML) ———
+
+export interface CharacterDefinition {
+  id: string;
+  name: string;
+  type: string;
+  archetype?: string;
+  faction?: string;
+  role?: 'minor' | 'supporting' | 'antagonist' | 'background';
+  description: string;
+  initialState: Record<string, unknown>;
+  traits: string[];
+  voiceNotes?: string;
+  backstory?: string;
+  knownSecrets?: string[];
+}
+
+// ——— Faction Definition ———
+
+export interface FactionDefinition {
+  id: string;
+  name: string;
+  kind: string;
+  description: string;
+  initialState: Record<string, unknown>;
+}
+
+// ——— Relationship Definition ———
+
+export interface RelationshipDefinition {
+  participants: [string, string];
+  type: string;
+  description: string;
+  initialState: {
+    [key: string]: Record<string, unknown>;
+  };
+  establishedEvent: string;
+}

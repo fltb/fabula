@@ -1,0 +1,21 @@
+// ============================================================================
+// Review System — Patch operations (pure functions)
+// ============================================================================
+
+import type { ReviewPatch, PatchChange } from '../types/index.js';
+
+/** Create a patch from resolved comments and store it */
+export function createPatch(
+  patches: ReviewPatch[],
+  sourceReviewIds: string[],
+  changes: PatchChange[],
+): ReviewPatch {
+  const patch: ReviewPatch = { sourceReviewIds, changes };
+  patches.push(patch);
+  return patch;
+}
+
+/** Get all stored patches */
+export function getPatches(patches: ReviewPatch[]): ReviewPatch[] {
+  return [...patches];
+}

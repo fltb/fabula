@@ -8,7 +8,7 @@ import type {
   TimeAnchor,
   WorldInitialState,
   CharacterDefinition,
-  RelationshipDefinition,
+  CharacterRelationshipDef,
   RuleDefinition,
   LocationDefinition,
   ItemDefinition,
@@ -44,7 +44,7 @@ export class EntityMapper {
       path.join(defsDir, 'characters'),
       this.storage,
     );
-    const relationships = readYamlFilesInDir<RelationshipDefinition>(
+    const relationships = readYamlFilesInDir<CharacterRelationshipDef>(
       path.join(defsDir, 'relationships'),
       this.storage,
     );

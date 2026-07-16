@@ -57,8 +57,20 @@ export type {
 export type {
   CharacterDefinition,
   FactionDefinition,
-  RelationshipDefinition,
+  CharacterRelationshipDef,
 } from './character.js';
+
+export type {
+  KnowledgeDefinition,
+  KnowledgeEvent,
+  KnowledgeEventType,
+} from './knowledge.js';
+
+export type {
+  RelationshipDefinition,
+  RelationshipEvent,
+  RelationshipEventType,
+} from './relationship.js';
 
 export type {
   LocationDefinition,

@@ -17,7 +17,8 @@ import { ruleDefinitionSchema } from './rule.js';
 import { locationDefinitionSchema } from './location.js';
 import { itemDefinitionSchema } from './item.js';
 import { factionDefinitionSchema } from './faction.js';
-import { relationshipDefinitionSchema } from './relationship.js';
+import { relationshipDefinitionSchema, relationshipEventSchema } from './relationship.js';
+import { knowledgeDefinitionSchema, knowledgeEventSchema } from './knowledge.js';
 import { worldInitialStateSchema } from './state-initial.js';
 import { chapterMetadataSchema, sceneMetadataSchema } from './chapter.js';
 import { projectConfigSchema } from './project.js';
@@ -35,6 +36,9 @@ export {
   itemDefinitionSchema,
   factionDefinitionSchema,
   relationshipDefinitionSchema,
+  relationshipEventSchema,
+  knowledgeDefinitionSchema,
+  knowledgeEventSchema,
   worldInitialStateSchema,
   chapterMetadataSchema,
   sceneMetadataSchema,
@@ -71,6 +75,9 @@ export const schemas: Record<string, ZodTypeAny> = {
   itemDefinition: itemDefinitionSchema,
   factionDefinition: factionDefinitionSchema,
   relationshipDefinition: relationshipDefinitionSchema,
+  relationshipEvent: relationshipEventSchema,
+  knowledgeDefinition: knowledgeDefinitionSchema,
+  knowledgeEvent: knowledgeEventSchema,
   worldInitialState: worldInitialStateSchema,
   chapterMetadata: chapterMetadataSchema,
   projectConfig: projectConfigSchema,

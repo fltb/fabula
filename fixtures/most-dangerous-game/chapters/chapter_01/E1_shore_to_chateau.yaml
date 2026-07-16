@@ -1,0 +1,94 @@
+event: E1
+title: "The Shore to the Château"
+narrativeOrder: 2
+sceneType: linear
+storyTime: day_1_afternoon
+pov:
+  character: rainsford
+  type: third_person_limited
+sceneBrief: "Rainsford wakes late in the afternoon, hungry but alive. Following the shore, he finds evidence of a violent chase: crushed underbrush, bloodstained weeds, an empty .22 cartridge, and a sailor's body torn by hounds. He follows the peculiar tree-skeleton warning deeper into the island. As darkness falls, he sights the lights of an enormous château on a high bluff. Approaching the spiked iron gate, he lifts a heavy gargoyle knocker. The door swings open to reveal a giant black-bearded man holding a revolver aimed at Rainsford's heart — Ivan, who is deaf and mute. Then General Zaroff appears, an erect, slender man in evening clothes, and welcomes Rainsford by name, having recognized him from his book on hunting snow leopards in Tibet. Ivan is dismissed with a silent gesture, and Rainsford is drawn into the warmth and light."
+preconditions:
+  - entity: rainsford
+    attribute: location
+    value: ship_trap_shore
+    confidence: 1.0
+  - entity: rainsford
+    attribute: status
+    value: alive
+    confidence: 1.0
+  - entity: world
+    attribute: time
+    value: day_1_afternoon
+    confidence: 1.0
+expectedPostconditions:
+  - entity: rainsford
+    attribute: location
+    value: chateau
+    confidence: 1.0
+  - entity: rainsford
+    attribute: found_hunting_trail
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: knows_island_inhabited
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: met_zaroff
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: met_ivan
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: knows_ivan_deaf_mute
+    value: true
+    confidence: 1.0
+  - entity: zaroff
+    attribute: knows_rainsford_identity
+    value: true
+    confidence: 1.0
+  - entity: ship_trap_shore
+    attribute: cartridge_found
+    value: true
+    confidence: 1.0
+  - entity: ship_trap_shore
+    attribute: bloodstains_identified
+    value: true
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "Rainsford discovers the island's deadly secret — someone has been hunted here before. He then meets Zaroff and Ivan and enters the château."
+    progressAfter: 25
+    progressTotal: 100
+foreshadowing:
+  - id: tree_skeleton_warning
+    hint: "The tree stripped of bark and showing white wood beneath — a warning sign left in the jungle. Rainsford does not yet understand its meaning, but it foreshadows the dead tree he will use as a man-catcher."
+    targetRevealChapter: 3
+    thread: T1
+  - id: hounds_in_jungle
+    hint: "The .22 cartridge and the body torn by hounds foreshadow Rainsford's own fate if caught."
+    targetRevealChapter: 4
+    thread: T1
+  - id: ivan_revolver
+    hint: "Ivan's revolver trained on Rainsford's heart. The deaf-mute giant is a gatekeeper of death."
+    targetRevealChapter: 4
+    thread: T1
+  - id: zaroff_recognition
+    hint: "Zaroff recognizes Rainsford from his book. This is not coincidence — Zaroff knows exactly who has arrived on his island."
+    targetRevealChapter: 5
+    thread: T3
+relationshipEffects:
+  - participants:
+      - rainsford
+      - zaroff
+    effect: establish
+    direction: host_guest
+newState:
+  type: formal_hospitality
+  intensity: 0.5
+ruleEffects: []
+styleGuidance: "Exploration and discovery. The island should feel beautiful and menacing at once — evidence of violence accumulates gradually, building unease. The château's appearance should feel like a mirage. Ivan at the door is a jump-scare; Zaroff's entrance is a relief that curdles into unease. End with Rainsford crossing the threshold, leaving the jungle for the gilded cage."
+narrativeContent:
+  opening: "Rainsford opened his eyes to the sun's late-afternoon glare and knew, with the hunter's instinct that had never failed him, that he had slept through most of the day. He was alive. That was the first fact. The second was hunger — a sharp, insistent clawing in his belly. The third fact lay before him: a trail of crushed weeds, a patch of crimson-stained moss, and glittering in the dying light, an empty brass cartridge.\n\nHe followed the trail through the beautiful and terrible jungle, past the stripped tree that stood like a skeleton warning, until at last, as darkness fell, he saw the lights of the château rising on a high bluff — immense, improbable, a fragment of civilization in the heart of savagery. The knocker was a gargoyle, its face frozen in a leering grin, and it boomed against the massive door with a sound that startled Rainsford with its violence. The door swung open as if on a spring, flooding the darkness with a river of glaring gold light. In the center of that light stood a giant, black-bearded to the waist, and in his hand, a long-barrelled revolver aimed directly at Rainsford's heart."

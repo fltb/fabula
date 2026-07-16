@@ -1,12 +1,12 @@
 import type {
   CharacterDefinition,
+  CharacterRelationshipDef,
   ChapterMetadata,
   EventFile,
   FactionDefinition,
   ItemDefinition,
   LocationDefinition,
   ProjectConfig,
-  RelationshipDefinition,
   RuleDefinition,
   TimeAnchor,
   WorldInitialState,
@@ -19,7 +19,7 @@ import type {
 export interface ProjectData {
   config: ProjectConfig | null;
   characters: CharacterDefinition[];
-  relationships: RelationshipDefinition[];
+  relationships: CharacterRelationshipDef[];
   rules: RuleDefinition[];
   locations: LocationDefinition[];
   items: ItemDefinition[];

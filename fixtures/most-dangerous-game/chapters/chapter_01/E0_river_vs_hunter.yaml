@@ -1,0 +1,98 @@
+event: E0
+title: "The River and the Hunter"
+narrativeOrder: 1
+sceneType: linear
+storyTime: night_0
+pov:
+  character: rainsford
+  type: third_person_limited
+sceneBrief: "On the deck of a yacht cutting through the moonless Caribbean night, Whitney reproaches Rainsford's dismissive attitude toward the animals they hunt. Rainsford laughs it off: 'The world is made up of two classes — the hunters and the huntees. Luckily, you and I are hunters.' Whitney goes to bed uneasy. Rainsford, alone, hears three gunshots in the darkness. He springs to the rail to peer into the darkness — and his pipe, striking a taut rope, is torn from his lips. He lunges for it and loses his balance, falling into the blood-warm Caribbean. The yacht speeds away. Stripping off his clothes, he swims toward the direction of the shots. An animal scream is cut short by a pistol shot. After a desperate swim, Rainsford drags himself onto the rocky shore of Ship-Trap Island and collapses into exhausted sleep."
+preconditions:
+  - entity: rainsford
+    attribute: location
+    value: yacht_caribbean
+    confidence: 1.0
+  - entity: rainsford
+    attribute: status
+    value: alive
+    confidence: 1.0
+  - entity: whitney
+    attribute: location
+    value: yacht_caribbean
+    confidence: 1.0
+  - entity: yacht_caribbean
+    attribute: status
+    value: underway
+    confidence: 1.0
+  - entity: world
+    attribute: time
+    value: night_0
+    confidence: 1.0
+expectedPostconditions:
+  - entity: rainsford
+    attribute: knows_ship_trap_island
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: heard_gunshots
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: location
+    value: ship_trap_shore
+    confidence: 1.0
+  - entity: rainsford
+    attribute: status
+    value: alive
+    confidence: 1.0
+  - entity: rainsford
+    attribute: condition
+    value: exhausted
+    confidence: 1.0
+  - entity: rainsford
+    attribute: inventory
+    value: "clothes_lost"
+    confidence: 1.0
+  - entity: yacht_caribbean
+    attribute: rainsford_on_board
+    value: false
+    confidence: 1.0
+  - entity: whitney
+    attribute: location
+    value: yacht_caribbean
+    confidence: 1.0
+threadProgress:
+  - thread: T2
+    advancement: "Whitney plants the seed — 'Perhaps the jaguar does' care about fear and pain. Rainsford dismisses it. He is about to learn what it means to be prey."
+    progressAfter: 5
+    progressTotal: 100
+  - thread: T1
+    advancement: "Rainsford falls overboard and reaches the island. Survival begins."
+    progressAfter: 15
+    progressTotal: 100
+foreshadowing:
+  - id: hunters_and_huntees
+    hint: "Rainsford declares the world divided into hunters and huntees — a worldview that will be violently inverted when he becomes the hunted."
+    targetRevealChapter: 5
+    thread: T2
+  - id: whitney_jaguar
+    hint: "Whitney insists the jaguar feels fear. Rainsford dismisses him. This moral question is the story's thematic core."
+    targetRevealChapter: 5
+    thread: T2
+  - id: three_gunshots
+    hint: "Three gunshots ring out in the night — Zaroff hunting his current quarry."
+    targetRevealChapter: 5
+    thread: T1
+relationshipEffects:
+  - participants:
+      - rainsford
+      - whitney
+    effect: reinforce
+    direction: friendly_debate
+newState:
+  type: philosophical_tension
+  intensity: 0.3
+ruleEffects: []
+styleGuidance: "Begin with atmospheric, languid dialogue establishing Rainsford's confidence and Whitney's unease. The gunshots are an abrupt intrusion. The fall overboard should be sudden and shocking. The swim is a desperate, methodical fight for survival. End with exhausted collapse on the shore."
+narrativeContent:
+  opening: "The yacht slid through the Caribbean night like a ghost on water, its engine a muffled heartbeat beneath the deck. Rainsford leaned against the rail, the bowl of his brier pipe glowing and fading in the darkness, and watched the place where the island ought to be — a place that was only a denser patch of blackness against the black sky.\n\n'I rather think they understand one thing — fear,' Whitney was saying. 'The fear of pain and the fear of death.'\n\nRainsford laughed, a short, dismissive sound. 'Nonsense. This hot weather is making you soft, Whitney. Be a realist. The world is made up of two classes — the hunters and the huntees. Luckily, you and I are hunters.'\n\nHe did not see Whitney's troubled expression in the dark. He did not feel the chill that had crept into the air. He only heard, faint and far away, three shots, spaced precisely, punching through the velvet night like a message from another world.\n\nThe three shots hung in the air like a question no one would answer. Rainsford was at the rail before the last echo died, straining to see — and his pipe, striking a taut rope, was torn from his lips. He lunged for it, his center of gravity shifted, and with a hoarse cry he was falling, the blood-warm water closing over his head like a door slamming shut."

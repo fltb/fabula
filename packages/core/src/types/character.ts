@@ -29,9 +29,11 @@ export interface FactionDefinition {
   initialState: Record<string, unknown>;
 }
 
-// ——— Relationship Definition ———
+// ——— Character-level Relationship Definition (file/YAML format) ———
+// Retained for YAML loading backward compatibility; the canonical
+// first-class RelationshipDefinition now lives in ./relationship.ts.
 
-export interface RelationshipDefinition {
+export interface CharacterRelationshipDef {
   participants: [string, string];
   type: string;
   description: string;

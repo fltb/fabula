@@ -1,0 +1,50 @@
+ruleId: shimmer_addiction_timeline
+name: "Shimmer Addiction Timeline"
+category: progression_rule
+type: "rule"
+statement: "Shimmer is a transformative and highly addictive substance derived from rare flowers found in the deepest levels of Zaun. It grants temporary physical enhancement — increased strength, speed, and endurance — but at a catastrophic cost. Regular use causes cumulative physiological damage: organ deterioration, nervous system degradation, violet discoloration of veins and skin, pupil dilation, and eventual psychological collapse. The timeline models the progression of shimmer addiction in a character, from first exposure to terminal shimmer-sickness."
+logicalConsequences:
+  - type: state_invariant
+    scope: character_phase_advancement
+    condition: shimmer_addicted_character_progression
+    constraint: |
+      For any character C with shimmer_addiction_phase = P:
+        if days_since_last_dose(C) > 3 AND P >= 3:
+          trigger withdrawal_event(C)
+          severity = P * 0.2
+          apply_stat_modifiers(C, withdrawal_severity=severity)
+        if days_since_last_dose(C) > 7 AND P >= 4:
+          roll_survival_check(C, difficulty=0.3 + (P * 0.1))
+          if fail: set status(C) = "dying"
+    priority: high
+    conflictResolution: "Withdrawal effects cannot be circumvented except by administering shimmer. No amount of willpower or hextech intervention can prevent the physiological dependency."
+  - type: transition_constraint
+    scope: phase_transition
+    condition: shimmer_phase_advancement_check
+    constraint: |
+      For any character C transitioning from phase P to phase P+1:
+        minimum_days_in_phase(P) must be satisfied
+        if C has trait "willpower_high" AND P < 3:
+          50% chance to delay phase advancement by 1.5x duration
+        if C has access to shimmer_detox_treatment AND P < 4:
+          halt advancement; begin detox counter at 0
+          accumulate 0.01 per day of completed detox
+          if detox counter >= 1.0: begin phase regression at 0.5x speed
+    priority: medium
+    conflictResolution: "Phase advancement is automatic unless specific intervention occurs. Detox is possible only in phases 1-3 and requires specialized medical care not commonly available."
+  - type: progression
+    scope: automatic_phase_advancement
+    condition: time_elapsed_based
+    constraint: |
+      Timeline for automatic phase advancement (without intervention):
+        Phase 1 → 2: after 14 consecutive days of shimmer use
+        Phase 2 → 3: after 45 days in phase 2 with continued use
+        Phase 3 → 4: after 90 days in phase 3 with continued use
+        Phase 4 → 5: after 120 days in phase 4 with continued use
+        Phase 5 → death: roll survival check every 30 days
+          base_difficulty = 0.6
+          +0.05 per previous check passed
+          shimmer_quality_penalty: if impure shimmer, +0.15 difficulty
+    priority: medium
+    conflictResolution: "The timeline can be accelerated by higher-quality shimmer or slowed by lower-quality shimmer. Character traits like 'resilient' or 'willpower_high' can provide minor delays but cannot halt the progression entirely."
+evidenceChain: []

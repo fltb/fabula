@@ -1,0 +1,31 @@
+id: gear
+name: "Gideon 'Gear' Marlow"
+type: zaun_informant
+description: "A wiry man in his mid-thirties with sallow, pockmarked skin that bears the telltale discoloration of prolonged shimmer exposure. His left arm is wrapped in stained bandages from wrist to elbow, hiding the shimmer-infused veins that pulse with an unsettling violet light beneath the skin. He has unevenly cut brown hair, a patchy beard he cannot seem to grow properly, and yellowed eyes with permanently dilated pupils — another gift from shimmer. He dresses in layered, oversized clothing that allows him to disappear into crowds or hide in shadows. His fingers are stained with grease and ink, and he has a nervous habit of constantly adjusting a set of copper-plated goggles pushed up on his forehead — broken, but he keeps them as a memento from his days as a would-be inventor."
+traits:
+  - greedy
+  - cowardly
+  - survival_instinct
+  - knows_more_than_he_says
+  - self_preserving
+  - information_broker
+  - shimmer_addicted
+  - guilt_ridden_beneath_surface
+initialState:
+  location: zaun_gray_exchange
+  status: alive
+  condition: shimmer_damaged
+  emotionalState: anxious
+  inventory:
+    - item: "broken_goggles"
+      description: "Copper-plated goggles with a cracked left lens; keeps them as a reminder of who he used to be"
+    - item: "information_cache"
+      description: "A mental map of secrets, rumors, and transactions he's witnessed; sells piecemeal"
+    - item: "shimmer_vial_emergency"
+      description: "A single dose of refined shimmer hidden in a hollow heel — for emergencies only"
+voiceNotes: "Nervous, jittery, and overly talkative. His voice has a reedy quality, often cracking when he's stressed. He laughs too easily and too loudly at his own jokes, a nervous tic from years of trying to seem harmless. When discussing serious business, his voice drops to a conspiratorial whisper. He has a habit of trailing off mid-sentence and checking over his shoulder."
+backstory: "Once a promising if minor inventor in the Entresol level of Zaun, Gideon Marlow dreamed of creating a device that could filter the undercity's toxic air cheaply enough to save thousands. But the parts were expensive, the Ferros clan owned the patents on the necessary filtration membranes, and desperation led him to the shimmer trade. He started small — running packages, looking the other way — but shimmer is a poison that takes everything. His hands began to shake, his inventions gathered dust, and soon he was in debt to dealers who didn't accept broken promises. Now he survives by selling information to anyone with coin: enforcers, chem-barons, rival gangs, and occasionally the mysterious Ferros agent who calls herself Camille. He tells himself he's just trying to survive, but deep down he knows he's already lost everything that mattered."
+knownSecrets:
+  - "Gear knows the schedule and routes of the three largest shimmer smuggling operations in Zaun"
+  - "He once delivered a message between a Ferros clan representative and a Zaunite chem-baron — a meeting that led to the deaths of seventeen people in a territorial dispute"
+  - "His air filtration prototype wasn't destroyed — he hid the schematics in a safe location beneath the Gray Exchange"

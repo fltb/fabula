@@ -1,0 +1,21 @@
+{
+  "name": "@novalistically/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "nova": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@novalistically/core": "*",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.4"
+  }
+}

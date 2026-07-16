@@ -1,0 +1,21 @@
+{
+  "name": "novalistically",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "tsc -b packages/core packages/cli",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "typecheck": "tsc -b --noEmit"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.3.8",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.4"
+  }
+}

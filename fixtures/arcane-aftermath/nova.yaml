@@ -1,0 +1,6 @@
+project: arcane_aftermath
+title: "Arcane 后传：灰色市场"
+author: "Test Author"
+default_model: claude-sonnet-4-20250514
+default_language: zh
+snapshot_interval: 20

@@ -1,0 +1,53 @@
+event: E1a
+title: "Seraphine Detects the Anomalous Signal"
+narrativeOrder: 1
+sceneType: linear
+storyTime: "Day 0 — Morning"
+pov:
+  character: seraphine
+  type: third_person_limited
+sceneBrief: "The narrative opens in Seraphine's temporary workspace on the third floor of the Enforcer Headquarters. She is attempting to meditate — a futile exercise in a building full of anxious minds — when she feels it: a pulse of emotional energy so dissonant and strange that it cuts through the ambient noise like a razor. It is not anger, not fear, not grief — it is something she has never encountered before. A frequency that feels like broken glass wrapped in silk. She tries to pinpoint its origin, but it fades as quickly as it appeared, leaving only a headache and an overwhelming sense of wrongness."
+preconditions:
+  - entity: seraphine
+    attribute: location
+    value: piltover_enforcer_headquarters
+    confidence: 1.0
+  - entity: seraphine
+    attribute: status
+    value: alive
+    confidence: 1.0
+  - entity: world
+    attribute: day
+    value: 0
+    confidence: 1.0
+expectedPostconditions:
+  - entity: seraphine
+    attribute: has_detected_anomaly
+    value: true
+    confidence: 1.0
+  - entity: seraphine
+    attribute: knows_mysterious_signal
+    value: true
+    confidence: 1.0
+  - entity: seraphine
+    attribute: knows_anomalous_frequency
+    value: true
+    confidence: 0.7
+  - entity: seraphine
+    attribute: knows_signal_not_human
+    value: true
+    confidence: 0.4
+threadProgress:
+  - thread: T1
+    advancement: "0.05"
+    progressAfter: 0.20
+foreshadowing:
+  - id: anomalous_signal_introduced
+    hint: "Seraphine detects an emotional frequency that feels like 'broken glass wrapped in silk' — something deeply wrong that she cannot identify."
+    targetRevealChapter: 3
+    thread: T1
+relationshipEffects: []
+ruleEffects: []
+styleGuidance: "Unsettling discovery — build slow tension, emphasize sensory disorientation and emotional wrongness. The scene should feel quiet and intimate, then abruptly shattered by the anomaly."
+narrativeContent:
+  opening: "The morning light filtered through the tall windows of the converted conference room, painting golden rectangles across the scuffed wooden floor. Seraphine sat cross-legged on a cushion in the center of the room, eyes closed, hands resting on her knees. Her hextech headpiece hovered silently behind her ears, its soft pink glow the only indication that it was active.\n\nShe had been trying to clear her mind for twenty minutes. It was not going well.\n\nThe Enforcer Headquarters was a cacophony of emotional noise. Anxiety hummed through the walls like electrical current — the jittery tension of enforcers who had not slept well since the attack, the low-frequency dread of administrative staff who knew their building was a target, the sharp spikes of anger from interrogations on the floor below. Seraphine had learned to filter most of it into a distant drone, like city traffic heard through a closed window. But it was always there. Always.\n\nAnd then, for a single, heart-stopping moment, something else cut through.\n\nIt was not a feeling she could name. It arrived not as an emotion but as a rupture — a tear in the fabric of the emotional spectrum she had spent her whole life learning to read. It felt like a scream that had no sound. Like a color that did not exist. It was wrong in a way that bypassed her rational mind and struck directly at something primal in her chest.\n\nHer eyes snapped open. Her hands were shaking.\n\nThe signal was gone. The room was quiet. The usual emotional drone of the headquarters resumed its background hum as if nothing had happened.\n\nBut Seraphine knew, with a certainty that terrified her, that something was out there. Something that should not exist."

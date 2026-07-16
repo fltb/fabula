@@ -1,0 +1,29 @@
+ruleId: hextech_crystal_scarcity
+name: "Hextech Crystal Scarcity"
+category: state_invariant
+type: "rule"
+statement: "After the events of Season 1, hextech crystals have become scarce and tightly controlled. Jayce Talis's research was partially dismantled, several crystals were destroyed in the explosion at the Piltover laboratory, and the remaining known crystals are under strict government supervision. This scarcity shapes the balance of power between Piltover and Zaun, and directly affects the operational capability of hextech-augmented individuals."
+logicalConsequences:
+  - type: state_invariant
+    scope: character_restriction
+    condition: hextech_augmented_character_check
+    constraint: |
+      For any character C with trait "hextech_augmented":
+        ∀ day d where d - last_maintenance_day(C) > 30:
+          degradation_level(C) = (d - last_maintenance_day(C) - 30) / 10
+          if degradation_level(C) > 5: set status(C) = "compromised"
+          if degradation_level(C) > 10: set condition(C) = "critical"
+    priority: high
+    conflictResolution: "If other rules would permit ignoring maintenance, hextech scarcity takes precedence. The player or narrator cannot hand-wave hextech maintenance without a narrative justification (e.g., finding a black market crystal source)."
+  - type: state_invariant
+    scope: faction_resource_check
+    condition: crystal_count_threshold
+    constraint: |
+      For any faction F with hextech_crystal_count > 10:
+        threat_level(F) += 15
+        every_narrative_beat(F):
+          roll_for_external_interest(F)
+          if result > 0.7: trigger_event("external_interest_in_crystals")
+    priority: medium
+    conflictResolution: "This is a soft constraint — it raises narrative stakes rather than enforcing a hard mechanical change. Storytellers may ignore it for short periods, but doing so should feel narratively unjustified."
+evidenceChain: []

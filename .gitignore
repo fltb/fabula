@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.tsbuildinfo
+.nova/snapshots/
+.nova/index.sqlite
+output/

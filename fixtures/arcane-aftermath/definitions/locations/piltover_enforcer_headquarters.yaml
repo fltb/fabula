@@ -1,0 +1,23 @@
+id: piltover_enforcer_headquarters
+name: "Piltover Enforcer Headquarters"
+kind: government_facility
+description: "A grand, imposing structure of white stone and polished brass that dominates the Piltover administrative district. The building rises six stories above the clean, sunlit boulevards, its façade decorated with bas-reliefs depicting the triumph of Piltover's law over Zaunite chaos. Enormous arched windows let in cascades of natural light that illuminate the marble lobby, where a massive bronze statue of the first Enforcer Commander stands in eternal vigilance. Inside, the building is a maze of gleaming corridors, interview rooms, evidence lockers, communications centers, and the offices of Piltover's most powerful law enforcement officials. The upper floors house the intelligence division — Camille's domain — where the architecture shifts from public grandeur to utilitarian functionality: reinforced doors, encrypted communication hubs, and rooms without windows where sensitive interrogations take place. The building is the nerve center of Piltover's authority, yet beneath its polished surface, rumors of corruption and political maneuvering circulate among the lower ranks."
+initialState:
+  status: operational
+  securityLevel: high
+  currentTension: moderate
+  activeInvestigations:
+    - name: "Hextech Weapons Smuggling"
+      status: active
+      leadInspector: camille
+      priority: high
+    - name: "Council Security Review"
+      status: pending
+      leadInspector: tbd
+      priority: medium
+  personnelPresent:
+    - camille
+    - seraphine
+  notableEvents:
+    - "Seraphine was assigned to HQ three days ago as a 'consultant' — most enforcers don't know what she actually does"
+    - "Camille has been unusually absent from command briefings; she is pursuing a personal lead"

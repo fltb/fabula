@@ -1,0 +1,26 @@
+id: zaun_gray_exchange
+name: "Gray Market Exchange"
+kind: underground_marketplace
+description: "The Gray Market Exchange is a sprawling, multi-level bazaar carved into the Entresol level of Zaun, suspended between the relative order of Piltover above and the lawless depths below. It is a chaotic warren of stalls, repurposed shipping containers, rusted scaffolding walkways, and flickering chem-lights that cast everything in a sickly greenish-yellow glow. The air smells of ozone, frying street meat, shimmer residue, and the ever-present metallic tang of Zaun's industrial decay. Vendors hawk everything from salvaged hextech components to counterfeit Piltover currency, from street food to information. Deals are made in hushed tones beneath the din of haggling crowds. The Exchange is technically neutral ground — a gentleman's agreement among the chem-barons keeps open violence off the main floor — but the upper galleries and back rooms are where the real business happens, and those spaces have no rules at all."
+initialState:
+  status: operational
+  controlledBy: zaun_underground
+  securityLevel: medium
+  currentTension: moderate
+  activeFactions:
+    - name: zaun_chem_barons
+      influence: 0.7
+      mood: territorial
+    - name: independent_merchants
+      influence: 0.5
+      mood: wary
+    - name: ferros_clan_agents
+      influence: 0.3
+      mood: covert
+  notableEvents:
+    - "Three days ago, a Ferros agent was spotted meeting with an unknown chem-baron representative in the Rusty Cog"
+    - "Rumors of a 'big score' circulating among the regulars — something involving hextech weapons"
+  npcsPresent:
+    - gear
+    - marlo_the_mechanic
+    - rusty_cog_barkeep

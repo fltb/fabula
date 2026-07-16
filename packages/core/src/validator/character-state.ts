@@ -7,6 +7,7 @@ import type {
   Validator,
   ValidatorContext,
   ValidationIssue,
+  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
@@ -58,6 +59,42 @@ export class CharacterStateValidator implements Validator {
           'condition',
           undefined,
           pc.value,
+        ));
+      }
+    }
+
+    return issues;
+  }
+
+  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const lowerProse = prose.toLowerCase();
+
+    for (const pc of event.preconditions) {
+      const entityId = pc.entityId;
+      if (!entityId) continue;
+
+      const expectedValue = String(pc.value ?? '').toLowerCase();
+      if (!expectedValue || expectedValue === 'true' || expectedValue === 'false') continue;
+
+      const entityLower = entityId.toLowerCase();
+
+      // Only check if the entity is mentioned in the prose
+      const entityPos = lowerProse.indexOf(entityLower);
+      if (entityPos === -1) continue;
+
+      // Look near the entity mention for the expected state value
+      const start = Math.max(0, entityPos - 100);
+      const end = Math.min(lowerProse.length, entityPos + 100);
+      const vicinity = lowerProse.slice(start, end);
+
+      if (!vicinity.includes(expectedValue)) {
+        issues.push(makeIssue(
+          this.name, event.id, entityId, 'info',
+          `Expected "${entityId}" to be "${pc.attribute}=${pc.value}" per preconditions, but prose near "${entityId}" doesn't reflect it`,
+          `Describe ${entityId}'s state (${expectedValue}) in the prose to stay consistent with established facts.`,
+          'edit_file',
+          pc.attribute,
         ));
       }
     }

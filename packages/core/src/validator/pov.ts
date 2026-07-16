@@ -7,6 +7,7 @@ import type {
   Validator,
   ValidatorContext,
   ValidationIssue,
+  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
@@ -55,6 +56,46 @@ export class POVValidator implements Validator {
         'Consider switching to third_person_limited for a specific character.',
         'manual',
       ));
+    }
+
+    return issues;
+  }
+
+  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const povType = event.pov.type;
+    const povChar = event.pov.character;
+
+    if (povType === 'first_person') {
+      const hasFirstPerson = /\b(?:I|my|me|myself|mine)\b/i.test(prose);
+      if (!hasFirstPerson) {
+        issues.push(makeIssue(
+          this.name, event.id, povChar, 'warning',
+          `First-person POV for "${povChar}" but prose does not contain first-person pronouns ("I", "my", "me")`,
+          'Use first-person narration consistently throughout the scene.',
+          'edit_file',
+          'pov.type',
+        ));
+      }
+    } else if (povType === 'third_person_limited') {
+      const otherChars = event.participants.entities.filter((e) => e !== povChar);
+      for (const char of otherChars) {
+        const name = char.includes('.') ? char.split('.').pop()! : char;
+        const thoughtRegex = new RegExp(
+          `\\b${name}\\s+(thought|wondered|realized|knew|felt|remembered|decided|hoped|feared)\\b`,
+          'i',
+        );
+        if (thoughtRegex.test(prose)) {
+          issues.push(makeIssue(
+            this.name, event.id, povChar, 'error',
+            `Prose enters "${char}"'s inner thoughts ("${thoughtRegex.source}") — inconsistent with ${povType} POV for "${povChar}"`,
+            'Rewrite to stay strictly within the POV character\'s perspective.',
+            'edit_file',
+            'pov.type',
+          ));
+          break;
+        }
+      }
     }
 
     return issues;

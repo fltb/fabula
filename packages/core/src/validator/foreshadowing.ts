@@ -7,6 +7,7 @@ import type {
   Validator,
   ValidatorContext,
   ValidationIssue,
+  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
@@ -50,6 +51,31 @@ export class ForeshadowingValidator implements Validator {
             'target_reveal_chapter',
           ));
         }
+      }
+    }
+
+    return issues;
+  }
+
+  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const proseLower = prose.toLowerCase();
+
+    for (const f of event.foreshadowing) {
+      const hintWords = f.hint.split(/\s+/).filter((w) => w.length > 3);
+      if (hintWords.length === 0) continue;
+
+      const foundCount = hintWords.filter((w) => proseLower.includes(w.toLowerCase())).length;
+      const threshold = Math.max(1, Math.floor(hintWords.length * 0.5));
+
+      if (foundCount < threshold) {
+        issues.push(makeIssue(
+          this.name, event.id, f.id, 'warning',
+          `Foreshadow hint "${f.hint}" is not reflected in the rendered prose — reader may miss this setup`,
+          'Weave the foreshadowing hint into the narrative prose.',
+          'edit_file',
+          'foreshadowing',
+        ));
       }
     }
 

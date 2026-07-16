@@ -7,6 +7,7 @@ import type {
   Validator,
   ValidatorContext,
   ValidationIssue,
+  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
@@ -53,6 +54,47 @@ export class FactualDetailValidator implements Validator {
           pc.attribute,
         ));
       }
+    }
+
+    return issues;
+  }
+
+  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const ordinals = ['', 'first', 'second', 'third', 'fourth', 'fifth', 'sixth', 'seventh', 'eighth', 'ninth', 'tenth'];
+
+    const allFacts = [...event.preconditions, ...event.postconditions];
+    for (const fact of allFacts) {
+      const val = fact.value;
+      if (val === null || val === undefined) continue;
+
+      const valStr = String(val);
+
+      // Exact match
+      if (prose.includes(valStr)) continue;
+
+      // Ordinal form for small integers: "3" -> "third"
+      const num = Number(valStr);
+      if (!isNaN(num) && Number.isInteger(num) && num >= 1 && num <= 10) {
+        if (new RegExp(`\\b${ordinals[num]}\\b`, 'i').test(prose)) continue;
+      }
+
+      // Number + unit pattern: "3 hours", "midnight of the third day"
+      if (!isNaN(num)) {
+        const unitPattern = new RegExp(
+          `\\b${valStr}\\s+(hours?|minutes?|days?|weeks?|months?|o'clock|am|pm|%|percent|dollars?|miles?|feet?|degrees?)`,
+          'i',
+        );
+        if (unitPattern.test(prose)) continue;
+      }
+
+      issues.push(makeIssue(
+        this.name, event.id, fact.entityId, 'warning',
+        `Prose does not mention factual detail "${fact.entityId}.${fact.attribute} = ${valStr}"`,
+        'Include this factual detail in the narrative prose.',
+        'edit_file',
+        fact.attribute,
+      ));
     }
 
     return issues;

@@ -99,9 +99,20 @@ export type {
 export { LLMError } from './ai/index.ts';
 export { MockProvider, OpencodeZenProvider, OpencodeGoProvider } from './ai/index.ts';
 export { OPENCODE_GO_MODELS } from './ai/index.ts';
-export { buildSceneRenderPrompt, buildThreadStatusPrompt } from './ai/index.ts';
+export { buildSceneRenderPrompt, buildThreadStatusPrompt, buildProsePrompt, buildAnalysisPrompt } from './ai/index.ts';
 export type { MockProviderOptions, OpencodeZenOptions, OpencodeGoOptions, OpencodeGoModel } from './ai/index.ts';
-export type { SceneRenderInput, ThreadStatusInput } from './ai/index.ts';
+export type { SceneRenderInput, ThreadStatusInput, ProseOnlyInput, RenderAnalysisInput } from './ai/index.ts';
+
+// Cache
+export {
+  computeCacheKeys,
+  getCachedRender,
+  setCachedRender,
+  clearRenderCache,
+} from './cache/render-cache.js';
+
+// Util
+export { ConcurrencyPool } from './util/index.js';
 
 // Bench (functional + performance) is in @novalistically/bench, NOT core.
 // Bench calls core to do measurements; bench itself is not part of core.

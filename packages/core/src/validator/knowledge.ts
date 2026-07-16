@@ -7,6 +7,7 @@ import type {
   Validator,
   ValidatorContext,
   ValidationIssue,
+  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
@@ -57,6 +58,59 @@ export class KnowledgeValidator implements Validator {
           this.name, event.id, povChar, 'error',
           `Character "${povChar}" appears to know fact "${pc.value}" before it is established (in ${factEvents[0].id})`,
           'Reorder events so the fact is established before the character learns it.',
+          'add_precondition',
+          'knows',
+        ));
+      }
+    }
+
+    return issues;
+  }
+
+  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const povChar = event.pov.character;
+    const lowerProse = prose.toLowerCase();
+
+    // Build set of entity IDs the POV character knows about
+    const knownEntities = new Set<string>();
+    knownEntities.add(povChar.toLowerCase());
+
+    const povKnowledge = state.knowledge?.[povChar]?.knownFacts ?? [];
+    for (const factId of povKnowledge) {
+      const fact = state.facts?.find((f) => f.id === factId);
+      if (fact?.entityId) {
+        knownEntities.add(fact.entityId.toLowerCase());
+      }
+    }
+
+    // Only scan in limited POV modes — omniscient can reference anyone
+    if (event.pov.type === 'omniscient') return issues;
+
+    // Check each entity in the world state that the POV character doesn't know
+    for (const entityId of Object.keys(state.entities)) {
+      const lowerId = entityId.toLowerCase();
+      if (knownEntities.has(lowerId)) continue;
+      if (lowerId === povChar.toLowerCase()) continue;
+
+      // Flag if the unknown entity name appears in prose outside of dialogue
+      const namePos = lowerProse.indexOf(lowerId);
+      if (namePos === -1) continue;
+
+      // Skip if the name appears in dialogue (between quotes)
+      const before = lowerProse.slice(Math.max(0, namePos - 60), namePos);
+      const after = lowerProse.slice(namePos + lowerId.length, Math.min(lowerProse.length, namePos + lowerId.length + 60));
+      const lineAround = before + lowerId + after;
+      const quoteCount = (lineAround.match(/"/g) || []).length;
+      if (quoteCount >= 2) continue; // Likely dialogue — other character said the name
+
+      // Flag if the reference is in narrative/thought context
+      const thoughtIndicators = /\b(thought|knew|remembered|realized|wondered|known|heard|recognized)\b/i;
+      if (thoughtIndicators.test(before) || thoughtIndicators.test(after)) {
+        issues.push(makeIssue(
+          this.name, event.id, povChar, 'warning',
+          `POV character "${povChar}" references "${entityId}" in narrative thought context but doesn't know about them yet`,
+          'Either establish the character learning about this entity, or remove the internal reference.',
           'add_precondition',
           'knows',
         ));

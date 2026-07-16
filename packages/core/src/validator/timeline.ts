@@ -7,6 +7,7 @@ import type {
   Validator,
   ValidatorContext,
   ValidationIssue,
+  WorldState,
 } from '../types/index.js';
 import { compareTimestamp } from '../entity/index.js';
 import { makeIssue } from './base.js';
@@ -47,6 +48,49 @@ export class TimelineValidator implements Validator {
         'Add narration_time field to indicate where in the narrative this scene is told.',
         'add_field',
         'narration_time',
+      ));
+    }
+
+    return issues;
+  }
+
+  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+
+    const storyTime = event.storyTime;
+    if (storyTime?.type !== 'absolute') return issues;
+
+    const value = storyTime.value.toLowerCase();
+    const lowerProse = prose.toLowerCase();
+
+    // Time period keyword sets
+    const timeKeywords: [string, string[]][] = [
+      ['night', ['night', 'dark', 'dusk', 'moon', 'stars', 'midnight', 'evening']],
+      ['dawn', ['dawn', 'morning', 'sunrise', 'daybreak']],
+      ['day', ['day', 'afternoon', 'noon', 'midday', 'sun', 'daylight']],
+      ['dusk', ['dusk', 'twilight', 'sunset', 'evening']],
+      ['midnight', ['midnight']],
+    ];
+
+    // Find matching time period from storyTime value
+    // Check if any keyword for a period appears in the storyTime value
+    let keywords: string[] | null = null;
+    for (const [, kws] of timeKeywords) {
+      if (kws.some((kw) => value.includes(kw))) {
+        keywords = kws;
+        break;
+      }
+    }
+
+    if (!keywords) return issues;
+
+    const found = keywords.some((kw) => lowerProse.includes(kw));
+    if (!found) {
+      issues.push(makeIssue(
+        this.name, event.id, event.pov.character, 'warning',
+        `Story time is "${value}" but prose lacks matching time-of-day cues (e.g., ${keywords.slice(0, 3).join(', ')})`,
+        'Add atmospheric details that reflect the time of day in the prose.',
+        'edit_file',
       ));
     }
 

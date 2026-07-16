@@ -48,7 +48,20 @@ export interface Validator {
   name: string;
   category: 'characterization' | 'factual_detail' | 'timeline_plot' | 'worldbuilding' | 'narrative_style';
   requiresLLM: boolean;
+
+  /** Check structured YAML input for logical issues (pre-render). */
   validate: (event: NarrativeEvent, context: ValidatorContext) => ValidationIssue[];
+
+  /**
+   * Check the rendered prose against the source event and world state.
+   * This is the PRIMARY quality gate — run AFTER LLM rendering.
+   * Default no-op; override in concrete validators.
+   */
+  validateRender: (
+    prose: string,
+    event: NarrativeEvent,
+    state: WorldState,
+  ) => ValidationIssue[];
 }
 
 // ——— Validation Result ———

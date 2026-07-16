@@ -7,6 +7,7 @@ import type {
   Validator,
   ValidatorContext,
   ValidationIssue,
+  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
@@ -49,6 +50,47 @@ export class CausalityValidator implements Validator {
         'change_value',
         'expected_postconditions',
       ));
+    }
+
+    return issues;
+  }
+
+  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const proseLower = prose.toLowerCase();
+
+    const mentionsFact = (entityId: string, attribute: string, value: unknown): boolean => {
+      const terms: string[] = [];
+      if (typeof value === 'string') terms.push(value);
+      const attrClean = attribute.replace(/^is_/, '').replace(/_/g, ' ');
+      terms.push(attrClean);
+      const parts = entityId.split('.');
+      terms.push(parts[parts.length - 1]);
+      return terms.some((t) => proseLower.includes(t.toLowerCase()));
+    };
+
+    for (const pc of event.preconditions) {
+      if (!mentionsFact(pc.entityId, pc.attribute, pc.value)) {
+        issues.push(makeIssue(
+          this.name, event.id, pc.entityId, 'warning',
+          `Prose does not describe precondition "${pc.entityId}.${pc.attribute} = ${JSON.stringify(pc.value)}" — this cause should be evident in the rendered scene`,
+          'Add description of this precondition to the narrative prose.',
+          'edit_file',
+          pc.attribute,
+        ));
+      }
+    }
+
+    for (const pc of event.postconditions) {
+      if (!mentionsFact(pc.entityId, pc.attribute, pc.value)) {
+        issues.push(makeIssue(
+          this.name, event.id, pc.entityId, 'warning',
+          `Prose does not describe postcondition "${pc.entityId}.${pc.attribute} = ${JSON.stringify(pc.value)}" — this effect should be evident in the rendered scene`,
+          'Add description of this postcondition to the narrative prose.',
+          'edit_file',
+          pc.attribute,
+        ));
+      }
     }
 
     return issues;

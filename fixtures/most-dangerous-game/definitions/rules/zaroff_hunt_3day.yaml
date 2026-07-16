@@ -1,0 +1,27 @@
+ruleId: zaroff_hunt_3day
+name: "Zaroff's Three-Day Hunt"
+category: game_rule
+type: conflict_rule
+statement: "If the quarry chooses to play the game, Zaroff grants him a three-hour head start and follows armed only with a small-caliber pistol. The quarry receives a supply of food and an excellent hunting knife — no other weapon. If the quarry eludes Zaroff for three whole days, he wins the game and is set free on the mainland. If Zaroff finds him before midnight of the third day, the quarry loses and is fed to the hounds. Zaroff's exact words: 'Three whole days... And then, if at the end of three days you have not been caught, you win.'"
+logicalConsequences:
+  - description: "The hunt ends only on survival or death — there is no surrender or mercy. Zaroff's honor as a sportsman demands a clean outcome: either the quarry outsmarts him and earns freedom, or the quarry is killed."
+    check:
+      type: state_invariant
+      filter: "zaroff_hunt_active == true"
+      assert: "(rainsford_location != 'chateau' AND rainsford_status == 'alive') OR (rainsford_status == 'dead' AND hunt_over == true)"
+      severity: error
+  - description: "If Rainsford survives three consecutive nights (from dusk of day_2_evening to midnight of day_4), he automatically wins. The three-day count is strict: midnight of the third day since the hunt began."
+    check:
+      type: progression
+      filter: "zaroff_hunt_active == true"
+      assert: "if time > day_4_midnight AND rainsford_status == 'alive' then rainsford_wins == true"
+      direction: "count_strict"
+      tolerance: 0
+      severity: error
+  - description: "Zaroff always hunts with a pistol of the smallest caliber and range. He does not use a rifle during the hunt, ensuring the game is 'sporting.'"
+    check:
+      type: transition_constraint
+      filter: "zaroff_in_hunt == true"
+      assert: "(zaroff_inventory does not contain 'hunting_rifle') OR (zaroff_using_rifle_during_hunt == false)"
+      severity: warning
+evidenceChain: []

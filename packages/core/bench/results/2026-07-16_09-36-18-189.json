@@ -1,0 +1,238 @@
+{
+  "timestamp": "2026-07-16T09:36:18.189Z",
+  "functional": [
+    {
+      "stage": "Load entities",
+      "passed": true,
+      "ms": 31.730593999998746,
+      "detail": "Characters: 5, Locations: 6, Rules: 3"
+    },
+    {
+      "stage": "Load events",
+      "passed": true,
+      "ms": 23.940082999999504,
+      "detail": "Total events: 14 (1 genesis, 13 narrative)"
+    },
+    {
+      "stage": "Build registry",
+      "passed": true,
+      "ms": 0.0061700000005657785,
+      "detail": "All 14 events loaded, no duplicates"
+    },
+    {
+      "stage": "Replay state from genesis",
+      "passed": true,
+      "ms": 0.11625900000035472,
+      "detail": "Entities: 7, Facts: 72, Threads: 3"
+    },
+    {
+      "stage": "TimelineValidator",
+      "passed": true,
+      "ms": 0.02019300000029034,
+      "detail": "Errors: 0, Warnings: 10, Infos: 0 — Scene type is \"action\" but no narration_time is set; Scene type is \"dialogue\" but no narration_time is set; Scene type is \"dialogue\" but no narration_time is set"
+    },
+    {
+      "stage": "CharacterStateValidator",
+      "passed": true,
+      "ms": 0.017922999999427702,
+      "detail": "Errors: 0, Warnings: 0, Infos: 0"
+    },
+    {
+      "stage": "KnowledgeValidator",
+      "passed": true,
+      "ms": 0.009570000000167056,
+      "detail": "Errors: 0, Warnings: 0, Infos: 0"
+    },
+    {
+      "stage": "WorldRuleValidator",
+      "passed": true,
+      "ms": 0.013291999999637483,
+      "detail": "Errors: 0, Warnings: 0, Infos: 0"
+    },
+    {
+      "stage": "CausalityValidator",
+      "passed": true,
+      "ms": 0.030683000000863103,
+      "detail": "Errors: 0, Warnings: 0, Infos: 0"
+    },
+    {
+      "stage": "ForeshadowingValidator",
+      "passed": true,
+      "ms": 0.01999900000009802,
+      "detail": "Errors: 0, Warnings: 0, Infos: 0"
+    },
+    {
+      "stage": "POVValidator",
+      "passed": true,
+      "ms": 0.009984000000258675,
+      "detail": "Errors: 1, Warnings: 0, Infos: 1 — POV character \"system\" is not defined in entity registry; Using omniscient POV — ensure this is intentional. Limited P…"
+    },
+    {
+      "stage": "FactualDetailValidator",
+      "passed": true,
+      "ms": 0.011531000000104541,
+      "detail": "Errors: 0, Warnings: 0, Infos: 0"
+    },
+    {
+      "stage": "VoiceDriftDetector",
+      "passed": true,
+      "ms": 0.0055400000001100125,
+      "detail": "Errors: 0, Warnings: 0, Infos: 0"
+    },
+    {
+      "stage": "BranchMergeValidator",
+      "passed": true,
+      "ms": 0.007408999999825028,
+      "detail": "Errors: 0, Warnings: 0, Infos: 0"
+    },
+    {
+      "stage": "ReachabilityValidator",
+      "passed": true,
+      "ms": 0.6113879999993515,
+      "detail": "Errors: 0, Warnings: 99, Infos: 0 — Precondition \"yacht_caribbean.status\" in event E0 is never e…; Precondition \"world.time\" in event E0 is never established b…; Precondition \"yacht_caribbean.status\" in event E0 is never e…"
+    },
+    {
+      "stage": "ResultAggregator",
+      "passed": true,
+      "ms": 0.679999999998472,
+      "detail": "Errors: 0, Warnings: 109, Infos: 0 (13 events validated)"
+    },
+    {
+      "stage": "Calculate ISS",
+      "passed": true,
+      "ms": 0.10223899999982677,
+      "detail": "ISS=95/100 (target=81) — 6 dimensions"
+    },
+    {
+      "stage": "Detect anti-patterns",
+      "passed": true,
+      "ms": 0.09282100000018545,
+      "detail": "24 anti-patterns found"
+    },
+    {
+      "stage": "Validate strict",
+      "passed": true,
+      "ms": 0.027882999998837477,
+      "detail": "Critical: 1, Total: 1"
+    },
+    {
+      "stage": "Compile context",
+      "passed": true,
+      "ms": 0.11702399999921909,
+      "detail": "Chars: 4, Rels: 3, Facts: 20, Threads: 3"
+    },
+    {
+      "stage": "Assemble novel",
+      "passed": false,
+      "ms": 0.035229000000981614,
+      "detail": "No scenes/ directory — skip novel assembly"
+    }
+  ],
+  "performance": [
+    {
+      "name": "Run all validators (N=10)",
+      "hz": 15361.077487369164,
+      "meanMs": 0.06509960000021238,
+      "samples": 10,
+      "scale": "10"
+    },
+    {
+      "name": "ResultAggregator (N=10)",
+      "hz": 16512.93127649146,
+      "meanMs": 0.06055859999996756,
+      "samples": 10,
+      "scale": "10"
+    },
+    {
+      "name": "Calculate ISS (N=10)",
+      "hz": 203384.31500347191,
+      "meanMs": 0.004916799999955401,
+      "samples": 10,
+      "scale": "10"
+    },
+    {
+      "name": "Replay state (N=10)",
+      "hz": 75236.61916739399,
+      "meanMs": 0.013291399999980058,
+      "samples": 10,
+      "scale": "10"
+    },
+    {
+      "name": "Compile context (N=10)",
+      "hz": 20407.496898071244,
+      "meanMs": 0.04900159999997413,
+      "samples": 10,
+      "scale": "10"
+    },
+    {
+      "name": "Run all validators (N=100)",
+      "hz": 263.0486326415965,
+      "meanMs": 3.801578400000653,
+      "samples": 5,
+      "scale": "100"
+    },
+    {
+      "name": "ResultAggregator (N=100)",
+      "hz": 246.50150277173356,
+      "meanMs": 4.05677040000046,
+      "samples": 5,
+      "scale": "100"
+    },
+    {
+      "name": "Calculate ISS (N=100)",
+      "hz": 34101.75965090737,
+      "meanMs": 0.029323999999905936,
+      "samples": 5,
+      "scale": "100"
+    },
+    {
+      "name": "Replay state (N=100)",
+      "hz": 8133.374325526984,
+      "meanMs": 0.12295020000019577,
+      "samples": 5,
+      "scale": "100"
+    },
+    {
+      "name": "Compile context (N=100)",
+      "hz": 14344.197628645828,
+      "meanMs": 0.0697145999998611,
+      "samples": 5,
+      "scale": "100"
+    },
+    {
+      "name": "Run all validators (N=1000)",
+      "hz": 2.650772774485399,
+      "meanMs": 377.2484800000002,
+      "samples": 3,
+      "scale": "1000"
+    },
+    {
+      "name": "ResultAggregator (N=1000)",
+      "hz": 0.9912531265705491,
+      "meanMs": 1008.8240563333329,
+      "samples": 3,
+      "scale": "1000"
+    },
+    {
+      "name": "Calculate ISS (N=1000)",
+      "hz": 3502.6760445077066,
+      "meanMs": 0.28549599999920855,
+      "samples": 3,
+      "scale": "1000"
+    },
+    {
+      "name": "Replay state (N=1000)",
+      "hz": 1927.1956861646747,
+      "meanMs": 0.5188886666668017,
+      "samples": 3,
+      "scale": "1000"
+    },
+    {
+      "name": "Compile context (N=1000)",
+      "hz": 4114.458756676106,
+      "meanMs": 0.24304533333270228,
+      "samples": 3,
+      "scale": "1000"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+participants:
+  - rainsford
+  - zaroff
+type: host_to_prey
+description: "The central relationship of the story. Initially, Zaroff is the gracious, cultured host welcoming the celebrated hunter Rainsford to his island home. Rainsford is a guest and fellow sportsman. When Zaroff reveals his true game — hunting men — the relationship pivots to predator and prey. Zaroff views Rainsford as a worthy opponent, a 'foeman worthy of my steel at last.' Rainsford is forced into the role of the hunted, experiencing the terror he once dismissed in animals. Their relationship is one of deadly respect: Zaroff admires Rainsford's woodcraft, and Rainsford is forced to acknowledge the hunter's supreme skill even as he fights for his life."
+initialState:
+  rainsfordToZaroff:
+    trust: 0.1
+    attitude: hostile_forced
+    emotionalDistance: 0.9
+    respect: 0.4
+    notes: "Rainsford regards Zaroff as a murderer and a madman, but is forced to respect his skill as a hunter. He will do whatever it takes to survive — including killing Zaroff."
+  zaroffToRainsford:
+    trust: 0.2
+    attitude: admiring_predator
+    emotionalDistance: 0.7
+    respect: 0.9
+    notes: "Zaroff genuinely admires Rainsford's hunting ability and sees him as the first worthy opponent in years. He is playing with his food — but the game is real, and he would kill Rainsford without hesitation if he catches him."
+establishedEvent:
+  day: 1
+  summary: "Rainsford arrives at Zaroff's château after falling from his yacht; Zaroff recognizes him as the famous hunter and invites him to dinner, where the true nature of the island is revealed."

@@ -1,0 +1,11 @@
+id: ship_trap_shore
+name: "Ship-Trap Island Shore"
+kind: coastline
+description: "The rocky shoreline of Ship-Trap Island where Rainsford drags himself ashore after falling from the yacht. Jagged crags jut up from swirling waters; on a less calm night, he would have been shattered against them. Dense jungle comes down to the very edge of the cliffs. The shore is littered with evidence of the island's deadly purpose — empty cartridges, crushed underbrush, and traces of hunted men. Beyond the shore, the jungle rises in an unbroken front of snarled and ragged vegetation. The cliffs are treacherous, but a flat place at the top offers a brief respite."
+initialState:
+  status: wild
+  tide: calm
+  type: rocky_shoreline
+  hazards:
+    - "jagged_crags"
+    - "treacherous_climbs"

@@ -1,0 +1,62 @@
+event: E2
+title: "The Trail of the Hunted"
+narrativeOrder: 3
+sceneType: linear
+storyTime: day_1_afternoon
+pov:
+  character: rainsford
+  type: third_person_limited
+sceneBrief: "Rainsford wakes late in the afternoon, hungry but refreshed. He follows the shore and finds evidence of a chase: crushed underbrush, bloodstained weeds, an empty .22 cartridge. He finds the print of hunting boots and follows the trail, noticing the peculiar tree-skeleton warning left behind. As darkness falls, he sights the lights of an enormous château on a high bluff. He approaches the spiked iron gate, exhausted but hopeful."
+preconditions:
+  - entity: rainsford
+    attribute: location
+    value: ship_trap_shore
+    confidence: 1.0
+  - entity: rainsford
+    attribute: status
+    value: alive
+    confidence: 1.0
+  - entity: world
+    attribute: time
+    value: day_1_afternoon
+    confidence: 1.0
+expectedPostconditions:
+  - entity: rainsford
+    attribute: location
+    value: chateau
+    confidence: 1.0
+  - entity: rainsford
+    attribute: found_hunting_trail
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: knows_island_inhabited
+    value: true
+    confidence: 1.0
+  - entity: ship_trap_shore
+    attribute: cartridge_found
+    value: true
+    confidence: 1.0
+  - entity: ship_trap_shore
+    attribute: bloodstains_identified
+    value: true
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "Rainsford discovers the island's deadly secret — someone has been hunted here before."
+    progressAfter: 20
+    progressTotal: 100
+foreshadowing:
+  - id: tree_skeleton_warning
+    hint: "The tree stripped of bark and showing white wood beneath — a warning sign left in the jungle. Rainsford does not yet understand its meaning, but it foreshadows the dead tree he will use as a man-catcher."
+    targetRevealChapter: 3
+    thread: T1
+  - id: hounds_in_jungle
+    hint: "The .22 cartridge suggests a hunter with a light gun — Zaroff's small-caliber pistol. The bloody trail and the sailor's body torn by hounds foreshadow Rainsford's own fate if caught."
+    targetRevealChapter: 4
+    thread: T1
+relationshipEffects: []
+ruleEffects: []
+styleGuidance: "Exploration and discovery. The island should feel beautiful and menacing at once. The evidence of violence should accumulate gradually, building unease. The château's appearance should feel like a mirage — impossible and ominous."
+narrativeContent:
+  opening: "Rainsford opened his eyes to the sun's late-afternoon glare and knew, with the hunter's instinct that had never failed him, that he had slept through most of the day. He was alive. That was the first fact. The second was hunger — a sharp, insistent clawing in his belly. The third fact lay before him: a trail of crushed weeds, a patch of crimson-stained moss, and glittering in the dying light, an empty brass cartridge."

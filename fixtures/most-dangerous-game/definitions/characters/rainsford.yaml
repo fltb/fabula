@@ -1,0 +1,26 @@
+id: rainsford
+name: "Sanger Rainsford"
+type: big_game_hunter
+description: "Sanger Rainsford is a celebrated American big-game hunter from New York City, in his early thirties. He has the lean, muscular build of an active outdoorsman, with keen eyes accustomed to scanning distant horizons and hands that are steady on the trigger. His face is handsome in a rugged, weathered way, with a strong jaw and the alert expression of a man who has spent his life reading terrain and tracking game. He carries himself with the easy confidence of someone who has never been the prey."
+traits:
+  - hunter
+  - pragmatic
+  - athletic
+  - blood_sport_defender
+initialState:
+  location: yacht_caribbean
+  status: alive
+  condition: well
+  emotionalState: aloof
+  inventory:
+    - item: "pipe"
+      description: "A favourite brier pipe"
+    - item: "lighter"
+      description: "Pocket lighter for his pipe"
+    - item: "hunting_kit"
+      description: "Small kit with basic hunting tools"
+    - item: "knife"
+      description: "A small hunting knife"
+voiceNotes: "Short, clipped sentences. Dismissive of animal suffering and sentimentality. Speaks with the authority of an expert hunter. Later in the story, his speech becomes terse, breathless, and edged with terror."
+backstory: "Served in World War I. Later became a famous author of hunting books, including one on hunting snow leopards in Tibet that Zaroff has read. Has hunted on every continent and considers himself a realist about the natural order."
+knownSecrets: []

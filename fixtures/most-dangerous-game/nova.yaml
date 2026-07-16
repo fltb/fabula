@@ -1,0 +1,6 @@
+project: most-dangerous-game
+title: "The Most Dangerous Game"
+author: "Richard Connell"
+default_model: mock
+default_language: en
+snapshot_interval: 5

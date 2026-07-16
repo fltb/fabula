@@ -1,0 +1,17 @@
+id: jungle
+name: "Ship-Trap Island Jungle"
+kind: wilderness
+description: "A dense, trackless jungle that covers most of Ship-Trap Island. The vegetation is a snarled, ragged tangle of trees, weeds, and underbrush so thick that it forms an almost unbroken wall. Trails wind through the interior, but they are treacherous — rotten logs, loose stones, and hidden dangers lurk at every step. The canopy is thick enough to block out the sun in many places, creating a perpetual twilight beneath the leaves. The jungle contains a ridge where Rainsford climbs a tree to hide; a watercourse where the hounds pursue their quarry; and the maze of trails that Zaroff knows intimately. The air is heavy with the scent of incense-like cigarette smoke whenever Zaroff is near. At night, the jungle is utterly silent — 'the silence of a dead world.'"
+initialState:
+  status: wild
+  timeOfDay: variable
+  type: tropical_jungle
+  hazards:
+    - "dense_undergrowth"
+    - "treacherous_terrain"
+    - "quicksand_margins"
+  knownTrails:
+    - "coastal_trail"
+    - "ridge_path"
+    - "watercourse"
+    - "death_swamp_approach"

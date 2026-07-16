@@ -8,7 +8,7 @@ loadDotenv({ path: resolve(__dirname, '.env'), quiet: true });
 export default defineConfig({
   test: {
     globals: true,
-    include: ['packages/*/tests/**/*.test.ts', 'packages/*/src/**/*.test.ts'],
+    include: ['packages/*/tests/**/*.test.ts', 'packages/*/src/**/*.test.ts', 'packages/*/bench/**/*.test.ts'],
     env: {
       // Pass through; dotenv has already populated process.env above.
       ...process.env,

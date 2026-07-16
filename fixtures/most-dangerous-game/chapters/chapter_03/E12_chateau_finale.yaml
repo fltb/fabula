@@ -1,0 +1,89 @@
+event: E12
+title: "A Better Bed"
+narrativeOrder: 13
+sceneType: action
+storyTime: day_3_night
+pov:
+  character: rainsford
+  type: third_person_limited
+sceneBrief: "Rainsford swims around the island and infiltrates Zaroff's château. He hides in the curtains of Zaroff's bedroom. Zaroff, having dined well, retires at ten o'clock. He looks out at the courtyard, calls to his hounds, and switches on the light. Rainsford steps from the curtains. Zaroff is shocked but recovers quickly, congratulating Rainsford on winning the game. Rainsford refuses the victory: 'I am still a beast at bay.' 'One of us is to furnish a repast for the hounds,' says Zaroff. 'The other will sleep in this very excellent bed. On guard, Rainsford.' They fight. Rainsford wins. The story ends as it began: 'He had never slept in a better bed.'"
+preconditions:
+  - entity: rainsford
+    attribute: status
+    value: alive
+    confidence: 1.0
+  - entity: rainsford
+    attribute: in_water
+    value: true
+    confidence: 1.0
+  - entity: world
+    attribute: time
+    value: day_3_night
+    confidence: 1.0
+expectedPostconditions:
+  - entity: rainsford
+    attribute: location
+    value: chateau
+    confidence: 1.0
+  - entity: rainsford
+    attribute: status
+    value: alive
+    confidence: 1.0
+  - entity: rainsford
+    attribute: won_fight
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: emotionalState
+    value: exhausted_victorious
+    confidence: 1.0
+  - entity: zaroff
+    attribute: status
+    value: dead
+    confidence: 1.0
+  - entity: zaroff
+    attribute: cause_of_death
+    value: killed_by_rainsford
+    confidence: 1.0
+  - entity: world
+    attribute: zaroff_hunt_active
+    value: false
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "Rainsford kills Zaroff and survives. The game is won."
+    progressAfter: 100
+    progressTotal: 100
+  - thread: T2
+    advancement: "Rainsford completes his transformation. He has killed a man in cold blood and will sleep in the dead man's bed. The hunter has become the huntee and the killer. Whitney's moral question has been answered in blood."
+    progressAfter: 100
+    progressTotal: 100
+  - thread: T3
+    advancement: "Zaroff's need for a worthy opponent leads to his death. His curse — boredom — is ended permanently."
+    progressAfter: 100
+    progressTotal: 100
+foreshadowing:
+  - id: hunters_huntees_final
+    hint: "Rainsford declared the world divided into hunters and huntees. In the end, he is both — hunter in the château, huntee in the jungle. The line has blurred to nothing."
+    targetRevealChapter: 5
+    thread: T2
+  - id: bed_frame
+    hint: "The story's opening described the château as having a 'good bed.' The closing line reveals Rainsford's final judgment: 'He had never slept in a better bed.' The frame is complete."
+    targetRevealChapter: 5
+    thread: T2
+relationshipEffects:
+  - participants:
+      - rainsford
+      - zaroff
+    effect: dissolve
+    direction: prey_kills_predator
+newState:
+  type: final_victory
+  intensity: 1.0
+ruleEffects:
+  - rule: zaroff_hunt_3day
+    effect: nullify
+    evidence: "Rainsford survives and kills Zaroff. The game is over. Rainsford wins."
+styleGuidance: "Tense, intimate confrontation. The bedroom should feel like a trap that has snapped shut. Zaroff's politeness should remain until the very end — he is a sportsman to the last. The fight itself can be brief; the meaning of the moment is in the dialogue and the closing line."
+narrativeContent:
+  opening: "General Zaroff had an exceedingly good dinner that evening. He drank a bottle of Pol Roger and half a bottle of Chambertin, and he read Marcus Aurelius in his library to soothe himself. Only two annoyances troubled his contentment: the difficulty of replacing Ivan, and the thought that his quarry had escaped him. But surely, he reasoned, the American hadn't played the game — must have drowned.\n\nAt ten o'clock he went up to his bedroom, locked the door, and walked to the window. He looked down at the courtyard where his hounds prowled, and called to them: 'Better luck another time.' Then he switched on the light.\n\nA man stepped from the curtains of the bed.\n\n'Rainsford!' screamed the general. 'How in God's name did you get here?'\n\n'Swam,' said Rainsford. 'I found it quicker than walking through the jungle.'\n\nThe general sucked in his breath and smiled. 'I congratulate you,' he said. 'You have won the game.'\n\nRainsford did not smile. 'I am still a beast at bay,' he said, in a low, hoarse voice. 'Get ready, General Zaroff.'\n\nThe general bowed, deeply, one sportsman to another. 'Splendid! One of us is to furnish a repast for the hounds. The other will sleep in this very excellent bed. On guard, Rainsford.'\n\nHe had never slept in a better bed, Rainsford decided."

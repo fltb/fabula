@@ -1,0 +1,13 @@
+ruleId: no_other_weapon
+name: "Quarry Weapon Restriction"
+category: game_rule
+type: equipment_rule
+statement: "The quarry may have no weapon but a small hunting knife — or nothing at all. Zaroff gives him a supply of food and an excellent hunting knife, but no firearm. Zaroff's exact words: 'I give him a supply of food and an excellent hunting knife. I give him three hours' start. I am to follow, armed only with a pistol of the smallest calibre and range.' This inequality of arms is the foundation of the game — the quarry must rely on cunning, woodcraft, and courage rather than firepower."
+logicalConsequences:
+  - description: "Rainsford cannot acquire or use a firearm during the hunt. His only weapon is the hunting knife provided by Zaroff. Any scene showing Rainsford with a gun would violate the rule."
+    check:
+      type: state_invariant
+      filter: "rainsford_in_hunt == true"
+      assert: "rainsford_inventory does not contain 'gun' AND rainsford_inventory does not contain 'rifle' AND rainsford_inventory does not contain 'pistol'"
+      severity: error
+evidenceChain: []

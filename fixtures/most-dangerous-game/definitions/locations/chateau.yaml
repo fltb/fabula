@@ -1,0 +1,17 @@
+id: chateau
+name: "Zaroff's Château"
+kind: fortress_manor
+description: "An enormous, palatial château set on a high bluff on the southern side of Ship-Trap Island. On three sides, cliffs dive down to where the sea laps against the rocks below. The building is a lofty structure with pointed towers plunging upward into the gloom, its silhouette suggesting medieval grandeur. A tall spiked iron gate guards the entrance; the massive door bears a leering gargoyle for a knocker. Inside, a grand marble staircase leads to a dining hall of medieval magnificence — oaken panels, a high ceiling, a vast refectory table where two score men could sit. The walls are lined with mounted heads of lions, tigers, elephants, moose, bears — the trophies of a lifetime of hunting. The bedroom assigned to Rainsford is a huge, beam-ceilinged chamber with a canopied bed big enough for six men. The château also houses a cellar where Zaroff keeps his 'training school' — imprisoned sailors awaiting the hunt, and below that, the kennels where a dozen enormous black hounds are kept."
+initialState:
+  status: occupied
+  securityLevel: extreme
+  controlledBy: zaroff
+  lightsOn: true
+  occupants:
+    - zaroff
+    - ivan
+  prisoners:
+    - "spanish_sailors_from_sanlucar"
+  guardDogs:
+    count: 12
+    description: "Enormous black hounds released at seven every evening"

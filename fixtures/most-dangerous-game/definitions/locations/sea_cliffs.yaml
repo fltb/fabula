@@ -1,0 +1,10 @@
+id: sea_cliffs
+name: "Southern Sea Cliffs"
+kind: cliff
+description: "The towering sea cliffs on the southern side of Ship-Trap Island, below Zaroff's château. The cliffs dive down to where the sea 'licks greedy lips in the shadows' against jagged rocks. It is here that Rainsford, cornered by the hounds, makes the desperate decision to leap into the sea rather than be torn apart. The drop is twenty feet or more into churning water; below the surface, jagged rocks wait to tear flesh. Rainsford's cheek is cut on one as he swims away from the cliffs. From this vantage, across a cove, he can see the gloomy gray stone of the château. After his leap, Zaroff shrugs and returns home for dinner, believing Rainsford to have drowned or escaped — either way, no longer his concern."
+initialState:
+  status: wild
+  type: coastal_cliffs
+  height: 20
+  hazard: "jagged_rocks_below"
+  view: "chateau_across_cove"

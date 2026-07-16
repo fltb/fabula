@@ -1,0 +1,12 @@
+id: death_swamp
+name: "Death Swamp"
+kind: swamp
+description: "A large, treacherous swamp in the southeast corner of Ship-Trap Island. Zaroff warns Rainsford to avoid it. The ground is soft and yielding; vegetation is rank and dense; insects bite savagely. Hidden beneath the murky surface lies quicksand that has claimed at least one victim — a sailor who foolishly attempted to cross it, and tragically, Zaroff's finest hound, Lazarus, who followed him. Rainsford uses the swamp's soft earth to dig a Burmese tiger pit, planting sharpened stakes at the bottom and covering the mouth with a carpet of weeds. The pit claims one of Zaroff's best dogs. The swamp is separated from the coast by a ridge, and at daybreak the baying of hounds can be heard from its edges."
+initialState:
+  status: wild
+  type: quicksand_swamp
+  hazards:
+    - "quicksand"
+    - "dense_vegetation"
+    - "savage_insects"
+    - "unstable_ground"

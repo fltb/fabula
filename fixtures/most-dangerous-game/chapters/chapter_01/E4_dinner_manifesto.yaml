@@ -1,0 +1,91 @@
+event: E4
+title: "The Most Dangerous Game"
+narrativeOrder: 5
+sceneType: dialogue
+storyTime: day_1_evening
+pov:
+  character: rainsford
+  type: third_person_limited
+sceneBrief: "Zaroff hosts Rainsford at a magnificent dinner in the medieval dining hall, surrounded by mounted animal heads. Over borsch, filet mignon, champagne, and port, Zaroff reveals his life story: his Cossack youth, his military service, his worldwide hunting career. He confesses that hunting had begun to bore him — and that he invented a new animal to hunt. The animal is man. Rainsford is horrified, calling it murder. Zaroff explains his philosophy: life is for the strong. He offers Rainsford the chance to hunt with him tomorrow. Rainsford refuses and is escorted to his room, where he finds the door locked from the outside."
+preconditions:
+  - entity: rainsford
+    attribute: location
+    value: chateau
+    confidence: 1.0
+  - entity: rainsford
+    attribute: status
+    value: alive
+    confidence: 1.0
+  - entity: world
+    attribute: time
+    value: day_1_evening
+    confidence: 1.0
+expectedPostconditions:
+  - entity: rainsford
+    attribute: knows_zaroff_hunts_men
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: refused_hunt
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: location
+    value: chateau
+    confidence: 1.0
+  - entity: rainsford
+    attribute: door_locked
+    value: true
+    confidence: 1.0
+  - entity: zaroff
+    attribute: true_nature_revealed
+    value: true
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "Rainsford learns the truth about Zaroff's game and refuses to participate. He is now trapped."
+    progressAfter: 30
+    progressTotal: 100
+  - thread: T2
+    advancement: "Rainsford calls it murder. His moral line is drawn — but he does not yet understand what it means to be prey."
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T3
+    advancement: "Zaroff reveals his philosophy and his ennui. He sees Rainsford as a potential worthy opponent."
+    progressAfter: 30
+    progressTotal: 100
+foreshadowing:
+  - id: zaroff_boredom
+    hint: "Zaroff's ennui — he is bored with all animals. Only a worthy human opponent can excite him. This need will lead him to give Rainsford chances he should not."
+    targetRevealChapter: 5
+    thread: T3
+  - id: hounds_revealed
+    hint: "Zaroff shows Rainsford the hounds from the window — twelve enormous black shapes with glittering green eyes."
+    targetRevealChapter: 4
+    thread: T1
+  - id: three_day_rule
+    hint: "Zaroff explains the three-day hunt rules. Rainsford does not yet know he will be forced to play."
+    targetRevealChapter: 5
+    thread: T1
+relationshipEffects:
+  - participants:
+      - rainsford
+      - zaroff
+    effect: change
+    direction: hospitality_turns_to_threat
+newState:
+  type: predator_recognizes_prey
+  intensity: 0.7
+ruleEffects:
+  - rule: zaroff_hunt_3day
+    effect: introduce_exception
+    evidence: "Zaroff explains the three-day hunt rules to Rainsford over dinner"
+  - rule: ivan_alternative
+    effect: reinforce
+    evidence: "Zaroff explains that if the quarry refuses, he is turned over to Ivan"
+  - rule: no_other_weapon
+    effect: reinforce
+    evidence: "Zaroff explains the quarry receives only a hunting knife, no firearm"
+styleGuidance: "Drawing-room horror. The dinner should feel opulent and civilized — the finest linen, crystal, silver, china, perfectly cooked food — while Zaroff calmly describes mass murder. The mounting heads on the walls take on new meaning. Rainsford's horror should grow as Zaroff's pleasantness never wavers."
+narrativeContent:
+  opening: "The dining hall was a cathedral of death. Lions, tigers, elephants, moose, bears — their glass-eyed heads stared down from every wall, trophies of a lifetime of slaughter. Rainsford sat at the vast refectory table, eating borsch from a silver spoon, while his host, immaculate in evening clothes, smiled with red lips and pointed teeth.\n\n'I have but one passion in my life, Mr. Rainsford,' said General Zaroff, 'and it is the hunt.'\n\nHe refilled Rainsford's glass with a venerable port, and his black eyes glittered in the candlelight. 'I have invented a new sensation. A new animal to hunt. The most dangerous game of all.'\n\nRainsford set down his glass. 'What game?'\n\nZaroff's smile widened. 'It must have courage, cunning, and above all, it must be able to reason.'\n\nA pause. The candles flickered. The dead animals watched.\n\n'But you can't mean——' Rainsford gasped.\n\n'And why not?' said General Zaroff."

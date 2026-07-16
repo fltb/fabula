@@ -1,0 +1,9 @@
+id: yacht_caribbean
+name: "Yacht on the Caribbean"
+kind: sea_vessel
+description: "A sleek, well-appointed yacht cutting through the warm Caribbean night on its way to Rio de Janeiro. The deck offers a steamer chair where Rainsford reclines, smoking his pipe in the darkness. The only sounds are the muffled throb of the engine and the swish and ripple of the propeller wash. The night is moonless, the air thick and warm as moist black velvet. The crew is jumpy — the island they recently passed has an evil name among seafaring men."
+initialState:
+  status: underway
+  destination: rio_de_janeiro
+  crewMood: uneasy
+  weather: calm_moonless_night

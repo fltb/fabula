@@ -1,0 +1,77 @@
+info:
+  currentEra: "1920s interwar period"
+  politicalSituation: "Post-WWI Caribbean; Cossack diaspora. The Russian Revolution has displaced many aristocrats. Zaroff is one such exile, having invested in American securities before fleeing. Ship-Trap Island exists outside any nation's jurisdiction — a lawless space where Zaroff's private hunting preserve operates undetected."
+
+timeAnchors:
+  - id: night_0
+    day: 0
+    description: "Night — The yacht is underway on the Caribbean, bound for Rio. Rainsford and Whitney converse on deck. Rainsford falls overboard after hearing three gunshots."
+    significance: "Opening scene. Establishes Rainsford's hunter worldview and the story's central moral question."
+  - id: day_1_afternoon
+    day: 1
+    description: "Late afternoon — Rainsford wakes on the rocky shore of Ship-Trap Island after a deep sleep. He is hungry but rested."
+    significance: "Rainsford first encounters the island's deadly environment."
+  - id: day_1_evening
+    day: 1
+    description: "Evening — Rainsford arrives at Zaroff's château. Ivan greets him with a revolver. Zaroff welcomes him warmly and hosts a grand dinner."
+    significance: "First meeting with Zaroff and Ivan. The château's opulence and Zaroff's hospitality are established before the reveal."
+  - id: day_2_morning
+    day: 2
+    description: "Morning — Rainsford is served breakfast. Zaroff does not appear until luncheon. Rainsford has spent a sleepless night in the tower bedroom."
+    significance: "Rainsford's first full day on the island. He attempts to leave and formally refuses to hunt."
+  - id: day_2_evening
+    day: 2
+    description: "Dusk — The hunt begins. Rainsford is given three hours' head start with a hunting knife, food, and moccasins. Zaroff will follow after dusk."
+    significance: "Central conflict begins. Rainsford becomes the prey."
+  - id: day_3_dawn
+    day: 3
+    description: "Dawn — Rainsford, having spent the night in a tree, watches Zaroff track him. Zaroff finds him but deliberately leaves, toying with him."
+    significance: "Rainsford realizes Zaroff is playing with him. The Malay man-catcher is set and wounds Zaroff."
+  - id: day_3_dusk
+    day: 3
+    description: "Dusk — Rainsford reaches Death Swamp, digs a Burmese tiger pit, and kills one of Zaroff's best hounds. The hunt intensifies."
+    significance: "Rainsford scores against Zaroff. The balance shifts slightly."
+  - id: day_3_night
+    day: 3
+    description: "Night — At daybreak Rainsford, pursued by hounds, leaps from the sea cliffs and swims around the island to infiltrate Zaroff's château. The final confrontation occurs in Zaroff's bedroom."
+    significance: "Climax and resolution. Rainsford kills Zaroff and sleeps in his bed."
+
+threads:
+  - id: T1
+    name: "Survival"
+    type: primary
+    description: "Rainsford must survive Zaroff's hunt for three days. If he eludes capture until midnight of the third day, he wins freedom. If caught, he is fed to the hounds. The thread tracks Rainsford's physical condition, his traps, and his progress toward the final confrontation."
+    targetRevealChapter: 3
+    initialProgress: "0.10"
+  - id: T2
+    name: "Moral awakening"
+    type: thematic
+    description: "Rainsford begins the story dismissing animal suffering — 'Who cares how a jaguar feels?' — but is forced to confront that worldview when he becomes the prey. His experience as the hunted, feeling terror and pain, parallels Whitney's earlier reproach. By the end, Rainsford has learned what it means to be the huntee, not the hunter."
+    targetRevealChapter: 3
+    initialProgress: "0.00"
+  - id: T3
+    name: "Zaroff's curse"
+    type: antagonist
+    description: "Zaroff's ennui — his boredom with hunting animals — drives the entire plot. He is a predator who has exhausted every natural quarry and now hunts men. His arrogance and need for a worthy opponent lead him to give Rainsford chances he should not. The thread tracks Zaroff's underestimation of Rainsford and the gradual erosion of his invincibility."
+    targetRevealChapter: 3
+    initialProgress: "0.20"
+
+worldFacts:
+  - id: ship_trap_island_existence
+    value: "Ship-Trap Island is a mysterious island in the Caribbean with an evil reputation among sailors. The old charts call it 'Ship-Trap Island.' The crew of Rainsford's yacht is visibly afraid of it."
+    description: "Public knowledge among seafarers"
+  - id: zaroff_former_general
+    value: "General Zaroff is a former Cossack cavalry commander who served the Tsar. After the Russian Revolution, he emigrated to America with a fortune invested in securities."
+    description: "Zaroff's personal history, revealed at dinner"
+  - id: ivan_deaf_mute
+    value: "Ivan is deaf and mute. He communicates through lip-reading and gestures. Zaroff speaks to him with silent lip movements."
+    description: "Observed fact upon meeting Ivan"
+  - id: hounds_kept_in_cellar
+    value: "A dozen enormous black hounds are kept in the cellar of Zaroff's château. They are released at seven every evening. Zaroff uses them to track and kill his quarry."
+    description: "Zaroff shows the hounds to Rainsford from the window"
+  - id: zaroff_fake_lighthouse
+    value: "Zaroff operates a false channel light that lures ships onto the razor-edged rocks surrounding Ship-Trap Island. He 'helps Providence' when ships do not come naturally."
+    description: "Zaroff confesses this to Rainsford during dinner"
+  - id: zaroff_three_day_rule
+    value: "Zaroff's hunt follows strict rules: three-hour head start, small-caliber pistol only, three days to survive. If the quarry wins, Zaroff's sloop takes them to the mainland."
+    description: "The rules of the game as explained by Zaroff"

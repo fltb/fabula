@@ -1,0 +1,13 @@
+ruleId: ivan_alternative
+name: "Ivan's Alternative"
+category: game_rule
+type: consequence_rule
+statement: "If the quarry refuses to play the game, Zaroff turns him over to Ivan. Ivan, who once served as official knouter to the Great White Tsar, has his own ideas of sport. The quarry is invariably killed — but not quickly. Zaroff presents this as a choice, knowing that any man with sense will choose the hunt. His exact words: 'If he does not wish to hunt, I turn him over to Ivan.'"
+logicalConsequences:
+  - description: "Refusal to participate in the hunt results in death by torture. The quarry is handed to Ivan, who executes him in the cellar."
+    check:
+      type: transition_constraint
+      filter: "quarry_refuses_hunt == true"
+      assert: "quarry_status == 'dead' AND cause_of_death == 'ivan_execution'"
+      severity: error
+evidenceChain: []

@@ -1,0 +1,54 @@
+event: E1
+title: "Overboard"
+narrativeOrder: 2
+sceneType: action
+storyTime: night_0
+pov:
+  character: rainsford
+  type: third_person_limited
+sceneBrief: "After hearing the gunshots, Rainsford springs to the rail to peer into the darkness. His pipe is knocked from his mouth by a rope; he lunges for it and loses his balance, falling into the blood-warm Caribbean. The yacht speeds away. Rainsford strips off his clothes and swims toward the direction of the shots. He hears an animal scream cut short by a pistol shot. After a desperate swim, he drags himself onto the rocky shore of Ship-Trap Island and collapses into exhausted sleep."
+preconditions:
+  - entity: rainsford
+    attribute: location
+    value: yacht_caribbean
+    confidence: 1.0
+  - entity: rainsford
+    attribute: heard_gunshots
+    value: true
+    confidence: 1.0
+  - entity: yacht_caribbean
+    attribute: status
+    value: underway
+    confidence: 1.0
+expectedPostconditions:
+  - entity: rainsford
+    attribute: location
+    value: ship_trap_shore
+    confidence: 1.0
+  - entity: rainsford
+    attribute: status
+    value: alive
+    confidence: 1.0
+  - entity: rainsford
+    attribute: condition
+    value: exhausted
+    confidence: 1.0
+  - entity: rainsford
+    attribute: inventory
+    value: "clothes_lost"
+    confidence: 1.0
+  - entity: yacht_caribbean
+    attribute: rainsford_on_board
+    value: false
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "Rainsford falls overboard and reaches the island. Survival begins."
+    progressAfter: 15
+    progressTotal: 100
+foreshadowing: []
+relationshipEffects: []
+ruleEffects: []
+styleGuidance: "Action sequence — sudden, disorienting. The fall should feel abrupt and shocking after the languid opening. The swim is a desperate, methodical fight for survival. End on exhausted collapse."
+narrativeContent:
+  opening: "The three shots hung in the air like a question no one would answer. Rainsford was at the rail before the last echo died, straining to see through the absolute blackness. He leaped onto the rail, balancing — and his pipe, striking a taut rope, was torn from his lips. He lunged for it, his center of gravity shifted, and with a hoarse cry he was falling, the blood-warm water closing over his head like a door slamming shut."

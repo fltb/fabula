@@ -1,0 +1,70 @@
+event: E3
+title: "The Château"
+narrativeOrder: 4
+sceneType: dialogue
+storyTime: day_1_evening
+pov:
+  character: rainsford
+  type: third_person_limited
+sceneBrief: "Rainsford lifts the heavy knocker on the massive door of the château. The door opens to reveal a giant black-bearded man holding a revolver aimed at Rainsford's heart — Ivan. Rainsford explains he fell off a yacht. Ivan does not respond; he cocks his revolver. Then General Zaroff appears, an erect, slender man in evening clothes, and welcomes Rainsford by name, having recognized him from his book on hunting snow leopards in Tibet. Ivan is dismissed with a silent gesture."
+preconditions:
+  - entity: rainsford
+    attribute: location
+    value: chateau
+    confidence: 1.0
+  - entity: rainsford
+    attribute: status
+    value: alive
+    confidence: 1.0
+  - entity: world
+    attribute: time
+    value: day_1_evening
+    confidence: 1.0
+expectedPostconditions:
+  - entity: rainsford
+    attribute: met_zaroff
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: met_ivan
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: knows_ivan_deaf_mute
+    value: true
+    confidence: 1.0
+  - entity: rainsford
+    attribute: location
+    value: chateau
+    confidence: 1.0
+  - entity: zaroff
+    attribute: knows_rainsford_identity
+    value: true
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "Rainsford meets Zaroff and Ivan. He is now inside the château — safe for the moment."
+    progressAfter: 25
+    progressTotal: 100
+foreshadowing:
+  - id: ivan_revolver
+    hint: "Ivan's revolver trained on Rainsford's heart. The deaf-mute giant is a gatekeeper of death."
+    targetRevealChapter: 4
+    thread: T1
+  - id: zaroff_recognition
+    hint: "Zaroff recognizes Rainsford from his book. This is not coincidence — Zaroff knows exactly who has arrived on his island."
+    targetRevealChapter: 5
+    thread: T3
+relationshipEffects:
+  - participants:
+      - rainsford
+      - zaroff
+    effect: establish
+    direction: host_guest
+newState:
+  type: formal_hospitality
+  intensity: 0.5
+ruleEffects: []
+styleGuidance: "Gothic tension. The door opening to reveal Ivan and his revolver should be a jump-scare moment. Zaroff's entrance should feel like a relief that curdles into unease — he is too smooth, too welcoming, too interested in Rainsford."
+narrativeContent:
+  opening: "The knocker was a gargoyle, its face frozen in a leering grin, and it boomed against the massive door with a sound that startled Rainsford with its violence. He waited. Nothing. He lifted the knocker again, let it fall — and the door swung open as if on a spring, flooding the darkness with a river of glaring gold light. In the center of that light stood a giant, black-bearded to the waist, and in his hand, a long-barrelled revolver aimed directly at Rainsford's heart."

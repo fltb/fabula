@@ -1,0 +1,28 @@
+id: zaroff
+name: "General Zaroff"
+type: aristocratic_hunter
+description: "General Zaroff is a tall, erect man past middle age with vivid white hair, thick black eyebrows, and a pointed military moustache as black as the night. His eyes are black and very bright, set in a spare, dark face with high cheekbones and a sharp-cut nose — the face of an aristocrat accustomed to command. He dresses immaculately in evening clothes or country tweeds, and carries himself with the cosmopolitan ease of a man who has traveled the world. His smile reveals red lips and pointed teeth, giving him a faintly predatory aspect. He moves with the fluid grace of a natural hunter."
+traits:
+  - cultured
+  - philosophical
+  - blood_lust
+  - huntsman
+  - aristocrat
+  - bored
+initialState:
+  location: chateau
+  status: alive
+  condition: well
+  emotionalState: amiable
+  inventory:
+    - item: "pistol"
+      description: "A small-caliber automatic pistol for the hunt"
+    - item: "hunting_rifle"
+      description: "A high-powered rifle for general use"
+    - item: "gold_cigarette_case"
+      description: "Contains long black perfumed cigarettes with silver tips"
+voiceNotes: "Formal, precise, and cultivated. Uses italicized foreign terms and philosophical asides. Speaks with a slight accent that gives his words added precision. His tone is urbane and cosmopolitan, but a predatory undercurrent lurks beneath the politeness."
+backstory: "A Cossack aristocrat who commanded a division of cavalry under the Tsar. After the Russian Revolution, he emigrated to America, having invested heavily in American securities. He inherited a fortune and bought Ship-Trap Island, building a palatial château. After exhausting every animal species on earth, he invented a new quarry — man. He has killed every man who has been hunted on his island."
+knownSecrets:
+  - "Zaroff suffers from profound boredom (ennui) — the hunt no longer thrills him with ordinary quarry"
+  - "He craves a worthy opponent — someone who can match his intellect and woodcraft"

@@ -11,6 +11,7 @@
     "build:js": "node packages/core/build.mjs && node packages/cli/build.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bench": "npm run -w @novalistically/core bench",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "typecheck": "tsc -b --noEmit packages/core packages/cli"
@@ -18,6 +19,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.3.8",
     "dotenv": "^17.4.2",
+    "tinybench": "^6.0.2",
     "typescript": "^5.9.0",
     "vitest": "^3.2.4"
   }

@@ -1,0 +1,17 @@
+id: captain_nielsen
+name: "Captain Nielsen"
+type: yacht_captain
+description: "Captain Nielsen is the tough-minded old Swedish captain of the yacht carrying Rainsford and Whitney toward Rio. He has fishy blue eyes that normally betray no fear, but even he is affected by the sinister reputation of Ship-Trap Island. He is a minor background character who appears only in the opening yacht scene."
+traits:
+  - experienced
+  - stoic
+  - superstitious_beneath_surface
+initialState:
+  location: yacht_caribbean
+  status: alive
+  condition: well
+  emotionalState: uneasy
+  inventory: []
+voiceNotes: "Gravely spoken, economical with words. A man of the sea who trusts his instincts."
+backstory: "A seasoned Swedish sea captain who has sailed the Caribbean for decades. He knows the legends of Ship-Trap Island and treats them with a sailor's respect."
+knownSecrets: []

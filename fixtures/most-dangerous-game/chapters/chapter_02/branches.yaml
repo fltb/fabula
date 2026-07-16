@@ -1,0 +1,40 @@
+# Branch Points File
+# Defines the branching choice at E5: Rainsford chooses to play Zaroff's game or refuses.
+
+branchPoints:
+  - id: rainsford_choice
+    triggerEvent: E5
+    description: "At luncheon, Rainsford must choose whether to accept Zaroff's hunt or refuse. Zaroff has offered both options — the hunt, or Ivan's alternative."
+    branches:
+      - id: A
+        label: "Refuse the hunt"
+        description: "Rainsford refuses to hunt. Zaroff turns him over to Ivan. Rainsford is killed in the cellar. Story ends."
+        condition: "rainsford.chose_hunt == false"
+        targetEvent: "story_end_refusal"
+        consequences:
+          - entity: rainsford
+            attribute: status
+            value: dead
+            confidence: 1.0
+          - entity: rainsford
+            attribute: cause_of_death
+            value: ivan_execution
+            confidence: 1.0
+          - entity: world
+            attribute: zaroff_hunt_active
+            value: false
+            confidence: 1.0
+      - id: B
+        label: "Accept the hunt"
+        description: "Rainsford chooses to play the game. He receives a hunting knife and a three-hour head start. The main story proceeds through E6-E12."
+        condition: "rainsford.chose_hunt == true"
+        targetEvent: E6
+        consequences:
+          - entity: rainsford
+            attribute: in_hunt
+            value: true
+            confidence: 1.0
+          - entity: world
+            attribute: zaroff_hunt_active
+            value: true
+            confidence: 1.0

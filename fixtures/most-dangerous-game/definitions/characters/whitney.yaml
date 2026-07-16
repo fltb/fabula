@@ -1,0 +1,21 @@
+id: whitney
+name: "Whitney"
+type: big_game_hunter_companion
+description: "Whitney is Rainsford's companion on the yacht, a fellow big-game hunter bound for a jaguar hunting expedition up the Amazon. He is more philosophically inclined than Rainsford, with a poetic sensibility that makes him sensitive to the moral implications of their sport. He is the first to sense the malevolent atmosphere surrounding Ship-Trap Island. He exits the story after the opening scene on the yacht."
+traits:
+  - poetic
+  - sensitive
+  - sailor
+initialState:
+  location: yacht_caribbean
+  status: alive
+  condition: well
+  emotionalState: uneasy
+  inventory:
+    - item: "pipe"
+      description: "A pipe for smoking"
+    - item: "lighter"
+      description: "Pocket lighter"
+voiceNotes: "Lyrical and philosophical. Prone to introspection and moral questioning. Speaks in longer, more measured sentences than Rainsford, with a tendency toward metaphor."
+backstory: "A fellow hunter and traveling companion of Rainsford. Familiar with the sea and its lore. The crew's unease around Ship-Trap Island has affected him deeply."
+knownSecrets: []

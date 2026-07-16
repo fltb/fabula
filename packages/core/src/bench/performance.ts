@@ -2,7 +2,7 @@
 // Performance Benchmarks — Measure pipeline stages at 10 / 100 / 1000 events
 // ============================================================================
 
-import type { NarrativeEvent, WorldState } from '../src/types/index.js';
+import type { NarrativeEvent, WorldState } from '../types/index.js';
 
 import {
   InMemoryEntityRegistry,
@@ -21,7 +21,7 @@ import {
   ContextCompiler,
   ReplayEngine,
   calculateISS,
-} from '../src/index.js';
+} from '../index.js';
 
 import { makeCtx } from './context-helper.js';
 

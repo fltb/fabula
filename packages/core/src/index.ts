@@ -97,3 +97,21 @@ export { MockProvider, OpencodeZenProvider } from './ai/index.ts';
 export { buildSceneRenderPrompt, buildThreadStatusPrompt } from './ai/index.ts';
 export type { MockProviderOptions, OpencodeZenOptions } from './ai/index.ts';
 export type { SceneRenderInput, ThreadStatusInput } from './ai/index.ts';
+
+// Bench (functional + performance)
+export {
+  runFunctionalBench,
+  runPerformanceBench,
+  runAll,
+  toJson,
+  toMarkdown,
+  writeResults,
+} from './bench/index.js';
+export type {
+  FunctionalResults,
+  FunctionalStageResult,
+  PerfResults,
+  PerfMeasurement,
+  BenchResults,
+  BenchMeasurement,
+} from './bench/index.js';

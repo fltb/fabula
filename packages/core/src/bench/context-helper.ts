@@ -2,7 +2,7 @@
 // Context Helper — build ValidatorContext for performance benchmarks
 // ============================================================================
 
-import type { NarrativeEvent, WorldState, EntityRegistry } from '../src/types/index.js';
+import type { NarrativeEvent, WorldState, EntityRegistry } from '../types/index.js';
 
 /**
  * Build a ValidatorContext for use in benchmarks.

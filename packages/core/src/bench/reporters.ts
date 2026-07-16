@@ -2,7 +2,8 @@
 // Benchmark Reporters — Markdown + JSON output
 // ============================================================================
 
-import * as fs from 'node:fs';
+import { FsStorage } from '../storage/index.js';
+import type { Storage } from '../storage/index.js';
 import * as path from 'node:path';
 
 export interface BenchMeasurement {
@@ -89,15 +90,17 @@ export function toMarkdown(results: BenchResults): string {
 
 const RESULTS_DIR = new URL('results', import.meta.url).pathname;
 
-export function writeResults(results: BenchResults): string {
+export function writeResults(results: BenchResults, storage?: Storage): string {
+  const st = storage ?? new FsStorage();
   const ts = results.timestamp.replace(/[:.]/g, '-').replace(/T/, '_').replace(/Z/, '');
   const basePath = path.join(RESULTS_DIR, ts);
 
+  st.mkdirp(RESULTS_DIR);
   const jsonPath = `${basePath}.json`;
-  fs.writeFileSync(jsonPath, toJson(results), 'utf-8');
+  st.write(jsonPath, toJson(results));
 
   const mdPath = `${basePath}.md`;
-  fs.writeFileSync(mdPath, toMarkdown(results), 'utf-8');
+  st.write(mdPath, toMarkdown(results));
 
   console.log(`[Reporters] Written ${jsonPath}`);
   console.log(`[Reporters] Written ${mdPath}`);

@@ -10,8 +10,8 @@ import {
   runFunctionalBench,
   runPerformanceBench,
   writeResults,
-} from './index.js';
-import type { FunctionalResults } from './index.js';
+} from '../src/bench/index.js';
+import type { FunctionalResults } from '../src/bench/index.js';
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
@@ -237,7 +237,7 @@ describe('Benchmark Reporting', () => {
 
 // ─── Main entry (also runnable as standalone) ─────────────────────────────
 
-import { runAll } from './index.js';
+import { runAll } from '../src/bench/index.js';
 
 describe('runAll integration', () => {
   it('runs both functional and performance benchmarks', async () => {

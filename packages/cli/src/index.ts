@@ -15,6 +15,9 @@ import {
   calculateISS,
   detectAntiPatterns,
   validateStrict,
+  runAll,
+  runFunctionalBench,
+  runPerformanceBench,
 } from '@novalistically/core';
 
 // ============================================================================
@@ -507,6 +510,48 @@ program
     console.log(`✅ Committed: ${lastEvent.id} — "${lastEvent.title}"`);
     console.log(`   Narrative order: ${lastEvent.narrativeOrder}`);
     console.log(`   Total events: ${events.length - 1} (excluding genesis)`);
+  });
+
+// --- bench ---
+program
+  .command('bench')
+  .description('Run functional + performance benchmarks against the project')
+  .option('--functional', 'Run only functional benchmarks', false)
+  .option('--performance', 'Run only performance benchmarks', false)
+  .action(async (options: { functional?: boolean; performance?: boolean }) => {
+    const projectDir = ensureProjectDir();
+
+    const onlyFun = options.functional && !options.performance;
+    const onlyPerf = options.performance && !options.functional;
+
+    if (onlyFun) {
+      console.log('── Functional Benchmarks ──');
+      const r = runFunctionalBench(projectDir);
+      for (const s of r.stages) {
+        const icon = s.passed ? '✅' : '❌';
+        console.log(`  ${icon} ${s.stage}: ${s.passed ? 'PASS' : 'FAIL'} (${s.ms.toFixed(2)}ms) — ${s.detail}`);
+      }
+      console.log(`  ── ${r.totalPassed}/${r.stages.length} passed, ${r.totalFailed} failed, ${r.totalTime.toFixed(0)}ms total ──`);
+      return;
+    }
+
+    if (onlyPerf) {
+      console.log('── Performance Benchmarks ──');
+      const r = await runPerformanceBench();
+      console.table(
+        r.measurements.map((m: { name: string; hz: number; meanMs: number; samples: number; scale: string | number }) => ({
+          Stage: m.name,
+          'Hz': m.hz.toFixed(1),
+          'Mean (ms)': m.meanMs.toFixed(3),
+          Samples: m.samples,
+          Scale: m.scale,
+        })),
+      );
+      return;
+    }
+
+    // Both
+    await runAll(projectDir);
   });
 
 // Parse

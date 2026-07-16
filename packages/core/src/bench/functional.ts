@@ -6,10 +6,9 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import type {
   NarrativeEvent,
-  ProjectData,
   WorldState,
   ContextPackage,
-} from '../src/types/index.js';
+} from '../types/index.js';
 
 import {
   EntityMapper,
@@ -28,11 +27,13 @@ import {
   ResultAggregator,
   ContextCompiler,
   ReplayEngine,
+  StateManager,
   assembleNovel,
   calculateISS,
   detectAntiPatterns,
   validateStrict,
-} from '../src/index.js';
+  type ProjectData,
+} from '../index.js';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 

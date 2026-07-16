@@ -2,19 +2,21 @@
 // SnapshotEngine — Periodic state snapshots for fast recovery
 // ============================================================================
 
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { WorldState, Snapshot } from '../types/index.js';
+import { FsStorage, type Storage } from '../storage/index.ts';
 
 export class SnapshotEngine {
   private snapshotInterval: number;
   private snapshotsDir: string;
+  private storage: Storage;
 
-  constructor(snapshotsDir: string, snapshotInterval = 20) {
+  constructor(snapshotsDir: string, snapshotInterval = 20, storage?: Storage) {
     this.snapshotsDir = snapshotsDir;
     this.snapshotInterval = snapshotInterval;
-    if (!fs.existsSync(snapshotsDir)) {
-      fs.mkdirSync(snapshotsDir, { recursive: true });
+    this.storage = storage ?? new FsStorage();
+    if (!this.storage.exists(snapshotsDir)) {
+      this.storage.mkdirp(snapshotsDir);
     }
   }
 
@@ -33,16 +35,16 @@ export class SnapshotEngine {
     };
 
     const filePath = path.join(this.snapshotsDir, `snapshot_${narrativeOrder}.json`);
-    fs.writeFileSync(filePath, JSON.stringify(snapshot, null, 2), 'utf-8');
+    this.storage.write(filePath, JSON.stringify(snapshot, null, 2));
 
     return snapshot;
   }
 
   /** Find the nearest snapshot at or before the given narrative order */
   findNearest(targetOrder: number): Snapshot | null {
-    if (!fs.existsSync(this.snapshotsDir)) return null;
+    if (!this.storage.exists(this.snapshotsDir)) return null;
 
-    const files = fs.readdirSync(this.snapshotsDir)
+    const files = this.storage.listFiles(this.snapshotsDir)
       .filter((f) => f.startsWith('snapshot_') && f.endsWith('.json'))
       .map((f) => {
         const match = f.match(/snapshot_(\d+)\.json/);
@@ -56,7 +58,7 @@ export class SnapshotEngine {
     const nearest = files[0];
     const filePath = path.join(this.snapshotsDir, `snapshot_${nearest}.json`);
     try {
-      return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as Snapshot;
+      return JSON.parse(this.storage.read(filePath)) as Snapshot;
     } catch {
       return null;
     }
@@ -64,9 +66,9 @@ export class SnapshotEngine {
 
   /** Invalidate snapshots at or after a given narrative order */
   invalidateFrom(narrativeOrder: number): void {
-    if (!fs.existsSync(this.snapshotsDir)) return;
+    if (!this.storage.exists(this.snapshotsDir)) return;
 
-    const files = fs.readdirSync(this.snapshotsDir)
+    const files = this.storage.listFiles(this.snapshotsDir)
       .filter((f) => f.startsWith('snapshot_') && f.endsWith('.json'));
 
     for (const file of files) {
@@ -74,7 +76,7 @@ export class SnapshotEngine {
       if (match) {
         const order = parseInt(match[1], 10);
         if (order >= narrativeOrder) {
-          fs.unlinkSync(path.join(this.snapshotsDir, file));
+          this.storage.remove(path.join(this.snapshotsDir, file));
         }
       }
     }
@@ -82,9 +84,9 @@ export class SnapshotEngine {
 
   /** List all available snapshots */
   listSnapshots(): number[] {
-    if (!fs.existsSync(this.snapshotsDir)) return [];
+    if (!this.storage.exists(this.snapshotsDir)) return [];
 
-    return fs.readdirSync(this.snapshotsDir)
+    return this.storage.listFiles(this.snapshotsDir)
       .filter((f) => f.startsWith('snapshot_') && f.endsWith('.json'))
       .map((f) => {
         const match = f.match(/snapshot_(\d+)\.json/);

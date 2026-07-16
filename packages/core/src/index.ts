@@ -81,6 +81,10 @@ export { ReviewManager } from './review/index.js';
 // Plugin
 export { PluginLoader } from './plugin/index.js';
 
+// Storage
+export { FsStorage, MemoryStorage } from './storage/index.ts';
+export type { Storage, DirEntry } from './storage/index.ts';
+
 // AI
 export type {
   LLMProvider,

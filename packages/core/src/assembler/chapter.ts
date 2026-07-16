@@ -1,7 +1,7 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { ChapterMetadata } from '../types/index.js';
+import { FsStorage, type Storage } from '../storage/index.ts';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Chapter Metadata Loader
@@ -12,27 +12,29 @@ import type { ChapterMetadata } from '../types/index.js';
  */
 export function loadChapterMetadata(
   projectDir: string,
+  storage?: Storage,
 ): Map<number, ChapterMetadata> {
+  const st = storage ?? new FsStorage();
   const map = new Map<number, ChapterMetadata>();
   const chaptersDir = path.join(projectDir, 'chapters');
 
-  if (!fs.existsSync(chaptersDir)) {
+  if (!st.exists(chaptersDir)) {
     console.warn(`[Assembler] Chapters directory not found: ${chaptersDir}`);
     return map;
   }
 
-  const dirs = fs
-    .readdirSync(chaptersDir, { withFileTypes: true })
+  const dirs = st
+    .list(chaptersDir)
     .filter((e) => e.isDirectory() && /^chapter_\d+/i.test(e.name))
     .map((e) => path.join(chaptersDir, e.name))
     .sort();
 
   for (const dir of dirs) {
     const metaPath = path.join(dir, '_chapter.yaml');
-    if (!fs.existsSync(metaPath)) continue;
+    if (!st.exists(metaPath)) continue;
 
     try {
-      const raw = fs.readFileSync(metaPath, 'utf-8');
+      const raw = st.read(metaPath);
       const parsed = parseYaml(raw) as Record<string, unknown>;
 
       const metadata: ChapterMetadata = {

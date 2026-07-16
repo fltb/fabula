@@ -2,13 +2,18 @@
 // EventStore — Append-only event log
 // ============================================================================
 
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { NarrativeEvent } from '../types/index.js';
+import { FsStorage, type Storage } from '../storage/index.ts';
 
 export class EventStore {
   private events: NarrativeEvent[] = [];
   private eventsByOrder: Map<number, NarrativeEvent> = new Map();
+  private storage: Storage;
+
+  constructor(storage?: Storage) {
+    this.storage = storage ?? new FsStorage();
+  }
 
   /** Append an event to the store */
   commit(event: NarrativeEvent): void {
@@ -63,15 +68,15 @@ export class EventStore {
   saveToDisk(dirPath: string): void {
     const filePath = path.join(dirPath, 'event_log.jsonl');
     const lines = this.getAll().map((e) => JSON.stringify(e));
-    fs.writeFileSync(filePath, lines.join('\n') + '\n', 'utf-8');
+    this.storage.write(filePath, lines.join('\n') + '\n');
   }
 
   /** Load event log from disk */
   loadFromDisk(dirPath: string): void {
     const filePath = path.join(dirPath, 'event_log.jsonl');
-    if (!fs.existsSync(filePath)) return;
+    if (!this.storage.exists(filePath)) return;
 
-    const content = fs.readFileSync(filePath, 'utf-8');
+    const content = this.storage.read(filePath);
     const lines = content.trim().split('\n').filter(Boolean);
     this.events = lines.map((line) => JSON.parse(line) as NarrativeEvent);
     this.eventsByOrder.clear();

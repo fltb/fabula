@@ -1,4 +1,3 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type {
   ChapterMetadata,
@@ -18,6 +17,7 @@ import type {
 import { readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
 import { parseStoryTimestamp, factIdFrom } from './timestamp.js';
 import type { ProjectData } from './types.js';
+import { FsStorage, type Storage } from '../storage/index.ts';
 
 // ============================================================================
 // EntityMapper — reads YAML definitions and maps to internal types
@@ -25,39 +25,49 @@ import type { ProjectData } from './types.js';
 
 export class EntityMapper {
   private projectPath: string;
+  private storage: Storage;
 
-  constructor(projectPath: string) {
+  constructor(projectPath: string, storage?: Storage) {
     this.projectPath = projectPath;
+    this.storage = storage ?? new FsStorage();
   }
 
   /** Load all project data from the filesystem */
   loadProject(): ProjectData {
     const config = readYamlFile<ProjectConfig>(
       path.join(this.projectPath, 'nova.yaml'),
+      this.storage,
     );
 
     const defsDir = path.join(this.projectPath, 'definitions');
     const characters = readYamlFilesInDir<CharacterDefinition>(
       path.join(defsDir, 'characters'),
+      this.storage,
     );
     const relationships = readYamlFilesInDir<RelationshipDefinition>(
       path.join(defsDir, 'relationships'),
+      this.storage,
     );
     const rules = readYamlFilesInDir<RuleDefinition>(
       path.join(defsDir, 'rules'),
+      this.storage,
     );
     const locations = readYamlFilesInDir<LocationDefinition>(
       path.join(defsDir, 'locations'),
+      this.storage,
     );
     const items = readYamlFilesInDir<ItemDefinition>(
       path.join(defsDir, 'items'),
+      this.storage,
     );
     const factions = readYamlFilesInDir<FactionDefinition>(
       path.join(defsDir, 'factions'),
+      this.storage,
     );
 
     const worldInitialState = readYamlFile<WorldInitialState>(
       path.join(defsDir, 'state_initial.yaml'),
+      this.storage,
     );
 
     const timeAnchors: TimeAnchor[] =
@@ -70,8 +80,8 @@ export class EntityMapper {
     // Load chapters
     const chapters = new Map<number, { metadata: ChapterMetadata | null; events: EventFile[] }>();
     const chaptersDir = path.join(this.projectPath, 'chapters');
-    if (fs.existsSync(chaptersDir)) {
-      const chapterDirs = fs.readdirSync(chaptersDir, { withFileTypes: true });
+    if (this.storage.exists(chaptersDir)) {
+      const chapterDirs = this.storage.list(chaptersDir);
       for (const dir of chapterDirs) {
         if (!dir.isDirectory()) continue;
         const chapterMatch = dir.name.match(/^chapter[_\s]*(\d+)$/i);
@@ -81,14 +91,15 @@ export class EntityMapper {
         const chapterPath = path.join(chaptersDir, dir.name);
         const metadata = readYamlFile<ChapterMetadata>(
           path.join(chapterPath, '_chapter.yaml'),
+          this.storage,
         );
 
         const events: EventFile[] = [];
-        const eventFiles = fs.readdirSync(chapterPath).filter(
+        const eventFiles = this.storage.listFiles(chapterPath).filter(
           (f) => f.startsWith('E') && (f.endsWith('.yaml') || f.endsWith('.yml')),
         );
         for (const ef of eventFiles) {
-          const event = readYamlFile<EventFile>(path.join(chapterPath, ef));
+          const event = readYamlFile<EventFile>(path.join(chapterPath, ef), this.storage);
           if (event) events.push(event);
         }
 

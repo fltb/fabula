@@ -1,8 +1,8 @@
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { SceneMetadata } from '../types/index.js';
 import type { SceneEntry } from './types.js';
+import { FsStorage, type Storage } from '../storage/index.ts';
 
 // ────────────────────────────────────────────────────────────────────────────
 // SceneCollector
@@ -31,19 +31,22 @@ export class SceneCollector {
    * @param scenesDir    Path to the `scenes/` directory
    * @param chaptersDir  Optional path to the `chapters/` directory for
    *                     narrativeOrder cross-referencing
+   * @param storage      Optional storage backend (defaults to FsStorage)
    */
   collectFrom(
     scenesDir: string,
     chaptersDir?: string,
+    storage?: Storage,
   ): Map<string, SceneEntry> {
+    const st = storage ?? new FsStorage();
     const collected = new Map<string, SceneEntry>();
 
-    if (!fs.existsSync(scenesDir)) {
+    if (!st.exists(scenesDir)) {
       console.warn(`[Assembler] Scenes directory not found: ${scenesDir}`);
       return collected;
     }
 
-    const chapterDirs = this._listChapterDirs(scenesDir);
+    const chapterDirs = this._listChapterDirs(scenesDir, st);
 
     for (const chapterDir of chapterDirs) {
       const chapterName = path.basename(chapterDir);
@@ -52,14 +55,14 @@ export class SceneCollector {
       const chapterNumber = Number.parseInt(chapterMatch[1], 10);
 
       // Gather scene metadata YAMLs (E*.yaml, skipping *render_request* etc.)
-      const metadataFiles = this._listSceneMetadataFiles(chapterDir);
+      const metadataFiles = this._listSceneMetadataFiles(chapterDir, st);
 
       for (const yamlPath of metadataFiles) {
         const yamlBaseName = path.basename(yamlPath);
         const eventId = yamlBaseName.replace(/\.yaml$/i, '');
 
         try {
-          const rawYaml = fs.readFileSync(yamlPath, 'utf-8');
+          const rawYaml = st.read(yamlPath);
           const metadataRaw = parseYaml(rawYaml) as Record<string, unknown>;
 
           // — narrativeOrder —
@@ -72,6 +75,7 @@ export class SceneCollector {
               chaptersDir,
               chapterNumber,
               eventId,
+              st,
             );
           }
 
@@ -87,8 +91,8 @@ export class SceneCollector {
           // — Prose (.md) —
           const prosePath = path.join(chapterDir, `${eventId}.md`);
           let prose = '';
-          if (fs.existsSync(prosePath)) {
-            prose = fs.readFileSync(prosePath, 'utf-8');
+          if (st.exists(prosePath)) {
+            prose = st.read(prosePath);
           } else {
             console.warn(
               `[Assembler] Prose file not found: ${prosePath}, skipping ${eventId}`,
@@ -122,8 +126,8 @@ export class SceneCollector {
 
   // ── private helpers ────────────────────────────────────────────────────
 
-  private _listChapterDirs(scenesDir: string): string[] {
-    const entries = fs.readdirSync(scenesDir, { withFileTypes: true });
+  private _listChapterDirs(scenesDir: string, st: Storage): string[] {
+    const entries = st.list(scenesDir);
     return entries
       .filter((e) => e.isDirectory() && /^chapter[_-]\d+/i.test(e.name))
       .map((e) => path.join(scenesDir, e.name))
@@ -134,9 +138,9 @@ export class SceneCollector {
    * List scene-metadata YAML files inside a chapter directory.
    * Matches E<anything>.yaml but excludes *render_request* files.
    */
-  private _listSceneMetadataFiles(dir: string): string[] {
-    if (!fs.existsSync(dir)) return [];
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+  private _listSceneMetadataFiles(dir: string, st: Storage): string[] {
+    if (!st.exists(dir)) return [];
+    const entries = st.list(dir);
     return entries
       .filter(
         (e) =>
@@ -152,6 +156,7 @@ export class SceneCollector {
     chaptersDir: string,
     chapterNumber: number,
     eventId: string,
+    st: Storage,
   ): number | undefined {
     // chapters dir uses underscore-separated naming
     const chapterDirName = `chapter_${String(chapterNumber).padStart(2, '0')}`;
@@ -161,10 +166,10 @@ export class SceneCollector {
       `${eventId}.yaml`,
     );
 
-    if (!fs.existsSync(eventFilePath)) return undefined;
+    if (!st.exists(eventFilePath)) return undefined;
 
     try {
-      const raw = fs.readFileSync(eventFilePath, 'utf-8');
+      const raw = st.read(eventFilePath);
       const parsed = parseYaml(raw) as Record<string, unknown>;
       return (parsed.narrative_order ?? parsed.narrativeOrder) as
         | number

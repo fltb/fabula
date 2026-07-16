@@ -1,4 +1,5 @@
 import type { BranchPath, ChapterMetadata, SceneMetadata } from '../types/index.js';
+import type { Storage } from '../storage/index.ts';
 
 // ────────────────────────────────────────────────────────────────────────────
 // SceneEntry, SortedScene, AssembleOptions, AssembleResult
@@ -27,6 +28,8 @@ export interface AssembleOptions {
   title?: string;
   /** Optional branch path for branch-filtered assembly */
   branchPath?: BranchPath;
+  /** Optional storage backend (defaults to FsStorage) */
+  storage?: Storage;
 }
 
 export interface AssembleResult {

@@ -111,8 +111,9 @@ export {
   clearRenderCache,
 } from './cache/render-cache.js';
 
-// Util
-export { ConcurrencyPool } from './util/index.js';
+// Pipeline
+export { RenderPipeline, ConcurrencyPool, buildAndWriteOutputs } from './pipeline/index.js';
+export type { RenderJob, RenderSceneResult, RenderPipelineOptions } from './pipeline/index.js';
 
 // Bench (functional + performance) is in @novalistically/bench, NOT core.
 // Bench calls core to do measurements; bench itself is not part of core.

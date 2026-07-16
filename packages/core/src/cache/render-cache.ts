@@ -152,7 +152,8 @@ export function setCachedRender(
   storage: Storage,
 ): void {
   const eventDir = path.join(cacheDir, eventId);
-  // Use storage's write which creates parent dirs
+  // Ensure parent dir exists before writing
+  storage.mkdirp(eventDir);
   storage.write(
     path.join(eventDir, 'cache.meta.json'),
     JSON.stringify({ cacheKey, createdAt: new Date().toISOString() }, null, 2),

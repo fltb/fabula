@@ -1,0 +1,18 @@
+{
+  "prose": "Mock response: ## Role\nYou are a working novelist producing the next scene of a literary novel.…",
+  "analysis": "Mock response: ## Scene Specification\n```json\n{\n  \"id\": \"E6\",\n  \"title\": \"Outdoor Chess\",\n  \"sc…",
+  "llmPass1": {
+    "promptTokens": 0,
+    "completionTokens": 0,
+    "totalTokens": 0
+  },
+  "llmPass2": {
+    "promptTokens": 1271.25,
+    "completionTokens": 24,
+    "totalTokens": 0
+  },
+  "renderedAt": "2026-07-16T14:27:18.431Z",
+  "chapters": [
+    2
+  ]
+}

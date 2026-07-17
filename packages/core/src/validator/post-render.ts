@@ -14,7 +14,7 @@
 // or measure. Like other Validators, it runs over (prose, event, worldState).
 // ============================================================================
 
-import type { NarrativeEvent, WorldState } from '../types/index.js';
+import type { NarrativeEvent, WorldState, AnalysisResult } from '../types/index.js';
 
 export interface PostRenderIssue {
   rule: 'postcondition_missing' | 'precondition_contradicted' | 'pov_leak' | 'name_typo' | 'forbidden_phrase';
@@ -37,12 +37,12 @@ export interface PostRenderResult {
   };
 }
 
+// POV leak detection is now handled by POVValidator (dynamic) and
+// AnalysisResult.pov.leaks (LLM analysis). This default is kept as
+// a fallback for legacy use — it uses no fixture-specific names.
+// The canonical approach is to provide canonicalNames via options.
 const DEFAULT_POV_LEAK_PATTERNS: Record<string, RegExp[]> = {
-  // 3rd-person limited to a specific character — catch when prose slips
-  // into another character's inner thoughts
-  third_person_limited: [
-    /\b(Whitney|Ivan|Zaroff|Whitney) (thought|felt|knew|remembered|wanted|wished)\b/gi,
-  ],
+  third_person_limited: [],
 };
 
 const FORBIDDEN_DEFAULT: RegExp[] = [
@@ -142,6 +142,7 @@ export class PostRenderValidator {
         postconditionsStated++;
       } else {
         issues.push({
+          /** @deprecated Use AnalysisResult.postconditions.dropped instead. */
           rule: 'postcondition_missing',
           severity: 'warning',
           message: `Postcondition not stated: ${pc.entityId}.${pc.attribute} = ${pc.value}`,
@@ -172,6 +173,7 @@ export class PostRenderValidator {
         const isDeath = deathPatterns.some((p) => p.test(prose));
         if (isDeath) {
           issues.push({
+            /** @deprecated Use AnalysisResult.preconditions.violated instead. */
             rule: 'precondition_contradicted',
             severity: 'error',
             message: `Precondition contradicted: ${entity} is alive but prose says they died`,
@@ -191,6 +193,7 @@ export class PostRenderValidator {
       const matches = prose.match(pattern);
       if (matches && matches.length > 0) {
         issues.push({
+          /** @deprecated Use AnalysisResult.pov.leaks instead. */
           rule: 'pov_leak',
           severity: 'warning',
           message: `POV leak: prose slips into non-POV character's inner thoughts`,

@@ -95,6 +95,16 @@ export type {
 } from './validator.js';
 
 export type {
+  AnalysisResult,
+  AnalysisContent,
+  PostconditionAnalysis,
+  PreconditionAnalysis,
+  POVAnalysis,
+  InventedDetail,
+  QualityAnalysis,
+} from './analysis.js';
+
+export type {
   RelevanceScore,
   ContextPackage,
   SystemContext,

@@ -131,7 +131,13 @@ describe('PostRenderValidator', () => {
   });
 
   it('flags POV leak when prose enters other characters thoughts in 3rd-person limited', () => {
-    const v = new PostRenderValidator();
+    const v = new PostRenderValidator({
+      povLeakPatterns: {
+        third_person_limited: [
+          /\b(Whitney|Ivan|Zaroff) (thought|felt|knew|remembered|wanted|wished)\b/gi,
+        ],
+      },
+    });
     const event = makeEvent({
       pov: { character: 'rainsford', type: 'third_person_limited' },
     });

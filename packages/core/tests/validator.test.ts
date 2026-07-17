@@ -236,27 +236,6 @@ describe('CharacterStateValidator', () => {
     expect(issues[0].entity).toBe('jinx');
   });
 
-  it('should warn when shimmer_damaged character becomes healthy without intervention', () => {
-    const registry = new InMemoryEntityRegistry();
-    registerCharacter(registry, 'jinx', { condition: 'shimmer_damaged' });
-    const event = makeEvent({
-      postconditions: [{ id: 'jinx.condition', entityId: 'jinx', attribute: 'condition', value: 'healthy', validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } } }],
-    });
-    const ctx = buildContext(event, {
-      entityRegistry: registry,
-      queryState: (_id, _attr) => {
-        if (_id === 'jinx' && _attr === 'condition') return 'shimmer_damaged';
-        return undefined;
-      },
-    });
-
-    const issues = validator.validate(event, ctx);
-    expect(issues).toHaveLength(1);
-    expect(issues[0].severity).toBe('warning');
-    expect(issues[0].message).toContain('shimmer_damaged');
-    expect(issues[0].message).toContain('healthy');
-  });
-
   it('should pass for normal state transitions', () => {
     const registry = new InMemoryEntityRegistry();
     registerCharacter(registry, 'jinx', { condition: 'injured' });
@@ -272,8 +251,7 @@ describe('CharacterStateValidator', () => {
     });
 
     const issues = validator.validate(event, ctx);
-    const shimmerIssues = issues.filter((i) => i.message.includes('shimmer_damaged'));
-    expect(shimmerIssues).toHaveLength(0);
+    expect(issues).toHaveLength(0);
   });
 
   it('should error when dead character appears in scene preconditions', () => {
@@ -431,58 +409,6 @@ describe('KnowledgeValidator', () => {
 
 describe('WorldRuleValidator', () => {
   const validator = new WorldRuleValidator();
-
-  it('should warn when hextech-augmented character has non-operational condition', () => {
-    const registry = new InMemoryEntityRegistry();
-    registerCharacter(registry, 'viktor', { traits: ['hextech_augmented'] });
-    const event = makeEvent({
-      postconditions: [
-        {
-          id: 'viktor.condition',
-          entityId: 'viktor',
-          attribute: 'condition',
-          value: 'malfunctioning',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-        },
-      ],
-    });
-    const ctx = buildContext(event, { entityRegistry: registry });
-
-    const issues = validator.validate(event, ctx);
-    expect(issues).toHaveLength(1);
-    expect(issues[0].severity).toBe('warning');
-    expect(issues[0].message).toContain('Hextech-augmented');
-    expect(issues[0].message).toContain('malfunctioning');
-  });
-
-  it('should error when shimmer-damaged character is set to healthy', () => {
-    const registry = new InMemoryEntityRegistry();
-    registerCharacter(registry, 'jinx', { condition: 'shimmer_damaged' });
-    const event = makeEvent({
-      postconditions: [
-        {
-          id: 'jinx.status',
-          entityId: 'jinx',
-          attribute: 'status',
-          value: 'healthy',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-        },
-      ],
-    });
-    const ctx = buildContext(event, {
-      entityRegistry: registry,
-      queryState: (_id, _attr) => {
-        if (_id === 'jinx' && _attr === 'condition') return 'shimmer_damaged';
-        return undefined;
-      },
-    });
-
-    const issues = validator.validate(event, ctx);
-    expect(issues).toHaveLength(1);
-    expect(issues[0].severity).toBe('error');
-    expect(issues[0].message).toContain('shimmer');
-    expect(issues[0].message).toContain('healthy');
-  });
 
   it('should pass for compliant state changes', () => {
     const registry = new InMemoryEntityRegistry();
@@ -806,27 +732,24 @@ describe('FactualDetailValidator', () => {
 describe('VoiceDriftDetector', () => {
   const validator = new VoiceDriftDetector();
 
-  it('should info about needing LLM evaluation when forbidden words are specified', () => {
+  it('should return no issues in validate() — voice drift checks occur in validateRender', () => {
     const event = makeEvent({
       styleGuidance: { avoid: 'suddenly,then,very' },
     });
     const ctx = buildContext(event);
 
     const issues = validator.validate(event, ctx);
-    expect(issues).toHaveLength(1);
-    expect(issues[0].severity).toBe('info');
-    expect(issues[0].message).toContain('LLM evaluation');
+    expect(issues).toHaveLength(0);
   });
 
-  it('should handle forbidden words list in style guidance', () => {
+  it('should return no issues in validate() regardless of style guidance', () => {
     const event = makeEvent({
       styleGuidance: { avoid: 'suddenly' },
     });
     const ctx = buildContext(event);
 
     const issues = validator.validate(event, ctx);
-    expect(issues).toHaveLength(1);
-    expect(issues[0].message).toContain('Voice drift');
+    expect(issues).toHaveLength(0);
   });
 
   it('should return no issues when no style guidance is present', () => {

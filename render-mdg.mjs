@@ -132,6 +132,7 @@ for (const { ev, chapterNum } of narrativeEvents) {
   const match = files.find((f) => f.startsWith(ev.id + '_') || f === ev.id + '.yaml');
   eventsFileMap.set(ev.id, {
     narrativeOrder: ev.narrativeOrder,
+    chapter: chapterNum,
     filePath: path.join(chapterDir, match || `${ev.id}.yaml`),
   });
 }

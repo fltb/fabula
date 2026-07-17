@@ -24,9 +24,13 @@ import { chapterMetadataSchema, sceneMetadataSchema } from './chapter.js';
 import { projectConfigSchema } from './project.js';
 import { branchPointsFileSchema } from './branch.js';
 
+import { analysisResultSchema, parseAnalysisJSON } from './analysis.js';
+
 // ── Re-export all per-entity schemas ─────────────────────────────────────────
 
 export {
+  analysisResultSchema,
+  parseAnalysisJSON,
   preconditionSchema,
   postconditionSchema,
   eventFileSchema,
@@ -84,6 +88,7 @@ export const schemas: Record<string, ZodTypeAny> = {
   sceneMetadata: sceneMetadataSchema,
   renderRequest: renderRequestSchema,
   branchPointsFile: branchPointsFileSchema,
+  analysisResult: analysisResultSchema,
 } as const;
 
 // ────────────────────────────────────────────────────────────────────────────

@@ -9,6 +9,9 @@ output/
 packages/bench/**/results/
 packages/*/bench/results/
 
+# Deepwork state files — local only, not committed
+.slim/deepwork/
+
 # Environment files
 .env
 .env.local

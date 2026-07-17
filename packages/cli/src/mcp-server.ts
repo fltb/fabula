@@ -12,6 +12,9 @@ import {
   assembleNovel,
   calculateISS,
   detectAntiPatterns,
+  RenderPipeline,
+  FsStorage,
+  buildAndWriteOutputs,
   type AssembleResult,
 } from '@novalistically/core';
 import * as fs from 'node:fs';
@@ -340,8 +343,109 @@ export function mcpNovaRender(projectPath: string, eventId: string) {
 }
 
 // ============================================================================
-// mcp_nova_assemble — Assemble the novel
+// mcp_nova_render_scene — Full LLM rendering + output writing
 // ============================================================================
+
+export async function mcpNovaRenderScene(
+  projectPath: string,
+  eventId: string,
+  options?: { model?: string },
+): Promise<{
+  eventId: string;
+  prose: string;
+  wordCount: number;
+  cacheHit: boolean;
+  errors: string[];
+  analysis: any;
+}> {
+  const ctx = initializeContext(projectPath);
+
+  const targetEvent = ctx.events.find((e: { id: string }) => e.id === eventId);
+  if (!targetEvent) throw new Error(`Event "${eventId}" not found`);
+
+  // Find which chapter this event belongs to
+  let chapterNum = 1;
+  for (const [ch, chapter] of ctx.data.chapters) {
+    if (chapter.events.some((e: { event: string }) => e.event === eventId)) {
+      chapterNum = ch;
+      break;
+    }
+  }
+
+  const state = ctx.stateManager.getStateAt(targetEvent.narrativeOrder - 1);
+  const compiler = new ContextCompiler();
+  const pkg = compiler.compile(targetEvent, state, ctx.registry);
+
+  // Build eventsFileMap for cache initialization
+  const eventsFileMap = new Map<string, { narrativeOrder: number; filePath: string; chapter: number }>();
+  for (const [ch, chapter] of ctx.data.chapters) {
+    for (const evFile of chapter.events) {
+      eventsFileMap.set(evFile.event, {
+        narrativeOrder: evFile.narrativeOrder,
+        filePath: evFile.filePath ?? '',
+        chapter: ch,
+      });
+    }
+  }
+
+  // LLM provider
+  const model =
+    options?.model ?? ctx.data.config?.defaultModel ?? 'claude-sonnet-4-20250514';
+  const apiKey = process.env['OPENCODE_API_KEY'] ?? '';
+  if (!apiKey) {
+    throw new Error('OPENCODE_API_KEY environment variable not set');
+  }
+  const baseUrl = process.env['OPENCODE_BASE_URL'] ?? 'http://127.0.0.1:25793';
+
+  let provider: any;
+  if (apiKey.startsWith('ocg-')) {
+    const { OpencodeGoProvider } = await import('@novalistically/core');
+    provider = new OpencodeGoProvider({ apiKey, baseUrl });
+  } else {
+    const { OpencodeZenProvider } = await import('@novalistically/core');
+    provider = new OpencodeZenProvider({
+      apiKey: apiKey || process.env['OPENROUTER_API_KEY'] || '',
+      baseUrl: process.env['OPENROUTER_BASE_URL'] || baseUrl,
+    });
+  }
+
+  const cacheDir = path.join(projectPath, '.nova', 'render-cache');
+  const storage = new FsStorage();
+  const pipeline = new RenderPipeline({
+    provider,
+    model,
+    cacheDir,
+    storage,
+  });
+  await pipeline.initCache(eventsFileMap, path.join(projectPath, 'definitions'));
+
+  const results = await pipeline.renderAll([
+    {
+      event: targetEvent,
+      stateBefore: state,
+      context: pkg,
+      chapter: chapterNum,
+    },
+  ]);
+
+  // Also write output files to disk
+  buildAndWriteOutputs(storage, projectPath, [{
+    event: targetEvent,
+    stateBefore: state,
+    context: pkg,
+    chapter: chapterNum,
+  }], results);
+
+  const result = results[0];
+  return {
+    eventId: result.eventId,
+    prose: result.prose,
+    wordCount: result.prose.split(/\s+/).filter(Boolean).length,
+    cacheHit: result.cacheHit,
+    errors: result.errors,
+    analysis: result.analysis,
+  };
+}
 
 export function mcpNovaAssemble(projectPath: string, outputPath?: string): AssembleResult {
   const ctx = initializeContext(projectPath);
@@ -492,6 +596,8 @@ export function createMCPServer(projectPath: string): {
       nova_read_state: (entityId?: string) => mcpNovaReadState(projectPath, entityId),
       nova_thread_status: (threadId?: string) => mcpNovaThreadStatus(projectPath, threadId),
       nova_render: (eventId: string) => mcpNovaRender(projectPath, eventId),
+      nova_render_scene: (eventId: string, options?: { model?: string }) =>
+        mcpNovaRenderScene(projectPath, eventId, options),
       nova_assemble: (outputPath?: string) => mcpNovaAssemble(projectPath, outputPath),
     },
   };

@@ -8,6 +8,7 @@ import type {
 } from './entity.js';
 import type { NarrativeEvent, RuleEffectEntry } from './event.js';
 import type { KnowledgeState, WorldState } from './world.js';
+import type { AnalysisResult } from './analysis.js';
 
 // ——— Validator Context ———
 
@@ -55,12 +56,19 @@ export interface Validator {
   /**
    * Check the rendered prose against the source event and world state.
    * This is the PRIMARY quality gate — run AFTER LLM rendering.
+   *
+   * The `analysis` parameter provides structured metadata from the LLM's
+   * second pass (self-analysis). Validators should PREFER using this
+   * structured data over regex-parsing the raw prose, as it is
+   * language-agnostic and more reliable.
+   *
    * Default no-op; override in concrete validators.
    */
   validateRender: (
     prose: string,
     event: NarrativeEvent,
     state: WorldState,
+    analysis?: AnalysisResult,
   ) => ValidationIssue[];
 }
 

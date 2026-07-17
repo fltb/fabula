@@ -8,9 +8,11 @@ import type {
   EntityRegistry,
   ValidationIssue,
   ValidationResult,
+  AnalysisResult,
 } from '../types/index.js';
 import type { Validator } from '../types/index.js';
-import { buildContext } from './base.js';
+import type { PluginValidator } from '../plugin/validator-registry.js';
+import { buildContext, makeIssue } from './base.js';
 import { TimelineValidator } from './timeline.js';
 import { CharacterStateValidator } from './character-state.js';
 import { KnowledgeValidator } from './knowledge.js';
@@ -25,8 +27,12 @@ import { ReachabilityValidator } from './reachability.js';
 
 export class ResultAggregator {
   private validators: Validator[];
+  private pluginValidators: PluginValidator[];
 
-  constructor(customValidators?: Validator[]) {
+  constructor(
+    customValidators?: Validator[],
+    pluginValidators?: PluginValidator[],
+  ) {
     this.validators = customValidators ?? [
       new TimelineValidator(),
       new CharacterStateValidator(),
@@ -40,6 +46,58 @@ export class ResultAggregator {
       new BranchMergeValidator(),
       new ReachabilityValidator(),
     ];
+    this.pluginValidators = pluginValidators ?? [];
+  }
+
+  /**
+   * Register additional plugin validators after construction.
+   */
+  addPluginValidators(validators: PluginValidator[]): void {
+    this.pluginValidators = [...this.pluginValidators, ...validators];
+  }
+
+  /**
+   * Run all validators' validateRender against rendered prose.
+   * Optionally accepts parsed AnalysisResult from LLM Pass 2.
+   */
+  validateRender(
+    prose: string,
+    event: NarrativeEvent,
+    state: WorldState,
+    analysis?: AnalysisResult,
+    overrides?: Record<string, 'off' | 'warning' | 'error'>,
+  ): ValidationResult {
+    const allIssues: ValidationIssue[] = [];
+
+    for (const validator of this.validators) {
+      const override = overrides?.[validator.name];
+      if (override === 'off') continue;
+
+      const issues = validator.validateRender(prose, event, state, analysis);
+
+      for (const issue of issues) {
+        if (override === 'error') {
+          issue.severity = 'error';
+        } else if (override === 'warning' && issue.severity !== 'error') {
+          issue.severity = 'warning';
+        }
+        allIssues.push(issue);
+      }
+    }
+
+    // Plugin validators don't have validateRender — skip
+    // They only operate on structured input via validate()
+
+    const errors = allIssues.filter((i) => i.severity === 'error');
+    const warnings = allIssues.filter((i) => i.severity === 'warning');
+    const infos = allIssues.filter((i) => i.severity === 'info');
+
+    return {
+      passed: errors.length === 0,
+      errors,
+      warnings,
+      infos,
+    };
   }
 
   /**
@@ -71,6 +129,25 @@ export class ResultAggregator {
           issue.severity = issue.severity === 'error' ? 'error' : 'warning';
         }
         allIssues.push(issue);
+      }
+    }
+
+    // Run plugin validators
+    for (const pv of this.pluginValidators) {
+      try {
+        const result = pv.validate(context);
+        for (const issue of result.errors) allIssues.push(issue as unknown as ValidationIssue);
+        for (const issue of result.warnings) allIssues.push(issue as unknown as ValidationIssue);
+      } catch (err) {
+        allIssues.push(makeIssue(
+          this.constructor.name,
+          event.id,
+          'system',
+          'error',
+          `Plugin validator "${pv.name}" failed: ${(err as Error).message}`,
+          'Check the plugin implementation.',
+          'manual',
+        ));
       }
     }
 

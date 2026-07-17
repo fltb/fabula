@@ -3,6 +3,7 @@
 // ============================================================================
 
 import type {
+  AnalysisResult,
   NarrativeEvent,
   Validator,
   ValidatorContext,
@@ -38,67 +39,12 @@ export class CharacterStateValidator implements Validator {
       }
     }
 
-    // Check postconditions for state contradictions
-    for (const pc of event.postconditions) {
-      const entity = context.entityRegistry.resolve(pc.entityId);
-      if (!entity || entity.kind !== 'character') continue;
-
-      const currentCondition = context.queryState(pc.entityId, 'condition');
-
-      // If transitioning to healthy from shimmer_damaged without medical_intervention
-      if (
-        pc.attribute === 'condition' &&
-        pc.value === 'healthy' &&
-        currentCondition === 'shimmer_damaged'
-      ) {
-        issues.push(makeIssue(
-          this.name, event.id, pc.entityId, 'warning',
-          `Character "${pc.entityId}" transitions from shimmer_damaged to healthy without medical intervention`,
-          'Add an event showing medical treatment, or change the expected postcondition.',
-          'change_value',
-          'condition',
-          undefined,
-          pc.value,
-        ));
-      }
-    }
-
     return issues;
   }
 
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-    const lowerProse = prose.toLowerCase();
-
-    for (const pc of event.preconditions) {
-      const entityId = pc.entityId;
-      if (!entityId) continue;
-
-      const expectedValue = String(pc.value ?? '').toLowerCase();
-      if (!expectedValue || expectedValue === 'true' || expectedValue === 'false') continue;
-
-      const entityLower = entityId.toLowerCase();
-
-      // Only check if the entity is mentioned in the prose
-      const entityPos = lowerProse.indexOf(entityLower);
-      if (entityPos === -1) continue;
-
-      // Look near the entity mention for the expected state value
-      const start = Math.max(0, entityPos - 100);
-      const end = Math.min(lowerProse.length, entityPos + 100);
-      const vicinity = lowerProse.slice(start, end);
-
-      if (!vicinity.includes(expectedValue)) {
-        issues.push(makeIssue(
-          this.name, event.id, entityId, 'info',
-          `Expected "${entityId}" to be "${pc.attribute}=${pc.value}" per preconditions, but prose near "${entityId}" doesn't reflect it`,
-          `Describe ${entityId}'s state (${expectedValue}) in the prose to stay consistent with established facts.`,
-          'edit_file',
-          pc.attribute,
-        ));
-      }
-    }
-
-    return issues;
+  validateRender(prose: string, event: NarrativeEvent, state: WorldState, analysis?: AnalysisResult): ValidationIssue[] {
+    // NOTE: Prose-level precondition/postcondition checking is now delegated
+    // to AnalysisResult from LLM Pass 2.
+    return [];
   }
 }

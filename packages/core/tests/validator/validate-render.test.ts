@@ -136,7 +136,7 @@ describe('validateRender actually checks the prose', () => {
     expect(issues.length).toBeGreaterThan(0);
   });
 
-  it('FactualDetailValidator flags when numeric claims are absent from prose', () => {
+  it('FactualDetailValidator no longer checks prose-level facts (delegated to AnalysisResult)', () => {
     const v = new FactualDetailValidator();
     const event = makeEvent({
       postconditions: [
@@ -150,9 +150,10 @@ describe('validateRender actually checks the prose', () => {
         },
       ],
     });
-    // Prose without "3 hours"
+    // Prose without "3 hours" — should no longer flag since prose-level
+    // fact checking is delegated to AnalysisResult from LLM Pass 2
     const prose = 'He waited. Then he moved on.';
     const issues = v.validateRender(prose, event, emptyState);
-    expect(issues.length).toBeGreaterThan(0);
+    expect(issues).toHaveLength(0);
   });
 });

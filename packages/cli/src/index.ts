@@ -16,7 +16,13 @@ import {
   detectAntiPatterns,
   validateStrict,
   PostRenderValidator,
+  RenderPipeline,
+  FsStorage,
+  buildAndWriteOutputs,
+  PluginLoader,
+  ValidatorRegistry,
 } from '@novalistically/core';
+import type { LLMProvider, AnalysisResult, PluginValidator } from '@novalistically/core';
 import { runAll, runFunctionalBench, runPerformanceBench } from '@novalistically/bench';
 
 // ============================================================================
@@ -179,7 +185,10 @@ program
     }
     const state = stateManager.getCurrentState();
 
-    const aggregator = new ResultAggregator();
+    // Load plugin validators (future: load from plugins/ directory)
+    const validatorRegistry = new ValidatorRegistry();
+    // TODO: Discover and register plugins from plugins/ directory
+    const aggregator = new ResultAggregator(undefined, validatorRegistry.validators);
     const overrides = data.config?.validatorOverrides;
 
     if (options.event) {
@@ -389,9 +398,11 @@ entityCmd
 // --- render ---
 program
   .command('render <event>')
-  .description('Compile context and show the Context Package for an event')
-  .option('--dry-run', 'Save prompt without calling LLM')
-  .action((eventId: string, options: { dryRun?: boolean }) => {
+  .description('Render a scene (or all scenes with --all) via LLM')
+  .option('--dry-run', 'Compile context and save prompt without calling LLM')
+  .option('--all', 'Render all events in order')
+  .option('--model <model>', 'LLM model to use (overrides config)')
+  .action(async (eventId: string, options: { dryRun?: boolean; all?: boolean; model?: string }) => {
     const projectDir = ensureProjectDir();
 
     const mapper = new EntityMapper(projectDir);
@@ -399,7 +410,7 @@ program
     const events = mapper.loadAllEvents(data.chapters);
 
     const targetEvent = events.find((e) => e.id === eventId);
-    if (!targetEvent) {
+    if (!targetEvent && !options.all) {
       console.error(`Error: Event "${eventId}" not found.`);
       process.exit(1);
     }
@@ -412,19 +423,130 @@ program
     for (const event of events) {
       stateManager.commit(event);
     }
-    const state = stateManager.getStateAt(targetEvent.narrativeOrder - 1);
 
-    const compiler = new ContextCompiler();
-    const pkg = compiler.compile(targetEvent, state, registry);
-
-    console.log(pkg.markdown);
+    // Build eventsFileMap with chapters for cache initialization
+    const eventsFileMap = new Map<string, { narrativeOrder: number; filePath: string; chapter: number }>();
+    for (const [ch, chapter] of data.chapters) {
+      for (const evFile of chapter.events) {
+        eventsFileMap.set(evFile.event, {
+          narrativeOrder: evFile.narrativeOrder,
+          filePath: evFile.filePath ?? '',
+          chapter: ch,
+        });
+      }
+    }
 
     if (options.dryRun) {
+      // Dry-run: compile context and save prompt
+      const compiler = new ContextCompiler();
+      const state = stateManager.getStateAt(targetEvent!.narrativeOrder - 1);
+      const pkg = compiler.compile(targetEvent!, state, registry);
+      console.log(pkg.markdown);
       const dryRunDir = path.join(projectDir, '.nova', 'dry-runs');
       fs.mkdirSync(dryRunDir, { recursive: true });
       const dryRunPath = path.join(dryRunDir, `${eventId}_prompt.md`);
       fs.writeFileSync(dryRunPath, pkg.markdown, 'utf-8');
       console.log(`\nDry-run prompt saved to: ${dryRunPath}`);
+      return;
+    }
+
+    // ---- Full render path ----
+
+    // Determine which events to render
+    const renderEvents = options.all
+      ? events.filter((e) => e.id !== 'system:genesis')
+      : events.filter((e) => e.id === eventId);
+
+    if (renderEvents.length === 0) {
+      console.error(`Error: Event "${eventId}" not found.`);
+      process.exit(1);
+    }
+
+    // Initialize LLM provider
+    const model = options.model ?? data.config?.defaultModel ?? 'claude-sonnet-4-20250514';
+    const apiKey = process.env['OPENCODE_API_KEY'] ?? '';
+    if (!apiKey) {
+      console.error('Error: OPENCODE_API_KEY environment variable not set.');
+      console.error('Set it in .env or export OPENCODE_API_KEY=your_key');
+      process.exit(1);
+    }
+    const baseUrl = process.env['OPENCODE_BASE_URL'] ?? 'http://127.0.0.1:25793';
+
+    let provider: LLMProvider;
+    if (apiKey.startsWith('ocg-')) {
+      const { OpencodeGoProvider } = await import('@novalistically/core');
+      provider = new OpencodeGoProvider({ apiKey, baseUrl });
+    } else {
+      const { OpencodeZenProvider } = await import('@novalistically/core');
+      provider = new OpencodeZenProvider({
+        apiKey: apiKey || process.env['OPENROUTER_API_KEY'] || '',
+        baseUrl: process.env['OPENROUTER_BASE_URL'] || baseUrl,
+      });
+    }
+
+    // Initialize RenderPipeline
+    const cacheDir = path.join(projectDir, '.nova', 'render-cache');
+    const storage = new FsStorage();
+    const pipeline = new RenderPipeline({
+      provider,
+      model,
+      cacheDir,
+      storage,
+    });
+
+    // Initialize cache
+    await pipeline.initCache(eventsFileMap, path.join(projectDir, 'definitions'));
+
+    // Build render jobs
+    const jobs: Array<{
+      event: any;
+      stateBefore: any;
+      context: any;
+      chapter: number;
+    }> = [];
+
+    for (const ev of renderEvents) {
+      // Find the chapter number for this event
+      let chapterNum = 1;
+      for (const [ch, chapter] of data.chapters) {
+        if (chapter.events.some((e) => e.event === ev.id)) {
+          chapterNum = ch;
+          break;
+        }
+      }
+
+      const beforeState = stateManager.getStateAt(ev.narrativeOrder - 1);
+      const compiler = new ContextCompiler();
+      const pkg = compiler.compile(ev, beforeState, registry);
+
+      jobs.push({
+        event: ev,
+        stateBefore: beforeState,
+        context: pkg,
+        chapter: chapterNum,
+      });
+    }
+
+    // Render
+    console.log(`Rendering ${jobs.length} scene(s) with model "${model}"...`);
+    try {
+      const results = await pipeline.renderAll(jobs);
+
+      // Write outputs
+      buildAndWriteOutputs(storage, projectDir, jobs, results);
+
+      // Report
+      for (const r of results) {
+        const status = r.errors.length > 0 ? '❌' : '✅';
+        console.log(`  ${status} ${r.eventId}: ${r.prose.split(/\s+/).filter(Boolean).length} words, cache=${r.cacheHit}`);
+        if (r.errors.length > 0) {
+          for (const e of r.errors) console.log(`       Error: ${e}`);
+        }
+      }
+      console.log(`\nDone. Output written to scenes/`);
+    } catch (err) {
+      console.error(`Render failed: ${(err as Error).message}`);
+      process.exit(1);
     }
   });
 

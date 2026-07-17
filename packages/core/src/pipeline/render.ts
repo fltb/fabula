@@ -16,7 +16,9 @@ import type {
   NarrativeEvent,
   WorldState,
   ContextPackage,
+  AnalysisResult,
 } from '../types/index.ts';
+import { parseAnalysisJSON } from '../schemas/analysis.ts';
 import { buildProsePrompt, type ProseOnlyInput } from '../ai/prompts/prose-only.ts';
 import { buildAnalysisPrompt, type RenderAnalysisInput } from '../ai/prompts/render-analysis.ts';
 import {
@@ -37,7 +39,7 @@ export interface RenderJob {
 export interface RenderSceneResult {
   eventId: string;
   prose: string;
-  analysis: string | null;
+  analysis: AnalysisResult | null;
   llmPass1: NonNullable<CompletionResponse['usage']>;
   llmPass2: NonNullable<CompletionResponse['usage']> | null;
   cacheHit: boolean;
@@ -82,10 +84,10 @@ export class RenderPipeline {
   /**
    * Initialize cache keys from events + definitions.
    * Must be called before render().
-   * eventsFileMap: Map<eventId, { narrativeOrder: number, filePath: string }>
+   * eventsFileMap: Map<eventId, { narrativeOrder: number, filePath: string, chapter: number }>
    */
   async initCache(
-    eventsFileMap: Map<string, { narrativeOrder: number; filePath: string }>,
+    eventsFileMap: Map<string, { narrativeOrder: number; filePath: string; chapter: number }>,
     defsDir: string,
   ): Promise<void> {
     this.cacheKeys = computeCacheKeys(eventsFileMap, defsDir, this.storage);
@@ -106,10 +108,15 @@ export class RenderPipeline {
       const cached = getCachedRender(this.cacheDir, eventId, cacheKey, this.storage);
       if (cached) {
         const c = cached as Record<string, unknown>;
+        const cachedAnalysisStr = c.analysis ? String(c.analysis) : null;
         return {
           eventId,
           prose: String(c.prose ?? ''),
-          analysis: c.analysis ? String(c.analysis) : null,
+          analysis: cachedAnalysisStr
+            ? parseAnalysisJSON(cachedAnalysisStr, (msg) =>
+              errors.push(`Cache parse warning: ${msg}`),
+            )
+            : null,
           llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
           llmPass2: null,
           cacheHit: true,
@@ -125,6 +132,7 @@ export class RenderPipeline {
 
     // ── Pass 1: Pure prose ──────────────────────────────────────
     let prose = '';
+    let llmPass1: { promptTokens: number; completionTokens: number; totalTokens: number } = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
     const proseInput: ProseOnlyInput = {
       context,
       styleGuidance: event.styleGuidance,
@@ -141,6 +149,7 @@ export class RenderPipeline {
         maxTokens: this.maxTokens,
       });
       prose = result1.content ?? '';
+      llmPass1 = result1.usage ?? llmPass1;
       if (!prose || prose.trim().length === 0) {
         errors.push('Pass 1 returned empty prose');
         prose = '(empty)';
@@ -151,7 +160,8 @@ export class RenderPipeline {
     }
 
     // ── Pass 2: Structured analysis ──────────────────────────────
-    let analysis: string | null = null;
+    let analysisRaw: string | null = null;
+    let analysis: AnalysisResult | null = null;
     let llmPass2: { promptTokens: number; completionTokens: number; totalTokens: number } | null = null;
     if (prose && prose !== '(empty)') {
       try {
@@ -167,8 +177,40 @@ export class RenderPipeline {
           temperature: 0.3,
           maxTokens: 4000,
         });
-        analysis = result2.content ?? null;
+        analysisRaw = result2.content ?? null;
         llmPass2 = result2.usage ?? null;
+
+        // Parse LLM analysis JSON with retry
+        if (analysisRaw) {
+          const errorsBeforeParse = errors.length;
+          const warn = (msg: string) => errors.push(`Analysis parse warning: ${msg}`);
+          analysis = parseAnalysisJSON(analysisRaw, warn);
+
+          if (!analysis) {
+            // Retry once — the LLM may have formatted the JSON incorrectly
+            errors.push('Analysis parse failed on first attempt, retrying Pass 2...');
+            try {
+              const result2b = await this.provider.complete({
+                messages: analysisMessages,
+                model: this.model,
+                temperature: 0.3,
+                maxTokens: 4000,
+              });
+              const retryRaw = result2b.content ?? null;
+              if (retryRaw) {
+                analysis = parseAnalysisJSON(retryRaw, warn);
+                if (analysis) {
+                  analysisRaw = retryRaw;
+                  llmPass2 = result2b.usage ?? null; // Include retry token usage
+                  // Clear all errors from first attempt + retry notice
+                  errors.length = errorsBeforeParse;
+                }
+              }
+            } catch {
+              errors.push('Analysis retry failed');
+            }
+          }
+        }
       } catch (err) {
         errors.push(`Pass 2 failed: ${(err as Error).message}`);
         analysis = null;
@@ -181,8 +223,8 @@ export class RenderPipeline {
     if (cacheKey) {
       setCachedRender(this.cacheDir, eventId, cacheKey, {
         prose,
-        analysis,
-        llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        analysis: analysisRaw, // Store raw JSON string in cache
+        llmPass1,
         llmPass2,
         renderedAt: new Date().toISOString(),
         chapters: [chapter],
@@ -193,7 +235,7 @@ export class RenderPipeline {
       eventId,
       prose,
       analysis,
-      llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      llmPass1,
       llmPass2,
       cacheHit: false,
       errors,

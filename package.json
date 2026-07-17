@@ -14,7 +14,7 @@
     "bench": "npm run -w @novalistically/bench bench",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "typecheck": "tsc -b --noEmit packages/core packages/bench packages/cli"
+    "typecheck": "tsc -b packages/core packages/bench packages/cli"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.8",

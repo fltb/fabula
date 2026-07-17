@@ -1,5 +1,5 @@
 // ============================================================================
-// VoiceDriftDetector — LLM-required (optional, default WARNING)
+// VoiceDriftDetector — Prose-level voice consistency checks
 // ============================================================================
 
 import type {
@@ -14,27 +14,10 @@ import { makeIssue } from './base.js';
 export class VoiceDriftDetector implements Validator {
   name = 'voice_drift';
   category = 'narrative_style' as const;
-  requiresLLM = true;
+  requiresLLM = false;
 
   validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-
-    // Deterministic part: check forbidden words if specified in style guidance
-    if (event.styleGuidance?.avoid) {
-      const forbidden = event.styleGuidance.avoid.split(',').map((w) => w.trim().toLowerCase());
-      // This would need the actual prose text to check — only possible after rendering
-      // For now, flag as needing LLM check
-      if (forbidden.length > 0) {
-        issues.push(makeIssue(
-          this.name, event.id, event.pov.character, 'info',
-          'Voice drift check requires LLM evaluation of rendered prose.',
-          'After rendering, run voice drift analysis on the prose text.',
-          'manual',
-        ));
-      }
-    }
-
-    return issues;
+    return [];
   }
 
   validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
@@ -48,7 +31,7 @@ export class VoiceDriftDetector implements Validator {
     const traits: string[] = (charState.traits as string[]) ?? [];
     const voiceNotes = (charState.voiceNotes as string) ?? '';
 
-    // ── Cultured / aristocratic voice (e.g. Zaroff) ──
+    // ── Cultured / aristocratic voice ──
     const isAristocratic =
       /aristocrat|cultured|refined|noble|count|general/i.test(archetype) ||
       traits.some((t) => /aristocrat|cultured|refined|noble|formal/i.test(t)) ||
@@ -88,7 +71,7 @@ export class VoiceDriftDetector implements Validator {
       }
     }
 
-    // ── Practical / direct voice (e.g. Rainsford) ──
+    // ── Practical / direct voice ──
     const isPractical =
       /practical|direct|no.nonsense|action|hunter|soldier|pragmatic|stoic/i.test(archetype) ||
       traits.some((t) => /practical|direct|no.nonsense|action|hunter|soldier|blunt/i.test(t));

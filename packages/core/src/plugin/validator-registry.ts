@@ -10,13 +10,18 @@ export interface PluginValidator {
 }
 
 export class ValidatorRegistry {
-  private validators: PluginValidator[] = [];
+  private _validators: PluginValidator[] = [];
 
   register(validator: PluginValidator): void {
-    this.validators.push(validator);
+    this._validators.push(validator);
   }
 
   runAll(ctx: ValidatorContext): ValidationResult[] {
-    return this.validators.map(v => v.validate(ctx));
+    return this._validators.map(v => v.validate(ctx));
+  }
+
+  /** Get all registered plugin validators */
+  get validators(): PluginValidator[] {
+    return [...this._validators];
   }
 }

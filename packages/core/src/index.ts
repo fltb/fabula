@@ -83,7 +83,8 @@ export { calculateISS, detectAntiPatterns, validateStrict } from './iss/index.js
 export { ReviewManager } from './review/index.js';
 
 // Plugin
-export { PluginLoader } from './plugin/index.js';
+export { PluginLoader, ValidatorRegistry } from './plugin/index.js';
+export type { PluginValidator } from './plugin/index.js';
 
 // Storage
 export { FsStorage, MemoryStorage } from './storage/index.ts';

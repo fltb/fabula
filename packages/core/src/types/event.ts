@@ -75,41 +75,54 @@ export interface StyleGuidance {
 // ——— Event File (YAML on disk) ———
 
 export interface EventFile {
+  /** Event identifier, e.g. "E0", "E1" */
   event: string;
+  /** Narrative order within the story */
   narrativeOrder: number;
+  /** Human-readable title */
   title: string;
+  /** Story timestamp (references a time anchor) */
   storyTime: string;
+  /** Scene type */
   sceneType?: 'linear' | 'flashback' | 'flashforward' | 'dream' | 'parallel';
+  /** Point of view */
   pov: {
     character: string;
     type: 'first_person' | 'third_person_limited' | 'omniscient';
   };
+  /** Brief description of what happens in the scene */
   sceneBrief: string;
+  /** Preconditions that must be true before this event */
   preconditions: Array<{
     entity: string;
     attribute: string;
     value: unknown;
     operator?: 'eq' | 'neq' | 'gt' | 'lt' | 'contains';
   }>;
+  /** Expected postconditions after this event */
   expectedPostconditions: Array<{
     entity: string;
     attribute: string;
     value: unknown;
     confidence?: number;
   }>;
+  /** Style guidance for the LLM */
   styleGuidance?: StyleGuidance;
+  /** Thread progress entries */
   threadProgress?: Array<{
     thread: string;
     advancement: string;
     progressAfter: number;
     progressTotal: number;
   }>;
+  /** Foreshadowing entries */
   foreshadowing?: Array<{
     id: string;
     hint: string;
     targetRevealChapter: number;
     thread?: string;
   }>;
+  /** Relationship effects */
   relationshipEffects?: Array<{
     participants: [string, string];
     effect: 'establish' | 'change' | 'dissolve' | 'reinforce' | 'complicate';
@@ -119,14 +132,18 @@ export interface EventFile {
       intensity: number;
     };
   }>;
+  /** Rule effects */
   ruleEffects?: Array<{
     rule: string;
     effect: 'reinforce' | 'weaken' | 'introduce_exception' | 'nullify';
     evidence: string;
   }>;
+  /** Entities introduced by this event */
   introduces?: Array<{
     type: 'character' | 'location' | 'item' | 'concept';
     id: string;
     initialState: Record<string, unknown>;
   }>;
+  /** Absolute file path to this event's YAML file on disk (set by EntityMapper) */
+  filePath?: string;
 }

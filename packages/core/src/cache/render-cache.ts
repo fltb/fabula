@@ -16,7 +16,8 @@
 //   We use a hash chain: defsHash = sha256(all defs sorted by path)
 //   For event 0: eventHash0 = sha256("event:" + fileContent + "|defs:" + defsHash)
 //   For event N: eventHashN = sha256(eventHash{N-1} + "|event:" + fileContent + "|defs:" + defsHash)
-//   Cache key for scene N = sha256("novalistically-scene:" + eventId + ":" + eventHashN)
+//   Cache key for scene N = "novalistically-scene:chapter-{NN}:{eventId}:{eventHashN}"
+//   (plain string, not re-hashed — chainHash is already SHA256)
 //
 //   This means: if ANY prior event or ANY definition changes, EVERY
 //   subsequent scene's cache key changes → automatic cascade invalidation.
@@ -31,12 +32,12 @@ import type { Storage } from '../storage/index.js';
 
 /**
  * Hash event files in order to produce a deterministic chain.
- * eventsMap: Map<eventId, { narrativeOrder: number, filePath: string }>
+ * eventsMap: Map<eventId, { narrativeOrder: number, filePath: string, chapter: number }>
  * defsDir: path to project's definitions/ directory
  * storage: FS abstraction
  */
 export function computeCacheKeys(
-  eventsMap: Map<string, { narrativeOrder: number; filePath: string }>,
+  eventsMap: Map<string, { narrativeOrder: number; filePath: string; chapter: number }>,
   defsDir: string,
   storage: Storage,
 ): Map<string, string> {
@@ -61,10 +62,7 @@ export function computeCacheKeys(
     const combined = prevHash + '|' + eventContentHash + '|' + defsHash;
     const chainHash = crypto.createHash('sha256').update(combined).digest('hex');
 
-    const cacheKey = crypto
-      .createHash('sha256')
-      .update(`novalistically-scene:${eventId}:${chainHash}`)
-      .digest('hex');
+    const cacheKey = `novalistically-scene:chapter-${String(info.chapter).padStart(2, '0')}:${eventId}:${chainHash}`;
 
     result.set(eventId, cacheKey);
     prevHash = chainHash;
@@ -78,7 +76,6 @@ export function computeCacheKeys(
  */
 function computeDefsHash(defsDir: string, storage: Storage): string {
   if (!storage.exists(defsDir)) return '';
-  const entries = storage.list(defsDir);
   const files: string[] = [];
 
   const walk = (dir: string) => {
@@ -88,7 +85,7 @@ function computeDefsHash(defsDir: string, storage: Storage): string {
       const fullPath = path.join(dir, item.name);
       if (item.isDirectory()) {
         walk(fullPath);
-      } else if (item.isFile() && /\.yaml$/i.test(item.name)) {
+      } else if (item.isFile() && /\.(yaml|yml)$/i.test(item.name)) {
         files.push(fullPath);
       }
     }

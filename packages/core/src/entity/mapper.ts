@@ -99,8 +99,12 @@ export class EntityMapper {
           (f) => f.startsWith('E') && (f.endsWith('.yaml') || f.endsWith('.yml')),
         );
         for (const ef of eventFiles) {
-          const event = readYamlFile<EventFile>(path.join(chapterPath, ef), this.storage);
-          if (event) events.push(event);
+          const fullPath = path.join(chapterPath, ef);
+          const event = readYamlFile<EventFile>(fullPath, this.storage);
+          if (event) {
+            event.filePath = fullPath;
+            events.push(event);
+          }
         }
 
         chapters.set(chapterNum, { metadata, events });

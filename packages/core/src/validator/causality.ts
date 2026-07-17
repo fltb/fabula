@@ -3,6 +3,7 @@
 // ============================================================================
 
 import type {
+  AnalysisResult,
   NarrativeEvent,
   Validator,
   ValidatorContext,
@@ -14,7 +15,7 @@ import { makeIssue } from './base.js';
 export class CausalityValidator implements Validator {
   name = 'causality';
   category = 'timeline_plot' as const;
-  requiresLLM = true;
+  requiresLLM = false;
 
   validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
@@ -55,44 +56,10 @@ export class CausalityValidator implements Validator {
     return issues;
   }
 
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-    const proseLower = prose.toLowerCase();
-
-    const mentionsFact = (entityId: string, attribute: string, value: unknown): boolean => {
-      const terms: string[] = [];
-      if (typeof value === 'string') terms.push(value);
-      const attrClean = attribute.replace(/^is_/, '').replace(/_/g, ' ');
-      terms.push(attrClean);
-      const parts = entityId.split('.');
-      terms.push(parts[parts.length - 1]);
-      return terms.some((t) => proseLower.includes(t.toLowerCase()));
-    };
-
-    for (const pc of event.preconditions) {
-      if (!mentionsFact(pc.entityId, pc.attribute, pc.value)) {
-        issues.push(makeIssue(
-          this.name, event.id, pc.entityId, 'warning',
-          `Prose does not describe precondition "${pc.entityId}.${pc.attribute} = ${JSON.stringify(pc.value)}" — this cause should be evident in the rendered scene`,
-          'Add description of this precondition to the narrative prose.',
-          'edit_file',
-          pc.attribute,
-        ));
-      }
-    }
-
-    for (const pc of event.postconditions) {
-      if (!mentionsFact(pc.entityId, pc.attribute, pc.value)) {
-        issues.push(makeIssue(
-          this.name, event.id, pc.entityId, 'warning',
-          `Prose does not describe postcondition "${pc.entityId}.${pc.attribute} = ${JSON.stringify(pc.value)}" — this effect should be evident in the rendered scene`,
-          'Add description of this postcondition to the narrative prose.',
-          'edit_file',
-          pc.attribute,
-        ));
-      }
-    }
-
-    return issues;
+  validateRender(prose: string, event: NarrativeEvent, state: WorldState, analysis?: AnalysisResult): ValidationIssue[] {
+    // NOTE: Prose-level fact checking is now delegated to AnalysisResult
+    // from LLM Pass 2 (postconditions.covered/dropped in structured JSON).
+    // This method kept as no-op to avoid 4x redundancy.
+    return [];
   }
 }

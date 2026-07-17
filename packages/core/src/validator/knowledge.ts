@@ -3,23 +3,22 @@
 // ============================================================================
 
 import type {
-  NarrativeEvent,
   Validator,
-  ValidatorContext,
   ValidationIssue,
-  WorldState,
+  PreRenderInput,
+  PostRenderInput,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class KnowledgeValidator implements Validator {
   name = 'knowledge';
   category = 'characterization' as const;
-  requiresLLM = false;
 
-  validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
+  validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const { event, events, getKnowledge } = input;
     const povChar = event.pov.character;
-    const knowledge = context.getKnowledge(povChar);
+    const knowledge = getKnowledge(povChar);
     const charKnowledge = knowledge.characterKnowledge[povChar];
 
     // For each postcondition that sets "knows" on the POV character,
@@ -45,7 +44,7 @@ export class KnowledgeValidator implements Validator {
       if (pc.entityId !== povChar || pc.attribute !== 'knows') continue;
 
       // Check if this fact was established in a future event (impossible)
-      const factEvents = context.events.filter(
+      const factEvents = events.filter(
         (e) =>
           e.narrativeOrder > event.narrativeOrder &&
           e.postconditions.some(
@@ -67,8 +66,9 @@ export class KnowledgeValidator implements Validator {
     return issues;
   }
 
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+  validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const { prose, event, worldState } = input;
     const povChar = event.pov.character;
     const lowerProse = prose.toLowerCase();
 
@@ -76,9 +76,9 @@ export class KnowledgeValidator implements Validator {
     const knownEntities = new Set<string>();
     knownEntities.add(povChar.toLowerCase());
 
-    const povKnowledge = state.knowledge?.[povChar]?.knownFacts ?? [];
+    const povKnowledge = worldState.knowledge?.[povChar]?.knownFacts ?? [];
     for (const factId of povKnowledge) {
-      const fact = state.facts?.find((f) => f.id === factId);
+      const fact = worldState.facts?.find((f) => f.id === factId);
       if (fact?.entityId) {
         knownEntities.add(fact.entityId.toLowerCase());
       }
@@ -88,7 +88,7 @@ export class KnowledgeValidator implements Validator {
     if (event.pov.type === 'omniscient') return issues;
 
     // Check each entity in the world state that the POV character doesn't know
-    for (const entityId of Object.keys(state.entities)) {
+    for (const entityId of Object.keys(worldState.entities)) {
       const lowerId = entityId.toLowerCase();
       if (knownEntities.has(lowerId)) continue;
       if (lowerId === povChar.toLowerCase()) continue;

@@ -3,26 +3,23 @@
 // ============================================================================
 
 import type {
-  AnalysisResult,
-  NarrativeEvent,
+  PreRenderInput,
   Validator,
-  ValidatorContext,
   ValidationIssue,
-  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class CausalityValidator implements Validator {
   name = 'causality';
   category = 'timeline_plot' as const;
-  requiresLLM = false;
 
-  validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
+  validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const event = input.event;
 
     // Deterministic part: check that preconditions are satisfied in current state
     for (const pc of event.preconditions) {
-      const currentValue = context.queryState(pc.entityId, pc.attribute);
+      const currentValue = input.queryState(pc.entityId, pc.attribute);
 
       if (currentValue === undefined || currentValue === null) {
         issues.push(makeIssue(
@@ -54,12 +51,5 @@ export class CausalityValidator implements Validator {
     }
 
     return issues;
-  }
-
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState, analysis?: AnalysisResult): ValidationIssue[] {
-    // NOTE: Prose-level fact checking is now delegated to AnalysisResult
-    // from LLM Pass 2 (postconditions.covered/dropped in structured JSON).
-    // This method kept as no-op to avoid 4x redundancy.
-    return [];
   }
 }

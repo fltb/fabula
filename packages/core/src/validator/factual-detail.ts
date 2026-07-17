@@ -3,29 +3,26 @@
 // ============================================================================
 
 import type {
-  AnalysisResult,
-  NarrativeEvent,
+  PreRenderInput,
   Validator,
-  ValidatorContext,
   ValidationIssue,
-  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class FactualDetailValidator implements Validator {
   name = 'factual_detail';
   category = 'factual_detail' as const;
-  requiresLLM = false;
 
-  validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
+  validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const event = input.event;
 
     // Deterministic part: check entity attribute consistency
     for (const pc of event.preconditions) {
-      const entity = context.entityRegistry.resolve(pc.entityId);
+      const entity = input.entityRegistry.resolve(pc.entityId);
       if (!entity) continue;
 
-      const currentValue = context.queryState(pc.entityId, pc.attribute);
+      const currentValue = input.queryState(pc.entityId, pc.attribute);
       const currentTraits = entity.state['traits'] as string[] | undefined;
 
       // Check trait-level contradictions
@@ -58,11 +55,5 @@ export class FactualDetailValidator implements Validator {
     }
 
     return issues;
-  }
-
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState, analysis?: AnalysisResult): ValidationIssue[] {
-    // NOTE: Fact-in-prose verification is now delegated to AnalysisResult
-    // from LLM Pass 2 (postconditions.covered/dropped).
-    return [];
   }
 }

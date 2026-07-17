@@ -8,6 +8,8 @@ import type {
   NarrativeEvent,
   WorldState,
   ContextPackage,
+  PreRenderInput,
+  KnowledgeState,
 } from '@novalistically/core';
 
 import {
@@ -88,19 +90,18 @@ function hasDir(p: string): boolean {
 
 // ─── Context builder (mirrors base.ts buildContext) ─────────────────────────
 
-function buildValidatorCtx(
+function buildPreInput(
   event: NarrativeEvent,
   state: WorldState,
   registry: InMemoryEntityRegistry,
   events: NarrativeEvent[],
-) {
+): PreRenderInput {
   return {
+    event,
     worldState: state,
     events,
     entityRegistry: registry,
-    currentEvent: event,
-    currentChapter: 1,
-    narrativeOrder: event.narrativeOrder,
+    chapter: 1,
     queryState: (entityId: string, attribute: string) =>
       state.entities[entityId]?.[attribute],
     getKnowledge: () => ({
@@ -108,9 +109,8 @@ function buildValidatorCtx(
       characterKnowledge: {},
       readerKnowledge: [],
       narratorKnowledge: [],
-    }),
-    getThreadProgress: (threadId: string) =>
-      state.threads[threadId] ?? { progress: 0, total: 0 },
+    } as KnowledgeState),
+    getThreadProgress: () => ({ progress: 0, total: 0 }),
     getRuleEvidence: () => [],
   };
 }
@@ -188,7 +188,7 @@ export function runFunctionalBench(fixturePath?: string): FunctionalResults {
   );
 
   // ── 5–15. Run validators + aggregator ─────────────────────────────────
-  const validators: Array<{ stageName: string; ValidatorClass: new () => { name?: string; validate: (e: NarrativeEvent, ctx: ReturnType<typeof buildValidatorCtx>) => Array<{ severity: string; message: string }> } }> = [
+  const validators: Array<{ stageName: string; ValidatorClass: new () => { name?: string; validatePre: (input: PreRenderInput) => Array<{ severity: string; message: string }> } }> = [
     { stageName: 'TimelineValidator', ValidatorClass: TimelineValidator },
     { stageName: 'CharacterStateValidator', ValidatorClass: CharacterStateValidator },
     { stageName: 'KnowledgeValidator', ValidatorClass: KnowledgeValidator },
@@ -207,16 +207,16 @@ export function runFunctionalBench(fixturePath?: string): FunctionalResults {
       mark(stageName, () => {
         const validator = new ValidatorClass();
         for (const event of allEvents) {
-          const ctx = buildValidatorCtx(event, state, registry, allEvents);
-          validator.validate(event, ctx);
+          const input = buildPreInput(event, state, registry, allEvents);
+          validator.validatePre(input);
         }
       }, () => {
         const validator = new ValidatorClass();
         let e = 0; let w = 0; let inf = 0;
         const msgs: string[] = [];
         for (const event of allEvents) {
-          const ctx = buildValidatorCtx(event, state, registry, allEvents);
-          for (const issue of validator.validate(event, ctx)) {
+          const input = buildPreInput(event, state, registry, allEvents);
+          for (const issue of validator.validatePre(input) ?? []) {
             if (issue.severity === 'error') e++;
             else if (issue.severity === 'warning') w++;
             else inf++;

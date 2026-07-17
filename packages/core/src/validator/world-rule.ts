@@ -3,28 +3,26 @@
 // ============================================================================
 
 import type {
-  NarrativeEvent,
+  PostRenderInput,
+  PreRenderInput,
   Validator,
-  ValidatorContext,
   ValidationIssue,
-  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class WorldRuleValidator implements Validator {
   name = 'world_rule';
   category = 'worldbuilding' as const;
-  requiresLLM = false;
 
-  validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-
-    return issues;
+  validatePre(_input: PreRenderInput): ValidationIssue[] {
+    return [];
   }
 
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+  validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
-    const lowerProse = prose.toLowerCase();
+    const lowerProse = input.prose.toLowerCase();
+    const event = input.event;
+    const state = input.worldState;
 
     // Check each active rule for possible prose violations
     for (const [ruleId, ruleData] of Object.entries(state.rules)) {
@@ -51,7 +49,7 @@ export class WorldRuleValidator implements Validator {
 
       // Travel/distance rules: flag instant movement
       if (/distance|travel|move|location/.test(ruleLower)) {
-        if (/\b(teleported|appeared suddenly|materialized|instantly arrived)\b/i.test(prose)) {
+        if (/\b(teleported|appeared suddenly|materialized|instantly arrived)\b/i.test(input.prose)) {
           issues.push(makeIssue(
             this.name, event.id, event.pov.character, 'warning',
             `Active rule "${ruleId}" may be violated: prose suggests instant travel`,

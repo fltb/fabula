@@ -8,7 +8,8 @@ import type {
   Entity,
   EntityRegistry,
   WorldState,
-  ValidatorContext,
+  PreRenderInput,
+  PostRenderInput,
   ForeshadowEntry,
 } from '../src/types/index.js';
 import {
@@ -55,11 +56,11 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
   };
 }
 
-/** Build a ValidatorContext from minimal pieces */
-function buildContext(
+/** Build a PreRenderInput from minimal pieces */
+function buildPreInput(
   event: NarrativeEvent,
-  overrides: Partial<ValidatorContext> = {},
-): ValidatorContext {
+  overrides: Partial<PreRenderInput> = {},
+): PreRenderInput {
   const defaultState: WorldState = {
     entities: {},
     relationships: {},
@@ -72,12 +73,11 @@ function buildContext(
   const defaultRegistry: EntityRegistry = new InMemoryEntityRegistry();
 
   return {
+    event,
     worldState: defaultState,
     events: [event],
     entityRegistry: defaultRegistry,
-    currentEvent: event,
-    currentChapter: 1,
-    narrativeOrder: event.narrativeOrder,
+    chapter: 1,
     queryState: (_entityId: string, _attribute: string) => undefined,
     getKnowledge: (_characterId: string) => ({
       worldTruth: [],
@@ -127,11 +127,11 @@ describe('TimelineValidator', () => {
       storyTime: { type: 'absolute', value: 'day_5' },
       sceneType: 'linear',
     });
-    const ctx = buildContext(currentEvent, {
+    const input = buildPreInput(currentEvent, {
       events: [prevEvent, currentEvent],
     });
 
-    const issues = validator.validate(currentEvent, ctx);
+    const issues = validator.validatePre(input);
     expect(issues).toHaveLength(1);
     expect(issues[0].severity).toBe('error');
     expect(issues[0].validator).toBe('timeline');
@@ -151,11 +151,11 @@ describe('TimelineValidator', () => {
       storyTime: { type: 'absolute', value: 'day_3' },
       sceneType: 'flashback',
     });
-    const ctx = buildContext(flashbackEvent, {
+    const input = buildPreInput(flashbackEvent, {
       events: [prevEvent, flashbackEvent],
     });
 
-    const issues = validator.validate(flashbackEvent, ctx);
+    const issues = validator.validatePre(input);
     // Flashback scenes should not trigger the time-backwards error
     const backwardsIssues = issues.filter((i) => i.message.includes('before previous event'));
     expect(backwardsIssues).toHaveLength(0);
@@ -166,8 +166,8 @@ describe('TimelineValidator', () => {
       sceneType: 'flashback',
       narrationTime: undefined,
     });
-    const ctx = buildContext(event);
-    const issues = validator.validate(event, ctx);
+    const input = buildPreInput(event);
+    const issues = validator.validatePre(input);
     expect(issues).toHaveLength(1);
     expect(issues[0].severity).toBe('warning');
     expect(issues[0].message).toContain('no narration_time');
@@ -186,11 +186,11 @@ describe('TimelineValidator', () => {
       storyTime: { type: 'absolute', value: 'day_5' },
       sceneType: 'linear',
     });
-    const ctx = buildContext(currentEvent, {
+    const input = buildPreInput(currentEvent, {
       events: [prevEvent, currentEvent],
     });
 
-    const issues = validator.validate(currentEvent, ctx);
+    const issues = validator.validatePre(input);
     const timeBackwardIssues = issues.filter((i) => i.message.includes('before previous event'));
     expect(timeBackwardIssues).toHaveLength(0);
   });
@@ -199,8 +199,8 @@ describe('TimelineValidator', () => {
     const event = makeEvent({
       sceneType: 'linear',
     });
-    const ctx = buildContext(event);
-    const issues = validator.validate(event, ctx);
+    const input = buildPreInput(event);
+    const issues = validator.validatePre(input);
     // No warning about missing narrationTime for linear scenes
     const missingNarrationIssues = issues.filter((i) => i.message.includes('no narration_time'));
     expect(missingNarrationIssues).toHaveLength(0);
@@ -220,7 +220,7 @@ describe('CharacterStateValidator', () => {
     const event = makeEvent({
       preconditions: [{ id: 'jinx.status', entityId: 'jinx', attribute: 'status', value: 'dead', validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } } }],
     });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       entityRegistry: registry,
       queryState: (_id, _attr) => {
         if (_attr === 'status') return 'dead';
@@ -229,7 +229,7 @@ describe('CharacterStateValidator', () => {
       },
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     expect(issues).toHaveLength(1);
     expect(issues[0].severity).toBe('error');
     expect(issues[0].message).toContain('dead');
@@ -242,7 +242,7 @@ describe('CharacterStateValidator', () => {
     const event = makeEvent({
       postconditions: [{ id: 'jinx.condition', entityId: 'jinx', attribute: 'condition', value: 'healthy', validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } } }],
     });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       entityRegistry: registry,
       queryState: (_id, _attr) => {
         if (_id === 'jinx' && _attr === 'condition') return 'injured';
@@ -250,7 +250,7 @@ describe('CharacterStateValidator', () => {
       },
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     expect(issues).toHaveLength(0);
   });
 
@@ -269,7 +269,7 @@ describe('CharacterStateValidator', () => {
       ],
       participants: { entities: ['vi'] },
     });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       entityRegistry: registry,
       queryState: (_id, _attr) => {
         if (_attr === 'status') return 'dead';
@@ -278,7 +278,7 @@ describe('CharacterStateValidator', () => {
       },
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const deadIssues = issues.filter((i) => i.severity === 'error' && i.message.includes('dead'));
     expect(deadIssues).toHaveLength(1);
     expect(deadIssues[0].entity).toBe('vi');
@@ -304,7 +304,7 @@ describe('KnowledgeValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       getKnowledge: (_charId: string) => ({
         worldTruth: [],
         characterKnowledge: {
@@ -326,7 +326,7 @@ describe('KnowledgeValidator', () => {
       }),
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     expect(issues).toHaveLength(1);
     expect(issues[0].severity).toBe('info');
     expect(issues[0].message).toContain('already knows');
@@ -360,7 +360,7 @@ describe('KnowledgeValidator', () => {
       ],
     });
 
-    const ctx = buildContext(currentEvent, {
+    const input = buildPreInput(currentEvent, {
       events: [currentEvent, futureEvent],
       getKnowledge: (_charId: string) => ({
         worldTruth: [],
@@ -370,7 +370,7 @@ describe('KnowledgeValidator', () => {
       }),
     });
 
-    const issues = validator.validate(currentEvent, ctx);
+    const issues = validator.validatePre(input);
     const futureIssues = issues.filter((i) => i.message.includes('before it is established'));
     expect(futureIssues).toHaveLength(1);
     expect(futureIssues[0].severity).toBe('error');
@@ -388,7 +388,7 @@ describe('KnowledgeValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       getKnowledge: (_charId: string) => ({
         worldTruth: [],
         characterKnowledge: { jinx: { knownFacts: [], unknownFacts: [], misbeliefs: [] } },
@@ -397,7 +397,7 @@ describe('KnowledgeValidator', () => {
       }),
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const infoIssues = issues.filter((i) => i.message.includes('already knows'));
     expect(infoIssues).toHaveLength(0);
   });
@@ -411,8 +411,6 @@ describe('WorldRuleValidator', () => {
   const validator = new WorldRuleValidator();
 
   it('should pass for compliant state changes', () => {
-    const registry = new InMemoryEntityRegistry();
-    registerCharacter(registry, 'jayce', { traits: ['hextech_augmented'] });
     const event = makeEvent({
       postconditions: [
         {
@@ -431,12 +429,15 @@ describe('WorldRuleValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(event, {
-      entityRegistry: registry,
-      queryState: () => 'healthy',
-    });
+    const input: PostRenderInput = {
+      event,
+      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      prose: '',
+      analysis: null,
+      chapter: 1,
+    };
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePost(input);
     expect(issues).toHaveLength(0);
   });
 });
@@ -460,11 +461,11 @@ describe('CausalityValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       queryState: (_id, _attr) => undefined, // not satisfied
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     expect(issues).toHaveLength(1);
     expect(issues[0].severity).toBe('warning');
     expect(issues[0].message).toContain('not satisfied');
@@ -491,11 +492,11 @@ describe('CausalityValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       queryState: (_id, _attr) => 'injured',
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     expect(issues).toHaveLength(1);
     expect(issues[0].severity).toBe('warning');
     expect(issues[0].message).toContain('no causal effect');
@@ -522,11 +523,11 @@ describe('CausalityValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       queryState: (_id, _attr) => 'injured',
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const noEffectIssues = issues.filter((i) => i.message.includes('no causal effect'));
     expect(noEffectIssues).toHaveLength(0);
   });
@@ -546,9 +547,9 @@ describe('ForeshadowingValidator', () => {
       ],
     });
     // currentChapter is 3, targetRevealChapter is 2 → past due
-    const ctx = buildContext(event, { currentChapter: 3 });
+    const input = buildPreInput(event, { chapter: 3 });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const warnIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('was supposed to be revealed'));
     expect(warnIssues).toHaveLength(1);
     expect(warnIssues[0].entity).toBe('f_shadow_1');
@@ -571,9 +572,9 @@ describe('ForeshadowingValidator', () => {
       foreshadowing: [],
     });
     // currentChapter is 5, targetRevealChapter is 1, diff = 4 which is > 2
-    const ctx = buildContext(currentEvent, { currentChapter: 5, events: [otherEvent, currentEvent] });
+    const input = buildPreInput(currentEvent, { chapter: 5, events: [otherEvent, currentEvent] });
 
-    const issues = validator.validate(currentEvent, ctx);
+    const issues = validator.validatePre(input);
     const errIssues = issues.filter((i) => i.severity === 'error' && i.message.includes('2+ chapters past'));
     expect(errIssues).toHaveLength(1);
     expect(errIssues[0].entity).toBe('f_shadow_2');
@@ -585,9 +586,9 @@ describe('ForeshadowingValidator', () => {
         { id: 'f_shadow_3', hint: 'The looming threat', targetRevealChapter: 5 },
       ],
     });
-    const ctx = buildContext(event, { currentChapter: 3, events: [event] });
+    const input = buildPreInput(event, { chapter: 3, events: [event] });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const pastDueIssues = issues.filter((i) => i.message.includes('past'));
     expect(pastDueIssues).toHaveLength(0);
   });
@@ -603,9 +604,9 @@ describe('POVValidator', () => {
   it('should error when POV character does not exist in registry', () => {
     const registry = new InMemoryEntityRegistry();
     const event = makeEvent({ pov: { character: 'nonexistent', type: 'first_person' } });
-    const ctx = buildContext(event, { entityRegistry: registry });
+    const input = buildPreInput(event, { entityRegistry: registry });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const errorIssues = issues.filter((i) => i.severity === 'error' && i.message.includes('not defined'));
     expect(errorIssues).toHaveLength(1);
     expect(errorIssues[0].entity).toBe('nonexistent');
@@ -618,9 +619,9 @@ describe('POVValidator', () => {
       pov: { character: 'jinx', type: 'third_person_limited' },
       participants: { entities: ['vi'] }, // jinx is not a participant
     });
-    const ctx = buildContext(event, { entityRegistry: registry });
+    const input = buildPreInput(event, { entityRegistry: registry });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const warnIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('not listed'));
     expect(warnIssues).toHaveLength(1);
     expect(warnIssues[0].entity).toBe('jinx');
@@ -632,9 +633,9 @@ describe('POVValidator', () => {
     const event = makeEvent({
       pov: { character: 'narrator', type: 'omniscient' },
     });
-    const ctx = buildContext(event, { entityRegistry: registry });
+    const input = buildPreInput(event, { entityRegistry: registry });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const infoIssues = issues.filter((i) => i.severity === 'info' && i.message.includes('omniscient'));
     expect(infoIssues).toHaveLength(1);
   });
@@ -646,9 +647,9 @@ describe('POVValidator', () => {
       pov: { character: 'jinx', type: 'third_person_limited' },
       participants: { entities: ['jinx'] },
     });
-    const ctx = buildContext(event, { entityRegistry: registry });
+    const input = buildPreInput(event, { entityRegistry: registry });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     expect(issues).toHaveLength(0);
   });
 });
@@ -674,9 +675,9 @@ describe('FactualDetailValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(event, { entityRegistry: registry });
+    const input = buildPreInput(event, { entityRegistry: registry });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const infoIssues = issues.filter((i) => i.severity === 'info' && i.message.includes('confirmed'));
     expect(infoIssues).toHaveLength(1);
     expect(infoIssues[0].entity).toBe('jayce');
@@ -695,9 +696,9 @@ describe('FactualDetailValidator', () => {
           },
         ],
       });
-      const ctx = buildContext(event);
+      const input = buildPreInput(event);
 
-      const issues = validator.validate(event, ctx);
+      const issues = validator.validatePre(input);
       const warnIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('Placeholder'));
       expect(warnIssues).toHaveLength(1);
     }
@@ -717,9 +718,9 @@ describe('FactualDetailValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(event, { entityRegistry: registry });
+    const input = buildPreInput(event, { entityRegistry: registry });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const placeholderIssues = issues.filter((i) => i.message.includes('Placeholder'));
     expect(placeholderIssues).toHaveLength(0);
   });
@@ -732,31 +733,49 @@ describe('FactualDetailValidator', () => {
 describe('VoiceDriftDetector', () => {
   const validator = new VoiceDriftDetector();
 
-  it('should return no issues in validate() — voice drift checks occur in validateRender', () => {
+  it('should return no issues in validatePost() — voice drift checks occur in validatePost', () => {
     const event = makeEvent({
       styleGuidance: { avoid: 'suddenly,then,very' },
     });
-    const ctx = buildContext(event);
+    const input: PostRenderInput = {
+      event,
+      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      prose: '',
+      analysis: null,
+      chapter: 1,
+    };
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePost(input);
     expect(issues).toHaveLength(0);
   });
 
-  it('should return no issues in validate() regardless of style guidance', () => {
+  it('should return no issues in validatePost() regardless of style guidance', () => {
     const event = makeEvent({
       styleGuidance: { avoid: 'suddenly' },
     });
-    const ctx = buildContext(event);
+    const input: PostRenderInput = {
+      event,
+      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      prose: '',
+      analysis: null,
+      chapter: 1,
+    };
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePost(input);
     expect(issues).toHaveLength(0);
   });
 
   it('should return no issues when no style guidance is present', () => {
     const event = makeEvent();
-    const ctx = buildContext(event);
+    const input: PostRenderInput = {
+      event,
+      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      prose: '',
+      analysis: null,
+      chapter: 1,
+    };
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePost(input);
     expect(issues).toHaveLength(0);
   });
 
@@ -764,9 +783,15 @@ describe('VoiceDriftDetector', () => {
     const event = makeEvent({
       styleGuidance: { avoid: '' },
     });
-    const ctx = buildContext(event);
+    const input: PostRenderInput = {
+      event,
+      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      prose: '',
+      analysis: null,
+      chapter: 1,
+    };
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePost(input);
     expect(issues).toHaveLength(0);
   });
 });
@@ -797,12 +822,12 @@ describe('BranchMergeValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(mergeEvent, {
+    const input = buildPreInput(mergeEvent, {
       events: [prevEvent, mergeEvent],
       queryState: (_id, _attr) => undefined, // not satisfied
     });
 
-    const issues = validator.validate(mergeEvent, ctx);
+    const issues = validator.validatePre(input);
     const warnIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('Merge precondition'));
     expect(warnIssues).toHaveLength(1);
     expect(warnIssues[0].entity).toBe('jinx');
@@ -827,12 +852,12 @@ describe('BranchMergeValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(mergeEvent, {
+    const input = buildPreInput(mergeEvent, {
       events: [prevEvent, mergeEvent],
       queryState: (_id, _attr) => true, // satisfied
     });
 
-    const issues = validator.validate(mergeEvent, ctx);
+    const issues = validator.validatePre(input);
     const mergeIssues = issues.filter((i) => i.message.includes('Merge precondition'));
     expect(mergeIssues).toHaveLength(0);
   });
@@ -849,11 +874,11 @@ describe('BranchMergeValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       queryState: (_id, _attr) => undefined,
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     expect(issues).toHaveLength(0);
   });
 });
@@ -867,7 +892,7 @@ describe('ReachabilityValidator', () => {
 
   it('should warn when thread is behind schedule', () => {
     const event = makeEvent({ narrativeOrder: 5 });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       worldState: {
         entities: {},
         relationships: {},
@@ -878,10 +903,10 @@ describe('ReachabilityValidator', () => {
         rules: {},
         facts: [],
       },
-      currentChapter: 7,
+      chapter: 7,
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const threadIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('Thread'));
     expect(threadIssues).toHaveLength(1);
     expect(threadIssues[0].message).toContain('behind');
@@ -895,12 +920,12 @@ describe('ReachabilityValidator', () => {
         { id: 'f_ancient_evil', hint: 'Something stirs', targetRevealChapter: 1 },
       ],
     });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       events: [event],
-      currentChapter: 10,
+      chapter: 10,
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const foreshadowIssues = issues.filter((i) => i.severity === 'error' && i.message.includes('unrevealed'));
     expect(foreshadowIssues).toHaveLength(1);
     expect(foreshadowIssues[0].entity).toBe('f_ancient_evil');
@@ -935,11 +960,11 @@ describe('ReachabilityValidator', () => {
         },
       ],
     });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       events: [otherEvent, event],
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     const precondIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('never established'));
     expect(precondIssues).toHaveLength(1);
     expect(precondIssues[0].message).toContain('magic_key');
@@ -947,7 +972,7 @@ describe('ReachabilityValidator', () => {
 
   it('should pass for healthy project state', () => {
     const event = makeEvent({ narrativeOrder: 10 });
-    const ctx = buildContext(event, {
+    const input = buildPreInput(event, {
       worldState: {
         entities: {},
         relationships: {},
@@ -959,10 +984,10 @@ describe('ReachabilityValidator', () => {
         facts: [],
       },
       events: [event],
-      currentChapter: 3,
+      chapter: 3,
     });
 
-    const issues = validator.validate(event, ctx);
+    const issues = validator.validatePre(input);
     expect(issues).toHaveLength(0);
   });
 });
@@ -1180,11 +1205,11 @@ describe('Validator Edge Cases', () => {
         narrativeOrder: 5,
         storyTime: { type: 'absolute', value: 'day_0' },
       });
-      const ctx = buildContext(nextEvent, {
+      const input = buildPreInput(nextEvent, {
         events: [genesis, nextEvent],
       });
 
-      const issues = validator.validate(nextEvent, ctx);
+      const issues = validator.validatePre(input);
       // Genesis is filtered out in comparison; should not error if times are same
       const backwardIssues = issues.filter((i) => i.message.includes('before previous event'));
       expect(backwardIssues).toHaveLength(0);
@@ -1203,11 +1228,11 @@ describe('Validator Edge Cases', () => {
         storyTime: { type: 'relative', anchor: 'start', offset: { amount: 5, unit: 'day' } },
         sceneType: 'linear',
       });
-      const ctx = buildContext(currentEvent, {
+      const input = buildPreInput(currentEvent, {
         events: [prevEvent, currentEvent],
       });
 
-      const issues = validator.validate(currentEvent, ctx);
+      const issues = validator.validatePre(input);
       // Relative timestamp resolves to 5 (anchor 'start' not in anchors → 0 + 5 = 5)
       // Prev is day_10 → cmp = 5 - 10 = -5 < 0 → error expected
       const backwardIssues = issues.filter((i) => i.message.includes('before previous event'));
@@ -1239,12 +1264,12 @@ describe('Validator Edge Cases', () => {
           },
         ],
       });
-      const ctx = buildContext(event, {
+      const input = buildPreInput(event, {
         entityRegistry: registry,
         queryState: () => 'destroyed',
       });
 
-      const issues = validator.validate(event, ctx);
+      const issues = validator.validatePre(input);
       // Non-character entities should be skipped without error
       const deadIssues = issues.filter((i) => i.message.includes('dead'));
       expect(deadIssues).toHaveLength(0);
@@ -1261,9 +1286,9 @@ describe('Validator Edge Cases', () => {
         pov: { character: 'jinx', type: 'first_person' },
         participants: { entities: ['vi'] },
       });
-      const ctx = buildContext(event, { entityRegistry: registry });
+      const input = buildPreInput(event, { entityRegistry: registry });
 
-      const issues = validator.validate(event, ctx);
+      const issues = validator.validatePre(input);
       const warnIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('not listed'));
       expect(warnIssues).toHaveLength(1);
     });
@@ -1278,9 +1303,9 @@ describe('Validator Edge Cases', () => {
           { id: 'f_free', hint: 'No deadline', targetRevealChapter: 0 },
         ],
       });
-      const ctx = buildContext(event, { currentChapter: 100, events: [event] });
+      const input = buildPreInput(event, { chapter: 100, events: [event] });
 
-      const issues = validator.validate(event, ctx);
+      const issues = validator.validatePre(input);
       const pastDueIssues = issues.filter((i) => i.message.includes('past'));
       expect(pastDueIssues).toHaveLength(0);
     });
@@ -1291,9 +1316,9 @@ describe('Validator Edge Cases', () => {
 
     it('should warn when empty pre/post conditions indicate no causal effect', () => {
       const event = makeEvent({ preconditions: [], postconditions: [] });
-      const ctx = buildContext(event);
+      const input = buildPreInput(event);
 
-      const issues = validator.validate(event, ctx);
+      const issues = validator.validatePre(input);
       expect(issues).toHaveLength(1);
       expect(issues[0].message).toContain('no causal effect');
     });

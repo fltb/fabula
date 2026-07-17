@@ -3,27 +3,26 @@
 // ============================================================================
 
 import type {
-  NarrativeEvent,
+  PreRenderInput,
   Validator,
-  ValidatorContext,
   ValidationIssue,
-  WorldState,
+  PostRenderInput,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class VoiceDriftDetector implements Validator {
   name = 'voice_drift';
   category = 'narrative_style' as const;
-  requiresLLM = false;
 
-  validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
+  validatePre(_input: PreRenderInput): ValidationIssue[] {
     return [];
   }
 
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+  validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const { prose, event, worldState } = input;
     const characterId = event.pov.character;
-    const charState = state.entities[characterId];
+    const charState = worldState.entities[characterId];
     if (!charState) return issues;
 
     const proseLower = prose.toLowerCase();

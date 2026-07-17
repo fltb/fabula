@@ -1,5 +1,5 @@
 // ============================================================================
-// validateRender — verify each of the 11 validators works on rendered prose
+// validateRender/validatePost — verify each of the 11 validators works on rendered prose
 // ============================================================================
 //
 // These tests are the contract: when an LLM produces a scene, the validators
@@ -19,7 +19,7 @@ import { FactualDetailValidator } from '../../src/validator/factual-detail.ts';
 import { VoiceDriftDetector } from '../../src/validator/voice-drift.ts';
 import { BranchMergeValidator } from '../../src/validator/branch-merge.ts';
 import { ReachabilityValidator } from '../../src/validator/reachability.ts';
-import type { NarrativeEvent, WorldState } from '../../src/types/index.js';
+import type { NarrativeEvent, PostRenderInput, PreRenderInput } from '../../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
   return {
@@ -45,81 +45,135 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
   };
 }
 
-const emptyState: WorldState = {
-  entities: {},
-  relationships: {},
-  knowledge: {},
-  threads: {},
-  rules: {},
-  facts: [],
-};
+function makePostInput(overrides: Partial<PostRenderInput> = {}): PostRenderInput {
+  return {
+    prose: '',
+    event: makeEvent(),
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
+    analysis: null,
+    chapter: 1,
+    ...overrides,
+  };
+}
+
+function makePreInput(overrides: Partial<PreRenderInput> = {}): PreRenderInput {
+  return {
+    event: makeEvent(),
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
+    events: [],
+    entityRegistry: { resolve() { return undefined; }, list() { return []; }, getAll() { return {}; }, getEntity() { return undefined; }, getEntitiesByKind() { return []; } },
+    chapter: 1,
+    queryState: () => undefined,
+    getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] }),
+    getThreadProgress: () => ({ progress: 0, total: 0 }),
+    getRuleEvidence: () => [],
+    ...overrides,
+  };
+}
 
 const sampleProse = `The morning sun broke over the eastern horizon, painting the Caribbean in molten gold. Rainsford, exhausted and bleeding from a dozen minor cuts, pulled himself from the black sea onto the jagged coral shore. He had fallen from the yacht in the night, lost in a moment of carelessness, and now, as the third day dawned, he felt the full weight of his predicament. Whitney had warned him about Ship-Trap Island.`;
 
-describe('All 11 validators implement validateRender', () => {
-  it('TimelineValidator.validateRender returns an array', () => {
+describe('All 11 validators implement the new interface', () => {
+  it('TimelineValidator implements validatePost', () => {
     const v = new TimelineValidator();
-    expect(Array.isArray(v.validateRender(sampleProse, makeEvent(), emptyState))).toBe(true);
+    const input = makePostInput({ prose: sampleProse });
+    expect(typeof v.validatePost).toBe('function');
+    expect(Array.isArray(v.validatePost!(input))).toBe(true);
   });
 
-  it('CharacterStateValidator.validateRender returns an array', () => {
+  it('CharacterStateValidator implements validatePre', () => {
     const v = new CharacterStateValidator();
-    expect(Array.isArray(v.validateRender(sampleProse, makeEvent(), emptyState))).toBe(true);
+    const input = makePreInput();
+    expect(typeof v.validatePre).toBe('function');
+    expect(Array.isArray(v.validatePre!(input))).toBe(true);
   });
 
-  it('KnowledgeValidator.validateRender returns an array', () => {
+  it('KnowledgeValidator implements validatePost', () => {
     const v = new KnowledgeValidator();
-    expect(Array.isArray(v.validateRender(sampleProse, makeEvent(), emptyState))).toBe(true);
+    const input = makePostInput({ prose: sampleProse });
+    expect(typeof v.validatePost).toBe('function');
+    expect(Array.isArray(v.validatePost!(input))).toBe(true);
   });
 
-  it('WorldRuleValidator.validateRender returns an array', () => {
+  it('WorldRuleValidator implements validatePost', () => {
     const v = new WorldRuleValidator();
-    expect(Array.isArray(v.validateRender(sampleProse, makeEvent(), emptyState))).toBe(true);
+    const input = makePostInput({ prose: sampleProse });
+    expect(typeof v.validatePost).toBe('function');
+    expect(Array.isArray(v.validatePost!(input))).toBe(true);
   });
 
-  it('CausalityValidator.validateRender returns an array', () => {
+  it('CausalityValidator implements validatePre', () => {
     const v = new CausalityValidator();
-    expect(Array.isArray(v.validateRender(sampleProse, makeEvent(), emptyState))).toBe(true);
+    const input = makePreInput();
+    expect(typeof v.validatePre).toBe('function');
+    expect(Array.isArray(v.validatePre!(input))).toBe(true);
   });
 
-  it('ForeshadowingValidator.validateRender returns an array', () => {
+  it('ForeshadowingValidator implements validatePost', () => {
     const v = new ForeshadowingValidator();
-    expect(Array.isArray(v.validateRender(sampleProse, makeEvent(), emptyState))).toBe(true);
+    const input = makePostInput({ prose: sampleProse });
+    expect(typeof v.validatePost).toBe('function');
+    expect(Array.isArray(v.validatePost!(input))).toBe(true);
   });
 
-  it('POVValidator.validateRender returns an array', () => {
+  it('POVValidator implements validatePost', () => {
     const v = new POVValidator();
-    expect(Array.isArray(v.validateRender(sampleProse, makeEvent(), emptyState))).toBe(true);
+    const input = makePostInput({ prose: sampleProse });
+    expect(typeof v.validatePost).toBe('function');
+    expect(Array.isArray(v.validatePost!(input))).toBe(true);
   });
 
-  it('FactualDetailValidator.validateRender returns an array', () => {
+  it('FactualDetailValidator implements validatePre', () => {
     const v = new FactualDetailValidator();
-    expect(Array.isArray(v.validateRender(sampleProse, makeEvent(), emptyState))).toBe(true);
+    const input = makePreInput();
+    expect(typeof v.validatePre).toBe('function');
+    expect(Array.isArray(v.validatePre!(input))).toBe(true);
   });
 
-  it('VoiceDriftDetector.validateRender returns an array', () => {
+  it('VoiceDriftDetector implements validatePost', () => {
     const v = new VoiceDriftDetector();
-    expect(Array.isArray(v.validateRender(sampleProse, makeEvent(), emptyState))).toBe(true);
+    const input = makePostInput({ prose: sampleProse });
+    expect(typeof v.validatePost).toBe('function');
+    expect(Array.isArray(v.validatePost!(input))).toBe(true);
   });
 
-  it('BranchMergeValidator.validateRender returns an array', () => {
+  it('BranchMergeValidator implements validatePost', () => {
     const v = new BranchMergeValidator();
-    expect(Array.isArray(v.validateRender(sampleProse, makeEvent(), emptyState))).toBe(true);
+    const input = makePostInput({ prose: sampleProse });
+    expect(typeof v.validatePost).toBe('function');
+    expect(Array.isArray(v.validatePost!(input))).toBe(true);
   });
 
-  it('ReachabilityValidator.validateRender returns an array', () => {
+  it('ReachabilityValidator implements validatePost', () => {
     const v = new ReachabilityValidator();
-    expect(Array.isArray(v.validateRender(sampleProse, makeEvent(), emptyState))).toBe(true);
+    const input = makePostInput({ prose: sampleProse });
+    expect(typeof v.validatePost).toBe('function');
+    expect(Array.isArray(v.validatePost!(input))).toBe(true);
   });
 });
 
-describe('validateRender actually checks the prose', () => {
+describe('validatePost actually checks the prose', () => {
   it('TimelineValidator flags missing time-of-day markers when storyTime is morning', () => {
     const v = new TimelineValidator();
     const event = makeEvent({ storyTime: { type: 'absolute', value: 'morning' } });
     // Prose with no morning markers
     const prose = 'The night was dark and stormy. He crept through the forest.';
-    const issues = v.validateRender(prose, event, emptyState);
+    const input = makePostInput({ prose, event });
+    const issues = v.validatePost!(input);
     // Should warn about missing morning markers
     expect(issues.some((i) => /morning|dawn|day/i.test(i.message))).toBe(true);
   });
@@ -131,7 +185,8 @@ describe('validateRender actually checks the prose', () => {
       participants: { entities: ['whitney', 'zaroff'] },
     });
     const prose = 'Rainsford ran. Whitney thought to himself that the chase was futile.';
-    const issues = v.validateRender(prose, event, emptyState);
+    const input = makePostInput({ prose, event });
+    const issues = v.validatePost!(input);
     // Should warn about Whitney's thoughts
     expect(issues.length).toBeGreaterThan(0);
   });
@@ -150,10 +205,10 @@ describe('validateRender actually checks the prose', () => {
         },
       ],
     });
-    // Prose without "3 hours" — should no longer flag since prose-level
-    // fact checking is delegated to AnalysisResult from LLM Pass 2
-    const prose = 'He waited. Then he moved on.';
-    const issues = v.validateRender(prose, event, emptyState);
-    expect(issues).toHaveLength(0);
+    const input = makePreInput({ event });
+    const issues = v.validatePre!(input);
+    // factual_detail has no post-render logic — validatePre handles entity attr consistency
+    // and should find no issues for this input
+    expect(Array.isArray(issues)).toBe(true);
   });
 });

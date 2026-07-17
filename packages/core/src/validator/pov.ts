@@ -3,26 +3,25 @@
 // ============================================================================
 
 import type {
-  NarrativeEvent,
+  PreRenderInput,
+  PostRenderInput,
   Validator,
-  ValidatorContext,
   ValidationIssue,
-  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class POVValidator implements Validator {
   name = 'pov';
   category = 'narrative_style' as const;
-  requiresLLM = false;
 
-  validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
+  validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const event = input.event;
     const povType = event.pov.type;
     const povChar = event.pov.character;
 
     // Check: POV character must exist in entity registry
-    const povEntity = context.entityRegistry.resolve(povChar);
+    const povEntity = input.entityRegistry.resolve(povChar);
     if (!povEntity) {
       issues.push(makeIssue(
         this.name, event.id, povChar, 'error',
@@ -61,8 +60,10 @@ export class POVValidator implements Validator {
     return issues;
   }
 
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+  validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const event = input.event;
+    const prose = input.prose;
     const povType = event.pov.type;
     const povChar = event.pov.character;
 

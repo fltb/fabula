@@ -2,7 +2,7 @@
 // Performance Benchmarks — Measure pipeline stages at 10 / 100 / 1000 events
 // ============================================================================
 
-import type { NarrativeEvent, WorldState } from '@novalistically/core';
+import type { NarrativeEvent, WorldState, PreRenderInput, KnowledgeState } from '@novalistically/core';
 
 import {
   InMemoryEntityRegistry,
@@ -23,7 +23,7 @@ import {
   calculateISS,
 } from '@novalistically/core';
 
-import { makeCtx } from './context-helper.js';
+import { makePreInput } from './context-helper.js';
 
 export interface PerfMeasurement {
   name: string;
@@ -261,18 +261,18 @@ export async function runPerformanceBench(): Promise<PerfResults> {
     {
       const r = timeIt(() => {
         for (const event of narrativeEvents) {
-          const ctx = makeCtx(event, state, registry, events);
-          timelineVal.validate(event, ctx);
-          charStateVal.validate(event, ctx);
-          knowledgeVal.validate(event, ctx);
-          worldRuleVal.validate(event, ctx);
-          causalityVal.validate(event, ctx);
-          foreshadowVal.validate(event, ctx);
-          povVal.validate(event, ctx);
-          factualVal.validate(event, ctx);
-          voiceVal.validate(event, ctx);
-          branchVal.validate(event, ctx);
-          reachVal.validate(event, ctx);
+          const input = makePreInput(event, state, registry, events);
+          timelineVal.validatePre(input);
+          charStateVal.validatePre(input);
+          knowledgeVal.validatePre(input);
+          worldRuleVal.validatePre(input);
+          causalityVal.validatePre(input);
+          foreshadowVal.validatePre(input);
+          povVal.validatePre(input);
+          factualVal.validatePre(input);
+          voiceVal.validatePre(input);
+          branchVal.validatePre(input);
+          reachVal.validatePre(input);
         }
       }, iters);
       const name = `Run all validators (N=${scale})`;

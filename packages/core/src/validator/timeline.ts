@@ -3,11 +3,10 @@
 // ============================================================================
 
 import type {
-  NarrativeEvent,
   Validator,
-  ValidatorContext,
   ValidationIssue,
-  WorldState,
+  PreRenderInput,
+  PostRenderInput,
 } from '../types/index.js';
 import { compareTimestamp } from '../entity/index.js';
 import { makeIssue } from './base.js';
@@ -15,13 +14,13 @@ import { makeIssue } from './base.js';
 export class TimelineValidator implements Validator {
   name = 'timeline';
   category = 'timeline_plot' as const;
-  requiresLLM = false;
 
-  validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
+  validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const { event, events } = input;
 
     // Check: narrative order must be strictly increasing
-    const prevEvents = context.events.filter(
+    const prevEvents = events.filter(
       (e) => e.narrativeOrder < event.narrativeOrder && e.id !== 'system:genesis',
     );
     const prevEvent = prevEvents[prevEvents.length - 1];
@@ -54,8 +53,9 @@ export class TimelineValidator implements Validator {
     return issues;
   }
 
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+  validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const { prose, event } = input;
 
     const storyTime = event.storyTime;
     if (storyTime?.type !== 'absolute') return issues;

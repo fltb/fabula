@@ -3,25 +3,24 @@
 // ============================================================================
 
 import type {
-  NarrativeEvent,
+  PreRenderInput,
+  PostRenderInput,
   Validator,
-  ValidatorContext,
   ValidationIssue,
-  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class BranchMergeValidator implements Validator {
   name = 'branch_merge';
   category = 'timeline_plot' as const;
-  requiresLLM = false;
 
-  validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
+  validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const event = input.event;
 
     // For branch events: check if this is a merge point
     // A merge point is where multiple incoming branch paths converge
-    const incomingBranches = context.events.filter(
+    const incomingBranches = input.events.filter(
       (e) =>
         e.narrativeOrder < event.narrativeOrder &&
         e.branchExistence.type !== 'all',
@@ -31,7 +30,7 @@ export class BranchMergeValidator implements Validator {
 
     // Check each precondition against each incoming branch's final state
     for (const pc of event.preconditions) {
-      const currentValue = context.queryState(pc.entityId, pc.attribute);
+      const currentValue = input.queryState(pc.entityId, pc.attribute);
 
       if (currentValue === undefined || currentValue === null) {
         issues.push(makeIssue(
@@ -47,8 +46,10 @@ export class BranchMergeValidator implements Validator {
     return issues;
   }
 
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+  validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const event = input.event;
+    const prose = input.prose;
     const branchType = event.branchExistence.type;
 
     if (branchType === 'paths') {

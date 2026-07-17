@@ -1,26 +1,25 @@
 // ============================================================================
-// Context Helper — build ValidatorContext for performance benchmarks
+// Context Helper — build PreRenderInput for performance benchmarks
 // ============================================================================
 
-import type { NarrativeEvent, WorldState, EntityRegistry } from '@novalistically/core';
+import type { NarrativeEvent, WorldState, EntityRegistry, PreRenderInput, KnowledgeState } from '@novalistically/core';
 
 /**
- * Build a ValidatorContext for use in benchmarks.
+ * Build a PreRenderInput for use in benchmarks.
  * Mirrors src/validator/base.ts buildContext but avoids circularities.
  */
-export function makeCtx(
+export function makePreInput(
   event: NarrativeEvent,
   state: WorldState,
   registry: EntityRegistry,
   events: NarrativeEvent[],
-) {
+): PreRenderInput {
   return {
+    event,
     worldState: state,
     events,
     entityRegistry: registry,
-    currentEvent: event,
-    currentChapter: 1,
-    narrativeOrder: event.narrativeOrder,
+    chapter: Math.ceil(event.narrativeOrder / 3),
     queryState: (entityId: string, attribute: string) =>
       state.entities[entityId]?.[attribute],
     getKnowledge: () => ({
@@ -28,9 +27,8 @@ export function makeCtx(
       characterKnowledge: {},
       readerKnowledge: [],
       narratorKnowledge: [],
-    }),
-    getThreadProgress: (threadId: string) =>
-      state.threads[threadId] ?? { progress: 0, total: 0 },
+    } as KnowledgeState),
+    getThreadProgress: () => ({ progress: 0, total: 0 }),
     getRuleEvidence: () => [],
   };
 }

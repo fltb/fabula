@@ -88,6 +88,8 @@ export type {
 } from './plugin.js';
 
 export type {
+  PreRenderInput,
+  PostRenderInput,
   ValidatorContext,
   ValidationIssue,
   Validator,

@@ -3,34 +3,33 @@
 // ============================================================================
 
 import type {
-  NarrativeEvent,
+  PreRenderInput,
+  PostRenderInput,
   Validator,
-  ValidatorContext,
   ValidationIssue,
-  WorldState,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class ReachabilityValidator implements Validator {
   name = 'reachability';
   category = 'timeline_plot' as const;
-  requiresLLM = false;
 
-  validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
+  validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const event = input.event;
 
     // 1. Thread completion: check if threads are on track
-    const allThreads = context.worldState.threads;
+    const allThreads = input.worldState.threads;
     for (const [threadId, threadData] of Object.entries(allThreads)) {
       if (
         threadData.progress < threadData.total &&
-        context.currentChapter > event.narrativeOrder
+        input.chapter > event.narrativeOrder
       ) {
         const behind = threadData.total - threadData.progress;
-        if (behind > 2 && context.currentChapter > 5) {
+        if (behind > 2 && input.chapter > 5) {
           issues.push(makeIssue(
             this.name, event.id, threadId, 'warning',
-            `Thread "${threadId}" is behind: ${threadData.progress}/${threadData.total} (${behind} remaining) at chapter ${context.currentChapter}`,
+            `Thread "${threadId}" is behind: ${threadData.progress}/${threadData.total} (${behind} remaining) at chapter ${input.chapter}`,
             'Add events that advance this thread, or adjust the progress target.',
             'change_value',
             'thread_progress',
@@ -40,16 +39,16 @@ export class ReachabilityValidator implements Validator {
     }
 
     // 2. Foreshadow recovery: check for dangling foreshadows
-    const allEvents = context.events;
+    const allEvents = input.events;
     const allForeshadows = allEvents.flatMap((e) =>
       e.foreshadowing.map((f) => ({ ...f, eventId: e.id, chapter: Math.ceil(e.narrativeOrder / 3) })),
     );
 
     for (const f of allForeshadows) {
-      if (f.targetRevealChapter > 0 && context.currentChapter > f.targetRevealChapter + 3) {
+      if (f.targetRevealChapter > 0 && input.chapter > f.targetRevealChapter + 3) {
         issues.push(makeIssue(
           this.name, f.eventId, f.id, 'error',
-          `Foreshadow "${f.id}" planted in ${f.eventId} (target: chapter ${f.targetRevealChapter}) is unrevealed at chapter ${context.currentChapter}`,
+          `Foreshadow "${f.id}" planted in ${f.eventId} (target: chapter ${f.targetRevealChapter}) is unrevealed at chapter ${input.chapter}`,
           'Resolve this foreshadow in an upcoming scene or mark it as intentionally abandoned.',
           'change_value',
           'target_reveal_chapter',
@@ -84,8 +83,11 @@ export class ReachabilityValidator implements Validator {
     return issues;
   }
 
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+  validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const event = input.event;
+    const prose = input.prose;
+    const state = input.worldState;
     const proseLower = prose.toLowerCase();
 
     // ── 1. Precondition consistency in prose ──
@@ -221,5 +223,4 @@ export class ReachabilityValidator implements Validator {
 
     return issues;
   }
-
 }

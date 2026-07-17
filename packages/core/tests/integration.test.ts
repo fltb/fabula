@@ -30,7 +30,7 @@ import {
 import { calculateISS, detectAntiPatterns } from '../src/iss/index.js';
 import { assembleNovel, countWords } from '../src/assembler/index.js';
 import { ContextCompiler } from '../src/context/index.js';
-import type { NarrativeEvent, WorldState } from '../src/types/index.js';
+import type { NarrativeEvent, PreRenderInput, WorldState } from '../src/types/index.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -344,9 +344,12 @@ describe('1. Full Pipeline', () => {
       entities: {}, relationships: {}, knowledge: {},
       threads: {}, rules: {}, facts: [],
     };
-    const ctx = {
-      worldState: state, events, entityRegistry: registry,
-      currentEvent: event, currentChapter: 1, narrativeOrder: 1,
+    const input: PreRenderInput = {
+      event,
+      worldState: state,
+      events,
+      entityRegistry: registry,
+      chapter: 1,
       queryState: () => undefined,
       getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] }),
       getThreadProgress: () => ({ progress: 0, total: 0 }),
@@ -354,10 +357,10 @@ describe('1. Full Pipeline', () => {
     };
 
     const tv = new TimelineValidator();
-    expect(tv.validate(event, ctx).filter((i) => i.severity === 'error')).toHaveLength(0);
+    expect(tv.validatePre(input).filter((i) => i.severity === 'error')).toHaveLength(0);
 
     const pv = new POVValidator();
-    expect(pv.validate(event, ctx).filter((i) => i.severity === 'error')).toHaveLength(0);
+    expect(pv.validatePre(input).filter((i) => i.severity === 'error')).toHaveLength(0);
   });
 });
 

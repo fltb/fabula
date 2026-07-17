@@ -3,31 +3,30 @@
 // ============================================================================
 
 import type {
-  NarrativeEvent,
   Validator,
-  ValidatorContext,
   ValidationIssue,
-  WorldState,
+  PreRenderInput,
+  PostRenderInput,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class ForeshadowingValidator implements Validator {
   name = 'foreshadowing';
   category = 'factual_detail' as const;
-  requiresLLM = false;
 
-  validate(event: NarrativeEvent, context: ValidatorContext): ValidationIssue[] {
+  validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const { event, events, chapter } = input;
 
     // Check existing foreshadows: are they past due?
     for (const f of event.foreshadowing) {
       if (
         f.targetRevealChapter > 0 &&
-        context.currentChapter > f.targetRevealChapter
+        chapter > f.targetRevealChapter
       ) {
         issues.push(makeIssue(
           this.name, event.id, f.id, 'warning',
-          `Foreshadow "${f.id}" (${f.hint}) was supposed to be revealed by chapter ${f.targetRevealChapter}, but we're at chapter ${context.currentChapter}`,
+          `Foreshadow "${f.id}" (${f.hint}) was supposed to be revealed by chapter ${f.targetRevealChapter}, but we're at chapter ${chapter}`,
           'Add the reveal event, or update the target_reveal_chapter.',
           'change_value',
           'target_reveal_chapter',
@@ -37,9 +36,9 @@ export class ForeshadowingValidator implements Validator {
 
     // Check all foreshadows in the event store: any dangling?
     // (partial check — full check is in ReachabilityValidator)
-    const allForeshadows = context.events.flatMap((e) => e.foreshadowing);
+    const allForeshadows = events.flatMap((e) => e.foreshadowing);
     for (const f of allForeshadows) {
-      if (f.targetRevealChapter > 0 && context.currentChapter > f.targetRevealChapter + 2) {
+      if (f.targetRevealChapter > 0 && chapter > f.targetRevealChapter + 2) {
         // Already 2 chapters past due
         const alreadyReported = issues.some((i) => i.entity === f.id);
         if (!alreadyReported) {
@@ -57,8 +56,9 @@ export class ForeshadowingValidator implements Validator {
     return issues;
   }
 
-  validateRender(prose: string, event: NarrativeEvent, state: WorldState): ValidationIssue[] {
+  validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
+    const { prose, event } = input;
     const proseLower = prose.toLowerCase();
 
     for (const f of event.foreshadowing) {

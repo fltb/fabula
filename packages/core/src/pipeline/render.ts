@@ -20,8 +20,8 @@ import type {
   ValidationResult,
 } from '../types/index.ts';
 import { parseAnalysisJSON } from '../schemas/analysis.ts';
-import { buildProsePrompt, type ProseOnlyInput } from '../ai/prompts/prose-only.ts';
 import { buildAnalysisPrompt, type RenderAnalysisInput } from '../ai/prompts/render-analysis.ts';
+import { PromptAssembler } from '../context/prompt-assembler.ts';
 import {
   computeCacheKeys,
   getCachedRender,
@@ -160,24 +160,16 @@ export class RenderPipeline {
       attempts = a;
 
       // ── Pass 1: Pure prose (with retry guidance on retry) ────────
-      const proseInput: ProseOnlyInput = {
-        context,
+      const assembler = new PromptAssembler();
+      const assembled = assembler.assemble(context, {
         styleGuidance: event.styleGuidance,
         targetLengthWords: 500,
         referenceExample: this.referenceExample,
-      };
-      // Inject retry guidance from previous failed validation
-      if (a > 1 && previousErrorMessages.length > 0) {
-        proseInput.retryGuidance = [
-          '### Issues to Fix in This Rewrite',
-          '',
-          ...previousErrorMessages.map((e, i) => `${i + 1}. ${e}`),
-          '',
-          'Rewrite the scene now, addressing every issue above.',
-        ].join('\n');
-      }
-
-      const proseMessages = buildProsePrompt(proseInput);
+        retryGuidance: a > 1 && previousErrorMessages.length > 0
+          ? previousErrorMessages.join('\n')
+          : undefined,
+      });
+      const proseMessages = assembled.messages;
       try {
         const result1 = await this.provider.complete({
           messages: proseMessages,

@@ -17,6 +17,7 @@ import type {
 import type { NarrativeEvent, RuleEffectEntry } from './event.js';
 import type { KnowledgeState, WorldState } from './world.js';
 import type { AnalysisResult } from './analysis.js';
+import type { EventStore } from '../state/event-store.js';
 
 // ——— Pre-Render Input (new) ———
 
@@ -26,6 +27,7 @@ export interface PreRenderInput {
   events: NarrativeEvent[];
   entityRegistry: EntityRegistry;
   chapter: number;
+  eventStore?: EventStore;
   queryState: (entityId: EntityId, attribute: string) => unknown;
   getKnowledge: (characterId: EntityId) => KnowledgeState;
   getThreadProgress: (threadId: string) => { progress: number; total: number };

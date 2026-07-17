@@ -92,6 +92,17 @@ author: "Author"
 default_model: claude-sonnet-4-20250514
 default_language: zh
 snapshot_interval: 20
+validator_overrides: {}
+  # Override validator behavior per-validator
+  # Format: { validator_name: 'off' | 'warning' | 'error' }
+  # Example: { factual_detail: 'warning', voice_drift: 'off' }
+circuit_breaker:
+  max_retries: 3
+  # Maximum render retries before marking scene as needs_review
+review_expiry:
+  enabled: false
+  auto_resolve_days: 30
+  # Auto-resolve unresolved reviews after N days
 `;
     fs.writeFileSync(path.join(projectDir, 'nova.yaml'), novaYaml, 'utf-8');
 
@@ -186,10 +197,13 @@ program
     }
     const state = stateManager.getCurrentState();
 
-    // Load plugin validators (future: load from plugins/ directory)
+    // Load plugins from project's plugins/ directory
+    const pluginLoader = new PluginLoader(new FsStorage());
+    const pluginDir = path.join(projectDir, 'plugins');
+    await pluginLoader.loadFromDirectory(pluginDir);
+
     const validatorRegistry = new ValidatorRegistry();
-    // TODO: Discover and register plugins from plugins/ directory
-    const aggregator = new ResultAggregator(undefined, validatorRegistry.validators);
+    const aggregator = new ResultAggregator(undefined, validatorRegistry.validators, stateManager.eventStore);
     const overrides = data.config?.validatorOverrides;
 
     if (options.event) {

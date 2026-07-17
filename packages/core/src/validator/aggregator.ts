@@ -29,14 +29,19 @@ import { VoiceDriftDetector } from './voice-drift.js';
 import { BranchMergeValidator } from './branch-merge.js';
 import { ReachabilityValidator } from './reachability.js';
 
+import type { EventStore } from '../state/event-store.js';
+
 export class ResultAggregator {
   private validators: Validator[];
   private pluginValidators: PluginValidator[];
+  private eventStore?: EventStore;
 
   constructor(
     customValidators?: Validator[],
     pluginValidators?: PluginValidator[],
+    eventStore?: EventStore,
   ) {
+    this.eventStore = eventStore;
     this.validators = customValidators ?? [
       new TimelineValidator(),
       new CharacterStateValidator(),
@@ -145,6 +150,7 @@ export class ResultAggregator {
           events,
           entityRegistry: registry,
           chapter,
+          eventStore: this.eventStore,
           queryState: (entityId: EntityId, attr: string) => state.entities[entityId]?.[attr],
           getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] } as KnowledgeState),
           getThreadProgress: (threadId: string) => state.threads[threadId] ?? { progress: 0, total: 0 },

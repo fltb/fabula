@@ -33,6 +33,68 @@ export interface DerivedData {
 }
 
 /**
+ * Collect derived reference data from rendered events.
+ * Extracts thread progress, foreshadowing entries, relationship effects,
+ * and rule effects from each event that has a corresponding render result.
+ */
+function collectAllReferenceFiles(
+  jobs: RenderJob[],
+  results: RenderSceneResult[],
+): DerivedData {
+  const resultMap = new Map(results.map((r) => [r.eventId, r]));
+  const threads: Record<string, unknown> = {};
+  const foreshadowing: Array<Record<string, unknown>> = [];
+  const relationships: Array<Record<string, unknown>> = [];
+  const rules: Array<Record<string, unknown>> = [];
+
+  for (const job of jobs) {
+    if (!resultMap.has(job.event.id)) continue;
+    const event = job.event;
+
+    // Thread progress — keyed by thread ID
+    for (const tp of event.threadProgress) {
+      threads[tp.thread] = {
+        advancement: tp.advancement,
+        progressAfter: tp.progressAfter,
+        progressTotal: tp.progressTotal,
+      };
+    }
+
+    // Foreshadowing — array of { eventId, hint, targetChapter }
+    for (const f of event.foreshadowing) {
+      foreshadowing.push({
+        eventId: event.id,
+            hint: f.hint,
+            targetChapter: f.targetRevealChapter,
+        thread: f.thread,
+      });
+    }
+
+    // Relationship effects — each entry carries participants as key
+    for (const re of event.relationshipEffects) {
+      relationships.push({
+        participants: re.participants,
+        effect: re.effect,
+        direction: re.direction,
+        newState: re.newState,
+      });
+    }
+
+    // Rule effects — each entry carries the rule as key
+    for (const r of event.ruleEffects) {
+      rules.push({
+        rule: r.rule,
+        effect: r.effect,
+        evidence: r.evidence,
+        eventId: event.id,
+      });
+    }
+  }
+
+  return { threads, foreshadowing, relationships, rules };
+}
+
+/**
  * Write render outputs to PROJECT.md-compliant directory layout.
  */
 export function writeRenderOutputs(
@@ -94,10 +156,6 @@ export function buildAndWriteOutputs(
   const resultMap = new Map(results.map((r) => [r.eventId, r]));
 
   const entries: OutputEntry[] = [];
-  const threads: Record<string, unknown> = {};
-  const foreshadowing: Array<Record<string, unknown>> = [];
-  const relationships: Array<Record<string, unknown>> = [];
-  const rules: Array<Record<string, unknown>> = [];
 
   for (const job of jobs) {
     const r = resultMap.get(job.event.id);
@@ -133,7 +191,7 @@ export function buildAndWriteOutputs(
     });
   }
 
-  const derived: DerivedData = { threads, foreshadowing, relationships, rules };
+  const derived = collectAllReferenceFiles(jobs, results);
 
   writeRenderOutputs(st, projectDir, entries, derived);
 

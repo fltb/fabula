@@ -48,7 +48,8 @@ export interface ProjectConfig {
     maxRetries: number;
   };
   reviewExpiry?: {
-    blockingChaptersBeforeDowngrade: number;
+    enabled: boolean;
+    autoResolveDays: number;
   };
   snapshotInterval?: number;
 }

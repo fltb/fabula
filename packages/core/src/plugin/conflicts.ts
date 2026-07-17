@@ -23,7 +23,7 @@ export function detectConflicts(plugins: PluginManifest[]): ConflictReport[] {
       }
 
       // Check exclusive authority dimensions
-      if (a.authority.exclusive && b.authority.exclusive) {
+      if (a.authority.exclusive || b.authority.exclusive) {
         for (const dim of a.authority.dimensions) {
           if (b.authority.dimensions.includes(dim)) {
             conflicts.push({

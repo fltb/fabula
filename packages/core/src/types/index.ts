@@ -125,6 +125,7 @@ export type {
   ReviewComment,
   ReviewPatch,
   PatchChange,
+  Proposal,
 } from './review.js';
 
 export type {

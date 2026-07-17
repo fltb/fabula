@@ -58,6 +58,7 @@ export {
   RelevanceEngine,
   ContextAssembler,
   ContextCompiler,
+  PromptAssembler,
 } from './context/index.js';
 export type { RelevanceContext } from './context/index.js';
 

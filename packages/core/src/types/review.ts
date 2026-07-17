@@ -21,9 +21,16 @@ export interface ReviewComment {
   resolvedAt?: string;
 }
 
+// ——— Proposal ———
+
+export interface Proposal {
+  sourceReviewIds: string[];
+  description: string;
+}
+
 // ——— Review Patch ———
 
-export interface ReviewPatch {
+export interface ReviewPatch extends Proposal {
   sourceReviewIds: string[];
   changes: PatchChange[];
 }

@@ -10,7 +10,7 @@ export function createPatch(
   sourceReviewIds: string[],
   changes: PatchChange[],
 ): ReviewPatch {
-  const patch: ReviewPatch = { sourceReviewIds, changes };
+  const patch: ReviewPatch = { sourceReviewIds, description: '', changes };
   patches.push(patch);
   return patch;
 }

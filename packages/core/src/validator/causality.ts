@@ -3,6 +3,7 @@
 // ============================================================================
 
 import type {
+  PostRenderInput,
   PreRenderInput,
   Validator,
   ValidationIssue,
@@ -47,6 +48,43 @@ export class CausalityValidator implements Validator {
         'This scene does not advance the story. Add meaningful state changes to expected_postconditions.',
         'change_value',
         'expected_postconditions',
+      ));
+    }
+
+    return issues;
+  }
+
+  validatePost(input: PostRenderInput): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const analysis = input.analysis;
+
+    if (!analysis) return issues;
+
+    const { covered, dropped } = analysis.analysis.postconditions;
+    const totalPostconditions = input.event.postconditions.length;
+    const coveredCount = covered.length;
+    const droppedCount = dropped.length;
+
+    // Warning: any postcondition dropped
+    for (const pc of input.event.postconditions) {
+      if (!covered.some((c) => c.includes(pc.entityId) && c.includes(pc.attribute))) {
+        issues.push(makeIssue(
+          this.name, input.event.id, pc.entityId, 'warning',
+          `Postcondition "${pc.entityId}.${pc.attribute}=${pc.value}" not covered in rendered prose.`,
+          'Add explicit mention of this state change in the scene.',
+          'manual',
+          pc.attribute,
+        ));
+      }
+    }
+
+    // Error: majority of postconditions dropped
+    if (droppedCount > totalPostconditions * 0.5) {
+      issues.push(makeIssue(
+        this.name, input.event.id, 'system', 'error',
+        `Majority of postconditions dropped: ${droppedCount}/${totalPostconditions} (${coveredCount} covered).`,
+        'Scene needs rewrite — too many expected state changes are missing.',
+        'manual',
       ));
     }
 

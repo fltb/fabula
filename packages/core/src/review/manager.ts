@@ -19,6 +19,7 @@ import {
   address,
   reopen,
   escalate,
+  markWontfix as markWontfixFunc,
 } from './comment.js';
 import { createPatch } from './patch.js';
 import { getSummary } from './summary.js';
@@ -111,5 +112,11 @@ export class ReviewManager {
   /** Escalate a comment's severity to 'blocking' */
   escalate(commentId: string): void {
     escalate(this.comments, commentId);
+  }
+
+  /** Mark a comment as wontfix (will not be addressed) */
+  markWontfix(commentId: string, projectDir: string, resolvedBy?: string): void {
+    this.comments = markWontfixFunc(this.comments, commentId, resolvedBy);
+    this.save(projectDir);
   }
 }

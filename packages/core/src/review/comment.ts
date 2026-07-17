@@ -73,3 +73,16 @@ export function escalate(comments: ReviewComment[], commentId: string): void {
     comment.status = 'open';
   }
 }
+
+/** Mark comment as wontfix (will not be addressed) */
+export function markWontfix(
+  comments: ReviewComment[],
+  commentId: string,
+  resolvedBy?: string,
+): ReviewComment[] {
+  return comments.map((c) =>
+    c.id === commentId
+      ? { ...c, status: 'wontfix' as const, resolvedBy: resolvedBy ?? c.resolvedBy, resolvedAt: new Date().toISOString() }
+      : c,
+  );
+}

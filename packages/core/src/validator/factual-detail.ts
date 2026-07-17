@@ -3,6 +3,7 @@
 // ============================================================================
 
 import type {
+  PostRenderInput,
   PreRenderInput,
   Validator,
   ValidationIssue,
@@ -52,6 +53,26 @@ export class FactualDetailValidator implements Validator {
           pc.attribute,
         ));
       }
+    }
+
+    return issues;
+  }
+
+  validatePost(input: PostRenderInput): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const analysis = input.analysis;
+
+    if (!analysis) return issues;
+
+    for (const detail of analysis.analysis.inventedDetails) {
+      if (detail.severity !== 'major') continue;
+
+      issues.push(makeIssue(
+        this.name, input.event.id, 'system', 'warning',
+        `Major invented detail: "${detail.detail}" — not specified in event definitions.`,
+        'Add this detail to event preconditions/postconditions, or mark it intentional.',
+        'manual',
+      ));
     }
 
     return issues;

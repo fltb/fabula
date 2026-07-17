@@ -87,6 +87,7 @@ export interface ThreadStatus {
 }
 
 // ——— Render System (§7.4.17) ———
+// Activated by PromptAssembler (context/prompt-assembler.ts)
 
 export interface RenderRequest {
   event: string;

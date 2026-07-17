@@ -20,7 +20,8 @@ export const projectConfigSchema = z
       .optional(),
     reviewExpiry: z
       .object({
-        blockingChaptersBeforeDowngrade: z.number(),
+        enabled: z.boolean(),
+        autoResolveDays: z.number(),
       })
       .strict()
       .optional(),

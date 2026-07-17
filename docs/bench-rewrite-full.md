@@ -401,7 +401,176 @@ DAG: narrationTime 不参与因果边。只用于 Assembler 可选排序。
 
 ---
 
-## 第三部分：类型系统扩充 — 从数据集丢弃字段反推通用模型缺口
+## 第三部分：分批渲染系统（BatchRenderPipeline）
+
+### 3.1 问题
+
+`RenderPipeline.renderAll()` 一次性提交全部事件到 `ConcurrencyPool`（默认 5 并发）。对 6-20 个事件的单项目工作良好，但 bench 场景涉及：
+
+- ChiNovelKE 150+ 角色、互动小说 100K 章节 → 全部结果 hold 在内存
+- 无进度可见性 → bench 跑外部数据集时不知道进度
+- 无流式输出 → 输出文件在全部渲染完成后一次性写入
+- 无批次间状态优化入口
+
+### 3.2 方案：滑动窗口分批渲染
+
+新增 `BatchRenderPipeline` 编排层类，位于 `packages/core/src/batch-renderer.ts`。
+
+**核心架构：**
+
+```
+BatchRenderPipeline（编排层 — batch-renderer.ts）
+  │  组合（非继承）
+  └─ RenderPipeline（渲染机制 — pipeline/render.ts，不变）
+       └─ ConcurrencyPool（pool.ts，不变）
+```
+
+**关键设计决策：**
+
+| 决策 | 选择 | 依据 |
+|---|---|---|
+| 放置层次 | `core/src/batch-renderer.ts`（编排层） | 分批调度是编排逻辑，不是渲染机制。与 api.ts 同级 |
+| 组合方式 | 组合 RenderPipeline | 不继承，保持 RenderPipeline 纯渲染语义 |
+| 调度模型 | 滑动窗口 | 2 批次在飞 → 完成一批补一批。AsyncIterator 对 bench 场景过度设计 |
+| 批次大小 | 固定（可配，默认 10） | 2× pool concurrency = 池子满但不堆积 |
+| 窗口大小 | 固定（可配，默认 2） | p-queue 标准，20 事件在飞，平衡吞吐和 API 压力 |
+
+### 3.3 API
+
+```typescript
+// packages/core/src/batch-renderer.ts
+
+export interface BatchConfig {
+  batchSize: number;          // 默认 10
+  windowSize: number;         // 默认 2
+  failFast?: boolean;         // 默认 true（false → 单批失败继续下一批）
+  onProgress?: (event: BatchProgressEvent) => void;
+  onBeforeBatch?: (batch: RenderJob[], index: number) => Promise<void>;
+  onAfterBatch?: (results: RenderSceneResult[], index: number) => Promise<void>;
+  signal?: AbortSignal;
+}
+
+export interface BatchProgressEvent {
+  batchIndex: number;
+  totalBatches: number;
+  completedInBatch: number;
+  totalCompleted: number;
+  totalJobs: number;
+  elapsedMs: number;
+  batchResults: RenderSceneResult[];
+}
+
+export interface BatchResult {
+  results: RenderSceneResult[];
+  completed: boolean;     // false = 提前终止
+  stats: BatchStats;
+}
+
+export interface BatchStats {
+  totalJobs: number;
+  totalBatches: number;
+  completedBatches: number;
+  cacheHits: number;
+  cacheMisses: number;
+  totalErrors: number;
+  totalAttempts: number;
+  elapsedMs: number;
+  aborted: boolean;
+}
+
+export class BatchRenderPipeline {
+  constructor(pipeline: RenderPipeline);
+  async renderBatched(jobs: RenderJob[], config: BatchConfig): Promise<BatchResult>;
+  abort(): void;
+}
+```
+
+### 3.4 滑动窗口算法
+
+```
+输入: jobs[], batchSize, windowSize
+输出: BatchResult
+
+1. batches = chunk(jobs, batchSize)          // 拆批
+2. inFlight = 0, nextToSubmit = 0, completedBatches = 0
+3. for i in 0..min(windowSize, batches.length):
+     submitBatch(batches[nextToSubmit++])    // 初始填充窗口
+4. while completedBatches < batches.length:
+     result = await Promise.race(inFlightPromises)
+     inFlight--
+     onAfterBatch(result) → 写盘 → 释放内存
+     onProgress(...)
+     if signal.aborted: break
+     completedBatches++
+     if nextToSubmit < batches.length:
+       submitBatch(batches[nextToSubmit++])
+```
+
+批次内部仍使用 `ConcurrencyPool.all(batchJobs, renderScene)` → 享受现有有界并行。
+
+### 3.5 错误处理
+
+| 场景 | failFast=true | failFast=false |
+|---|---|---|
+| 单场景 Pass 1 失败（3 次 retry 后） | 该批标记失败 → 终止全部 | 该场景 error → 该批继续其他场景 → 跳下一批 |
+| 单场景 Pass 2 parse 失败 | analysis=null，不影响 | 同左 |
+| 单批全部场景失败 | 终止全部 | 跳过该批，继续 |
+| abort() | 飞行批次完成后停止，completed=false | 同左 |
+
+### 3.6 api.ts 集成
+
+```typescript
+// api.ts — renderNovel 新增可选参数
+export async function renderNovel(
+  projectDir: string,
+  options?: {
+    // ... 现有参数 ...
+    batch?: BatchConfig;   // ★ 新增
+  },
+): Promise<{ results: MappedResult[]; errors: string[] }> {
+  const pipeline = new RenderPipeline({ ... });
+
+  if (options?.batch) {
+    const batchRenderer = new BatchRenderPipeline(pipeline);
+    const { results } = await batchRenderer.renderBatched(jobs, options.batch);
+    // onAfterBatch 中已流式写盘
+    return mapResults(results);
+  }
+
+  // 原模式不变
+  const results = await pipeline.renderAll(jobs);
+  buildAndWriteOutputs(storage, projectDir, jobs, results);
+  return mapResults(results);
+}
+```
+
+### 3.7 在 bench-rewrite 中的位置
+
+属于 **P2（Bench 重构）的前置基础设施**。依赖链：
+
+```
+P0-tier3 (RenderPipeline 稳定)
+  └── P0x BatchRenderPipeline (新增，不修改上游)
+        └── P2 Bench 重构 (P2a regression.ts / variants.ts 调用)
+```
+
+工作量：
+
+| 文件 | 行数 |
+|---|---|
+| `core/src/batch-renderer.ts` | ~250 |
+| `core/src/api.ts`（+batch 分支） | ~30 |
+| `core/src/index.ts`（导出） | ~5 |
+| `core/tests/batch-renderer.test.ts` | ~200 |
+| **合计** | **~485** |
+
+不修改：`RenderPipeline`、`ConcurrencyPool`、`render-analysis.ts`、`cache/`、bench 包（P2 阶段接线）。
+
+完整规格见 `docs/2026-07-17-batch-render-pipeline-design.md`。
+
+---
+
+## 第四部分：类型系统扩充 — 从数据集丢弃字段反推通用模型缺口
 
 ### 3.1 方法论
 
@@ -575,7 +744,7 @@ DAG: narrationTime 不参与因果边。只用于 Assembler 可选排序。
 
 ---
 
-## 第四部分：测试体系设计
+## 第五部分：测试体系设计
 
 ### 4.1 测试层次
 
@@ -1044,7 +1213,7 @@ interface BenchmarkReport {
 
 ---
 
-## 第五部分：实现阶段（按依赖排序）
+## 第六部分：实现阶段（按依赖排序）
 
 ### 依赖图总览
 
@@ -1061,11 +1230,13 @@ P0f 全部类型字段  ─┘
     ├──→ P0b DAG（依赖 Fact model）
     └──→ P0g Pass 2（依赖 types + Fact model）
               │
-              └──→ P5 新增 7 验证器（依赖 Pass 2 schema + compareFact）
+              ├──→ P5 新增 7 验证器（依赖 Pass 2 schema + compareFact）
+              │
+              └──→ P0x BatchRenderPipeline（依赖 RenderPipeline 稳定，P0-tier3 后）
                         │
                         └──→ P1 祝福夹具（依赖 types 稳定）
                                   │
-                                  └──→ P2 Bench 重构（依赖 fixtures + validators）
+                                  └──→ P2 Bench 重构（依赖 fixtures + validators + P0x）
                                             │
                                             ├──→ P3 外部适配器（依赖 bench + types）
                                             │         │
@@ -1108,7 +1279,15 @@ P0f 全部类型字段  ─┘
 
 **可并行。** P0b 和 P0g 改不同文件。
 
-### 第四阶段：新增验证器（P5）
+### 第四阶段：分批渲染系统（P0x）
+
+| ID | 内容 | 工作量 | 依赖 |
+|---|---|---|---|
+| **P0x** | BatchRenderPipeline — 滑动窗口分批渲染（编排层，组合 RenderPipeline）。含 BatchRenderPipeline 类 + BatchConfig/BatchProgress/BatchStats 类型 + api.ts batch 分支 + 单元测试 | ~250 行 core + ~30 行 api + ~200 行 test | P0-tier3（RenderPipeline 稳定） |
+
+**可并行于 P5。** P0x 只新增文件 + api.ts 加一个分支，不改 RenderPipeline/P5 代码。
+
+### 第五阶段：新增验证器（P5）
 
 | ID | 内容 | 工作量 | 依赖 |
 |---|---|---|---|
@@ -1122,7 +1301,7 @@ P0f 全部类型字段  ─┘
 
 全部依赖 P0g 的 schema 和 P0i 的 compareFact。**可并行。**
 
-### 第五阶段：祝福夹具 + 变种（P1）
+### 第六阶段：祝福夹具 + 变种（P1）
 
 | ID | 内容 | 工作量 | 依赖 |
 |---|---|---|---|
@@ -1130,14 +1309,14 @@ P0f 全部类型字段  ─┘
 | **P1b** | 祝福分支变种 + 错误注入变种 | 5 × ~5 文件 | P1a |
 | **P1c** | 祝福原文对比（LLM 辅助人工审核） | 文档 | P1a |
 
-### 第六阶段：Bench 重构（P2）
+### 第七阶段：Bench 重构（P2）
 
 | ID | 内容 | 工作量 | 依赖 |
 |---|---|---|---|
-| **P2a** | Bench 重构 — regression.ts + variants.ts + consistency.ts + 新 reporters | ~600 行 | P1（fixtures）, P5（validators） |
+| **P2a** | Bench 重构 — regression.ts + variants.ts + consistency.ts + 新 reporters。调用 BatchRenderPipeline 做分批渲染 | ~600 行 | P1（fixtures）, P5（validators）, P0x（BatchRenderPipeline） |
 | **P2c** | performance.ts 保留不变 | — | 无 |
 
-### 第七阶段：外部数据集适配器（P3）
+### 第八阶段：外部数据集适配器（P3）
 
 | ID | 内容 | 工作量 | 依赖 |
 |---|---|---|---|
@@ -1146,14 +1325,14 @@ P0f 全部类型字段  ─┘
 | **P3c** | 中文互动小说 3K adapter | ~700 行 | P2a |
 | **P3d** | LLM 提取层 + 转换产物标注 | ~500 行 | P3a-c |
 
-### 第八阶段：一致性基准 + 最终验证（P4）
+### 第九阶段：一致性基准 + 最终验证（P4）
 
 | ID | 内容 | 工作量 | 依赖 |
 |---|---|---|---|
 | **P4a** | 一致性基准 — 7 指标系统（N-CED, S-CED, Pipeline F1, ECDF, Per-Validator, Severity-Level CED, HANNA ρ）+ ConStory 对照报告 | ~600 行 | P3, P2 |
 | **P4b** | 最终验证（typecheck + all tests）+ Oracle 审查 | — | P4a |
 
-### 第九阶段：管线增强（P6）
+### 第十阶段：管线增强（P6）
 
 | ID | 内容 | 工作量 | 依赖 |
 |---|---|---|---|
@@ -1162,7 +1341,7 @@ P0f 全部类型字段  ─┘
 | **P6c** | 祝福原文对比框架（LLM 辅助，单故事） | ~200 行 | P1c |
 | **P6d** | cast 语义化 — `{onScreen, affected}` | ~150 行 | P0f |
 
-### 第十阶段：管线增强完整实现（P7）
+### 第十一阶段：管线增强完整实现（P7）
 
 | ID | 内容 | 工作量 | 依赖 |
 |---|---|---|---|
@@ -1180,7 +1359,7 @@ P0f 全部类型字段  ─┘
 
 ---
 
-## 第六部分：测试组织
+## 第七部分：测试组织
 
 ```
 fixtures/
@@ -1231,10 +1410,10 @@ packages/bench/
 | 夹具文件 | 祝福主线 25 YAML + 4 变种集 ~25 YAML |
 | Adapter 代码 | 3 adapter × ~600 行 + LLM 提取层 500 行 |
 | Bench 代码 | 5 个新模块 + 2 个保留 |
-| 总预估代码量 | ~10500 行 + ~50 YAML 文件 |
-| 总阶段数 | 10 个阶段（P0-tier1/2/3 → P5 → P1 → P2 → P3 → P4 → P6 → P7），按依赖排序 |
-| 总预估代码量 | ~10500 行 + ~50 YAML 文件 |
-| 关键依赖链 | types → Fact model → DAG + Pass 2 → validators → fixtures → bench → adapters → consistency |
+| BatchRenderPipeline | ~485 行（新增编排层，core 通用） |
+| 总阶段数 | 11 个阶段（P0-tier1/2/3 → P0x → P5 → P1 → P2 → P3 → P4 → P6 → P7），按依赖排序 |
+| 总预估代码量 | ~11000 行 + ~50 YAML 文件 |
+| 关键依赖链 | types → Fact model → DAG + Pass 2 → validators + BatchRenderPipeline → fixtures → bench → adapters → consistency |
 
 ## Git 管理规则
 

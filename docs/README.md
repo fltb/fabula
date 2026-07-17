@@ -4,8 +4,9 @@
 
 | 文件 | 状态 | 说明 |
 |---|---|---|
-| `bench-rewrite-design.md` | **活跃** | Bench 重写项目设计索引（~200 行）。快速查阅设计全貌。 |
-| `bench-rewrite-full.md` | **活跃** | Bench 重写项目完整规格（~1300 行）。含完整 TypeScript 接口、Zod schema、算法伪代码、所有技术决策的取舍依据。实现时参考此文档。 |
+| `bench-rewrite-design.md` | **活跃** | Bench 重写项目设计索引（~250 行）。快速查阅设计全貌。 |
+| `bench-rewrite-full.md` | **活跃** | Bench 重写项目完整规格（~1500 行）。含完整 TypeScript 接口、Zod schema、算法伪代码、所有技术决策的取舍依据。实现时参考此文档。 |
+| `2026-07-17-batch-render-pipeline-design.md` | **活跃** | BatchRenderPipeline 分批渲染系统规格。滑动窗口分批、编排层架构、API 设计、与 bench-rewrite 集成。 |
 
 ## 历史参考文档
 

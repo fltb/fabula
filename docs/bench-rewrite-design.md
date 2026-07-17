@@ -2,7 +2,7 @@
 
 **状态：设计锁定。技术决策全部内嵌。**
 
-> 本文档是 Novalistically bench 重写项目的唯一权威设计来源。涵盖架构修正、验证模型、类型系统、打分标准、实现阶段。所有技术决策的取舍过程和依据已内嵌在各节中。
+> 本文档是 Novalistically bench 重写项目的唯一权威设计来源。涵盖架构修正、分批渲染系统、验证模型、类型系统、打分标准、实现阶段。所有技术决策的取舍过程和依据已内嵌在各节中。
 
 ---
 
@@ -142,7 +142,53 @@ narrativeHint 事实不写入 WorldState（replay.ts 跳过）。7 个 validator
 
 ---
 
-## 第三部分：类型系统扩充
+## 第三部分：分批渲染系统（BatchRenderPipeline）
+
+### 3.1 问题
+
+`RenderPipeline.renderAll()` 一次性提交全部事件到 `ConcurrencyPool`。对外部数据集（互动小说 100K 章节）会导致内存膨胀、无进度反馈、无流式输出。
+
+### 3.2 方案：滑动窗口分批渲染
+
+新增 `BatchRenderPipeline` 类（编排层，位于 `packages/core/src/batch-renderer.ts`），组合 `RenderPipeline`：
+
+- **拆批**：事件按 `batchSize`（默认 10）拆成批次
+- **滑动窗口**：`windowSize`（默认 2）个批次同时在飞，一批完成 → 提交下一批
+- **流式输出**：每批完成 → `onAfterBatch` 钩子写盘 → 释放该批内存
+- **进度回调**：`onProgress({ batchIndex, totalBatches, elapsedMs })`
+- **批次间钩子**：`onBeforeBatch` / `onAfterBatch` — 用于 context 预热、统计收集
+- **提前终止**：`abort()` 或 `AbortSignal`
+- **失败隔离**：`failFast: false` 模式下单批失败不终止全部
+
+### 3.3 架构约束
+
+- `RenderPipeline` 不变（纯渲染执行器）
+- `ConcurrencyPool` 不变（批次内部仍用它做有界并行）
+- `api.ts` 的 `renderNovel()` 新增可选 `batch?: BatchConfig` 参数
+- 属于 bench-rewrite 的 **P2 前置基础设施**，不修改任何上游代码
+
+### 3.4 配置默认值
+
+| 参数 | 默认 | 依据 |
+|---|---|---|
+| batchSize | 10 | 2× pool concurrency (5)，与 LangChain batch() 实践一致 |
+| windowSize | 2 | p-queue 滑动窗口标准，20 事件在飞 |
+| failFast | true | 开发期快速失败；bench 批量跑外部数据集时可设 false |
+
+### 3.5 工作量
+
+| 文件 | 行数 |
+|---|---|
+| `core/src/batch-renderer.ts` | ~250 |
+| `core/src/api.ts`（修改） | ~30 |
+| `core/tests/batch-renderer.test.ts` | ~200 |
+| **合计** | **~480** |
+
+完整规格见 `docs/2026-07-17-batch-render-pipeline-design.md`。
+
+---
+
+## 第四部分：类型系统扩充
 
 从 4 个业界数据集的丢弃字段反推通用模型缺口。13 个新增 computational 字段：tense, discourseMode, arcPosition, conflictType, resolutionType, appearance, aliases[], ruleClass, gender, synopsis, age, emotionalValence, profession。2 个激活现有字段（genre 修复 bug, role→importance）。2 个纯元数据（tags, status）。1 个不新增（alignment）。
 
@@ -150,7 +196,7 @@ narrativeHint 事实不写入 WorldState（replay.ts 跳过）。7 个 validator
 
 ---
 
-## 第四部分：测试体系设计
+## 第五部分：测试体系设计
 
 ### 4.1 测试层次
 
@@ -176,7 +222,7 @@ narrativeHint 事实不写入 WorldState（replay.ts 跳过）。7 个 validator
 
 ---
 
-## 第五部分：实现阶段（按依赖排序）
+## 第六部分：实现阶段（按依赖排序）
 
 ### 依赖图
 
@@ -184,6 +230,8 @@ narrativeHint 事实不写入 WorldState（replay.ts 跳过）。7 个 validator
 P0f 类型字段 → P0i Fact 模型 → P0b DAG + P0g Pass 2
                                     ↓
                                   P5 验证器
+                                    ↓
+              P0x BatchRenderPipeline (依赖 RenderPipeline 稳定)
                                     ↓
                     P1 祝福夹具 → P2 Bench → P3 适配器 → P4 一致性
 ```
@@ -195,9 +243,10 @@ P0f 类型字段 → P0i Fact 模型 → P0b DAG + P0g Pass 2
 | P0-tier1 | 类型基础：13 字段 + scene 修复 + genre bug + 占位符 | 无 |
 | P0-tier2 | 核心模型：Fact 双表示 + narrationTime + role 激活 | P0-tier1 |
 | P0-tier3 | 计算 + Pass 2：DAG 因果边 + Pass 2 扩展 | P0-tier2 |
+| P0x | BatchRenderPipeline（分批滑动窗口渲染） | P0-tier3（RenderPipeline 稳定）|
 | P5 | 7 新验证器（全消费 Pass 2） | P0-tier3 |
 | P1 | 祝福夹具 + 变种 | P0-tier1 |
-| P2 | Bench 重构 | P1 + P5 |
+| P2 | Bench 重构（调用 BatchRenderPipeline） | P1 + P5 + P0x |
 | P3 | 外部适配器 | P2 |
 | P4 | 一致性基准 + 最终验证 | P3 |
 | P6 | 管线增强（Circuit breaker + 反向验证 + cast + 原文对比） | P0-tier3 + P5 |
@@ -212,7 +261,7 @@ P0f 类型字段 → P0i Fact 模型 → P0b DAG + P0g Pass 2
 
 ---
 
-## 第六部分：测试组织 + Git 管理
+## 第七部分：测试组织 + Git 管理
 
 **进入仓库：** `fixtures/zhu-fu/`、`fixtures/zhu-fu-variants/`、`packages/bench/src/`、`packages/bench/tests/`
 

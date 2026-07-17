@@ -6,24 +6,21 @@ import { Command } from 'commander';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
+  renderNovel,
+  validateNovel,
+  getProjectStatus,
+  diffEvent,
+  listEntities,
+  showEntity,
+  assembleNovel,
+  ReviewManager,
+  clearEventCache,
+  FsStorage,
   EntityMapper,
   InMemoryEntityRegistry,
   StateManager,
-  ResultAggregator,
-  ContextCompiler,
-  assembleNovel,
-  calculateISS,
-  detectAntiPatterns,
-  validateStrict,
-  RenderPipeline,
-  FsStorage,
-  buildAndWriteOutputs,
-  PluginLoader,
-  ValidatorRegistry,
-  ReviewManager,
-  clearEventCache,
 } from '@novalistically/core';
-import type { LLMProvider, AnalysisResult, PluginValidator, ReviewComment } from '@novalistically/core';
+import type { ReviewComment } from '@novalistically/core';
 import { runAll, runFunctionalBench, runPerformanceBench } from '@novalistically/bench';
 
 // ============================================================================
@@ -77,6 +74,7 @@ program
       'output',
       'reviews',
       'branches',
+      'rejected_proposals',
       '.nova/responses',
       '.nova/derived',
       '.nova/snapshots',
@@ -84,6 +82,27 @@ program
     for (const dir of dirs) {
       fs.mkdirSync(path.join(projectDir, dir), { recursive: true });
     }
+
+    // Create .gitkeep in rejected_proposals
+    fs.writeFileSync(path.join(projectDir, 'rejected_proposals', '.gitkeep'), '', 'utf-8');
+
+    // Write branch_points.yaml template
+    const branchPointsYaml = `# Branch Points
+# Define narrative branch points here.
+# Each branch point occurs at a specific event and offers choices.
+# branch_points:
+#   - id: BP1
+#     at_event: E5
+#     description: "The protagonist faces a critical decision"
+#     choices:
+#       - path: trust_ally
+#         branch_id: branch_a
+#         label: "Trust the ally"
+#       - path: go_alone
+#         branch_id: branch_b
+#         label: "Go alone"
+`;
+    fs.writeFileSync(path.join(projectDir, 'branches', 'branch_points.yaml'), branchPointsYaml, 'utf-8');
 
     // Write nova.yaml
     const novaYaml = `project: ${name}
@@ -173,107 +192,47 @@ No threads defined yet.
 program
   .command('validate')
   .description('Run all validators against the project')
-  .option('--strict', 'Enforce strict anti-laziness thresholds')
+  .option('--strict', 'Enforce strict ISS thresholds')
   .option('--event <eventId>', 'Validate a specific event only')
-  .action(async (options: { strict?: boolean; event?: string }) => {
+  .action((options: { strict?: boolean; event?: string }) => {
     const projectDir = ensureProjectDir();
 
-    const mapper = new EntityMapper(projectDir);
-    const data = mapper.loadProject();
-    const events = mapper.loadAllEvents(data.chapters);
-
-    if (events.length === 0) {
-      console.log('No events found. Create events in chapters/ and run validate again.');
-      return;
-    }
-
-    const registry = new InMemoryEntityRegistry();
-    registry.load(projectDir);
-
-    const snapshotsDir = path.join(projectDir, '.nova', 'snapshots');
-    const stateManager = new StateManager(snapshotsDir);
-    for (const event of events) {
-      stateManager.commit(event);
-    }
-    const state = stateManager.getCurrentState();
-
-    // Load plugins from project's plugins/ directory
-    const pluginLoader = new PluginLoader(new FsStorage());
-    const pluginDir = path.join(projectDir, 'plugins');
-    await pluginLoader.loadFromDirectory(pluginDir);
-
-    const validatorRegistry = new ValidatorRegistry();
-    const aggregator = new ResultAggregator(undefined, validatorRegistry.validators, stateManager.eventStore);
-    const overrides = data.config?.validatorOverrides;
+    const result = validateNovel(projectDir);
 
     if (options.event) {
-      // Validate single event
-      const targetEvent = events.find((e) => e.id === options.event);
-      if (!targetEvent) {
+      const vr = result.results.get(options.event);
+      if (!vr) {
         console.error(`Error: Event "${options.event}" not found.`);
         process.exit(1);
       }
-      const chapter = Math.max(1, Math.ceil(targetEvent.narrativeOrder / 3));
-      const result = aggregator.validate(targetEvent, state, registry, events, chapter, overrides);
-      printValidationResult(result);
-    } else {
-      // Validate all events
-      const results = aggregator.validateAll(events, state, registry, overrides);
+      printValidationResult(vr);
+      return;
+    }
 
-      let totalErrors = 0;
-      let totalWarnings = 0;
+    let totalErrors = 0;
+    let totalWarnings = 0;
 
-      for (const [eventId, result] of results) {
-        totalErrors += result.errors.length;
-        totalWarnings += result.warnings.length;
-        if (!result.passed || result.warnings.length > 0 || result.infos.length > 0) {
-          console.log(`\n--- ${eventId} ---`);
-          printValidationResult(result);
-        }
+    for (const [eventId, vr] of result.results) {
+      totalErrors += vr.errors.length;
+      totalWarnings += vr.warnings.length;
+      if (!vr.passed || vr.warnings.length > 0 || vr.infos.length > 0) {
+        console.log(`\n--- ${eventId} ---`);
+        printValidationResult(vr);
       }
+    }
 
-      console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-      console.log(`Validated ${results.size} events`);
-      console.log(`  Errors:   ${totalErrors}`);
-      console.log(`  Warnings: ${totalWarnings}`);
-      console.log(totalErrors === 0 ? '✅ All passed' : '❌ Has errors');
+    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+    console.log(`Validated ${result.results.size} events`);
+    console.log(`  Errors:   ${totalErrors}`);
+    console.log(`  Warnings: ${totalWarnings}`);
+    console.log(totalErrors === 0 ? '✅ All passed' : '❌ Has errors');
 
-      // ISS
-      if (options.strict || process.argv.includes('--strict')) {
-        const threads = data.worldInitialState?.threads ?? [];
-        const issResult = calculateISS({
-          projectDir,
-          entityRegistry: registry,
-          events,
-          threads: threads.map((t) => ({ id: t.id, name: t.name })),
-          rules: data.rules,
-        });
-
-        console.log(`\nISS: ${issResult.overall}% (target: ${issResult.target}%)`);
-        for (const dim of issResult.dimensions) {
-          const icon = dim.status === 'green' ? '✅' : dim.status === 'yellow' ? '⚠️' : '❌';
-          console.log(`  ${icon} ${dim.name}: ${dim.score}/${dim.max}`);
-        }
-
-        // Anti-patterns
-        const antiPatterns = detectAntiPatterns({
-          entityRegistry: registry,
-          events,
-          threads: threads.map((t) => ({ id: t.id, name: t.name })),
-        });
-        for (const ap of antiPatterns) {
-          console.log(`  ⚠️ Anti-pattern: ${ap.message}`);
-        }
-
-        // Strict validation
-        const strictIssues = validateStrict({
-          events,
-          entityRegistry: registry,
-          threads: threads,
-          rules: data.rules,
-        });
-        for (const issue of strictIssues) {
-          console.log(`  ❌ Strict: ${issue.message}`);
+    if (options.strict) {
+      const allGaps = result.iss.dimensions.flatMap((d) => d.gaps);
+      if (allGaps.length > 0) {
+        console.log(`\nISS gaps: ${allGaps.length}`);
+        for (const gap of allGaps) {
+          console.log(`  - ${gap.suggestion} (${gap.fixTarget})`);
         }
       }
     }
@@ -300,48 +259,18 @@ program
   .description('Show project status summary')
   .action(() => {
     const projectDir = ensureProjectDir();
+    const status = getProjectStatus(projectDir);
 
-    const mapper = new EntityMapper(projectDir);
-    const data = mapper.loadProject();
-    const events = mapper.loadAllEvents(data.chapters);
+    console.log(`\nSummary: ${status.summary.totalEvents} events, ${status.summary.renderedCount} rendered, ${status.summary.blockedCount} blocked`);
 
-    const registry = new InMemoryEntityRegistry();
-    registry.load(projectDir);
-
-    const snapshotsDir = path.join(projectDir, '.nova', 'snapshots');
-    const stateManager = new StateManager(snapshotsDir);
-    for (const event of events) {
-      stateManager.commit(event);
-    }
-    const state = stateManager.getCurrentState();
-
-    console.log(`\n📖 ${data.config?.title ?? 'Untitled'} — Project Status`);
-    console.log('━'.repeat(40));
-
-    // Progress
-    console.log('\n## Progress');
-    for (const [ch, chapter] of data.chapters) {
-      const completed = chapter.events.length;
-      console.log(`  Chapter ${ch}: ${chapter.metadata?.title ?? 'Untitled'} — ${completed} events`);
+    console.log('\n## Events');
+    for (const ev of status.events) {
+      console.log(`  ${ev.id}: ${ev.status} (chapter ${ev.chapter})${ev.wordCount ? `, ${ev.wordCount} words` : ''}`);
     }
 
-    // Threads
-    console.log('\n## Thread Status');
-    for (const [threadId, threadData] of Object.entries(state.threads)) {
-      const progress = `${threadData.progress}/${threadData.total}`;
-      const status = threadData.progress >= threadData.total ? '✅' :
-        threadData.progress > 0 ? '🔄' : '⏳';
-      console.log(`  ${status} ${threadId}: ${progress}`);
-    }
-
-    // Entities
-    console.log('\n## Entities');
-    const characters = registry.findByKind('character');
-    console.log(`  Characters: ${characters.length}`);
-    for (const c of characters) {
-      const loc = state.entities[c.id]?.['location'] ?? c.state['location'] ?? 'unknown';
-      const status = state.entities[c.id]?.['status'] ?? c.state['status'] ?? 'unknown';
-      console.log(`    - ${c.name} (${c.id}) — ${loc}, ${status}`);
+    console.log('\n## Thread Progress');
+    for (const t of status.threads) {
+      console.log(`  ${t.id}: ${t.progress}/${t.total}`);
     }
   });
 
@@ -353,13 +282,9 @@ program
   .action((options: { output?: string }) => {
     const projectDir = ensureProjectDir();
 
-    const mapper = new EntityMapper(projectDir);
-    const data = mapper.loadProject();
-
     const result = assembleNovel({
       projectDir,
       outputPath: options.output,
-      title: data.config?.title,
     });
 
     console.log(`✅ Novel assembled: ${result.wordCount} words, ${result.sceneCount} scenes`);
@@ -370,20 +295,14 @@ program
 const entityCmd = program.command('entity').description('Manage entities');
 
 entityCmd
-  .command('list')
-  .description('List all entities')
-  .option('--type <kind>', 'Filter by entity kind')
-  .action((options: { type?: string }) => {
+  .command('list [kind]')
+  .description('List entities (optionally filtered by kind)')
+  .action((kind?: string) => {
     const projectDir = ensureProjectDir();
-    const registry = new InMemoryEntityRegistry();
-    registry.load(projectDir);
+    const entities = listEntities(projectDir, kind);
 
-    const entities = options.type
-      ? registry.findByKind(options.type as any)
-      : registry.getAll();
-
-    for (const entity of entities) {
-      console.log(`  [${entity.kind}] ${entity.name} (${entity.id})`);
+    for (const e of entities) {
+      console.log(`  [${e.kind}] ${e.name || e.id} (${e.id})`);
     }
   });
 
@@ -392,20 +311,18 @@ entityCmd
   .description('Show entity details')
   .action((id: string) => {
     const projectDir = ensureProjectDir();
-    const registry = new InMemoryEntityRegistry();
-    registry.load(projectDir);
+    const entity = showEntity(projectDir, id);
 
-    const entity = registry.resolve(id);
     if (!entity) {
       console.error(`Entity "${id}" not found.`);
       process.exit(1);
     }
 
-    console.log(`\n${entity.name} (${entity.id})`);
+    console.log(`\n${entity.name || entity.id} (${entity.id})`);
     console.log(`Kind: ${entity.kind}`);
     console.log(`Definition: ${entity.definitionFile}`);
     console.log('\nState:');
-    for (const [key, value] of Object.entries(entity.state)) {
+    for (const [key, value] of Object.entries(entity.state as Record<string, unknown>)) {
       console.log(`  ${key}: ${JSON.stringify(value)}`);
     }
   });
@@ -535,148 +452,40 @@ program
   .action(async (eventId: string, options: { dryRun?: boolean; all?: boolean; model?: string }) => {
     const projectDir = ensureProjectDir();
 
-    const mapper = new EntityMapper(projectDir);
-    const data = mapper.loadProject();
-    const events = mapper.loadAllEvents(data.chapters);
-
-    const targetEvent = events.find((e) => e.id === eventId);
-    if (!targetEvent && !options.all) {
-      console.error(`Error: Event "${eventId}" not found.`);
-      process.exit(1);
-    }
-
-    const registry = new InMemoryEntityRegistry();
-    registry.load(projectDir);
-
-    const snapshotsDir = path.join(projectDir, '.nova', 'snapshots');
-    const stateManager = new StateManager(snapshotsDir);
-    for (const event of events) {
-      stateManager.commit(event);
-    }
-
-    // Build eventsFileMap with chapters for cache initialization
-    const eventsFileMap = new Map<string, { narrativeOrder: number; filePath: string; chapter: number }>();
-    for (const [ch, chapter] of data.chapters) {
-      for (const evFile of chapter.events) {
-        eventsFileMap.set(evFile.event, {
-          narrativeOrder: evFile.narrativeOrder,
-          filePath: evFile.filePath ?? '',
-          chapter: ch,
-        });
-      }
-    }
-
-    if (options.dryRun) {
-      // Dry-run: compile context and save prompt
-      const compiler = new ContextCompiler();
-      const state = stateManager.getStateAt(targetEvent!.narrativeOrder - 1);
-      const pkg = compiler.compile(targetEvent!, state, registry);
-      console.log(pkg.markdown);
-      const dryRunDir = path.join(projectDir, '.nova', 'dry-runs');
-      fs.mkdirSync(dryRunDir, { recursive: true });
-      const dryRunPath = path.join(dryRunDir, `${eventId}_prompt.md`);
-      fs.writeFileSync(dryRunPath, pkg.markdown, 'utf-8');
-      console.log(`\nDry-run prompt saved to: ${dryRunPath}`);
-      return;
-    }
-
-    // ---- Full render path ----
-
-    // Determine which events to render
-    const renderEvents = options.all
-      ? events.filter((e) => e.id !== 'system:genesis')
-      : events.filter((e) => e.id === eventId);
-
-    if (renderEvents.length === 0) {
-      console.error(`Error: Event "${eventId}" not found.`);
-      process.exit(1);
-    }
-
-    // Initialize LLM provider
-    const model = options.model ?? data.config?.defaultModel ?? 'claude-sonnet-4-20250514';
-    const apiKey = process.env['OPENCODE_API_KEY'] ?? '';
-    if (!apiKey) {
-      console.error('Error: OPENCODE_API_KEY environment variable not set.');
-      console.error('Set it in .env or export OPENCODE_API_KEY=your_key');
-      process.exit(1);
-    }
-    const baseUrl = process.env['OPENCODE_BASE_URL'] ?? 'http://127.0.0.1:25793';
-
-    let provider: LLMProvider;
-    if (apiKey.startsWith('ocg-')) {
-      const { OpencodeGoProvider } = await import('@novalistically/core');
-      provider = new OpencodeGoProvider({ apiKey, baseUrl });
-    } else {
-      const { OpencodeZenProvider } = await import('@novalistically/core');
-      provider = new OpencodeZenProvider({
-        apiKey: apiKey || process.env['OPENROUTER_API_KEY'] || '',
-        baseUrl: process.env['OPENROUTER_BASE_URL'] || baseUrl,
-      });
-    }
-
-    // Initialize RenderPipeline
-    const cacheDir = path.join(projectDir, '.nova', 'render-cache');
-    const storage = new FsStorage();
-    const pipeline = new RenderPipeline({
-      provider,
-      model,
-      cacheDir,
-      storage,
+    const result = await renderNovel({
+      projectDir,
+      model: options.model,
+      eventId: options.all ? undefined : eventId,
+      dryRun: options.dryRun,
     });
 
-    // Initialize cache
-    await pipeline.initCache(eventsFileMap, path.join(projectDir, 'definitions'));
-
-    // Build render jobs
-    const jobs: Array<{
-      event: any;
-      stateBefore: any;
-      context: any;
-      chapter: number;
-    }> = [];
-
-    for (const ev of renderEvents) {
-      // Find the chapter number for this event
-      let chapterNum = 1;
-      for (const [ch, chapter] of data.chapters) {
-        if (chapter.events.some((e) => e.event === ev.id)) {
-          chapterNum = ch;
-          break;
-        }
+    if (result.errors.length > 0 && result.results.length === 0) {
+      console.error('Render errors:');
+      for (const err of result.errors) {
+        console.error(`  ❌ ${err}`);
       }
-
-      const beforeState = stateManager.getStateAt(ev.narrativeOrder - 1);
-      const compiler = new ContextCompiler();
-      const pkg = compiler.compile(ev, beforeState, registry);
-
-      jobs.push({
-        event: ev,
-        stateBefore: beforeState,
-        context: pkg,
-        chapter: chapterNum,
-      });
+      process.exit(1);
     }
 
-    // Render
-    console.log(`Rendering ${jobs.length} scene(s) with model "${model}"...`);
-    try {
-      const results = await pipeline.renderAll(jobs);
-
-      // Write outputs
-      buildAndWriteOutputs(storage, projectDir, jobs, results);
-
-      // Report
-      for (const r of results) {
-        const status = r.errors.length > 0 ? '❌' : '✅';
-        console.log(`  ${status} ${r.eventId}: ${r.prose.split(/\s+/).filter(Boolean).length} words, cache=${r.cacheHit}`);
-        if (r.errors.length > 0) {
-          for (const e of r.errors) console.log(`       Error: ${e}`);
-        }
+    for (const r of result.results) {
+      const status = r.errors.length > 0 ? '❌' : '✅';
+      if (options.dryRun) {
+        console.log(`  ${status} ${r.eventId}: Dry-run (saved to .nova/dry-runs/)`);
+      } else {
+        console.log(`  ${status} ${r.eventId}: ${r.wordCount} words, cache=${r.cacheHit}`);
       }
+      for (const e of r.errors) console.log(`       Error: ${e}`);
+    }
+
+    if (result.errors.length > 0) {
+      console.error('\nPipeline errors:');
+      for (const err of result.errors) {
+        console.error(`  ❌ ${err}`);
+      }
+    }
+
+    if (!options.dryRun && result.results.length > 0) {
       console.log(`\nDone. Output written to scenes/`);
-    } catch (err) {
-      console.error(`Render failed: ${(err as Error).message}`);
-      process.exit(1);
     }
   });
 
@@ -686,52 +495,19 @@ program
   .description('Show state changes for an event')
   .action((eventId: string) => {
     const projectDir = ensureProjectDir();
+    const result = diffEvent(projectDir, eventId);
 
-    const mapper = new EntityMapper(projectDir);
-    const data = mapper.loadProject();
-    const events = mapper.loadAllEvents(data.chapters);
-
-    const targetEvent = events.find((e) => e.id === eventId);
-    if (!targetEvent) {
+    if (!result) {
       console.error(`Error: Event "${eventId}" not found.`);
       process.exit(1);
     }
 
-    const snapshotsDir = path.join(projectDir, '.nova', 'snapshots');
-    const stateManager = new StateManager(snapshotsDir);
-    for (const event of events) {
-      stateManager.commit(event);
-    }
-
-    const beforeState = stateManager.getStateAt(targetEvent.narrativeOrder - 1);
-    const afterState = stateManager.getStateAt(targetEvent.narrativeOrder);
-
-    console.log(`\nDiff: ${eventId} — "${targetEvent.title}"`);
+    console.log(`\nChanges: ${result.changed.length} attributes`);
     console.log('━'.repeat(50));
-
-    // Show preconditions
-    console.log('\n## Preconditions:');
-    for (const pc of targetEvent.preconditions) {
-      const before = beforeState.entities[pc.entityId]?.[pc.attribute];
-      console.log(`  ${pc.entityId}.${pc.attribute}: ${JSON.stringify(before)}`);
-    }
-
-    // Show postcondition changes
-    console.log('\n## State Changes:');
-    for (const pc of targetEvent.postconditions) {
-      const before = beforeState.entities[pc.entityId]?.[pc.attribute];
-      const after = afterState.entities[pc.entityId]?.[pc.attribute];
-      console.log(`  ${pc.entityId}.${pc.attribute}:`);
-      console.log(`    before: ${JSON.stringify(before)}`);
-      console.log(`    after:  ${JSON.stringify(after)}`);
-    }
-
-    // Show thread progress
-    if (targetEvent.threadProgress.length > 0) {
-      console.log('\n## Thread Progress:');
-      for (const tp of targetEvent.threadProgress) {
-        console.log(`  ${tp.thread}: ${tp.progressAfter}/${tp.progressTotal} — ${tp.advancement}`);
-      }
+    for (const key of result.changed) {
+      console.log(`  ${key}:`);
+      console.log(`    before: ${JSON.stringify(result.before[key])}`);
+      console.log(`    after:  ${JSON.stringify(result.after[key])}`);
     }
   });
 

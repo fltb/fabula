@@ -84,7 +84,7 @@ export { PluginLoader, ValidatorRegistry } from './plugin/index.js';
 export type { PluginValidator } from './plugin/index.js';
 
 // Storage
-export { FsStorage, MemoryStorage } from './storage/index.ts';
+export { FsStorage } from './storage/index.ts';
 export type { Storage, DirEntry } from './storage/index.ts';
 
 // AI
@@ -95,24 +95,32 @@ export type {
   CompletionResponse,
 } from './ai/index.ts';
 export { LLMError } from './ai/index.ts';
-export { MockProvider, OpencodeZenProvider, OpencodeGoProvider } from './ai/index.ts';
-export { OPENCODE_GO_MODELS } from './ai/index.ts';
 export { buildSceneRenderPrompt, buildThreadStatusPrompt, buildProsePrompt, buildAnalysisPrompt } from './ai/index.ts';
 export type { MockProviderOptions, OpencodeZenOptions, OpencodeGoOptions, OpencodeGoModel } from './ai/index.ts';
 export type { SceneRenderInput, ThreadStatusInput, ProseOnlyInput, RenderAnalysisInput } from './ai/index.ts';
 
 // Cache
-export {
-  computeCacheKeys,
-  getCachedRender,
-  setCachedRender,
-  clearRenderCache,
-  clearEventCache,
-} from './cache/render-cache.js';
+export { clearEventCache } from './cache/render-cache.js';
 
 // Pipeline
-export { RenderPipeline, ConcurrencyPool, buildAndWriteOutputs } from './pipeline/index.js';
+export { RenderPipeline, buildAndWriteOutputs } from './pipeline/index.js';
 export type { RenderJob, RenderSceneResult, RenderPipelineOptions } from './pipeline/index.js';
 
 // Bench (functional + performance) is in @novalistically/bench, NOT core.
 // Bench calls core to do measurements; bench itself is not part of core.
+
+// API — Orchestration functions (public API)
+export {
+  renderNovel,
+  validateNovel,
+  getProjectStatus,
+  diffEvent,
+  listEntities,
+  showEntity,
+} from './api.js';
+export type {
+  RenderNovelOptions,
+  RenderNovelResult,
+  ProjectStatusResult,
+  DiffResult,
+} from './api.js';

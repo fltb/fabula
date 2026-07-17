@@ -118,7 +118,6 @@ export type {
   ThreadStatus,
   RenderRequest,
   FinalPrompt,
-  ScribeOutput,
 } from './context.js';
 
 export type {
@@ -146,3 +145,9 @@ export type {
   SceneMetadata,
   ProjectConfig,
 } from './chapter.js';
+
+export type {
+  MergeConflict,
+  MergeConflictReport,
+  SceneQuality,
+} from './merge.js';

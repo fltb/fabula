@@ -22,7 +22,7 @@ import { knowledgeDefinitionSchema, knowledgeEventSchema } from './knowledge.js'
 import { worldInitialStateSchema } from './state-initial.js';
 import { chapterMetadataSchema, sceneMetadataSchema } from './chapter.js';
 import { projectConfigSchema } from './project.js';
-import { branchPointsFileSchema } from './branch.js';
+import { branchPointsFileSchema } from './branch-points.js';
 
 import { analysisResultSchema, parseAnalysisJSON } from './analysis.js';
 

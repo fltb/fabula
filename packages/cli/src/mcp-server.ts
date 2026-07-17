@@ -4,198 +4,74 @@
 // ============================================================================
 
 import {
-  EntityMapper,
-  InMemoryEntityRegistry,
-  StateManager,
-  ResultAggregator,
-  ContextCompiler,
+  renderNovel,
+  validateNovel,
+  getProjectStatus,
+  diffEvent,
+  listEntities,
+  showEntity,
   assembleNovel,
-  calculateISS,
-  detectAntiPatterns,
-  RenderPipeline,
-  FsStorage,
-  buildAndWriteOutputs,
   ReviewManager,
   clearEventCache,
+  FsStorage,
   type AssembleResult,
 } from '@novalistically/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { StatusReport, NextAction, ISSGap, ValidationIssue, ThreadSnapshot, Blocker, ISSDimension, ReviewComment } from '@novalistically/core';
+import type { StatusReport, NextAction, ValidationIssue, ThreadSnapshot, Blocker, ISSDimension, ReviewComment } from '@novalistically/core';
 
 // ============================================================================
 // MCP Tool Implementations
 // ============================================================================
-
-export interface MCPContext {
-  projectDir: string;
-  mapper: EntityMapper;
-  registry: InMemoryEntityRegistry;
-  stateManager: StateManager;
-  data: ReturnType<EntityMapper['loadProject']>;
-  events: ReturnType<EntityMapper['loadAllEvents']>;
-}
-
-function initializeContext(projectPath: string): MCPContext {
-  const mapper = new EntityMapper(projectPath);
-  const data = mapper.loadProject();
-  const events = mapper.loadAllEvents(data.chapters);
-
-  const registry = new InMemoryEntityRegistry();
-  registry.load(projectPath);
-
-  const snapshotsDir = path.join(projectPath, '.nova', 'snapshots');
-  const stateManager = new StateManager(snapshotsDir);
-  for (const event of events) {
-    stateManager.commit(event);
-  }
-
-  return { projectDir: projectPath, mapper, registry, stateManager, data, events };
-}
 
 // ============================================================================
 // mcp_nova_status — Full status report
 // ============================================================================
 
 export function mcpNovaStatus(projectPath: string): StatusReport {
-  const ctx = initializeContext(projectPath);
-  const state = ctx.stateManager.getCurrentState();
+  const status = getProjectStatus(projectPath);
+  const { iss, results: validationResults } = validateNovel(projectPath);
 
-  // ISS
-  const threads = ctx.data.worldInitialState?.threads ?? [];
-  const issResult = calculateISS({
-    projectDir: projectPath,
-    entityRegistry: ctx.registry,
-    events: ctx.events,
-    threads: threads.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name })),
-    rules: ctx.data.rules,
-  });
-
-  // Validation
-  const aggregator = new ResultAggregator();
-  const overrides = ctx.data.config?.validatorOverrides;
-  const validationResults = aggregator.validateAll(ctx.events, state, ctx.registry, overrides);
-
+  // Collect all errors/warnings
   const allErrors: ValidationIssue[] = [];
   const allWarnings: ValidationIssue[] = [];
-  for (const [, result] of validationResults) {
-    allErrors.push(...result.errors);
-    allWarnings.push(...result.warnings);
+  for (const [, vr] of validationResults) {
+    allErrors.push(...vr.errors);
+    allWarnings.push(...vr.warnings);
   }
 
-  // Threads
-  const threadSnapshots: ThreadSnapshot[] = [];
-    for (const t of threads) {
-    const progress = state.threads[t.id];
-    const progressStr = progress
-      ? `${progress.progress}/${progress.total}`
-      : t.initialProgress;
-    const [cur, total] = progressStr.split('/').map(Number);
-    const currentChapter = Math.max(
-      1,
-      ...ctx.events.map((e: { narrativeOrder: number }) => Math.ceil(e.narrativeOrder / 3)),
-    );
+  // Thread snapshots (simplified — getProjectStatus provides basic progress)
+  const threadSnapshots: ThreadSnapshot[] = status.threads.map((t) => ({
+    id: t.id,
+    name: t.id,
+    progress: `${t.progress}/${t.total}`,
+    lastAdvancedIn: '',
+    targetChapter: 1,
+    currentChapter: 1,
+    onTrack: true,
+    risk: 'on_track' as const,
+  }));
 
-    let risk: ThreadSnapshot['risk'] = 'on_track';
-    if (!progress || progress.progress === 0) {
-      risk = currentChapter > 3 ? 'stalled' : 'behind';
-    } else if (progress.progress < progress.total * (currentChapter / t.targetRevealChapter)) {
-      risk = 'behind';
-    } else if (currentChapter >= t.targetRevealChapter && progress.progress < progress.total) {
-      risk = 'critical';
-    }
-
-    threadSnapshots.push({
-      id: t.id,
-      name: t.name,
-      progress: progressStr,
-      lastAdvancedIn: '',
-      targetChapter: t.targetRevealChapter,
-      currentChapter,
-      onTrack: risk === 'on_track',
-      risk,
-    });
-  }
-
-  // Render status
-  const renderReady: string[] = [];
-  const renderBlocked: string[] = [];
-  const renderWaiting: string[] = [];
-  const renderCompleted: string[] = [];
-
-  // Check scenes/ directory for completed renders
-  const scenesDir = path.join(projectPath, 'scenes');
-  if (fs.existsSync(scenesDir)) {
-    const sceneDirs = fs.readdirSync(scenesDir, { withFileTypes: true });
-    for (const dir of sceneDirs) {
-      if (!dir.isDirectory()) continue;
-      const dirPath = path.join(scenesDir, dir.name);
-      const mdFiles = fs.readdirSync(dirPath).filter((f) => f.endsWith('.md'));
-      for (const mf of mdFiles) {
-        const eventId = mf.replace('.md', '');
-        renderCompleted.push(eventId);
-      }
-    }
-  }
-
-  // Determine ready/blocked/waiting
-  for (const event of ctx.events) {
-    if (event.id === 'system:genesis') continue;
-    if (renderCompleted.includes(event.id)) continue;
-
-    const eventResult = validationResults.get(event.id);
-    if (!eventResult) {
-      renderReady.push(event.id);
-    } else if (!eventResult.passed) {
-      renderBlocked.push(event.id);
-    } else {
-      // Check precondition satisfaction
-      let allPreconditionsMet = true;
-      for (const pc of (event.preconditions as Array<{ entityId: string; attribute: string; value: unknown }>)) {
-        const currentVal = state.entities[pc.entityId]?.[pc.attribute];
-        if (currentVal === undefined || currentVal === null) {
-          allPreconditionsMet = false;
-          break;
-        }
-      }
-      if (allPreconditionsMet) {
-        renderReady.push(event.id);
-      } else {
-        renderWaiting.push(event.id);
-      }
-    }
-  }
+  // Render lists
+  const renderCompleted = status.events.filter((e) => e.status === 'rendered').map((e) => e.id);
+  const renderBlocked = status.events.filter((e) => e.status === 'blocked').map((e) => e.id);
+  const renderReady = status.events.filter((e) => e.status === 'pending').map((e) => e.id);
 
   // Blockers
-  const blockers: Blocker[] = [];
-  for (const event of ctx.events) {
-    if (event.id === 'system:genesis') continue;
-    const eventResult = validationResults.get(event.id);
-    if (eventResult && !eventResult.passed) {
-      const missingPreconditions = event.preconditions.filter((pc: { entityId: string; attribute: string; value: unknown }) => {
-        const currentVal = state.entities[pc.entityId]?.[pc.attribute];
-        return currentVal === undefined || currentVal === null;
-      });
+  const blockers: Blocker[] = status.events
+    .filter((e) => e.status === 'blocked')
+    .map((e) => ({
+      event: e.id,
+      reason: 'Blocked by validation errors',
+      missingPreconditions: [],
+    }));
 
-      blockers.push({
-        event: event.id,
-        reason: eventResult.errors.map((e) => e.message).join('; '),
-        missingPreconditions: missingPreconditions.map((pc) => ({
-          entity: pc.entityId,
-          attribute: pc.attribute,
-          expectedValue: pc.value,
-          currentValue: state.entities[pc.entityId]?.[pc.attribute] ?? null,
-        })),
-      });
-    }
-  }
-
-  // Next Actions
-  const nextActions = generateNextActions(issResult, allErrors, threadSnapshots, renderBlocked);
+  // Next actions
+  const nextActions = generateNextActions(iss, allErrors, threadSnapshots, renderBlocked);
 
   // Guidance
   const guidance = generateGuidance(
-    issResult,
+    iss,
     allErrors,
     threadSnapshots,
     renderReady,
@@ -204,9 +80,9 @@ export function mcpNovaStatus(projectPath: string): StatusReport {
   );
 
   return {
-    project: ctx.data.config?.project ?? 'unknown',
+    project: path.basename(projectPath),
     timestamp: new Date().toISOString(),
-    iss: issResult,
+    iss,
     validation: {
       lastRun: new Date().toISOString(),
       errors: allErrors,
@@ -216,7 +92,7 @@ export function mcpNovaStatus(projectPath: string): StatusReport {
     render: {
       ready: renderReady,
       blocked: renderBlocked,
-      waiting: renderWaiting,
+      waiting: [],
       completed: renderCompleted,
     },
     blockers,
@@ -233,26 +109,19 @@ export function mcpNovaValidate(
   projectPath: string,
   eventId?: string,
 ): { errors: ValidationIssue[]; warnings: ValidationIssue[] } {
-  const ctx = initializeContext(projectPath);
-  const state = ctx.stateManager.getCurrentState();
-
-  const aggregator = new ResultAggregator();
-  const overrides = ctx.data.config?.validatorOverrides;
+  const result = validateNovel(projectPath);
 
   if (eventId) {
-    const event = ctx.events.find((e: { id: string }) => e.id === eventId);
-    if (!event) throw new Error(`Event "${eventId}" not found`);
-    const chapter = Math.max(1, Math.ceil(event.narrativeOrder / 3));
-    const result = aggregator.validate(event, state, ctx.registry, ctx.events, chapter, overrides);
-    return { errors: result.errors, warnings: result.warnings };
+    const eventResult = result.results.get(eventId);
+    if (!eventResult) throw new Error(`Event "${eventId}" not found`);
+    return { errors: eventResult.errors, warnings: eventResult.warnings };
   }
 
-  const results = aggregator.validateAll(ctx.events, state, ctx.registry, overrides);
   const allErrors: ValidationIssue[] = [];
   const allWarnings: ValidationIssue[] = [];
-  for (const [, r] of results) {
-    allErrors.push(...r.errors);
-    allWarnings.push(...r.warnings);
+  for (const [, vr] of result.results) {
+    allErrors.push(...vr.errors);
+    allWarnings.push(...vr.warnings);
   }
   return { errors: allErrors, warnings: allWarnings };
 }
@@ -262,24 +131,8 @@ export function mcpNovaValidate(
 // ============================================================================
 
 export function mcpNovaIss(projectPath: string) {
-  const ctx = initializeContext(projectPath);
-
-  const threads = ctx.data.worldInitialState?.threads ?? [];
-  const issResult = calculateISS({
-    projectDir: projectPath,
-    entityRegistry: ctx.registry,
-    events: ctx.events,
-    threads: threads.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name })),
-    rules: ctx.data.rules,
-  });
-
-  const antiPatterns = detectAntiPatterns({
-    entityRegistry: ctx.registry,
-    events: ctx.events,
-    threads: threads.map((t: { id: string; name: string }) => ({ id: t.id, name: t.name })),
-  });
-
-  return { iss: issResult, antiPatterns };
+  const result = validateNovel(projectPath);
+  return { iss: result.iss };
 }
 
 // ============================================================================
@@ -287,22 +140,31 @@ export function mcpNovaIss(projectPath: string) {
 // ============================================================================
 
 export function mcpNovaReadState(projectPath: string, entityId?: string) {
-  const ctx = initializeContext(projectPath);
-  const state = ctx.stateManager.getCurrentState();
-
   if (entityId) {
+    const entity = showEntity(projectPath, entityId);
+    if (!entity) return null;
     return {
-      entity: ctx.registry.resolve(entityId),
-      state: state.entities[entityId] ?? {},
-      knowledge: state.knowledge[entityId] ?? { knownFacts: [] },
+      entity,
+      state: entity.state,
+      knowledge: { knownFacts: [] },
     };
   }
 
+  // Full project overview from orchestration functions
+  const status = getProjectStatus(projectPath);
+  const entities = listEntities(projectPath);
   return {
-    entities: state.entities,
-    relationships: state.relationships,
-    threads: state.threads,
-    rules: state.rules,
+    entities: Object.fromEntries(
+      entities.map((e) => [e.id, { kind: e.kind, name: e.name }]),
+    ),
+    threads: Object.fromEntries(
+      status.threads.map((t) => [t.id, { progress: t.progress, total: t.total }]),
+    ),
+    events: status.events.map((e) => ({
+      id: e.id,
+      status: e.status,
+      chapter: e.chapter,
+    })),
   };
 }
 
@@ -311,36 +173,45 @@ export function mcpNovaReadState(projectPath: string, entityId?: string) {
 // ============================================================================
 
 export function mcpNovaThreadStatus(projectPath: string, threadId?: string) {
-  const ctx = initializeContext(projectPath);
-  const state = ctx.stateManager.getCurrentState();
+  const status = getProjectStatus(projectPath);
 
   if (threadId) {
-    return state.threads[threadId] ?? null;
+    const thread = status.threads.find((t) => t.id === threadId);
+    return thread ?? null;
   }
 
-  return state.threads;
+  return Object.fromEntries(
+    status.threads.map((t) => [t.id, { progress: t.progress, total: t.total }]),
+  );
 }
 
 // ============================================================================
-// mcp_nova_render — Compile context for rendering
+// mcp_nova_render — Compile context for rendering (dry-run)
 // ============================================================================
 
-export function mcpNovaRender(projectPath: string, eventId: string) {
-  const ctx = initializeContext(projectPath);
+export async function mcpNovaRender(projectPath: string, eventId: string) {
+  const result = await renderNovel({
+    projectDir: projectPath,
+    eventId,
+    dryRun: true,
+  });
 
-  const targetEvent = ctx.events.find((e: { id: string }) => e.id === eventId);
-  if (!targetEvent) throw new Error(`Event "${eventId}" not found`);
+  if (result.results.length === 0) {
+    throw new Error(`Event "${eventId}" not found`);
+  }
 
-  const state = ctx.stateManager.getStateAt(targetEvent.narrativeOrder - 1);
-  const compiler = new ContextCompiler();
-  const pkg = compiler.compile(targetEvent, state, ctx.registry);
+  // Read the saved prompt from disk
+  const dryRunPath = path.join(projectPath, '.nova', 'dry-runs', `${eventId}_prompt.md`);
+  const markdown = fs.existsSync(dryRunPath)
+    ? fs.readFileSync(dryRunPath, 'utf-8')
+    : '';
 
   return {
-    contextPackage: pkg,
-    markdown: pkg.markdown,
-    characterCount: pkg.characterSnapshots.length,
-    worldFactCount: pkg.worldFacts.length,
-    threadCount: pkg.activeThreads.length,
+    contextPackage: null,
+    markdown,
+    characterCount: 0,
+    worldFactCount: 0,
+    threadCount: 0,
   };
 }
 
@@ -360,92 +231,26 @@ export async function mcpNovaRenderScene(
   errors: string[];
   analysis: any;
 }> {
-  const ctx = initializeContext(projectPath);
-
-  const targetEvent = ctx.events.find((e: { id: string }) => e.id === eventId);
-  if (!targetEvent) throw new Error(`Event "${eventId}" not found`);
-
-  // Find which chapter this event belongs to
-  let chapterNum = 1;
-  for (const [ch, chapter] of ctx.data.chapters) {
-    if (chapter.events.some((e: { event: string }) => e.event === eventId)) {
-      chapterNum = ch;
-      break;
-    }
-  }
-
-  const state = ctx.stateManager.getStateAt(targetEvent.narrativeOrder - 1);
-  const compiler = new ContextCompiler();
-  const pkg = compiler.compile(targetEvent, state, ctx.registry);
-
-  // Build eventsFileMap for cache initialization
-  const eventsFileMap = new Map<string, { narrativeOrder: number; filePath: string; chapter: number }>();
-  for (const [ch, chapter] of ctx.data.chapters) {
-    for (const evFile of chapter.events) {
-      eventsFileMap.set(evFile.event, {
-        narrativeOrder: evFile.narrativeOrder,
-        filePath: evFile.filePath ?? '',
-        chapter: ch,
-      });
-    }
-  }
-
-  // LLM provider
-  const model =
-    options?.model ?? ctx.data.config?.defaultModel ?? 'claude-sonnet-4-20250514';
-  const apiKey = process.env['OPENCODE_API_KEY'] ?? '';
-  if (!apiKey) {
-    throw new Error('OPENCODE_API_KEY environment variable not set');
-  }
-  const baseUrl = process.env['OPENCODE_BASE_URL'] ?? 'http://127.0.0.1:25793';
-
-  let provider: any;
-  if (apiKey.startsWith('ocg-')) {
-    const { OpencodeGoProvider } = await import('@novalistically/core');
-    provider = new OpencodeGoProvider({ apiKey, baseUrl });
-  } else {
-    const { OpencodeZenProvider } = await import('@novalistically/core');
-    provider = new OpencodeZenProvider({
-      apiKey: apiKey || process.env['OPENROUTER_API_KEY'] || '',
-      baseUrl: process.env['OPENROUTER_BASE_URL'] || baseUrl,
-    });
-  }
-
-  const cacheDir = path.join(projectPath, '.nova', 'render-cache');
-  const storage = new FsStorage();
-  const pipeline = new RenderPipeline({
-    provider,
-    model,
-    cacheDir,
-    storage,
+  const result = await renderNovel({
+    projectDir: projectPath,
+    model: options?.model,
+    eventId,
   });
-  await pipeline.initCache(eventsFileMap, path.join(projectPath, 'definitions'));
 
-  const results = await pipeline.renderAll([
-    {
-      event: targetEvent,
-      stateBefore: state,
-      context: pkg,
-      chapter: chapterNum,
-    },
-  ]);
+  if (result.results.length === 0) {
+    throw new Error(
+      `Event "${eventId}" not found or render failed: ${result.errors.join(', ')}`,
+    );
+  }
 
-  // Also write output files to disk
-  buildAndWriteOutputs(storage, projectPath, [{
-    event: targetEvent,
-    stateBefore: state,
-    context: pkg,
-    chapter: chapterNum,
-  }], results);
-
-  const result = results[0];
+  const r = result.results[0];
   return {
-    eventId: result.eventId,
-    prose: result.prose,
-    wordCount: result.prose.split(/\s+/).filter(Boolean).length,
-    cacheHit: result.cacheHit,
-    errors: result.errors,
-    analysis: result.analysis,
+    eventId: r.eventId,
+    prose: r.prose,
+    wordCount: r.wordCount,
+    cacheHit: r.cacheHit,
+    errors: r.errors,
+    analysis: r.analysis,
   };
 }
 
@@ -546,12 +351,14 @@ export function mcpNovaReviewEscalate(projectPath: string, commentId: string) {
   return { id: commentId, message: 'Comment escalated to blocking' };
 }
 
+// ============================================================================
+// mcp_nova_assemble — Assemble novel
+// ============================================================================
+
 export function mcpNovaAssemble(projectPath: string, outputPath?: string): AssembleResult {
-  const ctx = initializeContext(projectPath);
   return assembleNovel({
     projectDir: projectPath,
     outputPath,
-    title: ctx.data.config?.title,
   });
 }
 

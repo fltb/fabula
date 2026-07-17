@@ -90,7 +90,6 @@ export class OpencodeGoProvider implements LLMProvider {
   private readonly defaultModel: string;
   private readonly defaultHeaders: Record<string, string>;
   private readonly timeoutMs: number;
-  private static warned = false;
 
   constructor(options: OpencodeGoOptions = {}) {
     this.apiKey = options.apiKey ?? process.env.OPENCODE_GO_API_KEY ?? '';
@@ -195,30 +194,150 @@ export class OpencodeGoProvider implements LLMProvider {
   }
 
   /**
-   * Synchronous-style streaming wrapper.
+   * Real SSE streaming via fetch ReadableStream.
    *
-   * The underlying opencode-go API does not support true server-sent event
-   * streaming.  This method calls the single-shot `complete()` and emits
-   * the entire response via `onChunk()` in one invocation.
+   * Parses OpenAI-compatible SSE chunks (data: {...}) and calls onChunk
+   * for each delta.content as it arrives.  Accumulates the full response
+   * content and returns a CompletionResponse at the end.
    *
-   * If `request.signal` is provided, it is forwarded to `complete()` which
-   * combines it with the internal timeout signal via `AbortSignal.any()`.
+   * If `request.signal` is provided, it is passed as the fetch `signal`
+   * option alongside the internal timeout signal via AbortSignal.any().
    */
   async completeStream(
     request: CompletionRequest,
     onChunk: (chunk: string) => void,
   ): Promise<CompletionResponse> {
-    if (!OpencodeGoProvider.warned) {
-      OpencodeGoProvider.warned = true;
-      console.warn(
-        '[opencode-go] completeStream() is a synchronous wrapper — ' +
-        'the underlying API does not support true streaming. ' +
-        'The full response is buffered and emitted as a single chunk.',
+    const url = `${this.baseUrl}/chat/completions`;
+    const body = {
+      model: request.model ?? this.defaultModel,
+      messages: request.messages.map((m: Message) => ({ role: m.role, content: m.content })),
+      ...(request.temperature !== undefined ? { temperature: request.temperature } : {}),
+      ...(request.maxTokens !== undefined ? { max_tokens: request.maxTokens } : {}),
+      ...(request.stop ? { stop: request.stop } : {}),
+      stream: true,
+    };
+
+    // Combine timeout with any external abort signal from the request
+    const signals: AbortSignal[] = [];
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    signals.push(controller.signal);
+
+    if (request.signal) {
+      signals.push(request.signal);
+    }
+
+    const combinedSignal = signals.length > 1
+      ? AbortSignal.any(signals)
+      : controller.signal;
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+          ...this.defaultHeaders,
+        },
+        body: JSON.stringify(body),
+        signal: combinedSignal,
+      });
+    } catch (err) {
+      clearTimeout(timer);
+      throw new LLMError(
+        `Network error calling ${url}: ${(err as Error).message}`,
+        { provider: this.name, cause: err },
       );
     }
-    const result = await this.complete(request);
-    onChunk(result.content);
-    return result;
+    clearTimeout(timer);
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new LLMError(
+        `opencode-go returned ${response.status}: ${text || response.statusText}`,
+        { statusCode: response.status, provider: this.name },
+      );
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new LLMError(
+        'Response body is not readable (no reader available)',
+        { provider: this.name },
+      );
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullContent = '';
+    let finishReason: string | undefined;
+    let responseId: string | undefined;
+    let responseModel: string | undefined;
+
+    const readLoop = async (): Promise<void> => {
+      while (true) {
+        const { done, value } = await reader!.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          if (trimmed === 'data: [DONE]') {
+            finishReason = 'stop';
+            continue;
+          }
+          if (!trimmed.startsWith('data: ')) continue;
+
+          try {
+            const json = JSON.parse(trimmed.slice(6));
+            const choice = json.choices?.[0];
+            if (!choice) continue;
+
+            // Capture metadata from the first chunk that has it
+            if (!responseId && json.id) responseId = json.id;
+            if (!responseModel && json.model) responseModel = json.model;
+
+            const delta = choice.delta?.content || '';
+            if (delta) {
+              fullContent += delta;
+              onChunk(delta);
+            }
+
+            if (choice.finish_reason) {
+              finishReason = choice.finish_reason;
+            }
+          } catch {
+            // Skip malformed SSE lines
+          }
+        }
+      }
+    };
+
+    try {
+      await readLoop();
+    } catch (err) {
+      throw new LLMError(
+        `Stream read error: ${(err as Error).message}`,
+        { provider: this.name, cause: err },
+      );
+    }
+
+    return {
+      id: responseId ?? `stream-${Date.now()}`,
+      model: responseModel ?? this.defaultModel,
+      content: fullContent,
+      usage: {
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+      },
+      finishReason: finishReason ?? 'stop',
+    };
   }
 }
 

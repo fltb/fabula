@@ -103,22 +103,4 @@ export interface FinalPrompt {
   userPrompt: string;
 }
 
-export interface ScribeOutput {
-  prose: string;
-  newFacts: Array<{
-    entity: string;
-    attribute: string;
-    value: unknown;
-    confidence: number;
-  }>;
-  threadProgress?: Array<{
-    thread: string;
-    advancement: string;
-    progressAfter: number;
-  }>;
-  foreshadowingPlanted?: Array<{
-    id: string;
-    hint: string;
-    targetRevealChapter: number;
-  }>;
-}
+

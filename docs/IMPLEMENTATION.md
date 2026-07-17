@@ -1,5 +1,7 @@
 # Novalistically — 实现指南
 
+> ⚠️ **历史参考文档。** 本文档从 PROJECT.md 提炼的开发路线图，部分内容已过时。当前活跃的设计文档为 `bench-rewrite-design.md`（索引）和 `bench-rewrite-full.md`（完整规格）。
+
 > 从 PROJECT.md 提炼的开发路线图。读这个开始写代码。
 
 ---

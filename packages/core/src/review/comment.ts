@@ -54,3 +54,22 @@ export function address(comments: ReviewComment[], commentId: string): void {
     comment.status = 'addressed';
   }
 }
+
+/** Reopen a resolved/addressed/wontfix comment */
+export function reopen(comments: ReviewComment[], commentId: string): void {
+  const comment = comments.find((c) => c.id === commentId);
+  if (comment) {
+    comment.status = 'open';
+    comment.resolvedAt = undefined;
+    comment.resolvedBy = undefined;
+  }
+}
+
+/** Escalate a comment's severity to 'blocking' */
+export function escalate(comments: ReviewComment[], commentId: string): void {
+  const comment = comments.find((c) => c.id === commentId);
+  if (comment) {
+    comment.severity = 'blocking';
+    comment.status = 'open';
+  }
+}

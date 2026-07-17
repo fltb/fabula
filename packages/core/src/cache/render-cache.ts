@@ -174,3 +174,22 @@ export function clearRenderCache(cacheDir: string, storage: Storage): void {
     }
   }
 }
+
+/**
+ * Delete cached data for a single event.
+ * This triggers a cache-miss on the next render.
+ */
+export function clearEventCache(
+  cacheDir: string,
+  eventId: string,
+  storage: Storage,
+): void {
+  const eventCacheDir = path.join(cacheDir, eventId);
+  if (storage.exists(eventCacheDir)) {
+    try {
+      storage.removeAll(eventCacheDir);
+    } catch {
+      // ignore — best-effort invalidation
+    }
+  }
+}

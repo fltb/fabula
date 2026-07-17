@@ -19,6 +19,8 @@ export interface RenderAnalysisInput {
   event: NarrativeEvent;
   prose: string;
   context: ContextPackage;
+  /** Previous validation error messages for self-correction context */
+  previousErrors?: string[];
 }
 
 /**
@@ -118,8 +120,21 @@ export function buildAnalysisPrompt(input: RenderAnalysisInput): Message[] {
     ),
     '```',
     '',
-    'Output ONLY the JSON object. No preamble, no explanation.',
   ];
+
+  if (input.previousErrors && input.previousErrors.length > 0) {
+    userParts.push(
+      '',
+      '## Previous Validation Errors',
+      'The previous rendering was flagged for these issues. Re-evaluate whether the current prose has addressed them:',
+      ...input.previousErrors.map((e) => `- ${e}`),
+    );
+  }
+
+  userParts.push(
+    '',
+    'Output ONLY the JSON object. No preamble, no explanation.',
+  );
 
   return [
     { role: 'system', content: sys },

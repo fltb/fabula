@@ -15,14 +15,15 @@ import {
   calculateISS,
   detectAntiPatterns,
   validateStrict,
-  PostRenderValidator,
   RenderPipeline,
   FsStorage,
   buildAndWriteOutputs,
   PluginLoader,
   ValidatorRegistry,
+  ReviewManager,
+  clearEventCache,
 } from '@novalistically/core';
-import type { LLMProvider, AnalysisResult, PluginValidator } from '@novalistically/core';
+import type { LLMProvider, AnalysisResult, PluginValidator, ReviewComment } from '@novalistically/core';
 import { runAll, runFunctionalBench, runPerformanceBench } from '@novalistically/bench';
 
 // ============================================================================
@@ -392,6 +393,121 @@ entityCmd
     console.log('\nState:');
     for (const [key, value] of Object.entries(entity.state)) {
       console.log(`  ${key}: ${JSON.stringify(value)}`);
+    }
+  });
+
+// ============================================================================
+// review — Manage review comments
+// ============================================================================
+
+const severityMap: Record<string, ReviewComment['severity']> = {
+  info: 'nit',
+  warning: 'suggestion',
+  blocking: 'blocking',
+};
+
+program
+  .command('review')
+  .description('Manage review comments for rendered scenes')
+  .argument('<action>', 'list | add | resolve | reopen | escalate')
+  .argument('[targetId]', 'Event ID or comment ID to target')
+  .argument('[message]', 'Comment text (for "add" action)')
+  .option('--severity <severity>', 'Severity for "add" action: info | warning | blocking', 'warning')
+  .action((action: string, targetId: string | undefined, message: string | undefined, opts: { severity?: string }) => {
+    const projectDir = ensureProjectDir();
+    const mapper = new EntityMapper(projectDir);
+    const data = mapper.loadProject();
+    const events = mapper.loadAllEvents(data.chapters);
+
+    const registry = new InMemoryEntityRegistry();
+    registry.load(projectDir);
+
+    const manager = new ReviewManager();
+    manager.load(projectDir);
+
+    switch (action) {
+      case 'list': {
+        const filter = targetId ? { targetId } as any : undefined;
+        const comments = manager.getComments(filter);
+        if (comments.length === 0) {
+          console.log('No review comments found.');
+          return;
+        }
+        for (const c of comments) {
+          console.log(`[${c.severity}] ${c.status} ${c.target.type}:${c.target.id} — ${c.content}`);
+          console.log(`  ID: ${c.id}, created: ${c.createdAt}`);
+          if (c.resolvedAt) console.log(`  Resolved: ${c.resolvedAt}`);
+          console.log('');
+        }
+        break;
+      }
+
+      case 'add': {
+        if (!targetId || !message) {
+          console.error('Usage: nova review add <eventId> "<message>"');
+          process.exit(1);
+        }
+        const event = events.find((e: { id: string }) => e.id === targetId);
+        if (!event) {
+          console.error(`Event "${targetId}" not found.`);
+          process.exit(1);
+        }
+        const comment: ReviewComment = {
+          id: `rev_${Date.now()}`,
+          author: 'human',
+          target: { type: 'scene', id: targetId },
+          severity: severityMap[opts.severity || 'warning'] ?? 'suggestion',
+          category: 'style',
+          content: message,
+          status: 'open',
+          createdAt: new Date().toISOString(),
+        };
+        manager.addComment(comment);
+        manager.save(projectDir);
+        console.log(`Review comment added: ${comment.id}`);
+        break;
+      }
+
+      case 'resolve': {
+        if (!targetId) {
+          console.error('Usage: nova review resolve <commentId>');
+          process.exit(1);
+        }
+        manager.resolve(targetId);
+        manager.save(projectDir);
+        console.log(`Comment resolved: ${targetId}`);
+        break;
+      }
+
+      case 'reopen': {
+        if (!targetId) {
+          console.error('Usage: nova review reopen <commentId>');
+          process.exit(1);
+        }
+        manager.reopen(targetId);
+        manager.save(projectDir);
+
+        // Invalidate cache on reopen
+        const cacheDir = path.join(projectDir, '.nova', 'render-cache');
+        clearEventCache(cacheDir, targetId, new FsStorage());
+        console.log(`Comment reopened and cache invalidated: ${targetId}`);
+        break;
+      }
+
+      case 'escalate': {
+        if (!targetId) {
+          console.error('Usage: nova review escalate <commentId>');
+          process.exit(1);
+        }
+        manager.escalate(targetId);
+        manager.save(projectDir);
+        console.log(`Comment escalated: ${targetId}`);
+        break;
+      }
+
+      default:
+        console.error(`Unknown action: "${action}". Use: list, add, resolve, reopen, escalate`);
+        process.exit(1);
     }
   });
 

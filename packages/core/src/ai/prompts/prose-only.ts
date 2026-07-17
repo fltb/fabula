@@ -19,6 +19,8 @@ export interface ProseOnlyInput {
   characterVoiceNotes?: string;
   targetLengthWords?: number;
   referenceExample?: string;     // optional "good" example from prior similar scene
+  /** Injected on retry: describes what was wrong with the previous attempt */
+  retryGuidance?: string;
 }
 
 /**
@@ -66,6 +68,16 @@ export function buildProsePrompt(input: ProseOnlyInput): Message[] {
       '```',
       input.referenceExample,
       '```',
+    );
+  }
+
+  if (input.retryGuidance) {
+    parts.push(
+      '',
+      '## Correction Required — Previous Output Was Rejected',
+      'The previous rendering of this scene failed quality checks. You MUST address ALL of them in this rewrite.',
+      '',
+      input.retryGuidance,
     );
   }
 

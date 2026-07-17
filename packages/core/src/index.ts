@@ -51,10 +51,6 @@ export {
   BranchMergeValidator,
   ReachabilityValidator,
   ResultAggregator,
-  PostRenderValidator,
-  type PostRenderIssue,
-  type PostRenderResult,
-  type PostRenderValidatorOptions,
 } from './validator/index.js';
 
 // Context
@@ -110,6 +106,7 @@ export {
   getCachedRender,
   setCachedRender,
   clearRenderCache,
+  clearEventCache,
 } from './cache/render-cache.js';
 
 // Pipeline

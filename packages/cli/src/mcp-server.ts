@@ -15,11 +15,13 @@ import {
   RenderPipeline,
   FsStorage,
   buildAndWriteOutputs,
+  ReviewManager,
+  clearEventCache,
   type AssembleResult,
 } from '@novalistically/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { StatusReport, NextAction, ISSGap, ValidationIssue, ThreadSnapshot, Blocker, ISSDimension } from '@novalistically/core';
+import type { StatusReport, NextAction, ISSGap, ValidationIssue, ThreadSnapshot, Blocker, ISSDimension, ReviewComment } from '@novalistically/core';
 
 // ============================================================================
 // MCP Tool Implementations
@@ -447,6 +449,103 @@ export async function mcpNovaRenderScene(
   };
 }
 
+// ============================================================================
+// mcp_nova_review_list — List review comments
+// ============================================================================
+
+export function mcpNovaReviewList(
+  projectPath: string,
+  filter?: { status?: string; severity?: string; eventId?: string },
+) {
+  const manager = new ReviewManager();
+  manager.load(projectPath);
+
+  const commentFilter: Record<string, string> = {};
+  if (filter?.status) commentFilter.status = filter.status;
+  if (filter?.severity) commentFilter.severity = filter.severity;
+  if (filter?.eventId) commentFilter.targetId = filter.eventId;
+
+  return manager.getComments(
+    Object.keys(commentFilter).length > 0 ? (commentFilter as any) : undefined,
+  );
+}
+
+// ============================================================================
+// mcp_nova_review_add — Add a review comment
+// ============================================================================
+
+export function mcpNovaReviewAdd(
+  projectPath: string,
+  eventId: string,
+  content: string,
+  severity?: 'nit' | 'suggestion' | 'blocking',
+) {
+  const manager = new ReviewManager();
+  manager.load(projectPath);
+
+  const comment: ReviewComment = {
+    id: `rev_${Date.now()}`,
+    author: 'human',
+    target: { type: 'scene', id: eventId },
+    severity: severity ?? 'suggestion',
+    status: 'open',
+    content,
+    category: 'style',
+    createdAt: new Date().toISOString(),
+  };
+
+  manager.addComment(comment);
+  manager.save(projectPath);
+
+  return { id: comment.id, message: 'Review comment added' };
+}
+
+// ============================================================================
+// mcp_nova_review_resolve — Resolve a review comment
+// ============================================================================
+
+export function mcpNovaReviewResolve(projectPath: string, commentId: string) {
+  const manager = new ReviewManager();
+  manager.load(projectPath);
+  manager.resolve(commentId);
+  manager.save(projectPath);
+  return { id: commentId, message: 'Comment resolved' };
+}
+
+// ============================================================================
+// mcp_nova_review_reopen — Reopen + invalidate cache for a comment
+// ============================================================================
+
+export function mcpNovaReviewReopen(projectPath: string, commentId: string) {
+  const manager = new ReviewManager();
+  manager.load(projectPath);
+  manager.reopen(commentId);
+  manager.save(projectPath);
+
+  // Invalidate cache for the associated event
+  const comment = manager
+    .getComments()
+    .find((c: ReviewComment) => c.id === commentId);
+  if (comment) {
+    const cacheDir = path.join(projectPath, '.nova', 'render-cache');
+    clearEventCache(cacheDir, comment.target.id, new FsStorage());
+  }
+
+  return { id: commentId, message: 'Comment reopened, cache invalidated' };
+}
+
+// ============================================================================
+// mcp_nova_review_escalate — Escalate severity
+// ============================================================================
+
+export function mcpNovaReviewEscalate(projectPath: string, commentId: string) {
+  const manager = new ReviewManager();
+  manager.load(projectPath);
+  manager.escalate(commentId);
+  manager.save(projectPath);
+  return { id: commentId, message: 'Comment escalated to blocking' };
+}
+
 export function mcpNovaAssemble(projectPath: string, outputPath?: string): AssembleResult {
   const ctx = initializeContext(projectPath);
   return assembleNovel({
@@ -599,6 +698,20 @@ export function createMCPServer(projectPath: string): {
       nova_render_scene: (eventId: string, options?: { model?: string }) =>
         mcpNovaRenderScene(projectPath, eventId, options),
       nova_assemble: (outputPath?: string) => mcpNovaAssemble(projectPath, outputPath),
+      nova_review_list: (filter?: any) => mcpNovaReviewList(projectPath, filter),
+      nova_review_add: (...args: any[]) => {
+        const [eventId, content, opts] =
+          typeof args[1] === 'string'
+            ? args
+            : [args[0], args[1]?.content ?? '', args[1]];
+        return mcpNovaReviewAdd(projectPath, eventId, content, opts?.severity);
+      },
+      nova_review_resolve: (commentId: string) =>
+        mcpNovaReviewResolve(projectPath, commentId),
+      nova_review_reopen: (commentId: string) =>
+        mcpNovaReviewReopen(projectPath, commentId),
+      nova_review_escalate: (commentId: string) =>
+        mcpNovaReviewEscalate(projectPath, commentId),
     },
   };
 }

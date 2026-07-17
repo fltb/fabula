@@ -7,4 +7,5 @@ export {
   getCachedRender,
   setCachedRender,
   clearRenderCache,
+  clearEventCache,
 } from './render-cache.js';

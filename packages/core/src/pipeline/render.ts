@@ -17,6 +17,7 @@ import type {
   WorldState,
   ContextPackage,
   AnalysisResult,
+  ValidationResult,
 } from '../types/index.ts';
 import { parseAnalysisJSON } from '../schemas/analysis.ts';
 import { buildProsePrompt, type ProseOnlyInput } from '../ai/prompts/prose-only.ts';
@@ -28,6 +29,7 @@ import {
 } from '../cache/render-cache.ts';
 import { ConcurrencyPool } from '../util/pool.ts';
 import type { Storage } from '../storage/index.ts';
+import { ResultAggregator } from '../validator/aggregator.ts';
 
 export interface RenderJob {
   event: NarrativeEvent;
@@ -46,6 +48,10 @@ export interface RenderSceneResult {
   errors: string[];
   renderStart: number;
   renderEnd: number;
+  validation: ValidationResult | null;   // post-render validation result
+  attempts: number;                      // number of render attempts
+  /** True if all retries exhausted and validation still has errors */
+  needsReview: boolean;
 }
 
 export interface RenderPipelineOptions {
@@ -57,6 +63,9 @@ export interface RenderPipelineOptions {
   maxTokens?: number;         // default 10000
   skipCache?: boolean;        // force re-render
   referenceExample?: string;  // optional "good" prose example for Pass 1
+  aggregator?: ResultAggregator;         // optional, for post-render validation
+  /** Maximum render+validate attempts before giving up (default 3) */
+  maxRetries?: number;
 }
 
 export class RenderPipeline {
@@ -68,6 +77,8 @@ export class RenderPipeline {
   private readonly cacheDir: string;
   private readonly storage: Storage;
   private readonly referenceExample?: string;
+  private readonly aggregator?: ResultAggregator;
+  private readonly maxRetries: number;
   private cacheKeys: Map<string, string> | null = null;
 
   constructor(opts: RenderPipelineOptions) {
@@ -78,6 +89,8 @@ export class RenderPipeline {
     this.skipCache = opts.skipCache ?? false;
     this.maxTokens = opts.maxTokens ?? 10_000;
     this.referenceExample = opts.referenceExample;
+    this.aggregator = opts.aggregator;
+    this.maxRetries = opts.maxRetries ?? 3;
     this.pool = new ConcurrencyPool(opts.concurrency ?? 5);
   }
 
@@ -126,49 +139,76 @@ export class RenderPipeline {
               ? new Date(c.renderedAt).getTime()
               : renderStart,
           renderEnd: renderStart,
+          validation: null,
+          attempts: 1,
+          needsReview: false,
         };
       }
     }
 
-    // ── Pass 1: Pure prose ──────────────────────────────────────
+    // ── Circuit Breaker: retry loop ────────────────────────────────
     let prose = '';
+    let analysis: AnalysisResult | null = null;
+    let analysisRaw: string | null = null;
     let llmPass1: { promptTokens: number; completionTokens: number; totalTokens: number } = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-    const proseInput: ProseOnlyInput = {
-      context,
-      styleGuidance: event.styleGuidance,
-      targetLengthWords: 500,
-      referenceExample: this.referenceExample,
-    };
-    const proseMessages = buildProsePrompt(proseInput);
+    let llmPass2: { promptTokens: number; completionTokens: number; totalTokens: number } | null = null;
+    let renderValidation: ValidationResult | null = null;
+    let previousErrorMessages: string[] = [];
+    let attempts = 0;
 
-    try {
-      const result1 = await this.provider.complete({
-        messages: proseMessages,
-        model: this.model,
-        temperature: 0.8,
-        maxTokens: this.maxTokens,
-      });
-      prose = result1.content ?? '';
-      llmPass1 = result1.usage ?? llmPass1;
-      if (!prose || prose.trim().length === 0) {
-        errors.push('Pass 1 returned empty prose');
+    for (let a = 1; a <= this.maxRetries; a++) {
+      attempts = a;
+
+      // ── Pass 1: Pure prose (with retry guidance on retry) ────────
+      const proseInput: ProseOnlyInput = {
+        context,
+        styleGuidance: event.styleGuidance,
+        targetLengthWords: 500,
+        referenceExample: this.referenceExample,
+      };
+      // Inject retry guidance from previous failed validation
+      if (a > 1 && previousErrorMessages.length > 0) {
+        proseInput.retryGuidance = [
+          '### Issues to Fix in This Rewrite',
+          '',
+          ...previousErrorMessages.map((e, i) => `${i + 1}. ${e}`),
+          '',
+          'Rewrite the scene now, addressing every issue above.',
+        ].join('\n');
+      }
+
+      const proseMessages = buildProsePrompt(proseInput);
+      try {
+        const result1 = await this.provider.complete({
+          messages: proseMessages,
+          model: this.model,
+          temperature: 0.8,
+          maxTokens: this.maxTokens,
+        });
+        prose = result1.content ?? '';
+        llmPass1 = result1.usage ?? llmPass1;
+        if (!prose || prose.trim().length === 0) {
+          errors.push(`Pass 1 attempt ${a} returned empty prose`);
+          prose = '(empty)';
+        }
+      } catch (err) {
+        errors.push(`Pass 1 attempt ${a} failed: ${(err as Error).message}`);
         prose = '(empty)';
       }
-    } catch (err) {
-      errors.push(`Pass 1 failed: ${(err as Error).message}`);
-      prose = '(empty)';
-    }
 
-    // ── Pass 2: Structured analysis ──────────────────────────────
-    let analysisRaw: string | null = null;
-    let analysis: AnalysisResult | null = null;
-    let llmPass2: { promptTokens: number; completionTokens: number; totalTokens: number } | null = null;
-    if (prose && prose !== '(empty)') {
+      if (prose === '(empty)') {
+        if (a < this.maxRetries) continue;
+        break;
+      }
+
+      // ── Pass 2: Structured analysis ──────────────────────────────
+      analysisRaw = null;
+      analysis = null;
+      llmPass2 = null;
       try {
         const analysisInput: RenderAnalysisInput = {
-          event,
-          prose,
-          context,
+          event, prose, context,
+          previousErrors: previousErrorMessages.length > 0 ? previousErrorMessages : undefined,
         };
         const analysisMessages = buildAnalysisPrompt(analysisInput);
         const result2 = await this.provider.complete({
@@ -180,7 +220,6 @@ export class RenderPipeline {
         analysisRaw = result2.content ?? null;
         llmPass2 = result2.usage ?? null;
 
-        // Parse LLM analysis JSON with retry
         if (analysisRaw) {
           const errorsBeforeParse = errors.length;
           const warn = (msg: string) => errors.push(`Analysis parse warning: ${msg}`);
@@ -212,15 +251,35 @@ export class RenderPipeline {
           }
         }
       } catch (err) {
-        errors.push(`Pass 2 failed: ${(err as Error).message}`);
+        errors.push(`Pass 2 attempt ${a} failed: ${(err as Error).message}`);
         analysis = null;
+      }
+
+      // ── Post-render validation ────────────────────────────────────
+      renderValidation = null;
+      if (this.aggregator) {
+        try {
+          renderValidation = this.aggregator.validateRender(prose, event, stateBefore, analysis ?? undefined);
+        } catch (err) {
+          errors.push(`Post-render validation failed: ${(err as Error).message}`);
+        }
+      }
+
+      // If validation passes (or no aggregator), break out of retry loop
+      if (!renderValidation || renderValidation.passed) break;
+
+      // Validation failed — prepare error messages for retry
+      previousErrorMessages = renderValidation.errors.map((e) => e.message);
+      if (a < this.maxRetries) {
+        errors.push(`Attempt ${a} failed validation (${renderValidation.errors.length} errors), retrying...`);
       }
     }
 
     const renderEnd = Date.now();
+    const needsReview = !!renderValidation && !renderValidation.passed;
 
-    // ── Save cache ──────────────────────────────────────────────
-    if (cacheKey) {
+    // Save cache ONLY if validation passed (don't cache bad renders)
+    if (cacheKey && !needsReview) {
       setCachedRender(this.cacheDir, eventId, cacheKey, {
         prose,
         analysis: analysisRaw, // Store raw JSON string in cache
@@ -241,6 +300,9 @@ export class RenderPipeline {
       errors,
       renderStart,
       renderEnd,
+      validation: renderValidation,
+      attempts,
+      needsReview,
     };
   }
 

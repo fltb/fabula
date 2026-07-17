@@ -136,14 +136,18 @@ describe('resolveConflict', () => {
     expect(resolveConflict(plugins, 'plugin-a', 'plugin-b', 'first_writer_wins')).toBe('plugin-a');
   });
 
-  it('merge strategy returns null', () => {
+  it('merge strategy returns both plugin names comma-separated', () => {
     const plugins = new Map<string, PluginManifest>();
-    expect(resolveConflict(plugins, 'plugin-a', 'plugin-b', 'merge')).toBeNull();
+    expect(resolveConflict(plugins, 'plugin-a', 'plugin-b', 'merge')).toBe(
+      'plugin-a,plugin-b',
+    );
   });
 
-  it('human_arbitration strategy returns null', () => {
+  it('human_arbitration strategy throws an error', () => {
     const plugins = new Map<string, PluginManifest>();
-    expect(resolveConflict(plugins, 'plugin-a', 'plugin-b', 'human_arbitration')).toBeNull();
+    expect(() =>
+      resolveConflict(plugins, 'plugin-a', 'plugin-b', 'human_arbitration'),
+    ).toThrow('requires human arbitration');
   });
 
   it('priority returns null for unknown plugins', () => {

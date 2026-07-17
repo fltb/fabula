@@ -90,6 +90,7 @@ export class OpencodeGoProvider implements LLMProvider {
   private readonly defaultModel: string;
   private readonly defaultHeaders: Record<string, string>;
   private readonly timeoutMs: number;
+  private static warned = false;
 
   constructor(options: OpencodeGoOptions = {}) {
     this.apiKey = options.apiKey ?? process.env.OPENCODE_GO_API_KEY ?? '';
@@ -118,8 +119,19 @@ export class OpencodeGoProvider implements LLMProvider {
       ...(request.stop ? { stop: request.stop } : {}),
     };
 
+    // Combine timeout with any external abort signal from the request
+    const signals: AbortSignal[] = [];
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    signals.push(controller.signal);
+
+    if (request.signal) {
+      signals.push(request.signal);
+    }
+
+    const combinedSignal = signals.length > 1
+      ? AbortSignal.any(signals)
+      : controller.signal;
 
     let response: Response;
     try {
@@ -131,7 +143,7 @@ export class OpencodeGoProvider implements LLMProvider {
           ...this.defaultHeaders,
         },
         body: JSON.stringify(body),
-        signal: controller.signal,
+        signal: combinedSignal,
       });
     } catch (err) {
       clearTimeout(timer);
@@ -183,13 +195,27 @@ export class OpencodeGoProvider implements LLMProvider {
   }
 
   /**
-   * Streaming is not natively supported by this provider; fall back to
-   * single-shot complete() and emit the whole content as one chunk.
+   * Synchronous-style streaming wrapper.
+   *
+   * The underlying opencode-go API does not support true server-sent event
+   * streaming.  This method calls the single-shot `complete()` and emits
+   * the entire response via `onChunk()` in one invocation.
+   *
+   * If `request.signal` is provided, it is forwarded to `complete()` which
+   * combines it with the internal timeout signal via `AbortSignal.any()`.
    */
   async completeStream(
     request: CompletionRequest,
     onChunk: (chunk: string) => void,
   ): Promise<CompletionResponse> {
+    if (!OpencodeGoProvider.warned) {
+      OpencodeGoProvider.warned = true;
+      console.warn(
+        '[opencode-go] completeStream() is a synchronous wrapper — ' +
+        'the underlying API does not support true streaming. ' +
+        'The full response is buffered and emitted as a single chunk.',
+      );
+    }
     const result = await this.complete(request);
     onChunk(result.content);
     return result;

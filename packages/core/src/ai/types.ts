@@ -17,6 +17,8 @@ export interface CompletionRequest {
   temperature?: number;
   maxTokens?: number;
   stop?: string[];
+  /** Optional AbortSignal to cancel the request mid-flight */
+  signal?: AbortSignal;
 }
 
 export interface CompletionResponse {

@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E4"
+    attribute: "preconditions"
+    expectedValidator: "causality"
+    expectedSeverity: "error"
+    description: "E4 references a precondition on attribute location for character xianglins_wife that is never set by any prior event's postcondition"

@@ -1,0 +1,9 @@
+project: zhu-fu-branch-b
+title: "祝福 — 分支B：贺老六没有死"
+author: "鲁迅（平行叙事变种）"
+default_model: mock
+default_language: zh
+genre: "literary"
+synopsis: "分支B：贺老六挺过了伤寒。祥林嫂没有被命运推回去鲁镇的路——她没有成为二次寡妇，没有遭遇柳妈的地狱恐吓，没有捐门槛，没有被冬至喝止击碎。她在贺家坳度过了一生：贫困、辛劳、无名、但未被封建礼教的社会机器绞杀。她老死在自家床上，身边是儿孙。这不是'幸福结局'——这只是展示了那个时代的底层女性，需要多少偶然才能活到老。"
+tense: past
+snapshot_interval: 3

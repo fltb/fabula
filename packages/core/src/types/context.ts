@@ -5,6 +5,7 @@
 import type { EntityId } from './entity.js';
 import type { RelationshipState } from './world.js';
 import type { StyleGuidance } from './event.js';
+import type { RuleDefinition } from './rule.js';
 
 // ——— Relevance Score ———
 
@@ -19,6 +20,7 @@ export interface RelevanceScore {
     relationshipRelevance: number;
     specificityBonus: number;
     recencyPenalty: number;
+    importanceBonus: number;
   };
 }
 
@@ -35,12 +37,15 @@ export interface ContextPackage {
   activeThreads: ThreadStatus[];
   previousSceneSummary: string;
   markdown: string;
+  activeRules?: RuleDefinition[];
 }
 
 export interface SystemContext {
   genre: string;
   style: string;
   narrativeRules: string[];
+  /** Intended audience for this scene (e.g. "adult_literary", "young_adult") */
+  targetAudience?: string;
 }
 
 export interface SceneSpecification {
@@ -57,6 +62,8 @@ export interface CharacterSnapshot {
   currentState: Record<string, unknown>;
   traits: string[];
   voiceNotes: string;
+  archetype?: string;
+  appearance?: Record<string, string>;
 }
 
 export interface RelationshipContext {

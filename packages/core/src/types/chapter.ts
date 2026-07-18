@@ -43,6 +43,9 @@ export interface ProjectConfig {
   author: string;
   defaultModel?: string;
   defaultLanguage?: string;
+  genre?: string;
+  synopsis?: string;
+  tense?: 'past' | 'present';
   validatorOverrides?: Record<string, 'off' | 'warning' | 'error'>;
   circuitBreaker?: {
     maxRetries: number;

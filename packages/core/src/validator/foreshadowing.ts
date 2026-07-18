@@ -58,21 +58,21 @@ export class ForeshadowingValidator implements Validator {
 
   validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
-    const { prose, event } = input;
-    const proseLower = prose.toLowerCase();
+    if (!input.analysis) return issues;
 
-    for (const f of event.foreshadowing) {
-      const hintWords = f.hint.split(/\s+/).filter((w) => w.length > 3);
-      if (hintWords.length === 0) continue;
+    const deployed = new Set(input.analysis.analysis.foreshadowingDeployed ?? []);
+    const declared = input.event.foreshadowing ?? [];
 
-      const foundCount = hintWords.filter((w) => proseLower.includes(w.toLowerCase())).length;
-      const threshold = Math.max(1, Math.floor(hintWords.length * 0.5));
-
-      if (foundCount < threshold) {
+    for (const fs of declared) {
+      if (!fs.hint) continue;
+      if (!deployed.has(fs.id)) {
         issues.push(makeIssue(
-          this.name, event.id, f.id, 'warning',
-          `Foreshadow hint "${f.hint}" is not reflected in the rendered prose — reader may miss this setup`,
-          'Weave the foreshadowing hint into the narrative prose.',
+          this.name,
+          input.event.id,
+          fs.id,
+          'warning',
+          `Foreshadowing "${fs.id}" not detected in prose: "${fs.hint}"`,
+          'Ensure foreshadowing is present in the rendered prose',
           'edit_file',
           'foreshadowing',
         ));
@@ -80,5 +80,13 @@ export class ForeshadowingValidator implements Validator {
     }
 
     return issues;
+  }
+
+  getAnalysisRequirements() {
+    return [{
+      field: 'foreshadowingDeployed',
+      schemaExample: { foreshadowingDeployed: ['foreshadowing IDs that appear in prose'] },
+      instruction: 'foreshadowingDeployed: List which foreshadowing IDs from the scene specification have their hints appear in the prose. Report in the foreshadowingDeployed block as an array of foreshadowing IDs that are reflected. If a hint is woven naturally into the narrative, it counts as deployed.',
+    }];
   }
 }

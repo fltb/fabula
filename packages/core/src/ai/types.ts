@@ -19,6 +19,13 @@ export interface CompletionRequest {
   stop?: string[];
   /** Optional AbortSignal to cancel the request mid-flight */
   signal?: AbortSignal;
+  /** Seed for reproducible output (Pass 2 analysis) */
+  seed?: number;
+  /** Response format hint (L3: json_object for Pass 2) */
+  responseFormat?: {
+    type: 'json_object';
+    schema?: unknown;
+  };
 }
 
 export interface CompletionResponse {

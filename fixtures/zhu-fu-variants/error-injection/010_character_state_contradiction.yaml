@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E5"
+    attribute: "postconditions"
+    expectedValidator: "character_state"
+    expectedSeverity: "error"
+    description: "E5 postconditions set xianglins_wife.status = dead, but E6 preconditions expect xianglins_wife.status = alive"

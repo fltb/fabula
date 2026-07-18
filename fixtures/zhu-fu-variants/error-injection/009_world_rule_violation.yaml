@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E4"
+    attribute: "worldRuleCompliance"
+    expectedValidator: "world_rule"
+    expectedSeverity: "error"
+    description: "An event depicts a woman (xianglins_wife) leading a public ritual — this violates the rule patriarchal_clan_authority which says only men conduct rituals"

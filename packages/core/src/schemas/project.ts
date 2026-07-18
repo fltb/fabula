@@ -11,6 +11,9 @@ export const projectConfigSchema = z
     author: z.string(),
     defaultModel: z.string().optional(),
     defaultLanguage: z.string().optional(),
+    genre: z.string().optional(),
+    synopsis: z.string().optional(),
+    tense: z.enum(['past', 'present']).optional(),
     validatorOverrides: z.record(z.string(), z.enum(['off', 'warning', 'error'])).optional(),
     circuitBreaker: z
       .object({

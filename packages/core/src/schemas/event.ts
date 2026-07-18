@@ -20,7 +20,14 @@ export const eventFileSchema = z
     narrativeOrder: z.number(),
     title: z.string(),
     storyTime: z.string(),
+    narrationTime: z.string().optional(),
     sceneType: z.enum(['linear', 'flashback', 'flashforward', 'dream', 'parallel']).optional(),
+    discourseMode: z.enum(['action', 'dialogue', 'description', 'exposition', 'reflection', 'transition']).optional(),
+    arcPosition: z.enum(['opening', 'rising', 'climax', 'falling', 'denouement']).optional(),
+    emotionalValence: z.string().optional(),
+    conflictType: z.string().optional(),
+    resolutionType: z.string().optional(),
+    tense: z.enum(['past', 'present']).optional(),
     pov: z
       .object({
         character: z.string(),
@@ -36,5 +43,10 @@ export const eventFileSchema = z
     relationshipEffects: z.array(relationshipChangeSchema).optional(),
     ruleEffects: z.array(ruleEffectSchema).optional(),
     introduces: z.array(introduceEntrySchema).optional(),
+    targetAudience: z.string().optional(),
+    cast: z.object({
+      onScreen: z.array(z.string()),
+      affected: z.array(z.string()),
+    }).optional(),
   })
   .strict();

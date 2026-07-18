@@ -1,0 +1,98 @@
+event: E2
+title: "初到鲁家——安分耐劳的寡妇"
+narrativeOrder: 3
+sceneType: flashback
+storyTime: winter_five_years_ago
+tense: past
+discourseMode: description
+arcPosition: rising
+emotionalValence: "hopeful_cautious"
+conflictType: "person_vs_society"
+resolutionType: "temporary_resolution"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "有一年的冬初，四叔家里要换女工，做中人的卫老婆子带了一个女人进来——她就是祥林嫂。她头上扎着白头绳，乌裙，蓝夹袄，月白背心，年纪大约二十六七，脸色青黄，但两颊却还是红的。四叔皱了皱眉——他讨厌她是一个寡妇。但四婶看她模样周正、手脚壮大、安分耐劳，便留下了她。试工期内她整天的做，似乎闲着就无聊，简直抵得过一个男子。到了年底，她一个人竟能担当起全部的祝福准备工作——扫尘、洗地、杀鸡、宰鹅、彻夜的煮福礼。她的口角边渐渐有了笑影，脸上也白胖了。人们从她断断续续的叙述中知道了她的来历：春天死了丈夫（比她小十岁的打柴的丈夫），家里有严厉的婆婆和一个十多岁能打柴的小叔子——她是逃出来的。"
+preconditions:
+  - entity: xianglins_wife
+    attribute: marital_status
+    value: widow_of_xianglin
+  - entity: xianglins_wife
+    attribute: location
+    value: weijia_shan
+expectedPostconditions:
+  - entity: xianglins_wife
+    attribute: location
+    value: fourth_master_lu_house
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: status
+    value: employed_maid
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: work_capability
+    value: full_strength
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: emotionalState
+    value: content
+    confidence: 0.9
+  - entity: fourth_master_lu
+    attribute: attitude_toward_xianglins_wife
+    value: tolerant_but_suspicious
+    confidence: 1.0
+  - entity: fourth_aunt
+    attribute: attitude_toward_xianglins_wife
+    value: satisfied
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: appearance
+    value: "pale_yellow_face_red_cheeks"
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: social_status
+    narrativeHint: "她是逃出来的寡妇——这个秘密埋下了她被婆婆抓回去的伏笔。她目前的安顿是暂时的，建立在隐瞒和逃亡之上。"
+    confidence: 0.9
+threadProgress:
+  - thread: T1
+    advancement: "祥林嫂逃出婆家，在鲁镇找到第一份工作。她靠自己的劳动力获得了暂时的稳定——口角有了笑影，脸上也白胖了。这是她生命中第一个短暂的安稳期。"
+    progressAfter: 35
+    progressTotal: 100
+relationshipEffects:
+  - participants:
+      - fourth_master_lu
+      - xianglins_wife
+    effect: establish
+    direction: reluctant_employer_tolerates_widow
+    newState:
+      type: wary_tolerance
+      intensity: 30
+  - participants:
+      - fourth_aunt
+      - xianglins_wife
+    effect: establish
+    direction: satisfied_employer_to_diligent_worker
+    newState:
+      type: positive_working_relationship
+      intensity: 40
+introduces:
+  - type: location
+    id: fourth_master_lu_house
+    initialState:
+      status: occupied
+  - type: character
+    id: old_mrs_wei
+    initialState:
+      location: weijia_shan
+      status: alive
+      condition: well
+newState:
+  type: precarious_stability
+  intensity: 0.3
+ruleEffects:
+  - rule: husbands_authority
+    effect: reinforce
+    evidence: "四叔皱眉——他讨厌她是一个寡妇。即使她安分耐劳，寡妇的身份本身就是瑕疵。"
+styleGuidance:
+  tone: "冷峻的社会观察中透出淡淡的温暖——她脸上短暂的红晕和笑影是故事中唯一的光亮。"
+  scenePacing: "缓慢的日常展开，在年终祝福的忙碌中达到高潮——注意将她的勤快与周围人的态度交织叙述。"

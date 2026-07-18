@@ -10,9 +10,15 @@
 // 2. We get machine-parseable metadata about coverage, contradictions, POV
 //
 // If the JSON is malformed, we retry ONLY Pass 2 (cheaper than re-rendering).
+//
+// The JSON schema is built dynamically from AnalysisBlockRequirement[]:
+// Only blocks that have at least one active validator consumer are included.
+// For narrativeChecks, the attribute enum is built from merged attributes.
 // ============================================================================
 
 import type { ContextPackage, NarrativeEvent } from '../../types/index.ts';
+import type { RuleDefinition } from '../../types/rule.ts';
+import type { AnalysisBlockRequirement } from '../../types/index.ts';
 import type { Message } from '../types.ts';
 
 export interface RenderAnalysisInput {
@@ -21,6 +27,82 @@ export interface RenderAnalysisInput {
   context: ContextPackage;
   /** Previous validation error messages for self-correction context */
   previousErrors?: string[];
+  /** Active rule definitions for rule consistency checks */
+  activeRules?: RuleDefinition[];
+  /** Dynamic analysis requirements from active validators */
+  analysisRequirements?: AnalysisBlockRequirement[];
+}
+
+/**
+ * Extract the top-level analysis block field from a dotted requirement field.
+ * e.g. 'pov.leaks' → 'pov', 'narrativeChecks' → 'narrativeChecks'
+ */
+function topField(field: string): string {
+  return field.split('.')[0];
+}
+
+/**
+ * Build the dynamic JSON template for the Pass 2 analysis schema.
+ * Only blocks with active validator requirements are included.
+ * Each block is generated from the schemaExample of the first matching requirement.
+ * For narrativeChecks, attributes from all requirements are merged.
+ */
+function buildDynamicJsonTemplate(
+  eventId: string,
+  requirements: AnalysisBlockRequirement[],
+): Record<string, unknown> {
+  // ── Collect active top-level fields ─────────────────────────
+  const activeFields = new Set<string>();
+  for (const req of requirements) {
+    activeFields.add(topField(req.field));
+  }
+
+  // ── Build merged attributes for narrativeChecks ─────────────
+  const narrativeCheckAttrs: string[] = [];
+  for (const req of requirements) {
+    if (topField(req.field) === 'narrativeChecks' && req.attributes) {
+      narrativeCheckAttrs.push(...req.attributes);
+    }
+  }
+
+  // ── Build the analysis object from requirements ─────────────
+  const analysis: Record<string, unknown> = {};
+
+  // Group requirements by top-level field, use first as template
+  const fieldToReq = new Map<string, AnalysisBlockRequirement>();
+  for (const req of requirements) {
+    const tf = topField(req.field);
+    if (!fieldToReq.has(tf)) {
+      fieldToReq.set(tf, req);
+    }
+  }
+
+  for (const field of activeFields) {
+    const req = fieldToReq.get(field);
+    if (!req) continue; // Shouldn't happen, but guard
+
+    // Deep-clone the schemaExample as the template base
+    const template = JSON.parse(JSON.stringify(req.schemaExample));
+
+    // Special handling for narrativeChecks: merge attributes & add matchLevel
+    if (field === 'narrativeChecks' && Array.isArray(template)) {
+      const item = template[0] as Record<string, unknown>;
+      if (narrativeCheckAttrs.length > 0) {
+        item.attribute = narrativeCheckAttrs.join(' | ');
+      }
+      item.matchLevel = 'exact|similar|absent|contradicted';
+      analysis[field] = template;
+    } else {
+      // For all other blocks, use the schemaExample as-is
+      // (it already contains the correct structure)
+      analysis[field] = template;
+    }
+  }
+
+  return {
+    eventId,
+    analysis,
+  };
 }
 
 /**
@@ -40,15 +122,22 @@ export function buildAnalysisPrompt(input: RenderAnalysisInput): Message[] {
         storyTime: input.event.storyTime,
         pov: input.event.pov,
         sceneBrief: input.event.sceneBrief,
+        tense: input.event.tense,
+        conflictType: input.event.conflictType,
+        resolutionType: input.event.resolutionType,
+        discourseMode: input.event.discourseMode,
+        arcPosition: input.event.arcPosition,
         preconditions: input.event.preconditions.map((p) => ({
           entityId: p.entityId,
           attribute: p.attribute,
           value: p.value,
+          narrativeHint: p.narrativeHint,
         })),
         postconditions: input.event.postconditions.map((p) => ({
           entityId: p.entityId,
           attribute: p.attribute,
           value: p.value,
+          narrativeHint: p.narrativeHint,
         })),
         threadProgress: input.event.threadProgress,
         foreshadowing: input.event.foreshadowing?.map((f) => ({
@@ -63,64 +152,52 @@ export function buildAnalysisPrompt(input: RenderAnalysisInput): Message[] {
     ),
     '```',
     '',
+    '## Context',
+    input.context.markdown,
+    '',
     '## Rendered Prose',
     '```',
     input.prose,
     '```',
     '',
+  ];
+
+  if (input.activeRules && input.activeRules.length > 0) {
+    userParts.push(
+      '',
+      '## Active World Rules',
+      '```json',
+      JSON.stringify(input.activeRules, null, 2),
+      '```',
+      '',
+    );
+  }
+
+  // ── Build dynamic JSON template ───────────────────────────
+  const requirements = input.analysisRequirements ?? [];
+  const jsonTemplate = buildDynamicJsonTemplate(input.event.id, requirements);
+
+  userParts.push(
     '## Instructions',
     'Analyze the prose against the specification. Output ONLY valid JSON with this schema:',
     '',
     '```json',
-    JSON.stringify(
-      {
-        eventId: input.event.id,
-        analysis: {
-          postconditions: {
-            covered: [
-              'list of entityId.attribute that ARE mentioned or implied in the prose',
-            ],
-            dropped: [
-              'list of entityId.attribute that are NOT mentioned in the prose',
-            ],
-          },
-          preconditions: {
-            violated: [
-              {
-                entityId: 'entityId',
-                attribute: 'attribute',
-                expectedValue: 'expected value',
-                issue: 'description of contradiction found in prose',
-              },
-            ],
-          },
-          pov: {
-            consistent: true,
-            leaks: ['any phrases that enter another character\'s inner thoughts'],
-          },
-          inventedDetails: [
-            {
-              detail: 'something in prose not in specification',
-              severity: 'minor or major',
-            },
-          ],
-          quality: {
-            proseScore: 0,
-            maxScore: 10,
-            strengths: ['specific strength'],
-            weaknesses: ['specific weakness'],
-            estimatedWordCount: 0,
-          },
-          threadProgressAchieved: ['thread IDs where prose advances the thread'],
-          foreshadowingDeployed: ['foreshadowing IDs that appear in prose'],
-        },
-      },
-      null,
-      2,
-    ),
+    JSON.stringify(jsonTemplate, null, 2),
     '```',
     '',
-  ];
+    '### Analysis Guidance',
+    '',
+  );
+
+  // ── Dynamic instructions from requirements ────────────────
+  const instructions = requirements
+    .map(r => r.instruction)
+    .join('\n\n');
+
+  userParts.push(
+    instructions || 'Analyze the prose for consistency with the specification. Follow the structure defined in the JSON schema above.',
+    '',
+  );
 
   if (input.previousErrors && input.previousErrors.length > 0) {
     userParts.push(

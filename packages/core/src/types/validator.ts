@@ -14,10 +14,28 @@ import type {
   EntityId,
   EntityRegistry,
 } from './entity.js';
-import type { NarrativeEvent, RuleEffectEntry } from './event.js';
+import type { NarrativeEvent } from './event.js';
 import type { KnowledgeState, WorldState } from './world.js';
 import type { AnalysisResult } from './analysis.js';
 import type { EventStore } from '../state/event-store.js';
+
+// ——— AnalysisBlockRequirement ———
+
+/**
+ * Declares what a Pass 2 consumer validator needs from the LLM analysis output.
+ * Validators returning these in getAnalysisRequirements() drive the dynamic
+ * construction of the Pass 2 JSON template + instructions.
+ */
+export interface AnalysisBlockRequirement {
+  /** JSON field path, e.g. 'narrativeChecks', 'ruleChecks', 'pov.leaks', 'postconditions' */
+  field: string;
+  /** Only for narrativeChecks-style keyed blocks: attribute values LLM should produce */
+  attributes?: string[];
+  /** JSON template example showing the structure (used to build schema). Can be object, array, or primitive. */
+  schemaExample: unknown;
+  /** LLM instruction: MUST start with the field name. e.g. "narrativeChecks[pacing]: check..." */
+  instruction: string;
+}
 
 // ——— Pre-Render Input (new) ———
 
@@ -31,7 +49,6 @@ export interface PreRenderInput {
   queryState: (entityId: EntityId, attribute: string) => unknown;
   getKnowledge: (characterId: EntityId) => KnowledgeState;
   getThreadProgress: (threadId: string) => { progress: number; total: number };
-  getRuleEvidence: (ruleId: string) => RuleEffectEntry[];
 }
 
 // ——— Post-Render Input (new) ———
@@ -58,7 +75,6 @@ export interface ValidatorContext {
   queryState: (entityId: EntityId, attribute: string) => unknown;
   getKnowledge: (characterId: EntityId) => KnowledgeState;
   getThreadProgress: (threadId: string) => { progress: number; total: number };
-  getRuleEvidence: (ruleId: string) => RuleEffectEntry[];
 }
 
 // ——— Validation Issue ———
@@ -83,7 +99,7 @@ export interface ValidationIssue {
 
 export interface Validator {
   name: string;
-  category: 'characterization' | 'factual_detail' | 'timeline_plot' | 'worldbuilding' | 'narrative_style';
+  category: 'characterization' | 'factual_detail' | 'timeline_plot' | 'worldbuilding' | 'narrative_style' | 'prose_quality';
 
   // ── New methods ──────────────────────────────────────────────────
 
@@ -92,6 +108,14 @@ export interface Validator {
 
   /** Post-render check: run against rendered prose + LLM analysis. */
   validatePost?(input: PostRenderInput): ValidationIssue[];
+
+  /**
+   * Returns prompt guidance for the LLM to produce the analysis JSON that this validator consumes.
+   * Only implement on validators that use validatePost with AnalysisResult.
+   * Return an empty array if no instructions are needed.
+   * Each requirement drives dynamic construction of the Pass 2 JSON template + instructions.
+   */
+  getAnalysisRequirements?(): AnalysisBlockRequirement[];
 
   // ── Legacy methods (deprecated, will be removed) ─────────────────
 

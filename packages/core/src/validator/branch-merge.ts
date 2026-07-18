@@ -9,6 +9,7 @@ import type {
   ValidationIssue,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
+import { compareFact } from '../entity/compare.js';
 
 export class BranchMergeValidator implements Validator {
   name = 'branch_merge';
@@ -31,8 +32,9 @@ export class BranchMergeValidator implements Validator {
     // Check each precondition against each incoming branch's final state
     for (const pc of event.preconditions) {
       const currentValue = input.queryState(pc.entityId, pc.attribute);
+      const outcome = compareFact(pc, currentValue);
 
-      if (currentValue === undefined || currentValue === null) {
+      if (outcome === 'mismatch') {
         issues.push(makeIssue(
           this.name, event.id, pc.entityId, 'warning',
           `Merge precondition "${pc.entityId}.${pc.attribute} = ${pc.value}" is not satisfied (current: ${JSON.stringify(currentValue)}) on branch path`,
@@ -41,6 +43,7 @@ export class BranchMergeValidator implements Validator {
           pc.attribute,
         ));
       }
+      // 'deferred' → skip for now (Pass 2 will wire semantic checks in P5)
     }
 
     return issues;
@@ -134,5 +137,9 @@ export class BranchMergeValidator implements Validator {
     }
 
     return issues;
+  }
+
+  getAnalysisRequirements() {
+    return []; // No Pass 2 analysis needed
   }
 }

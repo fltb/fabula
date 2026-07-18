@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E2"
+    attribute: "factRepresentation"
+    expectedValidator: "schema"
+    expectedSeverity: "error"
+    description: "A Fact has both value and narrativeHint set — they must be mutually exclusive per Zod refine()"

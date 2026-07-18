@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E3"
+    attribute: "storyTime"
+    expectedValidator: "timeline"
+    expectedSeverity: "error"
+    description: "E3 storyTime is earlier than E2 storyTime but sceneType is linear"

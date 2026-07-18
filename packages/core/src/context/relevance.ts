@@ -15,6 +15,13 @@ import { type RelevanceContext } from './types.ts';
 
 export { type RelevanceContext } from './types.ts';
 
+const IMPORTANCE_BONUS: Record<string, number> = {
+  antagonist: 0.25,
+  supporting: 0.15,
+  minor: 0.05,
+  background: 0,
+};
+
 export class RelevanceEngine {
   /**
    * Score all entities for relevance to the current scene.
@@ -31,6 +38,9 @@ export class RelevanceEngine {
     const sceneThreads = new Set(currentEvent.threadProgress.map((tp) => tp.thread));
 
     for (const entity of entities) {
+      const role = entity.state['role'] as string | undefined;
+      const importanceBonus = IMPORTANCE_BONUS[role ?? 'background'] ?? 0;
+
       const basis = {
         participation: this._participationScore(entity, sceneParticipants),
         threadAssociation: this._threadAssociationScore(entity, sceneThreads, currentEvent.threadProgress),
@@ -39,6 +49,7 @@ export class RelevanceEngine {
         relationshipRelevance: this._relationshipRelevanceScore(entity, currentEvent, worldState),
         specificityBonus: this._specificityBonus(entity, currentEvent),
         recencyPenalty: this._recencyPenalty(entity, recentEntities),
+        importanceBonus,
       };
 
       const score =
@@ -48,7 +59,8 @@ export class RelevanceEngine {
         basis.knowledgeIntersection * 0.10 +
         basis.relationshipRelevance * 0.15 +
         basis.specificityBonus * 0.05 -
-        basis.recencyPenalty * 0.05;
+        basis.recencyPenalty * 0.05 +
+        basis.importanceBonus * 0.05;
 
       scores.push({
         entity: entity.id,

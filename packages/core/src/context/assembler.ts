@@ -11,6 +11,7 @@ import type {
   NarrativeEvent,
   RelationshipContext,
   RelevanceScore,
+  RuleDefinition,
   SceneSpecification,
   SystemContext,
   ThreadStatus,
@@ -58,10 +59,13 @@ export class ContextAssembler {
     );
 
     // L1: System Context (always included)
-    const sysCtx = systemContext ?? {
-      genre: 'fantasy',
-      style: 'literary',
-      narrativeRules: [],
+    const sysCtx: SystemContext = {
+      ...(systemContext ?? {
+        genre: 'literary',
+        style: 'literary',
+        narrativeRules: [],
+      }),
+      targetAudience: event.targetAudience ?? systemContext?.targetAudience,
     };
 
     // L2: Scene Specification (always included)
@@ -86,6 +90,9 @@ export class ContextAssembler {
     // Active Threads
     const activeThreads = this._buildThreadStatus(state);
 
+    // Active World Rules
+    const activeRules = this._buildActiveRules(state, entityRegistry);
+
     // Track recent entities for recency penalty in next call
     this.recentEntities = [
       ...event.participants.entities,
@@ -103,6 +110,7 @@ export class ContextAssembler {
       activeThreads,
       previousSceneSummary,
       markdown: '',
+      activeRules,
     };
 
     // Render to markdown
@@ -142,6 +150,8 @@ export class ContextAssembler {
         currentState: state.entities[povEntity.id] ?? {},
         traits: (povEntity.state['traits'] as string[]) ?? [],
         voiceNotes: (povEntity.state['voice_notes'] as string) ?? '',
+        archetype: povEntity.state['archetype'] as string | undefined,
+        appearance: povEntity.state['appearance'] as Record<string, string> | undefined,
       });
     }
 
@@ -159,6 +169,8 @@ export class ContextAssembler {
         currentState: state.entities[entity.id] ?? entity.state,
         traits: (entity.state['traits'] as string[]) ?? [],
         voiceNotes: (entity.state['voice_notes'] as string) ?? '',
+        archetype: entity.state['archetype'] as string | undefined,
+        appearance: entity.state['appearance'] as Record<string, string> | undefined,
       });
     }
 
@@ -233,6 +245,27 @@ export class ContextAssembler {
     }));
   }
 
+  private _buildActiveRules(state: WorldState, registry: EntityRegistry): RuleDefinition[] {
+    const activeRules: RuleDefinition[] = [];
+    for (const [ruleId, ruleState] of Object.entries(state.rules)) {
+      if (ruleState.activeEvidence > 0) {
+        const entity = registry.resolve(ruleId);
+        if (entity) {
+          activeRules.push({
+            ruleId,
+            name: (entity.state['name'] as string) ?? ruleId,
+            statement: (entity.state['statement'] as string) ?? '',
+            category: (entity.state['category'] as string) ?? 'unknown',
+            type: (entity.state['type'] as string) ?? 'unknown',
+            logicalConsequences: (entity.state['logicalConsequences'] as any[]) ?? [],
+            evidenceChain: (entity.state['evidenceChain'] as any[]) ?? [],
+          });
+        }
+      }
+    }
+    return activeRules;
+  }
+
   /** Render context package to LLM-readable markdown */
   renderToMarkdown(pkg: ContextPackage): string {
     const lines: string[] = [];
@@ -244,6 +277,9 @@ export class ContextAssembler {
     lines.push('## System Context');
     lines.push(`- Genre: ${pkg.systemContext.genre}`);
     lines.push(`- Style: ${pkg.systemContext.style}`);
+    if (pkg.systemContext.targetAudience) {
+      lines.push(`- Target Audience: ${pkg.systemContext.targetAudience}`);
+    }
     for (const rule of pkg.systemContext.narrativeRules) {
       lines.push(`- Rule: ${rule}`);
     }
@@ -261,6 +297,15 @@ export class ContextAssembler {
     lines.push('## Characters');
     for (const cs of pkg.characterSnapshots) {
       lines.push(`### ${cs.name} (${cs.id})`);
+      if (cs.archetype) {
+        lines.push(`Archetype: ${cs.archetype}`);
+      }
+      if (cs.appearance && Object.keys(cs.appearance).length > 0) {
+        lines.push('Appearance:');
+        for (const [feature, desc] of Object.entries(cs.appearance)) {
+          lines.push(`  - ${feature}: ${desc}`);
+        }
+      }
       if (cs.traits.length > 0) {
         lines.push(`Traits: ${cs.traits.join(', ')}`);
       }
@@ -295,6 +340,16 @@ export class ContextAssembler {
       lines.push('## Relevant World Facts');
       for (const wf of pkg.worldFacts) {
         lines.push(`- ${wf.description}: ${JSON.stringify(wf.value)}`);
+      }
+      lines.push('');
+    }
+
+    // Active World Rules
+    if (pkg.activeRules && pkg.activeRules.length > 0) {
+      lines.push('## Active World Rules');
+      for (const rule of pkg.activeRules) {
+        lines.push(`- **${rule.name}** (${rule.ruleId}) [${rule.category}]`);
+        lines.push(`  Statement: ${rule.statement}`);
       }
       lines.push('');
     }

@@ -9,6 +9,7 @@ import type {
   ValidationIssue,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
+import { compareFact } from '../entity/compare.js';
 
 export class ReachabilityValidator implements Validator {
   name = 'reachability';
@@ -96,12 +97,17 @@ export class ReachabilityValidator implements Validator {
       const entityState = state.entities[pc.entityId];
       if (!entityState) continue;
 
-      const expectedValue = String(pc.value).toLowerCase();
       const entityNameParts = pc.entityId.split(/[_-]/);
       const entityNamePat = new RegExp(`\\b${entityNameParts.join('|')}\\b`, 'i');
 
       // Only check if the entity is actually mentioned in the prose
       if (!entityNamePat.test(prose)) continue;
+
+      // narrativeHint facts have no deterministic value to match in prose;
+      // skip string-based precondition consistency checks (deferred to Pass 2)
+      if (pc.value === undefined) continue;
+
+      const expectedValue = String(pc.value).toLowerCase();
 
       // Location precondition: prose should mention the location
       if (pc.attribute === 'location' && !proseLower.includes(expectedValue)) {
@@ -222,5 +228,9 @@ export class ReachabilityValidator implements Validator {
     }
 
     return issues;
+  }
+
+  getAnalysisRequirements() {
+    return []; // No Pass 2 analysis needed
   }
 }

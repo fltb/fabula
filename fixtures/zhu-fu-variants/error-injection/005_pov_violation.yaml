@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E2"
+    attribute: "pov"
+    expectedValidator: "pov"
+    expectedSeverity: "warning"
+    description: "E2 has pov.character = fourth_aunt but the character fourth_aunt has role supporting not protagonist or narrator — POV rule violation"

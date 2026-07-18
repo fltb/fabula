@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E3"
+    attribute: "inventedDetails"
+    expectedValidator: "factual_detail"
+    expectedSeverity: "warning"
+    description: "An event invents a detail about xianglins_wife having a younger sister that never appears in any character definition"

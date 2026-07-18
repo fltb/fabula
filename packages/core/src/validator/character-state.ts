@@ -3,6 +3,7 @@
 // ============================================================================
 
 import type {
+  PostRenderInput,
   PreRenderInput,
   Validator,
   ValidationIssue,
@@ -36,5 +37,37 @@ export class CharacterStateValidator implements Validator {
     }
 
     return issues;
+  }
+
+  validatePost(input: PostRenderInput): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    if (!input.analysis) return issues;
+
+    const narrativeChecks = input.analysis.analysis.narrativeChecks ?? [];
+    for (const check of narrativeChecks) {
+      if (check.attribute !== 'character_state') continue;
+      if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
+        issues.push(makeIssue(
+          'character_state',
+          input.event.id,
+          check.entityId,
+          'warning',
+          `Character state mismatch: ${check.hint} — ${check.evidence}`,
+          'Review character state consistency in prose',
+          'edit_file',
+          'state',
+        ));
+      }
+    }
+    return issues;
+  }
+
+  getAnalysisRequirements() {
+    return [{
+      field: 'narrativeChecks',
+      attributes: ['character_state'],
+      schemaExample: { entityId: 'char_001', attribute: 'character_state', hint: '...', evidence: '...', matchLevel: 'exact' },
+      instruction: 'narrativeChecks[character_state]: For each character, check if the prose depicts their state (alive/dead status, location, emotional state) consistently with the event\'s preconditions. Use the narrativeChecks block with attribute "character_state" to report any contradictions where the prose shows a character in a state that conflicts with established preconditions.',
+    }];
   }
 }

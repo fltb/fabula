@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E4"
+    attribute: "tense"
+    expectedValidator: "timeline"
+    expectedSeverity: "error"
+    description: "An event has tense: present but all scene guidance uses past-tense language, and the project config has tense: past"

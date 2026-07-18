@@ -1,0 +1,107 @@
+event: E1
+title: "死讯——灯灭了"
+narrativeOrder: 2
+sceneType: linear
+storyTime: new_year_eve
+tense: past
+discourseMode: exposition
+arcPosition: opening
+emotionalValence: "quiet_acceptance_melancholy"
+conflictType: "person_vs_society"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "当天傍晚，'我'坐在四叔书房里，心里没有原文中那种'惴惴不安'——'我'已经告诉她实话了。但'我'仍然反复回想她的表情：眼里的光暗下去了，嘴角却似乎动了一下。'我'不知道那个表情是什么意思——是感激？是释然？还是比恐惧更深的悲哀？晚饭时四叔照例骂新党，但语气比平日更冷。从短工的简短回答中——'老了'（死了）、'什么时候？——昨天夜里，或者就是今天罢。——我说不清'、'怎么死的？——还不是穷死的？'——'我'得知祥林嫂已经死了。四叔的反应是一句咒骂：'不早不迟，偏偏要在这时候——这就可见是一个谬种！'但这一次，'我'听到'谬种'二字时，心里涌起的不是愧疚，而是愤怒——或者说是一种说不出的荒诞感。她活着的时候没人把她当人，死了还要被骂。晚饭沉闷地吃完后，'我'独自坐在灯下，听着外面的雪花声。'我'想：她的灯灭了。'我'至少没有用谎言给她一盏假灯。但这算是安慰吗？'我'不知道。在孤灯下，'我'开始回想起她半生事迹的断片。"
+preconditions:
+  - entity: narrator
+    attribute: location
+    value: fourth_master_lu_house
+  - entity: narrator
+    attribute: knowledge
+    value: gave_honest_answer_to_xianglins_wife
+  - entity: narrator
+    attribute: emotionalState
+    value: truthful_but_uncertain
+expectedPostconditions:
+  - entity: xianglins_wife
+    attribute: status
+    value: dead
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: cause_of_death
+    value: poverty
+    confidence: 0.8
+  - entity: xianglins_wife
+    attribute: time_of_death
+    narrativeHint: "死于除夕夜或当天——'昨天夜里，或者就是今天罢。——我说不清'。死在祝福的最忙时刻，但她死前得到了一个诚实的回答。"
+    confidence: 1.0
+  - entity: narrator
+    attribute: emotionalState
+    value: melancholy_but_not_guilty
+    confidence: 1.0
+  - entity: fourth_master_lu
+    attribute: attitude_toward_xianglins_wife
+    value: disgusted
+    confidence: 1.0
+  - entity: narrator
+    attribute: purpose
+    value: recount_her_story
+    narrativeHint: "'我'在孤灯下开始回忆她的生平——'我'没有救她，但'我'至少没有骗她。这微小的诚实是否能赎回'我'的旁观者身份？'我'用书写她的故事来回应这个问题。"
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "祥林嫂死了。死于贫穷。死于祝福的最忙时刻。但她死前被给予了一个诚实的答案——她活着的时候，没有一个人告诉过她确定的真相。"
+    progressAfter: 25
+    progressTotal: 100
+  - thread: T2
+    advancement: "分支A：灵魂之问得到了诚实的回答。祥林嫂不再需要在地狱恐惧和团圆希望之间摇摆。她的灯灭了——这个词既是叙述者的诚实用语，也是对她一生的隐喻。"
+    progressAfter: 30
+    progressTotal: 100
+  - thread: T3
+    advancement: "四叔的'谬种'咒骂与'我'内心的愤怒形成对比——'我'开始质疑旁观者的角色本身。'我'的诚实回答没有救她，但它改变了'我'与社会的关系：'我'不再能与四叔共处一室而心安理得。"
+    progressAfter: 30
+    progressTotal: 100
+  - thread: T4
+    advancement: "她的死亡发生在祝福仪式的高潮时刻。但与原文不同的是——她的'灯灭了'不是一个玷污祝福的事件，而是一个揭示祝福仪式虚伪本质的事件。"
+    progressAfter: 25
+    progressTotal: 100
+foreshadowing:
+  - id: flashback_triggered
+    hint: "'我'在孤灯下的回忆——'先前所见所闻的她的半生事迹的断片，至此也联成一片了'——引发了从E2开始的完整倒叙。这一次的回忆动机与原文不同：不是出于愧疚，而是出于愤怒和不甘。"
+    targetRevealChapter: 1
+    thread: T1
+relationshipEffects:
+  - participants:
+      - narrator
+      - xianglins_wife
+    effect: break
+    direction: honest_death_severs_connection
+    newState:
+      type: witness_subject_resolved_in_truth
+      intensity: 80
+  - participants:
+      - fourth_master_lu
+      - xianglins_wife
+    effect: reinforce
+    direction: disgust_confirmed
+    newState:
+      type: deceased_nuisance
+      intensity: 90
+  - participants:
+      - narrator
+      - fourth_master_lu
+    effect: change
+    direction: from_uneasy_guest_to_quietly_alienated
+    newState:
+      type: estranged_kinship
+      intensity: 40
+ruleEffects:
+  - rule: widow_purity
+    effect: reinforce
+    evidence: "鲁四老爷骂她'不早不迟，偏偏要在这时候——这就可见是一个谬种！'——死在祝福时节，她的死亡玷污了祝福仪式的纯洁。这一点在两条分支中相同：社会的冷血不变。"
+styleGuidance:
+  tone: "不同于原文的'沉闷、渐趋冷峻'——分支A的E1是'清醒的悲哀'。叙述者不再用'渐渐地轻松'来回避自己的责任，而是承认自己的无力，同时拒绝接受四叔的道德框架。"
+  atmosphere: "书房里'我'独自坐在灯下，外面雪花簌簌声。灯——这个意象在E1中反复出现——既是叙述者的诚实象征，也是祥林嫂生命终结的隐喻。"
+  scenePacing: "从'我不再惴惴不安'的平静开头→得知死讯的震动→听到'谬种'时的愤怒→孤灯夜坐的沉思。情感曲线与原文不同：不是从罪感到轻松，而是从平静到清醒的悲哀。"
+  characterVoice:
+    narrator: "内省语气，但与原文的逃避不同——这次'我'面对自己的情感。'她的灯灭了'——这句话是诚实的，不自欺的，但也是冰冷的。叙述者意识到诚实在面对死亡时的有限性。"

@@ -139,6 +139,7 @@ export class EntityMapper {
       attribute: pc.attribute,
       value: pc.value,
       confidence: 1.0,
+      narrativeHint: pc.narrativeHint,
       validity: {
         temporal: {
           start: parseStoryTimestamp(eventFile.storyTime, timeAnchorsMap),
@@ -154,6 +155,7 @@ export class EntityMapper {
       attribute: pc.attribute,
       value: pc.value,
       confidence: pc.confidence ?? 1.0,
+      narrativeHint: pc.narrativeHint,
       validity: {
         temporal: {
           start: parseStoryTimestamp(eventFile.storyTime, timeAnchorsMap),
@@ -181,7 +183,14 @@ export class EntityMapper {
       narrativeOrder: eventFile.narrativeOrder,
       title: eventFile.title,
       storyTime,
+      narrationTime: eventFile.narrationTime ? parseStoryTimestamp(eventFile.narrationTime, timeAnchorsMap) : undefined,
       sceneType: eventFile.sceneType ?? 'linear',
+      discourseMode: eventFile.discourseMode,
+      arcPosition: eventFile.arcPosition,
+      emotionalValence: eventFile.emotionalValence,
+      conflictType: eventFile.conflictType,
+      resolutionType: eventFile.resolutionType,
+      tense: eventFile.tense,
       pov: {
         character: eventFile.pov.character,
         type: eventFile.pov.type,
@@ -218,6 +227,9 @@ export class EntityMapper {
       participants: {
         entities: [...participantSet],
       },
+      targetAudience: eventFile.targetAudience ?? undefined,
+      status: 'draft',
+      cast: eventFile.cast ?? undefined,
     };
   }
 
@@ -285,6 +297,8 @@ export class EntityMapper {
       source: 'genesis',
       branchExistence: { type: 'all' },
       participants: { entities: [] },
+      targetAudience: undefined,
+      status: 'draft',
     };
   }
 }

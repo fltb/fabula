@@ -83,12 +83,18 @@ export interface TransitionEffect {
 
 // ——— World State ———
 
+export interface RuleState {
+  activeEvidence: number;
+  nullified: boolean;
+  exceptions: string[];
+}
+
 export interface WorldState {
   entities: Record<EntityId, Record<string, unknown>>;
   relationships: Record<string, RelationshipState>;
   knowledge: Record<EntityId, { knownFacts: FactId[] }>;
   threads: Record<string, { progress: number; total: number }>;
-  rules: Record<string, { activeEvidence: number }>;
+  rules: Record<string, RuleState>;
   facts: Fact[];
 }
 

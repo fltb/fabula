@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E2"
+    attribute: "character_reference"
+    expectedValidator: "alias"
+    expectedSeverity: "warning"
+    description: "Event refers to xianglins_wife as '祥林家的' which is not in the character's defined aliases list."

@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E4"
+    attribute: "postconditions"
+    expectedValidator: "world_rule"
+    expectedSeverity: "error"
+    description: "E4 postconditions state xianglins_wife.marital_status = remarried but a worldFact in state_initial says she was never legally remarried"

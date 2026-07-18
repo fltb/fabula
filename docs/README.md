@@ -1,31 +1,11 @@
-# Novalistically — 文档索引
+# Novalistically 文档
 
-## 活跃设计文档
+> 规范文档入口现在位于 **[docs/INDEX.md](./INDEX.md)**。
 
-| 文件 | 状态 | 说明 |
-|---|---|---|
-| `bench-rewrite-design.md` | **活跃** | Bench 重写项目设计索引（~250 行）。快速查阅设计全貌。 |
-| `bench-rewrite-full.md` | **活跃** | Bench 重写项目完整规格（~1500 行）。含完整 TypeScript 接口、Zod schema、算法伪代码、所有技术决策的取舍依据。实现时参考此文档。 |
-| `2026-07-17-batch-render-pipeline-design.md` | **活跃** | BatchRenderPipeline 分批渲染系统规格。滑动窗口分批、编排层架构、API 设计、与 bench-rewrite 集成。 |
+此文件保留用于现有链接的向后兼容性。所有文档已重构为一个统一入口点，并附带一个按角色组织的子文档网络：
 
-## 历史参考文档
+- **用户**：[快速上手](./getting-started/quickstart.md) → [配置](./getting-started/configuration.md) → [YAML 格式](./reference/yaml-format/)
+- **开发者**：[架构](./architecture.md) → [验证器](./reference/validators.md) → [添加验证器](./guides/adding-a-validator.md)
+- **调试者**：[流水线](./reference/pipeline.md) → [状态管理](./reference/state-management.md) → [基准系统](./reference/bench.md)
 
-| 文件 | 状态 | 说明 |
-|---|---|---|
-| `PROJECT.md` | ⚠️ 历史 | 原始系统设计（2025 年 7 月，~2900 行）。部分内容已过时，但架构概念仍有参考价值。 |
-| `IMPLEMENTATION.md` | ⚠️ 历史 | 从 PROJECT.md 提炼的开发路线图（~268 行）。部分内容已过时。 |
-
-## 参考
-
-| 目录/文件 | 状态 | 说明 |
-|---|---|---|
-| `prompts/pass1-prose-reference.md` | 活跃 | Pass 1 散文生成提示模板参考。 |
-| `reference/beginning.md` | 活跃 | 大型参考文件（247KB）。 |
-
----
-
-## 快速上手
-
-- 了解系统整体设计 → 读 `PROJECT.md`
-- 了解当前 Bench 重写计划 → 读 `bench-rewrite-design.md`
-- 开始实现 Bench 重写 → 读 `bench-rewrite-full.md`
+历史设计文档保存在 **[docs/archive/](./archive/README.md)** 中。

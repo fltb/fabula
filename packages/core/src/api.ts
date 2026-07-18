@@ -16,6 +16,9 @@ import { StateManager } from './state/manager.ts';
 import { ContextCompiler } from './context/compiler.ts';
 import { RenderPipeline, buildAndWriteOutputs } from './pipeline/index.ts';
 import type { RenderSceneResult, RenderJob } from './pipeline/render.ts';
+import { BatchRenderPipeline } from './batch-renderer.ts';
+import type { BatchConfig } from './batch-renderer.ts';
+import type { SystemContext } from './types/context.js';
 import { ResultAggregator } from './validator/aggregator.ts';
 import { calculateISS } from './iss/score.ts';
 import { FsStorage } from './storage/fs-storage.ts';
@@ -41,6 +44,8 @@ export interface RenderNovelOptions {
   baseUrl?: string;
   eventId?: string;     // single event; omit or 'all' for all
   dryRun?: boolean;
+  /** Optional batch config for sliding-window batch rendering. */
+  batch?: BatchConfig;
 }
 
 export interface RenderNovelResult {
@@ -139,19 +144,15 @@ function findChapterForEvent(
 }
 
 /**
- * Create an LLM provider based on apiKey prefix.
- * If apiKey starts with 'ocg-' use OpencodeGoProvider, else OpencodeZenProvider.
+ * Create an LLM provider using AiSdkProvider (Vercel AI SDK).
+ * Reads apiKey and baseUrl from parameters or environment variables.
  */
 async function createProvider(
   apiKey: string,
   baseUrl?: string,
 ): Promise<LLMProvider> {
-  if (apiKey.startsWith('ocg-')) {
-    const { OpencodeGoProvider } = await import('./ai/providers/opencode-go.ts');
-    return new OpencodeGoProvider({ apiKey, baseUrl });
-  }
-  const { OpencodeZenProvider } = await import('./ai/providers/opencode-zen.ts');
-  return new OpencodeZenProvider({ apiKey, baseUrl });
+  const { AiSdkProvider } = await import('./ai/providers/ai-sdk.ts');
+  return new AiSdkProvider({ apiKey, baseURL: baseUrl });
 }
 
 // ============================================================================
@@ -185,6 +186,13 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     return { results: [], errors };
   }
 
+  // Build systemContext from project config (fixes hardcoded 'fantasy' genre bug)
+  const sysCtx: SystemContext = {
+    genre: data.config?.genre ?? 'literary',
+    style: 'literary',
+    narrativeRules: [],
+  };
+
   // ── Dry run ───────────────────────────────────────────────────────
   if (dryRun) {
     const results: RenderNovelResult['results'] = [];
@@ -194,7 +202,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     for (const ev of renderEvents) {
       const beforeState = stateManager.getStateAt(ev.narrativeOrder - 1);
       const compiler = new ContextCompiler();
-      const pkg = compiler.compile(ev, beforeState, registry);
+      const pkg = compiler.compile(ev, beforeState, registry, { systemContext: sysCtx });
 
       const dryRunPath = path.join(dryRunDir, `${ev.id}_prompt.md`);
       fs.writeFileSync(dryRunPath, pkg.markdown, 'utf-8');
@@ -213,12 +221,12 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
   }
 
   // ── Full rendering ────────────────────────────────────────────────
-  const resolvedApiKey = apiKey ?? process.env['OPENCODE_API_KEY'] ?? '';
+  const resolvedApiKey = apiKey ?? process.env['NOVALISTICALLY_AI_API_KEY'] ?? '';
   if (!resolvedApiKey) {
-    errors.push('No API key provided. Set apiKey option or OPENCODE_API_KEY environment variable.');
+    errors.push('No API key provided. Set NOVALISTICALLY_AI_API_KEY environment variable or pass apiKey option.');
     return { results: [], errors };
   }
-  const resolvedBaseUrl = baseUrl ?? process.env['OPENCODE_BASE_URL'] ?? 'http://127.0.0.1:25793';
+  const resolvedBaseUrl = baseUrl ?? process.env['NOVALISTICALLY_AI_BASE_URL'] ?? undefined;
 
   let provider: LLMProvider;
   try {
@@ -249,8 +257,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     const chapterNum = findChapterForEvent(data, ev.id);
     const beforeState = stateManager.getStateAt(ev.narrativeOrder - 1);
     const compiler = new ContextCompiler();
-    const pkg = compiler.compile(ev, beforeState, registry);
-
+    const pkg = compiler.compile(ev, beforeState, registry, { systemContext: sysCtx });
     jobs.push({
       event: ev,
       stateBefore: beforeState,
@@ -259,17 +266,24 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     });
   }
 
-  // Render
+  // Render — choose batched or bulk mode
   let results: RenderSceneResult[];
   try {
-    results = await pipeline.renderAll(jobs);
+    if (opts.batch) {
+      // Batch mode: sliding-window rendering with progress hooks
+      const batchRenderer = new BatchRenderPipeline(pipeline);
+      const batchResult = await batchRenderer.renderBatched(jobs, opts.batch);
+      results = batchResult.results;
+    } else {
+      // Original mode: full parallel render
+      results = await pipeline.renderAll(jobs);
+      // Write outputs (batch mode handles output writing via onAfterBatch hooks)
+      buildAndWriteOutputs(storage, projectDir, jobs, results);
+    }
   } catch (err) {
     errors.push(`Render failed: ${(err as Error).message}`);
     return { results: [], errors };
   }
-
-  // Write outputs
-  buildAndWriteOutputs(storage, projectDir, jobs, results);
 
   // Map to return type
   const mappedResults = results.map((r) => ({
@@ -289,7 +303,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
 // ============================================================================
 
 /**
- * Run all 11 validators against the project and calculate ISS.
+ * Run all 18 validators against the project and calculate ISS.
  *
  * Internally: EntityMapper → InMemoryEntityRegistry → StateManager
  * → ResultAggregator → calculateISS.

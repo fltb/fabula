@@ -1,5 +1,5 @@
 // ============================================================================
-// WorldRuleValidator — Enforce logical_consequences from rule definitions
+// WorldRuleValidator — Consume Pass 2 AnalysisResult rule checks
 // ============================================================================
 
 import type {
@@ -20,47 +20,31 @@ export class WorldRuleValidator implements Validator {
 
   validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
-    const lowerProse = input.prose.toLowerCase();
-    const event = input.event;
-    const state = input.worldState;
+    if (!input.analysis) return issues;
 
-    // Check each active rule for possible prose violations
-    for (const [ruleId, ruleData] of Object.entries(state.rules)) {
-      if ((ruleData.activeEvidence ?? 0) <= 0) continue;
-
-      const ruleLower = ruleId.toLowerCase();
-
-      // Duration/time rules: flag mention of large time skips
-      if (/duration|time|day|week|month/.test(ruleLower)) {
-        const skipPatterns = ['a week later', 'weeks later', 'a month later', 'months later', 'days later'];
-        for (const pat of skipPatterns) {
-          if (lowerProse.includes(pat)) {
-            issues.push(makeIssue(
-              this.name, event.id, event.pov.character, 'warning',
-              `Active rule "${ruleId}" may be violated: prose mentions "${pat}" which implies a time skip`,
-              'Ensure time progression respects the limits set by active world rules.',
-              'edit_file',
-              'prose',
-            ));
-            break;
-          }
-        }
-      }
-
-      // Travel/distance rules: flag instant movement
-      if (/distance|travel|move|location/.test(ruleLower)) {
-        if (/\b(teleported|appeared suddenly|materialized|instantly arrived)\b/i.test(input.prose)) {
-          issues.push(makeIssue(
-            this.name, event.id, event.pov.character, 'warning',
-            `Active rule "${ruleId}" may be violated: prose suggests instant travel`,
-            'Ensure character movement respects the distance/travel rules of the world.',
-            'edit_file',
-            'prose',
-          ));
-        }
+    const ruleChecks = input.analysis.analysis.ruleChecks ?? [];
+    for (const check of ruleChecks) {
+      if (check.violated) {
+        issues.push(makeIssue(
+          'world_rule',
+          input.event.id,
+          check.ruleId,
+          check.severity === 'major' ? 'error' : 'warning',
+          `World rule violation: ${check.evidence}`,
+          'Review scene for rule compliance',
+          'edit_file',
+          'ruleEffects',
+        ));
       }
     }
-
     return issues;
+  }
+
+  getAnalysisRequirements() {
+    return [{
+      field: 'ruleChecks',
+      schemaExample: { ruleId: 'R1', violated: false, evidence: '...', severity: 'minor' },
+      instruction: 'ruleChecks: For each active world rule, check if the prose complies with or violates the stated rule. Report in the ruleChecks block with the ruleId, whether the rule was violated (true/false), a direct quote from the prose as evidence, and severity as "minor" or "major". A rule is violated if the prose depicts an action, event, or state that directly contradicts the rule\'s statement.',
+    }];
   }
 }

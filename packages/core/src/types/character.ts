@@ -17,6 +17,11 @@ export interface CharacterDefinition {
   voiceNotes?: string;
   backstory?: string;
   knownSecrets?: string[];
+  appearance?: string;
+  aliases?: string[];
+  gender?: string;
+  age?: number | string;
+  profession?: string;
 }
 
 // ——— Faction Definition ———

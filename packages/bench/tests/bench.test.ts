@@ -1,5 +1,5 @@
 // ============================================================================
-// Bench Test Suite — invokes `runFunctionalBench` and `runPerformanceBench`
+// Bench Test Suite — invokes `runRegressionBench` and `runPerformanceBench`
 // inside vitest `it()` blocks, printing tables and writing results.
 // ============================================================================
 
@@ -7,120 +7,185 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
-  runFunctionalBench,
+  runRegressionBench,
   runPerformanceBench,
   writeResults,
 } from '../src/index.js';
-import type { FunctionalResults } from '../src/index.js';
+import type { RegressionResults } from '../src/index.js';
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
-const MDF_FIXTURE = path.resolve(
-  '/home/float/myfile/Projects/novalistically/fixtures/most-dangerous-game',
+const ZHU_FU_FIXTURE = path.resolve(
+  '/home/float/myfile/Projects/novalistically/fixtures/zhu-fu',
 );
-const ARCANE_FIXTURE = path.resolve(
-  '/home/float/myfile/Projects/novalistically/fixtures/arcane-aftermath',
+const FALLBACK_FIXTURE = path.resolve(
+  '/home/float/myfile/Projects/novalistically/fixtures/most-dangerous-game',
 );
 
 /** Pick the best available fixture */
 function pickFixture(): string {
   try {
-    if (fs.existsSync(path.join(MDF_FIXTURE, 'nova.yaml'))) return MDF_FIXTURE;
+    if (fs.existsSync(path.join(ZHU_FU_FIXTURE, 'nova.yaml'))) return ZHU_FU_FIXTURE;
   } catch { /* ignore */ }
   try {
-    if (fs.existsSync(path.join(ARCANE_FIXTURE, 'nova.yaml'))) return ARCANE_FIXTURE;
+    if (fs.existsSync(path.join(FALLBACK_FIXTURE, 'nova.yaml'))) return FALLBACK_FIXTURE;
   } catch { /* ignore */ }
-  return MDF_FIXTURE;
+  return ZHU_FU_FIXTURE;
 }
 
 const FIXTURE = pickFixture();
-const IS_MDF = FIXTURE === MDF_FIXTURE;
 
-// ─── Functional Benchmarks ────────────────────────────────────────────────
+// ─── Regression Benchmarks ────────────────────────────────────────────────
 
-describe('Functional Benchmarks', () => {
-  let results: FunctionalResults;
+describe('Regression Benchmarks', () => {
+  let results: RegressionResults;
 
-  beforeAll(() => {
-    console.log(`\n[Functional] Fixture: ${FIXTURE}`);
-    results = runFunctionalBench(FIXTURE);
-  });
+  beforeAll(async () => {
+    console.log(`\n[Regression] Fixture: ${FIXTURE}`);
+    results = await runRegressionBench(FIXTURE);
+  }, 30000); // 30s timeout for regression
 
-  it('runs all functional stages without crashing', () => {
+  it('runs all regression stages without crashing', () => {
     expect(results.stages.length).toBeGreaterThan(0);
     console.log(
-      `[Functional] ${results.totalPassed}/${results.stages.length} passed, ` +
-      `${results.totalFailed} failed, ${results.totalTime.toFixed(0)}ms total`,
+      `[Regression] ${results.totalPassed}/${results.stages.length} passed, ` +
+      `${results.totalFailed} failed, ${results.totalTime}ms total`,
     );
   });
 
   // Print summary table
-  it('produces readable functional results', () => {
+  it('produces readable regression results', () => {
     const table = results.stages.map((s) => ({
       Stage: s.stage,
       Result: s.passed ? 'PASS' : 'FAIL',
-      'Time (ms)': s.ms.toFixed(2),
+      'Time (ms)': s.ms,
       Detail: s.detail.slice(0, 80),
     }));
     console.table(table);
   });
 
-  // Stage-specific assertions (Most Dangerous Game fixture)
-  if (IS_MDF) {
-    it('Load entities: ≥5 characters, ≥6 locations, ≥3 rules', () => {
-      const stage = results.stages.find((s) => s.stage === 'Load entities');
-      expect(stage?.passed).toBe(true);
-    });
-
-    it('Load events: events loaded successfully', () => {
-      const stage = results.stages.find((s) => s.stage === 'Load events');
-      expect(stage?.passed).toBe(true);
-    });
-
-    it('Build registry: no duplicate event IDs', () => {
-      const stage = results.stages.find((s) => s.stage === 'Build registry');
-      expect(stage?.passed).toBe(true);
-    });
-
-    it('ISS score in valid range (0-100)', () => {
-      const stage = results.stages.find((s) => s.stage === 'Calculate ISS');
-      expect(stage?.passed).toBe(true);
-    });
-  } else {
-    // Generic assertions for any fixture
-    it('Load entities succeeds', () => {
-      const stage = results.stages.find((s) => s.stage === 'Load entities');
-      expect(stage?.passed).toBe(true);
-    });
-
-    it('Load events succeeds', () => {
-      const stage = results.stages.find((s) => s.stage === 'Load events');
-      expect(stage?.passed).toBe(true);
-    });
-
-    it('Build registry: no duplicate event IDs', () => {
-      const stage = results.stages.find((s) => s.stage === 'Build registry');
-      expect(stage?.passed).toBe(true);
-    });
-  }
-
-  // Validators all run without crashing
-  it('all validators run without throwing', () => {
-    const validatorStages = results.stages.filter(
-      (s) => s.stage.includes('Validator') || s.stage === 'ResultAggregator',
-    );
-    for (const vs of validatorStages) {
-      // Even if there are issues, the validator itself should not crash
-      expect(vs.passed).toBe(true);
-    }
+  it('Load entities succeeds', () => {
+    const stage = results.stages.find((s) => s.stage === 'Load entities');
+    expect(stage?.passed).toBe(true);
   });
 
-  it('Context compiler produces all 5 layers', () => {
+  it('Load events succeeds', () => {
+    const stage = results.stages.find((s) => s.stage === 'Load events');
+    expect(stage?.passed).toBe(true);
+  });
+
+  it('Build DAG succeeds', () => {
+    const stage = results.stages.find((s) => s.stage === 'Build DAG');
+    expect(stage?.passed).toBe(true);
+  });
+
+  it('Replay state succeeds', () => {
+    const stage = results.stages.find((s) => s.stage === 'Replay state');
+    expect(stage?.passed).toBe(true);
+  });
+
+  it('Run validators succeeds', () => {
+    const stage = results.stages.find((s) => s.stage === 'Run validators');
+    expect(stage?.passed).toBe(true);
+  });
+
+  it('Compile context succeeds', () => {
     const stage = results.stages.find((s) => s.stage === 'Compile context');
-    // May fail if no narrative events exist or E11 not found — check if present
     if (stage) {
       expect(stage.passed).toBe(true);
     }
+  });
+  it('Run post-render validators (L2) stage exists', () => {
+    const stage = results.stages.find((s) => s.stage === 'Run post-render validators (L2)');
+    expect(stage).toBeDefined();
+    expect(stage!.passed).toBe(true);
+    expect(stage!.detail).toContain('Events with analysis:');
+    console.log(`[L2] ${stage!.detail}`);
+  });
+
+  it('collects L1 issues array that is non-empty for zhu-fu', () => {
+    // zhu-fu should produce validation issues
+    expect(results.l1Issues).toBeDefined();
+    expect(results.l1Issues.length).toBeGreaterThan(0);
+    console.log(`[L1 Issues] Total: ${results.l1Issues.length}`);
+    // Print top-level breakdown
+    const bySeverity = new Map<string, number>();
+    for (const iss of results.l1Issues) {
+      bySeverity.set(iss.severity, (bySeverity.get(iss.severity) ?? 0) + 1);
+    }
+    for (const [sev, count] of bySeverity) {
+      console.log(`  ${sev}: ${count}`);
+    }
+  });
+
+  it('collects L2 issues array (may be empty if no reference data)', () => {
+    expect(results.l2Issues).toBeDefined();
+    // L2 may be empty if reference directory has no analysis data — that's ok
+    console.log(`[L2 Issues] Total: ${results.l2Issues.length}`);
+    if (results.l2Issues.length > 0) {
+      const bySeverity = new Map<string, number>();
+      for (const iss of results.l2Issues) {
+        bySeverity.set(iss.severity, (bySeverity.get(iss.severity) ?? 0) + 1);
+      }
+      for (const [sev, count] of bySeverity) {
+        console.log(`  ${sev}: ${count}`);
+      }
+    }
+  });
+
+  it('each L1 issue has required fields', () => {
+    for (const iss of results.l1Issues) {
+      expect(iss.validator).toBeTruthy();
+      expect(['error', 'warning', 'info']).toContain(iss.severity);
+      expect(iss.event).toBeTruthy();
+      expect(iss.entity).toBeTruthy();
+      expect(iss.message).toBeTruthy();
+      expect(iss.fixSuggestion).toBeTruthy();
+    }
+  });
+
+  it('computes per-validator N-CED for L1 issues', () => {
+    expect(results.l1PerValidator).toBeDefined();
+    expect(Array.isArray(results.l1PerValidator)).toBe(true);
+    if (results.l1PerValidator.length > 0) {
+      const first = results.l1PerValidator[0];
+      expect(first.validator).toBeTruthy();
+      expect(typeof first.nCED).toBe('number');
+      expect(first.nCED).toBeGreaterThanOrEqual(0);
+      console.log(`[L1 PerValidator] ${results.l1PerValidator.length} validators, top: ${first.validator} (N-CED=${first.nCED.toFixed(2)})`);
+    }
+  });
+
+  it('computes per-validator N-CED for L2 issues', () => {
+    expect(results.l2PerValidator).toBeDefined();
+    expect(Array.isArray(results.l2PerValidator)).toBe(true);
+    if (results.l2PerValidator.length > 0) {
+      const first = results.l2PerValidator[0];
+      expect(first.validator).toBeTruthy();
+      expect(typeof first.nCED).toBe('number');
+      expect(first.nCED).toBeGreaterThanOrEqual(0);
+      console.log(`[L2 PerValidator] ${results.l2PerValidator.length} validators, top: ${first.validator} (N-CED=${first.nCED.toFixed(2)})`);
+    }
+  });
+
+  it('computes severity-level CED', () => {
+    expect(results.severityCED).toBeDefined();
+    expect(Array.isArray(results.severityCED)).toBe(true);
+    expect(results.severityCED.length).toBe(3); // error, warning, info
+    for (const sc of results.severityCED) {
+      expect(['error', 'warning', 'info']).toContain(sc.severity);
+      expect(typeof sc.l1CED).toBe('number');
+      expect(sc.l1CED).toBeGreaterThanOrEqual(0);
+      expect(typeof sc.l2CED).toBe('number');
+      expect(sc.l2CED).toBeGreaterThanOrEqual(0);
+    }
+    const errorEntry = results.severityCED.find((s) => s.severity === 'error');
+    const warningEntry = results.severityCED.find((s) => s.severity === 'warning');
+    const infoEntry = results.severityCED.find((s) => s.severity === 'info');
+    expect(errorEntry).toBeDefined();
+    expect(warningEntry).toBeDefined();
+    expect(infoEntry).toBeDefined();
+    console.log(`[Severity CED] error: L1=${errorEntry!.l1CED.toFixed(2)} L2=${errorEntry!.l2CED.toFixed(2)}, warning: L1=${warningEntry!.l1CED.toFixed(2)} L2=${warningEntry!.l2CED.toFixed(2)}, info: L1=${infoEntry!.l1CED.toFixed(2)} L2=${infoEntry!.l2CED.toFixed(2)}`);
   });
 });
 
@@ -206,24 +271,77 @@ describe('Performance Benchmarks', () => {
 // ─── Report Writing ────────────────────────────────────────────────────────
 
 describe('Benchmark Reporting', () => {
-  it('writes JSON and Markdown results to disk', () => {
-    const results = runFunctionalBench(FIXTURE);
-    const basePath = writeResults({
+  it('writes JSON and Markdown results to disk', async () => {
+    const results = await runRegressionBench(FIXTURE);
+    const benchResults = {
       timestamp: new Date().toISOString(),
-      functional: results.stages.map((s) => ({
+      regression: results.stages.map((s) => ({
         stage: s.stage,
         passed: s.passed,
         ms: s.ms,
         detail: s.detail,
       })),
       performance: [],
-    });
+      l1Issues: results.l1Issues ?? [],
+      l2Issues: results.l2Issues ?? [],
+      l1PerValidator: results.l1PerValidator ?? [],
+      l2PerValidator: results.l2PerValidator ?? [],
+      severityCED: results.severityCED ?? [],
+    };
+
+    // Include L2 stats if present
+    const l2Stage = results.stages.find((s) => s.stage === 'Run post-render validators (L2)');
+    if (l2Stage) {
+      (benchResults as any).l2Stats = {
+        passed: l2Stage.passed,
+        ms: l2Stage.ms,
+        detail: l2Stage.detail,
+      };
+    }
+
+    const basePath = writeResults(benchResults as any);
 
     const jsonPath = `${basePath}.json`;
     const mdPath = `${basePath}.md`;
 
     expect(fs.existsSync(jsonPath)).toBe(true);
     expect(fs.existsSync(mdPath)).toBe(true);
+
+    // Verify L2 data in JSON output
+    const jsonContent = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
+    expect(jsonContent.l2Stats).toBeDefined();
+    expect(jsonContent.l2Stats.detail).toContain('Events with analysis:');
+
+    // Verify L2 data in Markdown output
+    const mdContent = fs.readFileSync(mdPath, 'utf-8');
+    expect(mdContent).toContain('L2 Post-Render Validation');
+    expect(mdContent).toContain('Events with analysis:');
+
+    // Verify issue detail sections
+    expect(jsonContent.l1Issues).toBeDefined();
+    expect(Array.isArray(jsonContent.l1Issues)).toBe(true);
+    expect(jsonContent.l2Issues).toBeDefined();
+    expect(Array.isArray(jsonContent.l2Issues)).toBe(true);
+
+    // Verify JSON issues have full fields (not truncated)
+    if (jsonContent.l1Issues.length > 0) {
+      const first = jsonContent.l1Issues[0];
+      expect(first.validator).toBeTruthy();
+      expect(first.severity).toBeTruthy();
+      expect(first.event).toBeTruthy();
+      expect(first.entity).toBeTruthy();
+      expect(first.message).toBeTruthy();
+      expect(first.fixSuggestion).toBeTruthy();
+    }
+
+    // Verify Markdown contains issue tables when issues exist
+    if (results.l1Issues.length > 0) {
+      expect(mdContent).toContain('L1 Issues (Pre-Render Validation)');
+      expect(mdContent).toContain('| # | Validator | Severity | Event | Entity | Attribute | Message |');
+    }
+    if (results.l2Issues.length > 0) {
+      expect(mdContent).toContain('L2 Issues (Post-Render Validation with Pass 2)');
+    }
 
     // Clean up test artifacts
     try {
@@ -240,11 +358,23 @@ describe('Benchmark Reporting', () => {
 import { runAll } from '../src/index.js';
 
 describe('runAll integration', () => {
-  it('runs both functional and performance benchmarks', async () => {
+  it('runs all benchmark suites', async () => {
     const results = await runAll(FIXTURE);
-    expect(results.functional.length).toBeGreaterThan(0);
+    expect(results.regression.length).toBeGreaterThan(0);
     expect(results.timestamp).toBeTruthy();
-    console.log(`[runAll] ${results.functional.filter((f) => f.passed).length} functional passed`);
+    console.log(`[runAll] ${results.regression.filter((f) => f.passed).length} regression passed`);
+    expect(results.performance.length).toBeGreaterThan(0);
     console.log(`[runAll] ${results.performance.length} performance measurements`);
-  }, 60000); // Allow up to 60s for full suite
+    // Verify issue arrays are present
+    expect(results.l1Issues).toBeDefined();
+    expect(Array.isArray(results.l1Issues)).toBe(true);
+    expect(results.l2Issues).toBeDefined();
+    expect(Array.isArray(results.l2Issues)).toBe(true);
+    if (results.l1Issues.length > 0) {
+      console.log(`[runAll] L1 issues: ${results.l1Issues.length}`);
+    }
+    if (results.l2Issues.length > 0) {
+      console.log(`[runAll] L2 issues: ${results.l2Issues.length}`);
+    }
+  }, 120000); // Allow up to 120s for full suite
 });

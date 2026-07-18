@@ -94,6 +94,7 @@ export type {
   ValidationIssue,
   Validator,
   ValidationResult,
+  AnalysisBlockRequirement,
 } from './validator.js';
 
 export type {
@@ -104,6 +105,12 @@ export type {
   POVAnalysis,
   InventedDetail,
   QualityAnalysis,
+  MatchLevel,
+  NarrativeCheck,
+  AppearanceCheck,
+  CharacterReference,
+  TenseDetected,
+  ConflictAnalysis,
 } from './analysis.js';
 
 export type {

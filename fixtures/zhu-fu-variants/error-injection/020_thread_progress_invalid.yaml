@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E3"
+    attribute: "threadProgress"
+    expectedValidator: "schema"
+    expectedSeverity: "warning"
+    description: "An event's threadProgress references threadId T99 — a non-existent thread"

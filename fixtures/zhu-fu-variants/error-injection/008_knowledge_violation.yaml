@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E2"
+    attribute: "narratorKnowledge"
+    expectedValidator: "knowledge"
+    expectedSeverity: "error"
+    description: "E2 (first arrival, chronological start) has the narrator knowing about the kidnapping that happens in E3 — knowledge of future events"

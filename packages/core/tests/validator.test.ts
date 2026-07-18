@@ -86,7 +86,6 @@ function buildPreInput(
       narratorKnowledge: [],
     }),
     getThreadProgress: (_threadId: string) => ({ progress: 0, total: 0 }),
-    getRuleEvidence: (_ruleId: string) => [],
     ...overrides,
   };
 }
@@ -1132,7 +1131,7 @@ describe('ResultAggregator', () => {
     const aggregator = new ResultAggregator();
     const validators = aggregator.listValidators();
 
-    expect(validators).toHaveLength(11);
+    expect(validators).toHaveLength(20);
     expect(validators.map((v) => v.name)).toEqual([
       'timeline',
       'character_state',
@@ -1145,6 +1144,15 @@ describe('ResultAggregator', () => {
       'voice_drift',
       'branch_merge',
       'reachability',
+      'pacing',
+      'tense_consistency',
+      'discourse_balance',
+      'alias',
+      'pronoun',
+      'appearance',
+      'conflict',
+      'quality',
+      'thread_progress',
     ]);
   });
 

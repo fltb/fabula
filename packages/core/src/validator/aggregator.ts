@@ -13,6 +13,7 @@ import type {
   PreRenderInput,
   PostRenderInput,
   KnowledgeState,
+  AnalysisBlockRequirement,
 } from '../types/index.js';
 import type { Validator } from '../types/index.js';
 import type { PluginValidator } from '../plugin/validator-registry.js';
@@ -28,6 +29,15 @@ import { FactualDetailValidator } from './factual-detail.js';
 import { VoiceDriftDetector } from './voice-drift.js';
 import { BranchMergeValidator } from './branch-merge.js';
 import { ReachabilityValidator } from './reachability.js';
+import { PacingValidator } from './pacing.js';
+import { TenseConsistencyValidator } from './tense-consistency.js';
+import { DiscourseBalanceValidator } from './discourse-balance.js';
+import { AliasValidator } from './alias.js';
+import { PronounValidator } from './pronoun.js';
+import { AppearanceValidator } from './appearance.js';
+import { ConflictValidator } from './conflict.js';
+import { QualityValidator } from './quality.js';
+import { ThreadProgressValidator } from './thread-progress.js';
 
 import type { EventStore } from '../state/event-store.js';
 
@@ -54,6 +64,15 @@ export class ResultAggregator {
       new VoiceDriftDetector(),
       new BranchMergeValidator(),
       new ReachabilityValidator(),
+      new PacingValidator(),
+      new TenseConsistencyValidator(),
+      new DiscourseBalanceValidator(),
+      new AliasValidator(),
+      new PronounValidator(),
+      new AppearanceValidator(),
+      new ConflictValidator(),
+      new QualityValidator(),
+      new ThreadProgressValidator(),
     ];
     this.pluginValidators = pluginValidators ?? [];
   }
@@ -154,7 +173,6 @@ export class ResultAggregator {
           queryState: (entityId: EntityId, attr: string) => state.entities[entityId]?.[attr],
           getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] } as KnowledgeState),
           getThreadProgress: (threadId: string) => state.threads[threadId] ?? { progress: 0, total: 0 },
-          getRuleEvidence: () => [],
         };
         const issues = validator.validatePre(input);
         for (const issue of issues) {
@@ -247,5 +265,48 @@ export class ResultAggregator {
       name: v.name,
       category: v.category,
     }));
+  }
+
+  /**
+   * Collect analysis block requirements from all validators that provide them.
+   * These drive dynamic construction of the Pass 2 JSON template + instructions.
+   * Merges requirements by field, detecting attribute conflicts on shared fields.
+   */
+  getAnalysisRequirements(): AnalysisBlockRequirement[] {
+    const all: AnalysisBlockRequirement[] = [];
+    for (const validator of this.validators) {
+      if (validator.getAnalysisRequirements) {
+        all.push(...validator.getAnalysisRequirements());
+      }
+    }
+
+    // Merge requirements by field, detecting attribute conflicts
+    const merged = new Map<string, AnalysisBlockRequirement>();
+    for (const req of all) {
+      const existing = merged.get(req.field);
+      if (!existing) {
+        merged.set(req.field, { ...req, attributes: [...(req.attributes ?? [])] });
+      } else {
+        // Check for attribute conflicts
+        if (req.attributes && req.attributes.length > 0) {
+          const existingAttrs = new Set(existing.attributes ?? []);
+          for (const attr of req.attributes) {
+            if (existingAttrs.has(attr)) {
+              throw new Error(
+                `AnalysisBlockRequirement conflict: attribute "${attr}" in field "${req.field}" ` +
+                `is claimed by multiple validators. Each attribute must be unique per field.`,
+              );
+            }
+            existingAttrs.add(attr);
+          }
+          existing.attributes = [...existingAttrs];
+        }
+        // Merge instructions
+        existing.instruction = existing.instruction + '\n\n' + req.instruction;
+        // Keep first schemaExample (they should be structurally identical for same field)
+      }
+    }
+
+    return [...merged.values()];
   }
 }

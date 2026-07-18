@@ -67,6 +67,7 @@ export class POVValidator implements Validator {
     const povType = event.pov.type;
     const povChar = event.pov.character;
 
+    // First-person pronoun check (deterministic, cross-language)
     if (povType === 'first_person') {
       const hasFirstPerson = /\b(?:I|my|me|myself|mine)\b/i.test(prose);
       if (!hasFirstPerson) {
@@ -78,27 +79,43 @@ export class POVValidator implements Validator {
           'pov.type',
         ));
       }
-    } else if (povType === 'third_person_limited') {
-      const otherChars = event.participants.entities.filter((e) => e !== povChar);
-      for (const char of otherChars) {
-        const name = char.includes('.') ? char.split('.').pop()! : char;
-        const thoughtRegex = new RegExp(
-          `\\b${name}\\s+(thought|wondered|realized|knew|felt|remembered|decided|hoped|feared)\\b`,
-          'i',
-        );
-        if (thoughtRegex.test(prose)) {
-          issues.push(makeIssue(
-            this.name, event.id, povChar, 'error',
-            `Prose enters "${char}"'s inner thoughts ("${thoughtRegex.source}") — inconsistent with ${povType} POV for "${povChar}"`,
-            'Rewrite to stay strictly within the POV character\'s perspective.',
-            'edit_file',
-            'pov.type',
-          ));
-          break;
-        }
+    }
+
+    // Consume Pass 2 analysis for POV leaks (semantic checks)
+    if (input.analysis) {
+      const leaks = input.analysis.analysis.pov.leaks ?? [];
+      for (const leak of leaks) {
+        issues.push(makeIssue(
+          this.name,
+          event.id,
+          event.pov.character,
+          'warning',
+          `POV leak detected: ${leak}`,
+          'Review POV consistency',
+          'edit_file',
+          'pov',
+        ));
       }
     }
 
+    // Check POV consistency from Pass 2 analysis
+    if (input.analysis && !input.analysis.analysis.pov.consistent) {
+      issues.push(makeIssue(
+        'pov', input.event.id, input.event.pov.character, 'warning',
+        'POV inconsistency detected: the prose does not maintain consistent point of view.',
+        'Review POV consistency throughout the scene.',
+        'edit_file', 'pov',
+      ));
+    }
+
     return issues;
+  }
+
+  getAnalysisRequirements() {
+    return [{
+      field: 'pov.leaks',
+      schemaExample: { consistent: true, leaks: ['any phrases that enter another character\'s inner thoughts'] },
+      instruction: 'pov.leaks: Determine if the prose maintains the specified POV type throughout. List any phrases where the narration leaks into another character\'s internal thoughts, perceptions, or knowledge that the POV character could not access. Report in the pov block with consistent (true/false) and an array of leaked phrases. Pay attention to free indirect discourse that might blur POV boundaries.',
+    }];
   }
 }

@@ -7,6 +7,34 @@ import {
   createEmptyBranchPath,
   includesPath,
 } from '../branch/index.js';
+import { buildCausalEdges, topologicalSort } from './dag.js';
+
+// ——— Rule effect application helper ———
+
+function applyRuleEffect(
+  state: WorldState,
+  re: { rule: string; effect: string; evidence: string }
+): void {
+  if (!state.rules[re.rule]) {
+    state.rules[re.rule] = { activeEvidence: 0, nullified: false, exceptions: [] };
+  }
+  switch (re.effect) {
+    case 'reinforce':
+      state.rules[re.rule].activeEvidence++;
+      state.rules[re.rule].nullified = false;  // reinforce clears nullification
+      break;
+    case 'weaken':
+      state.rules[re.rule].activeEvidence = Math.max(0, state.rules[re.rule].activeEvidence - 1);
+      break;
+    case 'nullify':
+      state.rules[re.rule].activeEvidence = 0;
+      state.rules[re.rule].nullified = true;
+      break;
+    case 'introduce_exception':
+      state.rules[re.rule].exceptions.push(re.evidence);
+      break;
+  }
+}
 
 export class ReplayEngine {
   /**
@@ -18,7 +46,24 @@ export class ReplayEngine {
     branchPath?: BranchPath,
   ): WorldState {
     const bp = branchPath ?? createEmptyBranchPath();
-    const sorted = [...events].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
+
+    // Sort events by causal DAG order; fall back to narrativeOrder on cycle
+    let sorted: NarrativeEvent[];
+    try {
+      const { edges, inDegree } = buildCausalEdges(events);
+      const sortedIds = topologicalSort(events, edges, inDegree);
+      const idToEvent = new Map(events.map((e) => [e.id, e]));
+      sorted = sortedIds.map((id) => idToEvent.get(id)!);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('cycle detected')) {
+        console.warn(
+          '[ReplayEngine] DAG cycle detected, falling back to narrativeOrder sort',
+        );
+        sorted = [...events].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
+      } else {
+        throw err;
+      }
+    }
 
     const state: WorldState = {
       entities: {},
@@ -38,12 +83,15 @@ export class ReplayEngine {
         // Also filter facts by branch
         if (!includesPath(fact.validity.branches, bp)) continue;
 
-        state.facts.push(fact);
-
         if (!state.entities[fact.entityId]) {
           state.entities[fact.entityId] = {};
         }
-        state.entities[fact.entityId][fact.attribute] = fact.value;
+        // Only write deterministic values; narrativeHint facts are skipped
+        // (they are consumed by Pass 2 analysis, not written to WorldState)
+        if (fact.value !== undefined) {
+          state.facts.push(fact);
+          state.entities[fact.entityId][fact.attribute] = fact.value;
+        }
       }
 
       // Apply preconditions (they become known facts about the entity too)
@@ -52,8 +100,8 @@ export class ReplayEngine {
         if (!state.entities[fact.entityId]) {
           state.entities[fact.entityId] = {};
         }
-        // Only set if not already set by a later postcondition
-        if (!(fact.attribute in state.entities[fact.entityId])) {
+        // Only set if not already set by a later postcondition AND has a deterministic value
+        if (!(fact.attribute in state.entities[fact.entityId]) && fact.value !== undefined) {
           state.entities[fact.entityId][fact.attribute] = fact.value;
         }
       }
@@ -103,14 +151,7 @@ export class ReplayEngine {
       }
 
       // Update rule evidence
-      for (const re of event.ruleEffects) {
-        if (!state.rules[re.rule]) {
-          state.rules[re.rule] = { activeEvidence: 0 };
-        }
-        if (re.effect === 'reinforce') {
-          state.rules[re.rule].activeEvidence++;
-        }
-      }
+      event.ruleEffects.forEach(re => applyRuleEffect(state, re));
     }
 
     return state;
@@ -161,11 +202,13 @@ export class ReplayEngine {
       for (const fact of event.postconditions) {
         if (!includesPath(fact.validity.branches, bp)) continue;
 
-        state.facts.push(fact);
         if (!state.entities[fact.entityId]) {
           state.entities[fact.entityId] = {};
         }
-        state.entities[fact.entityId][fact.attribute] = fact.value;
+        if (fact.value !== undefined) {
+          state.facts.push(fact);
+          state.entities[fact.entityId][fact.attribute] = fact.value;
+        }
       }
 
       for (const tp of event.threadProgress) {
@@ -175,14 +218,7 @@ export class ReplayEngine {
         };
       }
 
-      for (const re of event.ruleEffects) {
-        if (!state.rules[re.rule]) {
-          state.rules[re.rule] = { activeEvidence: 0 };
-        }
-        if (re.effect === 'reinforce') {
-          state.rules[re.rule].activeEvidence++;
-        }
-      }
+      event.ruleEffects.forEach(re => applyRuleEffect(state, re));
     }
 
     return state;

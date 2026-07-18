@@ -1,0 +1,14 @@
+id: narrator_xianglins_wife
+type: witness_subject
+participants:
+  - narrator
+  - xianglins_wife
+bidirectional: false
+initialState:
+  trust: 0
+  emotionalDistance: 80
+  intensity: 30
+  status: "stranger_encounter"
+  notes: "叙述者'我'与祥林嫂只有一面之缘——在河边相遇，她问他灵魂和地狱的问题。他们的关系是根本不对称的——他是受过教育的男性知识分子，她是目不识丁的女乞丐；他是叙述者、见证者，她是被叙述者、被观看者。他有能力帮助她但选择了逃避，她在寻求答案时被拒绝了。她死之后，他写下了她的故事——这是他唯一的'补偿'，但这份补偿是单方面的、事后的、无用的。"
+establishedEvent: E0
+breakingEvent: E1

@@ -1,0 +1,112 @@
+event: E6
+title: "冬日的炉边——没有祝福的终局"
+narrativeOrder: 7
+sceneType: flashback
+storyTime: branch_b_old_age
+tense: past
+discourseMode: transition
+arcPosition: denouement
+emotionalValence: "bittersweet_completion"
+conflictType: "person_vs_fate"
+resolutionType: "natural_death"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "又过了许多年。贺老六在一个冬天里安静地走了——不是伤寒复发，是老。他的头发全白了，躺在床上，握着祥林嫂的手说：'我走了，你跟阿毛过。'然后闭上眼睛，就像睡着了一样。祥林嫂没有哭——她这辈子已经哭够了。她坐在床边，摸了摸他的额头，凉的。阿毛已经是大人了，娶了媳妇，生了孩子。春丫头也嫁到隔壁村去了。祥林嫂做了奶奶，每天在灶前坐着，看着孙子孙女满院子跑。她的手还是粗糙的，头发也全白了，但脸上有了皱纹——是笑纹，不是木刻的纹路。她从来不问灵魂的事——没有人来吓她，她也不需要寻求答案。她死在一个春天的早晨——还是春天，但这一次，春天没有夺走她的什么东西。她是在自己的床上死的，身边是阿毛和儿媳妇。她说的最后一句话是：'灶上还有粥。'叙述者'我'从来不知道她的后半生——'我'在鲁镇遇到的祥林嫂已经死了，没有另一个人来问'我'灵魂问题。'我'只能从卫老婆子支离破碎的闲谈中拼凑出这些片段——'她倒熬出来了'、'后来在贺家坳老死的'。'我'不知道她的全名，不知道她死在哪一年，不知道她的孙儿叫什么。'我'只知道她没有被锯成两半——不是因为捐了门槛，而是因为她从未走进那套需要锯人的信仰。'我'写下这些，不是为了证明什么——只是想让这个没有名字的女人，至少在这几页纸上，被人看见。"
+preconditions:
+  - entity: xianglins_wife
+    attribute: location
+    value: he_family_hollow
+  - entity: xianglins_wife
+    attribute: emotionalState
+    value: quietly_content
+  - entity: he_laoliu
+    attribute: status
+    value: alive
+expectedPostconditions:
+  - entity: he_laoliu
+    attribute: status
+    value: dead
+    confidence: 1.0
+  - entity: he_laoliu
+    attribute: cause_of_death
+    value: old_age
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: status
+    value: dead
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: cause_of_death
+    value: old_age
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: death_location
+    value: own_home_he_family_hollow
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: social_status
+    narrativeHint: "分支B的终局：她在自己的床上，被家人围绕，在春天里安详死去——与原文中'纯乎是一个乞丐了'、冻死在除夕街头形成最极端的对比。但这并不是'幸福'的简单反写——她只是被命运放过了关键的那一劫。她的一生仍然贫穷、辛劳、没有名字。区别只在于：这一次，她没有成为鲁迅笔下那个被社会绞杀的标本——她只是像千百万普通农妇一样，活到了能活到的岁数，死在了能死在的地方。这个'普通'本身，就是对封建社会最尖锐的质问：为什么'普通'需要运气？"
+    confidence: 1.0
+  - entity: narrator
+    attribute: knowledge_of_branch_B
+    narrativeHint: "叙述者'我'只能从卫老婆子的闲谈中得知祥林嫂的后半生——这构成了叙述视角的有限性和分支之间的不可知性。'我'从未有机会给她一个诚实的回答，因为在这条分支中，她从未出现在'我'的河岸。"
+    confidence: 0.8
+threadProgress:
+  - thread: T1
+    advancement: "分支B：祥林嫂的生命轨迹——逃婚寡妇→勤快帮工→被卖改嫁→贺老六康复→平静岁月→自然老死。她的人生没有被封建社会最黑暗的机关捕获，但她的一生仍然被贫穷、劳作和无名所定义。她'熬出来了'——但这三个字本身就是对女性生存条件的控诉。"
+    progressAfter: 100
+    progressTotal: 100
+  - thread: T2
+    advancement: "灵魂之问在这条分支中从未被提出——不是因为她找到了答案，而是因为她从未被置于必须提问的绝境。她在自己家的床上死去，不需要一个知识分子的'说不清'来解释死亡。"
+    progressAfter: 100
+    progressTotal: 100
+  - thread: T3
+    advancement: "分支B的看客视角：叙述者'我'只能通过二手闲谈来了解她的后半生——这种知识的残缺本身就是一种看客伦理的延续。'我'从来没有真正认识她。"
+    progressAfter: 100
+    progressTotal: 100
+  - thread: T4
+    advancement: "祥林嫂在贺家坳的终局没有祝福仪式——没有爆竹，没有祭品，没有天地圣众的醉醺醺。她的祝福是灶上的粥、院里的孙儿、床边的家人。祝福仪式的缺席，恰恰是对祝福仪式虚伪性的终极揭示。"
+    progressAfter: 100
+    progressTotal: 100
+relationshipEffects:
+  - participants:
+      - he_laoliu
+      - xianglins_wife
+    effect: break
+    direction: old_age_widowhood
+    newState:
+      type: lifelong_partners
+      intensity: 100
+  - participants:
+      - xianglins_wife
+      - fourth_master_lu
+    effect: break
+    direction: never_reconnected
+    newState:
+      type: no_relationship
+      intensity: 0
+  - participants:
+      - narrator
+      - xianglins_wife
+    effect: never_formed
+    direction: never_met_in_this_branch
+    newState:
+      type: unknown_to_each_other
+      intensity: 0
+ruleEffects:
+  - rule: patriarchal_clan_authority
+    effect: challenge
+    evidence: "贺老六活到老，死在自己床上，大伯没有机会收房。宗族权力在这条分支中从未得到执行——但这并非制度的改善，只是一个家庭的偶然胜利。"
+  - rule: religious_authority
+    effect: dodge
+    evidence: "祥林嫂终身未接触地狱恐吓和门槛救赎——因为她的生活轨迹绕开了需要'赎罪'的社会情境。宗教绳索仍然存在，只是这次没有套住她。"
+  - rule: widow_purity
+    effect: dodge
+    evidence: "她只做了一次寡妇（贺老六老死时她已老，不受再寡歧视）。贞节规范在这条分支中没有机会惩罚她——不是因为她反抗了规范，而是因为她恰好避开了触发条件。"
+styleGuidance:
+  tone: "不是伤感，不是控诉，不是庆祝——是一种'注视'的语调。叙述者试图在零碎信息中还原一个他没有参与的故事。这种距离感本身就应该成为文本的一部分：书写者与被书写者之间，永远隔着一条看见与看不见的河。"
+  scenePacing: "贺老六的死（安静地滑入）→祥林嫂独坐的沉默→时光跳到阿毛成家、孙子出生→跳到她的终局：春天的死和灶上的粥。时间在这里加速——因为这是一条没有戏剧性转折的分支。最后回到叙述者的视角：'我'怎样从二手信息中拼凑出这些碎片。结尾落在'被人看见'——这是叙述本身的伦理声明。"
+  characterVoice:
+    narrator: "这一场的叙述语气应当比原文的E1更安静——不是'不知不觉地渐渐轻松'的自我辩护，而是'我从未真正认识她'的诚实承认。书写不是救赎，书写只是注视。"
+    avoid: "不要把她写成'幸福的老太太'——她仍然是穷苦的、粗糙的、没有名字的。不要浪漫化贫穷。不要暗示'如果贺老六没死就一切都好了'——分支B的意义不在于提供一个幸福的替代方案，而在于揭示：在那个系统中，'正常'的存活需要多少偶然条件。"

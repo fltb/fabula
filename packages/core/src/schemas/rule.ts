@@ -12,6 +12,7 @@ export const ruleDefinitionSchema = z
     category: z.string(),
     type: z.string(),
     statement: z.string(),
+    ruleClass: z.enum(['natural_law', 'social_norm', 'moral_principle', 'game_rule', 'legal_code']).optional(),
     logicalConsequences: z.array(logicalConsequenceSchema),
     exceptions: z
       .array(

@@ -353,7 +353,6 @@ describe('1. Full Pipeline', () => {
       queryState: () => undefined,
       getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] }),
       getThreadProgress: () => ({ progress: 0, total: 0 }),
-      getRuleEvidence: () => [],
     };
 
     const tv = new TimelineValidator();
@@ -829,7 +828,7 @@ describe('7. Context Compilation', () => {
 
     const pkg = compiler.compile(event, state, registry);
     expect(pkg.eventId).toBe('E1a');
-    expect(pkg.systemContext.genre).toBe('fantasy');
+    expect(pkg.systemContext.genre).toBe('literary');
     expect(pkg.systemContext.style).toBe('literary');
     expect(pkg.sceneSpec.goal).toContain('anomalous');
     expect(pkg.sceneSpec.povCharacter).toBe('seraphine');

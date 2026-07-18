@@ -24,13 +24,14 @@ import { chapterMetadataSchema, sceneMetadataSchema } from './chapter.js';
 import { projectConfigSchema } from './project.js';
 import { branchPointsFileSchema } from './branch-points.js';
 
-import { analysisResultSchema, parseAnalysisJSON } from './analysis.js';
+import { analysisResultSchema, parseAnalysisJSON, parseAnalysisJSONWithErrors } from './analysis.js';
 
 // ── Re-export all per-entity schemas ─────────────────────────────────────────
 
 export {
   analysisResultSchema,
   parseAnalysisJSON,
+  parseAnalysisJSONWithErrors,
   preconditionSchema,
   postconditionSchema,
   eventFileSchema,

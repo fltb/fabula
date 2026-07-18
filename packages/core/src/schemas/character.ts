@@ -18,5 +18,10 @@ export const characterDefinitionSchema = z
     voiceNotes: z.string().optional(),
     backstory: z.string().optional(),
     knownSecrets: z.array(z.string()).optional(),
+    appearance: z.string().optional(),
+    aliases: z.array(z.string()).optional(),
+    gender: z.string().optional(),
+    age: z.union([z.string(), z.number()]).optional(),
+    profession: z.string().optional(),
   })
   .strict();

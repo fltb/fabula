@@ -74,6 +74,10 @@ export class PromptAssembler {
     if (options?.characterVoiceNotes) {
       parts.push(`- Character voice: ${options.characterVoiceNotes}`);
     }
+    const targetAudience = context.systemContext?.targetAudience;
+    if (targetAudience) {
+      parts.push(`- Target audience: ${targetAudience}. Adjust vocabulary, complexity, and prose style accordingly.`);
+    }
 
     parts.push(
       '',

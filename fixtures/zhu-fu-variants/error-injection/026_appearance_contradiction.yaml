@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E2"
+    attribute: "appearance"
+    expectedValidator: "appearance"
+    expectedSeverity: "error"
+    description: "E2 shows xianglins_wife with 'white_hair_haggard_wooden_face' (her death-stage appearance) but she is ~26 years old at first arrival and should have red cheeks per character definition."

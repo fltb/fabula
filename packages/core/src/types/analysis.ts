@@ -10,6 +10,55 @@
 // Over time, validators should migrate from prose-regex checks to
 // structured analysis checks.
 
+// ── Block level types ─────────────────────────────────────────────────────────
+
+export type MatchLevel = 'exact' | 'similar' | 'absent' | 'contradicted';
+
+export interface NarrativeCheck {
+  entityId: string;
+  attribute: string;
+  hint: string;
+  evidence: string;
+  matchLevel: MatchLevel;
+}
+
+export interface AppearanceCheck {
+  entityId: string;
+  feature: string;
+  declared: string;
+  evidence: string;
+  matchLevel: MatchLevel;
+}
+
+export interface CharacterReference {
+  entityId: string;
+  namesUsed: string[];
+}
+
+export type TenseDetected = 'past' | 'present' | 'mixed';
+
+export interface ConflictAnalysis {
+  primaryType: string;
+  resolutionAchieved: boolean;
+}
+
+export interface RuleCheck {
+  ruleId: string;
+  violated: boolean;
+  evidence: string;
+  severity: 'minor' | 'major';
+}
+
+export interface KnowledgeCheck {
+  entityId: string;
+  leakedEntity: string;
+  leakedInfo: string;
+  evidence: string;
+  matchLevel: MatchLevel;
+}
+
+// ── Existing block types ──────────────────────────────────────────────────────
+
 export interface PostconditionAnalysis {
   covered: string[];
   dropped: string[];
@@ -52,6 +101,14 @@ export interface AnalysisContent {
   quality: QualityAnalysis;
   threadProgressAchieved: string[];
   foreshadowingDeployed: string[];
+  // ── New 5 blocks (P0g) ────────────────────────────────────────────
+  narrativeChecks?: NarrativeCheck[];
+  appearanceChecks?: AppearanceCheck[];
+  characterReferences?: CharacterReference[];
+  tenseDetected?: TenseDetected;
+  conflictAnalysis?: ConflictAnalysis;
+  ruleChecks?: RuleCheck[];
+  knowledgeChecks?: KnowledgeCheck[];
 }
 
 export interface AnalysisResult {

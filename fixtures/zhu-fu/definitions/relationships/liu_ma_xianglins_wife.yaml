@@ -1,0 +1,13 @@
+id: liu_ma_xianglins_wife
+type: coworker_spiritual_advisor
+participants:
+  - liu_ma
+  - xianglins_wife
+bidirectional: false
+initialState:
+  trust: 40
+  emotionalDistance: 60
+  intensity: 50
+  status: "benevolent_seed_of_destruction"
+  notes: "柳妈与祥林嫂的关系是故事中最具悲剧反讽的：她是祥林嫂遇见的唯一主动给出'帮助'的人——她真心想帮她脱离地狱苦难——但她的帮助恰恰是毁灭性的。柳妈的地狱恐吓使祥林嫂陷入前所未有的恐惧，捐门槛的建议耗尽了祥林嫂一年的工钱却未能带来救赎。柳妈从头到尾都相信自己做了善事——这种善意中的盲目恰恰揭示了神权压迫最阴险的形式：压迫由被压迫者本人传播。"
+establishedEvent: E5

@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E3"
+    attribute: "preconditions"
+    expectedValidator: "causality"
+    expectedSeverity: "error"
+    description: "Circular causal dependency: E3 precondition references xianglins_wife.spiritual_state = 'broken' (E5's postcondition), creating E3→E4→E5→E3 cycle — no topological ordering possible."

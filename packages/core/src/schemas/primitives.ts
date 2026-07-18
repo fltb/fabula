@@ -5,6 +5,12 @@
 import { z } from 'zod';
 
 // ────────────────────────────────────────────────────────────────────────────
+// Placeholder pattern — rejected in value fields
+// ────────────────────────────────────────────────────────────────────────────
+
+const PLACEHOLDER_PATTERN = /^(changed|resolved|updated|affected|modified|altered)$/i;
+
+// ────────────────────────────────────────────────────────────────────────────
 // Precondition Schema (exported)
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -12,10 +18,24 @@ export const preconditionSchema = z
   .object({
     entity: z.string(),
     attribute: z.string(),
-    value: z.unknown(),
+    value: z.unknown().optional().refine(
+      (val) => {
+        if (val === undefined) return true;
+        if (typeof val === 'string' && PLACEHOLDER_PATTERN.test(val)) {
+          return false;
+        }
+        return true;
+      },
+      { message: 'Placeholder values (changed, resolved, updated, affected, modified, altered) are not allowed. Use concrete values.' },
+    ),
+    narrativeHint: z.string().optional(),
     operator: z.enum(['eq', 'neq', 'gt', 'lt', 'contains']).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (data) => !(data.value !== undefined && data.narrativeHint !== undefined),
+    { message: 'Fact must have either value or narrativeHint, not both' },
+  );
 
 // ────────────────────────────────────────────────────────────────────────────
 // Postcondition Schema (exported)
@@ -25,10 +45,24 @@ export const postconditionSchema = z
   .object({
     entity: z.string(),
     attribute: z.string(),
-    value: z.unknown(),
+    value: z.unknown().optional().refine(
+      (val) => {
+        if (val === undefined) return true;
+        if (typeof val === 'string' && PLACEHOLDER_PATTERN.test(val)) {
+          return false;
+        }
+        return true;
+      },
+      { message: 'Placeholder values (changed, resolved, updated, affected, modified, altered) are not allowed. Use concrete values.' },
+    ),
+    narrativeHint: z.string().optional(),
     confidence: z.number().optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (data) => !(data.value !== undefined && data.narrativeHint !== undefined),
+    { message: 'Fact must have either value or narrativeHint, not both' },
+  );
 
 // ────────────────────────────────────────────────────────────────────────────
 // Shared Sub-Schemas (internal)

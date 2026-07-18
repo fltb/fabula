@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E3"
+    attribute: "pronoun_usage"
+    expectedValidator: "pronoun"
+    expectedSeverity: "error"
+    description: "Event uses masculine pronoun '他' when referring to xianglins_wife who is defined as female (gender: 女)."

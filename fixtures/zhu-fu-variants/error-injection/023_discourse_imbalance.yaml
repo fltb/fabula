@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E0"
+    attribute: "discourseMode"
+    expectedValidator: "discourse_balance"
+    expectedSeverity: "warning"
+    description: "All 7 events use discourseMode: 'description' — no narrative variety, discourse is unbalanced."

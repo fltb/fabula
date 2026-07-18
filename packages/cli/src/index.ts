@@ -19,9 +19,12 @@ import {
   EntityMapper,
   InMemoryEntityRegistry,
   StateManager,
+  buildCausalEdges,
+  exportDAGtoDOT,
+  exportDAGtoMermaid,
 } from '@novalistically/core';
 import type { ReviewComment } from '@novalistically/core';
-import { runAll, runFunctionalBench, runPerformanceBench } from '@novalistically/bench';
+import { runAll, runRegressionBench, runPerformanceBench } from '@novalistically/bench';
 
 // ============================================================================
 // Helpers
@@ -297,8 +300,32 @@ const entityCmd = program.command('entity').description('Manage entities');
 entityCmd
   .command('list [kind]')
   .description('List entities (optionally filtered by kind)')
-  .action((kind?: string) => {
+  .option('--status <status>', 'Filter events by status (draft|rendered|blocked|needs_review)')
+  .action((kind?: string, options?: { status?: string }) => {
     const projectDir = ensureProjectDir();
+
+    if (options?.status) {
+      // Show events filtered by status
+      const mapper = new EntityMapper(projectDir);
+      const data = mapper.loadProject();
+      const events = mapper.loadAllEvents(data.chapters);
+      
+      const filtered = events.filter(e => {
+        if (e.id === 'system:genesis') return false;
+        return e.status === options!.status;
+      });
+      
+      if (filtered.length === 0) {
+        console.log(`No events with status "${options.status}".`);
+        return;
+      }
+      
+      for (const e of filtered) {
+        console.log(`  ${e.id}: "${e.title}" — ${e.status}`);
+      }
+      return;
+    }
+
     const entities = listEntities(projectDir, kind);
 
     for (const e of entities) {
@@ -539,26 +566,52 @@ program
     console.log(`   Total events: ${events.length - 1} (excluding genesis)`);
   });
 
+// --- graph ---
+program
+  .command('graph')
+  .description('Export DAG visualization of causal event edges')
+  .option('--format <format>', 'Output format (dot or mermaid)', 'dot')
+  .action((options: { format?: string }) => {
+    const projectDir = ensureProjectDir();
+
+    const mapper = new EntityMapper(projectDir);
+    const data = mapper.loadProject();
+    const events = mapper.loadAllEvents(data.chapters);
+    const { edges } = buildCausalEdges(events);
+
+    const eventProps = events.map((e: { id: string; title: string; sceneType: string }) => ({
+      eventId: e.id,
+      title: e.title,
+      sceneType: e.sceneType,
+    }));
+
+    const output = options.format === 'mermaid'
+      ? exportDAGtoMermaid(edges, eventProps)
+      : exportDAGtoDOT(edges, eventProps);
+
+    console.log(output);
+  });
+
 // --- bench ---
 program
   .command('bench')
-  .description('Run functional + performance benchmarks against the project')
-  .option('--functional', 'Run only functional benchmarks', false)
+  .description('Run regression + performance benchmarks against the project')
+  .option('--regression', 'Run only regression benchmarks', false)
   .option('--performance', 'Run only performance benchmarks', false)
-  .action(async (options: { functional?: boolean; performance?: boolean }) => {
+  .action(async (options: { regression?: boolean; performance?: boolean }) => {
     const projectDir = ensureProjectDir();
 
-    const onlyFun = options.functional && !options.performance;
-    const onlyPerf = options.performance && !options.functional;
+    const onlyReg = options.regression && !options.performance;
+    const onlyPerf = options.performance && !options.regression;
 
-    if (onlyFun) {
-      console.log('── Functional Benchmarks ──');
-      const r = runFunctionalBench(projectDir);
+    if (onlyReg) {
+      console.log('── Regression Benchmarks ──');
+      const r = await runRegressionBench(projectDir);
       for (const s of r.stages) {
         const icon = s.passed ? '✅' : '❌';
-        console.log(`  ${icon} ${s.stage}: ${s.passed ? 'PASS' : 'FAIL'} (${s.ms.toFixed(2)}ms) — ${s.detail}`);
+        console.log(`  ${icon} ${s.stage}: ${s.passed ? 'PASS' : 'FAIL'} (${s.ms}ms) — ${s.detail}`);
       }
-      console.log(`  ── ${r.totalPassed}/${r.stages.length} passed, ${r.totalFailed} failed, ${r.totalTime.toFixed(0)}ms total ──`);
+      console.log(`  ── ${r.totalPassed}/${r.stages.length} passed, ${r.totalFailed} failed, ${r.totalTime}ms total ──`);
       return;
     }
 

@@ -1,5 +1,5 @@
 // ============================================================================
-// validateRender/validatePost — verify each of the 11 validators works on rendered prose
+// validateRender/validatePost — verify each of the 20 validators works on rendered prose
 // ============================================================================
 //
 // These tests are the contract: when an LLM produces a scene, the validators
@@ -80,14 +80,13 @@ function makePreInput(overrides: Partial<PreRenderInput> = {}): PreRenderInput {
     queryState: () => undefined,
     getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] }),
     getThreadProgress: () => ({ progress: 0, total: 0 }),
-    getRuleEvidence: () => [],
     ...overrides,
   };
 }
 
 const sampleProse = `The morning sun broke over the eastern horizon, painting the Caribbean in molten gold. Rainsford, exhausted and bleeding from a dozen minor cuts, pulled himself from the black sea onto the jagged coral shore. He had fallen from the yacht in the night, lost in a moment of carelessness, and now, as the third day dawned, he felt the full weight of his predicament. Whitney had warned him about Ship-Trap Island.`;
 
-describe('All 11 validators implement the new interface', () => {
+describe('All 20 validators implement the new interface', () => {
   it('TimelineValidator implements validatePost', () => {
     const v = new TimelineValidator();
     const input = makePostInput({ prose: sampleProse });
@@ -167,28 +166,70 @@ describe('All 11 validators implement the new interface', () => {
 });
 
 describe('validatePost actually checks the prose', () => {
-  it('TimelineValidator flags missing time-of-day markers when storyTime is morning', () => {
+  it('TimelineValidator flags time_period mismatches from analysis', () => {
     const v = new TimelineValidator();
     const event = makeEvent({ storyTime: { type: 'absolute', value: 'morning' } });
-    // Prose with no morning markers
-    const prose = 'The night was dark and stormy. He crept through the forest.';
-    const input = makePostInput({ prose, event });
+    const prose = 'The night was dark and stormy.';
+    const input = makePostInput({
+      prose,
+      event,
+      analysis: {
+        eventId: 'E0',
+        analysis: {
+          postconditions: { covered: [], dropped: [] },
+          preconditions: { violated: [] },
+          pov: { consistent: true, leaks: [] },
+          inventedDetails: [],
+          quality: { proseScore: 5, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+          threadProgressAchieved: [],
+          foreshadowingDeployed: [],
+          narrativeChecks: [
+            {
+              entityId: 'E0',
+              attribute: 'time_period',
+              hint: 'morning',
+              evidence: 'Prose describes night and darkness, not morning',
+              matchLevel: 'contradicted',
+            },
+          ],
+        },
+      },
+    });
     const issues = v.validatePost!(input);
-    // Should warn about missing morning markers
-    expect(issues.some((i) => /morning|dawn|day/i.test(i.message))).toBe(true);
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues.some((i) => i.message.includes('Time period mismatch'))).toBe(true);
   });
 
-  it('POVValidator flags POV leak when 3rd-person limited slips into another character', () => {
+  it('POVValidator flags POV leaks from analysis when 3rd-person limited slips into another character', () => {
     const v = new POVValidator();
     const event = makeEvent({
       pov: { character: 'rainsford', type: 'third_person_limited' },
       participants: { entities: ['whitney', 'zaroff'] },
     });
-    const prose = 'Rainsford ran. Whitney thought to himself that the chase was futile.';
-    const input = makePostInput({ prose, event });
+    const prose = 'Rainsford ran. Whitney was clearly anxious about the chase.';
+    const input = makePostInput({
+      prose,
+      event,
+      analysis: {
+        eventId: 'E0',
+        analysis: {
+          postconditions: { covered: [], dropped: [] },
+          preconditions: { violated: [] },
+          pov: {
+            consistent: false,
+            leaks: ['Whitney\'s emotional state is described despite Rainford not knowing it'],
+          },
+          inventedDetails: [],
+          quality: { proseScore: 5, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+          threadProgressAchieved: [],
+          foreshadowingDeployed: [],
+        },
+      },
+    });
     const issues = v.validatePost!(input);
-    // Should warn about Whitney's thoughts
+    // Should detect the leak from analysis
     expect(issues.length).toBeGreaterThan(0);
+    expect(issues.some((i) => i.message.includes('POV leak'))).toBe(true);
   });
 
   it('FactualDetailValidator no longer checks prose-level facts (delegated to AnalysisResult)', () => {

@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E0"
+    attribute: "arcPosition"
+    expectedValidator: "pacing"
+    expectedSeverity: "warning"
+    description: "All 7 events have arcPosition: 'opening' — no narrative arc structure, pacing is flat."

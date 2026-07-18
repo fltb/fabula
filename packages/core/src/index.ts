@@ -14,8 +14,9 @@ export {
   resolveTimestampToDay,
   readYamlFile,
   readYamlFilesInDir,
+  compareFact,
 } from './entity/index.js';
-export type { ProjectData } from './entity/index.js';
+export type { ProjectData, CompareOutcome } from './entity/index.js';
 
 // Branch
 export {
@@ -35,7 +36,12 @@ export {
   SnapshotEngine,
   ReplayEngine,
   StateManager,
+  buildCausalEdges,
+  topologicalSort,
+  exportDAGtoDOT,
+  exportDAGtoMermaid,
 } from './state/index.js';
+export type { AdjacencyList } from './state/index.js';
 
 // Validator
 export {
@@ -50,6 +56,13 @@ export {
   VoiceDriftDetector,
   BranchMergeValidator,
   ReachabilityValidator,
+  PacingValidator,
+  TenseConsistencyValidator,
+  DiscourseBalanceValidator,
+  AliasValidator,
+  PronounValidator,
+  AppearanceValidator,
+  ConflictValidator,
   ResultAggregator,
 } from './validator/index.js';
 
@@ -87,6 +100,9 @@ export type { PluginValidator } from './plugin/index.js';
 export { FsStorage } from './storage/index.ts';
 export type { Storage, DirEntry } from './storage/index.ts';
 
+// Reporter
+export { writeValidationReport, type ValidationReport } from './reporter/index.js';
+
 // AI
 export type {
   LLMProvider,
@@ -94,9 +110,9 @@ export type {
   CompletionRequest,
   CompletionResponse,
 } from './ai/index.ts';
-export { LLMError } from './ai/index.ts';
+export { LLMError, MockProvider, MockPass2Provider, AiSdkProvider } from './ai/index.ts';
 export { buildSceneRenderPrompt, buildThreadStatusPrompt, buildProsePrompt, buildAnalysisPrompt } from './ai/index.ts';
-export type { MockProviderOptions, OpencodeZenOptions, OpencodeGoOptions, OpencodeGoModel } from './ai/index.ts';
+export type { MockProviderOptions, MockPass2Options, MockPass2Entry, AiSdkProviderOptions } from './ai/index.ts';
 export type { SceneRenderInput, ThreadStatusInput, ProseOnlyInput, RenderAnalysisInput } from './ai/index.ts';
 
 // Cache
@@ -105,6 +121,12 @@ export { clearEventCache } from './cache/render-cache.js';
 // Pipeline
 export { RenderPipeline, buildAndWriteOutputs } from './pipeline/index.js';
 export type { RenderJob, RenderSceneResult, RenderPipelineOptions } from './pipeline/index.js';
+export { analyzeValidationErrors, buildRepairGuidance, decideRepairStrategy, degradeStrategy } from './pipeline/index.js';
+export type { ReverseValidationResult, RepairStrategy, RepairDecision } from './pipeline/index.js';
+
+// Batch renderer
+export { BatchRenderPipeline } from './batch-renderer.js';
+export type { BatchConfig, BatchProgressEvent, BatchResult, BatchStats } from './batch-renderer.js';
 
 // Bench (functional + performance) is in @novalistically/bench, NOT core.
 // Bench calls core to do measurements; bench itself is not part of core.

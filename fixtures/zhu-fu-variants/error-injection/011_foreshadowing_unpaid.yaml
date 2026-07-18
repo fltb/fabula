@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E2"
+    attribute: "foreshadowing"
+    expectedValidator: "foreshadowing"
+    expectedSeverity: "warning"
+    description: "An event plants a foreshadowing with targetRevealChapter 2, but there is no chapter 2"

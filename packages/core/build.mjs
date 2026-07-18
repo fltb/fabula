@@ -26,6 +26,12 @@ await build({
     'yaml',
     'zod',
     'better-sqlite3',
+    'ai',
+    '@ai-sdk/*',
+    '@vercel/*',
+    'eventsource-parser',
+    'json-schema',
+    'secure-json-parse',
   ],
   logLevel: 'info',
 });

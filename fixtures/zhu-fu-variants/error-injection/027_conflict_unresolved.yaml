@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E3"
+    attribute: "resolutionType"
+    expectedValidator: "conflict"
+    expectedSeverity: "warning"
+    description: "E3 conflict marked 'unresolved' but E4 preconditions treat the kidnapping/remarriage as completed — conflict state is inconsistent with causal chain."

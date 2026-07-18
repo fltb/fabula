@@ -29,6 +29,5 @@ export function makePreInput(
       narratorKnowledge: [],
     } as KnowledgeState),
     getThreadProgress: () => ({ progress: 0, total: 0 }),
-    getRuleEvidence: () => [],
   };
 }

@@ -111,7 +111,6 @@ function buildPreInput(
       narratorKnowledge: [],
     } as KnowledgeState),
     getThreadProgress: () => ({ progress: 0, total: 0 }),
-    getRuleEvidence: () => [],
   };
 }
 
@@ -133,6 +132,7 @@ export function runFunctionalBench(fixturePath?: string): FunctionalResults {
   let registry!: InMemoryEntityRegistry;
   let allEvents: NarrativeEvent[] = [];
   let state!: WorldState;
+  let stateBeforeEvent!: Map<string, WorldState>;
   let contextPkg: ContextPackage | null = null;
 
   // ── 1. Load entities ──────────────────────────────────────────────────
@@ -180,6 +180,15 @@ export function runFunctionalBench(fixturePath?: string): FunctionalResults {
     mark('Replay state from genesis', () => {
       const replay = new ReplayEngine();
       state = replay.replay(allEvents);
+      // Compute state BEFORE each event for correct validation
+      // (validators check preconditions against state before the event applied)
+      stateBeforeEvent = new Map();
+      let currentState = replay.replay([]); // empty initial state
+      const sorted = [...allEvents].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
+      for (const event of sorted) {
+        stateBeforeEvent.set(event.id, currentState);
+        currentState = replay.getStateAt(allEvents, event.narrativeOrder);
+      }
     }, () => {
       const entityCount = Object.keys(state.entities).length;
       const factCount = state.facts.length;
@@ -207,7 +216,7 @@ export function runFunctionalBench(fixturePath?: string): FunctionalResults {
       mark(stageName, () => {
         const validator = new ValidatorClass();
         for (const event of allEvents) {
-          const input = buildPreInput(event, state, registry, allEvents);
+          const input = buildPreInput(event, stateBeforeEvent.get(event.id)!, registry, allEvents);
           validator.validatePre(input);
         }
       }, () => {
@@ -215,7 +224,7 @@ export function runFunctionalBench(fixturePath?: string): FunctionalResults {
         let e = 0; let w = 0; let inf = 0;
         const msgs: string[] = [];
         for (const event of allEvents) {
-          const input = buildPreInput(event, state, registry, allEvents);
+          const input = buildPreInput(event, stateBeforeEvent.get(event.id)!, registry, allEvents);
           for (const issue of validator.validatePre(input) ?? []) {
             if (issue.severity === 'error') e++;
             else if (issue.severity === 'warning') w++;

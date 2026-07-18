@@ -66,7 +66,8 @@ export interface Fact {
   id: FactId;
   entityId: EntityId;
   attribute: string;
-  value: unknown;
+  value?: unknown;
+  narrativeHint?: string;
   confidence?: number;
   validity: FactValidity;
 }

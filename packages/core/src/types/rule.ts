@@ -12,6 +12,7 @@ export interface RuleDefinition {
   category: string;
   type: string;
   statement: string;
+  ruleClass?: 'natural_law' | 'social_norm' | 'moral_principle' | 'game_rule' | 'legal_code';
   logicalConsequences: LogicalConsequence[];
   exceptions?: Array<{ condition: string; note: string }>;
   evidenceChain: RuleEffectEntry[];

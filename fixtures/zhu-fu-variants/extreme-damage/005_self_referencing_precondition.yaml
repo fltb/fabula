@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E2"
+    attribute: "preconditions"
+    expectedValidator: "causality"
+    expectedSeverity: "error"
+    description: "Self-referencing precondition: E2 requires xianglins_wife.appearance = 'red_cheeks' which is only set by E2's own postconditions — creates a deadlock where E2 can never be satisfied."

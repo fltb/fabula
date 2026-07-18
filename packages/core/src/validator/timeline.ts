@@ -3,12 +3,14 @@
 // ============================================================================
 
 import type {
+  NarrativeEvent,
   Validator,
   ValidationIssue,
   PreRenderInput,
   PostRenderInput,
 } from '../types/index.js';
-import { compareTimestamp } from '../entity/index.js';
+import { compareTimestamp, resolveTimestampToDay } from '../entity/index.js';
+import { buildCausalEdges } from '../state/dag.js';
 import { makeIssue } from './base.js';
 
 export class TimelineValidator implements Validator {
@@ -19,14 +21,43 @@ export class TimelineValidator implements Validator {
     const issues: ValidationIssue[] = [];
     const { event, events } = input;
 
-    // Check: narrative order must be strictly increasing
-    const prevEvents = events.filter(
-      (e) => e.narrativeOrder < event.narrativeOrder && e.id !== 'system:genesis',
-    );
-    const prevEvent = prevEvents[prevEvents.length - 1];
+    // Find predecessor via DAG causal edges (most recent by narrativeOrder)
+    const { edges } = buildCausalEdges(events);
+    const predecessors: string[] = [];
+    for (const [srcId, targets] of edges) {
+      if (targets.includes(event.id) && srcId !== 'system:genesis') {
+        predecessors.push(srcId);
+      }
+    }
+    let prevEvent: NarrativeEvent | undefined;
+    if (predecessors.length > 0) {
+      // Sort predecessors by narrativeOrder, take the most recent
+      const prevId = predecessors.sort((a, b) => {
+        const ea = events.find((e) => e.id === a)!;
+        const eb = events.find((e) => e.id === b)!;
+        return eb.narrativeOrder - ea.narrativeOrder;
+      })[0];
+      prevEvent = events.find((e) => e.id === prevId);
+    } else {
+      // Fallback: use narrativeOrder predecessor when no DAG edges exist
+      const prevEvents = events.filter(
+        (e) => e.narrativeOrder < event.narrativeOrder && e.id !== 'system:genesis',
+      );
+      prevEvent = prevEvents[prevEvents.length - 1];
+    }
 
     if (prevEvent && event.storyTime && prevEvent.storyTime) {
+      // Build anchors map from all events' storyTime values, keyed by event ID.
+      // This allows relative timestamps referencing other event IDs to resolve correctly.
+      // For absolute timestamps (e.g. "day_5"), resolution is direct.
+      // For relative timestamps, the incremental build ensures earlier events' resolved
+      // values are available when resolving later events' relative references.
       const anchors = new Map<string, number>();
+      for (const e of input.events) {
+        if (e.storyTime) {
+          anchors.set(e.id, resolveTimestampToDay(e.storyTime, anchors));
+        }
+      }
       const cmp = compareTimestamp(event.storyTime, prevEvent.storyTime, anchors);
       if (cmp < 0 && event.sceneType === 'linear') {
         issues.push(makeIssue(
@@ -55,45 +86,33 @@ export class TimelineValidator implements Validator {
 
   validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
-    const { prose, event } = input;
+    if (!input.analysis) return issues;
 
-    const storyTime = event.storyTime;
-    if (storyTime?.type !== 'absolute') return issues;
-
-    const value = storyTime.value.toLowerCase();
-    const lowerProse = prose.toLowerCase();
-
-    // Time period keyword sets
-    const timeKeywords: [string, string[]][] = [
-      ['night', ['night', 'dark', 'dusk', 'moon', 'stars', 'midnight', 'evening']],
-      ['dawn', ['dawn', 'morning', 'sunrise', 'daybreak']],
-      ['day', ['day', 'afternoon', 'noon', 'midday', 'sun', 'daylight']],
-      ['dusk', ['dusk', 'twilight', 'sunset', 'evening']],
-      ['midnight', ['midnight']],
-    ];
-
-    // Find matching time period from storyTime value
-    // Check if any keyword for a period appears in the storyTime value
-    let keywords: string[] | null = null;
-    for (const [, kws] of timeKeywords) {
-      if (kws.some((kw) => value.includes(kw))) {
-        keywords = kws;
-        break;
+    const narrativeChecks = input.analysis.analysis.narrativeChecks ?? [];
+    for (const check of narrativeChecks) {
+      if (check.attribute !== 'time_period') continue;
+      if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
+        issues.push(makeIssue(
+          'timeline',
+          input.event.id,
+          input.event.id,
+          'warning',
+          `Time period mismatch: ${check.evidence}`,
+          'Review time-of-day consistency',
+          'edit_file',
+          'storyTime',
+        ));
       }
     }
-
-    if (!keywords) return issues;
-
-    const found = keywords.some((kw) => lowerProse.includes(kw));
-    if (!found) {
-      issues.push(makeIssue(
-        this.name, event.id, event.pov.character, 'warning',
-        `Story time is "${value}" but prose lacks matching time-of-day cues (e.g., ${keywords.slice(0, 3).join(', ')})`,
-        'Add atmospheric details that reflect the time of day in the prose.',
-        'edit_file',
-      ));
-    }
-
     return issues;
+  }
+
+  getAnalysisRequirements() {
+    return [{
+      field: 'narrativeChecks',
+      attributes: ['time_period'],
+      schemaExample: { entityId: 'E1', attribute: 'time_period', hint: '...', evidence: '...', matchLevel: 'exact' },
+      instruction: 'narrativeChecks[time_period]: Check if the prose includes atmospheric cues and setting details that match the story time (night, dawn, day, dusk, midnight, etc.). Use the narrativeChecks block with attribute "time_period" to report whether the prose\'s time-of-day cues match the expected story time. Report matchLevel as "exact", "similar", "absent", or "contradicted".',
+    }];
   }
 }

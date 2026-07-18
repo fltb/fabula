@@ -1,0 +1,14 @@
+id: fourth_master_lu_xianglins_wife
+type: master_servant
+participants:
+  - fourth_master_lu
+  - xianglins_wife
+bidirectional: false
+initialState:
+  trust: -20
+  emotionalDistance: 95
+  intensity: 40
+  status: "reluctant_employer_tolerates_suspected_widow"
+  notes: "鲁四老爷对祥林嫂的态度是一贯的厌恶——从第一次见面皱眉到死后骂她'谬种'。他不直接与她相处（家事由四婶管），但他代表这个家庭的道德权威：是他皱眉暗示不接纳她，是他下令禁止她触碰祭祀器皿，是他在听到死讯时只关心祝福的纯洁。祥林嫂对鲁四老爷是畏惧的——他是不可挑战的权力。"
+establishedEvent: E2
+breakingEvent: E6

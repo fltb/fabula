@@ -1,0 +1,51 @@
+id: narrator
+name: 我
+type: intellectual_witness
+archetype: passive_observer
+role: supporting
+description: >
+  一个受过新式教育的知识分子，估计二三十岁，在外地读书或工作，年底回到故乡鲁镇。
+  他称鲁四老爷为四叔，是四老爷的本家侄子。他属于新党——接受了新文化运动的一些思想，
+  懂一点新学，但在旧式家族关系中仍是晚辈。他住在四老爷书房里，看到房中未完全的理学书
+  和未必完全的康熙字典，感到与这个家庭的隔阂。他性格中最核心的特质是道德上的犹豫与
+  逃避——他看出了祥林嫂命运的不公，但选择了'说不清'的回避策略，最终在祝福的爆竹声中
+  轻松地放下内疚。
+appearance: >
+  一个年轻的知识分子，穿着城里人的衣服，与鲁镇的乡绅氛围格格不入。具体的面容和衣着
+  文中未详写，但从他与四老爷的关系和住在书房来看，他有读书人的清瘦气质。
+aliases:
+  - "我"
+  - 叙述者
+  - 四叔的侄子
+gender: 男
+age: 约二十五岁至三十岁
+profession: 知识分子（新派读书人）
+traits:
+  - educated
+  - new_school
+  - morally_ambivalent
+  - introspective
+  - evasive
+  - guilt_prone
+  - self_justifying
+  - observant
+  - outsider_in_hometown
+initialState:
+  location: luchen_town
+  status: alive
+  condition: well
+  purpose: new_year_visit
+  emotionalState: restless_uneasy
+  knowledge_of_xianglins_wife: none_yet
+  moral_state: untested
+voiceNotes: >
+  使用第一人称叙述，语言带有五四新文学的白话风格——简洁、冷峻、含而不露。叙述语气
+  在观察者（描述鲁镇风俗）和内省者（剖析自己的罪恶感）之间切换。在面对祥林嫂的灵魂
+  问题时的语无伦次——'也许有罢——我想'、'说不清'——是他性格的核心体现：知而不为，
+  言而不定。
+backstory: >
+  他是在外地接受了新式教育的读书人，回到鲁镇过年。他不太认同四老爷这类传统士绅的
+  世界观，但也无意挑战——'无论如何，我明天决计要走了'表明他选择离开而不是对抗。
+  他代表了五四一代知识分子的困境：看到了旧制度的残酷，却没有采取行动的勇气。他写下
+  了祥林嫂的故事——但只在故事中纪念她，而在现实中未能帮助她。
+knownSecrets: []

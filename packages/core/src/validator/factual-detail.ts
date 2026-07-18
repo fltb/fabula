@@ -9,6 +9,7 @@ import type {
   ValidationIssue,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
+import { compareFact } from '../entity/compare.js';
 
 export class FactualDetailValidator implements Validator {
   name = 'factual_detail';
@@ -23,11 +24,10 @@ export class FactualDetailValidator implements Validator {
       const entity = input.entityRegistry.resolve(pc.entityId);
       if (!entity) continue;
 
-      const currentValue = input.queryState(pc.entityId, pc.attribute);
       const currentTraits = entity.state['traits'] as string[] | undefined;
 
-      // Check trait-level contradictions
-      if (pc.attribute === 'traits' && currentTraits) {
+      // Check trait-level contradictions (only for deterministic values)
+      if (pc.attribute === 'traits' && currentTraits && pc.value !== undefined) {
         const requestedTraits = Array.isArray(pc.value) ? pc.value : [pc.value];
         for (const trait of requestedTraits) {
           if (currentTraits.includes(trait as string)) {
@@ -76,5 +76,13 @@ export class FactualDetailValidator implements Validator {
     }
 
     return issues;
+  }
+
+  getAnalysisRequirements() {
+    return [{
+      field: 'inventedDetails',
+      schemaExample: { detail: 'something in prose not in specification', severity: 'minor' },
+      instruction: 'inventedDetails: List any significant details in the prose that are not present in the event specification. For each invented detail, note the detail text and whether its severity is "minor" (e.g., atmospheric description) or "major" (plot or character change not in the specification). Report in the inventedDetails block.',
+    }];
   }
 }

@@ -44,22 +44,25 @@ export class KnowledgeValidator implements Validator {
       if (pc.entityId !== povChar || pc.attribute !== 'knows') continue;
 
       // Check if this fact was established in a future event (impossible)
-      const factEvents = events.filter(
-        (e) =>
-          e.narrativeOrder > event.narrativeOrder &&
-          e.postconditions.some(
-            (p) => p.entityId === pc.entityId && p.attribute === pc.attribute && p.value === pc.value,
-          ),
-      );
+      // Only check deterministic value facts; narrativeHint facts are deferred
+      if (pc.value !== undefined) {
+        const factEvents = events.filter(
+          (e) =>
+            e.narrativeOrder > event.narrativeOrder &&
+            e.postconditions.some(
+              (p) => p.entityId === pc.entityId && p.attribute === pc.attribute && p.value === pc.value,
+            ),
+        );
 
-      if (factEvents.length > 0) {
-        issues.push(makeIssue(
-          this.name, event.id, povChar, 'error',
-          `Character "${povChar}" appears to know fact "${pc.value}" before it is established (in ${factEvents[0].id})`,
-          'Reorder events so the fact is established before the character learns it.',
-          'add_precondition',
-          'knows',
-        ));
+        if (factEvents.length > 0) {
+          issues.push(makeIssue(
+            this.name, event.id, povChar, 'error',
+            `Character "${povChar}" appears to know fact "${pc.value}" before it is established (in ${factEvents[0].id})`,
+            'Reorder events so the fact is established before the character learns it.',
+            'add_precondition',
+            'knows',
+          ));
+        }
       }
     }
 
@@ -68,55 +71,31 @@ export class KnowledgeValidator implements Validator {
 
   validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
-    const { prose, event, worldState } = input;
-    const povChar = event.pov.character;
-    const lowerProse = prose.toLowerCase();
+    if (!input.analysis) return issues;
 
-    // Build set of entity IDs the POV character knows about
-    const knownEntities = new Set<string>();
-    knownEntities.add(povChar.toLowerCase());
-
-    const povKnowledge = worldState.knowledge?.[povChar]?.knownFacts ?? [];
-    for (const factId of povKnowledge) {
-      const fact = worldState.facts?.find((f) => f.id === factId);
-      if (fact?.entityId) {
-        knownEntities.add(fact.entityId.toLowerCase());
-      }
-    }
-
-    // Only scan in limited POV modes — omniscient can reference anyone
-    if (event.pov.type === 'omniscient') return issues;
-
-    // Check each entity in the world state that the POV character doesn't know
-    for (const entityId of Object.keys(worldState.entities)) {
-      const lowerId = entityId.toLowerCase();
-      if (knownEntities.has(lowerId)) continue;
-      if (lowerId === povChar.toLowerCase()) continue;
-
-      // Flag if the unknown entity name appears in prose outside of dialogue
-      const namePos = lowerProse.indexOf(lowerId);
-      if (namePos === -1) continue;
-
-      // Skip if the name appears in dialogue (between quotes)
-      const before = lowerProse.slice(Math.max(0, namePos - 60), namePos);
-      const after = lowerProse.slice(namePos + lowerId.length, Math.min(lowerProse.length, namePos + lowerId.length + 60));
-      const lineAround = before + lowerId + after;
-      const quoteCount = (lineAround.match(/"/g) || []).length;
-      if (quoteCount >= 2) continue; // Likely dialogue — other character said the name
-
-      // Flag if the reference is in narrative/thought context
-      const thoughtIndicators = /\b(thought|knew|remembered|realized|wondered|known|heard|recognized)\b/i;
-      if (thoughtIndicators.test(before) || thoughtIndicators.test(after)) {
+    const knowledgeChecks = input.analysis.analysis.knowledgeChecks ?? [];
+    for (const check of knowledgeChecks) {
+      if (check.matchLevel === 'contradicted') {
         issues.push(makeIssue(
-          this.name, event.id, povChar, 'warning',
-          `POV character "${povChar}" references "${entityId}" in narrative thought context but doesn't know about them yet`,
-          'Either establish the character learning about this entity, or remove the internal reference.',
-          'add_precondition',
-          'knows',
+          'knowledge',
+          input.event.id,
+          check.entityId,
+          'warning',
+          `Knowledge boundary violation: ${check.entityId} knows about ${check.leakedEntity} — ${check.leakedInfo}`,
+          `${check.evidence}`,
+          'edit_file',
+          'knowledge',
         ));
       }
     }
-
     return issues;
+  }
+
+  getAnalysisRequirements() {
+    return [{
+      field: 'knowledgeChecks',
+      schemaExample: { entityId: 'char_001', leakedEntity: 'char_002', leakedInfo: '...', evidence: '...', matchLevel: 'exact' },
+      instruction: 'knowledgeChecks: For the POV character, check if the prose reveals information they could not know given their established knowledge boundaries. Report leaks in the knowledgeChecks block with the POV character entityId, the leaked entity, what information was leaked, a direct quote as evidence, and matchLevel. A knowledge leak occurs when prose describes facts, observations, internal states of other characters, or historical events that the POV character has not acquired through direct experience, being told, or inference.',
+    }];
   }
 }

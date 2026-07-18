@@ -715,7 +715,7 @@ describe('ReplayEngine', () => {
 
       const state = engine.replay(events);
 
-      expect(state.rules.magic_conservation).toEqual({ activeEvidence: 2 });
+      expect(state.rules.magic_conservation).toEqual({ activeEvidence: 2, nullified: false, exceptions: [] });
     });
 
     it('should apply preconditions as entity state when not already set', () => {

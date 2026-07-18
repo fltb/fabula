@@ -15,6 +15,12 @@ export interface NarrativeEvent {
   storyTime: StoryTimestamp;
   narrationTime?: StoryTimestamp;
   sceneType: 'linear' | 'flashback' | 'flashforward' | 'dream' | 'parallel';
+  discourseMode?: 'action' | 'dialogue' | 'description' | 'exposition' | 'reflection' | 'transition';
+  arcPosition?: 'opening' | 'rising' | 'climax' | 'falling' | 'denouement';
+  emotionalValence?: string;
+  conflictType?: string;
+  resolutionType?: string;
+  tense?: 'past' | 'present';
   pov: {
     character: EntityId;
     type: 'first_person' | 'third_person_limited' | 'omniscient';
@@ -31,6 +37,15 @@ export interface NarrativeEvent {
   branchExistence: BranchSet;
   participants: {
     entities: EntityId[];
+  };
+  /** Intended audience for this scene (affects prose style, vocabulary, complexity) */
+  targetAudience?: string;  // e.g. "adult_literary", "young_adult", "middle_grade", "academic"
+  /** Runtime status: authored events are 'draft' until rendered, then 'rendered' */
+  status?: 'draft' | 'rendered' | 'blocked' | 'needs_review';
+  /** Characters present in the scene, with semantic roles */
+  cast?: {
+    onScreen: string[];   // characters physically present
+    affected: string[];   // characters affected by events (may be off-screen)
   };
 }
 
@@ -83,8 +98,22 @@ export interface EventFile {
   title: string;
   /** Story timestamp (references a time anchor) */
   storyTime: string;
+  /** Narration timestamp (when the story is being told) */
+  narrationTime?: string;
   /** Scene type */
   sceneType?: 'linear' | 'flashback' | 'flashforward' | 'dream' | 'parallel';
+  /** Discourse mode */
+  discourseMode?: 'action' | 'dialogue' | 'description' | 'exposition' | 'reflection' | 'transition';
+  /** Arc position within the story structure */
+  arcPosition?: 'opening' | 'rising' | 'climax' | 'falling' | 'denouement';
+  /** Emotional valence of the scene */
+  emotionalValence?: string;
+  /** Type of conflict in this scene */
+  conflictType?: string;
+  /** How the conflict is resolved */
+  resolutionType?: string;
+  /** Tense override for this scene */
+  tense?: 'past' | 'present';
   /** Point of view */
   pov: {
     character: string;
@@ -98,6 +127,7 @@ export interface EventFile {
     attribute: string;
     value: unknown;
     operator?: 'eq' | 'neq' | 'gt' | 'lt' | 'contains';
+    narrativeHint?: string;
   }>;
   /** Expected postconditions after this event */
   expectedPostconditions: Array<{
@@ -105,6 +135,7 @@ export interface EventFile {
     attribute: string;
     value: unknown;
     confidence?: number;
+    narrativeHint?: string;
   }>;
   /** Style guidance for the LLM */
   styleGuidance?: StyleGuidance;
@@ -144,6 +175,13 @@ export interface EventFile {
     id: string;
     initialState: Record<string, unknown>;
   }>;
+  /** Intended audience for this scene (affects prose style, vocabulary, complexity) */
+  targetAudience?: string;
+  /** Characters present in the scene, with semantic roles */
+  cast?: {
+    onScreen: string[];
+    affected: string[];
+  };
   /** Absolute file path to this event's YAML file on disk (set by EntityMapper) */
   filePath?: string;
 }

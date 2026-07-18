@@ -1,0 +1,75 @@
+info:
+  currentEra: "1920年代民国初期，辛亥革命后的浙江农村"
+  politicalSituation: "辛亥革命推翻帝制，但农村封建秩序基本未变。鲁镇由地主乡绅实际统治，宗族制度、礼教规范仍然是社会运行的底层逻辑。新文化运动正在城市兴起，但乡村几乎未受影响。"
+
+timeAnchors:
+  - id: new_year_eve
+    day: 0
+    description: "除夕 — 叙述者'我'在鲁镇过年，遇见祥林嫂，当晚她死去，次日清晨祝福仪式开始。"
+  - id: winter_five_years_ago
+    day: -1825
+    description: "初冬 — 祥林嫂第一次到鲁四老爷家做帮工，由卫老婆子介绍。约五年前。"
+  - id: spring_after_escape
+    day: -1700
+    description: "开春 — 祥林嫂在河边淘米时被婆婆带人绑架，卖到贺家坳嫁给贺老六。"
+  - id: first_winter_hejiaao
+    day: -1550
+    description: "冬 — 祥林嫂在贺家坳生下阿毛，母子平安。按卫老婆子说法，她'交了好运'。"
+  - id: spring_ahmao_death
+    day: -1000
+    description: "春末 — 贺老六因伤寒复发死去；阿毛在门口剥豆时被狼叼走，在山坳里发现时五脏已被吃空。约此后不久。"
+  - id: autumn_return
+    day: -540
+    description: "秋季 — 贺老六的大伯收屋赶人，祥林嫂无处可去，由卫老婆子再次带到鲁四老爷家。约一年半前。"
+  - id: winter_solstice
+    day: -120
+    description: "冬至 — 祥林嫂捐了门槛后在冬至祭祀时伸手拿杯筷，被四婶喝止：'你放着罢，祥林嫂！'精神彻底崩溃。"
+
+threads:
+  - id: T1
+    name: "祥林嫂的生存轨迹"
+    type: primary
+    description: "祥林嫂从逃婚寡妇→勤快帮工→被卖改嫁→丧夫失子→再回鲁镇→精神崩溃→沦为乞丐→冻死街头的完整生命轨迹。跟踪她的位置、精神状态、劳动能力、社会地位的变化。"
+    targetRevealChapter: 1
+    initialProgress: "0.00"
+  - id: T2
+    name: "灵魂之问"
+    type: thematic
+    description: "祥林嫂对死后世界的疑问贯穿始终——她既希望有灵魂（可以见到阿毛），又害怕有灵魂（会被锯成两半分给两个死鬼丈夫）。柳妈的地狱恐吓是转折点，捐门槛是她尝试自我救赎的最后努力。"
+    targetRevealChapter: 1
+    initialProgress: "0.00"
+  - id: T3
+    name: "看客的冷漠"
+    type: thematic
+    description: "鲁镇人对祥林嫂的态度演变：初始同情（听阿毛故事流泪）→厌烦（反复讲述）→嘲弄（拿额角伤疤取乐）→排斥（祭祀不许沾手）→遗忘（她死了无人关心）。叙述者'我'的逃避代表了知识分子的道德软弱。"
+    targetRevealChapter: 1
+    initialProgress: "0.00"
+  - id: T4
+    name: "祝福的讽刺"
+    type: thematic
+    description: "故事以过年祝福始、以祝福终。天地圣众醉醺醺地赐福给鲁镇人时，祥林嫂正在街头冻死。祝福的仪式性纯洁要求与祥林嫂被视为'不洁'形成根本矛盾。"
+    targetRevealChapter: 1
+    initialProgress: "0.00"
+
+worldFacts:
+  - id: zhu_fu_ritual
+    value: "祝福是鲁镇年终的大典，致敬尽礼，迎接福神，拜求来年一年中的好运。杀鸡、宰鹅、买猪肉，用心细细的洗，女人的臂膊都在水里浸得通红。"
+    description: "鲁镇最重要的年终仪式，由男人主持，女人准备。"
+  - id: lu_zhen_social_structure
+    value: "鲁镇是一个封闭的浙江水乡小镇，社会由地主乡绅主导，宗族制度严密。四叔鲁四老爷是'讲理学的老监生'，代表地方士绅阶层。"
+    description: "鲁镇的社会权力结构"
+  - id: xianglins_wife_name_unknown
+    value: "祥林嫂的全名无人知晓——她被称为'祥林嫂'（祥林的妻子），即使祥林已死、她已改嫁。她的姓氏只能从卫老婆子'既是邻居，大概姓卫'来推测。"
+    description: "祥林嫂没有自己的名字，身份完全依附于丈夫"
+  - id: four_ropes_oppression
+    value: "祥林嫂承受着封建社会对女性的四重压迫：政权（乡绅地主统治）、族权（婆婆可卖儿媳、大伯可收屋）、神权（地狱恐吓、捐门槛赎罪）、夫权（一女不事二夫、从一而终的贞节观）。四条绳索形成一个封闭系统，任何逃脱的尝试都被另一条绳索捕获。"
+    description: "祥林嫂命运悲剧的结构性根源"
+  - id: widow_taboo
+    value: "寡妇被视为不祥、不洁。鲁四老爷一见祥林嫂就皱眉。祭祀时不许她沾手杯筷和烛台。改嫁更是'败坏风俗'的罪过，死了也要在阴间受锯刑。"
+    description: "封建礼教对寡妇的双重道德审判"
+  - id: spring_tragedies
+    value: "祥林嫂生命中三次最大的悲剧都发生在春天：第一个丈夫祥林在春天死去，婆婆在春天把她卖掉改嫁，独子阿毛在春天被狼叼走。她是一个'没有春天的女人'。"
+    description: "春天（生机）与祥林嫂的死亡叙事形成反讽"
+  - id: earthly_god_temple_economy
+    value: "捐一条门槛需十二元鹰洋（约一万二千文钱），祥林嫂攒了将近一年。庙祝起初不肯，等她哭了才答应——宗教救赎是一桩交易，付了钱也未必有用。"
+    description: "土地庙的门槛经济——信仰商品化"

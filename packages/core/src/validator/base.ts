@@ -53,7 +53,6 @@ export function buildContext(
     }),
     getThreadProgress: (threadId: string) =>
       state.threads[threadId] ?? { progress: 0, total: 0 },
-    getRuleEvidence: (_ruleId: string) => [],
   };
 }
 

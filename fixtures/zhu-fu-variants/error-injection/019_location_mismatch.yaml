@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E3"
+    attribute: "location"
+    expectedValidator: "character_state"
+    expectedSeverity: "error"
+    description: "An event's pov.character has location beijing but that location is not in the definitions/locations/ directory"

@@ -1,0 +1,6 @@
+injected:
+  - entityId: "E1"
+    attribute: "pov"
+    expectedValidator: "pov"
+    expectedSeverity: "error"
+    description: "An event's pov.character references zhen_sao — a character that does not exist in any definitions/characters/ file"

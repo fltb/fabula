@@ -11,3 +11,7 @@ export {
   type OutputEntry,
   type DerivedData,
 } from './output.ts';
+export { createCircuitBreaker } from './circuit-breaker.ts';
+export type { CircuitBreakerState, CircuitBreakerConfig } from './circuit-breaker.ts';
+export { analyzeValidationErrors, buildRepairGuidance, decideRepairStrategy, degradeStrategy } from './reverse-validate.ts';
+export type { ReverseValidationResult, RepairStrategy, RepairDecision } from './reverse-validate.ts';

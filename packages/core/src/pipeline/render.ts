@@ -5,13 +5,13 @@
 // Design:
 //   Pass 1: LLM produces pure prose (no format constraints)
 //   Pass 2: prose + context fed back for structured analysis JSON
-//   Validation: all 11 validators' validateRender run on the prose
+//   Validation: all 18 validators' validateRender run on the prose
 //   Cache: hash-chain cache key → skip if fresh
 //   Parallel: ConcurrencyPool of concurrent LLM calls
 //   maxTokens: 10000 (far above target; we take what we get)
 // ============================================================================
 
-import type { LLMProvider, CompletionResponse } from '../ai/types.ts';
+import type { LLMProvider, CompletionResponse, Message } from '../ai/types.ts';
 import type {
   NarrativeEvent,
   WorldState,
@@ -19,8 +19,9 @@ import type {
   AnalysisResult,
   ValidationResult,
 } from '../types/index.ts';
-import { parseAnalysisJSON } from '../schemas/analysis.ts';
+import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
 import { buildAnalysisPrompt, type RenderAnalysisInput } from '../ai/prompts/render-analysis.ts';
+import { compareAnalysisBlocks } from '../util/compare-analysis.ts';
 import { PromptAssembler } from '../context/prompt-assembler.ts';
 import {
   computeCacheKeys,
@@ -30,6 +31,8 @@ import {
 import { ConcurrencyPool } from '../util/pool.ts';
 import type { Storage } from '../storage/index.ts';
 import { ResultAggregator } from '../validator/aggregator.ts';
+import { createCircuitBreaker } from './circuit-breaker.ts';
+import { analyzeValidationErrors, buildRepairGuidance, decideRepairStrategy, degradeStrategy } from './reverse-validate.ts';
 
 export interface RenderJob {
   event: NarrativeEvent;
@@ -66,6 +69,8 @@ export interface RenderPipelineOptions {
   aggregator?: ResultAggregator;         // optional, for post-render validation
   /** Maximum render+validate attempts before giving up (default 3) */
   maxRetries?: number;
+  /** Dev-only: run Pass 2 twice and compare for non-deterministic blocks (default false) */
+  doubleRunVerification?: boolean;
 }
 
 export class RenderPipeline {
@@ -79,6 +84,7 @@ export class RenderPipeline {
   private readonly referenceExample?: string;
   private readonly aggregator?: ResultAggregator;
   private readonly maxRetries: number;
+  private readonly doubleRunVerification: boolean;
   private cacheKeys: Map<string, string> | null = null;
 
   constructor(opts: RenderPipelineOptions) {
@@ -91,6 +97,7 @@ export class RenderPipeline {
     this.referenceExample = opts.referenceExample;
     this.aggregator = opts.aggregator;
     this.maxRetries = opts.maxRetries ?? 3;
+    this.doubleRunVerification = opts.doubleRunVerification ?? false;
     this.pool = new ConcurrencyPool(opts.concurrency ?? 5);
   }
 
@@ -156,16 +163,24 @@ export class RenderPipeline {
     let previousErrorMessages: string[] = [];
     let attempts = 0;
 
-    for (let a = 1; a <= this.maxRetries; a++) {
-      attempts = a;
+    // Initialize circuit breaker — manages 3 rounds of escalation
+    const breaker = createCircuitBreaker({
+      maxRounds: 3,
+      maxAttemptsPerRound: 2,
+      failureThreshold: 3,     // auto-open after 3 consecutive failures (safety net)
+      escalationDelay: 0,
+    });
+
+    while (breaker.attempt()) {
+      attempts = breaker.state().totalAttempts;
 
       // ── Pass 1: Pure prose (with retry guidance on retry) ────────
       const assembler = new PromptAssembler();
       const assembled = assembler.assemble(context, {
         styleGuidance: event.styleGuidance,
-        targetLengthWords: 500,
+        targetLengthWords: 400,
         referenceExample: this.referenceExample,
-        retryGuidance: a > 1 && previousErrorMessages.length > 0
+        retryGuidance: attempts > 1 && previousErrorMessages.length > 0
           ? previousErrorMessages.join('\n')
           : undefined,
       });
@@ -180,70 +195,102 @@ export class RenderPipeline {
         prose = result1.content ?? '';
         llmPass1 = result1.usage ?? llmPass1;
         if (!prose || prose.trim().length === 0) {
-          errors.push(`Pass 1 attempt ${a} returned empty prose`);
+          errors.push(`Pass 1 attempt ${attempts} returned empty prose`);
           prose = '(empty)';
         }
       } catch (err) {
-        errors.push(`Pass 1 attempt ${a} failed: ${(err as Error).message}`);
+        errors.push(`Pass 1 attempt ${attempts} failed: ${(err as Error).message}`);
         prose = '(empty)';
       }
 
       if (prose === '(empty)') {
-        if (a < this.maxRetries) continue;
-        break;
+        breaker.recordFailure('Pass 1 returned empty prose');
+        if (breaker.state().consecutiveFailures >= 2) {
+          breaker.escalate();
+        }
+        continue;
       }
 
-      // ── Pass 2: Structured analysis ──────────────────────────────
+      // ── Pass 2: Structured analysis (with retry-with-feedback) ────
       analysisRaw = null;
       analysis = null;
       llmPass2 = null;
       try {
-        const analysisInput: RenderAnalysisInput = {
-          event, prose, context,
-          previousErrors: previousErrorMessages.length > 0 ? previousErrorMessages : undefined,
-        };
-        const analysisMessages = buildAnalysisPrompt(analysisInput);
-        const result2 = await this.provider.complete({
-          messages: analysisMessages,
-          model: this.model,
-          temperature: 0.3,
-          maxTokens: 4000,
-        });
-        analysisRaw = result2.content ?? null;
-        llmPass2 = result2.usage ?? null;
+        let analysisObj: AnalysisResult | null = null;
+        let feedbackErrors: string[] | undefined;
+        let lastAnalysisMessages: Message[] | undefined;
 
-        if (analysisRaw) {
-          const errorsBeforeParse = errors.length;
-          const warn = (msg: string) => errors.push(`Analysis parse warning: ${msg}`);
-          analysis = parseAnalysisJSON(analysisRaw, warn);
+        // Up to 2 attempts: initial + retry with Zod error feedback
+        for (let attempt2 = 0; attempt2 < 2 && !analysisObj; attempt2++) {
+          const analysisInput: RenderAnalysisInput = {
+            event, prose, context,
+            previousErrors: feedbackErrors,
+            analysisRequirements: this.aggregator?.getAnalysisRequirements(),
+          };
+          lastAnalysisMessages = buildAnalysisPrompt(analysisInput);
+          const result2 = await this.provider.complete({
+            messages: lastAnalysisMessages,
+            model: this.model,
+            temperature: 0.3,
+            maxTokens: 12000,
+            seed: 42,
+            responseFormat: { type: 'json_object' },
+          });
+          analysisRaw = result2.content ?? null;
+          llmPass2 = result2.usage ?? null;
 
-          if (!analysis) {
-            // Retry once — the LLM may have formatted the JSON incorrectly
-            errors.push('Analysis parse failed on first attempt, retrying Pass 2...');
-            try {
-              const result2b = await this.provider.complete({
-                messages: analysisMessages,
-                model: this.model,
-                temperature: 0.3,
-                maxTokens: 4000,
-              });
-              const retryRaw = result2b.content ?? null;
-              if (retryRaw) {
-                analysis = parseAnalysisJSON(retryRaw, warn);
-                if (analysis) {
-                  analysisRaw = retryRaw;
-                  llmPass2 = result2b.usage ?? null; // Include retry token usage
-                  // Clear all errors from first attempt + retry notice
-                  errors.length = errorsBeforeParse;
-                }
-              }
-            } catch {
-              errors.push('Analysis retry failed');
+          if (analysisRaw) {
+            const parseResult = parseAnalysisJSONWithErrors(analysisRaw);
+            if (parseResult.result) {
+              analysisObj = parseResult.result;
+              break;
+            }
+
+            // Collect error details for feedback on retry
+            if (parseResult.parseError) {
+              feedbackErrors = [`JSON parse error: ${parseResult.parseError}`];
+            } else if (parseResult.zodErrors) {
+              feedbackErrors = parseResult.zodErrors.issues.map(i =>
+                `Validation error at "${i.path.join('.')}": ${i.message}`,
+              );
             }
           }
         }
+
+        if (analysisObj) {
+          analysis = analysisObj;
+
+          // ── P5: Dev-only double-run verification ──────────────────
+          if (this.doubleRunVerification && lastAnalysisMessages) {
+            try {
+              const result2b = await this.provider.complete({
+                messages: lastAnalysisMessages,
+                model: this.model,
+                temperature: 0.3,
+                maxTokens: 12000,
+                seed: 42,
+                responseFormat: { type: 'json_object' },
+              });
+              const analysis2Raw = result2b.content;
+              if (analysis2Raw) {
+                const parsed2 = parseAnalysisJSONWithErrors(analysis2Raw);
+                if (parsed2.result) {
+                  const diffs = compareAnalysisBlocks(analysis.analysis, parsed2.result.analysis);
+                  if (diffs.length > 0) {
+                    errors.push(`Pass 2 unstable: ${diffs.join(', ')} (${event.id})`);
+                  }
+                }
+              }
+            } catch {
+              // Double-run failure is non-fatal (dev-only diagnostic)
+            }
+          }
+        } else {
+          errors.push('Pass 2 JSON parse/validation failed after retry');
+          analysis = null;
+        }
       } catch (err) {
-        errors.push(`Pass 2 attempt ${a} failed: ${(err as Error).message}`);
+        errors.push(`Pass 2 attempt ${attempts} failed: ${(err as Error).message}`);
         analysis = null;
       }
 
@@ -258,17 +305,41 @@ export class RenderPipeline {
       }
 
       // If validation passes (or no aggregator), break out of retry loop
-      if (!renderValidation || renderValidation.passed) break;
-
-      // Validation failed — prepare error messages for retry
-      previousErrorMessages = renderValidation.errors.map((e) => e.message);
-      if (a < this.maxRetries) {
-        errors.push(`Attempt ${a} failed validation (${renderValidation.errors.length} errors), retrying...`);
+      if (!renderValidation || renderValidation.passed) {
+        breaker.recordSuccess();
+        break;
       }
+
+      // ── Validation failed — apply circuit breaker escalation ──────
+      breaker.recordFailure(`Validation failed (${renderValidation.errors.length} errors)`);
+
+      // After 2 consecutive failures, escalate to next round
+      if (breaker.state().consecutiveFailures >= 2) {
+        breaker.escalate();
+      }
+
+      // Build structured repair guidance from validation errors
+      const revResult = analyzeValidationErrors(renderValidation);
+      previousErrorMessages = renderValidation.errors.map((e) => e.message);
+
+      // Use decideRepairStrategy for strategy selection based on error count
+      const repairDecision = decideRepairStrategy(revResult, breaker.state().round, this.maxRetries);
+
+      // Inject repair guidance into retry prompt
+      if (repairDecision.strategy === 'prompt_fix' || repairDecision.strategy === 'context_enrich') {
+        if (repairDecision.guidance) {
+          previousErrorMessages.push(repairDecision.guidance);
+        }
+      }
+
+      errors.push(
+        `Attempt ${attempts} failed validation (${renderValidation.errors.length} errors), ` +
+        `round ${breaker.state().round}, strategy: ${breaker.state().escalatedStrategy}`,
+      );
     }
 
     const renderEnd = Date.now();
-    const needsReview = !!renderValidation && !renderValidation.passed;
+    const needsReview = breaker.state().isOpen || (!!renderValidation && !renderValidation.passed);
 
     // Save cache ONLY if validation passed (don't cache bad renders)
     if (cacheKey && !needsReview) {

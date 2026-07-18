@@ -1,0 +1,12 @@
+id: he_family_hollow
+name: "贺家坳"
+kind: mountain_village
+description: "贺家坳是山里的一个村庄，贺老六的家在这里。与鲁镇相比，这是一个更偏僻、更贫穷也更'野蛮'的地方——但正是这个山里，祥林嫂度过了她一生中唯一短暂的快乐时光。这里是贺老六自己房子的所在地，没有婆婆管束，她生下阿毛并把他养得胖胖的。也是在这里的春天，一头狼出现在村边，趁她进屋做饭时把独自坐在门槛上剥豆的阿毛叼走了——在山坳里只找到他的一只小鞋和散落的豆子，还有被吃剩的身体。"
+initialState:
+  status: remote_rural
+  population: sparse
+  wildlife_risk: wolves_in_spring
+notableFeatures:
+  - "贺老六的房子——祥林嫂短暂幸福生活的场所，后被大伯收走"
+  - "山坳——阿毛被狼叼走后被发现的地点"
+  - "门口——阿毛剥豆的地方，狼从这里将他叼走"

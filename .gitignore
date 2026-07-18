@@ -9,8 +9,12 @@ output/
 packages/bench/**/results/
 packages/*/bench/results/
 
+# External benchmark datasets — downloaded artifacts, not source-controlled
+bench-data/
+
 # Deepwork state files — local only, not committed
 .slim/deepwork/
+docs/superpowers/
 
 # Environment files
 .env

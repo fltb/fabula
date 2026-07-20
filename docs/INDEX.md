@@ -17,6 +17,7 @@ Novalistically 是一个叙事工程系统：结构化 YAML 定义 → 事件溯
 - **[Pass 2 分析](./reference/pass-2-analysis.md)** — 验证器消费的 14 个模块的 AnalysisResult JSON
 - **[验证器](./reference/validators.md)** — 全部 20 个验证器：每个检查的内容、哪些消费 Pass 2 分析、哪些在渲染前运行
 - **[状态管理](./reference/state-management.md)** — 事件溯源、DAG 因果边、ReplayEngine、快照、拓扑排序
+- **[竞品分析](./reference/competitive-analysis.md)** — Novalistically 与其他叙事引擎（Novel Studio、Sudowrite、Novel-OS 等）在上下文编译、场景连续性、验证体系上的对比与独创性分析
 - **[AI 提供商](./reference/ai-providers.md)** — AiSdkProvider（Vercel AI SDK）、MockPass2Provider（测试夹具）、配置、自动检测
 - **[基准系统](./reference/bench.md)** — 回归（在 祝福 上的 L1+L2）、变体（错误注入 + 极端破坏）、性能（N=10/100/1000）、一致性（N-CED、S-CED、Pipeline F1）、外部数据集
 - **[CLI 和 MCP](./reference/cli.md)** — CLI 命令（`nova render`、`nova validate`、`nova status`）、MCP 服务器

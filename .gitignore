@@ -16,6 +16,7 @@ bench-data/
 .slim/deepwork/
 docs/superpowers/
 
+.omp/
 # Environment files
 .env
 .env.local

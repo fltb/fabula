@@ -248,3 +248,33 @@ export {
   discourseCacheKeySchema,
   validationKeySchema,
 } from './discourse.js';
+
+// ——— RENDER-SURFACE-1: Surface render, group & cache schemas ———
+export {
+  styleResolutionPathSchema,
+  styleProfileSchema,
+  sceneTransitionSchema,
+  continuityPacketSchema,
+  compiledSceneContractSchema,
+  serialLaneSchema,
+  surfacePolicySchema,
+  renderGroupSchema,
+  surfaceDependencyGraphSchema,
+  validationGateStatusSchema,
+  validationGateSchema,
+  validationPolicySchema,
+  validationGateGraphSchema,
+  plannerModeSchema,
+  renderGroupManifestSchema,
+  excerptModeSchema,
+  styleMetricsSchema,
+  surfaceReferencePacketSchema,
+  autoGroupConfigSchema,
+  surfacePlannerOptionsSchema,
+  surfacePlanResultSchema,
+  logicalRenderKeySchema,
+  surfaceRenderKeySchema,
+  surfaceValidationKeySchema,
+  attemptKeySchema,
+  surfaceErrorCodeSchema,
+} from './render-surface.js';

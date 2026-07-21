@@ -381,3 +381,33 @@ export type {
   DiscourseCacheKey,
   ValidationKey,
 } from './discourse.js';
+
+// ——— RENDER-SURFACE-1: Surface render, groups & cache keys ———
+export type {
+  StyleProfile,
+  StyleResolutionPath,
+  ContinuityPacket,
+  SceneTransition,
+  CompiledSceneContract,
+  SurfaceDependencyGraph,
+  SerialLane,
+  ValidationGateGraph,
+  ValidationGate,
+  ValidationGateStatus,
+  ValidationPolicy,
+  RenderGroup,
+  SurfacePolicy,
+  RenderGroupManifest,
+  PlannerMode,
+  SurfaceReferencePacket,
+  StyleMetrics,
+  LogicalRenderKey,
+  SurfaceRenderKey,
+  SurfaceValidationKey,
+  AttemptKey,
+  SurfacePlannerOptions,
+  AutoGroupConfig,
+  SurfacePlanResult,
+  SurfacePlannerError,
+  SurfaceErrorCode,
+} from './render-surface.js';

@@ -2,7 +2,7 @@
 // Novalistically Core — Orchestration Functions (Public API)
 // ============================================================================
 //
-// These functions wrap the internal stateful classes and provide a clean,
+import type { RelationshipRuntimeState } from './types/index.js';
 // pure-function-like API for CLIs, MCP servers, and external consumers.
 // They are the recommended entry point for most use cases.
 // ============================================================================
@@ -749,8 +749,8 @@ export function diffEvent(
     ...Object.keys(afterState.relationships),
   ]);
   for (const relId of allRelIds) {
-    const br = beforeState.relationships[relId];
-    const ar = afterState.relationships[relId];
+    const br = (beforeState.relationships as Record<string, unknown>)[relId] as RelationshipRuntimeState | undefined;
+    const ar = (afterState.relationships as Record<string, unknown>)[relId] as RelationshipRuntimeState | undefined;
     if (JSON.stringify(br) !== JSON.stringify(ar)) {
       before[`relationship:${relId}`] = br ?? null;
       after[`relationship:${relId}`] = ar ?? null;

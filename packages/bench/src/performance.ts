@@ -2,7 +2,7 @@
 // Performance Benchmarks — Measure pipeline stages at 10 / 100 / 1000 events
 // ============================================================================
 
-import type { NarrativeEvent } from '@novalistically/core';
+import type { NarrativeEvent, RelationshipTransaction } from '@novalistically/core';
 
 import {
   InMemoryEntityRegistry,
@@ -102,11 +102,21 @@ function makeSyntheticEvent(): NarrativeEvent {
       { id: `f_shadow_${idx}`, hint: `Something ominous about ${char2}`, targetRevealChapter: Math.min(idx + 3, 12) },
     ] : [],
     relationshipEffects: idx % 2 === 0 ? [{
-      participants: [char1, char2] as [string, string],
-      effect: 'reinforce' as const,
-      direction: `${char1} -> ${char2}`,
-      newState: { type: 'acquainted', intensity: 0.5 + (idx * 0.01) },
-    }] : [],
+      effectId: `perf_rel_${idx}`,
+      relationshipId: `rel_${[char1, char2].sort().join('_')}`,
+      epochId: 'epoch_1',
+      lifecycleAfter: 'active' as const,
+      membershipAfter: [
+        { membershipId: `mem_${char1}_${idx}`, entityId: char1, role: 'member' },
+        { membershipId: `mem_${char2}_${idx}`, entityId: char2, role: 'member' },
+      ],
+      dimensionSet: [
+        { dimensionId: 'direction', scope: 'global' as const, value: `${char1} -> ${char2}` },
+        { dimensionId: 'type', scope: 'global' as const, value: 'acquainted' },
+        { dimensionId: 'intensity', scope: 'global' as const, value: 0.5 + (idx * 0.01) },
+      ],
+      provenance: 'bench:performance',
+    }] as unknown as RelationshipTransaction[] : [],
     ruleEffects: [],
     source: 'event_file' as const,
     branchExistence: { type: 'all' as const },

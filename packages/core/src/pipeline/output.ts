@@ -71,13 +71,19 @@ function collectAllReferenceFiles(
       });
     }
 
-    // Relationship effects — each entry carries participants as key
+    // Relationship effects — derive participants, direction, type, intensity from transaction
     for (const re of event.relationshipEffects) {
+      const participants = re.membershipAfter.map((m) => m.entityId);
+      const directionDim = re.dimensionSet?.find((d) => d.dimensionId === 'direction');
+      const typeDim = re.dimensionSet?.find((d) => d.dimensionId === 'type');
+      const intensityDim = re.dimensionSet?.find((d) => d.dimensionId === 'intensity');
       relationships.push({
-        participants: re.participants,
-        effect: re.effect,
-        direction: re.direction,
-        newState: re.newState,
+        participants: participants.length >= 2 ? [participants[0], participants[1]] : [],
+        effect: re.provenance?.replace('compat:RelationshipChange:', '') ?? 'change',
+        direction: (directionDim?.value as string) ?? '',
+        newState: typeDim || intensityDim
+          ? { type: (typeDim?.value as string) ?? '', intensity: (intensityDim?.value as number) ?? 0 }
+          : undefined,
       });
     }
 

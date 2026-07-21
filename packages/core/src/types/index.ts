@@ -72,16 +72,27 @@ export type {
   CharacterRelationshipDef,
 } from './character.js';
 
-export type {
-  KnowledgeDefinition,
-  KnowledgeEvent,
-  KnowledgeEventType,
-} from './knowledge.js';
 
 export type {
   RelationshipDefinition,
   RelationshipEvent,
   RelationshipEventType,
+  RelationshipTypeDefinition,
+  RelationshipRoleDefinition,
+  RelationshipId,
+  EpochId,
+  MembershipId,
+  EpochLifecycle,
+  DimensionScope,
+  Membership,
+  RelationshipTransaction,
+  DimensionWrite,
+  DimensionUnset,
+  RelationshipRuntimeState,
+  EpochRuntimeState,
+  DimensionState,
+  RelationshipIdentityTransitionGroup,
+  IdentityTransitionCarryEntry,
 } from './relationship.js';
 
 export type {
@@ -168,3 +179,35 @@ export type {
   MergeConflictReport,
   SceneQuality,
 } from './merge.js';
+
+// ——— STATE-4 Knowledge/Belief Types ———
+export type {
+  PropositionId,
+  PropositionKind,
+  Proposition,
+  GroundedProposition,
+  EpistemicProposition,
+  ActProposition,
+  IntensionalProposition,
+  PropositionCatalog,
+  ClaimGrade,
+  ClaimPolarity,
+  ClaimAssessment,
+  SettledAssessment,
+  ConflictedAssessment,
+  SuspendedAssessment,
+  ForgottenAssessment,
+  UnsetAssessment,
+  EvidenceSource,
+  ClaimEvidenceRecord,
+  Claim,
+  EpistemicLedger,
+  InformationActType,
+  InformationAct,
+  GroupEpistemicMode,
+  GroupEpistemicQueryDefinition,
+  CommonGroundRecord,
+  NarrativeKnowledgeBoundary,
+  EvaluationResult,
+  claimKey,
+} from './knowledge.js';

@@ -30,8 +30,8 @@ export class KnowledgeValidator implements Validator {
     const issues: ValidationIssue[] = [];
     const { event, events, getKnowledge } = input;
     const povChar = event.pov.character;
-    const knowledge = getKnowledge(povChar);
-    const charKnowledge = knowledge.characterKnowledge[povChar];
+    const ledger = getKnowledge(povChar);
+
 
     // For each postcondition that sets "knows" on the POV character,
     // check if they could have learned this at this point in time
@@ -39,25 +39,29 @@ export class KnowledgeValidator implements Validator {
       if (pc.entityId !== povChar) continue;
       if (getAttributeSemanticRole('character', pc.attribute) !== 'knowledge') continue;
 
-      const knownFacts = charKnowledge?.knownFacts ?? [];
-      const alreadyKnown = knownFacts.some((k) => k.fact.id === pc.id);
+      // Check if the character already has a settled claim for this proposition
+      const claimKey = `${povChar}:${pc.id}`;
+      const existingClaim = ledger.claims[claimKey];
+      const alreadyKnown =
+        existingClaim?.assessment.type === 'settled' &&
+        existingClaim.assessment.polarity === 'affirmative';
 
       if (alreadyKnown) {
         issues.push(makeIssue(
           this.name, event.id, povChar, 'info',
-          `Character "${povChar}" already knows fact "${pc.value}"`,
+          `Character "${povChar}" already knows proposition "${pc.value}" (fact: ${pc.id})`,
           'This is a duplicate knowledge acquisition. Consider removing if redundant.',
           'manual',
         ));
       }
     }
 
+    // Future-event check: if the fact this postcondition references is only
+    // established in a later event, flag impossible foreknowledge.
     for (const pc of event.postconditions) {
       if (pc.entityId !== povChar) continue;
       if (getAttributeSemanticRole('character', pc.attribute) !== 'knowledge') continue;
 
-      // Check if this fact was established in a future event (impossible)
-      // Only check deterministic value facts; narrativeHint facts are deferred
       if (pc.value !== undefined) {
         const factEvents = events.filter(
           (e) =>

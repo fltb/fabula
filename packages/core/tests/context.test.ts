@@ -76,10 +76,23 @@ function makeState(overrides: Partial<WorldState> = {}): WorldState {
     },
     relationships: {
       alice_bob: {
-        direction: {
-          alice: { trust: 0.7, type: 'friend' },
-          bob: { trust: 0.5, type: 'friend' },
+        relationshipId: 'alice_bob',
+        typeId: 'friendship',
+        epochs: {
+          epoch_1: {
+            epochId: 'epoch_1',
+            lifecycle: 'active',
+            memberships: {
+              mem_alice: { membershipId: 'mem_alice', entityId: 'alice' },
+              mem_bob: { membershipId: 'mem_bob', entityId: 'bob' },
+            },
+            dimensions: {
+              'global::intensity': { value: 0.5, scope: 'global', lastUpdatedEffectId: 'evt_1' },
+              'global::type': { value: 'friend', scope: 'global', lastUpdatedEffectId: 'evt_1' },
+            },
+          },
         },
+        activeEpochId: 'epoch_1',
       },
     },
     knowledge: {

@@ -12,3 +12,12 @@ export { compileStoryBoundaries } from './story-boundaries.ts';
 export type { StoryBoundaries } from './story-boundaries.ts';
 export { exportDAGtoDOT, exportDAGtoMermaid } from './dag-export.ts';
 export type { AdjacencyList } from './dag.ts';
+export {
+  evaluate,
+  applyClaimTransaction,
+  recordInformationAct,
+  hasSufficientWarrant,
+  validatePropositionCatalog,
+  applyKnowledgeBoundary,
+  evaluateGroupEpistemic,
+} from './knowledge-replay.ts';

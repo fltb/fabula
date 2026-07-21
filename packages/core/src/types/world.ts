@@ -4,6 +4,15 @@
 
 import type { EntityId, StoryTimestamp, Fact, FactId } from './entity.js';
 import type { NarrativeEvent } from './event.js';
+import type {
+  RelationshipRuntimeState,
+  RelationshipId,
+  DimensionState,
+  EpochRuntimeState,
+  Membership,
+} from './relationship.js';
+
+import type { EpistemicLedger, PropositionCatalog } from './knowledge.js';
 
 // ——— Knowledge System (§7.4.2) ———
 
@@ -91,8 +100,12 @@ interface RuleState {
 
 export interface WorldState {
   entities: Record<EntityId, Record<string, unknown>>;
-  relationships: Record<string, RelationshipState>;
+  relationships: Record<RelationshipId, RelationshipRuntimeState>;
   knowledge: Record<EntityId, { knownFacts: FactId[] }>;
+  /** STATE-4 EpistemicLedger — character knowledge attitudes toward propositions */
+  epistemicLedger?: EpistemicLedger;
+  /** STATE-4 PropositionCatalog — immutable catalog of propositions */
+  propositionCatalog?: PropositionCatalog;
   threads: Record<string, { progress: number; total: number }>;
   rules: Record<string, RuleState>;
   facts: Fact[];

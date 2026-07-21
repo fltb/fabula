@@ -10,6 +10,7 @@ import type {
   KnowledgeBoundary,
   NarrativeEvent,
   RelationshipContext,
+  RelationshipState,
   RelevanceScore,
   RuleDefinition,
   SceneSpecification,
@@ -178,17 +179,31 @@ export class ContextAssembler {
   ): RelationshipContext[] {
     const contexts: RelationshipContext[] = [];
 
-    for (const [relKey, relData] of Object.entries(state.relationships)) {
-      const parts = relKey.split('_');
+    for (const [relKey, relData] of Object.entries(state.relationships ?? {})) {
+      // Guard: skip old-format (pre STATE-2) relationships that lack epochs
+      if (!relData || typeof relData !== 'object' || !('epochs' in relData)) continue;
+
+      // Derive participants from active epoch memberships
+      const activeEpoch = relData.activeEpochId ? relData.epochs[relData.activeEpochId] : undefined;
+      const entityIds = activeEpoch
+        ? Object.values(activeEpoch.memberships).map((m) => m.entityId)
+        : [];
+
       const hasParticipant = event.participants.entities.some((p) =>
-        parts.includes(p),
+        entityIds.includes(p),
       );
       if (!hasParticipant) continue;
 
+      // Build pseudo participants tuple (first 2 for binary compat)
+      const participants: [EntityId, EntityId] =
+        entityIds.length >= 2
+          ? [entityIds[0], entityIds[1]]
+          : [entityIds[0] ?? '', entityIds[1] ?? ''];
+
       contexts.push({
         id: relKey,
-        participants: parts as [EntityId, EntityId],
-        currentState: relData,
+        participants,
+        currentState: relData as unknown as RelationshipState,
         unresolvedTensions: [],
       });
     }
@@ -320,11 +335,23 @@ export class ContextAssembler {
       lines.push('## Relationships');
       for (const rc of pkg.relationshipContext) {
         lines.push(`- ${rc.participants[0]} ↔ ${rc.participants[1]}`);
-        for (const [dir, data] of Object.entries(rc.currentState.direction)) {
-          const dims = Object.entries(data)
-            .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
-            .join(', ');
-          lines.push(`  ${dir}: { ${dims} }`);
+        if (rc.currentState && typeof rc.currentState === 'object' && 'direction' in rc.currentState && rc.currentState.direction) {
+          // Old-format (pre STATE-2): direction-based relationship state
+          for (const [dir, data] of Object.entries(rc.currentState.direction as Record<string, unknown>)) {
+            const dims = Object.entries(data as Record<string, unknown>)
+              .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
+              .join(', ');
+            lines.push(`  ${dir}: { ${dims} }`);
+          }
+        } else if (rc.currentState && typeof rc.currentState === 'object' && 'activeEpochId' in rc.currentState) {
+          // New-format (STATE-2): render dimensions from active epoch
+          const rs = rc.currentState as { activeEpochId?: string; epochs?: Record<string, { dimensions?: Record<string, { value: unknown }> }> };
+          const epoch = rs.activeEpochId ? rs.epochs?.[rs.activeEpochId] : undefined;
+          if (epoch?.dimensions) {
+            for (const [k, v] of Object.entries(epoch.dimensions)) {
+              lines.push(`  ${k}: ${JSON.stringify(v.value)}`);
+            }
+          }
         }
       }
       lines.push('');

@@ -12,6 +12,7 @@ import { locationDefinitionSchema } from './location.js';
 import { itemDefinitionSchema } from './item.js';
 import { factionDefinitionSchema } from './faction.js';
 import { relationshipDefinitionSchema } from './relationship.js';
+import { relationshipTypeDefinitionSchema, relationshipTransactionSchema, relationshipRoleDefinitionSchema, membershipSchema, dimensionWriteSchema, dimensionUnsetSchema, identityTransitionCarryEntrySchema, relationshipIdentityTransitionGroupSchema } from './relationship.js';
 import { worldInitialStateSchema } from './state-initial.js';
 import { chapterMetadataSchema } from './chapter.js';
 import { projectConfigSchema } from './project.js';
@@ -27,6 +28,8 @@ export {
   itemDefinitionSchema,
   factionDefinitionSchema,
   relationshipDefinitionSchema,
+  relationshipTypeDefinitionSchema,
+  relationshipTransactionSchema,
   worldInitialStateSchema,
   projectConfigSchema,
   chapterMetadataSchema,
@@ -43,3 +46,31 @@ export {
   entityTypeDefinitionSchema,
   entityDeclarationSchema,
 };
+
+// ——— STATE-4 Knowledge/Belief Schemas ———
+export {
+  groundedPropositionSchema,
+  epistemicPropositionSchema,
+  actPropositionSchema,
+  intensionalPropositionSchema,
+  propositionSchema,
+  propositionCatalogSchema,
+  claimGradeSchema,
+  claimPolaritySchema,
+  settledAssessmentSchema,
+  conflictedAssessmentSchema,
+  suspendedAssessmentSchema,
+  forgottenAssessmentSchema,
+  unsetAssessmentSchema,
+  claimAssessmentSchema,
+  evidenceSourceSchema,
+  claimEvidenceRecordSchema,
+  claimSchema,
+  epistemicLedgerSchema,
+  groupEpistemicModeSchema,
+  groupEpistemicQueryDefinitionSchema,
+  commonGroundRecordSchema,
+  narrativeKnowledgeBoundarySchema,
+  evaluationResultSchema,
+  informationActTypeSchema,
+} from './knowledge.js';

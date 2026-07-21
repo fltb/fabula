@@ -13,7 +13,7 @@ import type {
   AnalysisResult,
   PreRenderInput,
   PostRenderInput,
-  KnowledgeState,
+  EpistemicLedger,
   AnalysisBlockRequirement,
 } from '../types/index.js';
 import type { Validator } from '../types/index.js';
@@ -170,7 +170,8 @@ export class ResultAggregator {
           chapter,
           eventStore: this.eventStore,
           queryState: (entityId: EntityId, attr: string) => state.entities[entityId]?.[attr],
-          getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] } as KnowledgeState),
+          getKnowledge: (_characterId: EntityId) =>
+            state.epistemicLedger ?? { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
           getThreadProgress: (threadId: string) => state.threads[threadId] ?? { progress: 0, total: 0 },
         };
         const issues = validator.validatePre(input);

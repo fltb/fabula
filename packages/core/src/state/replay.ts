@@ -11,6 +11,8 @@ import { buildCausalEdges, topologicalSort } from './dag.js';
 import { ConfigError, PreconditionMismatchError } from '../errors.js';
 import { compareFact } from '../entity/compare.js';
 import { canonicalizeFactValue } from '../entity/fact-value.js';
+import { applyRelationshipTransaction } from './relationship-replay.js';
+import { convertRelationshipChange } from '../types/relationship.js';
 // ——— Lifecycle transition defaults ———
 const LIFECYCLE_STATES: Record<string, true> = { active: true, inactive: true, retired: true };
 
@@ -321,29 +323,24 @@ export class ReplayEngine {
         };
       }
 
-      // ── Phase 4: Relationship state ──
+      // ── Phase 4: Relationship state (STATE-2) ──
+      // Apply RelationshipTransaction[] from event.
+      // Backward compat: items with 'participants' (old RelationshipChange shape)
+      // are converted inline.
       for (const re of event.relationshipEffects) {
-        const relKey = [re.participants[0], re.participants[1]].sort().join('_');
-        if (!state.relationships[relKey]) {
-          state.relationships[relKey] = { direction: {} };
+        let tx;
+        if ('participants' in re && !('effectId' in re)) {
+          // Old-style RelationshipChange — convert inline
+          const idx = event.relationshipEffects.indexOf(re);
+          tx = convertRelationshipChange(
+            re as unknown as { participants: [string, string]; effect: string; direction: string; newState?: { type: string; intensity: number } },
+            event.id,
+            idx,
+          );
+        } else {
+          tx = re;
         }
-
-        const dirMatch = re.direction.match(/(\S+)\s*→\s*(\S+)/);
-        if (dirMatch) {
-          const from = dirMatch[1];
-          if (!state.relationships[relKey].direction[from]) {
-            state.relationships[relKey].direction[from] = { dimensions: {}, perceivedBy: {} };
-          }
-          if (re.newState) {
-            const dirEntry = state.relationships[relKey].direction[from]!;
-            if (re.newState.type !== undefined) {
-              dirEntry.dimensions['type'] = re.newState.type;
-            }
-            if (re.newState.intensity !== undefined) {
-              dirEntry.dimensions['intensity'] = re.newState.intensity;
-            }
-          }
-        }
+        applyRelationshipTransaction(state.relationships, tx);
       }
 
       // Knowledge state is owned by STATE-4 EpistemicLedger; replay does not write state.knowledge.

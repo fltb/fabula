@@ -2,7 +2,7 @@
 // Context Helper — build PreRenderInput for performance benchmarks
 // ============================================================================
 
-import type { NarrativeEvent, WorldState, EntityRegistry, PreRenderInput, KnowledgeState } from '@novalistically/core';
+import type { NarrativeEvent, WorldState, EntityRegistry, PreRenderInput, EpistemicLedger } from '@novalistically/core';
 
 /**
  * Build a PreRenderInput for use in benchmarks.
@@ -23,11 +23,11 @@ export function makePreInput(
     queryState: (entityId: string, attribute: string) =>
       state.entities[entityId]?.[attribute],
     getKnowledge: () => ({
-      worldTruth: state.facts,
-      characterKnowledge: {},
-      readerKnowledge: [],
-      narratorKnowledge: [],
-    } as KnowledgeState),
+      claims: {},
+      bySubject: {},
+      byProposition: {},
+      actLog: [],
+    } as EpistemicLedger),
     getThreadProgress: () => ({ progress: 0, total: 0 }),
   };
 }

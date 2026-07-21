@@ -148,16 +148,30 @@ export class RelevanceEngine {
     let score = 0;
     const participants = event.participants.entities;
 
-    for (const [relKey, relData] of Object.entries(state.relationships)) {
-      const parts = relKey.split('_');
-      if (parts.includes(entity.id)) {
+    for (const [relKey, relData] of Object.entries(state.relationships ?? {})) {
+      // Guard: skip old-format (pre STATE-2) relationships that lack epochs
+      if (!relData || typeof relData !== 'object' || !('epochs' in relData)) continue;
+
+      // Get entity IDs from each epoch's memberships
+      const entityIds: string[] = [];
+      for (const epoch of Object.values(relData.epochs)) {
+        for (const m of Object.values(epoch.memberships)) {
+          if (!entityIds.includes(m.entityId)) {
+            entityIds.push(m.entityId);
+          }
+        }
+      }
+
+      if (entityIds.includes(entity.id)) {
         // Entity is in this relationship
-        const otherParty = parts.find((p) => participants.includes(p));
+        const otherParty = entityIds.find((id) => participants.includes(id) && id !== entity.id);
         if (otherParty) {
           score += 0.4;
-          // Higher intensity = higher relevance
+          // Higher intensity = higher relevance — read from active epoch global dimension
+          const activeEpoch = relData.activeEpochId ? relData.epochs[relData.activeEpochId] : undefined;
+          const globalIntensityKey = 'global::intensity';
           const intensity =
-            relData.direction[entity.id]?.dimensions?.['intensity'] ?? 0;
+            activeEpoch?.dimensions?.[globalIntensityKey]?.value ?? 0;
           if (typeof intensity === 'number') {
             score += intensity * 0.3;
           }

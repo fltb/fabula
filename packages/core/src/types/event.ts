@@ -4,6 +4,7 @@
 
 import type { EntityId, StoryTimestamp, Fact } from './entity.js';
 import type { BranchSet } from './branch.js';
+import type { RelationshipTransaction, DimensionWrite, DimensionUnset, Membership, RelationshipId, EpochId, MembershipId, EpochLifecycle, DimensionScope, RelationshipRuntimeState, EpochRuntimeState, DimensionState } from './relationship.js';
 
 // ——— Narrative Event (§7.4.1) ———
 
@@ -30,7 +31,7 @@ export interface NarrativeEvent {
   postconditions: Fact[];
   threadProgress: ThreadProgressEntry[];
   foreshadowing: ForeshadowEntry[];
-  relationshipEffects: RelationshipChange[];
+  relationshipEffects: RelationshipTransaction[];
   ruleEffects: RuleEffectEntry[];
   styleGuidance?: StyleGuidance;
   source: 'genesis' | 'event_file' | 'branch_point' | 'system';
@@ -72,6 +73,30 @@ export interface RelationshipChange {
     intensity: number;
   };
 }
+
+// ——— STATE-2 RelationshipTransaction (replaces RelationshipChange) ———
+// RelationshipChange is kept as a backward-compat type; the EntityMapper
+// converts it to RelationshipTransaction at load time.
+// Binary relationships are a specialization of n-ary (2 members, role='member').
+
+export type {
+  RelationshipTransaction,
+  DimensionWrite,
+  DimensionUnset,
+  Membership,
+  RelationshipId,
+  EpochId,
+  MembershipId,
+  EpochLifecycle,
+  DimensionScope,
+  RelationshipRuntimeState,
+  EpochRuntimeState,
+  DimensionState,
+  RelationshipTypeDefinition,
+  RelationshipRoleDefinition,
+  RelationshipIdentityTransitionGroup,
+  IdentityTransitionCarryEntry,
+} from './relationship.js';
 
 export interface RuleEffectEntry {
   rule: string;

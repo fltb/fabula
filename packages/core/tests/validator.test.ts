@@ -80,10 +80,10 @@ function buildPreInput(
     chapter: 1,
     queryState: (_entityId: string, _attribute: string) => undefined,
     getKnowledge: (_characterId: string) => ({
-      worldTruth: [],
-      characterKnowledge: {},
-      readerKnowledge: [],
-      narratorKnowledge: [],
+      claims: {},
+      bySubject: {},
+      byProposition: {},
+      actLog: [],
     }),
     getThreadProgress: (_threadId: string) => ({ progress: 0, total: 0 }),
     ...overrides,
@@ -307,23 +307,21 @@ describe('KnowledgeValidator', () => {
     });
     const input = buildPreInput(event, {
       getKnowledge: (_charId: string) => ({
-        worldTruth: [],
-        characterKnowledge: {
-          jinx: {
-            knownFacts: [
-              {
-                fact: { id: 'jinx.knows', entityId: 'jinx', attribute: 'knows', value: 'hextech_secret', validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } } },
-                acquiredAt: { type: 'absolute', value: 'day_0' },
-                source: { type: 'direct_experience', eventId: 'evt_prev' },
-                confidence: 1,
-              },
-            ],
-            unknownFacts: [],
-            misbeliefs: [],
+        claims: {
+          'jinx:jinx.knows': {
+            subject: 'jinx',
+            propositionId: 'jinx.knows',
+            assessment: { type: 'settled', grade: 'know', polarity: 'affirmative' },
+            evidence: [{
+              source: 'direct_experience',
+              provenance: ['evt_prev'],
+              acquiredAt: { type: 'absolute' as const, value: 'day_0' },
+            }],
           },
         },
-        readerKnowledge: [],
-        narratorKnowledge: [],
+        bySubject: { jinx: ['jinx.knows'] },
+        byProposition: { 'jinx.knows': ['jinx'] },
+        actLog: [],
       }),
     });
 
@@ -363,12 +361,6 @@ describe('KnowledgeValidator', () => {
 
     const input = buildPreInput(currentEvent, {
       events: [currentEvent, futureEvent],
-      getKnowledge: (_charId: string) => ({
-        worldTruth: [],
-        characterKnowledge: { jinx: { knownFacts: [], unknownFacts: [], misbeliefs: [] } },
-        readerKnowledge: [],
-        narratorKnowledge: [],
-      }),
     });
 
     const issues = validator.validatePre(input);
@@ -389,20 +381,14 @@ describe('KnowledgeValidator', () => {
         },
       ],
     });
-    const input = buildPreInput(event, {
-      getKnowledge: (_charId: string) => ({
-        worldTruth: [],
-        characterKnowledge: { jinx: { knownFacts: [], unknownFacts: [], misbeliefs: [] } },
-        readerKnowledge: [],
-        narratorKnowledge: [],
-      }),
-    });
+    const input = buildPreInput(event);
 
     const issues = validator.validatePre(input);
     const infoIssues = issues.filter((i) => i.message.includes('already knows'));
     expect(infoIssues).toHaveLength(0);
   });
 });
+
 
 // ============================================================================
 // 4. WorldRuleValidator Tests

@@ -433,7 +433,8 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
     expect(ne.foreshadowing).toHaveLength(1);
     expect(ne.foreshadowing[0].id).toBe('foreshadow_01');
     expect(ne.relationshipEffects).toHaveLength(1);
-    expect(ne.relationshipEffects[0].effect).toBe('reinforce');
+    expect(ne.relationshipEffects[0].effectId).toBe('full_event_rel_0');
+    expect(ne.relationshipEffects[0].provenance).toBe('compat:RelationshipChange:reinforce');
     expect(ne.ruleEffects).toHaveLength(1);
     expect(ne.ruleEffects[0].rule).toBe('hextech_crystal_scarcity');
     expect(ne.styleGuidance).toEqual({ tone: 'suspenseful', scenePacing: 'deliberate' });

@@ -50,8 +50,9 @@ function calcEntityReferenceCompleteness(
       referencedIds.add(post.entityId);
     }
     for (const rel of event.relationshipEffects) {
-      referencedIds.add(rel.participants[0]);
-      referencedIds.add(rel.participants[1]);
+      for (const m of rel.membershipAfter) {
+        referencedIds.add(m.entityId);
+      }
     }
   }
 

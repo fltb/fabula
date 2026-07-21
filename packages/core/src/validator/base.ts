@@ -34,26 +34,8 @@ export function buildContext(
     narrativeOrder: event.narrativeOrder,
     queryState: (entityId: EntityId, attribute: string) =>
       state.entities[entityId]?.[attribute],
-    getKnowledge: (characterId: EntityId) => ({
-      worldTruth: state.facts,
-      characterKnowledge: {
-        [characterId]: {
-          knownFacts: state.knowledge[characterId]?.knownFacts?.map((fid) => ({
-            fact: state.facts.find((f) => f.id === fid) ?? {
-              id: fid, entityId: '', attribute: '', value: null,
-              validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-            },
-            acquiredAt: { type: 'absolute' as const, value: 'day_0' },
-            source: { type: 'direct_experience' as const, eventId: event.id },
-            confidence: 1,
-          })) ?? [],
-          unknownFacts: [],
-          misbeliefs: [],
-        },
-      },
-      readerKnowledge: [],
-      narratorKnowledge: [],
-    }),
+    getKnowledge: (characterId: EntityId) =>
+      state.epistemicLedger ?? { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
     getThreadProgress: (threadId: string) =>
       state.threads[threadId] ?? { progress: 0, total: 0 },
   };

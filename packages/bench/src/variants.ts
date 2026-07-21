@@ -952,25 +952,48 @@ function applyEventToState(event: NarrativeEvent, state: WorldState): void {
     };
   }
 
-  // Update relationship state
+  // Update relationship state (STATE-2)
+  const rels = state.relationships as unknown as Record<string, Record<string, unknown>>;
   for (const re of event.relationshipEffects) {
-    const relKey = [re.participants[0], re.participants[1]].sort().join('_');
-    if (!state.relationships[relKey]) {
-      state.relationships[relKey] = { direction: {} };
+    const relId = re.relationshipId as unknown as string;
+    if (!rels[relId]) {
+      rels[relId] = {
+        relationshipId: relId,
+        typeId: 'default',
+        epochs: {},
+        activeEpochId: undefined,
+      };
     }
-    const dirMatch = re.direction.match(/(\S+)\s*→\s*(\S+)/);
-    if (dirMatch) {
-      const from = dirMatch[1];
-      if (!state.relationships[relKey].direction[from]) {
-        state.relationships[relKey].direction[from] = { dimensions: {}, perceivedBy: {} };
+    const relState = rels[relId];
+    const epochs = relState.epochs as Record<string, Record<string, unknown>>;
+    const epochId = re.epochId ?? 'epoch_1';
+    if (!epochs[epochId]) {
+      epochs[epochId] = {
+        epochId,
+        lifecycle: 'active',
+        memberships: {},
+        dimensions: {},
+      };
+    }
+    const epoch = epochs[epochId];
+    const memberships = epoch.memberships as Record<string, { membershipId: string; entityId: string; role?: string }>;
+    for (const m of re.membershipAfter) {
+      memberships[m.membershipId] = m;
+    }
+    if (re.dimensionSet) {
+      const dimensions = epoch.dimensions as Record<string, { value: unknown; scope: string; lastUpdatedEffectId: string }>;
+      for (const d of re.dimensionSet) {
+        const key = `${d.scope}::${d.dimensionId}`;
+        dimensions[key] = { value: d.value, scope: d.scope, lastUpdatedEffectId: re.effectId };
       }
-      if (re.newState) {
-        const dirEntry = state.relationships[relKey].direction[from]!;
-        if (re.newState.type !== undefined) {
-          dirEntry.dimensions['type'] = re.newState.type;
-        }
-        if (re.newState.intensity !== undefined) {
-          dirEntry.dimensions['intensity'] = re.newState.intensity;
+    }
+    if (re.lifecycleAfter) {
+      epoch.lifecycle = re.lifecycleAfter;
+      if (re.lifecycleAfter === 'active') {
+        relState.activeEpochId = epochId;
+      } else if (re.lifecycleAfter === 'dissolved') {
+        if (relState.activeEpochId === epochId) {
+          relState.activeEpochId = undefined;
         }
       }
     }

@@ -15,6 +15,7 @@ import type {
 } from '../types/index.js';
 import { readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
 import { parseStoryTimestamp, factIdFrom } from './timestamp.js';
+import { convertRelationshipChange } from '../types/relationship.js';
 import type { ProjectData } from './types.js';
 import {
   chapterMetadataSchema,
@@ -207,12 +208,9 @@ export class EntityMapper {
         targetRevealChapter: f.targetRevealChapter,
         thread: f.thread,
       })),
-      relationshipEffects: (eventFile.relationshipEffects ?? []).map((re) => ({
-        participants: re.participants as [string, string],
-        effect: re.effect,
-        direction: re.direction,
-        newState: re.newState,
-      })),
+      relationshipEffects: (eventFile.relationshipEffects ?? []).map((re, idx) =>
+        convertRelationshipChange(re, eventFile.event, idx),
+      ),
       ruleEffects: (eventFile.ruleEffects ?? []).map((re) => ({
         rule: re.rule,
         effect: re.effect,

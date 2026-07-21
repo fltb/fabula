@@ -651,20 +651,40 @@ describe('ReplayEngine', () => {
         makeEvent(1, {
           relationshipEffects: [
             {
-              participants: ['camille', 'npc_gear'],
-              effect: 'establish',
-              direction: 'camille → npc_gear',
-              newState: { type: 'friend', intensity: 3 },
+              effectId: 'evt1_rel_0',
+              relationshipId: 'rel_camille_npc_gear',
+              epochId: 'epoch_1',
+              lifecycleAfter: 'active',
+              membershipAfter: [
+                { membershipId: 'mem_camille_1', entityId: 'camille', role: 'member' },
+                { membershipId: 'mem_npc_gear_1', entityId: 'npc_gear', role: 'member' },
+              ],
+              dimensionSet: [
+                { dimensionId: 'direction', scope: 'global', value: 'camille → npc_gear' },
+                { dimensionId: 'type', scope: 'global', value: 'friend' },
+                { dimensionId: 'intensity', scope: 'global', value: 3 },
+              ],
+              provenance: 'test:establish',
             },
           ],
         }),
         makeEvent(2, {
           relationshipEffects: [
             {
-              participants: ['camille', 'npc_gear'],
-              effect: 'change',
-              direction: 'camille → npc_gear',
-              newState: { type: 'friend', intensity: 5 },
+              effectId: 'evt2_rel_0',
+              relationshipId: 'rel_camille_npc_gear',
+              epochId: 'epoch_1',
+              lifecycleAfter: 'active',
+              membershipAfter: [
+                { membershipId: 'mem_camille_2', entityId: 'camille', role: 'member' },
+                { membershipId: 'mem_npc_gear_2', entityId: 'npc_gear', role: 'member' },
+              ],
+              dimensionSet: [
+                { dimensionId: 'direction', scope: 'global', value: 'camille → npc_gear' },
+                { dimensionId: 'type', scope: 'global', value: 'friend' },
+                { dimensionId: 'intensity', scope: 'global', value: 5 },
+              ],
+              provenance: 'test:change',
             },
           ],
         }),
@@ -672,12 +692,12 @@ describe('ReplayEngine', () => {
 
       const state = engine.replay(events);
 
-      const relKey = ['camille', 'npc_gear'].sort().join('_');
+      const relKey = 'rel_camille_npc_gear';
       expect(state.relationships[relKey]).toBeDefined();
-      expect(state.relationships[relKey].direction['camille'].dimensions).toEqual({
-        type: 'friend',
-        intensity: 5,
-      });
+      const relState = state.relationships[relKey];
+      const activeEpoch = relState.epochs[relState.activeEpochId!];
+      expect(activeEpoch.dimensions['global::type'].value).toBe('friend');
+      expect(activeEpoch.dimensions['global::intensity'].value).toBe(5);
     });
 
     it('should update knowledge state from postconditions with knows/knowledge attribute', () => {

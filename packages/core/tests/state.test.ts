@@ -1024,16 +1024,17 @@ describe('ReplayEngine', () => {
 
     it('should produce same result as getStateAt', () => {
       const events: NarrativeEvent[] = [
-        makeEvent(1, { postconditions: [makeFact('camille', 'age', 20)] }),
-        makeEvent(5, { postconditions: [makeFact('camille', 'location', 'village')] }),
+        makeEvent(1, { storyTime: { type: 'chapter', chapter: 1 }, postconditions: [makeFact('camille', 'age', 20)] }),
+        makeEvent(5, { storyTime: { type: 'chapter', chapter: 2 }, postconditions: [makeFact('camille', 'location', 'village')] }),
         makeEvent(10, {
+          storyTime: { type: 'chapter', chapter: 3 },
           postconditions: [makeFact('camille', 'age', 25)],
           threadProgress: [
             { thread: 'main', advancement: 'Step', progressAfter: 2, progressTotal: 10 },
           ],
         }),
-        makeEvent(15, { postconditions: [makeFact('camille', 'location', 'city')] }),
-        makeEvent(20, { postconditions: [makeFact('camille', 'age', 30)] }),
+        makeEvent(15, { storyTime: { type: 'chapter', chapter: 4 }, postconditions: [makeFact('camille', 'location', 'city')] }),
+        makeEvent(20, { storyTime: { type: 'chapter', chapter: 5 }, postconditions: [makeFact('camille', 'age', 30)] }),
       ];
 
       const snapshotState = engine.getStateAt(events, 10);
@@ -1308,6 +1309,7 @@ describe('StateManager', () => {
       const count = 100;
       for (let i = 1; i <= count; i++) {
         manager.commit(makeEvent(i, {
+          storyTime: { type: 'chapter', chapter: i },
           postconditions: [makeFact('camille', 'counter', i)],
         }));
       }

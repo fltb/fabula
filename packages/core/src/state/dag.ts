@@ -89,14 +89,13 @@ export function topologicalSort(
   const inDegree = new Map(inputInDegree);
   const eventById = new Map(events.map((event) => [event.id, event]));
 
-  // Deterministic priority: earliest story-time day first,
-  // then narrativeOrder as semantic tiebreaker, id as last resort
+  // Deterministic priority: earliest story-time day first, event id as last resort
   function compareByStory(a: string, b: string): number {
     const ea = eventById.get(a)!;
     const eb = eventById.get(b)!;
     const dayA = anchors ? resolveTimestampToDay(ea.storyTime, anchors) : 0;
     const dayB = anchors ? resolveTimestampToDay(eb.storyTime, anchors) : 0;
-    return (dayA - dayB) || (ea.narrativeOrder - eb.narrativeOrder) || a.localeCompare(b);
+    return (dayA - dayB) || a.localeCompare(b);
   }
 
   const ready = events

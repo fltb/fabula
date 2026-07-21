@@ -113,8 +113,18 @@ export class ReplayEngine {
     const bp = branchPath ?? createEmptyBranchPath();
 
     const selectedEvents = events.filter((event) => includesPath(event.branchExistence, bp));
-    const { edges, inDegree } = buildCausalEdges(selectedEvents, { branchPath: bp });
-    const sortedIds = topologicalSort(selectedEvents, edges, inDegree);
+
+    // Extract anchors from absolute storyTimes for deterministic day-based sorting
+    const anchors = new Map<string, number>();
+    for (const { storyTime } of selectedEvents) {
+      if (storyTime.type === 'absolute') {
+        const m = storyTime.value.match(/^day[_\s]*(-?\d+)$/i);
+        if (m) anchors.set(storyTime.value, parseInt(m[1], 10));
+      }
+    }
+
+    const { edges, inDegree } = buildCausalEdges(selectedEvents, { anchors, branchPath: bp });
+    const sortedIds = topologicalSort(selectedEvents, edges, inDegree, anchors);
     const idToEvent = new Map(selectedEvents.map((event) => [event.id, event]));
     const sorted = sortedIds.map((id) => idToEvent.get(id)!);
 

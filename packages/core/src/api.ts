@@ -12,6 +12,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { EntityMapper } from './entity/mapper.ts';
+import type { ProjectData } from './entity/index.js';
 import { InMemoryEntityRegistry } from './entity/registry.ts';
 import { StateManager } from './state/manager.ts';
 import { compileStoryBoundaries } from './state/story-boundaries.ts';
@@ -153,10 +154,35 @@ export interface DiffResult {
 // ============================================================================
 
 /**
+ * Build the initial state from genesis event data (post-
+ * conditions + entity registry).
+ */
+function buildInitialState(
+  events: NarrativeEvent[],
+  registry: InMemoryEntityRegistry,
+  data: ProjectData,
+): { initialFacts: Fact[]; authoredEvents: NarrativeEvent[]; initialThreads: Array<{ id: string }> } {
+  const genesis = events.find((event) => event.id === 'system:genesis');
+  const initialFacts: Fact[] = [
+    ...(genesis?.postconditions ?? []),
+    ...registry.getAll().flatMap((entity) => Object.entries(entity.state ?? {}).map(([attribute, value]) => ({
+      id: `${entity.id}.${attribute}`,
+      entityId: entity.id,
+      attribute,
+      value,
+      validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
+    }))),
+  ];
+  const initialThreads = (data.worldInitialState?.threads ?? []).map((t: { id: string }) => ({ id: t.id }));
+  const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
+  return { initialFacts, authoredEvents, initialThreads };
+}
+
+/**
  * Load a project's mapper, data, events, registry, and state manager.
  * This is the common initialization sequence used by most functions.
  */
-function initializeProject(projectDir: string): {
+export function initializeProject(projectDir: string): {
   mapper: EntityMapper;
   data: ReturnType<EntityMapper['loadProject']>;
   events: NarrativeEvent[];
@@ -297,22 +323,8 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
   const eventLogger = traceCollector ? new Logger(undefined, { module: 'render' }) : undefined;
 
   const { data, events, registry } = initializeProject(projectDir);
-  const genesis = events.find((event) => event.id === 'system:genesis');
-  const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
+  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
   const anchors = new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day]));
-  const initialFacts: Fact[] = [
-    ...(genesis?.postconditions ?? []),
-    ...registry.getAll().flatMap((entity) => Object.entries(entity.state).map(([attribute, value]) => ({
-      id: `${entity.id}.${attribute}`,
-      entityId: entity.id,
-      attribute,
-      value,
-      validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
-    }))),
-  ];
-  const initialThreads = (data.worldInitialState?.threads ?? []).map(t => ({
-    id: t.id,
-  }));
   const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, branchPath, initialThreads);
   const renderEvents = (!eventId || eventId === 'all'
     ? authoredEvents
@@ -489,22 +501,8 @@ export function validateNovel(
   const { data, events, registry } = initializeProject(projectDir);
 
   // Compile story boundaries for per-event pre-state
-  const genesis = events.find((event) => event.id === 'system:genesis');
-  const initialFacts: Fact[] = [
-    ...(genesis?.postconditions ?? []),
-    ...registry.getAll().flatMap((entity) => Object.entries(entity.state ?? {}).map(([attribute, value]) => ({
-      id: `${entity.id}.${attribute}`,
-      entityId: entity.id,
-      attribute,
-      value,
-      validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
-    }))),
-  ];
+  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
   const anchors = new Map((data.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day]));
-  const initialThreads = (data.worldInitialState?.threads ?? []).map(t => ({
-    id: t.id,
-  }));
-  const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
   const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
 
   // Run validators with per-event pre-state
@@ -569,22 +567,8 @@ export function getProjectStatus(
   }
 
   // Compile story boundaries for per-event pre-state validation
-  const genesis = events.find((event) => event.id === 'system:genesis');
-  const initialFacts: Fact[] = [
-    ...(genesis?.postconditions ?? []),
-    ...registry.getAll().flatMap((entity) => Object.entries(entity.state ?? {}).map(([attribute, value]) => ({
-      id: `${entity.id}.${attribute}`,
-      entityId: entity.id,
-      attribute,
-      value,
-      validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
-    }))),
-  ];
+  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
   const anchors = new Map((data.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day]));
-  const initialThreads = (data.worldInitialState?.threads ?? []).map(t => ({
-    id: t.id,
-  }));
-  const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
   const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
 
   // Use provided validation results or run validateAll

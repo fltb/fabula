@@ -139,6 +139,7 @@ export type { BatchConfig, BatchProgressEvent, BatchResult, BatchStats } from '.
 
 // API — Orchestration functions (public API)
 export {
+  initializeProject,
   renderNovel,
   validateNovel,
   getProjectStatus,

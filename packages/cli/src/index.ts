@@ -17,7 +17,7 @@ import {
   clearEventCache,
   FsStorage,
   EntityMapper,
-  StateManager,
+  initializeProject,
   buildCausalEdges,
   MockPass2Provider,
   exportDAGtoDOT,
@@ -563,17 +563,13 @@ program
   .action(() => {
     const projectDir = ensureProjectDir();
 
-    const mapper = new EntityMapper(projectDir);
-    const data = mapper.loadProject();
-    const events = mapper.loadAllEvents(data.chapters);
+    const { events, stateManager } = initializeProject(projectDir);
 
     if (events.length <= 1) {
       console.log('Nothing to commit.');
       return;
     }
 
-    const snapshotsDir = path.join(projectDir, '.nova', 'snapshots');
-    const stateManager = new StateManager(snapshotsDir);
     for (const event of events) {
       stateManager.commit(event);
     }

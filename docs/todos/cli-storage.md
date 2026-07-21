@@ -18,80 +18,170 @@
 
 ### STORAGE-2: Full module I/O audit — replace direct fs with Storage abstraction
 
-**Scope**: Audit every core module and CLI entry point for direct `node:fs` usage that should go through the `Storage` interface. The `Storage` interface (storage/types.ts) provides: `exists`, `read`, `readOptional`, `write`, `commitBatch`, `mkdirp`, `list`, `listFiles`, `remove`, `removeAll`. `FsStorage` and `MemoryStorage` implement it.
+**Scope**: Two phases — (1) AUDIT every core module and CLI entry point for direct `node:fs` usage, (2) FIX violations by routing through `Storage` interface.
 
-**Known violations to fix**:
-1. **`packages/core/src/api.ts`** — `getProjectStatus()` lines 558-569: uses `fs.existsSync(scenesDir)`, `fs.readdirSync(scenesDir, {withFileTypes:true})`, `fs.readdirSync(dirPath).filter(...)`. These should use `storage.exists()`, `storage.list()`, `storage.listFiles()`.
-   - Also `computeProjectHash()` lines 66-84: `fs.existsSync`, `fs.readdirSync`, `fs.readFileSync` — should use Storage.
-   - Also `renderNovel()` line 336: `fs.mkdirSync(dryRunDir, {recursive:true})` — should use `storage.mkdirp()`.
-   - Also `initializeProject()` — uses `new EntityMapper(projectDir)` which internally uses fs. This is acceptable IF EntityMapper is the abstraction layer. Check if EntityMapper uses Storage or direct fs.
+**Storage interface** (storage/types.ts): `exists`, `read`, `readOptional`, `write`, `commitBatch`, `mkdirp`, `list`, `listFiles`, `remove`, `removeAll`. `FsStorage` and `MemoryStorage` implement it.
 
-2. **`packages/cli/src/index.ts`** — line 6: `import * as fs from 'node:fs'`. Check all usages. The CLI is the top-level entry point; some direct fs may be acceptable for CLI-specific concerns (reading `.env`, checking CWD). But file-writing operations should go through Storage.
+#### Phase 1: AUDIT (grep-based, produces a checklist)
 
-3. **`packages/core/src/entity/mapper.ts`** — check if `EntityMapper` uses `fs` directly or via `readYamlFile`/Storage.
+Each module must be checked. For each, the evidence standard is: `grep -n "from 'node:fs'\|require('fs')\|fs\." <file>` output, classified as "Storage-backed" or "direct fs violation".
 
-4. **`packages/core/src/assembler/novel.ts`** — `output/novel.md` write — check if via Storage.
+| Module | File | Evidence standard |
+|--------|------|-------------------|
+| api.ts | `packages/core/src/api.ts` | `grep -n "fs\." packages/core/src/api.ts` — known violations at lines 336 (mkdirSync), 558-569 (existsSync+readdirSync in getProjectStatus), 66-84 (existsSync+readdirSync+readFileSync in computeProjectHash) |
+| CLI | `packages/cli/src/index.ts` | `grep -n "fs\." packages/cli/src/index.ts` — line 6 import; check all call sites |
+| EntityMapper | `packages/core/src/entity/mapper.ts` | `grep -n "fs\." packages/core/src/entity/mapper.ts` — check if uses readYamlFile or direct fs |
+| assembler | `packages/core/src/assembler/novel.ts` | `grep -n "fs\." packages/core/src/assembler/novel.ts` — check output/novel.md write |
+| pipeline output | `packages/core/src/pipeline/output.ts` | `grep -n "fs\." packages/core/src/pipeline/output.ts` — check scene file writes |
+| validation reporter | `packages/core/src/reporter/validation-reporter.ts` | `grep -n "fs\." packages/core/src/reporter/validation-reporter.ts` — check output/validation.md write |
+| bench reporters | `packages/bench/src/reporters.ts` | `grep -n "fs\." packages/bench/src/reporters.ts` — check output/bench/ writes |
+| render-cache | `packages/core/src/cache/render-cache.ts` | Already verified clean by STORAGE-1 — no fs import |
+| snapshot | `packages/core/src/state/snapshot.ts` | Already uses Storage — `grep "fs\."` should return 0 (uses `storage.exists/read/write/listFiles`) |
+| event-store | `packages/core/src/state/event-store.ts` | Already uses Storage — verify |
 
-5. **`packages/core/src/pipeline/output.ts`** — scene file writes — check if via Storage.
+#### Phase 2: FIX (only for confirmed violations)
 
-6. **`packages/core/src/reporter/validation-reporter.ts`** — `output/validation.md` write — check if via Storage.
+**api.ts fixes**:
 
-**Approach**:
-- The `api.ts` functions currently don't receive a `Storage` parameter. They construct paths from `projectDir` and use `fs` directly. The fix: add an optional `storage?: Storage` parameter to `getProjectStatus()`, `renderNovel()`, and `initializeProject()`. Default to `new FsStorage()` when not provided (backward compat). Replace all `fs.*` calls with `storage.*` calls.
-- For `computeProjectHash`, either accept a `Storage` parameter or move the hashing into `initializeProject` where Storage is available.
-- For CLI: the CLI creates `FsStorage` (already imported at line 18) and passes it to API functions.
-- For modules that already accept `Storage` (render-cache, snapshot, event-store): verify no direct fs leaks remain.
+1. `getProjectStatus()` (lines 558-569): Replace `fs.existsSync(scenesDir)`, `fs.readdirSync(scenesDir, {withFileTypes:true})`, `fs.readdirSync(dirPath).filter(...)` with Storage calls. Add `storage?: Storage` parameter (default `new FsStorage()`).
+   - `fs.existsSync(p)` → `storage.exists(p)`
+   - `fs.readdirSync(dir, {withFileTypes:true})` → `storage.list(dir)` (returns `DirEntry[]` with `isDirectory()`)
+   - `fs.readdirSync(dir).filter(f => f.endsWith('.md'))` → `storage.listFiles(dir).filter(f => f.endsWith('.md'))`
 
-**Target files** (primary):
-- `packages/core/src/api.ts` — add `storage?: Storage` param, replace fs calls
-- `packages/cli/src/index.ts` — pass `new FsStorage()` to API calls, remove direct fs where possible
+2. `computeProjectHash()` (lines 66-84): Replace `fs.existsSync`, `fs.readdirSync`, `fs.readFileSync` with Storage calls. Move the function to accept `storage: Storage` parameter or make it part of `initializeProject` where storage is available.
+   - `fs.existsSync(p)` → `storage.exists(p)`
+   - `fs.readdirSync(dir).sort()` → `storage.listFiles(dir).sort()`
+   - `fs.readFileSync(p)` → `storage.read(p)`
 
-**Target files** (audit-only, fix if needed):
-- `packages/core/src/entity/mapper.ts`
-- `packages/core/src/assembler/novel.ts`
-- `packages/core/src/pipeline/output.ts`
-- `packages/core/src/reporter/validation-reporter.ts`
+3. `renderNovel()` dry-run path (line 336): `fs.mkdirSync(dryRunDir, {recursive:true})` → `storage.mkdirp(dryRunDir)`. Add `storage` to the function (already has `storage?: Storage` in `RenderNovelOptions`).
+
+**CLI fixes**:
+
+4. `packages/cli/src/index.ts`: Check each `fs.*` call site. CLI-specific concerns (reading `.env`, checking CWD) may be acceptable as direct fs. File-writing operations should use Storage. The CLI already imports `FsStorage` (line 18).
+
+**Modules already clean** (verify, don't fix):
+- `render-cache.ts` — STORAGE-1 confirmed clean
+- `snapshot.ts` — uses `storage.exists/read/write/listFiles`
+- `event-store.ts` — verify uses Storage
+- `mapper.ts` — verify uses `readYamlFile` (which may or may not be Storage-backed; check implementation)
+- `assembler/novel.ts` — verify
+- `pipeline/output.ts` — verify
+- `reporter/validation-reporter.ts` — verify
+
+**Target files** (primary fix):
+- `packages/core/src/api.ts` — add `storage?: Storage` to `getProjectStatus` and `initializeProject`, replace fs calls in `getProjectStatus`, `computeProjectHash`, `renderNovel` dry-run
+- `packages/cli/src/index.ts` — pass `new FsStorage()` to API calls
 
 **Edge cases**:
-- `fs.existsSync` → `storage.exists()` (return type matches: boolean)
-- `fs.readdirSync(dir, {withFileTypes:true})` → `storage.list(dir)` returns `DirEntry[]` with `isFile()`/`isDirectory()`
-- `fs.readFileSync(path)` → `storage.read(path)` (throws if missing, same semantics)
-- `fs.mkdirSync(dir, {recursive:true})` → `storage.mkdirp(dir)`
-- `fs.readdirSync(dir).filter(f => f.endsWith('.md'))` → `storage.listFiles(dir).filter(f => f.endsWith('.md'))`
+- `storage.list()` returns `DirEntry[]` with `.isDirectory()` — matches `fs.readdirSync({withFileTypes:true})` dirent API
+- `storage.read()` throws if file missing — same as `fs.readFileSync` for non-existent files
+- Backward compat: `storage` param defaults to `new FsStorage()` so existing callers without the param work unchanged
 
-**Acceptance**: `npm run build` green, `npx vitest run --exclude '**/e2e.test.ts'` green, `grep -r "from 'node:fs'" packages/core/src/api.ts` returns no matches (or only in Storage-backed helpers), zhu-fu validate + render dry-run still work.
+**Acceptance**: 
+- `npm run build` green
+- `npx vitest run --exclude '**/e2e.test.ts'` green
+- `grep -n "from 'node:fs'" packages/core/src/api.ts` returns 0 (or only in type imports)
+- `grep -n "fs\.\(existsSync\|readdirSync\|readFileSync\|mkdirSync\|writeFileSync\)" packages/core/src/api.ts` returns 0
+- zhu-fu `nova validate` still works (0 errors, 0 warnings)
+- zhu-fu `nova render E0 --dry-run` still works
+
+**Evidence**:
+- `grep "fs\.\(existsSync\|readdirSync\|readFileSync\|mkdirSync\)" packages/core/src/api.ts` returns 0 matches
+- Per-module audit results: each module's `grep "fs\."` output recorded as "clean" or "fixed"
+- `npx vitest run --exclude '**/e2e.test.ts'` full suite green
+- zhu-fu fixture validate + render dry-run pass
 
 ### CLI-4: commit command — use initializeProject instead of inline duplication
 
-**Scope**: The `commit` command (cli/src/index.ts ~line 541) creates its own `EntityMapper` + `StateManager`, duplicating `initializeProject()` in api.ts. Refactor to call the shared init.
+**Scope**: The `commit` command (cli/src/index.ts:559-585) creates its own `EntityMapper` + `StateManager`, duplicating `initializeProject()` in api.ts. Refactor to call the shared init.
 
-**Target file**: `packages/cli/src/index.ts`
+**Current code** (cli/src/index.ts:559-585):
+```ts
+program
+  .command('commit')
+  .description('Commit current state (auto-run after validation)')
+  .action(() => {
+    const projectDir = ensureProjectDir();
+    const mapper = new EntityMapper(projectDir);
+    const data = mapper.loadProject();
+    const events = mapper.loadAllEvents(data.chapters);
+    if (events.length <= 1) { console.log('Nothing to commit.'); return; }
+    const snapshotsDir = path.join(projectDir, '.nova', 'snapshots');
+    const stateManager = new StateManager(snapshotsDir);
+    for (const event of events) { stateManager.commit(event); }
+    const lastEvent = events[events.length - 1];
+    console.log(`✅ Committed: ${lastEvent.id} — "${lastEvent.title}"`);
+    console.log(`   Narrative order: ${lastEvent.narrativeOrder}`);
+  });
+```
 
-**Steps**:
-1. Find the `commit` command (search for `.command('commit')`).
-2. Read the full command body to understand what it does beyond init.
-3. Replace inline `new EntityMapper(projectDir)` + `mapper.loadProject()` + `mapper.loadAllEvents()` + `new StateManager(...)` + `stateManager.initialize(events)` with `const { mapper, data, events, stateManager } = initializeProject(projectDir)`.
-4. Import `initializeProject` from `@novalistically/core` (may need to export it from core's index.ts if not already exported).
-5. If the commit command does something `initializeProject` doesn't (e.g., creating snapshots), keep that logic but use the shared init for the common setup.
+**Problem**: `initializeProject()` (api.ts:159-203) does the same `EntityMapper` + `StateManager` setup, plus uses the project cache (API-1). The commit command bypasses the cache and may desync.
 
-**Check**: Is `initializeProject` exported from `@novalistically/core`? If not, either export it or extract the shared logic to a CLI-local helper.
+**Change**:
+1. Check if `initializeProject` is exported from `@novalistically/core`. If not, export it from `packages/core/src/index.ts`.
+2. Replace the inline init with:
+   ```ts
+   const { events, stateManager } = initializeProject(projectDir);
+   ```
+3. Keep the commit loop and output logic. The `events.length <= 1` guard stays.
+4. Remove the now-unused `EntityMapper` and `StateManager` imports from CLI if no other command uses them directly. Check with grep first.
 
-**Acceptance**: `npm run build` green, `nova commit` still works on zhu-fu fixture, no duplicated init logic.
+**IMPORTANT**: `initializeProject` returns `stateManager` which is already initialized via `stateManager.initialize(events)`. The commit command's `for (const event of events) { stateManager.commit(event); }` loop is the actual commit action — `initialize` sets up the event store, `commit` advances state. Verify this is correct: `StateManager.initialize()` stores events, `StateManager.commit(event)` advances state and creates snapshots. The commit command should still loop through all events.
+
+**Target file**: `packages/cli/src/index.ts` (commit command block, ~line 559-585)
+
+**Acceptance**: `npm run build` green, `nova commit` on zhu-fu fixture works (commits events, creates snapshots), no duplicated init logic.
+
+**Evidence**: 
+- `node packages/cli/dist/index.js commit` in `fixtures/zhu-fu/` produces "Committed" output
+- `grep -c "new EntityMapper" packages/cli/src/index.ts` returns 0 (if no other command needs it) or documented why it remains
+- `npm run build` exit 0
 
 ### CLI-3: diff command — verify output format readability
 
-**Scope**: The `diff` command uses `diffEvent()` API (already verified correct) but CLI output uses `JSON.stringify` for before/after values. Verify the output is readable for nested objects; improve formatting if needed.
+**Scope**: The `diff` command (cli/src/index.ts:537-557) uses `JSON.stringify(result.before[key])` / `JSON.stringify(result.after[key])` for output. Verify readability; improve if needed.
 
-**Target file**: `packages/cli/src/index.ts`
+**Current output format** (cli/src/index.ts:550-556):
+```ts
+console.log(`\nChanges: ${result.changed.length} attributes`);
+console.log('━'.repeat(50));
+for (const key of result.changed) {
+  console.log(`  ${key}:`);
+  console.log(`    before: ${JSON.stringify(result.before[key])}`);
+  console.log(`    after:  ${JSON.stringify(result.after[key])}`);
+}
+```
 
 **Steps**:
-1. Find the `diff` command (search for `.command('diff')`).
-2. Read the full command body.
-3. Check output format: if it uses `JSON.stringify(value)` for before/after, consider using `JSON.stringify(value, null, 2)` for nested objects, or a key-by-key diff format.
-4. Test with `node packages/cli/dist/index.js diff E1` in `fixtures/zhu-fu/` (requires build first).
-5. If output is readable → mark done with evidence. If not → improve formatting.
+1. Build the CLI: `npm run build`
+2. Run `node packages/cli/dist/index.js diff E1` in `fixtures/zhu-fu/`
+3. Check output: if values are simple (strings, numbers, booleans), `JSON.stringify` is fine. If nested objects, use `JSON.stringify(value, null, 2)`.
+4. If output is already readable → mark done with evidence (paste the output).
+5. If not → change `JSON.stringify(result.before[key])` to `JSON.stringify(result.before[key], null, 2)` for multi-line nested objects. Add a helper that detects nested objects and pretty-prints them.
 
-**Acceptance**: `nova diff E1` on zhu-fu produces readable output showing changed attributes with clear before/after values.
+**Target file**: `packages/cli/src/index.ts` (diff command output, ~line 550-556)
+
+**Acceptance**: `nova diff E1` on zhu-fu produces readable output with clear before/after values.
+
+**Evidence**: Output of `node packages/cli/dist/index.js diff E1` in `fixtures/zhu-fu/` — shows readable attribute changes.
 
 ## Evidence
-—
+
+### CLI-5 [x]
+- `npm run build` exit 0
+- `npx vitest run packages/cli/tests/` — 2 files 2 tests pass
+
+### STORAGE-2
+- `grep "fs\.\(existsSync\|readdirSync\|readFileSync\|mkdirSync\)" packages/core/src/api.ts` returns 0
+- Per-module audit grep results recorded
+- `npx vitest run --exclude '**/e2e.test.ts'` full suite green
+- zhu-fu `nova validate` + `nova render E0 --dry-run` pass
+
+### CLI-4
+- `node packages/cli/dist/index.js commit` in zhu-fu produces "Committed" output
+- `grep -c "new EntityMapper" packages/cli/src/index.ts` — count reduced
+- `npm run build` exit 0
+
+### CLI-3
+- `node packages/cli/dist/index.js diff E1` output — readable attribute changes
+- `npm run build` exit 0

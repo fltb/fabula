@@ -404,7 +404,7 @@ export class ReplayEngine {
 
     // Replay only events after snapshot, in causal order
     const eventsAfter = events.filter(
-      (e) => e.narrativeOrder > snapshot.narrativeOrder && e.narrativeOrder <= narrativeOrder,
+      (e) => e.narrativeOrder > snapshot.eventCount && e.narrativeOrder <= narrativeOrder,
     );
 
     if (eventsAfter.length === 0) return state;

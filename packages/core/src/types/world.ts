@@ -113,7 +113,7 @@ export interface WorldState {
 // ——— Event Store & Snapshot (§7.4.19) ———
 
 export interface Snapshot {
-  narrativeOrder: number;
+  eventCount: number;
   eventId: string;
   timestamp: string;
   state: WorldState;

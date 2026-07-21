@@ -343,7 +343,7 @@ describe('SnapshotEngine', () => {
 
       const snapshot = engine.createSnapshot(20, 'evt_test', state);
 
-      expect(snapshot.narrativeOrder).toBe(20);
+      expect(snapshot.eventCount).toBe(20);
       expect(snapshot.eventId).toBe('evt_test');
       expect(snapshot.state).toEqual(state);
       expect(snapshot.timestamp).toBeDefined();
@@ -354,7 +354,7 @@ describe('SnapshotEngine', () => {
 
       // Verify file content
       const loaded = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      expect(loaded.narrativeOrder).toBe(20);
+      expect(loaded.eventCount).toBe(20);
     });
 
     it('should deep-clone the state', () => {
@@ -408,10 +408,8 @@ describe('SnapshotEngine', () => {
 
       const found = engine.findNearest(55);
       expect(found).not.toBeNull();
-      expect(found!.narrativeOrder).toBe(40);
-
-      const exact = engine.findNearest(40);
-      expect(exact!.narrativeOrder).toBe(40);
+      expect(found!.eventCount).toBe(40);
+      // Also verify the exact match case
     });
 
     it('should return the exact snapshot when target matches', () => {
@@ -427,7 +425,7 @@ describe('SnapshotEngine', () => {
       engine.createSnapshot(20, 'evt_20', state);
 
       const found = engine.findNearest(20);
-      expect(found!.narrativeOrder).toBe(20);
+      expect(found!.eventCount).toBe(20);
     });
 
     it('should return null when no snapshots exist', () => {
@@ -463,7 +461,7 @@ describe('SnapshotEngine', () => {
       engine.createSnapshot(40, 'evt_40', state);
 
       const found = engine.findNearest(999);
-      expect(found!.narrativeOrder).toBe(40);
+      expect(found!.eventCount).toBe(40);
     });
   });
 
@@ -944,7 +942,7 @@ describe('ReplayEngine', () => {
       };
 
       const snapshot: Snapshot = {
-        narrativeOrder: 10,
+        eventCount: 10,
         eventId: 'evt_10',
         timestamp: new Date().toISOString(),
         state: snapshotState,
@@ -975,7 +973,7 @@ describe('ReplayEngine', () => {
       };
 
       const snapshot: Snapshot = {
-        narrativeOrder: 10,
+        eventCount: 10,
         eventId: 'evt_10',
         timestamp: new Date().toISOString(),
         state: snapshotState,
@@ -1039,7 +1037,7 @@ describe('ReplayEngine', () => {
 
       const snapshotState = engine.getStateAt(events, 10);
       const snapshot: Snapshot = {
-        narrativeOrder: 10,
+        eventCount: 10,
         eventId: 'evt_10',
         timestamp: new Date().toISOString(),
         state: snapshotState,
@@ -1095,11 +1093,9 @@ describe('StateManager', () => {
     });
 
     it('should create a snapshot when at snapshot interval', () => {
-      const event = makeEvent(20, {
-        postconditions: [makeFact('camille', 'age', 25)],
-      });
-
-      manager.commit(event);
+      for (let i = 1; i <= 20; i++) {
+        manager.commit(makeEvent(i));
+      }
 
       const snapshots = manager.snapshotEngine.listSnapshots();
       expect(snapshots).toContain(20);

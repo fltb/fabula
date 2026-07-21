@@ -21,10 +21,9 @@ export class StateManager {
   /** Commit an event: write to event store, optionally create snapshot */
   commit(event: NarrativeEvent): void {
     this.eventStore.commit(event);
-
-    if (this.snapshotEngine.shouldSnapshot(event.narrativeOrder)) {
+    if (this.snapshotEngine.shouldSnapshot(this.eventStore.count)) {
       const state = this.getCurrentState();
-      this.snapshotEngine.createSnapshot(event.narrativeOrder, event.id, state);
+      this.snapshotEngine.createSnapshot(this.eventStore.count, event.id, state);
     }
   }
 

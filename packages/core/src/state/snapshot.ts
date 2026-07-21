@@ -20,28 +20,28 @@ export class SnapshotEngine {
     }
   }
 
-  /** Determine if a snapshot should be created at this narrative order */
-  shouldSnapshot(narrativeOrder: number): boolean {
-    return narrativeOrder > 0 && narrativeOrder % this.snapshotInterval === 0;
+  /** Determine if a snapshot should be created at this event count */
+  shouldSnapshot(eventCount: number): boolean {
+    return eventCount > 0 && eventCount % this.snapshotInterval === 0;
   }
 
   /** Create a snapshot of the current world state */
-  createSnapshot(narrativeOrder: number, eventId: string, state: WorldState): Snapshot {
+  createSnapshot(eventCount: number, eventId: string, state: WorldState): Snapshot {
     const snapshot: Snapshot = {
-      narrativeOrder,
+      eventCount,
       eventId,
       timestamp: new Date().toISOString(),
       state: JSON.parse(JSON.stringify(state)), // deep clone
     };
 
-    const filePath = path.join(this.snapshotsDir, `snapshot_${narrativeOrder}.json`);
+    const filePath = path.join(this.snapshotsDir, `snapshot_${eventCount}.json`);
     this.storage.write(filePath, JSON.stringify(snapshot, null, 2));
 
     return snapshot;
   }
 
-  /** Find the nearest snapshot at or before the given narrative order */
-  findNearest(targetOrder: number): Snapshot | null {
+  /** Find the nearest snapshot at or before the given event count */
+  findNearest(targetCount: number): Snapshot | null {
     if (!this.storage.exists(this.snapshotsDir)) return null;
 
     const files = this.storage.listFiles(this.snapshotsDir)
@@ -50,7 +50,7 @@ export class SnapshotEngine {
         const match = f.match(/snapshot_(\d+)\.json/);
         return match ? parseInt(match[1], 10) : 0;
       })
-      .filter((n) => n > 0 && n <= targetOrder)
+      .filter((n) => n > 0 && n <= targetCount)
       .sort((a, b) => b - a); // descending
 
     if (files.length === 0) return null;
@@ -64,8 +64,8 @@ export class SnapshotEngine {
     }
   }
 
-  /** Invalidate snapshots at or after a given narrative order */
-  invalidateFrom(narrativeOrder: number): void {
+  /** Invalidate snapshots at or after a given event count */
+  invalidateFrom(eventCount: number): void {
     if (!this.storage.exists(this.snapshotsDir)) return;
 
     const files = this.storage.listFiles(this.snapshotsDir)
@@ -75,7 +75,7 @@ export class SnapshotEngine {
       const match = file.match(/snapshot_(\d+)\.json/);
       if (match) {
         const order = parseInt(match[1], 10);
-        if (order >= narrativeOrder) {
+        if (order >= eventCount) {
           this.storage.remove(path.join(this.snapshotsDir, file));
         }
       }
@@ -96,3 +96,4 @@ export class SnapshotEngine {
       .sort((a, b) => a - b);
   }
 }
+

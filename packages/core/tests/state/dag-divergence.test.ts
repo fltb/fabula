@@ -93,7 +93,7 @@ describe('DAG divergence: snapshot-based optimization vs full replay', () => {
     expect(snapState.entities['hero']?.['status']).toBe('first');
 
     const snapshot: Snapshot = {
-      narrativeOrder: 1,
+      eventCount: 1,
       eventId: 'B',
       timestamp: '',
       state: snapState,
@@ -113,15 +113,16 @@ describe('DAG divergence: snapshot-based optimization vs full replay', () => {
 
     const fullReplay = engine.replay([B, A, C]);
     const snapState = engine.replay([B]);
-    const snapshot: Snapshot = { narrativeOrder: 1, eventId: 'B', timestamp: '', state: snapState };
+    const snapshot: Snapshot = { eventCount: 1, eventId: 'B', timestamp: '', state: snapState };
     const optimized = engine.getStateAtOptimized([B, A, C], 3, snapshot);
 
-    // Divergence: replay says "first" (B is causally latest), optimized says "second"
-    // (A overwrites snapshot state's "first" since post-snapshot events sort by day)
+    // Divergence: replay says "first" (B is causally latest at day_9),
+    // optimized says "second" (A at day_1 overwrites snapshot's "first"
+    // because A is post-snapshot and sorted before B)
+    expect(fullReplay.entities['hero']?.['status']).toBe('first');
+    expect(optimized.entities['hero']?.['status']).toBe('second');
     expect(fullReplay.entities['hero']?.['status']).not.toBe(
       optimized.entities['hero']?.['status'],
     );
-    expect(fullReplay.entities['hero']?.['status']).toBe('first');
-    expect(optimized.entities['hero']?.['status']).toBe('second');
   });
 });

@@ -1,3 +1,14 @@
+// STORAGE-2 AUDIT RESULTS (2026-07-22)
+// ================================
+// 1. api.ts — VIOLATION (fixes below): fs.existsSync, fs.readdirSync, fs.readFileSync, fs.mkdirSync
+// 2. cli/index.ts — partial VIOLATION: fs ops in project init (acceptable for bootstrapping); needs storage param in API callers
+// 3. entity/mapper.ts — Storage-backed: uses readYamlFile/readYamlFilesInDir (internally use Storage via yaml-loader)
+// 4. assembler/novel.ts — Storage-backed: already uses Storage interface
+// 5. pipeline/output.ts — Storage-backed: already uses Storage interface
+// 6. reporter/validation-reporter.ts — VIOLATION (deferred): writeFileSync/mkdirSync from 'node:fs'
+// 7. bench/reporters.ts — Storage-backed: uses FsStorage/Storage types
+// ================================
+
 // ============================================================================
 // Novalistically Core — Orchestration Functions (Public API)
 // ============================================================================
@@ -8,7 +19,6 @@ import type { RelationshipRuntimeState } from './types/index.js';
 // ============================================================================
 
 import * as crypto from 'node:crypto';
-import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 import { EntityMapper } from './entity/mapper.ts';
@@ -60,28 +70,28 @@ interface ProjectCacheEntry {
 
 const projectCache = new Map<string, ProjectCacheEntry>();
 
-function computeProjectHash(projectDir: string, events: NarrativeEvent[]): string {
+function computeProjectHash(projectDir: string, events: NarrativeEvent[], storage: Storage): string {
   const hasher = crypto.createHash('sha256');
   // Hash each definition YAML, config, and event YAML by content
   const defsDir = path.join(projectDir, 'definitions');
-  if (fs.existsSync(defsDir)) {
-    const defs = fs.readdirSync(defsDir).sort();
+  if (storage.exists(defsDir)) {
+    const defs = storage.listFiles(defsDir).sort();
     for (const f of defs) {
       if (f.endsWith('.yaml') || f.endsWith('.yml')) {
-        hasher.update(fs.readFileSync(path.join(defsDir, f)));
+        hasher.update(storage.read(path.join(defsDir, f)));
       }
     }
   }
   const configPath = path.join(projectDir, 'nova.yaml');
-  if (fs.existsSync(configPath)) {
-    hasher.update(fs.readFileSync(configPath));
+  if (storage.exists(configPath)) {
+    hasher.update(storage.read(configPath));
   }
   // Hash all event YAMLs by content (not just paths)
   for (const ev of events) {
     if (ev.id !== 'system:genesis') {
       const evPath = path.join(projectDir, 'events', `${ev.id}.yaml`);
-      if (fs.existsSync(evPath)) {
-        hasher.update(fs.readFileSync(evPath));
+      if (storage.exists(evPath)) {
+        hasher.update(storage.read(evPath));
       }
     }
   }
@@ -182,7 +192,7 @@ function buildInitialState(
  * Load a project's mapper, data, events, registry, and state manager.
  * This is the common initialization sequence used by most functions.
  */
-export function initializeProject(projectDir: string): {
+export function initializeProject(projectDir: string, storage?: Storage): {
   mapper: EntityMapper;
   data: ReturnType<EntityMapper['loadProject']>;
   events: NarrativeEvent[];
@@ -194,7 +204,7 @@ export function initializeProject(projectDir: string): {
   const mapper = new EntityMapper(projectDir);
   const data = mapper.loadProject();
   const events = mapper.loadAllEvents(data.chapters);
-  const hash = computeProjectHash(projectDir, events);
+  const hash = computeProjectHash(projectDir, events, storage ?? new FsStorage());
 
   const cached = projectCache.get(projectDir);
   if (cached && cached.hash === hash) {
@@ -318,6 +328,7 @@ async function createProvider(
 export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovelResult> {
   const { projectDir, model, apiKey, baseUrl, eventId, dryRun, provider: injectedProvider, branchPath, trace } = opts;
   const errors: string[] = [];
+  const storage = opts.storage ?? new FsStorage();
   // Observability: trace collector for this render session
   const traceCollector = trace ? new TraceCollector(eventId ?? 'render-all') : undefined;
   const eventLogger = traceCollector ? new Logger(undefined, { module: 'render' }) : undefined;
@@ -345,7 +356,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
   if (dryRun) {
     const results: RenderNovelResult['results'] = [];
     const dryRunDir = path.join(projectDir, '.nova', 'dry-runs');
-    fs.mkdirSync(dryRunDir, { recursive: true });
+    storage.mkdirp(dryRunDir);
 
     for (const ev of renderEvents) {
       const beforeState = boundaries.stateBeforeByEventId.get(ev.id)!;
@@ -389,7 +400,6 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     }
   }
   const cacheDir = path.join(projectDir, '.nova', 'render-cache');
-  const storage = opts.storage ?? new FsStorage();
   const pipeline = new RenderPipeline({
     provider,
     model: resolvedModel,
@@ -547,18 +557,20 @@ export function validateNovel(
 export function getProjectStatus(
   projectDir: string,
   validationResults?: Map<string, ValidationResult>,
+  storage?: Storage,
 ): ProjectStatusResult {
-  const { data, events, registry } = initializeProject(projectDir);
+  const resolvedStorage = storage ?? new FsStorage();
+  const { data, events, registry } = initializeProject(projectDir, resolvedStorage);
 
   // Determine rendered events by checking scenes/ directory for .md files
   const renderedSet = new Set<string>();
   const scenesDir = path.join(projectDir, 'scenes');
-  if (fs.existsSync(scenesDir)) {
-    const sceneDirs = fs.readdirSync(scenesDir, { withFileTypes: true });
+  if (resolvedStorage.exists(scenesDir)) {
+    const sceneDirs = resolvedStorage.list(scenesDir);
     for (const dir of sceneDirs) {
       if (!dir.isDirectory()) continue;
       const dirPath = path.join(scenesDir, dir.name);
-      const mdFiles = fs.readdirSync(dirPath).filter((f) => f.endsWith('.md'));
+      const mdFiles = resolvedStorage.listFiles(dirPath).filter((f) => f.endsWith('.md'));
       for (const mf of mdFiles) {
         const evId = mf.replace('.md', '');
         renderedSet.add(evId);
@@ -596,9 +608,9 @@ export function getProjectStatus(
         `chapter-${String(chapterNum).padStart(2, '0')}`,
         `${event.id}.yaml`,
       );
-      if (fs.existsSync(sceneMetaPath)) {
+      if (resolvedStorage.exists(sceneMetaPath)) {
         try {
-          const metaContent = fs.readFileSync(sceneMetaPath, 'utf-8');
+          const metaContent = resolvedStorage.read(sceneMetaPath);
           const wcMatch = metaContent.match(/word_count:\s*(\d+)/);
           if (wcMatch) wordCount = parseInt(wcMatch[1], 10);
         } catch {

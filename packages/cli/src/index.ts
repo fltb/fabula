@@ -262,7 +262,7 @@ program
   .description('Show project status summary')
   .action(() => {
     const projectDir = ensureProjectDir();
-    const status = getProjectStatus(projectDir);
+    const status = getProjectStatus(projectDir, undefined, new FsStorage());
 
     console.log(`\nSummary: ${status.summary.totalEvents} events, ${status.summary.renderedCount} rendered, ${status.summary.blockedCount} blocked`);
 
@@ -497,7 +497,7 @@ program
       eventId: options.all ? undefined : eventId,
       dryRun: options.dryRun,
       provider,
-      trace: options.trace,
+      storage: new FsStorage(),
     });
 
     if (result.errors.length > 0 && result.results.length === 0) {

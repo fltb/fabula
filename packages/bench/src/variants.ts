@@ -1018,25 +1018,39 @@ function applyEventToState(event: NarrativeEvent, state: WorldState): void {
     }
   }
 
-  // Update rule evidence
+  // Update rule evidence (STATE-6: use RuleRuntimeState)
   for (const re of event.ruleEffects) {
     if (!state.rules[re.rule]) {
-      state.rules[re.rule] = { activeEvidence: 0, nullified: false, exceptions: [] };
+      state.rules[re.rule] = {
+        ruleId: re.rule,
+        currentEpoch: `${re.rule}-epoch-default`,
+        specificationId: `${re.rule}-spec`,
+        activation: 'dormant',
+        effectiveness: 'full',
+        scopeBindings: {},
+        exceptions: [],
+      };
     }
     switch (re.effect) {
       case 'reinforce':
-        state.rules[re.rule].activeEvidence++;
-        state.rules[re.rule].nullified = false;
+        state.rules[re.rule].activation = 'enabled';
+        state.rules[re.rule].effectiveness = 'full';
         break;
       case 'weaken':
-        state.rules[re.rule].activeEvidence = Math.max(0, state.rules[re.rule].activeEvidence - 1);
+        state.rules[re.rule].activation = 'suspended';
         break;
       case 'nullify':
-        state.rules[re.rule].activeEvidence = 0;
-        state.rules[re.rule].nullified = true;
+        state.rules[re.rule].activation = 'dormant';
+        state.rules[re.rule].effectiveness = 'nullified';
         break;
       case 'introduce_exception':
-        state.rules[re.rule].exceptions.push(re.evidence);
+        state.rules[re.rule].exceptions.push({
+          exceptionId: `${re.rule}-exc-${state.rules[re.rule].exceptions.length}`,
+          status: 'active',
+          constraintIds: [],
+          scopeBindings: {},
+          effect: { type: 'exempt' },
+        });
         break;
     }
   }

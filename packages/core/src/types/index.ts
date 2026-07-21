@@ -46,7 +46,6 @@ export type {
   ThreadProgressEntry,
   ForeshadowEntry,
   RelationshipChange,
-  RuleEffectEntry,
   StyleGuidance,
   EventFile,
 } from './event.js';
@@ -103,6 +102,30 @@ export type {
 export type {
   RuleDefinition,
   LogicalConsequence,
+  RuleId,
+  RuleEpochId,
+  RuleExceptionId,
+  RuleSpecificationId,
+  RuleTypeDefinition,
+  RuleSpecification,
+  RuleConstraint,
+  RuleConstraintKind,
+  RuleEnforcement,
+  RuleApplicableEffectiveness,
+  RulePredicate,
+  RuleRuntimeState,
+  RuleActivation,
+  RuleEffectiveness,
+  RuleEvaluationRecord,
+  RuleEvaluationResult,
+  RuleException,
+  RuleExceptionStatus,
+  RuleExceptionEffect,
+  RuleExceptionCondition,
+  RuleTransaction,
+  RuleTransactionOperation,
+  RuleEffectEntry,
+  RuleClass,
 } from './rule.js';
 
 export type {

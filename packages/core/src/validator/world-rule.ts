@@ -1,5 +1,6 @@
 // ============================================================================
 // WorldRuleValidator — Consume Pass 2 AnalysisResult rule checks
+// Uses RuleRuntimeState and RuleEvaluationRecord from STATE-6.
 // ============================================================================
 
 import type {
@@ -7,6 +8,8 @@ import type {
   PreRenderInput,
   Validator,
   ValidationIssue,
+  RuleRuntimeState,
+  RuleEvaluationRecord,
 } from '../types/index.js';
 import { makeIssue, getAttributeWritePolicy } from './base.js';
 import { z } from 'zod';
@@ -29,13 +32,15 @@ export class WorldRuleValidator implements Validator {
     const { event, worldState } = input;
 
     // Deterministic check: ruleEffects that nullify established rules
+    // Uses RuleRuntimeState instead of scalar activeEvidence
     for (const re of event.ruleEffects) {
       if (re.effect === 'nullify') {
-        const ruleState = worldState.rules[re.rule];
-        if (ruleState && ruleState.activeEvidence > 0) {
+        const ruleId = re.rule;
+        const ruleState = worldState.rules[ruleId];
+        if (ruleState && ruleState.activation === 'enabled' && ruleState.effectiveness !== 'nullified') {
           issues.push(makeIssue(
-            this.name, event.id, re.rule, 'error',
-            `World rule "${re.rule}" is being nullified but has been reinforced ${ruleState.activeEvidence} time(s)`,
+            this.name, event.id, ruleId, 'error',
+            `World rule "${ruleId}" is being nullified but its current effectiveness is "${ruleState.effectiveness}"`,
             'Either remove the nullify effect or add enough weaken/nullify evidence.',
             'edit_file',
             'ruleEffects',

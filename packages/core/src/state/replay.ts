@@ -15,7 +15,7 @@ import { applyRelationshipTransaction } from './relationship-replay.js';
 import { convertRelationshipChange } from '../types/relationship.js';
 import type { ThreadTransaction } from '../types/index.js';
 import { applyThreadTransaction, convertLegacyThreadProgress, isLegacyThreadProgress } from './thread-replay.js';
-// ——— Lifecycle transition defaults ———
+import { applyRuleTransaction, convertLegacyRuleEffect, isLegacyRuleEffect } from './rule-replay.js';
 const LIFECYCLE_STATES: Record<string, true> = { active: true, inactive: true, retired: true };
 
 const DEFAULT_LIFECYCLE_TRANSITIONS: Array<[EntityRuntimeState, EntityRuntimeState]> = [
@@ -28,31 +28,21 @@ const DEFAULT_LIFECYCLE_TRANSITIONS: Array<[EntityRuntimeState, EntityRuntimeSta
 
 
 
-// ——— Rule effect application helper ———
-
+// ——— Rule effect application helper (backward-compat) ———
+//
+// Legacy RuleEffectEntry is converted to RuleTransaction and applied
+// via the structured rule-replay path. This wrapper preserves the
+// original function signature for backward compatibility.
+//
 function applyRuleEffect(
   state: WorldState,
   re: { rule: string; effect: string; evidence: string }
 ): void {
-  if (!state.rules[re.rule]) {
-    state.rules[re.rule] = { activeEvidence: 0, nullified: false, exceptions: [] };
-  }
-  switch (re.effect) {
-    case 'reinforce':
-      state.rules[re.rule].activeEvidence++;
-      state.rules[re.rule].nullified = false;  // reinforce clears nullification
-      break;
-    case 'weaken':
-      state.rules[re.rule].activeEvidence = Math.max(0, state.rules[re.rule].activeEvidence - 1);
-      break;
-    case 'nullify':
-      state.rules[re.rule].activeEvidence = 0;
-      state.rules[re.rule].nullified = true;
-      break;
-    case 'introduce_exception':
-      state.rules[re.rule].exceptions.push(re.evidence);
-      break;
-  }
+  const tx = convertLegacyRuleEffect(
+    { rule: re.rule, effect: re.effect as 'reinforce' | 'weaken' | 'introduce_exception' | 'nullify', evidence: re.evidence },
+    'replay',
+  );
+  applyRuleTransaction(state.rules, tx, { nodeId: 'replay' });
 }
 
 // ——— Precondition operator checker ———
@@ -356,8 +346,17 @@ export class ReplayEngine {
         }
       }
 
-      // ── Phase 5: Rule evidence ──
-      event.ruleEffects.forEach(re => applyRuleEffect(state, re));
+      // ── Phase 5: Rule evidence (STATE-6) ──
+      // Backward compat: convert legacy RuleEffectEntry to RuleTransaction
+      for (const re of event.ruleEffects) {
+        if (isLegacyRuleEffect(re)) {
+          const tx = convertLegacyRuleEffect(re, event.id);
+          applyRuleTransaction(state.rules, tx, { nodeId: event.id });
+        } else {
+          // Already a RuleTransaction
+          applyRuleTransaction(state.rules, re as never, { nodeId: event.id });
+        }
+      }
     }
 
     return state;
@@ -492,7 +491,15 @@ export class ReplayEngine {
           : (tp as unknown as ThreadTransaction);
         applyThreadTransaction(state.threads, tx);
       }
-      event.ruleEffects.forEach((re) => applyRuleEffect(state, re));
+      // ── Phase 5: Rule evidence (STATE-6) ──
+      for (const re of event.ruleEffects) {
+        if (isLegacyRuleEffect(re)) {
+          const tx = convertLegacyRuleEffect(re, event.id);
+          applyRuleTransaction(state.rules, tx, { nodeId: event.id });
+        } else {
+          applyRuleTransaction(state.rules, re as never, { nodeId: event.id });
+        }
+      }
     }
 
     return state;

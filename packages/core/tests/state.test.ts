@@ -736,7 +736,11 @@ describe('ReplayEngine', () => {
 
       const state = engine.replay(events);
 
-      expect(state.rules.magic_conservation).toEqual({ activeEvidence: 2, nullified: false, exceptions: [] });
+      const ruleState = state.rules.magic_conservation;
+      expect(ruleState.activation).toBe('enabled');
+      expect(ruleState.effectiveness).toBe('full');
+      expect(ruleState.ruleId).toBe('magic_conservation');
+      expect(ruleState.exceptions).toEqual([]);
     });
 
     it('rejects preconditions that have no deterministic provider', () => {

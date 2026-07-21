@@ -1,9 +1,155 @@
 // ============================================================================
-// Novalistically — Rule Definition Schema
+// Novalistically — STATE-6: Rule Schema Definitions (Zod)
 // ============================================================================
 
 import { z } from 'zod';
-import { logicalConsequenceSchema, ruleEffectSchema } from './primitives.js';
+
+// ——— Identity schemas ———
+
+export const ruleIdSchema = z.string();
+export const ruleEpochIdSchema = z.string();
+export const ruleExceptionIdSchema = z.string();
+export const ruleSpecificationIdSchema = z.string();
+
+// ——— RuleTypeDefinition schema ———
+
+export const ruleClassSchema = z.enum(['natural_law', 'social_norm', 'moral_principle', 'game_rule', 'legal_code']).optional();
+
+export const rulePredicateSchema = z.object({
+  version: z.string(),
+  type: z.enum(['compiled', 'simple']),
+  expression: z.string(),
+  operators: z.array(z.enum(['all', 'exists', 'count'])).optional(),
+}).strict();
+
+export const ruleConstraintKindSchema = z.enum([
+  'state_invariant',
+  'transition_constraint',
+  'precondition_requirement',
+  'postcondition_requirement',
+]);
+
+export const ruleEnforcementSchema = z.enum(['hard', 'audit', 'semantic']);
+
+export const ruleApplicableEffectivenessSchema = z.enum(['full', 'limited', 'nullified']);
+
+export const ruleConstraintSchema = z.object({
+  constraintId: z.string(),
+  kind: ruleConstraintKindSchema,
+  enforcement: ruleEnforcementSchema,
+  applicableEffectiveness: z.array(ruleApplicableEffectivenessSchema),
+  scope: z.record(z.string(), z.unknown()),
+  predicate: rulePredicateSchema,
+  semanticHint: z.string().optional(),
+}).strict();
+
+export const ruleTypeDefinitionSchema = z.object({
+  typeId: z.string(),
+  name: z.string(),
+  category: z.string(),
+  ruleClass: ruleClassSchema,
+  defaultConstraints: z.array(ruleConstraintSchema),
+}).strict();
+
+// ——— RuleSpecification schema ———
+
+export const ruleSpecificationSchema = z.object({
+  specificationId: ruleSpecificationIdSchema,
+  typeRef: z.object({
+    typeId: z.string(),
+    version: z.string(),
+  }).strict(),
+  statement: z.string(),
+  constraints: z.array(ruleConstraintSchema),
+  semanticHash: z.string(),
+}).strict();
+
+// ——— RuleRuntimeState schema ———
+
+export const ruleActivationSchema = z.enum(['dormant', 'enabled', 'suspended', 'revoked']);
+export const ruleEffectivenessSchema = z.enum(['full', 'limited', 'nullified']);
+
+export const ruleExceptionConditionSchema = z.object({
+  type: z.enum(['fact', 'expression']),
+  factId: z.string().optional(),
+  expression: z.string().optional(),
+}).strict();
+
+export const ruleExceptionEffectSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('exempt') }).strict(),
+  z.object({ type: z.literal('replaceWith'), replacementConstraintId: z.string() }).strict(),
+]);
+
+export const ruleExceptionSchema = z.object({
+  exceptionId: ruleExceptionIdSchema,
+  status: z.enum(['active', 'suspended', 'revoked']),
+  constraintIds: z.array(z.string()),
+  scopeBindings: z.record(z.string(), z.unknown()),
+  condition: ruleExceptionConditionSchema.optional(),
+  effect: ruleExceptionEffectSchema,
+}).strict();
+
+export const ruleRuntimeStateSchema = z.object({
+  ruleId: ruleIdSchema,
+  currentEpoch: ruleEpochIdSchema,
+  specificationId: ruleSpecificationIdSchema,
+  activation: ruleActivationSchema,
+  effectiveness: ruleEffectivenessSchema,
+  scopeBindings: z.record(z.string(), z.unknown()),
+  exceptions: z.array(ruleExceptionSchema),
+}).strict();
+
+// ——— RuleEvaluationRecord schema ———
+
+export const ruleEvaluationResultSchema = z.enum(['compliant', 'violated', 'exempt']);
+
+export const ruleEvaluationRecordSchema = z.object({
+  evaluationId: z.string(),
+  ruleId: ruleIdSchema,
+  epochId: ruleEpochIdSchema,
+  constraintId: z.string(),
+  nodeId: z.string(),
+  result: ruleEvaluationResultSchema,
+  enforcement: ruleEnforcementSchema,
+  details: z.string().optional(),
+}).strict();
+
+// ——— RuleTransaction schema ———
+
+export const ruleTransactionOperationSchema = z.enum([
+  'enable',
+  'suspend',
+  'revoke',
+  'amend',
+  'replace',
+  'set_effectiveness',
+  'add_exception',
+  'remove_exception',
+]);
+
+export const ruleTransactionSchema = z.object({
+  type: z.literal('rule_transaction'),
+  ruleId: ruleIdSchema,
+  operation: ruleTransactionOperationSchema,
+  evidence: z.string(),
+  epochId: ruleEpochIdSchema.optional(),
+  specificationId: ruleSpecificationIdSchema.optional(),
+  newEffectiveness: ruleEffectivenessSchema.optional(),
+  exception: ruleExceptionSchema.optional(),
+  constraintEvaluation: z.array(ruleConstraintSchema).optional(),
+}).strict();
+
+// ——— RuleEffectEntry (backward-compat) schema ———
+
+export const ruleEffectEntrySchema = z.object({
+  rule: z.string(),
+  effect: z.enum(['reinforce', 'weaken', 'introduce_exception', 'nullify']),
+  evidence: z.string(),
+}).strict();
+
+export const ruleExceptionStatusSchema = z.enum(['active', 'suspended', 'revoked']);
+
+// ——— RuleDefinition (YAML) — kept for backward compat ———
 
 export const ruleDefinitionSchema = z
   .object({
@@ -13,7 +159,18 @@ export const ruleDefinitionSchema = z
     type: z.string(),
     statement: z.string(),
     ruleClass: z.enum(['natural_law', 'social_norm', 'moral_principle', 'game_rule', 'legal_code']).optional(),
-    logicalConsequences: z.array(logicalConsequenceSchema),
+    logicalConsequences: z.array(z.object({
+      description: z.string(),
+      check: z.object({
+        type: z.enum(['state_invariant', 'transition_constraint', 'progression']),
+        filter: z.string(),
+        assert: z.string(),
+        unlessEvent: z.string().optional(),
+        direction: z.string().optional(),
+        tolerance: z.number().optional(),
+        severity: z.enum(['error', 'warning']),
+      }).strict(),
+    })),
     exceptions: z
       .array(
         z
@@ -24,6 +181,6 @@ export const ruleDefinitionSchema = z
           .strict(),
       )
       .optional(),
-    evidenceChain: z.array(ruleEffectSchema),
+    evidenceChain: z.array(ruleEffectEntrySchema),
   })
   .strict();

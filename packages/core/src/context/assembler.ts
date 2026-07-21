@@ -261,7 +261,8 @@ export class ContextAssembler {
   private _buildActiveRules(state: WorldState, registry: EntityRegistry): RuleDefinition[] {
     const activeRules: RuleDefinition[] = [];
     for (const [ruleId, ruleState] of Object.entries(state.rules)) {
-      if (ruleState.activeEvidence > 0) {
+      // Rule is active if enabled and not nullified
+      if (ruleState.activation === 'enabled' && ruleState.effectiveness !== 'nullified') {
         const entity = registry.resolve(ruleId);
         if (entity) {
           activeRules.push({

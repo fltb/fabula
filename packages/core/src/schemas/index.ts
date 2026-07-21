@@ -7,7 +7,33 @@
 
 import { eventFileSchema } from './event.js';
 import { characterDefinitionSchema } from './character.js';
-import { ruleDefinitionSchema } from './rule.js';
+import {
+  ruleDefinitionSchema,
+  ruleIdSchema,
+  ruleEpochIdSchema,
+  ruleExceptionIdSchema,
+  ruleSpecificationIdSchema,
+  ruleTypeDefinitionSchema,
+  ruleSpecificationSchema,
+  ruleConstraintSchema,
+  ruleConstraintKindSchema,
+  ruleEnforcementSchema,
+  ruleApplicableEffectivenessSchema,
+  rulePredicateSchema,
+  ruleRuntimeStateSchema,
+  ruleActivationSchema,
+  ruleEffectivenessSchema,
+  ruleEvaluationRecordSchema,
+  ruleEvaluationResultSchema,
+  ruleExceptionSchema,
+  ruleExceptionStatusSchema,
+  ruleExceptionEffectSchema,
+  ruleExceptionConditionSchema,
+  ruleTransactionSchema,
+  ruleTransactionOperationSchema,
+  ruleEffectEntrySchema,
+  ruleClassSchema,
+} from './rule.js';
 import { locationDefinitionSchema } from './location.js';
 import { itemDefinitionSchema } from './item.js';
 import { factionDefinitionSchema } from './faction.js';
@@ -19,7 +45,6 @@ import { projectConfigSchema } from './project.js';
 
 import { entityTypeCatalogSchema, entityDeclarationCatalogSchema, entityTypeRefSchema, entityRuntimeStateSchema, writePolicySchema, requiredAtSchema, attributeDefinitionSchema, entityTypeDefinitionSchema, entityDeclarationSchema } from './entity-catalog.js';
 // ── Re-export all per-entity schemas ─────────────────────────────────────────
-
 export {
   eventFileSchema,
   characterDefinitionSchema,
@@ -33,6 +58,32 @@ export {
   worldInitialStateSchema,
   projectConfigSchema,
   chapterMetadataSchema,
+};
+// ——— STATE-6 Rule Schemas ———
+export {
+  ruleIdSchema,
+  ruleEpochIdSchema,
+  ruleExceptionIdSchema,
+  ruleSpecificationIdSchema,
+  ruleTypeDefinitionSchema,
+  ruleSpecificationSchema,
+  ruleConstraintSchema,
+  ruleConstraintKindSchema,
+  ruleEnforcementSchema,
+  ruleApplicableEffectivenessSchema,
+  rulePredicateSchema,
+  ruleRuntimeStateSchema,
+  ruleActivationSchema,
+  ruleEffectivenessSchema,
+  ruleEvaluationRecordSchema,
+  ruleEvaluationResultSchema,
+  ruleExceptionSchema,
+  ruleExceptionEffectSchema,
+  ruleExceptionConditionSchema,
+  ruleTransactionSchema,
+  ruleTransactionOperationSchema,
+  ruleEffectEntrySchema,
+  ruleClassSchema,
 };
 
 export {

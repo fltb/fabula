@@ -42,6 +42,7 @@ export class TimeoutError extends defineError('TimeoutError', 'PROVIDER_TIMEOUT'
 export class ModelNotFoundError extends defineError('ModelNotFoundError', 'PROVIDER_MODEL_NOT_FOUND') {}
 export class AssemblyIncompleteError extends defineError('AssemblyIncompleteError', 'ASSEMBLY_INCOMPLETE') {}
 export class NetworkDeniedError extends defineError('NetworkDeniedError', 'NETWORK_DENIED') {}
+export class RuleConstraintViolationError extends defineError('RuleConstraintViolationError', 'RULE_CONSTRAINT_VIOLATION') {}
 
 // ============================================================================
 // Safe-error sanitizer — shared by core ledger + bench smoke artifacts

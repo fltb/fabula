@@ -92,12 +92,10 @@ export interface TransitionEffect {
 }
 
 // ——— World State ———
+import type { RuleRuntimeState } from './rule.js';
 
-interface RuleState {
-  activeEvidence: number;
-  nullified: boolean;
-  exceptions: string[];
-}
+
+
 
 export interface WorldState {
   entities: Record<EntityId, Record<string, unknown>>;
@@ -108,7 +106,7 @@ export interface WorldState {
   /** STATE-4 PropositionCatalog — immutable catalog of propositions */
   propositionCatalog?: PropositionCatalog;
   threads: Record<string, ThreadRuntimeState>;
-  rules: Record<string, RuleState>;
+  rules: Record<string, RuleRuntimeState>;
   facts: Fact[];
 }
 

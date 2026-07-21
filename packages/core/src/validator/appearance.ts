@@ -10,7 +10,7 @@
 // ============================================================================
 
 import { z } from 'zod';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import { matchLevelSchema } from './schemas.js';
 import type {
   PostRenderInput,
@@ -39,7 +39,7 @@ export class AppearanceValidator implements Validator {
     // Deterministic check: if an event has multiple appearance postconditions
     // for the same entity with different values, that's a contradiction
     const appearanceFacts = event.postconditions.filter(
-      (pc) => pc.attribute === 'appearance' && pc.value !== undefined,
+      (pc) => getAttributeSemanticRole('character', pc.attribute) === 'appearance' && pc.value !== undefined,
     );
     if (appearanceFacts.length > 1) {
       const values = [...new Set(appearanceFacts.map((f) => f.value))];
@@ -49,7 +49,7 @@ export class AppearanceValidator implements Validator {
           `Contradictory appearance values within same event: [${values.join(', ')}]`,
           'Remove the contradictory postcondition or resolve the contradiction.',
           'edit_file',
-          'appearance',
+          getAttributesBySemanticRole('character', 'appearance')[0] ?? 'appearance',
         ));
       }
     }

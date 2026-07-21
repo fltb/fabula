@@ -8,7 +8,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 
 export class ReachabilityValidator implements Validator {
   name = 'reachability';
@@ -114,8 +114,9 @@ export class ReachabilityValidator implements Validator {
 
       const expectedValue = String(pc.value).toLowerCase();
 
-      // Location precondition: prose should mention the location
-      if (pc.attribute === 'location' && !proseLower.includes(expectedValue)) {
+      // Resolve entity kind from registry for catalog lookups
+      const entityKind = input.entityRegistry?.resolve(pc.entityId)?.kind;
+      if (entityKind && getAttributeSemanticRole(entityKind, pc.attribute) === 'location' && !proseLower.includes(expectedValue)) {
         issues.push(makeIssue(
           this.name, event.id, pc.entityId, 'warning',
           `Precondition says "${pc.entityId}" is at "${pc.value}" but prose does not mention this location`,
@@ -125,8 +126,7 @@ export class ReachabilityValidator implements Validator {
         ));
       }
 
-      // Status = alive precondition: prose should not describe the character as dead
-      if (pc.attribute === 'status' && expectedValue === 'alive') {
+      if (entityKind && getAttributeSemanticRole(entityKind, pc.attribute) === 'lifecycle' && expectedValue === 'alive') {
         const deathWords = /\b(died|dead|death|killed|slain|corpse|lifeless)\b/i;
         // Only flag if death words appear near the character's name
         const sentences = prose.split(/[.!?]+/);
@@ -163,7 +163,7 @@ export class ReachabilityValidator implements Validator {
             `POV character "${povChar}" is at "${knownLocation}" but the opening sentence does not establish the setting`,
             'Consider opening by establishing the POV character\'s location for narrative continuity.',
             'edit_file',
-            'location',
+            getAttributesBySemanticRole('character', 'location')[0] ?? 'location',
           ));
         }
       }
@@ -184,7 +184,7 @@ export class ReachabilityValidator implements Validator {
               `Character "${povChar}" mood is "${knownMood}" but prose contains happy/joyful language`,
               'Align the prose tone with the character\'s known emotional state.',
               'edit_file',
-              'mood',
+              getAttributesBySemanticRole('character', 'emotional')[0] ?? 'mood',
             ));
           }
         } else if (/angry|furious|irate/i.test(moodLower)) {
@@ -194,7 +194,7 @@ export class ReachabilityValidator implements Validator {
               `Character "${povChar}" mood is "${knownMood}" but prose tone seems more sorrowful than angry`,
               'Consider adjusting the prose to reflect anger rather than sadness.',
               'edit_file',
-              'mood',
+              getAttributesBySemanticRole('character', 'emotional')[0] ?? 'mood',
             ));
           }
         }
@@ -224,7 +224,7 @@ export class ReachabilityValidator implements Validator {
               `"${entityId}" is ${status} per world state but prose describes them performing actions`,
               'Remove actions attributed to this character or mark the segment as a flashback/memory.',
               'edit_file',
-              'status',
+            getAttributesBySemanticRole('character', 'lifecycle')[0] ?? 'status',
             ));
             break;
           }

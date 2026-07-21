@@ -8,7 +8,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import { z } from 'zod';
  
 export const inventedDetailSchema = z.object({
@@ -26,15 +26,17 @@ export class FactualDetailValidator implements Validator {
     const issues: ValidationIssue[] = [];
     const event = input.event;
 
-    // Deterministic part: check entity attribute consistency
     for (const pc of event.preconditions) {
       const entity = input.entityRegistry.resolve(pc.entityId);
       if (!entity) continue;
 
-      const currentTraits = entity.state['traits'] as string[] | undefined;
+      // Derive the traits attribute ID from catalog (semanticRole: 'identity')
+      const identityAttrs = getAttributesBySemanticRole(entity.kind, 'identity');
+      const traitAttrId = identityAttrs.find(a => a === 'traits') ?? 'traits';
+      const currentTraits = entity.state[traitAttrId] as string[] | undefined;
 
       // Check trait-level contradictions (only for deterministic values)
-      if (pc.attribute === 'traits' && currentTraits && pc.value !== undefined) {
+      if (pc.attribute === traitAttrId && currentTraits && pc.value !== undefined) {
         const requestedTraits = Array.isArray(pc.value) ? pc.value : [pc.value];
         for (const trait of requestedTraits) {
           if (currentTraits.includes(trait as string)) {

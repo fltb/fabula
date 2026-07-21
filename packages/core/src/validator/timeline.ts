@@ -11,7 +11,7 @@ import type {
 } from '../types/index.js';
 import { compareTimestamp, resolveTimestampToDay } from '../entity/index.js';
 import { buildCausalEdges } from '../state/dag.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole } from './base.js';
 import { z } from 'zod';
 import { narrativeCheckSchema } from './schemas.js';
 
@@ -117,7 +117,12 @@ export class TimelineValidator implements Validator {
 
     const narrativeChecks = z.array(narrativeCheckSchema).safeParse(input.analysis.analysis.narrativeChecks).data ?? [];
     for (const check of narrativeChecks) {
-      if (check.attribute !== 'time_period') continue;
+      // Catalog-driven: check if attribute has temporal semanticRole
+      // time_period is the primary attribute; also accept any catalog temporal attrs
+      if (check.attribute !== 'time_period') {
+        const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+        if (!entityKind || getAttributeSemanticRole(entityKind, check.attribute) !== 'temporal') continue;
+      }
       if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
         issues.push(makeIssue(
           'timeline',

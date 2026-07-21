@@ -2,7 +2,7 @@
 // ReplayEngine — Replay events to reconstruct world state
 // ============================================================================
 
-import type { NarrativeEvent, WorldState, BranchPath, Snapshot } from '../types/index.js';
+import type { NarrativeEvent, WorldState, BranchPath, Snapshot, EntityRuntimeState, EntityDeclarationCatalog, EntityTypeCatalog, EntityTypeDefinition } from '../types/index.js';
 import {
   createEmptyBranchPath,
   includesPath,
@@ -11,6 +11,18 @@ import { buildCausalEdges, topologicalSort } from './dag.js';
 import { ConfigError, PreconditionMismatchError } from '../errors.js';
 import { compareFact } from '../entity/compare.js';
 import { canonicalizeFactValue } from '../entity/fact-value.js';
+// ——— Lifecycle transition defaults ———
+const LIFECYCLE_STATES: Record<string, true> = { active: true, inactive: true, retired: true };
+
+const DEFAULT_LIFECYCLE_TRANSITIONS: Array<[EntityRuntimeState, EntityRuntimeState]> = [
+  ['active', 'inactive'],
+  ['active', 'retired'],
+  ['inactive', 'active'],
+  ['inactive', 'retired'],
+];
+
+
+
 
 // ——— Rule effect application helper ———
 
@@ -88,6 +100,14 @@ function checkOperator(
 }
 
 export class ReplayEngine {
+  private entityDeclarationCatalog?: EntityDeclarationCatalog;
+  private entityTypeCatalog?: EntityTypeCatalog;
+
+  constructor(catalogs?: { entityDeclarationCatalog?: EntityDeclarationCatalog; entityTypeCatalog?: EntityTypeCatalog }) {
+    this.entityDeclarationCatalog = catalogs?.entityDeclarationCatalog;
+    this.entityTypeCatalog = catalogs?.entityTypeCatalog;
+  }
+
   /**
    * Replay events to build the current world state.
    * Optionally filter by branch path for branch-aware state.
@@ -112,6 +132,9 @@ export class ReplayEngine {
       rules: {},
       facts: [],
     };
+    // Track lifecycle changes by storyTime for conflict detection
+    const lifecycleChangesByStoryTime = new Map<string, Set<string>>();
+
 
     for (const event of sorted) {
       // Branch filtering: skip events not on this path
@@ -160,6 +183,7 @@ export class ReplayEngine {
 
       // ── Phase 2: Apply postcondition effects ──
       const writtenKeys = new Set<string>();
+      const introducedThisEvent = new Set<string>();
       for (const fact of event.postconditions) {
         if (!includesPath(fact.validity.branches, bp)) continue;
 
@@ -171,9 +195,33 @@ export class ReplayEngine {
           continue;
         }
 
-        // Track entity introduction: ensure entity exists
+        // Introduce or resolve entity
         if (!state.entities[fact.entityId]) {
-          state.entities[fact.entityId] = {};
+          // Entity not yet in state — check declaration catalog if available
+          if (this.entityDeclarationCatalog && !this.entityDeclarationCatalog.declarations[fact.entityId]) {
+            throw new ConfigError(
+              `Unknown entity ${fact.entityId}: not found in declaration catalog`,
+              { path: fact.entityId, eventId: event.id, phase: 'replay' },
+            );
+          }
+          state.entities[fact.entityId] = { lifecycle: 'active' };
+          introducedThisEvent.add(fact.entityId);
+        }
+
+        // Retired entity guard: no writes allowed except lifecycle attribute itself
+        if (state.entities[fact.entityId]?.lifecycle === 'retired' && fact.attribute !== 'lifecycle') {
+          throw new ConfigError(
+            `Cannot modify retired entity ${fact.entityId}`,
+            { path: fact.entityId, eventId: event.id, phase: 'replay' },
+          );
+        }
+
+        // Prevent unset of lifecycle
+        if (fact.attribute === 'lifecycle' && op === 'unset') {
+          throw new ConfigError(
+            `Cannot unset lifecycle on ${fact.entityId}`,
+            { path: fact.entityId, eventId: event.id, phase: 'replay' },
+          );
         }
 
         // Detect duplicate write to same (entityId, attribute) within this node
@@ -185,6 +233,55 @@ export class ReplayEngine {
           );
         }
         writtenKeys.add(key);
+
+        // ── Lifecycle transition detection ──
+        const rawValue = fact.value !== undefined ? String(fact.value) : undefined;
+        if (
+          fact.attribute === 'lifecycle' &&
+          rawValue !== undefined &&
+          op !== 'unset' &&
+          LIFECYCLE_STATES[rawValue]
+        ) {
+          const newLifecycle = rawValue as EntityRuntimeState;
+          const currentLifecycle = (state.entities[fact.entityId]?.lifecycle as EntityRuntimeState) ?? 'active';
+
+          // Resolve allowed transitions
+          let allowedTransitions = DEFAULT_LIFECYCLE_TRANSITIONS;
+          if (this.entityTypeCatalog && this.entityDeclarationCatalog) {
+            const decl = this.entityDeclarationCatalog.declarations[fact.entityId];
+            if (decl) {
+              const typeDef = this.entityTypeCatalog.types[decl.typeRef.typeId];
+              if (typeDef) {
+                allowedTransitions = typeDef.lifecyclePolicy.allowedTransitions;
+              }
+            }
+          }
+
+          const isValid = allowedTransitions.some(
+            ([from, to]) => from === currentLifecycle && to === newLifecycle,
+          );
+          if (!isValid) {
+            throw new ConfigError(
+              `Invalid lifecycle transition: ${currentLifecycle} → ${newLifecycle} for entity ${fact.entityId}`,
+              { path: fact.entityId, eventId: event.id, phase: 'replay' },
+            );
+          }
+
+          // Same storyTime lifecycle conflict detection
+          if (event.storyTime) {
+            const stKey = JSON.stringify(event.storyTime);
+            if (!lifecycleChangesByStoryTime.has(stKey)) {
+              lifecycleChangesByStoryTime.set(stKey, new Set());
+            }
+            if (lifecycleChangesByStoryTime.get(stKey)!.has(fact.entityId)) {
+              throw new ConfigError(
+                `Same storyTime lifecycle conflict: multiple events at ${stKey} modify lifecycle of ${fact.entityId}`,
+                { path: fact.entityId, eventId: event.id, phase: 'replay' },
+              );
+            }
+            lifecycleChangesByStoryTime.get(stKey)!.add(fact.entityId);
+          }
+        }
 
         if (op === 'unset') {
           // Form 2: unset — delete attribute
@@ -202,6 +299,19 @@ export class ReplayEngine {
           state.facts.push(fact);
         }
       }
+
+      // ── Participant lifecycle check: retired entities cannot participate unless introduced this event ──
+      if (event.participants) {
+        for (const pid of event.participants.entities) {
+          if (state.entities[pid]?.lifecycle === 'retired' && !introducedThisEvent.has(pid)) {
+            throw new ConfigError(
+              `Retired entity ${pid} cannot participate in event ${event.id}`,
+              { path: pid, eventId: event.id, phase: 'replay' },
+            );
+          }
+        }
+      }
+
 
       // ── Phase 3: Thread progress ──
       for (const tp of event.threadProgress) {
@@ -308,14 +418,74 @@ export class ReplayEngine {
 
     for (const eventId of ordered) {
       const event = eventById.get(eventId)!;
+
+      // Track introduced entities for participant check
+      const introducedThisEvent = new Set<string>();
+
       for (const fact of event.postconditions) {
         if (!includesPath(fact.validity.branches, bp)) continue;
-        if (!state.entities[fact.entityId]) state.entities[fact.entityId] = {};
+
+        // Introduce entity with lifecycle: active
+        if (!state.entities[fact.entityId]) {
+          state.entities[fact.entityId] = { lifecycle: 'active' };
+          introducedThisEvent.add(fact.entityId);
+        }
+
+        // Retired entity guard
+        if (state.entities[fact.entityId]?.lifecycle === 'retired' && fact.attribute !== 'lifecycle') {
+          throw new ConfigError(
+            `Cannot modify retired entity ${fact.entityId}`,
+            { path: fact.entityId, eventId, phase: 'replay' },
+          );
+        }
+
+        // Lifecycle transition handling
+        const rawValue = fact.value !== undefined ? String(fact.value) : undefined;
+        if (
+          fact.attribute === 'lifecycle' &&
+          rawValue !== undefined &&
+          LIFECYCLE_STATES[rawValue]
+        ) {
+          const currentLifecycle = (state.entities[fact.entityId]?.lifecycle as EntityRuntimeState) ?? 'active';
+          const newLifecycle = rawValue as EntityRuntimeState;
+
+          let allowedTransitions = DEFAULT_LIFECYCLE_TRANSITIONS;
+          if (this.entityTypeCatalog && this.entityDeclarationCatalog) {
+            const decl = this.entityDeclarationCatalog.declarations[fact.entityId];
+            if (decl) {
+              const typeDef = this.entityTypeCatalog.types[decl.typeRef.typeId];
+              if (typeDef) {
+                allowedTransitions = typeDef.lifecyclePolicy.allowedTransitions;
+              }
+            }
+          }
+
+          if (!allowedTransitions.some(([from, to]) => from === currentLifecycle && to === newLifecycle)) {
+            throw new ConfigError(
+              `Invalid lifecycle transition: ${currentLifecycle} → ${newLifecycle} for entity ${fact.entityId}`,
+              { path: fact.entityId, eventId, phase: 'replay' },
+            );
+          }
+        }
+
         if (fact.value !== undefined) {
           state.facts.push(fact);
           state.entities[fact.entityId][fact.attribute] = fact.value;
         }
       }
+
+      // Participant lifecycle check
+      if (event.participants) {
+        for (const pid of event.participants.entities) {
+          if (state.entities[pid]?.lifecycle === 'retired' && !introducedThisEvent.has(pid)) {
+            throw new ConfigError(
+              `Retired entity ${pid} cannot participate in event ${eventId}`,
+              { path: pid, eventId, phase: 'replay' },
+            );
+          }
+        }
+      }
+
       for (const tp of event.threadProgress) {
         state.threads[tp.thread] = { progress: tp.progressAfter, total: tp.progressTotal };
       }

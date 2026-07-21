@@ -8,7 +8,7 @@ import type {
   PreRenderInput,
   PostRenderInput,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole } from './base.js';
 import { z } from 'zod';
 import { matchLevelSchema } from './schemas.js';
 
@@ -36,7 +36,8 @@ export class KnowledgeValidator implements Validator {
     // For each postcondition that sets "knows" on the POV character,
     // check if they could have learned this at this point in time
     for (const pc of event.postconditions) {
-      if (pc.attribute !== 'knows' || pc.entityId !== povChar) continue;
+      if (pc.entityId !== povChar) continue;
+      if (getAttributeSemanticRole('character', pc.attribute) !== 'knowledge') continue;
 
       const knownFacts = charKnowledge?.knownFacts ?? [];
       const alreadyKnown = knownFacts.some((k) => k.fact.id === pc.id);
@@ -51,9 +52,9 @@ export class KnowledgeValidator implements Validator {
       }
     }
 
-    // Check: POV character shouldn't know facts from future events
     for (const pc of event.postconditions) {
-      if (pc.entityId !== povChar || pc.attribute !== 'knows') continue;
+      if (pc.entityId !== povChar) continue;
+      if (getAttributeSemanticRole('character', pc.attribute) !== 'knowledge') continue;
 
       // Check if this fact was established in a future event (impossible)
       // Only check deterministic value facts; narrativeHint facts are deferred

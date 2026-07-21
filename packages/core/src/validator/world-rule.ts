@@ -8,7 +8,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeWritePolicy } from './base.js';
 import { z } from 'zod';
 
 export const ruleCheckSchema = z.object({
@@ -43,21 +43,20 @@ export class WorldRuleValidator implements Validator {
         }
       }
     }
-
-    // Check postconditions: if a postcondition sets marital_status=remarried
-    // and the entity's current marital_status in state differs, flag as rule violation
+    // Check postconditions: flag changes to immutable attributes (world rule contradiction)
+    // Mutable attributes like marital_status (semanticRole: 'lifecycle') can change freely.
     for (const pc of event.postconditions) {
-      if (pc.attribute === 'marital_status') {
-        const entity = input.entityRegistry.resolve(pc.entityId);
-        if (entity && entity.state['marital_status'] && entity.state['marital_status'] !== pc.value) {
-          issues.push(makeIssue(
-            this.name, event.id, pc.entityId, 'error',
-            `World rule contradiction: "${pc.entityId}" marital_status set to "${pc.value}" but registry defines "${entity.state['marital_status']}"`,
-            'Review scene for world rule compliance, or update the character definition.',
-            'edit_file',
-            'marital_status',
-          ));
-        }
+      const entity = input.entityRegistry.resolve(pc.entityId);
+      if (!entity) continue;
+      const writePolicy = getAttributeWritePolicy(entity.kind, pc.attribute);
+      if (writePolicy === 'immutable' && entity.state[pc.attribute] !== undefined && entity.state[pc.attribute] !== pc.value) {
+        issues.push(makeIssue(
+          this.name, event.id, pc.entityId, 'error',
+          `World rule contradiction: "${pc.entityId}" ${pc.attribute} set to "${pc.value}" but registry defines "${entity.state[pc.attribute]}"`,
+          'Review scene for world rule compliance, or update the character definition.',
+          'edit_file',
+          pc.attribute,
+        ));
       }
     }
 

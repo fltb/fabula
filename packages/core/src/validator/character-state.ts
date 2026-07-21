@@ -8,7 +8,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import { z } from 'zod';
 import { narrativeCheckSchema } from './schemas.js';
 
@@ -23,11 +23,19 @@ export class CharacterStateValidator implements Validator {
       const entity = input.entityRegistry.resolve(pc.entityId);
       if (!entity || entity.kind !== 'character') continue;
 
-      const currentState = input.queryState(pc.entityId, 'status');
-      const currentAlive = input.queryState(pc.entityId, 'alive');
+      // Catalog-driven: check all lifecycle attributes for death/cessation signals
+      const lifecycleAttrs = getAttributesBySemanticRole('character', 'lifecycle');
+      let isDead = false;
+      for (const attr of lifecycleAttrs) {
+        const val = input.queryState(pc.entityId, attr);
+        if (val === 'dead' || val === 'deceased' || val === false) {
+          isDead = true;
+          break;
+        }
+      }
 
       // If character is dead, can't appear in scenes
-      if (currentState === 'dead' || currentAlive === false) {
+      if (isDead) {
         issues.push(makeIssue(
           this.name, input.event.id, pc.entityId, 'error',
           `Character "${pc.entityId}" is dead but appears in this scene`,
@@ -47,7 +55,11 @@ export class CharacterStateValidator implements Validator {
 
     const narrativeChecks = z.array(narrativeCheckSchema).safeParse(input.analysis.analysis.narrativeChecks).data ?? [];
     for (const check of narrativeChecks) {
-      if (check.attribute !== 'character_state') continue;
+      if (check.attribute !== 'character_state') {
+        // Catalog-driven: check if this is a lifecycle attribute via semanticRole
+        const entity = input.entityRegistry?.resolve(check.entityId);
+        if (entity && getAttributeSemanticRole(entity.kind, check.attribute) !== 'lifecycle') continue;
+      }
       if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
         issues.push(makeIssue(
           'character_state',

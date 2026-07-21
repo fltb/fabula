@@ -8,7 +8,7 @@
 // ============================================================================
 
 import { z } from 'zod';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributesBySemanticRole } from './base.js';
 import type {
   PostRenderInput,
   Validator,
@@ -43,6 +43,10 @@ export class AliasValidator implements Validator {
       // Build set of valid names for this entity
       const validNames = new Set<string>();
 
+      // Derive the aliases attribute ID from catalog (semanticRole: 'identity')
+      const identityAttrs = getAttributesBySemanticRole('character', 'identity');
+      const aliasAttrId = identityAttrs.find(a => a === 'aliases') ?? 'aliases';
+
       // The entity ID itself is always valid
       validNames.add(entityId.toLowerCase());
 
@@ -50,7 +54,7 @@ export class AliasValidator implements Validator {
       const entityState = worldState.entities[entityId];
       if (entityState) {
         // Check for aliases field (from CharacterDefinition.aliases mapped to state)
-        const stateAliases = entityState['aliases'];
+        const stateAliases = entityState[aliasAttrId];
         if (Array.isArray(stateAliases)) {
           for (const alias of stateAliases) {
             validNames.add(String(alias).toLowerCase());
@@ -62,7 +66,7 @@ export class AliasValidator implements Validator {
       if (input.entityRegistry) {
         const registryEntity = input.entityRegistry.resolve(entityId);
         if (registryEntity) {
-          const regAliases = registryEntity.state['aliases'];
+          const regAliases = registryEntity.state[aliasAttrId];
           if (Array.isArray(regAliases)) {
             for (const alias of regAliases) {
               validNames.add(String(alias).toLowerCase());
@@ -100,7 +104,7 @@ export class AliasValidator implements Validator {
             `Unknown name "${usedName}" used for character "${entityId}" — not in known names/aliases`,
             'If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.',
             'add_field',
-            'aliases',
+            aliasAttrId,
             undefined,
             usedName,
           ));

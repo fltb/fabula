@@ -10,7 +10,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import { z } from 'zod';
 import { narrativeCheckSchema } from './schemas.js';
 
@@ -26,19 +26,29 @@ export class PronounValidator implements Validator {
     if (input.analysis) {
       const narrativeChecks = z.array(narrativeCheckSchema).safeParse(input.analysis.analysis.narrativeChecks).data ?? [];
       for (const check of narrativeChecks) {
-        if (check.attribute === 'pronoun' || check.attribute === 'pronoun_consistency') {
-          if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
-            const severity = check.matchLevel === 'contradicted' ? 'error' : 'warning';
-            issues.push(makeIssue(
-              this.name,
-              input.event.id,
-              check.entityId,
-              severity,
-              `Pronoun consistency: "${check.hint}" — ${check.matchLevel}`,
-              check.evidence,
-              'manual',
-            ));
-          }
+        // Catalog-driven: verify attribute is a known narrative attribute
+        const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+        if (entityKind) {
+          const role = getAttributeSemanticRole(entityKind, check.attribute);
+          if (role !== 'narrative') continue;
+          // Further narrow to pronoun-specific narrative attributes from catalog
+          const narrativeAttrs = getAttributesBySemanticRole(entityKind, 'narrative');
+          const pronounAttrs: string[] = narrativeAttrs.filter(a => a === 'pronoun' || a === 'pronoun_consistency');
+          if (!pronounAttrs.includes(check.attribute)) continue;
+        } else if (check.attribute !== 'pronoun' && check.attribute !== 'pronoun_consistency') {
+          continue;
+        }
+        if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
+          const severity = check.matchLevel === 'contradicted' ? 'error' : 'warning';
+          issues.push(makeIssue(
+            this.name,
+            input.event.id,
+            check.entityId,
+            severity,
+            `Pronoun consistency: "${check.hint}" — ${check.matchLevel}`,
+            check.evidence,
+            'manual',
+          ));
         }
       }
     }

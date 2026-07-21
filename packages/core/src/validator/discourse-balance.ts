@@ -12,7 +12,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import { z } from 'zod';
 import { narrativeCheckSchema } from './schemas.js';
 
@@ -84,18 +84,28 @@ export class DiscourseBalanceValidator implements Validator {
     // Check Pass 2 narrativeChecks for discourse balance hints
     const narrativeChecks = z.array(narrativeCheckSchema).safeParse(analysis.analysis.narrativeChecks).data ?? [];
     for (const check of narrativeChecks) {
-      if (check.attribute === 'discourse_balance' || check.attribute === 'discourseMode') {
-        if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
-          issues.push(makeIssue(
-            this.name,
-            event.id,
-            check.entityId,
-            'info',
-            `Discourse balance signal: "${check.hint}" — ${check.matchLevel}`,
-            check.evidence,
-            'manual',
-          ));
-        }
+      // Catalog-driven: verify attribute is a narrative attribute
+      const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+      if (entityKind) {
+        const role = getAttributeSemanticRole(entityKind, check.attribute);
+        if (role !== 'narrative') continue;
+        // Narrow to discourse-specific narrative attributes from catalog
+        const narrativeAttrs = getAttributesBySemanticRole(entityKind, 'narrative');
+        const discourseAttrs: string[] = narrativeAttrs.filter(a => a === 'discourse_balance' || a === 'discourseMode');
+        if (!discourseAttrs.includes(check.attribute)) continue;
+      } else if (check.attribute !== 'discourse_balance' && check.attribute !== 'discourseMode') {
+        continue;
+      }
+      if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
+        issues.push(makeIssue(
+          this.name,
+          event.id,
+          check.entityId,
+          'info',
+          `Discourse balance signal: "${check.hint}" — ${check.matchLevel}`,
+          check.evidence,
+          'manual',
+        ));
       }
     }
 

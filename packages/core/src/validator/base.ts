@@ -9,7 +9,10 @@ import type {
   ValidatorContext,
   ValidationIssue,
   EntityId,
+  EntityKind,
+  WritePolicy,
 } from '../types/index.js';
+import { defaultEntityTypeCatalog } from '../entity/index.js';
 
 // ============================================================================
 // Helper: build ValidatorContext from current state
@@ -79,4 +82,36 @@ export function makeIssue(
     fixAction,
     fixTarget: { file: file ?? '', field: attribute, value },
   };
+}
+
+// ============================================================================
+// Catalog-driven attribute lookup helpers (STATE-3b)
+// ============================================================================
+// Replace hardcoded attribute-name checks in validators with semanticRole
+// and writePolicy lookups from the entity type catalog.
+// ============================================================================
+
+/** Look up the semanticRole for a given entity kind + attributeId */
+export function getAttributeSemanticRole(kind: EntityKind, attributeId: string): string | undefined {
+  const typeDef = defaultEntityTypeCatalog.types[kind];
+  if (!typeDef) return undefined;
+  const attrDef = typeDef.attributes[attributeId];
+  return attrDef?.semanticRole;
+}
+
+/** Look up the writePolicy for a given entity kind + attributeId */
+export function getAttributeWritePolicy(kind: EntityKind, attributeId: string): WritePolicy | undefined {
+  const typeDef = defaultEntityTypeCatalog.types[kind];
+  if (!typeDef) return undefined;
+  const attrDef = typeDef.attributes[attributeId];
+  return attrDef?.writePolicy;
+}
+
+/** Get all attributeIds for an entity kind that have a specific semanticRole */
+export function getAttributesBySemanticRole(kind: EntityKind, semanticRole: string): string[] {
+  const typeDef = defaultEntityTypeCatalog.types[kind];
+  if (!typeDef) return [];
+  return Object.values(typeDef.attributes)
+    .filter(a => a.semanticRole === semanticRole)
+    .map(a => a.attributeId);
 }

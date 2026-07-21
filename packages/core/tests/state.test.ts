@@ -615,10 +615,12 @@ describe('ReplayEngine', () => {
       const state = engine.replay(events);
 
       expect(state.entities.camille).toEqual({
+        lifecycle: 'active',
         age: 26,
         location: 'village',
       });
       expect(state.entities.npc_gear).toEqual({
+        lifecycle: 'active',
         status: 'broken',
       });
     });

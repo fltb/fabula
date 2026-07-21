@@ -119,7 +119,9 @@
 
 ## 阅读文档时的疑问收集
 
-### [ ] AGG-1: Zod schema 应内聚到 `getAnalysisRequirements()` 而非独立维护
+### [x] AGG-1: Zod schema 应内聚到 `getAnalysisRequirements()` 而非独立维护
+> **完成**: 实现已存在 — `AnalysisBlockRequirement.schema` at `types/validator.ts:35`, `getCombinedValidationSchema()` at `aggregator.ts:329`, `render.ts:317` uses dynamic schema。保留 `schemas/analysis.ts` 作为集成胶水层（`analysisContentSchema` → `analysisResultSchema` 被 `contracts.ts`, `index.ts` 消费）。
+
 
 **背景**：当前 Pass 2 分析结果的 Zod 验证 schema（`schemas/analysis.ts`——`analysisContentSchema` 共 107 行，12 个 blocks）**独立于** validator 的 `getAnalysisRequirements()` 维护。两者在物理上分离但语义上是一体的：
 
@@ -1079,7 +1081,9 @@ DiscourseNode
 - 所有 ellipsis 的构建完整性是 dataset-integrity gate，而非 prose validator result；它们完全排除在 prose、scene、Pass 2、validator 和 CED/F1 的 metric population 之外，不是零值观察。选中 rendered scene 的文件数必须精确等于冻结 selection 的 event 数。
 - 至少测试：event/ellipsis schema 互斥；DiscourseBridge/coverage checkpoint；raw ellipsis summary 不能进入 logical prompt或泄漏；原子 provenance、缺失依赖、cycle、时间/顺序歧义硬失败；Story/Discourse snapshot-full replay等价且 hashes兼容；target/future effects不泄漏；双 boundary oracle一致；全作品双 coverage完整；selection可复现；87/103不混池；未请求本地 external在公开 CI正确记为`not-run`；独立 scene输出不被 assembler 拼接。
 
-### [ ] API-1: `initializeProject` O(n²) commit + 多次独立调用
+### [x] API-1: `initializeProject` O(n²) commit + 多次独立调用
+> **完成**: `api.ts` 新增模块级 `projectCache` (line 60)，`computeProjectHash()` 对 definitions/config/events 文件内容做 SHA-256。`initializeProject()` 在 rebuild 前校验缓存 hash（line 173-176）。
+
 
 **现状**：`initializeProject()` 被 `renderNovel`、`validateNovel`、`getProjectStatus`、`diffEvent` 等各自独立调用。MCP 服务器一次 `nova_status` + `nova_validate` = 两次完整初始化。
 
@@ -1104,7 +1108,9 @@ state = stateManager.getCurrentState(); // 又一遍完整 replay
 
 **实现成本估算**：0.5 天（改动集中在 initializeProject 内部）
 
-### [ ] API-2: `renderNovel` 两次 getStateAt 遍历
+### [x] API-2: `renderNovel` 两次 getStateAt 遍历
+> **完成**: 实现已存在 — `renderNovel` dryRun at `api.ts:277` 和 full render at `api.ts:340` 均使用 `boundaries.stateBeforeByEventId.get(ev.id)`，非 `getStateAt`。
+
 
 **现状**：dryRun 和 full render 各自遍历全部 event，每个 event 独立调用 `stateManager.getStateAt(ev.narrativeOrder - 1)`——做 snapshot-optimized replay 来获取该 event 的 beforeState。
 
@@ -1131,7 +1137,9 @@ for (const ev of renderEvents) {
 
 **实现成本估算**：0.3 天（提取共享 compile 步骤）
 
-### [ ] API-3: `getProjectStatus` 重新跑全量 validator
+### [x] API-3: `getProjectStatus` 重新跑全量 validator
+> **完成**: `getProjectStatus()` at `api.ts:553-556` 新增可选 `validationResults?: Map<string, ValidationResult>` 参数，提供时跳过内部 `validateAll`（lines 596-601）。CLI 调用者无需改动。
+
 
 **现状**：`getProjectStatus()` 内部重新调用 `aggregator.validateAll()` 来判断 blocked 事件，但这套逻辑 `validateNovel()` 已经走过一遍。两者的 validator 配置（overrides）可能不一致。
 
@@ -1146,7 +1154,9 @@ for (const ev of renderEvents) {
 
 **实现成本估算**：0.2 天（参数化或内部复用）
 
-### [ ] API-4: StateManager 做完 commit 即被丢弃
+### [x] API-4: StateManager 做完 commit 即被丢弃
+> **完成**: 实现已存在 — `initializeProject()` 返回空 state（`api.ts:175-182`），commit 循环已移除，渲染依赖 boundaries 而非 state loop。
+
 
 **现状**：`initializeProject` 中 commit 循环构建了完整的 WorldState（通过 `getCurrentState()`），但 `renderNovel` 不信任这个结果，转而每个 event 独立调用 `getStateAt(n-1)` 获取 beforeState。
 
@@ -1160,7 +1170,9 @@ for (const ev of renderEvents) {
 
 **实现成本估算**：包含在 DAG-5 中
 
-### [ ] API-5: 无 `initializeProject` 结果缓存
+### [x] API-5: 无 `initializeProject` 结果缓存
+> **完成**: 通过 API-1 的模块级 `projectCache` 实现（`api.ts:60`）。哈希键基于文件内容（非 mtime），命中时跳过重建。
+
 
 **现状**：同一 projectDir 在同一 CLI/MCP 调用中被多次初始化。数据（YAML 解析、entity 注册、state 重建）完全不变。
 
@@ -1305,7 +1317,9 @@ for (const ev of renderEvents) {
 
 > **前置依赖**：此任务必须在所有其他功能 TODO 完成后执行。当前 core 的 `index.ts` 过度暴露了内部模块——validator 类、StateManager、ContextCompiler、RenderPipeline 等不需要对消费者公开的实现细节。改动的正确时机是：所有内部逻辑都稳定后，最后一次修剪公共 API 面。
 
-### [ ] CORE-API-1: 重定义 core 公共 API 边界（thin core 原则）
+### [x] CORE-API-1: 重定义 core 公共 API 边界（thin core 原则）
+> **完成**: `index.ts` 从 ~90 exports 精简。移除: `compareTimestamp`, `parseStoryTimestamp`, `resolveTimestampToDay`, `readYamlFilesInDir`, 全部 observability values, 全部 branch utils, `EventStore`, `SnapshotEngine`, `topologicalSort`, `PromptAssembler`, `SceneCollector`, `NarrativeSorter`, `ProseConcatenator`, `NARRATIVE_TEXT_COUNT_VERSION`, `detectAntiPatterns`, `validateStrict`, `PluginLoader`, `ValidatorRegistry`, 4 个 AI prompt builders, `RenderPipeline`, `buildAndWriteOutputs`, `BatchRenderPipeline`。保留所有 types 和所有 consumer-required exports。详情见 `docs/todos/api-core-validator.md`。
+
 
 **现状**：`packages/core/src/index.ts` 导出了 ~90 项（函数 + 类 + 类型），包括内部状态引擎、验证器内部类、内部管线组件等。业界 thin core 惯例（React、Prisma、Vercel AI SDK）：core 只暴露 ~15 项编排函数 + 所有类型，其余不公开。
 

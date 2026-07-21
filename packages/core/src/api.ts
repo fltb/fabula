@@ -7,6 +7,7 @@
 // They are the recommended entry point for most use cases.
 // ============================================================================
 
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -41,6 +42,51 @@ import type {
   WorldState,
 } from './types/index.ts';
 
+
+// ============================================================================
+// Module-level cache for initializeProject — API-1 / API-5
+// ============================================================================
+
+interface ProjectCacheEntry {
+  hash: string;
+  mapper: EntityMapper;
+  data: ReturnType<EntityMapper['loadProject']>;
+  events: NarrativeEvent[];
+  registry: InMemoryEntityRegistry;
+  stateManager: StateManager;
+  state: WorldState;
+}
+
+const projectCache = new Map<string, ProjectCacheEntry>();
+
+function computeProjectHash(projectDir: string, events: NarrativeEvent[]): string {
+  const hasher = crypto.createHash('sha256');
+  // Hash each definition YAML, config, and event YAML by content
+  const defsDir = path.join(projectDir, 'definitions');
+  if (fs.existsSync(defsDir)) {
+    const defs = fs.readdirSync(defsDir).sort();
+    for (const f of defs) {
+      if (f.endsWith('.yaml') || f.endsWith('.yml')) {
+        hasher.update(fs.readFileSync(path.join(defsDir, f)));
+      }
+    }
+  }
+  const configPath = path.join(projectDir, 'nova.yaml');
+  if (fs.existsSync(configPath)) {
+    hasher.update(fs.readFileSync(configPath));
+  }
+  // Hash all event YAMLs by content (not just paths)
+  for (const ev of events) {
+    if (ev.id !== 'system:genesis') {
+      const evPath = path.join(projectDir, 'events', `${ev.id}.yaml`);
+      if (fs.existsSync(evPath)) {
+        hasher.update(fs.readFileSync(evPath));
+      }
+    }
+  }
+  const hashObj = { projectDir, defsDir };
+  return `${hasher.digest('hex')}:${crypto.createHash('sha256').update(JSON.stringify(hashObj)).digest('hex')}`;
+}
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -118,9 +164,16 @@ function initializeProject(projectDir: string): {
   stateManager: StateManager;
   state: WorldState;
 } {
+  // Load events first for hash computation
   const mapper = new EntityMapper(projectDir);
   const data = mapper.loadProject();
   const events = mapper.loadAllEvents(data.chapters);
+  const hash = computeProjectHash(projectDir, events);
+
+  const cached = projectCache.get(projectDir);
+  if (cached && cached.hash === hash) {
+    return { mapper: cached.mapper, data: cached.data, events: cached.events, registry: cached.registry, stateManager: cached.stateManager, state: cached.state };
+  }
 
   const registry = new InMemoryEntityRegistry();
   registry.load(projectDir);
@@ -134,6 +187,17 @@ function initializeProject(projectDir: string): {
     rules: {},
     facts: [],
   };
+
+  const entry: ProjectCacheEntry = {
+    hash,
+    mapper,
+    data,
+    events,
+    registry,
+    stateManager,
+    state,
+  };
+  projectCache.set(projectDir, entry);
 
   return { mapper, data, events, registry, stateManager, state };
 }
@@ -477,14 +541,19 @@ export function validateNovel(
 // ============================================================================
 // 3. getProjectStatus — Status of events, threads, and render progress
 // ============================================================================
-
 /**
  * Get the current project status.
  *
  * Reads scenes/ to check which events have rendered output.
  * Checks preconditions to determine blocked status.
+ *
+ * @param validationResults - Optional pre-computed validation results.
+ *   When provided, skips the internal validateAll call.
  */
-export function getProjectStatus(projectDir: string): ProjectStatusResult {
+export function getProjectStatus(
+  projectDir: string,
+  validationResults?: Map<string, ValidationResult>,
+): ProjectStatusResult {
   const { data, events, registry } = initializeProject(projectDir);
 
   // Determine rendered events by checking scenes/ directory for .md files
@@ -524,10 +593,12 @@ export function getProjectStatus(projectDir: string): ProjectStatusResult {
   const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
   const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
 
-  // Validate to determine blocked events
-  const aggregator = new ResultAggregator();
-  const overrides = data.config?.validatorOverrides;
-  const validationResults = aggregator.validateAll(events, boundaries.finalState, registry, overrides, boundaries.stateBeforeByEventId);
+  // Use provided validation results or run validateAll
+  if (!validationResults) {
+    const aggregator = new ResultAggregator();
+    const overrides = data.config?.validatorOverrides;
+    validationResults = aggregator.validateAll(events, boundaries.finalState, registry, overrides, boundaries.stateBeforeByEventId);
+  }
 
   const eventStatuses: ProjectStatusResult['events'] = [];
 

@@ -30,11 +30,7 @@ export type { ErrorContext } from './errors.js';
 export {
   EntityMapper,
   InMemoryEntityRegistry,
-  compareTimestamp,
-  parseStoryTimestamp,
-  resolveTimestampToDay,
   readYamlFile,
-  readYamlFilesInDir,
   compareFact,
 } from './entity/index.js';
 export type { ProjectData, CompareOutcome } from './entity/index.js';
@@ -48,37 +44,16 @@ export {
   liveSmokeRecordSchema,
 } from './schemas/contracts.ts';
 
-// Observability
-export {
-  JsonlLogTransport,
-  Logger,
-  logger,
-  MemoryLogTransport,
-} from './observability/logger.ts';
-export { TraceCollector } from './observability/trace.ts';
+// Observability types only
 export type { LogContext, LogEntry, LogLevel, LogTransport } from './observability/logger.ts';
 
-// Branch
-export {
-  createEmptyBranchPath,
-  includesPath,
-  evaluateCondition,
-  branchPathsEqual,
-  branchPathToString,
-  isLinearNarrative,
-  createBranchPoint,
-  getAvailableChoices,
-} from './branch/index.js';
 
 // State
 export {
-  EventStore,
-  SnapshotEngine,
   ReplayEngine,
   StateManager,
   compileStoryBoundaries,
   buildCausalEdges,
-  topologicalSort,
   exportDAGtoDOT,
   exportDAGtoMermaid,
 } from './state/index.js';
@@ -112,29 +87,23 @@ export {
   RelevanceEngine,
   ContextAssembler,
   ContextCompiler,
-  PromptAssembler,
 } from './context/index.js';
 export type { RelevanceContext } from './context/index.js';
 
 // Assembler
 export {
-  SceneCollector,
-  NarrativeSorter,
-  ProseConcatenator,
   assembleNovel,
   countNarrativeText,
   countWords,
-  NARRATIVE_TEXT_COUNT_VERSION,
   type AssembleOptions,
   type AssembleResult,
 } from './assembler/index.js';
-export { calculateISS, detectAntiPatterns, validateStrict } from './iss/index.js';
+export { calculateISS } from './iss/index.js';
 
 // Review
 export { ReviewManager } from './review/index.js';
 
-// Plugin
-export { PluginLoader, ValidatorRegistry } from './plugin/index.js';
+// Plugin types only
 export type { PluginValidator } from './plugin/index.js';
 
 // Storage
@@ -152,20 +121,17 @@ export type {
   CompletionResponse,
 } from './ai/index.ts';
 export { LLMError, MockProvider, MockPass2Provider, AiSdkProvider } from './ai/index.ts';
-export { buildSceneRenderPrompt, buildThreadStatusPrompt, buildProsePrompt, buildAnalysisPrompt } from './ai/index.ts';
 export type { MockProviderOptions, MockPass2Options, MockPass2Entry, AiSdkProviderOptions } from './ai/index.ts';
 export type { SceneRenderInput, ThreadStatusInput, ProseOnlyInput, RenderAnalysisInput } from './ai/index.ts';
 
 // Cache
 export { clearEventCache } from './cache/render-cache.js';
 
-// Pipeline
-export { RenderPipeline, buildAndWriteOutputs } from './pipeline/index.js';
+// Pipeline types only
 export type { RenderJob, RenderSceneResult, RenderPipelineOptions, ProviderCallLedgerEntry } from './pipeline/index.js';
 export type { ReverseValidationResult, RepairStrategy, RepairDecision } from './pipeline/index.js';
 
-// Batch renderer
-export { BatchRenderPipeline } from './batch-renderer.js';
+// Batch types only
 export type { BatchConfig, BatchProgressEvent, BatchResult, BatchStats } from './batch-renderer.js';
 
 // Bench (functional + performance) is in @novalistically/bench, NOT core.

@@ -3,27 +3,6 @@
 // ============================================================================
 
 export {
-  annotate,
-  markDirect,
-  markMixed,
-} from './annotations.js';
-export type {
-  ProvenanceSource,
-  FieldOrigin,
-  ProvenanceAnnotation,
-} from './annotations.js';
-
-export {
-  buildExtractionPrompt,
-  parseExtractionResponse,
-  withExtractedFields,
-} from './llm-extractor.js';
-export type {
-  ExtractionRequest,
-  ExtractedFields,
-} from './llm-extractor.js';
-
-export {
   convertChiNovelKE,
   convertChiNovelKECharacter,
   convertChiNovelKELocation,

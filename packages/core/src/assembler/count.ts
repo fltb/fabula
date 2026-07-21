@@ -1,25 +1,22 @@
-// ────────────────────────────────────────────────────────────────────────────
-// countWords — Utility
-// ────────────────────────────────────────────────────────────────────────────
+export const NARRATIVE_TEXT_COUNT_VERSION = 1;
 
-/**
- * Counts words in a text string, stripping common markdown formatting
- * so the count more closely reflects the actual prose word count.
- */
-export function countWords(text: string): number {
-  const cleaned = text
-    // Remove markdown headings markers, list markers, blockquotes, separators
-    .replace(/^[#*\-_~`>|]+\s*/gm, '')
-    // Remove inline links: keep the displayed text
+/** Counts reader-visible narrative units after removing presentation syntax. */
+export function countNarrativeText(text: string, language: string): number {
+  const visible = text
+    .normalize('NFC')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    // Remove image tags
-    .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
-    // Remove HTML tags
     .replace(/<[^>]+>/g, '')
-    // Collapse whitespace
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/^[#>*\-`~]+\s*/gm, '');
+  if (language.startsWith('zh')) {
+    const cjk = visible.match(/[\u3400-\u9fff\uf900-\ufaff]/g) ?? [];
+    const latinRuns = visible.match(/[A-Za-z0-9]+/g) ?? [];
+    return cjk.length + latinRuns.length;
+  }
+  return visible.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu)?.length ?? 0;
+}
 
-  if (!cleaned) return 0;
-  return cleaned.split(/\s+/).filter(Boolean).length;
+/** @deprecated Use countNarrativeText(text, language). */
+export function countWords(text: string, language = 'en'): number {
+  return countNarrativeText(text, language);
 }

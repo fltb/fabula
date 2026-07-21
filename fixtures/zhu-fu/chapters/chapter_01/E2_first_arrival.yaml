@@ -3,20 +3,18 @@ title: "初到鲁家——安分耐劳的寡妇"
 narrativeOrder: 3
 sceneType: flashback
 storyTime: winter_five_years_ago
+narrationTime: new_year_eve
 tense: past
 discourseMode: description
 arcPosition: rising
 emotionalValence: "hopeful_cautious"
 conflictType: "person_vs_society"
-resolutionType: "temporary_resolution"
+resolutionType: negative_resolution
 pov:
   character: narrator
   type: first_person
 sceneBrief: "有一年的冬初，四叔家里要换女工，做中人的卫老婆子带了一个女人进来——她就是祥林嫂。她头上扎着白头绳，乌裙，蓝夹袄，月白背心，年纪大约二十六七，脸色青黄，但两颊却还是红的。四叔皱了皱眉——他讨厌她是一个寡妇。但四婶看她模样周正、手脚壮大、安分耐劳，便留下了她。试工期内她整天的做，似乎闲着就无聊，简直抵得过一个男子。到了年底，她一个人竟能担当起全部的祝福准备工作——扫尘、洗地、杀鸡、宰鹅、彻夜的煮福礼。她的口角边渐渐有了笑影，脸上也白胖了。人们从她断断续续的叙述中知道了她的来历：春天死了丈夫（比她小十岁的打柴的丈夫），家里有严厉的婆婆和一个十多岁能打柴的小叔子——她是逃出来的。"
 preconditions:
-  - entity: xianglins_wife
-    attribute: marital_status
-    value: widow_of_xianglin
   - entity: xianglins_wife
     attribute: location
     value: weijia_shan
@@ -86,13 +84,11 @@ introduces:
       location: weijia_shan
       status: alive
       condition: well
-newState:
-  type: precarious_stability
-  intensity: 0.3
 ruleEffects:
   - rule: husbands_authority
     effect: reinforce
     evidence: "四叔皱眉——他讨厌她是一个寡妇。即使她安分耐劳，寡妇的身份本身就是瑕疵。"
 styleGuidance:
   tone: "冷峻的社会观察中透出淡淡的温暖——她脸上短暂的红晕和笑影是故事中唯一的光亮。"
+  targetWordCount: 1500
   scenePacing: "缓慢的日常展开，在年终祝福的忙碌中达到高潮——注意将她的勤快与周围人的态度交织叙述。"

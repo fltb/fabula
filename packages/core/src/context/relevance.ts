@@ -30,7 +30,7 @@ export class RelevanceEngine {
    * recencyPenalty, threadSaturation.
    */
   scoreEntities(context: RelevanceContext): RelevanceScore[] {
-    const { currentEvent, worldState, entityRegistry, recentEntities, activeThreads } = context;
+    const { currentEvent, worldState, entityRegistry, recentEntities } = context;
     const entities = entityRegistry.getAll();
     const scores: RelevanceScore[] = [];
 
@@ -43,7 +43,7 @@ export class RelevanceEngine {
 
       const basis = {
         participation: this._participationScore(entity, sceneParticipants),
-        threadAssociation: this._threadAssociationScore(entity, sceneThreads, currentEvent.threadProgress),
+        threadAssociation: this._threadAssociationScore(sceneThreads, currentEvent.threadProgress),
         spatioTemporal: this._spatioTemporalScore(entity, currentEvent, worldState),
         knowledgeIntersection: this._knowledgeIntersectionScore(entity, currentEvent, worldState),
         relationshipRelevance: this._relationshipRelevanceScore(entity, currentEvent, worldState),
@@ -81,7 +81,6 @@ export class RelevanceEngine {
 
   /** Entity shares active threads with the scene */
   private _threadAssociationScore(
-    entity: Entity,
     sceneThreads: Set<string>,
     threadProgress: ThreadProgressEntry[],
   ): number {

@@ -1,10 +1,11 @@
 import type { StoryTimestamp } from '../types/index.js';
+import { DagProviderError } from '../errors.js';
 
 // ============================================================================
 // Timestamp Helpers
 // ============================================================================
 
-export function parseStoryTimestamp(raw: string | undefined, anchors: Map<string, number>): StoryTimestamp {
+export function parseStoryTimestamp(raw: string | undefined): StoryTimestamp {
   if (raw === undefined || raw === null) return { type: 'absolute', value: 'day_0' };
   // Try "anchor + N unit" pattern
   const relativeMatch = raw.match(/^(\S+)\s*\+\s*(\d+)\s*(minute|hour|day|week|month)s?$/);
@@ -32,12 +33,21 @@ export function parseStoryTimestamp(raw: string | undefined, anchors: Map<string
 export function resolveTimestampToDay(ts: StoryTimestamp, anchors: Map<string, number>): number {
   switch (ts.type) {
     case 'absolute': {
-      const dayMatch = ts.value.match(/^day[_\s]*(\d+)$/i);
+      const dayMatch = ts.value.match(/^day[_\s]*(-?\d+)$/i);
       if (dayMatch) return parseInt(dayMatch[1], 10);
-      return 0;
+      const absoluteTime = Date.parse(ts.value);
+      if (!Number.isNaN(absoluteTime)) return absoluteTime / 86_400_000;
+      const anchorDay = anchors.get(ts.value);
+      if (anchorDay === undefined) {
+        throw new DagProviderError('Unknown absolute time anchor', { stateKey: ts.value, phase: 'timestamp' });
+      }
+      return anchorDay;
     }
     case 'relative': {
-      const anchorDay = anchors.get(ts.anchor) ?? 0;
+      const anchorDay = anchors.get(ts.anchor);
+      if (anchorDay === undefined) {
+        throw new DagProviderError('Unknown relative time anchor', { stateKey: ts.anchor, phase: 'timestamp' });
+      }
       const unitDays: Record<string, number> = {
         minute: 1 / 1440,
         hour: 1 / 24,
@@ -45,7 +55,7 @@ export function resolveTimestampToDay(ts: StoryTimestamp, anchors: Map<string, n
         week: 7,
         month: 30,
       };
-      return anchorDay + ts.offset.amount * (unitDays[ts.offset.unit] ?? 1);
+      return anchorDay + ts.offset.amount * unitDays[ts.offset.unit];
     }
     case 'chapter':
       return ts.chapter;

@@ -75,7 +75,7 @@ export class MockPass2Provider implements LLMProvider {
       );
     }
 
-    const files = fs.readdirSync(refDir).filter((f) => f.endsWith('.json'));
+    const files = fs.readdirSync(refDir).filter((file) => file.endsWith('.json') && file !== 'system:genesis.json');
     for (const file of files) {
       const filePath = path.join(refDir, file);
       const data = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as MockPass2Entry;

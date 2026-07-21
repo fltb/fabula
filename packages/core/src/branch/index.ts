@@ -4,4 +4,3 @@
 
 export { createEmptyBranchPath, branchPathsEqual, branchPathToString, isLinearNarrative } from './path.ts';
 export { evaluateCondition, includesPath, createBranchPoint, getAvailableChoices } from './set.ts';
-export type { BranchPath, BranchSet, BranchPoint, BranchChoice, Condition } from './types.ts';

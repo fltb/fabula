@@ -1,0 +1,242 @@
+{
+  "version": 1,
+  "provider": "ai-sdk",
+  "model": "deepseek-v4-pro",
+  "seed": 42,
+  "events": [
+    "E0",
+    "E1",
+    "E2",
+    "E3",
+    "E4",
+    "E5",
+    "E6"
+  ],
+  "system": {
+    "nodeVersion": "v24.1.0",
+    "os": "linux",
+    "arch": "x64",
+    "cpu": "12th Gen Intel(R) Core(TM) i5-12400F"
+  },
+  "versions": {
+    "code": "0.1.0",
+    "fixture": "1",
+    "schema": 1,
+    "prompt": "1",
+    "capability": "1"
+  },
+  "command": "node /home/float/myfile/Projects/novalistically/packages/bench/scripts/generate-reference.mjs",
+  "call": {
+    "perEvent": [
+      {
+        "eventId": "E0",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "6f86a53c674ee95e0ca24eba0fc2d2ffd601a2609aada71630e44ca0b804335b",
+            "model": "deepseek-v4-pro",
+            "seed": null
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "dd0707e09aa7cd985c25f8c623d6f592d05328ea97bc7a3a12a02c711b6e4938",
+            "model": "deepseek-v4-pro",
+            "seed": 42
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "eb6967b576033a2c6dbada282f57f7335bce04650fcc8a23b58e873e481a6e3f",
+            "model": "deepseek-v4-pro",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E1",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "9948d58fc51d6c6beeffb6c7e0b6732c0db6027db568a33aeb4b69da98e1ce10",
+            "model": "deepseek-v4-pro",
+            "seed": null
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "954f0e3252baf2b91a3b91cc6e3497ae78a74cb0f37cb88f47101d97fa038b52",
+            "model": "deepseek-v4-pro",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E2",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "8a9abaa3eecce028f1a2c968683085e43500af21c8391ab1f630df01fae89e82",
+            "model": "deepseek-v4-pro",
+            "seed": null
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "60dadfd55604ac49aa2547cbda4148b7e9429b9f88f67671bc38db7debf18b84",
+            "model": "deepseek-v4-pro",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E3",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "73fc785b6875321c880f41f309eb9f614289d1853420bb9d792a605c03ea6aa0",
+            "model": "deepseek-v4-pro",
+            "seed": null
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "bb633bdf6b8fef37743a2e4cc1a4daaf04099a8003dc810f1972f60a9520183d",
+            "model": "deepseek-v4-pro",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E4",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "3cc9cd503e659cced3c2aa243acb0a5963fb9ed4b57e2351f64799204da99a2d",
+            "model": "deepseek-v4-pro",
+            "seed": null
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0e66f0c62a20321d6132f585c6462d73d2b1969dc9d51f04a956c12c14465890",
+            "model": "deepseek-v4-pro",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E5",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "f39bf9d4e8c2708175abab201f70593dab86f16ee758a99f705224ef189d7ba6",
+            "model": "deepseek-v4-pro",
+            "seed": null
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "358ed7e27c554c42fa4ba08d686f7165957c57622d9b78cb194c970f312c939c",
+            "model": "deepseek-v4-pro",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E6",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "3b50ec25b4b92e40817f2de45018aaf60777b3d6108b9a6351c52cca9583b4d4",
+            "model": "deepseek-v4-pro",
+            "seed": null
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "4c4a26e3d67205139b233b36180525cdf306e879b66d68704d0a46f6e715e538",
+            "model": "deepseek-v4-pro",
+            "seed": 42
+          }
+        ]
+      }
+    ],
+    "totalCalls": 15
+  },
+  "cache": {
+    "hits": 0,
+    "misses": 7
+  },
+  "failures": [],
+  "hashes": {
+    "events": [
+      {
+        "eventId": "E0",
+        "proseHash": "4afaf7133fbf0adcb562742401930694e24f0e40a9837657da469bbb7902d8a0",
+        "analysisHash": "8b9d98e0b8392ffa6424aaee04b3798e74d21bb6d8f54be82ca5b603c526e59b",
+        "promptHash": "e731ffade8ea8d619a61844e88a1583dc490bb4c9d0d0871ffdf6020f21b37c9"
+      },
+      {
+        "eventId": "E1",
+        "proseHash": "3907fdeb1cae67d444a98178d651cd4384544b6a2650af19212a8f09e5917981",
+        "analysisHash": "53b1eaecc73f81e57ea613b1cc9b03c5d6eac42aba5435d48b9b16b5288f4188",
+        "promptHash": "06819c4d4a6d29840e33e12a1a49b5e1d10c8f44686e450da60930aea7a00803"
+      },
+      {
+        "eventId": "E2",
+        "proseHash": "2a9e613144e8bb0a7c69c797ef58484dea11f525f3f126bfbaf6a2a273f0108e",
+        "analysisHash": "ad9293a5f4b76de7d98b487793f47d3c19e0b8bb3f0edf117df68ab409995051",
+        "promptHash": "1ad21b37139008520a6b2d805e2e27b22e21eecc137317789f0cb96690d33f6a"
+      },
+      {
+        "eventId": "E3",
+        "proseHash": "072c606b0d31bf337a4a43a6d0b05747e08b6f5fd37483ae29ef8fd7e1b5139d",
+        "analysisHash": "f1c27b27a5bacff1ad06e97144d83859a9006fdb822311b91906e2cf487ef81a",
+        "promptHash": "264b2743ca4ecb82e32838365373511dabd5ffddc3e6208ec92f6e070eab74be"
+      },
+      {
+        "eventId": "E4",
+        "proseHash": "1cedc8ffd53ef90532548683d066460a9721f0142c2928b643b404a4e34c7627",
+        "analysisHash": "ba7c955d19c94172b978cc15fc8b0aad619b088da6298df4841641be639973b2",
+        "promptHash": "84b49f6f75ca200d5b0df608d2d2dacc1693decacc586d69300e1e1ac2a337c8"
+      },
+      {
+        "eventId": "E5",
+        "proseHash": "9ab478b4f8343fc12263cdfdbe64e9b3ae790cf65f837c833e2e17600c0593a1",
+        "analysisHash": "51efc2d5d36e6b8257fb740db11cd5cad7b2de194c9c96cb37de820bfd242a57",
+        "promptHash": "482dee61fe9127684bd5a0dc80d5af1df6c66fbdddf8a0430328c7df9506be17"
+      },
+      {
+        "eventId": "E6",
+        "proseHash": "a99018554ebbfc594bce7eb791757346e93de35cd773875261d0c748e26002fc",
+        "analysisHash": "93ed20d9cbb1750006b579267c97e1b0c0e28dd0d8560ae41200f79a7805f547",
+        "promptHash": "77adedf4ffffff41823431378d065c9cc69982c7c3520fad281df078fca82985"
+      }
+    ]
+  },
+  "generatedAt": "2026-07-21T03:57:14.290Z",
+  "reviewStatus": "candidate"
+}

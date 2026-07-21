@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.dead-code.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src/**/*.ts"],
+  "references": []
+}

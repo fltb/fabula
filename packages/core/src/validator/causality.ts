@@ -2,6 +2,7 @@
 // CausalityValidator — LLM-assisted causal reasoning
 // ============================================================================
 
+import { z } from 'zod';
 import type {
   PostRenderInput,
   PreRenderInput,
@@ -10,6 +11,29 @@ import type {
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 import { compareFact } from '../entity/compare.js';
+
+// ── Schemas ───────────────────────────────────────────────────────────
+
+export const postconditionBlockSchema = z.object({
+  covered: z.array(z.string()),
+  dropped: z.array(z.string()),
+});
+
+export type PostconditionBlock = z.infer<typeof postconditionBlockSchema>;
+
+const violatedPreconditionSchema = z.object({
+  entityId: z.string(),
+  attribute: z.string(),
+  expectedValue: z.string(),
+  issue: z.string(),
+});
+
+export const preconditionBlockSchema = z.object({
+  violated: z.array(violatedPreconditionSchema),
+});
+
+export type PreconditionBlock = z.infer<typeof preconditionBlockSchema>;
+
 
 export class CausalityValidator implements Validator {
   name = 'causality';
@@ -26,7 +50,7 @@ export class CausalityValidator implements Validator {
 
       if (outcome === 'mismatch') {
         issues.push(makeIssue(
-          this.name, event.id, pc.entityId, 'warning',
+          this.name, event.id, pc.entityId, 'error',
           `Precondition "${pc.entityId}.${pc.attribute} = ${pc.value}" is not satisfied — current value is ${JSON.stringify(currentValue)}`,
           'Add a preceding event that establishes this precondition, or adjust the expected preconditions.',
           'add_precondition',
@@ -63,7 +87,9 @@ export class CausalityValidator implements Validator {
 
     if (!analysis) return issues;
 
-    const { covered, dropped } = analysis.analysis.postconditions;
+    const postResult = postconditionBlockSchema.safeParse(analysis.analysis.postconditions);
+    if (!postResult.success) return issues;
+    const { covered, dropped } = postResult.data;
     const totalPostconditions = input.event.postconditions.length;
     const coveredCount = covered.length;
     const droppedCount = dropped.length;
@@ -92,7 +118,8 @@ export class CausalityValidator implements Validator {
     }
 
     // Check preconditions violations from Pass 2 analysis
-    const violated = analysis.analysis.preconditions?.violated ?? [];
+    const preResult = preconditionBlockSchema.safeParse(analysis.analysis.preconditions);
+    const violated = preResult.success ? preResult.data.violated : [];
     for (const v of violated) {
       issues.push(makeIssue(
         this.name, input.event.id, v.entityId, 'error',
@@ -110,21 +137,12 @@ export class CausalityValidator implements Validator {
     return [
       {
         field: 'postconditions',
-        schemaExample: { covered: ['entityId.attribute'], dropped: ['entityId.attribute'] },
+        schema: postconditionBlockSchema,
         instruction: 'postconditions: For each expected postcondition from the scene specification, determine if it is explicitly mentioned or clearly implied in the prose. List covered postconditions (those present) and dropped postconditions (those absent) in the postconditions block. If a postcondition has a narrativeHint, evaluate whether the prose captures the semantic intent beyond literal value matching.',
       },
       {
         field: 'preconditions',
-        schemaExample: {
-          violated: [
-            {
-              entityId: 'entityId',
-              attribute: 'attribute',
-              expectedValue: 'expected value',
-              issue: 'description of contradiction found in prose',
-            },
-          ],
-        },
+        schema: preconditionBlockSchema,
         instruction: 'preconditions: Check if the rendered prose contradicts any of the scene\'s preconditions. For each precondition, determine whether the prose respects the expected state (e.g., character is alive, location is correct, status is as declared). Report violated preconditions with the entityId, attribute, expected value, and a description of the contradiction found in the prose.',
       },
     ];

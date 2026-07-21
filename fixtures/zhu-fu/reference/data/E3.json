@@ -3,23 +3,75 @@
   "analysis": {
     "eventId": "E3",
     "analysis": {
-      "postconditions": { "covered": [], "dropped": [] },
-      "preconditions": { "violated": [] },
-      "pov": { "consistent": true, "leaks": [] },
+      "postconditions": {
+        "covered": [],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
       "inventedDetails": [],
-      "quality": { "proseScore": 7, "maxScore": 10, "strengths": ["narrative pace"], "weaknesses": [], "estimatedWordCount": 250 },
-      "threadProgressAchieved": ["T4: forced_remarriage"],
+      "quality": {
+        "proseScore": 7,
+        "maxScore": 10,
+        "strengths": [
+          "narrative pace"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 250
+      },
+      "threadProgressAchieved": [
+        "T4: forced_remarriage"
+      ],
       "foreshadowingDeployed": [],
       "narrativeChecks": [],
       "appearanceChecks": [],
       "characterReferences": [
-        { "entityId": "xianglins_wife", "namesUsed": ["祥林嫂", "她"] },
-        { "entityId": "mother_in_law", "namesUsed": ["婆婆"] },
-        { "entityId": "he_laoliu", "namesUsed": ["贺老六"] }
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她"
+          ]
+        },
+        {
+          "entityId": "mother_in_law",
+          "namesUsed": [
+            "婆婆"
+          ]
+        },
+        {
+          "entityId": "he_laoliu",
+          "namesUsed": [
+            "贺老六"
+          ]
+        }
       ],
       "tenseDetected": "past",
-      "conflictAnalysis": { "primaryType": "person_vs_society", "resolutionAchieved": false }
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": false
+      },
+      "ruleChecks": [],
+      "knowledgeChecks": []
     }
   },
-  "_metadata": { "eventId": "E3", "errors": [] }
+  "metadata": {
+    "eventId": "E3",
+    "errors": [],
+    "provider": "mock-pass2",
+    "model": "mock-stage1",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-18T00:00:00.000Z",
+    "reviewStatus": "approved",
+    "attempts": 1
+  }
 }

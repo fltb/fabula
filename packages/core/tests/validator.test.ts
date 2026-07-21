@@ -465,8 +465,7 @@ describe('CausalityValidator', () => {
     });
 
     const issues = validator.validatePre(input);
-    expect(issues).toHaveLength(1);
-    expect(issues[0].severity).toBe('warning');
+    expect(issues[0].severity).toBe('error');
     expect(issues[0].message).toContain('not satisfied');
   });
 
@@ -1223,28 +1222,11 @@ describe('Validator Edge Cases', () => {
       expect(backwardIssues).toHaveLength(0);
     });
 
-    it('should handle relative timestamps correctly', () => {
-      const prevEvent = makeEvent({
-        id: 'evt_prev',
-        narrativeOrder: 5,
-        storyTime: { type: 'absolute', value: 'day_10' },
-        sceneType: 'linear',
-      });
-      const currentEvent = makeEvent({
-        id: 'evt_current',
-        narrativeOrder: 10,
-        storyTime: { type: 'relative', anchor: 'start', offset: { amount: 5, unit: 'day' } },
-        sceneType: 'linear',
-      });
-      const input = buildPreInput(currentEvent, {
-        events: [prevEvent, currentEvent],
-      });
-
-      const issues = validator.validatePre(input);
-      // Relative timestamp resolves to 5 (anchor 'start' not in anchors → 0 + 5 = 5)
-      // Prev is day_10 → cmp = 5 - 10 = -5 < 0 → error expected
-      const backwardIssues = issues.filter((i) => i.message.includes('before previous event'));
-      expect(backwardIssues).toHaveLength(1);
+    it('does not invent a missing relative time anchor', () => {
+      const prevEvent = makeEvent({ id: 'evt_prev', narrativeOrder: 5, storyTime: { type: 'absolute', value: 'day_10' }, sceneType: 'linear' });
+      const currentEvent = makeEvent({ id: 'evt_current', narrativeOrder: 10, storyTime: { type: 'relative', anchor: 'start', offset: { amount: 5, unit: 'day' } }, sceneType: 'linear' });
+      const issues = validator.validatePre(buildPreInput(currentEvent, { events: [prevEvent, currentEvent] }));
+      expect(issues.filter((issue) => issue.message.includes('before previous event'))).toHaveLength(0);
     });
   });
 

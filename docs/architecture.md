@@ -176,8 +176,9 @@ Monorepo 包含三个包，按以下顺序构建：`core → cli`（bench 独立
 
 ### `storage/` — 存储抽象
 
-- **`FsStorage`** — 文件系统存储。封装所有文件 I/O。
-- **`MemoryStorage`** — 用于测试的内存存储。
+- **`FsStorage`** — 供 storage-aware core 模块使用的文件系统实现。
+- **`MemoryStorage`** — 测试用的内存实现。
+- 渲染缓存通过注入的 `Storage` 读写；不得在缓存模块直接导入或调用 Node `fs`。
 
 ## 关键技术决策
 
@@ -189,4 +190,4 @@ Monorepo 包含三个包，按以下顺序构建：`core → cli`（bench 独立
 
 4. **并发池。** LLM 调用的有界并行度（默认 5）。可配置。
 
-5. **循环时 DAG 回退。** 如果拓扑排序检测到循环，系统会回退到 `narrativeOrder` 排序并发出警告。
+5. **DAG cycle 为硬错误。** 拓扑排序检测到循环即抛出 `DagCycleError`；不会按 `narrativeOrder` 降级重放。

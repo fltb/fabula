@@ -9,24 +9,60 @@
 // (detail contradicts the definition) is flagged as an error.
 // ============================================================================
 
+import { z } from 'zod';
+import { makeIssue } from './base.js';
+import { matchLevelSchema } from './schemas.js';
 import type {
   PostRenderInput,
+  PreRenderInput,
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+
+export const appearanceCheckSchema = z.object({
+  entityId: z.string(),
+  feature: z.string(),
+  declared: z.string(),
+  evidence: z.string(),
+  matchLevel: matchLevelSchema,
+});
+export type AppearanceCheck = z.infer<typeof appearanceCheckSchema>;
 
 export class AppearanceValidator implements Validator {
   name = 'appearance';
   category = 'factual_detail' as const;
 
+  validatePre(input: PreRenderInput): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const { event } = input;
+
+    // Deterministic check: if an event has multiple appearance postconditions
+    // for the same entity with different values, that's a contradiction
+    const appearanceFacts = event.postconditions.filter(
+      (pc) => pc.attribute === 'appearance' && pc.value !== undefined,
+    );
+    if (appearanceFacts.length > 1) {
+      const values = [...new Set(appearanceFacts.map((f) => f.value))];
+      if (values.length > 1) {
+        issues.push(makeIssue(
+          this.name, event.id, appearanceFacts[0].entityId, 'error',
+          `Contradictory appearance values within same event: [${values.join(', ')}]`,
+          'Remove the contradictory postcondition or resolve the contradiction.',
+          'edit_file',
+          'appearance',
+        ));
+      }
+    }
+
+    return issues;
+  }
   validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     const { event, analysis, worldState } = input;
 
     if (!analysis) return issues;
 
-    const appChecks = analysis.analysis.appearanceChecks ?? [];
+    const appChecks = z.array(appearanceCheckSchema).safeParse(analysis.analysis.appearanceChecks).data ?? [];
     if (appChecks.length === 0) return issues;
 
     for (const check of appChecks) {
@@ -88,7 +124,7 @@ export class AppearanceValidator implements Validator {
   getAnalysisRequirements() {
     return [{
       field: 'appearanceChecks',
-      schemaExample: { entityId: 'char_001', feature: 'eyes', declared: 'blue', evidence: '...', matchLevel: 'exact' },
+      schema: z.array(appearanceCheckSchema),
       instruction: 'appearanceChecks: For each character present in the scene, check if their declared appearance features (face, build, eyes, hair, clothing) match what is described in the prose. Report each feature in the appearanceChecks block with the declared value, a direct quote as evidence, and matchLevel as "exact", "similar", "absent" (feature not mentioned), or "contradicted" (prose contradicts the definition).',
     }];
   }

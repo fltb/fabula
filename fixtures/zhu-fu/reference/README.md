@@ -4,13 +4,30 @@
 
 This directory contains **reference data** for the 祝福 (zhu-fu) fixture, used by the L2 (post-render) benchmark validation stage.
 
-Each reference entry consists of:
+The approved reference set enforces the Stage 1 deterministic loading contract:
 
-- **`prose`**: LLM-generated prose (Pass 1 output) for a specific event
-- **`analysis`**: Pass 2 structured analysis JSON (AnalysisResult) covering all 12 blocks (postconditions, preconditions, pov, inventedDetails, quality, threadProgressAchieved, foreshadowingDeployed, narrativeChecks, appearanceChecks, characterReferences, tenseDetected, conflictAnalysis)
-- **`_metadata`**: Generation metadata (eventId, title, sceneBrief, generatedAt, cacheHit, attempts, errors)
+- Data files **E0.json through E6.json** only — no genesis scene, no extra files.
+- Every response carries **schema-valid metadata** with `provider`, `model`, `seed`, `promptVersion`, `promptHash`, `analysisSchemaVersion`, `fixtureFormatVersion`, `generatedAt`, `reviewStatus`, `attempts`, and `errors`.
+- `reviewStatus` must be `"approved"`; non-approved entries (e.g. `"candidate"`, `"failed"`) are rejected by the loader.
+- Metadata values are checked for secret-like patterns (`api_key`, `auth_token`, `sk-` prefixes, etc.) and rejected if found.
+- Expected-outcome manifest is **versioned** (`expected-outcomes.json`) with an `issues` array that serves as the approved allowlist.
+- Each issue identity is `validator + eventId + category + entityId? + attribute? + severity`. Matching is identity-based, not positional or message-based.
+- Provenance manifest (`provenance.json`) records every prose artifact as **`generated`** or **`source_quotation`** with the required fields for each kind.
+- `generated` entries require `runHash`; `source_quotation` entries require `edition`, `url`, `rights`, `sourceHash`, and an `overlap` range.
+- **This reference data is entirely mock/generated.** No prose is a source quotation. No human review evidence, live attestation, or provider credentials are included. The `expected-outcomes.json` allowlist is empty — actual validation runs will be compared by the benchmark runner against this manifest.
 
-This data serves as the **ground truth** for L2 benchmark validation — the bench runner loads these files and runs post-render validators against them, ensuring semantic correctness without calling a live LLM.
+## Approval Boundary
+
+Approval is a **loading-time gate**, not a runtime comparison:
+1. The loader validates file set, schema compliance, metadata integrity, provenance completeness, and expected-outcome manifest structure.
+2. `reviewStatus: "approved"` gates whether a reference entry passes loading.
+3. Expected-outcome manifest issues are **compared by identity** against actual validator output during benchmark runs (see `packages/bench/src/regression.ts`). The loader itself does not run validators.
+4. Live-provider smoke records are a separate process outside this reference set.
+
+What the loader **does not** do (and must not fake):
+- Run validators or compare outcomes against the manifest (that is the benchmark's job)
+- Invent human review attestation, source hashes, rights data, or provenance that does not exist
+- Accept `reviewStatus` values other than `"approved"` for loading
 
 ## File Format
 
@@ -25,10 +42,12 @@ reference/
 │   ├── E4.json       # Event E4 reference
 │   ├── E5.json       # Event E5 reference
 │   └── E6.json       # Event E6 reference
-└── original.txt      # Original 祝福 short story text (if available)
+├── provenance.json          # Provenance record for every prose artifact
+├── expected-outcomes.json   # Versioned expected-issue allowlist
+└── original.txt             # Original 祝福 short story text (if available)
 ```
 
-Each JSON file conforms to the `MockPass2Entry` structure:
+Each JSON file conforms to the `responseReferenceSchema` structure (exported from `@novalistically/core`):
 
 ```json
 {
@@ -37,12 +56,17 @@ Each JSON file conforms to the `MockPass2Entry` structure:
     "eventId": "E0",
     "analysis": { /* AnalysisContent with all 12 blocks */ }
   },
-  "_metadata": {
+  "metadata": {
     "eventId": "E0",
-    "title": "...",
-    "sceneBrief": "...",
-    "generatedAt": "2026-07-17T...",
-    "cacheHit": false,
+    "provider": "approved-reference",
+    "model": "unknown",
+    "seed": 42,
+    "promptVersion": "stage1",
+    "promptHash": "reviewed",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-18T00:00:00.000Z",
+    "reviewStatus": "approved",
     "attempts": 1,
     "errors": []
   }
@@ -63,7 +87,7 @@ The script (`packages/bench/scripts/generate-reference.mjs`):
 2. Builds per-event state via incremental replay
 3. Uses `AiSdkProvider` with the configured API key
 4. Runs `RenderPipeline.renderScene()` for each event (Pass 1 prose + Pass 2 analysis)
-5. Saves the result (`prose`, `analysis`, `_metadata`) to `reference/data/{eventId}.json`
+5. Saves the result (`prose`, `analysis`, `metadata`) to `reference/data/{eventId}.json`
 
 **Requirements:**
 

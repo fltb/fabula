@@ -13,10 +13,12 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@novalistically/bench": "*",
     "@novalistically/core": "*",
     "commander": "^13.1.0"
   },
   "devDependencies": {
+    "esbuild": "^0.25.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.4"
   }

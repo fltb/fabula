@@ -3,24 +3,24 @@
 // ============================================================================
 
 import {
+  ContextCompiler,
   EntityMapper,
   InMemoryEntityRegistry,
   ResultAggregator,
-  ReplayEngine,
-  ContextCompiler,
-  buildCausalEdges,
-  topologicalSort,
-  createEmptyBranchPath,
+  compileStoryBoundaries,
   writeValidationReport,
+  type Fact,
   type NarrativeEvent,
+  type StoryBoundaries,
   type WorldState,
   type ProjectData,
   type ValidationIssue,
-  type AnalysisResult,
 } from '@novalistically/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { computeNCED, type PerValidatorBreakdown, type SeverityLevelCED } from './consistency.js';
+import { loadApprovedReferences, collectReferenceIssueIdentities } from './reference.js';
+import type { ValidatorIssueIdentity, ApprovedReferenceSet } from './reference.js';
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -50,13 +50,20 @@ export interface RegressionResults {
   severityCED: SeverityLevelCED[];
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
-
-function trunc(s: string, max = 120): string {
-  return s.length > max ? `${s.slice(0, max)}…` : s;
-}
-
 // ─── Main entry ─────────────────────────────────────────────────────────────
+
+function initialFactsFor(registry: InMemoryEntityRegistry, genesis?: NarrativeEvent): Fact[] {
+  return [
+    ...(genesis?.postconditions ?? []),
+    ...registry.getAll().flatMap((entity) => Object.entries(entity.state ?? {}).map(([attribute, value]) => ({
+      id: `${entity.id}.${attribute}`,
+      entityId: entity.id,
+      attribute,
+      value,
+      validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
+    }))),
+  ];
+}
 
 /**
  * Run validation against the zhu-fu fixture and return detailed per-issue results.
@@ -67,22 +74,37 @@ export function validateFixtureIssues(fixturePath?: string): ValidationIssue[] {
   const p = fixturePath ?? path.resolve(
     __dirname, '..', '..', '..', 'fixtures', 'zhu-fu',
   );
-
   const mapper = new EntityMapper(p);
   const projectData = mapper.loadProject();
   const registry = new InMemoryEntityRegistry();
   registry.load(p);
   const allEvents = mapper.loadAllEvents(projectData.chapters);
-  const replay = new ReplayEngine();
-  const state = replay.replay(allEvents, createEmptyBranchPath());
-  const aggregator = new ResultAggregator();
-  const results = aggregator.validateAll(allEvents, state, registry);
+  const genesis = allEvents.find((event) => event.id === 'system:genesis');
+  const narrativeEvents = allEvents.filter((event) => event.id !== 'system:genesis');
+  const initialThreads = (projectData.worldInitialState?.threads ?? []).map(t => ({
+    id: t.id,
+    progress: Number(t.initialProgress ?? 0),
+    total: 0,
+  }));
+  const boundaries = compileStoryBoundaries(
+    narrativeEvents,
+    initialFactsFor(registry, genesis),
+    new Map((projectData.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day])),
+    undefined,
+    initialThreads,
+  );
+  const results = new ResultAggregator().validateAll(narrativeEvents, boundaries.finalState, registry, undefined, boundaries.stateBeforeByEventId);
+  return [...results.values()].flatMap((result) => [...result.errors, ...result.warnings, ...result.infos]);
+}
 
-  const allIssues: ValidationIssue[] = [];
-  for (const result of results.values()) {
-    allIssues.push(...result.errors, ...result.warnings, ...result.infos);
-  }
-  return allIssues;
+/** Build a comparable key for a ValidatorIssueIdentity. */
+function idKey(id: ValidatorIssueIdentity): string {
+  return `${id.validator}\x00${id.eventId}\x00${id.category}\x00${id.entityId ?? ''}\x00${id.attribute ?? ''}\x00${id.severity}`;
+}
+
+/** Human-readable representation. */
+function idStr(id: ValidatorIssueIdentity): string {
+  return `${id.validator}/${id.eventId}/${id.category}/${id.entityId ?? '-'}/${id.attribute ?? '-'}/${id.severity}`;
 }
 
 /**
@@ -101,6 +123,8 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
   let projectData!: ProjectData;
   let registry!: InMemoryEntityRegistry;
   let allEvents: NarrativeEvent[] = [];
+  let boundaries!: StoryBoundaries;
+  let stateBeforeByEventId = new Map<string, WorldState>();
   let state!: WorldState;
 
   // Helper: async mark a stage
@@ -152,29 +176,27 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
     return `Total events: ${total} (${genesisCount} genesis, ${total - genesisCount} narrative)`;
   });
 
-  // ── 3. Build DAG (causal edges + topological sort) ────────────────────
-  let dagOrder: string[] = [];
-  let dagCycleMsg = '';
+  // ── 3. Build DAG ─────────────────────────────────────────────────────
   await mark('Build DAG', async () => {
-    const { edges, inDegree } = buildCausalEdges(allEvents);
-    try {
-      dagOrder = topologicalSort(allEvents, edges, inDegree);
-    } catch (err) {
-      // DAG cycles are expected in some fixtures; ReplayEngine handles the
-      // fallback via narrativeOrder sort. The cycle detection itself is working
-      // correctly — note it but don't fail the stage.
-      dagCycleMsg = (err as Error).message;
-      dagOrder = [];
-    }
-  }, () => {
-    if (dagCycleMsg) return `Cycle detected (handled by ReplayEngine fallback): ${dagCycleMsg}`;
-    return `DAG order: ${dagOrder.length} events (matching input: ${dagOrder.length === allEvents.length})`;
-  });
+    const narrativeEvents = allEvents.filter((event) => event.id !== 'system:genesis');
+    const genesis = allEvents.find((event) => event.id === 'system:genesis');
+    boundaries = compileStoryBoundaries(
+      narrativeEvents,
+      initialFactsFor(registry, genesis),
+      new Map((projectData.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day])),
+      undefined,
+      (projectData.worldInitialState?.threads ?? []).map(t => ({
+        id: t.id,
+        progress: Number(t.initialProgress ?? 0),
+        total: 0,
+      })),
+    );
+    stateBeforeByEventId = boundaries.stateBeforeByEventId;
+  }, () => `DAG order: ${boundaries.orderedEventIds.length} narrative events`);
 
-  // ── 4. Replay state ───────────────────────────────────────────────────
   await mark('Replay state', async () => {
-    const replay = new ReplayEngine();
-    state = replay.replay(allEvents, createEmptyBranchPath());
+    state = boundaries.finalState;
+    stateBeforeByEventId = boundaries.stateBeforeByEventId;
   }, () => {
     const entityCount = Object.keys(state.entities).length;
     const factCount = state.facts.length;
@@ -185,8 +207,9 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
   let collectedL1Issues: ValidationIssue[] = [];
   await mark('Run validators', async () => {
     const aggregator = new ResultAggregator();
-    const results = aggregator.validateAll(allEvents, state, registry);
-    if (results.size === 0 && allEvents.filter((e) => e.id !== 'system:genesis').length > 0) {
+    const narrativeEvents = allEvents.filter((event) => event.id !== 'system:genesis');
+    const results = aggregator.validateAll(narrativeEvents, state, registry, undefined, stateBeforeByEventId);
+    if (results.size === 0 && narrativeEvents.length > 0) {
       throw new Error('Aggregator returned empty results');
     }
     // Collect all L1 issues
@@ -208,43 +231,36 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
   // ── 6. Run post-render validators (L2) against reference data ──────
   let collectedL2Issues: ValidationIssue[] = [];
   await mark('Run post-render validators (L2)', async () => {
-    const refDir = path.join(p, 'reference', 'data');
-    if (!fs.existsSync(refDir)) {
+    const referenceDir = path.join(p, 'reference');
+    if (!fs.existsSync(referenceDir)) {
       collectedL2Issues = [];
-      return; // no reference data — stage notes this but does not fail
+      return; // no reference directory — stage is skipped
     }
-    const refFiles = fs.readdirSync(refDir).filter((f) => f.endsWith('.json'));
-    if (refFiles.length === 0) {
-      collectedL2Issues = [];
-      return; // no reference files — stage notes this but does not fail
+
+    // Closed loading: validates data set, provenance, outcomes, review, hashes
+    let refSet: ApprovedReferenceSet;
+    try {
+      refSet = loadApprovedReferences(referenceDir);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      throw new Error(`Reference load failed: ${msg}`);
     }
 
     const aggregator = new ResultAggregator();
     const eventsById = new Map(allEvents.map((e) => [e.id, e]));
-
-    let withAnalysis = 0;
     const allL2Issues: ValidationIssue[] = [];
 
-    for (const file of refFiles) {
-      const raw = fs.readFileSync(path.join(refDir, file), 'utf-8');
-      let ref: { prose?: string; analysis?: AnalysisResult | null };
-      try {
-        ref = JSON.parse(raw);
-      } catch {
-        continue; // skip malformed JSON
-      }
-
-      if (!ref.analysis || !ref.prose) continue;
-      withAnalysis++;
-
-      const eventId = ref.analysis.eventId;
+    for (const [eventId, ref] of refSet.references) {
       const event = eventsById.get(eventId);
       if (!event) continue;
+
+      const stateBefore = stateBeforeByEventId.get(eventId);
+      if (!stateBefore) continue;
 
       const result = aggregator.validateRender(
         ref.prose,
         event,
-        state,
+        stateBefore,
         ref.analysis,
       );
       allL2Issues.push(...result.errors, ...result.warnings, ...result.infos);
@@ -252,17 +268,51 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
 
     collectedL2Issues = allL2Issues;
 
-    if (withAnalysis === 0) {
-      return; // No reference files have analysis data — stage notes this but does not fail
+    // Collect actual issue identities and compare against approved manifest
+    const actualIdentities = collectReferenceIssueIdentities(p, refSet.references);
+    const approvedIdentities = refSet.expectedIssues;
+
+    const actualKeySet = new Set(actualIdentities.map(idKey));
+    const approvedKeySet = new Set(approvedIdentities.map(idKey));
+
+    const missing: ValidatorIssueIdentity[] = [];
+    const unexpected: ValidatorIssueIdentity[] = [];
+
+    for (const id of approvedIdentities) {
+      if (!actualKeySet.has(idKey(id))) {
+        missing.push(id);
+      }
+    }
+    for (const id of actualIdentities) {
+      if (!approvedKeySet.has(idKey(id))) {
+        unexpected.push(id);
+      }
+    }
+
+    if (missing.length > 0 || unexpected.length > 0) {
+      let detail = '';
+      if (missing.length > 0) {
+        detail += `Missing ${missing.length} identities: ${missing.map(idStr).join(', ')}. `;
+      }
+      if (unexpected.length > 0) {
+        detail += `Unexpected ${unexpected.length} identities: ${unexpected.map(idStr).join(', ')}. `;
+      }
+
+      // Special case: empty approved list is valid only when actual is also empty
+      // and review notes contain the literal "approved empty outcome set"
+      if (
+        approvedIdentities.length === 0 &&
+        actualIdentities.length === 0 &&
+        refSet.review.notes.includes('approved empty outcome set')
+      ) {
+        // Allowed — identity sets match both empty
+      } else {
+        throw new Error(`Reference identity mismatch: ${detail.trim()}`);
+      }
     }
   }, () => {
-    const refDir = path.join(p, 'reference', 'data');
-    if (!fs.existsSync(refDir)) {
-      return 'No reference/data directory found — skipping L2 validation';
-    }
-    const refFiles = fs.readdirSync(refDir).filter((f) => f.endsWith('.json'));
-    if (refFiles.length === 0) {
-      return 'No reference files found — skipping L2 validation';
+    if (!fs.existsSync(path.join(p, 'reference'))) {
+      return 'No reference directory found — skipping L2 validation';
     }
 
     let errors = 0; let warnings = 0; let infos = 0;
@@ -272,7 +322,7 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
       else if (issue.severity === 'info') infos++;
     }
 
-    return `Events with analysis: ${collectedL2Issues.length > 0 ? 'yes' : 'none'}, Post-render errors: ${errors}, Warnings: ${warnings}, Infos: ${infos}`;
+    return `L2 issues — errors: ${errors}, warnings: ${warnings}, infos: ${infos}`;
   });
 
   // ── 7. Write validation report ──────────────────────────────────────
@@ -289,25 +339,23 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
   // ── 8. Compile context for last narrative event ───────────────────────
   await mark('Compile context', async () => {
     const compiler = new ContextCompiler();
-    const narrativeEvents = allEvents.filter((e) => e.id !== 'system:genesis');
+    const narrativeEvents = allEvents.filter((event) => event.id !== 'system:genesis');
     const lastEvent = narrativeEvents[narrativeEvents.length - 1];
     if (!lastEvent) throw new Error('No narrative events to compile context for');
-    const contextPkg = compiler.compile(lastEvent, state, registry);
-    // Verify all expected layers present
-    if (!contextPkg.systemContext) throw new Error('Missing systemContext');
-    if (!contextPkg.sceneSpec) throw new Error('Missing sceneSpec');
-    if (!contextPkg.characterSnapshots) throw new Error('Missing characterSnapshots');
-    if (!contextPkg.relationshipContext) throw new Error('Missing relationshipContext');
-    if (!contextPkg.worldFacts) throw new Error('Missing worldFacts');
-    if (!contextPkg.knowledgeBoundary) throw new Error('Missing knowledgeBoundary');
-    if (!contextPkg.activeThreads) throw new Error('Missing activeThreads');
-    if (!contextPkg.markdown) throw new Error('Missing markdown');
+    const stateBefore = stateBeforeByEventId.get(lastEvent.id);
+    if (!stateBefore) throw new Error(`Missing state boundary for ${lastEvent.id}`);
+    const contextPkg = compiler.compile(lastEvent, stateBefore, registry);
+    if (!contextPkg.systemContext || !contextPkg.sceneSpec || !contextPkg.characterSnapshots || !contextPkg.relationshipContext || !contextPkg.worldFacts || !contextPkg.knowledgeBoundary || !contextPkg.activeThreads || !contextPkg.markdown) {
+      throw new Error('Context compiler returned an incomplete package');
+    }
   }, () => {
     const compiler = new ContextCompiler();
-    const narrativeEvents = allEvents.filter((e) => e.id !== 'system:genesis');
+    const narrativeEvents = allEvents.filter((event) => event.id !== 'system:genesis');
     const lastEvent = narrativeEvents[narrativeEvents.length - 1];
-    if (!lastEvent) return 'Skipped';
-    const contextPkg = compiler.compile(lastEvent, state, registry);
+    if (!lastEvent) return 'No narrative event';
+    const stateBefore = stateBeforeByEventId.get(lastEvent.id);
+    if (!stateBefore) return `Missing state boundary for ${lastEvent.id}`;
+    const contextPkg = compiler.compile(lastEvent, stateBefore, registry);
     return `Chars: ${contextPkg.characterSnapshots.length}, Rels: ${contextPkg.relationshipContext.length}, Facts: ${contextPkg.worldFacts.length}, Threads: ${contextPkg.activeThreads.length}`;
   });
 

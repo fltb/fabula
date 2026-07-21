@@ -1,0 +1,224 @@
+{
+  "prose": "新年才过，祥林嫂在河边淘米时看见对岸一个男人，像是夫家的堂伯，她失色地缩了回来。没过几天，她的婆婆便带人找上门，口口声声说要她回去帮忙春耕。四叔听了，只淡淡地说：“既是她的婆婆要她回去，那有什么话可说的呢？”于是核算了工钱——她手里竟存了一千七百五十文，一文也没舍得花——全交还给了婆婆。铺盖衣物也打点好了。\n\n然而就在那天上午，祥林嫂再去河边淘米，一只白篷船突然拢岸，两条壮汉跳出来抱住了她，直往船里拖。她一面挣扎一面嚎骂，立即被堵了嘴。我们后来才知道，那船舱里还藏着一个人——卫老婆子。她才是这场抢亲的真正内应。祥林嫂就这样被捆着，塞进花轿，一路嚎哭着抬到了贺家坳。拜堂的时候，她一头撞在香案角上，额上登时一个大窟窿，鲜血淌了一脸。众人七手八脚把她按住，硬是拜完了天地。\n\n年底，卫老婆子又来拜年，脸上堆着笑说：“她真是交了好运了！”原来她竟生了个儿子，母子都养得白胖。那贺老六有力气，会做活，房子是自家屋，上头又没有婆婆。谁也想不到，那样烈性的一个人，竟在贺家坳过了两年安生日子。",
+  "analysis": {
+    "eventId": "E3",
+    "analysis": {
+      "postconditions": {
+        "covered": [
+          "xianglins_wife.location = he_family_hollow",
+          "xianglins_wife.marital_status = remarried",
+          "xianglins_wife.appearance = forehead_scar_from_altar_collision",
+          "xianglins_wife.has_ah_mao = true",
+          "xianglins_wife.emotionalState = content_with_new_family",
+          "he_laoliu.marital_status = married",
+          "old_mrs_wei.role_in_kidnapping = inside_agent"
+        ],
+        "dropped": [
+          "mother_in_law.financial_state = gained_80000_cash_from_sale",
+          "xianglins_wife.social_status (narrativeHint not addressed in prose)"
+        ]
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "我们后来才知道 (retrospective framing device)",
+          "severity": "minor"
+        },
+        {
+          "detail": "那样烈性的一个人 (authorial comment on her character)",
+          "severity": "minor"
+        }
+      ],
+      "quality": {
+        "proseScore": 7,
+        "maxScore": 10,
+        "strengths": [
+          "Faithfully captures all key narrative beats",
+          "Effective retrospective framing with 'we later learned'",
+          "Clear, economical prose mimics Lu Xun's style",
+          "Dramatic kidnapping and resistance scenes are vivid"
+        ],
+        "weaknesses": [
+          "Telling rather than showing; lacks sensory immediacy",
+          "The jump from 'end of year' to 'two stable years' feels abrupt",
+          "Some details like the 80,000 cash sale price are omitted",
+          "No atmospheric development of spring or river setting"
+        ],
+        "estimatedWordCount": 300
+      },
+      "threadProgressAchieved": [
+        "T1"
+      ],
+      "foreshadowingDeployed": [],
+      "narrativeChecks": [
+        {
+          "entityId": "scene",
+          "attribute": "time_period",
+          "hint": "spring_after_escape",
+          "evidence": "新年才过",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "character_state",
+          "hint": "location initially fourth_master_lu_house, then kidnapped to he_family_hollow; emotional state shifts from terror to eventual contentment",
+          "evidence": "祥林嫂在河边淘米...一只白篷船突然拢岸...抬到了贺家坳...她竟生了个儿子，母子都养得白胖...过了两年安生日子",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "mother_in_law",
+          "attribute": "character_state",
+          "hint": "motivated by financial gain, takes her wages and sells her",
+          "evidence": "婆婆便带人找上门...核算了工钱...全交还给了婆婆",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_formality",
+          "hint": "literary, educated, reflective, not overly formal",
+          "evidence": "我们后来才知道，那船舱里还藏着一个人——卫老婆子。她才是这场抢亲的真正内应。",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "scene",
+          "attribute": "discourseMode",
+          "hint": "expected action mode; prose uses narrative summary with some direct action",
+          "evidence": "然而就在那天上午...两条壮汉跳出来抱住了她...她一头撞在香案角上",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "pronoun",
+          "hint": "use female pronouns",
+          "evidence": "她",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "pronoun_consistency",
+          "hint": "first-person plural 'we' used in retrospective frame",
+          "evidence": "我们后来才知道",
+          "matchLevel": "exact"
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "xianglins_wife",
+          "feature": "pale_yellow_face_red_cheeks",
+          "declared": "pale_yellow_face_red_cheeks",
+          "evidence": "no appearance description in this flashback except the injury",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "feature": "elderly scholar in long gown",
+          "declared": "elderly scholar in long gown, stern face",
+          "evidence": "no physical description",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "mother_in_law",
+          "feature": "shrewd mountain woman",
+          "declared": "shrewd mountain woman",
+          "evidence": "no physical description",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "he_laoliu",
+          "feature": "strong, dark-skinned hunter/farmer",
+          "declared": "strong, dark-skinned hunter/farmer",
+          "evidence": "有力气，会做活，房子是自家屋 (no physical description)",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "old_mrs_wei",
+          "feature": "keen-faced middle-aged village woman in padded clothes",
+          "declared": "keen-faced middle-aged village woman in padded clothes",
+          "evidence": "no physical description",
+          "matchLevel": "absent"
+        }
+      ],
+      "characterReferences": [
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我们"
+          ]
+        },
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她",
+            "那样烈性的一个人"
+          ]
+        },
+        {
+          "entityId": "mother_in_law",
+          "namesUsed": [
+            "她的婆婆",
+            "婆婆"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四叔"
+          ]
+        },
+        {
+          "entityId": "old_mrs_wei",
+          "namesUsed": [
+            "卫老婆子"
+          ]
+        },
+        {
+          "entityId": "he_laoliu",
+          "namesUsed": [
+            "贺老六"
+          ]
+        }
+      ],
+      "tenseDetected": "past",
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": false
+      },
+      "ruleChecks": [
+        {
+          "ruleId": "patriarchal_clan_authority",
+          "violated": false,
+          "evidence": "四叔听了，只淡淡地说：“既是她的婆婆要她回去，那有什么话可说的呢？”",
+          "severity": "minor"
+        },
+        {
+          "ruleId": "husbands_authority",
+          "violated": false,
+          "evidence": "她一头撞在香案角上...她捍卫寡妇贞节的极端举动被强行压制",
+          "severity": "minor"
+        }
+      ],
+      "knowledgeChecks": []
+    }
+  },
+  "metadata": {
+    "eventId": "E3",
+    "provider": "ai-sdk",
+    "model": "deepseek-v4-pro",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "264b2743ca4ecb82e32838365373511dabd5ffddc3e6208ec92f6e070eab74be",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-21T03:57:14.290Z",
+    "reviewStatus": "candidate",
+    "attempts": 1,
+    "errors": []
+  }
+}

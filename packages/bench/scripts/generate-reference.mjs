@@ -1,156 +1,247 @@
 // ============================================================================
-// Generate reference AnalysisResult JSON from real LLM for benchmark fixtures.
-// Stores data in fixtures/{project}/reference/{eventId}.json
+// Live smoke runner for Stage 1 — real-provider candidate generation.
+// Usage (credentials required):
+//   NOVALISTICALLY_AI_API_KEY=... NOVALISTICALLY_AI_MODEL=... npm run smoke:stage1:live
+//
+// Creates a temporary copy of the fixture without .nova/scenes/output so no
+// developer cache can satisfy the run.  Results are written to the ORIGINAL
+// fixture's .nova/smoke-candidates/{timestamp}/ directory.
+// NEVER writes to the approved reference/data directory.
 // ============================================================================
-import { EntityMapper, ReplayEngine, ResultAggregator, ContextCompiler, RenderPipeline, FsStorage, AiSdkProvider, InMemoryEntityRegistry, writeValidationReport } from '../../core/dist/index.js';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { renderNovel, responseReferenceSchema, provenanceManifestSchema, sanitizeError } from '../../core/dist/index.js';
+import { buildLiveSmokeRecord, collectReferenceIssueIdentities } from '../dist/index.js';
+import { writeFileSync, mkdirSync, cpSync, rmSync, mkdtempSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
+import { tmpdir } from 'node:os';
 import 'dotenv/config';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname, '../../..');
 
+// ── Config ──────────────────────────────────────────────────────────────
 const projectName = process.argv[2] || 'zhu-fu';
 const projectDir = join(rootDir, 'fixtures', projectName);
-const referenceDir = join(projectDir, 'reference', 'data');
-
-if (!existsSync(projectDir)) {
-  console.error(`Project not found: ${projectDir}`);
-  process.exit(1);
-}
-
-const apiKey = process.env.NOVALISTICALLY_AI_API_KEY;
-if (!apiKey) {
-  console.error('NOVALISTICALLY_AI_API_KEY not set in .env');
-  process.exit(1);
-}
-
-// AiSdkProvider auto-detects base URL and model from key prefix
-const provider = new AiSdkProvider({ apiKey });
-
-// ── Empty initial state matching WorldState interface ────────────
-const EMPTY_STATE = {
-  entities: {},
-  relationships: {},
-  knowledge: {},
-  threads: {},
-  rules: {},
-  facts: [],
-};
-
-// ── Setup ──────────────────────────────────────────────────────────
-const storage = new FsStorage();
-const aggregator = new ResultAggregator();
-const mapper = new EntityMapper(projectDir);
-const registry = new InMemoryEntityRegistry();
-const compiler = new ContextCompiler();
-const replay = new ReplayEngine();
-
-// ── Load fixtures ──────────────────────────────────────────────────
-console.log(`Loading ${projectName} fixtures...`);
-const projectData = mapper.loadProject();
-const events = mapper.loadAllEvents(projectData.chapters);
-console.log(`  ${events.length} events loaded`);
-
-registry.load(projectDir);
-
-// ── Build per-event state (incremental replay) ─────────────────────
-// Sort by narrativeOrder for deterministic state reconstruction
-const sorted = [...events].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
-let currentState = replay.replay([]); // empty initial WorldState
-const eventStates = [];
-for (const event of sorted) {
-  // Deep clone via JSON round-trip (structuredClone may not exist in older Node)
-  eventStates.push({ event, stateBefore: JSON.parse(JSON.stringify(currentState)) });
-  // Advance state to include this event
-  currentState = replay.getStateAt(sorted, event.narrativeOrder);
-}
-
-// ── Pipeline ───────────────────────────────────────────────────────
 const model = process.env.NOVALISTICALLY_AI_MODEL || 'deepseek-v4-flash';
-const pipeline = new RenderPipeline({
-  provider,
-  model,
-  storage,
-  aggregator,
-  cacheDir: join(projectDir, '.nova/render-cache'),
-});
+const apiKey = process.env.NOVALISTICALLY_AI_API_KEY;
 
-// ── Generate reference data ────────────────────────────────────────
-mkdirSync(referenceDir, { recursive: true });
-let succeeded = 0;
-let failed = 0;
+// Pass 2 seed is fixed at 42; Pass 1 is explicitly unseeded (null).
+const SEED = 42;
 
-for (const { event, stateBefore } of eventStates) {
-  const refFile = join(referenceDir, `${event.id}.json`);
+// ── Credential check (MUST exit nonzero without writing any record) ────
+if (!apiKey) {
+  console.error('ERROR: NOVALISTICALLY_AI_API_KEY is not set.');
+  console.error('Set it in your environment or .env file to run the live smoke.');
+  console.error('No smoke record was written.');
+  process.exit(1);
+}
 
-  if (existsSync(refFile)) {
-    console.log(`  ${event.id}: skipping (already exists)`);
-    succeeded++;
-    continue;
+let workDir;
+
+async function main() {
+  workDir = mkdtempSync(join(tmpdir(), 'novalistically-smoke-'));
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const candidateDir = join(projectDir, '.nova', 'smoke-candidates', timestamp);
+  mkdirSync(candidateDir, { recursive: true });
+
+  const command = `node ${process.argv.slice(1).join(' ')}`;
+
+  // ── Temp fixture copy (no .nova/scenes/output) ──────────────────────
+  try {
+    // Copy everything except .nova, scenes, output — ensures no cache can
+    // satisfy the run and no stale intermediate artifacts influence it.
+    cpSync(projectDir, workDir, {
+      recursive: true,
+      filter: (src) => {
+        const rest = src[projectDir.length] === '/' ? src.slice(projectDir.length + 1) : src.slice(projectDir.length);
+        const top = rest.split('/')[0];
+        return top !== '.nova' && top !== 'scenes' && top !== 'output';
+      },
+    });
+  } catch (err) {
+    throw new Error(`Failed to copy fixture to temp directory: ${(err instanceof Error ? err.message : String(err))}`);
   }
 
-  process.stdout.write(`  ${event.id}: rendering... `);
+  // ── Render via public API ───────────────────────────────────────────
+  console.log(`\nLive smoke for ${projectName} (model: ${model}, seed: ${SEED})`);
+  console.log(`  Work dir:     ${workDir}`);
+  console.log(`  Candidate dir: ${candidateDir}\n`);
+
+  let result;
   try {
-    const context = compiler.compile(event, stateBefore ?? EMPTY_STATE, registry);
-    if (!context) {
-      console.log('SKIP (no context)');
-      continue;
-    }
-
-    const result = await pipeline.renderScene({
-      event,
-      stateBefore: stateBefore ?? EMPTY_STATE,
-      context,
-      chapter: 1,
+    result = await renderNovel({
+      projectDir: workDir,
+      model,
+      apiKey,
+      eventId: 'all',
+      maxRounds: 1,
     });
+  } catch (err) {
+    // Write fatal-error.json even when renderNovel threw
+    const fatal = { error: sanitizeError(err), generatedAt: new Date().toISOString() };
+    writeFileSync(join(candidateDir, 'fatal-error.json'), JSON.stringify(fatal, null, 2));
+    throw new Error(`Fatal error during renderNovel: ${sanitizeError(err)}`);
+  }
 
-    // Extract prose from RenderSceneResult
-    const prose = result.prose;
+  // ── Handle zero results ─────────────────────────────────────────────
+  if (!result || result.results.length === 0) {
+    const fatal = {
+      error: (result?.errors ?? []).join('; ') || 'Unknown: renderNovel returned no results',
+      generatedAt: new Date().toISOString(),
+    };
+    writeFileSync(join(candidateDir, 'fatal-error.json'), JSON.stringify(fatal, null, 2));
+    throw new Error(`renderNovel returned no results for ${projectName}: ${fatal.error}`);
+  }
 
-    // Save reference entry (MockPass2Provider compatible)
-    const reference = {
-      prose,
-      analysis: result.analysis, // may be null if Pass 2 failed
-      _metadata: {
-        eventId: event.id,
-        title: event.title,
-        sceneBrief: event.sceneBrief,
-        generatedAt: new Date().toISOString(),
-        cacheHit: result.cacheHit,
-        attempts: result.attempts,
-        errors: result.errors,
+  // ── Build smoke record ───────────────────────────────────────────────
+  let smokeOutput;
+  try {
+    smokeOutput = buildLiveSmokeRecord({
+      result,
+      provider: 'ai-sdk',
+      model,
+      seed: SEED,
+      command,
+      versions: {
+        code: '0.1.0',
+        fixture: '1',
+        schema: 1,
+        prompt: '1',
+        capability: '1',
+      },
+    });
+  } catch (err) {
+    throw new Error(`Smoke record build failed: ${(err instanceof Error ? err.message : String(err))}`);
+  }
+
+  // ── Serialise smoke record and compute runHash ────────────────────────
+  // runHash is the full SHA-256 of the byte-identical smoke record JSON,
+  // used in every provenance entry.  We compute it before writing so the
+  // file is written exactly once.
+  const recordStr = JSON.stringify(smokeOutput.record, null, 2);
+  const runHash = createHash('sha256').update(recordStr).digest('hex');
+  const generatedAt = new Date().toISOString();
+
+  // ── Validate all candidate scene outputs before writing any ──────────
+  // Validating every candidate first prevents partial candidate sets
+  // when one event cannot form a schema-valid response (e.g. null analysis).
+  const validatedEntries = [];
+  const failures = [];
+  for (const r of result.results) {
+    const attempts = (r.providerCalls && r.providerCalls.length > 0)
+      ? Math.max(...r.providerCalls.map((c) => c.attempt))
+      : 1;
+
+    const entry = {
+      prose: r.prose,
+      analysis: r.analysis,
+      metadata: {
+        eventId: r.eventId,
+        provider: 'ai-sdk',
+        model,
+        seed: SEED,
+        promptVersion: 'stage1-v1',
+        promptHash: r.promptHash,
+        analysisSchemaVersion: 1,
+        fixtureFormatVersion: 1,
+        generatedAt,
+        reviewStatus: 'candidate',
+        attempts,
+        errors: (r.errors ?? []).map((e) => sanitizeError(e)),
       },
     };
 
-    writeFileSync(refFile, JSON.stringify(reference, null, 2));
-    console.log('OK');
-    succeeded++;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    const stack = err instanceof Error ? err.stack : '';
-    console.log(`FAIL: ${msg}`);
-    if (stack) console.error(`  ${stack.split('\n').slice(0, 3).join('\n  ')}`);
-    failed++;
+    const parsed = responseReferenceSchema.safeParse(entry);
+    if (!parsed.success) {
+      failures.push({
+        eventId: r.eventId,
+        reason: parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+        pass2Rejection: r.pass2Rejection ?? null,
+      });
+    } else {
+      validatedEntries.push({ eventId: r.eventId, data: parsed.data, original: r });
+    }
+  }
+
+  // If any candidate failed validation, write fatal-error.json with only
+  // safe diagnostics (event IDs, counts, release state, sanitized reasons)
+  // and exit nonzero — never leave a partial promotable candidate set.
+  if (failures.length > 0) {
+    const released = result.results.filter((ev) => ev.prose && ev.prose.length > 0).length;
+    const fatal = {
+      fatalType: 'candidate_validation_failure',
+      generatedAt: new Date().toISOString(),
+      events: {
+        total: result.results.length,
+        valid: validatedEntries.length,
+        failed: failures.length,
+        released,
+      },
+      failures,
+      errors: (result.errors ?? []).map((e) => sanitizeError(e)),
+    };
+    writeFileSync(join(candidateDir, 'fatal-error.json'), JSON.stringify(fatal, null, 2));
+    const detail = failures.map((f) => `${f.eventId}: ${f.reason}`).join('; ');
+    throw new Error(`Candidate validation failed: ${failures.length}/${result.results.length} events invalid. ${detail}`);
+  }
+
+  // ── All validated — write candidate scene outputs ─────────────────────
+  const referenceMap = new Map();
+  for (const { eventId, data, original } of validatedEntries) {
+    writeFileSync(join(candidateDir, `${eventId}.json`), JSON.stringify(data, null, 2));
+    referenceMap.set(eventId, { prose: original.prose, analysis: original.analysis });
+  }
+
+  // ── Write observed-outcomes.json ─────────────────────────────────────
+  const identities = collectReferenceIssueIdentities(projectDir, referenceMap);
+  const outcomes = { version: 1, issues: identities };
+  writeFileSync(join(candidateDir, 'observed-outcomes.json'), JSON.stringify(outcomes, null, 2));
+
+  // ── Write candidate-provenance.json ──────────────────────────────────
+  const provenance = {
+    version: 1,
+    entries: result.results.map((r) => ({
+      eventId: r.eventId,
+      kind: 'generated',
+      runHash,
+    })),
+  };
+  const provParsed = provenanceManifestSchema.safeParse(provenance);
+  if (!provParsed.success) {
+    throw new Error(`Invalid provenance manifest: ${JSON.stringify(provParsed.error.issues)}`);
+  }
+  writeFileSync(join(candidateDir, 'candidate-provenance.json'), JSON.stringify(provParsed.data, null, 2));
+
+  // ── Write smoke record ───────────────────────────────────────────────
+  const recordPath = join(candidateDir, 'smoke-record.json');
+  writeFileSync(recordPath, recordStr);
+
+  // ── Report ──────────────────────────────────────────────────────────
+  if (smokeOutput.success) {
+    console.log(`\n✓ Live smoke passed for ${projectName} E0–E6`);
+    console.log(`  Candidate output: ${candidateDir}/`);
+    console.log(`  Smoke record:    ${recordPath}`);
+    console.log(`  Provenance hash: ${runHash}`);
+  } else {
+    const released = result.results.filter((r) => r.prose.length > 0);
+    console.error(`\n✗ Live smoke FAILED for ${projectName}`);
+    console.error(`  Released: ${released.length}/${result.results.length}`);
+    console.error(`  Errors:   ${result.errors.map((e) => sanitizeError(e)).join('; ')}`);
+    console.error(`  Failure record: ${recordPath}`);
+    throw new Error('Live smoke did not pass — see failure record for details');
   }
 }
 
-console.log(`\nDone: ${succeeded} succeeded, ${failed} failed`);
-console.log(`Reference data: ${referenceDir}/`);
-
-// ── Write per-project validation report ──────────────────────────────
-console.log('\nWriting validation report...');
-const aggregatorForReport = new ResultAggregator();
-const results = aggregatorForReport.validateAll(events, currentState, registry);
-const allL1Issues = [];
-for (const r of results.values()) {
-  allL1Issues.push(...r.errors, ...r.warnings, ...r.infos);
-}
-const reportPath = writeValidationReport(projectDir, {
-  projectName: projectName,
-  generatedAt: new Date().toISOString(),
-  l1Issues: allL1Issues,
-  l2Issues: [],
-});
-console.log(`Validation report: ${reportPath}`);
+main()
+  .then(() => {
+    if (workDir) rmSync(workDir, { recursive: true, force: true });
+    process.exit(0);
+  })
+  .catch((err) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`\nERROR: ${msg}`);
+    if (workDir) rmSync(workDir, { recursive: true, force: true });
+    process.exit(1);
+  });

@@ -17,10 +17,8 @@
 import type {
   CharacterDefinition,
   LocationDefinition,
-  RuleDefinition,
-  NarrativeEvent,
 } from '@novalistically/core';
-import { annotate, markDirect, markMixed, type ProvenanceAnnotation } from './annotations.js';
+import { annotate, markDirect, type ProvenanceAnnotation } from './annotations.js';
 
 // ─── Raw ChiNovelKE types ──────────────────────────────────────────────────
 

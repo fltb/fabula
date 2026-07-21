@@ -37,6 +37,13 @@
 | `targetAudience` | `string`（可选） | 影响散文风格的目标受众（例如 `adult_literary`） |
 | `narrationTime` | `string`（可选） | 故事被讲述的时间（用于非线性时间线） |
 
+### 阶段一严格合同
+
+- 所有 production YAML 只经严格 Zod compiler 加载；未知键、语法错误、缺必需文件均以带文件/YAML 路径的 `ConfigError` 失败，绝不静默跳过。
+- `Fact` 必须且只能给出 `value` 或 `narrativeHint`。确定性比较仅支持 `operator: eq`（省略等同 `eq`）；`neq`、`gt`、`lt`、`contains` 是阶段一拒绝输入。
+- `linear` 与 `flashback` 事件必须写出 `storyTime` 和 `narrationTime`。其他 scene type 不是阶段一 author-facing capability。
+- 项目键使用 camelCase；例如 `defaultModel`、`defaultLanguage`、`snapshotInterval`、`defaultSceneTextTarget`。旧 snake_case 不再兼容。
+
 ### 叙事元数据字段
 
 - **`threadProgress`** — 追踪叙事线程进度的数组，每项包含 `{ thread, advancement, progressAfter, progressTotal }`。

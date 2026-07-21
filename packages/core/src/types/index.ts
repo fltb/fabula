@@ -99,8 +99,6 @@ export type {
 
 export type {
   AnalysisResult,
-  AnalysisContent,
-  PostconditionAnalysis,
   PreconditionAnalysis,
   POVAnalysis,
   InventedDetail,

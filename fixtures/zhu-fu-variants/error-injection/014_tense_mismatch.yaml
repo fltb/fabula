@@ -1,6 +1,6 @@
 injected:
   - entityId: "E4"
-    attribute: "tense"
+    attribute: "narrationTime"
     expectedValidator: "timeline"
-    expectedSeverity: "error"
-    description: "An event has tense: present but all scene guidance uses past-tense language, and the project config has tense: past"
+    expectedSeverity: "warning"
+    description: "E4 sceneType is flashback but narrationTime removed — timeline validator detects missing temporal context"

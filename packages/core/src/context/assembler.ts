@@ -24,12 +24,10 @@ import { RelevanceEngine } from './relevance.ts';
 
 export class ContextAssembler {
   private relevanceEngine: RelevanceEngine;
-  private tokenBudget: number;
   private recentEntities: EntityId[] = [];
 
-  constructor(tokenBudget = 8000) {
+  constructor() {
     this.relevanceEngine = new RelevanceEngine();
-    this.tokenBudget = tokenBudget;
   }
 
   /**
@@ -54,9 +52,6 @@ export class ContextAssembler {
 
     // Score all entities for relevance
     const scores = this.relevanceEngine.scoreEntities(context);
-    const relevantEntities = new Set(
-      scores.filter((s) => s.score > 0.3).map((s) => s.entity),
-    );
 
     // L1: System Context (always included)
     const sysCtx: SystemContext = {

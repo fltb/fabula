@@ -9,29 +9,59 @@
 
 import type {
   PostRenderInput,
+  PreRenderInput,
   Validator,
   ValidationIssue,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
+import { z } from 'zod';
+
+export const conflictAnalysisSchema = z.object({
+  primaryType: z.string(),
+  resolutionAchieved: z.boolean(),
+});
+
+export type ConflictAnalysis = z.infer<typeof conflictAnalysisSchema>;
 
 export class ConflictValidator implements Validator {
   name = 'conflict';
   category = 'factual_detail' as const;
 
+  validatePre(input: PreRenderInput): ValidationIssue[] {
+    const issues: ValidationIssue[] = [];
+    const { event } = input;
+
+    // Deterministic check: if resolutionType is set to 'unresolved'
+    // but the scene has a conflict type that implies resolution,
+    // flag a warning
+    if (event.resolutionType === 'unresolved' && event.conflictType) {
+      issues.push(makeIssue(
+        this.name, event.id, 'system', 'warning',
+        `Scene "${event.id}" declares conflict type "${event.conflictType}" but resolution is "unresolved" — conflict may be left dangling`,
+        'Ensure the conflict reaches explicit resolution, or mark it as intentionally unresolved.',
+        'edit_file',
+        'resolutionType',
+      ));
+    }
+
+    return issues;
+  }
   validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     const { event, analysis } = input;
 
     if (!analysis) return issues;
 
-    const conflictAnalysis = analysis.analysis.conflictAnalysis;
-    if (!conflictAnalysis) return issues;
+    const conflictResult = conflictAnalysisSchema.safeParse(analysis.analysis.conflictAnalysis);
+    if (!conflictResult.success) return issues;
+    const conflictAnalysis = conflictResult.data;
 
     const eventResolutionType = event.resolutionType;
     const eventConflictType = event.conflictType;
 
-    // Check 1: If scene declares a resolution type, it should be achieved
-    if (eventResolutionType && !conflictAnalysis.resolutionAchieved) {
+    // Only a declared resolving outcome requires Pass 2 to confirm resolution.
+    const expectsResolution = eventResolutionType !== undefined && !['unresolved', 'negative_resolution'].includes(eventResolutionType);
+    if (expectsResolution && !conflictAnalysis.resolutionAchieved) {
       const message = eventConflictType
         ? `Scene "${event.id}" declares conflict type "${eventConflictType}" with resolution "${eventResolutionType}" but Pass 2 analysis indicates resolution was NOT achieved`
         : `Scene "${event.id}" declares resolution type "${eventResolutionType}" but Pass 2 analysis indicates resolution was NOT achieved`;
@@ -82,7 +112,7 @@ export class ConflictValidator implements Validator {
   getAnalysisRequirements() {
     return [{
       field: 'conflictAnalysis',
-      schemaExample: { primaryType: 'character vs. character', resolutionAchieved: false },
+      schema: conflictAnalysisSchema,
       instruction: 'conflictAnalysis: Identify the primary type of conflict depicted in the scene (e.g., character vs. character, character vs. self, character vs. nature, character vs. society) and whether it achieves resolution by the end of the scene. Report in the conflictAnalysis block with primaryType and resolutionAchieved.',
     }];
   }

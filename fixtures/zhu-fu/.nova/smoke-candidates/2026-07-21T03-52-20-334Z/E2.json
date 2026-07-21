@@ -1,0 +1,252 @@
+{
+  "prose": "那年冬初，四叔家里要换女工，做中人的卫老婆子便带了一个女人进来。我那时正客居在四叔的书房里，每日听着前院传来的鸡鸣与人声，倒也成了习惯。那女人头上扎着白头绳，乌裙，蓝夹袄，月白背心，年纪大约二十六七，脸色青黄，但两颊却还是红的。她站在那里，两手交握着，指节粗大，是做过重活的模样。四叔皱了皱眉——我望了他一眼，便知道他讨厌她是一个寡妇。四婶却走过去，将她从头到脚看了一遍，看她模样周正，手脚壮大，一副安分耐劳的样子，便点了点头，说留下试试。\n\n试工的那几天，这女人整天的做活，仿佛一闲下来就浑身不自在。她扫尘，洗地，杀鸡，宰鹅，力气简直抵得过一个男子；而且一声不响的，只听得见扫帚划过青砖的沙沙声，或是井台上水桶磕碰的闷响。四婶暗暗点头，四叔也不再说什么，只是偶尔从书房窗口瞥见她在天井里忙碌的背影，便又将眉头微微蹙起，却终于忍住了。到了年底，祝福的准备繁忙起来，她竟一个人担当了全部：扫尘、洗地、杀鸡、宰鹅、彻夜的煮福礼。那几天，灶间的灯火整夜不熄，热气蒸腾里，只见她两只手浸在冷水里洗刷祭器，手臂冻得通红，脸上却渐渐有了笑影，两颊也白胖了许多。\n\n人们从她断断续续的叙述里，渐渐知道了她的来历。春天里，她那比她小十岁的打柴的丈夫死了；家里还剩着一个严厉的婆婆，一个十多岁、已经能打柴的小叔子。她是逃出来的。说这些话时，她总是低着头，一边擦着桌凳，或是拣着菜叶，声音低得仿佛自言自语。我偶尔在天井里遇见她，她总是侧着身子，让到一边，眼光不敢抬起来，怕冲撞了什么似的。只有在那彻夜煮福礼的灶火旁，她的脸被火光映得暖暖的，口角边噙着一丝若有若无的笑，神情才显得安定而满足——仿佛她终于在这日夜不停的忙碌里，为自己寻着了一处可以容身的角落。",
+  "analysis": {
+    "eventId": "E2",
+    "analysis": {
+      "postconditions": {
+        "covered": [
+          "xianglins_wife.location=fourth_master_lu_house",
+          "xianglins_wife.status=employed_maid",
+          "xianglins_wife.work_capability=full_strength",
+          "xianglins_wife.emotionalState=content",
+          "fourth_master_lu.attitude=tolerant_but_suspicious",
+          "fourth_aunt.attitude=satisfied",
+          "xianglins_wife.appearance=pale_yellow_face_red_cheeks",
+          "xianglins_wife.social_status=secret_revealed (she is an escaped widow)"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "我那时正客居在四叔的书房里，每日听着前院传来的鸡鸣与人声",
+          "severity": "minor"
+        },
+        {
+          "detail": "只见她两只手浸在冷水里洗刷祭器，手臂冻得通红",
+          "severity": "minor"
+        },
+        {
+          "detail": "灶间的灯火整夜不熄，热气蒸腾",
+          "severity": "minor"
+        },
+        {
+          "detail": "她被火光映得暖暖的",
+          "severity": "minor"
+        }
+      ],
+      "quality": {
+        "proseScore": 9,
+        "maxScore": 10,
+        "strengths": [
+          "细腻的环境与动作描写，强化了人物形象和季节氛围",
+          "第一人称叙述者视角一致，观察细致",
+          "语言风格贴合文学性要求，节奏舒缓"
+        ],
+        "weaknesses": [
+          "部分细节如祥林嫂的伤疤未提及，可能遗漏关键伏笔（但场景初期尚不需交代）",
+          "中人对白完全省略，略微降低了场面的生动性"
+        ],
+        "estimatedWordCount": 520
+      },
+      "threadProgressAchieved": [
+        "T1"
+      ],
+      "foreshadowingDeployed": [],
+      "narrativeChecks": [
+        {
+          "entityId": "scene",
+          "attribute": "time_period",
+          "hint": "winter early",
+          "evidence": "那年冬初",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "character_state",
+          "hint": "fearful_but_determined initially, becoming content",
+          "evidence": "她总是低着头...眼光不敢抬起来，怕冲撞了什么似的；口角边噙着一丝若有若无的笑，神情才显得安定而满足",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "attribute": "character_state",
+          "hint": "tolerant_but_suspicious",
+          "evidence": "四叔皱了皱眉...便知道他讨厌她是一个寡妇",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "fourth_aunt",
+          "attribute": "character_state",
+          "hint": "satisfied",
+          "evidence": "四婶暗暗点头",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_formality",
+          "hint": "high formality, literary Chinese",
+          "evidence": "倒也成了习惯；仿佛一闲下来就浑身不自在",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_vocabulary",
+          "hint": "literary vocabulary, descriptive",
+          "evidence": "神情才显得安定而满足；热气蒸腾里",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_anachronism",
+          "hint": "no modern words",
+          "evidence": "全文无现代化用语",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_action_verbs",
+          "hint": "appropriate for period and character actions",
+          "evidence": "划过、磕碰、浸、洗刷、冻得通红",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "scene",
+          "attribute": "pacing",
+          "hint": "slow, descriptive pace",
+          "evidence": "长句与细节描写，如彻夜煮福礼的段落",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "scene",
+          "attribute": "discourseMode",
+          "hint": "description",
+          "evidence": "全文以描述为主，辅以叙述",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "pronoun",
+          "hint": "她/她的 consistent",
+          "evidence": "全篇用 她 指代祥林嫂",
+          "matchLevel": "exact"
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "xianglins_wife",
+          "feature": "clothing",
+          "declared": "乌裙、蓝夹袄、月白背心，头上扎白头绳",
+          "evidence": "头上扎着白头绳，乌裙，蓝夹袄，月白背心",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "face",
+          "declared": "脸色青黄但两颊还是红的",
+          "evidence": "脸色青黄，但两颊却还是红的",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "hands",
+          "declared": "手脚壮大",
+          "evidence": "指节粗大，是做过重活的模样",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "scar",
+          "declared": "额角有撞香案留下的伤疤",
+          "evidence": "未提及",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "feature": "facial_expression",
+          "declared": "眉头常锁",
+          "evidence": "四叔皱了皱眉",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "fourth_aunt",
+          "feature": "appearance",
+          "declared": "鲁镇的太太模样，穿着干净的棉袍，管家的精明写在脸上",
+          "evidence": "未描写",
+          "matchLevel": "absent"
+        }
+      ],
+      "characterReferences": [
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "她",
+            "这女人",
+            "女人"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四叔",
+            "他"
+          ]
+        },
+        {
+          "entityId": "fourth_aunt",
+          "namesUsed": [
+            "四婶",
+            "她"
+          ]
+        },
+        {
+          "entityId": "wei_lao_po_zi",
+          "namesUsed": [
+            "卫老婆子",
+            "做中人的卫老婆子"
+          ]
+        }
+      ],
+      "tenseDetected": "past",
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": false
+      },
+      "ruleChecks": [
+        {
+          "ruleId": "husbands_authority",
+          "violated": false,
+          "evidence": "四叔皱了皱眉——我望了他一眼，便知道他讨厌她是一个寡妇。",
+          "severity": "minor"
+        }
+      ],
+      "knowledgeChecks": []
+    }
+  },
+  "metadata": {
+    "eventId": "E2",
+    "provider": "ai-sdk",
+    "model": "deepseek-v4-pro",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "1ad21b37139008520a6b2d805e2e27b22e21eecc137317789f0cb96690d33f6a",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-21T03:57:14.290Z",
+    "reviewStatus": "candidate",
+    "attempts": 1,
+    "errors": []
+  }
+}

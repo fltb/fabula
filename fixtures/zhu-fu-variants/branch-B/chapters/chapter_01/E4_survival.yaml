@@ -77,14 +77,14 @@ relationshipEffects:
   - participants:
       - fourth_aunt
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: xianglins_wife_never_returns
     newState:
       type: no_relationship
       intensity: 0
 ruleEffects:
   - rule: patriarchal_clan_authority
-    effect: challenge
+    effect: weaken
     evidence: "大伯本来打算来收房——但贺老六活了下来，宗族的收房计划落空了。宗族权力在贺老六的存活面前暂时失效。"
 styleGuidance:
   tone: "温暖但不煽情——是一种真实的、山野人家的质朴生存。贺老六的康复不是奇迹，是身体的胜利、是妻子的日夜照顾。"

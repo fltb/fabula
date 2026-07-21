@@ -1,5 +1,6 @@
 // ============================================================================
 // Plugin System — Conflict Resolution
+import { logger } from '../observability/logger.ts';
 // ============================================================================
 
 import type { PluginManifest, ArbitrationStrategy } from '../types/index.js';
@@ -37,9 +38,7 @@ export function resolveConflict(
         'Resolve manually and re-run with an explicit strategy.',
       );
     default: {
-      console.warn(
-        `Unknown conflict resolution strategy "${strategy}". Falling back to "priority".`,
-      );
+      logger.warn('Unknown conflict resolution strategy', { module: 'plugin' });
       return resolveConflict(plugins, pluginA, pluginB, 'priority');
     }
   }

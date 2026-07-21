@@ -3,4 +3,4 @@ injected:
     attribute: "arcPosition"
     expectedValidator: "pacing"
     expectedSeverity: "warning"
-    description: "All 7 events have arcPosition: 'opening' — no narrative arc structure, pacing is flat."
+    description: "All 7 events have arcPosition: 'climax' — no narrative arc structure, pacing is broken"

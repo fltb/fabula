@@ -19,10 +19,9 @@
 // ============================================================================
 
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { generateText } from 'ai';
+import { generateText, Output } from 'ai';
 import type { LLMProvider, CompletionRequest, CompletionResponse } from '../types.ts';
 import { LLMError } from '../types.ts';
-import { analysisResultSchema } from '../../schemas/analysis.js';
 
 export interface AiSdkProviderOptions {
   baseURL?: string;
@@ -77,6 +76,8 @@ export class AiSdkProvider implements LLMProvider {
       }));
 
     try {
+      const outputSpec = isPass2 ? Output.json() : undefined;
+
       const result = await generateText({
         model: this.model,
         system: systemMsg?.content,
@@ -84,28 +85,10 @@ export class AiSdkProvider implements LLMProvider {
         temperature: request.temperature,
         maxOutputTokens: request.maxTokens,
         seed: request.seed,
+        ...(outputSpec ? { output: outputSpec } : {}),
       });
 
-      let content = result.text;
-
-      if (isPass2) {
-        // Validate JSON output for Pass 2
-        const cleaned = stripMarkdownFences(result.text);
-        try {
-          const parsed = JSON.parse(cleaned);
-          const validated = analysisResultSchema.safeParse(parsed);
-          if (!validated.success) {
-            throw new Error(
-              `Schema validation failed: ${validated.error.message}`,
-            );
-          }
-          content = JSON.stringify(validated.data);
-        } catch (e) {
-          throw new Error(
-            `Pass 2 JSON parse/validation failed: ${(e as Error).message}`,
-          );
-        }
-      }
+      const content = result.text;  // raw text — pipeline owns Pass 2 parsing/validation
 
       return {
         id: result.response?.id ?? 'ai-sdk',
@@ -127,7 +110,3 @@ export class AiSdkProvider implements LLMProvider {
   }
 }
 
-function stripMarkdownFences(text: string): string {
-  const match = text.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/i);
-  return match ? match[1].trim() : text.trim();
-}

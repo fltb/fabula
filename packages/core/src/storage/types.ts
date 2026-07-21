@@ -8,6 +8,11 @@ export interface DirEntry {
   isDirectory(): boolean;
 }
 
+export interface StorageWrite {
+  path: string;
+  content: string;
+}
+
 export interface Storage {
   /** Returns true if a file or directory exists at the given path */
   exists(path: string): boolean;
@@ -20,6 +25,9 @@ export interface Storage {
 
   /** Write (or overwrite) a file */
   write(path: string, content: string): void;
+
+  /** Publish a complete output set or leave the previous visible set intact. */
+  commitBatch(writes: readonly StorageWrite[]): void;
 
   /** Create a directory and all intermediate parents */
   mkdirp(path: string): void;

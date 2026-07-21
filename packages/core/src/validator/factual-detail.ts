@@ -9,7 +9,14 @@ import type {
   ValidationIssue,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
-import { compareFact } from '../entity/compare.js';
+import { z } from 'zod';
+ 
+export const inventedDetailSchema = z.object({
+  detail: z.string(),
+  severity: z.enum(['minor', 'major']),
+});
+export type InventedDetail = z.infer<typeof inventedDetailSchema>;
+ 
 
 export class FactualDetailValidator implements Validator {
   name = 'factual_detail';
@@ -55,6 +62,50 @@ export class FactualDetailValidator implements Validator {
       }
     }
 
+    // Check: postconditions with placeholder values (should be caught by schema)
+    for (const pc of event.postconditions) {
+      if (pc.value === 'changed' || pc.value === 'resolved' || pc.value === 'updated') {
+        issues.push(makeIssue(
+          this.name, event.id, pc.entityId, 'warning',
+          `Placeholder value "${pc.value}" used in postcondition "${pc.entityId}.${pc.attribute}" — this should be a concrete value`,
+          'Use a specific, concrete value instead of a placeholder.',
+          'change_value',
+          pc.attribute,
+        ));
+      }
+    }
+
+    // Check: mutual exclusion — fact must not have both value and narrativeHint
+    for (const pc of event.postconditions) {
+      if (pc.value !== undefined && pc.narrativeHint !== undefined && pc.narrativeHint !== '') {
+        issues.push(makeIssue(
+          this.name, event.id, pc.entityId, 'error',
+          `Fact "${pc.id}" has both value and narrativeHint set — they are mutually exclusive`,
+          'Remove one of value or narrativeHint.',
+          'change_value',
+          pc.attribute,
+        ));
+      }
+    }
+
+    // Check: postconditions referencing entities not in the registry
+    // (invented details / nonexistent entities)
+    for (const pc of event.postconditions) {
+      if (pc.value === undefined) continue;
+      const entity = input.entityRegistry.resolve(pc.entityId);
+      if (!entity) {
+        issues.push(makeIssue(
+          this.name, event.id, pc.entityId, 'warning',
+          `Postcondition references entity "${pc.entityId}" which is not defined in the entity registry`,
+          'Define this entity in definitions/, or remove the postcondition referencing it.',
+          'create_file',
+          'entity',
+          undefined,
+          pc.entityId,
+        ));
+      }
+    }
+
     return issues;
   }
 
@@ -64,7 +115,9 @@ export class FactualDetailValidator implements Validator {
 
     if (!analysis) return issues;
 
-    for (const detail of analysis.analysis.inventedDetails) {
+    const inventedResult = z.array(inventedDetailSchema).safeParse(analysis.analysis.inventedDetails);
+    const details = inventedResult.success ? inventedResult.data : [];
+    for (const detail of details) {
       if (detail.severity !== 'major') continue;
 
       issues.push(makeIssue(
@@ -81,7 +134,7 @@ export class FactualDetailValidator implements Validator {
   getAnalysisRequirements() {
     return [{
       field: 'inventedDetails',
-      schemaExample: { detail: 'something in prose not in specification', severity: 'minor' },
+      schema: z.array(inventedDetailSchema),
       instruction: 'inventedDetails: List any significant details in the prose that are not present in the event specification. For each invented detail, note the detail text and whether its severity is "minor" (e.g., atmospheric description) or "major" (plot or character change not in the specification). Report in the inventedDetails block.',
     }];
   }

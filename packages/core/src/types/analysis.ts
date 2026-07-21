@@ -42,14 +42,14 @@ export interface ConflictAnalysis {
   resolutionAchieved: boolean;
 }
 
-export interface RuleCheck {
+interface RuleCheck {
   ruleId: string;
   violated: boolean;
   evidence: string;
   severity: 'minor' | 'major';
 }
 
-export interface KnowledgeCheck {
+interface KnowledgeCheck {
   entityId: string;
   leakedEntity: string;
   leakedInfo: string;
@@ -64,7 +64,7 @@ export interface PostconditionAnalysis {
   dropped: string[];
 }
 
-export interface ViolatedPrecondition {
+interface ViolatedPrecondition {
   entityId: string;
   attribute: string;
   expectedValue: string;
@@ -93,25 +93,12 @@ export interface QualityAnalysis {
   estimatedWordCount: number;
 }
 
-export interface AnalysisContent {
-  postconditions: PostconditionAnalysis;
-  preconditions: PreconditionAnalysis;
-  pov: POVAnalysis;
-  inventedDetails: InventedDetail[];
-  quality: QualityAnalysis;
-  threadProgressAchieved: string[];
-  foreshadowingDeployed: string[];
-  // ── New 5 blocks (P0g) ────────────────────────────────────────────
-  narrativeChecks?: NarrativeCheck[];
-  appearanceChecks?: AppearanceCheck[];
-  characterReferences?: CharacterReference[];
-  tenseDetected?: TenseDetected;
-  conflictAnalysis?: ConflictAnalysis;
-  ruleChecks?: RuleCheck[];
-  knowledgeChecks?: KnowledgeCheck[];
-}
-
+/**
+ * Per-field block types are still available as z.infer<typeof validatorSchema>.
+ * The `analysis` field is intentionally `Record<string, unknown>` because
+ * plugin validators can add fields at runtime beyond the built-in set.
+ */
 export interface AnalysisResult {
   eventId: string;
-  analysis: AnalysisContent;
+  analysis: Record<string, unknown>;
 }

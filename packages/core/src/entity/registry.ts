@@ -24,7 +24,18 @@ export class InMemoryEntityRegistry implements EntityRegistry {
         kind: 'character',
         name: char.name,
         definitionFile: `definitions/characters/${char.id}.yaml`,
-        state: { ...char.initialState, traits: char.traits },
+        state: {
+          // Preserve top-level deterministic character definition fields
+          // needed by validators (AliasValidator, PronounValidator, etc.)
+          // without overwriting explicit initialState values.
+          ...(char.aliases ? { aliases: char.aliases } : {}),
+          ...(char.gender ? { gender: char.gender } : {}),
+          ...(char.appearance ? { appearance: char.appearance } : {}),
+          ...(char.age ? { age: char.age } : {}),
+          ...(char.profession ? { profession: char.profession } : {}),
+          ...char.initialState,
+          traits: char.traits,
+        },
       });
     }
 

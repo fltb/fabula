@@ -7,7 +7,6 @@ import {
   renderNovel,
   validateNovel,
   getProjectStatus,
-  diffEvent,
   listEntities,
   showEntity,
   assembleNovel,

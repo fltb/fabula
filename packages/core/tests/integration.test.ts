@@ -196,11 +196,6 @@ describe('1. Full Pipeline', () => {
       sceneType: 'linear',
       pov: { character: 'seraphine', type: 'third_person_limited' },
       sceneBrief: 'Seraphine detects an anomalous emotional frequency.',
-      preconditions: [{
-        id: 'seraphine.location', entityId: 'seraphine',
-        attribute: 'location', value: 'piltover_enforcer_headquarters', confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
       postconditions: [{
         id: 'seraphine.detected_anomaly', entityId: 'seraphine',
         attribute: 'detected_anomaly', value: true, confidence: 1.0,
@@ -216,11 +211,6 @@ describe('1. Full Pipeline', () => {
       storyTime: { type: 'absolute', value: 'day_0' },
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'Camille takes the missing-crystals case.',
-      preconditions: [{
-        id: 'camille.location', entityId: 'camille',
-        attribute: 'location', value: 'piltover_enforcer_headquarters', confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
       postconditions: [{
         id: 'camille.accepted_case', entityId: 'camille',
         attribute: 'case_status', value: 'accepted', confidence: 1.0,
@@ -743,17 +733,8 @@ describe('6. Assembler with Empty Scenes Directory', () => {
     if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
   });
 
-  it('6a. assembleNovel handles empty scenes gracefully (0 scenes)', () => {
-    const result = assembleNovel({ projectDir: FIXTURE_PATH, title: 'Arcane Aftermath' });
-    expect(result.markdown).toBeDefined();
-    expect(result.sceneCount).toBe(0);
-    expect(result.wordCount).toBeGreaterThanOrEqual(0);
-    expect(result.markdown).toContain('Arcane Aftermath');
-    expect(result.markdown).toContain('No scenes have been committed yet.');
-
-    const outputPath = path.join(FIXTURE_PATH, 'output', 'novel.md');
-    expect(fs.existsSync(outputPath)).toBe(true);
-    expect(fs.readFileSync(outputPath, 'utf-8')).toBe(result.markdown);
+  it('6a. assembly rejects empty scenes directory', () => {
+    expect(() => assembleNovel({ projectDir: FIXTURE_PATH, title: 'Arcane Aftermath' })).toThrow(/scene/i);
   });
 
   it('6b. countWords utility works correctly', () => {
@@ -763,17 +744,13 @@ describe('6. Assembler with Empty Scenes Directory', () => {
     expect(countWords('See [link](url) here.')).toBe(3);
   });
 
-  it('6c. Assembler with truly empty project still produces placeholder', () => {
+  it('6c. assembly rejects truly empty project', () => {
     const emptyDir = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-empty-'));
     fs.mkdirSync(path.join(emptyDir, 'scenes'), { recursive: true });
     fs.mkdirSync(path.join(emptyDir, 'chapters'), { recursive: true });
     fs.writeFileSync(path.join(emptyDir, 'nova.yaml'), 'project: empty\ntitle: "Empty"\nauthor: "Test"\n', 'utf-8');
 
-    const result = assembleNovel({ projectDir: emptyDir, title: 'Empty' });
-    expect(result.sceneCount).toBe(0);
-    expect(result.wordCount).toBeGreaterThanOrEqual(0);
-    expect(result.markdown).toContain('Empty');
-    expect(result.markdown).toContain('No scenes have been committed yet.');
+    expect(() => assembleNovel({ projectDir: emptyDir, title: 'Empty' })).toThrow(/scene|chapter/i);
 
     fs.rmSync(emptyDir, { recursive: true, force: true });
   });
@@ -1006,9 +983,7 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
     expect(iss.overall).toBeGreaterThanOrEqual(0);
 
     // 6. ASSEMBLER
-    const novel = assembleNovel({ projectDir: FIXTURE_PATH, title: 'Smoke Test' });
-    expect(novel.sceneCount).toBe(0);
-    expect(novel.markdown).toContain('Smoke Test');
+    expect(() => assembleNovel({ projectDir: FIXTURE_PATH, title: 'Smoke Test' })).toThrow(/scene/i);
 
     // 7. CONTEXT
     const ctx = new ContextCompiler().compile(e1a, state, registry);

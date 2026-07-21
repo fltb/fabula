@@ -103,3 +103,78 @@ buildAndWriteOutputs(new FsStorage(), projectDir, jobs, results);
 const { validateNovel } = await import('@novalistically/core');
 const { passed, results: validationResults, iss } = validateNovel(projectDir);
 ```
+
+## 公开 API 清单与死代码检测
+
+Monorepo 使用两层防御来防止意外公开内部代码和检测死代码：
+
+### `public-api.manifest.json`
+
+根目录下的 `public-api.manifest.json` 是每个工作区包的权威公开 API 表面。
+它枚举了每个包入口的显式值导出和类型导出，以及类型桶（type barrel）文件。
+任何未在此清单中声明的导出都被视为内部实现细节，不应被外部依赖。
+
+```jsonc
+// 结构示例
+{
+  "version": 1,
+  "packages": {
+    "@novalistically/core": {
+      "entry": "packages/core/src/index.ts",
+      "typeBarrels": ["packages/core/src/types/index.ts"],
+      "values": ["EntityMapper", "ReplayEngine", "StateManager", …],
+      "types": ["ErrorContext", "Storage", …]
+    }
+  }
+}
+```
+
+### `scripts/check-public-api.mjs`
+
+该脚本是一个离线确定性检查器，用于验证清单与实际源导出之间没有漂移。
+针对每个包：
+
+1. 验证清单中声明的每个值导出是否存在于入口源中
+2. 验证清单中声明的每个类型导出是否存在于入口源中
+3. 标记入口源中任何未声明的导出（需要添加到清单或设为内部）
+4. 验证声明的类型桶文件存在且仅导出类型
+5. 验证 `bin` 条目指向真实文件
+6. 验证所有工作区包在清单中有条目
+
+任何漂移都会导致非零退出码。
+
+### `knip.json`
+
+根目录下的 `knip.json` 配置了 [`knip`](https://github.com/webpro/knip) 死代码检测工具。
+配置会检查以下每一项：
+
+- **文件** — 每个工作区包中的未使用入口/项目文件
+- **导出** — 包入口中未使用的导出
+- **依赖** — `package.json` 中未声明的依赖
+- **devDependencies** — 应仅作为 `devDependencies` 的依赖
+
+排除项仅限于以下非生产目录和工件：
+
+- `tests/`, `*.test.ts`, `*.test.mjs` — 测试套件
+- `dist/` — 构建输出
+- `coverage/` — 覆盖率报告
+- `output/` — 生成的结果
+- `.nova/` — 运行数据
+- `.slim/` — 深度工作状态
+- `bench-data/` — 下载的数据集
+- `*.tsbuildinfo` — 类型脚本构建信息
+- `fixtures/` — 测试夹具
+- `**/results/` — 基准测试结果
+
+没有对生产代码进行广泛排除。
+
+### `dead-code:knip` 脚本
+
+将公共 API 清单检查器和 Knip 串联到一条命令中：
+
+```bash
+npm run dead-code:knip
+```
+
+这首先运行 `scripts/check-public-api.mjs`（如果清单与导出不符则失败），
+然后运行 `knip`（如果检测到死代码则失败）。

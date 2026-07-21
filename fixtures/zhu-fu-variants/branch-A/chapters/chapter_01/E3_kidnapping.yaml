@@ -56,7 +56,6 @@ expectedPostconditions:
   - entity: old_mrs_wei
     attribute: role_in_kidnapping
     value: inside_agent
-    narrativeHint: "卫老婆子既是介绍人又是同谋——她参与了婆婆的绑架计划，躲在船里接应。这种中间人角色的道德中立是封建乡村关系的典型特征。"
     confidence: 1.0
 threadProgress:
   - thread: T1
@@ -67,7 +66,7 @@ relationshipEffects:
   - participants:
       - he_laoliu
       - xianglins_wife
-    effect: form
+    effect: establish
     direction: forced_marriage_growing_into_stability
     newState:
       type: stable_marriage
@@ -75,7 +74,7 @@ relationshipEffects:
   - participants:
       - mother_in_law
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: property_transferred
     newState:
       type: ownership_transferred
@@ -83,7 +82,7 @@ relationshipEffects:
   - participants:
       - fourth_master_lu
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: employment_terminated_by_clan_right
     newState:
       type: former_employee

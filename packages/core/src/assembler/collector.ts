@@ -1,8 +1,10 @@
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { SceneMetadata } from '../types/index.js';
+import type { BranchSet, SceneMetadata } from '../types/index.js';
 import type { SceneEntry } from './types.js';
+import { AssemblyError, AssemblyErrorCode } from './types.js';
 import { FsStorage, type Storage } from '../storage/index.ts';
+import { NARRATIVE_TEXT_COUNT_VERSION } from './count.ts';
 
 // ────────────────────────────────────────────────────────────────────────────
 // SceneCollector
@@ -14,39 +16,39 @@ import { FsStorage, type Storage } from '../storage/index.ts';
  * Expected layout:
  *   scenes/chapter-01/
  *     E1a.md            – prose
- *     E1a.yaml          – scene metadata (event, proseSource, editHistory, …)
+ *     E1a.yaml          – scene metadata (event, proseSource, editHistory,
+ *                          narrativeOrder, branchExistence, textCountVersion, …)
  *     E1a_render_request.yaml  – ignored
  *   scenes/chapter-02/
  *     …
- *
- * narrativeOrder is read from the metadata YAML if present (as an extra
- * field beyond the typed SceneMetadata), otherwise it falls back to
- * reading the corresponding event file from the parallel `chapters/`
- * directory (e.g. chapters/chapter_01/E1a.yaml → narrative_order).
  */
 export class SceneCollector {
   /**
    * Collect all committed scenes from `scenesDir`.
    *
-   * @param scenesDir    Path to the `scenes/` directory
-   * @param chaptersDir  Optional path to the `chapters/` directory for
-   *                     narrativeOrder cross-referencing
-   * @param storage      Optional storage backend (defaults to FsStorage)
+   * Every scene MUST have:
+   *   - A YAML/JSON metadata file with narrativeOrder, branchExistence,
+   *     and textCountVersion matching the current NARRATIVE_TEXT_COUNT_VERSION.
+   *   - A corresponding `.md` prose file with non-empty content.
+   *
+   * @param scenesDir  Path to the `scenes/` directory
+   * @param storage    Optional storage backend (defaults to FsStorage)
    */
   collectFrom(
     scenesDir: string,
-    chaptersDir?: string,
     storage?: Storage,
   ): Map<string, SceneEntry> {
     const st = storage ?? new FsStorage();
     const collected = new Map<string, SceneEntry>();
 
     if (!st.exists(scenesDir)) {
-      console.warn(`[Assembler] Scenes directory not found: ${scenesDir}`);
-      return collected;
+      throw new AssemblyError(AssemblyErrorCode.NO_SCENES, `Scenes directory not found: ${scenesDir}`);
     }
 
     const chapterDirs = this._listChapterDirs(scenesDir, st);
+    if (chapterDirs.length === 0) {
+      throw new AssemblyError(AssemblyErrorCode.NO_SCENES, `No chapter directories found in ${scenesDir}`);
+    }
 
     for (const chapterDir of chapterDirs) {
       const chapterName = path.basename(chapterDir);
@@ -65,74 +67,70 @@ export class SceneCollector {
           ? metadataBaseName.replace(/\.render\.json$/i, '')
           : metadataBaseName.replace(/\.yaml$/i, '');
 
-        try {
-          const rawMetadata = st.read(metadataPath);
-          // Parse YAML or JSON based on extension
-          const metadataRaw = isJson
-            ? (JSON.parse(rawMetadata) as Record<string, unknown>)
-            : (parseYaml(rawMetadata) as Record<string, unknown>);
+        // ── 1. Parse metadata ────────────────────────────────────
+        const rawMetadata = st.read(metadataPath);
+        const metadataRaw = isJson
+          ? (JSON.parse(rawMetadata) as Record<string, unknown>)
+          : (parseYaml(rawMetadata) as Record<string, unknown>);
 
-          // — narrativeOrder — read from sourceEvent.narrativeOrder for JSON,
-          //   or top-level for YAML
-          let narrativeOrder: number | undefined;
-          if (isJson) {
-            const sourceEvent = metadataRaw.sourceEvent as Record<string, unknown> | undefined;
-            narrativeOrder = (sourceEvent?.narrativeOrder as number | undefined);
-          }
-          if (narrativeOrder === undefined) {
-            narrativeOrder = (metadataRaw.narrativeOrder as number | undefined) ??
-              (metadataRaw.narrative_order as number | undefined);
-          }
-
-          if (narrativeOrder === undefined && chaptersDir) {
-            narrativeOrder = this._extractNarrativeOrder(
-              chaptersDir,
-              chapterNumber,
-              eventId,
-              st,
-            );
-          }
-
-          if (narrativeOrder === undefined) {
-            console.warn(
-              `[Assembler] No narrativeOrder found for ${eventId} ` +
-              `(chapter ${chapterNumber}), using fallback default`,
-            );
-            // Fallback: chapter-relative ordering from directory listing
-            narrativeOrder = chapterNumber * 100;
-          }
-
-          // — Prose (.md) —
-          const prosePath = path.join(chapterDir, `${eventId}.md`);
-          let prose = '';
-          if (st.exists(prosePath)) {
-            prose = st.read(prosePath);
-          } else {
-            console.warn(
-              `[Assembler] Prose file not found: ${prosePath}, skipping ${eventId}`,
-            );
-            continue;
-          }
-
-          // — Normalise metadata to SceneMetadata type —
-          const sceneMetadata = this._normaliseMetadata(
-            metadataRaw,
-            eventId,
-          );
-
-          collected.set(eventId, {
-            prose,
-            metadata: sceneMetadata,
-            narrativeOrder,
-            chapter: chapterNumber,
-          });
-        } catch (err) {
-          console.warn(
-            `[Assembler] Error processing scene ${metadataBaseName}: ` +
-            `${(err as Error).message}`,
-          );
+        // ── 2. Validate text count version ───────────────────────
+        const countVersion = (metadataRaw.text_count_version ?? metadataRaw.textCountVersion) as number | undefined;
+        if (countVersion === undefined) {
+          throw new AssemblyError(AssemblyErrorCode.UNKNOWN_COUNT_VERSION,
+            `Scene ${eventId} is missing text count version, expected ${NARRATIVE_TEXT_COUNT_VERSION}`);
         }
+        if (countVersion !== NARRATIVE_TEXT_COUNT_VERSION) {
+          throw new AssemblyError(AssemblyErrorCode.UNKNOWN_COUNT_VERSION,
+            `Scene ${eventId} has unknown count version ${countVersion}, expected ${NARRATIVE_TEXT_COUNT_VERSION}`);
+        }
+
+        // ── 3. Extract narrativeOrder ────────────────────────────
+        const narrativeOrder = (metadataRaw.narrativeOrder ?? metadataRaw.narrative_order) as number | undefined;
+        if (narrativeOrder === undefined || typeof narrativeOrder !== 'number' || !Number.isFinite(narrativeOrder)) {
+          throw new AssemblyError(AssemblyErrorCode.MISSING_NARRATIVE_ORDER,
+            `Scene ${eventId} is missing or has invalid narrativeOrder`);
+        }
+
+        // ── 4. Extract and validate branchExistence ──────────────
+        const rawBranch = metadataRaw.branchExistence as Record<string, unknown> | undefined;
+        if (!rawBranch || typeof rawBranch !== 'object' || !rawBranch.type) {
+          throw new AssemblyError(AssemblyErrorCode.MISSING_BRANCH_EXISTENCE,
+            `Scene ${eventId} is missing branchExistence`);
+        }
+        const branchType = String(rawBranch.type);
+        if (!['all', 'paths', 'condition', 'except'].includes(branchType)) {
+          throw new AssemblyError(AssemblyErrorCode.INVALID_BRANCH_EXISTENCE,
+            `Scene ${eventId} has invalid branchExistence type "${branchType}"`);
+        }
+        const branchExistence = rawBranch as unknown as BranchSet;
+
+        // ── 5. Require prose file ────────────────────────────────
+        const prosePath = path.join(chapterDir, `${eventId}.md`);
+        if (!st.exists(prosePath)) {
+          throw new AssemblyError(AssemblyErrorCode.MISSING_PROSE,
+            `Scene ${eventId} has no committed prose file at ${prosePath}`);
+        }
+        const prose = st.read(prosePath);
+        if (prose.trim().length === 0) {
+          throw new AssemblyError(AssemblyErrorCode.EMPTY_PROSE,
+            `Scene ${eventId} has empty prose content`);
+        }
+
+        // ── 6. Normalise metadata to SceneMetadata type ──────────
+        const sceneMetadata = this._normaliseMetadata(metadataRaw, eventId);
+
+        collected.set(eventId, {
+          prose,
+          metadata: sceneMetadata,
+          narrativeOrder,
+          chapter: chapterNumber,
+          branchExistence,
+        });
       }
+    }
+
+    if (collected.size === 0) {
+      throw new AssemblyError(AssemblyErrorCode.NO_SCENES, 'No committed scenes found');
     }
 
     return collected;
@@ -164,33 +162,6 @@ export class SceneCollector {
       )
       .map((e) => path.join(dir, e.name))
       .sort();
-  }
-
-  private _extractNarrativeOrder(
-    chaptersDir: string,
-    chapterNumber: number,
-    eventId: string,
-    st: Storage,
-  ): number | undefined {
-    // chapters dir uses underscore-separated naming
-    const chapterDirName = `chapter_${String(chapterNumber).padStart(2, '0')}`;
-    const eventFilePath = path.join(
-      chaptersDir,
-      chapterDirName,
-      `${eventId}.yaml`,
-    );
-
-    if (!st.exists(eventFilePath)) return undefined;
-
-    try {
-      const raw = st.read(eventFilePath);
-      const parsed = parseYaml(raw) as Record<string, unknown>;
-      return (parsed.narrative_order ?? parsed.narrativeOrder) as
-        | number
-        | undefined;
-    } catch {
-      return undefined;
-    }
   }
 
   private _normaliseMetadata(

@@ -15,6 +15,7 @@
 
 import type { Storage } from '../storage/index.js';
 import type { RenderJob, RenderSceneResult } from './render.js';
+import { countNarrativeText, NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/count.ts';
 
 export interface OutputEntry {
   eventId: string;
@@ -97,50 +98,33 @@ function collectAllReferenceFiles(
 /**
  * Write render outputs to PROJECT.md-compliant directory layout.
  */
-export function writeRenderOutputs(
+function writeRenderOutputs(
   st: Storage,
   projectDir: string,
   entries: OutputEntry[],
   derived: DerivedData,
 ): void {
   const responseDir = [projectDir, '.nova', 'responses'].join('/');
-  st.mkdirp(responseDir);
+  const writes: Array<{ path: string; content: string }> = [];
 
   for (const entry of entries) {
-    const chStr = `chapter-${String(entry.chapterNumber).padStart(2, '0')}`;
-    const sceneDir = [projectDir, 'scenes', chStr].join('/');
-    st.mkdirp(sceneDir);
-
-    // 1. {eventId}.md — pure prose
-    st.write([sceneDir, `${entry.eventId}.md`].join('/'), entry.prose);
-
-    // 2. {eventId}.yaml — scene metadata
-    st.write(
-      [sceneDir, `${entry.eventId}.yaml`].join('/'),
-      yamlify(entry.metadata) + '\n',
-    );
-
-    // 3. {eventId}_render_request.yaml — what was sent to LLM
-    st.write(
-      [sceneDir, `${entry.eventId}_render_request.yaml`].join('/'),
-      yamlify(entry.renderRequest) + '\n',
-    );
-
-    // 4. .nova/responses/{eventId}.json — full raw response
-    st.write(
-      [responseDir, `${entry.eventId}.json`].join('/'),
-      JSON.stringify(entry.rawResponse, null, 2),
+    const sceneDir = [projectDir, 'scenes', `chapter-${String(entry.chapterNumber).padStart(2, '0')}`].join('/');
+    writes.push(
+      { path: [sceneDir, `${entry.eventId}.md`].join('/'), content: entry.prose },
+      { path: [sceneDir, `${entry.eventId}.yaml`].join('/'), content: `${yamlify(entry.metadata)}\n` },
+      { path: [sceneDir, `${entry.eventId}_render_request.yaml`].join('/'), content: `${yamlify(entry.renderRequest)}\n` },
+      { path: [responseDir, `${entry.eventId}.json`].join('/'), content: JSON.stringify(entry.rawResponse, null, 2) },
     );
   }
 
-  // 5. .nova/derived/ — tracking files
   const derivedDir = [projectDir, '.nova', 'derived'].join('/');
-  st.mkdirp(derivedDir);
-
-  st.write([derivedDir, 'threads.yaml'].join('/'), JSON.stringify(derived.threads, null, 2));
-  st.write([derivedDir, 'foreshadowing.yaml'].join('/'), JSON.stringify(derived.foreshadowing, null, 2));
-  st.write([derivedDir, 'relationships.yaml'].join('/'), JSON.stringify(derived.relationships, null, 2));
-  st.write([derivedDir, 'rules.yaml'].join('/'), JSON.stringify(derived.rules, null, 2));
+  writes.push(
+    { path: [derivedDir, 'threads.yaml'].join('/'), content: JSON.stringify(derived.threads, null, 2) },
+    { path: [derivedDir, 'foreshadowing.yaml'].join('/'), content: JSON.stringify(derived.foreshadowing, null, 2) },
+    { path: [derivedDir, 'relationships.yaml'].join('/'), content: JSON.stringify(derived.relationships, null, 2) },
+    { path: [derivedDir, 'rules.yaml'].join('/'), content: JSON.stringify(derived.rules, null, 2) },
+  );
+  st.commitBatch(writes);
 }
 
 /**
@@ -169,10 +153,11 @@ export function buildAndWriteOutputs(
         narrativeOrder: job.event.narrativeOrder,
         event: job.event.id,
         prose_source: r.cacheHit ? 'cache' : 'llm',
-        model_used: null,
+        word_count: countNarrativeText(r.prose, 'zh'),
+        text_count_version: NARRATIVE_TEXT_COUNT_VERSION,
         rendered_at: new Date(r.renderStart).toISOString(),
-        word_count: r.prose.split(/\s+/).filter(Boolean).length,
         edit_history: r.cacheHit ? [] : [{ action: 'llm_generated', timestamp: new Date().toISOString() }],
+        branchExistence: job.event.branchExistence ?? { type: 'all' },
       },
       renderRequest: {
         eventId: job.event.id,
@@ -187,6 +172,7 @@ export function buildAndWriteOutputs(
         timestamp: new Date().toISOString(),
         cacheHit: r.cacheHit,
         errors: r.errors,
+        analysis: r.analysis,
       },
     });
   }

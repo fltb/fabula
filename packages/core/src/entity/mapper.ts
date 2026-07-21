@@ -4,11 +4,10 @@ import type {
   EventFile,
   Fact,
   NarrativeEvent,
-  ProjectConfig,
   TimeAnchor,
   WorldInitialState,
   CharacterDefinition,
-  CharacterRelationshipDef,
+  RelationshipDefinition,
   RuleDefinition,
   LocationDefinition,
   ItemDefinition,
@@ -17,6 +16,18 @@ import type {
 import { readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
 import { parseStoryTimestamp, factIdFrom } from './timestamp.js';
 import type { ProjectData } from './types.js';
+import {
+  chapterMetadataSchema,
+  characterDefinitionSchema,
+  factionDefinitionSchema,
+  itemDefinitionSchema,
+  locationDefinitionSchema,
+  projectConfigSchema,
+  relationshipDefinitionSchema,
+  ruleDefinitionSchema,
+  worldInitialStateSchema,
+  eventFileSchema,
+} from '../schemas/index.js';
 import { FsStorage, type Storage } from '../storage/index.ts';
 
 // ============================================================================
@@ -34,41 +45,25 @@ export class EntityMapper {
 
   /** Load all project data from the filesystem */
   loadProject(): ProjectData {
-    const config = readYamlFile<ProjectConfig>(
-      path.join(this.projectPath, 'nova.yaml'),
-      this.storage,
-    );
+    const config = readYamlFile({
+      filePath: path.join(this.projectPath, 'nova.yaml'),
+      schema: projectConfigSchema,
+      storage: this.storage,
+    });
 
     const defsDir = path.join(this.projectPath, 'definitions');
-    const characters = readYamlFilesInDir<CharacterDefinition>(
-      path.join(defsDir, 'characters'),
-      this.storage,
-    );
-    const relationships = readYamlFilesInDir<CharacterRelationshipDef>(
-      path.join(defsDir, 'relationships'),
-      this.storage,
-    );
-    const rules = readYamlFilesInDir<RuleDefinition>(
-      path.join(defsDir, 'rules'),
-      this.storage,
-    );
-    const locations = readYamlFilesInDir<LocationDefinition>(
-      path.join(defsDir, 'locations'),
-      this.storage,
-    );
-    const items = readYamlFilesInDir<ItemDefinition>(
-      path.join(defsDir, 'items'),
-      this.storage,
-    );
-    const factions = readYamlFilesInDir<FactionDefinition>(
-      path.join(defsDir, 'factions'),
-      this.storage,
-    );
+    const characters = readYamlFilesInDir(path.join(defsDir, 'characters'), characterDefinitionSchema, this.storage) as CharacterDefinition[];
+    const relationships = readYamlFilesInDir(path.join(defsDir, 'relationships'), relationshipDefinitionSchema, this.storage) as RelationshipDefinition[];
+    const rules = readYamlFilesInDir(path.join(defsDir, 'rules'), ruleDefinitionSchema, this.storage) as RuleDefinition[];
+    const locations = readYamlFilesInDir(path.join(defsDir, 'locations'), locationDefinitionSchema, this.storage) as LocationDefinition[];
+    const items = readYamlFilesInDir(path.join(defsDir, 'items'), itemDefinitionSchema, this.storage) as ItemDefinition[];
+    const factions = readYamlFilesInDir(path.join(defsDir, 'factions'), factionDefinitionSchema, this.storage) as FactionDefinition[];
 
-    const worldInitialState = readYamlFile<WorldInitialState>(
-      path.join(defsDir, 'state_initial.yaml'),
-      this.storage,
-    );
+    const worldInitialState = readYamlFile({
+      filePath: path.join(defsDir, 'state_initial.yaml'),
+      schema: worldInitialStateSchema,
+      storage: this.storage,
+    }) as WorldInitialState | null;
 
     const timeAnchors: TimeAnchor[] =
       worldInitialState?.timeAnchors?.map((a) => ({
@@ -89,10 +84,11 @@ export class EntityMapper {
         const chapterNum = parseInt(chapterMatch[1], 10);
 
         const chapterPath = path.join(chaptersDir, dir.name);
-        const metadata = readYamlFile<ChapterMetadata>(
-          path.join(chapterPath, '_chapter.yaml'),
-          this.storage,
-        );
+        const metadata = readYamlFile({
+          filePath: path.join(chapterPath, '_chapter.yaml'),
+          schema: chapterMetadataSchema,
+          storage: this.storage,
+        });
 
         const events: EventFile[] = [];
         const eventFiles = this.storage.listFiles(chapterPath).filter(
@@ -100,10 +96,13 @@ export class EntityMapper {
         );
         for (const ef of eventFiles) {
           const fullPath = path.join(chapterPath, ef);
-          const event = readYamlFile<EventFile>(fullPath, this.storage);
+          const event = readYamlFile({
+            filePath: fullPath,
+            schema: eventFileSchema,
+            storage: this.storage,
+          });
           if (event) {
-            event.filePath = fullPath;
-            events.push(event);
+            events.push({ ...event, filePath: fullPath } as EventFile);
           }
         }
 
@@ -128,12 +127,10 @@ export class EntityMapper {
   /** Map EventFile to NarrativeEvent (internal type) */
   mapToNarrativeEvent(
     eventFile: EventFile,
-    chapterNum: number,
-    anchors: Map<string, number>,
   ): NarrativeEvent {
-    const timeAnchorsMap = new Map(anchors);
 
-    const preconditions: Fact[] = (eventFile.preconditions ?? []).map((pc, i) => ({
+
+    const preconditions: Fact[] = (eventFile.preconditions ?? []).map((pc) => ({
       id: factIdFrom(pc.entity, pc.attribute),
       entityId: pc.entity,
       attribute: pc.attribute,
@@ -142,7 +139,7 @@ export class EntityMapper {
       narrativeHint: pc.narrativeHint,
       validity: {
         temporal: {
-          start: parseStoryTimestamp(eventFile.storyTime, timeAnchorsMap),
+          start: parseStoryTimestamp(eventFile.storyTime),
           end: null,
         },
         branches: { type: 'all' as const },
@@ -158,14 +155,14 @@ export class EntityMapper {
       narrativeHint: pc.narrativeHint,
       validity: {
         temporal: {
-          start: parseStoryTimestamp(eventFile.storyTime, timeAnchorsMap),
+          start: parseStoryTimestamp(eventFile.storyTime),
           end: null,
         },
         branches: { type: 'all' as const },
       },
     }));
 
-    const storyTime = parseStoryTimestamp(eventFile.storyTime, timeAnchorsMap);
+    const storyTime = parseStoryTimestamp(eventFile.storyTime);
 
     // Extract participant entities from preconditions and relationship effects
     const participantSet = new Set<string>();
@@ -183,7 +180,7 @@ export class EntityMapper {
       narrativeOrder: eventFile.narrativeOrder,
       title: eventFile.title,
       storyTime,
-      narrationTime: eventFile.narrationTime ? parseStoryTimestamp(eventFile.narrationTime, timeAnchorsMap) : undefined,
+      narrationTime: eventFile.narrationTime ? parseStoryTimestamp(eventFile.narrationTime) : undefined,
       sceneType: eventFile.sceneType ?? 'linear',
       discourseMode: eventFile.discourseMode,
       arcPosition: eventFile.arcPosition,
@@ -235,11 +232,7 @@ export class EntityMapper {
 
   /** Load all events as NarrativeEvent objects */
   loadAllEvents(chapters: Map<number, { metadata: ChapterMetadata | null; events: EventFile[] }>): NarrativeEvent[] {
-    const anchors = new Map<string, number>();
     const projectData = this.loadProject();
-    for (const a of projectData.timeAnchors) {
-      anchors.set(a.id, a.day);
-    }
 
     const allEvents: NarrativeEvent[] = [];
 
@@ -249,9 +242,9 @@ export class EntityMapper {
       allEvents.push(genesisEvent);
     }
 
-    for (const [chapterNum, chapter] of chapters) {
+    for (const [, chapter] of chapters) {
       for (const ef of chapter.events) {
-        const ne = this.mapToNarrativeEvent(ef, chapterNum, anchors);
+        const ne = this.mapToNarrativeEvent(ef);
         allEvents.push(ne);
       }
     }

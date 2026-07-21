@@ -4,3 +4,11 @@ injected:
     expectedValidator: "pronoun"
     expectedSeverity: "error"
     description: "Event uses masculine pronoun '他' when referring to xianglins_wife who is defined as female (gender: 女)."
+    mockProse: "祥林嫂是村里最能干的妇人。他每天从早忙到晚，连一口热饭都顾不上吃。"
+    mockAnalysis:
+      narrativeChecks:
+        - entityId: "xianglins_wife"
+          attribute: "pronoun_consistency"
+          hint: "Prose uses '他' (male) for xianglins_wife who is declared female"
+          evidence: "Mock prose '祥林嫂…他每天' uses male pronoun 他 for a female character"
+          matchLevel: "contradicted"

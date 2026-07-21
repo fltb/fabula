@@ -3,6 +3,7 @@ title: "捐门槛与致命喝止——你放着罢"
 narrativeOrder: 6
 sceneType: flashback
 storyTime: winter_solstice
+narrationTime: new_year_eve
 tense: past
 discourseMode: description
 arcPosition: climax
@@ -76,13 +77,13 @@ threadProgress:
 foreshadowing:
   - id: her_inevitable_expulsion
     hint: "四婶开始觉得她越来越不像样——'祥林嫂怎么这样了？倒不如那时不留她'。驱逐已是时间问题。"
-    targetRevealChapter: 1
+    targetRevealChapter: 3
     thread: T1
 relationshipEffects:
   - participants:
       - liu_ma
       - xianglins_wife
-    effect: form
+    effect: establish
     direction: spiritual_advisor_becomes_destroyer
     newState:
       type: well_intentioned_disaster
@@ -107,6 +108,7 @@ ruleEffects:
     evidence: "来世的两个死鬼男人将争夺她——她死后仍然被两个丈夫平分，不得自主。"
 styleGuidance:
   tone: "从阿毛故事的重复疲劳→柳妈的骇人地狱描述→捐门槛的短暂希望→冬至喝止的致命一击。四个阶段的情绪色调截然不同，需在同一个场景中完成过渡。"
+  targetWordCount: 1500
   scenePacing: "柳妈的对话需要用日常闲聊的平淡口吻说出最恐怖的内容——越是轻描淡写，越显残酷。捐门槛后的短暂舒朗要写得真切（让读者几乎相信她真的得到救赎了），然后冬至喝止要像一道闪电击碎一切。"
   characterVoice:
     liu_ma: "柳妈的语气是关心的、絮叨的、认真的——她不是在吓人，而是在分享她深信的事实。'你呀，我想：这总是你自己愿意了……'——用家常话讲地狱。"

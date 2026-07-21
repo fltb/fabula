@@ -1,21 +1,13 @@
+id: camille_seraphine
 participants:
   - camille
   - seraphine
 type: professional_mentor_asset
-description: "A deeply asymmetrical professional relationship built on coercion, grudging respect, and the faint possibility of something more humane. Camille recruited Seraphine not out of malice but out of cold strategic necessity — an empathic hextech listener is too valuable an asset to leave unsupervised in Piltover's civilian population. For Seraphine, the arrangement is a gilded cage: she receives protection, resources, and a platform for her music, but she must surrender her gift to Camille's intelligence operations. Neither woman is entirely comfortable with the dynamic, but both are too pragmatic — or too trapped — to change it."
+bidirectional: false
 initialState:
-  camilleToSeraphine:
-    trust: 0.5
-    attitude: utilitarian
-    emotionalDistance: 0.8
-    respect: 0.6
-    notes: "Camille views Seraphine as a valuable but dangerous tool. She respects the girl's talent and has begun to notice — against her will — that Seraphine's music stirs something in her that she thought the hextech heart had removed. She keeps Seraphine at arm's length deliberately, treating her with cold professionalism to avoid attachment."
-  seraphineToCamille:
-    trust: 0.4
-    attitude: cautious_respect
-    emotionalDistance: 0.7
-    respect: 0.55
-    notes: "Seraphine is terrified of Camille and fascinated by her in equal measure. Through her empathy, she senses the suppressed grief and guilt beneath the Steel Shadow's cold exterior — and it breaks her heart. She wants to help Camille, but she also wants to escape her. The conflict between compassion and self-preservation is a constant tension."
-establishedEvent:
-  day: -120
-  summary: "Camille presented Seraphine with the choice: become a consultant, or be remanded to hextech research for 'public safety evaluation'"
+  trust: 45
+  emotionalDistance: 80
+  intensity: 60
+  status: active
+  notes: "Camille treats Seraphine as a strategically necessary but dangerous asset; Seraphine balances fear, compassion, and self-preservation."
+establishedEvent: arcane_s1_end

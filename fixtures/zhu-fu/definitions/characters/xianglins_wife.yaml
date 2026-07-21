@@ -27,7 +27,6 @@ initialState:
   location: weijia_shan
   status: alive
   condition: "widowed_seeking_work"
-  marital_status: "widow_of_xianglin"
   emotionalState: "fearful_but_determined"
   spiritual_state: "innocent"
   work_capability: "full_strength"

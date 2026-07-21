@@ -2,11 +2,7 @@
 // ISS — Strict Mode Validation
 // ============================================================================
 
-import {
-  type NarrativeEvent,
-  type RuleDefinition,
-  type ValidationIssue,
-} from '../types/index.js';
+import { type ValidationIssue } from '../types/index.js';
 import { type StrictValidationContext, isPlaceholderValue } from './types.js';
 
 /**

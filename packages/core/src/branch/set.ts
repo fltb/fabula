@@ -92,12 +92,10 @@ export function evaluateCondition(condition: Condition, branchPath: BranchPath):
  * - `{ type: "paths" }` → true if branchPath is deep-equal to any path
  * - `{ type: "except" }` → negated inclusion check
  * - `{ type: "condition" }` → delegates to evaluateCondition
- * - Empty branchPath (linear narrative) → returns true for **all** BranchSet types
+ * - Empty branchPath (linear narrative) includes only `{ type: "all" }`.
  */
 export function includesPath(branchSet: BranchSet, branchPath: BranchPath): boolean {
-  // An empty branch path (no decisions yet) belongs to every BranchSet.
-  // The reader hasn't diverged, so they are on every conceivable path.
-  if (branchPath.decisions.length === 0) return true;
+  if (branchPath.decisions.length === 0) return branchSet.type === 'all';
 
   switch (branchSet.type) {
     case 'all':

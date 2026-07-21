@@ -9,7 +9,6 @@ import type {
   ValidationIssue,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
-import { compareFact } from '../entity/compare.js';
 
 export class ReachabilityValidator implements Validator {
   name = 'reachability';
@@ -59,6 +58,12 @@ export class ReachabilityValidator implements Validator {
 
     // 3. Precondition deadlock: are there events whose preconditions can never be satisfied?
     const allFactIds = new Set<string>();
+    // Include initialFacts from world state (applied by compileStoryBoundaries)
+    for (const [entityId, attrs] of Object.entries(input.worldState.entities)) {
+      for (const attr of Object.keys(attrs)) {
+        allFactIds.add(`${entityId}.${attr}`);
+      }
+    }
     for (const e of allEvents) {
       for (const pc of e.postconditions) {
         allFactIds.add(`${pc.entityId}.${pc.attribute}`);

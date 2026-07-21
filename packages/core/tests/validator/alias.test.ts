@@ -95,6 +95,6 @@ describe('AliasValidator', () => {
     const aliasIssues = issues.filter(i => i.validator === 'alias');
     expect(aliasIssues.length).toBeGreaterThanOrEqual(1);
     expect(aliasIssues[0].message).toContain('Zargoth');
-    expect(aliasIssues[0].severity).toBe('info');
+    expect(aliasIssues[0].severity).toBe('warning');
   });
 });

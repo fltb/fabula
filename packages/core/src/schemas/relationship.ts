@@ -26,21 +26,3 @@ export const relationshipDefinitionSchema = z
   })
   .strict();
 
-// ——— RelationshipEvent ———
-
-export const relationshipEventSchema = z
-  .object({
-    id: z.string(),
-    type: z.enum(['strengthen', 'weaken', 'break', 'form', 'shift']),
-    relationshipId: z.string(),
-    delta: z
-      .object({
-        trust: z.number().optional(),
-        emotionalDistance: z.number().optional(),
-        intensity: z.number().optional(),
-        status: z.string().optional(),
-      })
-      .optional(),
-    sourceEvent: z.string(),
-  })
-  .strict();

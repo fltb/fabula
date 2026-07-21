@@ -3,4 +3,6 @@ injected:
     attribute: "foreshadowing"
     expectedValidator: "foreshadowing"
     expectedSeverity: "warning"
-    description: "An event plants a foreshadowing with targetRevealChapter 2, but there is no chapter 2"
+    description: "An event plants a foreshadowing with targetRevealChapter 1, but the chapter exceeds it immediately"
+    mockAnalysis:
+      foreshadowingDeployed: []

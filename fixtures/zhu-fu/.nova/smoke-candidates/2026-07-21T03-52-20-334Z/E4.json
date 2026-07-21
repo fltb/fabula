@@ -1,0 +1,201 @@
+{
+  "prose": "那年秋季，卫老婆子又来了，身后跟着祥林嫂。她还是那身打扮：头上扎着白头绳，乌裙，蓝夹袄，月白背心。只是脸色青黄得厉害，两颊上原先那点血色全消失了，眼角挂着泪痕，眼光也呆滞了许多，全没了先前那种安分耐劳的神气。四婶起初有些踌躇——她已是再寡的人了，照旧例，这样的人家大概有些不干净。但卫老婆子絮絮地讲起阿毛的事，四婶听着，眼圈竟渐渐红了，末了点了点头，让她留下。只是背地里告诫：祭祀的时候，万不许她沾手。\n\n祥林嫂便重新做起佣工。她手脚依旧壮大，可心里像是坍了一块，总在不停地说话。我也听过几回。\n\n“我真傻，真的，”她抬起那双没有光的眼睛，说，“我单知道雪天是野兽在山坳里没有食吃，会到村里来；我不知道春天也会有。我一清早起来开了门，拿小篮盛了一篮豆，叫我们的阿毛坐在门槛上剥豆去。他是很听话的，我的话句句听。他就出去了。我就在屋后劈柴，淘米。米下了锅，要蒸豆。我叫阿毛，没有应。出去一看，只见豆撒得一地，没有我们的阿毛了。各处去一问，都没有。我急了，央人出去寻。直到下半天，寻来寻去寻到山坳里，看见刺柴上挂着一只他的小鞋。大家都说，糟了，怕是遭了狼了。再进去，他果然躺在草窠里，肚里的五脏已经都给吃空了，手上还紧紧的捏着那只小篮呢。……”\n\n她接着便讲贺老六的死：伤寒复发，吃了冷饭就走了。丧夫失子之后，大伯来收房，将她赶了出来——她于是无处可去了。\n\n她反复地讲，音调毫无变化，仿佛那话不是从心里流出来，倒像是一段被碾压过无数次的辙印。镇上的人们起初还会掉泪，后来便厌烦了，拿她的悲哀当作消遣。而她似乎毫无察觉，只知道一遍遍地复述，仿佛那里面有唯一可以抓住的东西。",
+  "analysis": {
+    "eventId": "E4",
+    "analysis": {
+      "postconditions": {
+        "covered": [
+          "xianglins_wife.location = fourth_master_lu_house",
+          "xianglins_wife.marital_status = widowed_twice",
+          "xianglins_wife.has_ah_mao = false",
+          "xianglins_wife.emotionalState = grief_stricken",
+          "xianglins_wife.appearance = pale_face_no_red_cheeks_tear_stains_dull_eyes",
+          "he_laoliu.status = dead",
+          "fourth_aunt.attitude_toward_xianglins_wife = pitying_but_cautious",
+          "xianglins_wife.social_status = narrativeHint captured",
+          "xianglins_wife.storytelling_mode = narrativeHint captured"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "“她手脚依旧壮大” — not explicitly in scene spec but consistent with character profile",
+          "severity": "minor"
+        },
+        {
+          "detail": "“可心里像是坍了一块” — emotional metaphor not in spec but fits",
+          "severity": "minor"
+        },
+        {
+          "detail": "“音调毫无变化，仿佛那话不是从心里流出来，倒像是一段被碾压过无数次的辙印” — elaborate simile",
+          "severity": "minor"
+        }
+      ],
+      "quality": {
+        "proseScore": 8,
+        "maxScore": 10,
+        "strengths": [
+          "准确捕捉了原文的氛围和细节",
+          "祥林嫂的独白忠实再现了语气和节奏",
+          "叙述者冷峻的评论与独白形成有效对比",
+          "使用了富有文学性的比喻和描写"
+        ],
+        "weaknesses": [
+          "部分描述较为凝练，可能略去了原文中的某些细节",
+          "在展现'再寡'的社会歧视方面可以更深入"
+        ],
+        "estimatedWordCount": 540
+      },
+      "threadProgressAchieved": [
+        "T1",
+        "T3"
+      ],
+      "foreshadowingDeployed": [],
+      "narrativeChecks": [
+        {
+          "entityId": "scene",
+          "attribute": "time_period",
+          "hint": "autumn_return",
+          "evidence": "那年秋季",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "character_state",
+          "hint": "location changed to fourth_master_lu_house, appearance as specified, emotional state grief-stricken",
+          "evidence": "她还是那身打扮...只是脸色青黄得厉害，两颊上原先那点血色全消失了，眼角挂着泪痕，眼光也呆滞了许多",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "fourth_aunt",
+          "attribute": "character_state",
+          "hint": "attitude pitying but cautious",
+          "evidence": "四婶起初有些踌躇...眼圈竟渐渐红了...让她留下...只是背地里告诫：祭祀的时候，万不许她沾手",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "voice_vocabulary",
+          "hint": "simple, rural, repetitive with '我真傻，真的'",
+          "evidence": "“我真傻，真的，”她抬起那双没有光的眼睛，说，“我单知道雪天是野兽在山坳里没有食吃，会到村里来；我不知道春天也会有。...",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_formality",
+          "hint": "literary, reflective, cold commentary",
+          "evidence": "她反复地讲，音调毫无变化，仿佛那话不是从心里流出来，倒像是一段被碾压过无数次的辙印。",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "scene",
+          "attribute": "pacing",
+          "hint": "slow monologue then cold commentator transition",
+          "evidence": "前面大段独白，后接'她反复地讲...'的冷峻评论",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "scene",
+          "attribute": "discourseMode",
+          "hint": "exposition with embedded narrative",
+          "evidence": "全文以叙述性文字为主，穿插祥林嫂的独白",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "pronoun",
+          "hint": "first person '我'",
+          "evidence": "我也听过几回。",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "pronoun",
+          "hint": "feminine '她'",
+          "evidence": "她还是那身打扮...",
+          "matchLevel": "exact"
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "xianglins_wife",
+          "feature": "clothing and overall look",
+          "declared": "头上扎着白头绳，乌裙，蓝夹袄，月白背心，脸色青黄但两颊血色消失，眼角泪痕，眼光呆滞",
+          "evidence": "头上扎着白头绳，乌裙，蓝夹袄，月白背心。只是脸色青黄得厉害，两颊上原先那点血色全消失了，眼角挂着泪痕，眼光也呆滞了许多",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "fourth_aunt",
+          "feature": "clothing",
+          "declared": "穿着干净的棉袍",
+          "evidence": "未在文段中描述",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "narrator",
+          "feature": "appearance",
+          "declared": "年轻知识分子，城里人衣服，清瘦气质",
+          "evidence": "未在文段中描述",
+          "matchLevel": "absent"
+        }
+      ],
+      "characterReferences": [
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她"
+          ]
+        },
+        {
+          "entityId": "fourth_aunt",
+          "namesUsed": [
+            "四婶",
+            "她"
+          ]
+        }
+      ],
+      "tenseDetected": "past",
+      "conflictAnalysis": {
+        "primaryType": "person_vs_fate",
+        "resolutionAchieved": false
+      },
+      "ruleChecks": [
+        {
+          "ruleId": "patriarchal_clan_authority",
+          "violated": false,
+          "evidence": "丧夫失子之后，大伯来收房，将她赶了出来",
+          "severity": "minor"
+        }
+      ],
+      "knowledgeChecks": []
+    }
+  },
+  "metadata": {
+    "eventId": "E4",
+    "provider": "ai-sdk",
+    "model": "deepseek-v4-pro",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "84b49f6f75ca200d5b0df608d2d2dacc1693decacc586d69300e1e1ac2a337c8",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-21T03:57:14.290Z",
+    "reviewStatus": "candidate",
+    "attempts": 1,
+    "errors": []
+  }
+}

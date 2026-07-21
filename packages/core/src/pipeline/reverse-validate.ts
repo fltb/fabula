@@ -64,7 +64,7 @@ export function analyzeValidationErrors(result: ValidationResult): ReverseValida
  * Build structured repair guidance for injection into the retry prompt.
  * Includes round metadata and the list of issues to fix.
  */
-export function buildRepairGuidance(
+function buildRepairGuidance(
   result: ReverseValidationResult,
   round: number,
   maxRounds: number,
@@ -105,16 +105,3 @@ export function decideRepairStrategy(
   }
 }
 
-/**
- * Degrade strategy when repairs are not working.
- * Escalates: retry → prompt_fix → context_enrich → abort
- */
-export function degradeStrategy(current: RepairStrategy): RepairStrategy {
-  const degradation: Record<RepairStrategy, RepairStrategy> = {
-    retry: 'prompt_fix',
-    prompt_fix: 'context_enrich',
-    context_enrich: 'abort',
-    abort: 'abort',
-  };
-  return degradation[current];
-}

@@ -2,6 +2,7 @@
 // ResultAggregator — Collect, grade, and output validation results
 // ============================================================================
 
+import { z } from 'zod';
 import type {
   NarrativeEvent,
   WorldState,
@@ -94,17 +95,18 @@ export class ResultAggregator {
     state: WorldState,
     analysis?: AnalysisResult,
     overrides?: Record<string, 'off' | 'warning' | 'error'>,
+    registry?: EntityRegistry,
+    chapter: number = 1,
   ): ValidationResult {
     const allIssues: ValidationIssue[] = [];
-    const chapter = 1; // Caller should provide — current validators derive it internally
+    const chapterValue = chapter; // Use the parameter (defaults to 1)
 
     for (const validator of this.validators) {
       const override = overrides?.[validator.name];
       if (override === 'off') continue;
 
-      // New path: validatePost
       if (validator.validatePost) {
-        const input: PostRenderInput = { event, worldState: state, prose, analysis: analysis ?? null, chapter };
+        const input: PostRenderInput = { event, worldState: state, prose, analysis: analysis ?? null, chapter: chapterValue, entityRegistry: registry };
         const issues = validator.validatePost(input);
         for (const issue of issues) {
           if (override === 'error') {
@@ -114,11 +116,8 @@ export class ResultAggregator {
           }
           allIssues.push(issue);
         }
-        continue;
-      }
-
-      // Old path fallback: validateRender
-      if (validator.validateRender) {
+      } else if (validator.validateRender) {
+        // Old path fallback: validateRender
         const issues = validator.validateRender(prose, event, state, analysis);
         for (const issue of issues) {
           if (override === 'error') {
@@ -245,6 +244,7 @@ export class ResultAggregator {
     state: WorldState,
     registry: EntityRegistry,
     overrides?: Record<string, 'off' | 'warning' | 'error'>,
+    stateBeforeByEventId?: Map<string, WorldState>,
   ): Map<string, ValidationResult> {
     const results = new Map<string, ValidationResult>();
 
@@ -252,7 +252,8 @@ export class ResultAggregator {
       if (event.id === 'system:genesis') continue;
 
       const chapter = Math.max(1, Math.ceil(event.narrativeOrder / 3));
-      const result = this.validate(event, state, registry, events, chapter, overrides);
+      const eventState = stateBeforeByEventId?.get(event.id) ?? state;
+      const result = this.validate(event, eventState, registry, events, chapter, overrides);
       results.set(event.id, result);
     }
 
@@ -265,6 +266,17 @@ export class ResultAggregator {
       name: v.name,
       category: v.category,
     }));
+  }
+
+  /**
+   * Look up a validator's category by name. Throws if no validator with that name exists.
+   */
+  getValidatorCategory(name: string): Validator['category'] {
+    const validator = this.validators.find((v) => v.name === name);
+    if (!validator) {
+      throw new Error(`Unknown validator: "${name}". No validator registered with that name.`);
+    }
+    return validator.category;
   }
 
   /**
@@ -303,10 +315,31 @@ export class ResultAggregator {
         }
         // Merge instructions
         existing.instruction = existing.instruction + '\n\n' + req.instruction;
-        // Keep first schemaExample (they should be structurally identical for same field)
+        // Keep first schema (structurally identical for same field)
       }
     }
 
     return [...merged.values()];
+  }
+
+  /**
+   * Build a runtime Zod schema from all validator analysis blocks,
+   * including plugin validators. Use this for Pass 2 JSON validation.
+   */
+  getCombinedValidationSchema(): z.ZodObject<Record<string, z.ZodTypeAny>> {
+    const shape: Record<string, z.ZodTypeAny> = {};
+    const allValidators: Array<Validator | PluginValidator> = [
+      ...this.validators,
+      ...this.pluginValidators,
+    ];
+    for (const validator of allValidators) {
+      if (validator.getAnalysisRequirements) {
+        for (const req of validator.getAnalysisRequirements()) {
+          const tf = req.field.includes('.') ? req.field.split('.')[0] : req.field;
+          shape[tf] = req.schema;
+        }
+      }
+    }
+    return z.object(shape);
   }
 }

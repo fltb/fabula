@@ -19,6 +19,7 @@ import { FactualDetailValidator } from '../../src/validator/factual-detail.ts';
 import { VoiceDriftDetector } from '../../src/validator/voice-drift.ts';
 import { BranchMergeValidator } from '../../src/validator/branch-merge.ts';
 import { ReachabilityValidator } from '../../src/validator/reachability.ts';
+import { PronounValidator } from '../../src/validator/pronoun.ts';
 import type { NarrativeEvent, PostRenderInput, PreRenderInput } from '../../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
@@ -163,6 +164,12 @@ describe('All 20 validators implement the new interface', () => {
     expect(typeof v.validatePost).toBe('function');
     expect(Array.isArray(v.validatePost!(input))).toBe(true);
   });
+  it('PronounValidator implements validatePost', () => {
+    const v = new PronounValidator();
+    const input = makePostInput({ prose: sampleProse });
+    expect(typeof v.validatePost).toBe('function');
+    expect(Array.isArray(v.validatePost!(input))).toBe(true);
+  });
 });
 
 describe('validatePost actually checks the prose', () => {
@@ -251,5 +258,40 @@ describe('validatePost actually checks the prose', () => {
     // factual_detail has no post-render logic — validatePre handles entity attr consistency
     // and should find no issues for this input
     expect(Array.isArray(issues)).toBe(true);
+  });
+
+  it('PronounValidator flags pronoun_consistency contradictions from analysis', () => {
+    const v = new PronounValidator();
+    const event = makeEvent({ id: 'E1', participants: { entities: ['xianglins_wife'] } });
+    const prose = 'Prose with male pronoun for a female character.';
+    const input = makePostInput({
+      prose,
+      event,
+      analysis: {
+        eventId: 'E1',
+        analysis: {
+          postconditions: { covered: [], dropped: [] },
+          preconditions: { violated: [] },
+          pov: { consistent: true, leaks: [] },
+          inventedDetails: [],
+          quality: { proseScore: 5, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+          threadProgressAchieved: [],
+          foreshadowingDeployed: [],
+          narrativeChecks: [
+            {
+              entityId: 'xianglins_wife',
+              attribute: 'pronoun_consistency',
+              hint: 'Prose uses male pronoun for xianglins_wife who is declared female',
+              evidence: 'Prose contains male pronoun for a female character',
+              matchLevel: 'contradicted',
+            },
+          ],
+        },
+      },
+    });
+    const issues = v.validatePost!(input);
+    expect(issues.length).toBeGreaterThan(0);
+    expect(issues.some((i) => i.severity === 'error')).toBe(true);
+    expect(issues.some((i) => i.message.includes('Pronoun consistency'))).toBe(true);
   });
 });

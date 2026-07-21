@@ -3,23 +3,80 @@
   "analysis": {
     "eventId": "E1",
     "analysis": {
-      "postconditions": { "covered": ["xianglins_wife_status_dead"], "dropped": [] },
-      "preconditions": { "violated": [] },
-      "pov": { "consistent": true, "leaks": [] },
+      "postconditions": {
+        "covered": [
+          "xianglins_wife_status_dead"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
       "inventedDetails": [],
-      "quality": { "proseScore": 8, "maxScore": 10, "strengths": ["dialogue", "atmosphere"], "weaknesses": [], "estimatedWordCount": 350 },
-      "threadProgressAchieved": ["T1: her_death_confirmed", "T3: social_indifference"],
-      "foreshadowingDeployed": ["flashback_triggered"],
+      "quality": {
+        "proseScore": 8,
+        "maxScore": 10,
+        "strengths": [
+          "dialogue",
+          "atmosphere"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 350
+      },
+      "threadProgressAchieved": [
+        "T1: her_death_confirmed",
+        "T3: social_indifference"
+      ],
+      "foreshadowingDeployed": [
+        "flashback_triggered"
+      ],
       "narrativeChecks": [],
       "appearanceChecks": [],
       "characterReferences": [
-        { "entityId": "narrator", "namesUsed": ["我"] },
-        { "entityId": "fourth_master_lu", "namesUsed": ["四叔"] },
-        { "entityId": "xianglins_wife", "namesUsed": ["她"] }
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四叔"
+          ]
+        },
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "她"
+          ]
+        }
       ],
       "tenseDetected": "past",
-      "conflictAnalysis": { "primaryType": "person_vs_society", "resolutionAchieved": false }
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": false
+      },
+      "ruleChecks": [],
+      "knowledgeChecks": []
     }
   },
-  "_metadata": { "eventId": "E1", "errors": [] }
+  "metadata": {
+    "eventId": "E1",
+    "errors": [],
+    "provider": "mock-pass2",
+    "model": "mock-stage1",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-18T00:00:00.000Z",
+    "reviewStatus": "approved",
+    "attempts": 1
+  }
 }

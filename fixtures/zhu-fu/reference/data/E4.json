@@ -3,25 +3,84 @@
   "analysis": {
     "eventId": "E4",
     "analysis": {
-      "postconditions": { "covered": [], "dropped": [] },
-      "preconditions": { "violated": [] },
-      "pov": { "consistent": true, "leaks": [] },
+      "postconditions": {
+        "covered": [],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
       "inventedDetails": [],
-      "quality": { "proseScore": 9, "maxScore": 10, "strengths": ["emotional impact", "repetition as device"], "weaknesses": [], "estimatedWordCount": 350 },
-      "threadProgressAchieved": ["T2: grief_narrative"],
+      "quality": {
+        "proseScore": 9,
+        "maxScore": 10,
+        "strengths": [
+          "emotional impact",
+          "repetition as device"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 350
+      },
+      "threadProgressAchieved": [
+        "T2: grief_narrative"
+      ],
       "foreshadowingDeployed": [],
       "narrativeChecks": [],
       "appearanceChecks": [
-        { "entityId": "xianglins_wife", "feature": "appearance", "declared": "白头绳_脸色青黄_两颊失色", "evidence": "头上扎着白头绳，脸色青黄，但两颊上已经消失了血色", "matchLevel": "exact" }
+        {
+          "entityId": "xianglins_wife",
+          "feature": "appearance",
+          "declared": "白头绳_脸色青黄_两颊失色",
+          "evidence": "头上扎着白头绳，脸色青黄，但两颊上已经消失了血色",
+          "matchLevel": "exact"
+        }
       ],
       "characterReferences": [
-        { "entityId": "xianglins_wife", "namesUsed": ["祥林嫂", "她"] },
-        { "entityId": "narrator", "namesUsed": ["我"] },
-        { "entityId": "fourth_master_lu", "namesUsed": ["四叔"] }
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她"
+          ]
+        },
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四叔"
+          ]
+        }
       ],
       "tenseDetected": "past",
-      "conflictAnalysis": { "primaryType": "person_vs_fate", "resolutionAchieved": false }
+      "conflictAnalysis": {
+        "primaryType": "person_vs_fate",
+        "resolutionAchieved": false
+      },
+      "ruleChecks": [],
+      "knowledgeChecks": []
     }
   },
-  "_metadata": { "eventId": "E4", "errors": [] }
+  "metadata": {
+    "eventId": "E4",
+    "errors": [],
+    "provider": "mock-pass2",
+    "model": "mock-stage1",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-18T00:00:00.000Z",
+    "reviewStatus": "approved",
+    "attempts": 1
+  }
 }

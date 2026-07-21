@@ -1,6 +1,6 @@
 injected:
   - entityId: "E2"
     attribute: "narrationTime"
-    expectedValidator: "schema"
-    expectedSeverity: "error"
+    expectedValidator: "timeline"
+    expectedSeverity: "warning"
     description: "A flashback event (sceneType: flashback) has no narrationTime field"

@@ -1,5 +1,32 @@
-import type { BranchPath, ChapterMetadata, SceneMetadata } from '../types/index.js';
+import type { BranchPath, BranchSet, SceneMetadata } from '../types/index.js';
 import type { Storage } from '../storage/index.ts';
+
+// ────────────────────────────────────────────────────────────────────────────
+// AssemblyError — typed error for assembly failures
+// ────────────────────────────────────────────────────────────────────────────
+
+export const AssemblyErrorCode = {
+  NO_SCENES: 'NO_SCENES',
+  MISSING_NARRATIVE_ORDER: 'MISSING_NARRATIVE_ORDER',
+  MISSING_BRANCH_EXISTENCE: 'MISSING_BRANCH_EXISTENCE',
+  INVALID_BRANCH_EXISTENCE: 'INVALID_BRANCH_EXISTENCE',
+  MISSING_PROSE: 'MISSING_PROSE',
+  EMPTY_PROSE: 'EMPTY_PROSE',
+  DUPLICATE_NARRATIVE_ORDER: 'DUPLICATE_NARRATIVE_ORDER',
+  UNKNOWN_COUNT_VERSION: 'UNKNOWN_COUNT_VERSION',
+} as const;
+
+export type AssemblyErrorCodeType = (typeof AssemblyErrorCode)[keyof typeof AssemblyErrorCode];
+
+export class AssemblyError extends Error {
+  readonly code: AssemblyErrorCodeType;
+
+  constructor(code: AssemblyErrorCodeType, message: string) {
+    super(message);
+    this.name = 'AssemblyError';
+    this.code = code;
+  }
+}
 
 // ────────────────────────────────────────────────────────────────────────────
 // SceneEntry, SortedScene, AssembleOptions, AssembleResult
@@ -10,6 +37,7 @@ export interface SceneEntry {
   metadata: SceneMetadata;
   narrativeOrder: number;
   chapter: number;
+  branchExistence: BranchSet;
 }
 
 export interface SortedScene {
@@ -17,6 +45,14 @@ export interface SortedScene {
   prose: string;
   narrativeOrder: number;
   chapter: number;
+  branchExistence: BranchSet;
+}
+
+interface SceneInfo {
+  eventId: string;
+  chapter: number;
+  narrativeOrder: number;
+  branchExistence: BranchSet;
 }
 
 export interface AssembleOptions {
@@ -28,6 +64,7 @@ export interface AssembleOptions {
   title?: string;
   /** Optional branch path for branch-filtered assembly */
   branchPath?: BranchPath;
+  language?: string;
   /** Optional storage backend (defaults to FsStorage) */
   storage?: Storage;
 }
@@ -39,4 +76,6 @@ export interface AssembleResult {
   wordCount: number;
   /** Number of scenes included */
   sceneCount: number;
+  /** Per-scene metadata for the assembled scenes */
+  scenes: SceneInfo[];
 }

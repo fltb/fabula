@@ -3,25 +3,84 @@
   "analysis": {
     "eventId": "E2",
     "analysis": {
-      "postconditions": { "covered": [], "dropped": [] },
-      "preconditions": { "violated": [] },
-      "pov": { "consistent": true, "leaks": [] },
+      "postconditions": {
+        "covered": [],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
       "inventedDetails": [],
-      "quality": { "proseScore": 7, "maxScore": 10, "strengths": ["character background"], "weaknesses": [], "estimatedWordCount": 300 },
-      "threadProgressAchieved": ["T1: early_life_background"],
+      "quality": {
+        "proseScore": 7,
+        "maxScore": 10,
+        "strengths": [
+          "character background"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 300
+      },
+      "threadProgressAchieved": [
+        "T1: early_life_background"
+      ],
       "foreshadowingDeployed": [],
       "narrativeChecks": [],
       "appearanceChecks": [
-        { "entityId": "xianglins_wife", "feature": "appearance", "declared": "白胖", "evidence": "脸上也白胖了", "matchLevel": "exact" }
+        {
+          "entityId": "xianglins_wife",
+          "feature": "appearance",
+          "declared": "白胖",
+          "evidence": "脸上也白胖了",
+          "matchLevel": "exact"
+        }
       ],
       "characterReferences": [
-        { "entityId": "xianglins_wife", "namesUsed": ["祥林嫂", "她"] },
-        { "entityId": "narrator", "namesUsed": ["我"] },
-        { "entityId": "fourth_master_lu", "namesUsed": ["四叔", "鲁四老爷"] }
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她"
+          ]
+        },
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四叔",
+            "鲁四老爷"
+          ]
+        }
       ],
       "tenseDetected": "past",
-      "conflictAnalysis": { "primaryType": "person_vs_fate", "resolutionAchieved": false }
+      "conflictAnalysis": {
+        "primaryType": "person_vs_fate",
+        "resolutionAchieved": false
+      },
+      "ruleChecks": [],
+      "knowledgeChecks": []
     }
   },
-  "_metadata": { "eventId": "E2", "errors": [] }
+  "metadata": {
+    "eventId": "E2",
+    "errors": [],
+    "provider": "mock-pass2",
+    "model": "mock-stage1",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-18T00:00:00.000Z",
+    "reviewStatus": "approved",
+    "attempts": 1
+  }
 }

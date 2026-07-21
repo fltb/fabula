@@ -20,6 +20,7 @@ import {
   InMemoryEntityRegistry,
   StateManager,
   buildCausalEdges,
+  MockPass2Provider,
   exportDAGtoDOT,
   exportDAGtoMermaid,
 } from '@novalistically/core';
@@ -476,14 +477,30 @@ program
   .option('--dry-run', 'Compile context and save prompt without calling LLM')
   .option('--all', 'Render all events in order')
   .option('--model <model>', 'LLM model to use (overrides config)')
-  .action(async (eventId: string, options: { dryRun?: boolean; all?: boolean; model?: string }) => {
+  .option('--provider <provider>', 'Provider: ai-sdk or mock-pass2')
+  .option('--reference-dir <path>', 'Approved mock reference directory')
+  .option('--trace', 'Emit trace JSONL to .nova/traces/<job>.jsonl')
+  .action(async (eventId: string, options: { dryRun?: boolean; all?: boolean; model?: string; provider?: string; referenceDir?: string; trace?: boolean }) => {
     const projectDir = ensureProjectDir();
+    if (options.provider === 'mock-pass2' && !options.referenceDir) {
+      console.error('--provider mock-pass2 requires --reference-dir');
+      process.exit(1);
+    }
+    if (options.provider && options.provider !== 'ai-sdk' && options.provider !== 'mock-pass2') {
+      console.error(`Unsupported provider: ${options.provider}`);
+      process.exit(1);
+    }
+    const provider = options.provider === 'mock-pass2'
+      ? new MockPass2Provider({ referenceDir: options.referenceDir })
+      : undefined;
 
     const result = await renderNovel({
       projectDir,
       model: options.model,
       eventId: options.all ? undefined : eventId,
       dryRun: options.dryRun,
+      provider,
+      trace: options.trace,
     });
 
     if (result.errors.length > 0 && result.results.length === 0) {
@@ -494,14 +511,15 @@ program
       process.exit(1);
     }
 
-    for (const r of result.results) {
-      const status = r.errors.length > 0 ? '❌' : '✅';
+    for (const resultEntry of result.results) {
+      const status = resultEntry.released ? '✅' : '❌';
       if (options.dryRun) {
-        console.log(`  ${status} ${r.eventId}: Dry-run (saved to .nova/dry-runs/)`);
+        console.log(`  ${status} ${resultEntry.eventId}: Dry-run (saved to .nova/dry-runs/)`);
       } else {
-        console.log(`  ${status} ${r.eventId}: ${r.wordCount} words, cache=${r.cacheHit}`);
+        console.log(`  ${status} ${resultEntry.eventId}: ${resultEntry.wordCount} words, cache=${resultEntry.cacheHit}`);
       }
-      for (const e of r.errors) console.log(`       Error: ${e}`);
+      for (const error of resultEntry.errors) console.log(`       Error: ${error}`);
+      for (const message of resultEntry.validationIssueMessages) console.log(`       Validation: ${message}`);
     }
 
     if (result.errors.length > 0) {
@@ -509,6 +527,9 @@ program
       for (const err of result.errors) {
         console.error(`  ❌ ${err}`);
       }
+    }
+    if (!options.dryRun && result.results.some((entry) => !entry.released)) {
+      process.exit(1);
     }
 
     if (!options.dryRun && result.results.length > 0) {

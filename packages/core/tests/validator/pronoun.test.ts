@@ -53,24 +53,82 @@ describe('PronounValidator', () => {
     const entities = {
       char_hero: { name: 'Hero', gender: 'male' },
     };
-    const input = makeInput(event, prose, entities);
+    const analysis: AnalysisResult = {
+      eventId: 'E1',
+      analysis: {
+        postconditions: { covered: [], dropped: [] },
+        preconditions: { violated: [] },
+        pov: { consistent: true, leaks: [] },
+        inventedDetails: [],
+        quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+        threadProgressAchieved: [],
+        foreshadowingDeployed: [],
+        narrativeChecks: [
+          { entityId: 'char_hero', attribute: 'pronoun', hint: 'he/his', evidence: 'He walked', matchLevel: 'exact' },
+        ],
+      },
+    };
+    const input = makeInput(event, prose, entities, analysis);
     const issues = new PronounValidator().validatePost(input);
     const pronounIssues = issues.filter(i => i.validator === 'pronoun');
     expect(pronounIssues).toHaveLength(0);
   });
 
-  it('should report issue when pronouns mismatch declared gender', () => {
+  it('should error when pronoun contradicts declared gender (contradicted -> error)', () => {
     const event = makeEvent({ id: 'E1' });
     const prose = 'She walked to the door. Her hand trembled as she reached for the handle.';
     const entities = {
       char_hero: { name: 'Hero', gender: 'male' },
     };
-    const input = makeInput(event, prose, entities);
+    const analysis: AnalysisResult = {
+      eventId: 'E1',
+      analysis: {
+        postconditions: { covered: [], dropped: [] },
+        preconditions: { violated: [] },
+        pov: { consistent: true, leaks: [] },
+        inventedDetails: [],
+        quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+        threadProgressAchieved: [],
+        foreshadowingDeployed: [],
+        narrativeChecks: [
+          { entityId: 'char_hero', attribute: 'pronoun', hint: 'she/her', evidence: 'She walked', matchLevel: 'contradicted' },
+        ],
+      },
+    };
+    const input = makeInput(event, prose, entities, analysis);
     const issues = new PronounValidator().validatePost(input);
     const pronounIssues = issues.filter(i => i.validator === 'pronoun');
     expect(pronounIssues.length).toBeGreaterThanOrEqual(1);
-    expect(pronounIssues[0].message).toContain('male');
-    expect(pronounIssues[0].message).toContain('female pronouns');
+    expect(pronounIssues[0].message).toContain('contradicted');
+    expect(pronounIssues[0].severity).toBe('error');
+  });
+
+  it('should warn when pronoun match is absent (absent -> warning)', () => {
+    const event = makeEvent({ id: 'E1' });
+    const prose = 'The figure walked to the door. The hand trembled as it reached for the handle.';
+    const entities = {
+      char_hero: { name: 'Hero', gender: 'male' },
+    };
+    const analysis: AnalysisResult = {
+      eventId: 'E1',
+      analysis: {
+        postconditions: { covered: [], dropped: [] },
+        preconditions: { violated: [] },
+        pov: { consistent: true, leaks: [] },
+        inventedDetails: [],
+        quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+        threadProgressAchieved: [],
+        foreshadowingDeployed: [],
+        narrativeChecks: [
+          { entityId: 'char_hero', attribute: 'pronoun', hint: 'no pronouns used', evidence: 'The figure walked', matchLevel: 'absent' },
+        ],
+      },
+    };
+    const input = makeInput(event, prose, entities, analysis);
+    const issues = new PronounValidator().validatePost(input);
+    const pronounIssues = issues.filter(i => i.validator === 'pronoun');
+    expect(pronounIssues.length).toBeGreaterThanOrEqual(1);
+    expect(pronounIssues[0].message).toContain('absent');
     expect(pronounIssues[0].severity).toBe('warning');
   });
 });

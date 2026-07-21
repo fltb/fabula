@@ -4,3 +4,8 @@ injected:
     expectedValidator: "alias"
     expectedSeverity: "warning"
     description: "Event refers to xianglins_wife as '祥林家的' which is not in the character's defined aliases list."
+    mockAnalysis:
+      characterReferences:
+        - entityId: "xianglins_wife"
+          namesUsed:
+            - "祥林家的"

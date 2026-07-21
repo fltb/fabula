@@ -2,7 +2,7 @@ event: E1a
 title: "Seraphine Detects the Anomalous Signal"
 narrativeOrder: 1
 sceneType: linear
-storyTime: "Day 0 — Morning"
+storyTime: day_0
 pov:
   character: seraphine
   type: third_person_limited
@@ -41,6 +41,7 @@ threadProgress:
   - thread: T1
     advancement: "0.05"
     progressAfter: 0.20
+    progressTotal: 1
 foreshadowing:
   - id: anomalous_signal_introduced
     hint: "Seraphine detects an emotional frequency that feels like 'broken glass wrapped in silk' — something deeply wrong that she cannot identify."
@@ -48,6 +49,7 @@ foreshadowing:
     thread: T1
 relationshipEffects: []
 ruleEffects: []
-styleGuidance: "Unsettling discovery — build slow tension, emphasize sensory disorientation and emotional wrongness. The scene should feel quiet and intimate, then abruptly shattered by the anomaly."
-narrativeContent:
-  opening: "The morning light filtered through the tall windows of the converted conference room, painting golden rectangles across the scuffed wooden floor. Seraphine sat cross-legged on a cushion in the center of the room, eyes closed, hands resting on her knees. Her hextech headpiece hovered silently behind her ears, its soft pink glow the only indication that it was active.\n\nShe had been trying to clear her mind for twenty minutes. It was not going well.\n\nThe Enforcer Headquarters was a cacophony of emotional noise. Anxiety hummed through the walls like electrical current — the jittery tension of enforcers who had not slept well since the attack, the low-frequency dread of administrative staff who knew their building was a target, the sharp spikes of anger from interrogations on the floor below. Seraphine had learned to filter most of it into a distant drone, like city traffic heard through a closed window. But it was always there. Always.\n\nAnd then, for a single, heart-stopping moment, something else cut through.\n\nIt was not a feeling she could name. It arrived not as an emotion but as a rupture — a tear in the fabric of the emotional spectrum she had spent her whole life learning to read. It felt like a scream that had no sound. Like a color that did not exist. It was wrong in a way that bypassed her rational mind and struck directly at something primal in her chest.\n\nHer eyes snapped open. Her hands were shaking.\n\nThe signal was gone. The room was quiet. The usual emotional drone of the headquarters resumed its background hum as if nothing had happened.\n\nBut Seraphine knew, with a certainty that terrified her, that something was out there. Something that should not exist."
+styleGuidance:
+  tone: "Unsettling discovery"
+  scenePacing: "Build slow tension, then shatter it with the anomaly."
+  atmosphere: "Quiet, intimate, and emotionally disorienting."

@@ -73,7 +73,7 @@ relationshipEffects:
   - participants:
       - he_laoliu
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: death_severs_marriage
     newState:
       type: widow_again

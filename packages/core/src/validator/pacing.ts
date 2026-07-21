@@ -14,15 +14,10 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
+import { z } from 'zod';
+import { narrativeCheckSchema } from './schemas.js';
 import { makeIssue } from './base.js';
 
-const ARC_PROGRESSION: readonly string[] = [
-  'opening',
-  'rising',
-  'climax',
-  'falling',
-  'denouement',
-] as const;
 
 const CLIMAX_MIN_FRACTION = 0.6;
 const CLIMAX_MAX_FRACTION = 0.85;
@@ -80,7 +75,7 @@ export class PacingValidator implements Validator {
     if (!analysis) return issues;
 
     // Check: narrativeChecks can surface pacing-related issues from Pass 2
-    const narrativeChecks = analysis.analysis.narrativeChecks ?? [];
+    const narrativeChecks = z.array(narrativeCheckSchema).safeParse(analysis.analysis.narrativeChecks).data ?? [];
     for (const check of narrativeChecks) {
       if (check.attribute.includes('pacing') || check.attribute.includes('pace')) {
         if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
@@ -106,7 +101,7 @@ export class PacingValidator implements Validator {
     return [{
       field: 'narrativeChecks',
       attributes: ['pacing', 'pace'],
-      schemaExample: { entityId: 'E1', attribute: 'pacing', hint: '...', evidence: '...', matchLevel: 'exact' },
+      schema: z.array(narrativeCheckSchema),
       instruction: 'narrativeChecks[pacing]: For each character or scene element with pacing expectations, check if the prose\'s narrative pace (sentence length, action density, reflective passages) aligns with the expected pacing. Use the narrativeChecks block with attribute containing "pacing" or "pace" to report whether the pacing signal matches expectations. Report matchLevel as "exact", "similar", "absent", or "contradicted".',
     }];
   }

@@ -1,0 +1,18 @@
+{
+  "prose": "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮着洗器皿，蒸糕点，心里却一直想着那件心事。她听人说，像她这样嫁过两个男人的女人，死后要被阎罗王锯成两半分给两个男人。她害怕极了，于是用她做工积攒的工钱，到土地庙去捐了一条门槛，当作自己的替身，给千人踏万人跨，以赎罪过。捐了门槛之后，她精神格外爽快，眼光也分外有神。冬至那天，她坦然地去拿酒杯和筷子——'你放着罢，祥林嫂！'四婶慌忙大声说。她像是受了炮烙似的缩手，脸色同时变作灰黑，也不再去取烛台。这一回她的变化非常大，第二天，不但眼睛凹陷下去，连精神也更不济了。",
+  "analysis": "{\"eventId\":\"E5\",\"analysis\":{\"postconditions\":{\"covered\":[],\"dropped\":[]},\"preconditions\":{\"violated\":[]},\"pov\":{\"consistent\":true,\"leaks\":[]},\"inventedDetails\":[],\"quality\":{\"proseScore\":9,\"maxScore\":10,\"strengths\":[\"climactic scene\",\"emotional devastation\"],\"weaknesses\":[],\"estimatedWordCount\":300},\"threadProgressAchieved\":[\"T2: spiritual_crisis\",\"T4: rejection_climax\"],\"foreshadowingDeployed\":[],\"narrativeChecks\":[],\"appearanceChecks\":[{\"entityId\":\"xianglins_wife\",\"feature\":\"appearance\",\"declared\":\"眼睛凹陷_精神不济\",\"evidence\":\"眼睛凹陷下去，连精神也更不济了\",\"matchLevel\":\"exact\"}],\"characterReferences\":[{\"entityId\":\"xianglins_wife\",\"namesUsed\":[\"祥林嫂\",\"她\"]},{\"entityId\":\"fourth_master_lu\",\"namesUsed\":[\"四婶\"]},{\"entityId\":\"narrator\",\"namesUsed\":[\"我\"]}],\"tenseDetected\":\"past\",\"conflictAnalysis\":{\"primaryType\":\"person_vs_society\",\"resolutionAchieved\":false}}}",
+  "llmPass1": {
+    "promptTokens": 3379,
+    "completionTokens": 64,
+    "totalTokens": 0
+  },
+  "llmPass2": {
+    "promptTokens": 4388,
+    "completionTokens": 212,
+    "totalTokens": 0
+  },
+  "renderedAt": "2026-07-20T05:07:51.849Z",
+  "chapters": [
+    1
+  ]
+}

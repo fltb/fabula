@@ -9,6 +9,9 @@ import type {
   PostRenderInput,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
+import { z } from 'zod';
+export const foreshadowingDeployedSchema = z.array(z.string());
+ 
 
 export class ForeshadowingValidator implements Validator {
   name = 'foreshadowing';
@@ -21,7 +24,7 @@ export class ForeshadowingValidator implements Validator {
     // Check existing foreshadows: are they past due?
     for (const f of event.foreshadowing) {
       if (
-        f.targetRevealChapter > 0 &&
+        f.targetRevealChapter >= 0 &&
         chapter > f.targetRevealChapter
       ) {
         issues.push(makeIssue(
@@ -60,7 +63,8 @@ export class ForeshadowingValidator implements Validator {
     const issues: ValidationIssue[] = [];
     if (!input.analysis) return issues;
 
-    const deployed = new Set(input.analysis.analysis.foreshadowingDeployed ?? []);
+    const fsResult = foreshadowingDeployedSchema.safeParse(input.analysis.analysis.foreshadowingDeployed);
+    const deployed = new Set(fsResult.success ? fsResult.data : []);
     const declared = input.event.foreshadowing ?? [];
 
     for (const fs of declared) {
@@ -85,7 +89,7 @@ export class ForeshadowingValidator implements Validator {
   getAnalysisRequirements() {
     return [{
       field: 'foreshadowingDeployed',
-      schemaExample: { foreshadowingDeployed: ['foreshadowing IDs that appear in prose'] },
+      schema: foreshadowingDeployedSchema,
       instruction: 'foreshadowingDeployed: List which foreshadowing IDs from the scene specification have their hints appear in the prose. Report in the foreshadowingDeployed block as an array of foreshadowing IDs that are reflected. If a hint is woven naturally into the narrative, it counts as deployed.',
     }];
   }

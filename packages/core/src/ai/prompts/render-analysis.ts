@@ -20,6 +20,7 @@ import type { ContextPackage, NarrativeEvent } from '../../types/index.ts';
 import type { RuleDefinition } from '../../types/rule.ts';
 import type { AnalysisBlockRequirement } from '../../types/index.ts';
 import type { Message } from '../types.ts';
+import { zodExample } from '../util/zod-example.ts';
 
 export interface RenderAnalysisInput {
   event: NarrativeEvent;
@@ -44,7 +45,7 @@ function topField(field: string): string {
 /**
  * Build the dynamic JSON template for the Pass 2 analysis schema.
  * Only blocks with active validator requirements are included.
- * Each block is generated from the schemaExample of the first matching requirement.
+ * Each block is generated from the zodExample of the first matching requirement's schema.
  * For narrativeChecks, attributes from all requirements are merged.
  */
 function buildDynamicJsonTemplate(
@@ -79,10 +80,10 @@ function buildDynamicJsonTemplate(
 
   for (const field of activeFields) {
     const req = fieldToReq.get(field);
-    if (!req) continue; // Shouldn't happen, but guard
+    if (!req) continue;
 
-    // Deep-clone the schemaExample as the template base
-    const template = JSON.parse(JSON.stringify(req.schemaExample));
+    // Generate example JSON from the Zod schema
+    const template = zodExample(req.schema);
 
     // Special handling for narrativeChecks: merge attributes & add matchLevel
     if (field === 'narrativeChecks' && Array.isArray(template)) {
@@ -93,8 +94,6 @@ function buildDynamicJsonTemplate(
       item.matchLevel = 'exact|similar|absent|contradicted';
       analysis[field] = template;
     } else {
-      // For all other blocks, use the schemaExample as-is
-      // (it already contains the correct structure)
       analysis[field] = template;
     }
   }

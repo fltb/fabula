@@ -2,12 +2,14 @@
 // ReplayEngine — Replay events to reconstruct world state
 // ============================================================================
 
-import type { NarrativeEvent, WorldState, BranchPath, Fact, Snapshot } from '../types/index.js';
+import type { NarrativeEvent, WorldState, BranchPath, Snapshot } from '../types/index.js';
 import {
   createEmptyBranchPath,
   includesPath,
 } from '../branch/index.js';
 import { buildCausalEdges, topologicalSort } from './dag.js';
+import { PreconditionMismatchError } from '../errors.js';
+import { compareFact } from '../entity/compare.js';
 
 // ——— Rule effect application helper ———
 
@@ -47,23 +49,11 @@ export class ReplayEngine {
   ): WorldState {
     const bp = branchPath ?? createEmptyBranchPath();
 
-    // Sort events by causal DAG order; fall back to narrativeOrder on cycle
-    let sorted: NarrativeEvent[];
-    try {
-      const { edges, inDegree } = buildCausalEdges(events);
-      const sortedIds = topologicalSort(events, edges, inDegree);
-      const idToEvent = new Map(events.map((e) => [e.id, e]));
-      sorted = sortedIds.map((id) => idToEvent.get(id)!);
-    } catch (err) {
-      if (err instanceof Error && err.message.includes('cycle detected')) {
-        console.warn(
-          '[ReplayEngine] DAG cycle detected, falling back to narrativeOrder sort',
-        );
-        sorted = [...events].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
-      } else {
-        throw err;
-      }
-    }
+    const selectedEvents = events.filter((event) => includesPath(event.branchExistence, bp));
+    const { edges, inDegree } = buildCausalEdges(selectedEvents, { branchPath: bp });
+    const sortedIds = topologicalSort(selectedEvents, edges, inDegree);
+    const idToEvent = new Map(selectedEvents.map((event) => [event.id, event]));
+    const sorted = sortedIds.map((id) => idToEvent.get(id)!);
 
     const state: WorldState = {
       entities: {},
@@ -94,15 +84,15 @@ export class ReplayEngine {
         }
       }
 
-      // Apply preconditions (they become known facts about the entity too)
       for (const fact of event.preconditions) {
-        if (!includesPath(fact.validity.branches, bp)) continue;
-        if (!state.entities[fact.entityId]) {
-          state.entities[fact.entityId] = {};
-        }
-        // Only set if not already set by a later postcondition AND has a deterministic value
-        if (!(fact.attribute in state.entities[fact.entityId]) && fact.value !== undefined) {
-          state.entities[fact.entityId][fact.attribute] = fact.value;
+        if (!includesPath(fact.validity.branches, bp) || fact.value === undefined) continue;
+        const stateValue = state.entities[fact.entityId]?.[fact.attribute];
+        if (compareFact(fact, stateValue) !== 'match') {
+          throw new PreconditionMismatchError('Deterministic precondition does not match replay state', {
+            eventId: event.id,
+            stateKey: `${fact.entityId}.${fact.attribute}`,
+            phase: 'replay',
+          });
         }
       }
 
@@ -180,47 +170,53 @@ export class ReplayEngine {
     snapshot: Snapshot | null,
     branchPath?: BranchPath,
   ): WorldState {
-    const bp = branchPath ?? createEmptyBranchPath();
-
     if (!snapshot) {
-      return this.getStateAt(events, narrativeOrder, bp);
+      return this.getStateAt(events, narrativeOrder, branchPath);
     }
 
-    // Start from snapshot state
+    const bp = branchPath ?? createEmptyBranchPath();
     const state = JSON.parse(JSON.stringify(snapshot.state)) as WorldState;
 
-    // Replay events after the snapshot
+    // Replay only events after snapshot, in causal order
     const eventsAfter = events.filter(
-      (e) =>
-        e.narrativeOrder > snapshot.narrativeOrder &&
-        e.narrativeOrder <= narrativeOrder,
-    ).sort((a, b) => a.narrativeOrder - b.narrativeOrder);
+      (e) => e.narrativeOrder > snapshot.narrativeOrder && e.narrativeOrder <= narrativeOrder,
+    );
 
-    for (const event of eventsAfter) {
-      if (!includesPath(event.branchExistence, bp)) continue;
+    if (eventsAfter.length === 0) return state;
 
+    const selectedEvents = eventsAfter.filter((event) =>
+      includesPath(event.branchExistence, bp),
+    );
+
+    const anchors = new Map<string, number>();
+    for (const { storyTime } of selectedEvents) {
+      if (storyTime.type === 'absolute') {
+        const m = storyTime.value.match(/^day[_\s]*(-?\d+)$/i);
+        if (m) anchors.set(storyTime.value, parseInt(m[1], 10));
+      }
+    }
+
+    const { edges, inDegree } = buildCausalEdges(selectedEvents, { anchors, branchPath: bp });
+    const ordered = topologicalSort(selectedEvents, edges, inDegree, anchors);
+    const eventById = new Map(events.map((event) => [event.id, event]));
+
+    for (const eventId of ordered) {
+      const event = eventById.get(eventId)!;
       for (const fact of event.postconditions) {
         if (!includesPath(fact.validity.branches, bp)) continue;
-
-        if (!state.entities[fact.entityId]) {
-          state.entities[fact.entityId] = {};
-        }
+        if (!state.entities[fact.entityId]) state.entities[fact.entityId] = {};
         if (fact.value !== undefined) {
           state.facts.push(fact);
           state.entities[fact.entityId][fact.attribute] = fact.value;
         }
       }
-
       for (const tp of event.threadProgress) {
-        state.threads[tp.thread] = {
-          progress: tp.progressAfter,
-          total: tp.progressTotal,
-        };
+        state.threads[tp.thread] = { progress: tp.progressAfter, total: tp.progressTotal };
       }
-
-      event.ruleEffects.forEach(re => applyRuleEffect(state, re));
+      event.ruleEffects.forEach((re) => applyRuleEffect(state, re));
     }
 
     return state;
   }
+
 }

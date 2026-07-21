@@ -15,7 +15,3 @@ export function createPatch(
   return patch;
 }
 
-/** Get all stored patches */
-export function getPatches(patches: ReviewPatch[]): ReviewPatch[] {
-  return [...patches];
-}

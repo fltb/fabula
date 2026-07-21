@@ -6,19 +6,15 @@ timeAnchors:
   - id: arcane_s1_end
     day: 0
     description: "The conclusion of the battle at the Piltover bridge. Jinx's rocket struck the council chamber."
-    significance: "This event fundamentally altered the political landscape. Several councilors dead, Hextech's future uncertain, and the fragile peace between Piltover and Zaun shattered."
   - id: vi_and_jinx_departure
     day: -21
     description: "Vi departs Piltover following Jinx's trail. Caitlyn remains in Piltover, reassigned to internal affairs."
-    significance: "Key characters from Season 1 are absent — leaving room for new tensions."
   - id: seraphine_recruitment
     day: -120
     description: "Camille formally recruited Seraphine as a hextech-empathic consultant."
-    significance: "Seraphine has been in Camille's orbit for four months. Their dynamic has evolved from pure coercion to an uneasy alliance."
   - id: hextech_crystal_inventory
     day: -7
     description: "The Piltover Council conducted a classified inventory of remaining hextech crystals."
-    significance: "Total confirmed: 13 crystals. 3 unaccounted for. The missing crystals are the primary driver of the current crisis."
 
 threads:
   - id: T1

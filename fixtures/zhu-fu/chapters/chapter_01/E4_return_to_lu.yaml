@@ -3,12 +3,13 @@ title: "再到鲁镇——我真傻，真的"
 narrativeOrder: 5
 sceneType: flashback
 storyTime: autumn_return
+narrationTime: new_year_eve
 tense: past
 discourseMode: exposition
 arcPosition: falling
 emotionalValence: "grief_despair"
 conflictType: "person_vs_fate"
-resolutionType: "unresolved"
+resolutionType: "negative_resolution"
 pov:
   character: narrator
   type: first_person
@@ -73,7 +74,7 @@ relationshipEffects:
   - participants:
       - he_laoliu
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: death_severs_marriage
     newState:
       type: widow_again
@@ -92,6 +93,7 @@ ruleEffects:
     evidence: "贺老六死后，大伯来收房，赶她出门——没有儿子的寡妇在宗族中没有任何权利。"
 styleGuidance:
   tone: "从温暖的母性讲述（阿毛的故事）到寒冷的丧恸——阿毛的死亡场景（山坳、小鞋、被吃空的身体）是故事中最为残忍的意象。"
+  targetWordCount: 1500
   scenePacing: "以祥林嫂的独白（'我真傻，真的'）为中心——这是全文中唯一以她的声音为主的大段叙述，需要读出节奏感。从她缓慢的讲述过渡到叙述者冷峻的评论。"
   characterVoice:
     xianglins_wife: "她讲阿毛故事时的语气——'我真傻，真的'开头，反复回到同一句话，叙述过程有固定的节奏和停顿。这是创伤后重复性叙述的文学呈现。"

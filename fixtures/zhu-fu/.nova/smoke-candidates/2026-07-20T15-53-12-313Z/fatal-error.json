@@ -1,0 +1,35 @@
+{
+  "fatalType": "candidate_validation_failure",
+  "generatedAt": "2026-07-20T15:57:13.365Z",
+  "events": {
+    "total": 7,
+    "valid": 2,
+    "failed": 5,
+    "released": 7
+  },
+  "failures": [
+    {
+      "eventId": "E0",
+      "reason": "analysis: Expected object, received null"
+    },
+    {
+      "eventId": "E1",
+      "reason": "analysis: Expected object, received null"
+    },
+    {
+      "eventId": "E2",
+      "reason": "analysis: Expected object, received null"
+    },
+    {
+      "eventId": "E5",
+      "reason": "analysis: Expected object, received null"
+    },
+    {
+      "eventId": "E6",
+      "reason": "analysis: Expected object, received null"
+    }
+  ],
+  "errors": [
+    "Release gate rejected: E0: Pass 2 attempt 1 failed: ai-sdk error: Pass 2 JSON parse/validation failed: Schema validation failed: [\n  {\n    \"code\": \"invalid_type\",\n    \"expected\": \"array\",\n    \"rece..."
+  ]
+}

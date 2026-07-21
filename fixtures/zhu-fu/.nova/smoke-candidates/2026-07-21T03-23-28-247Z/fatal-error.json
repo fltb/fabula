@@ -1,0 +1,23 @@
+{
+  "fatalType": "candidate_validation_failure",
+  "generatedAt": "2026-07-21T03:33:09.751Z",
+  "events": {
+    "total": 7,
+    "valid": 5,
+    "failed": 2,
+    "released": 7
+  },
+  "failures": [
+    {
+      "eventId": "E2",
+      "reason": "analysis: Expected object, received null"
+    },
+    {
+      "eventId": "E4",
+      "reason": "analysis: Expected object, received null"
+    }
+  ],
+  "errors": [
+    "Release gate rejected: E2: Pass 2 exhausted: schema validation failed after retry; E4: Pass 2 exhausted: schema validation failed after retry"
+  ]
+}

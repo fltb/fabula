@@ -73,7 +73,7 @@ relationshipEffects:
   - participants:
       - he_laoliu
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: old_age_widowhood
     newState:
       type: lifelong_partners
@@ -81,7 +81,7 @@ relationshipEffects:
   - participants:
       - xianglins_wife
       - fourth_master_lu
-    effect: break
+    effect: dissolve
     direction: never_reconnected
     newState:
       type: no_relationship
@@ -89,20 +89,20 @@ relationshipEffects:
   - participants:
       - narrator
       - xianglins_wife
-    effect: never_formed
+    effect: establish
     direction: never_met_in_this_branch
     newState:
       type: unknown_to_each_other
       intensity: 0
 ruleEffects:
   - rule: patriarchal_clan_authority
-    effect: challenge
+    effect: weaken
     evidence: "贺老六活到老，死在自己床上，大伯没有机会收房。宗族权力在这条分支中从未得到执行——但这并非制度的改善，只是一个家庭的偶然胜利。"
   - rule: religious_authority
-    effect: dodge
+    effect: nullify
     evidence: "祥林嫂终身未接触地狱恐吓和门槛救赎——因为她的生活轨迹绕开了需要'赎罪'的社会情境。宗教绳索仍然存在，只是这次没有套住她。"
   - rule: widow_purity
-    effect: dodge
+    effect: nullify
     evidence: "她只做了一次寡妇（贺老六老死时她已老，不受再寡歧视）。贞节规范在这条分支中没有机会惩罚她——不是因为她反抗了规范，而是因为她恰好避开了触发条件。"
 styleGuidance:
   tone: "不是伤感，不是控诉，不是庆祝——是一种'注视'的语调。叙述者试图在零碎信息中还原一个他没有参与的故事。这种距离感本身就应该成为文本的一部分：书写者与被书写者之间，永远隔着一条看见与看不见的河。"

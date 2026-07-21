@@ -27,11 +27,8 @@ import { getSummary } from './summary.js';
 export class ReviewManager {
   private comments: ReviewComment[] = [];
   private patches: ReviewPatch[] = [];
-  private blockingChaptersBeforeDowngrade: number;
 
-  constructor(blockingChaptersBeforeDowngrade = 3) {
-    this.blockingChaptersBeforeDowngrade = blockingChaptersBeforeDowngrade;
-  }
+  constructor() {}
 
   /** Add a review comment */
   addComment(comment: ReviewComment): void {

@@ -82,7 +82,7 @@ relationshipEffects:
   - participants:
       - liu_ma
       - xianglins_wife
-    effect: form
+    effect: establish
     direction: spiritual_advisor_becomes_destroyer
     newState:
       type: well_intentioned_disaster

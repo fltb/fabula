@@ -1,9 +1,9 @@
 project: zhu-fu-branch-a
 title: "祝福 — 分支A：诚实的回答"
 author: "鲁迅（平行叙事变种）"
-default_model: mock
-default_language: zh
+defaultModel: mock
+defaultLanguage: zh
 genre: "literary"
 synopsis: "分支A：叙述者'我'在河边遇见祥林嫂时，没有用'说不清'来回避她的灵魂之问，而是诚实地告诉她：人死了就像灯灭，既没有灵魂，也没有地狱。她得到了一个确定的答案——虽然冰冷，但不再需要在地狱恐惧和团圆希望之间分裂。她死后，'我'感到的不是愧疚，而是清醒的悲哀：诚实面对死亡，并不会让死亡变得更容易承受。"
 tense: past
-snapshot_interval: 3
+snapshotInterval: 3

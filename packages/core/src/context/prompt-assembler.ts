@@ -46,6 +46,7 @@ export class PromptAssembler {
       styleGuidance?: StyleGuidance;
       characterVoiceNotes?: string;
       targetLengthWords?: number;
+      language?: string;
       referenceExample?: string;
       retryGuidance?: string;
     },
@@ -62,7 +63,9 @@ export class PromptAssembler {
       parts.push(this.scribeInstructions);
     } else {
       // Fallback to built-in instructions
-      parts.push(...this.getBuiltInInstructions(options?.targetLengthWords ?? 800));
+      const effectiveTarget = options?.styleGuidance?.targetWordCount ?? options?.targetLengthWords ?? 800;
+      const lang = options?.language ?? 'en';
+      parts.push(...this.getBuiltInInstructions(effectiveTarget, lang));
     }
 
     if (options?.styleGuidance) {
@@ -70,6 +73,11 @@ export class PromptAssembler {
       if (sg.tone) parts.push(`- Tone: ${sg.tone}.`);
       if (sg.scenePacing) parts.push(`- Pacing: ${sg.scenePacing}.`);
       if (sg.atmosphere) parts.push(`- Atmosphere: ${sg.atmosphere}.`);
+      if (sg.targetWordCount) {
+        const isCJK = (options?.language ?? 'en').startsWith('zh');
+        const unit = isCJK ? '字' : 'words';
+        parts.push(`- This scene should be approximately ${sg.targetWordCount} ${unit} long. This is a firm target — do not significantly under- or over-write.`);
+      }
     }
     if (options?.characterVoiceNotes) {
       parts.push(`- Character voice: ${options.characterVoiceNotes}`);
@@ -126,7 +134,9 @@ export class PromptAssembler {
     };
   }
 
-  private getBuiltInInstructions(targetLength: number): string[] {
+  private getBuiltInInstructions(targetLength: number, language: string): string[] {
+    const isCJK = language.startsWith('zh') || language.startsWith('ja') || language.startsWith('ko');
+    const unit = isCJK ? '字（characters）' : 'words';
     return [
       '- Write ONLY the scene narrative. No planning. No self-analysis. No section headers. No JSON.',
       '- Begin directly with the action or description. Do not label or explain the scene.',
@@ -134,7 +144,7 @@ export class PromptAssembler {
       '- Use sensory detail and interiority. Show emotional state through physical detail, not abstract summary.',
       '- Do NOT contradict any established fact from the context package.',
       "- End when this scene's narrative beat is complete. A clean break is better than over-writing.",
-      `- Target length: ~${targetLength} words.`,
+      `- Target length: ~${targetLength} ${unit}.`,
     ];
   }
 }

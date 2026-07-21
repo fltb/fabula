@@ -29,5 +29,6 @@ export const projectConfigSchema = z
       .strict()
       .optional(),
     snapshotInterval: z.number().optional(),
+    defaultSceneTextTarget: z.number().int().positive().optional()
   })
   .strict();

@@ -11,7 +11,11 @@ export type {
   AssembleOptions,
   AssembleResult,
 } from './types.js';
-export { countWords } from './count.js';
+export {
+  AssemblyError,
+  AssemblyErrorCode,
+} from './types.js';
+export { countNarrativeText, countWords, NARRATIVE_TEXT_COUNT_VERSION } from './count.js';
 export { SceneCollector } from './collector.js';
 export { NarrativeSorter } from './sorter.js';
 export { ProseConcatenator } from './concatenator.js';

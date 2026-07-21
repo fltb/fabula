@@ -2,6 +2,7 @@
 // POVValidator — POV consistency checks
 // ============================================================================
 
+import { z } from 'zod';
 import type {
   PreRenderInput,
   PostRenderInput,
@@ -9,6 +10,16 @@ import type {
   ValidationIssue,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
+
+// ── Schemas ───────────────────────────────────────────────────────────
+
+export const povBlockSchema = z.object({
+  consistent: z.boolean(),
+  leaks: z.array(z.string()),
+});
+
+export type PovBlock = z.infer<typeof povBlockSchema>;
+
 
 export class POVValidator implements Validator {
   name = 'pov';
@@ -83,30 +94,33 @@ export class POVValidator implements Validator {
 
     // Consume Pass 2 analysis for POV leaks (semantic checks)
     if (input.analysis) {
-      const leaks = input.analysis.analysis.pov.leaks ?? [];
-      for (const leak of leaks) {
-        issues.push(makeIssue(
-          this.name,
-          event.id,
-          event.pov.character,
-          'warning',
-          `POV leak detected: ${leak}`,
-          'Review POV consistency',
-          'edit_file',
-          'pov',
-        ));
+      const povResult = povBlockSchema.safeParse(input.analysis.analysis.pov);
+      if (povResult.success) {
+        const leaks = povResult.data.leaks ?? [];
+        for (const leak of leaks) {
+          issues.push(makeIssue(
+            this.name,
+            event.id,
+            event.pov.character,
+            'warning',
+            `POV leak detected: ${leak}`,
+            'Review POV consistency',
+            'edit_file',
+            'pov',
+          ));
+        }
+
+        if (!povResult.data.consistent) {
+          issues.push(makeIssue(
+            'pov', input.event.id, input.event.pov.character, 'warning',
+            'POV inconsistency detected: the prose does not maintain consistent point of view.',
+            'Review POV consistency throughout the scene.',
+            'edit_file', 'pov',
+          ));
+        }
       }
     }
 
-    // Check POV consistency from Pass 2 analysis
-    if (input.analysis && !input.analysis.analysis.pov.consistent) {
-      issues.push(makeIssue(
-        'pov', input.event.id, input.event.pov.character, 'warning',
-        'POV inconsistency detected: the prose does not maintain consistent point of view.',
-        'Review POV consistency throughout the scene.',
-        'edit_file', 'pov',
-      ));
-    }
 
     return issues;
   }
@@ -114,7 +128,7 @@ export class POVValidator implements Validator {
   getAnalysisRequirements() {
     return [{
       field: 'pov.leaks',
-      schemaExample: { consistent: true, leaks: ['any phrases that enter another character\'s inner thoughts'] },
+      schema: povBlockSchema,
       instruction: 'pov.leaks: Determine if the prose maintains the specified POV type throughout. List any phrases where the narration leaks into another character\'s internal thoughts, perceptions, or knowledge that the POV character could not access. Report in the pov block with consistent (true/false) and an array of leaked phrases. Pay attention to free indirect discourse that might blur POV boundaries.',
     }];
   }

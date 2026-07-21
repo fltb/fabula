@@ -2,7 +2,7 @@
 // Performance Benchmarks — Measure pipeline stages at 10 / 100 / 1000 events
 // ============================================================================
 
-import type { NarrativeEvent, WorldState, PreRenderInput, KnowledgeState } from '@novalistically/core';
+import type { NarrativeEvent } from '@novalistically/core';
 
 import {
   InMemoryEntityRegistry,
@@ -72,28 +72,7 @@ function makeSyntheticEvent(): NarrativeEvent {
     sceneType: idx % 5 === 0 ? 'flashback' : 'linear',
     pov: { character: char1, type: 'third_person_limited' as const },
     sceneBrief: `Scene ${idx}: ${char1} encounters ${char2} at ${loc}.`,
-    preconditions: [
-      {
-        id: `${char1}.location`,
-        entityId: char1,
-        attribute: 'location',
-        value: loc,
-        validity: {
-          temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
-          branches: { type: 'all' as const },
-        },
-      },
-      {
-        id: `${char1}.alive`,
-        entityId: char1,
-        attribute: 'alive',
-        value: true,
-        validity: {
-          temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
-          branches: { type: 'all' as const },
-        },
-      },
-    ],
+    preconditions: [],
     postconditions: [
       {
         id: `${char1}.state`,

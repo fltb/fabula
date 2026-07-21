@@ -1,0 +1,202 @@
+{
+  "prose": "傍晚，我独自坐在四叔的书房里，外面的天色早已暗了下来，雪似乎还在落，簌簌地打在窗纸上，那声音密密的，像有许多细小的东西在啮咬着什么。我的心却比下午见着祥林嫂时更不安稳了。我反复揣想她那句问话——“一个人死了之后，究竟有没有魂灵的？”——以及我那含含糊糊的回答。也许，我那句“说不清”竟害了她？她原是个极迷信的人，万一竟将我这吞吞吐吐的话当真，以为真有地狱，真有鬼魂，那两个死鬼的丈夫会来把她锯开……想到这里，我的手心竟有些潮潮的。可一转念，又觉得这不过是无端的自扰，一个乞丐的话，何至于就当真呢。然而那不安像蛛网似的，黏在心上，拂不去。\n\n晚饭时，四叔照例要骂几句新党。他呷了一口酒，冷冷地说：“如今的时势，就是给那些维新派搅坏的。好好的纲常伦理，都不要了。”他的语气比平日更峻厉，目光扫过我时，仿佛我也沾着些新派的嫌疑。我只低着头扒饭，不敢接话。四婶也默默。屋里只有筷子碰着碗沿的声响，以及间或的一两声咳嗽，气氛沉闷得像冻住了。\n\n饭快吃完时，一个短工进来回话。四叔放下筷子，问道：“外面可有什么事情？”短工垂着手，简短地答道：“没有什么事——只是，那个祥林嫂，老了。”我手里的筷子几乎掉下来。“老了”，这是此地人讳言死的说法。我忙问：“什么时候？”短工仍是那副木木的神情：“昨天夜里，或者就是今天罢。——我说不清。”“怎么死的？”我追着问。短工抬起头，仿佛我这问得有些多余，只淡然地答道：“还不是穷死的？”\n\n他的话还没落音，四叔却突然将酒杯重重地顿在桌上，脸上起了红潮，恨恨地骂道：“不早不迟，偏偏要在这时候，——这就可见是一个谬种！”\n\n这咒骂像一盆冰水，兜头浇下来。我原知道四叔忌讳多，年关将尽，死一个人，又是她这样一个被看作不祥的女人，他自然觉得晦气。但这话的冷酷，竟使我一时什么也说不出来。晚饭便在这死寂里草草地收了场。\n\n我仍回到书房，一个人坐在灯下。灯光昏昏的，将我的影子投在壁上，摇摇的有些变形。外面的雪似乎更大，簌簌的声响如今听来，倒不像啮咬，而像在掩埋什么。我的心地，渐渐地轻松起来。偶一想到她，仿佛还有一点负疚，但这一点负疚，也像雪片落进水里，无声地化去了。我对自己说，她的死，到底是穷死的，与我何干呢？然而那“老了”两个字，和她那木刻似的脸，总在我眼前浮着。我终于叹了一口气，在孤灯下，开始回想她半生事迹的断片来。",
+  "analysis": {
+    "eventId": "E1",
+    "analysis": {
+      "postconditions": {
+        "covered": [
+          "xianglins_wife.status=dead",
+          "xianglins_wife.cause_of_death=poverty",
+          "xianglins_wife.time_of_death (narrativeHint captured)",
+          "narrator.emotionalState=guilt_easing",
+          "fourth_master_lu.attitude_toward_xianglins_wife=disgusted",
+          "narrator.purpose=recount_her_story"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "雪声像啮咬的比喻",
+          "severity": "minor"
+        },
+        {
+          "detail": "手心潮潮的（生理反应）",
+          "severity": "minor"
+        },
+        {
+          "detail": "短工垂着手、四叔顿酒杯等动作细节",
+          "severity": "minor"
+        }
+      ],
+      "quality": {
+        "proseScore": 8,
+        "maxScore": 10,
+        "strengths": [
+          "细腻的环境描写烘托心理",
+          "对话贴合人物性格",
+          "内省转折自然流畅",
+          "节奏控制得当"
+        ],
+        "weaknesses": [
+          "个别比喻稍显刻意（如雪声啮咬）",
+          "祥林嫂的外貌除'木刻似的脸'外未再强化"
+        ],
+        "estimatedWordCount": 580
+      },
+      "threadProgressAchieved": [
+        "T1",
+        "T3",
+        "T4"
+      ],
+      "foreshadowingDeployed": [
+        "flashback_triggered"
+      ],
+      "narrativeChecks": [
+        {
+          "entityId": "scene",
+          "attribute": "time_period",
+          "hint": "傍晚、夜幕降临的气氛",
+          "evidence": "傍晚，我独自坐在四叔的书房里，外面的天色早已暗了下来，雪似乎还在落，簌簌地打在窗纸上",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "character_state",
+          "hint": "情感状态：不安到渐渐轻松",
+          "evidence": "我的心却比下午见着祥林嫂时更不安稳了...我的心地，渐渐地轻松起来",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "character_state",
+          "hint": "已死",
+          "evidence": "那个祥林嫂，老了",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "attribute": "voice_formality",
+          "hint": "保守士绅的严厉口吻",
+          "evidence": "不早不迟，偏偏要在这时候，——这就可见是一个谬种！",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_vocabulary",
+          "hint": "知识分子内省式的文学语言",
+          "evidence": "那不安像蛛网似的，黏在心上，拂不去",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "scene",
+          "attribute": "discourseMode",
+          "hint": "以叙述为主，穿插描写和对话",
+          "evidence": "全文平稳的叙述节奏，有心理描写和环境渲染",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "pronoun_consistency",
+          "hint": "第一人称'我'贯穿始终",
+          "evidence": "全篇使用'我'叙事，无错乱",
+          "matchLevel": "exact"
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "narrator",
+          "feature": "年轻知识分子，清瘦气质",
+          "declared": "穿城里人衣服，与乡绅氛围格格不入",
+          "evidence": "文中未具体描写",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "feature": "老监生，长衫，面容威严",
+          "declared": "传统士绅打扮",
+          "evidence": "文中未具体描写外貌",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "沦为乞丐后的形象",
+          "declared": "头发全白，脸黄中带黑，瘦削不堪，木刻似的",
+          "evidence": "文中仅提及其'木刻似的脸'",
+          "matchLevel": "similar"
+        }
+      ],
+      "characterReferences": [
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四叔",
+            "他"
+          ]
+        },
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她",
+            "老的"
+          ]
+        },
+        {
+          "entityId": "short_worker",
+          "namesUsed": [
+            "短工",
+            "他"
+          ]
+        },
+        {
+          "entityId": "fourth_aunt",
+          "namesUsed": [
+            "四婶",
+            "她"
+          ]
+        }
+      ],
+      "tenseDetected": "past",
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": false
+      },
+      "ruleChecks": [
+        {
+          "ruleId": "widow_purity",
+          "violated": false,
+          "evidence": "不早不迟，偏偏要在这时候，——这就可见是一个谬种！",
+          "severity": "minor"
+        }
+      ],
+      "knowledgeChecks": []
+    }
+  },
+  "metadata": {
+    "eventId": "E1",
+    "provider": "ai-sdk",
+    "model": "deepseek-v4-pro",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "06819c4d4a6d29840e33e12a1a49b5e1d10c8f44686e450da60930aea7a00803",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-21T03:57:14.290Z",
+    "reviewStatus": "candidate",
+    "attempts": 1,
+    "errors": []
+  }
+}

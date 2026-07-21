@@ -290,7 +290,7 @@ describe('ContextCompiler', () => {
   let registry: InMemoryEntityRegistry;
 
   beforeEach(() => {
-    compiler = new ContextCompiler(8000);
+    compiler = new ContextCompiler();
     registry = new InMemoryEntityRegistry();
     registry.register(makeEntity('alice', 'character', {
       location: 'entrance',

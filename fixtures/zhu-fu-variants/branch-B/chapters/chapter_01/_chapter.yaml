@@ -1,36 +1,5 @@
-chapter: chapter_01
+chapter: 1
 title: "第一章"
-narrativeOrder: 1
-wordCountTarget: 4200
 summary: "分支B：贺老六没有死于伤寒——他在祥林嫂的照顾下康复了。她不再被迫回到鲁镇，不再成为二次寡妇，不再遭受柳妈的地狱恐吓和捐门槛后仍被排斥的二次创伤。她的后半生在贺家坳度过，养育阿毛和他的弟妹，经历了漫长的平静——贫困但未被摧毁的平静。她最终老死在自己的床上，身边是家人。这是祥林嫂本来可能拥有的'正常'人生——但它需要的，仅仅是一个偶然。"
 intent: "分支B探索了'如果贺老六没死'的平行叙事——目的不是提供'幸福结局'，而是揭示：在封建社会的四大绳索中，底层女性需要多少偶然的幸运才能勉强活到老。分支B中的祥林嫂仍然贫穷、无名、依附于丈夫——她的'熬出来了'本身就是对这个系统的控诉。"
 plannedScenes: 7
-scenes:
-  - event: E0
-    title: "河边相遇——灵魂之问"
-    description: "叙述者'我'在鲁镇河边遇见沦为乞丐的祥林嫂，她问关于灵魂和地狱的三个问题。'我'给出含糊回答。"
-    sceneType: linear
-  - event: E1
-    title: "死讯——谬种"
-    description: "叙述者得知她已在除夕夜冻死街头，四叔骂她是'谬种'。转向倒叙。"
-    sceneType: linear
-  - event: E2
-    title: "初到鲁四老爷家"
-    description: "初冬，祥林嫂由卫老婆子介绍到鲁四老爷家做帮工。勤劳、满足。"
-    sceneType: flashback
-  - event: E3
-    title: "被绑卖与改嫁"
-    description: "祥林嫂被婆婆带人绑架，卖到贺家坳嫁给贺老六。"
-    sceneType: flashback
-  - event: E4
-    title: "贺老六康复——不再回鲁镇"
-    description: "分支B：贺老六挺过了伤寒，活了下来。祥林嫂第一次被命运放过，她留在了贺家坳。"
-    sceneType: flashback
-  - event: E5
-    title: "贺家坳——平静的岁月"
-    description: "阿毛长大，祥林嫂又生了女儿。一家人在贺家坳过着贫困但完整的日子。鲁镇的四大绳索没有机会再套住她。"
-    sceneType: flashback
-  - event: E6
-    title: "冬日的炉边——没有祝福的终局"
-    description: "贺老六老死，祥林嫂也老死在自家的床上。孙儿绕膝，灶上还有粥。叙述者只能从闲谈中拼凑她的后半生。"
-    sceneType: flashback

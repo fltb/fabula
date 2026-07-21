@@ -1,0 +1,272 @@
+{
+  "prose": "旧历的年底，鲁镇照例沉浸在一种混沌的忙碌里。我回到这故乡，暂寓在四叔的宅中，已有了三四日。四叔是个讲理学的老监生，书房的墙上照旧挂着那副“事理通达心气和平”的对联，然而我总觉得这屋里有一种说不出的窒息。那天下午，我一个人踱出家门，沿着镇东的河边走去。\n\n天空灰沉沉的，像要下雪的样子。河水静静地流着，岸边枯草在风里瑟缩。远远地，我看见一个身影蹲在河岸的乱石间，起初以为是一堆破布，走近了才看出是一个活人。那人头发全白了，散乱地披在肩上，脸是黄中带黑的，瘦得只剩下骨头的轮廓，神情木刻似的，只有那眼珠间或一轮，表示她仍是一个活物。我正要绕过去，那人却忽然抬起头来，眼珠定定地看住我，接着竟站了起来，拦住我的去路。\n\n“你回来了。”她说，声音沙哑而平板。\n\n我这才认出她是祥林嫂。我几乎失声叫出来。从前那个面色虽青黄但两颊还有红晕的勤快女人，现在竟成了这副模样。她手里拄着一根竹竿，下端开了裂；身上的蓝夹袄和乌裙都已破烂不堪，头上却还扎着那根白头绳。\n\n“这——”我不知如何回答。\n\n她走近一步，眼睛忽然发出一种异样的光，直盯着我，问：“你是识字的，又是出门人，见识得多。我正要问你一件事——”她那没有精采的眼睛忽然发光了。“就是——”她放低了声音，极秘密似的切切的说，“一个人死了之后，究竟有没有魂灵的？”\n\n我悚然了。这个问题来得太突兀。我在城里读过的那些书，讨讑的新学，此刻竟一句也想不起来。我看着她那紧盯的眼睛，那里面仿佛烧着最后的一点火。我只觉得背上渗出了冷汗。\n\n“也许有罢——”我吞吞吐吐地说，“我想，也许有罢……”\n\n“那么，也就有地狱了？”\n\n“地狱？——论理，就该也有。——然而也未必，……谁来管这等事……”\n\n“那么，死掉的一家的人，都能见面的？”\n\n“唉唉，见面不见面呢？……”这时我已知道自己也还是完全一个愚人，什么踌躇，什么计画，都挡不住那三句问。我即刻胆怯起来了，便想全翻过先前的话来，“那是，……实在，我说不清……。其实，究竟有没有魂灵，我也说不清。”\n\n我乘她不再紧接的问，迈开步便走，匆匆的逃回四叔的家中，心里很觉得不安逸。我坐在书房里，那副对联“事理通达心气和平”对着我，仿佛在嘲笑。屋外开始下起雪来，淅淅沥沥的，我的心却怎么也平静不下。我想，我那句“说不清”是句极有用的话，可以推脱一切的。然而，于她呢？我终究是负着一种难言的疚歉。\n\n这就是我最后一次见到祥林嫂了。",
+  "analysis": {
+    "eventId": "E0",
+    "analysis": {
+      "postconditions": {
+        "covered": [
+          "narrator.knowledge:encountered_xianglins_wife",
+          "narrator.emotionalState:guilty_uneasy",
+          "narrator.knowledge_of_xianglins_wife:saw_her_as_beggar",
+          "narrator.location:fourth_master_lu_house",
+          "xianglins_wife.spiritual_state (captured via her bright-eyed questioning)",
+          "xianglins_wife.emotionalState (captured as doubtful/questioning)"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "竹竿，下端开了裂",
+          "severity": "minor"
+        },
+        {
+          "detail": "天空灰沉沉的，像要下雪的样子；屋外开始下起雪来，淅淅沥沥的",
+          "severity": "minor"
+        },
+        {
+          "detail": "坐在书房里，那副对联对着我，仿佛在嘲笑",
+          "severity": "minor"
+        },
+        {
+          "detail": "这就是我最后一次见到祥林嫂了（explicit narrative foreshadowing not in spec)",
+          "severity": "minor"
+        }
+      ],
+      "quality": {
+        "proseScore": 8.5,
+        "maxScore": 10,
+        "strengths": [
+          "Atmospheric opening establishes bleak winter mood and cultural setting",
+          "Vivid description of Xianglin's wife's degradation",
+          "Effective pacing: slow build-up, intense encounter, rushed escape",
+          "Faithful rendering of the narrator's inner conflict and guilt",
+          "Echoes Lu Xun's original language and rhythm"
+        ],
+        "weaknesses": [
+          "Slight redundancy: eyes suddenly glowing mentioned twice",
+          "The final line '这就是我最后一次见到祥林嫂了' may be slightly forced, though effective",
+          "Some minor inconsistencies in punctuation (e.g., ellipses usage)"
+        ],
+        "estimatedWordCount": 650
+      },
+      "threadProgressAchieved": [
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "foreshadowingDeployed": [
+        "soul_question_unresolved",
+        "her_death_imminent"
+      ],
+      "narrativeChecks": [
+        {
+          "entityId": "scene",
+          "attribute": "time_period",
+          "hint": "new_year_eve afternoon, overcast, pre-snow atmosphere",
+          "evidence": "旧历的年底...那天下午...天空灰沉沉的，像要下雪的样子",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "character_state",
+          "hint": "location=luchen_town, purpose=new_year_visit, emotionalState=restless_uneasy",
+          "evidence": "我回到这故乡，暂寓在四叔的宅中...心里很觉得不安逸",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "character_state",
+          "hint": "beggar, physically degraded, asking soul questions",
+          "evidence": "头发全白...竹竿，下端开了裂...拦住我的去路...问魂灵",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_formality",
+          "hint": "literary but accessible, reflective first-person prose",
+          "evidence": "我悚然了...我即刻胆怯起来了，便想全翻过先前的话来",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_vocabulary",
+          "hint": "educated, uses period terms like '新学', '论理', '魂灵'",
+          "evidence": "我在城里读过的那些书，讨讑的新学...论理，就该也有...究竟有没有魂灵",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_anachronism",
+          "hint": "language appropriate for early 20th-century Chinese intellectual",
+          "evidence": "旧历的年底, 四叔, 老监生, 事理通达心气和平",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_action_verbs",
+          "hint": "verbs convey hesitation, evasion, and guilt",
+          "evidence": "吞吞吐吐地说, 匆匆的逃回, 负着一种难言的疚歉",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "scene",
+          "attribute": "pacing",
+          "hint": "slow atmospheric start, sudden intense encounter, rapid escape",
+          "evidence": "那天下午...慢慢走去...忽然站起来...匆匆的逃回四叔的家中",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "scene",
+          "attribute": "discourseMode",
+          "hint": "reflection dominates, with description and dialogue",
+          "evidence": "我总觉得...我悚然了...我终究是负着一种难言的疚歉",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "pronoun_consistency",
+          "hint": "uses 她 throughout",
+          "evidence": "她的眼睛, 她手里拄着, 她放低了声音",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "pronoun_consistency",
+          "hint": "uses 我 consistently in first-person",
+          "evidence": "我回到, 我才认出, 我悚然了, 我迈开步",
+          "matchLevel": "exact"
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "xianglins_wife",
+          "feature": "hair",
+          "declared": "头发全白",
+          "evidence": "头发全白了",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "face",
+          "declared": "脸黄中带黑",
+          "evidence": "脸是黄中带黑的",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "build",
+          "declared": "瘦削不堪",
+          "evidence": "瘦得只剩下骨头的轮廓",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "expression",
+          "declared": "木刻似的神情，只有眼珠间或一轮",
+          "evidence": "神情木刻似的，只有那眼珠间或一轮",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "clothing_upper",
+          "declared": "蓝夹袄",
+          "evidence": "蓝夹袄",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "clothing_lower",
+          "declared": "乌裙",
+          "evidence": "乌裙",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "headband",
+          "declared": "扎白头绳",
+          "evidence": "扎着那根白头绳",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "scar",
+          "declared": "额角伤疤",
+          "evidence": "not mentioned in prose",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "narrator",
+          "feature": "appearance",
+          "declared": "年轻知识分子，穿着城里人的衣服",
+          "evidence": "not described in prose",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "feature": "appearance",
+          "declared": "老监生威严，长衫",
+          "evidence": "not described in prose",
+          "matchLevel": "absent"
+        }
+      ],
+      "characterReferences": [
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她",
+            "那人"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四叔"
+          ]
+        }
+      ],
+      "tenseDetected": "past",
+      "conflictAnalysis": {
+        "primaryType": "person_vs_self",
+        "resolutionAchieved": false
+      },
+      "ruleChecks": [],
+      "knowledgeChecks": [
+        {
+          "entityId": "narrator",
+          "leakedEntity": "xianglins_wife",
+          "leakedInfo": "narrator recognizes her as 祥林嫂, implying prior knowledge not justified by 'Known facts: 0'",
+          "evidence": "我这才认出她是祥林嫂",
+          "matchLevel": "exact"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "eventId": "E0",
+    "provider": "ai-sdk",
+    "model": "deepseek-v4-pro",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "e731ffade8ea8d619a61844e88a1583dc490bb4c9d0d0871ffdf6020f21b37c9",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-21T03:57:14.290Z",
+    "reviewStatus": "candidate",
+    "attempts": 1,
+    "errors": []
+  }
+}

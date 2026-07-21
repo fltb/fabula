@@ -16,12 +16,6 @@ preconditions:
   - entity: narrator
     attribute: location
     value: fourth_master_lu_house
-  - entity: narrator
-    attribute: knowledge
-    value: gave_honest_answer_to_xianglins_wife
-  - entity: narrator
-    attribute: emotionalState
-    value: truthful_but_uncertain
 expectedPostconditions:
   - entity: xianglins_wife
     attribute: status
@@ -46,7 +40,6 @@ expectedPostconditions:
   - entity: narrator
     attribute: purpose
     value: recount_her_story
-    narrativeHint: "'我'在孤灯下开始回忆她的生平——'我'没有救她，但'我'至少没有骗她。这微小的诚实是否能赎回'我'的旁观者身份？'我'用书写她的故事来回应这个问题。"
     confidence: 1.0
 threadProgress:
   - thread: T1
@@ -74,7 +67,7 @@ relationshipEffects:
   - participants:
       - narrator
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: honest_death_severs_connection
     newState:
       type: witness_subject_resolved_in_truth

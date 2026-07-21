@@ -167,21 +167,10 @@ describe('includesPath', () => {
     expect(includesPath({ type: 'all' }, linearPath)).toBe(true);
   });
 
-  it('empty branch path returns true for { type: "paths" }', () => {
-    expect(includesPath({ type: 'paths', paths: [pathA] }, linearPath)).toBe(true);
-  });
-
-  it('empty branch path returns true for { type: "except" }', () => {
-    const bs: BranchSet = { type: 'except', branches: { type: 'all' } };
-    expect(includesPath(bs, linearPath)).toBe(true);
-  });
-
-  it('empty branch path returns true for { type: "condition" }', () => {
-    const bs: BranchSet = {
-      type: 'condition',
-      condition: { type: 'equals', field: 'decisions.length', value: 5 },
-    };
-    expect(includesPath(bs, linearPath)).toBe(true);
+  it('empty branch path excludes scoped paths, exceptions, and conditions', () => {
+    expect(includesPath({ type: 'paths', paths: [pathA] }, linearPath)).toBe(false);
+    expect(includesPath({ type: 'except', branches: { type: 'all' } }, linearPath)).toBe(false);
+    expect(includesPath({ type: 'condition', condition: { type: 'equals', field: 'decisions.length', value: 5 } }, linearPath)).toBe(false);
   });
 
   // --- "all" ---

@@ -1,0 +1,18 @@
+{
+  "prose": "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，一个短工从外面进来，在四叔耳边低语了几句。四叔的脸色沉了下来，放下碗筷，问道：'什么时候？'短工回答：'昨天夜里，或者就是今天罢。——我说不清。'四叔皱起眉头：'怎么死的？'短工说：'还不是穷死的？'四叔没有作声，过了好一会儿，才从鼻子里哼出一句：'不早不迟，偏偏要在这时候——这就可见是一个谬种！'我知道他们说的是谁了。我放下碗筷，心中忽然感到一阵轻松——但随即又有些负疚。外面的爆竹声越来越密，祝福的鞭炮震得窗纸簌簌地响。我默默地走回书房，点起灯来，一个人坐在灯下。雪花在窗外无声地飘落，爆竹的火药香混着雪的气息从门缝里渗进来。我的心渐渐地轻松起来——然而偶一想到她，便又感到一丝隐约的负罪。我于是拿起笔来，想记下些事情。先前所见所闻的她的半生事迹的断片，至此也联成一片了。",
+  "analysis": "{\"eventId\":\"E1\",\"analysis\":{\"postconditions\":{\"covered\":[\"xianglins_wife_status_dead\"],\"dropped\":[]},\"preconditions\":{\"violated\":[]},\"pov\":{\"consistent\":true,\"leaks\":[]},\"inventedDetails\":[],\"quality\":{\"proseScore\":8,\"maxScore\":10,\"strengths\":[\"dialogue\",\"atmosphere\"],\"weaknesses\":[],\"estimatedWordCount\":350},\"threadProgressAchieved\":[\"T1: her_death_confirmed\",\"T3: social_indifference\"],\"foreshadowingDeployed\":[\"flashback_triggered\"],\"narrativeChecks\":[],\"appearanceChecks\":[],\"characterReferences\":[{\"entityId\":\"narrator\",\"namesUsed\":[\"我\"]},{\"entityId\":\"fourth_master_lu\",\"namesUsed\":[\"四叔\"]},{\"entityId\":\"xianglins_wife\",\"namesUsed\":[\"她\"]}],\"tenseDetected\":\"past\",\"conflictAnalysis\":{\"primaryType\":\"person_vs_society\",\"resolutionAchieved\":false}}}",
+  "llmPass1": {
+    "promptTokens": 3275,
+    "completionTokens": 91,
+    "totalTokens": 0
+  },
+  "llmPass2": {
+    "promptTokens": 4084,
+    "completionTokens": 188,
+    "totalTokens": 0
+  },
+  "renderedAt": "2026-07-20T05:03:18.824Z",
+  "chapters": [
+    1
+  ]
+}

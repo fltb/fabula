@@ -1,0 +1,30 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [
+        "render-mdg.mjs",
+        "dump-issues.mjs",
+        "compare-mdg.mjs"
+      ],
+      "project": ["*.{ts,mjs}", "scripts/**/*.mjs"]
+    },
+    "packages/core": {
+      "project": ["src/**/*.ts"]
+    },
+    "packages/bench": {
+      "entry": ["scripts/**/*.mjs"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/cli": {
+      "entry": ["src/mcp-server.ts"],
+      "project": ["src/**/*.ts"]
+    }
+  },
+  "ignoreIssues": {
+    "packages/bench/src/consistency.ts": ["types"]
+  },
+  "ignoreDependencies": [
+    "tinybench"
+  ]
+}

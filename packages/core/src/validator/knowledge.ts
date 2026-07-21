@@ -9,6 +9,18 @@ import type {
   PostRenderInput,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
+import { z } from 'zod';
+import { matchLevelSchema } from './schemas.js';
+
+export const knowledgeCheckSchema = z.object({
+  entityId: z.string(),
+  leakedEntity: z.string(),
+  leakedInfo: z.string(),
+  evidence: z.string(),
+  matchLevel: matchLevelSchema,
+});
+
+export type KnowledgeCheck = z.infer<typeof knowledgeCheckSchema>;
 
 export class KnowledgeValidator implements Validator {
   name = 'knowledge';
@@ -73,7 +85,7 @@ export class KnowledgeValidator implements Validator {
     const issues: ValidationIssue[] = [];
     if (!input.analysis) return issues;
 
-    const knowledgeChecks = input.analysis.analysis.knowledgeChecks ?? [];
+    const knowledgeChecks = z.array(knowledgeCheckSchema).safeParse(input.analysis.analysis.knowledgeChecks).data ?? [];
     for (const check of knowledgeChecks) {
       if (check.matchLevel === 'contradicted') {
         issues.push(makeIssue(
@@ -94,7 +106,7 @@ export class KnowledgeValidator implements Validator {
   getAnalysisRequirements() {
     return [{
       field: 'knowledgeChecks',
-      schemaExample: { entityId: 'char_001', leakedEntity: 'char_002', leakedInfo: '...', evidence: '...', matchLevel: 'exact' },
+      schema: z.array(knowledgeCheckSchema),
       instruction: 'knowledgeChecks: For the POV character, check if the prose reveals information they could not know given their established knowledge boundaries. Report leaks in the knowledgeChecks block with the POV character entityId, the leaked entity, what information was leaked, a direct quote as evidence, and matchLevel. A knowledge leak occurs when prose describes facts, observations, internal states of other characters, or historical events that the POV character has not acquired through direct experience, being told, or inference.',
     }];
   }

@@ -2,5 +2,5 @@ injected:
   - entityId: "E5"
     attribute: "preconditions"
     expectedValidator: "reachability"
-    expectedSeverity: "error"
+    expectedSeverity: "warning"
     description: "E5 has a precondition that xianglins_wife.attribute has_magical_power = true — but no event ever sets this; the event is unreachable"

@@ -11,9 +11,9 @@
 //
 // This enables traceability, reproducibility, and field-level confidence reporting.
 
-export type ProvenanceSource = 'chinovelke' | 'novel_agent_sft' | 'interactive_novels_3k';
+type ProvenanceSource = 'chinovelke' | 'novel_agent_sft' | 'interactive_novels_3k';
 
-export type FieldOrigin = 'direct_map' | 'llm_inferred' | 'unavailable' | 'synthesized';
+type FieldOrigin = 'direct_map' | 'llm_inferred' | 'unavailable' | 'synthesized';
 
 export interface ProvenanceAnnotation {
   source: ProvenanceSource;

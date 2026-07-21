@@ -1,6 +1,8 @@
 injected:
   - entityId: "E3"
     attribute: "threadProgress"
-    expectedValidator: "schema"
+    expectedValidator: "thread_progress"
     expectedSeverity: "warning"
     description: "An event's threadProgress references threadId T99 — a non-existent thread"
+    mockAnalysis:
+      threadProgressAchieved: []

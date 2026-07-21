@@ -3,25 +3,91 @@
   "analysis": {
     "eventId": "E0",
     "analysis": {
-      "postconditions": { "covered": ["encountered_xianglins_wife"], "dropped": [] },
-      "preconditions": { "violated": [] },
-      "pov": { "consistent": true, "leaks": [] },
+      "postconditions": {
+        "covered": [
+          "encountered_xianglins_wife"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
       "inventedDetails": [],
-      "quality": { "proseScore": 8, "maxScore": 10, "strengths": ["atmospheric description", "character introduction"], "weaknesses": [], "estimatedWordCount": 450 },
-      "threadProgressAchieved": ["T2: soul_question_opened", "T3: narrator_moral_weakness"],
-      "foreshadowingDeployed": ["soul_question_unresolved", "her_death_imminent"],
+      "quality": {
+        "proseScore": 8,
+        "maxScore": 10,
+        "strengths": [
+          "atmospheric description",
+          "character introduction"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 450
+      },
+      "threadProgressAchieved": [
+        "T2: soul_question_opened",
+        "T3: narrator_moral_weakness"
+      ],
+      "foreshadowingDeployed": [
+        "soul_question_unresolved",
+        "her_death_imminent"
+      ],
       "narrativeChecks": [],
       "appearanceChecks": [
-        { "entityId": "xianglins_wife", "feature": "appearance", "declared": "white_hair_haggard_wooden_face", "evidence": "全白头发，脸上黄中带黑，瘦削不堪，木刻似的", "matchLevel": "exact" }
+        {
+          "entityId": "xianglins_wife",
+          "feature": "appearance",
+          "declared": "white_hair_haggard_wooden_face",
+          "evidence": "全白头发，脸上黄中带黑，瘦削不堪，木刻似的",
+          "matchLevel": "exact"
+        }
       ],
       "characterReferences": [
-        { "entityId": "narrator", "namesUsed": ["我"] },
-        { "entityId": "fourth_master_lu", "namesUsed": ["四叔", "鲁四老爷"] },
-        { "entityId": "xianglins_wife", "namesUsed": ["一个女人", "祥林嫂"] }
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四叔",
+            "鲁四老爷"
+          ]
+        },
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "一个女人",
+            "祥林嫂"
+          ]
+        }
       ],
       "tenseDetected": "past",
-      "conflictAnalysis": { "primaryType": "person_vs_self", "resolutionAchieved": false }
+      "conflictAnalysis": {
+        "primaryType": "person_vs_self",
+        "resolutionAchieved": false
+      },
+      "ruleChecks": [],
+      "knowledgeChecks": []
     }
   },
-  "_metadata": { "eventId": "E0", "errors": [] }
+  "metadata": {
+    "eventId": "E0",
+    "errors": [],
+    "provider": "mock-pass2",
+    "model": "mock-stage1",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-18T00:00:00.000Z",
+    "reviewStatus": "approved",
+    "attempts": 1
+  }
 }

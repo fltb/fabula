@@ -69,7 +69,7 @@ relationshipEffects:
   - participants:
       - fourth_master_lu
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: dying_nuisance
     newState:
       type: dead_outcast
@@ -77,7 +77,7 @@ relationshipEffects:
   - participants:
       - fourth_aunt
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: dismissed_and_forgotten
     newState:
       type: unwanted_memory

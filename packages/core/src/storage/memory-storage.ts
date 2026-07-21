@@ -5,7 +5,7 @@
 // to keep the implementation simple and path-agnostic (absolute vs relative).
 // ============================================================================
 
-import type { DirEntry, Storage } from './types.ts';
+import type { DirEntry, Storage, StorageWrite } from './types.ts';
 
 export class MemoryStorage implements Storage {
   private files = new Map<string, string>();
@@ -55,6 +55,25 @@ export class MemoryStorage implements Storage {
     const p = this._norm(filePath);
     this._ensureParent(p);
     this.files.set(p, content);
+  }
+
+  commitBatch(writes: readonly StorageWrite[]): void {
+    const nextFiles = new Map(this.files);
+    const nextDirs = new Set(this.dirs);
+    for (const write of writes) {
+      const normalized = this._norm(write.path);
+      const segments = normalized.split('/');
+      segments.pop();
+      let parent = '';
+      for (const segment of segments) {
+        if (!segment) continue;
+        parent = parent ? `${parent}/${segment}` : segment;
+        nextDirs.add(parent);
+      }
+      nextFiles.set(normalized, write.content);
+    }
+    this.files = nextFiles;
+    this.dirs = nextDirs;
   }
 
   mkdirp(dirPath: string): void {

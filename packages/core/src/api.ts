@@ -13,9 +13,12 @@ import * as path from 'node:path';
 import { EntityMapper } from './entity/mapper.ts';
 import { InMemoryEntityRegistry } from './entity/registry.ts';
 import { StateManager } from './state/manager.ts';
+import { compileStoryBoundaries } from './state/story-boundaries.ts';
 import { ContextCompiler } from './context/compiler.ts';
+import { assembleNovel } from './assembler/novel.ts';
+import { countNarrativeText } from './assembler/count.ts';
 import { RenderPipeline, buildAndWriteOutputs } from './pipeline/index.ts';
-import type { RenderSceneResult, RenderJob } from './pipeline/render.ts';
+import type { RenderSceneResult, RenderJob, ProviderCallLedgerEntry } from './pipeline/render.ts';
 import { BatchRenderPipeline } from './batch-renderer.ts';
 import type { BatchConfig } from './batch-renderer.ts';
 import type { SystemContext } from './types/context.js';
@@ -24,9 +27,14 @@ import { calculateISS } from './iss/score.ts';
 import { FsStorage } from './storage/fs-storage.ts';
 import type { Storage } from './storage/types.ts';
 import type { LLMProvider } from './ai/types.ts';
+import type { BranchPath } from './types/branch.js';
+import { Logger } from './observability/logger.ts';
+import { TraceCollector } from './observability/trace.ts';
+import { sanitizeError } from './errors.ts';
 import type {
   AnalysisResult,
   Entity,
+  Fact,
   ISSSnapshot,
   NarrativeEvent,
   ValidationResult,
@@ -44,8 +52,15 @@ export interface RenderNovelOptions {
   baseUrl?: string;
   eventId?: string;     // single event; omit or 'all' for all
   dryRun?: boolean;
+  branchPath?: BranchPath;
+  provider?: LLMProvider;
+  storage?: Storage;
+  /** Opt-in trace output to .nova/traces/<jobId>.jsonl */
+  trace?: boolean;
   /** Optional batch config for sliding-window batch rendering. */
   batch?: BatchConfig;
+  /** Circuit breaker max rounds (default 3, smoke=1) */
+  maxRounds?: number;
 }
 
 export interface RenderNovelResult {
@@ -55,7 +70,16 @@ export interface RenderNovelResult {
     wordCount: number;
     cacheHit: boolean;
     errors: string[];
+    released: boolean;
+    validationErrors: number;
+    validationIssueMessages: string[];
     analysis: AnalysisResult | null;
+    /** Provider call ledger — per-call record for live smoke auditing. */
+    providerCalls: ProviderCallLedgerEntry[];
+    /** Aggregate SHA-256 of ordered provider-call identities */
+    promptHash: string;
+    /** Pass2 rejection category when analysis is null (empty/parse/validation) */
+    pass2Rejection?: string;
   }>;
   errors: string[];
 }
@@ -100,13 +124,16 @@ function initializeProject(projectDir: string): {
 
   const registry = new InMemoryEntityRegistry();
   registry.load(projectDir);
-
-  const snapshotsDir = path.join(projectDir, '.nova', 'snapshots');
-  const stateManager = new StateManager(snapshotsDir);
-  for (const event of events) {
-    stateManager.commit(event);
-  }
-  const state = stateManager.getCurrentState();
+  const stateManager = new StateManager(path.join(projectDir, '.nova', 'snapshots'));
+  stateManager.initialize(events);
+  const state: WorldState = {
+    entities: {},
+    relationships: {},
+    knowledge: {},
+    threads: {},
+    rules: {},
+    facts: [],
+  };
 
   return { mapper, data, events, registry, stateManager, state };
 }
@@ -144,15 +171,44 @@ function findChapterForEvent(
 }
 
 /**
+ * Build a release-gate diagnostic message for a single scene result.
+ * The message includes the event ID and a sanitized, stable reason —
+ * never raw provider error secrets.
+ *
+ * @param result - The scene render result to diagnose.
+ * @returns A diagnostic string in the form "eventId: sanitized-reason".
+ */
+export function buildReleaseDiagnostic(result: RenderSceneResult): string {
+  let reason: string;
+
+  if (result.validation && result.validation.errors.length > 0) {
+    reason = result.validation.errors.map((issue) => issue.message).join(' | ');
+  } else if (result.errors.length > 0) {
+    reason = result.errors.join(' | ');
+  } else if (result.analysis === null) {
+    reason = 'missing analysis output';
+  } else if (result.prose.trim().length === 0) {
+    reason = 'empty prose';
+  } else if (result.needsReview) {
+    reason = 'exhausted retries — needs review';
+  } else {
+    reason = 'release requirements unmet';
+  }
+
+  return `${result.eventId}: ${sanitizeError(reason)}`;
+}
+
+/**
  * Create an LLM provider using AiSdkProvider (Vercel AI SDK).
  * Reads apiKey and baseUrl from parameters or environment variables.
  */
 async function createProvider(
   apiKey: string,
-  baseUrl?: string,
+  baseUrl: string | undefined,
+  model: string,
 ): Promise<LLMProvider> {
   const { AiSdkProvider } = await import('./ai/providers/ai-sdk.ts');
-  return new AiSdkProvider({ apiKey, baseURL: baseUrl });
+  return new AiSdkProvider({ apiKey, baseURL: baseUrl, model });
 }
 
 // ============================================================================
@@ -170,23 +226,41 @@ async function createProvider(
  * return with prose empty.
  */
 export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovelResult> {
-  const { projectDir, model, apiKey, baseUrl, eventId, dryRun } = opts;
+  const { projectDir, model, apiKey, baseUrl, eventId, dryRun, provider: injectedProvider, branchPath, trace } = opts;
   const errors: string[] = [];
+  // Observability: trace collector for this render session
+  const traceCollector = trace ? new TraceCollector(eventId ?? 'render-all') : undefined;
+  const eventLogger = traceCollector ? new Logger(undefined, { module: 'render' }) : undefined;
 
-  // ── Load project ──────────────────────────────────────────────────
-  const { mapper, data, events, registry, stateManager } = initializeProject(projectDir);
-
-  // Determine which events to render
-  const renderEvents = !eventId || eventId === 'all'
-    ? events.filter((e) => e.id !== 'system:genesis')
-    : events.filter((e) => e.id === eventId);
-
+  const { data, events, registry } = initializeProject(projectDir);
+  const genesis = events.find((event) => event.id === 'system:genesis');
+  const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
+  const anchors = new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day]));
+  const initialFacts: Fact[] = [
+    ...(genesis?.postconditions ?? []),
+    ...registry.getAll().flatMap((entity) => Object.entries(entity.state).map(([attribute, value]) => ({
+      id: `${entity.id}.${attribute}`,
+      entityId: entity.id,
+      attribute,
+      value,
+      validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
+    }))),
+  ];
+  const initialThreads = (data.worldInitialState?.threads ?? []).map(t => ({
+    id: t.id,
+    progress: Number(t.initialProgress ?? 0),
+    total: 0,
+  }));
+  const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, branchPath, initialThreads);
+  const renderEvents = (!eventId || eventId === 'all'
+    ? authoredEvents
+    : authoredEvents.filter((event) => event.id === eventId))
+    .filter((event) => boundaries.stateBeforeByEventId.has(event.id));
   if (renderEvents.length === 0) {
     errors.push(`No events found to render${eventId ? ` for eventId "${eventId}"` : ''}`);
     return { results: [], errors };
   }
 
-  // Build systemContext from project config (fixes hardcoded 'fantasy' genre bug)
   const sysCtx: SystemContext = {
     genre: data.config?.genre ?? 'literary',
     style: 'literary',
@@ -200,51 +274,59 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     fs.mkdirSync(dryRunDir, { recursive: true });
 
     for (const ev of renderEvents) {
-      const beforeState = stateManager.getStateAt(ev.narrativeOrder - 1);
+      const beforeState = boundaries.stateBeforeByEventId.get(ev.id)!;
       const compiler = new ContextCompiler();
-      const pkg = compiler.compile(ev, beforeState, registry, { systemContext: sysCtx });
-
-      const dryRunPath = path.join(dryRunDir, `${ev.id}_prompt.md`);
-      fs.writeFileSync(dryRunPath, pkg.markdown, 'utf-8');
+      compiler.compile(ev, beforeState, registry, { systemContext: sysCtx });
 
       results.push({
         eventId: ev.id,
         prose: '',
         wordCount: 0,
         cacheHit: false,
+        released: false,
+        validationErrors: 0,
+        validationIssueMessages: [],
         errors: [],
         analysis: null,
+        providerCalls: [],
+        promptHash: '',
       });
     }
 
     return { results, errors: [] };
   }
-
   // ── Full rendering ────────────────────────────────────────────────
-  const resolvedApiKey = apiKey ?? process.env['NOVALISTICALLY_AI_API_KEY'] ?? '';
-  if (!resolvedApiKey) {
-    errors.push('No API key provided. Set NOVALISTICALLY_AI_API_KEY environment variable or pass apiKey option.');
-    return { results: [], errors };
-  }
-  const resolvedBaseUrl = baseUrl ?? process.env['NOVALISTICALLY_AI_BASE_URL'] ?? undefined;
-
-  let provider: LLMProvider;
-  try {
-    provider = await createProvider(resolvedApiKey, resolvedBaseUrl);
-  } catch (err) {
-    errors.push(`Failed to create LLM provider: ${(err as Error).message}`);
-    return { results: [], errors };
-  }
-
   const resolvedModel = model ?? data.config?.defaultModel ?? 'claude-sonnet-4-20250514';
+  let provider: LLMProvider;
+  if (injectedProvider) {
+    provider = injectedProvider;
+  } else {
+    const resolvedApiKey = apiKey ?? process.env['NOVALISTICALLY_AI_API_KEY'] ?? '';
+    if (!resolvedApiKey) {
+      errors.push('No API key provided. Set NOVALISTICALLY_AI_API_KEY environment variable or pass apiKey option.');
+      return { results: [], errors };
+    }
+    const resolvedBaseUrl = baseUrl ?? process.env['NOVALISTICALLY_AI_BASE_URL'] ?? undefined;
+    try {
+      provider = await createProvider(resolvedApiKey, resolvedBaseUrl, resolvedModel);
+    } catch (err) {
+      errors.push(`Failed to create LLM provider: ${(err as Error).message}`);
+      return { results: [], errors };
+    }
+  }
   const cacheDir = path.join(projectDir, '.nova', 'render-cache');
-  const storage = new FsStorage();
-
+  const storage = opts.storage ?? new FsStorage();
   const pipeline = new RenderPipeline({
     provider,
     model: resolvedModel,
     cacheDir,
     storage,
+    aggregator: new ResultAggregator(),
+    logger: eventLogger,
+    traceCollector,
+    targetLengthWords: data.config?.defaultSceneTextTarget ?? 400,
+    language: data.config?.defaultLanguage ?? 'en',
+    maxRounds: opts.maxRounds,
   });
 
   // Initialize cache
@@ -255,9 +337,12 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
   const jobs: RenderJob[] = [];
   for (const ev of renderEvents) {
     const chapterNum = findChapterForEvent(data, ev.id);
-    const beforeState = stateManager.getStateAt(ev.narrativeOrder - 1);
+    const beforeState = boundaries.stateBeforeByEventId.get(ev.id)!;
     const compiler = new ContextCompiler();
+    const ctxStart = Date.now();
+    traceCollector?.record({ phase: 'context', state: 'start', spanId: ev.id, eventId: ev.id });
     const pkg = compiler.compile(ev, beforeState, registry, { systemContext: sysCtx });
+    traceCollector?.record({ phase: 'context', state: 'end', spanId: ev.id, eventId: ev.id, durationMs: Date.now() - ctxStart });
     jobs.push({
       event: ev,
       stateBefore: beforeState,
@@ -265,36 +350,59 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
       chapter: chapterNum,
     });
   }
-
-  // Render — choose batched or bulk mode
-  let results: RenderSceneResult[];
+  // Render — choose batched or bulk mode, preserving results even on exception
+  let results: RenderSceneResult[] = [];
   try {
-    if (opts.batch) {
-      // Batch mode: sliding-window rendering with progress hooks
-      const batchRenderer = new BatchRenderPipeline(pipeline);
-      const batchResult = await batchRenderer.renderBatched(jobs, opts.batch);
-      results = batchResult.results;
+    results = opts.batch
+      ? (await new BatchRenderPipeline(pipeline).renderBatched(jobs, opts.batch)).results
+      : await pipeline.renderAll(jobs);
+    const unreleased = results.filter((result) => result.prose.trim().length === 0 || result.analysis === null || result.validation === null || !result.validation.passed || result.needsReview);
+    if (unreleased.length > 0) {
+      const diagnostics = unreleased.map(buildReleaseDiagnostic);
+      errors.push(`Release gate rejected: ${diagnostics.join('; ')}`);
     } else {
-      // Original mode: full parallel render
-      results = await pipeline.renderAll(jobs);
-      // Write outputs (batch mode handles output writing via onAfterBatch hooks)
       buildAndWriteOutputs(storage, projectDir, jobs, results);
+      if (renderEvents.length === authoredEvents.length) {
+        const assembled = assembleNovel({ projectDir, storage, branchPath, language: data.config?.defaultLanguage ?? 'en' });
+        const sceneTextCount = results.reduce((total, result) => total + countNarrativeText(result.prose, data.config?.defaultLanguage ?? 'en'), 0);
+        if (assembled.wordCount !== sceneTextCount) {
+          throw new Error(`Assembly text count mismatch: scenes=${sceneTextCount}, novel=${assembled.wordCount}`);
+        }
+      }
     }
   } catch (err) {
-    errors.push(`Render failed: ${(err as Error).message}`);
-    return { results: [], errors };
+    errors.push(sanitizeError(err));
+    // results already populated from renderAll if it succeeded;
+    // if renderAll threw, results is still [] — no output writes.
+  }
+  // Record output spans (only for events that were rendered)
+  for (const result of results) {
+    traceCollector?.record({ phase: 'output', state: 'end', spanId: result.eventId, eventId: result.eventId, durationMs: result.renderEnd - result.renderStart });
+  }
+  // Write trace file (opt-in, errors must not affect release eligibility)
+  if (traceCollector) {
+    try {
+      traceCollector.write(storage, projectDir);
+    } catch {
+      // trace write errors silently ignored
+    }
   }
 
   // Map to return type
   const mappedResults = results.map((r) => ({
     eventId: r.eventId,
     prose: r.prose,
-    wordCount: r.prose.split(/\s+/).filter(Boolean).length,
+    wordCount: countNarrativeText(r.prose, data.config?.defaultLanguage ?? 'en'),
     cacheHit: r.cacheHit,
     errors: r.errors,
     analysis: r.analysis,
+    released: r.prose.trim().length > 0 && r.analysis !== null && r.validation !== null && r.validation.passed && !r.needsReview,
+    validationErrors: r.validation?.errors.length ?? 0,
+    validationIssueMessages: r.validation?.errors.map((issue) => issue.message) ?? [],
+    providerCalls: r.providerCalls,
+    promptHash: r.promptHash,
+    pass2Rejection: r.pass2Rejection,
   }));
-
   return { results: mappedResults, errors };
 }
 
@@ -316,12 +424,33 @@ export function validateNovel(
   results: Map<string, ValidationResult>;
   iss: ISSSnapshot;
 } {
-  const { data, events, registry, state } = initializeProject(projectDir);
+  const { data, events, registry } = initializeProject(projectDir);
 
-  // Run validators
+  // Compile story boundaries for per-event pre-state
+  const genesis = events.find((event) => event.id === 'system:genesis');
+  const initialFacts: Fact[] = [
+    ...(genesis?.postconditions ?? []),
+    ...registry.getAll().flatMap((entity) => Object.entries(entity.state ?? {}).map(([attribute, value]) => ({
+      id: `${entity.id}.${attribute}`,
+      entityId: entity.id,
+      attribute,
+      value,
+      validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
+    }))),
+  ];
+  const anchors = new Map((data.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day]));
+  const initialThreads = (data.worldInitialState?.threads ?? []).map(t => ({
+    id: t.id,
+    progress: Number(t.initialProgress ?? 0),
+    total: 0,
+  }));
+  const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
+  const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
+
+  // Run validators with per-event pre-state
   const aggregator = new ResultAggregator();
   const mergedOverrides = overrides ?? data.config?.validatorOverrides;
-  const validationResults = aggregator.validateAll(events, state, registry, mergedOverrides);
+  const validationResults = aggregator.validateAll(events, boundaries.finalState, registry, mergedOverrides, boundaries.stateBeforeByEventId);
 
   // Determine overall pass/fail
   let passed = true;
@@ -356,7 +485,7 @@ export function validateNovel(
  * Checks preconditions to determine blocked status.
  */
 export function getProjectStatus(projectDir: string): ProjectStatusResult {
-  const { data, events, registry, state } = initializeProject(projectDir);
+  const { data, events, registry } = initializeProject(projectDir);
 
   // Determine rendered events by checking scenes/ directory for .md files
   const renderedSet = new Set<string>();
@@ -374,10 +503,31 @@ export function getProjectStatus(projectDir: string): ProjectStatusResult {
     }
   }
 
+  // Compile story boundaries for per-event pre-state validation
+  const genesis = events.find((event) => event.id === 'system:genesis');
+  const initialFacts: Fact[] = [
+    ...(genesis?.postconditions ?? []),
+    ...registry.getAll().flatMap((entity) => Object.entries(entity.state ?? {}).map(([attribute, value]) => ({
+      id: `${entity.id}.${attribute}`,
+      entityId: entity.id,
+      attribute,
+      value,
+      validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
+    }))),
+  ];
+  const anchors = new Map((data.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day]));
+  const initialThreads = (data.worldInitialState?.threads ?? []).map(t => ({
+    id: t.id,
+    progress: Number(t.initialProgress ?? 0),
+    total: 0,
+  }));
+  const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
+  const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
+
   // Validate to determine blocked events
   const aggregator = new ResultAggregator();
   const overrides = data.config?.validatorOverrides;
-  const validationResults = aggregator.validateAll(events, state, registry, overrides);
+  const validationResults = aggregator.validateAll(events, boundaries.finalState, registry, overrides, boundaries.stateBeforeByEventId);
 
   const eventStatuses: ProjectStatusResult['events'] = [];
 
@@ -426,7 +576,7 @@ export function getProjectStatus(projectDir: string): ProjectStatusResult {
 
   // Thread progress
   const threads: ProjectStatusResult['threads'] = [];
-  for (const [threadId, threadData] of Object.entries(state.threads)) {
+  for (const [threadId, threadData] of Object.entries(boundaries.finalState.threads)) {
     threads.push({
       id: threadId,
       progress: threadData.progress,
@@ -461,7 +611,7 @@ export function diffEvent(
   projectDir: string,
   eventId: string,
 ): DiffResult | null {
-  const { data, events, registry, stateManager } = initializeProject(projectDir);
+  const { events, stateManager } = initializeProject(projectDir);
 
   const targetEvent = events.find((e) => e.id === eventId);
   if (!targetEvent) return null;

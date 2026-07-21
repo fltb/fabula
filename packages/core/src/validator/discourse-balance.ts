@@ -13,6 +13,8 @@ import type {
   ValidationIssue,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
+import { z } from 'zod';
+import { narrativeCheckSchema } from './schemas.js';
 
 const MAX_DOMINANCE_FRACTION = 0.8;
 
@@ -80,7 +82,7 @@ export class DiscourseBalanceValidator implements Validator {
     if (!analysis) return issues;
 
     // Check Pass 2 narrativeChecks for discourse balance hints
-    const narrativeChecks = analysis.analysis.narrativeChecks ?? [];
+    const narrativeChecks = z.array(narrativeCheckSchema).safeParse(analysis.analysis.narrativeChecks).data ?? [];
     for (const check of narrativeChecks) {
       if (check.attribute === 'discourse_balance' || check.attribute === 'discourseMode') {
         if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
@@ -104,7 +106,7 @@ export class DiscourseBalanceValidator implements Validator {
     return [{
       field: 'narrativeChecks',
       attributes: ['discourse_balance', 'discourseMode'],
-      schemaExample: { entityId: 'E1', attribute: 'discourse_balance', hint: '...', evidence: '...', matchLevel: 'exact' },
+      schema: z.array(narrativeCheckSchema),
       instruction: 'narrativeChecks[discourse]: Evaluate whether the prose\'s discourse mode aligns with the expected discourseMode (action, dialogue, description, exposition, reflection, transition) from the scene spec. Use the narrativeChecks block with attribute "discourse_balance" or "discourseMode" to report whether the prose stays in the intended mode or shifts awkwardly.',
     }];
   }

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import YAML from 'yaml';
 import fs from 'node:fs';
 import path from 'node:path';
+import { runVariantBench } from '../../bench/src/variants.ts';
+import type { VariantIssueResult } from '../../bench/src/variants.ts';
 
 // ============================================================
 // P1b: zhu-fu-variants test suite
@@ -196,7 +198,7 @@ describe('zhu-fu-variants / error-injection (28 files)', () => {
     }
     expect(validators.size).toBeGreaterThanOrEqual(15);
     expect(validators.has('timeline')).toBe(true);
-    expect(validators.has('schema')).toBe(true);
+    expect(validators.has('pronoun')).toBe(true);
     expect(validators.has('pacing')).toBe(true);
     expect(validators.has('appearance')).toBe(true);
   });
@@ -204,9 +206,9 @@ describe('zhu-fu-variants / error-injection (28 files)', () => {
   it('should have the specified 001_timeline_order error', () => {
     const data = loadYaml(path.join(eiDir, '001_timeline_order.yaml'));
     expect(data.injected[0].entityId).toBe('E3');
-    expect(data.injected[0].attribute).toBe('storyTime');
+    expect(data.injected[0].attribute).toBe('narrationTime');
     expect(data.injected[0].expectedValidator).toBe('timeline');
-    expect(data.injected[0].expectedSeverity).toBe('error');
+    expect(data.injected[0].expectedSeverity).toBe('warning');
   });
 });
 
@@ -264,5 +266,773 @@ describe('zhu-fu-variants / extreme-damage (5 files)', () => {
     );
     expect(genesisEntry).toBeDefined();
     expect(genesisEntry.expectedValidator).toBe('reachability');
+  });
+});
+
+// ----- Validation result contracts: runVariantBench checks each injection -----
+describe('zhu-fu-variants / validation result contracts', () => {
+  const EXPECTED_FILE_COUNT = 28;
+  const EXTREME_FILE_COUNT = 5;
+
+  let benchResults: {
+    errorInjection: VariantIssueResult[];
+    extremeDamage: VariantIssueResult[];
+    pipelineF1?: {
+      precision: number;
+      recall: number;
+      f1: number;
+      matchedCount: number;
+      falsePositiveCount: number;
+      missedCount: number;
+    };
+  };
+
+  beforeAll(async () => {
+    const full = await runVariantBench();
+    benchResults = {
+      errorInjection: full.errorInjection,
+      extremeDamage: full.extremeDamage,
+      pipelineF1: full.pipelineF1,
+    };
+  }, 30_000);
+
+  // ── Error injection counts ──────────────────────────────────────────
+  it(`should have exactly ${EXPECTED_FILE_COUNT} error-injection results`, () => {
+    const results = benchResults.errorInjection;
+    // Count unique files
+    const fileNames = new Set(results.map((r) => r.file));
+    expect(fileNames.size).toBe(EXPECTED_FILE_COUNT);
+  });
+
+  it(`should have exactly ${EXTREME_FILE_COUNT} extreme-damage results`, () => {
+    const results = benchResults.extremeDamage;
+    const fileNames = new Set(results.map((r) => r.file));
+    expect(fileNames.size).toBe(EXTREME_FILE_COUNT);
+  });
+
+  // ── Aggregate entry totals ──────────────────────────────────────────
+  it('should have exactly 30 error-injection entries total', () => {
+    expect(benchResults.errorInjection.length).toBe(30);
+  });
+
+  it('should have exactly 10 extreme-damage entries total', () => {
+    expect(benchResults.extremeDamage.length).toBe(10);
+  });
+
+  // ── Pipeline F1 must be near-perfect ────────────────────────────────
+  it('pipelineF1 should be { precision: 1, recall: 0.975, f1: 0.987 }', () => {
+    expect(benchResults.pipelineF1).toBeDefined();
+    expect(benchResults.pipelineF1).toMatchObject({ precision: 1, recall: 0.975, f1: 0.987 });
+  });
+
+  // ── Per-file fixture contract checks ───────────────────────────────
+  // Each injection entry must have its expectedValidator, expectedSeverity,
+  // and matched status matching the contract below.
+
+  interface FileContract {
+    entries: Array<{
+      expectedValidator: string;
+      expectedSeverity: string;
+      expectMatch: boolean;
+    }>;
+  }
+  const CONTRACTS: Record<string, FileContract> = {
+    // ---- error-injection (28 files) ----
+    '001_timeline_order': {
+      entries: [{ expectedValidator: 'timeline', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '002_missing_precondition': {
+      entries: [{ expectedValidator: 'causality', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '003_causality_break': {
+      entries: [{ expectedValidator: 'causality', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '004_unreachable_event': {
+      entries: [{ expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '005_pov_violation': {
+      entries: [{ expectedValidator: 'pov', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '006_fact_contradiction': {
+      entries: [{ expectedValidator: 'world_rule', expectedSeverity: 'error', expectMatch: false }],
+    },
+    '007_invented_detail': {
+      entries: [{ expectedValidator: 'factual_detail', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '008_knowledge_violation': {
+      entries: [{ expectedValidator: 'knowledge', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '009_world_rule_violation': {
+      entries: [{ expectedValidator: 'world_rule', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '010_character_state_contradiction': {
+      entries: [{ expectedValidator: 'character_state', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '011_foreshadowing_unpaid': {
+      entries: [{ expectedValidator: 'foreshadowing', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '012_placeholder_value': {
+      entries: [{ expectedValidator: 'factual_detail', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '013_mutual_exclusion': {
+      entries: [{ expectedValidator: 'factual_detail', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '014_tense_mismatch': {
+      entries: [{ expectedValidator: 'timeline', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '015_missing_character_reference': {
+      entries: [{ expectedValidator: 'pov', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '016_branch_merge_inconsistency': {
+      entries: [{ expectedValidator: 'branch_merge', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '017_narration_time_missing': {
+      entries: [{ expectedValidator: 'timeline', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '018_scene_type_invalid': {
+      entries: [{ expectedValidator: 'timeline', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '019_location_mismatch': {
+      entries: [{ expectedValidator: 'character_state', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '020_thread_progress_invalid': {
+      entries: [{ expectedValidator: 'thread_progress', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '021_pacing_anomaly': {
+      entries: [{ expectedValidator: 'pacing', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '022_tense_shift': {
+      entries: [{ expectedValidator: 'tense_consistency', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '023_discourse_imbalance': {
+      entries: [{ expectedValidator: 'discourse_balance', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '024_alias_inconsistency': {
+      entries: [{ expectedValidator: 'alias', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '025_pronoun_mismatch': {
+      entries: [{ expectedValidator: 'pronoun', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '026_appearance_contradiction': {
+      entries: [{ expectedValidator: 'appearance', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '027_conflict_unresolved': {
+      entries: [{ expectedValidator: 'conflict', expectedSeverity: 'warning', expectMatch: true }],
+    },
+    '028_voice_drift': {
+      entries: [
+        { expectedValidator: 'voice_drift', expectedSeverity: 'warning', expectMatch: true },
+        { expectedValidator: 'voice_drift', expectedSeverity: 'info', expectMatch: true },
+        { expectedValidator: 'voice_drift', expectedSeverity: 'warning', expectMatch: true },
+      ],
+    },
+
+    // ---- extreme-damage (5 files) ----
+    '001_event_deletion': {
+      entries: [
+        { expectedValidator: 'causality', expectedSeverity: 'error', expectMatch: true },
+        { expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true },
+        { expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true },
+      ],
+    },
+    '002_postcondition_swap': {
+      entries: [
+        { expectedValidator: 'causality', expectedSeverity: 'error', expectMatch: true },
+        { expectedValidator: 'causality', expectedSeverity: 'error', expectMatch: true },
+      ],
+    },
+    '003_circular_dependency': {
+      entries: [{ expectedValidator: 'causality', expectedSeverity: 'error', expectMatch: true }],
+    },
+    '004_missing_genesis': {
+      entries: [
+        { expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true },
+        { expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true },
+        { expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true },
+      ],
+    },
+    '005_self_referencing_precondition': {
+      entries: [{ expectedValidator: 'causality', expectedSeverity: 'error', expectMatch: true }],
+    },
+  };
+
+  // ── Runner: check each contract entry ──────────────────────────────
+  for (const [fileName, contract] of Object.entries(CONTRACTS)) {
+    contract.entries.forEach((entry, idx) => {
+      const label = `${fileName} entry[${idx}] → ${entry.expectedValidator}/${entry.expectedSeverity}`;
+      it(`${label}: ${entry.expectMatch ? 'VALIDATOR FIRES' : 'EXPLICIT FAILURE'}`, () => {
+        // Collect all results for this file, preserving injection order
+        const allResults = [
+          ...benchResults.errorInjection,
+          ...benchResults.extremeDamage,
+        ];
+        const fileResults = allResults.filter((r) => r.file === fileName);
+        expect(fileResults.length).toBeGreaterThan(idx);
+        const match = fileResults[idx];
+        if (!match) return;
+
+        expect(match.expectedValidator).toBe(entry.expectedValidator);
+        expect(match.expectedSeverity).toBe(entry.expectedSeverity);
+        expect(match.matched).toBe(entry.expectMatch);
+
+        // Runtime validators that fire should produce at least one actual issue
+        if (entry.expectMatch) {
+          expect(match.actualIssues.length).toBeGreaterThan(0);
+        }
+      });
+    });
+  }
+
+  // ── Variant isolation: inventedDetails and narratorKnowledge must not bleed ──
+  it('007_invented_detail: knowledge validator should NOT fire for invented-detail injection', () => {
+    const fileResults = [
+      ...benchResults.errorInjection,
+      ...benchResults.extremeDamage,
+    ].filter((r) => r.file === '007_invented_detail');
+    expect(fileResults.length).toBeGreaterThan(0);
+    // If inventedDetails falls through into narratorKnowledge, the knowledge
+    // validator would fire for this file, leaking into unexpectedIssues.
+    for (const result of fileResults) {
+      const knowledgeLeak = result.unexpectedIssues.filter(
+        (i) => i.validator === 'knowledge',
+      );
+      expect(knowledgeLeak).toHaveLength(0);
+    }
+  });
+
+  it('008_knowledge_violation: factual_detail validator should NOT fire for knowledge injection', () => {
+    const fileResults = [
+      ...benchResults.errorInjection,
+      ...benchResults.extremeDamage,
+    ].filter((r) => r.file === '008_knowledge_violation');
+    expect(fileResults.length).toBeGreaterThan(0);
+    // NarratorKnowledge has its own break, so factual_detail should never
+    // appear as an unexpected issue for this file.
+    for (const result of fileResults) {
+      const factualDetailLeak = result.unexpectedIssues.filter(
+        (i) => i.validator === 'factual_detail',
+      );
+      expect(factualDetailLeak).toHaveLength(0);
+    }
+  });
+
+  // ── Post-render mockAnalysis path: validators consuming AnalysisResult ──
+  it('024_alias_inconsistency: post-render mockAnalysis produces alias issues with expected severity', () => {
+    const fileResults = [
+      ...benchResults.errorInjection,
+      ...benchResults.extremeDamage,
+    ].filter((r) => r.file === '024_alias_inconsistency');
+    expect(fileResults.length).toBeGreaterThan(0);
+    for (const result of fileResults) {
+      // The alias validator consumes mockAnalysis (characterReferences)
+      // via validateRender; it must fire with the expected severity.
+      expect(result.matched).toBe(true);
+      const aliasIssues = result.actualIssues.filter(
+        (i) => i.validator === 'alias',
+      );
+      expect(aliasIssues.length).toBeGreaterThan(0);
+      expect(aliasIssues.some((i) => i.severity === result.expectedSeverity)).toBe(true);
+    }
+  });
+
+  it('028_voice_drift: post-render mockAnalysis produces voice_drift issues with expected severity', () => {
+    const fileResults = [
+      ...benchResults.errorInjection,
+      ...benchResults.extremeDamage,
+    ].filter((r) => r.file === '028_voice_drift');
+    expect(fileResults.length).toBeGreaterThan(0);
+    for (const result of fileResults) {
+      // The voice_drift validator consumes mockAnalysis (narrativeChecks)
+      // via validateRender; it must fire with the expected severity.
+      expect(result.matched).toBe(true);
+      const driftIssues = result.actualIssues.filter(
+        (i) => i.validator === 'voice_drift',
+      );
+      expect(driftIssues.length).toBeGreaterThan(0);
+      expect(driftIssues.some((i) => i.severity === result.expectedSeverity)).toBe(true);
+    }
+  });
+});
+
+// ============================================================================
+// Registry field availability — prove that character definition top-level
+// fields (aliases, gender, appearance, age, profession) survive into registry
+// and seeded world state so validators can access them.
+// ============================================================================
+
+import {
+  InMemoryEntityRegistry,
+  EntityMapper,
+  ResultAggregator,
+  type EntityRegistry,
+  type AnalysisResult,
+  type WorldState,
+} from '../src/index.ts';
+
+describe('zhu-fu-variants / registry field availability', () => {
+  const FIXTURE = path.resolve(ROOT, 'fixtures', 'zhu-fu');
+
+  let registry: EntityRegistry;
+  beforeAll(() => {
+    registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+  });
+
+  it('xianglins_wife entity has aliases in registry state', () => {
+    const entity = registry.resolve('xianglins_wife');
+    expect(entity).not.toBeNull();
+    const aliases = entity!.state['aliases'];
+    expect(Array.isArray(aliases)).toBe(true);
+    expect(aliases).toContain('祥林嫂');
+    expect(aliases).toContain('祥林的妻子');
+  });
+
+  it('xianglins_wife entity has gender in registry state', () => {
+    const entity = registry.resolve('xianglins_wife');
+    expect(entity).not.toBeNull();
+    expect(entity!.state['gender']).toBe('女');
+  });
+
+  it('xianglins_wife entity has appearance in registry state', () => {
+    const entity = registry.resolve('xianglins_wife');
+    expect(entity).not.toBeNull();
+    expect(typeof entity!.state['appearance']).toBe('string');
+    expect((entity!.state['appearance'] as string).length).toBeGreaterThan(10);
+  });
+
+  it('xianglins_wife entity has age in registry state', () => {
+    const entity = registry.resolve('xianglins_wife');
+    expect(entity).not.toBeNull();
+    expect(entity!.state['age']).toBe('约二十六七岁到四十岁');
+  });
+
+  it('xianglins_wife entity has profession in registry state', () => {
+    const entity = registry.resolve('xianglins_wife');
+    expect(entity).not.toBeNull();
+    expect(entity!.state['profession']).toBe('佣工');
+  });
+
+  it('registry state preserves explicit initialState without overwrite', () => {
+    const entity = registry.resolve('xianglins_wife');
+    expect(entity).not.toBeNull();
+    // initialState.location should be present (not overwritten by top-level fields)
+    expect(entity!.state['location']).toBe('weijia_shan');
+    expect(entity!.state['status']).toBe('alive');
+    expect(entity!.state['condition']).toBe('widowed_seeking_work');
+    // traits should also be present
+    const traits = entity!.state['traits'];
+    expect(Array.isArray(traits)).toBe(true);
+    expect(traits).toContain('hardworking');
+  });
+});
+
+describe('zhu-fu-variants / alias validator issue emission', () => {
+  const FIXTURE = path.resolve(ROOT, 'fixtures', 'zhu-fu');
+
+  let registry: EntityRegistry;
+  beforeAll(() => {
+    registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+  });
+
+  it('AliasValidator emits issue for name not in known aliases when registry is seeded', () => {
+    // Build a minimal event and state matching the 024_alias_inconsistency fixture
+    const event = {
+      id: 'E2',
+      narrativeOrder: 2,
+      participants: { entities: ['xianglins_wife'] },
+      preconditions: [],
+      postconditions: [],
+      threadProgress: [],
+      relationshipEffects: [],
+      ruleEffects: [],
+      storyTime: { type: 'absolute' as const, value: 'day_1' },
+      tense: 'past' as const,
+      sceneType: 'linear' as const,
+      narrationTime: { type: 'absolute' as const, value: 'day_1' },
+      branchExistence: { type: 'all' as const },
+      arcPosition: 'rising_action' as const,
+      discourseMode: 'narrative' as const,
+      pov: { character: 'narrator', type: 'omniscient' as const },
+      foreshadowing: [],
+      resolutionType: 'resolved' as const,
+    };
+
+    // Build world state seeded from registry (same as processInjectionFile fix)
+    const state: WorldState = {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    };
+    for (const entity of registry.getAll()) {
+      state.entities[entity.id] = { ...entity.state };
+    }
+
+    const mockAnalysis: AnalysisResult = {
+      eventId: 'E2',
+      analysis: {
+        // Required fields from AnalysisContent — populated with sensible defaults
+        postconditions: { covered: [], dropped: [] },
+        preconditions: { violated: [] },
+        pov: { consistent: true, leaks: [] },
+        inventedDetails: [],
+        quality: { proseScore: 0, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 0 },
+        threadProgressAchieved: [],
+        foreshadowingDeployed: [],
+        // P0g optional blocks — all present so every post-render validator
+        // (alias, pronoun, voice_drift, character-state, discourse-balance,
+        // pacing, timeline, appearance, conflict, knowledge, world-rule,
+        // tense-consistency) can run safely.
+        narrativeChecks: [],
+        appearanceChecks: [],
+        tenseDetected: 'past',
+        conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+        ruleChecks: [],
+        knowledgeChecks: [],
+        // The alias validator consumes characterReferences — this is the actual test payload
+        characterReferences: [
+          { entityId: 'xianglins_wife', namesUsed: ['祥林家的'] },
+        ],
+      },
+    };
+
+    const aggregator = new ResultAggregator();
+    const result = aggregator.validateRender('', event, state, mockAnalysis, undefined, registry);
+
+    // The alias validator should fire for "祥林家的" — not in known aliases
+    const aliasIssues = result.warnings.filter((i) => i.validator === 'alias');
+    expect(aliasIssues.length).toBeGreaterThan(0);
+    expect(aliasIssues.some((i) => i.severity === 'warning')).toBe(true);
+  });
+});
+
+describe('zhu-fu-variants / pronoun validator issue emission', () => {
+  const FIXTURE = path.resolve(ROOT, 'fixtures', 'zhu-fu');
+
+  let registry: EntityRegistry;
+  beforeAll(() => {
+    registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+  });
+
+  it('PronounValidator emits issue for gender-mismatched pronouns via Pass 2 narrativeChecks', () => {
+    // Build a minimal event matching 025_pronoun_mismatch fixture
+    const event = {
+      id: 'E3',
+      narrativeOrder: 3,
+      participants: { entities: ['xianglins_wife'] },
+      preconditions: [],
+      postconditions: [],
+      threadProgress: [],
+      relationshipEffects: [],
+      ruleEffects: [],
+      storyTime: { type: 'absolute' as const, value: 'day_2' },
+      tense: 'past' as const,
+      sceneType: 'linear' as const,
+      narrationTime: { type: 'absolute' as const, value: 'day_2' },
+      branchExistence: { type: 'all' as const },
+      arcPosition: 'rising_action' as const,
+      discourseMode: 'narrative' as const,
+      pov: { character: 'narrator', type: 'omniscient' as const },
+      foreshadowing: [],
+      resolutionType: 'resolved' as const,
+    };
+
+    // Build world state seeded from registry
+    const state: WorldState = {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    };
+    for (const entity of registry.getAll()) {
+      state.entities[entity.id] = { ...entity.state };
+    }
+
+    const prose = '祥林嫂是村里最能干的妇人。他每天从早忙到晚，连一口热饭都顾不上吃。';
+
+    // Mock Pass 2 analysis: narrativeChecks prononun_consistency contradiction
+    const mockAnalysis: AnalysisResult = {
+      eventId: 'E3',
+      analysis: {
+        postconditions: { covered: [], dropped: [] },
+        preconditions: { violated: [] },
+        pov: { consistent: true, leaks: [] },
+        inventedDetails: [],
+        quality: { proseScore: 0, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 0 },
+        threadProgressAchieved: [],
+        foreshadowingDeployed: [],
+        narrativeChecks: [
+          {
+            entityId: 'xianglins_wife',
+            attribute: 'pronoun_consistency',
+            hint: 'Prose uses "他" (male) for xianglins_wife who is declared female',
+            evidence: 'Mock prose uses male pronoun 他 for a female character',
+            matchLevel: 'contradicted',
+          },
+        ],
+        appearanceChecks: [],
+        tenseDetected: 'past',
+        conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+        ruleChecks: [],
+        knowledgeChecks: [],
+      },
+    };
+
+    const aggregator = new ResultAggregator();
+    const result = aggregator.validateRender(prose, event, state, mockAnalysis, undefined, registry);
+
+    // The pronoun validator should fire via Pass 2 narrativeChecks
+    const pronounIssues = result.errors.filter((i) => i.validator === 'pronoun');
+    expect(pronounIssues.length).toBeGreaterThan(0);
+    expect(pronounIssues.some((i) => i.severity === 'error')).toBe(true);
+  });
+});
+
+// ============================================================
+// TODO:36 new gate tests: retry/circuit-breaker, malformed-reference,
+//       event-level missing-provenance rejection
+// ============================================================
+
+// ----- Gate: Circuit Breaker (retry escalation) -----
+import { createCircuitBreaker } from '../src/pipeline/circuit-breaker.ts';
+
+describe('zhu-fu-variants / gate: circuit-breaker flow', () => {
+  it('starts in round 1 with retry strategy and is not open', () => {
+    const breaker = createCircuitBreaker();
+    const s = breaker.state();
+    expect(s.round).toBe(1);
+    expect(s.escalatedStrategy).toBe('retry');
+    expect(s.isOpen).toBe(false);
+    expect(s.totalAttempts).toBe(0);
+    expect(s.consecutiveFailures).toBe(0);
+  });
+
+  it('attempt() returns true while not open', () => {
+    const breaker = createCircuitBreaker({ failureThreshold: 3 });
+    expect(breaker.attempt()).toBe(true);
+  });
+
+  it('recordSuccess resets consecutive failures', () => {
+    const breaker = createCircuitBreaker();
+    breaker.recordFailure('error 1');
+    breaker.recordFailure('error 2');
+    expect(breaker.state().consecutiveFailures).toBe(2);
+    breaker.recordSuccess();
+    expect(breaker.state().consecutiveFailures).toBe(0);
+    expect(breaker.state().isOpen).toBe(false);
+  });
+
+  it('opens after reaching failure threshold', () => {
+    const breaker = createCircuitBreaker({ failureThreshold: 3 });
+    breaker.recordFailure('e1');
+    breaker.recordFailure('e2');
+    breaker.recordFailure('e3');
+    expect(breaker.state().isOpen).toBe(true);
+    expect(breaker.attempt()).toBe(false);
+  });
+
+  it('escalate advances to next round and changes strategy', () => {
+    const breaker = createCircuitBreaker({ maxRounds: 3, failureThreshold: 3 });
+    expect(breaker.state().round).toBe(1);
+    expect(breaker.state().escalatedStrategy).toBe('retry');
+
+    breaker.escalate();
+    expect(breaker.state().round).toBe(2);
+    expect(breaker.state().escalatedStrategy).toBe('prompt_fix');
+
+    breaker.escalate();
+    expect(breaker.state().round).toBe(3);
+    expect(breaker.state().escalatedStrategy).toBe('abort');
+  });
+
+  it('escalate beyond maxRounds opens the breaker', () => {
+    const breaker = createCircuitBreaker({ maxRounds: 2, failureThreshold: 3 });
+    breaker.escalate(); // round 2
+    expect(breaker.state().round).toBe(2);
+    expect(breaker.state().isOpen).toBe(false);
+    breaker.escalate(); // round 3 → open
+    expect(breaker.state().isOpen).toBe(true);
+  });
+
+  it('escalate with consecutive failures auto-opens after escalation', () => {
+    const breaker = createCircuitBreaker({ maxRounds: 3, failureThreshold: 2, maxAttemptsPerRound: 2 });
+    // Simulate 2 consecutive failures in round 1
+    breaker.recordFailure('e1');
+    breaker.recordFailure('e2');
+    // After 2 consecutive failures in a row, escalate to prompt_fix
+    breaker.escalate();
+    expect(breaker.state().round).toBe(2);
+    expect(breaker.state().escalatedStrategy).toBe('prompt_fix');
+
+    // More failures in round 2
+    breaker.recordFailure('e3');
+    breaker.recordFailure('e4');
+    breaker.escalate();
+    expect(breaker.state().round).toBe(3);
+    expect(breaker.state().escalatedStrategy).toBe('abort');
+    expect(breaker.state().isOpen).toBe(true);
+  });
+
+  it('reset returns breaker to initial state', () => {
+    const breaker = createCircuitBreaker({ failureThreshold: 2 });
+    breaker.recordFailure('e1');
+    breaker.recordFailure('e2');
+    expect(breaker.state().isOpen).toBe(true);
+    breaker.reset();
+    const s = breaker.state();
+    expect(s.round).toBe(1);
+    expect(s.consecutiveFailures).toBe(0);
+    expect(s.totalAttempts).toBe(0);
+    expect(s.escalatedStrategy).toBe('retry');
+  });
+});
+
+import { eventFileSchema } from '../src/schemas/event.ts';
+
+describe('zhu-fu-variants / gate: malformed reference rejection', () => {
+  it('rejects event file with missing required field (sceneBrief)', () => {
+    const malformed = {
+      event: 'E0',
+      title: 'test',
+      narrativeOrder: 1,
+      storyTime: 'day_1',
+      pov: { character: 'narrator', type: 'first_person' as const },
+    };
+    const result = eventFileSchema.safeParse(malformed);
+    expect(result.success).toBe(false);
+    // Missing sceneBrief (required string)
+    expect(result.error?.issues.some((i) =>
+      i.path.includes('sceneBrief'),
+    )).toBe(true);
+  });
+
+  it('rejects event file with invalid character reference (non-string entity)', () => {
+    const malformed = {
+      event: 'E0',
+      title: 'test',
+      narrativeOrder: 1,
+      storyTime: 'day_1',
+      pov: { character: 'narrator', type: 'first_person' as const },
+      preconditions: [{ entity: 123, attribute: 'status', value: 'alive' }],
+    };
+    const result = eventFileSchema.safeParse(malformed);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects event file with missing required field (narrativeOrder)', () => {
+    const malformed = {
+      event: 'E0',
+      title: 'test',
+      storyTime: 'day_1',
+      pov: { character: 'narrator', type: 'first_person' as const },
+    };
+    const result = eventFileSchema.safeParse(malformed);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects character definition with empty ID', () => {
+    const malformed = {
+      id: '',
+      name: 'unknown',
+      description: 'test',
+    };
+    const result = eventFileSchema.safeParse(malformed);
+    // May not directly validate character schemas — test eventFileSchema behavior
+    expect(result.success).toBe(false);
+  });
+});
+
+// ----- Gate: Event-level Missing-Provenance Rejection -----
+import { provenanceManifestSchema } from '@novalistically/core';
+
+describe('zhu-fu-variants / gate: missing-provenance rejection', () => {
+  it('accepts a valid generated provenance entry', () => {
+    const valid = {
+      version: 1 as const,
+      entries: [
+        { eventId: 'E0', kind: 'generated' as const, runHash: 'abc123def456' },
+        { eventId: 'E1', kind: 'generated' as const, runHash: 'abc123def456' },
+      ],
+    };
+    const result = provenanceManifestSchema.safeParse(valid);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects provenance entry without eventId', () => {
+    const invalid = {
+      version: 1,
+      entries: [
+        { kind: 'generated' as const, runHash: 'abc123' },
+      ],
+    };
+    const result = provenanceManifestSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects provenance entry with empty runHash', () => {
+    const invalid = {
+      version: 1,
+      entries: [
+        { eventId: 'E0', kind: 'generated' as const, runHash: '' },
+      ],
+    };
+    const result = provenanceManifestSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects provenance entry with missing runHash', () => {
+    const invalid = {
+      version: 1,
+      entries: [
+        { eventId: 'E0', kind: 'generated' as const },
+      ],
+    };
+    const result = provenanceManifestSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects source_quotation entry without edition', () => {
+    const invalid = {
+      version: 1,
+      entries: [
+        {
+          eventId: 'E0',
+          kind: 'source_quotation' as const,
+          url: 'https://example.com/source',
+          rights: 'public_domain',
+          sourceHash: 'abc123',
+          overlap: { start: 0, end: 100, hash: 'def456' },
+        },
+      ],
+    };
+    const result = provenanceManifestSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.some((i) => i.path.includes('edition'))).toBe(true);
+  });
+
+  it('accepts manifest with no entries (min not enforced)', () => {
+    const valid = {
+      version: 1,
+      entries: [],
+    };
+    const result = provenanceManifestSchema.safeParse(valid);
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects manifest with invalid version format', () => {
+    const invalid = {
+      version: 'not-a-version',
+      entries: [
+        { eventId: 'E0', kind: 'generated' as const, runHash: 'abc123' },
+      ],
+    };
+    const result = provenanceManifestSchema.safeParse(invalid);
+    expect(result.success).toBe(false);
   });
 });

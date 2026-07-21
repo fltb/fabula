@@ -6,6 +6,6 @@ injected:
     description: "E4 postcondition xianglins_wife.marital_status has value 'broken' instead of 'widowed_twice' — swapped with E5's spiritual_state postcondition, so E5's precondition expecting widowed_twice is unsatisfied."
   - entityId: "E5"
     attribute: "postconditions"
-    expectedValidator: "character_state"
+    expectedValidator: "causality"
     expectedSeverity: "error"
     description: "E5 postcondition xianglins_wife.spiritual_state has value 'widowed_twice' instead of 'broken' — swapped with E4's marital_status postcondition, breaking E5's own causal contract."

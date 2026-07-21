@@ -1,0 +1,199 @@
+{
+  "prose": "她终于被四婶打发走了。我后来才知道，那时她早已不是四婶起初留用的那个手脚壮大的女工；她整日只是呆坐着，眼光也失了神，连淘米洗菜都记不清了。四婶起初还忍耐，后来便常说：“祥林嫂怎么这样了？倒不如那时不留她。”于是她成了真正的废物，被暗示着离开了鲁家。至于她是出了门便沦为乞丐，还是先到卫老婆子那里再流落街头，我至今不知道。\n\n我只记得——那或许是一个冬日的黄昏——我在镇东头的河边遇见她。她那时头发已经全白，脸上黄中带黑，而且瘦得不堪，木刻似的，只有那眼珠间或一轮，才表明她是一个活物。她一手提着竹篮，内中一个破碗，空的；一手拄着一支比她更长的竹竿，下端开了裂。她分明已经纯乎是一个乞丐了。我站住，心里不知为什么忽然有些瑟缩；她却仿佛没有看见我，只是木然地移着步。\n\n就在除夕夜，或者前后相差不过一两天，她死了。一个短工淡然地告诉我：“怎么死的？还不是穷死的？”四叔知道了，皱起眉，骂了一句“谬种”。我知道她的尸首大概就躺在哪条街上，无人认领。而第二天清晨，远处的爆竹声已经连绵不断地响了起来。我仿佛看见天地间的圣众，醉醺醺的，在空中蹒跚着，预备给鲁镇的人们以无限的幸福。",
+  "analysis": {
+    "eventId": "E6",
+    "analysis": {
+      "postconditions": {
+        "covered": [
+          "xianglins_wife.location = luchen_streets",
+          "xianglins_wife.status = beggar",
+          "xianglins_wife.work_capability = none",
+          "xianglins_wife.appearance = white_hair_yellow_black_face_wooden_expression_beggars_basket",
+          "xianglins_wife.social_status (narrativeHint: societal abandonment)",
+          "fourth_aunt.attitude_toward_xianglins_wife = wanted_gone"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "冬日的黄昏 (winter dusk) - the season is implied but not specified in the encounter timing; adds atmosphere.",
+          "severity": "minor"
+        },
+        {
+          "detail": "我站住，心里不知为什么忽然有些瑟缩 - narrator's emotional response not in spec, adds psychological depth.",
+          "severity": "minor"
+        }
+      ],
+      "quality": {
+        "proseScore": 8,
+        "maxScore": 10,
+        "strengths": [
+          "Faithfully renders key events and imagery from the specification.",
+          "Maintains consistent first-person reflective voice throughout.",
+          "Captures the bleak tone and social indifference effectively.",
+          "Strong symbolic ending with the blessing ceremony."
+        ],
+        "weaknesses": [
+          "The phrase '成了真正的废物' slightly deviates from the more neutral tone of the original text.",
+          "Some transitions feel abrupt, particularly from the dismissal to the encounter.",
+          "The prose is largely a summary, lacking a fully immersive scene with sensory details beyond the visual."
+        ],
+        "estimatedWordCount": 300
+      },
+      "threadProgressAchieved": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "foreshadowingDeployed": [],
+      "narrativeChecks": [
+        {
+          "entityId": "narrator",
+          "attribute": "time_period",
+          "hint": "Story time is absolute day_-1 (New Year's Eve and next morning). The prose should include atmospheric cues of dusk, night, and dawn.",
+          "evidence": "黄昏...除夕夜...第二天清晨",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "character_state",
+          "hint": "Preconditions: spiritual_state broken, work_capability diminished.",
+          "evidence": "她整日只是呆坐着，眼光也失了神，连淘米洗菜都记不清了",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "fourth_aunt",
+          "attribute": "character_state",
+          "hint": "Precondition: attitude toward xianglins_wife increasingly annoyed.",
+          "evidence": "四婶起初还忍耐，后来便常说：“祥林嫂怎么这样了？倒不如那时不留她。”",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_formality",
+          "hint": "First-person literary narration, reflective, moderate-high formality.",
+          "evidence": "我后来才知道...我只记得...我站住，心里不知为什么忽然有些瑟缩",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "discourseMode",
+          "hint": "Expected discourseMode: transition. The prose moves from dismissal to encounter to death to celebration.",
+          "evidence": "Narrative shifts through time and locations smoothly.",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "pronoun_consistency",
+          "hint": "First-person pronouns should be used consistently.",
+          "evidence": "Uses '我' consistently.",
+          "matchLevel": "exact"
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "xianglins_wife",
+          "feature": "hair",
+          "declared": "全白",
+          "evidence": "头发已经全白",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "face",
+          "declared": "黄中带黑",
+          "evidence": "脸上黄中带黑",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "expression",
+          "declared": "木刻似的",
+          "evidence": "木刻似的",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "eyes",
+          "declared": "眼珠间或一轮",
+          "evidence": "只有那眼珠间或一轮",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "beggar items",
+          "declared": "竹篮破碗开裂竹竿",
+          "evidence": "她一手提着竹篮，内中一个破碗，空的；一手拄着一支比她更长的竹竿，下端开了裂",
+          "matchLevel": "exact"
+        }
+      ],
+      "characterReferences": [
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "fourth_aunt",
+          "namesUsed": [
+            "四婶"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四叔"
+          ]
+        },
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她",
+            "谬种",
+            "乞丐",
+            "活物",
+            "废物"
+          ]
+        }
+      ],
+      "tenseDetected": "past",
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": true
+      },
+      "ruleChecks": [
+        {
+          "ruleId": "widow_purity",
+          "violated": false,
+          "evidence": "四叔知道了，皱起眉，骂了一句“谬种”",
+          "severity": "minor"
+        }
+      ],
+      "knowledgeChecks": []
+    }
+  },
+  "metadata": {
+    "eventId": "E6",
+    "provider": "ai-sdk",
+    "model": "deepseek-v4-pro",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "77adedf4ffffff41823431378d065c9cc69982c7c3520fad281df078fca82985",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-21T03:57:14.290Z",
+    "reviewStatus": "candidate",
+    "attempts": 1,
+    "errors": []
+  }
+}

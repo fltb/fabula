@@ -9,6 +9,8 @@ import type {
   ValidationIssue,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
+import { z } from 'zod';
+import { narrativeCheckSchema } from './schemas.js';
 
 export class CharacterStateValidator implements Validator {
   name = 'character_state';
@@ -43,7 +45,7 @@ export class CharacterStateValidator implements Validator {
     const issues: ValidationIssue[] = [];
     if (!input.analysis) return issues;
 
-    const narrativeChecks = input.analysis.analysis.narrativeChecks ?? [];
+    const narrativeChecks = z.array(narrativeCheckSchema).safeParse(input.analysis.analysis.narrativeChecks).data ?? [];
     for (const check of narrativeChecks) {
       if (check.attribute !== 'character_state') continue;
       if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
@@ -66,8 +68,8 @@ export class CharacterStateValidator implements Validator {
     return [{
       field: 'narrativeChecks',
       attributes: ['character_state'],
-      schemaExample: { entityId: 'char_001', attribute: 'character_state', hint: '...', evidence: '...', matchLevel: 'exact' },
       instruction: 'narrativeChecks[character_state]: For each character, check if the prose depicts their state (alive/dead status, location, emotional state) consistently with the event\'s preconditions. Use the narrativeChecks block with attribute "character_state" to report any contradictions where the prose shows a character in a state that conflicts with established preconditions.',
+      schema: z.array(narrativeCheckSchema),
     }];
   }
 }

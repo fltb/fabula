@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "provider": "approved-reference",
+  "model": "unknown",
+  "seed": 42,
+  "call": {
+    "totalCalls": 0,
+    "perEvent": []
+  },
+  "cache": {
+    "hits": 0,
+    "misses": 0
+  },
+  "failures": [],
+  "hashes": {
+    "events": [],
+    "allUnique": true
+  },
+  "generatedAt": "2026-07-21T06:32:48.487Z",
+  "reviewStatus": "approved"
+}

@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { AssembleOptions, AssembleResult } from './types.js';
+import { AssemblyError, AssemblyErrorCode } from './types.js';
 import { countWords } from './count.js';
 import { loadChapterMetadata } from './chapter.js';
 import { SceneCollector } from './collector.js';
@@ -8,6 +9,7 @@ import { NarrativeSorter } from './sorter.js';
 import { ProseConcatenator } from './concatenator.js';
 import { filterScenesByBranchPath } from './branch-filter.js';
 import { FsStorage, type Storage } from '../storage/index.ts';
+import { logger } from '../observability/logger.ts';
 
 // ────────────────────────────────────────────────────────────────────────────
 // assembleNovel — Main Export
@@ -20,46 +22,48 @@ import { FsStorage, type Storage } from '../storage/index.ts';
  *   1. Resolve input/output paths
  *   2. Load chapter metadata (`chapters/chapter_NN/_chapter.yaml`)
  *   3. Collect all scene prose + metadata (`scenes/chapter-NN/E*`)
- *   4. Cross-reference narrativeOrder from event files as needed
- *   5. Sort scenes by narrativeOrder ascending
- *   6. Filter by branch path (optional)
- *   7. Concatenate into a markdown document with chapter headings
- *   8. Write to `output/novel.md` (or custom path)
- *   9. Return the markdown, word count, and scene count
+ *   4. Sort scenes by narrativeOrder ascending
+ *   5. Filter by branch path (optional)
+ *   6. Concatenate into a markdown document with chapter headings
+ *   7. Write to `output/novel.md` (or custom path)
+ *   8. Return the markdown, word count, and scene metadata
  */
 export function assembleNovel(options: AssembleOptions): AssembleResult {
-  const { projectDir, outputPath, title, branchPath, storage } = options;
+  const { projectDir, outputPath, title, branchPath, storage, language = 'en' } = options;
   const st = storage ?? new FsStorage();
 
   // ── Resolve paths ──────────────────────────────────────────────
   const scenesDir = path.join(projectDir, 'scenes');
-  const chaptersDir = path.join(projectDir, 'chapters');
   const resolvedOutputPath =
     outputPath ?? path.join(projectDir, 'output', 'novel.md');
 
   // ── Load chapter metadata ──────────────────────────────────────
   const chapterMetadata = loadChapterMetadata(projectDir, st);
 
-  // ── Collect scenes ─────────────────────────────────────────────
+  // ── Collect scenes (strict: fails on missing/invalid metadata) ─
   const collector = new SceneCollector();
-  const collected = collector.collectFrom(scenesDir, chaptersDir, st);
-
-  if (collected.size === 0) {
-    console.warn('[Assembler] No scenes collected. Output will be empty.');
-  }
+  const collected = collector.collectFrom(scenesDir, st);
 
   // ── Sort ───────────────────────────────────────────────────────
   const sorter = new NarrativeSorter();
   let sorted = sorter.sortByOrder(collected);
+
+  // ── Validate no duplicate narrativeOrders ──────────────────────
+  const seenOrders = new Set<number>();
+  for (const scene of sorted) {
+    if (seenOrders.has(scene.narrativeOrder)) {
+      throw new AssemblyError(AssemblyErrorCode.DUPLICATE_NARRATIVE_ORDER,
+        `Duplicate narrativeOrder ${scene.narrativeOrder} in scene ${scene.eventId}`);
+    }
+    seenOrders.add(scene.narrativeOrder);
+  }
 
   // ── Branch-path filter ─────────────────────────────────────────
   if (branchPath) {
     const before = sorted.length;
     sorted = filterScenesByBranchPath(sorted, branchPath);
     if (sorted.length < before) {
-      console.log(
-        `[Assembler] Branch filter removed ${before - sorted.length} scene(s)`,
-      );
+      logger.info('Branch filter removed scenes', { module: 'assembler', eventId: undefined });
     }
   }
 
@@ -74,19 +78,22 @@ export function assembleNovel(options: AssembleOptions): AssembleResult {
     novelTitle,
   );
 
-  // ── Write output ───────────────────────────────────────────────
   const outputDir = path.dirname(resolvedOutputPath);
   if (!st.exists(outputDir)) {
     st.mkdirp(outputDir);
   }
   st.write(resolvedOutputPath, markdown);
-  console.log(`[Assembler] Novel written to ${resolvedOutputPath}`);
 
-  // ── Return result ──────────────────────────────────────────────
   return {
     markdown,
-    wordCount: countWords(markdown),
+    wordCount: sorted.reduce((total, scene) => total + countWords(scene.prose, language), 0),
     sceneCount: sorted.length,
+    scenes: sorted.map((scene) => ({
+      eventId: scene.eventId,
+      chapter: scene.chapter,
+      narrativeOrder: scene.narrativeOrder,
+      branchExistence: scene.branchExistence,
+    })),
   };
 }
 

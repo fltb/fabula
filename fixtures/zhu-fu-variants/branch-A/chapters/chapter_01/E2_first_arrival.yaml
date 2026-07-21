@@ -86,9 +86,6 @@ introduces:
       location: weijia_shan
       status: alive
       condition: well
-newState:
-  type: precarious_stability
-  intensity: 0.3
 ruleEffects:
   - rule: husbands_authority
     effect: reinforce

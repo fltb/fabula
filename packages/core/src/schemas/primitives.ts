@@ -29,13 +29,26 @@ export const preconditionSchema = z
       { message: 'Placeholder values (changed, resolved, updated, affected, modified, altered) are not allowed. Use concrete values.' },
     ),
     narrativeHint: z.string().optional(),
+    confidence: z.number().optional(),
     operator: z.enum(['eq', 'neq', 'gt', 'lt', 'contains']).optional(),
   })
   .strict()
-  .refine(
-    (data) => !(data.value !== undefined && data.narrativeHint !== undefined),
-    { message: 'Fact must have either value or narrativeHint, not both' },
-  );
+  .superRefine((data, context) => {
+    const representations = Number(data.value !== undefined) + Number(data.narrativeHint !== undefined);
+    if (representations !== 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Fact must contain exactly one of value or narrativeHint',
+      });
+    }
+    if (data.value !== undefined && data.operator !== undefined && data.operator !== 'eq') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['operator'],
+        message: 'Only the eq operator is supported in Stage 1',
+      });
+    }
+  });
 
 // ────────────────────────────────────────────────────────────────────────────
 // Postcondition Schema (exported)
@@ -59,10 +72,14 @@ export const postconditionSchema = z
     confidence: z.number().optional(),
   })
   .strict()
-  .refine(
-    (data) => !(data.value !== undefined && data.narrativeHint !== undefined),
-    { message: 'Fact must have either value or narrativeHint, not both' },
-  );
+  .superRefine((data, context) => {
+    if (Number(data.value !== undefined) + Number(data.narrativeHint !== undefined) !== 1) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Fact must contain exactly one of value or narrativeHint',
+      });
+    }
+  });
 
 // ────────────────────────────────────────────────────────────────────────────
 // Shared Sub-Schemas (internal)
@@ -75,6 +92,7 @@ export const styleGuidanceSchema = z
     avoid: z.string().optional(),
     scenePacing: z.string().optional(),
     atmosphere: z.string().optional(),
+    targetWordCount: z.number().optional(),
   })
   .strict();
 

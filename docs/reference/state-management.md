@@ -21,19 +21,21 @@ facts          Fact[]
 
 每个属性都在重放处理事件时增量构建。实体状态存储为平面键值记录；关系状态追踪定向维度和感知。
 
-## DAG 因果边
+## DAG 因果边与状态边界
 
-与朴素的时间顺序重放不同，Novalistically 按**因果依赖**而不是 `narrativeOrder` 对事件进行排序。`packages/core/src/state/dag.ts` 中的 `buildCausalEdges()` 函数通过匹配 `eventA.postconditions` → `eventB.preconditions`（基于 `entityId + attribute + value`）来构建邻接表。多重匹配选择最新的提供者。`narrativeHint` 事实（非确定性）被跳过——它们不能创建因果边。
+`buildCausalEdges()` 仅用确定性 `value` 事实构图。每个前置条件只能由 initial state 或 story time 严格更早的唯一最新写入提供；缺失、未来、同刻歧义、自依赖和环均抛具稳定 code 的 typed error。`narrativeOrder` 只用于组装显示，`narrationTime` 不参与 provider 选择。
 
-`topologicalSort()` 应用带有环检测的 Kahn 算法。无连接的事件（无因果边）按 `narrativeOrder` 排序。如果检测到环，`ReplayEngine` 会回退到 `narrativeOrder` 排序并发出警告。导出函数 `exportDAGtoDOT()` 和 `exportDAGtoMermaid()` 可对图进行可视化。
+`topologicalSort()` 不修改输入入度表，环直接抛 `DagCycleError`；没有 narrative-order fallback。`ReplayEngine` 不再以 precondition 初始化状态：确定性前置条件必须经 `compareFact()` 匹配，否则抛 `PreconditionMismatchError`。`narrativeHint` 仍不写入 `WorldState`。
 
-## ReplayEngine
+`compileStoryBoundaries()` 是渲染编排使用的唯一 story-state 边界：initial writes 独立输入，不合成 `system:genesis` narrative event；它产出 causal order、每个 event 的 `stateBefore` 与 final state。空 BranchPath 只包含 `{ type: "all" }` 事件，绝不泄漏 path-scoped scenes。
 
-`replay()` — 从初始状态开始完全重放。通过 `includesPath()` 在 `branchExistence` 上过滤分支路径。应用后置条件（仅确定性值）、前提条件（如果尚未设置）、线程进度、关系效果、知识更新和规则效果。
+最小 diamond 只支持显式 `{ type: "all" }` trunk 与 `{ type: "paths" }` lane；DAG 和 assembler 共享同一 `includesPath()` predicate。无 decision 的 linear run 绝不包含 lane-scoped event；选定 lane 绝不读取另一 lane 的 provider 或 scene。
 
-`getStateAt(narrativeOrder)` — 过滤 `narrativeOrder <= N` 的事件，然后从初始状态重放。简单但正确。
+快照优化尚未证明与因果边界等价；阶段一受限路径不得把快照作为 render state 的来源。
 
-`getStateAtOptimized(narrativeOrder, snapshot)` — 从序列化的 `Snapshot` 开始，增量地重放 `snapshot.narrativeOrder` 之后的事件。使用快照状态的深拷贝以避免突变。对于重复访问要快得多。
+## 阶段一文本计数与组装
+
+`countNarrativeText(text, language)` 是唯一版本化文本计数器：先 NFC，再排除 Markdown/HTML/link 表现语法；中文按 CJK 字符加连续 Latin/digit run，英文按可见 lexical token。全量发布只在七场都 released 后组装；empty scene、零场景与 duplicate `narrativeOrder` 均拒绝，novel 的计数必须等于各 scene prose 计数和。
 
 ## 快照
 

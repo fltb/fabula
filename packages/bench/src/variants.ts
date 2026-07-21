@@ -6,17 +6,25 @@
 import {
   EntityMapper,
   InMemoryEntityRegistry,
-  ReplayEngine,
   ResultAggregator,
-  createEmptyBranchPath,
-  type NarrativeEvent,
-  type WorldState,
-  type ValidationIssue,
+  compileStoryBoundaries,
+  type AnalysisResult,
   type EntityRegistry,
+  type Fact,
+  type NarrativeEvent,
+  type ValidationIssue,
+  type WorldState,
 } from '@novalistically/core';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import YAML from 'yaml';
+
+
+/** Deterministic injection ID counter — replaces non-deterministic Date.now() */
+let _injIdCounter = 1;
+function nextInjId(): string {
+  return String(_injIdCounter++);
+}
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -26,6 +34,10 @@ export interface InjectedEntry {
   expectedValidator: string;
   expectedSeverity: string;
   description: string;
+  /** Optional mock prose for post-render validation (alias, pronoun, voice_drift) */
+  mockProse?: string;
+  /** Optional mock analysis JSON for post-render validation */
+  mockAnalysis?: Record<string, unknown>;
 }
 
 /** Result for a single injected error — whether the expected validator caught it */
@@ -35,6 +47,8 @@ export interface VariantIssueResult {
   expectedValidator: string;
   expectedSeverity: string;
   actualIssues: ValidationIssue[];
+  /** Issues from validators other than the expected one — catches cross-contamination leaks */
+  unexpectedIssues: ValidationIssue[];
   matched: boolean;
 }
 
@@ -124,6 +138,27 @@ interface FactValidity {
   branches: { type: 'all' };
 }
 
+/** Complete baseline analysis content — all required fields defaulted.
+ *  Fixture mockAnalysis overlays ONLY the fields it provides. */
+function makeBaselineAnalysisContent(): Record<string, unknown> {
+  return {
+    postconditions: { covered: [], dropped: [] },
+    preconditions: { violated: [] },
+    pov: { consistent: true, leaks: [] },
+    inventedDetails: [],
+    quality: { proseScore: 0, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 0 },
+    threadProgressAchieved: [],
+    foreshadowingDeployed: [],
+    narrativeChecks: [],
+    appearanceChecks: [],
+    characterReferences: [],
+    tenseDetected: 'past',
+    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+    ruleChecks: [],
+    knowledgeChecks: [],
+  };
+}
+
 // ─── Mutation Engine ────────────────────────────────────────────────────────
 
 /**
@@ -178,7 +213,7 @@ function applyInjections(
           // Add a precondition for an attribute that no event's
           // postcondition will ever set → reachability detects it
           event.preconditions.push({
-            id: `injected_unreachable_${Date.now()}`,
+            id: `injected_unreachable_${nextInjId()}`,
             entityId: 'xianglins_wife',
             attribute: 'has_magical_power',
             value: true,
@@ -194,7 +229,7 @@ function applyInjections(
           if (event.postconditions.length > 0) {
             const pc = event.postconditions[0];
             event.preconditions.push({
-              id: `injected_circular_${Date.now()}`,
+              id: `injected_circular_${nextInjId()}`,
               entityId: pc.entityId,
               attribute: pc.attribute,
               value: pc.value,
@@ -206,7 +241,7 @@ function applyInjections(
           // Causality break: add an unsatisfiable precondition.
           // Pick a plausible entity+attribute that the state won't have.
           event.preconditions.push({
-            id: `injected_unsatisfiable_${Date.now()}`,
+            id: `injected_unsatisfiable_${nextInjId()}`,
             entityId: 'xianglins_wife',
             attribute: 'location',
             value: 'nonexistent_faraway_land',
@@ -220,11 +255,13 @@ function applyInjections(
       // ── postconditions ─────────────────────────────────────────────
       case 'postconditions': {
         if (inj.expectedValidator === 'causality') {
-          // Corrupt a postcondition so the next event's precondition
-          // can't be satisfied → causality fires on the DOWNSTREAM event
+          // Corrupt the FIRST postcondition so the next event's precondition
+          // can't be satisfied → causality fires on the DOWNSTREAM event.
+          // Using index 0 (not last) because downstream events' preconditions
+          // typically depend on the most structurally significant postcondition.
           if (event.postconditions.length > 0) {
-            const target = event.postconditions[event.postconditions.length - 1];
-            target.value = `CORRUPTED_${Date.now()}`;
+            const target = event.postconditions[0];
+            target.value = `CORRUPTED_${nextInjId()}`;
             applied.push(`Corrupted postcondition: ${target.entityId}.${target.attribute}=CORRUPTED`);
           }
           // For extreme-damage 002_postcondition_swap: swap values
@@ -250,17 +287,29 @@ function applyInjections(
           // e.g., setting xianglins_wife.status = dead when later
           // events expect alive
           event.postconditions.push({
-            id: `injected_dead_${Date.now()}`,
+            id: `injected_dead_${nextInjId()}`,
             entityId: 'xianglins_wife',
             attribute: 'status',
             value: 'dead',
             validity: makeFactValidity(),
           });
-          applied.push('Added dead status postcondition: xianglins_wife.status=dead');
+          // Add a conflicting precondition to this same event so the
+          // CharacterStateValidator fires when checking preconditions.
+          // The state already has status=dead from this event's postcondition
+          // (applied during buildStateFromEvents), so the precondition check
+          // will detect the dead-status contradiction.
+          event.preconditions.push({
+            id: `injected_alive_check_${nextInjId()}`,
+            entityId: 'xianglins_wife',
+            attribute: 'status',
+            value: 'alive',
+            validity: makeFactValidity(),
+          });
+          applied.push('Added dead status postcondition + alive precondition to same event');
         } else if (inj.expectedValidator === 'world_rule') {
           // Add a postcondition that violates a world rule
           event.postconditions.push({
-            id: `injected_remarried_${Date.now()}`,
+            id: `injected_remarried_${nextInjId()}`,
             entityId: 'xianglins_wife',
             attribute: 'marital_status',
             value: 'remarried',
@@ -270,7 +319,7 @@ function applyInjections(
         } else {
           // Generic corrupt postcondition
           if (event.postconditions.length > 0) {
-            event.postconditions[0].value = `INJECTED_${Date.now()}`;
+            event.postconditions[0].value = `INJECTED_${nextInjId()}`;
             applied.push('Corrupted first postcondition value');
           }
         }
@@ -290,7 +339,12 @@ function applyInjections(
       // ── pov ─────────────────────────────────────────────────────────
       case 'pov': {
         // Set POV to a character that doesn't exist or has wrong role
-        if (inj.description.includes('fourth_aunt')) {
+        if (inj.description.includes('he_laoliu')) {
+          // he_laoliu exists in zhu-fu but is not a scene participant —
+          // triggers POV in-scene warning for third_person_limited
+          event.pov = { character: 'he_laoliu', type: 'third_person_limited' };
+          applied.push('Set POV to he_laoliu (non-participant character)');
+        } else if (inj.description.includes('fourth_aunt')) {
           // fourth_aunt exists in zhu-fu but has role 'supporting'
           // The POV validator catches this if role not protagonist/narrator
           event.pov = { character: 'fourth_aunt', type: 'third_person_limited' };
@@ -308,7 +362,7 @@ function applyInjections(
       case 'invented_detail': {
         // Add a postcondition about a nonexistent entity
         event.postconditions.push({
-          id: `invented_sister_${Date.now()}`,
+          id: `invented_sister_${nextInjId()}`,
           entityId: 'nonexistent_sister',
           attribute: 'exists',
           value: true,
@@ -317,20 +371,40 @@ function applyInjections(
         applied.push('Added invented detail about nonexistent entity');
         break;
       }
-
+ 
       // ── narratorKnowledge / knowledge ───────────────────────────────
       case 'narratorKnowledge':
       case 'narrator_knowledge': {
-        // Add precondition that implies knowledge of future events
-        // The knowledge validator should detect this temporal inconsistency
-        event.preconditions.push({
-          id: `future_knowledge_${Date.now()}`,
-          entityId: 'xianglins_wife',
-          attribute: 'kidnapped_by_he_laoliu',
-          value: true,
+        // Add postcondition with 'knows' attribute about future events.
+        // KnowledgeValidator.validatePre checks postconditions for temporal
+        // consistency — it looks for matching postconditions in future events.
+        const futureFactValue = 'kidnapped_by_he_laoliu';
+        event.postconditions.push({
+          id: `future_knowledge_${nextInjId()}`,
+          entityId: 'narrator',
+          attribute: 'knows',
+          value: futureFactValue,
           validity: makeFactValidity(),
         });
-        applied.push('Added future knowledge precondition');
+        applied.push('Added future knowledge postcondition (knows attribute)');
+
+        // Also add a matching knows postcondition to the nearest future event
+        // so KnowledgeValidator detects the temporal inconsistency:
+        // the current event knows something before the future event establishes it.
+        const futureEvents = events
+          .filter((e) => e.narrativeOrder > event.narrativeOrder)
+          .sort((a, b) => a.narrativeOrder - b.narrativeOrder);
+        if (futureEvents.length > 0) {
+          const nearestFuture = futureEvents[0];
+          nearestFuture.postconditions.push({
+            id: `establish_knowledge_${nextInjId()}`,
+            entityId: 'narrator',
+            attribute: 'knows',
+            value: futureFactValue,
+            validity: makeFactValidity(),
+          });
+          applied.push(`Added matching knows to future event ${nearestFuture.id}`);
+        }
         break;
       }
 
@@ -349,14 +423,13 @@ function applyInjections(
 
       // ── foreshadowing ───────────────────────────────────────────────
       case 'foreshadowing': {
-        // Add a foreshadowing entry whose target chapter will never exist
         event.foreshadowing.push({
-          id: `unpaid_${Date.now()}`,
+          id: `unpaid_${nextInjId()}`,
           hint: 'Something mysterious that never pays off',
-          targetRevealChapter: 999,
+          targetRevealChapter: 0,
           thread: 'mystery',
         });
-        applied.push('Added unpaid foreshadowing (target chapter 999)');
+        applied.push('Added unpaid foreshadowing (target chapter 0)');
         break;
       }
 
@@ -369,7 +442,7 @@ function applyInjections(
           applied.push('Set postcondition value to placeholder "changed"');
         } else {
           event.postconditions.push({
-            id: `placeholder_fact_${Date.now()}`,
+            id: `placeholder_fact_${nextInjId()}`,
             entityId: 'xianglins_wife',
             attribute: 'test_placeholder',
             value: 'changed',
@@ -421,13 +494,29 @@ function applyInjections(
       // ── location ────────────────────────────────────────────────────
       case 'location': {
         event.postconditions.push({
-          id: `location_mismatch_${Date.now()}`,
+          id: `location_mismatch_${nextInjId()}`,
           entityId: 'xianglins_wife',
           attribute: 'location',
           value: 'beijing',
           validity: makeFactValidity(),
         });
-        applied.push('Added location=beijing postcondition');
+        // Also add dead-status postcondition + conflicting precondition
+        // on the SAME event so the CharacterStateValidator fires
+        event.postconditions.push({
+          id: `injected_dead_loc_${nextInjId()}`,
+          entityId: 'xianglins_wife',
+          attribute: 'status',
+          value: 'dead',
+          validity: makeFactValidity(),
+        });
+        event.preconditions.push({
+          id: `injected_alive_check_loc_${nextInjId()}`,
+          entityId: 'xianglins_wife',
+          attribute: 'status',
+          value: 'alive',
+          validity: makeFactValidity(),
+        });
+        applied.push('Added location=beijing postcondition + dead status injection');
         break;
       }
 
@@ -448,13 +537,14 @@ function applyInjections(
       // ── arcPosition (pacing anomaly) ──────────────────────────────
       case 'arcPosition':
       case 'arc_position': {
-        // Set ALL events to 'opening' — flat narrative arc
+        // Set ALL events to 'climax' — no narrative arc structure.
+        // PacingValidator flags climax events outside the 60-85% window.
         for (const e of events) {
           if (e.id !== 'system:genesis') {
-            e.arcPosition = 'opening';
+            e.arcPosition = 'climax';
           }
         }
-        applied.push('Set all events to arcPosition="opening"');
+        applied.push('Set all events to arcPosition="climax"');
         break;
       }
 
@@ -478,7 +568,22 @@ function applyInjections(
           type: 'paths',
           paths: [['A'], ['B']],
         };
-        applied.push('Corrupted branchExistence');
+        // Set earlier events to non-all branchExistence so
+        // BranchMergeValidator.validatePre sees incoming branches
+        for (const e of events) {
+          if (e.narrativeOrder < event.narrativeOrder && e.branchExistence.type === 'all') {
+            (e as any).branchExistence = { type: 'paths', paths: [['A'], ['B']] };
+          }
+        }
+        // Add unsatisfiable precondition — compareFact will yield mismatch
+        event.preconditions.push({
+          id: `merge_unsat_${nextInjId()}`,
+          entityId: 'xianglins_wife',
+          attribute: 'non_existent_attr',
+          value: 'branch_specific_value',
+          validity: makeFactValidity(),
+        });
+        applied.push('Corrupted branchExistence and added merge-unsatisfiable precondition');
         break;
       }
 
@@ -507,13 +612,22 @@ function applyInjections(
       case 'appearance': {
         // Add contradictory appearance postcondition
         event.postconditions.push({
-          id: `appearance_contradiction_${Date.now()}`,
+          id: `appearance_contradiction_${nextInjId()}`,
           entityId: 'xianglins_wife',
           attribute: 'appearance',
           value: 'white_hair_haggard_wooden_face',
           validity: makeFactValidity(),
         });
-        applied.push('Added contradictory appearance postcondition');
+        // Add a SECOND conflicting appearance postcondition so
+        // AppearanceValidator.validatePre detects the contradiction
+        event.postconditions.push({
+          id: `appearance_sane_${nextInjId()}`,
+          entityId: 'xianglins_wife',
+          attribute: 'appearance',
+          value: 'pale_yellow_face_red_cheeks',
+          validity: makeFactValidity(),
+        });
+        applied.push('Added contradictory appearance postcondition pair');
         break;
       }
 
@@ -546,9 +660,10 @@ function runValidators(
   events: NarrativeEvent[],
   state: WorldState,
   registry: EntityRegistry,
+  stateBeforeByEventId?: Map<string, WorldState>,
 ): ValidationIssue[] {
   const aggregator = new ResultAggregator();
-  const results = aggregator.validateAll(events, state, registry);
+  const results = aggregator.validateAll(events, state, registry, undefined, stateBeforeByEventId);
 
   const allIssues: ValidationIssue[] = [];
   for (const result of results.values()) {
@@ -560,14 +675,13 @@ function runValidators(
 // ─── Injection File Processor ──────────────────────────────────────────────
 
 /**
- * Severity rank for comparing expected vs actual severity.
- * A higher-severity match (error vs expected warning) counts as match.
- */
-const SEV_RANK: Record<string, number> = { error: 3, warning: 2, info: 1 };
-
-/**
  * Process a single injection file: load the YAML, create mutated events,
- * replay state from mutated events, run validators, and return results.
+ * replay state incrementally per-event, run validators, and return results.
+ *
+ * State is built incrementally: each event is validated against the state
+ * accumulated from all previous events (but NOT its own effects). This
+ * ensures validators see pre-event state — critical for nullify detection,
+ * circular dependency detection, and self-referencing precondition detection.
  */
 function processInjectionFile(
   filePath: string,
@@ -583,59 +697,119 @@ function processInjectionFile(
   // Deep-clone events and apply all injections for this file simultaneously
   const mutated = cloneEvents(baseEvents);
   const appliedDesc = applyInjections(mutated, injections);
+  // Build state incrementally: validate each event against pre-event state,
+  // then apply its effects for subsequent events.
+  const allIssues: ValidationIssue[] = [];
+  const incrementalState = makeEmptyState();
 
-  // Replay state from the mutated events
-  const replay = new ReplayEngine();
-  const state = replay.replay(mutated, createEmptyBranchPath());
+  // Sort by narrative order for deterministic incremental replay
+  const sorted = [...mutated].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
 
-  // Run validators against the mutated events with fresh state
-  const allIssues = runValidators(mutated, state, registry);
+  // Seed initial state from genesis postconditions + registry entity state,
+  // matching production renderNovel's initialFacts construction.
+  const genesisEvent = sorted.find((e) => e.id === 'system:genesis');
+  if (genesisEvent) {
+    applyEventToState(genesisEvent, incrementalState);
+  }
+  // Apply registry entity state on top (overwrites genesis for same keys,
+  // matching compileStoryBoundaries behavior).
+  applyRegistryState(incrementalState, registry);
+
+  for (const event of sorted) {
+    if (event.id === 'system:genesis') {
+      continue;
+    }
+
+    // Validate event against current (pre-event) state
+    const eventAggregator = new ResultAggregator();
+    const chapter = Math.max(1, Math.ceil(event.narrativeOrder / 3));
+    const result = eventAggregator.validate(
+      event, incrementalState, registry, sorted, chapter,
+    );
+    allIssues.push(...result.errors, ...result.warnings, ...result.infos);
+
+    // Apply event's effects to state for subsequent events
+    applyEventToState(event, incrementalState);
+  }
 
   // For each injection entry, check if the expected validator matched
   const results: VariantIssueResult[] = injections.map((inj) => {
     const expectedName = normalizeValidatorName(inj.expectedValidator);
-    const expectedRank = SEV_RANK[inj.expectedSeverity] ?? 0;
 
-    // Schema validation happens during YAML loading, not in validators
-    if (expectedName === 'schema') {
-      return {
-        file: fileName,
-        description: inj.description,
-        expectedValidator: inj.expectedValidator,
-        expectedSeverity: inj.expectedSeverity,
-        actualIssues: [],
-        matched: false,
-      };
-    }
-
-    // Collect ALL issues from the expected validator (any severity).
-    // The injection files' expectedSeverity is informational — many validators
-    // produce warning-level issues even for injection-targeted errors.
-    const anyFromValidator = allIssues.filter(
+    // Collect ALL pre-render issues from the expected validator (any severity).
+    const preIssues = allIssues.filter(
       (issue) => issue.validator === expectedName,
     );
 
-    // Find issues at or above expected severity (for severity-matched reporting)
-    const matchingIssues = anyFromValidator.filter((issue) => {
-      const actualRank = SEV_RANK[issue.severity] ?? 0;
-      return actualRank >= expectedRank;
-    });
+    // Post-render validation: run validateRender for entries with mock analysis data
+    let postIssues: ValidationIssue[] = [];
+    if (inj.mockAnalysis || inj.mockProse) {
+      const targetEvent = mutated.find((e) => e.id === inj.entityId);
+      if (targetEvent) {
+        const renderAggregator = new ResultAggregator();
+        const mockAnalysis: AnalysisResult | undefined = inj.mockAnalysis
+          ? {
+              eventId: targetEvent.id,
+              analysis: {
+                ...makeBaselineAnalysisContent(),
+                ...(inj.mockAnalysis as Record<string, unknown>),
+              },
+            }
+          : undefined;
 
-    // Matched = the expected validator fired (regardless of severity).
-    // This is the primary signal: did the validator detect the injected error?
-    const matched = anyFromValidator.length > 0;
+        // Build pre-event state for post-render validation: stop at the target event.
+        // Must include registry entity state (same as pre-render path) so validators
+        // like AliasValidator and PronounValidator can access declaration fields.
+        const postRenderState = makeEmptyState();
+        if (genesisEvent) {
+          applyEventToState(genesisEvent, postRenderState);
+        }
+        applyRegistryState(postRenderState, registry);
+        for (const e of sorted) {
+          if (e.id === 'system:genesis') continue;
+          if (e.narrativeOrder >= targetEvent.narrativeOrder) break;
+          applyEventToState(e, postRenderState);
+        }
 
+        const postResult = renderAggregator.validateRender(
+          inj.mockProse ?? '',
+          targetEvent,
+          postRenderState,
+          mockAnalysis,
+          undefined,
+          registry,
+        );
+        postIssues = [
+          ...postResult.errors,
+          ...postResult.warnings,
+          ...postResult.infos,
+        ].filter((i) => i.validator === expectedName);
+      }
+    }
+
+    // Combine pre-render and post-render issues from the expected validator
+    const allFromValidator = [...preIssues, ...postIssues];
+
+    // MATCH: require at least one actual issue from the expected validator AND
+    // at least one issue with the exact expected severity.
+    // Severity-specific matching ensures contract fidelity across all severities
+    // (error, warning, info). A validator may produce multiple severities for
+    // different rule checks — the match targets the specific severity declared
+    // in the YAML fixture, which the contract then verifies.
+    const matched = allFromValidator.some((i) => i.severity === inj.expectedSeverity);
     return {
       file: fileName,
       description: inj.description,
       expectedValidator: inj.expectedValidator,
       expectedSeverity: inj.expectedSeverity,
-      actualIssues: anyFromValidator,
+      actualIssues: allFromValidator,
+      unexpectedIssues: allIssues.filter(
+        (issue) => issue.validator !== expectedName,
+      ),
       matched,
     };
   });
 
-  // Debug: log what happened
   if (results.some((r) => r.matched)) {
     const matchedDesc = results.filter((r) => r.matched).map((r) => r.expectedValidator).join(', ');
     console.log(`  [variants] ${fileName}: matched ${matchedDesc} (${appliedDesc.join('; ')})`);
@@ -669,8 +843,8 @@ export async function runVariantBench(): Promise<VariantResults> {
   const baseEvents = mapper.loadAllEvents(projectData.chapters);
 
   // ── Branch variants ─────────────────────────────────────────────────
-  const branchA = runBranchVariant(path.join(root, 'branch-A'), 'branch-A');
-  const branchB = runBranchVariant(path.join(root, 'branch-B'), 'branch-B');
+  const branchA = runBranchVariant(path.join(root, 'branch-A'));
+  const branchB = runBranchVariant(path.join(root, 'branch-B'));
 
   // ── Error-injection variants ────────────────────────────────────────
   const errorInjectionResults = runInjectionVariants(
@@ -740,25 +914,181 @@ export async function runVariantBench(): Promise<VariantResults> {
   };
 }
 
+/**
+ * Create a fresh empty WorldState with no accumulated facts.
+ */
+function makeEmptyState(): WorldState {
+  return {
+    entities: {},
+    relationships: {},
+    knowledge: {},
+    threads: {},
+    rules: {},
+    facts: [],
+  };
+}
+
+/**
+ * Apply a single event's effects to the world state (postconditions,
+ * thread progress, relationship effects, knowledge, rule evidence).
+ * Separated from buildStateFromEvents so incremental replay can use it.
+ */
+function applyEventToState(event: NarrativeEvent, state: WorldState): void {
+  // Apply postconditions to entities
+  for (const fact of event.postconditions) {
+    if (fact.value === undefined) continue;
+    if (!state.entities[fact.entityId]) {
+      state.entities[fact.entityId] = {};
+    }
+    state.facts.push(fact);
+    state.entities[fact.entityId][fact.attribute] = fact.value;
+  }
+
+  // Update thread progress
+  for (const tp of event.threadProgress) {
+    state.threads[tp.thread] = {
+      progress: tp.progressAfter,
+      total: tp.progressTotal,
+    };
+  }
+
+  // Update relationship state
+  for (const re of event.relationshipEffects) {
+    const relKey = [re.participants[0], re.participants[1]].sort().join('_');
+    if (!state.relationships[relKey]) {
+      state.relationships[relKey] = { direction: {} };
+    }
+    const dirMatch = re.direction.match(/(\S+)\s*→\s*(\S+)/);
+    if (dirMatch) {
+      const from = dirMatch[1];
+      if (!state.relationships[relKey].direction[from]) {
+        state.relationships[relKey].direction[from] = { dimensions: {}, perceivedBy: {} };
+      }
+      if (re.newState) {
+        const dirEntry = state.relationships[relKey].direction[from]!;
+        if (re.newState.type !== undefined) {
+          dirEntry.dimensions['type'] = re.newState.type;
+        }
+        if (re.newState.intensity !== undefined) {
+          dirEntry.dimensions['intensity'] = re.newState.intensity;
+        }
+      }
+    }
+  }
+
+  // Update knowledge (from postconditions with attribute "knows" or "knowledge")
+  for (const fact of event.postconditions) {
+    if (fact.attribute === 'knows' || fact.attribute === 'knowledge') {
+      if (!state.knowledge[fact.entityId]) {
+        state.knowledge[fact.entityId] = { knownFacts: [] };
+      }
+      state.knowledge[fact.entityId].knownFacts.push(fact.id);
+    }
+  }
+
+  // Update rule evidence
+  for (const re of event.ruleEffects) {
+    if (!state.rules[re.rule]) {
+      state.rules[re.rule] = { activeEvidence: 0, nullified: false, exceptions: [] };
+    }
+    switch (re.effect) {
+      case 'reinforce':
+        state.rules[re.rule].activeEvidence++;
+        state.rules[re.rule].nullified = false;
+        break;
+      case 'weaken':
+        state.rules[re.rule].activeEvidence = Math.max(0, state.rules[re.rule].activeEvidence - 1);
+        break;
+      case 'nullify':
+        state.rules[re.rule].activeEvidence = 0;
+        state.rules[re.rule].nullified = true;
+        break;
+      case 'introduce_exception':
+        state.rules[re.rule].exceptions.push(re.evidence);
+        break;
+    }
+  }
+}
+
+/**
+ * Seed registry entity state into a world state, matching production
+ * renderNovel's initialFacts construction where all entity.state fields
+ * become available as initial facts. This ensures character declaration
+ * fields (aliases, gender, appearance, age, profession) are accessible to
+ * pre-render and post-render validators.
+ *
+ * Registry state is applied AFTER genesis postconditions so it overwrites
+ * any duplicate keys, the same order as compileStoryBoundaries does.
+ */
+function applyRegistryState(state: WorldState, registry: EntityRegistry): void {
+  for (const entity of registry.getAll()) {
+    if (!state.entities[entity.id]) {
+      state.entities[entity.id] = {};
+    }
+    for (const [attr, value] of Object.entries(entity.state)) {
+      if (value !== undefined) {
+        state.entities[entity.id][attr] = value;
+        state.facts.push({
+          id: `${entity.id}.${attr}`,
+          entityId: entity.id,
+          attribute: attr,
+          value,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        });
+      }
+    }
+  }
+}
+
+
 // ─── Branch variant runner ──────────────────────────────────────────────────
 
 function runBranchVariant(
   dir: string,
-  name: string,
 ): { eventsLoaded: number; issues: ValidationIssue[] } {
-  try {
-    const mapper = new EntityMapper(dir);
-    const projectData = mapper.loadProject();
-    const registry = new InMemoryEntityRegistry();
-    registry.load(dir);
-    const events = mapper.loadAllEvents(projectData.chapters);
-    const replay = new ReplayEngine();
-    const state = replay.replay(events, createEmptyBranchPath());
-    const issues = runValidators(events, state, registry);
-    return { eventsLoaded: events.length, issues };
-  } catch {
-    return { eventsLoaded: 0, issues: [] };
-  }
+  const mapper = new EntityMapper(dir);
+  const projectData = mapper.loadProject();
+  const registry = new InMemoryEntityRegistry();
+  registry.load(dir);
+  const events = mapper.loadAllEvents(projectData.chapters);
+
+  // Build time anchors from project data so story timestamps resolve correctly
+  const anchors = new Map(projectData.timeAnchors.map((a) => [a.id, a.day]));
+
+  // Separate genesis event from authored events
+  const genesis = events.find((e) => e.id === 'system:genesis');
+  const authoredEvents = events.filter((e) => e.id !== 'system:genesis');
+
+  // Initial facts = genesis postconditions + registry entity state
+  const initialFacts: Fact[] = [
+    ...(genesis?.postconditions ?? []),
+    ...registry.getAll().flatMap((entity) =>
+      Object.entries(entity.state).map(([attribute, value]) => ({
+        id: `${entity.id}.${attribute}`,
+        entityId: entity.id,
+        attribute,
+        value,
+        validity: {
+          temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
+          branches: { type: 'all' as const },
+        },
+      })),
+    ),
+  ];
+
+  // Compile story boundaries with causal ordering and state snapshots
+  const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors);
+
+  // Only validate events that survived causal filtering
+  const selectedEvents = authoredEvents.filter(
+    (e) => boundaries.stateBeforeByEventId.has(e.id),
+  );
+
+  const issues = runValidators(selectedEvents, boundaries.finalState, registry, boundaries.stateBeforeByEventId);
+  return { eventsLoaded: selectedEvents.length, issues };
 }
 
 // ─── Injection variants runner ─────────────────────────────────────────────
@@ -773,12 +1103,8 @@ function runInjectionVariants(
 
   for (const file of files) {
     const filePath = path.join(dir, file);
-    try {
-      const results = processInjectionFile(filePath, baseEvents, registry);
-      allResults.push(...results);
-    } catch (err) {
-      console.error(`[variants] Error processing ${file}:`, err);
-    }
+    const results = processInjectionFile(filePath, baseEvents, registry);
+    allResults.push(...results);
   }
 
   return allResults;

@@ -705,15 +705,9 @@ describe('InMemoryEntityRegistry', () => {
 // ============================================================================
 
 describe('parseStoryTimestamp()', () => {
-  const emptyAnchors = new Map<string, number>();
-  const withAnchors = new Map<string, number>([
-    ['arcane_s1_end', 0],
-    ['seraphine_recruitment', -120],
-    ['vi_and_jinx_departure', -21],
-  ]);
 
   it('should parse relative timestamps like "arcane_s1_end + 3 weeks"', () => {
-    const result = parseStoryTimestamp('arcane_s1_end + 3 weeks', withAnchors);
+    const result = parseStoryTimestamp('arcane_s1_end + 3 weeks');
     expect(result).toEqual({
       type: 'relative',
       anchor: 'arcane_s1_end',
@@ -722,28 +716,28 @@ describe('parseStoryTimestamp()', () => {
   });
 
   it('should parse relative timestamps with various units', () => {
-    const minute = parseStoryTimestamp('anchor + 30 minutes', emptyAnchors);
+    const minute = parseStoryTimestamp('anchor + 30 minutes');
     expect(minute).toEqual({
       type: 'relative',
       anchor: 'anchor',
       offset: { amount: 30, unit: 'minute' },
     });
 
-    const hour = parseStoryTimestamp('anchor + 6 hours', emptyAnchors);
+    const hour = parseStoryTimestamp('anchor + 6 hours');
     expect(hour).toEqual({
       type: 'relative',
       anchor: 'anchor',
       offset: { amount: 6, unit: 'hour' },
     });
 
-    const day = parseStoryTimestamp('anchor + 5 days', emptyAnchors);
+    const day = parseStoryTimestamp('anchor + 5 days');
     expect(day).toEqual({
       type: 'relative',
       anchor: 'anchor',
       offset: { amount: 5, unit: 'day' },
     });
 
-    const month = parseStoryTimestamp('anchor + 1 month', emptyAnchors);
+    const month = parseStoryTimestamp('anchor + 1 month');
     expect(month).toEqual({
       type: 'relative',
       anchor: 'anchor',
@@ -752,27 +746,27 @@ describe('parseStoryTimestamp()', () => {
   });
 
   it('should parse chapter timestamps like "chapter_5"', () => {
-    const result1 = parseStoryTimestamp('chapter_5', emptyAnchors);
+    const result1 = parseStoryTimestamp('chapter_5');
     expect(result1).toEqual({ type: 'chapter', chapter: 5 });
   });
 
   it('should parse chapter timestamps like "chapter 3"', () => {
-    const result = parseStoryTimestamp('chapter 3', emptyAnchors);
+    const result = parseStoryTimestamp('chapter 3');
     expect(result).toEqual({ type: 'chapter', chapter: 3 });
   });
 
   it('should parse absolute timestamps like "day_42"', () => {
-    const result = parseStoryTimestamp('day_42', emptyAnchors);
+    const result = parseStoryTimestamp('day_42');
     expect(result).toEqual({ type: 'absolute', value: 'day_42' });
   });
 
   it('should fallback to absolute for unrecognised formats', () => {
-    const result = parseStoryTimestamp('some_custom_reference', emptyAnchors);
+    const result = parseStoryTimestamp('some_custom_reference');
     expect(result).toEqual({ type: 'absolute', value: 'some_custom_reference' });
   });
 
   it('should handle empty or whitespace-only strings as absolute fallback', () => {
-    const result = parseStoryTimestamp('', emptyAnchors);
+    const result = parseStoryTimestamp('');
     // The function returns { type: 'absolute', value: raw } for unmatched patterns
     // where raw is the input string. With empty string, value should be ''.
     expect(result.type).toBe('absolute');
@@ -797,9 +791,9 @@ describe('resolveTimestampToDay()', () => {
     expect(resolveTimestampToDay({ type: 'absolute', value: 'day_100' }, anchors)).toBe(100);
   });
 
-  it('should resolve absolute non-"day_N" formats to 0', () => {
-    expect(resolveTimestampToDay({ type: 'absolute', value: 'foo' }, anchors)).toBe(0);
-    expect(resolveTimestampToDay({ type: 'absolute', value: '' }, anchors)).toBe(0);
+  it('rejects unknown absolute timestamps', () => {
+    expect(() => resolveTimestampToDay({ type: 'absolute', value: 'foo' }, anchors)).toThrow('Unknown absolute time anchor');
+    expect(() => resolveTimestampToDay({ type: 'absolute', value: '' }, anchors)).toThrow('Unknown absolute time anchor');
   });
 
   it('should resolve relative timestamps', () => {
@@ -822,13 +816,13 @@ describe('resolveTimestampToDay()', () => {
     expect(resolveTimestampToDay(ts, anchors)).toBe(-90);
   });
 
-  it('should use 0 for unknown anchors', () => {
+  it('rejects unknown relative anchors', () => {
     const ts: StoryTimestamp = {
       type: 'relative',
       anchor: 'unknown_anchor',
       offset: { amount: 5, unit: 'day' },
     };
-    expect(resolveTimestampToDay(ts, anchors)).toBe(5);
+    expect(() => resolveTimestampToDay(ts, anchors)).toThrow('Unknown relative time anchor');
   });
 
   it('should resolve chapter timestamps to chapter number', () => {
@@ -928,18 +922,9 @@ describe('compareTimestamp()', () => {
 // ============================================================================
 
 describe('EntityMapper — edge cases', () => {
-  it('should handle non-existent project path gracefully', () => {
+  it('rejects a non-existent project path with ConfigError', () => {
     const mapper = new EntityMapper('/nonexistent/path');
-    const data = mapper.loadProject();
-    expect(data.config).toBeNull();
-    expect(data.characters).toEqual([]);
-    expect(data.relationships).toEqual([]);
-    expect(data.rules).toEqual([]);
-    expect(data.locations).toEqual([]);
-    expect(data.items).toEqual([]);
-    expect(data.factions).toEqual([]);
-    expect(data.worldInitialState).toBeNull();
-    expect(data.chapters.size).toBe(0);
+    expect(() => mapper.loadProject()).toThrow('Required YAML file is missing');
   });
 
   it('mapToNarrativeEvent should handle empty arrays', () => {
@@ -975,11 +960,9 @@ describe('EntityMapper — edge cases', () => {
 });
 
 describe('InMemoryEntityRegistry — edge cases', () => {
-  it('load() should handle non-existent directory', () => {
+  it('propagates a missing project ConfigError', () => {
     const registry = new InMemoryEntityRegistry();
-    // Should not throw
-    expect(() => registry.load('/nonexistent')).not.toThrow();
-    expect(registry.getAll()).toEqual([]);
+    expect(() => registry.load('/nonexistent')).toThrow('Required YAML file is missing');
   });
 
   it('resolveRefs() should handle empty array', () => {

@@ -1,6 +1,6 @@
 import type {
   CharacterDefinition,
-  CharacterRelationshipDef,
+  RelationshipDefinition,
   ChapterMetadata,
   EventFile,
   FactionDefinition,
@@ -19,7 +19,7 @@ import type {
 export interface ProjectData {
   config: ProjectConfig | null;
   characters: CharacterDefinition[];
-  relationships: CharacterRelationshipDef[];
+  relationships: RelationshipDefinition[];
   rules: RuleDefinition[];
   locations: LocationDefinition[];
   items: ItemDefinition[];

@@ -31,7 +31,7 @@ traits:
   - observant
   - outsider_in_hometown
 initialState:
-  location: luchen_town
+  location: fourth_master_lu_house
   status: alive
   condition: well
   purpose: new_year_visit

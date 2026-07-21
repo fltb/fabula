@@ -31,8 +31,8 @@ export interface AnalysisBlockRequirement {
   field: string;
   /** Only for narrativeChecks-style keyed blocks: attribute values LLM should produce */
   attributes?: string[];
-  /** JSON template example showing the structure (used to build schema). Can be object, array, or primitive. */
-  schemaExample: unknown;
+  /** Zod schema for this analysis block — auto-generates the JSON example in the prompt */
+  schema: import('zod').ZodTypeAny;
   /** LLM instruction: MUST start with the field name. e.g. "narrativeChecks[pacing]: check..." */
   instruction: string;
 }
@@ -59,6 +59,7 @@ export interface PostRenderInput {
   prose: string;
   analysis: AnalysisResult | null;
   chapter: number;
+  entityRegistry?: EntityRegistry;
 }
 
 // ——— Validator Context (legacy) ———

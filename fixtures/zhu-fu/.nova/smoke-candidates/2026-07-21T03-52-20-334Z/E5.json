@@ -1,0 +1,269 @@
+{
+  "prose": "但我也还是时时想起那件事。自从祥林嫂回到鲁镇，她的故事便像磨盘似的，一圈一圈地重复。起初人们还陪出许多眼泪，后来镇上的人几乎都能背诵她的话，一听到就烦厌得头痛。“我真傻，真的，”她开口说。“我单知道雪天里野兽在山墺里没有食吃……”于是人们便打断她，或者故意逗她：“祥林嫂，你们的阿毛如果还在，不是也就有这么大了么？”她便怔怔的，说不下去了。后来他们又专拿她额上的伤疤取笑。“你那时怎么竟肯了？”他们问。她总是无言地走开，缩着肩膀，仿佛要躲进影子里去。\n\n这年冬，柳妈来做帮工。柳妈是个善女人，吃素，不杀生，却极爱说话。一日午后，我走过厨房，听见她在里面絮絮地讲。祥林嫂蹲在灶下烧火，柳妈坐在矮凳上剥豆，两个人影子被火光照得一跳一跳的。“你额角上的疤，不就是那时撞的么？”柳妈问，语气平平的，像是在问盐罐子放在哪里。“唔。”祥林嫂含糊地应。“我问你，你那时怎么后来竟依了呢？”“我么？……”祥林嫂忽然不作声了。柳妈却笑起来，把一颗豆荚丢进篮子里，说：“你想，你将来到阴司去，那两个死鬼的男人还要争，你给了谁好呢？阎罗大王只好把你锯开来，分给他们。我想，这真是……”她咂了咂嘴，像在品味一桩极有趣的事。\n\n祥林嫂的脸在火光里白得怕人，眼睛却黑沉沉地定住了。第二天她便告了假，到西头的土地庙去。庙祝起初不肯，她跪在那里哭，后来总算答应——一条门槛，十二元鹰洋。她从此干活更勤，积了将近年把，才攒够了。捐了门槛之后，她的确变了个模样，眼光也分外有神，逢人便有一种隐秘的、几乎算得上欢悦的神色，仿佛她已经赎了罪，重新活了过来。\n\n冬至祭祖，四婶照例在堂屋里张罗。祥林嫂也像往年一样去帮忙，她坦然伸手去取酒杯和筷子。“你放着罢，祥林嫂！”四婶慌忙大叫，声音绷得像一根将断的弦。祥林嫂的手像被炮烙了似的缩回去，脸色同时变成灰黑。她没有说一句话，只是站了一刻，然后默默地出去了。\n\n从此她不再开口。她的眼睛窅陷下去，头发在几个月里全白了，记性也坏，连淘米也忘记。整日只是坐在灶下，像一个木偶人。我想，她终于还是被那门槛绊倒了，又或者，那门槛从来就不曾存在过。",
+  "analysis": {
+    "eventId": "E5",
+    "analysis": {
+      "postconditions": {
+        "covered": [
+          "xianglins_wife.spiritual_state=broken",
+          "xianglins_wife.has_donated_threshold=true",
+          "xianglins_wife.work_capability=diminished",
+          "xianglins_wife.appearance=grey_black_face_sunken_eyes_white_hair_wooden_puppet",
+          "xianglins_wife.emotionalState=spiritually_devastated",
+          "fourth_aunt.attitude_toward_xianglins_wife=increasingly_annoyed",
+          "xianglins_wife.social_status",
+          "liu_ma.effect_on_xianglins_wife"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "柳妈坐在矮凳上剥豆，把一颗豆荚丢进篮子里",
+          "severity": "minor"
+        },
+        {
+          "detail": "她咂了咂嘴，像在品味一桩极有趣的事",
+          "severity": "minor"
+        },
+        {
+          "detail": "我走过厨房",
+          "severity": "minor"
+        },
+        {
+          "detail": "庙祝起初不肯，她跪在那里哭",
+          "severity": "minor"
+        }
+      ],
+      "quality": {
+        "proseScore": 8,
+        "maxScore": 10,
+        "strengths": [
+          "生动的意象（如磨盘、炮烙）增强了悲剧感",
+          "节奏把控得当：铺垫、转折、高潮层层推进",
+          "柳妈的对话用平静口吻说出恐怖内容，恰到好处"
+        ],
+        "weaknesses": [
+          "部分情节（如庙祝对话）略超出第一人称视角知识范围",
+          "祥林嫂捐门槛后的心理转变稍显跳跃"
+        ],
+        "estimatedWordCount": 450
+      },
+      "threadProgressAchieved": [
+        "T1",
+        "T2",
+        "T3",
+        "T4"
+      ],
+      "foreshadowingDeployed": [
+        "her_inevitable_expulsion"
+      ],
+      "narrativeChecks": [
+        {
+          "entityId": "scene",
+          "attribute": "time_period",
+          "hint": "winter_solstice",
+          "evidence": "冬至祭祖",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "character_state:emotionalState",
+          "hint": "grief_stricken",
+          "evidence": "她的故事便像磨盘似的，一圈一圈地重复...她便怔怔的，说不下去了。后来他们又专拿她额上的伤疤取笑...她总是无言地走开",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "character_state:location",
+          "hint": "fourth_master_lu_house",
+          "evidence": "这年冬，柳妈来做帮工...祥林嫂蹲在灶下烧火",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "character_state:marital_status",
+          "hint": "widowed_twice",
+          "evidence": "那两个死鬼的男人还要争",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_formality",
+          "hint": "literary, educated, reflective",
+          "evidence": "但我也还是时时想起那件事。我想，她终于还是被那门槛绊倒了，又或者，那门槛从来就不曾存在过。",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "liu_ma",
+          "attribute": "voice_vocabulary",
+          "hint": "talkative, superstitious, colloquial",
+          "evidence": "你想，你将来到阴司去，那两个死鬼的男人还要争...阎罗大王只好把你锯开来，分给他们",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "fourth_aunt",
+          "attribute": "voice_action_verbs",
+          "hint": "ritual enforcer, sharp command",
+          "evidence": "你放着罢，祥林嫂！",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "overall",
+          "attribute": "pace",
+          "hint": "varied: compressed summary then sharp climax",
+          "evidence": "她从此干活更勤，积了将近年把，才攒够了。（summary）→ 你放着罢，祥林嫂！ （sharp）",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "overall",
+          "attribute": "discourseMode",
+          "hint": "description",
+          "evidence": "Prose is predominantly descriptive narrative with embedded dialogue, no extended action or reflection.",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "pronoun_consistency",
+          "hint": "she/her",
+          "evidence": "Repeated use of 她 throughout the prose",
+          "matchLevel": "exact"
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "xianglins_wife",
+          "feature": "脸色",
+          "declared": "灰黑",
+          "evidence": "脸色同时变成灰黑",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "眼睛",
+          "declared": "窅陷",
+          "evidence": "眼睛窅陷下去",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "头发",
+          "declared": "全白",
+          "evidence": "头发在几个月里全白了",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "整体形象",
+          "declared": "木偶人",
+          "evidence": "像一个木偶人",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "fourth_aunt",
+          "feature": "衣着",
+          "declared": "干净的棉袍",
+          "evidence": "无对应描写",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "liu_ma",
+          "feature": "衣着",
+          "declared": "素净，可能带念珠等",
+          "evidence": "无对应描写",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "narrator",
+          "feature": "衣着",
+          "declared": "城里人的衣服",
+          "evidence": "无对应描写",
+          "matchLevel": "absent"
+        }
+      ],
+      "characterReferences": [
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她"
+          ]
+        },
+        {
+          "entityId": "fourth_aunt",
+          "namesUsed": [
+            "四婶"
+          ]
+        },
+        {
+          "entityId": "liu_ma",
+          "namesUsed": [
+            "柳妈",
+            "善女人",
+            "她"
+          ]
+        }
+      ],
+      "tenseDetected": "past",
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": true
+      },
+      "ruleChecks": [
+        {
+          "ruleId": "religious_authority",
+          "violated": false,
+          "evidence": "柳妈：将来到阴司去...阎罗大王只好把你锯开来",
+          "severity": "minor"
+        },
+        {
+          "ruleId": "widow_purity",
+          "violated": false,
+          "evidence": "你放着罢，祥林嫂！",
+          "severity": "minor"
+        },
+        {
+          "ruleId": "husbands_authority",
+          "violated": false,
+          "evidence": "那两个死鬼的男人还要争，你给了谁好呢？",
+          "severity": "minor"
+        }
+      ],
+      "knowledgeChecks": [
+        {
+          "entityId": "narrator",
+          "leakedEntity": "xianglins_wife",
+          "leakedInfo": "Details of the temple donation negotiation (the keeper's initial refusal, her crying, agreement, cost) without the narrator being present or attributing the source.",
+          "evidence": "庙祝起初不肯，她跪在那里哭，后来总算答应——一条门槛，十二元鹰洋",
+          "matchLevel": "exact"
+        }
+      ]
+    }
+  },
+  "metadata": {
+    "eventId": "E5",
+    "provider": "ai-sdk",
+    "model": "deepseek-v4-pro",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "482dee61fe9127684bd5a0dc80d5af1df6c66fbdddf8a0430328c7df9506be17",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-21T03:57:14.290Z",
+    "reviewStatus": "candidate",
+    "attempts": 1,
+    "errors": []
+  }
+}

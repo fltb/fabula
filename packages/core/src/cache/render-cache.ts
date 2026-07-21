@@ -27,7 +27,7 @@
 
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
-import * as fs from 'node:fs';
+import { CacheCorruptionError } from '../errors.ts';
 import type { Storage } from '../storage/index.js';
 
 /**
@@ -126,14 +126,21 @@ export function getCachedRender(
 
   try {
     const metaRaw = storage.read(metaPath);
-    const meta = JSON.parse(metaRaw) as { cacheKey: string };
-    if (meta.cacheKey !== cacheKey) {
-      return null; // Cache invalidated by source change
+    const meta = JSON.parse(metaRaw) as { cacheKey?: unknown };
+    if (typeof meta.cacheKey !== 'string') {
+      throw new CacheCorruptionError('Cache metadata has no cache key', { eventId, phase: 'cache-read' });
     }
-    const dataRaw = storage.read(dataPath);
-    return JSON.parse(dataRaw) as Record<string, unknown>;
-  } catch {
-    return null;
+    if (meta.cacheKey !== cacheKey) {
+      return null;
+    }
+    const data = JSON.parse(storage.read(dataPath));
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+      throw new CacheCorruptionError('Cache render payload must be an object', { eventId, phase: 'cache-read' });
+    }
+    return data as Record<string, unknown>;
+  } catch (error) {
+    if (error instanceof CacheCorruptionError) throw error;
+    throw new CacheCorruptionError('Cache files are malformed', { eventId, phase: 'cache-read' });
   }
 }
 

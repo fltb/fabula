@@ -7,12 +7,19 @@
 // or CharacterDefinition.aliases[].
 // ============================================================================
 
+import { z } from 'zod';
+import { makeIssue } from './base.js';
 import type {
   PostRenderInput,
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+
+export const characterReferenceSchema = z.object({
+  entityId: z.string(),
+  namesUsed: z.array(z.string()),
+});
+export type CharacterReference = z.infer<typeof characterReferenceSchema>;
 
 export class AliasValidator implements Validator {
   name = 'alias';
@@ -24,7 +31,7 @@ export class AliasValidator implements Validator {
 
     if (!analysis) return issues;
 
-    const charRefs = analysis.analysis.characterReferences ?? [];
+    const charRefs = z.array(characterReferenceSchema).safeParse(analysis.analysis.characterReferences).data ?? [];
     if (charRefs.length === 0) return issues;
 
     for (const ref of charRefs) {
@@ -51,6 +58,18 @@ export class AliasValidator implements Validator {
         }
       }
 
+      // Fallback: check entity registry directly when worldState lacks aliases
+      if (input.entityRegistry) {
+        const registryEntity = input.entityRegistry.resolve(entityId);
+        if (registryEntity) {
+          const regAliases = registryEntity.state['aliases'];
+          if (Array.isArray(regAliases)) {
+            for (const alias of regAliases) {
+              validNames.add(String(alias).toLowerCase());
+            }
+          }
+        }
+      }
       // Also check the entity registry info accessible via event participants
       // and fall back to checking the entity ID variations
       const idParts = entityId.split(/[._\s-]+/);
@@ -77,7 +96,7 @@ export class AliasValidator implements Validator {
             this.name,
             event.id,
             entityId,
-            'info',
+            'warning',
             `Unknown name "${usedName}" used for character "${entityId}" — not in known names/aliases`,
             'If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.',
             'add_field',
@@ -95,7 +114,7 @@ export class AliasValidator implements Validator {
   getAnalysisRequirements() {
     return [{
       field: 'characterReferences',
-      schemaExample: { entityId: 'char_001', namesUsed: ['John', 'Mr. Smith', 'he'] },
+      schema: z.array(characterReferenceSchema),
       instruction: 'characterReferences: For each character present in the scene, record every name variant used in the prose (full name, nickname, title, epithet, pronoun) in the characterReferences block under namesUsed. This helps verify that all names are valid aliases for the character.',
     }];
   }

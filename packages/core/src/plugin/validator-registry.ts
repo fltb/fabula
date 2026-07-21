@@ -1,12 +1,11 @@
-// ============================================================================
-// Plugin System — Validator Registry
-// ============================================================================
+import type { ValidatorContext, ValidationResult, AnalysisBlockRequirement } from '../types/index.js';
 
-import type { ValidatorContext, ValidationResult } from '../types/index.js';
 
 export interface PluginValidator {
   name: string;
   validate(ctx: ValidatorContext): ValidationResult;
+  /** Optional: contribute analysis blocks to the dynamic Pass 2 schema. */
+  getAnalysisRequirements?(): AnalysisBlockRequirement[];
 }
 
 export class ValidatorRegistry {

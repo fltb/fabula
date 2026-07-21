@@ -1,0 +1,56 @@
+[
+  {
+    "rule": "widow_purity",
+    "effect": "reinforce",
+    "evidence": "鲁四老爷骂她'不早不迟，偏偏要在这时候——这就可见是一个谬种！'——死在祝福时节，她的死亡玷污了祝福仪式的纯洁。",
+    "eventId": "E1"
+  },
+  {
+    "rule": "husbands_authority",
+    "effect": "reinforce",
+    "evidence": "四叔皱眉——他讨厌她是一个寡妇。即使她安分耐劳，寡妇的身份本身就是瑕疵。",
+    "eventId": "E2"
+  },
+  {
+    "rule": "patriarchal_clan_authority",
+    "effect": "reinforce",
+    "evidence": "婆婆有权卖儿媳——以八十千的价钱卖给贺老六。四老爷认可：'既是她的婆婆要她回去，那有什么话可说的呢？'",
+    "eventId": "E3"
+  },
+  {
+    "rule": "husbands_authority",
+    "effect": "reinforce",
+    "evidence": "祥林嫂以头撞香案——她的反抗不是拒绝婚姻本身，而是捍卫寡妇的贞节：她不该改嫁，不该侍奉第二个男人。",
+    "eventId": "E3"
+  },
+  {
+    "rule": "patriarchal_clan_authority",
+    "effect": "reinforce",
+    "evidence": "贺老六死后，大伯来收房，赶她出门——没有儿子的寡妇在宗族中没有任何权利。",
+    "eventId": "E4"
+  },
+  {
+    "rule": "religious_authority",
+    "effect": "reinforce",
+    "evidence": "柳妈的地狱恐吓——阎罗王将祥林嫂锯成两半分给两个死鬼丈夫——使她陷入前所未有的恐惧。",
+    "eventId": "E5"
+  },
+  {
+    "rule": "widow_purity",
+    "effect": "reinforce",
+    "evidence": "四婶冬至祭祀时的喝止——'你放着罢，祥林嫂！'——证明捐门槛也不能洗清寡妇的'不洁'标签。",
+    "eventId": "E5"
+  },
+  {
+    "rule": "husbands_authority",
+    "effect": "reinforce",
+    "evidence": "来世的两个死鬼男人将争夺她——她死后仍然被两个丈夫平分，不得自主。",
+    "eventId": "E5"
+  },
+  {
+    "rule": "widow_purity",
+    "effect": "reinforce",
+    "evidence": "鲁四老爷在她死后的第一反应：'不早不迟，偏偏要在这时候——这就可见是一个谬种！'——她连死都选错了时间，冒犯了祝福的纯洁。",
+    "eventId": "E6"
+  }
+]

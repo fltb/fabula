@@ -4,7 +4,6 @@
 
 import type { EntityId } from './entity.js';
 import type { RelationshipState } from './world.js';
-import type { StyleGuidance } from './event.js';
 import type { RuleDefinition } from './rule.js';
 
 // ——— Relevance Score ———

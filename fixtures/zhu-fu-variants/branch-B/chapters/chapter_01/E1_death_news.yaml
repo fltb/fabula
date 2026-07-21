@@ -16,12 +16,6 @@ preconditions:
   - entity: narrator
     attribute: location
     value: fourth_master_lu_house
-  - entity: narrator
-    attribute: knowledge
-    value: encountered_xianglins_wife
-  - entity: narrator
-    attribute: emotionalState
-    value: guilty_uneasy
 expectedPostconditions:
   - entity: xianglins_wife
     attribute: status
@@ -46,7 +40,6 @@ expectedPostconditions:
   - entity: narrator
     attribute: purpose
     value: recount_her_story
-    narrativeHint: "'我'在孤灯下开始回忆她的生平——'先前所见所闻的她的半生事迹的断片，至此也联成一片了'。这是从框架叙事转向倒叙的过渡句。"
     confidence: 1.0
 threadProgress:
   - thread: T1
@@ -70,7 +63,7 @@ relationshipEffects:
   - participants:
       - narrator
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: death_severs_possible_help
     newState:
       type: witness_subject_resolved_in_death

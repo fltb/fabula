@@ -1,6 +1,6 @@
 injected:
   - entityId: "E3"
-    attribute: "storyTime"
+    attribute: "narrationTime"
     expectedValidator: "timeline"
-    expectedSeverity: "error"
-    description: "E3 storyTime is earlier than E2 storyTime but sceneType is linear"
+    expectedSeverity: "warning"
+    description: "E3 sceneType is flashback but narrationTime is missing — timeline validator should detect missing temporal context"

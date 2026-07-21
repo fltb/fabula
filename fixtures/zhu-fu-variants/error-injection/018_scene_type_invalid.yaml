@@ -1,6 +1,6 @@
 injected:
   - entityId: "E1"
     attribute: "sceneType"
-    expectedValidator: "schema"
+    expectedValidator: "timeline"
     expectedSeverity: "error"
     description: "An event has sceneType 'notarealtype' — invalid enum value"

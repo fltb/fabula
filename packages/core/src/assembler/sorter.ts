@@ -23,6 +23,7 @@ export class NarrativeSorter {
         prose: entry.prose,
         narrativeOrder: entry.narrativeOrder,
         chapter: entry.chapter,
+        branchExistence: entry.branchExistence,
       });
     }
 

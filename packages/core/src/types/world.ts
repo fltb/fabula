@@ -3,7 +3,7 @@
 // ============================================================================
 
 import type { EntityId, StoryTimestamp, Fact, FactId } from './entity.js';
-import type { NarrativeEvent, RuleEffectEntry } from './event.js';
+import type { NarrativeEvent } from './event.js';
 
 // ——— Knowledge System (§7.4.2) ———
 
@@ -83,7 +83,7 @@ export interface TransitionEffect {
 
 // ——— World State ———
 
-export interface RuleState {
+interface RuleState {
   activeEvidence: number;
   nullified: boolean;
   exceptions: string[];

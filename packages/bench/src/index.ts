@@ -3,6 +3,8 @@
 // ============================================================================
 
 export { runRegressionBench, validateFixtureIssues } from './regression.js';
+export { loadApprovedReferences, collectReferenceIssueIdentities } from './reference.js';
+export type { ApprovedReference, ApprovedReferenceSet, ValidatorIssueIdentity, ProvenanceManifest, Stage1ReferenceReview } from './reference.js';
 export type { RegressionResults, RegressionStageResult } from './regression.js';
 
 export { runVariantBench } from './variants.js';
@@ -40,14 +42,14 @@ export {
 } from './adapters/index.js';
 export type { IN3KConversionResult } from './adapters/index.js';
 
+// Live smoke record builder
+export { buildLiveSmokeRecord } from './live-smoke.js';
+export type { LiveSmokeRecordInput, LiveSmokeRecordOutput } from './live-smoke.js';
+
 import { runRegressionBench } from './regression.js';
-import type { RegressionResults } from './regression.js';
 import { runVariantBench } from './variants.js';
-import type { VariantResults } from './variants.js';
 import { runExternalBench } from './external.js';
-import type { ExternalBenchResult } from './external.js';
 import { runPerformanceBench } from './performance.js';
-import type { PerfResults } from './performance.js';
 import { writeResults } from './reporters.js';
 import type { BenchResults } from './reporters.js';
 

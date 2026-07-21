@@ -3,25 +3,85 @@
   "analysis": {
     "eventId": "E5",
     "analysis": {
-      "postconditions": { "covered": [], "dropped": [] },
-      "preconditions": { "violated": [] },
-      "pov": { "consistent": true, "leaks": [] },
+      "postconditions": {
+        "covered": [],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
       "inventedDetails": [],
-      "quality": { "proseScore": 9, "maxScore": 10, "strengths": ["climactic scene", "emotional devastation"], "weaknesses": [], "estimatedWordCount": 300 },
-      "threadProgressAchieved": ["T2: spiritual_crisis", "T4: rejection_climax"],
+      "quality": {
+        "proseScore": 9,
+        "maxScore": 10,
+        "strengths": [
+          "climactic scene",
+          "emotional devastation"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 300
+      },
+      "threadProgressAchieved": [
+        "T2: spiritual_crisis",
+        "T4: rejection_climax"
+      ],
       "foreshadowingDeployed": [],
       "narrativeChecks": [],
       "appearanceChecks": [
-        { "entityId": "xianglins_wife", "feature": "appearance", "declared": "眼睛凹陷_精神不济", "evidence": "眼睛凹陷下去，连精神也更不济了", "matchLevel": "exact" }
+        {
+          "entityId": "xianglins_wife",
+          "feature": "appearance",
+          "declared": "眼睛凹陷_精神不济",
+          "evidence": "眼睛凹陷下去，连精神也更不济了",
+          "matchLevel": "exact"
+        }
       ],
       "characterReferences": [
-        { "entityId": "xianglins_wife", "namesUsed": ["祥林嫂", "她"] },
-        { "entityId": "fourth_master_lu", "namesUsed": ["四婶"] },
-        { "entityId": "narrator", "namesUsed": ["我"] }
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四婶"
+          ]
+        },
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        }
       ],
       "tenseDetected": "past",
-      "conflictAnalysis": { "primaryType": "person_vs_society", "resolutionAchieved": false }
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": false
+      },
+      "ruleChecks": [],
+      "knowledgeChecks": []
     }
   },
-  "_metadata": { "eventId": "E5", "errors": [] }
+  "metadata": {
+    "eventId": "E5",
+    "errors": [],
+    "provider": "mock-pass2",
+    "model": "mock-stage1",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "generatedAt": "2026-07-18T00:00:00.000Z",
+    "reviewStatus": "approved",
+    "attempts": 1
+  }
 }

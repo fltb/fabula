@@ -13,6 +13,8 @@ npm install
 npm run build          # 先构建 core，再构建 cli
 npx nova --help        # 或全局链接
 ```
+构建产物保持 YAML 依赖在 ESM bundle 外部；`packages/cli/tests/bundle-boundary.test.ts` 验证没有 dynamic-require wrapper，且 built CLI 的 `--help` 可启动。
+
 
 ## 命令
 
@@ -22,8 +24,7 @@ npx nova --help        # 或全局链接
 |---------|-------------|
 | `project init <name>` | 创建新的项目目录，包含 definitions/、chapters/、scenes/、.nova/ 目录结构、branch_points.yaml 模板、nova.yaml 配置和 state_initial.yaml |
 | `validate` | 通过 `ResultAggregator.validateAll()` + ISS 计算运行全部 18 个验证器。`--strict` 强制执行 ISS 阈值；`--event <id>` 验证单个事件 |
-| `render <event>` | 完整的 LLM 渲染管道。`--all` 渲染所有事件；`--dry-run` 编译上下文并保存提示词但不调用 LLM；`--model` 覆盖模型 |
-| `status` | 通过 `getProjectStatus()` 显示项目状态摘要：各状态的事件数量、线索进度 |
+| `render <event>` | 完整的 LLM 渲染管道（两轮：Pass 1 prose → Pass 2 结构化分析）。每轮输出分别写入 `scenes/chapter-NN/{eventId}.md`（prose）、`scenes/chapter-NN/{eventId}.yaml`（元数据）、`scenes/chapter-NN/{eventId}_render_request.yaml`（上下文）、`.nova/responses/{eventId}.json`（Pass 2 原始响应含 prose + 分析 artifact）。`--all` 渲染全部 authored event；`--dry-run` 只编译上下文；`--model` 覆盖模型。离线 deterministic run 必须显式传 `--provider mock-pass2 --reference-dir <approved-reference-data>`。mock 无 reference dir、未知 provider 或任一场未通过 release gate 都以非零退出。Release gate 要求：prose 非空、Pass 2 分析符合 schema、全部 18 个 validator 通过。全链验收使用项目配置的 `defaultSceneTextTarget`（默认无阈值；在 `nova.yaml` 中显式配置即生效，如祝福项目设为 400 narrative units），绝不允许低于该目标的烟雾阈值。当 `--all` 渲染所有 authored event 时，自动调用 assembleNovel() 生成 `output/novel.md`，每个场景恰好出现一次，验证文本计数完整性。`system:genesis` 从不参与 narrative 输出。 |
 | `assemble` | 通过 `assembleNovel()` 将已提交的场景组装到 `output/novel.md`；`--output` 指定自定义路径 |
 | `entity list [kind]` | 按类型筛选列出实体；`--status` 按渲染状态筛选事件 |
 | `entity show <id>` | 显示实体详情、状态和定义文件路径 |

@@ -11,7 +11,8 @@
 //   maxTokens: 10000 (far above target; we take what we get)
 // ============================================================================
 
-import type { LLMProvider, CompletionResponse, Message } from '../ai/types.ts';
+import * as crypto from 'node:crypto';
+import type { LLMProvider, CompletionRequest, CompletionResponse, Message } from '../ai/types.ts';
 import type {
   NarrativeEvent,
   WorldState,
@@ -32,7 +33,10 @@ import { ConcurrencyPool } from '../util/pool.ts';
 import type { Storage } from '../storage/index.ts';
 import { ResultAggregator } from '../validator/aggregator.ts';
 import { createCircuitBreaker } from './circuit-breaker.ts';
-import { analyzeValidationErrors, buildRepairGuidance, decideRepairStrategy, degradeStrategy } from './reverse-validate.ts';
+import { CacheCorruptionError, sanitizeError } from '../errors.ts';
+import { analyzeValidationErrors, decideRepairStrategy } from './reverse-validate.ts';
+import type { Logger } from '../observability/logger.ts';
+import type { TraceCollector } from '../observability/trace.ts';
 
 export interface RenderJob {
   event: NarrativeEvent;
@@ -40,6 +44,29 @@ export interface RenderJob {
   context: ContextPackage;
   chapter: number;
 }
+export interface ProviderCallLedgerEntry {
+  phase: 'pass1' | 'pass2' | 'pass2_verify';
+  /** Scene-level attempt number from the circuit breaker (1-based) */
+  attempt: number;
+  outcome: 'success' | 'failure';
+  /** 64-lowercase-hex SHA-256 of canonical-json request projection */
+  requestHash: string;
+  /** The model used for this call */
+  model: string;
+  /** Seed (Pass 2/verify uses 42; Pass 1 is null) */
+  seed: number | null;
+  /** Safe failure reason — set only on failure, never contains prompts/secrets/keys */
+  failureReason?: string;
+}
+
+/** Categorises why Pass 2 analysis is null after all retries exhaust.
+ *  - 'empty': provider returned null or empty content
+ *  - 'parse': content was not valid JSON
+ *  - 'validation': content parsed as JSON but failed schema validation
+ *  Only set when `analysis` is null due to Pass 2 failure.
+ *  Never set when Pass 2 succeeds, the outer loop retries, or Pass 2 throws. */
+export type Pass2RejectionCategory = 'empty' | 'parse' | 'validation';
+
 
 export interface RenderSceneResult {
   eventId: string;
@@ -49,12 +76,18 @@ export interface RenderSceneResult {
   llmPass2: NonNullable<CompletionResponse['usage']> | null;
   cacheHit: boolean;
   errors: string[];
+  promptHash: string;                   // SHA-256 of ordered provider-call identities
   renderStart: number;
   renderEnd: number;
   validation: ValidationResult | null;   // post-render validation result
+  providerCalls: ProviderCallLedgerEntry[];
   attempts: number;                      // number of render attempts
   /** True if all retries exhausted and validation still has errors */
   needsReview: boolean;
+  /** Categorises Pass 2 exhaustion: 'empty' | 'parse' | 'validation'.
+   *  Only non-null when analysis is null due to Pass 2 content rejection.
+   *  Undefined on provider throw, Pass 2 success, or Pass 1 only failure. */
+  pass2Rejection?: Pass2RejectionCategory;
 }
 
 export interface RenderPipelineOptions {
@@ -69,8 +102,17 @@ export interface RenderPipelineOptions {
   aggregator?: ResultAggregator;         // optional, for post-render validation
   /** Maximum render+validate attempts before giving up (default 3) */
   maxRetries?: number;
-  /** Dev-only: run Pass 2 twice and compare for non-deterministic blocks (default false) */
+  /** Logger for structured observability (optional) */
+  logger?: Logger;
+  /** Trace collector for span recording (optional) */
+  traceCollector?: TraceCollector;
+  /** Target length for Pass 1 prose generation (default: 400 words) */
+  targetLengthWords?: number;
+  /** Language code for CJK-aware instruction generation (default: 'en') */
+  language?: string;
   doubleRunVerification?: boolean;
+  /** Circuit breaker max rounds (default 3) */
+  maxRounds?: number;
 }
 
 export class RenderPipeline {
@@ -85,8 +127,12 @@ export class RenderPipeline {
   private readonly aggregator?: ResultAggregator;
   private readonly maxRetries: number;
   private readonly doubleRunVerification: boolean;
+  private readonly logger?: Logger;
+  private readonly traceCollector?: TraceCollector;
+  private readonly targetLengthWords: number;
+  private readonly language: string;
   private cacheKeys: Map<string, string> | null = null;
-
+  private readonly maxRounds: number;
   constructor(opts: RenderPipelineOptions) {
     this.provider = opts.provider;
     this.model = opts.model;
@@ -98,9 +144,13 @@ export class RenderPipeline {
     this.aggregator = opts.aggregator;
     this.maxRetries = opts.maxRetries ?? 3;
     this.doubleRunVerification = opts.doubleRunVerification ?? false;
+    this.logger = opts.logger;
+    this.traceCollector = opts.traceCollector;
+    this.targetLengthWords = opts.targetLengthWords ?? 400;
+    this.language = opts.language ?? 'en';
+    this.maxRounds = opts.maxRounds ?? 3;
     this.pool = new ConcurrencyPool(opts.concurrency ?? 5);
   }
-
   /**
    * Initialize cache keys from events + definitions.
    * Must be called before render().
@@ -122,34 +172,41 @@ export class RenderPipeline {
     const errors: string[] = [];
     const renderStart = Date.now();
     const cacheKey = this.cacheKeys?.get(eventId);
+    // Observability: pipeline span start
+    this.traceCollector?.record({ phase: 'pipeline', state: 'start', spanId: eventId, eventId });
+    this.logger?.info('Starting scene render', { eventId, chapter });
 
     // ── Cache check ──────────────────────────────────────────────
     if (!this.skipCache && cacheKey) {
-      const cached = getCachedRender(this.cacheDir, eventId, cacheKey, this.storage);
-      if (cached) {
-        const c = cached as Record<string, unknown>;
-        const cachedAnalysisStr = c.analysis ? String(c.analysis) : null;
-        return {
-          eventId,
-          prose: String(c.prose ?? ''),
-          analysis: cachedAnalysisStr
-            ? parseAnalysisJSON(cachedAnalysisStr, (msg) =>
-              errors.push(`Cache parse warning: ${msg}`),
-            )
-            : null,
-          llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-          llmPass2: null,
-          cacheHit: true,
-          errors: [],
-          renderStart:
-            typeof c.renderedAt === 'string'
-              ? new Date(c.renderedAt).getTime()
-              : renderStart,
-          renderEnd: renderStart,
-          validation: null,
-          attempts: 1,
-          needsReview: false,
-        };
+      this.traceCollector?.record({ phase: 'cache', state: 'start', spanId: `${eventId}:cache`, eventId });
+      try {
+        const cached = getCachedRender(this.cacheDir, eventId, cacheKey, this.storage);
+        if (cached) {
+          const c = cached as Record<string, unknown>;
+          const cachedAnalysisStr = c.analysis ? String(c.analysis) : null;
+          const analysis = cachedAnalysisStr ? parseAnalysisJSON(cachedAnalysisStr, (message) => errors.push(`Cache parse warning: ${message}`)) : null;
+          const validation = analysis && this.aggregator
+            ? this.aggregator.validateRender(String(c.prose ?? ''), event, stateBefore, analysis)
+            : null;
+          const needsReview = String(c.prose ?? '').trim().length === 0 || analysis === null || (validation !== null && !validation.passed);
+          this.traceCollector?.record({ phase: 'cache', state: 'end', spanId: `${eventId}:cache`, eventId });
+          this.traceCollector?.record({ phase: 'pipeline', state: 'end', spanId: eventId, eventId });
+          this.logger?.info('Cache hit, returning cached result', { eventId });
+          return {
+            eventId, prose: String(c.prose ?? ''), analysis,
+            llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, llmPass2: null,
+            cacheHit: true, errors, renderStart: typeof c.renderedAt === 'string' ? new Date(c.renderedAt).getTime() : renderStart,
+            renderEnd: renderStart, validation, attempts: 0, needsReview,
+            providerCalls: [],
+            promptHash: typeof c.promptHash === 'string' ? c.promptHash : '',
+          };
+        }
+        this.traceCollector?.record({ phase: 'cache', state: 'end', spanId: `${eventId}:cache`, eventId });
+        this.logger?.info('Cache miss, proceeding to render', { eventId });
+      } catch (error) {
+        if (!(error instanceof CacheCorruptionError)) throw error;
+        errors.push(`Cache read failed for ${eventId}: ${error.code}`);
+        this.traceCollector?.record({ phase: 'cache', state: 'error', spanId: `${eventId}:cache`, eventId, code: error.code });
       }
     }
 
@@ -162,12 +219,13 @@ export class RenderPipeline {
     let renderValidation: ValidationResult | null = null;
     let previousErrorMessages: string[] = [];
     let attempts = 0;
-
-    // Initialize circuit breaker — manages 3 rounds of escalation
+    const providerCalls: ProviderCallLedgerEntry[] = [];
+    let pass2Rejection: Pass2RejectionCategory | null = null;
+    // Initialize circuit breaker — scene-level retry escalation
     const breaker = createCircuitBreaker({
-      maxRounds: 3,
+      maxRounds: this.maxRounds,
       maxAttemptsPerRound: 2,
-      failureThreshold: 3,     // auto-open after 3 consecutive failures (safety net)
+      failureThreshold: 3,
       escalationDelay: 0,
     });
 
@@ -177,8 +235,9 @@ export class RenderPipeline {
       // ── Pass 1: Pure prose (with retry guidance on retry) ────────
       const assembler = new PromptAssembler();
       const assembled = assembler.assemble(context, {
-        styleGuidance: event.styleGuidance,
-        targetLengthWords: 400,
+        targetLengthWords: this.targetLengthWords,
+        styleGuidance: job.event.styleGuidance,
+        language: this.language,
         referenceExample: this.referenceExample,
         retryGuidance: attempts > 1 && previousErrorMessages.length > 0
           ? previousErrorMessages.join('\n')
@@ -186,22 +245,34 @@ export class RenderPipeline {
       });
       const proseMessages = assembled.messages;
       try {
-        const result1 = await this.provider.complete({
+        const pass1Request: CompletionRequest = {
           messages: proseMessages,
           model: this.model,
           temperature: 0.8,
           maxTokens: this.maxTokens,
-        });
+        };
+        const pass1Hash = this.computeRequestHash(pass1Request);
+        const result1 = await this.provider.complete(pass1Request);
         prose = result1.content ?? '';
         llmPass1 = result1.usage ?? llmPass1;
+        providerCalls.push({ phase: 'pass1', attempt: attempts, outcome: 'success', requestHash: pass1Hash, model: this.model, seed: null });
         if (!prose || prose.trim().length === 0) {
           errors.push(`Pass 1 attempt ${attempts} returned empty prose`);
           prose = '(empty)';
         }
       } catch (err) {
-        errors.push(`Pass 1 attempt ${attempts} failed: ${(err as Error).message}`);
+        errors.push(`Pass 1 attempt ${attempts} failed: ${sanitizeError(err)}`);
+        const pass1Hash = this.computeRequestHash({
+          messages: proseMessages,
+          model: this.model,
+          temperature: 0.8,
+          maxTokens: this.maxTokens,
+        });
+        providerCalls.push({ phase: 'pass1', attempt: attempts, outcome: 'failure', failureReason: sanitizeError(err), requestHash: pass1Hash, model: this.model, seed: null });
         prose = '(empty)';
       }
+      this.traceCollector?.record({ phase: 'pass1', state: 'end', spanId: `${eventId}:pass1`, eventId, durationMs: Date.now() - renderStart });
+      this.logger?.info('Pass 1 completed', { eventId, attempts, promptTokens: llmPass1.promptTokens, completionTokens: llmPass1.completionTokens, totalTokens: llmPass1.totalTokens });
 
       if (prose === '(empty)') {
         breaker.recordFailure('Pass 1 returned empty prose');
@@ -215,45 +286,53 @@ export class RenderPipeline {
       analysisRaw = null;
       analysis = null;
       llmPass2 = null;
+      pass2Rejection = null;
+      let lastAnalysisMessages: Message[] | undefined;
       try {
         let analysisObj: AnalysisResult | null = null;
         let feedbackErrors: string[] | undefined;
-        let lastAnalysisMessages: Message[] | undefined;
-
-        // Up to 2 attempts: initial + retry with Zod error feedback
-        for (let attempt2 = 0; attempt2 < 2 && !analysisObj; attempt2++) {
+        // Up to 4 attempts: initial + up to 3 retries with Zod error feedback
+        for (let attempt2 = 0; attempt2 < 4 && !analysisObj; attempt2++) {
           const analysisInput: RenderAnalysisInput = {
             event, prose, context,
             previousErrors: feedbackErrors,
             analysisRequirements: this.aggregator?.getAnalysisRequirements(),
           };
           lastAnalysisMessages = buildAnalysisPrompt(analysisInput);
-          const result2 = await this.provider.complete({
+          const pass2Request: CompletionRequest = {
             messages: lastAnalysisMessages,
             model: this.model,
             temperature: 0.3,
             maxTokens: 12000,
             seed: 42,
             responseFormat: { type: 'json_object' },
-          });
+          };
+          const pass2Hash = this.computeRequestHash(pass2Request);
+          const result2 = await this.provider.complete(pass2Request);
           analysisRaw = result2.content ?? null;
           llmPass2 = result2.usage ?? null;
+          providerCalls.push({ phase: 'pass2', attempt: attempts, outcome: 'success', requestHash: pass2Hash, model: this.model, seed: 42 });
 
           if (analysisRaw) {
-            const parseResult = parseAnalysisJSONWithErrors(analysisRaw);
+            const parseResult = parseAnalysisJSONWithErrors(analysisRaw, this.aggregator?.getCombinedValidationSchema());
             if (parseResult.result) {
               analysisObj = parseResult.result;
               break;
             }
 
-            // Collect error details for feedback on retry
+            // Track rejection category for deterministic diagnosis
+            // Must be set before parseError/zodErrors are potentially consumed for feedback.
             if (parseResult.parseError) {
+              pass2Rejection = 'parse';
               feedbackErrors = [`JSON parse error: ${parseResult.parseError}`];
             } else if (parseResult.zodErrors) {
+              pass2Rejection = 'validation';
               feedbackErrors = parseResult.zodErrors.issues.map(i =>
                 `Validation error at "${i.path.join('.')}": ${i.message}`,
               );
             }
+          } else {
+            pass2Rejection = 'empty';
           }
         }
 
@@ -262,15 +341,19 @@ export class RenderPipeline {
 
           // ── P5: Dev-only double-run verification ──────────────────
           if (this.doubleRunVerification && lastAnalysisMessages) {
+            let verifyHash = '';
             try {
-              const result2b = await this.provider.complete({
+              const verifyRequest: CompletionRequest = {
                 messages: lastAnalysisMessages,
                 model: this.model,
                 temperature: 0.3,
                 maxTokens: 12000,
                 seed: 42,
                 responseFormat: { type: 'json_object' },
-              });
+              };
+              verifyHash = this.computeRequestHash(verifyRequest);
+              const result2b = await this.provider.complete(verifyRequest);
+              providerCalls.push({ phase: 'pass2_verify', attempt: attempts, outcome: 'success', requestHash: verifyHash, model: this.model, seed: 42 });
               const analysis2Raw = result2b.content;
               if (analysis2Raw) {
                 const parsed2 = parseAnalysisJSONWithErrors(analysis2Raw);
@@ -282,20 +365,46 @@ export class RenderPipeline {
                 }
               }
             } catch {
-              // Double-run failure is non-fatal (dev-only diagnostic)
+              providerCalls.push({ phase: 'pass2_verify', attempt: attempts, outcome: 'failure', failureReason: sanitizeError('Double-run non-fatal error'), requestHash: verifyHash, model: this.model, seed: 42 });
             }
           }
         } else {
-          errors.push('Pass 2 JSON parse/validation failed after retry');
+          // Categorize the failure for deterministic diagnosis without leaking raw content
+          if (pass2Rejection === 'empty') {
+            errors.push('Pass 2 exhausted: provider returned empty content');
+          } else if (pass2Rejection === 'parse') {
+            errors.push('Pass 2 exhausted: JSON parse failed after retry');
+          } else if (pass2Rejection === 'validation') {
+            errors.push('Pass 2 exhausted: schema validation failed after retry');
+          } else {
+            errors.push('Pass 2 JSON parse/validation failed after retry');
+          }
           analysis = null;
         }
       } catch (err) {
-        errors.push(`Pass 2 attempt ${attempts} failed: ${(err as Error).message}`);
+        errors.push(`Pass 2 attempt ${attempts} failed: ${sanitizeError(err)}`);
+        // Recompute request hash in the catch block — the for-loop-scoped
+        // pass2Hash is not accessible here. lastAnalysisMessages is set before
+        // the provider call that may have thrown, so it carries the actual
+        // request projection. The ?? [] fallback ensures a valid 64-hex hash
+        // even in the edge case the loop never ran.
+        const failPass2Hash = this.computeRequestHash({
+          messages: lastAnalysisMessages ?? [],
+          model: this.model,
+          temperature: 0.3,
+          maxTokens: 12000,
+          seed: 42,
+          responseFormat: { type: 'json_object' },
+        });
+        providerCalls.push({ phase: 'pass2', attempt: attempts, outcome: 'failure', failureReason: sanitizeError(err), requestHash: failPass2Hash, model: this.model, seed: 42 });
         analysis = null;
       }
+      this.traceCollector?.record({ phase: 'pass2', state: 'end', spanId: `${eventId}:pass2`, eventId, durationMs: Date.now() - renderStart });
+      this.logger?.info('Pass 2 completed', { eventId, attempts });
 
       // ── Post-render validation ────────────────────────────────────
       renderValidation = null;
+      this.traceCollector?.record({ phase: 'validator', state: 'start', spanId: `${eventId}:validator`, eventId });
       if (this.aggregator) {
         try {
           renderValidation = this.aggregator.validateRender(prose, event, stateBefore, analysis ?? undefined);
@@ -303,6 +412,7 @@ export class RenderPipeline {
           errors.push(`Post-render validation failed: ${(err as Error).message}`);
         }
       }
+      this.traceCollector?.record({ phase: 'validator', state: 'end', spanId: `${eventId}:validator`, eventId, durationMs: Date.now() - renderStart });
 
       // If validation passes (or no aggregator), break out of retry loop
       if (!renderValidation || renderValidation.passed) {
@@ -316,6 +426,8 @@ export class RenderPipeline {
       // After 2 consecutive failures, escalate to next round
       if (breaker.state().consecutiveFailures >= 2) {
         breaker.escalate();
+        this.traceCollector?.record({ phase: 'circuit', state: 'end', spanId: `${eventId}:circuit`, eventId, code: `round_${breaker.state().round}_escalated` });
+        this.logger?.warn('Circuit escalation', { eventId, round: breaker.state().round, strategy: breaker.state().escalatedStrategy });
       }
 
       // Build structured repair guidance from validation errors
@@ -339,7 +451,15 @@ export class RenderPipeline {
     }
 
     const renderEnd = Date.now();
-    const needsReview = breaker.state().isOpen || (!!renderValidation && !renderValidation.passed);
+    const needsReview = analysis === null || breaker.state().isOpen || (!!renderValidation && !renderValidation.passed);
+
+    // Compute aggregate promptHash from ordered provider-call identities
+    const promptHash = crypto.createHash('sha256')
+      .update(this.canonicalJson(
+        providerCalls.map(({ phase, attempt, requestHash, model, seed }) =>
+          ({ phase, attempt, requestHash, model, seed })),
+      ))
+      .digest('hex');
 
     // Save cache ONLY if validation passed (don't cache bad renders)
     if (cacheKey && !needsReview) {
@@ -348,10 +468,13 @@ export class RenderPipeline {
         analysis: analysisRaw, // Store raw JSON string in cache
         llmPass1,
         llmPass2,
+        promptHash,
         renderedAt: new Date().toISOString(),
         chapters: [chapter],
       }, this.storage);
     }
+    this.traceCollector?.record({ phase: 'pipeline', state: 'end', spanId: eventId, eventId, durationMs: renderEnd - renderStart });
+    this.logger?.info('Scene render completed', { eventId, durationMs: renderEnd - renderStart, attempts, needsReview });
 
     return {
       eventId,
@@ -364,8 +487,11 @@ export class RenderPipeline {
       renderStart,
       renderEnd,
       validation: renderValidation,
+      providerCalls,
       attempts,
       needsReview,
+      promptHash,
+      ...(pass2Rejection !== null ? { pass2Rejection } : {}),
     };
   }
 
@@ -376,4 +502,41 @@ export class RenderPipeline {
   async renderAll(jobs: RenderJob[]): Promise<RenderSceneResult[]> {
     return this.pool.all(jobs, (job) => this.renderScene(job));
   }
+
+  /**
+   * Deterministic recursive sorted-key canonical JSON serialization.
+   * Arrays preserve original order; plain-object keys are sorted lexicographically;
+   * undefined object members are omitted; JSON primitives serialize normally.
+   */
+  private canonicalJson(value: unknown): string {
+    if (typeof value !== 'object' || value === null) {
+      return JSON.stringify(value);
+    }
+    if (Array.isArray(value)) {
+      return '[' + value.map(v => this.canonicalJson(v)).join(',') + ']';
+    }
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).filter(k => obj[k] !== undefined).sort();
+    return '{' + keys.map(k => JSON.stringify(k) + ':' + this.canonicalJson(obj[k])).join(',') + '}';
+  }
+  /**
+   * Compute the SHA-256 request hash for a provider call.
+   * The hash covers the canonical JSON of the request projection
+   * (messages role+content, model, temperature, maxTokens, stop, seed, responseFormat).
+   * signal is excluded as it is a non-serializable cancellation handle.
+   */
+  private computeRequestHash(request: CompletionRequest): string {
+    const projection = {
+      messages: request.messages.map(({ role, content }) => ({ role, content })),
+      model: request.model ?? null,
+      temperature: request.temperature ?? null,
+      maxTokens: request.maxTokens ?? null,
+      stop: request.stop ?? null,
+      seed: request.seed ?? null,
+      responseFormat: request.responseFormat ?? null,
+    };
+    const json = this.canonicalJson(projection);
+    return crypto.createHash('sha256').update(json, 'utf-8').digest('hex');
+  }
 }
+

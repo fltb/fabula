@@ -38,8 +38,8 @@ describe('ReviewManager', () => {
       // but we can verify by exercising the class
     });
 
-    it('should create a ReviewManager with custom blocking threshold', () => {
-      const custom = new ReviewManager(5);
+    it('should create a ReviewManager', () => {
+      const custom = new ReviewManager();
       expect(custom).toBeInstanceOf(ReviewManager);
     });
   });

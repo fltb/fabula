@@ -2,7 +2,8 @@ event: E1
 title: "死讯——谬种"
 narrativeOrder: 2
 sceneType: linear
-storyTime: new_year_eve
+storyTime: new_year_eve + 1 hour
+narrationTime: new_year_eve
 tense: past
 discourseMode: exposition
 arcPosition: opening
@@ -46,7 +47,6 @@ expectedPostconditions:
   - entity: narrator
     attribute: purpose
     value: recount_her_story
-    narrativeHint: "'我'在孤灯下开始回忆她的生平——'先前所见所闻的她的半生事迹的断片，至此也联成一片了'。这是从框架叙事转向倒叙的过渡句。"
     confidence: 1.0
 threadProgress:
   - thread: T1
@@ -70,7 +70,7 @@ relationshipEffects:
   - participants:
       - narrator
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: death_severs_possible_help
     newState:
       type: witness_subject_resolved_in_death
@@ -89,6 +89,7 @@ ruleEffects:
     evidence: "鲁四老爷骂她'不早不迟，偏偏要在这时候——这就可见是一个谬种！'——死在祝福时节，她的死亡玷污了祝福仪式的纯洁。"
 styleGuidance:
   tone: "沉闷、压抑、渐趋冷峻"
+  targetWordCount: 400
   atmosphere: "书房里'我'独自坐在灯下，外面雪花簌簌声，满屋的寂静。晚云的消夜和爆竹声成为压抑的背景音。"
   scenePacing: "从惴惴不安到得知死讯的震动，再到'心地渐渐轻松'的微妙转折——需展现'我'的道德回避机制。"
   characterVoice:

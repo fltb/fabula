@@ -3,4 +3,4 @@ injected:
     attribute: "tense"
     expectedValidator: "tense_consistency"
     expectedSeverity: "error"
-    description: "E2 tense field is 'present' but sceneBrief content is in past tense and project config uses tense: past."
+    description: "E2 tense field is 'present' but E0/E1 use past tense — cross-scene tense inconsistency"

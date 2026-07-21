@@ -92,7 +92,7 @@ relationshipEffects:
   - participants:
       - xianglins_wife
       - fourth_master_lu
-    effect: break
+    effect: dissolve
     direction: permanent_separation_from_lu_system
     newState:
       type: no_relationship
@@ -100,17 +100,17 @@ relationshipEffects:
   - participants:
       - xianglins_wife
       - liu_ma
-    effect: never_formed
+    effect: establish
     direction: never_encountered
     newState:
       type: no_relationship
       intensity: 0
 ruleEffects:
   - rule: patriarchal_clan_authority
-    effect: dodge
+    effect: nullify
     evidence: "大伯没能收房——贺老六活着。宗族权力没有机会行使。但这是一种'绕过去的胜利'，不是制度的改变。"
   - rule: religious_authority
-    effect: dodge
+    effect: nullify
     evidence: "祥林嫂从未听到柳妈的地狱故事。宗教绳索在贺家坳的物理距离中被悬置了——她没有脱离信仰体系，只是没有被它捕获。"
 styleGuidance:
   tone: "质朴、平淡、细微的温暖与持续的艰辛并存。不能用浪漫化的笔调写'田园幸福'——这是穷人的日子，每一天都需要用力气去挣。但厨房里的热气、阿毛的叫喊、贺老六扛柴回来的脚步声——这些细节之中有另一种叙述能量：生存的、具体的、不需要救赎的。"

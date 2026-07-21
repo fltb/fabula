@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import type { ChapterMetadata } from '../types/index.js';
 import { FsStorage, type Storage } from '../storage/index.ts';
+import { logger } from '../observability/logger.ts';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Chapter Metadata Loader
@@ -19,7 +20,7 @@ export function loadChapterMetadata(
   const chaptersDir = path.join(projectDir, 'chapters');
 
   if (!st.exists(chaptersDir)) {
-    console.warn(`[Assembler] Chapters directory not found: ${chaptersDir}`);
+    logger.warn('Chapter metadata directory not found', { module: 'assembler', path: chaptersDir });
     return map;
   }
 
@@ -50,11 +51,8 @@ export function loadChapterMetadata(
       };
 
       map.set(metadata.chapter, metadata);
-    } catch (err) {
-      console.warn(
-        `[Assembler] Error reading chapter metadata ${metaPath}: ` +
-        `${(err as Error).message}`,
-      );
+    } catch {
+      logger.warn('Chapter metadata could not be read', { module: 'assembler', path: metaPath });
     }
   }
 

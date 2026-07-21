@@ -2,7 +2,8 @@ event: E6
 title: "逐出与死亡——谬种的终结"
 narrativeOrder: 7
 sceneType: flashback
-storyTime: new_year_eve
+storyTime: day_-1
+narrationTime: new_year_eve
 tense: past
 discourseMode: transition
 arcPosition: denouement
@@ -69,7 +70,7 @@ relationshipEffects:
   - participants:
       - fourth_master_lu
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: dying_nuisance
     newState:
       type: dead_outcast
@@ -77,7 +78,7 @@ relationshipEffects:
   - participants:
       - fourth_aunt
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: dismissed_and_forgotten
     newState:
       type: unwanted_memory
@@ -88,6 +89,7 @@ ruleEffects:
     evidence: "鲁四老爷在她死后的第一反应：'不早不迟，偏偏要在这时候——这就可见是一个谬种！'——她连死都选错了时间，冒犯了祝福的纯洁。"
 styleGuidance:
   tone: "从四婶的不耐烦→祥林嫂消失的真空→'我'的冷淡叙述→祝福大典的盛大与荒谬。最终段需要写出巨大的反讽——祥林嫂的尸体正不知躺在哪里，而整个鲁镇正在醉醺醺地接受天地的祝福。"
+  targetWordCount: 1800
   scenePacing: "逐出过程的简短交代（祥林嫂被悄然打发走）→沦为乞丐的空白期（'我'不知道她怎么变成乞丐的）→E0的河边相遇在此重新浮现→死亡的简短确认→祝福的盛大终场。时间线从倒叙回到框架现在，形成环形叙事。"
   characterVoice:
     narrator: "最后一段的语气表面平静、甚至'懒散而且舒适'，实质上是最大的反讽——他在恭喜发财的爆竹声中，用文学的笔将祥林嫂重新埋葬。"

@@ -1,0 +1,170 @@
+[
+  {
+    "participants": [
+      "narrator",
+      "xianglins_wife"
+    ],
+    "effect": "establish",
+    "direction": "stranger_encounter_turning_into_moral_test",
+    "newState": {
+      "type": "witness_subject",
+      "intensity": 60
+    }
+  },
+  {
+    "participants": [
+      "narrator",
+      "xianglins_wife"
+    ],
+    "effect": "dissolve",
+    "direction": "death_severs_possible_help",
+    "newState": {
+      "type": "witness_subject_resolved_in_death",
+      "intensity": 80
+    }
+  },
+  {
+    "participants": [
+      "fourth_master_lu",
+      "xianglins_wife"
+    ],
+    "effect": "reinforce",
+    "direction": "disgust_confirmed",
+    "newState": {
+      "type": "deceased_nuisance",
+      "intensity": 90
+    }
+  },
+  {
+    "participants": [
+      "fourth_master_lu",
+      "xianglins_wife"
+    ],
+    "effect": "establish",
+    "direction": "reluctant_employer_tolerates_widow",
+    "newState": {
+      "type": "wary_tolerance",
+      "intensity": 30
+    }
+  },
+  {
+    "participants": [
+      "fourth_aunt",
+      "xianglins_wife"
+    ],
+    "effect": "establish",
+    "direction": "satisfied_employer_to_diligent_worker",
+    "newState": {
+      "type": "positive_working_relationship",
+      "intensity": 40
+    }
+  },
+  {
+    "participants": [
+      "he_laoliu",
+      "xianglins_wife"
+    ],
+    "effect": "establish",
+    "direction": "forced_marriage_growing_into_stability",
+    "newState": {
+      "type": "stable_marriage",
+      "intensity": 60
+    }
+  },
+  {
+    "participants": [
+      "mother_in_law",
+      "xianglins_wife"
+    ],
+    "effect": "dissolve",
+    "direction": "property_transferred",
+    "newState": {
+      "type": "ownership_transferred",
+      "intensity": 100
+    }
+  },
+  {
+    "participants": [
+      "fourth_master_lu",
+      "xianglins_wife"
+    ],
+    "effect": "dissolve",
+    "direction": "employment_terminated_by_clan_right",
+    "newState": {
+      "type": "former_employee",
+      "intensity": 20
+    }
+  },
+  {
+    "participants": [
+      "he_laoliu",
+      "xianglins_wife"
+    ],
+    "effect": "dissolve",
+    "direction": "death_severs_marriage",
+    "newState": {
+      "type": "widow_again",
+      "intensity": 100
+    }
+  },
+  {
+    "participants": [
+      "fourth_aunt",
+      "xianglins_wife"
+    ],
+    "effect": "change",
+    "direction": "from_satisfied_to_pitying_but_distrustful",
+    "newState": {
+      "type": "conditional_acceptance",
+      "intensity": 30
+    }
+  },
+  {
+    "participants": [
+      "liu_ma",
+      "xianglins_wife"
+    ],
+    "effect": "establish",
+    "direction": "spiritual_advisor_becomes_destroyer",
+    "newState": {
+      "type": "well_intentioned_disaster",
+      "intensity": 90
+    }
+  },
+  {
+    "participants": [
+      "fourth_aunt",
+      "xianglins_wife"
+    ],
+    "effect": "change",
+    "direction": "from_pity_to_rejection",
+    "newState": {
+      "type": "unwanted_burden",
+      "intensity": 80
+    }
+  },
+  {
+    "participants": [
+      "fourth_master_lu",
+      "xianglins_wife"
+    ],
+    "effect": "dissolve",
+    "direction": "dying_nuisance",
+    "newState": {
+      "type": "dead_outcast",
+      "intensity": 100
+    }
+  },
+  {
+    "participants": [
+      "fourth_aunt",
+      "xianglins_wife"
+    ],
+    "effect": "dissolve",
+    "direction": "dismissed_and_forgotten",
+    "newState": {
+      "type": "unwanted_memory",
+      "intensity": 90
+    }
+  }
+]

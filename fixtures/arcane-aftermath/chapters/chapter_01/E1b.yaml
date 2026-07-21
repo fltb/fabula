@@ -2,7 +2,7 @@ event: E1b
 title: "Camille Takes the Case"
 narrativeOrder: 2
 sceneType: linear
-storyTime: "Day 0 — Late morning"
+storyTime: day_0 + 1 hour
 pov:
   character: camille
   type: third_person_limited
@@ -53,9 +53,11 @@ threadProgress:
   - thread: T1
     advancement: "0.10"
     progressAfter: 0.25
+    progressTotal: 1
   - thread: T2
     advancement: "0.05"
     progressAfter: 0.15
+    progressTotal: 1
 foreshadowing:
   - id: commander_eagerness
     hint: "Haldren stressed speed over thoroughness. A minor irregularity, but Camille notices patterns."
@@ -71,10 +73,10 @@ foreshadowing:
     thread: T1
 relationshipEffects:
   - participants: ["camille", "seraphine"]
-    effect: "If Seraphine reported the anomaly, Camille factors it into her investigation, creating an earlier connection between their threads."
-    direction: professional_bond
-    newState: collaborative_curiosity
+    effect: reinforce
+    direction: camille_to_seraphine
 ruleEffects: []
-styleGuidance: "Coldly professional with underlying tension. The briefing should feel clipped and efficient, with subtext crackling beneath every line. Camille's internal observations reveal the gaps in the official story."
-narrativeContent:
-  opening: "The briefing lasted exactly eight minutes. Camille had timed it.\n\nShe stood at parade rest before the Enforcer Commander's desk — a position she had maintained for so many briefings over the years that the muscle memory was a comfort. Commander Haldren was a bulky man with a graying beard and the tired eyes of someone who had been promoted beyond his competence. He spoke quickly, his words tripping over each other as if he wanted the conversation to be over before it began.\n\n'Three crystals,' he said, sliding a folder across the polished mahogany. 'Serial numbers HX-04, 07, and 11. Missing from the secured inventory. The last verified signatures were from the Ferros clan logistics division.'\n\nA pause. He was watching her reaction.\n\nCamille did not give him one. Her face was a mask of professional neutrality as she picked up the folder and opened it. Her eyes moved across the pages with mechanical precision, cataloging every number, every date, every signature.\n\n'The Ferros clan logistics officer who signed for these shipments — Tobias Ferros — died in a workplace accident three days ago,' Haldren continued. 'A fall from a loading gantry. The coroner ruled it accidental.'\n\nAnother pause. Another test.\n\n'I see,' Camille said. Her voice was calm, flat, unhurried. 'And the urgency, Commander?'\n\nHaldren leaned back in his chair. It creaked. 'The Council wants this handled quietly. Before the next session. Before anyone asks why the inventory was delayed, why three of the most dangerous objects in Piltover are sitting in a Zaunite weapons lab.'\n\n'If they are in Zaun.'\n\n'Where else would they be?'\n\nCamille closed the folder. She met his eyes for a long, silent moment — long enough for a less disciplined man to look away. Haldren did not look away, but she saw the micro-movement in his jaw. A clench. A tell.\n\n'I will take the case, Commander,' she said. 'I will handle it quietly. You may inform the Council that the Steel Shadow is on the hunt.'\n\nShe turned and walked out of the office without waiting for dismissal. The door clicked shut behind her with a sound of absolute finality.\n\nAlone in the corridor, she allowed herself one moment of stillness. The folder felt heavier than it should. A cousin dead. Shipping manifests tampered. A commander who wanted answers to disappear.\n\nShe began walking toward her office, her hextech legs clicking against the marble floor in a steady, unwavering rhythm. The investigation had begun. And for the first time in years, Camille Ferros was not entirely certain she wanted to know where it would lead."
+styleGuidance:
+  tone: "Coldly professional with underlying tension"
+  scenePacing: "Clipped and efficient."
+  atmosphere: "Official gaps and subtext under pressure."

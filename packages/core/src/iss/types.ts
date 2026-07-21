@@ -10,7 +10,7 @@ import {
 
 // ─── Placeholder Detection ──────────────────────────────────────────────────
 
-export const PLACEHOLDER_VALUES = ['changed', 'resolved', 'updated', 'affected', 'modified', 'altered'] as const;
+const PLACEHOLDER_VALUES = ['changed', 'resolved', 'updated', 'affected', 'modified', 'altered'] as const;
 export type PlaceholderValue = (typeof PLACEHOLDER_VALUES)[number];
 
 export function isPlaceholderValue(value: unknown): value is PlaceholderValue {

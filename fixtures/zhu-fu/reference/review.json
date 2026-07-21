@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "reviewer": "Stage 1 acceptance — C-standard",
+  "reviewedAt": "2026-07-21T09:00:55.798Z",
+  "decision": "approved",
+  "notes": "C-standard. Reference data is mock (for test determinism); real evidence at smoke-candidates/2026-07-21T03-52-20-334Z (7/7, 15 calls, 0 failures).",
+  "responsesSha256": "d5ab9330c32a90ea24d7f4a8be38f6d9a557dcc56a3031bf2838613836dce2ed",
+  "generationRecordSha256": "6ff4d11723ba2af6f3e101a6eb169c166550fa65057e23ccafbd4aefe88a13b7",
+  "provenanceSha256": "8750884555986dd1d2f60e8ddbc45beaeab398896784a3ef9d61c3297cfd708f",
+  "expectedOutcomesSha256": "4d590a6de84147f1aefa82fb5700c8d4147b7e9d3fdde3c7959a1d59ca5e938a"
+}

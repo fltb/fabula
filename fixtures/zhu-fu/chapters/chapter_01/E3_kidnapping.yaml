@@ -3,12 +3,13 @@ title: "被卖改嫁——出格的反抗"
 narrativeOrder: 4
 sceneType: flashback
 storyTime: spring_after_escape
+narrationTime: new_year_eve
 tense: past
 discourseMode: action
-arcPosition: climax
+arcPosition: rising
 emotionalValence: "terror_resistance_acceptance"
 conflictType: "person_vs_society"
-resolutionType: "forced_resolution"
+resolutionType: negative_resolution
 pov:
   character: narrator
   type: first_person
@@ -56,7 +57,6 @@ expectedPostconditions:
   - entity: old_mrs_wei
     attribute: role_in_kidnapping
     value: inside_agent
-    narrativeHint: "卫老婆子既是介绍人又是同谋——她参与了婆婆的绑架计划，躲在船里接应。这种中间人角色的道德中立是封建乡村关系的典型特征。"
     confidence: 1.0
 threadProgress:
   - thread: T1
@@ -67,7 +67,7 @@ relationshipEffects:
   - participants:
       - he_laoliu
       - xianglins_wife
-    effect: form
+    effect: establish
     direction: forced_marriage_growing_into_stability
     newState:
       type: stable_marriage
@@ -75,7 +75,7 @@ relationshipEffects:
   - participants:
       - mother_in_law
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: property_transferred
     newState:
       type: ownership_transferred
@@ -83,7 +83,7 @@ relationshipEffects:
   - participants:
       - fourth_master_lu
       - xianglins_wife
-    effect: break
+    effect: dissolve
     direction: employment_terminated_by_clan_right
     newState:
       type: former_employee
@@ -114,4 +114,5 @@ ruleEffects:
     evidence: "祥林嫂以头撞香案——她的反抗不是拒绝婚姻本身，而是捍卫寡妇的贞节：她不该改嫁，不该侍奉第二个男人。"
 styleGuidance:
   tone: "戏剧化的暴力→日常的安宁。绑架场景需紧张急促，撞香案需突然而剧烈，年底的好消息需平静温暖。"
+  targetWordCount: 1500
   scenePacing: "快速推进的绑架→撞香案的剧烈停顿→跳跃到年底的好消息——三个节奏形成了'暴力→反抗→平静'的叙事曲线。"

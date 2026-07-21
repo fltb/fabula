@@ -20,7 +20,9 @@
   },
   "dependencies": {
     "@novalistically/core": "*",
-    "tinybench": "^6.0.2"
+    "apache-arrow": "^18.0.0",
+    "tinybench": "^6.0.2",
+    "yaml": "^2.7.0"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

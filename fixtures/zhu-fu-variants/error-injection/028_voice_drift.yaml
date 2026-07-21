@@ -4,13 +4,34 @@ injected:
     expectedValidator: "voice_drift"
     expectedSeverity: "warning"
     description: "Xianglin's Wife uses formal classical Chinese register in dialogue ('吾夫已逝') but character profile specifies simple rustic speech — voice_formality matchLevel is 'contradicted'."
+    mockAnalysis:
+      narrativeChecks:
+        - entityId: "xianglins_wife"
+          attribute: "voice_formality"
+          hint: "Character uses formal classical Chinese register"
+          evidence: "吾夫已逝"
+          matchLevel: "contradicted"
   - entityId: "E3"
     attribute: "narrativeChecks.voice_vocabulary"
     expectedValidator: "voice_drift"
     expectedSeverity: "info"
     description: "Narrator's internal monologue uses modern colloquialisms like '基本上' and '搞定' which are absent from the 1920s rural Zhejiang lexical set — voice_vocabulary matchLevel is 'absent'."
+    mockAnalysis:
+      narrativeChecks:
+        - entityId: "narrator"
+          attribute: "voice_vocabulary"
+          hint: "Narrator uses modern colloquialisms"
+          evidence: "基本上；搞定"
+          matchLevel: "absent"
   - entityId: "E1"
     attribute: "narrativeChecks.voice_anachronism"
     expectedValidator: "voice_drift"
     expectedSeverity: "warning"
     description: "He Laoliu's dialogue references '电报' and '报纸' in a scene set before the telegraph reached Lu Town — voice_anachronism matchLevel is 'contradicted'."
+    mockAnalysis:
+      narrativeChecks:
+        - entityId: "he_laoliu"
+          attribute: "voice_anachronism"
+          hint: "Character references anachronistic technology"
+          evidence: "电报；报纸"
+          matchLevel: "contradicted"

@@ -2,6 +2,7 @@
 // Plugin System — Plugin Loader
 // ============================================================================
 
+import { logger } from '../observability/logger.ts';
 import * as path from 'node:path';
 import * as yaml from 'yaml';
 import type { PluginManifest, ArbitrationStrategy } from '../types/index.js';
@@ -79,14 +80,14 @@ export class PluginLoader {
 
           const manifest = yaml.parse(manifestContent) as PluginManifest;
           if (!manifest || !manifest.name) {
-            console.warn(`[PluginLoader] Invalid manifest in ${manifestPath}`);
+            logger.warn('Plugin manifest is invalid', { module: 'plugin', path: manifestPath });
             continue;
           }
 
           this.register(manifest);
-          console.log(`[PluginLoader] Loaded plugin "${manifest.name}" v${manifest.version}`);
-        } catch (err) {
-          console.warn(`[PluginLoader] Failed to load plugin from ${pluginDir}: ${(err as Error).message}`);
+          logger.info('Plugin loaded', { module: 'plugin', version: manifest.version });
+        } catch {
+          logger.warn('Plugin failed to load', { module: 'plugin', path: pluginDir });
         }
       }
     } catch (err) {

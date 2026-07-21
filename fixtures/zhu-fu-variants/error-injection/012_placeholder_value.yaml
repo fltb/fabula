@@ -1,6 +1,6 @@
 injected:
   - entityId: "E3"
     attribute: "factValue"
-    expectedValidator: "schema"
-    expectedSeverity: "error"
+    expectedValidator: "factual_detail"
+    expectedSeverity: "warning"
     description: "A Fact.value contains 'changed' — this is a placeholder value that should be rejected by Zod schema validation"

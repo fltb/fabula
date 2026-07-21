@@ -12,9 +12,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { tmpdir } from 'node:os';
 
-const FIXTURE_PATH = path.resolve(
-  '/home/float/myfile/Projects/novalistically/fixtures/arcane-aftermath',
-);
+const FIXTURE_PATH = path.resolve('fixtures/arcane-aftermath');
 
 import {
   EntityMapper,
@@ -23,7 +21,6 @@ import {
   ReplayEngine,
   ContextCompiler,
   MockProvider,
-  OpencodeZenProvider,
   LLMError,
   buildSceneRenderPrompt,
   buildThreadStatusPrompt,
@@ -68,23 +65,30 @@ function makeGenesisEvent(): NarrativeEvent {
     event: 'system:genesis',
     narrativeOrder: 0,
     title: 'World Genesis',
-    storyTime: { type: 'absolute', value: 'day_0' },
+    storyTime: { type: 'absolute', value: 'day_-1' },
     source: 'genesis',
-    postconditions: [{
-      id: 'world.init',
-      entityId: 'world',
-      attribute: 'status',
-      value: 'post_arcane_s1',
+    postconditions: [
+      ['world', 'status', 'post_arcane_s1'],
+      ['world', 'day', 0],
+      ['world', 'has_crystal_inventory', true],
+      ['seraphine', 'location', 'piltover_enforcer_headquarters'],
+      ['seraphine', 'status', 'alive'],
+      ['camille', 'location', 'piltover_enforcer_headquarters'],
+      ['camille', 'status', 'alive'],
+      ['camille', 'condition', 'healthy'],
+    ].map(([entityId, attribute, value]) => ({
+      id: `${entityId}.${attribute}`,
+      entityId,
+      attribute,
+      value,
       confidence: 1.0,
       validity: {
-        temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
-        branches: { type: 'all' },
+        temporal: { start: { type: 'absolute' as const, value: 'day_-1' }, end: null },
+        branches: { type: 'all' as const },
       },
-    }],
+    })),
   });
 }
-
-// ─── 1. Full Pipeline with MockProvider ───────────────────────────────────────
 
 describe('1. Full Pipeline with MockProvider', () => {
   let mapper: EntityMapper;
@@ -172,11 +176,11 @@ describe('1. Full Pipeline with MockProvider', () => {
 
   it('1d. ReplayEngine reconstucts state at narrative order 1', () => {
     const replay = new ReplayEngine();
-    const at0 = replay.getStateAt(allEvents, 0);
-    // At order 0, only genesis — world state may be set
-    expect(at0.entities['world']?.['status'] || true).toBeDefined();
+    const causalEvents = [makeGenesisEvent(), e1aEvent];
+    const at0 = replay.getStateAt(causalEvents, 0);
+    expect(at0.entities['world']?.['status']).toBe('post_arcane_s1');
 
-    const at1 = replay.getStateAt(allEvents, 1);
+    const at1 = replay.getStateAt(causalEvents, 1);
     // E1a's postconditions applied
     expect(at1.facts.length).toBeGreaterThan(0);
   });
@@ -188,7 +192,7 @@ describe('1. Full Pipeline with MockProvider', () => {
     const pkg = compiler.compile(e1aEvent, state, registry);
 
     expect(pkg.eventId).toBe('E1a');
-    expect(pkg.systemContext.genre).toBe('fantasy');
+    expect(pkg.systemContext.genre).toBe('literary');
     expect(pkg.systemContext.style).toBe('literary');
     expect(pkg.sceneSpec.povCharacter).toBe('seraphine');
     expect(pkg.sceneSpec.povType).toBe('third_person_limited');
@@ -418,186 +422,6 @@ describe('2. LLMError class behavior', () => {
   });
 });
 
-// ─── 3. OpencodeZenProvider Error Handling ──────────────────────────────────
-
-describe('3. OpencodeZenProvider error handling', () => {
-  // Store original env and fetch
-  const originalEnv = { ...process.env };
-  const originalFetch = globalThis.fetch;
-
-  afterEach(() => {
-    // Restore fetch after each test
-    globalThis.fetch = originalFetch;
-    process.env = { ...originalEnv };
-  });
-
-  it('3a. constructor throws without API key', () => {
-    // Ensure no env variable is set
-    delete process.env.OPENCODE_ZEN_API_KEY;
-
-    expect(() => new OpencodeZenProvider()).toThrow(
-      /API key not provided|apiKey/,
-    );
-  });
-
-  it('3b. constructor throws with empty API key in options', () => {
-    delete process.env.OPENCODE_ZEN_API_KEY;
-    expect(() => new OpencodeZenProvider({ apiKey: '' })).toThrow(
-      /API key not provided|apiKey/,
-    );
-  });
-
-  it('3c. constructor succeeds with API key in options', () => {
-    delete process.env.OPENCODE_ZEN_API_KEY;
-    const provider = new OpencodeZenProvider({ apiKey: 'test-key-123' });
-    expect(provider).toBeDefined();
-    expect(provider.name).toBe('opencode-zen');
-  });
-
-  it('3d. constructor succeeds with API key in environment', () => {
-    process.env.OPENCODE_ZEN_API_KEY = 'env-key-456';
-    const provider = new OpencodeZenProvider();
-    expect(provider).toBeDefined();
-    expect(provider.name).toBe('opencode-zen');
-  });
-
-  it('3e. mock fetch returning 401 throws LLMError with isHttpError=true, isRetryable=false', async () => {
-    process.env.OPENCODE_ZEN_API_KEY = 'test-key';
-    globalThis.fetch = async () =>
-      new Response('Unauthorized', {
-        status: 401,
-        statusText: 'Unauthorized',
-      });
-
-    const provider = new OpencodeZenProvider();
-
-    try {
-      await provider.complete({ messages: [{ role: 'user', content: 'hi' }] });
-      expect.unreachable('Should have thrown');
-    } catch (err) {
-      expect(err).toBeInstanceOf(LLMError);
-      const llmErr = err as LLMError;
-      expect(llmErr.statusCode).toBe(401);
-      expect(llmErr.isHttpError).toBe(true);
-      expect(llmErr.isRetryable).toBe(false);
-      expect(llmErr.message).toContain('401');
-      expect(llmErr.provider).toBe('opencode-zen');
-    }
-  });
-
-  it('3f. mock fetch returning 500 throws LLMError with isRetryable=true', async () => {
-    process.env.OPENCODE_ZEN_API_KEY = 'test-key';
-    globalThis.fetch = async () =>
-      new Response('Internal Server Error', {
-        status: 500,
-        statusText: 'Internal Server Error',
-      });
-
-    const provider = new OpencodeZenProvider();
-
-    try {
-      await provider.complete({ messages: [{ role: 'user', content: 'hi' }] });
-      expect.unreachable('Should have thrown');
-    } catch (err) {
-      expect(err).toBeInstanceOf(LLMError);
-      const llmErr = err as LLMError;
-      expect(llmErr.statusCode).toBe(500);
-      expect(llmErr.isHttpError).toBe(true);
-      expect(llmErr.isRetryable).toBe(true);
-      expect(llmErr.message).toContain('500');
-    }
-  });
-
-  it('3g. mock fetch returning 200 with valid response returns CompletionResponse', async () => {
-    process.env.OPENCODE_ZEN_API_KEY = 'test-key';
-    const openaiResponse = {
-      id: 'chatcmpl-abc123',
-      object: 'chat.completion',
-      created: 1677858242,
-      model: 'deepseek-v4-flash',
-      choices: [
-        {
-          index: 0,
-          message: {
-            role: 'assistant',
-            content: 'The morning mist clung to the cobblestones.',
-          },
-          finish_reason: 'stop',
-        },
-      ],
-      usage: {
-        prompt_tokens: 150,
-        completion_tokens: 42,
-        total_tokens: 192,
-      },
-    };
-
-    globalThis.fetch = async () =>
-      new Response(JSON.stringify(openaiResponse), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-    const provider = new OpencodeZenProvider();
-    const response = await provider.complete({
-      messages: [{ role: 'user', content: 'Write a scene.' }],
-    });
-
-    expect(response).toBeDefined();
-    expect(response.id).toBe('chatcmpl-abc123');
-    expect(response.model).toBe('deepseek-v4-flash');
-    expect(response.content).toBe(
-      'The morning mist clung to the cobblestones.',
-    );
-    expect(response.finishReason).toBe('stop');
-    expect(response.usage.promptTokens).toBe(150);
-    expect(response.usage.completionTokens).toBe(42);
-    expect(response.usage.totalTokens).toBe(192);
-  });
-
-  it('3h. mock fetch returning 200 with empty choices throws LLMError', async () => {
-    process.env.OPENCODE_ZEN_API_KEY = 'test-key';
-    globalThis.fetch = async () =>
-      new Response(
-        JSON.stringify({
-          id: 'chatcmpl-empty',
-          object: 'chat.completion',
-          created: 1677858242,
-          model: 'deepseek-v4-flash',
-          choices: [],
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-
-    const provider = new OpencodeZenProvider();
-
-    await expect(
-      provider.complete({ messages: [{ role: 'user', content: 'hi' }] }),
-    ).rejects.toThrow(LLMError);
-  });
-
-  it('3i. mock fetch throwing network error produces LLMError with isRetryable=true', async () => {
-    process.env.OPENCODE_ZEN_API_KEY = 'test-key';
-    globalThis.fetch = async () => {
-      throw new TypeError('fetch failed');
-    };
-
-    const provider = new OpencodeZenProvider();
-
-    try {
-      await provider.complete({ messages: [{ role: 'user', content: 'hi' }] });
-      expect.unreachable('Should have thrown');
-    } catch (err) {
-      expect(err).toBeInstanceOf(LLMError);
-      const llmErr = err as LLMError;
-      expect(llmErr.statusCode).toBeUndefined();
-      expect(llmErr.isHttpError).toBe(false);
-      expect(llmErr.isRetryable).toBe(true);
-      expect(llmErr.message).toContain('Network error');
-      expect(llmErr.provider).toBe('opencode-zen');
-    }
-  });
-});
 
 // ─── 4. buildThreadStatusPrompt ─────────────────────────────────────────────
 

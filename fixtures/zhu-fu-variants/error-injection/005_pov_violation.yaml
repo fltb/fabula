@@ -3,4 +3,4 @@ injected:
     attribute: "pov"
     expectedValidator: "pov"
     expectedSeverity: "warning"
-    description: "E2 has pov.character = fourth_aunt but the character fourth_aunt has role supporting not protagonist or narrator — POV rule violation"
+    description: "E2 POV set to he_laoliu who is a defined character but not a scene participant — POV in-scene rule violation"

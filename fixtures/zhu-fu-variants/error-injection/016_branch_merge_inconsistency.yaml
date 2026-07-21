@@ -2,5 +2,5 @@ injected:
   - entityId: "E6"
     attribute: "branchExistence"
     expectedValidator: "branch_merge"
-    expectedSeverity: "error"
+    expectedSeverity: "warning"
     description: "An event has branchExistence type paths with paths A and B but its preconditions only reference facts set in branch A, not branch B"

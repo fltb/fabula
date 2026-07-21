@@ -55,4 +55,5 @@ export interface ProjectConfig {
     autoResolveDays: number;
   };
   snapshotInterval?: number;
+  defaultSceneTextTarget?: number;
 }

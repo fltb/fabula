@@ -2,7 +2,7 @@
 // Novalistically — Narrative Event & Event File Types
 // ============================================================================
 
-import type { EntityId, StoryTimestamp, Fact, FactId } from './entity.js';
+import type { EntityId, StoryTimestamp, Fact } from './entity.js';
 import type { BranchSet } from './branch.js';
 
 // ——— Narrative Event (§7.4.1) ———
@@ -85,6 +85,7 @@ export interface StyleGuidance {
   avoid?: string;
   scenePacing?: string;
   atmosphere?: string;
+  targetWordCount?: number;
 }
 
 // ——— Event File (YAML on disk) ———

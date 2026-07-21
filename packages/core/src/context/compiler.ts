@@ -15,8 +15,8 @@ import { ContextAssembler } from './assembler.ts';
 export class ContextCompiler {
   private assembler: ContextAssembler;
 
-  constructor(tokenBudget = 8000) {
-    this.assembler = new ContextAssembler(tokenBudget);
+  constructor() {
+    this.assembler = new ContextAssembler();
   }
 
   /**

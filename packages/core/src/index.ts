@@ -5,6 +5,27 @@
 // Types
 export type * from './types/index.js';
 
+// Stable, safe operational errors
+export {
+  NovalisticallyError,
+  ConfigError,
+  StorageError,
+  DagProviderError,
+  DagCycleError,
+  PreconditionMismatchError,
+  ReferenceFormatError,
+  CacheCorruptionError,
+  PipelineError,
+  AuthError,
+  RateLimitError,
+  TimeoutError,
+  ModelNotFoundError,
+  AssemblyIncompleteError,
+  NetworkDeniedError,
+  sanitizeError,
+} from './errors.js';
+export type { ErrorContext } from './errors.js';
+
 // Entity
 export {
   EntityMapper,
@@ -17,6 +38,25 @@ export {
   compareFact,
 } from './entity/index.js';
 export type { ProjectData, CompareOutcome } from './entity/index.js';
+export {
+  analysisResultSchema,
+} from './schemas/analysis.js';
+export {
+  expectedOutcomeManifestSchema,
+  provenanceManifestSchema,
+  responseReferenceSchema,
+  liveSmokeRecordSchema,
+} from './schemas/contracts.ts';
+
+// Observability
+export {
+  JsonlLogTransport,
+  Logger,
+  logger,
+  MemoryLogTransport,
+} from './observability/logger.ts';
+export { TraceCollector } from './observability/trace.ts';
+export type { LogContext, LogEntry, LogLevel, LogTransport } from './observability/logger.ts';
 
 // Branch
 export {
@@ -36,12 +76,13 @@ export {
   SnapshotEngine,
   ReplayEngine,
   StateManager,
+  compileStoryBoundaries,
   buildCausalEdges,
   topologicalSort,
   exportDAGtoDOT,
   exportDAGtoMermaid,
 } from './state/index.js';
-export type { AdjacencyList } from './state/index.js';
+export type { AdjacencyList, StoryBoundaries } from './state/index.js';
 
 // Validator
 export {
@@ -81,12 +122,12 @@ export {
   NarrativeSorter,
   ProseConcatenator,
   assembleNovel,
+  countNarrativeText,
   countWords,
+  NARRATIVE_TEXT_COUNT_VERSION,
   type AssembleOptions,
   type AssembleResult,
 } from './assembler/index.js';
-
-// ISS
 export { calculateISS, detectAntiPatterns, validateStrict } from './iss/index.js';
 
 // Review
@@ -97,8 +138,8 @@ export { PluginLoader, ValidatorRegistry } from './plugin/index.js';
 export type { PluginValidator } from './plugin/index.js';
 
 // Storage
-export { FsStorage } from './storage/index.ts';
-export type { Storage, DirEntry } from './storage/index.ts';
+export { FsStorage, MemoryStorage } from './storage/index.ts';
+export type { Storage, DirEntry, StorageWrite } from './storage/index.ts';
 
 // Reporter
 export { writeValidationReport, type ValidationReport } from './reporter/index.js';
@@ -120,8 +161,7 @@ export { clearEventCache } from './cache/render-cache.js';
 
 // Pipeline
 export { RenderPipeline, buildAndWriteOutputs } from './pipeline/index.js';
-export type { RenderJob, RenderSceneResult, RenderPipelineOptions } from './pipeline/index.js';
-export { analyzeValidationErrors, buildRepairGuidance, decideRepairStrategy, degradeStrategy } from './pipeline/index.js';
+export type { RenderJob, RenderSceneResult, RenderPipelineOptions, ProviderCallLedgerEntry } from './pipeline/index.js';
 export type { ReverseValidationResult, RepairStrategy, RepairDecision } from './pipeline/index.js';
 
 // Batch renderer

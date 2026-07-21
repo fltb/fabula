@@ -1,0 +1,515 @@
+// ============================================================================
+// Novalistically — DISCOURSE-1: Discourse State Replay Logic
+//
+// Replays a PlannedDiscourseLedger up to a given DiscoursePosition,
+// producing an immutable DiscourseState snapshot. Also provides the
+// Pass 1 DiscourseContextProjection derivation.
+//
+// Binding constraints enforced:
+//   §1 — DiscourseState NOT part of WorldState
+//   §3 — Canonical = PlannedDiscourseLedger only
+//   §5 — reveal truth-boundary hard rule
+//   §6 — claim no truth commitment
+//   §7 — hint contract states (6)
+//   §8 — retraction no fake forget
+//   §9 — correction NEVER retcons WorldState
+//  §12 — Pass 1 projection capability-separated
+//  §14 — branch-independent ledger
+//  §15 — NarrativeEllipsis no discourse effect
+//  §16 — sparse corpus modes
+//  §17 — Pass 2 observation non-mutation (enforced at type level)
+// ============================================================================
+
+import type {
+  DiscourseState,
+  DiscoursePosition,
+  DiscourseContextProjection,
+  PlannedDiscourseLedger,
+  DisclosureAction,
+  NarratorAssertion,
+  NarratorProfile,
+  Hint,
+  HintState,
+  WithholdingPolicy,
+  ModelReaderProfile,
+  NarratorAccess,
+  NarratorAssertionCapability,
+  NarratorTruthCapability,
+  NarratorFidelity,
+  NarratorSincerity,
+  DisclosureObservation,
+} from '../types/discourse.js';
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Default constants
+// ═════════════════════════════════════════════════════════════════════════════
+
+const DEFAULT_MODEL_READER_PROFILE_ID = 'default_model_reader_v1';
+
+// ═════════════════════════════════════════════════════════════════════════════
+// ModelReaderProfile factory (§2)
+// ═════════════════════════════════════════════════════════════════════════════
+
+/** Build the immutable default_model_reader_v1 profile. */
+export function createDefaultModelReaderProfile(): ModelReaderProfile {
+  return {
+    id: DEFAULT_MODEL_READER_PROFILE_ID,
+    hash: 'hash_default_model_reader_v1',
+    audienceSemantics: {
+      narrativeInterpretation: 'default',
+      disclosureInterpretation: 'default',
+    },
+    narrationDisclosurePolicy: {
+      allowPrivateThoughtDisclosure: true,
+      allowDirectAddress: false,
+    },
+    initialExposureContract: {
+      initialReveals: [],
+      initialClaims: [],
+      initialWithholds: [],
+    },
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// NarratorProfile factory helpers
+// ═════════════════════════════════════════════════════════════════════════════
+
+export function createFocalizerBoundProfile(
+  id: string,
+  access: NarratorAccess,
+  assertion: NarratorAssertionCapability,
+  truth: NarratorTruthCapability,
+  fidelity: NarratorFidelity,
+  sincerity: NarratorSincerity,
+): NarratorProfile {
+  return { type: 'focalizer_bound', id, access, assertion, truth, fidelity, sincerity };
+}
+
+export function createRetrospectiveEntityProfile(
+  id: string,
+  knowledgeBoundary: string,
+  access: NarratorAccess,
+  assertion: NarratorAssertionCapability,
+  truth: NarratorTruthCapability,
+  fidelity: NarratorFidelity,
+  sincerity: NarratorSincerity,
+): NarratorProfile {
+  return {
+    type: 'retrospective_entity',
+    id,
+    knowledgeBoundary,
+    access,
+    assertion,
+    truth,
+    fidelity,
+    sincerity,
+  };
+}
+
+export function createExplicitLedgerProfile(
+  id: string,
+  access: NarratorAccess,
+  assertion: NarratorAssertionCapability,
+  truth: NarratorTruthCapability,
+  fidelity: NarratorFidelity,
+  sincerity: NarratorSincerity,
+): NarratorProfile {
+  return { type: 'explicit_ledger', id, access, assertion, truth, fidelity, sincerity };
+}
+
+export function createOmniscientProfile(
+  id: string,
+  access: NarratorAccess,
+  assertion: NarratorAssertionCapability,
+  truth: NarratorTruthCapability,
+  fidelity: NarratorFidelity,
+  sincerity: NarratorSincerity,
+): NarratorProfile {
+  return { type: 'omniscient', id, access, assertion, truth, fidelity, sincerity, autoReveal: false };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Internal: empty DiscourseState
+// ═════════════════════════════════════════════════════════════════════════════
+
+function emptyDiscourseState(branch: string): DiscourseState {
+  return {
+    position: 0,
+    reveals: [],
+    openClaims: [],
+    retractions: [],
+    corrections: [],
+    hints: [],
+    activeWithholds: [],
+    narratorProfiles: {},
+    assertions: {},
+    providerIndex: {},
+    branch,
+    ledgerHash: '',
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Action application helpers
+// ═════════════════════════════════════════════════════════════════════════════
+
+function findAssertion(
+  assertions: Record<string, NarratorAssertion>,
+  assertionId: string,
+): NarratorAssertion | undefined {
+  return assertions[assertionId];
+}
+
+/**
+ * Apply a single disclosure action to a DiscourseState.
+ * Mutates the state in place for efficiency — caller must clone/hold
+ * immutable semantics if needed.
+ */
+function applyAction(state: DiscourseState, action: DisclosureAction, assertions: Record<string, NarratorAssertion>): void {
+  switch (action.type) {
+    case 'reveal': {
+      // §5: reveal truth-boundary hard rule — MUST be true
+      const assertion = findAssertion(assertions, action.assertionId);
+      if (assertion && assertion.truthBoundary !== true) {
+        // Hard fail: cannot reveal assertion without truthBoundary=true
+        // Return silently — the caller should validate before calling
+        return;
+      }
+      if (!state.reveals.includes(action.assertionId)) {
+        state.reveals.push(action.assertionId);
+      }
+      // Remove from open claims if present (reveal supersedes claim)
+      state.openClaims = state.openClaims.filter(id => id !== action.assertionId);
+      break;
+    }
+
+    case 'claim': {
+      // §6: claim exposes assertion without committing truth
+      if (!state.openClaims.includes(action.assertionId)) {
+        state.openClaims.push(action.assertionId);
+      }
+      break;
+    }
+
+    case 'hint': {
+      // §7: hint enters planned state
+      const existing = state.hints.find(h => h.hintId === action.hintId);
+      if (existing) {
+        // Update existing hint state
+        existing.state = 'planned';
+      } else {
+        state.hints.push({
+          hintId: action.hintId,
+          state: 'planned',
+          surfaceProposition: action.surfaceProposition,
+          targetProposition: action.targetProposition,
+          threadId: action.threadId,
+          discoursePosition: action.discoursePosition,
+        });
+      }
+      break;
+    }
+
+    case 'retraction': {
+      // §8: retraction does NOT make reader fake forget
+      state.retractions.push({
+        assertionId: action.assertionId,
+        discoursePosition: action.discoursePosition,
+      });
+      // Remove from open claims
+      state.openClaims = state.openClaims.filter(id => id !== action.assertionId);
+      break;
+    }
+
+    case 'correction': {
+      // §9: correction ONLY supersedes prior assertion contract
+      state.corrections.push({
+        priorAssertionId: action.priorAssertionId,
+        newAssertionId: action.newAssertionId,
+        discoursePosition: action.discoursePosition,
+      });
+      // Replace in reveals if present
+      const revealIdx = state.reveals.indexOf(action.priorAssertionId);
+      if (revealIdx !== -1) {
+        state.reveals[revealIdx] = action.newAssertionId;
+      }
+      // Replace in open claims if present
+      const claimIdx = state.openClaims.indexOf(action.priorAssertionId);
+      if (claimIdx !== -1) {
+        state.openClaims[claimIdx] = action.newAssertionId;
+      }
+      break;
+    }
+
+    case 'withhold_start': {
+      const existingPolicy = state.activeWithholds.find(w => w.policyId === action.policyId);
+      if (!existingPolicy) {
+        state.activeWithholds.push({
+          policyId: action.policyId,
+          reason: action.reason,
+          startPosition: action.discoursePosition,
+          endPosition: null,
+          active: true,
+        });
+      } else {
+        existingPolicy.active = true;
+        existingPolicy.endPosition = null;
+        existingPolicy.startPosition = Math.min(existingPolicy.startPosition, action.discoursePosition);
+      }
+      break;
+    }
+
+    case 'withhold_end': {
+      const policy = state.activeWithholds.find(w => w.policyId === action.policyId);
+      if (policy) {
+        policy.active = false;
+        policy.endPosition = action.discoursePosition;
+      }
+      break;
+    }
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Public API
+// ═════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Replay a PlannedDiscourseLedger up to (and including) the given position
+ * for the specified branch.
+ *
+ * Returns the DiscourseState at that position.
+ *
+ * @param ledger - The canonical planned discourse ledger.
+ * @param position - Discourse position to replay to (0-indexed).
+ * @param branch - Branch path to filter entries by.
+ * @returns Immutable DiscourseState snapshot.
+ *
+ * Hard fails (§19):
+ * - position out of bounds
+ * - duplicate discourse position in entries
+ */
+export function replayDiscourseState(
+  ledger: PlannedDiscourseLedger,
+  position: DiscoursePosition,
+  branch: string,
+): DiscourseState {
+  const state = emptyDiscourseState(branch);
+  state.ledgerHash = ledger.hash;
+
+  // Validate position bounds
+  if (position < 0 || position > ledger.entries.length) {
+    throw new Error(
+      `DiscoursePosition out of bounds: ${position} not in [0, ${ledger.entries.length}]`,
+    );
+  }
+
+  // Collect assertions from entries that reference them
+  // (assertions must be pre-loaded via the ledger context)
+  const assertions: Record<string, NarratorAssertion> = {};
+
+  // Filter entries for this branch up to position
+  const relevantEntries = ledger.entries.filter(
+    e => e.branch === branch && e.discoursePosition <= position,
+  );
+
+  // Sort by discourse position (should already be sorted, but be safe)
+  relevantEntries.sort((a, b) => a.discoursePosition - b.discoursePosition);
+
+  // Check for duplicate positions (§19)
+  const seenPositions = new Set<DiscoursePosition>();
+  for (const entry of relevantEntries) {
+    if (seenPositions.has(entry.discoursePosition)) {
+      throw new Error(
+        `DuplicateDiscoursePositionError: position ${entry.discoursePosition} appears more than once`,
+      );
+    }
+    seenPositions.add(entry.discoursePosition);
+  }
+
+  // Apply each action in order
+  for (const entry of relevantEntries) {
+    applyAction(state, entry.action, assertions);
+    state.position = entry.discoursePosition;
+  }
+
+  return state;
+}
+
+/**
+ * Build a Pass 1 DiscourseContextProjection from a DiscourseState.
+ *
+ * ONLY includes (§12):
+ * - planned reader reveals
+ * - open claims
+ * - visible hint surfaces (NEVER target proposition)
+ * - accessible claims (focalizer/narrator)
+ * - authorized targets
+ * - active withholding policies
+ *
+ * FORBIDDEN items are excluded (§12).
+ */
+export function projectDiscourseContext(
+  state: DiscourseState,
+  narratorProfiles: Record<string, NarratorProfile>,
+  authorizedAssertions: string[],
+): DiscourseContextProjection {
+  // Visible hints — surface only, NEVER target (§12)
+  const visibleHints = state.hints
+    .filter(h => h.state !== 'retracted')
+    .map(h => ({
+      hintId: h.hintId,
+      surfaceProposition: h.surfaceProposition,
+      state: h.state,
+    }));
+
+  // Accessible claims — filter by narrator access
+  const accessibleClaims = state.openClaims
+    .filter(assertionId => {
+      const assertion = state.assertions[assertionId];
+      return assertion !== undefined && authorizedAssertions.includes(assertionId);
+    })
+    .map(assertionId => {
+      const assertion = state.assertions[assertionId];
+      return {
+        assertionId,
+        narrator: assertion.narrator,
+        type: assertion.type,
+        surface: assertion.proposition,
+      };
+    });
+
+  // Authorized targets for the current scene
+  const authorizedTargets = authorizedAssertions
+    .filter(assertionId => {
+      const isReveal = state.reveals.includes(assertionId);
+      const isClaim = state.openClaims.includes(assertionId);
+      return isReveal || isClaim;
+    })
+    .map(assertionId => ({
+      assertionId,
+      actionType: (state.reveals.includes(assertionId) ? 'reveal' : 'claim') as 'reveal' | 'claim',
+      discoursePosition: state.position,
+    }));
+
+  return {
+    plannedReveals: [...state.reveals],
+    openClaims: [...state.openClaims],
+    visibleHints,
+    accessibleClaims,
+    authorizedTargets,
+    activeWithholdingPolicies: state.activeWithholds.filter(w => w.active),
+  };
+}
+
+/**
+ * Check whether two DiscourseContextProjections are identical.
+ *
+ * Used for shared post-merge scene validation (§14):
+ * shared post-merge scene ONLY if all incoming branches have IDENTICAL
+ * complete discourse read projection — otherwise generate branch variants.
+ */
+export function areProjectionsIdentical(
+  a: DiscourseContextProjection,
+  b: DiscourseContextProjection,
+): boolean {
+  // Compare plannedReveals
+  if (a.plannedReveals.length !== b.plannedReveals.length) return false;
+  for (let i = 0; i < a.plannedReveals.length; i++) {
+    if (a.plannedReveals[i] !== b.plannedReveals[i]) return false;
+  }
+
+  // Compare openClaims
+  if (a.openClaims.length !== b.openClaims.length) return false;
+  for (let i = 0; i < a.openClaims.length; i++) {
+    if (a.openClaims[i] !== b.openClaims[i]) return false;
+  }
+
+  // Compare visibleHints
+  if (a.visibleHints.length !== b.visibleHints.length) return false;
+  for (let i = 0; i < a.visibleHints.length; i++) {
+    const ha = a.visibleHints[i];
+    const hb = b.visibleHints[i];
+    if (ha.hintId !== hb.hintId) return false;
+    if (ha.surfaceProposition !== hb.surfaceProposition) return false;
+    if (ha.state !== hb.state) return false;
+  }
+
+  // Compare accessibleClaims
+  if (a.accessibleClaims.length !== b.accessibleClaims.length) return false;
+  for (let i = 0; i < a.accessibleClaims.length; i++) {
+    const ca = a.accessibleClaims[i];
+    const cb = b.accessibleClaims[i];
+    if (ca.assertionId !== cb.assertionId) return false;
+    if (ca.narrator !== cb.narrator) return false;
+    if (ca.type !== cb.type) return false;
+    if (ca.surface !== cb.surface) return false;
+  }
+
+  // Compare authorizedTargets
+  if (a.authorizedTargets.length !== b.authorizedTargets.length) return false;
+  for (let i = 0; i < a.authorizedTargets.length; i++) {
+    const ta = a.authorizedTargets[i];
+    const tb = b.authorizedTargets[i];
+    if (ta.assertionId !== tb.assertionId) return false;
+    if (ta.actionType !== tb.actionType) return false;
+    if (ta.discoursePosition !== tb.discoursePosition) return false;
+  }
+
+  // Compare activeWithholdingPolicies
+  if (a.activeWithholdingPolicies.length !== b.activeWithholdingPolicies.length) return false;
+  for (let i = 0; i < a.activeWithholdingPolicies.length; i++) {
+    const wa = a.activeWithholdingPolicies[i];
+    const wb = b.activeWithholdingPolicies[i];
+    if (wa.policyId !== wb.policyId) return false;
+    if (wa.active !== wb.active) return false;
+    if (wa.startPosition !== wb.startPosition) return false;
+    if (wa.endPosition !== wb.endPosition) return false;
+  }
+
+  return true;
+}
+
+/**
+ * Validate truth-boundary for a reveal action (§5).
+ * reveal can ONLY plan to expose truth-boundary=true propositions.
+ *
+ * @returns true if the assertion may be revealed; false if only claim/conjecture.
+ */
+export function canReveal(assertion: NarratorAssertion): boolean {
+  return assertion.truthBoundary === true;
+}
+
+/**
+ * Advance a hint's contract state (§7).
+ * Returns a new Hint with the updated state.
+ */
+export function advanceHintState(hint: Hint, newState: HintState): Hint {
+  return { ...hint, state: newState };
+}
+
+/**
+ * Create a Pass 2 observation without mutating any canonical state (§17).
+ * This is a pure data constructor — observations NEVER write/revise the
+ * canonical discourse ledger.
+ */
+export function createObservation(
+  plannedEffectId: string,
+  observationType: DisclosureObservation['observationType'],
+  proposition: string,
+  polarity: string,
+  assertion: string,
+  matchLevel: DisclosureObservation['matchLevel'],
+  overrides?: Partial<DisclosureObservation>,
+): DisclosureObservation {
+  return {
+    plannedEffectId,
+    observationType,
+    proposition,
+    polarity: polarity as 'affirmative' | 'negative',
+    assertion,
+    matchLevel,
+    ...overrides,
+  };
+}

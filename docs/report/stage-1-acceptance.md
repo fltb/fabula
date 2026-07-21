@@ -380,3 +380,38 @@ bench L1       → Errors: 0, Warnings: 0, Infos: 0
 **阶段 1 后修复（§8）：** zhu-fu benchmark 从 16 个 L1 错误 + 35 个警告降至 0 错误 0 警告。Novel 产出从空 placeholder 修复为完整 7 场景中文散文（9684 bytes）。CJK 感知 prompt 链路已连线（`StyleGuidance.targetWordCount` → `RenderPipeline.language` → `PromptAssembler`）。
 
 **阶段 1 整体完成。**
+
+
+## Known Defects Carried into Stage 1.5
+
+Stage 1 acceptance is closed. The following systemic defects are accepted as
+carried-forward debt, to be eliminated in Stage 1.5:
+
+1. **Validator hardcoded attribute checks (21 sites, 12 of 20 validators).**
+   `Entity.state` is `Record<string, unknown>` with no metadata. Validators
+   hardcode attribute names (`marital_status`, `status`, `alive`, `knows`,
+   `location`, `mood`, `appearance`, `traits`, `aliases`, `character_state`,
+   `time_period`, `pacing`, `voice_*`, `pronoun`, `discourse_balance`) to
+   identify which state fields carry which semantics. This caused 3 false
+   world_rule errors in the zhu-fu fixture (marital_status modeled as
+   immutable when it is a mutable lifecycle attribute). Fix: STATE-3
+   per-kind attribute catalog with `writePolicy` + `semanticRole` metadata.
+
+2. **Broken knowledge data path.** `aggregator.ts:172-174` `getKnowledge`
+   stub always returns empty. `replay.ts:139` pushes `fact.id` (string) to
+   `knownFacts: KnowledgeEntry[]` (expects `{fact, acquiredAt, source,
+   confidence}` objects) — latent TypeError. `state.entities[id]['knows']`
+   is written but has no reader. Fix: STATE-4 Knowledge/Belief规范
+   establishes single source of truth.
+
+3. **Character-centric Entity model.** `Entity` interface is generic
+   (`kind: 'character'|'location'|'item'|'concept'|'faction'|'rule'`) but
+   `InMemoryEntityRegistry` load path special-cases characters (6 top-level
+   field promotion: aliases/gender/appearance/age/profession/traits) and
+   rules/concepts (hardcoded 2-field state). Only location/item/faction use
+   generic `initialState` copy. Fix: STATE-3 per-kind EntityTypeCatalog.
+
+These defects do not invalidate Stage 1's positive evidence (813/813 tests,
+zhu-fu 0 errors, 9684-byte assembly, real provider smoke). They are
+architectural debt that Stage 1.5 eliminates before Stage 2 academic
+verification begins.

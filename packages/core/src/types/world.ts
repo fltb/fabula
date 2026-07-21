@@ -13,6 +13,7 @@ import type {
 } from './relationship.js';
 
 import type { EpistemicLedger, PropositionCatalog } from './knowledge.js';
+import type { ThreadRuntimeState } from './thread.js';
 
 // ——— Knowledge System (§7.4.2) ———
 
@@ -106,7 +107,7 @@ export interface WorldState {
   epistemicLedger?: EpistemicLedger;
   /** STATE-4 PropositionCatalog — immutable catalog of propositions */
   propositionCatalog?: PropositionCatalog;
-  threads: Record<string, { progress: number; total: number }>;
+  threads: Record<string, ThreadRuntimeState>;
   rules: Record<string, RuleState>;
   facts: Fact[];
 }

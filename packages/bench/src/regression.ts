@@ -83,8 +83,6 @@ export function validateFixtureIssues(fixturePath?: string): ValidationIssue[] {
   const narrativeEvents = allEvents.filter((event) => event.id !== 'system:genesis');
   const initialThreads = (projectData.worldInitialState?.threads ?? []).map(t => ({
     id: t.id,
-    progress: Number(t.initialProgress ?? 0),
-    total: 0,
   }));
   const boundaries = compileStoryBoundaries(
     narrativeEvents,
@@ -187,8 +185,6 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
       undefined,
       (projectData.worldInitialState?.threads ?? []).map(t => ({
         id: t.id,
-        progress: Number(t.initialProgress ?? 0),
-        total: 0,
       })),
     );
     stateBeforeByEventId = boundaries.stateBeforeByEventId;

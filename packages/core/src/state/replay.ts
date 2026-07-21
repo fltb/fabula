@@ -13,6 +13,8 @@ import { compareFact } from '../entity/compare.js';
 import { canonicalizeFactValue } from '../entity/fact-value.js';
 import { applyRelationshipTransaction } from './relationship-replay.js';
 import { convertRelationshipChange } from '../types/relationship.js';
+import type { ThreadTransaction } from '../types/index.js';
+import { applyThreadTransaction, convertLegacyThreadProgress, isLegacyThreadProgress } from './thread-replay.js';
 // ——— Lifecycle transition defaults ———
 const LIFECYCLE_STATES: Record<string, true> = { active: true, inactive: true, retired: true };
 
@@ -315,12 +317,13 @@ export class ReplayEngine {
       }
 
 
-      // ── Phase 3: Thread progress ──
+      // ── Phase 3: Thread progress (STATE-5) ──
+      // Backward compat: convert legacy ThreadProgressEntry to ThreadTransaction
       for (const tp of event.threadProgress) {
-        state.threads[tp.thread] = {
-          progress: tp.progressAfter,
-          total: tp.progressTotal,
-        };
+        const tx = isLegacyThreadProgress(tp)
+          ? convertLegacyThreadProgress(tp, event.id)
+          : (tp as unknown as ThreadTransaction);
+        applyThreadTransaction(state.threads, tx);
       }
 
       // ── Phase 4: Relationship state (STATE-2) ──
@@ -484,7 +487,10 @@ export class ReplayEngine {
       }
 
       for (const tp of event.threadProgress) {
-        state.threads[tp.thread] = { progress: tp.progressAfter, total: tp.progressTotal };
+        const tx = isLegacyThreadProgress(tp)
+          ? convertLegacyThreadProgress(tp, eventId)
+          : (tp as unknown as ThreadTransaction);
+        applyThreadTransaction(state.threads, tx);
       }
       event.ruleEffects.forEach((re) => applyRuleEffect(state, re));
     }

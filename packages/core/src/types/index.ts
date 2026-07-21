@@ -211,3 +211,22 @@ export type {
   EvaluationResult,
   claimKey,
 } from './knowledge.js';
+// ——— STATE-5 Thread Types ———
+export type {
+  ThreadId,
+  ThreadRunId,
+  ThreadLifecycle,
+  GoalLifecycle,
+  MilestoneLifecycle,
+  GoalState,
+  MilestoneState,
+  TimeDomain,
+  ThreadTypeDefinition,
+  ThreadTypeCatalog,
+  ThreadDeclaration,
+  ThreadDeclarationCatalog,
+  ThreadRuntimeState,
+  ThreadTransaction,
+  ThreadMergeStrategy,
+  ThreadMergeResult,
+} from './thread.js';

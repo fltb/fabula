@@ -19,13 +19,13 @@ export class ThreadProgressValidator implements Validator {
 
   validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
-
     // Check: threadProgress entries reference threads that exist in world state
     // (after replay, state.threads contains all established thread IDs from
     //  every event's threadProgress — unknown thread IDs indicate a schema concern)
     for (const tp of input.event.threadProgress) {
       const threadState = input.getThreadProgress(tp.thread);
-      if (!threadState || (threadState.progress === 0 && threadState.total === 0 && !input.worldState.threads[tp.thread])) {
+      const missing = !threadState || !input.worldState.threads[tp.thread];
+      if (missing) {
         issues.push(makeIssue(
           this.name, input.event.id, tp.thread, 'warning',
           `Thread "${tp.thread}" referenced in threadProgress is not defined in world state`,

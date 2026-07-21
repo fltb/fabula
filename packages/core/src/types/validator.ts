@@ -19,6 +19,7 @@ import type { KnowledgeState, WorldState } from './world.js';
 import type { EpistemicLedger } from './knowledge.js';
 import type { AnalysisResult } from './analysis.js';
 import type { EventStore } from '../state/event-store.js';
+import type { ThreadRuntimeState } from './thread.js';
 
 // ——— AnalysisBlockRequirement ———
 
@@ -49,7 +50,7 @@ export interface PreRenderInput {
   eventStore?: EventStore;
   queryState: (entityId: EntityId, attribute: string) => unknown;
   getKnowledge: (characterId: EntityId) => EpistemicLedger;
-  getThreadProgress: (threadId: string) => { progress: number; total: number };
+  getThreadProgress: (threadId: string) => ThreadRuntimeState | null;
 }
 
 // ——— Post-Render Input (new) ———
@@ -76,7 +77,7 @@ export interface ValidatorContext {
   narrativeOrder: number;
   queryState: (entityId: EntityId, attribute: string) => unknown;
   getKnowledge: (characterId: EntityId) => EpistemicLedger;
-  getThreadProgress: (threadId: string) => { progress: number; total: number };
+  getThreadProgress: (threadId: string) => ThreadRuntimeState | null;
 }
 
 // ——— Validation Issue ———

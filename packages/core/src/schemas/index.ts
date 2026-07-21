@@ -74,3 +74,22 @@ export {
   evaluationResultSchema,
   informationActTypeSchema,
 } from './knowledge.js';
+// ——— STATE-5 Thread Schemas ———
+export {
+  threadIdSchema,
+  threadRunIdSchema,
+  threadLifecycleSchema,
+  goalLifecycleSchema,
+  milestoneLifecycleSchema,
+  goalStateSchema,
+  milestoneStateSchema,
+  timeDomainSchema,
+  threadTypeDefinitionSchema,
+  threadTypeCatalogSchema,
+  threadDeclarationSchema,
+  threadDeclarationCatalogSchema,
+  threadRuntimeStateSchema,
+  threadTransactionSchema,
+  threadMergeStrategySchema,
+  threadMergeResultSchema,
+} from './thread.js';

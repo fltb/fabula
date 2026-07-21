@@ -11,6 +11,8 @@ import type {
   PreRenderInput,
   PostRenderInput,
   ForeshadowEntry,
+  ThreadId,
+  ThreadRunId,
 } from '../src/types/index.js';
 import {
   TimelineValidator,
@@ -85,7 +87,7 @@ function buildPreInput(
       byProposition: {},
       actLog: [],
     }),
-    getThreadProgress: (_threadId: string) => ({ progress: 0, total: 0 }),
+    getThreadProgress: (_threadId: string) => null,
     ...overrides,
   };
 }
@@ -884,7 +886,16 @@ describe('ReachabilityValidator', () => {
         relationships: {},
         knowledge: {},
         threads: {
-          main_plot: { progress: 2, total: 10 },
+          main_plot: {
+            threadId: 'main_plot' as ThreadId,
+            status: 'active',
+            currentRunId: 'legacy-main_plot' as ThreadRunId,
+            phase: '',
+            bindings: {},
+            goalStates: { goal1: 'achieved', goal2: 'achieved', goal3: 'active', goal4: 'active', goal5: 'active' },
+            milestoneStates: {},
+            semanticStateHash: 'h0',
+          },
         },
         rules: {},
         facts: [],
@@ -964,7 +975,16 @@ describe('ReachabilityValidator', () => {
         relationships: {},
         knowledge: {},
         threads: {
-          main_plot: { progress: 5, total: 10 },
+          main_plot: {
+            threadId: 'main_plot' as ThreadId,
+            status: 'active',
+            currentRunId: 'legacy-main_plot' as ThreadRunId,
+            phase: '',
+            bindings: {},
+            goalStates: { progress: 'achieved' },
+            milestoneStates: {},
+            semanticStateHash: 'h0',
+          },
         },
         rules: {},
         facts: [],

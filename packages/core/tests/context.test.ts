@@ -14,6 +14,8 @@ import type {
   WorldState,
   Entity,
   RelevanceContext,
+  ThreadId,
+  ThreadRunId,
 } from '../src/types/index.js';
 
 function makeEntity(id: string, kind: string, state: Record<string, unknown>): Entity {
@@ -99,7 +101,16 @@ function makeState(overrides: Partial<WorldState> = {}): WorldState {
       alice: { knownFacts: ['alice.location', 'bob.location'] },
     },
     threads: {
-      T1: { progress: 2, total: 5 },
+      T1: {
+        threadId: 'T1' as ThreadId,
+        status: 'active',
+        currentRunId: 'legacy-T1' as ThreadRunId,
+        phase: '',
+        bindings: {},
+        goalStates: { progress: 'active' },
+        milestoneStates: {},
+        semanticStateHash: 'h0',
+      },
     },
     rules: {},
     facts: [

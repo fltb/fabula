@@ -1,4 +1,4 @@
-import type { Fact, NarrativeEvent, WorldState, EntityRuntimeState } from '../types/index.js';
+import type { Fact, NarrativeEvent, WorldState, EntityRuntimeState, ThreadRuntimeState, ThreadLifecycle, ThreadId, ThreadRunId } from '../types/index.js';
 import type { BranchPath } from '../types/branch.js';
 import { compareFact } from '../entity/compare.js';
 import { canonicalizeFactValue } from '../entity/fact-value.js';
@@ -53,7 +53,7 @@ export function compileStoryBoundaries(
   initialFacts: readonly Fact[],
   anchors: Map<string, number>,
   branchPath?: BranchPath,
-  initialThreads?: Array<{ id: string; progress: number; total: number }>,
+  initialThreads?: Array<{ id: string }>,
 ): StoryBoundaries {
   const { edges, inDegree } = buildCausalEdges(events, { anchors, initialFacts, branchPath });
   const selectedEvents = events.filter((event) => inDegree.has(event.id));
@@ -65,7 +65,16 @@ export function compileStoryBoundaries(
 
   if (initialThreads) {
     for (const t of initialThreads) {
-      state.threads[t.id] = { progress: t.progress, total: t.total };
+      state.threads[t.id] = {
+        threadId: t.id as ThreadId,
+        status: 'planned' as ThreadLifecycle,
+        currentRunId: `init-${t.id}` as ThreadRunId,
+        phase: '',
+        bindings: {},
+        goalStates: {},
+        milestoneStates: {},
+        semanticStateHash: '',
+      };
     }
   }
 

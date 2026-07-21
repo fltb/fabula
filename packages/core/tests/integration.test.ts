@@ -30,7 +30,7 @@ import {
 import { calculateISS, detectAntiPatterns } from '../src/iss/index.js';
 import { assembleNovel, countWords } from '../src/assembler/index.js';
 import { ContextCompiler } from '../src/context/index.js';
-import type { NarrativeEvent, PreRenderInput, WorldState } from '../src/types/index.js';
+import type { NarrativeEvent, PreRenderInput, WorldState, ThreadRuntimeState, ThreadId, ThreadRunId, ThreadLifecycle, GoalLifecycle, MilestoneLifecycle } from '../src/types/index.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -237,8 +237,8 @@ describe('1. Full Pipeline', () => {
 
     // State
     const state = sm.getCurrentState();
-    expect(state.threads['T1']).toEqual({ progress: 30, total: 100 });
-    expect(state.threads['T2']).toEqual({ progress: 15, total: 100 });
+    expect(state.threads['T1']).toEqual({ threadId: 'T1' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T1' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'hx9s670' });
+    expect(state.threads['T2']).toEqual({ threadId: 'T2' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T2' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'hbe9vjr' });
     expect(state.entities['seraphine']?.['detected_anomaly']).toBe(true);
     expect(state.entities['camille']?.['case_status']).toBe('accepted');
 
@@ -347,7 +347,7 @@ describe('1. Full Pipeline', () => {
       chapter: 1,
       queryState: () => undefined,
       getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] }),
-      getThreadProgress: () => ({ progress: 0, total: 0 }),
+      getThreadProgress: () => null,
     };
 
     const tv = new TimelineValidator();
@@ -522,9 +522,9 @@ describe('4. State Transitions', () => {
     sm2.commit(e1b);
 
     const state = sm2.getCurrentState();
-    expect(state.threads['T1']).toEqual({ progress: 30, total: 100 });
-    expect(state.threads['T2']).toEqual({ progress: 15, total: 100 });
-    expect(state.threads['T3']).toEqual({ progress: 3, total: 100 });
+    expect(state.threads['T1']).toEqual({ threadId: 'T1' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T1' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'hx9s670' });
+    expect(state.threads['T2']).toEqual({ threadId: 'T2' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T2' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'hbe9vjr' });
+    expect(state.threads['T3']).toEqual({ threadId: 'T3' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T3' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'h4x3zs9' });
 
     fs.rmSync(snapDir2, { recursive: true, force: true });
   });
@@ -556,12 +556,14 @@ describe('4. State Transitions', () => {
     // At order 1: seraphine detected anomaly
     const at1 = replay.getStateAt(allEvents, 1);
     expect(at1.entities['seraphine']?.['detected_anomaly']).toBe(true);
-    expect(at1.threads['T1']?.progress).toBe(20);
+    expect(at1.threads['T1']).toBeDefined();
+    expect(at1.threads['T1'].status).toBe('active');
 
     // At order 2: camille accepted case
     const at2 = replay.getStateAt(allEvents, 2);
     expect(at2.entities['camille']?.['case_status']).toBe('accepted');
-    expect(at2.threads['T1']?.progress).toBe(30);
+    expect(at2.threads['T1']).toBeDefined();
+    expect(at2.threads['T1'].status).toBe('active');
 
     // Optimized path with snapshot
     const snap = { narrativeOrder: 0, eventId: 'sys:g', timestamp: '', state: replay.getStateAt(allEvents, 0) };
@@ -817,7 +819,7 @@ describe('7. Context Compilation', () => {
     const state: WorldState = {
       entities: { seraphine: { location: 'piltover_enforcer_headquarters', status: 'alive', detected_anomaly: true } },
       relationships: {}, knowledge: {},
-      threads: { T1: { progress: 20, total: 100 } },
+      threads: { T1: { threadId: 'T1' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T1' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'h0' } },
       rules: {}, facts: [],
     };
 
@@ -838,8 +840,8 @@ describe('7. Context Compilation', () => {
     // Thread status
     const t1 = pkg.activeThreads.find((t) => t.id === 'T1');
     expect(t1).toBeDefined();
-    expect(t1!.progress).toBe(20);
-    expect(t1!.total).toBe(100);
+    expect(t1!.progress).toBe(0);
+    expect(t1!.total).toBe(1);
   });
 
   it('7b. Context package includes system context, scene spec, character snapshots', () => {
@@ -892,7 +894,7 @@ describe('7. Context Compilation', () => {
     });
     const state: WorldState = {
       entities: {}, relationships: {}, knowledge: {},
-      threads: { T1: { progress: 50, total: 100 } },
+      threads: { T1: { threadId: 'T1' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T1' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'h0' } },
       rules: {}, facts: [],
     };
     const pkg = compiler.compile(event, state, registry, { activeThreadIds: ['T1'] });

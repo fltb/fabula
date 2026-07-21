@@ -37,7 +37,7 @@ export function buildContext(
     getKnowledge: (characterId: EntityId) =>
       state.epistemicLedger ?? { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
     getThreadProgress: (threadId: string) =>
-      state.threads[threadId] ?? { progress: 0, total: 0 },
+      state.threads[threadId] ?? null,
   };
 }
 

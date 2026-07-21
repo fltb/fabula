@@ -36,7 +36,7 @@ function makeInput(
     chapter: 1,
     queryState: () => undefined,
     getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] }),
-    getThreadProgress: () => ({ progress: 0, total: 0 }),
+    getThreadProgress: () => null,
   };
 }
 

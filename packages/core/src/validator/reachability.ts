@@ -21,15 +21,18 @@ export class ReachabilityValidator implements Validator {
     // 1. Thread completion: check if threads are on track
     const allThreads = input.worldState.threads;
     for (const [threadId, threadData] of Object.entries(allThreads)) {
+      const goalStates = threadData.goalStates ?? {};
+      const totalGoals = Object.keys(goalStates!).length;
+      const achievedGoals = Object.values(goalStates!).filter(s => s === 'achieved').length;
       if (
-        threadData.progress < threadData.total &&
+        achievedGoals < totalGoals &&
         input.chapter > event.narrativeOrder
       ) {
-        const behind = threadData.total - threadData.progress;
+        const behind = totalGoals - achievedGoals;
         if (behind > 2 && input.chapter > 5) {
           issues.push(makeIssue(
             this.name, event.id, threadId, 'warning',
-            `Thread "${threadId}" is behind: ${threadData.progress}/${threadData.total} (${behind} remaining) at chapter ${input.chapter}`,
+            `Thread "${threadId}" is behind: ${achievedGoals}/${totalGoals} goals (${behind} remaining) at chapter ${input.chapter}`,
             'Add events that advance this thread, or adjust the progress target.',
             'change_value',
             'thread_progress',

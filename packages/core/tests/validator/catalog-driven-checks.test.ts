@@ -164,7 +164,7 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
         readerKnowledge: [],
         narratorKnowledge: [],
       }),
-      getThreadProgress: () => ({ progress: 0, total: 0 }),
+      getThreadProgress: () => null,
     };
 
     const issues = validator.validatePre(input);
@@ -206,7 +206,7 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
         readerKnowledge: [],
         narratorKnowledge: [],
       }),
-      getThreadProgress: () => ({ progress: 0, total: 0 }),
+      getThreadProgress: () => null,
     };
 
     const issues = validator.validatePre(input);
@@ -247,7 +247,7 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
         readerKnowledge: [],
         narratorKnowledge: [],
       }),
-      getThreadProgress: () => ({ progress: 0, total: 0 }),
+      getThreadProgress: () => null,
     };
 
     const issues = validator.validatePre(input);
@@ -285,7 +285,7 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
         readerKnowledge: [],
         narratorKnowledge: [],
       }),
-      getThreadProgress: () => ({ progress: 0, total: 0 }),
+      getThreadProgress: () => null,
     };
 
     const issues = validator.validatePre(input);
@@ -320,7 +320,7 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
         readerKnowledge: [],
         narratorKnowledge: [],
       }),
-      getThreadProgress: () => ({ progress: 0, total: 0 }),
+      getThreadProgress: () => null,
     };
 
     const issues = validator.validatePre(input);
@@ -355,7 +355,7 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
         readerKnowledge: [],
         narratorKnowledge: [],
       }),
-      getThreadProgress: () => ({ progress: 0, total: 0 }),
+      getThreadProgress: () => null,
     };
 
     const issues = validator.validatePre(input);

@@ -172,7 +172,7 @@ export class ResultAggregator {
           queryState: (entityId: EntityId, attr: string) => state.entities[entityId]?.[attr],
           getKnowledge: (_characterId: EntityId) =>
             state.epistemicLedger ?? { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
-          getThreadProgress: (threadId: string) => state.threads[threadId] ?? { progress: 0, total: 0 },
+          getThreadProgress: (threadId: string) => state.threads[threadId] ?? null,
         };
         const issues = validator.validatePre(input);
         for (const issue of issues) {

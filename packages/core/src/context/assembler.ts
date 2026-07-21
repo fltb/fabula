@@ -246,13 +246,16 @@ export class ContextAssembler {
   }
 
   private _buildThreadStatus(state: WorldState): ThreadStatus[] {
-    return Object.entries(state.threads).map(([id, data]) => ({
-      id,
-      name: id,
-      progress: data.progress,
-      total: data.total,
-      description: '',
-    }));
+    return Object.entries(state.threads).map(([id, data]) => {
+      const goals = Object.values(data.goalStates);
+      return {
+        id,
+        name: id,
+        progress: goals.filter((s) => s === 'achieved').length,
+        total: goals.length,
+        description: '',
+      };
+    });
   }
 
   private _buildActiveRules(state: WorldState, registry: EntityRegistry): RuleDefinition[] {

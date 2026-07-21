@@ -312,8 +312,6 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
   ];
   const initialThreads = (data.worldInitialState?.threads ?? []).map(t => ({
     id: t.id,
-    progress: Number(t.initialProgress ?? 0),
-    total: 0,
   }));
   const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, branchPath, initialThreads);
   const renderEvents = (!eventId || eventId === 'all'
@@ -505,8 +503,6 @@ export function validateNovel(
   const anchors = new Map((data.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day]));
   const initialThreads = (data.worldInitialState?.threads ?? []).map(t => ({
     id: t.id,
-    progress: Number(t.initialProgress ?? 0),
-    total: 0,
   }));
   const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
   const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
@@ -587,8 +583,6 @@ export function getProjectStatus(
   const anchors = new Map((data.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day]));
   const initialThreads = (data.worldInitialState?.threads ?? []).map(t => ({
     id: t.id,
-    progress: Number(t.initialProgress ?? 0),
-    total: 0,
   }));
   const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
   const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
@@ -645,13 +639,13 @@ export function getProjectStatus(
     });
   }
 
-  // Thread progress
   const threads: ProjectStatusResult['threads'] = [];
   for (const [threadId, threadData] of Object.entries(boundaries.finalState.threads)) {
+    const goalEntries = Object.values(threadData.goalStates);
     threads.push({
       id: threadId,
-      progress: threadData.progress,
-      total: threadData.total,
+      progress: goalEntries.filter((s) => s === 'achieved').length,
+      total: goalEntries.length,
     });
   }
 

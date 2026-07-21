@@ -14,6 +14,9 @@ import {
   type NarrativeEvent,
   type ValidationIssue,
   type WorldState,
+  type ThreadRuntimeState,
+  type ThreadId,
+  type ThreadRunId,
 } from '@novalistically/core';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
@@ -947,8 +950,14 @@ function applyEventToState(event: NarrativeEvent, state: WorldState): void {
   // Update thread progress
   for (const tp of event.threadProgress) {
     state.threads[tp.thread] = {
-      progress: tp.progressAfter,
-      total: tp.progressTotal,
+      threadId: tp.thread as ThreadId,
+      status: 'active',
+      currentRunId: `bench-${tp.thread}` as ThreadRunId,
+      phase: '',
+      bindings: {},
+      goalStates: {},
+      milestoneStates: {},
+      semanticStateHash: '',
     };
   }
 

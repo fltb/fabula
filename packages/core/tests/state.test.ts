@@ -336,7 +336,7 @@ describe('SnapshotEngine', () => {
         entities: { camille: { age: 25 } },
         relationships: {},
         knowledge: {},
-        threads: { main: { progress: 1, total: 10 } },
+        threads: { main: { threadId: 'main', status: 'active', currentRunId: 'legacy-main', phase: '', bindings: {}, goalStates: { progress: 'active' }, milestoneStates: {}, semanticStateHash: 'h0' } },
         rules: {},
         facts: [],
       };
@@ -642,8 +642,12 @@ describe('ReplayEngine', () => {
 
       const state = engine.replay(events);
 
-      expect(state.threads.mystery).toEqual({ progress: 3, total: 10 });
-      expect(state.threads.romance).toEqual({ progress: 1, total: 5 });
+      expect(state.threads.mystery).toBeDefined();
+      expect(state.threads.mystery!.status).toBe('active');
+      expect(state.threads.mystery!.goalStates.progress).toBe('active');
+      expect(state.threads.romance).toBeDefined();
+      expect(state.threads.romance!.status).toBe('active');
+      expect(state.threads.romance!.goalStates.progress).toBe('active');
     });
 
     it('should update relationship state', () => {
@@ -1148,7 +1152,9 @@ describe('StateManager', () => {
       const state = manager.getCurrentState();
 
       expect(state.entities.camille.age).toBe(26);
-      expect(state.threads.main).toEqual({ progress: 1, total: 10 });
+      expect(state.threads.main).toBeDefined();
+      expect(state.threads.main!.status).toBe('active');
+      expect(state.threads.main!.goalStates.progress).toBe('active');
     });
 
     it('should honor branch path filtering', () => {

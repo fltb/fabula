@@ -5,6 +5,7 @@
 import type { EntityId, StoryTimestamp, Fact } from './entity.js';
 import type { BranchSet } from './branch.js';
 import type { RelationshipTransaction, DimensionWrite, DimensionUnset, Membership, RelationshipId, EpochId, MembershipId, EpochLifecycle, DimensionScope, RelationshipRuntimeState, EpochRuntimeState, DimensionState } from './relationship.js';
+import type { ThreadTransaction, ThreadId, ThreadRunId, ThreadLifecycle, GoalLifecycle, MilestoneLifecycle, GoalState, MilestoneState, TimeDomain, ThreadRuntimeState, ThreadTypeDefinition, ThreadTypeCatalog, ThreadDeclaration, ThreadDeclarationCatalog, ThreadMergeStrategy, ThreadMergeResult } from './thread.js';
 
 // ——— Narrative Event (§7.4.1) ———
 
@@ -97,6 +98,27 @@ export type {
   RelationshipIdentityTransitionGroup,
   IdentityTransitionCarryEntry,
 } from './relationship.js';
+// ——— STATE-5 ThreadTransaction ———
+// ThreadProgressEntry is kept as a backward-compat type; the replay engine
+// converts it to ThreadTransaction at application time.
+export type {
+  ThreadTransaction,
+  ThreadId,
+  ThreadRunId,
+  ThreadLifecycle,
+  GoalLifecycle,
+  MilestoneLifecycle,
+  GoalState,
+  MilestoneState,
+  TimeDomain,
+  ThreadRuntimeState,
+  ThreadTypeDefinition,
+  ThreadTypeCatalog,
+  ThreadDeclaration,
+  ThreadDeclarationCatalog,
+  ThreadMergeStrategy,
+  ThreadMergeResult,
+} from './thread.js';
 
 export interface RuleEffectEntry {
   rule: string;

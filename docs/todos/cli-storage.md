@@ -6,7 +6,7 @@
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| CLI-5 | [ ] | — | `docs/TODO.md` lines 1292-1306 |
+| CLI-5 | [x] | — | `docs/TODO.md` lines 1304-1312 — removed unused InMemoryEntityRegistry import + registry creation in review command; build + cli tests green |
 | STORAGE-2 | [ ] | — | `docs/TODO.md` lines 1235-1256 |
 | CLI-4 | [ ] | API-1 (in api-core-validator) | `docs/TODO.md` lines 1282-1290 |
 | CLI-3 | [ ] | API-2 (in api-core-validator) | `docs/TODO.md` lines 1272-1280 |

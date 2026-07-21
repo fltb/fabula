@@ -17,7 +17,6 @@ import {
   clearEventCache,
   FsStorage,
   EntityMapper,
-  InMemoryEntityRegistry,
   StateManager,
   buildCausalEdges,
   MockPass2Provider,
@@ -378,8 +377,6 @@ program
     const data = mapper.loadProject();
     const events = mapper.loadAllEvents(data.chapters);
 
-    const registry = new InMemoryEntityRegistry();
-    registry.load(projectDir);
 
     const manager = new ReviewManager();
     manager.load(projectDir);

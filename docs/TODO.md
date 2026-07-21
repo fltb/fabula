@@ -843,7 +843,7 @@ ReportWriter
 
 **实现成本估算**：待 initial-state schema、mapper 与 replay 调用点联合细化
 
-### [-] DAG-5: Snapshot 不再用 narrativeOrder 做 key，统一 replay 方法
+### [x] DAG-5: Snapshot 不再用 narrativeOrder 做 key，统一 replay 方法
 
 **现状**：snapshot 系统在三个地方把 narrativeOrder 当 data order 用：
 

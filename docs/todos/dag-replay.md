@@ -1,6 +1,6 @@
 # dag-replay: DAG causal edges, replay, and snapshot keying
 
-## Group Status: [-] in progress — DAG-0 + DAG-3 [x] (already implemented by CLI-2); DAG-1/2/4/5 open
+## Group Status: [x] complete — all 6 DAG items done. Build+test green (1085/1086, 1 pre-existing ai-sdk failure).
 
 ## Items in this group
 
@@ -10,7 +10,7 @@
 | DAG-1 | [x] | — (test-only) | `docs/TODO.md` lines 796-806 — divergence test proving getStateAtOptimized diverges from replay(); 3 tests in dag-divergence.test.ts |
 | DAG-2 | [x] | — | `docs/TODO.md` lines 808-820 — narrativeOrder tiebreaker removed from compareByStory; replay() now extracts anchors from storyTimes; dag-tiebreaker.test.ts (2 tests) |
 | DAG-4 | [x] | — | `docs/TODO.md` lines 836-844 — buildInitialState() helper deduped across 3 call sites; genesis-root.test.ts (4 tests) |
-| DAG-5 | [-] | DAG-1, DAG-2, DAG-4 | `docs/TODO.md` lines 846-870 — 5a done (snapshot key → eventCount); 5b/5c remain (delete getStateAtOptimized, unify getStateAt, test updates) |
+| DAG-5 | [x] | DAG-1, DAG-2, DAG-4 | `docs/TODO.md` lines 846-870 — 5a: snapshot key → eventCount; 5b: deleted getStateAtOptimized, unified getStateAt (DAG-position-based); 5c: test updates; build+test green |
 
 ## Group-level dependencies
 - **state-model**: STATE-3 [x] ✅ — all DAG items' preconditions met.

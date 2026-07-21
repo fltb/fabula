@@ -154,6 +154,8 @@ function makeSyntheticEntities(registry: InMemoryEntityRegistry): void {
       kind: 'character',
       name: char.charAt(0).toUpperCase() + char.slice(1),
       definitionFile: `definitions/characters/${char}.yaml`,
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: {
         status: 'alive',
         alive: true,
@@ -167,6 +169,8 @@ function makeSyntheticEntities(registry: InMemoryEntityRegistry): void {
       kind: 'location',
       name: loc.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
       definitionFile: `definitions/locations/${loc}.yaml`,
+      lifecycle: 'active',
+      typeRef: { typeId: 'location', schemaVersion: 1 },
       state: { explored: false },
     });
   }

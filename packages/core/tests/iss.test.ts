@@ -48,6 +48,8 @@ function makeRegistry(characters: Array<{ id: string; traits: string[] }> = []):
       kind: 'character',
       name: c.id,
       definitionFile: `definitions/characters/${c.id}.yaml`,
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: c.traits },
     });
   }

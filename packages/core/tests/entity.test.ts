@@ -457,6 +457,8 @@ function createFixtureRegistry(): InMemoryEntityRegistry {
     kind: 'character',
     name: 'Camille',
     definitionFile: 'definitions/characters/camille.yaml',
+    lifecycle: 'active',
+    typeRef: { typeId: 'character', schemaVersion: 1 },
     state: {
       location: 'piltover_enforcer_headquarters',
       status: 'alive',
@@ -470,6 +472,8 @@ function createFixtureRegistry(): InMemoryEntityRegistry {
     kind: 'character',
     name: 'Seraphine',
     definitionFile: 'definitions/characters/seraphine.yaml',
+    lifecycle: 'active',
+    typeRef: { typeId: 'character', schemaVersion: 1 },
     state: {
       location: 'piltover_enforcer_headquarters',
       status: 'alive',
@@ -483,6 +487,8 @@ function createFixtureRegistry(): InMemoryEntityRegistry {
     kind: 'character',
     name: 'Gear',
     definitionFile: 'definitions/characters/npcs/npc_gear.yaml',
+    lifecycle: 'active',
+    typeRef: { typeId: 'character', schemaVersion: 1 },
     state: {
       location: 'zaun_gray_exchange',
       status: 'alive',
@@ -498,6 +504,8 @@ function createFixtureRegistry(): InMemoryEntityRegistry {
     kind: 'location',
     name: 'Piltover Enforcer Headquarters',
     definitionFile: 'definitions/locations/piltover_enforcer_headquarters.yaml',
+    lifecycle: 'active',
+    typeRef: { typeId: 'location', schemaVersion: 1 },
     state: { status: 'operational', security_level: 'high', current_tension: 'moderate' },
   });
   registry.register({
@@ -505,6 +513,8 @@ function createFixtureRegistry(): InMemoryEntityRegistry {
     kind: 'location',
     name: 'Gray Market Exchange',
     definitionFile: 'definitions/locations/zaun_gray_exchange.yaml',
+    lifecycle: 'active',
+    typeRef: { typeId: 'location', schemaVersion: 1 },
     state: { status: 'operational', controlled_by: 'zaun_underground', security_level: 'medium' },
   });
 
@@ -514,6 +524,8 @@ function createFixtureRegistry(): InMemoryEntityRegistry {
     kind: 'rule',
     name: 'Hextech Crystal Scarcity',
     definitionFile: 'definitions/rules/hextech.yaml',
+    lifecycle: 'active',
+    typeRef: { typeId: 'rule', schemaVersion: 1 },
     state: { category: 'state_invariant', type: 'state_invariant' },
   });
   registry.register({
@@ -521,6 +533,8 @@ function createFixtureRegistry(): InMemoryEntityRegistry {
     kind: 'rule',
     name: 'Shimmer Addiction Timeline',
     definitionFile: 'definitions/rules/shimmer.yaml',
+    lifecycle: 'active',
+    typeRef: { typeId: 'rule', schemaVersion: 1 },
     state: { category: 'progression_rule', type: 'progression_rule' },
   });
 
@@ -530,6 +544,8 @@ function createFixtureRegistry(): InMemoryEntityRegistry {
     kind: 'concept',
     name: 'council_disarray',
     definitionFile: 'definitions/state_initial.yaml',
+    lifecycle: 'active',
+    typeRef: { typeId: 'concept', schemaVersion: 1 },
     state: {
       value: 'The Piltover Council is in disarray following the attack.',
       description: 'Three council seats are unfilled.',
@@ -626,19 +642,22 @@ describe('InMemoryEntityRegistry', () => {
         kind: 'concept',
         name: 'Test Entity',
         definitionFile: 'test.yaml',
+        lifecycle: 'active',
+        typeRef: { typeId: 'concept', schemaVersion: 1 },
         state: { value: 42 },
       };
 
       registry.register(entity);
       expect(registry.resolve('test_entity')).toEqual(entity);
     });
-
     it('register() should overwrite existing entities with same ID', () => {
       registry.register({
         id: 'dup',
         kind: 'character',
         name: 'Original',
         definitionFile: 'orig.yaml',
+        lifecycle: 'active',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
         state: {},
       });
       registry.register({
@@ -646,6 +665,8 @@ describe('InMemoryEntityRegistry', () => {
         kind: 'character',
         name: 'Overwritten',
         definitionFile: 'new.yaml',
+        lifecycle: 'active',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
         state: { updated: true },
       });
       expect(registry.resolve('dup')!.name).toBe('Overwritten');
@@ -658,6 +679,8 @@ describe('InMemoryEntityRegistry', () => {
         kind: 'character',
         name: 'Mutable',
         definitionFile: 'mutable.yaml',
+        lifecycle: 'active',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
         state: { status: 'alive', location: 'home', health: 100 },
       });
 
@@ -689,6 +712,8 @@ describe('InMemoryEntityRegistry', () => {
         kind: 'character',
         name: 'A',
         definitionFile: 'a.yaml',
+        lifecycle: 'active',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
         state: { color: 'red' },
       });
       expect(registry.findByAttribute('color', 'blue')).toEqual([]);
@@ -978,6 +1003,8 @@ describe('InMemoryEntityRegistry — edge cases', () => {
       kind: 'concept',
       name: 'Dup',
       definitionFile: 'd.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'concept', schemaVersion: 1 },
       state: {},
     });
     const result = registry.resolveRefs(['dup_target', 'dup_target', 'dup_target']);
@@ -992,6 +1019,8 @@ describe('InMemoryEntityRegistry — edge cases', () => {
       kind: 'concept',
       name: 'Empty',
       definitionFile: 'e.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'concept', schemaVersion: 1 },
       state: {},
     });
     registry.updateState('empty_state', {});

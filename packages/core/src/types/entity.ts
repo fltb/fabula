@@ -16,6 +16,17 @@ export type EntityKind =
   | 'faction'
   | 'rule';
 
+// ——— Type Reference ———
+
+export interface EntityTypeRef {
+  typeId: string;
+  schemaVersion: number;
+}
+
+// ——— Runtime State ———
+
+export type EntityRuntimeState = 'active' | 'inactive' | 'retired';
+
 // ——— Entity ———
 
 export interface Entity {
@@ -23,6 +34,8 @@ export interface Entity {
   kind: EntityKind;
   name: string;
   definitionFile: string;
+  lifecycle: EntityRuntimeState;
+  typeRef: EntityTypeRef;
   state: Record<string, unknown>;
 }
 

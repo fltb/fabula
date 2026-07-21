@@ -9,6 +9,8 @@ export type {
   EntityId,
   EntityKind,
   Entity,
+  EntityTypeRef,
+  EntityRuntimeState,
   StoryTimestamp,
   AbsoluteTimestamp,
   RelativeTimestamp,
@@ -19,6 +21,16 @@ export type {
   FactValidity,
   EntityRegistry,
 } from './entity.js';
+
+export type {
+  AttributeDefinition,
+  WritePolicy,
+  RequiredAt,
+  EntityTypeDefinition,
+  EntityDeclaration,
+  EntityTypeCatalog,
+  EntityDeclarationCatalog,
+} from './entity-catalog.js';
 
 export type {
   BranchPath,

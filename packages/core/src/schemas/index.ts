@@ -16,6 +16,7 @@ import { worldInitialStateSchema } from './state-initial.js';
 import { chapterMetadataSchema } from './chapter.js';
 import { projectConfigSchema } from './project.js';
 
+import { entityTypeCatalogSchema, entityDeclarationCatalogSchema, entityTypeRefSchema, entityRuntimeStateSchema, writePolicySchema, requiredAtSchema, attributeDefinitionSchema, entityTypeDefinitionSchema, entityDeclarationSchema } from './entity-catalog.js';
 // ── Re-export all per-entity schemas ─────────────────────────────────────────
 
 export {
@@ -29,4 +30,16 @@ export {
   worldInitialStateSchema,
   projectConfigSchema,
   chapterMetadataSchema,
+};
+
+export {
+  entityTypeCatalogSchema,
+  entityDeclarationCatalogSchema,
+  entityTypeRefSchema,
+  entityRuntimeStateSchema,
+  writePolicySchema,
+  requiredAtSchema,
+  attributeDefinitionSchema,
+  entityTypeDefinitionSchema,
+  entityDeclarationSchema,
 };

@@ -22,6 +22,8 @@ function makeEntity(id: string, kind: string, state: Record<string, unknown>): E
     kind: kind as any,
     name: id,
     definitionFile: `definitions/${kind}s/${id}.yaml`,
+    lifecycle: 'active',
+    typeRef: { typeId: kind, schemaVersion: 1 },
     state,
   };
 }

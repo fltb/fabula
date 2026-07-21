@@ -3,12 +3,77 @@ import type {
   EntityId,
   EntityKind,
   EntityRegistry,
+  EntityTypeRef,
 } from '../types/index.js';
+import type { CharacterDefinition } from '../types/character.js';
+import type { RuleDefinition } from '../types/rule.js';
+import type { LocationDefinition } from '../types/location.js';
+import type { ItemDefinition } from '../types/location.js';
+import type { FactionDefinition } from '../types/character.js';
 import { EntityMapper } from './mapper.js';
+import { canonicalizeFactValue } from './fact-value.js';
+import { defaultEntityTypeCatalog } from './default-catalog.js';
 
 // ============================================================================
 // InMemoryEntityRegistry — stores and resolves entities in memory
 // ============================================================================
+
+function makeTypeRef(kind: string, schemaVersion = 1): EntityTypeRef {
+  return { typeId: kind, schemaVersion };
+}
+
+/**
+ * Build the entity state for a character by promoting definition-level
+ * fields (aliases, gender, appearance, age, profession, traits) into
+ * state, then overlaying initialState.
+ */
+function buildCharacterState(char: CharacterDefinition): Record<string, unknown> {
+  const state: Record<string, unknown> = {};
+
+  // Promote top-level definition fields needed by validators
+  if (char.aliases) state.aliases = canonicalizeFactValue(char.aliases);
+  if (char.gender) state.gender = canonicalizeFactValue(char.gender);
+  if (char.appearance) state.appearance = canonicalizeFactValue(char.appearance);
+  if (char.age) state.age = canonicalizeFactValue(char.age);
+  if (char.profession) state.profession = canonicalizeFactValue(char.profession);
+  // traits is always set (even if undefined — preserve existing behavior)
+  state.traits = canonicalizeFactValue(char.traits);
+
+  // Overlay initialState (may overwrite promoted fields)
+  if (char.initialState) {
+    for (const [key, value] of Object.entries(char.initialState)) {
+      state[key] = canonicalizeFactValue(value);
+    }
+  }
+
+  return state;
+}
+
+/**
+ * Build the entity state for a rule by promoting definition-level
+ * fields (category, type) into state.
+ */
+function buildRuleState(rule: RuleDefinition): Record<string, unknown> {
+  const state: Record<string, unknown> = {};
+  state.category = canonicalizeFactValue(rule.category);
+  state.type = canonicalizeFactValue(rule.type);
+  return state;
+}
+
+/**
+ * Build state for location, item, or faction from initialState.
+ */
+function buildGenericState(
+  initialState: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const state: Record<string, unknown> = {};
+  if (initialState) {
+    for (const [key, value] of Object.entries(initialState)) {
+      state[key] = canonicalizeFactValue(value);
+    }
+  }
+  return state;
+}
 
 export class InMemoryEntityRegistry implements EntityRegistry {
   private entities: Map<EntityId, Entity> = new Map();
@@ -24,18 +89,9 @@ export class InMemoryEntityRegistry implements EntityRegistry {
         kind: 'character',
         name: char.name,
         definitionFile: `definitions/characters/${char.id}.yaml`,
-        state: {
-          // Preserve top-level deterministic character definition fields
-          // needed by validators (AliasValidator, PronounValidator, etc.)
-          // without overwriting explicit initialState values.
-          ...(char.aliases ? { aliases: char.aliases } : {}),
-          ...(char.gender ? { gender: char.gender } : {}),
-          ...(char.appearance ? { appearance: char.appearance } : {}),
-          ...(char.age ? { age: char.age } : {}),
-          ...(char.profession ? { profession: char.profession } : {}),
-          ...char.initialState,
-          traits: char.traits,
-        },
+        lifecycle: 'active',
+        typeRef: makeTypeRef('character'),
+        state: buildCharacterState(char),
       });
     }
 
@@ -46,7 +102,9 @@ export class InMemoryEntityRegistry implements EntityRegistry {
         kind: 'location',
         name: loc.name,
         definitionFile: `definitions/locations/${loc.id}.yaml`,
-        state: { ...loc.initialState },
+        lifecycle: 'active',
+        typeRef: makeTypeRef('location'),
+        state: buildGenericState(loc.initialState),
       });
     }
 
@@ -57,7 +115,9 @@ export class InMemoryEntityRegistry implements EntityRegistry {
         kind: 'item',
         name: item.name,
         definitionFile: `definitions/items/${item.id}.yaml`,
-        state: { ...item.initialState },
+        lifecycle: 'active',
+        typeRef: makeTypeRef('item'),
+        state: buildGenericState(item.initialState),
       });
     }
 
@@ -68,19 +128,24 @@ export class InMemoryEntityRegistry implements EntityRegistry {
         kind: 'faction',
         name: fac.name,
         definitionFile: `definitions/factions/${fac.id}.yaml`,
-        state: { ...fac.initialState },
+        lifecycle: 'active',
+        typeRef: makeTypeRef('faction'),
+        state: buildGenericState(fac.initialState),
       });
     }
 
     // Load rules as entities
     for (const rule of data.rules) {
-      const ruleId = rule.ruleId ?? (rule as any).rule ?? `rule_${Math.random()}`;
+      // Some fixture YAML files use a snake_case 'rule' field as fallback ruleId
+      const ruleId = rule.ruleId ?? `rule_${Math.random()}`;
       this.entities.set(ruleId, {
         id: ruleId,
         kind: 'rule',
         name: rule.name,
-        definitionFile: `definitions/rules/${(ruleId as string).split('.').pop() ?? ruleId}.yaml`,
-        state: { category: rule.category, type: rule.type },
+        definitionFile: `definitions/rules/${ruleId.split('.').pop() ?? ruleId}.yaml`,
+        lifecycle: 'active',
+        typeRef: makeTypeRef('rule'),
+        state: buildRuleState(rule),
       });
     }
 
@@ -92,7 +157,12 @@ export class InMemoryEntityRegistry implements EntityRegistry {
           kind: 'concept',
           name: wf.id,
           definitionFile: 'definitions/state_initial.yaml',
-          state: { value: wf.value, description: wf.description },
+          lifecycle: 'active',
+          typeRef: makeTypeRef('concept'),
+          state: {
+            value: canonicalizeFactValue(wf.value),
+            description: canonicalizeFactValue(wf.description),
+          },
         });
       }
     }

@@ -101,6 +101,8 @@ function registerCharacter(
     kind: 'character',
     name: id.charAt(0).toUpperCase() + id.slice(1),
     definitionFile: `definitions/characters/${id}.yaml`,
+    lifecycle: 'active',
+    typeRef: { typeId: 'character', schemaVersion: 1 },
     state: { status: 'alive', alive: true, condition: 'healthy', ...extraState },
   };
   registry.register(entity);
@@ -1240,6 +1242,8 @@ describe('Validator Edge Cases', () => {
         kind: 'location',
         name: 'Zaun',
         definitionFile: 'definitions/locations/zaun.yaml',
+        lifecycle: 'active',
+        typeRef: { typeId: 'location', schemaVersion: 1 },
         state: {},
       };
       registry.register(entity);

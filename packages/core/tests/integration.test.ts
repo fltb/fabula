@@ -290,11 +290,15 @@ describe('1. Full Pipeline', () => {
     registry.register({
       id: 'seraphine', kind: 'character', name: 'Seraphine',
       definitionFile: 'definitions/characters/seraphine.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['empathetic', 'musical'], location: 'piltover_enforcer_headquarters' },
     });
     registry.register({
       id: 'camille', kind: 'character', name: 'Camille',
       definitionFile: 'definitions/characters/camille.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['calculating'], location: 'piltover_enforcer_headquarters' },
     });
 
@@ -311,15 +315,16 @@ describe('1. Full Pipeline', () => {
         `Event ${eventId} has errors: ${JSON.stringify(result.errors)}`,
       );
     }
-
-    fs.rmSync(snapDir, { recursive: true, force: true });
   });
+
 
   it('1f. Individual TimelineValidator and POVValidator produce no errors', () => {
     const registry = new InMemoryEntityRegistry();
     registry.register({
       id: 'seraphine', kind: 'character', name: 'Seraphine',
       definitionFile: 'definitions/characters/seraphine.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['empathetic'] },
     });
 
@@ -571,31 +576,40 @@ describe('5. ISS Calculation', () => {
   let registry: InMemoryEntityRegistry;
 
   beforeAll(() => {
-    // Build manually to avoid the ruleId crash in registry.load()
     registry = new InMemoryEntityRegistry();
     registry.register({
       id: 'seraphine', kind: 'character', name: 'Seraphine',
       definitionFile: 'definitions/characters/seraphine.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['empathetic', 'musical', 'burdened_by_voices'], location: 'piltover_enforcer_headquarters' },
     });
     registry.register({
       id: 'camille', kind: 'character', name: 'Camille',
       definitionFile: 'definitions/characters/camille.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['calculating', 'ruthless_when_necessary'], location: 'piltover_enforcer_headquarters' },
     });
     registry.register({
       id: 'gear', kind: 'character', name: 'Gear',
       definitionFile: 'definitions/characters/npcs/npc_gear.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['greedy', 'cowardly', 'shimmer_addicted'], location: 'zaun_gray_exchange' },
     });
     registry.register({
       id: 'piltover_enforcer_headquarters', kind: 'location', name: 'Piltover Enforcer HQ',
       definitionFile: 'definitions/locations/piltover_enforcer_headquarters.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'location', schemaVersion: 1 },
       state: { status: 'operational' },
     });
     registry.register({
       id: 'zaun_gray_exchange', kind: 'location', name: 'Gray Market Exchange',
       definitionFile: 'definitions/locations/zaun_gray_exchange.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'location', schemaVersion: 1 },
       state: { status: 'operational' },
     });
   });
@@ -767,11 +781,15 @@ describe('7. Context Compilation', () => {
     registry.register({
       id: 'seraphine', kind: 'character', name: 'Seraphine',
       definitionFile: 'definitions/characters/seraphine.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['empathetic', 'musical'], location: 'piltover_enforcer_headquarters' },
     });
     registry.register({
       id: 'camille', kind: 'character', name: 'Camille',
       definitionFile: 'definitions/characters/camille.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['calculating', 'ruthless_when_necessary'], location: 'piltover_enforcer_headquarters' },
     });
     compiler = new ContextCompiler();
@@ -914,11 +932,15 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
     registry.register({
       id: 'seraphine', kind: 'character', name: 'Seraphine',
       definitionFile: 'definitions/characters/seraphine.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['empathetic'], location: 'piltover_enforcer_headquarters' },
     });
     registry.register({
       id: 'camille', kind: 'character', name: 'Camille',
       definitionFile: 'definitions/characters/camille.yaml',
+      lifecycle: 'active',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['calculating'], location: 'piltover_enforcer_headquarters' },
     });
 
@@ -991,3 +1013,4 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
     expect(ctx.markdown).toContain('# Context Package: E1a');
   });
 });
+

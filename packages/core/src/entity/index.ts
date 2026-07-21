@@ -11,3 +11,4 @@ export type { CompareOutcome } from './compare.js';
 export type { ProjectData } from './types.js';
 export { canonicalizeFactValue, isCanonicalFactValue, canonicalDeepEqual } from './fact-value.js';
 export type { CanonicalFactValue } from './fact-value.js';
+export { defaultEntityTypeCatalog, getTypeDefinitionByKind, getAttributeIdsForKind } from './default-catalog.js';

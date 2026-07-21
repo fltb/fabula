@@ -1,13 +1,13 @@
 # integration: Cross-domain resolution, merge, and reference eligibility
 
-## Group Status: [ ] unstarted
+## Group Status: [x] complete — both INTEGRATION items done. Build+test green (1225/1225).
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| INTEGRATION-2 | [ ] | STATE-3 [x] | `docs/TODO.md` lines 934-940 |
-| INTEGRATION-1 | [ ] | STATE-1..6 [x], DAG-1..5 [x] | `docs/TODO.md` lines 1026-1034 |
+| INTEGRATION-2 | [x] | STATE-3 [x] | `docs/TODO.md` lines 934-940 — ReferenceEligibility (3 modes, 14 kinds), ReferenceIndex, retirement closure, 37 tests |
+| INTEGRATION-1 | [x] | STATE-1..6 [x], DAG-1..5 [x] | `docs/TODO.md` lines 1026-1034 — AbsenceWitness, ReadResolution, BoundaryReference, MergePlan, dual coverage, StorySnapshot/DiscourseSnapshot, 50 tests |
 
 ## Group-level dependencies
 - **state-model**: STATE-3 [x] ✅ for INTEGRATION-2; STATE-1..6 [x] ✅ for INTEGRATION-1

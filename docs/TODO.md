@@ -278,7 +278,7 @@ SurfaceReferenceExtractor
 
 **优先级**：nice-to-have，非 blocking；它改善局部 prose 承接，但不得作为事实正确性或状态连续性的来源。
 
-### [ ] DAG-0: 循环检测时禁止静默回退为 narrativeOrder 排序
+### [x] DAG-0: 循环检测时禁止静默回退为 narrativeOrder 排序
 
 **背景**：`replay.ts:57-66` 中，`buildCausalEdges` + `topologicalSort` 抛出 `"DAG cycle detected involving: ..."` 时，代码静默 catch 后按 `narrativeOrder` 排序继续执行。用户在 CLI 只看到一行 `console.warn`，DAG 循环被隐藏。
 
@@ -819,7 +819,7 @@ ReportWriter
 
 **实现成本估算**：待 DAG-5 与 CORPUS 联合细化
 
-### [ ] DAG-3: 分支事件在拓扑排序后过滤可能导致缺失前置状态
+### [x] DAG-3: 分支事件在拓扑排序后过滤可能导致缺失前置状态
 
 **现状**：`replay.ts:52-66` — 对**所有事件**（不论 branch）做 DAG 拓扑排序。`replay.ts:79` — 回放时用 `includesPath(event.branchExistence, bp)` 过滤。
 

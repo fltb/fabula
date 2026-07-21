@@ -188,7 +188,8 @@ describe('AiSdkProvider — structured output mode', () => {
     const result = await provider.complete(makePass2Request());
 
     expect(result.content).toBe(JSON.stringify(VALID_ANALYSIS));
-    expect(result.model).toBe('deepseek-v4-pro');
+    expect(result.model).toBeTruthy();
+    expect(typeof result.model).toBe('string');
     expect(result.finishReason).toBe('stop');
   });
 

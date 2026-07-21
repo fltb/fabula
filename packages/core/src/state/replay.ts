@@ -8,8 +8,9 @@ import {
   includesPath,
 } from '../branch/index.js';
 import { buildCausalEdges, topologicalSort } from './dag.js';
-import { PreconditionMismatchError } from '../errors.js';
+import { ConfigError, PreconditionMismatchError } from '../errors.js';
 import { compareFact } from '../entity/compare.js';
+import { canonicalizeFactValue } from '../entity/fact-value.js';
 
 // ——— Rule effect application helper ———
 
@@ -35,6 +36,54 @@ function applyRuleEffect(
     case 'introduce_exception':
       state.rules[re.rule].exceptions.push(re.evidence);
       break;
+  }
+}
+
+// ——— Precondition operator checker ———
+
+function checkOperator(
+  operator: string,
+  stateValue: unknown,
+  factValue: unknown,
+): boolean {
+  switch (operator) {
+    case 'eq':
+      return stateValue === factValue;
+    case 'neq':
+      // Missing state does not satisfy neq
+      if (stateValue === undefined) return false;
+      return stateValue !== factValue;
+    case 'gt':
+      if (typeof stateValue !== 'number' || typeof factValue !== 'number') return false;
+      return stateValue > factValue;
+    case 'gte':
+      if (typeof stateValue !== 'number' || typeof factValue !== 'number') return false;
+      return stateValue >= factValue;
+    case 'lt':
+      if (typeof stateValue !== 'number' || typeof factValue !== 'number') return false;
+      return stateValue < factValue;
+    case 'lte':
+      if (typeof stateValue !== 'number' || typeof factValue !== 'number') return false;
+      return stateValue <= factValue;
+    case 'contains':
+      if (typeof stateValue === 'string' && typeof factValue === 'string') {
+        return stateValue.includes(factValue);
+      }
+      if (Array.isArray(stateValue)) {
+        return stateValue.some((v) => v === factValue);
+      }
+      return false;
+    case 'not_contains':
+      if (typeof stateValue === 'string' && typeof factValue === 'string') {
+        return !stateValue.includes(factValue);
+      }
+      if (Array.isArray(stateValue)) {
+        return !stateValue.some((v) => v === factValue);
+      }
+      // Missing or incompatible state: definitely does not contain, so not_contains is true
+      return true;
+    default:
+      return stateValue === factValue;
   }
 }
 
@@ -68,35 +117,93 @@ export class ReplayEngine {
       // Branch filtering: skip events not on this path
       if (!includesPath(event.branchExistence, bp)) continue;
 
-      // Apply postconditions to entities
-      for (const fact of event.postconditions) {
-        // Also filter facts by branch
+      // ── Phase 1: Validate all deterministic preconditions BEFORE effects ──
+      for (const fact of event.preconditions) {
         if (!includesPath(fact.validity.branches, bp)) continue;
 
+        const op = (fact as unknown as Record<string, unknown>).operator as string | undefined;
+
+        // exists / not_exists: direct check, no value required
+        if (op === 'exists') {
+          if (state.entities[fact.entityId]?.[fact.attribute] === undefined) {
+            throw new PreconditionMismatchError(
+              `Precondition exists fails: ${fact.entityId}.${fact.attribute} is absent`,
+              { eventId: event.id, stateKey: `${fact.entityId}.${fact.attribute}`, phase: 'replay' },
+            );
+          }
+          continue;
+        }
+        if (op === 'not_exists') {
+          if (state.entities[fact.entityId]?.[fact.attribute] !== undefined) {
+            throw new PreconditionMismatchError(
+              `Precondition not_exists fails: ${fact.entityId}.${fact.attribute} is present`,
+              { eventId: event.id, stateKey: `${fact.entityId}.${fact.attribute}`, phase: 'replay' },
+            );
+          }
+          continue;
+        }
+
+        // Skip narrativeHint-only preconditions (deferred to Pass 2)
+        if (fact.value === undefined) continue;
+
+        // Operator-based check (defaults to 'eq')
+        const operator = op ?? 'eq';
+        const stateValue = state.entities[fact.entityId]?.[fact.attribute];
+        const matched = checkOperator(operator, stateValue, fact.value);
+        if (!matched) {
+          throw new PreconditionMismatchError(
+            `Precondition ${operator} fails for ${fact.entityId}.${fact.attribute}`,
+            { eventId: event.id, stateKey: `${fact.entityId}.${fact.attribute}`, phase: 'replay' },
+          );
+        }
+      }
+
+      // ── Phase 2: Apply postcondition effects ──
+      const writtenKeys = new Set<string>();
+      for (const fact of event.postconditions) {
+        if (!includesPath(fact.validity.branches, bp)) continue;
+
+        const op = (fact as unknown as Record<string, unknown>).operation as string | undefined;
+
+        // Form 3: narrativeHint-only — skip WorldState write
+        if (fact.value === undefined && fact.narrativeHint !== undefined && op !== 'unset') {
+          state.facts.push(fact);
+          continue;
+        }
+
+        // Track entity introduction: ensure entity exists
         if (!state.entities[fact.entityId]) {
           state.entities[fact.entityId] = {};
         }
-        // Only write deterministic values; narrativeHint facts are skipped
-        // (they are consumed by Pass 2 analysis, not written to WorldState)
-        if (fact.value !== undefined) {
+
+        // Detect duplicate write to same (entityId, attribute) within this node
+        const key = `${fact.entityId}::${fact.attribute}`;
+        if (writtenKeys.has(key)) {
+          throw new ConfigError(
+            `Duplicate write to ${fact.entityId}.${fact.attribute} within event ${event.id}`,
+            { path: fact.entityId, eventId: event.id, phase: 'replay' },
+          );
+        }
+        writtenKeys.add(key);
+
+        if (op === 'unset') {
+          // Form 2: unset — delete attribute
+          if (!state.entities[fact.entityId] || !(fact.attribute in state.entities[fact.entityId])) {
+            throw new ConfigError(
+              `Cannot unset absent attribute ${fact.entityId}.${fact.attribute}`,
+              { path: fact.entityId, eventId: event.id, phase: 'replay' },
+            );
+          }
+          delete state.entities[fact.entityId][fact.attribute];
           state.facts.push(fact);
-          state.entities[fact.entityId][fact.attribute] = fact.value;
+        } else if (fact.value !== undefined) {
+          // Form 1: set (default or explicit 'set') — write canonicalized value
+          state.entities[fact.entityId][fact.attribute] = canonicalizeFactValue(fact.value);
+          state.facts.push(fact);
         }
       }
 
-      for (const fact of event.preconditions) {
-        if (!includesPath(fact.validity.branches, bp) || fact.value === undefined) continue;
-        const stateValue = state.entities[fact.entityId]?.[fact.attribute];
-        if (compareFact(fact, stateValue) !== 'match') {
-          throw new PreconditionMismatchError('Deterministic precondition does not match replay state', {
-            eventId: event.id,
-            stateKey: `${fact.entityId}.${fact.attribute}`,
-            phase: 'replay',
-          });
-        }
-      }
-
-      // Update thread progress
+      // ── Phase 3: Thread progress ──
       for (const tp of event.threadProgress) {
         state.threads[tp.thread] = {
           progress: tp.progressAfter,
@@ -104,14 +211,13 @@ export class ReplayEngine {
         };
       }
 
-      // Update relationship state
+      // ── Phase 4: Relationship state ──
       for (const re of event.relationshipEffects) {
         const relKey = [re.participants[0], re.participants[1]].sort().join('_');
         if (!state.relationships[relKey]) {
           state.relationships[relKey] = { direction: {} };
         }
 
-        // Parse direction (e.g., "camille → npc_gear")
         const dirMatch = re.direction.match(/(\S+)\s*→\s*(\S+)/);
         if (dirMatch) {
           const from = dirMatch[1];
@@ -130,17 +236,17 @@ export class ReplayEngine {
         }
       }
 
-      // Update knowledge (from postconditions that look like "entity.knows = X")
+      // Knowledge state is owned by STATE-4 EpistemicLedger; replay does not write state.knowledge.
+      // (Keep empty init for existing readers that access state.knowledge[entityId]?.knownFacts)
       for (const fact of event.postconditions) {
         if (fact.attribute === 'knows' || fact.attribute === 'knowledge') {
           if (!state.knowledge[fact.entityId]) {
             state.knowledge[fact.entityId] = { knownFacts: [] };
           }
-          state.knowledge[fact.entityId].knownFacts.push(fact.id);
         }
       }
 
-      // Update rule evidence
+      // ── Phase 5: Rule evidence ──
       event.ruleEffects.forEach(re => applyRuleEffect(state, re));
     }
 

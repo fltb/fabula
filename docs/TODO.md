@@ -888,7 +888,9 @@ ReportWriter
 - snapshot 必须是 branch-compatible、ancestor-closed 的 temporal replay prefix，并绑定有序 node/effect hash、canonical state hash、definition/source、schema/replay version 与 branch path。StorySnapshot 明确不含 selection；selection 仅绑定 DiscourseSnapshot、assembly/run、coverage和render cache。render cache key 必须包含 target 定义、canonical `stateBefore`、完整 replay input（更早 temporal prefix 加同时间 causal ancestors）、node/effect/provenance hash、branch、context、selection、prompt/schema 和 provider 配置；不得使用 narrative-order hash chain 代替。
 - `docs/reference/state-semantics.md` 必须成为本规范的面向作者/集成者说明，列出支持范围、全部拒绝情形、YAML 因果依赖语法、state key/set/unset 语义、branch/merge 规则与错误示例。每项拒绝情形都必须有 schema/compiler fixture；每项支持规则都必须有 replay、snapshot、cache 和 boundary-oracle 测试。
 
-#### [ ] STATE-1: Entity Fact 的 presence-aware set/unset 规范
+#### [x] STATE-1: Entity Fact 的 presence-aware set/unset 规范
+
+**完成备注（2026-07-21）**：实现 canonical FactValue（`entity/fact-value.ts` — `canonicalizeFactValue`/`isCanonicalFactValue`/`canonicalDeepEqual`，JSON-compatible + freeze + deep equality）；Fact 类型新增 `operation?: 'set'|'unset'`（默认 `set`）；三态 postcondition schema（set+value / unset / narrativeHint-only，互斥）；presence-aware precondition schema（扩展 operator 至 `eq/neq/gt/gte/lt/lte/contains/not_contains/exists/not_exists`，`exists`/`not_exists` 禁 value，比较类要求 value，移除 Stage-1 "only eq" 限制）；replay.ts 前置条件验证移至 effects 之前（`PreconditionMismatchError`），set/unset 语义 + 硬错误（unset-on-absent / unknown entity / same-node duplicate write），移除 broken knowledge-push（defect #2 修复，保留空 init 供现有 reader）；story-boundaries.ts 拒绝 `operation: 'unset'` 的 initialFacts。5 个新测试文件 72 测试。验证：`npm run build` 退出 0；`npx vitest run --exclude '**/e2e.test.ts'` 855/856 通过（1 个预存 ai-sdk model-name 失败，与本次无关）。`compareFact` 已返回 `'deferred'`（compare.ts:22-23，无需修改）。
 
 - 确定性 `FactValue` 仅允许 canonical JSON：`null`、boolean、finite number、string、array 与 plain object；写入时 canonical copy/freeze，比较使用 canonical deep equality。`undefined`、`NaN`、infinity、Date、class instance、function、symbol 等拒绝。`null` 是存在的合法值，永不表示删除。
 - YAML `expectedPostconditions` 只有三种互斥形式：`value` 且 `operation` 省略/`set`（确定性设置）；`operation: unset` 且无 `value`/`narrativeHint`（确定性删除 attribute）；或只有 `narrativeHint`（语义要求）。现有含 `value` 的 YAML 兼容地视作 `operation: set`。同一 node 不得对同一 `(entityId, attribute)` 产生多个确定性 effects。
@@ -1301,7 +1303,9 @@ for (const ev of renderEvents) {
 
 **实现成本估算**：0.2 天（重构 CLI 入口调用）
 
-### [ ] CLI-5: `review list` 命令中 EntityMapper + EntityRegistry 创建但未使用
+### [x] CLI-5: `review list` 命令中 EntityMapper + EntityRegistry 创建但未使用
+
+**完成备注（2026-07-21）**：删除 `cli/src/index.ts` 中未使用的 `InMemoryEntityRegistry` import（原第 20 行）和 review 命令中未使用的 `registry` 创建（原第 381-382 行）。EntityMapper 保留（add action 用 events 查找）。验证：`npm run build` 退出 0；`npx vitest run packages/cli/tests/` 2 文件 2 测试通过。
 
 **现状**：`cli/src/index.ts:376-381` — `review` 命令中创建了 EntityMapper 并加载项目数据（用于 `add` action 的 event 查找），同时创建 InMemoryEntityRegistry 并 load，但 EntityRegistry **从未被使用**（在所有 5 个 action 中均无引用）。
 

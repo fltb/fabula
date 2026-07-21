@@ -10,13 +10,13 @@ group file is `[x]` with passing evidence.
 
 | Group | Status | Deps | Sub-plan | Items | Count |
 |-------|--------|------|----------|-------|-------|
-| state-model | [-] | — | [state-model.md](state-model.md) — sub-plan authored, impl deferred | STATE-1, STATE-2, STATE-3, STATE-4, STATE-5, STATE-6 | 6 |
+| state-model | [-] | — | [state-model.md](state-model.md) — STATE-1 [x], STATE-2..6 sub-plan authored, impl deferred | STATE-1, STATE-2, STATE-3, STATE-4, STATE-5, STATE-6 | 6 |
 | dag-replay | [ ] | state-model | [dag-replay.md](dag-replay.md) | DAG-0, DAG-1, DAG-2, DAG-3, DAG-4, DAG-5 | 6 |
 | graph-discourse-render | [ ] | state-model, dag-replay | [graph-discourse-render.md](graph-discourse-render.md) | GRAPH-1, DISCOURSE-1, RENDER-SURFACE-1 | 3 |
 | integration | [ ] | state-model, dag-replay | [integration.md](integration.md) | INTEGRATION-1, INTEGRATION-2 | 2 |
 | capability-contract | [ ] | state-model, dag-replay, graph-discourse-render, integration | [capability-contract.md](capability-contract.md) | CAPABILITY-1, YAML-CONTRACT | 2 |
 | api-core-validator | [x] | — | [api-core-validator.md](api-core-validator.md) — 7/7 items done | API-1, API-2, API-3, API-4, API-5, AGG-1, CORE-API-1 | 7 |
-| cli-storage | [ ] | api-core-validator | [cli-storage.md](cli-storage.md) | CLI-3, CLI-4, CLI-5, STORAGE-2 | 4 |
+| cli-storage | [-] | api-core-validator | [cli-storage.md](cli-storage.md) — CLI-5 [x], 3 items remain | CLI-3, CLI-4, CLI-5, STORAGE-2 | 4 |
 | documentation | [ ] | graph-discourse-render, capability-contract | [documentation.md](documentation.md) | DOC-1, DOC-2, DOC-3 | 3 |
 
 **Total: 33 TODOs across 8 group sub-plans.**

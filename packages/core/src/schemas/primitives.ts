@@ -30,23 +30,41 @@ export const preconditionSchema = z
     ),
     narrativeHint: z.string().optional(),
     confidence: z.number().optional(),
-    operator: z.enum(['eq', 'neq', 'gt', 'lt', 'contains']).optional(),
+    operator: z.enum(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'not_contains', 'exists', 'not_exists']).optional(),
   })
   .strict()
   .superRefine((data, context) => {
-    const representations = Number(data.value !== undefined) + Number(data.narrativeHint !== undefined);
-    if (representations !== 1) {
+    const hasValue = data.value !== undefined;
+    const hasNarrativeHint = data.narrativeHint !== undefined;
+
+    // Mutual exclusivity: value XOR narrativeHint for precondition facts
+    if (hasValue && hasNarrativeHint) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Fact must contain exactly one of value or narrativeHint',
       });
     }
-    if (data.value !== undefined && data.operator !== undefined && data.operator !== 'eq') {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['operator'],
-        message: 'Only the eq operator is supported in Stage 1',
-      });
+
+    // exists / not_exists: value must be absent
+    if (data.operator === 'exists' || data.operator === 'not_exists') {
+      if (hasValue) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['value'],
+          message: 'exists/not_exists operator must not have a value',
+        });
+      }
+    }
+
+    // Comparison operators (eq/neq/gt/gte/lt/lte/contains/not_contains): value required
+    if (data.operator !== undefined && data.operator !== 'exists' && data.operator !== 'not_exists') {
+      if (!hasValue) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['value'],
+          message: `Operator '${data.operator}' requires a value`,
+        });
+      }
     }
   });
 
@@ -70,13 +88,48 @@ export const postconditionSchema = z
     ),
     narrativeHint: z.string().optional(),
     confidence: z.number().optional(),
+    operation: z.enum(['set', 'unset']).optional(),
   })
   .strict()
   .superRefine((data, context) => {
-    if (Number(data.value !== undefined) + Number(data.narrativeHint !== undefined) !== 1) {
+    const hasValue = data.value !== undefined;
+    const hasNarrativeHint = data.narrativeHint !== undefined;
+    const op = data.operation;
+
+    // Three forms:
+    // 1. value + (omit 'set' or explicit 'set') → deterministic write
+    // 2. 'unset' operation, no value, no narrativeHint → delete attribute
+    // 3. narrativeHint only, no operation → semantic description only
+
+    // Form 2: unset
+    if (op === 'unset') {
+      if (hasValue) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['value'],
+          message: 'Unset operation must not have a value',
+        });
+      }
+      if (hasNarrativeHint) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['narrativeHint'],
+          message: 'Unset operation must not have a narrativeHint',
+        });
+      }
+      return;
+    }
+
+    // Mutual exclusivity: value XOR narrativeHint
+    if (hasValue && hasNarrativeHint) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         message: 'Fact must contain exactly one of value or narrativeHint',
+      });
+    } else if (!hasValue && !hasNarrativeHint) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Fact must contain one of value, narrativeHint, or unset operation',
       });
     }
   });

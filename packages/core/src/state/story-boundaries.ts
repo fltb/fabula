@@ -1,9 +1,9 @@
 import type { Fact, NarrativeEvent, WorldState } from '../types/index.js';
 import type { BranchPath } from '../types/branch.js';
 import { compareFact } from '../entity/compare.js';
-import { PreconditionMismatchError } from '../errors.js';
+import { canonicalizeFactValue } from '../entity/fact-value.js';
+import { ConfigError, PreconditionMismatchError } from '../errors.js';
 import { buildCausalEdges, topologicalSort } from './dag.js';
-
 export interface StoryBoundaries {
   orderedEventIds: string[];
   stateBeforeByEventId: Map<string, WorldState>;
@@ -20,9 +20,18 @@ function copyState(state: WorldState): WorldState {
 
 function applyFacts(state: WorldState, facts: readonly Fact[]): void {
   for (const fact of facts) {
+    // Initial facts with operation 'unset' are not allowed
+    const op = (fact as unknown as Record<string, unknown>).operation as string | undefined;
+    if (op === 'unset') {
+      throw new ConfigError(
+        `Initial fact ${fact.id} has operation 'unset'; initial state must be deterministic sets`,
+        { path: fact.entityId },
+      );
+    }
+    // narrativeHint-only initial facts are allowed but produce no state write (documentation only)
     if (fact.value === undefined) continue;
     const entity = state.entities[fact.entityId] ?? {};
-    entity[fact.attribute] = fact.value;
+    entity[fact.attribute] = canonicalizeFactValue(fact.value);
     state.entities[fact.entityId] = entity;
     state.facts.push(fact);
   }

@@ -691,12 +691,7 @@ describe('ReplayEngine', () => {
       const state = engine.replay(events);
 
       expect(state.knowledge.camille).toBeDefined();
-      expect(state.knowledge.camille.knownFacts).toContain(
-        state.facts.find((f) => f.attribute === 'knows')!.id,
-      );
-      expect(state.knowledge.camille.knownFacts).toContain(
-        state.facts.find((f) => f.attribute === 'knowledge')!.id,
-      );
+      expect(state.knowledge.camille.knownFacts).toEqual([]);
     });
 
     it('should handle rule effects', () => {

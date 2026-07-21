@@ -1,12 +1,12 @@
 # state-model: Entity state model — Fact, Relationship, Entity lifecycle, Knowledge, Thread, Rule
 
-## Group Status: [-] in progress — sub-plan authored (decision-complete for all 6 items), implementation deferred (multi-session architecture work). STATE-1 is the root prerequisite and first implementation target.
+## Group Status: [-] in progress — STATE-1 [x] implemented; STATE-2..6 sub-plan authored (decision-complete), implementation deferred (multi-session, STATE-3 is next root prerequisite ~40 files).
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| STATE-1 | [ ] | — | `docs/TODO.md` lines 889-898 |
+| STATE-1 | [x] | — | `docs/TODO.md` lines 889-898 — implemented: canonical FactValue, three-form postconditions, presence-aware preconditions, replay set/unset + hard errors, defect #2 fixed, 5 test files/72 tests, build+test green |
 | STATE-3 | [ ] | STATE-1 | `docs/TODO.md` lines 914-924 |
 | STATE-2 | [ ] | STATE-3 | `docs/TODO.md` lines 900-912 |
 | STATE-4 | [ ] | STATE-3 | `docs/TODO.md` lines 934-948 |

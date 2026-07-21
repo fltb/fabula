@@ -20,10 +20,10 @@ describe('Stage 1 contracts', () => {
     expect(capabilityManifestSchema.safeParse({ ...manifest, unexpected: true }).success).toBe(false);
   });
 
-  it('requires exactly one fact representation and only eq comparisons', () => {
+  it('requires exactly one fact representation (value XOR narrativeHint) and rejects missing value for operator', () => {
     const base = { entity: 'wife', attribute: 'status' };
     expect(preconditionSchema.safeParse({ ...base, value: 'alive', narrativeHint: 'alive' }).success).toBe(false);
-    expect(preconditionSchema.safeParse({ ...base, value: 'alive', operator: 'neq' }).success).toBe(false);
+    expect(preconditionSchema.safeParse({ ...base, value: 'alive', operator: 'neq' }).success).toBe(true);
     expect(preconditionSchema.safeParse({ ...base, operator: 'eq' }).success).toBe(false);
     expect(postconditionSchema.safeParse({ ...base }).success).toBe(false);
     expect(postconditionSchema.safeParse({ ...base, value: 'changed' }).success).toBe(false);

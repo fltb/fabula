@@ -66,9 +66,25 @@ export interface Fact {
   id: FactId;
   entityId: EntityId;
   attribute: string;
+  /**
+   * Deterministic value to write to WorldState.
+   * When present and operation is omitted (or 'set'), the value is canonicalized and written.
+   * Operation 'unset' deletes the attribute from state; value MUST be absent.
+   */
   value?: unknown;
+  /**
+   * Semantic description for Pass 2 analysis (no WorldState write).
+   * Mutually exclusive with value.
+   */
   narrativeHint?: string;
   confidence?: number;
+  /**
+   * Set or unset the attribute. Default 'set' when value is present.
+   * - 'set': write canonicalized value to WorldState (value required)
+   * - 'unset': delete the attribute from WorldState (value and narrativeHint forbidden)
+   * Omitted/undefined defaults to 'set' when value is present.
+   */
+  operation?: 'set' | 'unset';
   validity: FactValidity;
 }
 

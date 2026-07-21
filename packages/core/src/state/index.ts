@@ -8,6 +8,8 @@ export { SnapshotEngine } from './snapshot.ts';
 export { ReplayEngine } from './replay.ts';
 export { StateManager } from './manager.ts';
 export { buildCausalEdges, topologicalSort } from './dag.ts';
+export { compileGraph, compileStoryGraph, compileDiscourseGraph } from './graph-compiler.ts';
+export type { CompileNode, RawEffect, RawRequirement, ExplicitEdgeDecl } from './graph-compiler.ts';
 export { compileStoryBoundaries } from './story-boundaries.ts';
 export type { StoryBoundaries } from './story-boundaries.ts';
 export { exportDAGtoDOT, exportDAGtoMermaid } from './dag-export.ts';

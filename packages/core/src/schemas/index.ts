@@ -144,3 +144,60 @@ export {
   threadMergeStrategySchema,
   threadMergeResultSchema,
 } from './thread.js';
+
+// ——— GRAPH-1: Typed Causal Graph Schemas ———
+export {
+  storyCoordinateSchema,
+  discourseCoordinateSchema,
+  effectiveCoordinateSchema,
+  edgeClassSchema,
+  outputValueSchema,
+  outputDescriptorSchema,
+  readPhaseSchema,
+  readOriginSchema,
+  presencePredicateSchema,
+  readRequirementSchema,
+  graphEdgeSchema,
+  graphProviderOutputSchema,
+  graphAbsenceWitnessSchema,
+  graphReadResolutionSchema,
+  graphBoundaryReferenceSchema,
+  graphNarrativeEllipsisSchema,
+  storyGraphSchema,
+  discourseGraphSchema,
+  graphCacheEntrySchema,
+  graphSchema,
+} from './graph.js';
+// ——— INTEGRATION-1: Cross-domain resolution, Merge & dual coverage ———
+export {
+  absenceBasisSchema,
+  absenceWitnessSchema,
+  providerOutputSchema,
+  readResolutionSchema,
+  readResolutionUnionSchema,
+  boundaryReferenceSchema,
+  mergePlanSchema,
+  mergePlanProvenanceSchema,
+  mergePolicySchema,
+  narrativeEllipsisSchema,
+  narrativeNodeSchema,
+  scenePresentationSchema,
+  discourseBridgeSchema,
+  discourseNodeSchema,
+  coverageManifestSchema,
+  storySnapshotSchema,
+  storySnapshotTombstonesSchema,
+  storySnapshotCatalogHashesSchema,
+  discourseSnapshotSchema,
+  sparseRunDeclarationSchema,
+  excerptDisclosureCheckpointSchema,
+  fullWorkContextSchema,
+} from './integration.js';
+
+// ——— INTEGRATION-2: ReferenceEligibility & lifecycle closure ———
+export {
+  referenceModeSchema,
+  referenceKindSchema,
+  referenceEntrySchema,
+  referenceIndexSchema,
+} from './reference.js';

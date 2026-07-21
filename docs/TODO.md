@@ -120,6 +120,7 @@
 ## 阅读文档时的疑问收集
 
 ### [x] AGG-1: Zod schema 应内聚到 `getAnalysisRequirements()` 而非独立维护
+**完成备注（2026-07-22）**：每个 validator 的 zod schema 片段 + getCombinedValidationSchema()。
 > **完成**: 实现已存在 — `AnalysisBlockRequirement.schema` at `types/validator.ts:35`, `getCombinedValidationSchema()` at `aggregator.ts:329`, `render.ts:317` uses dynamic schema。保留 `schemas/analysis.ts` 作为集成胶水层（`analysisContentSchema` → `analysisResultSchema` 被 `contracts.ts`, `index.ts` 消费）。
 
 
@@ -279,6 +280,7 @@ SurfaceReferenceExtractor
 **优先级**：nice-to-have，非 blocking；它改善局部 prose 承接，但不得作为事实正确性或状态连续性的来源。
 
 ### [x] DAG-0: 循环检测时禁止静默回退为 narrativeOrder 排序
+**完成备注（2026-07-22）**：已由 CLI-2 实现。`topologicalSort()` (dag.ts:125) 抛 `DagCycleError`，`replay()` 无 catch/fallback。`dag.test.ts:29-36` 覆盖 cycle 拒绝。zhu-fu fixture 无环。narrativeOrder 仅用于 Assembler/discourse，DAG/provider/replay 完全忽略。
 
 **背景**：`replay.ts:57-66` 中，`buildCausalEdges` + `topologicalSort` 抛出 `"DAG cycle detected involving: ..."` 时，代码静默 catch 后按 `narrativeOrder` 排序继续执行。用户在 CLI 只看到一行 `console.warn`，DAG 循环被隐藏。
 
@@ -794,6 +796,7 @@ ReportWriter
 > 来源：2026-07-19 代码审查 `packages/core/src/state/dag.ts` + `replay.ts`
 
 ### [x] DAG-1: 删除 `getStateAtOptimized` 前验证其不与统一 replay 分叉
+**完成备注（2026-07-22）**：divergence test (dag-divergence.test.ts) 证明 getStateAtOptimized 与 replay() 在 causal order ≠ narrativeOrder 时分叉。3 测试。
 
 **现状**：`replay.ts:193-197` — `getStateAtOptimized()` 在快照后增量回放时用 `narrativeOrder` 排序，而非 `replay()` 主方法使用的 DAG 拓扑排序。
 
@@ -806,6 +809,7 @@ ReportWriter
 **实现成本估算**：包含在 DAG-5
 
 ### [x] DAG-2: 以因果依赖和 storyTime 替代 narrativeOrder provider 代理
+**完成备注（2026-07-22）**：narrativeOrder tiebreaker 从 compareByStory 移除 (dag.ts:99)。replay() 现在从 storyTimes 提取 anchors 传给 topologicalSort。dag-tiebreaker.test.ts (2 测试)。
 
 **现状**：`dag.ts:60` — `best = providers.reduce((a, b) => (a.order > b.order ? a : b))`。用 `narrativeOrder` 判断"最新"provider。隐含假设：narrativeOrder 与因果序一致。
 
@@ -820,6 +824,7 @@ ReportWriter
 **实现成本估算**：待 DAG-5 与 CORPUS 联合细化
 
 ### [x] DAG-3: 分支事件在拓扑排序后过滤可能导致缺失前置状态
+**完成备注（2026-07-22）**：已由 CLI-2 实现。buildCausalEdges 在 dag.ts:31-33 先按 branch 过滤再建边。replay() 在 :115 先过滤。无 post-topology 过滤丢失 provider。
 
 **现状**：`replay.ts:52-66` — 对**所有事件**（不论 branch）做 DAG 拓扑排序。`replay.ts:79` — 回放时用 `includesPath(event.branchExistence, bp)` 过滤。
 
@@ -834,6 +839,7 @@ ReportWriter
 **实现成本估算**：0.5-1 天（取决于评估结果）
 
 ### [x] DAG-4: `system:genesis` 改为独立初始 WorldState 根
+**完成备注（2026-07-22）**：buildInitialState() helper 提取到 api.ts，3 处重复（renderNovel, validateNovel, getProjectStatus）统一调用。genesis-root.test.ts (4 测试)。
 
 **现状**：Genesis 目前作为 synthetic `NarrativeEvent` 进入 DAG。这把故事开始前的初始状态误建模为 event(scene)，并与 `NarrativeNode = NarrativeEvent | NarrativeEllipsis` 及 replay 根语义冲突。
 
@@ -844,6 +850,7 @@ ReportWriter
 **实现成本估算**：待 initial-state schema、mapper 与 replay 调用点联合细化
 
 ### [x] DAG-5: Snapshot 不再用 narrativeOrder 做 key，统一 replay 方法
+**完成备注（2026-07-22）**：5a: snapshot.ts 从 narrativeOrder 改为 eventCount keying；Snapshot 类型字段重命名。5b: 删除 getStateAtOptimized，统一 getStateAt 为 DAG-position-based。5c: 测试更新。build+test green (1088/1088)。
 
 **现状**：snapshot 系统在三个地方把 narrativeOrder 当 data order 用：
 
@@ -1094,6 +1101,7 @@ DiscourseNode
 - 至少测试：event/ellipsis schema 互斥；DiscourseBridge/coverage checkpoint；raw ellipsis summary 不能进入 logical prompt或泄漏；原子 provenance、缺失依赖、cycle、时间/顺序歧义硬失败；Story/Discourse snapshot-full replay等价且 hashes兼容；target/future effects不泄漏；双 boundary oracle一致；全作品双 coverage完整；selection可复现；87/103不混池；未请求本地 external在公开 CI正确记为`not-run`；独立 scene输出不被 assembler 拼接。
 
 ### [x] API-1: `initializeProject` O(n²) commit + 多次独立调用
+**完成备注（2026-07-22）**：模块级 projectCache (api.ts:60) + computeProjectHash 内容哈希键。
 > **完成**: `api.ts` 新增模块级 `projectCache` (line 60)，`computeProjectHash()` 对 definitions/config/events 文件内容做 SHA-256。`initializeProject()` 在 rebuild 前校验缓存 hash（line 173-176）。
 
 
@@ -1121,6 +1129,7 @@ state = stateManager.getCurrentState(); // 又一遍完整 replay
 **实现成本估算**：0.5 天（改动集中在 initializeProject 内部）
 
 ### [x] API-2: `renderNovel` 两次 getStateAt 遍历
+**完成备注（2026-07-22）**：renderNovel 使用 boundaries.stateBeforeByEventId。
 > **完成**: 实现已存在 — `renderNovel` dryRun at `api.ts:277` 和 full render at `api.ts:340` 均使用 `boundaries.stateBeforeByEventId.get(ev.id)`，非 `getStateAt`。
 
 
@@ -1150,6 +1159,7 @@ for (const ev of renderEvents) {
 **实现成本估算**：0.3 天（提取共享 compile 步骤）
 
 ### [x] API-3: `getProjectStatus` 重新跑全量 validator
+**完成备注（2026-07-22）**：getProjectStatus 添加可选 validationResults 参数 (api.ts:553-556)。
 > **完成**: `getProjectStatus()` at `api.ts:553-556` 新增可选 `validationResults?: Map<string, ValidationResult>` 参数，提供时跳过内部 `validateAll`（lines 596-601）。CLI 调用者无需改动。
 
 
@@ -1167,6 +1177,7 @@ for (const ev of renderEvents) {
 **实现成本估算**：0.2 天（参数化或内部复用）
 
 ### [x] API-4: StateManager 做完 commit 即被丢弃
+**完成备注（2026-07-22）**：initializeProject 返回空状态，无 commit 循环。
 > **完成**: 实现已存在 — `initializeProject()` 返回空 state（`api.ts:175-182`），commit 循环已移除，渲染依赖 boundaries 而非 state loop。
 
 
@@ -1183,6 +1194,7 @@ for (const ev of renderEvents) {
 **实现成本估算**：包含在 DAG-5 中
 
 ### [x] API-5: 无 `initializeProject` 结果缓存
+**完成备注（2026-07-22）**：projectCache 内容哈希键避免 O(n²) 重复初始化。
 > **完成**: 通过 API-1 的模块级 `projectCache` 实现（`api.ts:60`）。哈希键基于文件内容（非 mtime），命中时跳过重建。
 
 
@@ -1257,6 +1269,7 @@ for (const ev of renderEvents) {
 
 
 ### [x] STORAGE-2: 全模块 I/O 审计 — 确认是否全部走 Storage 抽象
+**完成备注（2026-07-22）**：审计 7 个模块。api.ts 修复：computeProjectHash/getProjectStatus/renderNovel dry-run 改用 Storage 接口。mapper/novel/output/reporters 确认 Storage-backed。validation-reporter.ts violation 延后。
 
 **现状**：核心模块（render-cache、snapshot、event-store）已使用 `Storage` 接口。但未审计全部 I/O 调用点：
 
@@ -1294,6 +1307,7 @@ for (const ev of renderEvents) {
 
 
 ### [x] CLI-3: `diff` 命令 API 存在但 CLI 入口路径未验证
+**完成备注（2026-07-22）**：diffEvent 从 stateManager.getStateAt 迁移到 compileStoryBoundaries（修复 zhu-fu timeAnchors 崩溃）。nova diff E1 输出 5 个可读属性变更。
 
 **现状**：`diffEvent()` API 已存在（`api.ts:460`），实测 E1 返回 9 个已变更属性。但 CLI 入口实现使用硬编码 `JSON.stringify` 输出 before/after 值，可能对嵌套对象输出不佳。CLI 捆绑 bug 阻塞实际测试。
 
@@ -1304,6 +1318,7 @@ for (const ev of renderEvents) {
 **实现成本估算**：0 分钟（捆绑修复后自然验证）
 
 ### [x] CLI-4: `commit` 命令独立重建 StateManager，与 `renderNovel`/`validateNovel` 的初始化重复
+**完成备注（2026-07-22）**：commit 命令重构为使用 initializeProject()。initializeProject 从 core index 导出。
 
 **现状**：`commit` 命令（cli/src/index.ts:541）创建自己的 EntityMapper + StateManager，做完整的 commit 循环。`initializeProject()` 在 `api.ts` 中做同样的事。两套代码做同样的事，且 CLI 版本可能不同步。
 
@@ -1332,6 +1347,7 @@ for (const ev of renderEvents) {
 > **前置依赖**：此任务必须在所有其他功能 TODO 完成后执行。当前 core 的 `index.ts` 过度暴露了内部模块——validator 类、StateManager、ContextCompiler、RenderPipeline 等不需要对消费者公开的实现细节。改动的正确时机是：所有内部逻辑都稳定后，最后一次修剪公共 API 面。
 
 ### [x] CORE-API-1: 重定义 core 公共 API 边界（thin core 原则）
+**完成备注（2026-07-22）**：index.ts 从 ~190 行精简至 ~154 行，移除 36 个导出。
 > **完成**: `index.ts` 从 ~90 exports 精简。移除: `compareTimestamp`, `parseStoryTimestamp`, `resolveTimestampToDay`, `readYamlFilesInDir`, 全部 observability values, 全部 branch utils, `EventStore`, `SnapshotEngine`, `topologicalSort`, `PromptAssembler`, `SceneCollector`, `NarrativeSorter`, `ProseConcatenator`, `NARRATIVE_TEXT_COUNT_VERSION`, `detectAntiPatterns`, `validateStrict`, `PluginLoader`, `ValidatorRegistry`, 4 个 AI prompt builders, `RenderPipeline`, `buildAndWriteOutputs`, `BatchRenderPipeline`。保留所有 types 和所有 consumer-required exports。详情见 `docs/todos/api-core-validator.md`。
 
 

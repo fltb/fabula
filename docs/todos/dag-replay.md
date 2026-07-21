@@ -7,10 +7,9 @@
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
 | DAG-0 | [x] | — | `docs/TODO.md` lines 281-296 — `topologicalSort()` throws `DagCycleError` (dag.ts:125), no catch/fallback in `replay()`, test `dag.test.ts:29-36` covers cycle rejection, zhu-fu fixture confirmed cycle-free by CLI-2 |
-| DAG-1 | [ ] | — (test-only) | `docs/TODO.md` lines 796-806 — `getStateAtOptimized()` filters events by `narrativeOrder` (replay.ts:397), diverges from `replay()` DAG-sorted path. Needs divergence test fixture, then deletion in DAG-5 |
-| DAG-2 | [ ] | — | `docs/TODO.md` lines 808-820 — provider selection already storyTime-based (dag.ts:58-68). Remaining: remove `narrativeOrder` tiebreaker from `compareByStory` (dag.ts:99); broader semantic provider resolution deferred to GRAPH-1 (Wave 3) |
-| DAG-3 | [x] | — | `docs/TODO.md` lines 822-832 — `buildCausalEdges` filters by branch BEFORE edge construction (dag.ts:31-33); `replay()` filters at :115. Already branch-safe |
-| DAG-4 | [ ] | — | `docs/TODO.md` lines 836-844 — `system:genesis` already filtered from events (api.ts:507,587), initialFacts applied separately (story-boundaries.ts:64). Remaining: dedupe the genesis+initialFacts construction into a shared helper |
+| DAG-1 | [x] | — (test-only) | `docs/TODO.md` lines 796-806 — divergence test proving getStateAtOptimized diverges from replay(); 3 tests in dag-divergence.test.ts |
+| DAG-2 | [x] | — | `docs/TODO.md` lines 808-820 — narrativeOrder tiebreaker removed from compareByStory; replay() now extracts anchors from storyTimes; dag-tiebreaker.test.ts (2 tests) |
+| DAG-4 | [x] | — | `docs/TODO.md` lines 836-844 — buildInitialState() helper deduped across 3 call sites; genesis-root.test.ts (4 tests) |
 | DAG-5 | [ ] | DAG-1, DAG-2, DAG-4 | `docs/TODO.md` lines 846-870 — snapshot.ts uses narrativeOrder everywhere (filename :37, findNearest :44, shouldSnapshot :24). `getStateAtOptimized` diverges. Split into 5a/5b/5c |
 
 ## Group-level dependencies

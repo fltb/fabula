@@ -793,7 +793,7 @@ ReportWriter
 
 > 来源：2026-07-19 代码审查 `packages/core/src/state/dag.ts` + `replay.ts`
 
-### [ ] DAG-1: 删除 `getStateAtOptimized` 前验证其不与统一 replay 分叉
+### [x] DAG-1: 删除 `getStateAtOptimized` 前验证其不与统一 replay 分叉
 
 **现状**：`replay.ts:193-197` — `getStateAtOptimized()` 在快照后增量回放时用 `narrativeOrder` 排序，而非 `replay()` 主方法使用的 DAG 拓扑排序。
 
@@ -805,7 +805,7 @@ ReportWriter
 
 **实现成本估算**：包含在 DAG-5
 
-### [ ] DAG-2: 以因果依赖和 storyTime 替代 narrativeOrder provider 代理
+### [x] DAG-2: 以因果依赖和 storyTime 替代 narrativeOrder provider 代理
 
 **现状**：`dag.ts:60` — `best = providers.reduce((a, b) => (a.order > b.order ? a : b))`。用 `narrativeOrder` 判断"最新"provider。隐含假设：narrativeOrder 与因果序一致。
 
@@ -833,7 +833,7 @@ ReportWriter
 
 **实现成本估算**：0.5-1 天（取决于评估结果）
 
-### [ ] DAG-4: `system:genesis` 改为独立初始 WorldState 根
+### [x] DAG-4: `system:genesis` 改为独立初始 WorldState 根
 
 **现状**：Genesis 目前作为 synthetic `NarrativeEvent` 进入 DAG。这把故事开始前的初始状态误建模为 event(scene)，并与 `NarrativeNode = NarrativeEvent | NarrativeEllipsis` 及 replay 根语义冲突。
 
@@ -1293,7 +1293,7 @@ for (const ev of renderEvents) {
 **完成备注（2026-07-20）**：`topologicalSort()` 现对 cycle 抛 `DagCycleError`，render 走 `compileStoryBoundaries()`，不再降级为 narrativeOrder fallback；zhu-fu 因果数据已调整为无环。验证：`packages/core/tests/state/dag.test.ts` 覆盖 cycle 拒绝，`packages/cli/tests/render-full-chain.test.ts` 覆盖 E0–E6 全链路，二者均随 `npx vitest run packages/core/tests/render-cache.test.ts packages/core/tests/state/dag.test.ts packages/cli/tests/bundle-boundary.test.ts packages/cli/tests/render-full-chain.test.ts` 通过（4 files / 12 tests）。`docs/reference/state-management.md` 已说明无 fallback 的 DAG 行为。
 
 
-### [ ] CLI-3: `diff` 命令 API 存在但 CLI 入口路径未验证
+### [x] CLI-3: `diff` 命令 API 存在但 CLI 入口路径未验证
 
 **现状**：`diffEvent()` API 已存在（`api.ts:460`），实测 E1 返回 9 个已变更属性。但 CLI 入口实现使用硬编码 `JSON.stringify` 输出 before/after 值，可能对嵌套对象输出不佳。CLI 捆绑 bug 阻塞实际测试。
 
@@ -1303,7 +1303,7 @@ for (const ev of renderEvents) {
 
 **实现成本估算**：0 分钟（捆绑修复后自然验证）
 
-### [ ] CLI-4: `commit` 命令独立重建 StateManager，与 `renderNovel`/`validateNovel` 的初始化重复
+### [x] CLI-4: `commit` 命令独立重建 StateManager，与 `renderNovel`/`validateNovel` 的初始化重复
 
 **现状**：`commit` 命令（cli/src/index.ts:541）创建自己的 EntityMapper + StateManager，做完整的 commit 循环。`initializeProject()` 在 `api.ts` 中做同样的事。两套代码做同样的事，且 CLI 版本可能不同步。
 

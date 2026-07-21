@@ -654,19 +654,32 @@ export function getProjectStatus(
 /**
  * Show the world state before and after a specific event.
  *
- * EntityMapper → StateManager → getStateAt(narrativeOrder-1) vs getStateAt(narrativeOrder).
+ * Uses compileStoryBoundaries for DAG-ordered state with time anchors.
  */
 export function diffEvent(
   projectDir: string,
   eventId: string,
 ): DiffResult | null {
-  const { events, stateManager } = initializeProject(projectDir);
+  const { events, registry, data } = initializeProject(projectDir);
 
   const targetEvent = events.find((e) => e.id === eventId);
   if (!targetEvent) return null;
 
-  const beforeState = stateManager.getStateAt(targetEvent.narrativeOrder - 1);
-  const afterState = stateManager.getStateAt(targetEvent.narrativeOrder);
+  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
+  const anchors = new Map((data.timeAnchors ?? []).map((a) => [a.id, a.day]));
+  const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
+
+  const orderedIds = boundaries.orderedEventIds;
+  const targetIndex = orderedIds.indexOf(eventId);
+  if (targetIndex === -1) return null;
+
+  // Before state: state before the target event in causal order
+  const beforeState = boundaries.stateBeforeByEventId.get(eventId) ?? { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] };
+
+  // After state: replay including the target event
+  const afterState = targetIndex === orderedIds.length - 1
+    ? boundaries.finalState
+    : boundaries.stateBeforeByEventId.get(orderedIds[targetIndex + 1]) ?? boundaries.finalState;
 
   // Build human-readable diffs
   const before: Record<string, unknown> = {};

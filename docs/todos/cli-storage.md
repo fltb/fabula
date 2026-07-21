@@ -8,8 +8,8 @@
 |---------|--------|---------------|--------|
 | CLI-5 | [x] | — | `docs/TODO.md` lines 1316-1322 — removed unused InMemoryEntityRegistry import + registry creation in review command; build + cli tests green |
 | STORAGE-2 | [ ] | — | `docs/TODO.md` lines 1259-1274 — audit all I/O call points for direct `fs` usage bypassing `Storage` abstraction |
-| CLI-4 | [ ] | API-1 [x] ✅ | `docs/TODO.md` lines 1306-1314 — `commit` command duplicates `initializeProject()` logic; refactor to call shared init |
-| CLI-3 | [ ] | API-2 [x] ✅ | `docs/TODO.md` lines 1296-1304 — `diff` command output format verification; test `nova diff E1` readability |
+| CLI-4 | [x] | API-1 [x] ✅ | `docs/TODO.md` lines 1306-1314 — commit command refactored to use initializeProject; exported from core index; build green |
+| CLI-3 | [x] | API-2 [x] ✅ | `docs/TODO.md` lines 1296-1304 — diffEvent migrated to compileStoryBoundaries (fixes timeAnchors crash); `nova diff E1` on zhu-fu outputs 5 readable attribute changes; build+test green |
 
 ## Group-level dependencies
 - **api-core-validator**: API-1 [x] ✅ (project cache), API-2 [x] ✅ (story boundaries) — both done, CLI-3/4 unblocked.

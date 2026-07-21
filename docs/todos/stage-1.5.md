@@ -10,7 +10,7 @@ group file is `[x]` with passing evidence.
 
 | Group | Status | Deps | Sub-plan | Items | Count |
 |-------|--------|------|----------|-------|-------|
-| state-model | [-] | — | [state-model.md](state-model.md) — STATE-1 [x], STATE-2..6 sub-plan authored, impl deferred | STATE-1, STATE-2, STATE-3, STATE-4, STATE-5, STATE-6 | 6 |
+| state-model | [x] | — | [state-model.md](state-model.md) — 6/6 items done | STATE-1, STATE-2, STATE-3, STATE-4, STATE-5, STATE-6 | 6 |
 | dag-replay | [ ] | state-model | [dag-replay.md](dag-replay.md) | DAG-0, DAG-1, DAG-2, DAG-3, DAG-4, DAG-5 | 6 |
 | graph-discourse-render | [ ] | state-model, dag-replay | [graph-discourse-render.md](graph-discourse-render.md) | GRAPH-1, DISCOURSE-1, RENDER-SURFACE-1 | 3 |
 | integration | [ ] | state-model, dag-replay | [integration.md](integration.md) | INTEGRATION-1, INTEGRATION-2 | 2 |

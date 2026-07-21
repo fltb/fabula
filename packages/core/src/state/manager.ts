@@ -32,13 +32,11 @@ export class StateManager {
     return this.replayEngine.replay(this.eventStore.getAll(), branchPath);
   }
 
-  /** Get state at a specific narrative order (optimized with snapshots) */
-  getStateAt(narrativeOrder: number, branchPath?: BranchPath): WorldState {
-    const snapshot = this.snapshotEngine.findNearest(narrativeOrder);
-    return this.replayEngine.getStateAtOptimized(
+  /** Get state at a specific DAG position (by replaying that many events in causal order) */
+  getStateAt(position: number, branchPath?: BranchPath): WorldState {
+    return this.replayEngine.getStateAt(
       this.eventStore.getAll(),
-      narrativeOrder,
-      snapshot,
+      position,
       branchPath,
     );
   }

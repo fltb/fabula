@@ -82,47 +82,25 @@ describe('DAG divergence: snapshot-based optimization vs full replay', () => {
     expect(state.entities['hero']?.['location']).toBe('end');
   });
 
-  it('snapshot at narrativeOrder=1 captures only B effects (status=first)', () => {
+
+  it('getStateAt with position produces consistent state', () => {
+    // After DAG-5b: getStateAtOptimized is deleted, getStateAt uses
+    // DAG-position-based filtering. This test verifies the unified path.
     const engine = new ReplayEngine();
     const B = event('B', 9, 1, [], [fact('hero', 'status', 'first')]);
     const A = event('A', 1, 2, [], [fact('hero', 'status', 'second')]);
     const C = event('C', 5, 3, [], [fact('hero', 'location', 'end')]);
 
-    // Replay only B to get snapshot state
-    const snapState = engine.replay([B]);
-    expect(snapState.entities['hero']?.['status']).toBe('first');
+    // Causal order: A(1) → C(5) → B(9)
+    // Position 0 = empty, 1 = after A, 2 = after A+C, 3 = after A+C+B
+    const state0 = engine.getStateAt([B, A, C], 0);
+    expect(state0.entities).toEqual({});
 
-    const snapshot: Snapshot = {
-      eventCount: 1,
-      eventId: 'B',
-      timestamp: '',
-      state: snapState,
-    };
-    // getStateAtOptimized replays events with narrativeOrder > 1 && <= 3 = [A, C]
-    // Sorted by storyTime day: A(1) then C(5).
-    // A writes "second" — overwriting snapshot's "first"
-    const optimized = engine.getStateAtOptimized([B, A, C], 3, snapshot);
-    expect(optimized.entities['hero']?.['status']).toBe('second');
-  });
+    const state3 = engine.getStateAt([B, A, C], 3);
+    expect(state3.entities['hero']?.['status']).toBe('first');
+    expect(state3.entities['hero']?.['location']).toBe('end');
 
-  it('getStateAtOptimized diverges from replay() when causal != narrative order', () => {
-    const engine = new ReplayEngine();
-    const B = event('B', 9, 1, [], [fact('hero', 'status', 'first')]);
-    const A = event('A', 1, 2, [], [fact('hero', 'status', 'second')]);
-    const C = event('C', 5, 3, [], [fact('hero', 'location', 'end')]);
-
+    // getStateAt matches replay() for full position
     const fullReplay = engine.replay([B, A, C]);
-    const snapState = engine.replay([B]);
-    const snapshot: Snapshot = { eventCount: 1, eventId: 'B', timestamp: '', state: snapState };
-    const optimized = engine.getStateAtOptimized([B, A, C], 3, snapshot);
-
-    // Divergence: replay says "first" (B is causally latest at day_9),
-    // optimized says "second" (A at day_1 overwrites snapshot's "first"
-    // because A is post-snapshot and sorted before B)
-    expect(fullReplay.entities['hero']?.['status']).toBe('first');
-    expect(optimized.entities['hero']?.['status']).toBe('second');
-    expect(fullReplay.entities['hero']?.['status']).not.toBe(
-      optimized.entities['hero']?.['status'],
-    );
-  });
+    expect(state3.entities['hero']?.['status']).toBe(fullReplay.entities['hero']?.['status']);
 });

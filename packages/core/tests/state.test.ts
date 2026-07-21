@@ -857,9 +857,9 @@ describe('ReplayEngine', () => {
   describe('getStateAt()', () => {
     it('should return state at a specific narrative order', () => {
       const events: NarrativeEvent[] = [
-        makeEvent(1, { postconditions: [makeFact('camille', 'age', 25)] }),
-        makeEvent(2, { postconditions: [makeFact('camille', 'age', 26)] }),
-        makeEvent(3, { postconditions: [makeFact('camille', 'age', 27)] }),
+        makeEvent(1, { storyTime: { type: 'chapter', chapter: 1 }, postconditions: [makeFact('camille', 'age', 25)] }),
+        makeEvent(2, { storyTime: { type: 'chapter', chapter: 2 }, postconditions: [makeFact('camille', 'age', 26)] }),
+        makeEvent(3, { storyTime: { type: 'chapter', chapter: 3 }, postconditions: [makeFact('camille', 'age', 27)] }),
       ];
 
       const stateAt2 = engine.getStateAt(events, 2);
@@ -880,7 +880,7 @@ describe('ReplayEngine', () => {
 
     it('should return full state when order exceeds all events', () => {
       const events: NarrativeEvent[] = [
-        makeEvent(1, { postconditions: [makeFact('camille', 'age', 25)] }),
+        makeEvent(1, { storyTime: { type: 'chapter', chapter: 1 }, postconditions: [makeFact('camille', 'age', 25)] }),
       ];
 
       const state = engine.getStateAt(events, 999);
@@ -895,9 +895,10 @@ describe('ReplayEngine', () => {
       };
 
       const events: NarrativeEvent[] = [
-        makeEvent(1, { postconditions: [makeFact('camille', 'name', 'Camille')] }),
-        makeEvent(2, { title: 'Choice' }),
+        makeEvent(1, { storyTime: { type: 'chapter', chapter: 1 }, postconditions: [makeFact('camille', 'name', 'Camille')] }),
+        makeEvent(2, { storyTime: { type: 'chapter', chapter: 2 }, title: 'Choice' }),
         makeEvent(3, {
+          storyTime: { type: 'chapter', chapter: 3 },
           branchExistence: {
             type: 'paths',
             paths: [
@@ -920,135 +921,6 @@ describe('ReplayEngine', () => {
     });
   });
 
-  describe('getStateAtOptimized()', () => {
-    it('should fall back to getStateAt when snapshot is null', () => {
-      const events: NarrativeEvent[] = [
-        makeEvent(1, { postconditions: [makeFact('camille', 'age', 25)] }),
-        makeEvent(2, { postconditions: [makeFact('camille', 'age', 26)] }),
-      ];
-
-      const state = engine.getStateAtOptimized(events, 2, null);
-      expect(state.entities.camille.age).toBe(26);
-    });
-
-    it('should start from snapshot state and replay only events after', () => {
-      const snapshotState: WorldState = {
-        entities: { camille: { age: 25, name: 'Camille' } },
-        relationships: {},
-        knowledge: {},
-        threads: {},
-        rules: {},
-        facts: [],
-      };
-
-      const snapshot: Snapshot = {
-        eventCount: 10,
-        eventId: 'evt_10',
-        timestamp: new Date().toISOString(),
-        state: snapshotState,
-      };
-
-      const events: NarrativeEvent[] = [
-        makeEvent(1, { postconditions: [makeFact('camille', 'age', 20)] }),
-        makeEvent(10, { postconditions: [makeFact('camille', 'age', 25)] }),
-        makeEvent(15, {
-          postconditions: [makeFact('camille', 'age', 30)],
-        }),
-        makeEvent(20, { postconditions: [makeFact('camille', 'age', 35)] }),
-      ];
-
-      const state = engine.getStateAtOptimized(events, 15, snapshot);
-
-      expect(state.entities.camille.age).toBe(30);
-    });
-
-    it('should apply branch filtering after snapshot', () => {
-      const snapshotState: WorldState = {
-        entities: { camille: { name: 'Camille' } },
-        relationships: {},
-        knowledge: {},
-        threads: {},
-        rules: {},
-        facts: [],
-      };
-
-      const snapshot: Snapshot = {
-        eventCount: 10,
-        eventId: 'evt_10',
-        timestamp: new Date().toISOString(),
-        state: snapshotState,
-      };
-
-      const branchPath: BranchPath = {
-        decisions: [
-          { atEventId: 'evt_choice', choiceId: 'path_a', narrativeOrder: 5 },
-        ],
-      };
-
-      const events: NarrativeEvent[] = [
-        makeEvent(5, { title: 'Choice' }),
-        makeEvent(11, {
-          branchExistence: {
-            type: 'paths',
-            paths: [
-              {
-                decisions: [
-                  { atEventId: 'evt_choice', choiceId: 'path_a', narrativeOrder: 5 },
-                ],
-              },
-            ],
-          },
-          postconditions: [makeFact('camille', 'fate', 'hero')],
-        }),
-        makeEvent(12, {
-          branchExistence: {
-            type: 'paths',
-            paths: [
-              {
-                decisions: [
-                  { atEventId: 'evt_choice', choiceId: 'path_b', narrativeOrder: 5 },
-                ],
-              },
-            ],
-          },
-          postconditions: [makeFact('camille', 'fate', 'villain')],
-        }),
-      ];
-
-      const state = engine.getStateAtOptimized(events, 12, snapshot, branchPath);
-
-      expect(state.entities.camille.fate).toBe('hero');
-    });
-
-    it('should produce same result as getStateAt', () => {
-      const events: NarrativeEvent[] = [
-        makeEvent(1, { storyTime: { type: 'chapter', chapter: 1 }, postconditions: [makeFact('camille', 'age', 20)] }),
-        makeEvent(5, { storyTime: { type: 'chapter', chapter: 2 }, postconditions: [makeFact('camille', 'location', 'village')] }),
-        makeEvent(10, {
-          storyTime: { type: 'chapter', chapter: 3 },
-          postconditions: [makeFact('camille', 'age', 25)],
-          threadProgress: [
-            { thread: 'main', advancement: 'Step', progressAfter: 2, progressTotal: 10 },
-          ],
-        }),
-        makeEvent(15, { storyTime: { type: 'chapter', chapter: 4 }, postconditions: [makeFact('camille', 'location', 'city')] }),
-        makeEvent(20, { storyTime: { type: 'chapter', chapter: 5 }, postconditions: [makeFact('camille', 'age', 30)] }),
-      ];
-
-      const snapshotState = engine.getStateAt(events, 10);
-      const snapshot: Snapshot = {
-        eventCount: 10,
-        eventId: 'evt_10',
-        timestamp: new Date().toISOString(),
-        state: snapshotState,
-      };
-
-      const direct = engine.getStateAt(events, 15);
-      const optimized = engine.getStateAtOptimized(events, 15, snapshot);
-
-      expect(optimized).toEqual(direct);
-    });
-  });
 });
 
 // ============================================================================
@@ -1205,6 +1077,7 @@ describe('StateManager', () => {
     it('should return state at a specific narrative order', () => {
       for (let i = 1; i <= 5; i++) {
         manager.commit(makeEvent(i, {
+          storyTime: { type: 'chapter', chapter: i },
           postconditions: [makeFact('camille', 'age', 20 + i)],
         }));
       }
@@ -1220,15 +1093,13 @@ describe('StateManager', () => {
       // Commit events that create a snapshot at 20
       for (let i = 1; i <= 25; i++) {
         manager.commit(makeEvent(i, {
+          storyTime: { type: 'chapter', chapter: i },
           postconditions: [makeFact('camille', 'value', i)],
         }));
       }
 
       const state = manager.getStateAt(25);
       expect(state.entities.camille.value).toBe(25);
-
-      // Verify snapshots were created
-      expect(manager.snapshotEngine.listSnapshots()).toContain(20);
     });
 
     it('should return empty state when order is before all events', () => {
@@ -1236,7 +1107,7 @@ describe('StateManager', () => {
         postconditions: [makeFact('camille', 'age', 30)],
       }));
 
-      const state = manager.getStateAt(5);
+      const state = manager.getStateAt(0);
       expect(state.entities).toEqual({});
     });
   });

@@ -566,8 +566,8 @@ describe('4. State Transitions', () => {
     expect(at2.threads['T1'].status).toBe('active');
 
     // Optimized path with snapshot
-    const snap = { eventCount: 0, eventId: 'sys:g', timestamp: '', state: replay.getStateAt(allEvents, 0) };
-    const at1opt = replay.getStateAtOptimized(allEvents, 1, snap);
+    const snap = replay.getStateAt(allEvents, 0);
+    const at1opt = replay.getStateAt(allEvents, 1);
     expect(at1opt.entities['seraphine']?.['detected_anomaly']).toBe(true);
   });
 });

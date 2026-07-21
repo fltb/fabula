@@ -2,7 +2,7 @@
 // ReplayEngine — Replay events to reconstruct world state
 // ============================================================================
 
-import type { NarrativeEvent, WorldState, BranchPath, Snapshot, EntityRuntimeState, EntityDeclarationCatalog, EntityTypeCatalog, EntityTypeDefinition } from '../types/index.js';
+import type { NarrativeEvent, WorldState, BranchPath, EntityRuntimeState, EntityDeclarationCatalog, EntityTypeCatalog, EntityTypeDefinition } from '../types/index.js';
 import {
   createEmptyBranchPath,
   includesPath,
@@ -373,46 +373,15 @@ export class ReplayEngine {
   }
 
   /**
-   * Get state at a specific narrative order (by replaying up to that point).
+   * Get state at a specific DAG position (by replaying that many events in causal order).
    */
   getStateAt(
     events: NarrativeEvent[],
-    narrativeOrder: number,
+    position: number,
     branchPath?: BranchPath,
   ): WorldState {
-    const relevantEvents = events.filter(
-      (e) => e.narrativeOrder <= narrativeOrder,
-    );
-    return this.replay(relevantEvents, branchPath);
-  }
-
-  /**
-   * Optimized: use snapshot + incremental replay
-   */
-  getStateAtOptimized(
-    events: NarrativeEvent[],
-    narrativeOrder: number,
-    snapshot: Snapshot | null,
-    branchPath?: BranchPath,
-  ): WorldState {
-    if (!snapshot) {
-      return this.getStateAt(events, narrativeOrder, branchPath);
-    }
-
     const bp = branchPath ?? createEmptyBranchPath();
-    const state = JSON.parse(JSON.stringify(snapshot.state)) as WorldState;
-
-    // Replay only events after snapshot, in causal order
-    const eventsAfter = events.filter(
-      (e) => e.narrativeOrder > snapshot.eventCount && e.narrativeOrder <= narrativeOrder,
-    );
-
-    if (eventsAfter.length === 0) return state;
-
-    const selectedEvents = eventsAfter.filter((event) =>
-      includesPath(event.branchExistence, bp),
-    );
-
+    const selectedEvents = events.filter((event) => includesPath(event.branchExistence, bp));
     const anchors = new Map<string, number>();
     for (const { storyTime } of selectedEvents) {
       if (storyTime.type === 'absolute') {
@@ -420,99 +389,12 @@ export class ReplayEngine {
         if (m) anchors.set(storyTime.value, parseInt(m[1], 10));
       }
     }
-
     const { edges, inDegree } = buildCausalEdges(selectedEvents, { anchors, branchPath: bp });
-    const ordered = topologicalSort(selectedEvents, edges, inDegree, anchors);
-    const eventById = new Map(events.map((event) => [event.id, event]));
-
-    for (const eventId of ordered) {
-      const event = eventById.get(eventId)!;
-
-      // Track introduced entities for participant check
-      const introducedThisEvent = new Set<string>();
-
-      for (const fact of event.postconditions) {
-        if (!includesPath(fact.validity.branches, bp)) continue;
-
-        // Introduce entity with lifecycle: active
-        if (!state.entities[fact.entityId]) {
-          state.entities[fact.entityId] = { lifecycle: 'active' };
-          introducedThisEvent.add(fact.entityId);
-        }
-
-        // Retired entity guard
-        if (state.entities[fact.entityId]?.lifecycle === 'retired' && fact.attribute !== 'lifecycle') {
-          throw new ConfigError(
-            `Cannot modify retired entity ${fact.entityId}`,
-            { path: fact.entityId, eventId, phase: 'replay' },
-          );
-        }
-
-        // Lifecycle transition handling
-        const rawValue = fact.value !== undefined ? String(fact.value) : undefined;
-        if (
-          fact.attribute === 'lifecycle' &&
-          rawValue !== undefined &&
-          LIFECYCLE_STATES[rawValue]
-        ) {
-          const currentLifecycle = (state.entities[fact.entityId]?.lifecycle as EntityRuntimeState) ?? 'active';
-          const newLifecycle = rawValue as EntityRuntimeState;
-
-          let allowedTransitions = DEFAULT_LIFECYCLE_TRANSITIONS;
-          if (this.entityTypeCatalog && this.entityDeclarationCatalog) {
-            const decl = this.entityDeclarationCatalog.declarations[fact.entityId];
-            if (decl) {
-              const typeDef = this.entityTypeCatalog.types[decl.typeRef.typeId];
-              if (typeDef) {
-                allowedTransitions = typeDef.lifecyclePolicy.allowedTransitions;
-              }
-            }
-          }
-
-          if (!allowedTransitions.some(([from, to]) => from === currentLifecycle && to === newLifecycle)) {
-            throw new ConfigError(
-              `Invalid lifecycle transition: ${currentLifecycle} → ${newLifecycle} for entity ${fact.entityId}`,
-              { path: fact.entityId, eventId, phase: 'replay' },
-            );
-          }
-        }
-
-        if (fact.value !== undefined) {
-          state.facts.push(fact);
-          state.entities[fact.entityId][fact.attribute] = fact.value;
-        }
-      }
-
-      // Participant lifecycle check
-      if (event.participants) {
-        for (const pid of event.participants.entities) {
-          if (state.entities[pid]?.lifecycle === 'retired' && !introducedThisEvent.has(pid)) {
-            throw new ConfigError(
-              `Retired entity ${pid} cannot participate in event ${eventId}`,
-              { path: pid, eventId, phase: 'replay' },
-            );
-          }
-        }
-      }
-
-      for (const tp of event.threadProgress) {
-        const tx = isLegacyThreadProgress(tp)
-          ? convertLegacyThreadProgress(tp, eventId)
-          : (tp as unknown as ThreadTransaction);
-        applyThreadTransaction(state.threads, tx);
-      }
-      // ── Phase 5: Rule evidence (STATE-6) ──
-      for (const re of event.ruleEffects) {
-        if (isLegacyRuleEffect(re)) {
-          const tx = convertLegacyRuleEffect(re, event.id);
-          applyRuleTransaction(state.rules, tx, { nodeId: event.id });
-        } else {
-          applyRuleTransaction(state.rules, re as never, { nodeId: event.id });
-        }
-      }
-    }
-
-    return state;
+    const sortedIds = topologicalSort(selectedEvents, edges, inDegree, anchors);
+    const idToEvent = new Map(selectedEvents.map((event) => [event.id, event]));
+    const eventsToReplay = sortedIds.slice(0, position).map((id) => idToEvent.get(id)!);
+    return this.replay(eventsToReplay, bp);
   }
+
 
 }

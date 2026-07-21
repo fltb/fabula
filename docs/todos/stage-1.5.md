@@ -12,7 +12,7 @@ group file is `[x]` with passing evidence.
 |-------|--------|------|----------|-------|-------|
 | state-model | [x] | — | [state-model.md](state-model.md) — 6/6 items done | STATE-1, STATE-2, STATE-3, STATE-4, STATE-5, STATE-6 | 6 |
 | dag-replay | [x] | state-model | [dag-replay.md](dag-replay.md) — 6/6 items done | DAG-0, DAG-1, DAG-2, DAG-3, DAG-4, DAG-5 | 6 |
-| graph-discourse-render | [-] | state-model, dag-replay | [graph-discourse-render.md](graph-discourse-render.md) — GRAPH-1/DISCOURSE-1 [x], RENDER-SURFACE-1 remains | GRAPH-1, DISCOURSE-1, RENDER-SURFACE-1 | 3 |
+| graph-discourse-render | [x] | state-model, dag-replay | [graph-discourse-render.md](graph-discourse-render.md) — 3/3 items done | GRAPH-1, DISCOURSE-1, RENDER-SURFACE-1 | 3 |
 | integration | [x] | state-model, dag-replay | [integration.md](integration.md) — 2/2 items done | INTEGRATION-1, INTEGRATION-2 | 2 |
 | capability-contract | [ ] | state-model, dag-replay, graph-discourse-render, integration | [capability-contract.md](capability-contract.md) | CAPABILITY-1, YAML-CONTRACT | 2 |
 | api-core-validator | [x] | — | [api-core-validator.md](api-core-validator.md) — 7/7 items done | API-1, API-2, API-3, API-4, API-5, AGG-1, CORE-API-1 | 7 |

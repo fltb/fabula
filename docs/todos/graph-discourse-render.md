@@ -1,6 +1,6 @@
 # graph-discourse-render: Typed causal graph, discourse model, and render surface
 
-## Group Status: [ ] unstarted
+## Group Status: [x] complete — all 3 items done. Build+test green (1319/1319).
 
 ## Items in this group
 
@@ -8,7 +8,7 @@
 |---------|--------|---------------|--------|
 | GRAPH-1 | [x] | STATE-1, STATE-3 [x], DAG-2 [x] | `docs/TODO.md` lines 996-1007 — StoryGraph+DiscourseGraph, 4 edge classes, OutputDescriptor, ReadResolution, 24 error types, 50 tests |
 | DISCOURSE-1 | [x] | GRAPH-1 | `docs/TODO.md` lines 1009-1020 — DiscourseState, 7 disclosure actions, 6 hint states, 4 narrator profiles, DiscourseContextProjection, 55 tests |
-| RENDER-SURFACE-1 | [ ] | DISCOURSE-1 | `docs/TODO.md` lines 1022-1031 |
+| RENDER-SURFACE-1 | [x] | DISCOURSE-1 | `docs/TODO.md` lines 1022-1031 — CompiledSceneContract, SurfaceDependencyGraph, 2 group policies, 4 cache keys, 39 tests |
 
 ## Group-level dependencies
 - **state-model**: STATE-1 + STATE-3 [x] ✅

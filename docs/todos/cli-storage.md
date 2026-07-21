@@ -7,7 +7,7 @@
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
 | CLI-5 | [x] | — | `docs/TODO.md` lines 1316-1322 — removed unused InMemoryEntityRegistry import + registry creation in review command; build + cli tests green |
-| STORAGE-2 | [ ] | — | `docs/TODO.md` lines 1259-1274 — audit all I/O call points for direct `fs` usage bypassing `Storage` abstraction |
+| STORAGE-2 | [x] | — | `docs/TODO.md` lines 1259-1274 — audited 7 modules; fixed api.ts (computeProjectHash, getProjectStatus, renderNovel dry-run) to use Storage; mapper/novel/output/reporters confirmed Storage-backed; validation-reporter.ts violation deferred |
 | CLI-4 | [x] | API-1 [x] ✅ | `docs/TODO.md` lines 1306-1314 — commit command refactored to use initializeProject; exported from core index; build green |
 | CLI-3 | [x] | API-2 [x] ✅ | `docs/TODO.md` lines 1296-1304 — diffEvent migrated to compileStoryBoundaries (fixes timeAnchors crash); `nova diff E1` on zhu-fu outputs 5 readable attribute changes; build+test green |
 

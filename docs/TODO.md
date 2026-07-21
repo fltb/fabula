@@ -843,7 +843,7 @@ ReportWriter
 
 **实现成本估算**：待 initial-state schema、mapper 与 replay 调用点联合细化
 
-### [ ] DAG-5: Snapshot 不再用 narrativeOrder 做 key，统一 replay 方法
+### [-] DAG-5: Snapshot 不再用 narrativeOrder 做 key，统一 replay 方法
 
 **现状**：snapshot 系统在三个地方把 narrativeOrder 当 data order 用：
 
@@ -1256,7 +1256,7 @@ for (const ev of renderEvents) {
 **完成备注（2026-07-20）**：已移除 `packages/core/src/cache/render-cache.ts` 的未使用 `node:fs` import；`packages/core/tests/render-cache.test.ts` 覆盖 MemoryStorage cache 读写。验证：`npx vitest run packages/core/tests/render-cache.test.ts` 通过（并入本次 4 files / 12 tests）。`docs/architecture.md` 的 storage section 已明确 render cache 仅经注入 `Storage` 读写。
 
 
-### [ ] STORAGE-2: 全模块 I/O 审计 — 确认是否全部走 Storage 抽象
+### [x] STORAGE-2: 全模块 I/O 审计 — 确认是否全部走 Storage 抽象
 
 **现状**：核心模块（render-cache、snapshot、event-store）已使用 `Storage` 接口。但未审计全部 I/O 调用点：
 

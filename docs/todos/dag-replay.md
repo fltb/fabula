@@ -10,7 +10,7 @@
 | DAG-1 | [x] | — (test-only) | `docs/TODO.md` lines 796-806 — divergence test proving getStateAtOptimized diverges from replay(); 3 tests in dag-divergence.test.ts |
 | DAG-2 | [x] | — | `docs/TODO.md` lines 808-820 — narrativeOrder tiebreaker removed from compareByStory; replay() now extracts anchors from storyTimes; dag-tiebreaker.test.ts (2 tests) |
 | DAG-4 | [x] | — | `docs/TODO.md` lines 836-844 — buildInitialState() helper deduped across 3 call sites; genesis-root.test.ts (4 tests) |
-| DAG-5 | [ ] | DAG-1, DAG-2, DAG-4 | `docs/TODO.md` lines 846-870 — snapshot.ts uses narrativeOrder everywhere (filename :37, findNearest :44, shouldSnapshot :24). `getStateAtOptimized` diverges. Split into 5a/5b/5c |
+| DAG-5 | [-] | DAG-1, DAG-2, DAG-4 | `docs/TODO.md` lines 846-870 — 5a done (snapshot key → eventCount); 5b/5c remain (delete getStateAtOptimized, unify getStateAt, test updates) |
 
 ## Group-level dependencies
 - **state-model**: STATE-3 [x] ✅ — all DAG items' preconditions met.

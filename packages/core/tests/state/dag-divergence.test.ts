@@ -104,3 +104,4 @@ describe('DAG divergence: snapshot-based optimization vs full replay', () => {
     const fullReplay = engine.replay([B, A, C]);
     expect(state3.entities['hero']?.['status']).toBe(fullReplay.entities['hero']?.['status']);
 });
+});

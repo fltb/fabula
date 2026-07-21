@@ -1,13 +1,13 @@
 # state-model: Entity state model — Fact, Relationship, Entity lifecycle, Knowledge, Thread, Rule
 
-## Group Status: [-] in progress — STATE-1 [x] implemented; STATE-2..6 sub-plan authored (decision-complete), implementation deferred (multi-session, STATE-3 is next root prerequisite ~40 files).
+## Group Status: [-] in progress — STATE-1 + STATE-3 [x] implemented (defects #1,#3 fixed); STATE-2,4,5,6 sub-plan authored, implementation in progress (this session).
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
 | STATE-1 | [x] | — | `docs/TODO.md` lines 889-898 — implemented: canonical FactValue, three-form postconditions, presence-aware preconditions, replay set/unset + hard errors, defect #2 fixed, 5 test files/72 tests, build+test green |
-| STATE-3 | [ ] | STATE-1 | `docs/TODO.md` lines 914-924 |
+| STATE-3 | [x] | STATE-1 | `docs/TODO.md` lines 914-924 — STATE-3a (catalog types + registry refactor, defect #3) + STATE-3b (21 validator checks catalog-driven, defect #1/zhu-fu fix) + STATE-3c (replay lifecycle transactions); 3 test files/75 tests; build+test green |
 | STATE-2 | [ ] | STATE-3 | `docs/TODO.md` lines 900-912 |
 | STATE-4 | [ ] | STATE-3 | `docs/TODO.md` lines 934-948 |
 | STATE-5 | [ ] | STATE-3 | `docs/TODO.md` lines 950-960 |

@@ -1076,8 +1076,8 @@ DiscourseNode
 └── DiscourseBridge      # 未渲染原文的 source-verified disclosure record
 ```
 
-#### [ ] CORPUS-1: `NarrativeNode` 与 `NarrativeEllipsis` 契约
 
+#### [x] CORPUS-1: `NarrativeNode` 与 `NarrativeEllipsis` 契约
 - `NarrativeNode = NarrativeEvent | NarrativeEllipsis`，以显式 discriminant 区分。既有 YAML `EventFile` 和 `NarrativeEvent` 保持作者面对的 event(scene) 模型与直接状态字段，不要求原创项目理解 ellipsis。
 - `NarrativeEllipsis` 表示一段有意不按 scene 拆分、但必须纳入故事模型的叙事省略。它具有 identity、branch scope、一个有效 `storyTime`、可选 source-grounded diagnostic summary，以及直接复用的 preconditions、Entity/Relationship/Knowledge/Thread/Rule transactions；summary 本身不得创建 claim/provider。
 - `NarrativeEllipsis` 不得拥有 POV、cast、scene brief、style、target words、`narrationTime` 或 `narrativeOrder`；永不产生 `RenderedScene`，不进入 RenderJob、Pass 2、scene validator、Assembler、scene count 或 CED/F1 分母。raw summary 仅供来源审查/diagnostics，绝不得直接进入 target logical prompt、产生 Fact/因果边/WorldState/DiscourseState 变更；target logical context 只能来自 planned discourse projection，surface context只能按 RENDER-SURFACE-1 使用已接受 rendered prose。

@@ -8,7 +8,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
+import { makeIssue } from './base.js';
 import { z } from 'zod';
  
 export const inventedDetailSchema = z.object({
@@ -22,93 +22,8 @@ export class FactualDetailValidator implements Validator {
   name = 'factual_detail';
   category = 'factual_detail' as const;
 
-  validatePre(input: PreRenderInput): ValidationIssue[] {
-    const issues: ValidationIssue[] = [];
-    const event = input.event;
-
-    for (const pc of event.preconditions) {
-      const entity = input.entityRegistry.resolve(pc.entityId);
-      if (!entity) continue;
-
-      // Derive the traits attribute ID from catalog (semanticRole: 'identity')
-      const identityAttrs = getAttributesBySemanticRole(entity.kind, 'identity');
-      const traitAttrId = identityAttrs.find(a => a === 'traits') ?? 'traits';
-      const currentTraits = entity.state[traitAttrId] as string[] | undefined;
-
-      // Check trait-level contradictions (only for deterministic values)
-      if (pc.attribute === traitAttrId && currentTraits && pc.value !== undefined) {
-        const requestedTraits = Array.isArray(pc.value) ? pc.value : [pc.value];
-        for (const trait of requestedTraits) {
-          if (currentTraits.includes(trait as string)) {
-            issues.push(makeIssue(
-              this.name, event.id, pc.entityId, 'info',
-              `Trait "${trait}" confirmed for "${pc.entityId}"`,
-              'No action needed.',
-              'manual',
-            ));
-          }
-        }
-      }
-    }
-
-    // Check for naming inconsistencies: entity IDs should match across references
-    for (const pc of event.preconditions) {
-      if (pc.value === 'changed' || pc.value === 'resolved' || pc.value === 'updated') {
-        issues.push(makeIssue(
-          this.name, event.id, pc.entityId, 'warning',
-          `Placeholder value "${pc.value}" used for "${pc.entityId}.${pc.attribute}" — this is not a verifiable fact`,
-          'Use a specific, concrete value instead of a placeholder.',
-          'change_value',
-          pc.attribute,
-        ));
-      }
-    }
-
-    // Check: postconditions with placeholder values (should be caught by schema)
-    for (const pc of event.postconditions) {
-      if (pc.value === 'changed' || pc.value === 'resolved' || pc.value === 'updated') {
-        issues.push(makeIssue(
-          this.name, event.id, pc.entityId, 'warning',
-          `Placeholder value "${pc.value}" used in postcondition "${pc.entityId}.${pc.attribute}" — this should be a concrete value`,
-          'Use a specific, concrete value instead of a placeholder.',
-          'change_value',
-          pc.attribute,
-        ));
-      }
-    }
-
-    // Check: mutual exclusion — fact must not have both value and narrativeHint
-    for (const pc of event.postconditions) {
-      if (pc.value !== undefined && pc.narrativeHint !== undefined && pc.narrativeHint !== '') {
-        issues.push(makeIssue(
-          this.name, event.id, pc.entityId, 'error',
-          `Fact "${pc.id}" has both value and narrativeHint set — they are mutually exclusive`,
-          'Remove one of value or narrativeHint.',
-          'change_value',
-          pc.attribute,
-        ));
-      }
-    }
-
-    // Check: postconditions referencing entities not in the registry
-    // (invented details / nonexistent entities)
-    for (const pc of event.postconditions) {
-      if (pc.value === undefined) continue;
-      const entity = input.entityRegistry.resolve(pc.entityId);
-      if (!entity) {
-        issues.push(makeIssue(
-          this.name, event.id, pc.entityId, 'warning',
-          `Postcondition references entity "${pc.entityId}" which is not defined in the entity registry`,
-          'Define this entity in definitions/, or remove the postcondition referencing it.',
-          'create_file',
-          'entity',
-          undefined,
-          pc.entityId,
-        ));
-      }
-    }
-
-    return issues;
+  validatePre(_input: PreRenderInput): ValidationIssue[] {
+    return [];
   }
 
   validatePost(input: PostRenderInput): ValidationIssue[] {

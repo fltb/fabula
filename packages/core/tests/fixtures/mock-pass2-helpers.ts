@@ -39,6 +39,10 @@ export function makeAnalysisResult(
       narrativeChecks: [],
       appearanceChecks: [],
       characterReferences: [],
+      tenseDetected: 'past',
+      conflictAnalysis: { primaryType: '', resolutionAchieved: false },
+      ruleChecks: [],
+      knowledgeChecks: [],
       ...overrides,
     },
   };

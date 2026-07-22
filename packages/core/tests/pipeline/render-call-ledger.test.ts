@@ -12,6 +12,10 @@ import type { RenderJob, ProviderCallLedgerEntry, Pass2RejectionCategory } from 
 import { MockProvider } from '../../src/ai/providers/mock.ts';
 import type { MockProviderOptions } from '../../src/ai/providers/mock.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
+import { ResultAggregator } from '../../src/validator/aggregator.ts';
+import { makeAnalysisResult } from '../fixtures/mock-pass2-helpers.ts';
 import type {
   NarrativeEvent,
   WorldState,
@@ -121,6 +125,54 @@ function makePipeline(opts: MockProviderOptions = {}) {
   });
   return { pipeline, provider, storage };
 }
+
+/**
+ * Build a pipeline WITH a ResultAggregator so getCombinedValidationSchema()
+ * is exercised, using MockPass2Provider for predictable Pass 2 analysis.
+ */
+function makePipelineWithAggregator(entry: MockPass2Entry) {
+  const provider = new MockPass2Provider({ entries: { test: entry } });
+  const aggregator = new ResultAggregator();
+  const storage = new MemoryStorage();
+  const pipeline = new RenderPipeline({
+    provider,
+    model: 'mock-pass2',
+    cacheDir: '/tmp/test-cache',
+    storage,
+    skipCache: true,
+    maxRetries: 1,
+    aggregator,
+  });
+  return { pipeline, provider, storage };
+}
+
+describe('dynamic schema path with aggregator', () => {
+  it('parses analysis with dynamic schema from aggregator', async () => {
+    const entry = makeAnalysisResult('test');
+    const { pipeline } = makePipelineWithAggregator(entry);
+    const result = await pipeline.renderScene(makeJob('test'));
+
+    expect(result.analysis).not.toBeNull();
+    expect(result.analysis!.eventId).toBe('test');
+    // All 14 blocks should be present in the parsed analysis
+    const a = result.analysis!.analysis;
+    expect(a).toHaveProperty('postconditions');
+    expect(a).toHaveProperty('preconditions');
+    expect(a).toHaveProperty('pov');
+    expect(a).toHaveProperty('inventedDetails');
+    expect(a).toHaveProperty('quality');
+    expect(a).toHaveProperty('threadProgressAchieved');
+    expect(a).toHaveProperty('foreshadowingDeployed');
+    expect(a).toHaveProperty('narrativeChecks');
+    expect(a).toHaveProperty('appearanceChecks');
+    expect(a).toHaveProperty('characterReferences');
+    expect(a).toHaveProperty('tenseDetected');
+    expect(a).toHaveProperty('conflictAnalysis');
+    expect(a).toHaveProperty('ruleChecks');
+    expect(a).toHaveProperty('knowledgeChecks');
+    expect(result.pass2Rejection).toBeUndefined();
+  });
+});
 
 // ============================================================================
 // Tests

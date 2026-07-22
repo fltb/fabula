@@ -29,7 +29,7 @@ import { compileStoryBoundaries } from './state/story-boundaries.ts';
 import { ContextCompiler } from './context/compiler.ts';
 import { assembleNovel } from './assembler/novel.ts';
 import { countNarrativeText } from './assembler/count.ts';
-import { RenderPipeline, buildAndWriteOutputs } from './pipeline/index.ts';
+import { RenderPipeline, buildAndWriteOutputs, InteractionManager } from './pipeline/index.ts';
 import type { RenderSceneResult, RenderJob, ProviderCallLedgerEntry } from './pipeline/render.ts';
 import { BatchRenderPipeline } from './batch-renderer.ts';
 import type { BatchConfig } from './batch-renderer.ts';
@@ -42,10 +42,13 @@ import type { LLMProvider } from './ai/types.ts';
 import type { BranchPath } from './types/branch.js';
 import { Logger } from './observability/logger.ts';
 import { TraceCollector } from './observability/trace.ts';
+import { DEFAULT_CONFIG } from './config/index.js';
 import { sanitizeError } from './errors.ts';
+import { LogicalDisclosureSummaryCompiler, SurfaceReferenceExtractor } from './summary/index.ts';
 import type {
   AnalysisResult,
   Entity,
+  EventFile,
   Fact,
   ISSSnapshot,
   NarrativeEvent,
@@ -118,6 +121,14 @@ export interface RenderNovelOptions {
   batch?: BatchConfig;
   /** Circuit breaker max rounds (default 3, smoke=1) */
   maxRounds?: number;
+  /** Max concurrent LLM calls (default from config) */
+  concurrency?: number;
+  /**
+   * Optional InteractionManager for approving waiver-eligible results.
+   * When provided, warning-level (C) validation failures can be waived;
+   * error-level (S/X) failures remain blocking.
+   */
+  interactionManager?: InteractionManager;
 }
 
 export interface RenderNovelResult {
@@ -157,6 +168,15 @@ export interface DiffResult {
   before: Record<string, unknown>;
   after: Record<string, unknown>;
   changed: string[];
+}
+
+/** Impact level for a single event in impact analysis */
+export type ImpactLevel = 'green' | 'yellow' | 'red';
+
+/** Result of comparing two project versions */
+export interface ImpactAnalysisResult {
+  events: Record<string, ImpactLevel>;
+  downstream: Record<string, string[]>;
 }
 
 // ============================================================================
@@ -213,7 +233,7 @@ export function initializeProject(projectDir: string, storage?: Storage): {
 
   const registry = new InMemoryEntityRegistry();
   registry.load(projectDir);
-  const stateManager = new StateManager(path.join(projectDir, '.nova', 'snapshots'));
+  const stateManager = new StateManager(path.join(projectDir, data.config?.outputDir ?? DEFAULT_CONFIG.outputDir, 'snapshots'));
   stateManager.initialize(events);
   const state: WorldState = {
     entities: {},
@@ -328,6 +348,8 @@ async function createProvider(
 export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovelResult> {
   const { projectDir, model, apiKey, baseUrl, eventId, dryRun, provider: injectedProvider, branchPath, trace } = opts;
   const errors: string[] = [];
+  const waivedEventIds = new Set<string>();
+
   const storage = opts.storage ?? new FsStorage();
   // Observability: trace collector for this render session
   const traceCollector = trace ? new TraceCollector(eventId ?? 'render-all') : undefined;
@@ -355,7 +377,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
   // ── Dry run ───────────────────────────────────────────────────────
   if (dryRun) {
     const results: RenderNovelResult['results'] = [];
-    const dryRunDir = path.join(projectDir, '.nova', 'dry-runs');
+    const dryRunDir = path.join(projectDir, data.config?.outputDir ?? DEFAULT_CONFIG.outputDir, 'dry-runs');
     storage.mkdirp(dryRunDir);
 
     for (const ev of renderEvents) {
@@ -399,39 +421,56 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
       return { results: [], errors };
     }
   }
-  const cacheDir = path.join(projectDir, '.nova', 'render-cache');
+  const cacheDir = path.join(projectDir, data.config?.outputDir ?? DEFAULT_CONFIG.outputDir, 'render-cache');
   const pipeline = new RenderPipeline({
     provider,
     model: resolvedModel,
     cacheDir,
     storage,
-    aggregator: new ResultAggregator(),
+    aggregator: new ResultAggregator(undefined, undefined, undefined, traceCollector),
     logger: eventLogger,
     traceCollector,
-    targetLengthWords: data.config?.defaultSceneTextTarget ?? 400,
-    language: data.config?.defaultLanguage ?? 'en',
     maxRounds: opts.maxRounds,
+    concurrency: opts.concurrency,
+    language: data.config?.defaultLanguage ?? 'en',
   });
 
   // Initialize cache
   const eventsFileMap = buildEventsFileMap(data);
   await pipeline.initCache(eventsFileMap, path.join(projectDir, 'definitions'));
-
   // Build render jobs
   const jobs: RenderJob[] = [];
+  const disclosureCompiler = new LogicalDisclosureSummaryCompiler();
+  const surfaceExtractor = new SurfaceReferenceExtractor();
+  let previousSummary: string | undefined;
   for (const ev of renderEvents) {
     const chapterNum = findChapterForEvent(data, ev.id);
     const beforeState = boundaries.stateBeforeByEventId.get(ev.id)!;
     const compiler = new ContextCompiler();
     const ctxStart = Date.now();
     traceCollector?.record({ phase: 'context', state: 'start', spanId: ev.id, eventId: ev.id });
-    const pkg = compiler.compile(ev, beforeState, registry, { systemContext: sysCtx });
+
+    // Compute disclosure-safe summary for prior discoure context
+    // Full DiscourseState wiring requires the planned discourse ledger, which
+    // is loaded once the discourse system is fully integrated. For now the
+    // summarizer is available and ready — wire it with compile options.
+    const pkg = compiler.compile(ev, beforeState, registry, {
+      systemContext: sysCtx,
+      previousSceneSummary: previousSummary ?? '',
+    });
+    // After rendering this scene, the surface extractor can produce a
+    // reference packet from the accepted prose. Stash the summary for the
+    // next scene.
+    previousSummary = pkg.markdown.includes('## Previous Scene Summary')
+      ? pkg.previousSceneSummary
+      : undefined;
     traceCollector?.record({ phase: 'context', state: 'end', spanId: ev.id, eventId: ev.id, durationMs: Date.now() - ctxStart });
     jobs.push({
       event: ev,
       stateBefore: beforeState,
       context: pkg,
       chapter: chapterNum,
+      logicalDisclosureSummary: pkg.previousSceneSummary || undefined,
     });
   }
   // Render — choose batched or bulk mode, preserving results even on exception
@@ -442,8 +481,56 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
       : await pipeline.renderAll(jobs);
     const unreleased = results.filter((result) => result.prose.trim().length === 0 || result.analysis === null || result.validation === null || !result.validation.passed || result.needsReview);
     if (unreleased.length > 0) {
-      const diagnostics = unreleased.map(buildReleaseDiagnostic);
-      errors.push(`Release gate rejected: ${diagnostics.join('; ')}`);
+      const interactionManager = opts.interactionManager;
+      if (interactionManager) {
+        // With InteractionManager: separate waivable (warning-only, C) from blocking (errors, S/X)
+        const blocking: RenderSceneResult[] = [];
+        const waived: string[] = [];
+        for (const result of unreleased) {
+          // Empty prose or missing analysis are always blocking
+          if (result.prose.trim().length === 0 || result.analysis === null) {
+            blocking.push(result);
+            continue;
+          }
+          // Check for error-level (S/X) issues — cannot waive
+          const hasErrors = result.validation?.errors.some(issue => issue.severity === 'error');
+          if (hasErrors) {
+            blocking.push(result);
+            continue;
+          }
+          // Warning-only (C) findings: check if a waiver exists
+          // Gate is only needed when there are actual warnings
+          if (result.validation && result.validation.warnings.length > 0) {
+            const gateId = `gate:${result.eventId}:validation`;
+            if (!interactionManager.needsApproval(gateId, 'warning')) {
+              // Gate is already waived — release
+              waived.push(result.eventId);
+            } else {
+              // Gate is pending — cannot release without waiver
+              blocking.push(result);
+            }
+          } else {
+            // No warning issues but needsReview is true (shouldn't happen in practice)
+            blocking.push(result);
+          }
+        }
+        if (blocking.length > 0) {
+          const diagnostics = blocking.map(buildReleaseDiagnostic);
+          errors.push(`Release gate rejected (blocking): ${diagnostics.join('; ')}`);
+        }
+        if (waived.length > 0 || blocking.length === 0) {
+          const releasable = results.filter(r => !blocking.some(b => b.eventId === r.eventId));
+          if (releasable.length > 0) {
+            buildAndWriteOutputs(storage, projectDir, jobs, releasable);
+          }
+        }
+        // Track waived event IDs for the released field below
+        for (const id of waived) waivedEventIds.add(id);
+      } else {
+        // No InteractionManager — original strict behavior
+        const diagnostics = unreleased.map(buildReleaseDiagnostic);
+        errors.push(`Release gate rejected: ${diagnostics.join('; ')}`);
+      }
     } else {
       buildAndWriteOutputs(storage, projectDir, jobs, results);
       if (renderEvents.length === authoredEvents.length) {
@@ -480,7 +567,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     cacheHit: r.cacheHit,
     errors: r.errors,
     analysis: r.analysis,
-    released: r.prose.trim().length > 0 && r.analysis !== null && r.validation !== null && r.validation.passed && !r.needsReview,
+    released: waivedEventIds.has(r.eventId) || (r.prose.trim().length > 0 && r.analysis !== null && r.validation !== null && r.validation.passed && !r.needsReview),
     validationErrors: r.validation?.errors.length ?? 0,
     validationIssueMessages: r.validation?.errors.map((issue) => issue.message) ?? [],
     providerCalls: r.providerCalls,
@@ -823,4 +910,176 @@ export function showEntity(
     definitionFile: entity.definitionFile,
     state: entity.state,
   };
+}
+
+// ============================================================================
+// 7. analyzeProjectImpact — Compare two project versions
+// ============================================================================
+
+/**
+ * Compare two project versions and classify each event's impact level.
+ *
+ * Loads both project YAML directories, compares event definitions, and
+ * classifies changes:
+ * - Green: only narrativeOrder changed (no downstream effect)
+ * - Yellow: event data changed but preconditions/postconditions intact
+ * - Red: precondition/postcondition changed → causal chain potentially broken
+ *
+ * Also detects downstream events: when a Red event has changed postconditions,
+ * any event whose preconditions reference the same entity+attribute pairs is
+ * flagged as downstream.
+ *
+ * @param oldPath - Path to the original project directory
+ * @param newPath - Path to the modified project directory
+ * @returns Impact analysis result with per-event levels and downstream map
+ */
+export function analyzeProjectImpact(
+  oldPath: string,
+  newPath: string,
+): ImpactAnalysisResult {
+  const oldMapper = new EntityMapper(oldPath);
+  const newMapper = new EntityMapper(newPath);
+  const oldData = oldMapper.loadProject();
+  const newData = newMapper.loadProject();
+
+  // Build event map (event ID → EventFile) for both versions
+  const oldEvents = new Map<string, EventFile>();
+  for (const [, chapter] of oldData.chapters) {
+    for (const ev of chapter.events) {
+      oldEvents.set(ev.event, ev);
+    }
+  }
+
+  const newEvents = new Map<string, EventFile>();
+  for (const [, chapter] of newData.chapters) {
+    for (const ev of chapter.events) {
+      newEvents.set(ev.event, ev);
+    }
+  }
+
+  // Helper: serialize a precondition or postcondition for comparison
+  const pcKey = (pc: { entity: string; attribute: string; value: unknown; operator?: string }): string =>
+    `${pc.entity}:${pc.attribute}:${JSON.stringify(pc.value)}:${pc.operator ?? 'eq'}`;
+
+  const events: Record<string, ImpactLevel> = {};
+  const downstream: Record<string, string[]> = {};
+
+  // Collect which (entityId, attribute) pairs each event's postconditions write to
+  const postconditionPairs = new Map<string, Set<string>>();
+  for (const [id, ev] of newEvents) {
+    const pairs = new Set<string>();
+    for (const pc of ev.expectedPostconditions) {
+      pairs.add(`${pc.entity}:${pc.attribute}`);
+    }
+    postconditionPairs.set(id, pairs);
+  }
+
+  // Collect which (entityId, attribute) pairs each event's preconditions read
+  const preconditionPairs = new Map<string, Set<string>>();
+  for (const [id, ev] of newEvents) {
+    const pairs = new Set<string>();
+    for (const pc of ev.preconditions) {
+      pairs.add(`${pc.entity}:${pc.attribute}`);
+    }
+    preconditionPairs.set(id, pairs);
+  }
+
+  // Compare events present in both versions
+  const allIds = new Set([...oldEvents.keys(), ...newEvents.keys()]);
+  const newOnlyIds = new Set<string>();
+
+  for (const id of allIds) {
+    const oldEv = oldEvents.get(id);
+    const newEv = newEvents.get(id);
+
+    if (!oldEv && newEv) {
+      // New event added
+      events[id] = 'red';
+      newOnlyIds.add(id);
+      continue;
+    }
+    if (oldEv && !newEv) {
+      // Event removed
+      events[id] = 'red';
+      continue;
+    }
+    if (!oldEv || !newEv) continue;
+
+    // Compare preconditions
+    const oldPreKeys = new Set(oldEv.preconditions.map(pcKey));
+    const newPreKeys = new Set(newEv.preconditions.map(pcKey));
+    const preChanged =
+      oldPreKeys.size !== newPreKeys.size ||
+      [...oldPreKeys].some((k) => !newPreKeys.has(k));
+
+    // Compare postconditions
+    const oldPostKeys = new Set(oldEv.expectedPostconditions.map(pcKey));
+    const newPostKeys = new Set(newEv.expectedPostconditions.map(pcKey));
+    const postChanged =
+      oldPostKeys.size !== newPostKeys.size ||
+      [...oldPostKeys].some((k) => !newPostKeys.has(k));
+
+    if (preChanged || postChanged) {
+      events[id] = 'red';
+      continue;
+    }
+
+    // Check for other event data changes (excluding narrativeOrder)
+    const dataChanged =
+      oldEv.title !== newEv.title ||
+      oldEv.sceneBrief !== newEv.sceneBrief ||
+      oldEv.storyTime !== newEv.storyTime ||
+      oldEv.narrationTime !== newEv.narrationTime ||
+      oldEv.sceneType !== newEv.sceneType ||
+      oldEv.discourseMode !== newEv.discourseMode ||
+      oldEv.arcPosition !== newEv.arcPosition ||
+      oldEv.emotionalValence !== newEv.emotionalValence ||
+      oldEv.conflictType !== newEv.conflictType ||
+      oldEv.resolutionType !== newEv.resolutionType ||
+      oldEv.tense !== newEv.tense ||
+      JSON.stringify(oldEv.pov) !== JSON.stringify(newEv.pov) ||
+      JSON.stringify(oldEv.threadProgress) !== JSON.stringify(newEv.threadProgress) ||
+      JSON.stringify(oldEv.foreshadowing) !== JSON.stringify(newEv.foreshadowing) ||
+      JSON.stringify(oldEv.relationshipEffects) !== JSON.stringify(newEv.relationshipEffects) ||
+      JSON.stringify(oldEv.ruleEffects) !== JSON.stringify(newEv.ruleEffects) ||
+      JSON.stringify(oldEv.styleGuidance) !== JSON.stringify(newEv.styleGuidance) ||
+      JSON.stringify(oldEv.cast) !== JSON.stringify(newEv.cast);
+
+    if (dataChanged) {
+      events[id] = 'yellow';
+      continue;
+    }
+
+    // Only narrativeOrder changed (or nothing at all)
+    if (oldEv.narrativeOrder !== newEv.narrativeOrder) {
+      events[id] = 'green';
+    }
+    // else: no changes — leave unset
+  }
+
+  // Downstream detection: for each Red event, find events whose preconditions
+  // reference entity+attribute pairs that this event's postconditions set
+  for (const [id, level] of Object.entries(events)) {
+    if (level !== 'red' && !newOnlyIds.has(id)) continue;
+
+    const changedPairs = postconditionPairs.get(id);
+    if (!changedPairs || changedPairs.size === 0) continue;
+
+    const downstreamEvents: string[] = [];
+    for (const [otherId, otherPrePairs] of preconditionPairs) {
+      if (otherId === id) continue;
+      for (const prePair of otherPrePairs) {
+        if (changedPairs.has(prePair)) {
+          downstreamEvents.push(otherId);
+          break;
+        }
+      }
+    }
+
+    if (downstreamEvents.length > 0) {
+      downstream[id] = downstreamEvents.sort();
+    }
+  }
+
+  return { events, downstream };
 }

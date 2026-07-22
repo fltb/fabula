@@ -28,6 +28,7 @@ export class SnapshotEngine {
   /** Create a snapshot of the current world state */
   createSnapshot(eventCount: number, eventId: string, state: WorldState): Snapshot {
     const snapshot: Snapshot = {
+      version: 1,
       eventCount,
       eventId,
       timestamp: new Date().toISOString(),

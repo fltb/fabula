@@ -9,7 +9,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 
 // ── Schemas ───────────────────────────────────────────────────────────
 
@@ -28,8 +28,8 @@ export class POVValidator implements Validator {
   validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     const event = input.event;
-    const povType = event.pov.type;
-    const povChar = event.pov.character;
+    const povType = event.pov.type; // event-level field, not in entity attribute catalog
+    const povChar = event.pov.character; // event-level field, not in entity attribute catalog
 
     // Check: POV character must exist in entity registry
     const povEntity = input.entityRegistry.resolve(povChar);
@@ -46,7 +46,7 @@ export class POVValidator implements Validator {
 
     // For third_person_limited: POV character should be in the scene
     if (povType === 'third_person_limited' || povType === 'first_person') {
-      const inScene = event.participants.entities.includes(povChar);
+      const inScene = event.participants.entities.includes(povChar); // event-level field, not in entity attribute catalog
       if (!inScene) {
         issues.push(makeIssue(
           this.name, event.id, povChar, 'warning',
@@ -75,8 +75,8 @@ export class POVValidator implements Validator {
     const issues: ValidationIssue[] = [];
     const event = input.event;
     const prose = input.prose;
-    const povType = event.pov.type;
-    const povChar = event.pov.character;
+    const povType = event.pov.type; // event-level field, not in entity attribute catalog
+    const povChar = event.pov.character; // event-level field, not in entity attribute catalog
 
     // First-person pronoun check (deterministic, cross-language)
     if (povType === 'first_person') {

@@ -41,6 +41,7 @@ export interface ProjectConfig {
   project: string;
   title: string;
   author: string;
+  schemaVersion?: number;
   defaultModel?: string;
   defaultLanguage?: string;
   genre?: string;
@@ -55,5 +56,10 @@ export interface ProjectConfig {
     autoResolveDays: number;
   };
   snapshotInterval?: number;
+  concurrency?: number;
+  outputDir?: string;
+  logLevel?: 'debug' | 'info' | 'warn' | 'error';
+  traceLevel?: 'off' | 'basic' | 'detailed';
+  cacheEnabled?: boolean;
   defaultSceneTextTarget?: number;
 }

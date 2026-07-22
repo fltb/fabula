@@ -13,7 +13,7 @@ import type {
   ItemDefinition,
   FactionDefinition,
 } from '../types/index.js';
-import { readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
+import { loadProjectConfig, readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
 import { parseStoryTimestamp, factIdFrom } from './timestamp.js';
 import { convertRelationshipChange } from '../types/relationship.js';
 import type { ProjectData } from './types.js';
@@ -46,11 +46,10 @@ export class EntityMapper {
 
   /** Load all project data from the filesystem */
   loadProject(): ProjectData {
-    const config = readYamlFile({
-      filePath: path.join(this.projectPath, 'nova.yaml'),
-      schema: projectConfigSchema,
-      storage: this.storage,
-    });
+    const config = loadProjectConfig(
+      path.join(this.projectPath, 'nova.yaml'),
+      this.storage,
+    );
 
     const defsDir = path.join(this.projectPath, 'definitions');
     const characters = readYamlFilesInDir(path.join(defsDir, 'characters'), characterDefinitionSchema, this.storage) as CharacterDefinition[];

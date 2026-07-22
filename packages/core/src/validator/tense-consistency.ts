@@ -4,12 +4,11 @@
 //
 // Checks:
 // - Pass 2 tenseDetected matches the scene-level tense override (if set)
-// - Cross-scene consistency is tracked via a static registry
-// - Warnings when tense changes between scenes
+// - Cross-scene changes detected from input.events in validatePre
 // ============================================================================
 
 import { z } from 'zod';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import type {
   PostRenderInput,
   PreRenderInput,
@@ -24,14 +23,13 @@ export class TenseConsistencyValidator implements Validator {
   name = 'tense_consistency';
   category = 'narrative_style' as const;
 
-  private seenTenses = new Map<string, 'past' | 'present' | 'mixed'>();
-
   validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     const { event, events } = input;
 
     // Deterministic check: detect if this event's tense differs from
     // previously seen events (cross-scene tense change)
+    // event-level field, not in entity attribute catalog
     if (event.tense) {
       const earlierEvents = events.filter(
         (e) => e.narrativeOrder < event.narrativeOrder && e.id !== 'system:genesis' && e.tense,
@@ -62,10 +60,8 @@ export class TenseConsistencyValidator implements Validator {
     if (!tenseResult.success) return issues;
     const tenseDetected = tenseResult.data;
 
-    // Register the detected tense for cross-scene tracking
-    this.seenTenses.set(event.id, tenseDetected);
-
     // Check 1: If scene declares a tense override, it should match what was detected
+    // event-level field, not in entity attribute catalog
     if (event.tense) {
       if (tenseDetected === 'mixed') {
         issues.push(makeIssue(
@@ -90,22 +86,6 @@ export class TenseConsistencyValidator implements Validator {
           'tense',
         ));
       }
-    }
-
-    // Check 2: Cross-scene consistency — warn on tense changes
-    // (A static map tracks all scenes seen so far)
-    const uniqueTenses = new Set(this.seenTenses.values());
-    uniqueTenses.delete('mixed'); // mixed doesn't count as a clear direction
-    if (uniqueTenses.size > 1) {
-      issues.push(makeIssue(
-        this.name,
-        event.id,
-        'system',
-        'info',
-        `Cross-scene tense change detected: scenes so far use [${[...uniqueTenses].join(', ')}]`,
-        'If intentional (e.g., flashback in past tense), confirm the transition is clearly marked.',
-        'manual',
-      ));
     }
 
     return issues;

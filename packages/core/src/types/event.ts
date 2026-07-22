@@ -136,6 +136,8 @@ export interface StyleGuidance {
 export interface EventFile {
   /** Event identifier, e.g. "E0", "E1" */
   event: string;
+  /** Format version for migration tracking */
+  formatVersion?: number;
   /** Narrative order within the story */
   narrativeOrder: number;
   /** Human-readable title */

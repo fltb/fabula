@@ -11,6 +11,9 @@ export interface Message {
 
 // ——— Request / Response ———
 
+/** Task type for multi-model routing */
+export type TaskType = 'pass1' | 'pass2' | 'summary';
+
 export interface CompletionRequest {
   messages: Message[];
   model?: string;
@@ -21,6 +24,8 @@ export interface CompletionRequest {
   signal?: AbortSignal;
   /** Seed for reproducible output (Pass 2 analysis) */
   seed?: number;
+  /** Task type for model routing (pass1, pass2, summary) */
+  taskType?: TaskType;
   /** Response format hint (L3: json_object for Pass 2) */
   responseFormat?: {
     type: 'json_object';

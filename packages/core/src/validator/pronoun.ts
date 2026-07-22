@@ -10,7 +10,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole, consumeNarrativeChecks } from './base.js';
 import { z } from 'zod';
 import { narrativeCheckSchema } from './schemas.js';
 
@@ -25,22 +25,25 @@ export class PronounValidator implements Validator {
     // Check Pass 2 analysis for pronoun-related signals
     if (input.analysis) {
       const narrativeChecks = z.array(narrativeCheckSchema).safeParse(input.analysis.analysis.narrativeChecks).data ?? [];
-      for (const check of narrativeChecks) {
-        // Catalog-driven: verify attribute is a known narrative attribute
-        const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
-        if (entityKind) {
-          const role = getAttributeSemanticRole(entityKind, check.attribute);
-          if (role !== 'narrative') continue;
-          // Further narrow to pronoun-specific narrative attributes from catalog
-          const narrativeAttrs = getAttributesBySemanticRole(entityKind, 'narrative');
-          const pronounAttrs: string[] = narrativeAttrs.filter(a => a === 'pronoun' || a === 'pronoun_consistency');
-          if (!pronounAttrs.includes(check.attribute)) continue;
-        } else if (check.attribute !== 'pronoun' && check.attribute !== 'pronoun_consistency') {
-          continue;
-        }
-        if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
+      issues.push(...consumeNarrativeChecks(narrativeChecks,
+        (check) => {
+          // Catalog-driven: verify attribute is a known narrative attribute
+          const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+          if (entityKind) {
+            const role = getAttributeSemanticRole(entityKind, check.attribute);
+            if (role !== 'narrative') return false;
+            // Further narrow to pronoun-specific narrative attributes from catalog
+            const narrativeAttrs = getAttributesBySemanticRole(entityKind, 'narrative');
+            const pronounAttrs: string[] = narrativeAttrs.filter(a => a === 'pronoun' || a === 'pronoun_consistency');
+            if (!pronounAttrs.includes(check.attribute)) return false;
+          } else if (check.attribute !== 'pronoun' && check.attribute !== 'pronoun_consistency') {
+            return false;
+          }
+          return check.matchLevel === 'absent' || check.matchLevel === 'contradicted';
+        },
+        (check) => {
           const severity = check.matchLevel === 'contradicted' ? 'error' : 'warning';
-          issues.push(makeIssue(
+          return makeIssue(
             this.name,
             input.event.id,
             check.entityId,
@@ -48,9 +51,9 @@ export class PronounValidator implements Validator {
             `Pronoun consistency: "${check.hint}" — ${check.matchLevel}`,
             check.evidence,
             'manual',
-          ));
-        }
-      }
+          );
+        },
+      ));
     }
 
     return issues;

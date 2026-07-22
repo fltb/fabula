@@ -11,6 +11,7 @@ import type {
   EntityId,
   EntityKind,
   WritePolicy,
+  NarrativeCheck,
 } from '../types/index.js';
 import { defaultEntityTypeCatalog } from '../entity/index.js';
 
@@ -96,4 +97,26 @@ export function getAttributesBySemanticRole(kind: EntityKind, semanticRole: stri
   return Object.values(typeDef.attributes)
     .filter(a => a.semanticRole === semanticRole)
     .map(a => a.attributeId);
+}
+
+
+// ============================================================================
+// consumeNarrativeChecks — Iterate parsed narrative checks with predicate
+// ============================================================================
+// Takes an already-parsed array of NarrativeCheck objects (from Zod-safeParse)
+// and applies a predicate + issue-factory for each matching check.
+// ============================================================================
+
+export function consumeNarrativeChecks(
+  checks: NarrativeCheck[],
+  predicate: (check: NarrativeCheck) => boolean,
+  makeIssueFn: (check: NarrativeCheck) => ValidationIssue,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+  for (const check of checks) {
+    if (predicate(check)) {
+      issues.push(makeIssueFn(check));
+    }
+  }
+  return issues;
 }

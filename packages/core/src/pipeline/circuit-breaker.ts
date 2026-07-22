@@ -7,6 +7,65 @@
 //   Round 2: prompt_fix (retry with repair guidance injected)
 //   Round 3: abort (stop trying, mark for review)
 // ============================================================================
+import { AuthError, ModelNotFoundError, RateLimitError, TimeoutError, ValidationError } from '../errors.ts';
+
+/**
+ * Retry strategy result.
+ */
+export interface RetryStrategy {
+  shouldRetry: boolean;
+  delayMs: number;
+  strategy: 'backoff' | 'jitter' | 'immediate_abort' | 'no_retry';
+}
+
+/**
+ * Determine retry strategy based on the error type.
+ * Used externally by callers to decide how to handle a failed attempt.
+ */
+export function getRetryStrategy(error: unknown, attempt: number = 0): RetryStrategy {
+  if (error instanceof RateLimitError) {
+    return {
+      shouldRetry: true,
+      delayMs: 1000 * (attempt + 1),
+      strategy: 'backoff',
+    };
+  }
+  if (error instanceof TimeoutError) {
+    return {
+      shouldRetry: true,
+      delayMs: 500 + Math.random() * 1000,
+      strategy: 'jitter',
+    };
+  }
+  if (error instanceof AuthError) {
+    return {
+      shouldRetry: false,
+      delayMs: 0,
+      strategy: 'immediate_abort',
+    };
+  }
+  if (error instanceof ModelNotFoundError) {
+    return {
+      shouldRetry: false,
+      delayMs: 0,
+      strategy: 'immediate_abort',
+    };
+  }
+  if (error instanceof ValidationError) {
+    return {
+      shouldRetry: false,
+      delayMs: 0,
+      strategy: 'no_retry',
+    };
+  }
+  // Default: transient/unknown error → backoff with fixed delay
+  return {
+    shouldRetry: true,
+    delayMs: 500,
+    strategy: 'backoff',
+  };
+}
+
 
 export interface CircuitBreakerState {
   round: number;          // 1-3

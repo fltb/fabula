@@ -588,6 +588,8 @@ describe('ReplayEngine', () => {
         entities: {},
         relationships: {},
         knowledge: {},
+        epistemicLedger: { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
+        propositionCatalog: { version: 0, propositions: {}, dependencyGraph: {} },
         threads: {},
         rules: {},
         facts: [],
@@ -714,8 +716,12 @@ describe('ReplayEngine', () => {
 
       const state = engine.replay(events);
 
-      expect(state.knowledge.camille).toBeDefined();
-      expect(state.knowledge.camille.knownFacts).toEqual([]);
+      // Legacy state.knowledge shim is removed — epistemic ledger handles knowledge now
+      expect(state.knowledge.camille).toBeUndefined();
+      expect(state.epistemicLedger).toBeDefined();
+      // The entity attribute was still written via normal set path
+      expect(state.entities.camille?.knows).toBe('camille_is_hero');
+      expect(state.entities.camille?.knowledge).toBe('camille_is_chosen');
     });
 
     it('should handle rule effects', () => {
@@ -1005,6 +1011,8 @@ describe('StateManager', () => {
         entities: {},
         relationships: {},
         knowledge: {},
+        epistemicLedger: { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
+        propositionCatalog: { version: 0, propositions: {}, dependencyGraph: {} },
         threads: {},
         rules: {},
         facts: [],

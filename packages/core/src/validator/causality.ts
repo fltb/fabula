@@ -9,8 +9,9 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import { compareFact } from '../entity/compare.js';
+import { resolveDeferredFacts } from './deferred-resolver.js';
 
 // ── Schemas ───────────────────────────────────────────────────────────
 
@@ -85,7 +86,38 @@ export class CausalityValidator implements Validator {
     const issues: ValidationIssue[] = [];
     const analysis = input.analysis;
 
+    // ── Precondition location prose check (deterministic, no Pass 2 needed) ──
+    // If a precondition says a character is at a specific location, the prose should mention it
+    const proseLower = input.prose.toLowerCase();
+    for (const pc of input.event.preconditions) {
+      // Skip narrativeHint-only preconditions (deferred to Pass 2)
+      if (pc.value === undefined) continue;
+
+      const entityKind = input.entityRegistry?.resolve(pc.entityId)?.kind;
+      if (entityKind && getAttributeSemanticRole(entityKind, pc.attribute) === 'location') {
+        const expectedValue = String(pc.value).toLowerCase();
+        if (!proseLower.includes(expectedValue)) {
+          // Only flag if the entity is mentioned in prose
+          const entityNameParts = pc.entityId.split(/[_-]/);
+          const entityNamePat = new RegExp(`\\b${entityNameParts.join('|')}\\b`, 'i');
+          if (entityNamePat.test(input.prose)) {
+            issues.push(makeIssue(
+              this.name, input.event.id, pc.entityId, 'warning',
+              `Precondition says "${pc.entityId}" is at "${pc.value}" but prose does not mention this location`,
+              `Establish that ${pc.entityId} is at ${pc.value} before the event action.`,
+              'edit_file',
+              pc.attribute,
+            ));
+          }
+        }
+      }
+    }
+
+    // ── Pass 2 dependent checks below ──
     if (!analysis) return issues;
+
+    // Resolve narrativeHint-only preconditions against Pass 2 narrativeChecks
+    issues.push(...resolveDeferredFacts(input.event, analysis));
 
     const postResult = postconditionBlockSchema.safeParse(analysis.analysis.postconditions);
     if (!postResult.success) return issues;

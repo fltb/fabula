@@ -13,6 +13,8 @@ import type {
   RelationshipState,
   RelevanceScore,
   RuleDefinition,
+  LogicalConsequence,
+  RuleEffectEntry,
   SceneSpecification,
   SystemContext,
   ThreadStatus,
@@ -40,6 +42,7 @@ export class ContextAssembler {
     state: WorldState,
     entityRegistry: EntityRegistry,
     previousSceneSummary = '',
+    volumeSummary = '',
     systemContext?: SystemContext,
     activeThreadIds?: string[],
   ): ContextPackage {
@@ -105,6 +108,7 @@ export class ContextAssembler {
       knowledgeBoundary,
       activeThreads,
       previousSceneSummary,
+      volumeSummary,
       markdown: '',
       activeRules,
     };
@@ -203,6 +207,9 @@ export class ContextAssembler {
       contexts.push({
         id: relKey,
         participants,
+        // TODO(T3-remaining): RelationshipRuntimeState and RelationshipState are structurally
+        // incompatible types. This cast bridges the legacy RelationshipContext API. Requires
+        // either a data transformation or a type unification to eliminate.
         currentState: relData as unknown as RelationshipState,
         unresolvedTensions: [],
       });
@@ -271,8 +278,8 @@ export class ContextAssembler {
             statement: (entity.state['statement'] as string) ?? '',
             category: (entity.state['category'] as string) ?? 'unknown',
             type: (entity.state['type'] as string) ?? 'unknown',
-            logicalConsequences: (entity.state['logicalConsequences'] as any[]) ?? [],
-            evidenceChain: (entity.state['evidenceChain'] as any[]) ?? [],
+            logicalConsequences: (entity.state['logicalConsequences'] as LogicalConsequence[] | undefined) ?? [],
+            evidenceChain: (entity.state['evidenceChain'] as RuleEffectEntry[] | undefined) ?? [],
           });
         }
       }
@@ -399,6 +406,12 @@ export class ContextAssembler {
     if (pkg.previousSceneSummary) {
       lines.push('## Previous Scene Summary');
       lines.push(pkg.previousSceneSummary);
+      lines.push('');
+    }
+
+    // Volume Summary
+    if (pkg.volumeSummary) {
+      lines.push(pkg.volumeSummary);
       lines.push('');
     }
 

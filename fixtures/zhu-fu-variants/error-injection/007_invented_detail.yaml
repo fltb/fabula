@@ -4,3 +4,8 @@ injected:
     expectedValidator: "factual_detail"
     expectedSeverity: "warning"
     description: "An event invents a detail about xianglins_wife having a younger sister that never appears in any character definition"
+    mockProse: "祥林嫂有一个妹妹，名叫祥林妹。她经常来帮祥林嫂干活。"
+    mockAnalysis:
+      inventedDetails:
+        - detail: "Xianglin's Wife has a younger sister named Xianglin Mei who helps with chores"
+          severity: "major"

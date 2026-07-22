@@ -65,6 +65,13 @@ const MIN_ANALYSIS_CONTENT = {
   quality: { proseScore: 85, maxScore: 100, strengths: [] as string[], weaknesses: [] as string[], estimatedWordCount: 200 },
   threadProgressAchieved: [] as string[],
   foreshadowingDeployed: [] as string[],
+  narrativeChecks: [] as Array<{ entityId: string; attribute: string; matchLevel: 'exact' | 'similar' | 'absent' | 'contradicted'; evidence: string }>,
+  appearanceChecks: [] as Array<{ entityId: string; feature: string; declared: string; evidence: string; matchLevel: 'exact' | 'similar' | 'absent' | 'contradicted' }>,
+  characterReferences: [] as Array<{ entityId: string; namesUsed: string[] }>,
+  tenseDetected: 'past' as const,
+  conflictAnalysis: { primaryType: '' as string, resolutionAchieved: false as boolean },
+  ruleChecks: [] as Array<{ ruleId: string; satisfied: boolean; evidence: string }>,
+  knowledgeChecks: [] as Array<{ entityId: string; propositionId: string; matchLevel: 'exact' | 'similar' | 'absent' | 'contradicted'; evidence: string }>,
 };
 
 function makeAnalysis(eventId: string) {

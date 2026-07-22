@@ -1,6 +1,14 @@
 // ============================================================================
 // ForeshadowingValidator — Check foreshadow status
 // ============================================================================
+// Uses event-level foreshadowing fields (id, hint, targetRevealChapter), not
+// entity attribute lookups. Foreshadowing is an event-level construct, not
+// represented in entity attribute catalog. Catalog functions imported for
+// future use.
+
+/** 2-chapter threshold for dangling foreshadow detection */
+export const FORESHADOW_THRESHOLD_CHAPTERS = 2;
+
 
 import type {
   Validator,
@@ -8,7 +16,7 @@ import type {
   PreRenderInput,
   PostRenderInput,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import { z } from 'zod';
 export const foreshadowingDeployedSchema = z.array(z.string());
  
@@ -38,16 +46,17 @@ export class ForeshadowingValidator implements Validator {
     }
 
     // Check all foreshadows in the event store: any dangling?
-    // (partial check — full check is in ReachabilityValidator)
-    const allForeshadows = events.flatMap((e) => e.foreshadowing);
+    const allForeshadows = events.flatMap((e) =>
+      e.foreshadowing.map((f) => ({ ...f, eventId: e.id })),
+    );
     for (const f of allForeshadows) {
-      if (f.targetRevealChapter > 0 && chapter > f.targetRevealChapter + 2) {
-        // Already 2 chapters past due
+      if (f.targetRevealChapter > 0 && chapter > f.targetRevealChapter + FORESHADOW_THRESHOLD_CHAPTERS) {
+        // Already past the threshold past due
         const alreadyReported = issues.some((i) => i.entity === f.id);
         if (!alreadyReported) {
           issues.push(makeIssue(
-            this.name, f.id, f.id, 'error',
-            `Foreshadow "${f.id}" is 2+ chapters past its reveal deadline (chapter ${f.targetRevealChapter})`,
+            this.name, f.eventId, f.id, 'error',
+            `Foreshadow "${f.id}" planted in ${f.eventId} (target: chapter ${f.targetRevealChapter}) is ${FORESHADOW_THRESHOLD_CHAPTERS}+ chapters overdue at chapter ${chapter}`,
             'Write the reveal scene or update the target chapter.',
             'change_value',
             'target_reveal_chapter',

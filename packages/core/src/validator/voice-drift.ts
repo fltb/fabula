@@ -8,7 +8,7 @@ import type {
   ValidationIssue,
   PostRenderInput,
 } from '../types/index.js';
-import { makeIssue, getAttributeSemanticRole } from './base.js';
+import { makeIssue, getAttributeSemanticRole, consumeNarrativeChecks } from './base.js';
 import { z } from 'zod';
 import { narrativeCheckSchema } from './schemas.js';
 
@@ -25,32 +25,33 @@ export class VoiceDriftDetector implements Validator {
     if (!input.analysis) return issues;
 
     const narrativeChecks = z.array(narrativeCheckSchema).safeParse(input.analysis.analysis.narrativeChecks).data ?? [];
-    for (const check of narrativeChecks) {
-      // Prefix match via catalog: verify voice_ attributes exist in catalog
-      // Catalog has 'voice_*' template entry with semanticRole: 'narrative'
-      if (!check.attribute.startsWith('voice_')) continue;
+    issues.push(...consumeNarrativeChecks(narrativeChecks,
+      (check) => {
+        // Prefix match via catalog: verify voice_ attributes exist in catalog
+        // Catalog has 'voice_*' template entry with semanticRole: 'narrative'
+        if (!check.attribute.startsWith('voice_')) return false;
 
-      // Catalog validation: if entity kind is known, verify the attribute is a narrative attribute
-      const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
-      if (entityKind) {
-        const role = getAttributeSemanticRole(entityKind, check.attribute);
-        // Accept if found with narrative role, or if undefined (wildcard 'voice_*' template)
-        if (role !== undefined && role !== 'narrative') continue;
-      }
+        // Catalog validation: if entity kind is known, verify the attribute is a narrative attribute
+        const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+        if (entityKind) {
+          const role = getAttributeSemanticRole(entityKind, check.attribute);
+          // Accept if found with narrative role, or if undefined (wildcard 'voice_*' template)
+          if (role !== undefined && role !== 'narrative') return false;
+        }
 
-      if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
-        issues.push(makeIssue(
-          'voice_drift',
-          input.event.id,
-          check.entityId,
-          check.matchLevel === 'contradicted' ? 'warning' : 'info',
-          `Voice drift detected: ${check.hint} — ${check.evidence}`,
-          'Review character voice consistency',
-          'edit_file',
-          'voiceNotes',
-        ));
-      }
-    }
+        return check.matchLevel === 'absent' || check.matchLevel === 'contradicted';
+      },
+      (check) => makeIssue(
+        'voice_drift',
+        input.event.id,
+        check.entityId,
+        check.matchLevel === 'contradicted' ? 'warning' : 'info',
+        `Voice drift detected: ${check.hint} — ${check.evidence}`,
+        'Review character voice consistency',
+        'edit_file',
+        'voiceNotes',
+      ),
+    ));
     return issues;
   }
 

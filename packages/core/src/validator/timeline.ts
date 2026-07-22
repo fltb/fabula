@@ -11,7 +11,7 @@ import type {
 } from '../types/index.js';
 import { compareTimestamp, resolveTimestampToDay } from '../entity/index.js';
 import { buildCausalEdges } from '../state/dag.js';
-import { makeIssue, getAttributeSemanticRole } from './base.js';
+import { makeIssue, getAttributeSemanticRole, consumeNarrativeChecks } from './base.js';
 import { z } from 'zod';
 import { narrativeCheckSchema } from './schemas.js';
 
@@ -116,26 +116,27 @@ export class TimelineValidator implements Validator {
     if (!input.analysis) return issues;
 
     const narrativeChecks = z.array(narrativeCheckSchema).safeParse(input.analysis.analysis.narrativeChecks).data ?? [];
-    for (const check of narrativeChecks) {
-      // Catalog-driven: check if attribute has temporal semanticRole
-      // time_period is the primary attribute; also accept any catalog temporal attrs
-      if (check.attribute !== 'time_period') {
-        const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
-        if (!entityKind || getAttributeSemanticRole(entityKind, check.attribute) !== 'temporal') continue;
-      }
-      if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
-        issues.push(makeIssue(
-          'timeline',
-          input.event.id,
-          input.event.id,
-          'warning',
-          `Time period mismatch: ${check.evidence}`,
-          'Review time-of-day consistency',
-          'edit_file',
-          'storyTime',
-        ));
-      }
-    }
+    issues.push(...consumeNarrativeChecks(narrativeChecks,
+      (check) => {
+        // Catalog-driven: check if attribute has temporal semanticRole
+        // time_period is the primary attribute; also accept any catalog temporal attrs
+        if (check.attribute !== 'time_period') {
+          const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+          if (!entityKind || getAttributeSemanticRole(entityKind, check.attribute) !== 'temporal') return false;
+        }
+        return check.matchLevel === 'absent' || check.matchLevel === 'contradicted';
+      },
+      (check) => makeIssue(
+        'timeline',
+        input.event.id,
+        input.event.id,
+        'warning',
+        `Time period mismatch: ${check.evidence}`,
+        'Review time-of-day consistency',
+        'edit_file',
+        'storyTime',
+      ),
+    ));
     return issues;
   }
 

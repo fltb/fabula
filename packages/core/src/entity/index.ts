@@ -2,7 +2,7 @@
 // Entity — barrel exports
 // ============================================================================
 
-export { readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
+export { loadProjectConfig, migrateProjectFile, readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
 export { parseStoryTimestamp, resolveTimestampToDay, compareTimestamp } from './timestamp.js';
 export { EntityMapper } from './mapper.js';
 export { InMemoryEntityRegistry } from './registry.js';

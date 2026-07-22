@@ -17,6 +17,7 @@ import {
 export const eventFileSchema = z
   .object({
     event: z.string(),
+    formatVersion: z.number().default(1),
     narrativeOrder: z.number(),
     title: z.string(),
     storyTime: z.string(),

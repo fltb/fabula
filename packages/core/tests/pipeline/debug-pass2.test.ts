@@ -5,6 +5,9 @@ import { MockProvider } from '../../src/ai/providers/mock.ts';
 import type { MockProviderOptions } from '../../src/ai/providers/mock.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type { NarrativeEvent, WorldState, ContextPackage, SystemContext, SceneSpecification, KnowledgeBoundary } from '../../src/types/index.ts';
+import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import { ResultAggregator } from '../../src/validator/aggregator.ts';
+import { makeAnalysisResult } from '../fixtures/mock-pass2-helpers.ts';
 
 const VALID_ANALYSIS_JSON = JSON.stringify({
   eventId: 'evt_test', analysis: {
@@ -43,6 +46,53 @@ function makePipeline(opts: MockProviderOptions = {}) {
   const provider = new MockProvider(opts);
   return { pipeline: new RenderPipeline({ provider, model: 'mock-model', cacheDir: '/tmp/test-cache', storage: new MemoryStorage(), skipCache: true, maxRetries: 3 }), provider };
 }
+
+/**
+ * Build a pipeline WITH a ResultAggregator so getCombinedValidationSchema()
+ * is exercised, using MockPass2Provider for predictable Pass 2 analysis.
+ */
+function makePipelineWithAggregator(entry: MockPass2Entry) {
+  const provider = new MockPass2Provider({ entries: { test: entry } });
+  const aggregator = new ResultAggregator();
+  return new RenderPipeline({
+    provider,
+    model: 'mock-pass2',
+    cacheDir: '/tmp/test-cache',
+    storage: new MemoryStorage(),
+    skipCache: true,
+    maxRetries: 1,
+    aggregator,
+  });
+}
+
+describe('dynamic schema path with aggregator', () => {
+  it('parses analysis with dynamic schema from aggregator', async () => {
+    const entry = makeAnalysisResult('test');
+    const pipeline = makePipelineWithAggregator(entry);
+    const result = await pipeline.renderScene(makeJob('test'));
+
+    expect(result.analysis).not.toBeNull();
+    expect(result.analysis!.eventId).toBe('test');
+    // All 14 blocks should be present in the parsed analysis
+    const a = result.analysis!.analysis;
+    expect(a).toHaveProperty('postconditions');
+    expect(a).toHaveProperty('preconditions');
+    expect(a).toHaveProperty('pov');
+    expect(a).toHaveProperty('inventedDetails');
+    expect(a).toHaveProperty('quality');
+    expect(a).toHaveProperty('threadProgressAchieved');
+    expect(a).toHaveProperty('foreshadowingDeployed');
+    expect(a).toHaveProperty('narrativeChecks');
+    expect(a).toHaveProperty('appearanceChecks');
+    expect(a).toHaveProperty('characterReferences');
+    expect(a).toHaveProperty('tenseDetected');
+    expect(a).toHaveProperty('conflictAnalysis');
+    expect(a).toHaveProperty('ruleChecks');
+    expect(a).toHaveProperty('knowledgeChecks');
+    // Schema validation passed — no pass2 rejection
+    expect(result.pass2Rejection).toBeUndefined();
+  });
+});
 
 describe('debug pass2 rejection field', () => {
   it('generator returning empty', async () => {

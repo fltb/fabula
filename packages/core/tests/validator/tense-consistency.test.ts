@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { TenseConsistencyValidator } from '../../src/validator/tense-consistency.js';
-import type { NarrativeEvent, PostRenderInput, AnalysisResult } from '../../src/types/index.js';
+import type {
+  NarrativeEvent,
+  PostRenderInput,
+  PreRenderInput,
+  AnalysisResult,
+} from '../../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -34,6 +39,22 @@ function makeInput(
     prose: 'Some prose.',
     analysis,
     chapter: 1,
+  };
+}
+
+function makePreInput(
+  event: NarrativeEvent,
+  events: NarrativeEvent[],
+): PreRenderInput {
+  return {
+    event,
+    events,
+    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    entityRegistry: { load: () => {}, resolve: () => null, findByKind: () => [], findByAttribute: () => [], resolveRefs: () => new Map(), register: () => {}, updateState: () => {}, getAll: () => [] },
+    chapter: 1,
+    queryState: () => undefined,
+    getKnowledge: () => ({ claims: {}, bySubject: {}, byProposition: {}, actLog: [] }),
+    getThreadProgress: () => null,
   };
 }
 
@@ -84,5 +105,40 @@ describe('TenseConsistencyValidator', () => {
 
     const issues = new TenseConsistencyValidator().validatePost(input);
     expect(issues).toHaveLength(0);
+  });
+});
+
+describe('instance state (no leakage)', () => {
+  it('should not carry state between validatePre calls with different event sets', () => {
+    const validator = new TenseConsistencyValidator();
+
+    // Set A: past-tense events
+    const eA1 = makeEvent({ id: 'E1', narrativeOrder: 1, tense: 'past' });
+    const eA2 = makeEvent({ id: 'E2', narrativeOrder: 2, tense: 'past' });
+    const issuesA = validator.validatePre(makePreInput(eA2, [eA1, eA2]));
+    expect(issuesA.filter(i => i.validator === 'tense_consistency')).toHaveLength(0);
+
+    // Set B: present-tense events (no tense conflict within set)
+    const eB1 = makeEvent({ id: 'E3', narrativeOrder: 1, tense: 'present' });
+    const eB2 = makeEvent({ id: 'E4', narrativeOrder: 2, tense: 'present' });
+    const issuesB = validator.validatePre(makePreInput(eB2, [eB1, eB2]));
+    expect(issuesB.filter(i => i.validator === 'tense_consistency')).toHaveLength(0);
+  });
+
+  it('should not carry state between validatePost calls with different events', () => {
+    const validator = new TenseConsistencyValidator();
+
+    // Call with past-tense event + matching analysis
+    const input1 = makeInput(makeEvent({ id: 'E1', tense: 'past' }), makeAnalysis({ tenseDetected: 'past' }));
+    const issues1 = validator.validatePost(input1);
+    expect(issues1.filter(i => i.validator === 'tense_consistency')).toHaveLength(0);
+
+    // Call with present-tense event + matching analysis (should NOT be affected by first call)
+    const input2 = makeInput(
+      makeEvent({ id: 'E2', tense: 'present' }),
+      makeAnalysis({ eventId: 'E2', tenseDetected: 'present' }),
+    );
+    const issues2 = validator.validatePost(input2);
+    expect(issues2.filter(i => i.validator === 'tense_consistency')).toHaveLength(0);
   });
 });

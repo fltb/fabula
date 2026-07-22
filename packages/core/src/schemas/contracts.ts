@@ -16,7 +16,7 @@ const capabilityEntrySchema = z
   })
   .strict();
 
-export const capabilityManifestSchema = z
+export const legacyCapabilityManifestSchema = z
   .object({
     version: schemaVersion,
     capabilities: z.array(capabilityEntrySchema).superRefine((entries, context) => {

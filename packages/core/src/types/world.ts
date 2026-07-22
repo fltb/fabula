@@ -2,7 +2,7 @@
 // Novalistically — World State, Knowledge, Relationship & State Transition Types
 // ============================================================================
 
-import type { EntityId, StoryTimestamp, Fact, FactId } from './entity.js';
+import type { EntityId, Fact, FactId } from './entity.js';
 import type { NarrativeEvent } from './event.js';
 import type {
   RelationshipRuntimeState,
@@ -14,32 +14,6 @@ import type {
 
 import type { EpistemicLedger, PropositionCatalog } from './knowledge.js';
 import type { ThreadRuntimeState } from './thread.js';
-
-// ——— Knowledge System (§7.4.2) ———
-
-export interface KnowledgeState {
-  worldTruth: Fact[];
-  characterKnowledge: Record<EntityId, {
-    knownFacts: KnowledgeEntry[];
-    unknownFacts: FactId[];
-    misbeliefs: KnowledgeEntry[];
-  }>;
-  readerKnowledge: FactId[];
-  narratorKnowledge: FactId[];
-}
-
-export interface KnowledgeEntry {
-  fact: Fact;
-  acquiredAt: StoryTimestamp;
-  source: KnowledgeSource;
-  confidence: number;
-}
-
-export type KnowledgeSource =
-  | { type: 'direct_experience'; eventId: string }
-  | { type: 'told_by'; characterId: EntityId; eventId: string }
-  | { type: 'inferred'; basis: FactId[] }
-  | { type: 'deceived_by'; characterId: EntityId; actualFact: FactId };
 
 // ——— Relationship System (§7.4.3) ———
 
@@ -71,25 +45,6 @@ export interface RelationshipEffect {
     | { type: 'qualitative'; trigger: string; from: string; to: string };
 }
 
-// ——— State Transition Rule (§7.4.4) ———
-
-export interface StateTransitionRule {
-  id: string;
-  eventType: string;
-  condition?: (event: NarrativeEvent, state: WorldState) => boolean;
-  effects: TransitionEffect[];
-}
-
-export interface TransitionEffect {
-  target: 'character' | 'relationship' | 'knowledge' | 'world';
-  dimension: string;
-  delta?: number;
-  qualitative?: {
-    semantics: 'irreversible' | 'conditional' | 'gradual' | 'threshold';
-    threshold?: number;
-    description: string;
-  };
-}
 
 // ——— World State ———
 import type { RuleRuntimeState } from './rule.js';
@@ -116,6 +71,7 @@ export interface Snapshot {
   eventCount: number;
   eventId: string;
   timestamp: string;
+  version: number;
   state: WorldState;
 }
 

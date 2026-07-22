@@ -98,6 +98,13 @@ export interface Fact {
    * Omitted/undefined defaults to 'set' when value is present.
    */
   operation?: 'set' | 'unset';
+  /**
+   * Comparison operator for precondition evaluation:
+   * - 'eq' / 'neq' / 'gt' / 'gte' / 'lt' / 'lte' / 'contains' / 'not_contains' require a value
+   * - 'exists' / 'not_exists' check attribute presence/absence (no value)
+   * Omitted defaults to 'eq' when value is present.
+   */
+  operator?: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'not_contains' | 'exists' | 'not_exists';
   validity: FactValidity;
 }
 

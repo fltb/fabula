@@ -11,6 +11,7 @@
 //   maxTokens: 10000 (far above target; we take what we get)
 // ============================================================================
 
+import { StyleResolver, toStyleNotes, resolveProfile, type StyleProfile } from '../style/index.ts';
 import * as crypto from 'node:crypto';
 import type { LLMProvider, CompletionRequest, CompletionResponse, Message } from '../ai/types.ts';
 import type {
@@ -20,12 +21,14 @@ import type {
   AnalysisResult,
   ValidationResult,
 } from '../types/index.ts';
+import type { SurfaceReferencePacket } from '../types/render-surface.ts';
 import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
 import { buildAnalysisPrompt, type RenderAnalysisInput } from '../ai/prompts/render-analysis.ts';
 import { compareAnalysisBlocks } from '../util/compare-analysis.ts';
 import { PromptAssembler } from '../context/prompt-assembler.ts';
 import {
   computeCacheKeys,
+  computeEvidenceHash,
   getCachedRender,
   setCachedRender,
 } from '../cache/render-cache.ts';
@@ -37,12 +40,26 @@ import { CacheCorruptionError, sanitizeError } from '../errors.ts';
 import { analyzeValidationErrors, decideRepairStrategy } from './reverse-validate.ts';
 import type { Logger } from '../observability/logger.ts';
 import type { TraceCollector } from '../observability/trace.ts';
+import type { PluginHooksManager } from '../plugin/hooks-manager.ts';
+import { TypedEventBus } from '../event-bus.ts';
 
 export interface RenderJob {
   event: NarrativeEvent;
   stateBefore: WorldState;
   context: ContextPackage;
   chapter: number;
+
+  /**
+   * Hash-pinned disclosure-safe summary of prior discourse state.
+   * Produced by LogicalDisclosureSummaryCompiler before context compilation.
+   */
+  logicalDisclosureSummary?: string;
+
+  /**
+   * Non-authoritative prose excerpt + style packet from a prior render.
+   * Per RENDER-SURFACE-1: YAML always wins over this packet.
+   */
+  surfaceReferencePacket?: SurfaceReferencePacket;
 }
 export interface ProviderCallLedgerEntry {
   phase: 'pass1' | 'pass2' | 'pass2_verify';
@@ -106,11 +123,17 @@ export interface RenderPipelineOptions {
   logger?: Logger;
   /** Trace collector for span recording (optional) */
   traceCollector?: TraceCollector;
+  /** Event bus for pipeline lifecycle observation (optional) */
+  eventBus?: TypedEventBus;
   /** Target length for Pass 1 prose generation (default: 400 words) */
   targetLengthWords?: number;
   /** Language code for CJK-aware instruction generation (default: 'en') */
   language?: string;
+  /** Plugin lifecycle hooks manager (optional) */
+  pluginHooksManager?: PluginHooksManager;
   doubleRunVerification?: boolean;
+  /** Optional project-level style profile for prose generation guidance */
+  styleProfile?: StyleProfile;
   /** Circuit breaker max rounds (default 3) */
   maxRounds?: number;
 }
@@ -129,8 +152,12 @@ export class RenderPipeline {
   private readonly doubleRunVerification: boolean;
   private readonly logger?: Logger;
   private readonly traceCollector?: TraceCollector;
+  private readonly eventBus?: TypedEventBus;
   private readonly targetLengthWords: number;
+  private readonly styleProfile?: StyleProfile;
+  private readonly styleResolver: StyleResolver;
   private readonly language: string;
+  private readonly pluginHooksManager?: PluginHooksManager;
   private cacheKeys: Map<string, string> | null = null;
   private readonly maxRounds: number;
   constructor(opts: RenderPipelineOptions) {
@@ -146,9 +173,13 @@ export class RenderPipeline {
     this.doubleRunVerification = opts.doubleRunVerification ?? false;
     this.logger = opts.logger;
     this.traceCollector = opts.traceCollector;
+    this.eventBus = opts.eventBus;
     this.targetLengthWords = opts.targetLengthWords ?? 400;
+    this.styleProfile = opts.styleProfile;
+    this.styleResolver = new StyleResolver();
     this.language = opts.language ?? 'en';
     this.maxRounds = opts.maxRounds ?? 3;
+    this.pluginHooksManager = opts.pluginHooksManager;
     this.pool = new ConcurrencyPool(opts.concurrency ?? 5);
   }
   /**
@@ -175,22 +206,28 @@ export class RenderPipeline {
     // Observability: pipeline span start
     this.traceCollector?.record({ phase: 'pipeline', state: 'start', spanId: eventId, eventId });
     this.logger?.info('Starting scene render', { eventId, chapter });
+    this.eventBus?.emit('pipeline:render:before', { eventId });
 
     // ── Cache check ──────────────────────────────────────────────
     if (!this.skipCache && cacheKey) {
       this.traceCollector?.record({ phase: 'cache', state: 'start', spanId: `${eventId}:cache`, eventId });
       try {
-        const cached = getCachedRender(this.cacheDir, eventId, cacheKey, this.storage);
+        const evidenceHash = computeEvidenceHash(event.id, event.preconditions ?? [], event.postconditions ?? []);
+        const cached = getCachedRender(this.cacheDir, eventId, cacheKey, this.storage, evidenceHash);
         if (cached) {
           const c = cached as Record<string, unknown>;
           const cachedAnalysisStr = c.analysis ? String(c.analysis) : null;
-          const analysis = cachedAnalysisStr ? parseAnalysisJSON(cachedAnalysisStr, (message) => errors.push(`Cache parse warning: ${message}`)) : null;
+          const analysis = cachedAnalysisStr ? (this.aggregator
+            ? parseAnalysisJSONWithErrors(cachedAnalysisStr, this.aggregator.getCombinedValidationSchema()).result
+            : parseAnalysisJSON(cachedAnalysisStr, (message) => errors.push(`Cache parse warning: ${message}`)))
+          : null;
           const validation = analysis && this.aggregator
             ? this.aggregator.validateRender(String(c.prose ?? ''), event, stateBefore, analysis)
             : null;
           const needsReview = String(c.prose ?? '').trim().length === 0 || analysis === null || (validation !== null && !validation.passed);
           this.traceCollector?.record({ phase: 'cache', state: 'end', spanId: `${eventId}:cache`, eventId });
           this.traceCollector?.record({ phase: 'pipeline', state: 'end', spanId: eventId, eventId });
+          this.eventBus?.emit('cache:hit', { eventId, cacheKey: cacheKey ?? '' });
           this.logger?.info('Cache hit, returning cached result', { eventId });
           return {
             eventId, prose: String(c.prose ?? ''), analysis,
@@ -203,11 +240,18 @@ export class RenderPipeline {
         }
         this.traceCollector?.record({ phase: 'cache', state: 'end', spanId: `${eventId}:cache`, eventId });
         this.logger?.info('Cache miss, proceeding to render', { eventId });
+        this.eventBus?.emit('cache:miss', { eventId });
       } catch (error) {
         if (!(error instanceof CacheCorruptionError)) throw error;
         errors.push(`Cache read failed for ${eventId}: ${error.code}`);
         this.traceCollector?.record({ phase: 'cache', state: 'error', spanId: `${eventId}:cache`, eventId, code: error.code });
       }
+    }
+
+    // ── Plugin: beforeRender hook ─────────────────────────────────
+    if (this.pluginHooksManager) {
+      const hookErrors = await this.pluginHooksManager.runBeforeRender();
+      errors.push(...hookErrors);
     }
 
     // ── Circuit Breaker: retry loop ────────────────────────────────
@@ -229,8 +273,13 @@ export class RenderPipeline {
       escalationDelay: 0,
     });
 
+    // Resolve style profile from project config (chapter/narrator/scene levels can be added later)
+    const styleNotes = this.styleProfile
+      ? toStyleNotes(resolveProfile({ project: this.styleProfile }))
+      : undefined;
     while (breaker.attempt()) {
       attempts = breaker.state().totalAttempts;
+      this.traceCollector?.record({ phase: 'circuit', state: 'start', spanId: `${eventId}:circuit:attempt_${attempts}`, eventId, code: `round_${breaker.state().round}_attempt_${attempts}` });
 
       // ── Pass 1: Pure prose (with retry guidance on retry) ────────
       const assembler = new PromptAssembler();
@@ -242,7 +291,9 @@ export class RenderPipeline {
         retryGuidance: attempts > 1 && previousErrorMessages.length > 0
           ? previousErrorMessages.join('\n')
           : undefined,
+        profileStyleNotes: styleNotes,
       });
+      this.traceCollector?.record({ phase: 'pass1', state: 'start', spanId: `${eventId}:pass1`, eventId });
       const proseMessages = assembled.messages;
       try {
         const pass1Request: CompletionRequest = {
@@ -250,6 +301,7 @@ export class RenderPipeline {
           model: this.model,
           temperature: 0.8,
           maxTokens: this.maxTokens,
+          taskType: 'pass1',
         };
         const pass1Hash = this.computeRequestHash(pass1Request);
         const result1 = await this.provider.complete(pass1Request);
@@ -261,12 +313,12 @@ export class RenderPipeline {
           prose = '(empty)';
         }
       } catch (err) {
-        errors.push(`Pass 1 attempt ${attempts} failed: ${sanitizeError(err)}`);
         const pass1Hash = this.computeRequestHash({
           messages: proseMessages,
           model: this.model,
           temperature: 0.8,
           maxTokens: this.maxTokens,
+          taskType: 'pass1',
         });
         providerCalls.push({ phase: 'pass1', attempt: attempts, outcome: 'failure', failureReason: sanitizeError(err), requestHash: pass1Hash, model: this.model, seed: null });
         prose = '(empty)';
@@ -288,6 +340,7 @@ export class RenderPipeline {
       llmPass2 = null;
       pass2Rejection = null;
       let lastAnalysisMessages: Message[] | undefined;
+      this.traceCollector?.record({ phase: 'pass2', state: 'start', spanId: `${eventId}:pass2`, eventId });
       try {
         let analysisObj: AnalysisResult | null = null;
         let feedbackErrors: string[] | undefined;
@@ -305,6 +358,7 @@ export class RenderPipeline {
             temperature: 0.3,
             maxTokens: 12000,
             seed: 42,
+            taskType: 'pass2',
             responseFormat: { type: 'json_object' },
           };
           const pass2Hash = this.computeRequestHash(pass2Request);
@@ -349,6 +403,7 @@ export class RenderPipeline {
                 temperature: 0.3,
                 maxTokens: 12000,
                 seed: 42,
+                taskType: 'pass2',
                 responseFormat: { type: 'json_object' },
               };
               verifyHash = this.computeRequestHash(verifyRequest);
@@ -394,6 +449,7 @@ export class RenderPipeline {
           temperature: 0.3,
           maxTokens: 12000,
           seed: 42,
+          taskType: 'pass2',
           responseFormat: { type: 'json_object' },
         });
         providerCalls.push({ phase: 'pass2', attempt: attempts, outcome: 'failure', failureReason: sanitizeError(err), requestHash: failPass2Hash, model: this.model, seed: 42 });
@@ -413,6 +469,8 @@ export class RenderPipeline {
         }
       }
       this.traceCollector?.record({ phase: 'validator', state: 'end', spanId: `${eventId}:validator`, eventId, durationMs: Date.now() - renderStart });
+      const issueCount = renderValidation?.errors.length ?? 0;
+      this.eventBus?.emit('pipeline:validation:complete', { eventId, issueCount });
 
       // If validation passes (or no aggregator), break out of retry loop
       if (!renderValidation || renderValidation.passed) {
@@ -463,6 +521,7 @@ export class RenderPipeline {
 
     // Save cache ONLY if validation passed (don't cache bad renders)
     if (cacheKey && !needsReview) {
+      const evidenceHash = computeEvidenceHash(event.id, event.preconditions ?? [], event.postconditions ?? []);
       setCachedRender(this.cacheDir, eventId, cacheKey, {
         prose,
         analysis: analysisRaw, // Store raw JSON string in cache
@@ -471,10 +530,17 @@ export class RenderPipeline {
         promptHash,
         renderedAt: new Date().toISOString(),
         chapters: [chapter],
-      }, this.storage);
+      }, this.storage, evidenceHash);
     }
     this.traceCollector?.record({ phase: 'pipeline', state: 'end', spanId: eventId, eventId, durationMs: renderEnd - renderStart });
     this.logger?.info('Scene render completed', { eventId, durationMs: renderEnd - renderStart, attempts, needsReview });
+    this.eventBus?.emit('pipeline:render:after', { eventId, durationMs: renderEnd - renderStart });
+
+    // ── Plugin: afterRender hook ──────────────────────────────────
+    if (this.pluginHooksManager) {
+      const hookErrors = await this.pluginHooksManager.runAfterRender();
+      errors.push(...hookErrors);
+    }
 
     return {
       eventId,

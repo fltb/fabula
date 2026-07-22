@@ -5,6 +5,10 @@
 // Consumes Pass 2 conflictAnalysis block to verify that:
 // - If a scene declares a resolutionType, the analysis should confirm resolution
 // - If analysis says resolutionAchieved=false but scene expects resolution = error
+//
+// Note: Uses event-level conflictType/resolutionType fields, not entity attribute
+// lookups. conflictType and resolutionType are event-schema fields, not entity
+// attributes. Catalog functions imported for future use.
 // ============================================================================
 
 import type {
@@ -13,7 +17,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import { z } from 'zod';
 
 export const conflictAnalysisSchema = z.object({
@@ -34,6 +38,7 @@ export class ConflictValidator implements Validator {
     // Deterministic check: if resolutionType is set to 'unresolved'
     // but the scene has a conflict type that implies resolution,
     // flag a warning
+    // event-level field, not in entity attribute catalog
     if (event.resolutionType === 'unresolved' && event.conflictType) {
       issues.push(makeIssue(
         this.name, event.id, 'system', 'warning',
@@ -55,9 +60,8 @@ export class ConflictValidator implements Validator {
     const conflictResult = conflictAnalysisSchema.safeParse(analysis.analysis.conflictAnalysis);
     if (!conflictResult.success) return issues;
     const conflictAnalysis = conflictResult.data;
-
-    const eventResolutionType = event.resolutionType;
-    const eventConflictType = event.conflictType;
+    const eventResolutionType = event.resolutionType; // event-level field, not in entity attribute catalog
+    const eventConflictType = event.conflictType; // event-level field, not in entity attribute catalog
 
     // Only a declared resolving outcome requires Pass 2 to confirm resolution.
     const expectsResolution = eventResolutionType !== undefined && !['unresolved', 'negative_resolution'].includes(eventResolutionType);

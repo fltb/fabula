@@ -72,6 +72,25 @@ eventHashN = sha256(eventHash{N-1} + "|event:" + fileContent + "|defs:" + defsHa
 
 如果验证通过，结果会被缓存：散文 + 分析原始 JSON + LLM 使用元数据 + 时间戳。糟糕的渲染结果永远不会被缓存。
 
+### 7. 发布门控与交互式审批
+
+发布门控在 `renderNovel()` 中运行。渲染完成后，检查每个 `RenderSceneResult`：
+
+- **S/X 级别错误（`severity: 'error'`）**：必须修复，不可豁免。门控阻塞，输出错误诊断。
+- **C 级别警告（`severity: 'warning'`）**：可通过 `InteractionManager.recordWaiver()` 记录签名豁免后放行。豁免记录包含：门 ID、签署人、时间戳、原因。
+
+如果没有提供 `InteractionManager`，所有 `needsReview === true` 的结果都会阻塞发布。
+
+相关类型和类：
+
+| 符号 | 文件 | 说明 |
+|------|------|------|
+| `InteractionGate` | `pipeline/interaction-gate.ts` | 门控描述（条件、期望输入、超时） |
+| `WaiverRecord` | `pipeline/interaction-gate.ts` | 豁免记录（签署人、时间、原因） |
+| `InteractionManager` | `pipeline/interaction-gate.ts` | 门控管理器：`needsApproval()`/`recordWaiver()`/`getPendingGates()` |
+
+`InteractionManager` 的生命周期由调用方管理（典型为 CLI 层）。每个 `renderNovel()` 调用可以传入同一个 `InteractionManager` 实例，以便跨调用累积豁免记录。
+
 ## 输出文件
 
 由 `output.ts` 通过 `Storage` 抽象写入：

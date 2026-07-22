@@ -28,6 +28,7 @@ export class ContextCompiler {
     entityRegistry: EntityRegistry,
     options?: {
       previousSceneSummary?: string;
+      volumeSummary?: string;
       systemContext?: SystemContext;
       activeThreadIds?: string[];
     },
@@ -37,6 +38,7 @@ export class ContextCompiler {
       state,
       entityRegistry,
       options?.previousSceneSummary ?? '',
+      options?.volumeSummary ?? '',
       options?.systemContext,
       options?.activeThreadIds,
     );

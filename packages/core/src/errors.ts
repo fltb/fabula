@@ -30,6 +30,7 @@ function defineError(name: string, code: string) {
 
 export class ConfigError extends defineError('ConfigError', 'CONFIG_INVALID') {}
 export class StorageError extends defineError('StorageError', 'STORAGE_FAILURE') {}
+export class ValidationError extends defineError('ValidationError', 'VALIDATION_FAILED') {}
 export class DagProviderError extends defineError('DagProviderError', 'DAG_PROVIDER_INVALID') {}
 export class DagCycleError extends defineError('DagCycleError', 'DAG_CYCLE') {}
 export class PreconditionMismatchError extends defineError('PreconditionMismatchError', 'PRECONDITION_MISMATCH') {}

@@ -49,6 +49,8 @@ export class PromptAssembler {
       language?: string;
       referenceExample?: string;
       retryGuidance?: string;
+      /** Pre-composed style profile notes from resolved project/chapter/scene profile */
+      profileStyleNotes?: string;
     },
   ): AssembledPrompt {
     const parts: string[] = [
@@ -81,6 +83,9 @@ export class PromptAssembler {
     }
     if (options?.characterVoiceNotes) {
       parts.push(`- Character voice: ${options.characterVoiceNotes}`);
+    }
+    if (options?.profileStyleNotes) {
+      parts.push(`- ${options.profileStyleNotes}`);
     }
     const targetAudience = context.systemContext?.targetAudience;
     if (targetAudience) {

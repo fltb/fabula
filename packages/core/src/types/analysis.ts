@@ -59,10 +59,6 @@ interface KnowledgeCheck {
 
 // ── Existing block types ──────────────────────────────────────────────────────
 
-export interface PostconditionAnalysis {
-  covered: string[];
-  dropped: string[];
-}
 
 interface ViolatedPrecondition {
   entityId: string;

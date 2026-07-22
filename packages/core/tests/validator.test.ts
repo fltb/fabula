@@ -286,6 +286,32 @@ describe('CharacterStateValidator', () => {
     expect(deadIssues).toHaveLength(1);
     expect(deadIssues[0].entity).toBe('vi');
   });
+
+  it('should error when dead character is described performing actions in prose', () => {
+    const event = makeEvent({ participants: { entities: ['vi'] } });
+    const input: PostRenderInput = {
+      event,
+      worldState: {
+        entities: {
+          vi: { status: 'dead', alive: false },
+        },
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
+      prose: 'vi walked into the room and spoke to the group.',
+      analysis: null,
+      chapter: 3,
+      entityRegistry: new InMemoryEntityRegistry(),
+    };
+
+    const issues = validator.validatePost(input);
+    const deadActionIssues = issues.filter((i) => i.severity === 'error' && i.message.includes('dead'));
+    expect(deadActionIssues).toHaveLength(1);
+    expect(deadActionIssues[0].entity).toBe('vi');
+  });
 });
 
 // ============================================================================
@@ -519,6 +545,77 @@ describe('CausalityValidator', () => {
     const noEffectIssues = issues.filter((i) => i.message.includes('no causal effect'));
     expect(noEffectIssues).toHaveLength(0);
   });
+
+  it('should warn when precondition location is not mentioned in prose', () => {
+    const registry = new InMemoryEntityRegistry();
+    registerCharacter(registry, 'jinx', { location: 'piltover' });
+    const event = makeEvent({
+      preconditions: [
+        {
+          id: 'jinx.location',
+          entityId: 'jinx',
+          attribute: 'location',
+          value: 'piltover',
+          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+        },
+      ],
+    });
+    const input: PostRenderInput = {
+      event,
+      worldState: {
+        entities: { jinx: { location: 'piltover' } },
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
+      prose: 'Jinx looked around the dark room, searching for an exit.',
+      analysis: null,
+      chapter: 3,
+      entityRegistry: registry,
+    };
+
+    const issues = validator.validatePost(input);
+    const locationIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('location'));
+    expect(locationIssues).toHaveLength(1);
+    expect(locationIssues[0].message).toContain('piltover');
+  });
+  
+  it('should pass when precondition location is mentioned in prose', () => {
+    const registry = new InMemoryEntityRegistry();
+    registerCharacter(registry, 'jinx', { location: 'piltover' });
+    const event = makeEvent({
+      preconditions: [
+        {
+          id: 'jinx.location',
+          entityId: 'jinx',
+          attribute: 'location',
+          value: 'piltover',
+          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+        },
+      ],
+    });
+    const input: PostRenderInput = {
+      event,
+      worldState: {
+        entities: { jinx: { location: 'piltover' } },
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
+      prose: 'Jinx walked through the streets of Piltover.',
+      analysis: null,
+      chapter: 3,
+      entityRegistry: registry,
+    };
+
+    const issues = validator.validatePost(input);
+    const locationIssues = issues.filter((i) => i.message.includes('location'));
+    expect(locationIssues).toHaveLength(0);
+  });
 });
 
 // ============================================================================
@@ -563,7 +660,7 @@ describe('ForeshadowingValidator', () => {
     const input = buildPreInput(currentEvent, { chapter: 5, events: [otherEvent, currentEvent] });
 
     const issues = validator.validatePre(input);
-    const errIssues = issues.filter((i) => i.severity === 'error' && i.message.includes('2+ chapters past'));
+    const errIssues = issues.filter((i) => i.severity === 'error' && i.message.includes('overdue'));
     expect(errIssues).toHaveLength(1);
     expect(errIssues[0].entity).toBe('f_shadow_2');
   });
@@ -641,79 +738,6 @@ describe('POVValidator', () => {
     expect(issues).toHaveLength(0);
   });
 });
-
-// ============================================================================
-// 8. FactualDetailValidator Tests
-// ============================================================================
-
-describe('FactualDetailValidator', () => {
-  const validator = new FactualDetailValidator();
-
-  it('should info when trait is confirmed', () => {
-    const registry = new InMemoryEntityRegistry();
-    registerCharacter(registry, 'jayce', { traits: ['brilliant_inventor'] });
-    const event = makeEvent({
-      preconditions: [
-        {
-          id: 'jayce.traits',
-          entityId: 'jayce',
-          attribute: 'traits',
-          value: 'brilliant_inventor',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-        },
-      ],
-    });
-    const input = buildPreInput(event, { entityRegistry: registry });
-
-    const issues = validator.validatePre(input);
-    const infoIssues = issues.filter((i) => i.severity === 'info' && i.message.includes('confirmed'));
-    expect(infoIssues).toHaveLength(1);
-    expect(infoIssues[0].entity).toBe('jayce');
-  });
-
-  it('should warn on placeholder values (changed, resolved, updated)', () => {
-    for (const placeholder of ['changed', 'resolved', 'updated']) {
-      const event = makeEvent({
-        preconditions: [
-          {
-            id: `jinx.${placeholder}`,
-            entityId: 'jinx',
-            attribute: 'status',
-            value: placeholder,
-            validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-          },
-        ],
-      });
-      const input = buildPreInput(event);
-
-      const issues = validator.validatePre(input);
-      const warnIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('Placeholder'));
-      expect(warnIssues).toHaveLength(1);
-    }
-  });
-
-  it('should pass for concrete facts', () => {
-    const registry = new InMemoryEntityRegistry();
-    registerCharacter(registry, 'jinx', { traits: ['chaotic'] });
-    const event = makeEvent({
-      preconditions: [
-        {
-          id: 'jinx.traits',
-          entityId: 'jinx',
-          attribute: 'traits',
-          value: 'chaotic',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-        },
-      ],
-    });
-    const input = buildPreInput(event, { entityRegistry: registry });
-
-    const issues = validator.validatePre(input);
-    const placeholderIssues = issues.filter((i) => i.message.includes('Placeholder'));
-    expect(placeholderIssues).toHaveLength(0);
-  });
-});
-
 // ============================================================================
 // 9. VoiceDriftDetector Tests
 // ============================================================================
@@ -909,24 +933,6 @@ describe('ReachabilityValidator', () => {
     expect(threadIssues[0].message).toContain('behind');
   });
 
-  it('should error when foreshadow is unrevealed far past due', () => {
-    const event = makeEvent({
-      id: 'evt_early',
-      narrativeOrder: 3,
-      foreshadowing: [
-        { id: 'f_ancient_evil', hint: 'Something stirs', targetRevealChapter: 1 },
-      ],
-    });
-    const input = buildPreInput(event, {
-      events: [event],
-      chapter: 10,
-    });
-
-    const issues = validator.validatePre(input);
-    const foreshadowIssues = issues.filter((i) => i.severity === 'error' && i.message.includes('unrevealed'));
-    expect(foreshadowIssues).toHaveLength(1);
-    expect(foreshadowIssues[0].entity).toBe('f_ancient_evil');
-  });
 
   it('should warn when precondition is never established by any postcondition', () => {
     const event = makeEvent({

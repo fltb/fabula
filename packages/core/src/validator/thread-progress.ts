@@ -8,7 +8,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import { z } from 'zod';
 export const threadProgressAchievedSchema = z.array(z.string());
  
@@ -16,6 +16,9 @@ export const threadProgressAchievedSchema = z.array(z.string());
 export class ThreadProgressValidator implements Validator {
   name = 'thread_progress';
   category = 'timeline_plot' as const;
+  // Uses event-level threadProgress fields, not entity attribute lookups.
+  // Thread IDs are project-defined narrative markers, not entity attributes.
+  // Catalog functions imported for future use.
 
   validatePre(input: PreRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];

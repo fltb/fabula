@@ -15,7 +15,7 @@ import type {
   EntityRegistry,
 } from './entity.js';
 import type { NarrativeEvent } from './event.js';
-import type { KnowledgeState, WorldState } from './world.js';
+import type { WorldState } from './world.js';
 import type { EpistemicLedger } from './knowledge.js';
 import type { AnalysisResult } from './analysis.js';
 import type { EventStore } from '../state/event-store.js';

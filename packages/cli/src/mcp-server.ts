@@ -13,11 +13,19 @@ import {
   ReviewManager,
   clearEventCache,
   FsStorage,
+  ReportWriter,
   type AssembleResult,
+  type PipelineRunResult,
+  type ValidationIssue,
+  type ThreadSnapshot,
+  type Blocker,
+  type NextAction,
+  type ISSDimension,
+  type ReviewComment,
 } from '@novalistically/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { StatusReport, NextAction, ValidationIssue, ThreadSnapshot, Blocker, ISSDimension, ReviewComment } from '@novalistically/core';
+import type { StatusReport } from '@novalistically/core';
 
 // ============================================================================
 // MCP Tool Implementations
@@ -31,12 +39,10 @@ export function mcpNovaStatus(projectPath: string): StatusReport {
   const status = getProjectStatus(projectPath);
   const { iss, results: validationResults } = validateNovel(projectPath);
 
-  // Collect all errors/warnings
-  const allErrors: ValidationIssue[] = [];
-  const allWarnings: ValidationIssue[] = [];
+  // Collect all L1 issues from validateNovel
+  const l1Issues: ValidationIssue[] = [];
   for (const [, vr] of validationResults) {
-    allErrors.push(...vr.errors);
-    allWarnings.push(...vr.warnings);
+    l1Issues.push(...vr.errors, ...vr.warnings, ...vr.infos);
   }
 
   // Thread snapshots (simplified — getProjectStatus provides basic progress)
@@ -65,7 +71,8 @@ export function mcpNovaStatus(projectPath: string): StatusReport {
       missingPreconditions: [],
     }));
 
-  // Next actions
+  // Next actions (helper functions defined below in this file)
+  const allErrors = l1Issues.filter(i => i.severity === 'error');
   const nextActions = generateNextActions(iss, allErrors, threadSnapshots, renderBlocked);
 
   // Guidance
@@ -78,26 +85,30 @@ export function mcpNovaStatus(projectPath: string): StatusReport {
     nextActions,
   );
 
-  return {
-    project: path.basename(projectPath),
-    timestamp: new Date().toISOString(),
+  // Build PipelineRunResult and delegate to ReportWriter
+  const result: PipelineRunResult = {
+    projectName: path.basename(projectPath),
+    projectDir: projectPath,
+    generatedAt: new Date().toISOString(),
+    passed: l1Issues.filter(i => i.severity === 'error').length === 0,
+    l1Issues,
+    l2Issues: [],
     iss,
-    validation: {
-      lastRun: new Date().toISOString(),
-      errors: allErrors,
-      warnings: allWarnings,
-    },
-    threads: threadSnapshots,
-    render: {
+    results: [],
+    renderStatus: {
       ready: renderReady,
       blocked: renderBlocked,
       waiting: [],
       completed: renderCompleted,
     },
+    threads: threadSnapshots,
     blockers,
     nextActions,
     guidance,
+    errors: [],
   };
+
+  return new ReportWriter(result).toStatusReport();
 }
 
 // ============================================================================

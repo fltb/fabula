@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { capabilityManifestSchema, responseReferenceSchema } from '../src/schemas/contracts.ts';
+import { legacyCapabilityManifestSchema, responseReferenceSchema } from '../src/schemas/contracts.ts';
 import {
   ConfigError,
   DagCycleError,
@@ -12,12 +12,12 @@ describe('Stage 1 contracts', () => {
   const manifest = JSON.parse(readFileSync('capabilities/stage-1.json', 'utf8'));
 
   it('accepts the versioned capability manifest', () => {
-    expect(capabilityManifestSchema.parse(manifest).capabilities).not.toHaveLength(0);
+    expect(legacyCapabilityManifestSchema.parse(manifest).capabilities).not.toHaveLength(0);
   });
 
   it('rejects duplicate and unknown capability fields', () => {
-    expect(capabilityManifestSchema.safeParse({ ...manifest, capabilities: [manifest.capabilities[0], manifest.capabilities[0]] }).success).toBe(false);
-    expect(capabilityManifestSchema.safeParse({ ...manifest, unexpected: true }).success).toBe(false);
+    expect(legacyCapabilityManifestSchema.safeParse({ ...manifest, capabilities: [manifest.capabilities[0], manifest.capabilities[0]] }).success).toBe(false);
+    expect(legacyCapabilityManifestSchema.safeParse({ ...manifest, unexpected: true }).success).toBe(false);
   });
 
   it('requires exactly one fact representation (value XOR narrativeHint) and rejects missing value for operator', () => {
@@ -30,7 +30,7 @@ describe('Stage 1 contracts', () => {
   });
 
   it('rejects unsupported contract versions and mismatched reference IDs', () => {
-    expect(capabilityManifestSchema.safeParse({ ...manifest, version: 2 }).success).toBe(false);
+    expect(legacyCapabilityManifestSchema.safeParse({ ...manifest, version: 2 }).success).toBe(false);
     const fixture = JSON.parse(readFileSync('fixtures/zhu-fu/reference/data/E0.json', 'utf8'));
     const result = responseReferenceSchema.safeParse({
       prose: fixture.prose,

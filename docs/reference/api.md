@@ -51,7 +51,7 @@
 | `parseAnalysisJSONWithErrors(text)` | `schemas/analysis.ts` | 解析 + Zod 验证 Pass 2 JSON，返回 AnalysisResult 或详细错误 |
 | `writeValidationReport(projectDir, report)` | `reporter/validation-reporter.ts` | 写入 `output/validation.md`，包含摘要和问题表格 |
 | `calculateISS(input)` | `iss/score.ts` | 计算各维度的实现状态评分（Implementation Status Score） |
-| `assembleNovel(options)` | `assembler/index.ts` | 将所有已渲染场景组装为最终的小说输出 |
+| `analyzeProjectImpact(oldPath, newPath)` | `api.ts` | 比较两个项目目录的 YAML 事件定义，按影响等级（Red/Yellow/Green）分类变更，检测下游事件。返回 `{ events, downstream }` |
 
 ### 存储抽象层
 

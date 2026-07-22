@@ -51,15 +51,10 @@ export type {
 } from './event.js';
 
 export type {
-  KnowledgeState,
-  KnowledgeEntry,
-  KnowledgeSource,
   Relationship,
   RelationshipDef,
   RelationshipState,
   RelationshipEffect,
-  StateTransitionRule,
-  TransitionEffect,
   WorldState,
   Snapshot,
   WorldInitialState,
@@ -175,7 +170,6 @@ export type {
   ReviewComment,
   ReviewPatch,
   PatchChange,
-  Proposal,
 } from './review.js';
 
 export type {
@@ -420,6 +414,13 @@ export type {
   SurfacePlannerError,
   SurfaceErrorCode,
 } from './render-surface.js';
+
+// ——— SUMMARY: Volume Summary types ———
+export type {
+  VolumeSummary,
+  ChapterMeta,
+  SceneMeta,
+} from './summary.js';
 
 // ——— CAPABILITY-1: Capability Manifest types ———
 export type {

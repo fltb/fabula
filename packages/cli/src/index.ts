@@ -22,6 +22,10 @@ import {
   MockPass2Provider,
   exportDAGtoDOT,
   exportDAGtoMermaid,
+  migrateProjectFile,
+  analyzeProjectImpact,
+  computeEvidenceHash,
+  verifyEvidenceChain,
 } from '@novalistically/core';
 import type { ReviewComment } from '@novalistically/core';
 import { runAll, runRegressionBench, runPerformanceBench } from '@novalistically/bench';
@@ -277,6 +281,31 @@ program
     }
   });
 
+
+// --- migrate ---
+program
+  .command('migrate')
+  .description('Migrate project config to the latest schema version')
+  .action(() => {
+    const projectDir = ensureProjectDir();
+    const yamlPath = path.join(projectDir, 'nova.yaml');
+
+    try {
+      const prevVersion = migrateProjectFile(yamlPath, new FsStorage());
+      if (prevVersion >= 1) {
+        console.log('Project is already at latest schema version (1).');
+      } else {
+        console.log(`Migration complete. Schema version updated from ${prevVersion} to 1.`);
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('newer than supported')) {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
+      }
+      throw err;
+    }
+  });
+
 // --- assemble ---
 program
   .command('assemble')
@@ -477,7 +506,8 @@ program
   .option('--provider <provider>', 'Provider: ai-sdk or mock-pass2')
   .option('--reference-dir <path>', 'Approved mock reference directory')
   .option('--trace', 'Emit trace JSONL to .nova/traces/<job>.jsonl')
-  .action(async (eventId: string, options: { dryRun?: boolean; all?: boolean; model?: string; provider?: string; referenceDir?: string; trace?: boolean }) => {
+  .option('--concurrency <number>', 'Max concurrent LLM calls')
+  .action(async (eventId: string, options: { dryRun?: boolean; all?: boolean; model?: string; provider?: string; referenceDir?: string; trace?: boolean; concurrency?: string }) => {
     const projectDir = ensureProjectDir();
     if (options.provider === 'mock-pass2' && !options.referenceDir) {
       console.error('--provider mock-pass2 requires --reference-dir');
@@ -496,8 +526,10 @@ program
       model: options.model,
       eventId: options.all ? undefined : eventId,
       dryRun: options.dryRun,
-      provider,
+      trace: options.trace,
       storage: new FsStorage(),
+      concurrency: options.concurrency ? Number(options.concurrency) : undefined,
+      provider,
     });
 
     if (result.errors.length > 0 && result.results.length === 0) {
@@ -533,13 +565,169 @@ program
       console.log(`\nDone. Output written to scenes/`);
     }
   });
+// --- trace ---
+const traceCmd = program.command('trace').description('Inspect pipeline trace output');
 
-// --- diff ---
-program
-  .command('diff <event>')
-  .description('Show state changes for an event')
+traceCmd
+  .command('event <eventId>')
+  .description('Show trace events for a single event')
   .action((eventId: string) => {
     const projectDir = ensureProjectDir();
+    const tracesDir = path.join(projectDir, '.nova', 'traces');
+    if (!fs.existsSync(tracesDir)) {
+      console.error('No trace data found. Run with --trace flag during render first.');
+      process.exit(1);
+    }
+    const files = fs.readdirSync(tracesDir).filter((f) => f.endsWith('.jsonl'));
+    if (files.length === 0) {
+      console.log('No trace files found.');
+      return;
+    }
+    // Load all trace events, filter by eventId
+    const matching: Array<Record<string, unknown>> = [];
+    for (const file of files) {
+      const content = fs.readFileSync(path.join(tracesDir, file), 'utf-8');
+      for (const line of content.trim().split('\n').filter(Boolean)) {
+        try {
+          const ev = JSON.parse(line);
+          if (ev.eventId === eventId) {
+            matching.push(ev);
+          }
+        } catch {
+          // skip malformed lines
+        }
+      }
+    }
+    if (matching.length === 0) {
+      console.log(`No trace events found for event "${eventId}".`);
+      return;
+    }
+    // Display formatted trace
+    matching.sort((a, b) => (a.timestamp as string)?.localeCompare(b.timestamp as string) ?? 0);
+    console.log(`\nTrace events for "${eventId}" (${matching.length} events):`);
+    console.log('━'.repeat(60));
+    for (const ev of matching) {
+      const phase = String(ev.phase ?? '').padEnd(12);
+      const state = String(ev.state ?? '').padEnd(6);
+      const dur = ev.durationMs != null ? ` ${String(ev.durationMs).padStart(4)}ms` : '       ';
+      const code = ev.code ? ` [${ev.code}]` : '';
+      console.log(`  ${String(ev.timestamp ?? '').slice(11, 23)}  ${phase} ${state}${dur}${code}  span=${ev.spanId}`);
+    }
+  });
+
+traceCmd
+  .command('stats')
+  .description('Show aggregate trace statistics')
+  .action(() => {
+    const projectDir = ensureProjectDir();
+    const tracesDir = path.join(projectDir, '.nova', 'traces');
+    if (!fs.existsSync(tracesDir)) {
+      console.error('No trace data found. Run with --trace flag during render first.');
+      process.exit(1);
+    }
+    const files = fs.readdirSync(tracesDir).filter((f) => f.endsWith('.jsonl'));
+    if (files.length === 0) {
+      console.log('No trace files found.');
+      return;
+    }
+    // Gather stats
+    const phaseCounts: Record<string, number> = {};
+    const phaseDurations: Record<string, number[]> = {};
+    let totalEvents = 0;
+    for (const file of files) {
+      const content = fs.readFileSync(path.join(tracesDir, file), 'utf-8');
+      for (const line of content.trim().split('\n').filter(Boolean)) {
+        try {
+          const ev = JSON.parse(line);
+          totalEvents++;
+          const phase = String(ev.phase ?? 'unknown');
+          phaseCounts[phase] = (phaseCounts[phase] ?? 0) + 1;
+          if (ev.durationMs != null) {
+            phaseDurations[phase] = phaseDurations[phase] ?? [];
+            phaseDurations[phase].push(Number(ev.durationMs));
+          }
+        } catch {
+          // skip malformed lines
+        }
+      }
+    }
+    console.log(`\nTrace Stats (${files.length} files, ${totalEvents} events):`);
+    console.log('━'.repeat(60));
+    console.log('  Phase               Count    Avg(ms)   Min(ms)   Max(ms)');
+    console.log('  ' + '─'.repeat(56));
+    const sortedPhases = Object.keys(phaseCounts).sort();
+    for (const phase of sortedPhases) {
+      const count = phaseCounts[phase];
+      const durs = phaseDurations[phase];
+      if (durs && durs.length > 0) {
+        const avg = (durs.reduce((a, b) => a + b, 0) / durs.length).toFixed(1);
+        const min = Math.min(...durs).toFixed(0);
+        const max = Math.max(...durs).toFixed(0);
+        console.log(`  ${phase.padEnd(20)} ${String(count).padStart(5)}  ${avg.padStart(8)}  ${min.padStart(7)}  ${max.padStart(7)}`);
+      } else {
+        console.log(`  ${phase.padEnd(20)} ${String(count).padStart(5)}       N/A       N/A       N/A`);
+      }
+    }
+  });
+// --- diff ---
+program
+  .command('diff')
+  .description('Show state changes for an event or compare project versions')
+  .argument('[event]', 'Event ID to diff (state before/after)')
+  .option('--project <path>', 'Compare current project YAML with version at <path>')
+  .option('--json', 'Output in JSON format (project diff only)')
+  .action((eventId: string | undefined, opts: { project?: string; json?: boolean }) => {
+    const projectDir = ensureProjectDir();
+
+    if (opts.project) {
+      // Impact analysis mode
+      const oldPath = path.resolve(opts.project);
+      const result = analyzeProjectImpact(oldPath, projectDir);
+
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      const redEvents = Object.entries(result.events)
+        .filter(([, level]) => level === 'red')
+        .map(([id]) => id).sort();
+      const yellowEvents = Object.entries(result.events)
+        .filter(([, level]) => level === 'yellow')
+        .map(([id]) => id).sort();
+      const greenEvents = Object.entries(result.events)
+        .filter(([, level]) => level === 'green')
+        .map(([id]) => id).sort();
+
+      console.log('\nImpact Analysis:');
+      console.log('  ' + '━'.repeat(50));
+      if (redEvents.length > 0) {
+        console.log(`  Red (causal chain broken): ${redEvents.length} event${redEvents.length !== 1 ? 's' : ''} (${redEvents.join(', ')})`);
+        for (const [id, downstreamIds] of Object.entries(result.downstream)) {
+          console.log(`    ${id} downstream: ${downstreamIds.join(', ')}`);
+        }
+      } else {
+        console.log('  Red (causal chain broken):  0 events');
+      }
+      if (yellowEvents.length > 0) {
+        console.log(`  Yellow (needs rewrite):     ${yellowEvents.length} event${yellowEvents.length !== 1 ? 's' : ''} (${yellowEvents.join(', ')})`);
+      } else {
+        console.log('  Yellow (needs rewrite):     0 events');
+      }
+      if (greenEvents.length > 0) {
+        console.log(`  Green (no effect):          ${greenEvents.length} event${greenEvents.length !== 1 ? 's' : ''} (${greenEvents.join(', ')})`);
+      } else {
+        console.log('  Green (no effect):          0 events');
+      }
+      return;
+    }
+
+    if (!eventId) {
+      console.error('Error: Provide an event ID or --project <path>');
+      process.exit(1);
+    }
+
+    // Existing event state diff mode
     const result = diffEvent(projectDir, eventId);
 
     if (!result) {
@@ -556,7 +744,61 @@ program
     }
   });
 
-// --- commit ---
+// --- verify ---
+program
+  .command('verify')
+  .description('Verify evidence chain for all cached scenes')
+  .option('--json', 'Output as JSON')
+  .action((opts: { json?: boolean }) => {
+    const projectDir = ensureProjectDir();
+    const storage = new FsStorage();
+    const cacheDir = path.join(projectDir, '.nova', 'render-cache');
+
+    // Load events to compute current evidence hashes
+    const mapper = new EntityMapper(projectDir, storage);
+    const data = mapper.loadProject();
+    const events = mapper.loadAllEvents(data.chapters);
+
+    // Build evidence hash map
+    const evidenceHashes = new Map<string, string>();
+    for (const event of events) {
+      if (event.source === 'genesis') continue; // skip genesis system event
+      const hash = computeEvidenceHash(event.id, event.preconditions ?? [], event.postconditions ?? []);
+      evidenceHashes.set(event.id, hash);
+    }
+
+    const result = verifyEvidenceChain(cacheDir, evidenceHashes, storage);
+
+    if (opts.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    console.log('\nEvidence Chain Verification:');
+    console.log('  ' + '━'.repeat(50));
+    console.log(`  Total cached:  ${result.totalCached}`);
+    console.log(`  Valid:         ${result.valid}`);
+    console.log(`  Stale:         ${result.stale}`);
+    console.log(`  Missing:       ${result.missing}`);
+
+    if (result.details.length > 0) {
+      const issues = result.details.filter((d) => d.status !== 'valid');
+      if (issues.length > 0) {
+        console.log('\n  Issues:');
+        for (const d of issues) {
+          console.log(`    ${d.eventId}: ${d.status}${d.reason ? ` (${d.reason})` : ''}`);
+        }
+      }
+    }
+
+    if (result.stale === 0 && result.missing === 0) {
+      console.log('\n  ✅ All cached scenes verified.');
+    } else if (result.valid > 0) {
+      console.log('\n  ⚠️  Some cached scenes are stale or missing. Re-render recommended.');
+    } else {
+      console.log('\n  ❌ No valid cached scenes found.');
+    }
+  });
 program
   .command('commit')
   .description('Commit current state (auto-run after validation)')

@@ -11,6 +11,13 @@ const validJSON = {
     quality: { proseScore: 8, maxScore: 10, strengths: ['good'], weaknesses: [], estimatedWordCount: 350 },
     threadProgressAchieved: ['thread-1'],
     foreshadowingDeployed: [],
+    narrativeChecks: [],
+    appearanceChecks: [],
+    characterReferences: [],
+    tenseDetected: 'past',
+    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+    ruleChecks: [],
+    knowledgeChecks: [],
   },
 };
 

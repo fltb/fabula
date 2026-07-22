@@ -2,7 +2,7 @@
 // ReplayEngine — Replay events to reconstruct world state
 // ============================================================================
 
-import type { NarrativeEvent, WorldState, BranchPath, EntityRuntimeState, EntityDeclarationCatalog, EntityTypeCatalog, EntityTypeDefinition } from '../types/index.js';
+import type { NarrativeEvent, WorldState, BranchPath, EntityRuntimeState, EntityDeclarationCatalog, EntityTypeCatalog, EntityTypeDefinition, RelationshipChange } from '../types/index.js';
 import {
   createEmptyBranchPath,
   includesPath,
@@ -16,6 +16,7 @@ import { convertRelationshipChange } from '../types/relationship.js';
 import type { ThreadTransaction } from '../types/index.js';
 import { applyThreadTransaction, convertLegacyThreadProgress, isLegacyThreadProgress } from './thread-replay.js';
 import { applyRuleTransaction, convertLegacyRuleEffect, isLegacyRuleEffect } from './rule-replay.js';
+import { emptyWorldState } from './story-boundaries.js';
 const LIFECYCLE_STATES: Record<string, true> = { active: true, inactive: true, retired: true };
 
 const DEFAULT_LIFECYCLE_TRANSITIONS: Array<[EntityRuntimeState, EntityRuntimeState]> = [
@@ -127,15 +128,7 @@ export class ReplayEngine {
     const sortedIds = topologicalSort(selectedEvents, edges, inDegree, anchors);
     const idToEvent = new Map(selectedEvents.map((event) => [event.id, event]));
     const sorted = sortedIds.map((id) => idToEvent.get(id)!);
-
-    const state: WorldState = {
-      entities: {},
-      relationships: {},
-      knowledge: {},
-      threads: {},
-      rules: {},
-      facts: [],
-    };
+    const state = emptyWorldState();
     // Track lifecycle changes by storyTime for conflict detection
     const lifecycleChangesByStoryTime = new Map<string, Set<string>>();
 
@@ -148,7 +141,7 @@ export class ReplayEngine {
       for (const fact of event.preconditions) {
         if (!includesPath(fact.validity.branches, bp)) continue;
 
-        const op = (fact as unknown as Record<string, unknown>).operator as string | undefined;
+        const op = fact.operator;
 
         // exists / not_exists: direct check, no value required
         if (op === 'exists') {
@@ -191,7 +184,7 @@ export class ReplayEngine {
       for (const fact of event.postconditions) {
         if (!includesPath(fact.validity.branches, bp)) continue;
 
-        const op = (fact as unknown as Record<string, unknown>).operation as string | undefined;
+        const op = fact.operation;
 
         // Form 3: narrativeHint-only — skip WorldState write
         if (fact.value === undefined && fact.narrativeHint !== undefined && op !== 'unset') {
@@ -322,6 +315,8 @@ export class ReplayEngine {
       for (const tp of event.threadProgress) {
         const tx = isLegacyThreadProgress(tp)
           ? convertLegacyThreadProgress(tp, event.id)
+          // TODO(T3-remaining): needs (ThreadProgressEntry | ThreadTransaction) union on
+          // NarrativeEvent.threadProgress to eliminate the double-cast
           : (tp as unknown as ThreadTransaction);
         applyThreadTransaction(state.threads, tx);
       }
@@ -335,8 +330,10 @@ export class ReplayEngine {
         if ('participants' in re && !('effectId' in re)) {
           // Old-style RelationshipChange — convert inline
           const idx = event.relationshipEffects.indexOf(re);
+          // TODO(T3-remaining): needs (RelationshipChange | RelationshipTransaction) union on
+          // NarrativeEvent.relationshipEffects to eliminate the double-cast
           tx = convertRelationshipChange(
-            re as unknown as { participants: [string, string]; effect: string; direction: string; newState?: { type: string; intensity: number } },
+            re as unknown as RelationshipChange,
             event.id,
             idx,
           );
@@ -346,15 +343,7 @@ export class ReplayEngine {
         applyRelationshipTransaction(state.relationships, tx);
       }
 
-      // Knowledge state is owned by STATE-4 EpistemicLedger; replay does not write state.knowledge.
-      // (Keep empty init for existing readers that access state.knowledge[entityId]?.knownFacts)
-      for (const fact of event.postconditions) {
-        if (fact.attribute === 'knows' || fact.attribute === 'knowledge') {
-          if (!state.knowledge[fact.entityId]) {
-            state.knowledge[fact.entityId] = { knownFacts: [] };
-          }
-        }
-      }
+      // Knowledge state is initialized via emptyWorldState() factory (epistemicLedger handles knowledge)
 
       // ── Phase 5: Rule evidence (STATE-6) ──
       // Backward compat: convert legacy RuleEffectEntry to RuleTransaction

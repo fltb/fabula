@@ -25,6 +25,7 @@ export { PronounValidator } from './pronoun.js';
 export { AppearanceValidator } from './appearance.js';
 export { ConflictValidator } from './conflict.js';
 export { ResultAggregator } from './aggregator.js';
+export { resolveDeferredFacts } from './deferred-resolver.js';
 
 // ============================================================================
 // Aggregated analysis schema — built from built-in validator schemas
@@ -57,13 +58,13 @@ export const analysisContentSchema = z.object({
   quality: qualityBlockSchema,
   threadProgressAchieved: threadProgressAchievedSchema,
   foreshadowingDeployed: foreshadowingDeployedSchema,
-  narrativeChecks: z.array(narrativeCheckSchema).optional(),
-  appearanceChecks: z.array(appearanceCheckSchema).optional(),
-  characterReferences: z.array(characterReferenceSchema).optional(),
-  tenseDetected: tenseDetectedSchema.optional(),
-  conflictAnalysis: conflictAnalysisSchema.optional(),
-  ruleChecks: z.array(ruleCheckSchema).optional(),
-  knowledgeChecks: z.array(knowledgeCheckSchema).optional(),
+  narrativeChecks: z.array(narrativeCheckSchema),
+  appearanceChecks: z.array(appearanceCheckSchema),
+  characterReferences: z.array(characterReferenceSchema),
+  tenseDetected: tenseDetectedSchema,
+  conflictAnalysis: conflictAnalysisSchema,
+  ruleChecks: z.array(ruleCheckSchema),
+  knowledgeChecks: z.array(knowledgeCheckSchema),
 });
 
 export type AnalysisContent = z.infer<typeof analysisContentSchema>;

@@ -21,8 +21,17 @@ export interface StoryBoundaries {
   finalState: WorldState;
 }
 
-function emptyState(): WorldState {
-  return { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] };
+export function emptyWorldState(): WorldState {
+  return {
+    entities: {},
+    relationships: {},
+    knowledge: {},
+    epistemicLedger: { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
+    propositionCatalog: { version: 0, propositions: {}, dependencyGraph: {} },
+    threads: {},
+    rules: {},
+    facts: [],
+  };
 }
 
 function copyState(state: WorldState): WorldState {
@@ -32,7 +41,7 @@ function copyState(state: WorldState): WorldState {
 function applyFacts(state: WorldState, facts: readonly Fact[]): void {
   for (const fact of facts) {
     // Initial facts with operation 'unset' are not allowed
-    const op = (fact as unknown as Record<string, unknown>).operation as string | undefined;
+    const op = fact.operation;
     if (op === 'unset') {
       throw new ConfigError(
         `Initial fact ${fact.id} has operation 'unset'; initial state must be deterministic sets`,
@@ -59,7 +68,7 @@ export function compileStoryBoundaries(
   const selectedEvents = events.filter((event) => inDegree.has(event.id));
   const eventById = new Map(selectedEvents.map((event) => [event.id, event]));
   const orderedEventIds = topologicalSort(selectedEvents, edges, inDegree, anchors);
-  const state = emptyState();
+  const state = emptyWorldState();
   const stateBeforeByEventId = new Map<string, WorldState>();
   applyFacts(state, initialFacts);
 

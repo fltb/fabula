@@ -41,18 +41,24 @@ import { QualityValidator } from './quality.js';
 import { ThreadProgressValidator } from './thread-progress.js';
 
 import type { EventStore } from '../state/event-store.js';
+import type { TraceCollector } from '../observability/trace.ts';
+import { logger } from '../observability/logger.js';
+
 
 export class ResultAggregator {
   private validators: Validator[];
   private pluginValidators: PluginValidator[];
   private eventStore?: EventStore;
+  private traceCollector?: TraceCollector;
 
   constructor(
     customValidators?: Validator[],
     pluginValidators?: PluginValidator[],
     eventStore?: EventStore,
+    traceCollector?: TraceCollector,
   ) {
     this.eventStore = eventStore;
+    this.traceCollector = traceCollector;
     this.validators = customValidators ?? [
       new TimelineValidator(),
       new CharacterStateValidator(),
@@ -100,10 +106,13 @@ export class ResultAggregator {
   ): ValidationResult {
     const allIssues: ValidationIssue[] = [];
     const chapterValue = chapter; // Use the parameter (defaults to 1)
-
     for (const validator of this.validators) {
       const override = overrides?.[validator.name];
       if (override === 'off') continue;
+
+      const valSpanId = `${event.id}:validator:${validator.name}`;
+      const startTime = Date.now();
+      this.traceCollector?.record({ phase: 'validator', state: 'start', spanId: valSpanId, eventId: event.id });
 
       if (validator.validatePost) {
         const input: PostRenderInput = { event, worldState: state, prose, analysis: analysis ?? null, chapter: chapterValue, entityRegistry: registry };
@@ -128,6 +137,8 @@ export class ResultAggregator {
           allIssues.push(issue);
         }
       }
+
+      this.traceCollector?.record({ phase: 'validator', state: 'end', spanId: valSpanId, eventId: event.id, durationMs: Date.now() - startTime });
     }
 
     const errors = allIssues.filter((i) => i.severity === 'error');
@@ -160,6 +171,10 @@ export class ResultAggregator {
       const override = overrides?.[validator.name];
       if (override === 'off') continue;
 
+      const valSpanId = `${event.id}:validator:${validator.name}`;
+      const startTime = Date.now();
+      this.traceCollector?.record({ phase: 'validator', state: 'start', spanId: valSpanId, eventId: event.id });
+
       // New path: validatePre
       if (validator.validatePre) {
         const input: PreRenderInput = {
@@ -183,6 +198,7 @@ export class ResultAggregator {
           }
           allIssues.push(issue);
         }
+        this.traceCollector?.record({ phase: 'validator', state: 'end', spanId: valSpanId, eventId: event.id, durationMs: Date.now() - startTime });
         continue;
       }
 
@@ -201,6 +217,8 @@ export class ResultAggregator {
           allIssues.push(issue);
         }
       }
+
+      this.traceCollector?.record({ phase: 'validator', state: 'end', spanId: valSpanId, eventId: event.id, durationMs: Date.now() - startTime });
     }
 
     // Run plugin validators (still use ValidatorContext)
@@ -329,6 +347,8 @@ export class ResultAggregator {
    */
   getCombinedValidationSchema(): z.ZodObject<Record<string, z.ZodTypeAny>> {
     const shape: Record<string, z.ZodTypeAny> = {};
+    /** Track which validator first claimed each top-level field */
+    const fieldSources = new Map<string, string>();
     const allValidators: Array<Validator | PluginValidator> = [
       ...this.validators,
       ...this.pluginValidators,
@@ -337,7 +357,24 @@ export class ResultAggregator {
       if (validator.getAnalysisRequirements) {
         for (const req of validator.getAnalysisRequirements()) {
           const tf = req.field.includes('.') ? req.field.split('.')[0] : req.field;
-          shape[tf] = req.schema;
+          const existing = shape[tf];
+          if (existing !== undefined) {
+            // Detect schema conflicts
+            const existingSource = fieldSources.get(tf) ?? 'unknown';
+            const currentSource = validator.name;
+            const areCompatible = JSON.stringify(existing) === JSON.stringify(req.schema);
+            if (!areCompatible) {
+              logger.warn(
+                `Schema conflict for field "${tf}": validators "${existingSource}" and "${currentSource}" have incompatible schemas; using "${currentSource}"`,
+                { validator: currentSource, field: tf, module: 'aggregator' },
+              );
+            }
+            // Always use the last schema (maintain backward compat)
+            shape[tf] = req.schema;
+          } else {
+            fieldSources.set(tf, validator.name);
+            shape[tf] = req.schema;
+          }
         }
       }
     }

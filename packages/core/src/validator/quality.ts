@@ -1,6 +1,11 @@
 // ============================================================================
 // QualityValidator — Self-assessment of prose quality from Pass 2 analysis
 // ============================================================================
+//
+// Uses Pass 2 analysis block data only, not entity attribute lookups.
+// Quality scores, strengths, weaknesses, and word counts are analysis-level
+// values, not entity attributes. Catalog functions imported for future use.
+// ============================================================================
 
 import { z } from 'zod';
 import type {
@@ -9,7 +14,7 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 
 // ── Schemas ───────────────────────────────────────────────────────────
 

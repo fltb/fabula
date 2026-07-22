@@ -35,6 +35,7 @@ export interface ContextPackage {
   knowledgeBoundary: KnowledgeBoundary;
   activeThreads: ThreadStatus[];
   previousSceneSummary: string;
+  volumeSummary: string;
   markdown: string;
   activeRules?: RuleDefinition[];
 }

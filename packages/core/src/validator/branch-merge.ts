@@ -1,6 +1,8 @@
 // ============================================================================
 // BranchMergeValidator — Check branch merge precondition consistency
 // ============================================================================
+// Uses generic pc.attribute access via compareFact/queryState, no hardcoded
+// entity attribute name comparisons. Catalog functions imported for future use.
 
 import type {
   PreRenderInput,
@@ -8,8 +10,9 @@ import type {
   Validator,
   ValidationIssue,
 } from '../types/index.js';
-import { makeIssue } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import { compareFact } from '../entity/compare.js';
+import { resolveDeferredFacts } from './deferred-resolver.js';
 
 export class BranchMergeValidator implements Validator {
   name = 'branch_merge';
@@ -54,6 +57,9 @@ export class BranchMergeValidator implements Validator {
     const event = input.event;
     const prose = input.prose;
     const branchType = event.branchExistence.type;
+
+    // Resolve narrativeHint-only preconditions against Pass 2 narrativeChecks
+    issues.push(...resolveDeferredFacts(event, input.analysis));
 
     if (branchType === 'paths') {
       // Branched event: prose should acknowledge multiple possibilities

@@ -16,7 +16,7 @@ import type {
 } from '../types/index.js';
 import { z } from 'zod';
 import { narrativeCheckSchema } from './schemas.js';
-import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
+import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole, consumeNarrativeChecks } from './base.js';
 
 
 const CLIMAX_MIN_FRACTION = 0.6;
@@ -76,32 +76,33 @@ export class PacingValidator implements Validator {
 
     // Check: narrativeChecks can surface pacing-related issues from Pass 2
     const narrativeChecks = z.array(narrativeCheckSchema).safeParse(analysis.analysis.narrativeChecks).data ?? [];
-    for (const check of narrativeChecks) {
-      // Catalog-driven: check if attribute is a pacing-related narrative attribute
-      const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
-      if (entityKind && getAttributeSemanticRole(entityKind, check.attribute) === 'narrative') {
-        // Filter for pacing-specific attributes derived from catalog
-        const narrativeAttrs = getAttributesBySemanticRole(entityKind, 'narrative');
-        const paceAttrs = narrativeAttrs.filter(a => a.includes('pacing') || a.includes('pace'));
-        if (!paceAttrs.includes(check.attribute)) continue;
-      } else if (!entityKind) {
-        // Fallback: attribute-name heuristic when registry unavailable
-        if (!check.attribute.includes('pacing') && !check.attribute.includes('pace')) continue;
-      }
-      if (check.matchLevel === 'absent' || check.matchLevel === 'contradicted') {
-        issues.push(makeIssue(
-          this.name,
-          event.id,
-          check.entityId,
-          'warning',
-          `Pacing issue: "${check.hint}" — ${check.matchLevel} (${check.evidence})`,
-          check.matchLevel === 'absent'
-            ? 'Expected pacing signal was not detected in the prose.'
-            : 'Prose contradicts expected pacing signal.',
-          'manual',
-        ));
-      }
-    }
+    issues.push(...consumeNarrativeChecks(narrativeChecks,
+      (check) => {
+        // Catalog-driven: check if attribute is a pacing-related narrative attribute
+        const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+        if (entityKind && getAttributeSemanticRole(entityKind, check.attribute) === 'narrative') {
+          // Filter for pacing-specific attributes derived from catalog
+          const narrativeAttrs = getAttributesBySemanticRole(entityKind, 'narrative');
+          const paceAttrs = narrativeAttrs.filter(a => a.includes('pacing') || a.includes('pace'));
+          if (!paceAttrs.includes(check.attribute)) return false;
+        } else if (!entityKind) {
+          // Fallback: attribute-name heuristic when registry unavailable
+          if (!check.attribute.includes('pacing') && !check.attribute.includes('pace')) return false;
+        }
+        return check.matchLevel === 'absent' || check.matchLevel === 'contradicted';
+      },
+      (check) => makeIssue(
+        this.name,
+        event.id,
+        check.entityId,
+        'warning',
+        `Pacing issue: "${check.hint}" — ${check.matchLevel} (${check.evidence})`,
+        check.matchLevel === 'absent'
+          ? 'Expected pacing signal was not detected in the prose.'
+          : 'Prose contradicts expected pacing signal.',
+        'manual',
+      ),
+    ));
 
     return issues;
   }

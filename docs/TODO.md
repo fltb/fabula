@@ -204,7 +204,8 @@ interface AnalysisBlockRequirement {
 
 **实现成本估算**：1-2 天（20 个 validator 补 zodSchema + aggregator 改 + render 替换 + 测试）
 
-### [ ] 插件系统（Plugin System）
+### [x] 插件系统（Plugin System）
+**完成备注（2026-07-22）**：PluginHooks interface + PluginHooksManager + PluginContext + ProviderRegistry + pipeline lifecycle integration. 24 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：已有 skeleton，但不可用。
 
@@ -253,7 +254,8 @@ interface AnalysisBlockRequirement {
 
 **实现成本估算**：3-5 天（集成到主 pipeline + hook 系统 + 测试）
 
-### [ ] Summarizer — Render 层的叙事连续性功能（medium / optional enhancement）
+### [x] Summarizer — Render 层的叙事连续性功能（medium / optional enhancement）
+**完成备注（2026-07-22）**：LogicalDisclosureSummaryCompiler + SurfaceReferenceExtractor + RenderJob 分离 logicalDisclosureSummary/surfaceReferencePacket. 34 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：`ContextPackage.previousSceneSummary` 字段存在但从未传入（硬编码 `''`），且它在 Context 层是设计错误——ContextCompiler 管状态编译，不管叙事连续性。
 
@@ -307,7 +309,8 @@ SurfaceReferenceExtractor
 > 来源：2026-07-19 竞品分析（详见 [docs/reference/competitive-analysis.md](./reference/competitive-analysis.md#对标系统有而-novalistically-少做的功能)）
 > 对标系统：Novel Studio（学术）、Sudowrite（商业）、Novel-OS（开源）
 
-### [ ] 交互式审批（Human-in-the-Loop Pipeline Gate）
+### [x] 交互式审批（Human-in-the-Loop Pipeline Gate）
+**完成备注（2026-07-22）**：实现了 `InteractionManager` 类（`packages/core/src/pipeline/interaction-gate.ts`），提供 `needsApproval()`/`recordWaiver()`/`getPendingGates()` 方法。`api.ts` 的 `renderNovel()` 集成交互式审批：C（warning）级别问题可记录 signed waiver 后放行，S/X（error）级别问题强制阻塞。`RenderNovelOptions` 增加可选 `interactionManager` 参数。测试覆盖 20 个用例：门控触发、C 级 waiver 记录、S/X 阻塞、pending 门控跟踪、多门控独立管理、超时/重置。
 
 **现状**：`RenderSceneResult.needsReview` 字段已在类型中，`CircuitBreaker` 可标记 `BLOCKED` 状态、`human_arbitration` 占位符已在 plugin resolver 中。但 pipeline 是全自动的，没有人停下来等用户的环节。
 
@@ -324,7 +327,8 @@ SurfaceReferenceExtractor
 
 **实现成本估算**：3-5 天
 
-### [ ] 项目级风格档案（Style Profile）
+### [x] 项目级风格档案（Style Profile）
+**完成备注（2026-07-22）**：StyleProfile interface + defaults + StyleResolver (5-layer precedence) + prompt integration. 24 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：`NarrativeEvent.styleGuidance` 是 per-scene 的（tone、characterVoice、atmosphere、scenePacing、avoid）。每个场景 YAML 里独立写，没有全局 fallback；但 RENDER-SURFACE-1 的每个 CompiledSceneContract 都必须有 resolved StyleProfile。
 
@@ -341,7 +345,8 @@ SurfaceReferenceExtractor
 
 **实现成本估算**：1-2 天
 
-### [ ] 变更影响分析（Impact Analysis）
+### [x] 变更影响分析（Impact Analysis）
+**完成备注（2026-07-22）**：analyzeProjectImpact() with Green/Yellow/Red classification + downstream detection + nova diff --project CLI. 10 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：修改 YAML 定义 → 缓存静默失效 → 下次渲染自动重跑。作者得不到"这次改动影响了 X 个场景"的报告。
 
@@ -358,7 +363,8 @@ SurfaceReferenceExtractor
 
 **实现成本估算**：2-3 天
 
-### [ ] 多层级摘要（L0 Scene + L1 Volume）
+### [x] 多层级摘要（L0 Scene + L1 Volume）
+**完成备注（2026-07-22）**：VolumeSummary + VolumeSummaryCompiler + context compiler P2 integration. 18 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：仅 per-scene summary（Summarizer TODO 中规划的 SummaryCompiler）。没有更高层的抽象。
 
@@ -377,7 +383,8 @@ SurfaceReferenceExtractor
 
 **实现成本估算**：3-5 天（设计 + 实现 L1 聚合逻辑）
 
-### [ ] 多模型路由（Per-Task Model Routing）
+### [x] 多模型路由（Per-Task Model Routing）
+**完成备注（2026-07-22）**：ProviderConfig.routing + CompletionRequest.taskType + AiSdkProvider lazy model cache + routing-aware complete(). 11 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：所有任务（Pass 1 写作、Pass 2 分析、预编译摘要、验证）走同一个 `provider.complete()`。不能按任务需求路由模型。
 
@@ -394,7 +401,8 @@ SurfaceReferenceExtractor
 
 **实现成本估算**：1-2 天
 
-### [ ] Agent 独立配置体系（Agent-as-Configurable-Unit）
+### [x] Agent 独立配置体系（Agent-as-Configurable-Unit）
+**完成备注（2026-07-22）**：Agent<I,O> interface + AgentRegistry + AgentPacket + AgentConfig. 17 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：`packages/core/src/ai/prompts/` 下每个 prompt 是一个静态 import 的 TS 函数（`buildSceneRenderPrompt()` → `Message[]`）。`RenderPipeline` 是唯一的执行者——既做 Pass 1 写作、又做 Pass 2 分析。没有 "Agent" 这个抽象概念：
 
@@ -436,7 +444,8 @@ Agent 列表：Chat Agent（闲聊/意图）、Planner（蓝图）、Writer（�
 
 **实现成本估算**：5-7 天（整体架构改造 + 迁移 + 测试）
 
-### [ ] 管线 Trace 系统（Orchestration Trace）
+### [x] 管线 Trace 系统（Orchestration Trace）
+**完成备注（2026-07-22）**：TraceCollector + per-validator timing + pipeline instrumentation + nova trace CLI commands. 7 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：**零 trace。** 整个 `packages/core/src/` 下没有一行结构化 trace 代码。只有零散的 `console.log` / `console.warn`，没有 span 树、没有 timing、没有层级上下文。开发者无法回答以下基本问题：
 
@@ -522,7 +531,8 @@ Novel Studio 的 trace 覆盖：哪个 Agent 在何时执行、什么 model、�
 
 **实现成本估算**：3-5 天（定义类型 + TraceCollector + 核心埋点 + CLI 输出）
 
-### [ ] 结构化日志系统（Structured Logging）
+### [x] 结构化日志系统（Structured Logging）
+**完成备注（2026-07-22）**：Logger class + MemoryLogTransport + JsonlLogTransport + context sanitization + zero console.log in src/. 24 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：**零。** `packages/core/src/` 下 14 处 ad-hoc `console.log('[Assembler]...')`、`console.warn('[PluginLoader]...')`。无日志级别、无 JSON 输出、无 correlation ID（无法将一条日志关联到特定 event/scene 的渲染）。Assembler 的 `assembleNovel()` 直接写 `console.log`（副作用），函数不纯。
 
@@ -559,7 +569,8 @@ Trace 回答"这次渲染管线做了什么"，Log 回答"系统内部状态变�
 
 **实现成本估算**：1-2 天（引入 pino + 全局替换 console.log + 注入 trace_id）
 
-### [ ] 错误类型体系（Error Type Hierarchy）
+### [x] 错误类型体系（Error Type Hierarchy）
+**完成备注（2026-07-22）**：NovalisticallyError + 15 subclasses + ValidationError + getRetryStrategy() type-aware retry. 63 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：只有 `LLMError` 一个自定义错误类（`packages/core/src/ai/types.ts:56`）。其余全部用原始 `Error` + 字符串 message。Circuit Breaker（`circuit-breaker.ts`）不区分错误类型 — 429 rate limit、401 auth fail、网络超时、Zod parse fail 全部同一策略重试。缓存层（`render-cache.ts:172,191`）直接 `catch { // ignore }` 吞错误。
 
@@ -610,7 +621,8 @@ Trace 回答"这次渲染管线做了什么"，Log 回答"系统内部状态变�
 
 **实现成本估算**：1-2 天（定义类 + provider 映射 + Circuit Breaker 差异化）
 
-### [ ] Schema 迁移系统（Schema Migration）
+### [x] Schema 迁移系统（Schema Migration）
+**完成备注（2026-07-22）**：migrateToLatest() + schemaVersion/formatVersion on all schemas + yaml-loader auto-migration + nova migrate CLI. 12 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：**零。** YAML 定义格式（event、character、location、thread、rule）无 schema version 字段。Event log（`event-store.ts` 的 JSONL）无 version marker。Cache（`.nova/render-cache/cache.meta.json`）无 format version。Snapshot（`snapshot.ts` 的 `Snapshot` 类型）无 version 字段。
 
@@ -660,7 +672,8 @@ Trace 回答"这次渲染管线做了什么"，Log 回答"系统内部状态变�
 
 ---
 
-### [ ] 配置层级系统（Configuration Hierarchy）
+### [x] 配置层级系统（Configuration Hierarchy）
+**完成备注（2026-07-22）**：ConfigLoader (5-layer deep merge: defaults→project→env→cli→runtime) + ConfigDefaults. 18 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：单文件平面 `nova.yaml`（`schemas/project.ts:7-33`）。加载时不做 Zod 验证（`readYamlFile<T>()` 在 `yaml-loader.ts` 中只有类型转换）。无继承/覆盖机制。CLI flags、env vars、project config 各自独立读取，无统一合并点。快照目录（`.nova/snapshots`）硬编码在 `api.ts:104`。
 
@@ -678,7 +691,8 @@ Trace 回答"这次渲染管线做了什么"，Log 回答"系统内部状态变�
 
 **实现成本估算**：1-2 天
 
-### [ ] Pipeline 证据校验（Pipeline Evidence Verification）
+### [x] Pipeline 证据校验（Pipeline Evidence Verification）
+**完成备注（2026-07-22）**：evidence hash chain in render-cache + nova verify CLI command. 15 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：Hash-chain 缓存（`render-cache.ts`）只用于判断"需不需要重新渲染"。不用于验证"已完成的渲染是否仍然有效"。如果 `.nova/render-cache/data.render.json` 文件被人为损坏或部分写入后崩溃，系统不会发现 — 下次渲染时直接读损坏数据或静默回退到重渲染。
 
@@ -698,7 +712,8 @@ Trace 回答"这次渲染管线做了什么"，Log 回答"系统内部状态变�
 
 **实现成本估算**：0.5-1 天
 
-### [ ] 事件总线（EventBus / Internal Message Bus）
+### [x] 事件总线（EventBus / Internal Message Bus）
+**完成备注（2026-07-22）**：TypedEventBus with 7 event types + pipeline integration. 14 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**：管线组件之间是直接 `import + 调用`。`api.ts → ContextCompiler → RenderPipeline → Assembler` 是硬连接的调用链。没有进程内的松耦合通信机制。
 
@@ -737,7 +752,8 @@ Trace 回答"这次渲染管线做了什么"，Log 回答"系统内部状态变�
 
 **实现成本估算**：0.5-1 天（typed EventBus 类 + 第一批事件定义 + 管线关键节点的 emit）
 
-### [ ] 报告器重新设计（ReportWriter — 统一报告概念）
+### [x] 报告器重新设计（ReportWriter — 统一报告概念）
+**完成备注（2026-07-22）**：ReportWriter (toMarkdown/toJSON/toStatusReport/toBenchReport) + backward-compat writeValidationReport. 19 tests. 详见 docs/audits/stage-1.5v2-report.md。
 
 **现状**："报告器"不是统一概念。报告逻辑散落在 5 个地方：
 
@@ -876,9 +892,10 @@ ReportWriter
 
 **实现成本估算**：1 天（重构 snapshot 类型 + 统一 replay + 更新所有调用点 + 测试）
 
-### [ ] STORY-SEMANTICS: 离散确定性故事状态规范
+### [x] STORY-SEMANTICS: 离散确定性故事状态规范
 
 **规范边界**：Novalistically 支持有限、离散、确定性、按具体 `BranchPath` 解析的 `WorldState` 回放与 selected-scene 验证。每个 replayable node 在一个有效 `storyTime` 原子应用其 effects；`narrativeOrder` 只控制 discourse/Assembler。系统不支持连续重叠动作、概率性因果、纯 `narrativeHint` 语义依赖或真正的因果循环。它们必须拆分为可证实的离散变化、转写为确定性 Fact，或被明确拒绝。
+**完成备注（2026-07-22）**：全部 12 项 STORY-SEMANTICS 子规范已在前期阶段完成实现、测试和文档更新。规范边界定义（离散确定性状态、BranchPath 解析、DAG 因果边、compareFact() 唯一入口、narrativeHint 语义不可进入 WorldState）均已由代码沿袭满足，无遗留未闭合项。
 
 **状态与因果规则**：
 

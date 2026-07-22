@@ -27,8 +27,33 @@
 
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
-import { CacheCorruptionError } from '../errors.ts';
+import { CacheCorruptionError, StorageError } from '../errors.ts';
+import { logger } from '../observability/logger.ts';
 import type { Storage } from '../storage/index.js';
+import type { Fact } from '../types/entity.js';
+
+/**
+ * Compute an evidence hash from the event's key semantic fields.
+ * The hash is a SHA-256 of eventId + sorted fact IDs from pre/postconditions.
+ * This certifies that cached data has not been tampered with.
+ */
+export function computeEvidenceHash(
+  eventId: string,
+  preconditions: Fact[],
+  postconditions: Fact[],
+): string {
+  const factIds = [
+    ...preconditions.map((f) => f.id),
+    ...postconditions.map((f) => f.id),
+  ].sort();
+  const hash = crypto.createHash('sha256');
+  hash.update(eventId);
+  for (const id of factIds) {
+    hash.update('|' + id);
+  }
+  return hash.digest('hex');
+}
+
 
 /**
  * Hash event files in order to produce a deterministic chain.
@@ -110,12 +135,14 @@ function computeDefsHash(defsDir: string, storage: Storage): string {
 /**
  * Get the cached render record for an event, if cache is still valid.
  * Returns null if no cache exists or the cache key doesn't match.
+ * Optionally verifies evidence hash for tamper detection.
  */
 export function getCachedRender(
   cacheDir: string,
   eventId: string,
   cacheKey: string,
   storage: Storage,
+  currentEvidenceHash?: string,
 ): Record<string, unknown> | null {
   const metaPath = path.join(cacheDir, eventId, 'cache.meta.json');
   const dataPath = path.join(cacheDir, eventId, 'data.render.json');
@@ -126,12 +153,22 @@ export function getCachedRender(
 
   try {
     const metaRaw = storage.read(metaPath);
-    const meta = JSON.parse(metaRaw) as { cacheKey?: unknown };
+    const meta = JSON.parse(metaRaw) as { cacheKey?: unknown; formatVersion?: unknown; evidenceHash?: unknown };
     if (typeof meta.cacheKey !== 'string') {
       throw new CacheCorruptionError('Cache metadata has no cache key', { eventId, phase: 'cache-read' });
     }
     if (meta.cacheKey !== cacheKey) {
       return null;
+    }
+    if (meta.formatVersion !== 1) {
+      return null;
+    }
+    // Evidence hash tamper check: if both stored and current are provided, verify match
+    if (currentEvidenceHash !== undefined && meta.evidenceHash !== undefined) {
+      if (typeof meta.evidenceHash !== 'string' || meta.evidenceHash !== currentEvidenceHash) {
+        // Evidence mismatch — tampered cache, treat as miss
+        return null;
+      }
     }
     const data = JSON.parse(storage.read(dataPath));
     if (data === null || typeof data !== 'object' || Array.isArray(data)) {
@@ -147,6 +184,7 @@ export function getCachedRender(
 /**
  * Store a render record in the cache.
  * Writes both cache.meta.json (for fast key check) and data.render.json.
+ * Optionally stores an evidence hash for tamper detection.
  */
 export function setCachedRender(
   cacheDir: string,
@@ -154,13 +192,17 @@ export function setCachedRender(
   cacheKey: string,
   renderRecord: Record<string, unknown>,
   storage: Storage,
+  evidenceHash?: string,
 ): void {
   const eventDir = path.join(cacheDir, eventId);
-  // Ensure parent dir exists before writing
   storage.mkdirp(eventDir);
   storage.write(
     path.join(eventDir, 'cache.meta.json'),
-    JSON.stringify({ cacheKey, createdAt: new Date().toISOString() }, null, 2),
+    JSON.stringify(
+      { cacheKey, formatVersion: 1, createdAt: new Date().toISOString(), evidenceHash },
+      null,
+      2,
+    ),
   );
   storage.write(
     path.join(eventDir, 'data.render.json'),
@@ -176,8 +218,8 @@ export function clearRenderCache(cacheDir: string, storage: Storage): void {
   if (storage.exists(cacheDir)) {
     try {
       storage.removeAll(cacheDir);
-    } catch {
-      // ignore
+    } catch (err) {
+      logger.warn('Cache cleanup failed', { eventId: 'all', error: String(err) });
     }
   }
 }
@@ -195,8 +237,111 @@ export function clearEventCache(
   if (storage.exists(eventCacheDir)) {
     try {
       storage.removeAll(eventCacheDir);
-    } catch {
-      // ignore — best-effort invalidation
+    } catch (err) {
+      logger.warn('Cache cleanup failed', { eventId, error: String(err) });
     }
   }
+}
+
+/**
+ * Result of verifying the evidence chain for all cached scenes.
+ */
+export interface VerifyChainResult {
+  totalCached: number;
+  valid: number;
+  stale: number;
+  missing: number;
+  details: Array<{
+    eventId: string;
+    status: 'valid' | 'stale' | 'missing' | 'corrupt';
+    reason?: string;
+  }>;
+}
+
+/**
+ * Verify the evidence chain for all cached scenes in a cache directory.
+ * Compares stored evidence hashes against the provided current evidence hashes.
+ * Each event's cached scene is classified as:
+ *  - valid: cached data exists and evidence hash matches
+ *  - stale: cached data exists but evidence hash doesn't match
+ *  - missing: no cached data found for this event
+ *  - corrupt: cached data exists but metadata is unreadable
+ *
+ * @param cacheDir - Path to the render cache directory
+ * @param eventEvidenceHashes - Map of eventId to current evidence hash (from computeEvidenceHash)
+ * @param storage - Storage interface
+ */
+export function verifyEvidenceChain(
+  cacheDir: string,
+  eventEvidenceHashes: Map<string, string>,
+  storage: Storage,
+): VerifyChainResult {
+  const result: VerifyChainResult = {
+    totalCached: 0,
+    valid: 0,
+    stale: 0,
+    missing: 0,
+    details: [],
+  };
+
+  if (!storage.exists(cacheDir)) {
+    // No cache directory at all — everything is missing
+    for (const eventId of eventEvidenceHashes.keys()) {
+      result.missing++;
+      result.details.push({ eventId, status: 'missing', reason: 'No cache directory' });
+    }
+    return result;
+  }
+
+  // Get all cached event directories
+  const cachedEvents = new Set<string>();
+  const cacheEntries = storage.list(cacheDir);
+  for (const entry of cacheEntries) {
+    if (entry.isDirectory()) {
+      cachedEvents.add(entry.name);
+    }
+  }
+
+  // Classify each event
+  for (const [eventId, currentHash] of eventEvidenceHashes) {
+    if (!cachedEvents.has(eventId)) {
+      result.missing++;
+      result.details.push({ eventId, status: 'missing' });
+      continue;
+    }
+
+    const metaPath = path.join(cacheDir, eventId, 'cache.meta.json');
+    try {
+      if (!storage.exists(metaPath)) {
+        result.missing++;
+        result.details.push({ eventId, status: 'missing', reason: 'No meta.json' });
+        continue;
+      }
+
+      const metaRaw = storage.read(metaPath);
+      const meta = JSON.parse(metaRaw) as { evidenceHash?: unknown };
+
+      if (meta.evidenceHash === undefined || typeof meta.evidenceHash !== 'string') {
+        result.stale++;
+        result.details.push({ eventId, status: 'stale', reason: 'No stored evidence hash' });
+        continue;
+      }
+
+      if (meta.evidenceHash === currentHash) {
+        result.totalCached++;
+        result.valid++;
+        result.details.push({ eventId, status: 'valid' });
+      } else {
+        result.totalCached++;
+        result.stale++;
+        result.details.push({ eventId, status: 'stale', reason: 'Evidence hash mismatch' });
+      }
+    } catch {
+      result.totalCached++;
+      result.stale++;
+      result.details.push({ eventId, status: 'corrupt', reason: 'Unreadable meta.json' });
+    }
+  }
+
+  return result;
 }

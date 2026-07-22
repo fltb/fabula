@@ -932,6 +932,7 @@ ReportWriter
 - `EntityTypeRef = { typeId, schemaVersion }` 不可原位修改。type 定义 kind、attributes、lifecycle policy、reference capabilities 与 typed invariants；每个 attribute 定义 canonical value schema、`requiredAt`（introduction/activation/never）、`writePolicy`（immutable/write_once/mutable/lifecycle_managed）、允许写入的 lifecycle 状态、`unsetAllowed` 和可选 typed reference constraint。defaults 必须 materialize 为有 provider 的 persisted write，不得 replay 静默补值。
 - `EntityRuntimeState` 只有 `active`、`inactive`、`retired`。未引入 instance 仅在 catalog，不存在 runtime `pending`。`introduce` 直接原子创建为 active 并写齐 introduction-required attributes；active→inactive、inactive→active、active/inactive→retired；retired terminal，ID 永不复用。inactive 仍保留 identity/history，但由 type policy 控制能否参与新的 references。所有 transition 和 attribute writes 必须使用同一 node/entity atomic transaction，preconditions 读取 stateBefore，最终 cross-domain referential integrity 一次校验。
 #### [x] INTEGRATION-2: ReferenceEligibility 与 lifecycle closure 规范
+**完成备注（2026-07-22）**：ReferenceEligibility (3 modes: identity/live/historical, 14 kinds), ReferenceIndex (recomputed from canonical state), retirement closure validation, inactive override support, 37 tests.
 - `requiredAt: activation` 是 active-state completeness contract：direct introduce-to-active 的 final candidate state 同时满足 introduction-required 与 activation-required attributes；inactive-to-active 必须再次满足 activation requirements，但既有未变 attributes 可直接通过，不要求重复写入。若 inactive 期间允许 unset required attribute，activation transaction 必须显式补齐；type invariants 以 closed AST/read-set 在同一 before/after candidate path 验证。
 - canonical entity cells 是 `{domain:'entity', entityId, cell:'lifecycle'|'typeRef'|'attribute', attributeId?}`。introduction 提供 lifecycle/typeRef/materialized initial attributes；后续 provider 采用同 branch、时间合法的 exact-cell latest write。entity reference 同时读取 target lifecycle；activation 读取所有 activation-required attributes/invariants。相同 storyTime 中 lifecycle change 与任何 unordered write/reference 冲突；不同 mutable attributes 只有在 type invariant read set 不耦合时才可交换；不得 stable-ID/narrativeOrder tie-break。
 - 所有 kinds 共享 lifecycle：character、location、item、faction、concept、rule 都是 instance；type definition 才是静态 schema。kind-specific facts必须留在 domain state：character 的 life/POV/aliases/knowledge/location，location 的 containment/access，item 的 ownership/location/condition，faction 的 membership，concept 的 stability，rule 的 applicability/effectiveness/evidence。可演进的关联使用 relationship；immutable structural links可用 typed foreign-key attribute，但不得同时维护两个可写 truth source。
@@ -995,6 +996,8 @@ ReportWriter
 
 #### [x] GRAPH-1: 跨域 typed causalDependencies 与 graph compiler 规范
 
+**完成备注（2026-07-22）**：StoryGraph+DiscourseGraph (4 edge classes: author_origin/provider/same_coordinate_order/internal), OutputDescriptor normalization, ReadRequirement/ReadResolution, 24 typed error classes, 9-stage fixed compiler order, 50 tests.
+
 - compiler 分别构建 `StoryGraph`（effectiveCoordinate=storyTime）与 `DiscourseGraph`（effectiveCoordinate=DiscoursePosition）；二者各自保留四类语义绝不混用的边：`author_origin`、`provider`、`same_coordinate_order`、`internal`。它们各自 topological replay，author origin 不得覆盖 provider resolution，provider 不得自动证明 narrative causation；禁止 StoryGraph/DiscourseGraph causal/provider edge，只有 hash-pinned one-way `BoundaryReference` 可从 StorySnapshot 向 Discourse validation/context 提供只读 truth input。每条跨 node dependency 只有一个 predecessor/dependent；多前因使用多条 dependency（可共享 causalGroupId）。
 - 每个 replay effect 必须归一化为 immutable `OutputDescriptor`：stable output/effect/node ID、canonical state/artifact key、set/unset after value、branch scope、`effectiveCoordinate = storyTime | discoursePosition`、provenance hash。entity/relationship（含 implicit scope unsets）/knowledge/story-thread/rule writes、materialized defaults、merge writes、information acts、rule evaluations 是 StoryGraph outputs；planned disclosure/narrator assertion/hint/withhold/discourse-thread/DiscourseBridge acts 是 DiscourseGraph outputs；summary、narrativeHint、prose、Pass 2 结果和 LLM judgment 永不成为 output。每个 deterministic consumer 暴露 `ReadRequirement`：read ID、exact canonical key/artifact、presence-aware predicate、stateBefore/stateAfter phase、branch scope、origin（precondition/source/rule/scope/lifecycle/merge）。
 - canonical selector/output binding 必须覆盖所有 domains：Entity lifecycle/type/attribute；full n-ary Relationship epoch/membership/dimension scope（必须 RelationshipId/EpochId/MembershipId，不得 participant name/direction prose/current-member wildcard）；Knowledge claim；Thread status/run/phase/binding/goal/milestone及其 clock；Rule epoch/activation/effectiveness/scope/exception；DiscourseState 仅可用于 discourse dependencies。每条显式 dependency 必须选择至少一个实际 predecessor output，绑定 expected operation/value/output hash，selector 必须在每个 applicable concrete branch 唯一解析；泛化 `dependsOn`、无 output 边、semantic hint/prose output dependency 均拒绝。
@@ -1007,6 +1010,8 @@ ReportWriter
 - typed errors 至少包括 unknown/self predecessor、missing/ambiguous output、assertion/read mismatch、unknown read ID、stale provider selection、duplicate branch provider、branch coverage/incompatibility、future/incomparable time、unordered same-time conflict、cross-clock edge、edge-origin cycle、initial-root misuse、semantic-output dependency、dynamic lifecycle/merge input/ellipsis summary/provenance error。最低 tests：全部 domain selector/output/read；initial root；reversion/unset/stale selection；author-origin/provider separation；n-ary relationship scope；knowledge acts/higher-order claims；thread/rule reads；same-time commutativity/order；dynamic entities；branch partition/convergence/merge；ellipsis provenance/selection closure；cycle diagnostics；snapshot/full replay/cache invalidation；独立 reference graph compiler property tests（branch filtering precedes providers、every accepted read has exactly one ReadResolution、ProviderOutput resolution is the unique maximal write、commuting permutations等价、explicit selection不改变 latest semantics）。
 
 #### [x] DISCOURSE-1: Model Reader、Narrator 与 spoiler-safe context 规范
+
+**完成备注（2026-07-22）**：DiscourseState (DiscoursePosition-replayed), 7 disclosure actions (reveal/claim/hint/retraction/correction/withhold_start/withhold_end), 6 hint states, 4 narrator profiles, DiscourseContextProjection, reveal vs claim truth-boundary enforced, 55 tests.
 
 - `DiscourseState` 是独立、finite、branch-resolved、按 `DiscoursePosition`（assembled narrative order）回放的 domain，run key 绑定 assembly ID、BranchPath、ModelReaderProfile、selection hash。它记录 intended model reader 的**planned/contractual** exposure与 narrator assertions，不声明 generated prose 已实际实现这些 exposure；实际 realization 仅 C validation evidence。它不属于 `WorldState`，不得满足 story precondition、提供 WorldState provider 或跨 story/discourse clock 建边。真实读者心理不被建模；planned retraction 只改变 assertion contract status，不伪造 reader forget。
 - v1 `ModelReaderProfile` 仅支持 immutable/versioned built-in `default_model_reader_v1`：其 stable profile ID/hash、intended audience semantics、allowed narration/disclosure policy 与 empty initial exposure contract 由 compiler内建定义。`initialDiscourseState` 按该 profile 显式写入任何 fixed-corpus checkpoint/initial planned exposure；profile 不从 prose、reader telemetry或运行时推断，不能改写 StoryState。custom/project-specific profiles在有 versioned profile catalog、migration、manifest row与discourse reference conformance前为 X；profile hash进入 DiscourseSnapshot/run/logical render cache key。
@@ -1021,16 +1026,14 @@ ReportWriter
 
 #### [x] RENDER-SURFACE-1: 逻辑独立的文本连贯与分组并行规范
 
+**完成备注（2026-07-22）**：CompiledSceneContract per scene, SurfaceDependencyGraph + ValidationGateGraph, 2 group policies (parallel/serial_surface), 4 independent cache keys, surface planner (manual/suggest/auto), 39 tests.
+
 - render plan 必须分离 `logicalGraph`（STATE/GRAPH contract）、`plannedDiscourseGraph`、`SurfaceDependencyGraph` 与 `ValidationGateGraph`。YAML/catalog/compiled deterministic state/ planned DiscourseState 是 scene logic 唯一输入；generated prose、Pass 2、summary、surface packet 永不写/修订 WorldState、Knowledge、Thread、Rule 或 planned DiscourseState，永不成为 logical provider/causal dependency/precondition/reveal contract。若 prose 中出现未建模 detail，后续逻辑要依赖它时必须由作者提升到 YAML 后重新编译。
 - 每 scene 在 prose 前拥有完整 `CompiledSceneContract`：branch/discourse position、WorldState/Knowledge/narrator/planned discourse boundary hashes、resolved versioned StyleProfile、deterministic authored continuity packet、prompt contract hash。StyleProfile 按 project→chapter→narrator/POV→scene 的 deterministic precedence 解析，可包含 voice/diction/rhythm/paragraphing/typography/dialogue/avoid；continuity packet 仅含 transition（continuous/hard_cut/time_jump/location_jump/pov_shift/chapter/flashback）、authored motifs/callbacks/open-close mode。generated prose 不得反写 style profile；generated phrase 不能变 mandatory callback，除非作者写入 YAML 并重编译。
-#### [x] INTEGRATION-1: 跨域解析、Merge 与双覆盖规范
-- grouping policy 有 `manual`、`suggest`、`auto`：manual 为作者明写 group；suggest 由 deterministic planner 依据 discourse adjacency/chapter/POV/narrator/location/transition/cast overlap/style profile/author continuity metadata 提议但不生效；auto 只有项目明确授权时采用 planner。任何生效结果都输出版本化、hash-pinned、可覆盖的 `RenderGroupManifest`（policy version/source definition hash/group IDs/lanes/surface policy），进入 surface cache key；planner 不得读取 prose/LLM judgment、修改 YAML/logic/discourse/causal edges或临时按完成顺序重组。
-- group policies 仅支持 `parallel`、`serial_surface`；`parallel_then_harmonize` 与一次请求生成多 scene 的 `joint_group` 明确为 X，禁止作为隐式优化或 benchmark workload，未来需先定义完整 revision/validation/cache/assembly contract 才可解除。推荐 globally logical_parallel，连续动作/拆分对话/同 narrator 情绪或感官过渡/刻意回声使用短 serial groups；远距 POV、独立 branches、仅逻辑相连 scene、hard chapter cuts 使用 parallel。chapter 默认不 carry prose excerpt；POV/narrator switch 必须声明 none/rhythm_only/tail_excerpt/authored_anchor。
-- validation gate 仅决定 prose artifact 是否可 release/assemble与是否可作为 surface source：Pass 1→Pass 2/ deterministic checks→accept/retry/block current scene；accepted prose 才产生 surface packet。failed scene 仅阻断 surface descendants，logical compilation/unrelated groups 仍有效；retry有独立 AttemptKey，replacement prose hash 使 transitive surface descendants stylistically stale，不能 assemble，必要时重渲染。`fallback_without_surface` 仅在 group policy 明示并进入 cache key时合法；exhausted retry 不得 patch state/skip hard validation/invent disclosure。
-- cache 彻底分层：`LogicalRenderKey` 绑定 scene contract/WorldState/planned discourse/catalog/graph/style/profile/prompt-provider；`SurfaceRenderKey` 加 group manifest/surface policy/ordered source prose hashes/extractor-truncation version；`ValidationKey` 加 prose hash/Pass2 schema-model/validator-reference policy；`AttemptKey` 加 surface key/attempt/prior prose/same-scene retry guidance。YAML/state 修改 invalidates logical dependents 与其 surface descendants；仅 prose 修改只 invalidates validation/assembly/surface descendants；group repartition/policy 只 invalidates surface keys。offline determinism 覆盖 contract/group scheduling/extraction/normalization/cache/invalidation/assembly，真实 LLM output 以 frozen reference artifacts 验收。
-- performance 必须分别 benchmark logical_parallel、平衡/偏斜 serial groups、cold/warm cache、source prose fanout/retry/branch variants。报告 total work、critical path、makespan、cache hit、invalidated scene count、retry amplification，以及相对 `max(totalWork/poolSize, longestSurfaceCriticalPath)` 的 scheduler efficiency；不得以 pool speedup 惩罚必然 serial 的 group。`parallel_then_harmonize` 与 `joint_group` 为 X，不纳入 implementation/benchmark。最低 tests：surface永不进入logical/discourse reads；author group/order/branch validation；manual/suggest/auto manifest determinism；excerpt budget/normalization；POV/chapter/flashback policies；source retry/stale descendants/fallback；branch merge isolation；cache partition/invalidation；parallel groups completion order不影响结果。
 
-#### [ ] INTEGRATION-1: 跨域解析、Merge 与双覆盖规范
+#### [x] INTEGRATION-1: 跨域解析、Merge 与双覆盖规范
+
+**完成备注（2026-07-22）**：AbsenceWitness (4 basis types), ReadResolution=ProviderOutput|AbsenceWitness, BoundaryReference (one-way), MergePlan (requireEqual/selectBranch/literal), dual coverage manifest, StorySnapshot/DiscourseSnapshot separation, 50 tests.
 
 - `not_exists`/未引入 entity/never-written cell 使用不可变 `AbsenceWitness` 作为 deterministic absence resolution：它绑定 concrete branch、temporal prefix、catalog/lifecycle/closed-world basis、latest unset（如有）与 resolution hash，可满足 presence-aware read 并进入 provider/absence index、snapshot/cache/reference tests；它不是 WorldState write、initialState unset、author-origin output 或 narrative causation。测试 never-written、pre-introduction、after-unset、branch-local absence、snapshot restart 与 aggregate three-valued evaluation。
 - every deterministic read 必须恰有一个 `ReadResolution = ProviderOutput | AbsenceWitness`：ProviderOutput 才产生 provider edge，AbsenceWitness 使用独立 absence index/temporal basis且不伪装为 write/output。所有 read/provider coverage、branch validation、snapshot/cache/reference tests 均以 ReadResolution 为准，不得将 absence 强迫为 initial unset 或 author causal origin。
@@ -1042,6 +1045,8 @@ ReportWriter
 
 #### [x] CAPABILITY-1: 支持边界与 conformance manifest gate
 
+**完成备注（2026-07-22）**：CapabilityManifest (S|C|X status, 5 evidence classes), CapabilityRegistry with 3-stage gate validation, RENDER-SURFACE constraint, missing entry rejection, 30 tests.
+
 - 建立 versioned `CapabilityManifest`，将每项对作者/LLM 宣称的能力映射到 capability ID、`S|C|X` 状态、schema/normalization versions、supported input forms、reference cases、property/model cases、rejection cases、snapshot/cache cases、fixture IDs、provenance requirements、stage gate 与 evidence artifact hash。每个 YAML schema variant、compiled IR variant、runtime domain operation与跨域组合必须归属一行；无 manifest entry 的输入默认 rejected，不得靠 loader fallback 或文档暗示为支持。
 - `S` 仅在有限 deterministic 语义、typed rejection、production implementation、独立 reference interpreter、property/model tests、human-readable fixtures、适用的 snapshot/replay/cache equivalence 和 stage evidence 全部通过后可对外宣称支持；reference implementation 不得 import production replay/canonicalization/key/provider/predicate/merge helpers。CapabilityManifest 必须声明 evidence class（例如 `state_replay`、`discourse_replay`、`schema_rejection`、`surface_scheduler`、`validation_measurement`）及其 mandatory evidence set；只有该 artifact class 逻辑上不拥有 replay/snapshot/cache surface 时才可填写带理由的 `N/A`，不得以泛化 N/A 逃避测试。`C` 仅表示结构/contract 可表达但 prose/Pass 2/human detection 是测量能力，例如 narrativeHint realization、semantic thread goal、semantic rule compliance、subtle hint/spoiler detection、narrator sincerity及对 model-reader disclosure contract 的 human-rated effectiveness；必须报告 calibration/F1/CED/human evidence/uncertainty，绝不得等同 S。actual reader mind/state/effect为 X，不得收集、推断或宣称建模。`X` 是明确不支持：schema/compiler 抛 typed error，docs 指出替代建模方式，并有 rejection fixture。
 - RENDER-SURFACE 必须至少有两条独立 manifest rows：`surface_scheduler_contract` 是 S 候选，覆盖 deterministic grouping/extraction/budget/cache/invalidation/assembly gating；`surface_prose_continuity_outcome` 是 C，仅测量 serial surface reference 对连贯性/风格延续的 human/validation evidence，绝不把 scheduler 成功或 frozen artifact 等同为保证 prose coherence。
@@ -1049,6 +1054,8 @@ ReportWriter
 - minimum cross-domain conformance suite 覆盖 AbsenceWitness、candidate-state reads/internal effects、dynamic introduction/retirement、full n-ary identity transitions、all MergePlan operators、branch-specific providers、same-time commutativity、BoundaryReference、story/discourse separation、DiscourseBridge、every implicit output、source/edge/merge provenance、snapshot/cache hash constituent、adjacent migrations、production-vs-reference equality。coverage percentage 不能替代 manifest evidence；新规范章节在其全部 manifest rows 达 S 前保持 unchecked，不得因文档已写而声称 implemented。
 
 #### [x] YAML-CONTRACT: 每个冻结数据结构的 author-facing 接口
+
+**完成备注（2026-07-22）**：10 YAML contract docs (README, initialState, entity, relationship, knowledge, thread, rule, causal-deps, discourse, ellipsis-bridge). Each with field table + valid/invalid examples.
 
 - 每个已经冻结的 normalized runtime contract 必须同步有版本化 YAML authoring interface；YAML 是作者/LLM 可读中间表示，不是 runtime truth 的独立第二语义。编译器只能执行 `YAML -> normalized IR` 的明确归一化，任何内部 provider/output/read/hash/tombstone/derived projection 不得要求作者手填，也不得在未定义 YAML contract 时由 loader 猜测。
 - YAML schema/docs 必须覆盖 initialState、Entity type/declaration/lifecycle transaction、full n-ary relationship type/epoch/membership/dimension transaction、Proposition/claim/information act、Thread type/run/goal/milestone transaction、Rule specification/constraint/exception transaction、typed causalDependencies、Discourse scene contract/acts、NarrativeEllipsis 与 DiscourseBridge。每个接口定义 required/optional、mutually exclusive forms、closed enums/IDs、branch/time/provenance、author-facing convenience syntax及其 exact normalized target；runtime fields未暴露时必须由 compiler deterministic materialize 并给 stable source map。
@@ -1216,6 +1223,8 @@ for (const ev of renderEvents) {
 
 ### [x] DOC-1: 缺失 location/item/faction/branch YAML 格式文档
 
+**完成备注（2026-07-22）**：4 YAML format docs created: location.md, item.md, faction.md, branch.md. Each with ## Fields table, valid/invalid examples, normalized IR section.
+
 **现状**：现有 `location/item/faction/branch` 字段文档缺失，且旧 definition-only 视图已不足以覆盖 STATE-3 Entity type/declaration/lifecycle、ReferenceEligibility、MergePlan 与 YAML-CONTRACT 的 versioned author interface。
 
 **需要做什么**：由 schema registry 生成/校验 `location.md`、`item.md`、`faction.md`、`branch.md` 及对应 Entity type/declaration/introduction/retirement/reference-policy/migration 文档；每份包含字段表、normalized IR、合法/非法 fixture、source-map diagnostic、版本迁移和数据流说明。不得只文档旧静态 definition。
@@ -1225,6 +1234,8 @@ for (const ev of renderEvents) {
 **实现成本估算**：0.5-1 天（4 个文件，每个约 40-60 行）
 
 ### [x] DOC-2: event.md 缺失 Fact 关键字段文档
+
+**完成备注（2026-07-22）**：event.md updated — 10-operator precondition table, 3 Fact forms (set/unset/narrativeHint), placeholder rejection, presence-aware rules, 25 keyword matches.
 
 **现状**：event.md 仍只描述旧 Fact 形状，未反映 STATE-1/GRAPH-1/YAML-CONTRACT 的 presence-aware transaction、typed causalDependencies、跨域 authoring interface。
 
@@ -1246,6 +1257,8 @@ for (const ev of renderEvents) {
 **实现成本估算**：0.2 天（补充字段表 + 示例）
 
 ### [x] DOC-3: configuration.md 缺失 6 个 nova.yaml 字段
+
+**完成备注（2026-07-22）**：configuration.md updated — added 7 missing fields: defaultLanguage, genre, synopsis, defaultSceneTextTarget, validatorOverrides, circuitBreaker, reviewExpiry.
 
 **现状**：`projectConfigSchema` 有 12 个字段，但 `docs/getting-started/configuration.md` 只列了 6 个。缺失：`defaultLanguage`、`genre`、`synopsis`、`validatorOverrides`、`circuitBreaker`、`reviewExpiry`。
 

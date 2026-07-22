@@ -168,6 +168,19 @@ export {
   graphCacheEntrySchema,
   graphSchema,
 } from './graph.js';
+// ——— CORPUS-1: NarrativeEllipsis & NarrativeNode Schemas ———
+export {
+  narrativeEllipsisSchema as corpusNarrativeEllipsisSchema,
+  narrativeNodeSchema as corpusNarrativeNodeSchema,
+  narrativeEventSchema as corpusNarrativeEventSchema,
+  ellipsisProvenanceSchema,
+  informationActSchema,
+  isNarrativeEllipsis,
+  isNarrativeEvent,
+  isNarrativeNode,
+} from './corpus.js';
+// These supersede the integration.ts schemas and carry full binding-constraint validation.
+
 // ——— INTEGRATION-1: Cross-domain resolution, Merge & dual coverage ———
 export {
   absenceBasisSchema,

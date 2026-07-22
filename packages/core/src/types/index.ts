@@ -304,6 +304,15 @@ export type {
   NoOutputEdgeError,
   DuplicateDiscoursePositionError,
 } from './graph.js';
+// ——— CORPUS-1: NarrativeEllipsis & NarrativeNode ———
+export type {
+  NarrativeEllipsis as CorpusEllipsis,
+  EllipsisProvenance,
+  NarrativeNode as CorpusNode,
+} from './corpus.js';
+// The above are aliased to avoid conflict with INTEGRATION-1 NarrativeEllipsis/NarrativeNode.
+// CORPUS-1 types supersede the integration.ts stubs and should be used for all new code.
+
 // ——— INTEGRATION-1: Cross-domain resolution, Merge & dual coverage ———
 export type {
   ProviderOutput,

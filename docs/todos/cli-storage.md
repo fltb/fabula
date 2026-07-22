@@ -1,6 +1,6 @@
 # cli-storage: CLI command paths and storage abstraction audit
 
-## Group Status: [-] in progress — CLI-5 [x]; CLI-3, CLI-4, STORAGE-2 open
+## Group Status: [x] complete — all 4 items done. Build+test green (1400/1400).
 
 ## Items in this group
 

@@ -14,10 +14,9 @@ group file is `[x]` with passing evidence.
 | dag-replay | [x] | state-model | [dag-replay.md](dag-replay.md) — 6/6 items done | DAG-0, DAG-1, DAG-2, DAG-3, DAG-4, DAG-5 | 6 |
 | graph-discourse-render | [x] | state-model, dag-replay | [graph-discourse-render.md](graph-discourse-render.md) — 3/3 items done | GRAPH-1, DISCOURSE-1, RENDER-SURFACE-1 | 3 |
 | integration | [x] | state-model, dag-replay | [integration.md](integration.md) — 2/2 items done | INTEGRATION-1, INTEGRATION-2 | 2 |
-| capability-contract | [ ] | state-model, dag-replay, graph-discourse-render, integration | [capability-contract.md](capability-contract.md) | CAPABILITY-1, YAML-CONTRACT | 2 |
-| api-core-validator | [x] | — | [api-core-validator.md](api-core-validator.md) — 7/7 items done | API-1, API-2, API-3, API-4, API-5, AGG-1, CORE-API-1 | 7 |
+| capability-contract | [x] | state-model, dag-replay, graph-discourse-render, integration | [capability-contract.md](capability-contract.md) — 2/2 items done | CAPABILITY-1, YAML-CONTRACT | 2 |
+| documentation | [x] | graph-discourse-render, capability-contract | [documentation.md](documentation.md) — 3/3 items done | DOC-1, DOC-2, DOC-3 | 3 |
 | cli-storage | [x] | api-core-validator | [cli-storage.md](cli-storage.md) — 4/4 items done | CLI-3, CLI-4, CLI-5, STORAGE-2 | 4 |
-| documentation | [ ] | graph-discourse-render, capability-contract | [documentation.md](documentation.md) | DOC-1, DOC-2, DOC-3 | 3 |
 
 **Total: 33 TODOs across 8 group sub-plans.**
 

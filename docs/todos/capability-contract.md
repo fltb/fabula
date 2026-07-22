@@ -1,13 +1,13 @@
 # capability-contract: Capability manifest and YAML authoring contract
 
-## Group Status: [ ] unstarted
+## Group Status: [x] complete — both items done. Build+test green (1349/1349).
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| CAPABILITY-1 | [ ] | all architecture [x] | `docs/TODO.md` lines 1043-1049 |
-| YAML-CONTRACT | [ ] | all architecture [x] | `docs/TODO.md` lines 1051-1056 |
+| CAPABILITY-1 | [x] | all architecture [x] | `docs/TODO.md` lines 1043-1049 — CapabilityManifest (S|C|X, 5 evidence classes), CapabilityRegistry, 3-stage gate, 30 tests |
+| YAML-CONTRACT | [x] | all architecture [x] | `docs/TODO.md` lines 1051-1056 — 10 YAML contract docs with field tables + valid/invalid examples |
 
 ## Group-level dependencies
 All architecture groups [x] ✅. CAPABILITY-1 and YAML-CONTRACT are independent → parallel.

@@ -1040,7 +1040,7 @@ ReportWriter
 - 外部语料采用正交双 coverage manifest：`NarrativeNode = NarrativeEvent | NarrativeEllipsis` 覆盖 story replay/source state；`DiscourseNode = ScenePresentation | DiscourseBridge` 覆盖 reader discourse order/planned disclosure。`DiscourseBridge` 是 source-verified omitted-text disclosure record（position/planned acts/provenance），无 WorldState effect/render/POV/Pass2 job，且可与同一 source range 的 narrative ellipsis 并存，不在任一 coverage layer 内双重计数。sparse run 只能声明 `isolated_excerpt`（ExcerptDisclosureCheckpoint）或 `full_work_context`（preceding bridge completeness）；缺 checkpoint/bridge hard fail。
 - snapshots 分为 `StorySnapshot` 与 `DiscourseSnapshot`。StorySnapshot 绑定 branch、ancestor-closed temporal node prefix、ordered node/effect/output IDs、complete WorldState、provider/AbsenceWitness indexes、entity/relationship/thread tombstones、rule epoch/exception/specification-transition/retired-ID tombstones、retained InformationActs/RuleEvaluationRecords、type/declaration catalog hashes、normalized graph hash、state/provenance/schema/replay hashes；它严格 selection-independent，恢复结果必须与 full story replay 完全相同。DiscourseSnapshot 绑定 assembly/branch/DiscoursePosition、planned DiscourseState、narrator/profile/proposition catalog/BoundaryReference/selection/discourse graph/schema hashes；恢复结果必须与 full planned discourse replay 相同。generated prose、Pass 2 observations、surface packets 永不进入逻辑 snapshots，仅存在于 validation/render/assembly artifact cache。
 
-#### [ ] CAPABILITY-1: 支持边界与 conformance manifest gate
+#### [x] CAPABILITY-1: 支持边界与 conformance manifest gate
 
 - 建立 versioned `CapabilityManifest`，将每项对作者/LLM 宣称的能力映射到 capability ID、`S|C|X` 状态、schema/normalization versions、supported input forms、reference cases、property/model cases、rejection cases、snapshot/cache cases、fixture IDs、provenance requirements、stage gate 与 evidence artifact hash。每个 YAML schema variant、compiled IR variant、runtime domain operation与跨域组合必须归属一行；无 manifest entry 的输入默认 rejected，不得靠 loader fallback 或文档暗示为支持。
 - `S` 仅在有限 deterministic 语义、typed rejection、production implementation、独立 reference interpreter、property/model tests、human-readable fixtures、适用的 snapshot/replay/cache equivalence 和 stage evidence 全部通过后可对外宣称支持；reference implementation 不得 import production replay/canonicalization/key/provider/predicate/merge helpers。CapabilityManifest 必须声明 evidence class（例如 `state_replay`、`discourse_replay`、`schema_rejection`、`surface_scheduler`、`validation_measurement`）及其 mandatory evidence set；只有该 artifact class 逻辑上不拥有 replay/snapshot/cache surface 时才可填写带理由的 `N/A`，不得以泛化 N/A 逃避测试。`C` 仅表示结构/contract 可表达但 prose/Pass 2/human detection 是测量能力，例如 narrativeHint realization、semantic thread goal、semantic rule compliance、subtle hint/spoiler detection、narrator sincerity及对 model-reader disclosure contract 的 human-rated effectiveness；必须报告 calibration/F1/CED/human evidence/uncertainty，绝不得等同 S。actual reader mind/state/effect为 X，不得收集、推断或宣称建模。`X` 是明确不支持：schema/compiler 抛 typed error，docs 指出替代建模方式，并有 rejection fixture。
@@ -1048,7 +1048,7 @@ ReportWriter
 - Stage 1 gate：所有 declared S core schema/replay/graph/lifecycle/branch/snapshot/cache/fixture capabilities均须 manifest complete；默认 offline CI 运行 relevant conformance suites，recorded/live smoke 只能补运行证据不能替代。Stage 2 gate：外部 corpus、C metrics、人类标注、source/legal/provenance、performance/cache/parallel evidence分别绑定 manifest；C 不得作为绝对质量/逻辑保证。Stage 3 gate：每次项目 render/assemble 固定并记录 manifest/version/config；遇 X 或 manifest 未覆盖的 YAML/IR 组合 hard fail，无隐式降级。
 - minimum cross-domain conformance suite 覆盖 AbsenceWitness、candidate-state reads/internal effects、dynamic introduction/retirement、full n-ary identity transitions、all MergePlan operators、branch-specific providers、same-time commutativity、BoundaryReference、story/discourse separation、DiscourseBridge、every implicit output、source/edge/merge provenance、snapshot/cache hash constituent、adjacent migrations、production-vs-reference equality。coverage percentage 不能替代 manifest evidence；新规范章节在其全部 manifest rows 达 S 前保持 unchecked，不得因文档已写而声称 implemented。
 
-#### [ ] YAML-CONTRACT: 每个冻结数据结构的 author-facing 接口
+#### [x] YAML-CONTRACT: 每个冻结数据结构的 author-facing 接口
 
 - 每个已经冻结的 normalized runtime contract 必须同步有版本化 YAML authoring interface；YAML 是作者/LLM 可读中间表示，不是 runtime truth 的独立第二语义。编译器只能执行 `YAML -> normalized IR` 的明确归一化，任何内部 provider/output/read/hash/tombstone/derived projection 不得要求作者手填，也不得在未定义 YAML contract 时由 loader 猜测。
 - YAML schema/docs 必须覆盖 initialState、Entity type/declaration/lifecycle transaction、full n-ary relationship type/epoch/membership/dimension transaction、Proposition/claim/information act、Thread type/run/goal/milestone transaction、Rule specification/constraint/exception transaction、typed causalDependencies、Discourse scene contract/acts、NarrativeEllipsis 与 DiscourseBridge。每个接口定义 required/optional、mutually exclusive forms、closed enums/IDs、branch/time/provenance、author-facing convenience syntax及其 exact normalized target；runtime fields未暴露时必须由 compiler deterministic materialize 并给 stable source map。
@@ -1214,7 +1214,7 @@ for (const ev of renderEvents) {
 
 **现状**：16 个 Zod schema 文件，但只有 3 个对应 YAML 格式文档（character、event、rule）。其余或有 schema 无文档，或已有文档缺字段。
 
-### [ ] DOC-1: 缺失 location/item/faction/branch YAML 格式文档
+### [x] DOC-1: 缺失 location/item/faction/branch YAML 格式文档
 
 **现状**：现有 `location/item/faction/branch` 字段文档缺失，且旧 definition-only 视图已不足以覆盖 STATE-3 Entity type/declaration/lifecycle、ReferenceEligibility、MergePlan 与 YAML-CONTRACT 的 versioned author interface。
 
@@ -1224,7 +1224,7 @@ for (const ev of renderEvents) {
 
 **实现成本估算**：0.5-1 天（4 个文件，每个约 40-60 行）
 
-### [ ] DOC-2: event.md 缺失 Fact 关键字段文档
+### [x] DOC-2: event.md 缺失 Fact 关键字段文档
 
 **现状**：event.md 仍只描述旧 Fact 形状，未反映 STATE-1/GRAPH-1/YAML-CONTRACT 的 presence-aware transaction、typed causalDependencies、跨域 authoring interface。
 
@@ -1245,7 +1245,7 @@ for (const ev of renderEvents) {
 
 **实现成本估算**：0.2 天（补充字段表 + 示例）
 
-### [ ] DOC-3: configuration.md 缺失 6 个 nova.yaml 字段
+### [x] DOC-3: configuration.md 缺失 6 个 nova.yaml 字段
 
 **现状**：`projectConfigSchema` 有 12 个字段，但 `docs/getting-started/configuration.md` 只列了 6 个。缺失：`defaultLanguage`、`genre`、`synopsis`、`validatorOverrides`、`circuitBreaker`、`reviewExpiry`。
 

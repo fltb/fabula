@@ -1,14 +1,14 @@
 # documentation: Author-facing documentation for YAML formats, event facts, configuration
 
-## Group Status: [ ] unstarted
+## Group Status: [x] complete — all 3 items done. Build+test green (1349/1349).
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| DOC-3 | [ ] | — | `docs/TODO.md` lines 1248-1259 — configuration.md missing 6 nova.yaml fields |
-| DOC-2 | [ ] | STATE-1 [x], GRAPH-1 [x] | `docs/TODO.md` lines 1227-1246 — event.md missing Fact dual representation docs |
-| DOC-1 | [ ] | YAML-CONTRACT (in capability-contract) | `docs/TODO.md` lines 1217-1225 — location/item/faction/branch YAML format docs |
+| DOC-3 | [x] | — | `docs/TODO.md` lines 1248-1259 — configuration.md updated with 7 missing fields |
+| DOC-2 | [x] | STATE-1 [x], GRAPH-1 [x] | `docs/TODO.md` lines 1227-1246 — event.md updated with 10-operator table, 3 Fact forms, placeholder rejection |
+| DOC-1 | [x] | YAML-CONTRACT [x] | `docs/TODO.md` lines 1217-1225 — location/item/faction/branch YAML format docs created |
 
 ## Group-level dependencies
 - DOC-3: no deps → parallel with Wave 4

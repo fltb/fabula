@@ -411,3 +411,12 @@ export type {
   SurfacePlannerError,
   SurfaceErrorCode,
 } from './render-surface.js';
+
+// ——— CAPABILITY-1: Capability Manifest types ———
+export type {
+  CapabilityStatus,
+  EvidenceClass,
+  StageGate,
+  CapabilityManifestEntry,
+  CapabilityManifest,
+} from './capability.js';

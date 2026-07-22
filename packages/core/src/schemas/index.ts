@@ -278,3 +278,17 @@ export {
   attemptKeySchema,
   surfaceErrorCodeSchema,
 } from './render-surface.js';
+
+// ——— CAPABILITY-1: Capability Manifest schemas ———
+export {
+  capabilityStatusSchema,
+  evidenceClassSchema,
+  stageGateSchema,
+  capabilityManifestEntrySchema,
+  capabilityManifestSchema,
+  capabilityStatusSchemaZ,
+  evidenceClassSchemaZ,
+  stageGateSchemaZ,
+  capabilityManifestEntrySchemaZ,
+  capabilityManifestSchemaZ,
+} from './capability.js';

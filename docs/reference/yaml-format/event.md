@@ -40,9 +40,88 @@
 ### 阶段一严格合同
 
 - 所有 production YAML 只经严格 Zod compiler 加载；未知键、语法错误、缺必需文件均以带文件/YAML 路径的 `ConfigError` 失败，绝不静默跳过。
-- `Fact` 必须且只能给出 `value` 或 `narrativeHint`。确定性比较仅支持 `operator: eq`（省略等同 `eq`）；`neq`、`gt`、`lt`、`contains` 是阶段一拒绝输入。
+- `Fact` 必须采用三种互斥形式之一：提供 `value`（set，默认）、`operation: unset`（删除属性），或 `narrativeHint`（仅 Pass 2）。所有 10 种运算符（`eq`、`neq`、`gt`、`gte`、`lt`、`lte`、`contains`、`not_contains`、`exists`、`not_exists`）均受支持；`eq` 为默认值。各运算符详见下方前件运算符表。
 - `linear` 与 `flashback` 事件必须写出 `storyTime` 和 `narrationTime`。其他 scene type 不是阶段一 author-facing capability。
 - 项目键使用 camelCase；例如 `defaultModel`、`defaultLanguage`、`snapshotInterval`、`defaultSceneTextTarget`。旧 snake_case 不再兼容。
+
+
+### 前件运算符
+
+前件使用 `operator` 字段来指定事实值的比较方式：
+
+| 运算符 | 描述 | 需要 `value` | 示例 |
+|--------|------|-------------|------|
+| `eq` | 等于（默认） | 是 | `operator: eq, value: "alive"` |
+| `neq` | 不等于 | 是 | `operator: neq, value: "dead"` |
+| `gt` | 大于 | 是（数值） | `operator: gt, value: 5` |
+| `gte` | 大于或等于 | 是（数值） | `operator: gte, value: 0` |
+| `lt` | 小于 | 是（数值） | `operator: lt, value: 100` |
+| `lte` | 小于或等于 | 是（数值） | `operator: lte, value: 100` |
+| `contains` | 字符串包含或数组包含 | 是 | `operator: contains, value: "keyword"` |
+| `not_contains` | 字符串/数组不包含 | 是 | `operator: not_contains, value: "forbidden"` |
+| `exists` | 属性存在 | **否**——必须省略 `value` | `operator: exists` |
+| `not_exists` | 属性不存在 | **否**——必须省略 `value` | `operator: not_exists` |
+
+#### 存在性感知规则
+
+使用 `exists` 和 `not_exists` 时，前件检查的是属性的存在性而非其值：
+
+- `operator: exists` 在实体具有该属性（不论值为何）时满足。
+- `operator: not_exists` 在实体完全缺少该属性时满足。
+- 使用 `neq` 比较一个缺失的属性会失败（不满足），因为缺失的属性不等于任何值。
+- `exists` 和 `not_exists` 均要求省略 `value` 字段——提供 `value` 会导致 schema 验证错误。
+
+### 事实后件形式
+
+`expectedPostconditions` 中每个 `Fact` 条目必须采用以下三种互斥形式之一：
+
+**形式 1——set（默认）：** 提供 `value` 字段，将规范化的值写入 `WorldState`。`operation: set` 可以显式指定，但为可选（省略时默认为 set）。
+
+```yaml
+expectedPostconditions:
+  - entity: xianglins_wife
+    attribute: spiritual_state
+    value: broken
+```
+
+**形式 2——unset：** 设置 `operation: unset`，从实体中删除属性。`value` 字段必须 **不** 存在。如果属性已不存在则失败。
+
+```yaml
+expectedPostconditions:
+  - entity: xianglins_wife
+    attribute: temporary_flag
+    operation: unset
+```
+
+**形式 3——narrativeHint：** 提供 `narrativeHint` 字段，省略 `value`。仅由 Pass 2 分析消费。**永不** 写入 `WorldState`。
+
+```yaml
+expectedPostconditions:
+  - entity: xianglins_wife
+    attribute: social_status
+    narrativeHint: "捐门槛之后她以为自己赎了罪..."
+```
+
+三种形式**互斥**——`value` 和 `narrativeHint` 不能同时出现。`unset` 同时不得有 `value` 或 `narrativeHint`。
+
+### Placeholder 值拒绝
+
+以下占位符值会被 Zod schema 拒绝：`changed`、`resolved`、`updated`。这些值是历史遗留标记，不得在 production YAML 中使用。
+
+```yaml
+postconditions:
+  - entityId: hero
+    attribute: status
+    value: changed  # 错误：占位符值被拒绝
+```
+
+### narrativeHint 字段
+
+`narrativeHint` 为 Pass 2 分析提供语义属性。它包含人类可读的散文，供 LLM 驱动的 Pass 2 分析使用，以推导语义状态变化。
+
+- 与 `value` **互斥**——不能同时设置两者。
+- 常用值示例：`"subtle_hint"`、`"implicit_reveal"`、`"ambient_tone"`。
+- `narrativeHint` **永不** 写入 `WorldState`；它仅影响 Pass 2 的叙事分析。
 
 ### 叙事元数据字段
 

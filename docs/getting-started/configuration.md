@@ -56,9 +56,18 @@ snapshot_interval: 3
 
 关键字段：
 - `project` — 机器可读的项目标识符
+- `title` — 作品标题
+- `author` — 作者名称
 - `default_model` — 所有场景的 LLM 模型（可按事件覆盖）
+- `defaultLanguage` — 默认生成语言。示例：`zh-CN`, `en`。可选。
+- `genre` — 渲染管线使用的类型标签。示例：`literary`, `fantasy`。可选。
+- `synopsis` — 项目梗概，为 LLM 提供故事背景。可选。
+- `defaultSceneTextTarget` — 每个场景的目标字数（整数）。可选。
 - `snapshot_interval` — 两次 WorldState 快照之间的事件数
 - `tense` — 默认叙事时态（`past` | `present`）
+- `validatorOverrides` — 逐验证器配置覆盖。键为验证器名称，值为 `off`、`warning` 或 `error`。可选。
+- `circuitBreaker` — 重试熔断器配置。`maxRetries`（整数）。可选。
+- `reviewExpiry` — 审查评论自动解决。`enabled`（布尔值），`autoResolveDays`（数字）。可选。
 
 ## 定义
 

@@ -1,0 +1,21 @@
+id: jialian
+name: 贾琏
+type: supporting
+role: supporting
+description: 贾琏，首次出现于第2回，共提及67次。
+appearance: 青年公子相貌，面皮白净，五短身材。衣饰华丽，纨绔子弟打扮。
+aliases: []
+gender: 男
+age: 20-30
+traits:
+- 好色
+- 纨绔
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: young_adult
+voiceNotes: 言语轻浮，好色贪婪。在妻子凤姐面前心虚气短，在外则到处拈花惹草。但办事能力尚可，常负责贾府对外事务。
+backstory: 荣国府长房贾赦之子，王熙凤之夫。好色纨绔，先后与多姑娘、鲍二媳妇、尤二姐偷情。偷娶尤二姐被凤姐发现后酿成悲剧。虽品德不端，但办事能力尚可，常被派往外地处理事务。
+knownSecrets:
+- 偷娶尤二姐
+- 与多姑娘私通

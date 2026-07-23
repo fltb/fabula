@@ -1,0 +1,21 @@
+id: shixiangyun
+name: 史湘云
+type: supporting
+role: supporting
+description: 史湘云，首次出现于第19回，共提及22次。
+appearance: 蜂腰猿背，鹤势螂形。容貌清秀，英气勃勃。常穿男装，别有风致。
+aliases: []
+gender: 女
+age: 13-18
+traits:
+- 豪爽
+- 才情
+- 乐观
+initialState:
+  location: 史家
+  status: alive
+  age_stage: adolescent
+voiceNotes: 言语豪爽大方，心直口快。说话响亮，有男子气概。醉了酒在石凳上睡着也不在意。诗才敏捷，联诗时不让须眉。
+backstory: 金陵史侯家之后，贾母的侄孙女。父母早亡，寄居在叔叔家，日子并不宽裕。性格豪爽开朗，不拘小节，是贾府众多姊妹中最英气的一个。与宝玉关系亲近，但最终嫁与卫若兰后丧偶。
+knownSecrets:
+- 在家中的日子并不如表面风光

@@ -1,0 +1,54 @@
+event: E12
+title: 钱默吟伤愈，立志报仇
+narrativeOrder: 12
+sceneType: linear
+storyTime: spring_of_next_year
+narrationTime: spring_of_next_year
+tense: past
+discourseMode: reflection
+arcPosition: rising
+emotionalValence: determination_transformation
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 春天来了，但北平的人心还冻结在冰里。钱默吟的身体渐渐恢复，但他的精神已经彻底变了。他不再吟诗赏花，不再喝茵陈酒。他告诉瑞宣：他羡慕金三爷的身体，因为有力气才能报仇。他不再考虑什么来得及来不及，只想赶快好起来去和日本人拼命。他鼓励钱少奶奶生一个会打仗的孩子。瑞宣从钱先生身上看到了一种全新的力量——一个最和平的人变成了最坚决的战士。
+preconditions:
+- entity: qian_moyin
+  attribute: location
+  value: loc_qianjia
+- entity: qian_moyin
+  attribute: health
+  value: recovering
+- entity: qi_ruixuan
+  attribute: location
+  value: loc_qianjia
+expectedPostconditions:
+- entity: qian_moyin
+  attribute: emotionalState
+  narrativeHint: 钱默吟彻底变了。他不再吟诗，不再赏花，只想报仇。他羡慕金三爷的身体，因为他需要力气去杀敌。
+  confidence: 1.0
+- entity: qian_moyin
+  attribute: political_stance
+  value: resistance_fighter
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 瑞宣从钱先生的转变中看到了希望——连最和平的人都能变成战士，中国不会亡。
+  confidence: 1.0
+threadProgress:
+- thread: T3
+  advancement: 钱默吟伤愈后的转变是全书最重要的精神转折。他由诗人变成了战士，由隐士变成了复仇者。
+  progressAfter: 50
+  progressTotal: 100
+- thread: T1
+  advancement: 钱默吟的觉醒代表了抗日力量的壮大。瑞宣从他身上看到了自己的方向。
+  progressAfter: 40
+  progressTotal: 100
+styleGuidance:
+  tone: 悲壮、坚定、浴火重生
+  targetWordCount: 1200
+  atmosphere: 春天来了，钱家院中的花草又发了芽。但钱先生已经不再看它们——他的眼睛看向更远的地方。
+  scenePacing: 身体渐愈→决心报仇→与瑞宣的谈话→关于孙子的期望
+  characterVoice:
+    omniscient: 第三人称全知，以钱默吟的视角展现一个灵魂的蜕变

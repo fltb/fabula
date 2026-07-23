@@ -1,0 +1,13 @@
+id: qi_ruixuan_yunmei
+type: marriage
+participants:
+  - qi_ruixuan
+  - yunmei
+bidirectional: true
+initialState:
+  trust: 75
+  emotionalDistance: 25
+  intensity: 40
+  status: "传统夫妻——相敬如宾"
+  notes: "瑞宣与韵梅是父母之命、媒妁之言的旧式婚姻。韵梅是祁家内定的长孙媳妇，从进门那天起就一心一意操持家务、伺候老人、养育孩子。瑞宣对她有尊重、有感激，但缺少爱情——两人之间隔着一层薄纱。瑞宣是读过书的教员，韵梅大字不识几个；瑞宣忧国忧民，韵梅只懂得米面油盐。这层隔膜不是谁对谁错，而是新旧文化在一个家庭里的裂缝。韵梅管着全家人的温饱，瑞宣管着全家人的体面——两人在这个分工上配合得天衣无缝，却也永远各守各的领地。南京陷落那天瑞宣痛哭失声，韵梅不知道丈夫为什么哭得那么伤心，只能默默端上一碗热汤。她不懂他的世界，但懂他的痛苦——这大概就是那个时代夫妻最深的理解了。"
+establishedEvent: fall_of_beiping

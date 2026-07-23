@@ -1,0 +1,6 @@
+id: loc_qijia
+name: 祁家（五号院）
+description: 祁老人置办的房产，北房住祁老人，南房住天佑太太与瑞宣夫妇，东屋住瑞丰夫妇，西屋后来空出（原瑞全住）。院中有两棵枣树、石榴树和几盆夹竹桃。
+kind: residence
+initialState:
+  status: active

@@ -1,0 +1,9 @@
+id: salem_house
+name: "Salem House School"
+kind: boarding_school
+description: "Mr Creakle's school in the Blackheath/Hatcham area near London, where David is sent after biting Mr Murdstone. The school is a grim building surrounded by a high brick wall with broken glass bottles embedded in the top — a wall designed to prevent escape. The dull, dark schoolroom has a high window through which Creakle's assistant Tungay looks in. The boys sleep in a long, bare dormitory and subsist on meagre food. Mr Creakle presides with a stick, beating boys for the slightest infractions. The school is redeemed only by the friendships David makes — Steerforth (his protector) and Traddles (his true friend). David later visits it as a place of memory (Chapter 19) after he has grown up."
+initialState:
+  status: active
+  season: term_time
+  atmosphere: harsh_disciplinarian
+  notable_feature: high_wall_broken_bottles

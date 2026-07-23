@@ -1,0 +1,12 @@
+id: xiaoxiangguan
+name: 潇湘馆
+kind: residence
+parent: 大观园
+description: 大观园中林黛玉的住所，位于大观园西南角。入门便是曲折游廊，阶下石子漫成甬路。最引人注目的是后院有千竿翠竹，影影绰绰，凤尾森森，龙吟细细。黛玉在此读书写诗、与鹦鹉说话，是全书最具诗意的场景之一。
+initialState:
+  status: occupied
+  atmosphere: quiet_poetic
+notableFeatures:
+- 翠竹——后院千竿翠竹，象征黛玉清高孤傲
+- 书房——黛玉在此读书作诗
+- 鹦鹉——黛玉教的鹦鹉会念诗

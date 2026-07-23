@@ -1,0 +1,24 @@
+id: sun_qi
+name: 孙七
+type: barber
+archetype: common_man
+role: minor
+description: 剃头匠，小羊圈胡同的住户之一。他爱说话、好管闲事、有正义感。听到南京陷落的消息时，他正在给人剃头，惊得把剃刀扔在地上。他和小崔是好友。
+appearance: 近视眼，常穿短衣，系围裙。
+aliases:
+- 孙七爷
+gender: 男
+age: 约四十岁
+profession: 剃头匠
+traits:
+- talkative
+- righteous
+- hot_blooded
+- kind
+initialState:
+  location: loc_xiaoyangquan
+  status: alive
+  condition: working
+  emotionalState: indignant
+backstory: 靠手艺吃饭。
+knownSecrets: []

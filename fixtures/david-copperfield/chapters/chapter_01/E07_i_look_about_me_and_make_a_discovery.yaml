@@ -1,0 +1,108 @@
+event: E07
+title: "I Look About Me, and Make a Discovery"
+narrativeOrder: 7
+sceneType: linear
+storyTime: london_career
+narrationTime: london_career
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "restless_discovery"
+conflictType: "person_vs_society"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "David's school days end, and he must choose a profession. After a visit to Yarmouth where he sees the Peggotty family (now with Peggotty married to Mr Barkis) and a now-grown Little Emily, he travels to London to visit Steerforth at his mother's elegant house in Highgate. There he meets the bitter, scarred Rosa Dartle, Mrs Steerforth's ward. David finds London society fascinating but feels the pressure of choosing his path. Miss Betsey decides he shall be a proctor in Doctors' Commons — a genteel legal profession. David agrees, and his apprenticeship is arranged with Mr Spenlow. He takes lodgings in Buckingham Street in the Strand, beginning his independent adult life in London."
+preconditions:
+  - entity: david_copperfield
+    attribute: status
+    value: school_graduate
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: london
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: profession
+    value: proctors_apprentice
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: status
+    value: independent_adult
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: restless_eager
+    confidence: 1.0
+  - entity: steerforth
+    attribute: location
+    value: london
+    confidence: 1.0
+  - entity: peggotty
+    attribute: location
+    value: yarmouth
+    confidence: 1.0
+  - entity: peggotty
+    attribute: status
+    value: married_to_barkis
+    confidence: 1.0
+  - entity: emily
+    attribute: location
+    value: yarmouth
+    confidence: 1.0
+  - entity: emily
+    attribute: status
+    value: grown_and_courted
+    confidence: 0.9
+  - entity: rosa_dartle
+    attribute: location
+    value: london_highgate
+    confidence: 1.0
+  - entity: betsey_trotwood
+    attribute: decision
+    value: proctor_for_david
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "David enters adulthood and London society. His apprenticeship as a proctor marks the beginning of his independent life — the young man now steps into the world, with lodgings, a profession, and a growing circle of acquaintances. The 'undisciplined heart' is about to find its first object."
+    progressAfter: 35
+    progressTotal: 100
+  - thread: T2
+    advancement: "Dora not yet met, but David's heart is 'undisciplined' and ready for his first love. The restlessness and eager curiosity of this chapter prepare the ground for his instant infatuation. Meanwhile, Agnes remains in Canterbury, already a constant but quiet presence in David's thoughts."
+    progressAfter: 7
+    progressTotal: 100
+  - thread: T4
+    advancement: "Steerforth's charm is on full display in Highgate — his mother adores him, Rosa Dartle watches him with a strange, wounded intensity that hints at a past injury. David, dazzled as always, notices nothing of the darkness beneath the surface. Rosa's bitterness is the reader's first warning of Steerforth's capacity for cruelty."
+    progressAfter: 10
+    progressTotal: 100
+foreshadowing:
+  - id: rosas_bitterness
+    hint: "Rosa Dartle's scarred lip and her piercing, angry questions about Steerforth hint at a hidden history of injury — both physical and emotional — at Steerforth's hands. Her intensity is the first crack in David's idealised portrait of his friend."
+    targetRevealChapter: 22
+    thread: T4
+  - id: doctors_commons
+    hint: "The quaint, antiquated world of Doctors' Commons — with its proctors, advocates, and arcane procedures — becomes a symbolic setting for David's early adult life. It represents a genteel but rather stagnant profession, a holding pattern before the real dramas of life begin."
+    targetRevealChapter: 23
+    thread: T1
+  - id: undisciplined_heart
+    hint: "David's 'undisciplined heart' is named for the first time in this phase. His restless eagerness for life, love, and experience is both his greatest energy and his greatest vulnerability — it will lead him into Dora's arms and through much suffering before he learns to govern it."
+    targetRevealChapter: 45
+    thread: T1
+introduces:
+  - type: character
+    id: rosa_dartle
+    initialState:
+      location: london_highgate
+      status: ward_of_mrs_steerforth
+      condition: bitter_and_wounded
+      emotionalState: intense_resentful
+styleGuidance:
+  tone: "restless, observant, slightly awed — the young man's first real taste of the world beyond school"
+  targetWordCount: 800
+  atmosphere: "Highgate Hill on a fine day — the elegant Steerforth drawing-room with its dark portraits and polished furniture; Rosa Dartle's harp and her scarred lip; the dusty old world of Doctors' Commons with its velvet-collared proctors and ecclesiastical courts; London's streets full of energy and purpose"
+  scenePacing: "school's end and visit to Yarmouth (nostalgic, brief) → Highgate and Steerforth (elegant, unsettling) → Doctors' Commons and the proctor decision (measured, decisive) → Buckingham Street lodgings (fresh start)"
+  characterVoice:
+    narrator: "David is at the threshold of adulthood — his narration is eager, observant, still impressionable but gaining a sharper eye. He notices Rosa's intensity without understanding it. He reports Steerforth's manner with undiminished admiration, but the gap between David's perception and the reader's understanding is beginning to widen."
+    steerforth: "Confident, charming, effortlessly superior — speaks with the easy authority of a young man who has never known contradiction. His conversation is full of warmth and condescension in equal measure, fascinating David and repelling Rosa."
+    rosa_dartle: "Sharp, bitter, elliptical — every question is a dagger, every pause carries a weight of unspoken grievance. Her voice is thin, piercing, and full of innuendo that David completely misses."
+    betsey_trotwood: "Decisive and practical — 'I want him to be a proctor!' she declares, and the thing is done. Her no-nonsense management of David's future shows her love expressed through action rather than sentiment."

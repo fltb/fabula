@@ -1,0 +1,28 @@
+id: mr_dick
+name: "Mr Dick"
+type: supporting_character
+archetype: innocent_eccentric
+role: supporting
+description: "Richard Babley, known universally as Mr Dick, is Aunt Betsey Trotwood's amiable, eccentric companion. He is a man of childlike simplicity who is widely considered 'half-witted' — though Aunt Betsey insists that 'his simplicity is his wisdom.' He spends his days writing a Memorial (a petition to some unspecified authority) that never gets anywhere because it keeps turning to the story of King Charles the First, and flying a kite from which he hangs copies of his written pages. Despite his apparent foolishness, Mr Dick has moments of profound insight and emotional intelligence. He is a loyal friend to David, a devoted support to Aunt Betsey, and a gentle, loving presence in the household."
+appearance: "A middle-aged man with a fresh, boyish face, a high forehead, bright eyes, and a mild, contented expression. He has a habit of carrying a sheaf of papers covered in writing and looking earnestly at people. He dresses plainly and neatly."
+aliases:
+  - "Mr Dick"
+  - "Richard Babley"
+gender: male
+age: "Middle-aged"
+profession: "Gentleman (dependent on Miss Betsey)"
+traits:
+  - innocent
+  - simple
+  - kind
+  - loyal
+  - eccentric
+  - wise_in_his_own_way
+  - cheerful
+initialState:
+  location: dover
+  status: alive
+  condition: companion_to_miss_betsey
+  emotionalState: contented
+voiceNotes: "Earnest, simple, and curiously direct. He speaks about his Memorial and King Charles's head as if they are the most urgent matters in the world. His observations, though oddly expressed, often cut to the heart of a matter."
+backstory: "Mr Dick's brother had him declared insane and confined him. Miss Betsey befriended him (or 'adopted' him, as she says) and brought him to live in her cottage at Dover, where he is free to write his Memorial and fly his kites to his heart's content. His family tried to get him back, but Miss Betsey fought them off. His association with King Charles's head (which 'always comes into his writing') is a recurring comic motif."

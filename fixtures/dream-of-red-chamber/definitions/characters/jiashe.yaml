@@ -1,0 +1,18 @@
+id: jiashe
+name: 贾赦
+type: supporting
+role: supporting
+description: 贾赦，首次出现于第2回，共提及45次。
+appearance: 老官员相貌，白须华发。世袭一等将军，穿戴官服时气派十足。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: elderly
+voiceNotes: 言语好色贪婪，年老而不自重。在母亲贾母面前尚有几分忌惮，在家人面前则倚老卖老。说话粗鄙，贪财好色。
+backstory: 荣国府长房贾赦，袭一等将军之职，贾母之长子。贪财好色，荒淫无度。曾欲强纳贾母丫鬟鸳鸯为妾，被贾母痛斥。后因交通外官、仗势欺人等罪名被革职抄家。
+knownSecrets:
+- 欲强纳鸳鸯为妾

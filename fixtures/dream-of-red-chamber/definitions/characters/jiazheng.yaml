@@ -1,0 +1,20 @@
+id: jiazheng
+name: 贾政
+type: antagonist
+role: supporting
+description: 贾政，首次出现于第2回，共提及75次。
+appearance: 中年官员相貌，须髯威严，常着官服或家常道袍。神情严肃，不苟言笑。
+aliases: []
+gender: 男
+age: 50+
+traits:
+- 迂腐
+- 严厉
+- 封建
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: middle_aged
+voiceNotes: 言语端方严正，常以圣贤道理训人。教训宝玉时声严厉色，在贾母面前则唯唯诺诺。为官场合言谈得体，具有官僚气度。
+backstory: 荣国府二老爷，贾宝玉之父。为人迂腐古板，热衷仕途功名，对宝玉叛逆的性情深感不满。曾因宝玉与戏子交往而痛打宝玉。虽为官清廉，但无力挽救贾府败落之势。
+knownSecrets: []

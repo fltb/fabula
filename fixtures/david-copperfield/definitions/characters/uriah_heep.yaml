@@ -1,0 +1,30 @@
+id: uriah_heep
+name: "Uriah Heep"
+type: antagonist
+archetype: hypocritical_villain
+role: supporting
+description: "One of literature's great villains. Uriah Heep is a clerk in Mr Wickfield's Canterbury law office who presents himself as an 'umble' servant but is in fact an ambitious, manipulative, and fraudulent schemer. He insinuates himself into Wickfield's confidence, exploits his weakness for drink and his financial troubles, and gradually assumes control of the firm. His ultimate goal is to possess the firm and marry Agnes Wickfield. He is undone by Mr Micawber's secret investigation. Heep's defining characteristic is his exaggerated humility — 'I am well aware that I am the umblest person going' — which is simultaneously a weapon, a disguise, and a bitter mockery of his subordinate position. His physical description — thin, lank-haired, clammy-handed —represents his slithering, cold nature."
+appearance: "Extremely thin, tall, and lanky, with pale, clammy skin, red eyes, no eyebrows, and lank red hair. His hands are always cold and fish-like. He writhes and squirms when he speaks, expressing his humility through physical cringing. He dresses in black. His facial expression is a mixture of fawning subservience and secret cunning."
+aliases:
+  - "Heep"
+  - "Ury"
+  - "Mr 'Umble"
+gender: male
+age: "About twenty-five at introduction"
+profession: "Clerk / Law Partner"
+traits:
+  - hypocritical
+  - ambitious
+  - cunning
+  - vengeful
+  - false_humble
+  - manipulative
+  - grasping
+  - cold
+initialState:
+  location: canterbury
+  status: alive
+  condition: clerk_at_wickfield_office
+  emotionalState: resentful_ambitious
+voiceNotes: "His speech is a masterpiece of ironic humility — endless professions of his 'umbleness' that are actually expressions of resentment and self-justification. He writhes and wriggles as he speaks, with much hand-wringing and bowing. His catchphrase: 'I am a very umble person.' He calls David 'Master Copperfield' or 'Mister Copperfield' with a sneer barely concealed."
+backstory: "Son of a sexton's widow, raised in the charity school where he learned his 'umbleness as a survival strategy. He is placed as a clerk with Mr Wickfield and gradually gains power over his employer. He systematically defrauds Wickfield, forging documents and manipulating the accounts. He attempts to force Agnes into marriage as part of his plan to take over the firm. He is exposed by Mr Micawber in a spectacular confrontation and ultimately imprisoned, though with the possibility of eventual release if he reforms."

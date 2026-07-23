@@ -1,0 +1,18 @@
+id: hupo
+name: 琥珀
+type: supporting
+role: supporting
+description: 琥珀，首次出现于第20回，共提及21次。贾母的丫鬟
+appearance: 贾母身边的丫鬟，容貌端正。穿戴体面，有体面丫鬟的气度。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 贾母院
+  status: alive
+  role: maid
+  age_stage: young_adult
+voiceNotes: 言语得体，在贾母身边侍奉周到。偶尔打趣鸳鸯，关系融洽。在贾府中是个不惹事的好丫鬟。
+backstory: 贾母身边的丫鬟之一，地位仅次于鸳鸯。与鸳鸯一起在贾母跟前当差。性格温和，不多言多语。
+knownSecrets: []

@@ -1,0 +1,12 @@
+id: hengwuyuan
+name: 蘅芜苑
+kind: residence
+parent: 大观园
+description: 大观园中薛宝钗的住所，位于大观园东北角。院中遍植各种香草异卉（蘅芜即香草），无花但有奇香。室内布置极简素净，雪洞一般，一色玩器全无。体现了宝钗朴素内敛的性格。
+initialState:
+  status: occupied
+  atmosphere: simple_elegant
+notableFeatures:
+- 香草——遍植蘅芜等香草，沁人心脾
+- 雪洞般的室内——宝钗居所极简朴素
+- 奇香——草木清香，与宝钗冷香丸相应

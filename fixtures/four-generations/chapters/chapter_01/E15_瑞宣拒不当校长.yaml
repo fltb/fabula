@@ -1,0 +1,54 @@
+event: E15
+title: 瑞宣拒不当校长
+narrativeOrder: 15
+sceneType: linear
+storyTime: celebration_nanjing
+narrationTime: celebration_nanjing
+tense: past
+discourseMode: description
+arcPosition: climax
+emotionalValence: principled_defiance
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 瑞丰当上科长后，跑来告诉瑞宣：学校的校长辞职了，他可以活动让瑞宣当校长。瑞宣一口拒绝。瑞丰急了，说大哥太固执："南京都丢了，你一个人有骨头又怎样？"瑞宣平静而坚定地回答：可以教书就教书，不可以教书就去卖落花生，但绝不给日本人做事。瑞丰认为大哥疯了，悻悻而去。瑞宣向祖父和母亲表明心迹：宁可饿死，也不做汉奸。祁老人和天佑太太虽不理解，但也只能支持。
+preconditions:
+- entity: qi_ruifeng
+  attribute: role
+  value: education_bureau_section_chief
+- entity: qi_ruixuan
+  attribute: location
+  value: loc_qijia
+- entity: qi_ruixuan
+  attribute: political_stance
+  value: determined_not_to_collaborate
+expectedPostconditions:
+- entity: qi_ruixuan
+  attribute: political_stance
+  narrativeHint: 瑞宣拒绝当校长，这是他向家人也是向自己明确宣告：绝不做汉奸。这是他在沦陷区守住底线的标志性时刻。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: emotionalState
+  value: determined_and_peaceful
+  confidence: 1.0
+- entity: sr_qi
+  attribute: emotionalState
+  narrativeHint: 祁老人虽然不理解孙子的选择，但看到他的决心也不便阻拦。他只求一家人能在一起。
+  confidence: 0.9
+- entity: qi_ruifeng
+  attribute: emotionalState
+  value: frustrated_and_contemptuous
+  confidence: 1.0
+threadProgress:
+- thread: T2
+  advancement: 瑞宣拒绝当校长，表明他守住了底线。在忠孝不能两全的情况下，他选择了不做汉奸。
+  progressAfter: 50
+  progressTotal: 100
+styleGuidance:
+  tone: 坚定、悲壮、大义凛然
+  targetWordCount: 1200
+  atmosphere: 祁家院中，枣树光秃秃的。瑞丰穿着新马褂得意洋洋而来，瑞宣穿着旧棉袍平静相对。
+  scenePacing: 瑞丰报喜→瑞宣拒绝→兄弟冲突→向祖父母表明心迹
+  characterVoice:
+    omniscient: 第三人称全知，突显瑞宣在关键时刻的道德勇气

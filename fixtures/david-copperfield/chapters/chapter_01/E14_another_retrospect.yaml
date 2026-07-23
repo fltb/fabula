@@ -1,0 +1,75 @@
+event: E14
+title: "Another Retrospect"
+narrativeOrder: 14
+sceneType: linear
+storyTime: dora_death
+narrationTime: dora_death
+tense: past
+discourseMode: reflection
+arcPosition: climax
+emotionalValence: "bittersweet_grief"
+conflictType: "person_vs_fate"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "A retrospective chapter in which David pauses to survey the passing of time. He and Dora are now married, living in their small cottage with Jip the dog. Their marriage is loving but troubled: Dora is utterly incapable of managing a household, and David's efforts to 'form her mind' only make her miserable. She remains a 'child-wife,' playing with Jip and avoiding responsibilities. As time passes, Dora's health begins to decline. She becomes paler and weaker. Jip grows old and blind. The chapter is tinged with sadness and foreboding. David works hard at his writing, achieving success, but the happiness at home is fading. The retrospect closes with Dora's quiet, gentle illness deepening and the shadow of loss approaching."
+preconditions:
+  - entity: david_copperfield
+    attribute: status
+    value: married_to_dora
+  - entity: dora_spenlow
+    attribute: condition
+    value: declining_health
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: status
+    value: successful_writer
+    confidence: 1.0
+  - entity: dora_spenlow
+    attribute: condition
+    value: gravely_ill
+    confidence: 1.0
+  - entity: dora_spenlow
+    attribute: emotionalState
+    narrativeHint: "Dora faces her decline with childlike courage — she knows she is dying but speaks of it gently, asking David not to be unhappy. Her last gift to him is to release him, asking Agnes to take her place. In dying, Dora achieves a quiet dignity her life never had."
+    confidence: 1.0
+  - entity: jip
+    attribute: condition
+    value: old_and_blind
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: foreboding_grief
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "David's literary career succeeds — he is now a published and respected writer — but his personal happiness falters. The retrospect shows him caught between professional fulfilment and domestic sorrow, the bildungsroman reaching a bittersweet midpoint."
+    progressAfter: 55
+    progressTotal: 100
+  - thread: T2
+    advancement: "The Dora marriage reaches its bittersweet climax — a love that was real but incapable of mature partnership. David's attempts to change Dora only hurt her, and her decline casts the entire relationship in the light of tragic inevitability. The idyll of young love gives way to the reality of incompatible natures."
+    progressAfter: 65
+    progressTotal: 100
+  - thread: T4
+    advancement: "The contrast between Emily's flight abroad and Dora's quiet fading at home underscores the different fates of women in the novel — one dramatic and scandalous, the other domestic and sorrowful, both ending in loss."
+    progressAfter: 75
+    progressTotal: 100
+foreshadowing:
+  - id: dora_death
+    hint: "Dora's gentle, unexplained decline — her paleness, her weakness, Jip's blindness — is the quiet approach of death. She is called to heaven as softly as she lived, her passing foreshadowed in every fading smile."
+    targetRevealChapter: 48
+    thread: T2
+  - id: agnes_quiet_role
+    hint: "Dora's innocent request that Agnes take her place — the child-wife's surprising wisdom in seeing what David cannot — points toward the eventual resolution of David's romantic story."
+    targetRevealChapter: 60
+    thread: T1
+introduces: []
+styleGuidance:
+  tone: "elegiac, tender, suffused with quiet sorrow — the retrospect slows time to a near halt, every scene steeped in the awareness of approaching loss"
+  targetWordCount: 800
+  atmosphere: "the small cottage with the dying fire, Jip curled blind on Dora's lap, the dust motes in the afternoon light, David writing at his desk in the next room while his wife fades — everything softened, muted, already half-memory"
+  scenePacing: "the retrospect frame (slow, contemplative) → domestic vignettes: Dora with the housekeeping book, Dora with Jip, David trying to teach her (fond but painful) → the first signs of illness (hushed, creeping) → the deepening shadow (inexorable) → the close: winter light, Dora's thin hand, Jip's unseeing eyes"
+  characterVoice:
+    narrator: "Adult David at his most vulnerable — the retrospect removes the ironic distance and leaves only memory and grief. The prose becomes lyrical, impressionistic, as if written through tears."
+    dora_spenlow: "Light, fluttering, childlike even in decline — she calls David 'Doady' and cannot manage a household but knows how to love. Her voice grows fainter as the chapter goes on, her last words tender and selfless."
+    david_copperfield: "Frustrated, loving, guilty — he tries to shape Dora into a practical wife and fails, then watches her slip away, realising too late that he should have loved her as she was. His voice carries the weight of unspoken apologies."

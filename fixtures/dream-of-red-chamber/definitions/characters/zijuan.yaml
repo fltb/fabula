@@ -1,0 +1,19 @@
+id: zijuan
+name: 紫鹃
+type: supporting
+role: supporting
+description: 紫鹃，首次出现于第8回，共提及46次。
+appearance: 容貌清秀，性情温和。常随黛玉左右，打扮素净。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  role: maid
+  age_stage: young_adult
+voiceNotes: 言语诚恳真挚，忠心护主。在黛玉面前体贴入微，言辞温柔；在外人面前则为黛玉据理力争。曾用言辞试探宝玉真心，言语间充满智慧与忠诚。
+backstory: 原名鹦哥，贾母的丫鬟，被派去服侍林黛玉。与黛玉情同姊妹，是黛玉在贾府中最贴心的人。真心为黛玉着想，曾以"黛玉要回苏州"之言试探宝玉真情。黛玉死后，紫鹃看破红尘，随惜春出家。
+knownSecrets:
+- 以"黛玉要回苏州"之言试探宝玉真情

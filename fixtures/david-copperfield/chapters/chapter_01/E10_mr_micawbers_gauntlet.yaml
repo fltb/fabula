@@ -1,0 +1,93 @@
+event: E10
+title: "Mr Micawber's Gauntlet"
+narrativeOrder: 10
+sceneType: linear
+storyTime: london_career
+narrationTime: london_career
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "comic_romantic"
+conflictType: "person_vs_society"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "David hosts a dinner party in his London chambers for his friends: Traddles (now a struggling law student living on bread and milk), Steerforth, and the newly-arrived Mr and Mrs Micawber. The evening is a glorious success despite David's love-lorn appetite — he lives on Dora and coffee. Mr Micawber makes a magnificent speech and Mrs Micawber declares she 'never will desert Mr Micawber.' The chapter also advances the Dora romance: Mr Spenlow forbids David from visiting Dora, and David discovers that Miss Murdstone (his step-aunt) has become Dora's companion, making the courtship even more difficult. Traddles, meanwhile, confides his own long engagement to his beloved Sophy."
+preconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: london
+  - entity: dora_spenlow
+    attribute: relationship_david
+    value: courting
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: london
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: lovesick_obstacle_faced
+    confidence: 1.0
+  - entity: dora_spenlow
+    attribute: relationship_david
+    value: courting_under_difficulties
+    confidence: 1.0
+  - entity: micawber
+    attribute: location
+    value: london
+    confidence: 1.0
+  - entity: micawber
+    attribute: financial_status
+    value: desperate_as_ever
+    confidence: 1.0
+  - entity: traddles
+    attribute: location
+    value: london
+    confidence: 1.0
+  - entity: traddles
+    attribute: relationship
+    value: engaged_to_sophy
+    confidence: 1.0
+  - entity: murdstone
+    attribute: location
+    value: london
+    confidence: 1.0
+threadProgress:
+  - thread: T2
+    advancement: "David's courtship of Dora faces its first serious obstacles. Mr Spenlow forbids visits, and the Murdstone complication makes access to Dora nearly impossible. The opposition stiffens David's resolve and heightens the romantic drama — the course of true love is proving anything but smooth."
+    progressAfter: 15
+    progressTotal: 100
+  - thread: T5
+    advancement: "Micawber reappears in David's life, his fortunes at a new low. The dinner party reveals Micawber at his most magnificent and ludicrous — full of grand rhetoric and empty pockets. This is the last time David will see Micawber in his old character before the great transformation that lies ahead."
+    progressAfter: 15
+    progressTotal: 100
+  - thread: T1
+    advancement: "David's London life takes fuller shape — social, professional, and romantic. The dinner party shows him as a young host, a young lover, and a young friend. His circle is widening: the loyal Traddles, the dashing Steerforth, the comic Micawbers. The ordinary texture of young adult life is richly rendered."
+    progressAfter: 48
+    progressTotal: 100
+foreshadowing:
+  - id: micawbers_rhetoric
+    hint: "Mr Micawber's magnificent speech at the dinner party — 'something will turn up' — is the same hopeful rhetoric that has carried him through every crisis. But his desperation is deepening, and his next turn of fortune will take him further from London and into the orbit of Uriah Heep."
+    targetRevealChapter: 36
+    thread: T5
+  - id: miss_murdstone_companion
+    hint: "The reappearance of Miss Murdstone as Dora's companion is a darkly comic reversal: the woman who once tormented David as a child now stands guard over his beloved. Her presence ensures that the courtship will be a battle of wits — and that David must face his old oppressor in a new form."
+    targetRevealChapter: 33
+    thread: T2
+  - id: traddles_devotion
+    hint: "Traddles, living on bread and milk and studying law on a shoestring, confides his long engagement to Sophy. His quiet, uncomplaining devotion to a distant love contrasts sharply with David's feverish, immediate passion for Dora. Traddles's steady faithfulness prefigures the kind of love that endures."
+    targetRevealChapter: 59
+    thread: T1
+introduces: []
+styleGuidance:
+  tone: "comic, warm, slightly rueful — the dinner-party scenes are among the most fully comic in the novel, but the shadow of romantic difficulty and financial anxiety gives the laughter an edge"
+  targetWordCount: 800
+  atmosphere: "David's chambers in Buckingham Street — a modest but cheerful lodging prepared for a dinner party; the scent of mock turtle soup and roast fowl; Mr Micawber's expansive gestures over the wine; Mrs Micawber's perpetual laments; Traddles's patient good humour; the late-night talk of love and fortune"
+  scenePacing: "preparations for the dinner (bustling, happy) → the dinner itself (comic set-piece, expansive) → Micawber's speech (climactic oratory) → the aftermath: Spenlow's prohibition and Miss Murdstone's arrival (sobering, dramatic) → Traddles's confidence (quiet, warm)"
+  characterVoice:
+    narrator: "David as young host — proud, a little anxious, full of love and high spirits. The narration is warm and observant, relishing the comedy of his friends while honestly recording his own lovesick distraction: 'I didn't eat anything — I lived on Dora and coffee.'"
+    micawber: "Magniloquent, theatrical, indefatigable — every speech is an oration, every sentence a rolling period. He speaks of his financial difficulties with the same grandiloquence he brings to proposing a toast. 'Mr Copperfield, I am your obedient servant — though at present I am not in a condition to be the servant of anyone.'"
+    mrs_micawber: "Loyal, self-dramatizing, perpetually aggrieved — she 'never will desert Mr Micawber,' and she announces this at every opportunity. Her speech is a series of declarations, each more emphatic than the last, delivered with the air of a tragic heroine."
+    traddles: "Good-humoured, modest, persevering — he speaks of his struggles with a cheerful frankness that disarms all pity. His conversation about Sophy is tender but undemonstrative, a steady flame compared to David's blaze."
+    steerforth: "Charming, condescending, slightly removed — he joins the party but holds himself apart, amused by the Micawbers, pleasant to Traddles. The reader senses that Steerforth is slumming, and that his patience with David's humble friends is wearing thin."

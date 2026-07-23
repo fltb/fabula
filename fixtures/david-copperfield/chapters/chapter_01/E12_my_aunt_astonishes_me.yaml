@@ -1,0 +1,75 @@
+event: E12
+title: "My Aunt Astonishes Me"
+narrativeOrder: 12
+sceneType: linear
+storyTime: london_career
+narrationTime: london_career
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "shock_resolve"
+conflictType: "person_vs_society"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "David is engaged to Dora and writes to Agnes with joyful news, but his happiness is interrupted when Aunt Betsey arrives unexpectedly in London, looking strained and serious. She reveals that she has lost nearly all her money — ruined by Uriah Heep's machinations and by investments that failed. She is now poor. David is shocked but immediately resolves to support her and reduce their expenses. He takes on additional work as a secretary for Doctor Strong, who has also moved to London, and begins writing fiction in earnest, starting his literary career. The chapter marks a turning point: David must become responsible and self-reliant, no longer dependent on his aunt's fortune."
+preconditions:
+  - entity: david_copperfield
+    attribute: status
+    value: engaged_to_dora
+  - entity: betsey_trotwood
+    attribute: financial
+    value: ruined_by_heep
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: status
+    value: became_self_supporting
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: occupation
+    value: writer_and_secretary
+    confidence: 1.0
+  - entity: betsey_trotwood
+    attribute: status
+    value: dependent_on_david
+    confidence: 1.0
+  - entity: betsey_trotwood
+    attribute: emotionalState
+    narrativeHint: "Miss Betsey bears her ruin with extraordinary dignity — she does not weep or complain, but faces her reduced circumstances with the same eccentric composure she has always shown. This reversal reveals her true strength of character."
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: determined_responsible
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "David's decisive turning point — the loss of his aunt's fortune forces him to become a man. He takes on work, begins his literary career in earnest, and assumes responsibility for another. The dependent boy is gone; the self-reliant adult emerges."
+    progressAfter: 45
+    progressTotal: 100
+  - thread: T2
+    advancement: "The engagement to Dora faces its first real test — David must now support himself and his aunt on a modest income, and Dora's inability to manage household affairs becomes a looming practical problem."
+    progressAfter: 35
+    progressTotal: 100
+  - thread: T3
+    advancement: "Heep's schemes begin to reach beyond Canterbury — his machinations have directly affected Miss Betsey's fortune, bringing the villain into David's personal circle. The threads of the plot are converging."
+    progressAfter: 40
+    progressTotal: 100
+foreshadowing:
+  - id: writing_career_begins
+    hint: "David begins his literary career out of necessity — the fiction he writes to earn bread will become his true vocation. The pragmatic start of a great writer's life."
+    targetRevealChapter: 43
+    thread: T1
+  - id: dora_unsuitability
+    hint: "The question of whether Dora can be a partner in hardship — her childlike nature and incapacity for practical life — begins to press on David's mind. The foundations of their marriage are already strained by circumstance."
+    targetRevealChapter: 43
+    thread: T2
+introduces: []
+styleGuidance:
+  tone: "dramatic reversal — from domestic happiness to financial crisis, carried by David's resolve and Miss Betsey's extraordinary dignity in ruin"
+  targetWordCount: 850
+  atmosphere: "David's cheerful London rooms invaded by the sudden gravity of Miss Betsey's arrival — the familiar face gone gaunt, the favourite chair occupied by a woman who has lost everything, the clock ticking in the shocked silence"
+  scenePacing: "engagement joy (brisk, light) → Aunt Betsey's arrival (ominous entrance) → the revelation (slow, building weight) → David's resolution (decisive, forward-looking) → the new regime (quiet determination)"
+  characterVoice:
+    narrator: "Adult David recounting the moment his life changed — the shock still fresh in the telling, but pride and affection for his aunt tempering the pain of the memory."
+    betsey_trotwood: "Strained but unbroken — her voice loses none of its eccentric sharpness even in penury. 'Trot, I am ruined' — delivered with the same matter-of-factness she would use to announce a donkey in the garden. Her dignity in defeat is her finest hour."
+    david_copperfield: "Brave, decisive, growing into manhood in real time — his voice shifts from the eager young lover to the responsible head of a household, accepting the burden without complaint."

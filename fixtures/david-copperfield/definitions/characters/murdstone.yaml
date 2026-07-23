@@ -1,0 +1,29 @@
+id: murdstone
+name: "Edward Murdstone"
+type: antagonist
+archetype: cruel_stepfather
+role: supporting
+description: "David's cruel stepfather, a stern, dark-browed man with a firm conviction in the virtue of 'firmness.' He is handsome in a dark, brooding way, but his good looks are undercut by a hardness of expression and a coldness of manner. He courts and marries Clara Copperfield after her first husband's death, ostensibly to provide her with protection — but in truth to dominate her and her household. He beats David, sends him away to a harsh school, and after Clara's death sets David to menial labour in his warehouse. His sister Jane Murdstone is his companion and co-tyrant. Together they represent the domestic tyranny that Dickens condemns."
+appearance: "Dark complexion, dark hair, heavy brows, a firm mouth, a forbidding expression. Dresses in severe black. His face is 'hard and set.' He has a way of looking at people — especially David — that freezes them. His hands are large and his grip is strong."
+aliases:
+  - "Mr Murdstone"
+gender: male
+age: "About thirty at time of marriage"
+profession: "Businessman (co-partner in Murdstone and Grinby, wine merchant)"
+traits:
+  - cruel
+  - domineering
+  - hypocritical
+  - proud
+  - self_righteous
+  - cold
+  - manipulative
+  - firm_as_virtue
+initialState:
+  location: unknown
+  status: alive
+  condition: bachelor_seeking_wife
+  emotionalState: calculating
+  relationship_clara: suitor
+voiceNotes: "Polished and articulate, using the language of moral rectitude to justify cruelty. His favourite word is 'firmness.' He speaks in measured, deliberate tones, often employing religious and moral justifications for his harshness. His letters are cold and formal."
+backstory: "A wine merchant of respectable standing. He courts Clara Copperfield soon after she is widowed, attracted by her beauty, her property, and her pliability. After marriage he takes full control of the household, dismissing Peggotty, sending David away, and reducing Clara to a silent, fearful shadow of herself. After Clara's death, he sends David to work at Murdstone and Grinby's, the firm he co-owns. He eventually remarries another young, pliable woman."

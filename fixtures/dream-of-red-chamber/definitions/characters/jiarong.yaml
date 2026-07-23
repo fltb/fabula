@@ -1,0 +1,17 @@
+id: jiarong
+name: 贾蓉
+type: supporting
+role: supporting
+description: 贾蓉，首次出现于第2回，共提及36次。
+appearance: 青年公子，面皮白净。宁国府长孙，衣饰华丽。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 宁国府
+  status: alive
+  age_stage: young_adult
+voiceNotes: 言语轻浮，与其父贾珍一脉相承。在长辈面前假作恭顺，私下则与尤二姐等调笑无忌。对妻子秦可卿之死并无真心悲痛。
+backstory: 宁国府贾珍之子，秦可卿之夫。为人轻浮好色，与其父一丘之貉。曾调戏尤二姐、尤三姐。在秦可卿死后，为丧事大肆铺张。宁国府被查抄后，贾蓉也受到牵连。
+knownSecrets: []

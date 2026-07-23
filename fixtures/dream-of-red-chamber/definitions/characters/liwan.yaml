@@ -1,0 +1,18 @@
+id: liwan
+name: 李纨
+type: supporting
+role: supporting
+description: 李纨，首次出现于第4回，共提及60次。
+appearance: 寡居妇人打扮，穿青缎或素色衣裳，不施脂粉。面容端庄，举止恬淡。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: young_adult
+  marital_status: widowed
+voiceNotes: 言语温和寡淡，持家以静。说话不多但句句在理。教育儿子时严格，在姐妹中则慈和。起诗社时言语风趣，不失大家风范。
+backstory: 荣国府贾珠之妻，贾兰之母。贾珠早亡后寡居，一心教子，不闻外事。为人温厚善良，在贾府中与世无争。在大观园中带领众姊妹结诗社。贾兰长大后科举高中，李纨得以封诰命。
+knownSecrets: []

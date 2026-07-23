@@ -1,0 +1,29 @@
+id: dan_peggotty
+name: "Daniel Peggotty"
+type: supporting_character
+archetype: noble_fisherman
+role: supporting
+description: "Peggotty's brother, a Yarmouth fisherman of extraordinary goodness and dignity. Mr Peggotty lives in a remarkable house — a converted boat on Yarmouth beach — where he raises his orphaned nephew Ham and niece Little Emily. He is a man of few words, immense physical strength, and profound emotional depth. When Emily is seduced and abandoned by Steerforth, Mr Peggotty's response is not rage but a determination to find her and bring her home. He travels across Europe for months, and when he finds her, his forgiveness is complete and unconditional. He is the moral heart of the novel's subplot — a poor, illiterate fisherman who embodies Christian forgiveness more perfectly than any clergyman in the book."
+appearance: "A big, sturdy fisherman with a weather-beaten face, a rough beard, a broad chest, and powerful arms. He wears a flannel shirt, a waistcoat, trousers tucked into sea-boots, and a sou'wester hat. He has a ruddy complexion and a voice as deep as a foghorn. His eyes are honest and kind."
+aliases:
+  - "Mr Peggotty"
+  - "Dan"
+gender: male
+age: "Middle-aged"
+profession: "Fisherman"
+traits:
+  - kind
+  - strong
+  - steadfast
+  - forgiving
+  - gentle
+  - honourable
+  - determined
+  - simplehearted
+initialState:
+  location: yarmouth
+  status: alive
+  condition: head_of_boathouse_household
+  emotionalState: contented
+voiceNotes: "Speaks in the Yarmouth dialect — rough, warm, and direct. He uses 'you' for 'your,' 'd'ye' for 'do you,' and has a habit of ending sentences with 'my pretty' or 'my beauty.' His speech becomes more formal when he is deeply moved, as if emotion elevates his natural dignity."
+backstory: "Brother of Clara Peggotty. A fisherman by trade, he takes in his orphaned nephew Ham and niece Emily, raising them in his boathouse home. He also shelters the widowed Mrs Gummidge (his partner's widow). His household is a model of kindness and mutual support. After Emily's elopement with Steerforth, he travels across France and Italy searching for her. When he finds her (with Martha's help), he forgives her completely. He emigrates to Australia with Emily, where they start a new life, and Mr Peggotty eventually becomes a successful sheep farmer."

@@ -1,0 +1,55 @@
+ruleId: national_resistance_moral
+name: "民族大义与个人选择"
+category: ethical_dilemma
+type: dilemma
+statement: "民族大义与个人选择之间永无解的冲突是全书的灵魂命题。每个人都在亡国之际面临选择：瑞全选择了出走抗日，代价是抛弃年迈的祖父和需要他的家庭；瑞宣选择了留下养家，代价是忍受良知煎熬和亡国之辱；钱默吟被动地被卷入——他没有选择被捕，但他选择了出狱后继续战斗；冠晓荷和大赤包选择了当汉奸，代价是出卖灵魂和沦为历史笑柄。老舍没有给出非黑即白的答案——瑞宣留下来教书养家难道就不爱国吗？瑞全抛下一家老小奔赴国难就一定对吗？他通过祁家每一个人的命运展示了这个残酷的时代命题：在亡国之日，没有一个人能全身而退，每一种选择都有它的代价与痛苦。"
+ruleClass: moral_principle
+logicalConsequences:
+  - description: "选择出走抗日者必须承受抛弃家庭的道德负罪"
+    check:
+      type: state_invariant
+      filter: "entity.choice='leave_to_resist'"
+      assert: "entity.guilt_about_family>=60"
+      severity: warning
+  - description: "选择留下养家者必须承受苟且偷生的屈辱感"
+    check:
+      type: state_invariant
+      filter: "entity.choice='stay_and_support_family' AND entity.political_stance CONTAINS 'patriotic'"
+      assert: "entity.sense_of_shame>=70"
+      severity: warning
+  - description: "选择当汉奸者获得短期利益但丧失个人尊严"
+    check:
+      type: state_invariant
+      filter: "entity.choice='collaboration'"
+      assert: "entity.power>=60 AND entity.dignity<=20"
+      severity: error
+  - description: "被迫卷入战争者（如底层市民）拥有爱国直觉但缺乏行动力"
+    check:
+      type: state_invariant
+      filter: "entity.social_class='lower_class'"
+      assert: "entity.patriotic_instinct>=60 AND entity.resistance_capacity<=30"
+      severity: warning
+exceptions:
+  - condition: "钱默吟从隐士变成战士——最和平的人变成最坚决的抗日者"
+    note: "极致的压迫催生极致的反抗——民族大义压倒个人安危"
+  - condition: "瑞宣最终在瑞全的启发下走上隐蔽抗日之路——终将两种选择合二为一"
+    note: "忠孝难两全，但有些人找到了第三条路——既养家又抗日，虽然两条路都走得艰难"
+evidenceChain:
+  - rule: national_resistance_moral
+    effect: reinforce
+    evidence: "瑞全悄然离家的那夜——'国家在召唤他，他不能不走'，但他一步三回头"
+  - rule: national_resistance_moral
+    effect: reinforce
+    evidence: "瑞宣拿着瑞全留下的纸条看了又看——他既为弟弟骄傲，又为自己悲哀"
+  - rule: national_resistance_moral
+    effect: reinforce
+    evidence: "钱默吟出狱后变成了铁一般的抗日宣传者——最温和的人变成了最坚强的人"
+  - rule: national_resistance_moral
+    effect: reinforce
+    evidence: "冠晓荷出卖钱默吟以巴结日本人——但日本人最终也没有把他当人看"
+  - rule: national_resistance_moral
+    effect: reinforce
+    evidence: "小崔打了日本兵——一个不识字的车夫比很多读书人更有骨气"
+  - rule: national_resistance_moral
+    effect: weaken
+    evidence: "祁老人的忍耐哲学并非不爱国——活了七十五年的老人只知道'忍为高'，他的选择代表着传统农耕文化的生存智慧"

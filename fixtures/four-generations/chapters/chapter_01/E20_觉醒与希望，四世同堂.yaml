@@ -1,0 +1,62 @@
+event: E20
+title: 觉醒与希望，四世同堂
+narrativeOrder: 20
+sceneType: linear
+storyTime: end_of_novel
+narrationTime: end_of_novel
+tense: past
+discourseMode: reflection
+arcPosition: denouement
+emotionalValence: hopeful_resolute
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 珍珠港事件爆发，日本人在小羊圈胡同里围着大槐树欢呼。与此同时，程长顺的新生儿呱呱坠地——一条小小的生命给这死气沉沉的胡同带来了一丝生机。瑞宣与瑞全在中山公园的谈话后，心中豁然开朗。他决定不再犹豫，像钱默吟和瑞全那样去行动。祁家的四世同堂在战火中虽然残破——瑞全在外抗日，瑞宣找到了自己的使命，老人和妇孺在家苦熬——但希望仍在。北平虽沦陷，人心不死。
+preconditions:
+- entity: qi_ruixuan
+  attribute: political_stance
+  value: clandestine_supporter
+- entity: qi_ruiquan
+  attribute: status
+  value: returned_secretly
+- entity: qian_moyin
+  attribute: political_stance
+  value: resistance_fighter
+expectedPostconditions:
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 瑞宣终于不再苦闷。他找到了自己在战争中的位置——和一个中国人该做的事。他的觉醒代表了无数沦陷区知识分子的转变。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: role
+  value: resistance_supporter
+  confidence: 1.0
+- entity: qi_ruiquan
+  attribute: status
+  value: back_in_resistance
+  confidence: 1.0
+- entity: qian_moyin
+  attribute: role
+  narrativeHint: 钱默吟的转变在瑞宣身上得到了延续。诗人变成了战士，战士又唤醒了更多的人。
+  confidence: 1.0
+threadProgress:
+- thread: T1
+  advancement: 瑞全归来、瑞宣觉醒、钱默吟坚持抗日——三条线索汇聚在一起。希望虽然微弱，但确实在燃烧。
+  progressAfter: 95
+  progressTotal: 100
+- thread: T2
+  advancement: 瑞宣不再苦闷。他找到了行动的方向。从"想"到"做"，这是全书最重要的转变。
+  progressAfter: 95
+  progressTotal: 100
+- thread: T3
+  advancement: 钱默吟的种子在瑞宣身上生根发芽。诗人的抗争方式不再是吟诗，而是唤醒更多人。
+  progressAfter: 85
+  progressTotal: 100
+styleGuidance:
+  tone: 悲壮中见希望，黑暗中见光明
+  targetWordCount: 1200
+  atmosphere: 小羊圈胡同里，日本人在欢呼珍珠港的胜利。但在胡同深处，一个新生命呱呱坠地。瑞宣站在枣树下，心中已不再迷惘。
+  scenePacing: 日本人狂欢→新生命诞生→瑞宣的觉悟→希望的象征
+  characterVoice:
+    omniscient: 第三人称全知，以对比手法展现征服者的狂欢与被征服者的不屈

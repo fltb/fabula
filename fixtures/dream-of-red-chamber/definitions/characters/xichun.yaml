@@ -1,0 +1,17 @@
+id: xichun
+name: 惜春
+type: supporting
+role: supporting
+description: 惜春，首次出现于第3回，共提及49次。
+appearance: 年幼小姐模样，面庞稚嫩，性格孤介。随年岁增长渐有出世之态。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: child
+voiceNotes: 年纪虽小但言语冷淡，性情孤僻。对世事常抱冷眼旁观的态度，言语间有出尘之想。抄检大观园时撵走入画，语气决绝。
+backstory: 宁国府贾珍之妹，自幼在荣国府贾母身边长大。性格孤僻冷傲，喜与妙玉来往，有出家的念头。目睹贾府种种丑事后更加心冷，最终在贾府败落后削发为尼。
+knownSecrets: []

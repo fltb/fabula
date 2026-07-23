@@ -1,0 +1,54 @@
+event: E19
+title: 瑞全归来，兄弟重逢
+narrativeOrder: 19
+sceneType: linear
+storyTime: end_of_novel
+narrationTime: end_of_novel
+tense: past
+discourseMode: description
+arcPosition: climax
+emotionalValence: joyful_exciting
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 瑞全秘密潜回北平执行任务。他在中山公园后身与大哥瑞宣秘密见面。瑞全变了——不再是那个冲动的学生，而是一个沉着干练的战士。他告诉瑞宣：战争已经进入了新阶段，太平洋战争爆发了，中国的抗战不再孤独。他邀请瑞宣为抗日做更多的工作。瑞宣看着弟弟，心中充满了骄傲与希望——老三回来了，而且老三没有看不起他。他终于找到了自己在战争中的位置。
+preconditions:
+- entity: qi_ruixuan
+  attribute: location
+  value: loc_beiping
+- entity: qi_ruiquan
+  attribute: status
+  value: returned_secretly
+- entity: qi_ruixuan
+  attribute: political_stance
+  value: clandestine_supporter
+expectedPostconditions:
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 瑞宣与弟弟重逢，心中充满了骄傲与希望。老三没有看不起他，反而邀请他一起工作。他终于找到了自己在战争中的位置。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: role
+  narrativeHint: 瑞宣决定听从老三的安排，去做更危险也更光荣的抗日工作。他从一个旁观者变成了参与者。
+  confidence: 1.0
+- entity: qi_ruiquan
+  attribute: emotionalState
+  value: determined_and_calm
+  confidence: 1.0
+threadProgress:
+- thread: T1
+  advancement: 瑞全归来预示着抗日力量在壮大。瑞宣也在弟弟的鼓励下决定更深入地参与地下工作。
+  progressAfter: 80
+  progressTotal: 100
+- thread: T2
+  advancement: 瑞宣终于突破了苦闷——他不再是一个"会思想的废物"，而是真正开始行动的人。
+  progressAfter: 80
+  progressTotal: 100
+styleGuidance:
+  tone: 激动、希望、兄弟情深
+  targetWordCount: 1200
+  atmosphere: 中山公园后身，秋日午后，阳光透过树叶洒下斑驳光影。一个穿着短打的青年匆匆走来。
+  scenePacing: 等待→重逢→打量→交谈→决定
+  characterVoice:
+    omniscient: 第三人称全知，以兄弟二人的视角交替展现重逢的激动与各自的成长

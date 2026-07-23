@@ -1,0 +1,9 @@
+id: dover
+name: "Dover"
+kind: coastal_town
+description: "The Channel port town where Aunt Betsey Trotwood lives in her neat cottage on the cliffs. David makes the journey here — walking from London after running away from Murdstone and Grinby's — and is taken in by his aunt. Her cottage is small but comfortable, with a parlour looking out to sea, a garden, and a window from which David watches the moonlight on the water. The town itself is a busy seaport with ferries crossing to France."
+initialState:
+  status: active
+  season: summer_day
+  atmosphere: seaside_tranquility
+  notable_feature: white_cliffs_cottage

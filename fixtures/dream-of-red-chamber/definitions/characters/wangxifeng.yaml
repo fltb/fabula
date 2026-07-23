@@ -1,0 +1,25 @@
+id: wangxifeng
+name: 王熙凤
+type: supporting
+role: supporting
+description: 王熙凤，首次出现于第3回，共提及79次。王熙凤
+appearance: 一双丹凤三角眼，两弯柳叶吊梢眉，身量苗条，体格风骚。粉面含春威不露，丹唇未启笑先闻。
+aliases:
+- 凤姐
+gender: 女
+age: 20-25
+traits:
+- 精明
+- 泼辣
+- 狠毒
+initialState:
+  location: 荣国府
+  status: alive
+  role: household_manager
+  age_stage: young_adult
+voiceNotes: 伶牙俐齿，爽利泼辣，常先声夺人。对上能说会道哄贾母开心，对下威严厉色管束仆人。言语诙谐幽默，是贾府的开心果，但狠辣处令人胆寒。
+backstory: 荣国府长房孙媳，贾琏之妻，王夫人的内侄女。精明能干，掌握荣国府管家大权，杀伐决断。弄权铁槛寺、逼死尤二姐，手段狠毒。最终贾府败落后被休弃，"一从二令三人木"，哭向金陵事更哀。
+knownSecrets:
+- 放高利贷敛财
+- 弄权铁槛寺受贿三千两
+- 设计逼死尤二姐

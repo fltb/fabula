@@ -1,0 +1,25 @@
+id: chang_erye
+name: 常二爷
+type: farmer
+archetype: country_cousin
+role: minor
+description: 替祁家种坟地的乡下人，横粗的小老头儿，约六十岁。他忠厚老实，每年进城给祁家送新小米。战争开始后，他带来了城外不安宁的消息——有人在偷坟盗墓，连王爷坟都被扒了。他提醒祁老人注意祖坟的安全。他的到来给祁家带来了一点点来自土地的亲切与温暖。
+appearance: 又干又倔，横粗，花白胡须，满身黄土。
+aliases:
+- 老常
+- 常老二
+gender: 男
+age: 约六十岁
+profession: 农民
+traits:
+- honest
+- hardworking
+- loyal
+- straightforward
+initialState:
+  location: loc_beiping
+  status: alive
+  condition: farming
+  emotionalState: worried_about_graves
+backstory: 祁家老相识，多年替祁家照看坟地。
+knownSecrets: []

@@ -1,0 +1,26 @@
+event: E16
+title: 刘姥姥醉闹贾府宴
+narrativeOrder: 16
+sceneType: linear
+pov:
+  character: narrator_omniscient
+  type: omniscient
+sceneBrief: 刘姥姥在凤姐与鸳鸯的安排下以粗鄙言语和笨拙举箸逗笑贾府众人，贾母等上上下下大笑不止。饭后众人至探春卧室闲话，纵览其阔朗摆设。忽闻鼓乐之声，贾母命家班借水音于藕香榭演习，众人在缀锦阁饮酒，并乘棠木舫游池，凤姐戏撑船晃动，引出后续游览之事。
+preconditions: []
+expectedPostconditions: []
+threadProgress: []
+foreshadowing: []
+introduces: []
+styleGuidance:
+  tone: 诙谐热闹中兼写雅趣
+  targetWordCount: 600
+  atmosphere: 宴飨笑声与舟游水音交织，盛景中暗藏闲适
+  scenePacing: 由喧闹饭桌转入闲话居室，再转舟行之景，节奏舒缓有度
+  characterVoice: {}
+tense: past
+discourseMode: action
+arcPosition: opening
+emotionalValence: past
+conflictType: past
+storyTime: past
+narrationTime: past

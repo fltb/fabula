@@ -1,0 +1,61 @@
+event: E17
+title: 钱默吟秘密抗日
+narrativeOrder: 17
+sceneType: linear
+storyTime: spring_of_next_year
+narrationTime: spring_of_next_year
+tense: past
+discourseMode: description
+arcPosition: climax
+emotionalValence: inspiring_hopeful
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 钱默吟伤愈后彻底告别了过去的自己。他不再穿大褂，不再吟诗，而是换上了短衣，在城中各处秘密活动。他写抗日传单，联络有志青年。他告诉瑞宣：他找到了比诗歌更有力的语言——用行动去唤醒同胞。他每天在外面奔走，有时深夜才回来。瑞宣问他做什么，他只说"做一点儿一个中国人该做的事"。钱默吟还找到瑞宣，请他帮忙写一些宣传文章。瑞宣犹豫之后答应了——他终于为抗战做了一点事。
+preconditions:
+- entity: qian_moyin
+  attribute: location
+  value: loc_beiping
+- entity: qian_moyin
+  attribute: health
+  value: recovered
+- entity: qian_moyin
+  attribute: political_stance
+  value: resistance_fighter
+- entity: qi_ruixuan
+  attribute: location
+  value: loc_beiping
+expectedPostconditions:
+- entity: qian_moyin
+  attribute: role
+  narrativeHint: 钱默吟成了地下抗日宣传者。他不再是一个诗人，而是一个战士。他用行动证明最和平的人也可以成为最坚决的抵抗者。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: role
+  narrativeHint: 瑞宣开始暗中帮助钱默吟写宣传文章。他终于找到了一个既能不违背良心、又能为抗战出力的方式。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: political_stance
+  value: clandestine_supporter
+  confidence: 1.0
+threadProgress:
+- thread: T3
+  advancement: 钱默吟彻底转变为抗日战士。他所受的苦难化作了复仇的力量。
+  progressAfter: 65
+  progressTotal: 100
+- thread: T1
+  advancement: 钱默吟的抗日活动如火如荼，瑞宣也开始参与地下工作。抗日的力量在暗中壮大。
+  progressAfter: 55
+  progressTotal: 100
+- thread: T2
+  advancement: 瑞宣终于在实践中找到了突破苦闷的方法——他不再是旁观者，而是参与者了。
+  progressAfter: 60
+  progressTotal: 100
+styleGuidance:
+  tone: 隐秘、坚定、希望的火种
+  targetWordCount: 1200
+  atmosphere: 北平的小茶馆或什刹海边，钱默吟穿着短衣、戴着毡帽，与瑞宣低声交谈。春风吹动水面。
+  scenePacing: 钱默吟的新形象→秘密活动→邀请瑞宣→瑞宣的抉择
+  characterVoice:
+    omniscient: 第三人称全知，以秘密接头的气氛烘托地下工作的紧张与神圣

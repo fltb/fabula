@@ -1,0 +1,113 @@
+event: E06
+title: "I Am a New Boy in More Senses Than One"
+narrativeOrder: 6
+sceneType: linear
+storyTime: canterbury_school
+narrationTime: canterbury_school
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "hopeful_earnest"
+conflictType: "person_vs_self"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "David begins his new life at Doctor Strong's school in Canterbury, a grave and learned institution that suits the Cathedral town. He lodges with Mr Wickfield, a kind but melancholy widower, and meets his daughter Agnes — a wise, serene girl of about his age who already manages the household for her father. David also meets Uriah Heep for the first time, the 'umble clerk who works in Mr Wickfield's office, whose cold, clammy handshake and fawning manner immediately make David uneasy. David thrives at the school under Doctor Strong's benevolent instruction, and Agnes becomes his quiet confidante. The chapter introduces the two figures who will play pivotal roles in David's future: his good angel (Agnes) and his eventual nemesis (Heep)."
+preconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: canterbury
+  - entity: david_copperfield
+    attribute: condition
+    value: adopted_by_miss_betsey
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: canterbury
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: status
+    value: student_at_strongs_school
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: hopeful_settled
+    confidence: 1.0
+  - entity: agnes_wickfield
+    attribute: location
+    value: canterbury
+    confidence: 1.0
+  - entity: agnes_wickfield
+    attribute: relationship_to_david
+    value: friend_and_confidante
+    confidence: 1.0
+  - entity: uriah_heep
+    attribute: location
+    value: canterbury
+    confidence: 1.0
+  - entity: mr_wickfield
+    attribute: location
+    value: canterbury
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "David enters a new phase — education, moral formation. The move to Canterbury marks the beginning of his formal schooling and the shaping of his character through Dr Strong's influence and Agnes's steady friendship."
+    progressAfter: 30
+    progressTotal: 100
+  - thread: T2
+    advancement: "First meeting with Agnes Wickfield — the beginning of their lifelong bond. Agnes, even as a young girl, is portrayed as a serene, wise presence who manages her father's house and quietly anchors David's moral compass. This meeting establishes the pattern of their relationship: Agnes as David's 'good angel.'"
+    progressAfter: 5
+    progressTotal: 100
+  - thread: T3
+    advancement: "First meeting with Uriah Heep — the villain is introduced. Heep's 'umble' posturing and clammy handshake are David's first encounter with hypocrisy and false humility. The ground is prepared for Heep's gradual corruption of the Wickfield firm and his persecution of David and his friends."
+    progressAfter: 2
+    progressTotal: 100
+foreshadowing:
+  - id: agnes_good_angel
+    hint: "Agnes is presented from her first appearance as a figure of moral clarity — 'she was always a little above me in the matter of years and wisdom.' Her serene household management and gentle guidance prefigure her role as David's conscience and eventual wife."
+    targetRevealChapter: 62
+    thread: T2
+  - id: heep_clamy_hand
+    hint: "Uriah Heep's 'umble' manner and cold, clammy handshake are the first signs of a reptilian hypocrisy that will grow into active villainy. His presence in the Wickfield household marks the beginning of the corruption that David must later expose."
+    targetRevealChapter: 52
+    thread: T3
+  - id: dr_strongs_school
+    hint: "Doctor Strong's benevolent tutelage and the orderly Cathedral-town setting provide David with the first stable, nurturing educational environment he has known. This foundation of learning and character will sustain him through later trials."
+    targetRevealChapter: 16
+    thread: T1
+introduces:
+  - type: location
+    id: canterbury
+    initialState:
+      status: active
+  - type: character
+    id: agnes_wickfield
+    initialState:
+      location: canterbury
+      status: daughter_of_mr_wickfield
+      condition: household_manager
+      emotionalState: serene_wise
+  - type: character
+    id: uriah_heep
+    initialState:
+      location: canterbury
+      status: clerk_at_wickfield
+      condition: fawning_humble
+      emotionalState: servile_sinister
+  - type: character
+    id: mr_wickfield
+    initialState:
+      location: canterbury
+      status: widower_and_solicitor
+      condition: melancholy
+      emotionalState: kind_but_sad
+styleGuidance:
+  tone: "grave, earnest, quietly hopeful — the prose takes on the measured dignity of the Cathedral town"
+  targetWordCount: 800
+  atmosphere: "the ancient Cathedral town of Canterbury — the quiet gravity of Doctor Strong's schoolroom, the scent of cobwebs and old books in Mr Wickfield's dim office, the neat order of the Wickfield household managed by a child, Uriah Heep's unsettling presence in the dusty back office"
+  scenePacing: "arrival in Canterbury (wonder, observation) → meeting the Wickfields (warm, establishing) → introducing Heep (ominous, unsettling) → school life (steady, peaceful)"
+  characterVoice:
+    narrator: "David, now with several years of retrospection, narrates his Canterbury years with fondness and gratitude. The voice is more settled and confident — he has found a home and a school worth loving. The unease with Heep is reported with adult hindsight: 'I remember him as a red-haired, lanky youth with a clammy hand.'"
+    agnes_wickfield: "Quiet, wise, gently authoritative for her age — speaks with a calm clarity that belies her years. Her dialogue is marked by understatement and a serene directness that steadies everyone around her."
+    uriah_heep: "Fawning, unctuous, exaggeratedly humble — every sentence is drenched in self-deprecation. 'I am well aware that I am the humblest person going.' His speech is a mask of servility that barely conceals a rapacious ambition."
+    mr_wickfield: "Kind but weighed down by grief and an excessive reliance on his daughter — speaks in gentle, weary tones, often preoccupied with the past and his own weakness of purpose."

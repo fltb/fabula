@@ -1,0 +1,26 @@
+id: li_siye
+name: 李四爷
+type: neighbor
+archetype: helper
+role: supporting
+description: 小羊圈胡同四号院的住户，杠夫头。七十多岁，但身体硬朗。他是胡同里最热心肠的人——钱家办丧事他跑前跑后，给钱先生请医生他去奔走。他见识广，认识西半城所有的中医。他信奉行善积德，以助人为己任。日本人占领北平后，他被关在城外的次数越来越多，背也渐渐弯了。
+appearance: 高个子，背微弯，声音清脆洪亮。常穿短打。
+aliases:
+- 四爷
+- 李四
+gender: 男
+age: 七十多岁
+profession: 杠夫头
+traits:
+- kind
+- reliable
+- experienced
+- generous
+- neighborly
+initialState:
+  location: loc_xiaoyangquan
+  status: alive
+  condition: active
+  emotionalState: calm_and_helpful
+backstory: 在北平干了一辈子的杠房营生，什么事都见过。
+knownSecrets: []

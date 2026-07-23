@@ -1,0 +1,22 @@
+id: qingwen
+name: 晴雯
+type: supporting
+role: supporting
+description: 晴雯，首次出现于第5回，共提及43次。
+appearance: 水蛇腰，削肩膀，眉眼有些像林黛玉。生得伶伶俐俐，美丽出众，有"晴为黛影"之说。
+aliases: []
+gender: 女
+age: 15-17
+traits:
+- 刚烈
+- 美丽
+- 直率
+initialState:
+  location: 怡红院
+  status: alive
+  role: maid
+  age_stage: young_adult
+voiceNotes: 言语爽利泼辣，心直口快，从不藏奸。在宝玉面前任性撒娇，在别的丫鬟面前不让分毫。撕扇子时娇俏任性，被逐时言语悲愤。
+backstory: 贾宝玉房中的丫鬟，美貌出众、针线极好。性格刚烈直率，从不逢迎讨好。因王夫人担心她"勾引"宝玉，在抄检大观园后被逐出，抱病回家。宝玉私下去探望，晴雯与宝玉交换贴身旧袄后含恨而死。
+knownSecrets:
+- 与宝玉交换贴身旧袄以慰别情

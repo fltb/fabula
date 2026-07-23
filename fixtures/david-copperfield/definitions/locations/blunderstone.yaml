@@ -1,0 +1,9 @@
+id: blunderstone
+name: "Blunderstone Rookery"
+kind: rural_village
+description: "David Copperfield's childhood home in Suffolk. A pleasant house with a large garden, tall old elm trees with rooks' nests (though the rooks themselves long gone), a churchyard nearby where David's father is buried, and a warm parlour where David's mother sits by the fire. The house is called 'the Rookery' by David's father, who liked to think rooks were about — though there never were any. It is the setting of David's earliest memories: Peggotty's rough forefinger, his mother's beautiful hair, the bright fire on winter evenings."
+initialState:
+  status: active
+  season: perpetual_childhood_memory
+  atmosphere: warm_domestic
+  social_standing: gentry_household

@@ -1,0 +1,18 @@
+id: xuebaoqin
+name: 薛宝琴
+type: supporting
+role: supporting
+description: 薛宝琴，首次出现于第51回，共提及19次。薛宝琴
+appearance: 容貌极美，连宝玉都惊叹"老天老天，你有多少精华灵秀，生出这些人上之人来！"披着凫靥裘时光彩照人。
+aliases:
+- 宝琴
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 薛家
+  status: alive
+  age_stage: adolescent
+voiceNotes: 言语活泼大方，见多识广。走过许多地方，见识不凡。在众姊妹中毫不怯场，诗词才情出众。受贾母特别的宠爱。
+backstory: 薛蝌之妹，薛宝钗的堂妹。随哥哥进京后住进贾府，容貌才情俱佳，深受贾母喜爱。贾母曾有意为宝玉求配宝琴，但宝琴已许配梅翰林子。
+knownSecrets: []

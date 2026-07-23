@@ -1,0 +1,18 @@
+id: sheyue
+name: 麝月
+type: supporting
+role: supporting
+description: 麝月，首次出现于第5回，共提及46次。
+appearance: 容貌端正，性情温和。宝玉房中的二丫鬟，打扮得体。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 怡红院
+  status: alive
+  role: maid
+  age_stage: young_adult
+voiceNotes: 言语稳重可靠，不争不抢。袭人之后最得力的丫鬟。对宝玉忠心，做事周到细致，从不多言多语。
+backstory: 贾宝玉房中的丫鬟，仅次于袭人。性格温和稳重，忠厚可靠。在晴雯被逐后，成为宝玉房中最重要的丫鬟之一。宝玉出家后，麝月与袭人一同面对命运的安排。
+knownSecrets: []

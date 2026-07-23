@@ -1,0 +1,11 @@
+project: four-generations
+schemaVersion: 1
+title: "四世同堂"
+author: "老舍"
+defaultModel: mock
+defaultLanguage: zh
+genre: "literary"
+synopsis: "一九三七年七七事变后，北平沦陷。小说以小羊圈胡同中祁家、钱家、冠家三户人家为核心，描写了在日寇占领下的北平市民的苦难生活与精神挣扎。祁家的四世同堂——祁老人、祁天佑、祁瑞宣、祁瑞丰、祁瑞全——各有人生选择；钱默吟由隐士变成抗日战士；冠晓荷夫妇沦为汉奸。通过市民群像展现了亡国之痛与民族觉醒的艰难历程。"
+tense: past
+snapshotInterval: 3
+defaultSceneTextTarget: 1200

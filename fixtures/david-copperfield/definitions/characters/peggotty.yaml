@@ -1,0 +1,31 @@
+id: peggotty
+name: "Clara Peggotty"
+type: supporting_character
+archetype: faithful_servant
+role: supporting
+description: "The devoted servant of the Copperfield household, universally called Peggotty (by her first name Clara, but the household has two Claras). She is a plump, red-cheeked, warm-hearted woman with rough hands from her housework and a perpetual odour of soap and starch about her. She is David's first and most enduring protector — his refuge from Murdstone's cruelty, his nurse through childhood illnesses, his confidante in all troubles. She marries Mr Barkis, the carrier, and becomes Mrs Barkis, but David always calls her Peggotty. After Barkis's death she keeps house for David until his marriage. She is the sister of Daniel Peggotty of Yarmouth, connecting David to the Peggotty family."
+appearance: "Plump, with red cheeks and arms so hard and rough from scrubbing that they used to 'pinch' David when she hugged him. Always wears a clean white apron and a straw bonnet with green ribbons. Her pockets are full of mysterious odds and ends — keys, pincushions, pieces of string."
+aliases:
+  - "Peggotty"
+  - "Mrs Barkis"
+  - "Clara Peggotty"
+gender: female
+age: "Middle-aged across the novel"
+profession: "Housekeeper / Servant"
+traits:
+  - devoted
+  - practical
+  - warm
+  - protective
+  - honest
+  - domestic
+  - loyal
+  - sentimental
+initialState:
+  location: blunderstone
+  status: alive
+  condition: servant_in_copperfield_household
+  emotionalState: devoted
+  relationship_david: nurse_and_protector
+voiceNotes: "Earthy, warm, simple English speech. She is not highly educated but speaks with great common sense and directness. Her conversation is full of domestic details, references to her brother, and expressions of affection for David. She calls him 'my Davy' or 'my dear.' She has a deep and simple religious faith."
+backstory: "Has served the Copperfield family since before David's birth. She is the sister of Daniel Peggotty, a Yarmouth fisherman. She introduces David to the Yarmouth boathouse and the Peggotty family, who become his second family. She marries Mr Barkis, the carrier, who courts her through David with the message 'Barkis is willin'.' As Mrs Barkis she continues to care for David after his mother's death. She is widowed when Barkis dies, and later keeps house for David during his bachelor days in London."

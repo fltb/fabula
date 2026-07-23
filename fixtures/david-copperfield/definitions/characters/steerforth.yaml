@@ -1,0 +1,28 @@
+id: steerforth
+name: "James Steerforth"
+type: antagonist
+archetype: charismatic_corrupter
+role: supporting
+description: "David's charismatic schoolfellow at Salem House and later his fatal friend. Steerforth is older than David, strikingly handsome, self-possessed, and commanding — everything the younger boy admires. He protects David from bullies at school and becomes David's idol. But Steerforth is fundamentally corrupt: he treats people as instruments of his pleasure, seduces and abandons Little Emily (ruining her and breaking the Peggotty family), and ultimately drowns in the great storm off Yarmouth. David's love for Steerforth is the most ambivalent relationship in the novel — a boyish hero-worship that David must later reckon with as a moral failure of his own perception."
+appearance: "Exceptionally handsome: tall, well-formed, with a fine open countenance, curling chestnut hair, a melodious voice, and a winning smile. He dresses with careless elegance. His good looks and easy manners make him universally admired."
+aliases:
+  - "Steerforth"
+gender: male
+age: "About three or four years older than David"
+profession: "Gentleman (independent means)"
+traits:
+  - charming
+  - handsome
+  - proud
+  - selfish
+  - manipulative
+  - reckless
+  - patronising
+  - secretly_cruel
+initialState:
+  location: salem_house
+  status: alive
+  condition: senior_boy_at_salem_house
+  emotionalState: supremely_confident
+voiceNotes: "Melodious, confident, patronising. He has a habit of telling other people's stories better than they can, and of claiming superior knowledge of everyone. He calls David 'Daisy' as a patronising nickname. His tone can shift — warm and natural with David, condescending with servants, cruel with Mr Mell."
+backstory: "Son of a wealthy widow, Mrs Steerforth of Highgate. He is sent to Salem House after his mother remarried. There he dominates the school as its senior boy, making the younger David his protégé. He takes David to his home in Highgate and later to Yarmouth, where he meets and seduces Little Emily. After their elopement he abandons her abroad. He drowns when his yacht sinks off Yarmouth during the great storm; Ham Peggotty dies trying to save him."

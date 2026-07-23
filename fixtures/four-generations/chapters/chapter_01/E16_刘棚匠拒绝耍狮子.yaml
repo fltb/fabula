@@ -1,0 +1,54 @@
+event: E16
+title: 刘棚匠拒绝耍狮子
+narrativeOrder: 16
+sceneType: linear
+storyTime: celebration_baoding
+narrationTime: celebration_baoding
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: pride_and_defiance
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 新民会为了庆祝保定陷落，要组织游行大会，想找会耍狮子的棚匠们参加。冠晓荷来约六号的刘棚匠去耍狮子。刘师傅是耍狮子的名手，但他一口回绝："我的老家在保定，祖坟在保定！我不能庆祝保定陷落！就是爸爸来叫我，我也不去给日本人耍狮子！"冠晓荷碰了一鼻子灰。刘师傅后来和瑞宣倾诉：他真想走，可是没钱没路费。要是南京偷偷派人来招兵，他一定去。
+preconditions:
+- entity: guan_xiaohe
+  attribute: location
+  value: loc_xiaoyangquan
+- entity: liu_shifu
+  attribute: location
+  value: loc_xiaoyangquan
+- entity: liu_shifu
+  attribute: emotionalState
+  value: patriotic
+expectedPostconditions:
+- entity: guan_xiaohe
+  attribute: emotionalState
+  narrativeHint: 冠晓荷被刘棚匠拒绝后恼羞成怒，但也无可奈何。他意识到并非所有人都像他一样没有骨气。
+  confidence: 1.0
+- entity: liu_shifu
+  attribute: emotionalState
+  narrativeHint: 刘师傅拒绝了为日本人表演，但心中并不好受——他空有一身本事却不能去打日本鬼子。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: knowledge
+  value: liu_refused_to_perform
+  confidence: 1.0
+threadProgress:
+- thread: T5
+  advancement: 刘棚匠拒绝为日本人耍狮子，展现了普通市民的骨气。他是小羊圈胡同中最有血性的人之一。
+  progressAfter: 30
+  progressTotal: 100
+- thread: T4
+  advancement: 冠晓荷四处碰壁——刘师傅的拒绝让他看到并非人人都像他一样没有廉耻。
+  progressAfter: 30
+  progressTotal: 100
+styleGuidance:
+  tone: 刚烈、正气、令人敬佩
+  targetWordCount: 1200
+  atmosphere: 六号院中，刘师傅正在收拾棚匠家什。阳光照在他结实的身板上，白牙一闪一闪。
+  scenePacing: 冠晓荷来访→刘师傅拒绝→说明理由→与瑞宣的交谈
+  characterVoice:
+    omniscient: 第三人称全知，刻画刘师傅的刚直与爱国心

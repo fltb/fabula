@@ -1,0 +1,12 @@
+id: longcuian
+name: 栊翠庵
+kind: temple
+parent: 大观园
+description: 大观园中的尼姑庵，位于大观园东北角，是妙玉修行处。入门是山门，院中有禅房和佛堂，环境清幽。妙玉在此修行，品茶论道。贾母曾带刘姥姥来此品茶，妙玉用不同茶具招待各人，极为讲究。
+initialState:
+  status: occupied
+  atmosphere: quiet_secluded
+notableFeatures:
+- 禅房——妙玉日常修行之所
+- 佛堂——供奉神佛
+- 茶室——妙玉以梅花雪水烹茶待客

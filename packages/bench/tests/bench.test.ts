@@ -103,7 +103,7 @@ describe('Regression Benchmarks', () => {
     // Without a properly reviewed reference, the stage reports a descriptive failure.
     console.log(`[L2] Passed: ${stage!.passed}, Detail: ${stage!.detail}`);
     if (stage!.passed) {
-      expect(stage!.detail).toContain('Events with analysis:');
+      expect(stage!.detail).toContain('L2 issues');
     }
   });
 
@@ -315,14 +315,14 @@ describe('Benchmark Reporting', () => {
     const jsonContent = JSON.parse(fs.readFileSync(jsonPath, 'utf-8'));
     expect(jsonContent.l2Stats).toBeDefined();
     if (l2Stage?.passed) {
-      expect(jsonContent.l2Stats.detail).toContain('Events with analysis:');
+      expect(jsonContent.l2Stats.detail).toContain('L2 issues');
     }
 
     // Verify L2 data in Markdown output
     const mdContent = fs.readFileSync(mdPath, 'utf-8');
     expect(mdContent).toContain('L2 Post-Render Validation');
     if (l2Stage?.passed) {
-      expect(mdContent).toContain('Events with analysis:');
+      expect(mdContent).toContain('L2 Issues');
     }
 
     // Verify issue detail sections

@@ -1,0 +1,29 @@
+id: micawber
+name: "Wilkins Micawber"
+type: supporting_character
+archetype: optimistic_debtor
+role: supporting
+description: "One of Dickens's most memorable comic characters. Mr Micawber is a gentleman of magnificent eloquence and perpetual impecuniosity, always waiting for 'something to turn up.' He is kind-hearted, generous, grandiloquent, and eternally optimistic despite being constantly pursued by creditors and confined to debtors' prison. He takes David in as a lodger during the Murdstone and Grinby days and becomes a father figure. Later, he works as Uriah Heep's confidential clerk while secretly investigating Heep's frauds, culminating in a dramatic exposure scene. He emigrates to Australia where he finally prospers as a magistrate. His philosophy is encapsulated in his famous maxim: 'Annual income twenty pounds, annual expenditure nineteen nineteen and six, result happiness. Annual income twenty pounds, annual expenditure twenty pounds ought and six, result misery.'"
+appearance: "A portly gentleman with a bald head, a florid complexion, a large nose, and a pair of eyes that roll expressively. He wears a shabby-genteel suit — very worn but attempting respectability. He has a magnificent chest voice and an oratorical manner."
+aliases:
+  - "Mr Micawber"
+  - "Micawber"
+gender: male
+age: "Middle-aged"
+profession: "Gentleman / Clerk / Magistrate"
+traits:
+  - eloquent
+  - optimistic
+  - improvident
+  - kind
+  - theatrical
+  - generous
+  - perpetually_in_debt
+  - resourceful_at_last
+initialState:
+  location: london
+  status: alive
+  condition: in_reduced_circumstances
+  emotionalState: hopeful_desperate
+voiceNotes: "Oratorical, grandiloquent, full of elaborate periods and rhetorical flourishes. He writes letters in the most formal style, with many subordinate clauses and circumlocutions. He quotes Latin tags. His favourite expression is 'something will turn up.' His speech is theatrical, as if he is always addressing a public meeting."
+backstory: "A gentleman of respectable family who has squandered his resources and lives in a state of perpetual debt. He takes David as a lodger when the boy is set to work at Murdstone and Grinby's. He is imprisoned in the Marshalsea for debt, released when his friends help pay his obligations, moves his family to Plymouth, and later appears in Canterbury working as Uriah Heep's clerk. He secretly collects evidence of Heep's frauds, which he dramatically reveals in a written statement at the climax of the novel. He emigrates to Australia with his family, where he becomes a prosperous magistrate, proving that his talents were always hampered by English circumstances."

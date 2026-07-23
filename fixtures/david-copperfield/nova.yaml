@@ -1,0 +1,11 @@
+project: david-copperfield
+schemaVersion: 1
+title: "David Copperfield"
+author: "Charles Dickens"
+defaultModel: mock
+defaultLanguage: en
+genre: "bildungsroman"
+synopsis: "David Copperfield recounts the life of its narrator from infancy to maturity. Born at Blunderstone in Suffolk, David endures a harsh childhood after his mother's remarriage to the cruel Mr Murdstone, is sent to work in London at age ten, and eventually finds refuge with his eccentric Aunt Betsey Trotwood. His journey takes him through Salem House school, Canterbury with the Wickfield family, apprenticeship at Doctors' Commons, and a literary career in London. Along the way he encounters a vivid cast of characters — the faithful Peggotty, the tragic Little Emily, the villainous Uriah Heep, the ever-optimistic Mr Micawber, and the two great loves of his life: the childlike Dora Spenlow and the steadfast Agnes Wickfield. The novel traces David's moral and emotional education, culminating in his recognition of Agnes's true worth and his establishment as a successful novelist."
+tense: past
+snapshotInterval: 3
+defaultSceneTextTarget: 1200

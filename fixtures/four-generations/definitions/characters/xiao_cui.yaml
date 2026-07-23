@@ -1,0 +1,25 @@
+id: xiao_cui
+name: 小崔
+type: rickshaw_puller
+archetype: common_man
+role: minor
+description: 小羊圈胡同的洋车夫，脾气火爆，但心地善良。他恨日本人，有一次拉了一个日本兵，到了背静处把对方打了一顿——结果发现那是个东北人，从小受日本教育长大。这让他和瑞宣都深受震动。他爱国、直率，但养不起老婆。他嚷嚷着要去当兵，却始终走不了。
+appearance: 倭瓜脸，横七竖八的肌肉，个子不高但结实。
+aliases: []
+gender: 男
+age: 约二十五六岁
+profession: 洋车夫
+traits:
+- hot_tempered
+- patriotic
+- poor
+- honest
+- kind
+initialState:
+  location: loc_xiaoyangquan
+  status: alive
+  condition: pulling_rickshaw
+  emotionalState: angry_and_frustrated
+backstory: 娶了个媳妇但养不活，两口子经常因为没钱吵架。
+knownSecrets:
+- 打过日本兵

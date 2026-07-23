@@ -13,14 +13,36 @@ export type { VariantResults, VariantResult, VariantIssueResult, InjectedEntry }
 export { runExternalBench } from './external.js';
 export type { ExternalBenchResult } from './external.js';
 
-export { runPerformanceBench } from './performance.js';
-export type { PerfResults, PerfMeasurement } from './performance.js';
+export {
+  runPerformanceBench,
+  runOfflineCorePathBench,
+  runCacheBench,
+  runPoolEfficiencyBench,
+  runFullOfflineBench,
+} from './performance.js';
+export type {
+  PerfResults,
+  PerfMeasurement,
+  CacheStats,
+  PoolEfficiencyResult,
+} from './performance.js';
 
 export { toJson, toMarkdown, writeResults } from './reporters.js';
 export type { BenchResults, BenchMeasurement } from './reporters.js';
 
 // Consistency metric types
 export type { PerValidatorBreakdown, SeverityLevelCED } from './consistency.js';
+
+// Annotation statistics — human evaluation agreement metrics
+export {
+  quadraticWeightedKappa,
+  clusterBootstrap,
+  agreementStats,
+  gradeDistribution,
+  transitionMatrix,
+  spearmanTestRetestRho,
+  rankWithTies,
+} from './annotation-stats.js';
 
 // Adapter exports — for downstream consumers to call conversion functions directly
 export {

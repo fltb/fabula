@@ -1,0 +1,93 @@
+event: E03
+title: "My 'First Half' at Salem House"
+narrativeOrder: 3
+sceneType: linear
+storyTime: murdstone_marriage
+narrationTime: murdstone_marriage
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "lonely_then_protected"
+conflictType: "person_vs_society"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "David arrives at Salem House school, a grim establishment run by the cruel Mr Creakle who beats boys with a stick. As a punishment for biting Mr Murdstone, David is made to wear a placard on his back reading 'Take care of him. He bites.' The older, charismatic James Steerforth takes David under his protection, making him his 'favourite' and securing him privileges. David becomes Steerforth's devoted admirer, telling him stories at night and buying him wine and biscuits. He also befriends the poor, good-natured Tommy Traddles, who draws skeletons on his slate and is beaten more than any other boy. Despite the harsh conditions, David finds a measure of happiness through these friendships."
+preconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: salem_house
+  - entity: david_copperfield
+    attribute: condition
+    value: pupil
+  - entity: david_copperfield
+    attribute: status
+    value: punished_by_placard
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: protected_and_devoted_to_steerforth
+    confidence: 0.9
+  - entity: david_copperfield
+    attribute: social_standing
+    value: steerforths_protege
+    confidence: 1.0
+  - entity: steerforth
+    attribute: status
+    value: school_leader
+    confidence: 1.0
+  - entity: traddles
+    attribute: status
+    value: schoolboy_beaten_often
+    confidence: 1.0
+  - entity: creakle
+    attribute: reputation
+    value: cruel_headmaster
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "Salem House introduces David to the wider world of cruelty and hierarchy. The placard — 'Take care of him. He bites.' — brands him as an outcast, but his adoption by Steerforth gives him a protective position he has never experienced."
+    progressAfter: 15
+    progressTotal: 100
+  - thread: T4
+    advancement: "Steerforth's first appearance establishes his charismatic dominance. David's adoration of the older boy — telling him stories, buying him treats — plants the seeds of the idolatry that will blind David to Steerforth's flaws until it is too late."
+    progressAfter: 8
+    progressTotal: 100
+foreshadowing:
+  - id: steerforth_charm_danger
+    hint: "Steerforth's effortless charm — his easy authority, his condescending patronage of David, his casual use of David's money — hints at the moral carelessness that will destroy Little Emily and break the Peggotty family."
+    targetRevealChapter: 31
+    thread: T4
+  - id: traddles_resilience
+    hint: "Traddles draws skeletons on his slate and is beaten more than any other boy, yet remains good-natured. His resilience prefigures his future as the steady, loyal friend who succeeds through perseverance while David's more glamorous attachments fail."
+    targetRevealChapter: 59
+    thread: T1
+  - id: david_storyteller
+    hint: "David's nighttime storytelling to Steerforth — telling him tales from novels — is the first hint of his narrative gift, the very faculty that will become his adult profession."
+    targetRevealChapter: 1
+    thread: T1
+introduces:
+  - type: character
+    id: steerforth
+    initialState:
+      location: salem_house
+      status: senior_pupil
+      condition: charismatic_and_dominant
+      emotionalState: amused_condescending
+  - type: character
+    id: traddles
+    initialState:
+      location: salem_house
+      status: schoolboy
+      condition: poor_and_beaten
+      emotionalState: cheerful_resilient
+styleGuidance:
+  tone: "grim humour — cruelty rendered through a child's eyes with adult retrospective irony"
+  targetWordCount: 800
+  atmosphere: "the damp, cold corridors of Salem House; the smell of musty classrooms; the crack of Creakle's stick; the solitary shame of the placard; the warmth of Steerforth's room at night where David tells stories by candlelight"
+  scenePacing: "arrival and the placard (humiliating, slow) → Creakle's regime (repetitive dread) → Steerforth's protection (quick relief) → friendship with Traddles (gentle interludes)"
+  characterVoice:
+    narrator: "Child David's vulnerability overlaid with adult David's understanding — the shame of the placard is still raw even in the telling, but the admiration for Steerforth is shaded by what the adult knows will come"
+    steerforth: "Easy, confident, slightly mocking — he speaks to everyone as a superior, his kindness to David laced with condescension. 'Come, Copperfield, tell me a story'"
+    traddles: "Cheerful despite everything — his voice is bright, his conversation full of sketches and jokes, his laughter unbroken by the beatings"
+    creakle: "A voice of pure menace — 'Mr Creakle' spoken with capital letters of dread — his words are few, his presence signalled by the shaking of his head and the reaching for his cane"

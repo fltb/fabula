@@ -1,0 +1,18 @@
+id: xiangling
+name: 香菱
+type: supporting
+role: supporting
+description: 香菱，首次出现于第7回，共提及26次。原名甄英莲
+appearance: 容貌出众，颇有秦可卿之态。温柔安静，惹人怜爱。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 金陵
+  status: alive
+  age_stage: young_adult
+voiceNotes: 言语温柔，心地纯良。虽被薛蟠打骂却从不记恨。学诗时痴迷入魔，满口都是诗词。命运多舛但性格不改其温柔。
+backstory: 原名甄英莲，甄士隐之女。幼年被拐卖，辗转被薛蟠抢走作妾。随薛家进京后住在贾府，曾向黛玉学诗，极为用功。性格温柔善良，命运极其悲惨。
+knownSecrets:
+- 本名甄英莲，出身于书香门第

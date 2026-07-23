@@ -1,0 +1,34 @@
+event: E4
+title: 张太医论病细穷源 贾敬寿排家宴见熙凤
+narrativeOrder: 4
+sceneType: linear
+storyTime: story_start
+narrationTime: story_start
+tense: past
+discourseMode: exposition
+arcPosition: opening
+emotionalValence: anxious
+conflictType: person_vs_fate
+pov:
+  character: narrator_omniscient
+  type: omniscient
+sceneBrief: 秦可卿病重迟迟未决，贾珍经冯紫英举荐请来张友士先生诊脉。张先生先望脉后论症，断定非喜脉而是心病，虑伤脾肝木忒旺经血不调，开益气养荣补脾和肝汤，称若过春分可望痊愈。与此同时贾敬寿辰将近，其不愿回府受礼，命贾珍自行款待亲朋。贾蓉奉命照旧例办两日筵席并请西府诸眷。次日张先生到府，诊脉后分析脉象与症候一一对应，指出病因乃聪明太过思虑过甚，病尚有三分可治。十一回开篇贾敬寿辰日，贾珍遣贾蓉送十六捧盒上等果品，渐有宾客到来，贾瑞于见熙凤时已起淫心。
+preconditions: []
+expectedPostconditions: []
+threadProgress: []
+foreshadowing:
+  - id: fs_auto
+    hint: 可卿病未必过春分即愈，似另有隐患
+    thread: T1
+    targetRevealChapter: 80
+  - id: fs_auto
+    hint: jiarui起淫心，将生风波
+    thread: T1
+    targetRevealChapter: 80
+introduces: []
+styleGuidance:
+  tone: 沉郁含忧，于医论与礼制之间暗伏衰兆
+  targetWordCount: 600
+  atmosphere: 府第虽繁华排场渐生阴翳，可卿病榻与寿筵并置一冷一热
+  scenePacing: 由求医延请到诊脉论症再到寿辰将行，舒缓推进
+  characterVoice: {}

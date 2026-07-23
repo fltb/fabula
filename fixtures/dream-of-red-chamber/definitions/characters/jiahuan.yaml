@@ -1,0 +1,18 @@
+id: jiahuan
+name: 贾环
+type: supporting
+role: supporting
+description: 贾环，首次出现于第20回，共提及36次。
+appearance: 少年公子模样，形容猥琐，上不了台面。与宝玉同父异母，但相貌气度相去甚远。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: child
+voiceNotes: 言语粗鄙下流，嫉妒心重。在贾母等人面前畏缩拘谨，在丫鬟面前则仗势欺人。时常恶语中伤宝玉，心胸狭窄。
+backstory: 贾政与赵姨娘之子，贾宝玉同父异母的弟弟。因是庶出，自小不受重视，养成嫉妒阴险的性格。曾故意推倒蜡灯烫伤宝玉的脸，又在贾政面前添油加醋告状。最终贾府败落后，贾环的命运亦多舛。
+knownSecrets:
+- 故意推倒蜡灯烫伤宝玉

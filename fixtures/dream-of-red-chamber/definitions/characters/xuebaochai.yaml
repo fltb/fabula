@@ -1,0 +1,22 @@
+id: xuebaochai
+name: 薛宝钗
+type: protagonist
+role: supporting
+description: 薛宝钗，首次出现于第5回，共提及17次。
+appearance: 唇不点而红，眉不画而翠，脸若银盆，眼如水杏。品格端方，容貌丰美，举动娴雅。
+aliases: []
+gender: 女
+age: 14-19
+traits:
+- 端庄
+- 世故
+- 博学
+initialState:
+  location: 梨香院
+  status: alive
+  age_stage: adolescent
+voiceNotes: 说话稳重得体，善解人意，从不失礼。对上恭顺，对下宽和，言语间常含规劝之意。与宝玉论仕途经济时据理力争，但不失分寸。
+backstory: 皇商薛家之女，幼年丧父，随母兄进京投靠贾府。博学多才，通晓世故，心地宽厚。佩金锁与宝玉的玉有"金玉良缘"之说，最终嫁与宝玉，但婚后宝玉出家，独守空闺。
+knownSecrets:
+- 曾偷听小红与坠儿的私语并以"金蝉脱壳"之计自保
+- 金锁上的字与宝玉的玉上字是配对的谶语

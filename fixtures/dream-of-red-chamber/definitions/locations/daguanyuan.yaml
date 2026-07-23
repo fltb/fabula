@@ -1,0 +1,14 @@
+id: daguanyuan
+name: 大观园
+kind: garden
+description: 为迎接元春省亲而建的园林，是《红楼梦》后半部主要场景。内有怡红院、潇湘馆、蘅芜苑、稻香村、秋爽斋、栊翠庵、暖香坞、藕香榭、芦雪庵等多处景致。元春省亲后命家中姊妹入住各院，大观园成为宝玉与众姊妹吟诗作画、嬉戏游玩的世外桃源。
+initialState:
+  status: occupied
+  season: spring
+  atmosphere: flourishing
+notableFeatures:
+- 怡红院——宝玉住处，"怡红快绿"
+- 潇湘馆——黛玉住处，有千竿翠竹
+- 蘅芜苑——宝钗住处，花草繁盛
+- 栊翠庵——妙玉修行处
+- 稻香村——李纨住处，田园风光

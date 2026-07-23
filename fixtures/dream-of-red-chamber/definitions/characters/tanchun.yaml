@@ -1,0 +1,18 @@
+id: tanchun
+name: 探春
+type: supporting
+role: supporting
+description: 探春，首次出现于第3回，共提及58次。
+appearance: 削肩细腰，长挑身材，鸭蛋脸面，俊眼修眉，顾盼神飞。文采精华，见之忘俗。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: adolescent
+voiceNotes: 说话爽利明快，有男子气概。理家理事时条理分明、魄力十足。在母亲赵姨娘面前颇感无奈，言辞间时露刚强与自尊。
+backstory: 贾政与赵姨娘之女，贾宝玉同父异母的妹妹。精明能干，有志气有才能，曾代理荣国府家务，大力改革弊端。因是庶出，常感自卑而更好强。最终远嫁海疆。
+knownSecrets:
+- 抄检大观园时提前得知消息，秉烛开门以待

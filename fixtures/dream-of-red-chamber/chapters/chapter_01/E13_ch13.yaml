@@ -1,0 +1,52 @@
+event: E13
+title: 宝玉挨打之后 袭人进言搬出园
+narrativeOrder: 13
+sceneType: linear
+pov:
+  character: narrator_omniscient
+  type: omniscient
+sceneBrief: 宝玉挨打后向黛玉表明心志，黛玉悲泣嘱咐他改过。凤姐、薛姨妈、贾母相继探问。袭人应王夫人之召前往，借送香露之机进言，称宝玉该得老爷教训，并试探性地提出让宝玉搬出大观园居住，深得王夫人信任。
+preconditions: []
+expectedPostconditions: []
+threadProgress:
+  - thread: T4
+    advancement: 宝玉对黛玉直言‘为这些人死了也是情愿的’，情志坚守
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T7
+    advancement: 袭人向王夫人进言，礼制秩序介入宝黛相处空间
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T3
+    advancement: 大观园局面松动，家长权威再度压近
+    progressAfter: 10
+    progressTotal: 100
+foreshadowing:
+  - id: fs_E13_ch13_qj7p
+    hint: 见原文
+    thread: T1
+    targetRevealChapter: 80
+  - id: fs_E13_ch13_atwc
+    hint: 见原文
+    thread: T1
+    targetRevealChapter: 80
+introduces:
+  - type: item
+    initialState: {}
+    id: unknown_kitd
+  - type: item
+    initialState: {}
+    id: unknown_ilnm
+styleGuidance:
+  tone: 温婉含泪，暗藏机锋
+  targetWordCount: 600
+  atmosphere: 伤后静谧中潜流暗涌
+  scenePacing: 先情后事，由内转外
+  characterVoice: {}
+tense: past
+discourseMode: action
+arcPosition: opening
+emotionalValence: past
+conflictType: past
+storyTime: past
+narrationTime: past

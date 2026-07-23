@@ -1,0 +1,9 @@
+id: yarmouth
+name: "Yarmouth"
+kind: coastal_town
+description: "The seaside town on the Norfolk coast where the Peggotty family lives. The defining feature is Mr Peggotty's house — a real black barge converted into a dwelling on the beach. The town has an inn (where Steerforth stays), a church with a Sunday congregation, a harbour where fishing boats come and go, and a wide, flat beach. The sea dominates life here — the constantly changing tides, the wind, the storms. It is the setting of David's happiest childhood holiday and of the novel's most terrible climax — the great storm in which Steerforth and Ham die."
+initialState:
+  status: active
+  season: summer_holiday
+  atmosphere: warm_fishing_community
+  notable_feature: converted_boat_house

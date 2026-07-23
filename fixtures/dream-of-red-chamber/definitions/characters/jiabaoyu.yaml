@@ -1,0 +1,23 @@
+id: jiabaoyu
+name: 贾宝玉
+type: protagonist
+role: supporting
+description: 贾宝玉，首次出现于第3回，共提及102次。贾宝玉的常用简称
+appearance: 面若中秋之月，色如春晓之花，鬓若刀裁，眉如墨画，面如桃瓣，目若秋波。项上金螭璎珞，又有一根五色丝绦，系着一块美玉。
+aliases:
+- 宝玉
+gender: 男
+age: 13-19
+traits:
+- 多情
+- 叛逆
+- 纯真
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: adolescent
+voiceNotes: 言语多情而任性，常语出惊人，如"女儿是水做的骨肉，男人是泥做的骨肉"。在姊妹面前温柔体贴，在父亲面前畏惧拘谨，在丫鬟面前平等随和。
+backstory: 衔玉而生，贾府二房嫡孙，自幼受贾母宠爱。在脂粉堆中长大，最厌恶仕途经济，只愿与姊妹丫鬟厮混。与林黛玉青梅竹马、情投意合，却最终被安排娶了薛宝钗。
+knownSecrets:
+- 与黛玉互赠手帕定情
+- 私下与蒋玉菡交往被父亲责打

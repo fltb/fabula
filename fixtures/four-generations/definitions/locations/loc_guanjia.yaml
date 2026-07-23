@@ -1,0 +1,6 @@
+id: loc_guanjia
+name: 冠家（三号院）
+description: 冠晓荷与大赤包的宅子。比起祁钱两家，冠家装饰得更加华丽、俗气。客厅里摆着牌桌，常有汉奸和无聊文人出入。大赤包当了所长后，这里更是门庭若市。
+kind: residence
+initialState:
+  status: active

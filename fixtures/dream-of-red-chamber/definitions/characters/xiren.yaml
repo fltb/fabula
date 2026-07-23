@@ -1,0 +1,23 @@
+id: xiren
+name: 袭人
+type: supporting
+role: supporting
+description: 袭人，首次出现于第3回，共提及87次。
+appearance: 细挑身材，容长脸儿，温柔和顺。常穿桃红或银红袄儿，青缎背心。
+aliases: []
+gender: 女
+age: 16-20
+traits:
+- 温顺
+- 忠诚
+- 心机
+initialState:
+  location: 贾母院
+  status: alive
+  role: maid
+  age_stage: young_adult
+voiceNotes: 说话温柔体贴，识大体顾大局。常以规劝口吻对宝玉说话，如劝他读书上进、注意言行。在主子面前恭谨有礼，在丫鬟中稳重可靠。
+backstory: 原为贾母的丫鬟，因忠心可靠被派去服侍宝玉，是宝玉房里的大丫鬟。性格温顺贤惠，深得王夫人信任，被默认为宝玉的准妾。宝玉出家后，嫁与蒋玉菡。
+knownSecrets:
+- 早已与宝玉有云雨之事
+- 曾向王夫人进言建议让宝玉搬出大观园

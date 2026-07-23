@@ -1,0 +1,25 @@
+id: xiao_wen
+name: 小文
+type: artist
+archetype: former_aristocrat
+role: minor
+description: 文侯爷，虽然是民国元年出生，但继承了前朝旗人的文化与传统。他会唱戏、拉胡琴，是个票友。他的妻子文若霞是女票友，夫妻俩靠唱戏维持生活。他性格温和、与世无争，即使在亡国之际也只关心他的新腔。他代表了北平文化中不问世事、只求艺术的一面。
+appearance: 矮个子，小四方脸，两道很长的眉，清秀文雅。
+aliases:
+- 文侯爷
+gender: 男
+age: 约二十五岁
+profession: 票友（胡琴手）
+traits:
+- artistic
+- gentle
+- detached
+- innocent
+- polite
+initialState:
+  location: loc_xiaoyangquan
+  status: alive
+  condition: performing
+  emotionalState: serene
+backstory: 生在贵族家庭，拥有一切后又失去一切，只剩下了一把胡琴。
+knownSecrets: []

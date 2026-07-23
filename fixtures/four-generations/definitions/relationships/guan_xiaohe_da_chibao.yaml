@@ -1,0 +1,13 @@
+id: guan_xiaohe_da_chibao
+type: marriage_complicity
+participants:
+  - guan_xiaohe
+  - da_chibao
+bidirectional: true
+initialState:
+  trust: 30
+  emotionalDistance: 40
+  intensity: 90
+  status: "夫妻共谋——两条蚂蚱拴在一根绳上"
+  notes: "冠晓荷与大赤包的婚姻是全北平最热闹的夫妻关系。大赤包比丈夫更有手腕、更狠毒、更不要脸——她管得住丈夫的每一分钱，却管不住他想娶小老婆的心。两人三天一小吵五天一大吵，但吵完又一起去巴结日本人、算计邻居。他们不是伴侣，是合伙人：大赤包靠冠晓荷的社交混进汉奸圈子，冠晓荷靠大赤包的泼辣和野心往上爬。大赤包当上妓女检查所所长后更是趾高气扬，冠晓荷在她面前矮了半截。但是当大赤包被日本人和汉奸的倾轧吞噬后，冠晓荷连一滴眼泪都没掉——他立刻转头去寻找新的靠山。他们的关系从头到尾就是一条互相利用、互相折磨的锁链。"
+establishedEvent: celebration_nanjing

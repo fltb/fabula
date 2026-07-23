@@ -1,0 +1,46 @@
+event: E18
+title: 鸳鸯抗婚诉姐妹 宝玉藏山听密语
+narrativeOrder: 18
+sceneType: linear
+pov:
+  character: narrator_omniscient
+  type: omniscient
+sceneBrief: 凤姐将贾赦欲讨鸳鸯作妾之事告知平儿。平儿、袭人在山石后劝慰鸳鸯,三人互诉心事,鸳鸯痛斥贾赦色欲并表明宁死不从、剪发为尼、以死相抗之志。鸳鸯嫂子来劝婚,被鸳鸯唾骂赶走。宝玉自山石后现身,原是他先藏身捉弄袭人,无意中听见三人密语。
+preconditions: []
+expectedPostconditions: []
+threadProgress:
+  - thread: T1
+    advancement: 鸳鸯以死相抗、剪发为尼之说,暗伏人间荣枯皆空之旨
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T2
+    advancement: 凤姐遮掩回避贾赦之事,显示其权力亦有不能触及之处
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T3
+    advancement: 贾赦好色强娶家生丫鬟,显露贾府内里朽败之象
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T6
+    advancement: 宝玉无意听闻鸳鸯抗婚,情感上对女性悲剧生出悲悯
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T7
+    advancement: 家生女儿之命运、主奴等级、礼制压迫均在此回凸显
+    progressAfter: 10
+    progressTotal: 100
+foreshadowing: []
+introduces: []
+styleGuidance:
+  tone: 悲愤交织而带市井谐趣
+  targetWordCount: 600
+  atmosphere: 山石花木间,丫鬟密语之隐秘,抗争泪骂之声色
+  scenePacing: 以对话推进为主,从私情闲话到激烈抗辩,节奏由缓入急
+  characterVoice: {}
+tense: past
+discourseMode: action
+arcPosition: opening
+emotionalValence: past
+conflictType: past
+storyTime: past
+narrationTime: past

@@ -1,0 +1,12 @@
+id: ningguofu
+name: 宁国府
+kind: residence
+description: 贾氏家族二房宁国公贾演之后贾珍的府邸，与荣国府并称"宁荣二府"。内有会芳园、天香楼等建筑。宁国府较荣国府更显奢华荒淫，贾珍在此恣意享乐，秦可卿之死、尤二姐之事均发生于此。最终被朝廷查抄。
+initialState:
+  status: occupied
+  household_state: decadent
+  atmosphere: extravagant
+notableFeatures:
+- 会芳园——宁国府花园
+- 天香楼——秦可卿事件的核心地点
+- 贾珍院——贾珍居所

@@ -1,0 +1,110 @@
+event: E15
+title: I Am Involved in Mystery
+narrativeOrder: 15
+sceneType: linear
+storyTime: london_career
+narrationTime: london_career
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: mysterious_anticipation
+conflictType: person_vs_person
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: David receives a mysterious letter from Mr Micawber, written in his most
+  elaborate style, hinting at 'a disclosure of the most momentous nature' and requesting
+  David's presence — along with Traddles and Aunt Betsey — in Canterbury. The letter
+  is dated from Canterbury, where Micawber has been working as Uriah Heep's confidential
+  clerk. It is full of dark hints about 'the destruction that is brewing' and 'the
+  serpent that has gnawed my vitals.' David, Traddles, and Aunt Betsey consult and
+  decide to go to Canterbury on the appointed day. The chapter builds suspense for
+  the climactic exposure of Heep's schemes, for which Micawber has been secretly gathering
+  evidence.
+preconditions:
+- entity: micawber
+  attribute: location
+  value: canterbury
+- entity: micawber
+  attribute: employment
+  value: clerk_to_heep
+expectedPostconditions:
+- entity: david_copperfield
+  attribute: location
+  value: travelling_to_canterbury
+  confidence: 1.0
+- entity: traddles
+  attribute: location
+  value: travelling_to_canterbury
+  confidence: 1.0
+- entity: betsey_trotwood
+  attribute: location
+  value: travelling_to_canterbury
+  confidence: 1.0
+- entity: micawber
+  attribute: status
+  value: revealed_as_secret_investigator
+  confidence: 1.0
+- entity: uriah_heep
+  attribute: status
+  value: unaware_of_conspiracy
+  confidence: 0.9
+threadProgress:
+- thread: T3
+  advancement: The Heep plot builds toward its climax — all the threads of villainy
+    (the Wickfield firm, Miss Betsey's ruin, the forging of documents) are converging.
+    The long setup pays off as the trap closes.
+  progressAfter: 70
+  progressTotal: 100
+- thread: T5
+  advancement: Micawber's secret mission reaches its revelation moment — the comic
+    figure has been the investigator all along, gathering evidence against Heep. His
+    elaborate letter signals that his role as the spy within the enemy camp is about
+    to yield results.
+  progressAfter: 80
+  progressTotal: 100
+- thread: T1
+  advancement: David, now a successful writer and a man of responsibility, is drawn
+    into the unmasking of Heep — the boy who suffered under Murdstone now stands as
+    a force for justice, alongside Traddles and Micawber.
+  progressAfter: 55
+  progressTotal: 100
+foreshadowing:
+- id: micawber_exposure
+  hint: Micawber's letter is the herald of the climax — 'the destruction that is brewing'
+    and 'the serpent that has gnawed my vitals' are pure Micawber rhetoric, but they
+    signal the real exposure of Heep's fraud and forgery that is about to unfold.
+  targetRevealChapter: 52
+  thread: T5
+- id: traddles_legal_role
+  hint: Traddles is brought into the conspiracy alongside David — the old Salem House
+    friend, steady and reliable, is now a law student whose legal knowledge will be
+    essential in the exposure. The quiet boy becomes the instrument of justice.
+  targetRevealChapter: 52
+  thread: T3
+introduces: []
+styleGuidance:
+  tone: suspenseful, theatrical, with Micawber's characteristic bombast providing
+    both comedy and genuine dramatic tension
+  targetWordCount: 800
+  atmosphere: 'the arrival of the mysterious letter in David''s quiet study — the
+    elaborate handwriting, the blotted ink, the mounting dread and excitement. The
+    consultation with Traddles and Aunt Betsey: candlelight, maps, whispered plans,
+    the sense that a long-pending storm is about to break'
+  scenePacing: daily life at David's (calm, ordinary) → the letter arrives (mysterious,
+    portentous) → reading Micawber's prose (comic alarm) → consultation with Traddles
+    and Aunt Betsey (earnest, legal) → decision to go to Canterbury (resolute, forward-charging)
+  characterVoice:
+    narrator: Adult David with a note of theatrical relish — the mystery of Micawber's
+      letter is both comic and thrilling, and the telling captures the excitement
+      of a plot advancing toward its resolution.
+    micawber: The letter is pure Micawber — rolling periods, classical allusions,
+      dark hints wrapped in elaborate syntax, the writer clearly enjoying his dramatic
+      role as the secret avenger. 'The serpent that has gnawed my vitals' is vintage
+      Micawber, mixing genuine grievance with exquisite self-dramatisation.
+    traddles: Earnest, practical, the steady legal mind — his voice cuts through Micawber's
+      rhetoric with clear analysis. He has grown from the boy who drew skeletons into
+      a reliable young man of law.
+    betsey_trotwood: Keen, shrewd, ready for battle — the prospect of confronting
+      Heep restores her energy. She has not forgotten her ruined fortune and is eager
+      to see justice done.

@@ -1,0 +1,27 @@
+id: guan_xiaohe
+name: 冠晓荷
+type: collaborator
+archetype: sycophant
+role: antagonist
+description: 冠晓荷是小羊圈三号的主人，一个彻底的投机分子和汉奸。他外表体面，穿着讲究，会吃会喝会享受，骨子里却无耻至极。他出卖钱默吟给日本人，又四处钻营想在新民会或伪政府中谋个一官半职。他最大的本事是无聊——能把无聊的事做得津津有味。他怕太太大赤包，但又不安分，对邻居小文太太若霞垂涎三尺。
+appearance: 中等身材，常穿绸袍缎鞋，打扮得一丝不苟。面皮白净，说话油滑。
+aliases:
+- 冠先生
+gender: 男
+age: 约四十多岁
+profession: 无业游民（曾做过小官）
+traits:
+- sycophantic
+- shameless
+- lazy
+- gluttonous
+- lecherous
+- cowardly
+initialState:
+  location: loc_guanjia
+  status: alive
+  condition: idle
+  emotionalState: ambitious_to_collaborate
+backstory: 祖上阔过，做过几任小官。一生最擅长的就是蝇营狗苟、趋炎附势。
+knownSecrets:
+- 告密导致钱默吟被捕

@@ -1,0 +1,77 @@
+event: E11
+title: "A Greater Loss"
+narrativeOrder: 11
+sceneType: linear
+storyTime: london_career
+narrationTime: london_career
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "sorrow_reflection"
+conflictType: "person_vs_fate"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "Mr Barkis, Peggotty's husband and the carrier, dies after a long illness. David goes to Yarmouth for the funeral and stays with Peggotty in her grief. Barkis's will reveals that he has left Peggotty a substantial fortune of three thousand pounds saved from his miserly ways — 'Barkis is willin'' turns out to have been truer than anyone knew. David administers the will and is moved by Peggotty's simple goodness. But the greater loss is that Little Emily has run away with Steerforth. The Peggotty household is shattered. Ham is devastated but forgives her. Mr Peggotty, refusing to curse her, sets out on a desperate search for his lost niece, vowing to find her and bring her home."
+preconditions:
+  - entity: emily
+    attribute: status
+    value: ran_away_with_steerforth
+expectedPostconditions:
+  - entity: mr_barkis
+    attribute: status
+    value: deceased
+    confidence: 1.0
+  - entity: peggotty
+    attribute: financial
+    value: inherited_barkis_fortune
+    confidence: 1.0
+  - entity: peggotty
+    attribute: emotionalState
+    value: grieving_but_secure
+    confidence: 1.0
+  - entity: emily
+    attribute: status
+    value: missing_with_steerforth
+    confidence: 1.0
+  - entity: dan_peggotty
+    attribute: status
+    value: searching_for_emily
+    confidence: 1.0
+  - entity: ham
+    attribute: emotionalState
+    narrativeHint: "Ham is devastated by Emily's flight but forgives her completely, his love unchanged by her betrayal. This magnanimity makes his later tragedy all the more poignant."
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "David begins to see Steerforth's true colours — the seduction of Emily forces David to reckon with the flaw in his idolised friend. The carefree admiration of boyhood gives way to a moral reckoning."
+    progressAfter: 35
+    progressTotal: 100
+  - thread: T4
+    advancement: "The central tragedy of the Emily subplot: Emily elopes with Steerforth, shattering the Peggotty household. Mr Peggotty's quest to find her begins, establishing him as a figure of extraordinary forgiveness and determination. This is the moral crisis that sets the arc toward its climax."
+    progressAfter: 50
+    progressTotal: 100
+  - thread: T2
+    advancement: "David sees in the Emily-Steerforth catastrophe a dark parallel to his own romantic choices — Dora's helplessness begins to worry him in a new light."
+    progressAfter: 30
+    progressTotal: 100
+foreshadowing:
+  - id: barkis_willin_fulfilled
+    hint: "Barkis's repeated catchphrase 'Barkis is willin'' — long thought a joke about the carrier's willingness to transport goods — is revealed as a literal statement of his bequest. The miser's hoard becomes Peggotty's security."
+    targetRevealChapter: 31
+    thread: T1
+  - id: mr_peggotty_quest
+    hint: "Mr Peggotty's vow to find Emily — refusing to curse her, setting out across the world — establishes the moral gravity that will define the resolution of this thread. His forgiveness prefigures the story's deepest theme of redemption."
+    targetRevealChapter: 40
+    thread: T4
+introduces: []
+styleGuidance:
+  tone: "mournful, tender, with moments of bitter irony — Barkis's posthumous generosity set against the devastation of Emily's flight"
+  targetWordCount: 900
+  atmosphere: "the Yarmouth coast in grief — the undertaker's house, the still body in the bedroom, and the shattered boathouse where the sea murmurs on as if nothing has changed, though everything has"
+  scenePacing: "Barkis's decline (slow, patient) → death (quiet) → will reading (surprising warmth) → Emily's flight disclosed (sudden catastrophe) → Mr Peggotty's quest begins (solemn resolve)"
+  characterVoice:
+    narrator: "Adult David looking back on a double loss — the comic figure of Barkis gone, but overshadowed by the terrible thing Steerforth has done. The voice carries a weight of regret, of having seen more than he understood at the time."
+    peggotty: "Simple, grieving, dignified — her sorrow over Barkis mixed with the shock of Emily's fall. She speaks plainly, her goodness untainted by the scandal."
+    dan_peggotty: "Broken but not bitter — his voice trembles with grief over Emily but rises with conviction when he vows to find her. 'I'm a-going to seek my niece through the wureld.'"
+    ham: "Devastated but forgiving — speaks with a quiet, stunned dignity. His forgiveness of Emily is immediate and unconditional, more heartbreaking than any curse."

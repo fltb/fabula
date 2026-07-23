@@ -1,0 +1,19 @@
+id: caiyun
+name: 彩云
+type: supporting
+role: supporting
+description: 彩云，首次出现于第23回，共提及23次。赵姨娘房里的丫鬟
+appearance: 赵姨娘房中的丫鬟，容貌中上。打扮一般。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  role: maid
+  age_stage: young_adult
+voiceNotes: 言语善辩，在赵姨娘和贾环之间周旋。夹在主子之间处境为难，言语间时露不满。
+backstory: 赵姨娘房中的丫鬟。与贾环关系暧昧，曾被赵姨娘利用去偷王夫人房中的东西。后被察觉，处境十分尴尬。
+knownSecrets:
+- 曾被赵姨娘利用偷窃王夫人之物

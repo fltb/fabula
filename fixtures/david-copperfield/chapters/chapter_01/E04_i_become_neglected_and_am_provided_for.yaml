@@ -1,0 +1,104 @@
+event: E04
+title: "I Become Neglected, and Am Provided For"
+narrativeOrder: 4
+sceneType: linear
+storyTime: mothers_death
+narrationTime: mothers_death
+tense: past
+arcPosition: climax
+discourseMode: exposition
+emotionalValence: "grief_abandonment"
+conflictType: "person_vs_society"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "David's mother Clara dies suddenly, and the baby brother dies shortly after. David is called home from Salem House for the funeral — a heartbreaking return to a house now ruled entirely by the Murdstones. Peggotty is dismissed with a month's warning. After the funeral, David is not sent back to school. Instead he is sent to London to work at Murdstone and Grinby's wine warehouse, a filthy, rat-infested establishment on the Thames. At age ten, David spends his days washing bottles alongside rough boys, feeling utterly degraded and abandoned. He lodges at the home of the improvident but kind Mr Micawber, who is soon arrested for debt and sent to the Marshalsea prison."
+preconditions:
+  - entity: david_copperfield
+    attribute: status
+    value: orphaned
+  - entity: clara_copperfield
+    attribute: status
+    value: dead
+  - entity: david_copperfield
+    attribute: location
+    value: salem_house
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: london
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: status
+    value: child_labourer
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: degraded_abandoned_desperate
+    confidence: 1.0
+  - entity: clara_copperfield
+    attribute: status
+    value: deceased
+    confidence: 1.0
+  - entity: peggotty
+    attribute: location
+    value: dismissed_from_blunderstone
+    confidence: 1.0
+  - entity: micawber
+    attribute: status
+    value: imprisoned_for_debt
+    confidence: 0.9
+  - entity: murdstone
+    attribute: status
+    value: widower_full_control
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "David's lowest point — orphaned, abandoned by the Murdstones, reduced to child labour at Murdstone and Grinby's warehouse. This is the nadir of his childhood, the moment that will drive him to take desperate action."
+    progressAfter: 20
+    progressTotal: 100
+  - thread: T5
+    advancement: "First appearance of Micawber and his family. Micawber's endless financial troubles — his credulity, his oratory, his imprisonment in the Marshalsea — establish the pattern of comic desperation that will define his character throughout the novel."
+    progressAfter: 10
+    progressTotal: 100
+foreshadowing:
+  - id: micawber_providence
+    hint: "Micawber's perpetual refrain — 'something will turn up' — sounds comically optimistic now, but it prefigures his eventual redemption and his crucial role in exposing Uriah Heep's fraud."
+    targetRevealChapter: 52
+    thread: T5
+  - id: warehouse_humiliation
+    hint: "David's degradation at the warehouse — his shame at being seen by anyone he knows, his fall from the gentry into manual labour — plants the desperate resolve that will eventually drive him to run away to Dover."
+    targetRevealChapter: 13
+    thread: T1
+  - id: david_ambition_planted
+    hint: "David's daily walk past the houses of successful gentlemen on his way to the rat-infested warehouse plants the seed of ambition. He sees a gap between what he is and what he might become, and the contrast becomes unbearable."
+    targetRevealChapter: 13
+    thread: T1
+introduces:
+  - type: location
+    id: london
+    initialState:
+      status: active
+  - type: character
+    id: micawber
+    initialState:
+      location: london
+      status: debtor
+      condition: improvident_imprisoned
+      emotionalState: rhetorically_cheerful_desperate
+  - type: character
+    id: mrs_micawber
+    initialState:
+      location: london
+      status: wife_of_micawber
+      condition: loyal_impoverished
+      emotionalState: steadfast_complaining
+styleGuidance:
+  tone: "sombre, pained, with sparks of dark comedy in the Micawber scenes"
+  targetWordCount: 800
+  atmosphere: "the deathly quiet of Blunderstone at the funeral; the stench and rot of the Thames-side wine warehouse; the chaotic warmth of the Micawber lodgings where everything is being pawned; the cold stone walls of the Marshalsea prison"
+  scenePacing: "mother's funeral (slow, grieving) → warehouse routine (repetitive, grinding) → Micawber domesticity (comic, chaotic) → arrest (swift, inevitable)"
+  characterVoice:
+    narrator: "David's voice is at its most wounded here — the adult narrator still feels the shame of the warehouse as a fresh wound. The prose is stripped of humour, replaced by raw indignation and grief"
+    micawber: "Oratorical, grandiose, endlessly optimistic — every sentence is a rhetorical performance. 'My dear Copperfield, something will turn up!' His speech is a comedy of misplaced confidence and elaborate vocabulary"
+    murdstone: "Colder than ever — his words are business-like, efficient, devastating. He disposes of David as one would dispose of an inconvenient package"

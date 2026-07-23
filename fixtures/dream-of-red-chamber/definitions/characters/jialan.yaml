@@ -1,0 +1,17 @@
+id: jialan
+name: 贾兰
+type: supporting
+role: supporting
+description: 贾兰，首次出现于第4回，共提及31次。
+appearance: 少年公子，眉清目秀。李纨之子，衣着端正朴素。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: child
+voiceNotes: 沉默寡言，好读书。母亲李纨教导有方，言行举止有分寸。在众人面前恭敬有礼，与众不同的书卷气。
+backstory: 贾珠与李纨之子，贾母的曾孙。自幼丧父，在母亲李纨的严格教育下专心读书。不似宝玉叛逆，而是循规蹈矩的好学生。最终贾府败落后，贾兰科举高中，光耀门楣。
+knownSecrets: []

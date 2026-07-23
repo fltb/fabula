@@ -1,0 +1,18 @@
+id: fenger
+name: 丰儿
+type: supporting
+role: supporting
+description: 丰儿，首次出现于第7回，共提及18次。凤姐的丫鬟
+appearance: 王熙凤房中的小丫鬟。容貌普通，年纪尚小。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  role: maid
+  age_stage: child
+voiceNotes: 言语不多，在凤姐跟前小心翼翼。偶尔被吩咐跑腿传话，在凤姐的威势下从不敢多言。
+backstory: 王熙凤房中的丫鬟。常被凤姐使唤跑腿，在凤姐教训下人时在旁边侍立。地位不高，只在凤姐院中做些杂务。
+knownSecrets: []

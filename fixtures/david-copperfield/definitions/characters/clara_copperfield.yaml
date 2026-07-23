@@ -1,0 +1,32 @@
+id: clara_copperfield
+name: "Clara Copperfield"
+type: supporting_character
+archetype: gentle_mother
+role: supporting
+description: "David's mother, a beautiful, youthful, and gentle-natured woman. She was barely twenty when she married the much older David Copperfield senior, and was left a widow with a child soon after. She is described as looking scarcely more than a child herself — small, fair-haired, with a girlish figure and a trusting disposition. After her marriage to Mr Murdstone, she becomes increasingly timid and submissive, unable to protect her son from the Murdstones' cruelty. She dies when David is about ten years old, worn down by the Murdstone regime and the loss of her baby son. David remembers her with profound tenderness. Her grave in Blunderstone churchyard is a recurring touchstone in his memory."
+appearance: "Young, fair, with beautiful luxuriant hair that falls about her face when she takes off her cap. Small and slight, with a youthful figure and a face that expresses her emotions transparently. Often in mourning black or simple white. The very picture of a 'wax doll' as Betsey Trotwood calls her."
+aliases:
+  - "Mrs Copperfield"
+  - "Clara"
+  - "Mama"
+gender: female
+age: "About twenty to thirty"
+profession: "Gentlewoman (married)"
+traits:
+  - gentle
+  - timid
+  - loving
+  - vulnerable
+  - trusting
+  - malleable
+  - easily_led
+  - devoted
+initialState:
+  location: blunderstone
+  status: alive
+  condition: pregnant_with_david
+  emotionalState: anxious_tender
+  social_status: widow
+  relationship_murdstone: single
+voiceNotes: "David narrates her with affectionate hindsight. She is always 'my poor mother' in his telling — beloved but fragile. Her speech is soft and yielding, easily overborne by Murdstone's firmness and Miss Murdstone's asperity. She calls David 'my Davy' with an endearing tenderness."
+backstory: "Daughter of a country gentleman, orphaned young. She married David Copperfield senior (a man double her age) and was left a widow within a year when he died of a constitution weakened by age. She is left to raise her posthumous son alone, with the help of Peggotty. Her brother-in-law — or rather her husband's aunt — Miss Betsey Trotwood disapproved of the marriage and calls Clara a 'wax doll.' When Mr Murdstone courts her, she is flattered and relieved to have a protector. After the marriage, she becomes increasingly powerless in her own home."

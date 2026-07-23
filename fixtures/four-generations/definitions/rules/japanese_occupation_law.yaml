@@ -1,0 +1,52 @@
+ruleId: japanese_occupation_law
+name: "日本占领区管制"
+category: legal_regime
+type: state_invariant
+statement: "北平沦陷后，日军通过伪政权实施全面管制：城门设卡盘查、发放良民证、物资统制配给、强迫市民参加庆祝日军胜利的游行集会。不服从者以抗日罪名逮捕、毒刑、甚至处死。整个城市在日军的刺刀下运转，每一个北平市民都活在随时可能被逮捕的恐惧中。"
+ruleClass: legal_code
+logicalConsequences:
+  - description: "出入城门须向日军哨兵鞠躬接受盘查"
+    check:
+      type: state_invariant
+      filter: "entity.location IN ('loc_beiping', 'loc_xiaoyangquan') AND entity.status='alive'"
+      assert: "entity.has_pass=true AND entity.has_identity_card=true"
+      severity: error
+  - description: "日军可以无理由逮捕并刑讯任何嫌疑人"
+    check:
+      type: transition_constraint
+      filter: "event.cause='arrest_by_japanese'"
+      assert: "entity.status='arrested' AND entity.condition='tortured'"
+      severity: error
+  - description: "市民必须参加日伪组织的庆祝游行"
+    check:
+      type: state_invariant
+      filter: "event.type='celebration_parade' AND entity.location='loc_beiping'"
+      assert: "entity.did_attend=true OR entity.hidden=true"
+      severity: warning
+  - description: "物资（米、煤、布）由日伪统制配给，市民过冬困难"
+    check:
+      type: state_invariant
+      filter: "entity.location='loc_beiping'"
+      assert: "entity.food_supply<=30 AND entity.coal_supply<=30"
+      severity: warning
+exceptions:
+  - condition: "汉奸和伪政府工作人员可以不鞠躬、不受盘查"
+    note: "汉奸享有特权，这是日本人分化统治的手段"
+  - condition: "抗日地下工作者以假证件和隐蔽方式规避管控"
+    note: "地下抗日活动是对占领管制的变相抵抗"
+evidenceChain:
+  - rule: japanese_occupation_law
+    effect: reinforce
+    evidence: "祁瑞全离家出走前，北平城门已经戒严，出入需经日军哨兵盘查"
+  - rule: japanese_occupation_law
+    effect: reinforce
+    evidence: "钱默吟被日本宪兵逮捕后遭受毒刑，出狱时面目全非、牙齿被打掉"
+  - rule: japanese_occupation_law
+    effect: reinforce
+    evidence: "保定陷落后日伪强迫学生游行庆祝，瑞丰积极领队，瑞宣拒绝参加而陷入苦闷"
+  - rule: japanese_occupation_law
+    effect: reinforce
+    evidence: "南京陷落后日伪大肆庆祝，大赤包就任妓女检查所所长，汉奸们弹冠相庆"
+  - rule: japanese_occupation_law
+    effect: reinforce
+    evidence: "战争持续一年后，北平米煤布极度匮乏，祁家买不到煤球，祁老人冻得睡不着觉"

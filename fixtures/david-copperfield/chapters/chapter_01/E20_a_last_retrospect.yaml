@@ -1,0 +1,89 @@
+event: E20
+title: "A Last Retrospect"
+narrativeOrder: 20
+sceneType: linear
+storyTime: return_to_england
+narrationTime: return_to_england
+tense: past
+discourseMode: reflection
+arcPosition: denouement
+emotionalValence: "contented_fulfillment"
+conflictType: "person_vs_self"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "David closes his written story with a final retrospect. He looks back over his life and sees himself 'with Agnes at my side, journeying along the road of life.' Their married life is happy: they have children (including a little Betsey Trotwood), and their friends and family gather around them — Aunt Betsey in her old age, Peggotty with her 'Crocodile Book,' Mr Dick with his kites and his Memorial (which he has finally finished). David is a successful novelist, Agnes is the 'centre of his life,' and all the sorrows of the past have been transformed into wisdom. The chapter surveys each major character's fate — Traddles and Sophy in their happy home, the Micawbers thriving in Australia, Mr Peggotty and Emily contented — and closes with Agnes's face, the guiding star of David's life, and the final image of the road stretching before them."
+preconditions:
+  - entity: david_copperfield
+    attribute: status
+    value: married_to_agnes
+  - entity: agnes_wickfield
+    attribute: status
+    value: married_to_david
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: status
+    value: successful_novelist
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: contented_fulfillment
+    confidence: 1.0
+  - entity: agnes_wickfield
+    attribute: emotionalState
+    value: peaceful_contentment
+    confidence: 1.0
+  - entity: betsey_trotwood
+    attribute: status
+    value: happy_grandaunt
+    confidence: 1.0
+  - entity: micawber
+    attribute: status
+    value: prosperous_in_australia
+    confidence: 1.0
+  - entity: traddles
+    attribute: status
+    value: happy_judge_and_family_man
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "David's journey from birth to maturity concludes — the orphaned boy, the abused child, the struggling youth, the successful writer, the loving husband and father. The entire bildungsroman resolves into the final image of David and Agnes journeying together along the road of life, the road that stretches out before them."
+    progressAfter: 100
+    progressTotal: 100
+  - thread: T2
+    advancement: "David finally recognises Agnes's true worth — the 'undisciplined heart' is disciplined at last. The love that was always present but unrecognised is now the central fact of his life. Agnes, who has loved him in patient silence through all his wanderings, is at last acknowledged as the guiding star of his existence."
+    progressAfter: 100
+    progressTotal: 100
+  - thread: T3
+    advancement: "Heep's defeat is complete and permanent — mentioned only in passing as a closed chapter. Justice has been done, and the worm has been crushed by the machinery of law and society."
+    progressAfter: 100
+    progressTotal: 100
+  - thread: T4
+    advancement: "Emily's redemption is confirmed — she and Mr Peggotty are contented in Australia, the past forgiven and the future secure. The 'fallen woman' has been restored to life and hope."
+    progressAfter: 100
+    progressTotal: 100
+  - thread: T5
+    advancement: "Micawber's triumph in Australia is complete — he has become a respected magistrate, his 'something will turn up' finally justified. The man who was always a failure in England found his element in a new world, proving that his talents were never the problem — only the circumstances."
+    progressAfter: 100
+    progressTotal: 100
+foreshadowing: []
+introduces:
+  - type: character
+    id: little_betsey_trotwood
+    initialState:
+      status: alive
+      condition: child_of_david_and_agnes
+  - type: character
+    id: traddles_children
+    initialState:
+      status: alive
+      condition: unnamed_children
+styleGuidance:
+  tone: "serene, grateful, elegiac in a minor key — the retrospect closes the novel not with dramatic action but with a quiet survey of fulfilled lives. Every sentence carries the weight of experience transformed into wisdom"
+  targetWordCount: 800
+  atmosphere: "the drawing-room of David's happy home — evening light, the fire burning, Agnes at her workbasket, the children at play, Aunt Betsey nodding in her chair. Outside, the ordinary world goes on; inside, there is peace. The retrospect expands outward from this domestic centre to touch each of the novel's characters in their distant homes — Traddles in his chambers, Micawber in his Australian magistrate's house, Mr Peggotty on his farm — all living out the happiness they have earned."
+  scenePacing: "the opening image: David and Agnes together (still, central) → the children: little Betsey Trotwood and the others (warm, domestic) → Aunt Betsey and Peggotty in their old age (affectionate, comic) → Mr Dick and his finished Memorial (triumphant eccentricity) → Traddles and Sophy's happy family (serene contentment) → Micawber in Australia (comic glory realised) → Mr Peggotty and Emily (forgiveness embodied) → the closing address to Agnes (devotional, transcendent) → the final sentence: the road stretching before them (open, eternal)"
+  characterVoice:
+    narrator: "Adult David at his most serene and grateful — the retrospective narrator has reached the end of his story and speaks with the voice of a man who has suffered, loved, and been healed. The prose is simple, direct, and luminous. There is no anger, no regret, only acceptance and gratitude. The final paragraphs, addressed to Agnes and to the reader, are among the most beautifully cadenced in English literature — a benediction on the life he has lived and the story he has told."
+    agnes_wickfield: "Quiet, present, the centre around which everything revolves — her voice is not heard directly in the retrospect but she is the steady presence against which every other happiness is measured. She has become what she has always been: the good angel of David's life, now fully acknowledged."
+    david_copperfield: "The final union of the narrator and the man — there is no longer any distance between the self who writes and the self who lived. David's voice in the closing pages is the voice of a complete human being: one who has passed through the entire arc of the bildungsroman and emerged on the far side, ready to close the book and rest."

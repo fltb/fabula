@@ -1,0 +1,29 @@
+id: ham
+name: "Ham Peggotty"
+type: supporting_character
+archetype: gentle_giant
+role: supporting
+description: "Mr Peggotty's nephew (his brother's son), raised in the Yarmouth boathouse alongside Little Emily, whom he loves and is engaged to marry. Ham is a big, strong, gentle young man — a fisherman and boat-builder by trade. He is simple, honest, and deeply attached to Emily. When she elopes with Steerforth, his heart is broken but he does not curse her. He continues working, living and eventually dies heroically when he attempts to rescue a man from a sinking ship in the great Yarmouth storm — the very ship carrying Steerforth. Ham perishes in the attempt, and his body is laid in the churchyard beside his drowned rival."
+appearance: "A large, broad-shouldered, muscular young man with a sunburnt face, a shock of hair, and a shy, gentle expression. He is awkward and bashful in manner but radiates physical strength and kindness. As a youth: a big, rough fisher boy with an open face."
+aliases:
+  - "Ham"
+  - "Ham Peggotty"
+gender: male
+age: "About fifteen to twenty-five"
+profession: "Fisherman / Boat-builder"
+traits:
+  - gentle
+  - strong
+  - loyal
+  - shy
+  - hardworking
+  - forgiving
+  - self_sacrificing
+initialState:
+  location: yarmouth
+  status: alive
+  condition: fisherman_in_uncle's_household
+  emotionalState: happy_contented
+  engagement_emily: betrothed
+voiceNotes: "Speaks with the Yarmouth dialect — simple, unpretentious, and warm. He is not articulate, but his few words come from a genuine, good heart. When deeply moved, he shows a surprising dignity and sorrow."
+backstory: "Orphaned son of Mr Peggotty's brother. Raised in the Yarmouth boathouse alongside Emily and Mrs Gummidge. He grows up to be a skilled boat-builder and fisherman. He is engaged to Emily, whom he has loved since childhood. When Steerforth seduces and elopes with Emily, Ham is devastated but does not seek revenge. He is last seen during the great storm off Yarmouth, when he insists on attempting to rescue a man from a wrecked ship, not knowing it is Steerforth being rescued. Both men drown — Steerforth on the wreck, Ham in the surf. They are buried in the same churchyard."

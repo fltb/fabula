@@ -1,0 +1,5 @@
+chapter: 1
+title: "红楼梦"
+summary: "以贾宝玉、林黛玉、薛宝钗的爱情悲剧为主线，描写贾王史薛四大家族由盛而衰的过程。前80回由曹雪芹所著。本项目选取20个关键回目作为叙事事件进行建模。"
+intent: "CORPUS-3: 20 selected scenes from 80 chapters. Full definitions (40 characters, 8 locations, 7 threads)."
+plannedScenes: 20

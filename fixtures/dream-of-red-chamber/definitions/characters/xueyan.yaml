@@ -1,0 +1,18 @@
+id: xueyan
+name: 雪雁
+type: supporting
+role: supporting
+description: 雪雁，首次出现于第3回，共提及19次。黛玉的丫鬟
+appearance: 年幼丫鬟，林黛玉从扬州带来的贴身小丫头。容貌清秀，身材瘦小。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 林家
+  status: alive
+  role: maid
+  age_stage: child
+voiceNotes: 言语稚嫩，对黛玉忠心。是黛玉从家带来的旧仆，在紫鹃来之前是黛玉最亲近的丫鬟。后由紫鹃接替了大丫鬟的位置。
+backstory: 林黛玉从扬州带来的小丫鬟，从小服侍黛玉。初到贾府时黛玉身边最亲近的人。后贾母派紫鹃（原名鹦哥）去服侍黛玉，雪雁便退居次位。
+knownSecrets: []

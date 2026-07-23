@@ -1,0 +1,95 @@
+event: E09
+title: "Good and Bad Angels"
+narrativeOrder: 9
+sceneType: linear
+storyTime: dora_meeting
+narrationTime: dora_meeting
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "ecstatic_infatuation"
+conflictType: "person_vs_self"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "David is invited to Mr Spenlow's house in Norwood and meets Mr Spenlow's daughter Dora — 'the bewitching little Dora' — and falls instantly, hopelessly in love. Dora is small, pretty, golden-curled, and utterly charming with her little dog Jip and her coquettish ways. David becomes obsessed, wandering around Norwood, writing passionate letters, and living in a dream of love. Meanwhile, he visits Agnes in Canterbury and writes to her about his passion; she listens with her usual gentle sympathy, though her own feelings are concealed. The chapter contrasts David's childish infatuation with Dora ('my bad angel' — his undisciplined heart) and his deep, unacknowledged reliance on Agnes ('my good angel')."
+preconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: london
+  - entity: david_copperfield
+    attribute: profession
+    value: proctors_apprentice
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: madly_in_love_with_dora
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: location
+    value: london
+    confidence: 1.0
+  - entity: dora_spenlow
+    attribute: location
+    value: norwood
+    confidence: 1.0
+  - entity: dora_spenlow
+    attribute: relationship_to_david
+    value: first_love
+    confidence: 1.0
+  - entity: agnes_wickfield
+    attribute: relationship_to_david
+    value: confidante
+    confidence: 1.0
+  - entity: agnes_wickfield
+    attribute: emotionalState
+    value: conceal_own_feelings
+    confidence: 0.9
+  - entity: mr_spenlow
+    attribute: location
+    value: norwood
+    confidence: 1.0
+threadProgress:
+  - thread: T2
+    advancement: "David meets Dora — the central romance of his early manhood begins. He falls instantly, irrationally, and completely in love with 'the bewitching little Dora.' This is the 'bad angel' of the chapter — the undisciplined heart that chooses beauty and charm over substance. Meanwhile, Agnes listens to David's raptures with gentle patience, concealing her own feelings. The triangle of Dora-Agnes-David is established."
+    progressAfter: 12
+    progressTotal: 100
+  - thread: T1
+    advancement: "David's 'undisciplined heart' is in full flower. His obsession with Dora — wandering Norwood, writing letters, neglecting his work — is the first serious test of his character. He is incapable of seeing that his love is a boy's fantasy rather than a man's commitment. The chapter explicitly names the moral struggle: 'good angel' vs 'bad angel.'"
+    progressAfter: 45
+    progressTotal: 100
+foreshadowing:
+  - id: dora_jip
+    hint: "Dora's little dog Jip is more than a pet — he is a symbol of Dora herself: small, pretty, pampered, jealous, and incapable of serious life. Jip's hostility to David and Dora's obsessive care for the dog foreshadow the limitations of their marriage — a household run by caprice rather than competence."
+    targetRevealChapter: 37
+    thread: T2
+  - id: agnes_silent_love
+    hint: "Agnes listens to David's raptures about Dora with perfect composure, but the narrative hints at a hidden depth of feeling — 'there was something in her gentle eyes that I could not read.' Her silent love, unspoken for years, is the quiet counterpoint to David's noisy infatuation."
+    targetRevealChapter: 60
+    thread: T2
+  - id: undisciplined_heart_named
+    hint: "The chapter title 'Good and Bad Angels' makes explicit the moral framework of the novel. David's 'undisciplined heart' — his tendency to fall in love with the beautiful rather than the good — is the central flaw he must overcome. This pattern will repeat until he learns to govern his affections."
+    targetRevealChapter: 45
+    thread: T1
+introduces:
+  - type: character
+    id: dora_spenlow
+    initialState:
+      location: norwood
+      status: daughter_of_mr_spenlow
+      condition: beautiful_coquettish
+      emotionalState: charming_vain
+  - type: location
+    id: norwood
+    initialState:
+      status: active
+styleGuidance:
+  tone: "ecstatic, feverish, self-mocking — adult David looking back on his youthful folly with affectionate derision"
+  targetWordCount: 800
+  atmosphere: "Mr Spenlow's house in Norwood — a sunny garden, a little dog barking, a girl with golden curls and a blue ribbon; the dusty precincts of Doctors' Commons where David cannot concentrate; the tranquil Canterbury household where Agnes listens with a still, sad patience; the streets of London at night, walked by a man on fire with love"
+  scenePacing: "invitation to Norwood (sudden, bright) → first sight of Dora (magical, breathless) → the obsession (accelerating, comic) → visit to Canterbury (poignant contrast) → return to London (resolution to win her)"
+  characterVoice:
+    narrator: "David narrates his first love with the passionate immediacy of the young man he was, filtered through the rueful humour of the adult he has become. The prose is at once feverish and self-aware — 'I was swallowed up in an abyss of love' — the narrator knows how absurd he was, but he does not mock the feeling itself."
+    dora_spenlow: "Light, playful, childish — she speaks in little exclamations, calls her dog Jip, and has no idea of the effect she produces. 'Oh, thank you, Mr Copperfield! How very kind!' — her speech is all surface charm, with no depth, which is both her attraction and her limitation."
+    agnes_wickfield: "Gentle, restrained, quietly penetrating — she listens to David's raptures with steady sympathy, but her questions reveal a deeper understanding of what he does not see. 'Are you quite sure, Trotwood, that you love her?' The question is gentle but searching."
+    mr_spenlow: "Formal, complacent, a little pompous — a proctor of the old school, more concerned with appearances than with his daughter's happiness. He speaks in measured legal periods, unaware of the romance blooming under his nose."

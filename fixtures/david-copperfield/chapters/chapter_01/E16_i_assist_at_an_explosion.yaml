@@ -1,0 +1,128 @@
+event: E16
+title: I Assist at an Explosion
+narrativeOrder: 16
+sceneType: linear
+storyTime: heep_exposure
+narrationTime: heep_exposure
+tense: past
+discourseMode: action
+arcPosition: climax
+emotionalValence: triumphant_justice
+conflictType: person_vs_person
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: 'David, Aunt Betsey, and Traddles travel to Canterbury on the appointed
+  day, joining Mr Micawber in Wickfield''s office for the long-awaited confrontation.
+  Micawber, in a magnificent written statement, systematically exposes Uriah Heep''s
+  frauds: forging Wickfield''s signature, manipulating accounts, and attempting to
+  force Agnes into marriage. Heep writhes and threatens, but the evidence is irrefutable
+  — Micawber has been secretly collecting it for months. Traddles, as the legal mind,
+  takes charge of the paperwork. Heep is compelled to return the stolen documents
+  and money, and to surrender his power over Wickfield''s firm. The episode is a triumph
+  of justice: Micawber''s finest hour, Traddles''s legal competence, and Heep''s deserved
+  humiliation.'
+preconditions:
+- entity: micawber
+  attribute: location
+  value: canterbury
+- entity: micawber
+  attribute: condition
+  value: has_evidence_against_heep
+expectedPostconditions:
+- entity: micawber
+  attribute: status
+  value: triumphant_exposer
+  confidence: 1.0
+- entity: uriah_heep
+  attribute: status
+  value: exposed_and_defeated
+  confidence: 1.0
+- entity: traddles
+  attribute: status
+  value: legal_agent_of_justice
+  confidence: 1.0
+- entity: wickfield
+  attribute: status
+  value: freed_from_heep
+  confidence: 1.0
+- entity: agnes_wickfield
+  attribute: status
+  value: freed_from_heep
+  confidence: 1.0
+- entity: david_copperfield
+  attribute: emotionalState
+  value: triumphant_vindication
+  confidence: 1.0
+threadProgress:
+- thread: T3
+  advancement: 'Heep''s schemes are exposed and defeated — the fraud, the forgery,
+    the manipulation of Wickfield, the attempt to coerce Agnes into marriage: all
+    are laid bare. Heep is stripped of his power and humiliated, the central villain
+    of the novel brought to justice.'
+  progressAfter: 95
+  progressTotal: 100
+- thread: T5
+  advancement: Micawber's moment of supreme triumph — his honour is restored, his
+    secret mission culminates in a rhetorical masterpiece. The man who has always
+    been a failure proves himself capable, resourceful, and morally decisive when
+    it truly matters. This is his finest hour.
+  progressAfter: 95
+  progressTotal: 100
+- thread: T1
+  advancement: David sees justice done; his friends triumph over the forces that have
+    oppressed the Wickfield family and ruined Aunt Betsey. The boy who once ran from
+    Murdstone now stands as a man of judgement among his allies, witnessing the defeat
+    of evil.
+  progressAfter: 75
+  progressTotal: 100
+foreshadowing:
+- id: micawber_australia
+  hint: With his mission accomplished and his debts still pressing, Micawber's future
+    in England remains untenable — the exposure of Heep, magnificent as it is, does
+    not solve the Micawbers' perennial financial problems. Emigration beckons as the
+    only path forward.
+  targetRevealChapter: 57
+  thread: T5
+- id: heep_prison
+  hint: Though Heep is defeated and forced to surrender his ill-gotten gains, his
+    full legal punishment — imprisonment — lies in the future. The worm will not be
+    crushed, only contained.
+  targetRevealChapter: 61
+  thread: T3
+introduces: []
+styleGuidance:
+  tone: dramatic, triumphant, with an undertone of theatrical release — the long-built
+    tension of the Heep plot explodes in a scene of rhetorical fireworks and moral
+    vindication
+  targetWordCount: 1200
+  atmosphere: 'the close, dusty office of Wickfield & Heep in Canterbury — morning
+    light through the windows, the shelves of grim legal books, the smell of old paper.
+    Every character is wound tight: Micawber trembling with the magnitude of his moment,
+    Heep''s eyes narrowing in calculation, Traddles quietly arranging papers, Aunt
+    Betsey''s stony satisfaction. The room becomes a stage for the unmasking.'
+  scenePacing: arrival in Canterbury (tense expectancy) → assembly in Wickfield's
+    office (charged stillness) → Micawber's written statement (building crescendo)
+    → the reading of evidence (relentless, methodical) → Heep's reactions (writhing,
+    threatening, collapsing) → Traddles takes legal charge (calm competence) → the
+    settlement (justice done) → aftermath (release and exultation)
+  characterVoice:
+    narrator: Adult David reporting a scene of rare, unequivocal triumph — the prose
+      rises to the occasion, matching Micawber's rhetoric with its own urgency. David
+      stands as both participant and witness, his voice carrying the thrill of justice
+      finally served.
+    micawber: At his most magnificent — his written statement is the crowning achievement
+      of his rhetorical gift, all his grandiloquence pressed into the service of truth.
+      He speaks with the authority of a man who has endured humiliation and emerged
+      with evidence. His voice is tremulous with emotion but absolutely clear.
+    uriah_heep: His ingratiating 'umble' manner drops away piece by piece as the evidence
+      mounts. He begins with false innocence and protests of wounded virtue, progresses
+      to threats and bluster, and ends in sullen, defeated silence. The underlying
+      ugliness that his humility has always concealed is finally exposed.
+    traddles: Quiet, methodical, unshakeable — the contrast with Micawber's drama
+      is deliberate. Traddles speaks in short, precise sentences about bonds, accounts,
+      and legal remedies. His competence provides the sturdy framework for Micawber's
+      theatrical revelation.
+    betsey_trotwood: Laconic, severe, and deeply satisfied — she says little during
+      the confrontation but her presence is felt. When she does speak, it is to deliver
+      a dry, devastating remark that cuts through Heep's prevarications.

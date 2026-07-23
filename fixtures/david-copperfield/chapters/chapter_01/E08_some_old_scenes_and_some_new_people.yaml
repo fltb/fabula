@@ -1,0 +1,95 @@
+event: E08
+title: "Some Old Scenes, and Some New People"
+narrativeOrder: 8
+sceneType: linear
+storyTime: london_career
+narrationTime: london_career
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "warm_then_ominous"
+conflictType: "person_vs_person"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "David brings his charismatic friend Steerforth to Yarmouth for a visit. Steerforth charms everyone — the Peggotty family, Mr Barkis, Little Emily, and especially David, who basks in his friend's admiration of his humble origins. Steerforth commissions a boat from Mr Peggotty, naming it the 'Little Emily.' But beneath the surface, Steerforth is laying a fatal fascination on Emily. David, blinded by his hero-worship, notices nothing amiss. The chapter also introduces Martha Endell, a girl of questionable reputation who is shunned by Yarmouth society, and the sharp, eccentric Miss Mowcher, a little hairdresser who knows everyone's secrets."
+preconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: yarmouth
+  - entity: steerforth
+    attribute: location
+    value: yarmouth
+expectedPostconditions:
+  - entity: steerforth
+    attribute: relationship_to_emily
+    value: begins_seduction
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: location
+    value: yarmouth
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: awareness_of_steerforth
+    value: still_blind
+    confidence: 1.0
+  - entity: emily
+    attribute: emotionalState
+    value: flattered_and_fascinated
+    confidence: 0.9
+  - entity: dan_peggotty
+    attribute: location
+    value: yarmouth
+    confidence: 1.0
+  - entity: ham
+    attribute: location
+    value: yarmouth
+    confidence: 1.0
+threadProgress:
+  - thread: T4
+    advancement: "Steerforth's seduction of Emily begins in earnest. He charms the entire Peggotty family, commissions the boat 'Little Emily,' and fixes his fascination on the beautiful girl. Dan Peggotty is utterly taken in, Ham is quietly watchful, and David sees nothing but his friend's generosity. The trap is set in the warmest of settings."
+    progressAfter: 15
+    progressTotal: 100
+  - thread: T1
+    advancement: "David's blindness to Steerforth's true character is at its most complete. His hero-worship prevents him from seeing what the reader suspects: that Steerforth's interest in Yarmouth and in Emily is predatory. This marks a critical failure of David's judgment — his 'undisciplined heart' extends to his choice of friends."
+    progressAfter: 40
+    progressTotal: 100
+foreshadowing:
+  - id: the_little_emily_boat
+    hint: "Steerforth's commissioning and naming of the boat 'Little Emily' is an act of possession disguised as generosity. The name itself is a claim: she is now 'his' Little Emily in more ways than one. The boat symbolizes the vessel of her ruin."
+    targetRevealChapter: 31
+    thread: T4
+  - id: martha_watching
+    hint: "Martha Endell, the shunned girl of the town, watches Emily's growing fascination with Steerforth with a knowing, haunted look. She knows what ruin looks like — and she will reappear at the critical moment of Emily's fall."
+    targetRevealChapter: 40
+    thread: T4
+  - id: miss_mowchers_knowledge
+    hint: "Miss Mowcher, the sharp-eyed little hairdresser, knows every secret in Yarmouth society. Her garrulous, gossipy manner masks a shrewd understanding of human nature. She will later play a crucial role in unmasking Steerforth's treachery."
+    targetRevealChapter: 32
+    thread: T4
+introduces:
+  - type: character
+    id: martha_endell
+    initialState:
+      location: yarmouth
+      status: outcast
+      condition: ruined_reputation
+      emotionalState: desperate_watching
+  - type: character
+    id: miss_mowcher
+    initialState:
+      location: yarmouth
+      status: hairdresser_and_gossip
+      condition: eccentric_knowledgeable
+      emotionalState: sharp_garrulous
+styleGuidance:
+  tone: "warm and affectionate at first, then increasingly ominous — the gaiety of the Yarmouth scenes is undercut by a growing sense of danger"
+  targetWordCount: 800
+  atmosphere: "the Peggotty boat-house in Yarmouth — warm firelight, the smell of salt and tar, the cosy interior of the converted boat where the Peggotty family lives; the wide beach and the grey sea; Steerforth's handsome ease among humble folk; Emily's bright eyes and restless spirit; Martha lurking in the shadows of the town"
+  scenePacing: "journey to Yarmouth (brisk) → Steerforth at the Peggotty's (warm, comic, charming) → the boat commission (ominous beneath the surface) → Martha and Miss Mowcher (introducing counterpoints) → departure (unease unexpressed)"
+  characterVoice:
+    narrator: "David is at his most trusting and least perceptive — he basks in Steerforth's reflected glory, narrating the Yarmouth visit with boyish enthusiasm. The adult narrator allows the warmth of the memory to stand, but the reader feels the shadow the young David never saw."
+    steerforth: "Effortlessly charming, condescending disguised as warmth — he talks to the Peggotty family with a kind of amused patronage that they mistake for respect. To Emily he is tender, admiring, and infinitely dangerous — 'My little wife, perhaps!' he says of the boat, and the words are more true than he admits."
+    emily: "Bright, coquettish, dangerously ambitious — she is flattered by the attention of a gentleman. Her speech is full of restless longing for a life beyond Yarmouth, and Steerforth seems to offer the key."
+    dan_peggotty: "Hospitable, generous, utterly unsuspecting — his warm 'Welcome, sir!' to Steerforth is the embrace of a good man who cannot imagine evil."
+    miss_mowcher: "Garrulous, knowing, theatrical — she talks in a torrent of observation and innuendo, her small size and comic manner belying a sharp intelligence that misses nothing."

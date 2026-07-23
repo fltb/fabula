@@ -1,0 +1,111 @@
+event: E02
+title: "I Fall Into Disgrace"
+narrativeOrder: 2
+sceneType: linear
+storyTime: murdstone_marriage
+narrationTime: murdstone_marriage
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "fear_resentment"
+conflictType: "person_vs_person"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "Mr Murdstone marries David's gentle mother Clara, and the happy Blunderstone childhood ends. Murdstone's stern sister Jane arrives to run the household with cold efficiency. David struggles under the new regime of 'firmness' — the Murdstones' favourite word for their system of harsh discipline. When David falls behind in his lessons under Mr Murdstone's brutal teaching methods, he is beaten. In desperation, David bites Mr Murdstone's hand and is sent away to Salem House school as punishment. Before he leaves, Peggotty takes David to Yarmouth to visit her brother's boathouse family, giving him a last taste of happiness before his ordeal."
+preconditions:
+  - entity: clara_copperfield
+    attribute: status
+    value: married_to_murdstone
+  - entity: david_copperfield
+    attribute: location
+    value: blunderstone
+  - entity: david_copperfield
+    attribute: condition
+    value: child
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: salem_house
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: punished_banished
+    confidence: 1.0
+  - entity: clara_copperfield
+    attribute: emotionalState
+    narrativeHint: "Clara is torn between her love for David and her fear of Murdstone. She acquiesces to the punishment, too weak to protect her son. This passivity will haunt her until her death."
+    confidence: 1.0
+  - entity: murdstone
+    attribute: status
+    value: head_of_household
+    confidence: 1.0
+  - entity: peggotty
+    attribute: emotionalState
+    value: grieving_for_david
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "David's fall from grace — the idyllic childhood shattered by Murdstone's cruelty. The beating, the biting, and the exile to Salem House mark David's first major reversal and introduce the pattern of suffering that will define his early life."
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T4
+    advancement: "David first visits Yarmouth and meets the Peggotty family in their boathouse home — Little Emily, Mr Peggotty, Ham, and Mrs Gummidge. This visit plants the seed of the Yarmouth connection that will bear tragic fruit with Steerforth's arrival."
+    progressAfter: 5
+    progressTotal: 100
+foreshadowing:
+  - id: yarmouth_doom
+    hint: "David's happy visit to Yarmouth — the boathouse, the sea, little Emily — is a last idyll before the storm. The sea's wildness and the fragile happiness of the Peggotty household foreshadow the tragedy that will engulf Emily and Steerforth."
+    targetRevealChapter: 31
+    thread: T4
+  - id: clara_weakness
+    hint: "Clara's failure to protect David from Murdstone — her tearful compliance — foreshadows her inability to survive the Murdstone regime. She is too gentle for the world she has married into."
+    targetRevealChapter: 10
+    thread: T1
+introduces:
+  - type: location
+    id: yarmouth
+    initialState:
+      status: active
+  - type: location
+    id: salem_house
+    initialState:
+      status: active
+  - type: character
+    id: murdstone
+    initialState:
+      location: blunderstone
+      status: stepfather
+      condition: married_to_clara
+      emotionalState: cold_authoritarian
+  - type: character
+    id: emily
+    initialState:
+      location: yarmouth
+      status: child
+      condition: orphaned_niece_of_dan
+      emotionalState: bright_lively
+  - type: character
+    id: dan_peggotty
+    initialState:
+      location: yarmouth
+      status: fisherman
+      condition: head_of_boathouse_household
+      emotionalState: warm_generous
+  - type: character
+    id: ham
+    initialState:
+      location: yarmouth
+      status: nephew_of_dan
+      condition: young_fisherman
+      emotionalState: kind_sturdy
+styleGuidance:
+  tone: "sombre, tense, with pockets of warmth in the Yarmouth interlude"
+  targetWordCount: 800
+  atmosphere: "the darkening of Blunderstone — Murdstone's black presence and Jane's cold efficiency draining the warmth from the Rookery, contrasted with the salty vitality of the Yarmouth boathouse"
+  scenePacing: "marriage (swift) → the regime of firmness (building dread) → the beating and biting (violent climax) → Yarmouth interlude (warm reprieve) → exile to school (sombre close)"
+  characterVoice:
+    narrator: "David as a child experiencing these events, coloured by adult David's retrospective anger — the indignation is barely masked by the measured prose"
+    murdstone: "Cold, deliberate, every word a weapon — 'firmness' is his mantra, used to justify cruelty with moral authority"
+    clara_copperfield: "Diminished, tearful, pleading — her voice grows thinner under Murdstone's shadow, her protests half-hearted"
+    peggotty: "Warmth and loyalty — her voice is the last remnant of the old happy world, comforting David with nicknames and embraces"

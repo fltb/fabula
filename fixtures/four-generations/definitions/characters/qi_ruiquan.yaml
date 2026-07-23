@@ -1,0 +1,28 @@
+id: qi_ruiquan
+name: 祁瑞全
+type: hero
+archetype: young_patriot
+role: supporting
+description: 祁家三孙，学生。北平沦陷后，他是祁家第一个也是唯一一个毅然出走、奔赴国难的人。他悄悄离家，加入了抗日队伍。后来秘密潜回北平执行任务，与大哥瑞宣重逢，鼓励瑞宣参加地下抗日工作。他是全书的光明与希望。
+appearance: 年轻结实，目光坚定，行动敏捷。
+aliases:
+- 瑞全
+- 老三
+gender: 男
+age: 约二十岁
+profession: 学生→抗日战士
+traits:
+- brave
+- determined
+- patriotic
+- decisive
+- independent
+initialState:
+  location: loc_qijia
+  status: alive
+  condition: student
+  emotionalState: determined_to_fight
+  political_stance: resistance
+backstory: 在北平上大学，七七事变后不顾家人反对，悄然离开北平奔赴抗日战场。
+knownSecrets:
+- 秘密加入抗日组织

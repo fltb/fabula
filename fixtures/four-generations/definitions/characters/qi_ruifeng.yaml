@@ -1,0 +1,29 @@
+id: qi_ruifeng
+name: 祁瑞丰
+type: collaborator
+archetype: opportunist
+role: antagonist
+description: 祁家二孙，瑞宣的弟弟。他浮浅、无聊、爱虚荣，在小学当庶务。北平沦陷后，他先是巴结蓝东阳参加庆祝保定陷落的游行，又投靠冠晓荷，最后靠太太的关系当上了教育局庶务科科长。他毫无国家观念，只在乎吃喝玩乐。瑞宣多次劝他不要当汉奸，他全当耳旁风。他是祁家的反面——没骨气、没担当、没良心。
+appearance: 小个子，小干脸，常穿中山装或马褂，喜欢打扮。
+aliases:
+- 瑞丰
+- 老二
+gender: 男
+age: 约二十六七岁
+profession: 教育局庶务科科长（原小学庶务）
+traits:
+- superficial
+- vain
+- cowardly
+- greedy
+- snobbish
+- boring
+initialState:
+  location: loc_qijia
+  status: alive
+  condition: working_as_clerk
+  emotionalState: smug_and_ambitious
+  political_stance: collaborator
+backstory: 从小被惯坏，读书不成，靠关系在小学做庶务。娶了个胖太太，被太太牵着鼻子走。
+knownSecrets:
+- 曾告诉蓝东阳老三逃出北平的事

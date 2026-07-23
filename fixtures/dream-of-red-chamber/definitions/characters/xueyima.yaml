@@ -1,0 +1,17 @@
+id: xueyima
+name: 薛姨妈
+type: supporting
+role: supporting
+description: 薛姨妈，首次出现于第4回，共提及58次。
+appearance: 中年妇人，慈眉善目，富贵气象。穿戴体面，举止大方。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 梨香院
+  status: alive
+  age_stage: middle_aged
+voiceNotes: 说话慈祥和气，待人宽厚。经常接济他人，言语间充满母性的温柔。在贾母面前恭谨有礼，在晚辈面前和蔼可亲。
+backstory: 金陵薛家之妻，薛蟠、薛宝钗之母。丧夫后带着子女投奔贾府，寄居梨香院。为人宽厚仁慈，疼爱子女，对宝钗的婚姻寄予厚望。
+knownSecrets: []

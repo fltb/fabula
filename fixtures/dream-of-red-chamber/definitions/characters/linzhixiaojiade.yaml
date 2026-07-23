@@ -1,0 +1,18 @@
+id: linzhixiaojiade
+name: 林之孝家的
+type: supporting
+role: supporting
+description: 林之孝家的，首次出现于第18回，共提及16次。贾府管家媳妇
+appearance: 中年仆妇，荣国府管家媳妇。穿着干净利索，行事干练。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  role: servant
+  age_stage: middle_aged
+voiceNotes: 言语精明干练，在贾府中掌管事务。对下人有威仪，对上恭谨。
+backstory: 荣国府的管家媳妇，丈夫林之孝是荣国府的大管家。负责管理贾府部分日常事务，在抄检大观园事件中有参与。女儿小红（林红玉）在怡红院当差。
+knownSecrets: []

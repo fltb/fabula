@@ -1,0 +1,94 @@
+event: E03
+title: 汉奸得意，冠家兴旺
+narrativeOrder: 3
+sceneType: linear
+storyTime: fall_of_beiping
+narrationTime: fall_of_beiping
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: contemptuous_bitter
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 与祁家的愁云惨雾相反，冠家喜气洋洋。冠晓荷认为改朝换代正是活动的好时机，大赤包更是野心勃勃。他们商量着如何巴结日本人，第一步就是出卖钱默吟——冠晓荷知道钱家二儿子仲石摔死了一车日本兵。他决定向日本人告密，作为进身之阶。大赤包热烈支持，认为这是"立功"的好机会。
+preconditions:
+- entity: guan_xiaohe
+  attribute: location
+  value: loc_guanjia
+- entity: guan_xiaohe
+  attribute: emotionalState
+  value: ambitious_to_collaborate
+- entity: da_chibao
+  attribute: location
+  value: loc_guanjia
+expectedPostconditions:
+- entity: guan_xiaohe
+  attribute: emotionalState
+  narrativeHint: 冠晓荷得意忘形，以为改朝换代是他飞黄腾达的机会。他完全不顾廉耻，只想巴结日本人。
+  confidence: 1.0
+- entity: guan_xiaohe
+  attribute: knowledge
+  value: plans_to_betray_qian
+  confidence: 1.0
+- entity: da_chibao
+  attribute: emotionalState
+  value: ambitious_and_greedy
+  confidence: 1.0
+- entity: da_chibao
+  attribute: role
+  value: encouraging_husband_to_collaborate
+  confidence: 1.0
+threadProgress:
+- thread: T4
+  advancement: 冠晓荷决定告密，汉奸的丑态开始暴露。他以为出卖同胞就能换来荣华富贵。
+  progressAfter: 15
+  progressTotal: 100
+introduces:
+- type: character
+  id: guan_xiaohe
+  initialState:
+    location: loc_guanjia
+    status: alive
+    condition: idle
+    emotionalState: ambitious_to_collaborate
+- type: character
+  id: da_chibao
+  initialState:
+    location: loc_guanjia
+    status: alive
+    condition: idle_but_ambitious
+    emotionalState: impatient_for_power
+- type: character
+  id: guan_gaodi
+  initialState:
+    location: loc_guanjia
+    status: alive
+    condition: unmarried
+    emotionalState: discontent_with_family
+- type: character
+  id: guan_zhaodi
+  initialState:
+    location: loc_guanjia
+    status: alive
+    condition: unmarried
+    emotionalState: carefree
+- type: character
+  id: you_tongfang
+  initialState:
+    location: loc_guanjia
+    status: alive
+    condition: concubine
+    emotionalState: resentful_but_resigned
+- type: location
+  id: loc_guanjia
+  initialState:
+    status: active
+styleGuidance:
+  tone: 讽刺、沉重、愤怒
+  targetWordCount: 1200
+  atmosphere: 冠家客厅，大赤包高声谈笑，冠晓荷殷勤献媚。与隔壁钱家的清寒形成鲜明对比。
+  scenePacing: 冠家欢腾→讨论出卖→决定告密
+  characterVoice:
+    omniscient: 第三人称全知，以讽刺的笔调描写汉奸的丑态

@@ -1,0 +1,38 @@
+event: E2
+title: 葫芦庙门子献护官符 雨村徇私断薛蟠案
+narrativeOrder: 2
+sceneType: linear
+storyTime: story_start
+narrationTime: story_start
+tense: past
+discourseMode: exposition
+arcPosition: opening
+emotionalValence: uneasy
+conflictType: person_vs_fate
+pov:
+  character: narrator_omniscient
+  type: omniscient
+sceneBrief: 雨村补授应天府，一下马便遇人命官司：冯渊与薛蟠争买一婢，薛蟠倚势将冯渊打死。雨村欲发签拿人，案边门子使眼色制止，退堂密谈。门子原是葫芦庙小沙弥，献上本省护官符，揭示贾史王薛四大家族联络有亲、一损俱损一荣俱荣之势。门子细说被卖之婢乃甄士隐之女英莲，自幼被拐，今落入薛蟠之手；又劝雨村顺水推舟徇私了案以讨好贾府王府。雨村当初得贾府之力补缺，虽初言不可因私废法，终在门子劝诱下动摇。
+preconditions: []
+expectedPostconditions: []
+threadProgress: []
+foreshadowing:
+  - id: fs_auto
+    hint: 英莲入薛家后命运多舛
+    thread: T1
+    targetRevealChapter: 80
+  - id: fs_auto
+    hint: 薛蟠上京将住入贾府，引出薛宝钗
+    thread: T1
+    targetRevealChapter: 80
+  - id: fs_auto
+    hint: 四大家族一损俱损，暗示日后衰败同命
+    thread: T1
+    targetRevealChapter: 80
+introduces: []
+styleGuidance:
+  tone: 世态讽刺，官场黑暗，冷眼旁观中含悲悯
+  targetWordCount: 600
+  atmosphere: 官署密室，阴谋密语，权势压人
+  scenePacing: 先急后缓，堂审急而密室谈缓，层层揭示
+  characterVoice: {}

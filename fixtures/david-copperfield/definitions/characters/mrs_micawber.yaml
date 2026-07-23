@@ -1,0 +1,28 @@
+id: mrs_micawber
+name: "Emma Micawber"
+type: supporting_character
+archetype: loyal_wife
+role: supporting
+description: "Mr Micawber's devoted wife, who stands by her husband through every financial disaster with unfailing loyalty and rhetorical declaration that she 'never will desert Mr Micawber.' She is a thin, faded woman with an air of genteel suffering, given to making speeches about her family (the 'Kinolson family' from whom she is estranged) and her determination to stand by her husband through everything. She manages (or fails to manage) their domestic affairs with a kind of heroic incompetence, always producing tea and toast in crisis and maintaining the fiction of gentility."
+appearance: "A thin, faded woman, slightly shabby but always attempting neatness. She wears a lace cap and a tippet. She has a high nose, a somewhat pinched expression, and eyes that perpetually hint at noble suffering nobly borne."
+aliases:
+  - "Mrs Micawber"
+  - "Emma Micawber"
+gender: female
+age: "About forty"
+profession: "Gentlewoman (married)"
+traits:
+  - loyal
+  - dramatic
+  - genteel
+  - devoted
+  - rhetorical
+  - loving
+  - impractical
+initialState:
+  location: london
+  status: alive
+  condition: wife_in_reduced_circumstances
+  emotionalState: hopeful_despair
+voiceNotes: "Given to elaborate, formal declarations of her intents and sentiments, especially the refrain that she 'never will desert Mr Micawber.' She speaks of her family (the Kinolsons) with a reverence not shared by her listeners. She is both absurd and genuinely noble in her devotion."
+backstory: "Married Wilkins Micawber against her family's wishes. The Kinolsen family (her people, of Devonshire) have cut her off. She has borne Mr Micawber many children and manages their households through an unending series of financial crises with an invincible faith that something will turn up. She emigrates to Australia with Mr Micawber and their children."

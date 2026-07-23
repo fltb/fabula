@@ -1,0 +1,55 @@
+event: E14
+title: 小崔痛打日本兵
+narrativeOrder: 14
+sceneType: linear
+storyTime: fall_of_shanghai
+narrationTime: fall_of_shanghai
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: mixed_patriotic_irony
+conflictType: person_vs_person
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 小崔拉了一个日本兵，到了背静处那兵不给钱就想跑。小崔火冒三丈，追上去把那兵打倒在地——他早就想打日本人了！可是打了几拳之后，那兵突然用中国话告饶，原来是个东北人，从小受日本教育长大的。小崔愣住了，心里说不出的恶心。他把这事告诉了瑞宣，瑞宣叹道：老一辈的东北人永远是中国人，但在日本教育下长大的孩子已经变了。小崔问：要是北平老让日本人占着，过几年咱们的孩子也会变吗？瑞宣听了浑身发冷。
+preconditions:
+- entity: xiao_cui
+  attribute: location
+  value: loc_beiping
+- entity: xiao_cui
+  attribute: emotionalState
+  value: angry_and_frustrated
+expectedPostconditions:
+- entity: xiao_cui
+  attribute: emotionalState
+  narrativeHint: 小崔打了日本兵却并不痛快——因为那是个被日本教育洗脑的东北人。他第一次意识到问题的复杂性。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: knowledge
+  value: heard_cui_story
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 瑞宣被小崔的问题深深震动：要是北平的孩子也受日本教育长大，他们会变成什么样？
+  confidence: 1.0
+- entity: xiao_cui
+  attribute: status
+  value: active
+  confidence: 1.0
+threadProgress:
+- thread: T5
+  advancement: 小崔的举动展现了底层市民的朴素爱国心。但他也发现了一个可怕的问题——教育可以改变一个人的民族认同。
+  progressAfter: 35
+  progressTotal: 100
+- thread: T2
+  advancement: 瑞宣从小崔的故事中看到了更深层的恐惧——亡国灭种不只是肉体上的。
+  progressAfter: 45
+  progressTotal: 100
+styleGuidance:
+  tone: 激烈、悲愤、发人深省
+  targetWordCount: 1200
+  atmosphere: 北平背静的胡同，秋风吹起尘土。小崔把车放下，擦了把汗。
+  scenePacing: 拉车→不打不行→痛打→发现真相→与瑞宣的对话
+  characterVoice:
+    omniscient: 第三人称全知，通过小崔与瑞宣的对话引出深层思考

@@ -1,0 +1,51 @@
+event: E18
+title: 饥荒降临，小羊圈
+narrativeOrder: 18
+sceneType: linear
+storyTime: famine_winter
+narrationTime: famine_winter
+tense: past
+discourseMode: description
+arcPosition: falling
+emotionalValence: starving_desperate
+conflictType: person_vs_nature
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 战争持续一年多，北平的物资已经枯竭。日本人推行配给制，粮证一次有效，过期作废。市民们拿着粮证去领粮，领到的却是掺了沙子和木屑的"共和面"。李四爷帮忙办粮证，挨了不少冤枉骂。祁家已经断粮多日，只能喝稀粥配咸菜。小崔和孙七这些底层市民更是朝不保夕。程长顺的外婆每天只吃一顿饭，把省下的给外孙。小崔媳妇饿得面黄肌瘦。祁老人再也不说"三个月准保平安"了。
+preconditions:
+- entity: qi_ruixuan
+  attribute: location
+  value: loc_qijia
+- entity: qi_ruixuan
+  attribute: financial
+  value: desperate
+expectedPostconditions:
+- entity: sr_qi
+  attribute: emotionalState
+  narrativeHint: 祁老人再也不说"三个月准保平安"了。饥荒让他明白了——战争是实实在在的苦难，不是忍一忍就能过去的。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 瑞宣看着一家老小挨饿，心中如刀割。他开始怀疑自己坚持留在北平是否正确。
+  confidence: 1.0
+- entity: sr_qi
+  attribute: health
+  value: declining
+  confidence: 0.9
+threadProgress:
+- thread: T5
+  advancement: 饥荒降临，底层市民的生存陷入绝境。小崔、孙七、程长顺这些人连饭都吃不上了。
+  progressAfter: 50
+  progressTotal: 100
+- thread: T2
+  advancement: 瑞宣面对饥荒一筹莫展。他想出去做事挣钱，但又不愿与日本人合作——这是一条越来越窄的路。
+  progressAfter: 65
+  progressTotal: 100
+styleGuidance:
+  tone: 绝望、饥饿、挣扎求生
+  targetWordCount: 1200
+  atmosphere: 北平的冬天格外寒冷。粮店门前排着长队，人们穿着破棉袄在寒风中瑟瑟发抖。共和面里掺着沙子。
+  scenePacing: 配给制推行→排队领粮→共和面的真相→各家的困境
+  characterVoice:
+    omniscient: 第三人称全知，以群像的方式展现饥荒下各家的困境

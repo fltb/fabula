@@ -1,0 +1,18 @@
+id: yinger
+name: 莺儿
+type: supporting
+role: supporting
+description: 莺儿，首次出现于第7回，共提及26次。宝钗的丫鬟
+appearance: 年轻丫鬟，容貌娇俏。薛宝钗的贴身丫鬟，打扮得体。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 梨香院
+  status: alive
+  role: maid
+  age_stage: young_adult
+voiceNotes: 言语爽快活泼，心灵手巧。在宝钗面前侍奉殷勤，在外人面前维护宝钗。善于编织各色络子，和宝玉说话时也比较随意。
+backstory: 薛宝钗的贴身丫鬟。心灵手巧，善编花络。随薛家入住贾府后与宝玉房中丫鬟熟络。为人忠心，一心服侍宝钗。
+knownSecrets: []

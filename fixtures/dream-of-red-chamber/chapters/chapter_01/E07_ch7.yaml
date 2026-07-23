@@ -1,0 +1,38 @@
+event: E7
+title: 耗子精故事与李嬷嬷骂袭人
+narrativeOrder: 7
+sceneType: linear
+pov:
+  character: narrator_omniscient
+  type: omniscient
+sceneBrief: 宝玉在黛玉房中讲耗子精偷香芋的故事戏弄黛玉，宝钗随后走来讽刺宝玉忘典。此时宝玉房中传来吵嚷，李嬷嬷正拄拐大骂袭人，宝钗劝宝玉让步。凤姐在上房听见后面喧闹，便知是李嬷嬷老病发作，正要赶来排解。
+preconditions: []
+expectedPostconditions: []
+threadProgress:
+  - thread: T4
+    advancement: 宝玉黛玉在房中嬉闹互嘲，情感越发亲昵无间
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T7
+    advancement: 李嬷嬷借骂袭人抒发对丫鬟的不满，显露贾府主仆间的积怨
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T2
+    advancement: 凤姐察觉后院喧闹，准备出面干预平息事态
+    progressAfter: 10
+    progressTotal: 100
+foreshadowing: []
+introduces: []
+styleGuidance:
+  tone: 戏谑与喧闹交织
+  targetWordCount: 600
+  atmosphere: 闺房闲趣与下人纠纷的转换
+  scenePacing: 由轻松转入急促
+  characterVoice: {}
+tense: past
+discourseMode: action
+arcPosition: opening
+emotionalValence: past
+conflictType: past
+storyTime: past
+narrationTime: past

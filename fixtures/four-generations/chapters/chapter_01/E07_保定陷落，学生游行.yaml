@@ -1,0 +1,54 @@
+event: E07
+title: 保定陷落，学生游行
+narrativeOrder: 7
+sceneType: linear
+storyTime: celebration_baoding
+narrationTime: celebration_baoding
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: humiliation_and_anger
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 保定陷落的消息传来，日本人逼着学生和市民游行庆祝。天安门前升起了庆祝的大气球。瑞宣拒绝参加游行，陷入辞职还是忍辱教书的挣扎。瑞丰却积极得很，穿上中山装做了学生领队。在天安门广场上，学生们低着头，一声不出，默默地走着——他们用沉默表达着最后的抵抗。瑞丰一开始还喊口令，后来也低下了头。
+preconditions:
+- entity: qi_ruixuan
+  attribute: location
+  value: loc_qijia
+- entity: qi_ruifeng
+  attribute: location
+  value: loc_qijia
+- entity: qi_ruifeng
+  attribute: emotionalState
+  value: smug_and_ambitious
+expectedPostconditions:
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 瑞宣拒绝参加游行，内心却更加苦闷。他意识到沉默也是一种武器，但也担心学生的面孔会越来越厚。
+  confidence: 1.0
+- entity: qi_ruifeng
+  attribute: emotionalState
+  narrativeHint: 瑞丰参加了游行，回来后反而得意洋洋，认为这是"中日亲善"的开始。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: knowledge
+  value: students_forced_to_parade
+  confidence: 1.0
+threadProgress:
+- thread: T2
+  advancement: 瑞宣在天安门前学生的沉默中看到了希望，但也担心麻木会侵蚀人心。
+  progressAfter: 25
+  progressTotal: 100
+- thread: T4
+  advancement: 瑞丰在汉奸的路上越走越远——他穿着中山装为日本人领队游行。
+  progressAfter: 25
+  progressTotal: 100
+styleGuidance:
+  tone: 压抑、羞辱、无声的愤怒
+  targetWordCount: 1200
+  atmosphere: 天安门广场前，学生们低头不语。秋日晴空下，大红的气球高高飘起，上面写着"庆祝保定陷落"。
+  scenePacing: 消息传来→瑞宣的挣扎→游行的沉默→瑞丰的得意
+  characterVoice:
+    omniscient: 第三人称全知，对比瑞宣与瑞丰的不同反应

@@ -1,0 +1,19 @@
+id: zhouruijiade
+name: 周瑞家的
+type: supporting
+role: supporting
+description: 周瑞家的，首次出现于第6回，共提及16次。王夫人的陪房
+appearance: 中年仆妇，王夫人的陪房。穿戴整洁，行事利落。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  role: servant
+  age_stage: middle_aged
+voiceNotes: 言语老练世故，在贾府中走动办事。替王夫人传话送东西，对各房各院的底细都清楚。
+backstory: 王夫人的陪房（嫁妆仆人），丈夫周瑞是荣国府的管家。常替王夫人各处传话办事，曾送宫花给各房小姐。在贾府中是个比较得力的女仆。
+knownSecrets:
+- 知道很多贾府各房的内情

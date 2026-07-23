@@ -1,0 +1,27 @@
+id: yunmei
+name: 韵梅
+type: virtuous_wife
+archetype: traditional_housewife
+role: supporting
+description: 瑞宣的妻子，小顺儿和妞子的母亲。她在祁家被称为"小顺儿的妈"，是个典型的北平贤惠媳妇。她没受过多少教育，但有实际的生活智慧。她伺候老人、管教孩子、操持家务，在战乱中撑起祁家的日常生活。她不懂什么国家大事，却知道怎么省下一把米、怎么哄老人们开心。瑞宣的苦闷她不完全理解，但总是默默支持。
+appearance: 大眼睛，身材适中，梳髻，穿蓝布褂子。做事利索。
+aliases:
+- 小顺儿的妈
+- 小顺儿妈
+gender: 女
+age: 约二十七八岁
+profession: 家庭主妇
+traits:
+- diligent
+- practical
+- patient
+- loyal
+- kind
+- shrewd
+initialState:
+  location: loc_qijia
+  status: alive
+  condition: healthy
+  emotionalState: worried_but_steadfast
+backstory: 娘家是普通北平市民，嫁到祁家后一心一意操持家务。她知道自己嫁了个有学问的丈夫，虽然两人之间有一层薄纱，但她用"尽责"来保障自己的地位。
+knownSecrets: []

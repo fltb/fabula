@@ -1,0 +1,64 @@
+event: E02
+title: 瑞全出走，奔赴国难
+narrativeOrder: 2
+sceneType: linear
+storyTime: fall_of_beiping
+narrationTime: fall_of_beiping
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: resolute_bittersweet
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 瑞全再也待不住了。他悄悄收拾了简单的行李，把书籍托付给大哥瑞宣，在一个清晨不辞而别。他吻了吻熟睡的小顺儿和妞子，看了一眼院中的枣树和老槐树，便头也不回地走出了小羊圈。瑞宣发现后追出去，只在胡同口看见弟弟的背影消失在晨雾中。瑞宣心中说不出的羡慕与惭愧——老三做到了他做不到的事。
+preconditions:
+- entity: qi_ruiquan
+  attribute: location
+  value: loc_qijia
+- entity: qi_ruiquan
+  attribute: emotionalState
+  value: determined_to_fight
+- entity: qi_ruixuan
+  attribute: location
+  value: loc_qijia
+expectedPostconditions:
+- entity: qi_ruiquan
+  attribute: location
+  value: left_beiping
+  confidence: 1.0
+- entity: qi_ruiquan
+  attribute: status
+  value: joined_resistance
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 瑞宣望着弟弟的背影，既羡慕又惭愧。他想走却走不了，被家庭责任牢牢拴住。
+  confidence: 1.0
+- entity: sr_qi
+  attribute: emotionalState
+  value: sad_but_resigned
+  confidence: 0.9
+threadProgress:
+- thread: T1
+  advancement: 瑞全出走，抗日救国的线索正式开始。他是祁家第一个实际行动的人。
+  progressAfter: 15
+  progressTotal: 100
+- thread: T2
+  advancement: 瑞宣看着弟弟离开，内心的矛盾更加深重——忠孝不能两全。
+  progressAfter: 10
+  progressTotal: 100
+foreshadowing:
+- id: ruiquan_return
+  hint: 瑞全的出走并非永别，他将在关键时刻潜回北平。
+  targetRevealChapter: 1
+  thread: T1
+introduces: []
+styleGuidance:
+  tone: 决绝、惆怅、悲壮
+  targetWordCount: 1200
+  atmosphere: 清晨，小羊圈胡同笼罩在薄雾中。枣树上的露珠滴落，麻雀初醒。
+  scenePacing: 内心挣扎→悄悄收拾→不辞而别→瑞宣的目送
+  characterVoice:
+    omniscient: 第三人称全知叙事，侧重瑞宣与瑞全的内心对比

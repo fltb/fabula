@@ -1,0 +1,12 @@
+id: yihongyuan
+name: 怡红院
+kind: residence
+parent: 大观园
+description: 大观园中贾宝玉的住所，位于大观园东南角。院外粉墙环护，绿柳周垂。院内种有西府海棠（女儿棠）和芭蕉，取"红"与"绿"之意，匾额题"怡红快绿"。院内有五间抱厦，是宝玉与诸丫鬟起居处。
+initialState:
+  status: occupied
+  atmosphere: lively_chaotic
+notableFeatures:
+- 女儿棠——西府海棠，为院中标志植物
+- '"怡红快绿"匾额——宝玉所题'
+- 抱厦——宝玉卧室，晴雯撕扇、病补雀金裘均在此

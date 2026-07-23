@@ -1,0 +1,23 @@
+id: lindaiyu
+name: 林黛玉
+type: protagonist
+role: supporting
+description: 林黛玉，首次出现于第5回，共提及23次。
+appearance: 两弯似蹙非蹙罥烟眉，一双似喜非喜含情目。闲静时如姣花照水，行动处似弱柳扶风。心较比干多一窍，病如西子胜三分。
+aliases: []
+gender: 女
+age: 12-17
+traits:
+- 才华横溢
+- 敏感
+- 孤傲
+initialState:
+  location: 林家
+  status: alive
+  health: frail
+  age_stage: child
+voiceNotes: 言辞伶俐尖刻，常含机锋嘲讽，但诗中寄深情。与宝玉私下对话时温柔细腻，公开场合则敏感多疑，常因小事落泪。
+backstory: 巡盐御史林如海之女，母亲贾敏去世后寄居贾府。自幼聪慧过人，诗才横溢。与贾宝玉青梅竹马，两人互为知己，但体弱多病，终因宝玉娶钗而泪尽夭亡。
+knownSecrets:
+- 私下作《葬花吟》感怀身世
+- 与宝玉通过紫鹃传递心意

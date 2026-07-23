@@ -1,0 +1,96 @@
+event: E04
+title: 钱默吟被捕，胡同震动
+narrativeOrder: 4
+sceneType: linear
+storyTime: qian_moyin_arrested
+narrationTime: qian_moyin_arrested
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: shock_and_outrage
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 日本宪兵来到小羊圈胡同，直扑钱家。白巡长拉着钱默吟走出来，钱先生口中流着血，光着头，左脚拖着布鞋，右脚光着。钱大少爷孟石扑过来，被白巡长一拳打倒——白巡长急中生智，假装他是大烟鬼，免得也被抓走。钱太太被推出来，直到这时才知道二儿子仲石已经死了。钱默吟被押走时，回头看了一眼院中盛开的秋葵。瑞宣在护国寺街口亲眼看见钱先生被捕，心中如刀割。
+preconditions:
+- entity: qian_moyin
+  attribute: location
+  value: loc_qianjia
+- entity: qian_moyin
+  attribute: political_stance
+  value: apolitical_turned_resistance
+- entity: guan_xiaohe
+  attribute: knowledge
+  value: qian_zhongshi_death
+expectedPostconditions:
+- entity: qian_moyin
+  attribute: status
+  value: arrested
+  confidence: 1.0
+- entity: qian_moyin
+  attribute: condition
+  value: tortured
+  confidence: 1.0
+- entity: qian_moyin
+  attribute: emotionalState
+  narrativeHint: 钱默吟在被捕时表现出诗人的镇定与尊严。他知道等待他的是什么，但他毫无恐惧。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: knowledge
+  value: witnessed_qian_arrest
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 瑞宣亲眼看见好友被捕，心中如被刀割。他更加痛恨日本人，也更加痛恨自己的无能。
+  confidence: 1.0
+- entity: guan_xiaohe
+  attribute: emotionalState
+  value: smug_but_nervous
+  confidence: 0.9
+threadProgress:
+- thread: T3
+  advancement: 钱默吟被捕，钱家的悲剧开始。他的被捕是全书最重要的转折点之一。
+  progressAfter: 20
+  progressTotal: 100
+- thread: T4
+  advancement: 冠晓荷告密得手，得意中带着不安。胡同里的人开始用白眼看他。
+  progressAfter: 10
+  progressTotal: 100
+- thread: T5
+  advancement: 全胡同的人第一次看到日本人如何对待中国人，恐惧与愤怒在蔓延。
+  progressAfter: 10
+  progressTotal: 100
+introduces:
+- type: character
+  id: qian_moyin
+  initialState:
+    location: loc_qianjia
+    status: arrested
+    condition: injured
+    emotionalState: defiant
+- type: character
+  id: li_siye
+  initialState:
+    location: loc_xiaoyangquan
+    status: alive
+    condition: active
+    emotionalState: calm_and_helpful
+- type: character
+  id: bai_xunzhang
+  initialState:
+    location: loc_beiping
+    status: alive
+    condition: working
+    emotionalState: reluctant_duty
+- type: location
+  id: loc_qianjia
+  initialState:
+    status: active
+styleGuidance:
+  tone: 紧张、悲愤、压抑
+  targetWordCount: 1200
+  atmosphere: 秋日上午，阳光晴美。日本宪兵的皮靴踏碎了小羊圈的宁静。钱家的秋葵正开着鹅黄色的花。
+  scenePacing: 宪兵突至→逮捕过程→胡同震动→瑞宣目送
+  characterVoice:
+    omniscient: 第三人称全知，冷静描写逮捕过程，穿插瑞宣与白巡长的内心活动

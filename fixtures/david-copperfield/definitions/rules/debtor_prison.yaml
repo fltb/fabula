@@ -1,0 +1,43 @@
+ruleId: debtor_prison
+name: "Debtors' Prison System"
+category: legal_system
+type: constraint
+statement: "Under Victorian English law, a person unable to pay their debts could be imprisoned indefinitely at the pleasure of their creditors. The debtor was confined to a prison — most famously the Marshalsea, the Fleet, and the King's Bench — until the debt was paid, a friend paid it, or the creditor relented. Imprisonment did not discharge the debt; it merely prevented the debtor from earning money to repay it, creating a trap from which few escaped. Debtors' prisons were classified; those who could afford 'the rules' (a fee for limited liberty outside the walls) had some freedom. Families often lived with the debtor inside the prison, sharing his confinement. The system was widely condemned but persisted until the Debtors Act of 1869. The threat of debtors' prison hung over the lives of the Victorian poor and middle class alike — a single financial reverse could destroy a family."
+ruleClass: social_norm
+logicalConsequences:
+  - description: "A debtor unable to pay may be imprisoned indefinitely"
+    check:
+      type: transition_constraint
+      filter: "entity.debt>0 AND entity.can_pay=false"
+      assert: "entity.imprisoned=true AND entity.release_condition='debt_paid_or_forgiven'"
+      severity: error
+  - description: "Imprisonment prevents the debtor from earning money to repay the debt"
+    check:
+      type: state_invariant
+      filter: "entity.imprisoned_for_debt=true"
+      assert: "entity.can_earn_income=false"
+      severity: warning
+  - description: "Family members of the debtor may share imprisonment"
+    check:
+      type: state_invariant
+      filter: "entity.imprisoned_for_debt=true"
+      assert: "entity.family_may_cohabit_prison=true AND entity.dependents.quality_of_life=degraded"
+      severity: warning
+exceptions:
+  - condition: "A debtor who can pay for 'the rules' (the liberty of the rules) may leave the prison during the day to work"
+    note: "Micawber at the King's Bench Prison has access to the rules, allowing him to move about within a defined area outside the walls"
+  - condition: "A friend or relative may pay the debt and secure release"
+    note: "David pays Mr Micawber's debts on at least one occasion, securing his temporary freedom"
+evidenceChain:
+  - rule: debtor_prison
+    effect: reinforce
+    evidence: "Mr Micawber is arrested for debt and confined to the King's Bench Prison — his family moves into the prison with him, and the household continues inside the walls"
+  - rule: debtor_prison
+    effect: reinforce
+    evidence: "David, as a boy, visits the Micawbers in the King's Bench, observing the prison community: debtors of varying gentility, families crammed into small rooms, the prison coffee house where Micawber holds court"
+  - rule: debtor_prison
+    effect: reinforce
+    evidence: "The Micawbers are repeatedly released when friends pay their debts and rearrested when new creditors emerge — the cycle of debt, imprisonment, and release defines their existence"
+  - rule: debtor_prison
+    effect: reinforce
+    evidence: "Mr Wickfield lives in fear of financial ruin that would expose him to disgrace — the threat of debtor's prison hangs over every Victorian who falls into debt, even a respectable solicitor"

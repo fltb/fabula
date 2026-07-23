@@ -1,0 +1,58 @@
+event: E06
+title: 钱默吟归来，脊背血网
+narrativeOrder: 6
+sceneType: linear
+storyTime: qian_moyin_returned
+narrationTime: qian_moyin_returned
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: painful_admiration
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 金三爷和瑞宣把昏迷的钱默吟抬进屋中，发现他背上的衣服已与血肉粘在一起。那些血道子有的是黑色的旧疤，有的是鲜红的伤口，有的还流着黄水——日本人的毒刑在他背上织成了一张血网。医生来了却百般刁难，瑞宣怒斥庸医。金三爷气不过，一拳打倒冠晓荷——他终于替亲家出了一口气。钱默吟在昏迷中反复说："打！打！我没的说！"
+preconditions:
+- entity: qian_moyin
+  attribute: location
+  value: loc_qianjia
+- entity: qian_moyin
+  attribute: condition
+  value: severely_injured
+- entity: qi_ruixuan
+  attribute: location
+  value: loc_qianjia
+expectedPostconditions:
+- entity: qian_moyin
+  attribute: health
+  narrativeHint: 钱默吟的伤需要长期休养。但更深的伤在心里——他的家已经破碎了。
+  confidence: 1.0
+- entity: qian_moyin
+  attribute: emotionalState
+  value: determined_to_revenge
+  confidence: 0.9
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 瑞宣决定日夜照看钱先生。伺候钱诗人成了他的一种宗教性的服务。
+  confidence: 1.0
+- entity: guan_xiaohe
+  attribute: condition
+  value: humiliated_by_jin
+  confidence: 1.0
+threadProgress:
+- thread: T3
+  advancement: 钱默吟的伤口触目惊心，但他的精神没有被摧毁。他仍说"打！我没的说！"
+  progressAfter: 40
+  progressTotal: 100
+- thread: T4
+  advancement: 金三爷大闹冠家，给汉奸们一个教训。冠晓荷被打却不敢还手。
+  progressAfter: 20
+  progressTotal: 100
+styleGuidance:
+  tone: 惨烈、愤怒、刚毅
+  targetWordCount: 1200
+  atmosphere: 钱家昏暗的灯光下，钱默吟背上的血网触目惊心。瑞宣和金三爷守在床边，沉默而坚定。
+  scenePacing: 发现伤情→请医波折→金三爷出头→钱默吟的呓语
+  characterVoice:
+    omniscient: 第三人称全知，正面描写伤痕以控诉日本人的残暴

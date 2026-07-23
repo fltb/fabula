@@ -1,0 +1,18 @@
+id: youshi
+name: 尤氏
+type: supporting
+role: supporting
+description: 尤氏，首次出现于第5回，共提及45次。
+appearance: 妇人相貌，性情软弱。宁国府当家奶奶，穿戴齐整但神情常显无奈。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 宁国府
+  status: alive
+  age_stage: middle_aged
+voiceNotes: 言语温顺退让，不敢违逆贾珍。在凤姐面前吃哑巴亏，忍气吞声。处理宁府事务时力不从心，话语中常透露出无可奈何。
+backstory: 宁国府贾珍之续弦妻，贾蓉的继母。性格懦弱，对贾珍的荒唐行为无力管束。在"凤姐大闹宁国府"一场中被凤姐百般羞辱却只能忍气吞声。最终宁国府被抄家，尤氏命运悲惨。
+knownSecrets:
+- 知道秦可卿之事但不敢言

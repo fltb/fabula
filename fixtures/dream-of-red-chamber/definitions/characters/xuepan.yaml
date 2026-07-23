@@ -1,0 +1,18 @@
+id: xuepan
+name: 薛蟠
+type: supporting
+role: supporting
+description: 薛蟠，首次出现于第3回，共提及34次。
+appearance: 青年男子，矮胖身体，粗俗面相。薛家长房独子，穿戴豪奢。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 金陵
+  status: alive
+  age_stage: young_adult
+voiceNotes: 言语粗俗不堪，蛮横霸道。人称"呆霸王"，说话行事不过脑子。喝多了更加放肆，闹出人命也不在乎。在母亲和妹妹面前倒有几分听话。
+backstory: 薛姨妈之子，薛宝钗之兄。外号"呆霸王"，仗着家势横行霸道。打死冯渊、抢走香菱，惹下人命官司。在贾府居住期间依旧惹是生非。最终薛蟠因再次杀人被判死刑。
+knownSecrets:
+- 打死冯渊抢走香菱之事

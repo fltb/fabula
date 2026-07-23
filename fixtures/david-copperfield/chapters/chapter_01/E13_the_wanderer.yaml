@@ -1,0 +1,88 @@
+event: E13
+title: "The Wanderer"
+narrativeOrder: 13
+sceneType: linear
+storyTime: london_career
+narrationTime: london_career
+tense: past
+discourseMode: exposition
+arcPosition: falling
+emotionalValence: "compassionate_solemn"
+conflictType: "person_vs_society"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "David and his aunt have a serious conversation about recent events — the flight of Emily, the collapse of Miss Betsey's fortune, and the strange behaviour of Mr Wickfield's affairs. Mr Peggotty arrives in London, having searched for Emily across France and Italy without success. He is worn and weary but determined. David learns that Martha Endell, the disgraced Yarmouth girl, may know where Emily is hiding. With Mr Peggotty's consent, David and Martha go to find Emily at a house near the Thames where she has taken refuge after being abandoned by Steerforth. The chapter shows Mr Peggotty's extraordinary forgiveness — he welcomes Emily back not with reproach but with open arms."
+preconditions:
+  - entity: emily
+    attribute: status
+    value: abandoned_abroad
+  - entity: dan_peggotty
+    attribute: condition
+    value: searching_for_emily
+expectedPostconditions:
+  - entity: emily
+    attribute: status
+    value: found_and_forgiven
+    confidence: 1.0
+  - entity: emily
+    attribute: location
+    value: london_refuge
+    confidence: 1.0
+  - entity: dan_peggotty
+    attribute: status
+    value: reunited_with_emily
+    confidence: 1.0
+  - entity: dan_peggotty
+    attribute: emotionalState
+    narrativeHint: "Mr Peggotty's forgiveness of Emily is the moral crux of the entire novel — he welcomes her not with reproach but with love, declaring her his 'dearest' unchanged. His forgiveness is absolute, without condition or judgment, the most powerful expression of Christian charity in the book."
+    confidence: 1.0
+  - entity: martha_endell
+    attribute: status
+    value: instrumental_in_rescue
+    confidence: 1.0
+threadProgress:
+  - thread: T4
+    advancement: "The Emily arc reaches its moral climax — she is found and forgiven. Mr Peggotty's unconditional embrace of his fallen niece is the heart of this thread, transforming tragedy into redemption. Emily's fate is now bound to her uncle's plan to start anew abroad."
+    progressAfter: 75
+    progressTotal: 100
+  - thread: T1
+    advancement: "David witnesses the full cost of Steerforth's betrayal. Steerforth's face on the abandoned Emily is a lesson David carries into his own moral development — the danger of charm untethered from conscience."
+    progressAfter: 50
+    progressTotal: 100
+  - thread: T3
+    advancement: "Miss Betsey's conversation with David about Mr Wickfield's affairs confirms that Heep's grip on the Wickfield household is tightening. The threads of villainy are drawing together."
+    progressAfter: 45
+    progressTotal: 100
+foreshadowing:
+  - id: emily_exile
+    hint: "Mr Peggotty resolves to take Emily away from England to start a new life in Australia — a fresh beginning across the sea that will also serve as an exit for other characters seeking redemption."
+    targetRevealChapter: 46
+    thread: T4
+  - id: martha_redemption
+    hint: "Martha Endell, the cast-off girl of Yarmouth, becomes the instrument of Emily's rescue. Her knowledge of the world's dark places — the Thames-side haunts where fallen women hide — proves redemptive for both women."
+    targetRevealChapter: 40
+    thread: T4
+introduces:
+  - type: character
+    id: martha_endell
+    initialState:
+      location: london
+      status: outcast
+      condition: disgraced_but_hopeful
+      emotionalState: remorseful_determined
+  - type: location
+    id: thames_refuge
+    initialState:
+      status: active
+      condition: london_slums_riverside
+styleGuidance:
+  tone: "solemn, compassionate, redemptive — the darkest hour before the dawn of forgiveness"
+  targetWordCount: 900
+  atmosphere: "the Thames at night — fog, mud, the hulks on the river, the desperate houses near Blackfriars Bridge where ruined women hide. Then the candlelit room where Mr Peggotty holds his niece and says nothing but her name."
+  scenePacing: "conversation with Aunt Betsey (thoughtful, measured) → Mr Peggotty's arrival (worn, sorrowful) → Martha's revelation (urgent, tense) → the night journey to the Thames (dread and hope) → the reunion (climactic forgiveness, quiet and immense)"
+  characterVoice:
+    narrator: "Adult David recounting the night he helped find Emily — the memory still heavy with the weight of what Steerforth did, and the even heavier weight of Mr Peggotty's grace. The prose is stripped of irony, almost biblical in its restraint."
+    dan_peggotty: "Worn by months of fruitless searching across Europe — his voice is quieter now, the booming warmth muted by suffering, but it rises with renewed purpose when there is hope. His reunion speech is brief: he simply holds Emily and calls her his 'dear' — it is everything."
+    martha_endell: "Low, urgent, knowing — she speaks from the margins, her voice carrying the weight of experience with the world's cruelty. She knows where Emily will be because she herself has been there."
+    emily: "Broken but not beyond hope — she speaks little, her shame so deep it is nearly wordless. Her repentance is in her collapse, her uncle's forgiveness in his embrace. No words are needed."

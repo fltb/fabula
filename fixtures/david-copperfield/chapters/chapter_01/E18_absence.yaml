@@ -1,0 +1,109 @@
+event: E18
+title: Absence
+narrativeOrder: 18
+sceneType: linear
+storyTime: dora_death
+narrationTime: dora_death
+tense: past
+discourseMode: reflection
+arcPosition: falling
+emotionalValence: desolate_grief
+conflictType: person_vs_self
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: 'After Dora''s death and the Yarmouth catastrophe, David is left alone
+  with his ''undisciplined heart.'' He decides to go abroad and leaves England for
+  three years, travelling through Europe in a state of profound grief and numbness.
+  He visits France, Switzerland, Italy — the landscapes blurring past him as he tries
+  to outrun his sorrow. The chapter reflects on the slow, painful process of healing:
+  the shock of loss that comes ''not quickly, but little by little, and grain by grain.''
+  David finds some solace in the beauty of the Alps and in his writing. But the true
+  change is within: he is learning to discipline his heart and to recognise what he
+  has always needed.'
+preconditions:
+- entity: david_copperfield
+  attribute: status
+  value: widowed
+- entity: dora_spenlow
+  attribute: status
+  value: dead
+expectedPostconditions:
+- entity: david_copperfield
+  attribute: status
+  value: returned_to_england
+  confidence: 1.0
+- entity: david_copperfield
+  attribute: emotionalState
+  value: numbed_grief
+  confidence: 1.0
+- entity: david_copperfield
+  attribute: emotionalState
+  value: slow_healing
+  confidence: 1.0
+- entity: david_copperfield
+  attribute: undisciplined_heart
+  value: partial_discipline
+  confidence: 0.9
+threadProgress:
+- thread: T1
+  advancement: 'David''s period of mourning and growth — the ''disciplining of his
+    heart'' begins in earnest. The three years abroad are a crucible: he loses his
+    childish dependencies, confronts his grief alone, and emerges with a mature understanding
+    of himself and his needs. The bildungsroman moves toward its emotional resolution.'
+  progressAfter: 85
+  progressTotal: 100
+- thread: T2
+  advancement: Dora is gone, but Agnes remains as a constant presence in David's consciousness.
+    He has not yet recognised his love for her, but the ground is being prepared.
+    The contrast between the two women — the child-wife who died and the steady angel
+    who has always been there — becomes more apparent in David's reflections.
+  progressAfter: 75
+  progressTotal: 100
+- thread: T3
+  advancement: The Heep defeat is complete; David's thoughts in Europe return only
+    briefly to the Canterbury events. The villain's shadow has been lifted, and the
+    story is now moving toward personal rather than external resolution.
+  progressAfter: 95
+  progressTotal: 100
+foreshadowing:
+- id: agnes_awaiting_david
+  hint: As David wanders through Europe, his thoughts return again and again to Agnes
+    — her letters, her face, her steady presence in his life. He does not yet understand
+    what these thoughts mean, but the reader recognises the preparation for his eventual
+    return and recognition.
+  targetRevealChapter: 60
+  thread: T2
+- id: david_novel
+  hint: David begins to think of his life as a story that he might one day write —
+    the act of composition becoming a way of processing experience. The novelist is
+    being born out of the sufferer.
+  targetRevealChapter: 58
+  thread: T1
+introduces: []
+styleGuidance:
+  tone: elegiac, interior, slowly resolving — the prose moves at the pace of grief,
+    circling, repeating, lingering on images of landscape and memory. There is no
+    dramatic action, only the slow work of the soul healing itself.
+  targetWordCount: 800
+  atmosphere: 'the shifting landscapes of Europe as seen through the eyes of a man
+    carrying an immense invisible weight — the Swiss Alps in snow and mist, the Italian
+    lakes at twilight, the French country roads in autumn. Every scene is filtered
+    through David''s interior state: the mountains are ''too grand to sympathise,''
+    the cities are ''foreign and indifferent,'' and only the solitude of the high
+    passes offers any kinship to his mood.'
+  scenePacing: 'the decision to leave England (hollow, automatic) → departure (a fading
+    coastline) → the first months: France (numb, mechanical sightseeing) → the Alps
+    (solitude, the first stirrings of something other than pain) → Italy (colour,
+    warmth, the slow return of sensation) → the third year (acceptance, the beginning
+    of wisdom) → the decision to return (calm, settled, ready)'
+  characterVoice:
+    narrator: Adult David at his most introspective — this is the section of the novel
+      where the retrospective narrator most fully merges with his younger self. The
+      prose is lyrical but subdued, as if the pain is still too close for full articulation.
+      He speaks of grief in universal terms — 'Grief is a thing that comes not quickly'
+      — reaching for the consolations of philosophy and shared human experience.
+    david_copperfield: Quiet, reflective, stripped of the energy that has driven him
+      through the earlier chapters. His voice in this section is that of a man learning
+      to be alone — turning over memories, examining his 'undisciplined heart,' slowly
+      coming to terms with loss. The voice of a soul in convalescence.

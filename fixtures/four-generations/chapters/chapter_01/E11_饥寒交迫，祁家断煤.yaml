@@ -1,0 +1,54 @@
+event: E11
+title: 饥寒交迫，祁家断煤
+narrativeOrder: 11
+sceneType: linear
+storyTime: famine_winter
+narrationTime: famine_winter
+tense: past
+discourseMode: description
+arcPosition: falling
+emotionalValence: despair_and_endurance
+conflictType: person_vs_nature
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 天越来越冷，北平的煤断了来源。祁家的炕烧不起了，祁老人夜里冻得睡不着，把身子蜷成一只大猫。天佑太太的南屋更加潮湿寒冷，夜里能把水瓶冻炸。瑞宣为买煤的钱发愁——他已经几个月没拿到薪水了。韵梅提醒丈夫冬天没火怎么活，小顺儿天真地说"没煤我去拣煤核儿"。瑞宣心中茫然：今天缺煤，明天缺粮，一家人在沦陷的北平怎么活得下去？
+preconditions:
+- entity: qi_ruixuan
+  attribute: location
+  value: loc_qijia
+- entity: sr_qi
+  attribute: location
+  value: loc_qijia
+- entity: qi_tianyou
+  attribute: location
+  value: loc_qijia
+expectedPostconditions:
+- entity: sr_qi
+  attribute: health
+  narrativeHint: 祁老人因为没有煤烧炕而受了寒，夜里冻得睡不着。他的乐观开始被严寒消磨。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 瑞宣看着家中断煤，心中比天气更冷。他开始怀疑自己不走的决定是否正确——难道留在家里就能救全家吗？
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: financial
+  value: desperate
+  confidence: 1.0
+threadProgress:
+- thread: T2
+  advancement: 饥寒交迫使瑞宣更加痛苦。他开始怀疑自己留在北平是否正确——他救不了任何人。
+  progressAfter: 40
+  progressTotal: 100
+- thread: T5
+  advancement: 北平物资全面紧缺，底层市民的生活更加艰难。饥荒的阴影笼罩着小羊圈。
+  progressAfter: 25
+  progressTotal: 100
+styleGuidance:
+  tone: 寒冷、绝望、挣扎
+  targetWordCount: 1200
+  atmosphere: 北平三九天，北风呼啸。祁家各屋都没有生火，窗纸上结满冰花。祁老人穿着皮袍蜷在炕上。
+  scenePacing: 煤源断绝→各屋寒冷→瑞宣的忧虑→小顺儿的天真→持续的绝望
+  characterVoice:
+    omniscient: 第三人称全知，以寒冷为意象贯穿全篇

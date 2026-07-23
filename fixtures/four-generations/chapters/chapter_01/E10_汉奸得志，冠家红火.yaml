@@ -1,0 +1,51 @@
+event: E10
+title: 汉奸得志，冠家红火
+narrativeOrder: 10
+sceneType: linear
+storyTime: celebration_nanjing
+narrationTime: celebration_nanjing
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: sarcastic_angry
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 南京陷落让汉奸们弹冠相庆。大赤包通过李空山的关系当上了妓女检查所所长，威风八面。瑞丰靠胖太太的二舅也当上了教育局庶务科科长。冠家门前贴起了"贵府冠夫人荣升织女检查所所长"的红报子。蓝东阳、瑞丰、冠晓荷三个汉奸互相倾轧又互相利用。大赤包得意洋洋地说："日本人拿第一份，我们拿第二份！"胖菊子也学会了骂人，把蓝东阳推了个趔趄。
+preconditions:
+- entity: da_chibao
+  attribute: location
+  value: loc_guanjia
+- entity: qi_ruifeng
+  attribute: emotionalState
+  value: smug_and_ambitious
+expectedPostconditions:
+- entity: da_chibao
+  attribute: role
+  value: head_of_prostitute_inspection
+  confidence: 1.0
+- entity: da_chibao
+  attribute: emotionalState
+  narrativeHint: 大赤包当上所长后不可一世，咳嗽一声都震得窗户纸响。她以为从此可以为所欲为了。
+  confidence: 1.0
+- entity: qi_ruifeng
+  attribute: role
+  value: education_bureau_section_chief
+  confidence: 1.0
+- entity: qi_ruifeng
+  attribute: emotionalState
+  narrativeHint: 瑞丰当了科长后得意忘形，觉得自己是个人物了。他甚至敢对大哥瑞宣训话。
+  confidence: 1.0
+threadProgress:
+- thread: T4
+  advancement: 汉奸们各自得势——大赤包当了所长，瑞丰当了科长。他们的丑态更加不堪。
+  progressAfter: 40
+  progressTotal: 100
+styleGuidance:
+  tone: 辛辣讽刺、愤怒
+  targetWordCount: 1200
+  atmosphere: 冠家门口贴着大红报子，客厅里摆满礼物花篮。大赤包穿着紫色绸袍，烫着猫头鹰头。
+  scenePacing: 各得官位→互相庆贺→互相倾轧→丑态百出
+  characterVoice:
+    omniscient: 第三人称全知，以讽刺的笔法揭露汉奸的无耻嘴脸

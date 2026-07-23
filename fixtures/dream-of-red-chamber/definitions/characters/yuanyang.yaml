@@ -1,0 +1,19 @@
+id: yuanyang
+name: 鸳鸯
+type: supporting
+role: supporting
+description: 鸳鸯，首次出现于第20回，共提及46次。
+appearance: 容貌出众，蜂腰削肩，鸭蛋脸面。贾母身边最体面的大丫鬟，穿戴考究。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 贾母院
+  status: alive
+  role: maid
+  age_stage: young_adult
+voiceNotes: 言语利落干脆，有主见有骨气。在贾母面前侍奉得体，在众人面前不卑不亢。拒婚时言辞激烈决绝，宁死不从。
+backstory: 贾母身边最得力的大丫鬟，深受贾母信任。贾赦欲纳她为妾，她誓死不从，在贾母面前剪发誓愿，贾母因此斥责贾赦。贾母死后，鸳鸯悬梁自尽，殉主而死。
+knownSecrets:
+- 贾赦欲强纳为妾之事

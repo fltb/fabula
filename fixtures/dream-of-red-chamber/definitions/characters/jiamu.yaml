@@ -1,0 +1,22 @@
+id: jiamu
+name: 贾母
+type: supporting
+role: supporting
+description: 贾母，首次出现于第2回，共提及102次。
+appearance: 鬓发如银，慈眉善目，富贵雍容。虽年事已高，但精神矍铄，穿戴体面。
+aliases: []
+gender: 女
+age: 70+
+traits:
+- 慈祥
+- 权威
+- 享乐
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: elderly
+voiceNotes: 说话慈祥和蔼，是贾府的最高权威。疼爱孙子孙女时言语宠溺，处理家务时不失威严。偏爱热闹，常组织宴席游戏。
+backstory: 金陵世家史侯之女，嫁与荣国公贾代善为妻，是贾府辈分最高的长辈。极其宠爱孙辈，尤其是贾宝玉和林黛玉。在她的庇护下，宝黛得以在贾府中成长。但最终在家族败落前夕去世。
+knownSecrets:
+- 暗中支持宝黛之情但未公开表态
+- 私下存有私房钱以备不时之需

@@ -1,0 +1,32 @@
+id: betsey_trotwood
+name: "Betsey Trotwood"
+type: supporting_character
+archetype: eccentric_guardian
+role: supporting
+description: "David's great-aunt, the most memorable character in the novel after David himself. A fierce, eccentric, essentially kind-hearted spinster with an imperious manner, a rigid sense of propriety, and a profound contempt for donkeys on her green. She is tall and upright, with a severe countenance that nevertheless softens with affection. She disapproved of her nephew's marriage to Clara (whom she called 'a wax doll') and walked out of David's life at his birth when she learned the baby was a boy — only to reappear years later when David runs to her for refuge. She takes him in, names him 'Trotwood Copperfield,' educates him, and becomes his staunchest supporter. Her own history includes an unhappy marriage to a younger man who mistreated her and whom she eventually bought off."
+appearance: "Tall, erect, with an aquiline nose, bright black eyes, and a steady frowning expression. She wears a lavender-coloured silk gown, a cap with a stiff border, and a tucker. Her hands are always busy. She carries a sturdy walking stick and uses it to threaten donkeys. In later years she wears spectacles."
+aliases:
+  - "Miss Trotwood"
+  - "Aunt Betsey"
+  - "Miss Betsey"
+  - "Aunt"
+gender: female
+age: "Sixtyish at the start"
+profession: "Gentlewoman (independent means)"
+traits:
+  - eccentric
+  - imperious
+  - fierce
+  - generous
+  - principled
+  - loyal
+  - secret_kindness
+  - independent
+initialState:
+  location: dover
+  status: alive
+  condition: living_secluded_in_dover
+  emotionalState: settled_contentment
+  financial: comfortable
+voiceNotes: "Peremptory, emphatic, and wonderfully peculiar. She calls David 'Trot' or 'Trotwood.' She repeats her opinions with comic vehemence — especially about donkeys, the King's Bench prison, and the virtues of her great-nephew. She speaks her mind without reserve, regardless of whom she offends."
+backstory: "The aunt of David Copperfield senior. She was married briefly, unhappily, and unconventionally to a man younger than herself who beat her and tried to throw her from a window; she paid him to leave. She took back her maiden name, bought a cottage in Dover, and lived there in absolute independence. She opposed her nephew's marriage to Clara Copperfield, and when David was born a boy (she had wanted a girl — to be named Betsey Trotwood), she washed her hands of the family. Years later, when David arrives at her door penniless and desperate, she takes him in without hesitation, becoming his guardian and the agent of his salvation. She later loses most of her fortune through Uriah Heep's machinations but conceals it from David to spare him worry."

@@ -1,0 +1,18 @@
+id: xingfuren
+name: 邢夫人
+type: supporting
+role: supporting
+description: 邢夫人，首次出现于第3回，共提及52次。
+appearance: 妇人相貌，畏缩之态。衣饰平平，不似当家太太的气派。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: middle_aged
+voiceNotes: 言语糊涂，一味顺从贾赦。为人吝啬，常因小事计较。说话时讨好贾赦却不得要领，在继媳凤姐面前更显无能。
+backstory: 贾赦之续弦妻，王熙凤的婆婆。为人愚钝，一味顺从丈夫贾赦，助纣为虐。曾替贾赦向贾母讨鸳鸯为妾，被贾母痛责。吝啬小气，在贾府中地位尴尬。
+knownSecrets:
+- 替贾赦讨鸳鸯做妾

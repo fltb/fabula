@@ -1,0 +1,51 @@
+event: E08
+title: 天安门前沉默的抗议
+narrativeOrder: 8
+sceneType: linear
+storyTime: celebration_baoding
+narrationTime: celebration_baoding
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: solemn_disgust
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 天安门的庆祝大会冷清而压抑。学生们站了整整半天，一声不出。日本军官在台上用扩音器讲话，但声音在空旷的广场上散开，只像带着痰的咳嗽。干事们发昭和糖，学生们把糖和纸旗扔在地上。冠晓荷远远地向上深深鞠躬，希望日本人能看见他。蓝东阳躲在远处不敢靠近。只有瑞丰这种没心没肺的人，才以为大会开得很成功。
+preconditions:
+- entity: qi_ruifeng
+  attribute: location
+  value: loc_beiping
+- entity: guan_xiaohe
+  attribute: location
+  value: loc_beiping
+expectedPostconditions:
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 瑞宣在家中心急如焚，既盼望有人扔炸弹，又怕学生受害。他的矛盾达到了顶点。
+  confidence: 1.0
+- entity: guan_xiaohe
+  attribute: knowledge
+  value: attended_celebration
+  confidence: 1.0
+- entity: guan_xiaohe
+  attribute: emotionalState
+  value: hopeful_for_position
+  confidence: 1.0
+threadProgress:
+- thread: T2
+  advancement: 学生的沉默让瑞宣既欣慰又担忧。他怕这沉默会随着时间变成麻木。
+  progressAfter: 30
+  progressTotal: 100
+- thread: T4
+  advancement: 冠晓荷在天安门前鞠躬，蓝东阳躲在远处。汉奸们各有各的丑态。
+  progressAfter: 25
+  progressTotal: 100
+styleGuidance:
+  tone: 肃穆、讽刺、沉重
+  targetWordCount: 1200
+  atmosphere: 天安门在秋日下格外庄严，但广场上的人群渺小而沉默。红墙与白气球形成刺眼的对比。
+  scenePacing: 会场冷清→学生沉默→汉奸活动→散场的昭和糖
+  characterVoice:
+    omniscient: 第三人称全知，以天安门的庄严反衬人的渺小与耻辱

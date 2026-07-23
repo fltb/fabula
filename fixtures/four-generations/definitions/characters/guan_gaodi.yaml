@@ -1,0 +1,27 @@
+id: guan_gaodi
+name: 冠高第
+type: daughter
+archetype: rebellious_daughter
+role: supporting
+description: 冠晓荷与大赤包的大女儿。她不像妹妹招弟那样娇媚，也不像母亲那样霸道，而是有几分书卷气，爱看小说。她对父母当汉奸不满，内心深处有正义感。她和尤桐芳成了好友，暗中同情钱家。在母亲要把她嫁给李空山时，她面临是否逃走的抉择。
+appearance: 面容端正，短鼻子，不施脂粉时更显朴素。
+aliases:
+- 高第
+- 大妹妹
+gender: 女
+age: 约二十岁
+profession: 无业
+traits:
+- bookish
+- rebellious
+- kind
+- confused
+- principled
+initialState:
+  location: loc_guanjia
+  status: alive
+  condition: unmarried
+  emotionalState: discontent_with_family
+backstory: 生在冠家却不认同父母的做法。她对钱仲石有朦胧的爱意，但仲石牺牲了。
+knownSecrets:
+- 曾和桐芳一起给钱家送钱

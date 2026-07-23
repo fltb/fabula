@@ -1,0 +1,27 @@
+id: qi_tianyou
+name: 祁天佑
+type: merchant
+archetype: honest_tradesman
+role: supporting
+description: 祁天佑是祁老人的独子，祁家长辈中唯一在外挣钱的男人。他在西单牌楼附近开一家小布铺，为人诚信，尺码加一，永不欺客。七七事变后生意日渐清淡，城门关闭让乡下主顾进不来城。他忧虑国事却从不张扬，默默支撑着一家人的生计。他的头发在短短几个月里白了许多根。
+appearance: 中等身材，圆脸，常穿蓝布大衫。头发渐白，面带愁容。
+aliases:
+- 天佑
+- 祁掌柜
+gender: 男
+age: 约五十岁
+profession: 布铺掌柜
+traits:
+- honest
+- hardworking
+- silent
+- dutiful
+- worried
+initialState:
+  location: loc_beiping
+  status: alive
+  condition: working
+  emotionalState: anxious_about_business
+  financial: declining
+backstory: 从小在父亲的教导下学做买卖，一辈子规规矩矩。他最在乎的就是"规矩"二字，从不趁火打劫或浑水摸鱼。国难当头，他的生意眼看就要维持不下去了。
+knownSecrets: []

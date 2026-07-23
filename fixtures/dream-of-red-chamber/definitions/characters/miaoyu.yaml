@@ -1,0 +1,21 @@
+id: miaoyu
+name: 妙玉
+type: supporting
+role: supporting
+description: 妙玉，首次出现于第18回，共提及16次。
+appearance: 身穿月白素袖袄儿，外罩水田青缎镶边长背心，束着秋板貂鼠尾巴。容貌清雅，气质出尘。
+aliases: []
+gender: 女
+age: 18-20
+traits:
+- 孤傲
+- 洁癖
+- 才情
+initialState:
+  location: 栊翠庵
+  status: alive
+  age_stage: young_adult
+voiceNotes: 言语孤傲冷僻，嫌贫爱富。自称"槛外人"，对俗人俗事不屑一顾。但内心深处对宝玉暗藏情愫，言语间偶露波澜。品茶论道时辞锋犀利。
+backstory: 金陵十二钗之一，出身仕宦之家，从小多病，买了许多替身均不中用，最后亲自入了空门才好了。寄居贾府栊翠庵，精通茶道、诗词。性格孤傲冷僻，对宝玉暗藏情愫。最终贾府败落后被强盗掳走。
+knownSecrets:
+- 对宝玉暗藏情愫，以粉红信笺寄意

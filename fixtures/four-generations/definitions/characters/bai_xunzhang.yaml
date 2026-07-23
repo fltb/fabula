@@ -1,0 +1,25 @@
+id: bai_xunzhang
+name: 白巡长
+type: policeman
+archetype: reluctant_collaborator
+role: minor
+description: 小羊圈胡同一带的巡警队长。他虽然是给日本人办事的，但骨子里还是向着中国人。他暗中保护钱默吟的家人，在调查户口时帮祁家隐瞒了瑞全出走的事。他是个在夹缝中生存的小人物。
+appearance: 穿制服，面目和善。
+aliases:
+- 白巡警
+gender: 男
+age: 约四十岁
+profession: 巡长
+traits:
+- kind
+- cautious
+- helpful
+- conflicted
+initialState:
+  location: loc_beiping
+  status: alive
+  condition: working
+  emotionalState: reluctant_duty
+backstory: 当了多年巡警，知道怎么做人。
+knownSecrets:
+- 帮祁家隐瞒瑞全出走

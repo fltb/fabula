@@ -1,0 +1,105 @@
+event: E05
+title: "The Sequel of My Resolution"
+narrativeOrder: 5
+sceneType: linear
+storyTime: flight_to_dover
+narrationTime: flight_to_dover
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "desperate_then_hopeful"
+conflictType: "person_vs_society"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "Unable to endure his miserable life any longer, David resolves to run away. He sets out from London on foot, heading for Dover to find his only known relative, Aunt Betsey Trotwood. His journey is arduous: his box and half-guinea are stolen, he is robbed by a young man with a donkey-cart, he sells his waistcoat for food, and he sleeps in the open air. After six days of walking, hungry and ragged, he arrives in Dover and finds Miss Betsey's cottage. He presents himself to her, and after some initial shock and cross-examination, Miss Betsey decides to take him in. She writes to the Murdstones, confronts them, and declares she will be David's guardian from now on, renaming him 'Trotwood Copperfield.'"
+preconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: london
+  - entity: david_copperfield
+    attribute: condition
+    value: child_labourer
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: desperate_to_escape
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: location
+    value: dover
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: status
+    value: adopted_by_betsey
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: emotionalState
+    value: saved_hopeful
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: name
+    value: trotwood_copperfield
+    confidence: 1.0
+  - entity: betsey_trotwood
+    attribute: status
+    value: guardian_of_david
+    confidence: 1.0
+  - entity: mr_dick
+    attribute: location
+    value: dover
+    confidence: 1.0
+  - entity: murdstone
+    attribute: custody_of_david
+    value: terminated
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "The turning point — David takes his fate into his own hands. The journey from London to Dover is the first truly independent act of his life, transforming him from passive sufferer to active agent of his own destiny."
+    progressAfter: 25
+    progressTotal: 100
+  - thread: T2
+    advancement: "Miss Betsey's adoption sets David on the path that will lead him to the Wickfields of Canterbury. By establishing him in Dover and sending him to school in Canterbury, Betsey unwittingly places David in the orbit of Agnes Wickfield, the woman who will ultimately become his 'better self.'"
+    progressAfter: 3
+    progressTotal: 100
+foreshadowing:
+  - id: trotwood_name
+    hint: "Miss Betsey's renaming of David — 'Trotwood Copperfield' — is a symbolic adoption. She claims him as her own, and the name 'Trotwood' will become David's dearest identity. It also hints at the elision of the Copperfield name that Murdstone has sullied."
+    targetRevealChapter: 13
+    thread: T1
+  - id: betsey_fortitude
+    hint: "Miss Betsey's fierce protection of David — her confrontation with the Murdstones, her declaration 'I will be your guardian' — reveals the steel beneath her eccentricity. Her strength prefigures her role as David's anchor through all future trials."
+    targetRevealChapter: 60
+    thread: T1
+  - id: dover_as_haven
+    hint: "Dover — the white cliffs, the sea, Miss Betsey's cottage with its neat garden — becomes the symbolic haven of David's childhood, the place where he is saved. The contrast between the filthy London warehouse and the clean Dover cottage marks the moral geography of the novel."
+    targetRevealChapter: 13
+    thread: T1
+introduces:
+  - type: location
+    id: dover
+    initialState:
+      status: active
+  - type: character
+    id: mr_dick
+    initialState:
+      location: dover
+      status: dependent_of_betsey
+      condition: harmless_eccentric
+      emotionalState: gentle_muddled
+  - type: character
+    id: betsey_trotwood
+    initialState:
+      location: dover
+      status: guardian_of_david
+      condition: protector_established
+      emotionalState: fierce_tender
+styleGuidance:
+  tone: "desperate journey giving way to warmth and relief — the prose rises from the dust of the road into the light of Miss Betsey's cottage"
+  targetWordCount: 800
+  atmosphere: "the open road under a harsh sun; hunger and exhaustion; the theft and the selling of clothes; the first sight of Dover's white cliffs; the neat order of Miss Betsey's cottage with its fuchsia bushes and the donkey-free garden; the tea served by a woman who has just saved a life"
+  scenePacing: "resolution to flee (quick, decisive) → the journey (long, episodic, trials) → arrival at Dover (climactic) → the confrontation with Murdstone (dramatic showdown) → acceptance and renaming (peaceful close)"
+  characterVoice:
+    narrator: "David's voice shifts from desperation to relief over the course of the event. The journey is told with breathless urgency — the adult narrator recreating the panic and hope of the ten-year-old. Upon reaching Betsey, the prose softens into gratitude"
+    betsey_trotwood: "Initially brusque and bewildered — 'Go away! I don't know anything about you!' — then softening into fierce protectiveness. Her confrontation with Murdstone is magnificent: she is imperious, sarcastic, utterly commanding"
+    murdstone: "Defensive, then defeated — for the first time his cold authority meets its match. He speaks in his usual measured tones, but Betsey dismantles his arguments systematically"
+    mr_dick: "Friendly, confused, tangential — his speech wanders, circling back to King Charles's head, but his kindness to David is immediate and genuine"

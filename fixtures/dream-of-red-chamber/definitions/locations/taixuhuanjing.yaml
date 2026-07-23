@@ -1,0 +1,11 @@
+id: taixuhuanjing
+name: 太虚幻境
+kind: temple
+description: 位于离恨天之上、灌愁海之中的仙境。是警幻仙子居所，掌管人间风情月债。石牌坊上写着"太虚幻境"四字，两边有"假作真时真亦假，无为有处有还无"的对联。宝玉在梦境中曾到此一游，见到金陵十二钗判词和《红楼梦》十二支曲子，预示了众女子的命运。
+initialState:
+  status: mythical
+  atmosphere: ethereal
+notableFeatures:
+- 牌坊——"太虚幻境"四字，两侧对联
+- 薄命司——存放金陵十二钗判词之处
+- 痴情司、结怨司等——各司分别掌管人间情感

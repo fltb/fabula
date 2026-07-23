@@ -1,0 +1,30 @@
+id: agnes_wickfield
+name: "Agnes Wickfield"
+type: love_interest
+archetype: angelic_guardian
+role: supporting
+description: "David's 'good angel' — the steady, wise, loving daughter of Mr Wickfield, who keeps house for her father from the age of twelve and bears the weight of his alcoholism and financial decline. She is the quiet centre of the Canterbury household and of David's emotional life, though he fails to recognise his love for her until late in the novel. Agnes is everything Dora is not: practical, intelligent, selfless, perceptive, and spiritually mature beyond her years. She serves as David's moral guide, his confidante in his love for Dora, and ultimately his wife. Her love for David is constant, patient, and self-effacing — she conceals it for years to avoid compromising his happiness with Dora."
+appearance: "Young lady of serene and gentle beauty, with a calm, thoughtful face, a placid brow, and a graceful figure. She has a way of raising her eyes — David calls them 'her mild, clear eyes' — that seems to see into his soul. She is always neatly and simply dressed in quiet colours. Her real beauty is in her expression: earnest, gentle, intelligent."
+aliases:
+  - "Agnes"
+  - "Miss Wickfield"
+gender: female
+age: "About two years younger than David"
+profession: "Gentlewoman (keeps house for her father)"
+traits:
+  - wise
+  - gentle
+  - selfless
+  - patient
+  - loyal
+  - perceptive
+  - faithful
+  - strong
+  - angelic
+initialState:
+  location: canterbury
+  status: alive
+  condition: housekeeper_for_father
+  emotionalState: burdened_but_serene
+voiceNotes: "Quiet, earnest, and measured. Her speech reflects her wisdom and her emotional restraint. She speaks little but her words are well-chosen and often profoundly perceptive. She has a habit of raising her eyes to David's when she wants him to understand something without words. She calls him 'Trotwood' affectionately after he is adopted by Betsey."
+backstory: "Daughter of Mr Wickfield of Canterbury. Her mother died when she was young, and she took over the household at age twelve. She bears her father's love and his weakness for drink with equal grace. She is aware of Uriah Heep's true character from the beginning and resists his advances. She loves David Copperfield from childhood but never declares it, acting as his confidante in his courtship of Dora. After Dora's death and David's return from abroad, she finally marries him, becoming the true companion of his life."

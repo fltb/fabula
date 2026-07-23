@@ -13,55 +13,7 @@
       "validator": "alias",
       "eventId": "E1",
       "category": "characterization",
-      "entityId": "fourth_aunt",
-      "attribute": "aliases",
-      "severity": "warning"
-    },
-    {
-      "validator": "alias",
-      "eventId": "E1",
-      "category": "characterization",
-      "entityId": "fourth_master_lu",
-      "attribute": "aliases",
-      "severity": "warning"
-    },
-    {
-      "validator": "alias",
-      "eventId": "E1",
-      "category": "characterization",
-      "entityId": "short_worker",
-      "attribute": "aliases",
-      "severity": "warning"
-    },
-    {
-      "validator": "alias",
-      "eventId": "E1",
-      "category": "characterization",
       "entityId": "xianglins_wife",
-      "attribute": "aliases",
-      "severity": "warning"
-    },
-    {
-      "validator": "alias",
-      "eventId": "E2",
-      "category": "characterization",
-      "entityId": "fourth_aunt",
-      "attribute": "aliases",
-      "severity": "warning"
-    },
-    {
-      "validator": "alias",
-      "eventId": "E2",
-      "category": "characterization",
-      "entityId": "fourth_master_lu",
-      "attribute": "aliases",
-      "severity": "warning"
-    },
-    {
-      "validator": "alias",
-      "eventId": "E2",
-      "category": "characterization",
-      "entityId": "wei_lao_po_zi",
       "attribute": "aliases",
       "severity": "warning"
     },
@@ -85,14 +37,6 @@
       "validator": "alias",
       "eventId": "E4",
       "category": "characterization",
-      "entityId": "fourth_aunt",
-      "attribute": "aliases",
-      "severity": "warning"
-    },
-    {
-      "validator": "alias",
-      "eventId": "E4",
-      "category": "characterization",
       "entityId": "xianglins_wife",
       "attribute": "aliases",
       "severity": "warning"
@@ -101,7 +45,7 @@
       "validator": "alias",
       "eventId": "E5",
       "category": "characterization",
-      "entityId": "liu_ma",
+      "entityId": "fourth_master_lu",
       "attribute": "aliases",
       "severity": "warning"
     },
@@ -117,143 +61,184 @@
       "validator": "alias",
       "eventId": "E6",
       "category": "characterization",
+      "entityId": "fourth_aunt",
+      "attribute": "aliases",
+      "severity": "warning"
+    },
+    {
+      "validator": "alias",
+      "eventId": "E6",
+      "category": "characterization",
+      "entityId": "fourth_master_lu",
+      "attribute": "aliases",
+      "severity": "warning"
+    },
+    {
+      "validator": "alias",
+      "eventId": "E6",
+      "category": "characterization",
       "entityId": "xianglins_wife",
       "attribute": "aliases",
       "severity": "warning"
     },
     {
-      "validator": "appearance",
+      "validator": "causality",
       "eventId": "E0",
-      "category": "factual_detail",
-      "entityId": "fourth_master_lu",
-      "severity": "warning"
-    },
-    {
-      "validator": "appearance",
-      "eventId": "E0",
-      "category": "factual_detail",
+      "category": "timeline_plot",
       "entityId": "narrator",
+      "attribute": "emotionalState",
       "severity": "warning"
     },
     {
-      "validator": "appearance",
+      "validator": "causality",
       "eventId": "E0",
-      "category": "factual_detail",
+      "category": "timeline_plot",
+      "entityId": "narrator",
+      "attribute": "knowledge",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E0",
+      "category": "timeline_plot",
+      "entityId": "narrator",
+      "attribute": "knowledge_of_xianglins_wife",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E0",
+      "category": "timeline_plot",
+      "entityId": "narrator",
+      "attribute": "location",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E0",
+      "category": "timeline_plot",
       "entityId": "xianglins_wife",
+      "attribute": "emotionalState",
       "severity": "warning"
     },
     {
-      "validator": "appearance",
+      "validator": "causality",
+      "eventId": "E0",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "spiritual_state",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
       "eventId": "E1",
-      "category": "factual_detail",
+      "category": "timeline_plot",
       "entityId": "fourth_master_lu",
+      "attribute": "attitude_toward_xianglins_wife",
       "severity": "warning"
     },
     {
-      "validator": "appearance",
+      "validator": "causality",
       "eventId": "E1",
-      "category": "factual_detail",
+      "category": "timeline_plot",
       "entityId": "narrator",
+      "attribute": "emotionalState",
       "severity": "warning"
     },
     {
-      "validator": "appearance",
+      "validator": "causality",
+      "eventId": "E1",
+      "category": "timeline_plot",
+      "entityId": "narrator",
+      "attribute": "purpose",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E1",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "cause_of_death",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E1",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "time_of_death",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
       "eventId": "E2",
-      "category": "factual_detail",
+      "category": "timeline_plot",
       "entityId": "fourth_aunt",
+      "attribute": "attitude_toward_xianglins_wife",
       "severity": "warning"
     },
     {
-      "validator": "appearance",
+      "validator": "causality",
       "eventId": "E2",
-      "category": "factual_detail",
-      "entityId": "xianglins_wife",
-      "severity": "warning"
-    },
-    {
-      "validator": "appearance",
-      "eventId": "E3",
-      "category": "factual_detail",
+      "category": "timeline_plot",
       "entityId": "fourth_master_lu",
+      "attribute": "attitude_toward_xianglins_wife",
       "severity": "warning"
     },
     {
-      "validator": "appearance",
+      "validator": "causality",
+      "eventId": "E2",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "appearance",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E2",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "emotionalState",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E2",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "location",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E2",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "social_status",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E2",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "status",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E2",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "work_capability",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
       "eventId": "E3",
-      "category": "factual_detail",
+      "category": "timeline_plot",
       "entityId": "he_laoliu",
-      "severity": "warning"
-    },
-    {
-      "validator": "appearance",
-      "eventId": "E3",
-      "category": "factual_detail",
-      "entityId": "mother_in_law",
-      "severity": "warning"
-    },
-    {
-      "validator": "appearance",
-      "eventId": "E3",
-      "category": "factual_detail",
-      "entityId": "old_mrs_wei",
-      "severity": "warning"
-    },
-    {
-      "validator": "appearance",
-      "eventId": "E3",
-      "category": "factual_detail",
-      "entityId": "xianglins_wife",
-      "severity": "warning"
-    },
-    {
-      "validator": "appearance",
-      "eventId": "E4",
-      "category": "factual_detail",
-      "entityId": "fourth_aunt",
-      "severity": "warning"
-    },
-    {
-      "validator": "appearance",
-      "eventId": "E4",
-      "category": "factual_detail",
-      "entityId": "narrator",
-      "severity": "warning"
-    },
-    {
-      "validator": "appearance",
-      "eventId": "E5",
-      "category": "factual_detail",
-      "entityId": "fourth_aunt",
-      "severity": "warning"
-    },
-    {
-      "validator": "appearance",
-      "eventId": "E5",
-      "category": "factual_detail",
-      "entityId": "liu_ma",
-      "severity": "warning"
-    },
-    {
-      "validator": "appearance",
-      "eventId": "E5",
-      "category": "factual_detail",
-      "entityId": "narrator",
-      "severity": "warning"
-    },
-    {
-      "validator": "causality",
-      "eventId": "E2",
-      "category": "timeline_plot",
-      "entityId": "fourth_aunt",
-      "attribute": "attitude_toward_xianglins_wife",
-      "severity": "warning"
-    },
-    {
-      "validator": "causality",
-      "eventId": "E2",
-      "category": "timeline_plot",
-      "entityId": "fourth_master_lu",
-      "attribute": "attitude_toward_xianglins_wife",
+      "attribute": "marital_status",
       "severity": "warning"
     },
     {
@@ -268,365 +253,408 @@
       "validator": "causality",
       "eventId": "E3",
       "category": "timeline_plot",
+      "entityId": "old_mrs_wei",
+      "attribute": "role_in_kidnapping",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E3",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "appearance",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E3",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "emotionalState",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E3",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "has_ah_mao",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E3",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "location",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E3",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "marital_status",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E3",
+      "category": "timeline_plot",
       "entityId": "xianglins_wife",
       "attribute": "social_status",
       "severity": "warning"
     },
     {
-      "validator": "character_state",
-      "eventId": "E4",
-      "category": "characterization",
-      "entityId": "xianglins_wife",
-      "attribute": "status",
-      "severity": "error"
-    },
-    {
-      "validator": "character_state",
-      "eventId": "E5",
-      "category": "characterization",
-      "entityId": "xianglins_wife",
-      "attribute": "status",
-      "severity": "error"
-    },
-    {
-      "validator": "character_state",
-      "eventId": "E6",
-      "category": "characterization",
-      "entityId": "xianglins_wife",
-      "attribute": "status",
-      "severity": "error"
-    },
-    {
-      "validator": "conflict",
-      "eventId": "E2",
-      "category": "factual_detail",
-      "attribute": "resolutionType",
-      "severity": "warning"
-    },
-    {
-      "validator": "conflict",
-      "eventId": "E3",
-      "category": "factual_detail",
-      "attribute": "resolutionType",
-      "severity": "warning"
-    },
-    {
-      "validator": "conflict",
-      "eventId": "E4",
-      "category": "factual_detail",
-      "attribute": "resolutionType",
-      "severity": "warning"
-    },
-    {
-      "validator": "pacing",
-      "eventId": "E3",
-      "category": "narrative_style",
-      "attribute": "arcPosition",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E0",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E1",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E2",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E3",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E4",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E5",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E6",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "reachability",
-      "eventId": "E0",
-      "category": "timeline_plot",
-      "entityId": "fourth_master_lu",
-      "attribute": "location",
-      "severity": "warning"
-    },
-    {
-      "validator": "reachability",
-      "eventId": "E0",
-      "category": "timeline_plot",
-      "entityId": "narrator",
-      "attribute": "location",
-      "severity": "info"
-    },
-    {
-      "validator": "reachability",
-      "eventId": "E1",
-      "category": "timeline_plot",
-      "entityId": "narrator",
-      "attribute": "location",
-      "severity": "info"
-    },
-    {
-      "validator": "reachability",
-      "eventId": "E2",
-      "category": "timeline_plot",
-      "entityId": "narrator",
-      "attribute": "location",
-      "severity": "info"
-    },
-    {
-      "validator": "reachability",
-      "eventId": "E3",
-      "category": "timeline_plot",
-      "entityId": "mother_in_law",
-      "attribute": "motivation",
-      "severity": "warning"
-    },
-    {
-      "validator": "reachability",
-      "eventId": "E3",
-      "category": "timeline_plot",
-      "entityId": "narrator",
-      "attribute": "location",
-      "severity": "info"
-    },
-    {
-      "validator": "reachability",
+      "validator": "causality",
       "eventId": "E4",
       "category": "timeline_plot",
-      "entityId": "narrator",
-      "attribute": "location",
-      "severity": "info"
-    },
-    {
-      "validator": "reachability",
-      "eventId": "E5",
-      "category": "timeline_plot",
-      "entityId": "narrator",
-      "attribute": "location",
-      "severity": "info"
-    },
-    {
-      "validator": "reachability",
-      "eventId": "E6",
-      "category": "timeline_plot",
-      "entityId": "narrator",
-      "attribute": "location",
-      "severity": "info"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E0",
-      "category": "timeline_plot",
-      "entityId": "T2",
-      "attribute": "threadProgress",
+      "entityId": "fourth_aunt",
+      "attribute": "attitude_toward_xianglins_wife",
       "severity": "warning"
     },
     {
-      "validator": "thread_progress",
-      "eventId": "E0",
-      "category": "timeline_plot",
-      "entityId": "T3",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E0",
-      "category": "timeline_plot",
-      "entityId": "T4",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E1",
-      "category": "timeline_plot",
-      "entityId": "T1",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E1",
-      "category": "timeline_plot",
-      "entityId": "T3",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E1",
-      "category": "timeline_plot",
-      "entityId": "T4",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E2",
-      "category": "timeline_plot",
-      "entityId": "T1",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E3",
-      "category": "timeline_plot",
-      "entityId": "T1",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
+      "validator": "causality",
       "eventId": "E4",
       "category": "timeline_plot",
-      "entityId": "T1",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E4",
-      "category": "timeline_plot",
-      "entityId": "T3",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E5",
-      "category": "timeline_plot",
-      "entityId": "T1",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E5",
-      "category": "timeline_plot",
-      "entityId": "T2",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E5",
-      "category": "timeline_plot",
-      "entityId": "T3",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E5",
-      "category": "timeline_plot",
-      "entityId": "T4",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E6",
-      "category": "timeline_plot",
-      "entityId": "T1",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E6",
-      "category": "timeline_plot",
-      "entityId": "T2",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E6",
-      "category": "timeline_plot",
-      "entityId": "T3",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E6",
-      "category": "timeline_plot",
-      "entityId": "T4",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "timeline",
-      "eventId": "E3",
-      "category": "timeline_plot",
-      "entityId": "narrator",
-      "attribute": "narration_time",
-      "severity": "warning"
-    },
-    {
-      "validator": "world_rule",
-      "eventId": "E3",
-      "category": "worldbuilding",
       "entityId": "he_laoliu",
-      "attribute": "marital_status",
-      "severity": "error"
+      "attribute": "status",
+      "severity": "warning"
     },
     {
-      "validator": "world_rule",
-      "eventId": "E3",
-      "category": "worldbuilding",
-      "entityId": "xianglins_wife",
-      "attribute": "marital_status",
-      "severity": "error"
-    },
-    {
-      "validator": "world_rule",
+      "validator": "causality",
       "eventId": "E4",
-      "category": "worldbuilding",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "appearance",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E4",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "emotionalState",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E4",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "has_ah_mao",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E4",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "location",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E4",
+      "category": "timeline_plot",
       "entityId": "xianglins_wife",
       "attribute": "marital_status",
-      "severity": "error"
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E4",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "social_status",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E4",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "storytelling_mode",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "fourth_aunt",
+      "attribute": "attitude_toward_xianglins_wife",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "liu_ma",
+      "attribute": "effect_on_xianglins_wife",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "appearance",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "emotionalState",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "has_donated_threshold",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "social_status",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "spiritual_state",
+      "severity": "warning"
+    },
+    {
+      "validator": "causality",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "xianglins_wife",
+      "attribute": "work_capability",
+      "severity": "warning"
+    },
+    {
+      "validator": "conflict",
+      "eventId": "E2",
+      "category": "factual_detail",
+      "attribute": "conflictType",
+      "severity": "info"
+    },
+    {
+      "validator": "foreshadowing",
+      "eventId": "E5",
+      "category": "factual_detail",
+      "entityId": "her_inevitable_expulsion",
+      "attribute": "foreshadowing",
+      "severity": "warning"
+    },
+    {
+      "validator": "pov",
+      "eventId": "E0",
+      "category": "narrative_style",
+      "entityId": "narrator",
+      "attribute": "pov.type",
+      "severity": "warning"
+    },
+    {
+      "validator": "pov",
+      "eventId": "E1",
+      "category": "narrative_style",
+      "entityId": "narrator",
+      "attribute": "pov.type",
+      "severity": "warning"
+    },
+    {
+      "validator": "pov",
+      "eventId": "E2",
+      "category": "narrative_style",
+      "entityId": "narrator",
+      "attribute": "pov.type",
+      "severity": "warning"
+    },
+    {
+      "validator": "pov",
+      "eventId": "E3",
+      "category": "narrative_style",
+      "entityId": "narrator",
+      "attribute": "pov.type",
+      "severity": "warning"
+    },
+    {
+      "validator": "pov",
+      "eventId": "E4",
+      "category": "narrative_style",
+      "entityId": "narrator",
+      "attribute": "pov.type",
+      "severity": "warning"
+    },
+    {
+      "validator": "pov",
+      "eventId": "E5",
+      "category": "narrative_style",
+      "entityId": "narrator",
+      "attribute": "pov.type",
+      "severity": "warning"
+    },
+    {
+      "validator": "pov",
+      "eventId": "E6",
+      "category": "narrative_style",
+      "entityId": "narrator",
+      "attribute": "pov.type",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E0",
+      "category": "timeline_plot",
+      "entityId": "T2",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E0",
+      "category": "timeline_plot",
+      "entityId": "T3",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E0",
+      "category": "timeline_plot",
+      "entityId": "T4",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E1",
+      "category": "timeline_plot",
+      "entityId": "T1",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E1",
+      "category": "timeline_plot",
+      "entityId": "T3",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E1",
+      "category": "timeline_plot",
+      "entityId": "T4",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E2",
+      "category": "timeline_plot",
+      "entityId": "T1",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E3",
+      "category": "timeline_plot",
+      "entityId": "T1",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E4",
+      "category": "timeline_plot",
+      "entityId": "T1",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E4",
+      "category": "timeline_plot",
+      "entityId": "T3",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "T1",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "T2",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "T3",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E5",
+      "category": "timeline_plot",
+      "entityId": "T4",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E6",
+      "category": "timeline_plot",
+      "entityId": "T1",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E6",
+      "category": "timeline_plot",
+      "entityId": "T2",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E6",
+      "category": "timeline_plot",
+      "entityId": "T3",
+      "attribute": "threadProgress",
+      "severity": "warning"
+    },
+    {
+      "validator": "thread_progress",
+      "eventId": "E6",
+      "category": "timeline_plot",
+      "entityId": "T4",
+      "attribute": "threadProgress",
+      "severity": "warning"
     }
   ]
 }

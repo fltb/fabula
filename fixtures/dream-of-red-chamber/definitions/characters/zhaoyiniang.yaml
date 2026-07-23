@@ -1,0 +1,18 @@
+id: zhaoyiniang
+name: 赵姨娘
+type: supporting
+role: supporting
+description: 赵姨娘，首次出现于第20回，共提及32次。
+appearance: 半老徐娘相貌，有些姿色但已褪去。贾政之妾，穿戴俗艳。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: middle_aged
+voiceNotes: 言语刻薄恶毒，好搬弄是非。因地位低下而心理扭曲，常因小事与人争吵。在贾政面前撒娇卖痴，在他人面前满口怨毒之言。
+backstory: 贾政之妾，探春、贾环之生母。出身低微，为人卑鄙刻薄。曾买通马道婆用巫蛊之术暗害王熙凤和贾宝玉。对亲生女儿探春尚有几分亲情，但探春却因她是姨娘而深感羞耻。最终赵姨娘暴病而亡。
+knownSecrets:
+- 买通马道婆用巫蛊之术暗害凤姐和宝玉

@@ -1,0 +1,106 @@
+event: E01
+title: "I Am Born"
+narrativeOrder: 1
+sceneType: linear
+storyTime: davids_birth
+narrationTime: davids_birth
+tense: past
+discourseMode: reflection
+arcPosition: opening
+emotionalValence: "wonder_anxiety"
+conflictType: "person_vs_fate"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "David Copperfield is born at Blunderstone Rookery in Suffolk on a Friday at midnight, a posthumous child whose father died six months before. His mother Clara is sitting by the fire, anxious and tearful, when the formidable Miss Betsey Trotwood arrives unexpectedly, demanding to see the baby. Miss Betsey had wanted a girl and when she learns the child is a boy, she leaves in disappointment, declaring it 'as plain as plain can be there's no improvement.' Despite this, David's early life is happy, spent with his gentle mother and the devoted servant Peggotty — running in the garden, reading to Peggotty from the Crocodile Book, and sleeping in the warm nursery. The chapter establishes the key relationships and the narrative voice: David looking back on his infancy with a mixture of affectionate memory and wry humour."
+preconditions: []
+expectedPostconditions:
+  - entity: david_copperfield
+    attribute: status
+    value: born
+    confidence: 1.0
+  - entity: david_copperfield
+    attribute: location
+    value: blunderstone
+    confidence: 1.0
+  - entity: clara_copperfield
+    attribute: status
+    value: mother_of_david
+    confidence: 1.0
+  - entity: clara_copperfield
+    attribute: location
+    value: blunderstone
+    confidence: 1.0
+  - entity: betsey_trotwood
+    attribute: relationship_to_david
+    narrativeHint: "Miss Betsey leaves disappointed that the child is a boy, but this is only the beginning of their connection. She will return as David's protector years later, renaming him Trotwood Copperfield."
+    confidence: 0.9
+  - entity: betsey_trotwood
+    attribute: location
+    value: blunderstone
+    confidence: 1.0
+  - entity: peggotty
+    attribute: location
+    value: blunderstone
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "David's birth and earliest memories establish the bildungsroman arc. The posthumous child enters a world already marked by loss, but his early years with Clara and Peggotty at Blunderstone are idyllic — running in the garden, reading the Crocodile Book, sleeping in the warm nursery."
+    progressAfter: 2
+    progressTotal: 100
+  - thread: T2
+    advancement: "Miss Betsey's disappointment at a boy rather than a girl plants the seed of the Trotwood-Copperfield relationship. Her declaration that 'there's no improvement' and abrupt departure leave the connection unresolved, to be renewed when David flees to her in Dover."
+    progressAfter: 1
+    progressTotal: 100
+foreshadowing:
+  - id: betsey_future_role
+    hint: "Miss Betsey's frustrated departure — 'as plain as plain can be there's no improvement' — masks a deeper disappointment that is not abandonment but the start of a long-unresolved connection. She will return as David's guardian when he runs away to Dover."
+    targetRevealChapter: 13
+    thread: T1
+  - id: the_crocodile_book
+    hint: "David reading the Crocodile Book to Peggotty hints at his future vocation as a storyteller and his lifelong love of narrative."
+    targetRevealChapter: 1
+    thread: T1
+introduces:
+  - type: location
+    id: blunderstone
+    initialState:
+      status: active
+  - type: character
+    id: david_copperfield
+    initialState:
+      location: blunderstone
+      status: newborn
+      condition: infant
+      emotionalState: unaware
+  - type: character
+    id: clara_copperfield
+    initialState:
+      location: blunderstone
+      status: mother
+      condition: widowed_recently
+      emotionalState: anxious_tender
+  - type: character
+    id: peggotty
+    initialState:
+      location: blunderstone
+      status: servant
+      condition: devoted
+      emotionalState: loyal_affectionate
+  - type: character
+    id: betsey_trotwood
+    initialState:
+      location: blunderstone
+      status: visitor_departed
+      condition: disappointed
+      emotionalState: frustrated_but_intrigued
+styleGuidance:
+  tone: "wry, affectionate, gently humorous"
+  targetWordCount: 800
+  atmosphere: "midnight firelight at Blunderstone Rookery — the warm nursery and garden contrasted with the cold Suffolk night outside, the novel's world opening in lamplight and shadow"
+  scenePacing: "birth (brisk) → Miss Betsey's arrival (theatrical and sharp) → early childhood vignettes (meandering, episodic, warm)"
+  characterVoice:
+    narrator: "Adult David looking back on his own birth with amused detachment — 'I was born at Blunderstone Rookery, in Suffolk, on a Friday...' The voice is mature, self-aware, gently ironic, conscious of the gap between infant experience and adult understanding"
+    clara_copperfield: "Gentle, tearful, anxious — a young mother overwhelmed by her circumstances, speaking softly and uncertainly, easily intimidated"
+    betsey_trotwood: "Brusque, commanding, eccentric — speaks in direct imperatives, her disappointment masked by sharp wit. 'Janet! Donkeys!' is her first recorded command"
+    peggotty: "Quiet, devoted, practical — few words but immense warmth, the solid presence in young David's life"

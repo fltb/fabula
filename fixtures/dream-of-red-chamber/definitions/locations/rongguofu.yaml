@@ -1,0 +1,13 @@
+id: rongguofu
+name: 荣国府
+kind: residence
+description: 荣国府是《红楼梦》的核心场景，贾氏家族长房住宅。大门三间，东西两府并列。内有贾母院、贾赦院、凤姐院、梨香院等院落，正堂为荣禧堂。府内书有"荣禧堂"匾额，为皇帝御笔。日常生活的各类事件在此频繁上演。
+initialState:
+  status: occupied
+  household_state: prosperous
+  atmosphere: bustling
+notableFeatures:
+- 荣禧堂——正堂，皇帝御笔赐匾
+- 贾母院——贾母居所，府中最高权威所在
+- 凤姐院——王熙凤居所，管家办事处
+- 梨香院——薛家初到时寄居之处

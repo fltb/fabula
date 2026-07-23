@@ -1,0 +1,29 @@
+id: traddles
+name: "Tommy Traddles"
+type: supporting_character
+archetype: steadfast_friend
+role: supporting
+description: "David's loyal schoolfellow at Salem House and lifelong friend. Traddles is a good-natured, hard-working boy with a talent for drawing skeletons and a perpetual state of being unjustly punished by Mr Creakle. He is the most thoroughly good character in the novel — honest, patient, persevering, and without a trace of malice. As an adult he studies law with determination, overcomes poverty and obstacles, marries his beloved Sophy, and eventually becomes a respected judge. He helps David expose Uriah Heep's frauds and is the repository of the evidence collected by Micawber."
+appearance: "Sturdy, round-faced, with a cheerful expression and a roughly brushed head of hair that stands up all over. He is always somewhat rumpled and ink-stained. Has a habit of rubbing his hands together when pleased."
+aliases:
+  - "Traddles"
+  - "Tommy Traddles"
+gender: male
+age: "Same age as David"
+profession: "Barrister / Judge, formerly articled clerk"
+traits:
+  - good_natured
+  - persevering
+  - honest
+  - industrious
+  - loyal
+  - optimistic
+  - humble
+  - contented
+initialState:
+  location: salem_house
+  status: alive
+  condition: schoolboy_with_no_protector
+  emotionalState: cheerful_despite_woes
+voiceNotes: "Earnest, unpretentious, often expressing wonder at his own good fortune. He has a habit of recounting his misfortunes (broken shins, unjust punishments) without rancour. His letters are laboriously written and full of exclamation marks."
+backstory: "Son of a poor but respectable Devonshire family. At Salem House he is beaten more than any other boy — Mr Creakle counts the skeletons Traddles draws on his slate as evidence of idleness. He forms a close friendship with David that lasts all their lives. He struggles through poverty to qualify as a barrister, endures boarding in attics on bread and milk, and eventually marries Sophy (the daughter of a country parson with ten children, for whom he has waited years). He helps David and Micawber expose Uriah Heep."

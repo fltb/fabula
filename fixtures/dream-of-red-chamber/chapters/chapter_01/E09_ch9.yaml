@@ -1,0 +1,54 @@
+event: E9
+title: 通灵除邪
+narrativeOrder: 9
+sceneType: linear
+pov:
+  character: narrator_omniscient
+  type: omniscient
+sceneBrief: 宝玉与凤姐同时中邪，举止疯狂，合家惊慌失措。众人延医问卜无效，叔嫂二人气息将绝。赵姨娘幸灾乐祸，被贾母痛斥。至第四日，癞头和尚与跛足道人降临，持诵通灵宝玉，嘱将宝玉悬挂室内，避阴人冲犯，三十三日可愈。二人坐于王夫人房中守护，宝玉凤姐渐渐苏醒。黛玉念一声阿弥陀佛，宝钗讥笑佛祖也管姻缘，黛玉红了脸。
+preconditions: []
+expectedPostconditions: []
+threadProgress:
+  - thread: T1
+    advancement: 通灵宝玉被声色货利所迷，赖僧道持诵复灵，点出幻灭与觉醒之机。
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T2
+    advancement: 凤姐中邪弄刀，权势之外显其脆弱，病愈后仍暂归原位。
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T3
+    advancement: 贾府合家慌乱、治备棺木，显露盛中藏衰之兆。
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T4
+    advancement: 黛玉关切宝钗讥讽，感情暗流涌动。
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T7
+    advancement: 赵姨娘贾环之冷意与贾母责骂，暴露家族礼制之裂痕。
+    progressAfter: 10
+    progressTotal: 100
+foreshadowing:
+  - thread: T1
+    id: fs_E09_ch9_fmmr
+    hint: 见原文
+    targetRevealChapter: 80
+  - thread: T4
+    id: fs_E09_ch9_ryif
+    hint: 见原文
+    targetRevealChapter: 80
+introduces: []
+styleGuidance:
+  tone: 紧张玄幻中含悲喜交织
+  targetWordCount: 600
+  atmosphere: 全场慌乱，后转神秘庄严，终归于闺中轻薄戏谑
+  scenePacing: 前急后缓，起伏分明
+  characterVoice: {}
+tense: past
+discourseMode: action
+arcPosition: opening
+emotionalValence: past
+conflictType: past
+storyTime: past
+narrationTime: past

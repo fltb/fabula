@@ -1,0 +1,25 @@
+id: guan_zhaodi
+name: 冠招弟
+type: daughter
+archetype: pretty_but_empty
+role: minor
+description: 冠家二女儿，比姐姐高第漂亮、活泼，也更受母亲宠爱。她爱打扮、爱玩，对国事毫不在意。大赤包打算把她嫁给更有权势的人。
+appearance: 花容月貌，爱打扮，活泼。
+aliases:
+- 招弟
+- 二妹妹
+gender: 女
+age: 约十七八岁
+profession: 无业
+traits:
+- pretty
+- frivolous
+- spoiled
+- naive
+initialState:
+  location: loc_guanjia
+  status: alive
+  condition: unmarried
+  emotionalState: carefree
+backstory: 冠家最受宠的小女儿。
+knownSecrets: []

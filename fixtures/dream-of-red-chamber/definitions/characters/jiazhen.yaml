@@ -1,0 +1,19 @@
+id: jiazhen
+name: 贾珍
+type: supporting
+role: supporting
+description: 贾珍，首次出现于第2回，共提及58次。
+appearance: 中年男子，面皮白净，微有髭须。衣饰华贵，气度张扬。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 宁国府
+  status: alive
+  age_stage: middle_aged
+voiceNotes: 言语张狂恣意，不守礼法。在族中行事跋扈，与儿媳秦可卿之事令人侧目。但处理宁府事务时亦有威仪。
+backstory: 宁国府当家人，贾蓉之父。世袭三品威烈将军，荒淫无度，不理家业。与儿媳秦可卿有不伦之事，为其大办丧事逾制。最终宁国府被查抄，贾珍获罪发配。
+knownSecrets:
+- 与秦可卿之事
+- 为秦可卿大办丧事逾制越礼

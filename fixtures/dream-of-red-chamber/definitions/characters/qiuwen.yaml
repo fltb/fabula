@@ -1,0 +1,18 @@
+id: qiuwen
+name: 秋纹
+type: supporting
+role: supporting
+description: 秋纹，首次出现于第19回，共提及31次。宝玉的丫鬟
+appearance: 宝玉房中的丫鬟，容貌端正。打扮干净利落。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 怡红院
+  status: alive
+  role: maid
+  age_stage: young_adult
+voiceNotes: 言语挑拨是非，心胸狭窄。因是宝玉房中丫鬟而自视甚高，对小红等下层丫鬟颐指气使。偶尔讨好宝玉。
+backstory: 贾宝玉房中的丫鬟。性格好胜嫉妒，曾与麝月一起排挤小红。在宝玉房中地位次于袭人、晴雯、麝月。晴雯被逐后仍在怡红院当差。
+knownSecrets: []

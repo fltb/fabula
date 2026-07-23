@@ -1,0 +1,132 @@
+event: E19
+title: I Am Shown Two Interesting Penitents
+narrativeOrder: 19
+sceneType: linear
+storyTime: return_to_england
+narrationTime: return_to_england
+tense: past
+discourseMode: exposition
+arcPosition: denouement
+emotionalValence: redemptive_hope
+conflictType: person_vs_society
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: David has returned to England and is living at Aunt Betsey's house in
+  Dover, completing his novel. He goes to visit the Micawbers and the Peggottys before
+  their emigration to Australia. Mr Peggotty shows David Emily, who has been living
+  quietly in London under Martha's care, genuinely penitent and deeply changed. Emily
+  asks David to write to Ham's family and to tell them she will spend her life trying
+  to be worthy of their forgiveness. Mr Peggotty, Emily, Mrs Gummidge, and the entire
+  Micawber family sail for Australia, where they will start new lives. Mr Micawber,
+  with his usual optimism, declares that he will 'shine' in the colonies. Before they
+  go, David also visits Littimer and Uriah Heep in prison — two fascinating penitents,
+  though their penitence is more tactical than genuine.
+preconditions:
+- entity: david_copperfield
+  attribute: location
+  value: dover
+- entity: dan_peggotty
+  attribute: condition
+  value: about_to_emigrate
+expectedPostconditions:
+- entity: emily
+  attribute: status
+  value: forgiven_and_emigrating
+  confidence: 1.0
+- entity: dan_peggotty
+  attribute: status
+  value: emigrated_to_australia
+  confidence: 1.0
+- entity: micawber
+  attribute: status
+  value: emigrated_to_australia
+  confidence: 1.0
+- entity: uriah_heep
+  attribute: status
+  value: imprisoned
+  confidence: 1.0
+- entity: david_copperfield
+  attribute: emotionalState
+  value: peaceful_closure
+  confidence: 1.0
+threadProgress:
+- thread: T4
+  advancement: Emily's redemption is complete — she is forgiven by the only family
+    she has left and given a new chance in Australia. The 'fallen woman' is restored
+    not to her former position but to a different kind of life, one of quiet penance
+    and hope. Dickens's most sympathetic treatment of a fallen woman reaches its conclusion.
+  progressAfter: 100
+  progressTotal: 100
+- thread: T5
+  advancement: Micawber's emigration — the beginning of his Australian success story.
+    The man who has always failed in England will find his element in the colonies,
+    where energy and optimism are more valuable than social position. His declaration
+    that he will 'shine' is not empty boast but prophecy.
+  progressAfter: 100
+  progressTotal: 100
+- thread: T1
+  advancement: David is healed, writing, and ready for his future. He has faced the
+    'undisciplined heart' and begun to understand it. The visits to the emigrants
+    and the prisoners give him a sense of closure — the old stories are ending, and
+    a new chapter of his life is about to begin.
+  progressAfter: 90
+  progressTotal: 100
+- thread: T3
+  advancement: The definitive end of the Heep plot — Heep is in prison, finally receiving
+    the legal consequences of his fraud. His 'penitence' is exposed as hypocritical,
+    but the machinery of justice has done its work.
+  progressAfter: 100
+  progressTotal: 100
+foreshadowing:
+- id: david_return_to_agnes
+  hint: 'As David completes his rounds of farewell — the emigrants, the prisoners,
+    the old friends — one face is notably absent from the chapter: Agnes. She waits
+    for him, and his readiness to see her will define the final chapter of his story.'
+  targetRevealChapter: 60
+  thread: T2
+- id: micawber_australian_success
+  hint: Micawber's confidence on the dock is more than comic bluster — it anticipates
+    his actual success in Australia, where he becomes a respected magistrate and finally
+    achieves the prosperity that always eluded him in England.
+  targetRevealChapter: 64
+  thread: T5
+introduces: []
+styleGuidance:
+  tone: bittersweet, redemptive, forward-looking — the chapter gathers up the threads
+    of the emigrants' stories and weaves them into a pattern of hope and new beginnings,
+    while the visits to the penitents offer a sombre counterpoint of justice served
+    and hypocrisy unmasked
+  targetWordCount: 1000
+  atmosphere: 'the dock at Gravesend, the ship ready to sail — a bustle of trunks
+    and tearful farewells, the smell of the harbour, the cries of gulls. Emily''s
+    quiet face among the crowd, Mr Peggotty''s steady presence, Micawber''s oratory
+    soaring above the confusion. The prison scenes offer a sharp contrast: stone walls,
+    echoing corridors, the men reduced to their true natures.'
+  scenePacing: David at Dover with Aunt Betsey (peaceful, settled) → the visit to
+    Emily in London (tender, painful, healing) → the farewell at the docks (bustling,
+    emotional, forward-looking) → Micawber's parting speech (comic and noble) → the
+    ship departs (a turning page) → the prison visits (sombre, revealing, contrasting)
+    → David alone again (reflective, ready)
+  characterVoice:
+    narrator: Adult David with a tone of gentle resolution — the urgency and passion
+      of the earlier chapters have given way to a calm, retrospective wisdom. He is
+      not merely telling events but surveying the completed arcs of his friends' lives,
+      and his voice carries the satisfaction of a pattern completed.
+    emily: Quiet, subdued, genuinely penitent — her voice is barely audible, her words
+      few. She speaks of Ham with a grief that is beyond tears, and of her future
+      with a humility that asks for nothing but the chance to be good. The wild girl
+      of Yarmouth is gone; in her place is a woman who has suffered and been purified
+      by suffering.
+    micawber: As magnificent as ever — his farewell address is pure Micawber, full
+      of rolling periods and hopeful predictions. But there is a new note of genuine
+      feeling beneath the rhetoric. He knows this is his last chance, and he means
+      to take it. 'I shall shine, Master Copperfield — I shall shine!'
+    mr_peggotty: Steady, quiet, his forgiveness shown in actions rather than words.
+      He speaks of Emily as if no wrong had ever come between them, calling her 'my
+      dear' with perfect naturalness. His voice is the voice of unconditional love,
+      the most powerful moral force in the novel.
+    uriah_heep: Still 'umble,' still oily, still insinuating — prison has not changed
+      him, only given him new grievances to nurse and a new audience to fascinate
+      with his performance of reform. His voice is the same as ever, but now the reader
+      sees through it completely.

@@ -1,0 +1,117 @@
+event: E17
+title: Tempest
+narrativeOrder: 17
+sceneType: linear
+storyTime: london_career
+narrationTime: london_career
+tense: past
+discourseMode: exposition
+arcPosition: climax
+emotionalValence: catastrophic_tragedy
+conflictType: person_vs_nature
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: David travels to Yarmouth as the emigrant ship is about to sail with the
+  Micawbers and Peggotty family. A terrible storm — the worst in living memory — rages
+  along the coast. A ship is wrecked off Yarmouth beach, and a man is seen clinging
+  to the rigging. Ham Peggotty, despite desperate pleas from the crowd, insists on
+  attempting a rescue — he ties a rope around himself and swims into the surf. The
+  wreck breaks apart and both Ham and the man are engulfed. Ham drowns; the body washed
+  ashore later is revealed to be Steerforth. The two men — innocent victim and guilty
+  seducer — die together in the same sea. David witnesses the entire catastrophe.
+  The chapter is the novel's most powerful and devastating scene, a climax of both
+  the Emily-Steerforth tragedy and the tempest motif that has run through the book.
+preconditions:
+- entity: ham
+  attribute: location
+  value: yarmouth
+- entity: steerforth
+  attribute: location
+  value: at_sea_near_yarmouth
+expectedPostconditions:
+- entity: ham
+  attribute: status
+  value: dead
+  confidence: 1.0
+- entity: steerforth
+  attribute: status
+  value: dead
+  confidence: 1.0
+- entity: david_copperfield
+  attribute: emotionalState
+  value: shattered_by_horror
+  confidence: 1.0
+- entity: ham
+  attribute: emotionalState
+  value: heroic_unto_death
+  confidence: 1.0
+threadProgress:
+- thread: T4
+  advancement: The tragedy of Emily and Steerforth concludes in the most devastating
+    possible way — Ham dies a martyr attempting to save the man who destroyed his
+    life; Steerforth dies by the sea that was the instrument of his seduction of Emily.
+    Both are taken by the same wave, their bodies laid in the same churchyard. The
+    moral and emotional arc of the subplot is complete.
+  progressAfter: 100
+  progressTotal: 100
+- thread: T1
+  advancement: David's world is shaken to its foundations — he has lost his oldest
+    schoolfellow (the idol of his youth) and his Yarmouth friend in a single night
+    of horror. The tempest becomes the outer expression of an inner chaos that will
+    take years to calm. This is the darkest moment of his young manhood.
+  progressAfter: 80
+  progressTotal: 100
+- thread: T2
+  advancement: The violence of the storm and the deaths at Yarmouth stand in stark
+    contrast to the quiet domestic sorrow of Dora's decline — two different kinds
+    of loss, one cataclysmic, the other gentle, both stripping David of everyone he
+    loves.
+  progressAfter: 80
+  progressTotal: 100
+foreshadowing:
+- id: ham_death_foreshadowing
+  hint: Ham's character has always been defined by patient suffering and self-sacrifice
+    — the storm reveals the limit of that sacrifice. The sea that has been his livelihood
+    becomes his grave, his last act an attempt to rescue the man who wronged him.
+  targetRevealChapter: 55
+  thread: T4
+- id: steerforth_end
+  hint: Steerforth's arrogance and carelessness — the yacht, the recklessness, the
+    contempt for consequences — find their natural conclusion in shipwreck. The sea
+    that carried him to Emily's ruin carries him to his own.
+  targetRevealChapter: 55
+  thread: T4
+introduces: []
+styleGuidance:
+  tone: apocalyptic, sublime, overwhelming — the prose must match the fury of the
+    storm and the profound tragedy of the double drowning. There is no comfort here,
+    only the raw power of nature and the terrible consequences of human action and
+    inaction.
+  targetWordCount: 1500
+  atmosphere: the Yarmouth coast under a black sky — wind that tears the breath from
+    the mouth, rain that flies horizontally, the sea a boiling chaos of white and
+    grey. The wrecked ship heaves and groans in the surf, its masts whipping, a human
+    figure barely visible in the rigging. The crowd on the beach is huddled and helpless,
+    their cries lost in the wind. Ham stands apart, his face strange and fixed, already
+    gone from them.
+  scenePacing: journey to Yarmouth (ominous weather, gathering dread) → the coast
+    before the storm (portentous stillness, the sea breathing) → the storm breaks
+    (crescendo of wind and wave) → the ship appears (horror approaching) → the figure
+    in the rigging (distant desperation) → Ham's decision (inevitable, terrible) →
+    the rescue attempt (held breath, crushing wave) → Ham gone (silence within the
+    roar) → the body of Steerforth (the face from the past) → the double death accepted
+    in stunned silence
+  characterVoice:
+    narrator: Adult David at his most stripped and direct — the retrospective narrator
+      abandons all ornament and irony, describing the storm and its consequences with
+      a plain, terrible clarity. The horror is too great for literary effect; the
+      prose becomes elemental.
+    ham: Almost silent — his few words before the rescue are spoken with a strange,
+      faraway calm. 'Masse'r Davy,' he says, 'if my time is come, 'tis come.' He speaks
+      with a dignity that transcends his rough dialect. There is no bravado, only
+      acceptance.
+    david_copperfield: David's voice is that of a helpless witness — he pleads with
+      Ham not to go, he screams warnings that are lost in the wind, he stands paralysed
+      as the waves close over his friend. His narration conveys the particular horror
+      of watching someone you love walk calmly to their death.

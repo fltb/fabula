@@ -1,0 +1,51 @@
+event: E09
+title: 南京陷落，瑞宣痛哭
+narrativeOrder: 9
+sceneType: linear
+storyTime: celebration_nanjing
+narrationTime: celebration_nanjing
+tense: past
+discourseMode: description
+arcPosition: climax
+emotionalValence: devastating_grief
+conflictType: person_vs_society
+pov:
+  character: omniscient
+  type: omniscient
+sceneBrief: 南京陷落的消息传来时，瑞宣正在去学校的路上。他转身回家，一头扎在床上，失声痛哭——这是北平陷落以来他第一次放声大哭。小顺儿的妈不知所措。广播电台上升起更大的气球，"庆祝南京陷落"的大字刺着每个人的眼。瑞宣想到了蒋委员长的继续抗战宣言，心中又燃起一丝希望。他决定：宁可丢了脑袋，也不向敌人屈膝。
+preconditions:
+- entity: qi_ruixuan
+  attribute: location
+  value: loc_qijia
+- entity: qi_ruixuan
+  attribute: emotionalState
+  value: anxious_and_conflicted
+expectedPostconditions:
+- entity: qi_ruixuan
+  attribute: emotionalState
+  narrativeHint: 南京陷落让瑞宣彻底绝望了一回，但他从蒋委员长的抗战宣言中重新找到了力量。他决定：绝不做汉奸，宁可饿死也不向日本人低头。
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: political_stance
+  value: determined_not_to_collaborate
+  confidence: 1.0
+- entity: qi_ruixuan
+  attribute: knowledge
+  value: nanjing_has_fallen
+  confidence: 1.0
+threadProgress:
+- thread: T1
+  advancement: 南京陷落使局势更加严峻，但抗战仍在继续。瑞宣听到了蒋委员长的宣言，心中又燃起希望。
+  progressAfter: 30
+  progressTotal: 100
+- thread: T2
+  advancement: 瑞宣在痛哭之后反而坚定了决心——宁可饿死也不做汉奸。他找到了自己的底线。
+  progressAfter: 35
+  progressTotal: 100
+styleGuidance:
+  tone: 大悲之后的大彻大悟
+  targetWordCount: 1200
+  atmosphere: 冬日阴冷，瑞宣的屋中光线昏暗。远处传来日伪庆祝的锣鼓声，与他的哭声交织在一起。
+  scenePacing: 消息传来→失声痛哭→绝望→重燃希望→明确底线
+  characterVoice:
+    omniscient: 第三人称全知，深入瑞宣的内心世界，展现他从绝望到坚定的心理过程

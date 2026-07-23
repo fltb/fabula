@@ -1,0 +1,19 @@
+id: wangfuren
+name: 王夫人
+type: supporting
+role: supporting
+description: 王夫人，首次出现于第3回，共提及105次。
+appearance: 中年妇人，面容端庄和善，常穿素净衣裳。虽不似凤姐张扬，但自有当家太太的气度。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: middle_aged
+voiceNotes: 表面慈祥寡言，实则果断严厉。平时吃斋念佛、言语温和，但涉及宝玉时则雷厉风行。撵晴雯、逐芳官时毫不留情，句句斩钉截铁。
+backstory: 贾政之妻，金陵王家之女，王熙凤的内姑母。贾宝玉的母亲，表面仁慈实则封建保守。因担心丫鬟"勾引"坏了宝玉，先后撵走金钏、晴雯等人。支持"金玉良缘"，主导了宝钗与宝玉的婚姻。
+knownSecrets:
+- 曾逼死金钏儿后内心不安
+- 背着贾政抄检大观园

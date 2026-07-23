@@ -1,0 +1,11 @@
+project: dream-of-red-chamber
+schemaVersion: 1
+title: "红楼梦"
+author: "曹雪芹"
+defaultModel: mock
+defaultLanguage: zh
+genre: "literary"
+synopsis: "以贾宝玉、林黛玉、薛宝钗的爱情悲剧为主线，描写贾王史薛四大家族由盛而衰的过程。前80回由曹雪芹所著。"
+tense: past
+snapshotInterval: 5
+defaultSceneTextTarget: 600

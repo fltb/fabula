@@ -1,0 +1,29 @@
+id: qian_moyin
+name: 钱默吟
+type: tragic_hero
+archetype: poet_turned_warrior
+role: supporting
+description: 钱默吟本是北平一位饮酒赏菊、吟诗作画的隐士诗人。他有学问有品位，与世无争。二儿子钱仲石摔死一车日本兵后牺牲，他因冠晓荷告密被日本宪兵逮捕，遭受了非人的毒刑。出狱后他变成了另一个人——身体被摧残，精神却更加强大。他不再吟诗，转而从事抗日秘密宣传。他的转变是全书的转折点：一个最和平的人变成了最坚决的战士。
+appearance: 原是胖胖的、快乐的诗人模样。出狱后脸上没了肉，太阳穴和腮陷进去，牙被打掉，背上布满血网。
+aliases:
+- 钱先生
+- 钱诗人
+gender: 男
+age: 约五十岁
+profession: 诗人、隐士（后为抗日宣传者）
+traits:
+- poetic
+- peaceful
+- resilient
+- brave
+- transformed
+- righteous
+initialState:
+  location: loc_qianjia
+  status: alive
+  condition: poet_scholar
+  emotionalState: peaceful_content
+  political_stance: apolitical_turned_resistance
+backstory: 满腹诗书，爱花草、爱茵陈酒、爱作诗。两个儿子——孟石文弱、仲石刚烈。仲石在卢沟桥事变后摔死一车日本兵，他自己也被捕入狱。
+knownSecrets:
+- 从事地下抗日宣传

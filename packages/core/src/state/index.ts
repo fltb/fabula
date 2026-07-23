@@ -23,3 +23,36 @@ export {
   applyKnowledgeBoundary,
   evaluateGroupEpistemic,
 } from './knowledge-replay.ts';
+
+// ——— CORPUS-3: Reproducible Selection ———
+export type { SelectionPlan, CoverageStrata } from './corpus-selection.ts';
+export {
+  applySelectionFormula,
+  planSelection,
+  validateSelectionAgainstEvents,
+  isBenchmarkEligible,
+  getCoverageCategories,
+  DEFAULT_SELECTION_FORMULA,
+  BENCHMARK_ELIGIBILITY_MIN,
+  COVERAGE_STRATA,
+} from './corpus-selection.ts';
+
+// ——— CORPUS-4: Mixed Causal Replay + Boundary Oracles ———
+export type { StoryBoundaryOracle, DiscourseOracle } from './corpus-replay.ts';
+export {
+  buildMixedNodeOrder,
+  computeStateBefore,
+  createBoundaryOracle,
+  createDiscourseOracle,
+} from './corpus-replay.ts';
+
+// ——— CORPUS-5: Build Failure, Metric Isolation & Gate ———
+export type { CorpusGateResult, GateCheck } from './corpus-gate.ts';
+export {
+  validateCorpusIntegrity,
+  checkProvenance,
+  checkCausalDeps,
+  checkOracleCoverage,
+  checkSelectionReproducibility,
+  checkNoPooling,
+} from './corpus-gate.ts';

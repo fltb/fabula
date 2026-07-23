@@ -1,0 +1,28 @@
+id: da_chibao
+name: 大赤包
+type: collaborator
+archetype: female_tyrant
+role: antagonist
+description: 冠晓荷的太太，本名不详，绰号大赤包。她比丈夫更有手腕、更狠毒、更不要脸。在日本人占领北平后，她通过李空山的关系当上了妓女检查所所长，从此威风八面。她气派极大，咳嗽一声能震得窗户纸响。她贪婪、霸道、毫无廉耻，以当汉奸为荣。但她最终还是被日本人和汉奸之间的倾轧所吞噬。
+appearance: 身材高大，满脸雀斑，常穿枣红色旗袍，烫魔鬼式头发。说话声音洪亮。
+aliases:
+- 冠大奶奶
+- 冠太太
+gender: 女
+age: 约四十岁
+profession: 妓女检查所所长
+traits:
+- domineering
+- greedy
+- cruel
+- ambitious
+- vulgar
+- shrewd
+initialState:
+  location: loc_guanjia
+  status: alive
+  condition: idle_but_ambitious
+  emotionalState: impatient_for_power
+backstory: 娘家有钱，嫁给了风流倜傥的冠晓荷。她管得住丈夫，却管不住他想娶小老婆的心。当汉奸是她人生最大的"事业"。
+knownSecrets:
+- 利用妓女检查所敛财

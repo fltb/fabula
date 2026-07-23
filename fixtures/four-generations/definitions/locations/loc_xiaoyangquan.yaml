@@ -1,0 +1,6 @@
+id: loc_xiaoyangquan
+name: 小羊圈胡同
+description: 北平西城一条葫芦形的小胡同，口小肚子大。五号住祁家，三号住冠家，一号住钱家，六号住小文夫妇和刘棚匠，四号住李四爷。胡同虽然不起眼，却是全书最主要的故事舞台。
+kind: residential_area
+initialState:
+  status: active

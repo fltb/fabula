@@ -1,0 +1,31 @@
+id: emily
+name: "Little Emily"
+type: supporting_character
+archetype: fallen_woman
+role: supporting
+description: "Little Emily is Mr Peggotty's orphaned niece, engaged to Ham Peggotty, and the most tragic figure in the novel's subplot. She is a beautiful, wild, and sensitive girl who dreams of becoming a lady and escaping the humble life of Yarmouth. When James Steerforth — charismatic, handsome, and utterly selfish — seduces and elopes with her, she believes he will marry her. Instead, he abandons her abroad after a brief liaison. Her 'fall' shatters the Peggotty family, breaks Ham's heart, and sends Mr Peggotty searching for her across Europe. She is eventually found by Martha and brought to London, then emigrates to Australia with Mr Peggotty to start a new life. Emily is one of Dickens's 'fallen women' treated with genuine sympathy — she is a victim, not a sinner."
+appearance: "About fifteen when first introduced, with a bright, merry face, a light figure, a sunburnt complexion, and blue eyes. She wears a little straw hat and a clean, plain dress. Mr Peggotty calls her 'the sweetest little face that ever was seen.' After her fall, her face is worn and sad."
+aliases:
+  - "Emily"
+  - "Little Em'ly"
+  - "Em'ly"
+gender: female
+age: "About fifteen to early twenties"
+profession: "Fisherman's niece / needleworker"
+traits:
+  - beautiful
+  - proud
+  - sensitive
+  - ambitious
+  - trusting
+  - kind
+  - vulnerable
+  - repentant
+initialState:
+  location: yarmouth
+  status: alive
+  condition: fishermen_ward
+  emotionalState: happy_dreamy
+  engagement_ham: betrothed
+voiceNotes: "Her speech is warm, affectionate, and tinged with the dialect of the Yarmouth fishermen. She has a way of casting her eyes down when embarrassed. When David first meets her, she chatters merrily. Later, after her ruin, she is subdued and speaks little."
+backstory: "Orphaned daughter of Mr Peggotty's brother and his wife. She is raised in the Yarmouth boathouse and grows up with Ham (her cousin by blood and later her fiancé). From childhood she dreams of becoming a lady. When David brings Steerforth to Yarmouth, Steerforth charms the entire family. He seduces Emily and persuades her to elope with him. He takes her abroad (to France and Italy) and abandons her when he tires of her. Mr Peggotty searches for her for months, finally finding her in London. She is partially redeemed by her genuine repentance and by the family's forgiveness. She eventually emigrates to Australia with Mr Peggotty, finding a new life."

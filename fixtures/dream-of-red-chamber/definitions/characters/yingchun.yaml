@@ -1,0 +1,17 @@
+id: yingchun
+name: 迎春
+type: supporting
+role: supporting
+description: 迎春，首次出现于第3回，共提及41次。
+appearance: 肌肤微丰，合中身材，腮凝新荔，鼻腻鹅脂。温柔沉默，观之可亲。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  age_stage: adolescent
+voiceNotes: 言语温柔沉默，不争不抢。绰号"二木头"，被人欺负也不敢出声。被父亲许配孙绍祖时哭诉无助，言语间全是对命运的绝望。
+backstory: 贾赦之女，贾琏同父异母的妹妹，荣国府二小姐。性格温柔懦弱，被人称为"二木头"。在抄检大观园时，她的丫鬟司棋被撵，她无力保护。后被父亲许配给孙绍祖，遭受家暴虐待，一年后便折磨而死。
+knownSecrets: []

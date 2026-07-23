@@ -1,0 +1,34 @@
+event: E11
+title: 清虚观打醮惹烦扰 宝黛诉衷肠怒砸玉
+narrativeOrder: 11
+sceneType: linear
+pov:
+  character: narrator_omniscient
+  type: omniscient
+sceneBrief: 清虚观打醮引来世交亲友送礼，贾母后悔惊动众人，下午便回府，次日亦借故不去。宝玉因张道士提亲不快，加之黛玉中暑，探病时二人因言语误会爆发冲突。黛玉借金玉之说试探，宝玉情急之下怒砸通灵宝玉，黛玉痛哭并吐出解暑汤。袭人、紫鹃上前劝解，二人均感悔痛交加，伤心流泪。
+preconditions: []
+expectedPostconditions: []
+threadProgress:
+  - thread: T4
+    advancement: 张道士提亲引发金玉之争，宝黛互试真心反生嫌隙
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T7
+    advancement: 贾府打醮引官场送礼，显赫交际暗含盛衰之兆
+    progressAfter: 10
+    progressTotal: 100
+foreshadowing: []
+introduces: []
+styleGuidance:
+  tone: 凄婉幽怨，焦灼痴缠
+  targetWordCount: 600
+  atmosphere: 情急心乱，病榻愁云
+  scenePacing: 跌宕起伏，紧凑错落
+  characterVoice: {}
+tense: past
+discourseMode: action
+arcPosition: opening
+emotionalValence: past
+conflictType: past
+storyTime: past
+narrationTime: past

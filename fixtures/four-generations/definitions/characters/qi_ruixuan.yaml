@@ -1,0 +1,30 @@
+id: qi_ruixuan
+name: 祁瑞宣
+type: protagonist
+archetype: intellectual_in_conflict
+role: supporting
+description: 祁瑞宣是祁家的长孙，中学英语教员。他受过新式教育，有强烈的爱国心与是非感，却又被四世同堂的家庭责任牢牢拴住。他羡慕三弟瑞全能一走了之去抗日，自己却只能在沦陷的北平教书养家。他的苦闷是全书的灵魂——想在日本人面前保持气节，又不忍抛下祖父、父母和妻儿。他天天听南京广播，为每一个胜败消息而狂喜或落泪。最终在钱默吟和瑞全的影响下，找到了隐蔽抗日的工作。
+appearance: 瘦高个，戴眼镜，常穿旧蓝布大衫。面容清秀，眼神中常带忧郁。
+aliases:
+- 瑞宣
+- 大哥
+gender: 男
+age: 约三十岁
+profession: 中学英语教员
+traits:
+- intelligent
+- responsible
+- melancholy
+- patriotic
+- indecisive
+- kind
+- dutiful
+initialState:
+  location: loc_qijia
+  status: alive
+  condition: teaching
+  emotionalState: anxious_and_conflicted
+  political_stance: patriotic_but_passive
+backstory: 师范大学毕业，在学校教书认真负责。他认识钱默吟，敬佩钱先生的诗才与为人。他想要为国家做点事，却总被家庭责任拖住。他的矛盾是那一代沦陷区知识分子的共同命运。
+knownSecrets:
+- 协助钱默吟从事抗日宣传

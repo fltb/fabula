@@ -1,0 +1,34 @@
+id: sr_qi
+name: "祁老人"
+type: patriarch
+archetype: traditional_elder
+role: supporting
+description: "祁老人，本名不详，七十五岁。小羊圈胡同五号院的房主，祁家的最高长辈。他白手起家，靠勤劳置下房产，一生信奉'和气生财'与'忍为高'。他个子高大，虽然年迈走路还硬朗，小眼睛里总带着笑意。他对日本人并无深仇大恨，只求能平安过自己的日子、过生日、过中秋节。但战争的残酷一点点打碎了他的乐观——钱默吟被捕、孙子瑞全出走、生日无人来贺、钱孟石病死，他先是愤怒，后是沉默，最后也不得不承认：日本人已经不许他过节过生日了。"
+appearance: "高大身材，背微驼，花白胡须，小眼睛常带笑意。冬天穿狗皮袜头，扎腿带。"
+aliases:
+  - "祁老太爷"
+  - "老太爷"
+  - "祁大个子"
+gender: "男"
+age: "七十五岁"
+profession: "退休市民（原布铺学徒）"
+traits:
+  - traditional
+  - peace_loving
+  - resilient
+  - optimistic
+  - conservative
+  - kind
+  - stubborn
+  - home_bound
+initialState:
+  location: loc_qijia
+  status: alive
+  condition: "healthy_for_his_age"
+  emotionalState: "anxious_but_hopeful"
+  health: "fair"
+  worldview: "peace_and_harmony"
+  confidence_in_victory: "three_months"
+voiceNotes: "祁老人说话带有北平老人的从容与固执，常用'过不了三个月'来表达他对战争结束的乐观预期。他虽不识字，但自有一套生存哲学——忍让、和气、不出头。他的话语里充满了俗语和老理儿。"
+backstory: "祁老人年轻时从乡下到北平学买卖，靠省吃俭用攒钱买下小羊圈五号院的房产。他一辈子勤劳本分，把祁家从一口人发展到四世同堂。他最大的骄傲就是这一院子和一大家子人。他相信只要人老实、不惹事，老天爷就不会亏待好人。"
+knownSecrets: []

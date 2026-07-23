@@ -1,0 +1,20 @@
+id: pinger
+name: 平儿
+type: supporting
+role: supporting
+description: 平儿，首次出现于第6回，共提及68次。
+appearance: 容貌俊俏，性情温和。常随王熙凤左右，打扮体面。
+aliases: []
+gender: 未知
+age: ''
+traits: []
+initialState:
+  location: 荣国府
+  status: alive
+  role: maid
+  age_stage: young_adult
+voiceNotes: 说话通情达理，善于调和矛盾。在王熙凤的威势下从不仗势欺人，反而常私下帮助他人。言语温柔得体，是贾府中难得的好人。
+backstory: 王熙凤的陪嫁丫鬟，贾琏的通房丫头。为人善良聪慧，在凤姐的严苛管束下夹缝求生，却仍能保持本心，常暗中帮助他人。是贾府中难得的明白人。
+knownSecrets:
+- 知道凤姐放高利贷的内情
+- 曾暗中帮助尤二姐但无力回天

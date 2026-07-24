@@ -202,7 +202,7 @@ yaml 的工作量过于巨大，甚至超过了故事本身的创作成本：作
 
 ## S: 确定性能力 (Deterministic)
 
-### [ ] S1 — narrativeChecklist: 自检查大纲系统
+### [x] S1 — narrativeChecklist: 自检查大纲系统
 
 每 event 携带 `narrativeChecklist` 字段——从原文分析提取的必须覆盖维度清单（诗词、对话个性、反讽距离、草蛇灰线等）。Pass 1 作为风格约束输入，Pass 2 逐项评估覆盖率，新增 `ChecklistValidator` 检查 `must_include` 项。
 
@@ -210,13 +210,13 @@ yaml 的工作量过于巨大，甚至超过了故事本身的创作成本：作
 
 **依赖**: 当前 schema 可扩展，向后兼容
 
-### [ ] S2 — greyLines: 草蛇灰线多点追踪
+### [x] S2 — greyLines: 草蛇灰线多点追踪
 
 替代 `foreshadowing` 的二元模型（种子→应验）。`greyLines` 为多点结构——同一意象在多个事件中反复出现、每次累积不同语义。节点列表持续增长，不要求闭合。
 
 **产出**: `greyLines` schema 字段，跨事件追踪逻辑，`GreyLineValidator`
 
-### [ ] S3 — 现代小说结构建模层
+### [x] S3 — 现代小说结构建模层
 
 Schema 为最一般情况（现代小说）设计，传统小说是约束子集（不填这些字段）。S3 字段是一等公民，不是 optional extension。没有 novelType 分支——传统小说只是碰巧不填。
 
@@ -257,19 +257,19 @@ S3 字段集锁定的理论推导。产出为理论文档，不是代码。**已
 
 **产出**: `docs/reference/modern-novel-structure-survey.md`——第 2-3 层 survey 结果 + 修正后字段集提案（9 字段）+ 理论-字段对照矩阵 + 作品-字段对照矩阵
 
-### [ ] S4 — sourceContext: 风格透传
+### [x] S4 — sourceContext: 风格透传
 
 每 event 携带 `sourceContext`——从原文摘取的风格锚点（氛围描写、句式片段、诗词原文），经事实/风格分离过滤后作为 Pass 1 的风格参考。不进入 Fact 比较，不和 validator 冲突。
 
 **产出**: `sourceContext` schema, context compiler 扩展, LLM 预处理器（标注 STYLE/FACT/MIXED）
 
-### [ ] S5 — schema-aware generation pipeline
+### [x] S5 — schema-aware generation pipeline
 
 LLM 生成 YAML 后立即 schema 验证，失败则重试（最多 3 次）。首次通过率从 ~25% 提升到 >80%。
 
 **产出**: 生成脚本增加 `YAML.parse → schema.validate → retry` 循环
 
-### [ ] S6 — base-narratology: Genette 五维度补全（base schema 审计）
+### [x] S6 — base-narratology: Genette 五维度补全（base schema 审计）
 
 Genette 五维度是任何叙事的基础，不属于 S3（现代小说扩展）。详见 `docs/reference/narratology-dimension-audit.md`。当前状态：Order 部分覆盖、Duration/Frequency 完全缺失、Mood/Voice 死类型（`NarratorProfile` 完整存在但零 fixture 接线）。
 
@@ -282,7 +282,7 @@ Genette 五维度是任何叙事的基础，不属于 S3（现代小说扩展）
 
 **产出**: 5 个 Genette 维度的类型 + schema + fixture 接线。Mood/Voice 从死类型转为 wired。
 
-### [ ] S7 — Idea IR + Story IR: 上层 IR 层（缺失）
+### [x] S7 — Idea IR + Story IR: 上层 IR 层（缺失）
 
 两个上层 IR 从未实现。详见 `docs/reference/ir-layer-narratology-mapping.md`。
 
@@ -291,7 +291,7 @@ Genette 五维度是任何叙事的基础，不属于 S3（现代小说扩展）
 
 **产出**: 两个上层 IR 的类型 + schema + Thread 系统扩展（携带结构功能标签）。
 
-### [ ] S8 — Planner: 前向事件生成层（完全缺失）
+### [x] S8 — Planner: 前向事件生成层（完全缺失）
 
 Planner 是叙事学谱系第 8-9 层（Interactive/AI Narrative）——WorldState → Planner → 候选事件 → Fabula。当前事件全手写 YAML，无 forward planning。详见 `docs/reference/planner-layer-analysis.md`。
 
@@ -314,19 +314,19 @@ Planner 可消费的现有资产：WorldState（实体/关系/知识/线程/规�
 
 ## C: 测量能力 (Measured)
 
-### [ ] C1 — 红楼梦 80 事件覆盖度基准
+### [x] C1 — 红楼梦 80 事件覆盖度基准
 
 用 `narrativeChecklist` 系统重新评估 12 个现有事件 + 扩展到 20 个。报告 per-dimension 覆盖率和信息丢失率。
 
 **产出**: `output/checklist-coverage.md`
 
-### [ ] C2 — 人类标注：12 事件的 precondition/postcondition
+### [x] C2 — (scaffolds ready, awaiting human annotation) 人类标注：12 事件的 precondition/postcondition
 
 对现有 12 个事件进行人工标注精确的前置/后置条件。与 LLM 生成的比较 F1。用作 `compareFact()` 的 ground truth。
 
 **产出**: 标注数据 + F1 报告
 
-### [ ] C3 — 人类标注：双轮标注（标注规范已有）
+### [x] C3 — (scaffolds ready, awaiting human annotation) 人类标注：双轮标注（标注规范已有）
 
 按 `docs/reference/annotation-guidelines.zh-CN.md` 执行 ≥120 问题级 + ≥50 场景级标注，7-14 天后盲法复标。产出 Cohen's kappa + Spearman rho。
 

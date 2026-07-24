@@ -119,7 +119,7 @@ export class AliasValidator implements Validator {
     return [{
       field: 'characterReferences',
       schema: z.array(characterReferenceSchema),
-      instruction: 'characterReferences: For each character present in the scene, record every name variant used in the prose (full name, nickname, title, epithet, pronoun) in the characterReferences block under namesUsed. This helps verify that all names are valid aliases for the character.',
+      instruction: 'characterReferences: For each character present in the scene, record every name variant used in the prose (full name, nickname, title, epithet — do NOT include pronouns; pronoun consistency is handled by PronounValidator via narrativeChecks) in the characterReferences block under namesUsed. This helps verify that all names are valid aliases for the character.',
     }];
   }
 }

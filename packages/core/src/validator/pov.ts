@@ -78,19 +78,7 @@ export class POVValidator implements Validator {
     const povType = event.pov.type; // event-level field, not in entity attribute catalog
     const povChar = event.pov.character; // event-level field, not in entity attribute catalog
 
-    // First-person pronoun check (deterministic, cross-language)
-    if (povType === 'first_person') {
-      const hasFirstPerson = /\b(?:I|my|me|myself|mine)\b/i.test(prose);
-      if (!hasFirstPerson) {
-        issues.push(makeIssue(
-          this.name, event.id, povChar, 'warning',
-          `First-person POV for "${povChar}" but prose does not contain first-person pronouns ("I", "my", "me")`,
-          'Use first-person narration consistently throughout the scene.',
-          'edit_file',
-          'pov.type',
-        ));
-      }
-    }
+    // First-person detection: handled by Pass 2 pov.consistent + pov.leaks; see getAnalysisRequirements().
 
     // Consume Pass 2 analysis for POV leaks (semantic checks)
     if (input.analysis) {

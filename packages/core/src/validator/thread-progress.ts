@@ -46,7 +46,9 @@ export class ThreadProgressValidator implements Validator {
     const issues: ValidationIssue[] = [];
     if (!input.analysis) return issues;
 
-    const achieved = new Set(threadProgressAchievedSchema.safeParse(input.analysis.analysis.threadProgressAchieved).data ?? []);
+    const achievedIds = (threadProgressAchievedSchema.safeParse(input.analysis.analysis.threadProgressAchieved).data ?? [])
+      .map(s => s.split(/[:：]/)[0].trim());
+    const achieved = new Set(achievedIds);
     const declared = input.event.threadProgress ?? [];
 
     for (const tp of declared) {

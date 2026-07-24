@@ -1,0 +1,5 @@
+chapter: 1
+title: "祝福"
+summary: "旧历的年底，'我'回到故乡鲁镇，暂寓在四叔鲁四老爷家中。在除夕前日，'我'在镇东河边遇见沦为乞丐的祥林嫂，她问'我'人死后是否有灵魂、是否有地狱。'我'含糊其辞，随后逃回四叔家。当晚，'我'得知祥林嫂已冻死街头，四叔骂她是'谬种'。在孤灯下，'我'回忆起她半生的事迹——她如何第一次来到鲁家做帮工，如何被婆婆绑走卖掉，如何改嫁贺老六后丧夫失子，如何再回鲁家后一步步走向精神崩溃，最终在人们的漠视中无声死去。次日清晨，爆竹声中，鲁镇的祝福大典照常举行。"
+intent: "建立一个具有倒叙结构的文学叙事模型。外层框架（E0-E1）使用线性时态、第一人称有限视角，内层倒叙（E2-E6）使用时态不一致、第三人称视角。测试系统的时态检测（过去时 vs 过去完成内部时态）、POV 一致性、倒叙场景类型识别、DAG 因果边（E2→E3→E4→E5→E6）与 narrativeOrder 排列（E0-E6 线性话语序）的正确分离。同时测试所有新增 P0 字段（discourseMode, arcPosition, emotionalValence, conflictType, resolutionType, tense, narrationTime）和新的 Pass 2 分析块（appearanceChecks, narrativeChecks, characterReferences, tenseDetected, conflictAnalysis）。"
+plannedScenes: 7

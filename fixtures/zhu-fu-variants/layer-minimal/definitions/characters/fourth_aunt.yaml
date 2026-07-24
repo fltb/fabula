@@ -1,0 +1,28 @@
+id: fourth_aunt
+name: "四婶"
+type: domestic_manager
+role: supporting
+description: "四婶是鲁四老爷的妻子，负责管理家务和佣工。她起初对祥林嫂的印象良好——觉得她模样周正、手脚壮大、安分耐劳，像一个能干的帮工。祥林嫂在鲁家工作三四个月后，四婶对她日渐满意。但当祥林嫂第二次回到鲁家时，四婶的态度已经改变了——虽然最终收留了她，但内心深处已将她视为'败坏风俗'的人。四婶对祥林嫂最致命的一击发生在冬至祭祀：当祥林嫂以为自己已通过捐门槛赎了罪，坦然地伸手去拿酒杯和筷子时，四婶慌忙大叫'你放着罢，祥林嫂！'——这一句话像炮烙一样将祥林嫂彻底击溃。此后四婶看祥林嫂越来越不顺眼，最终暗示她离开。"
+appearance: "鲁镇的太太模样，穿着干净的棉袍，管家的精明写在脸上。具体面容文中未细写，但从她的管家方式来看，她是个精明能干、讲究规矩的妇人。"
+aliases:
+  - "四婶"
+  - "鲁四太太"
+gender: "女"
+age: "约四十至五十岁"
+profession: "管家太太"
+traits:
+  - practical
+  - capable
+  - complicit
+  - traditional
+  - class_conscious
+  - ritual_enforcer
+  - gradually_hardening
+initialState:
+  location: fourth_master_lu_house
+  status: alive
+  condition: well
+  attitude_toward_xianglins_wife: welcoming_cautiously
+voiceNotes: "说话带着主母的权威和实用主义的语气。最初对祥林嫂评价正面——'试工期内，她整天的做，似乎闲着就无聊，又有力，简直抵得过一个男子'。但在关键时刻的喝止——'你放着罢，祥林嫂！'——简短、急促、带着真切的恐慌，仿佛她在触碰一个污秽的东西。这句话是她对祥林嫂态度的本质表达。"
+backstory: "四婶是鲁四老爷的妻子，掌管鲁家的日常运作。她遵循丈夫的道德标准——对祥林嫂的排斥不仅出于个人好恶，更是她作为这个封建家庭管家人的角色要求。她不是天生的恶人，但她的'本分'行为最终参与了杀死祥林嫂。"
+knownSecrets: []

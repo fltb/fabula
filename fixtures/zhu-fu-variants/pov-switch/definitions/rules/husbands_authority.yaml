@@ -1,0 +1,38 @@
+ruleId: husbands_authority
+name: "夫权 — 一女不事二夫的贞节观"
+category: moral_code
+type: constraint
+statement: "女子一生只能侍奉一个丈夫。守寡是美德，改嫁是耻辱。祥林嫂因改嫁而被视为'败坏风俗'的人——即使她是在被绑、被卖的强迫下改嫁的。她的身份永远依附于丈夫：即使祥林已死、她已改嫁贺老六，她仍然被叫做'祥林嫂'（祥林的妻子）。死后她的身体需要在两个丈夫之间平分——生时没有自主权，死后也不得自主。"
+ruleClass: moral_principle
+logicalConsequences:
+  - description: "寡妇的身份永远系于亡夫"
+    check:
+      type: state_invariant
+      filter: "entity.gender='女' AND entity.marital_status='widow'"
+      assert: "entity.identity.derived_from='deceased_husband'"
+      severity: error
+  - description: "改嫁后的女人是'败坏风俗'的"
+    check:
+      type: state_invariant
+      filter: "entity.gender='女' AND entity.marital_status='remarried'"
+      assert: "entity.social_label='immoral'"
+      severity: error
+  - description: "再寡后女人不能触碰祭祀物品"
+    check:
+      type: transition_constraint
+      filter: "entity.gender='女' AND entity.marital_status='remarried_widow'"
+      assert: "entity.can_touch_ritual_items=false"
+      severity: error
+exceptions:
+  - condition: "如果死了丈夫后仍有儿子，母以子贵，社会地位有所保全"
+    note: "祥林嫂失去阿毛后便彻底失去了社会立足点"
+evidenceChain:
+  - rule: husbands_authority
+    effect: reinforce
+    evidence: "鲁四老爷第一次见祥林嫂就皱眉——'他是讨厌她是一个寡妇'"
+  - rule: husbands_authority
+    effect: reinforce
+    evidence: "冬至祭祀时四婶禁止祥林嫂触碰酒杯和筷子"
+  - rule: husbands_authority
+    effect: reinforce
+    evidence: "祥林嫂被绑进花轿时以头撞香案——她反抗的不是买卖婚姻本身，而是改嫁'失节'的耻辱"

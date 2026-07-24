@@ -1,0 +1,12 @@
+id: earth_god_temple
+name: "土地庙"
+kind: religious_site
+parent: luchen_town
+description: "鲁镇西头的土地庙是民间宗教信仰的中心。庙祝管理着庙务。祥林嫂在这里用十二元鹰洋（约一万二千文钱）捐了一条门槛——按柳妈的说法，这条门槛将被千人踏万人跨，作为她的替身，替她赎清一世罪名。庙祝起初不肯，等她哭了才答应。捐门槛后祥林嫂精神舒畅，以为自己终于被赦免了——但她错了。土地庙象征着民间宗教的'功德经济'：救赎是可以购买的，但穷人倾尽所有也买不到真正的解脱。"
+initialState:
+  status: active
+  threshold_available: true
+  cost: "12 yuan (12,000 cash)"
+notableFeatures:
+  - "捐门槛的仪式场所——门槛放在庙前，供往来行人踩踏"
+  - "庙祝——管理庙务、收钱的中间人，最初拒绝祥林嫂的请求"

@@ -1,0 +1,13 @@
+id: mother_in_law_xianglins_wife
+type: owner_property
+participants:
+  - mother_in_law
+  - xianglins_wife
+bidirectional: false
+initialState:
+  trust: -80
+  emotionalDistance: 100
+  intensity: 70
+  status: "property_relationship"
+  notes: "婆婆与祥林嫂的关系本质上是所有权关系——祥林嫂是祥林家的财产。祥林死后，婆婆拥有处置她的绝对权利。关系是完全单向的：婆婆决定祥林嫂的命运，祥林嫂没有任何话语权。最具讽刺意味的是，婆婆本人也是女性——她是封建制度中女性压迫女性的典型。她把儿媳卖了八十千，用钱给另一个儿子娶媳妇——她在这个制度中唯一能行使的权力就是向下压迫。"
+establishedEvent: E3

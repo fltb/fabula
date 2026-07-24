@@ -1,0 +1,14 @@
+id: he_laoliu_xianglins_wife
+type: forced_then_beloved_husband
+participants:
+  - he_laoliu
+  - xianglins_wife
+bidirectional: true
+initialState:
+  trust: -50
+  emotionalDistance: 100
+  intensity: 90
+  status: "violent_marriage_stranger"
+  notes: "祥林嫂与贺老六的关系始于暴力（她被绑来、捆着塞进花轿、以头撞香案）但发展为短暂的幸福（他靠力气养家、没有婆婆、她生下儿子）。这是她一生中唯一有过的安稳日子。然而这段关系承载着深刻的矛盾：贺老六既是压迫她的制度的一部分（买卖婚姻），又是她生命中最好的遭遇。死后他在来世与另一个亡夫争夺她的灵魂——那个生前给了她幸福的男人，死后成为她地狱苦难的来源。"
+establishedEvent: E3
+breakingEvent: E4

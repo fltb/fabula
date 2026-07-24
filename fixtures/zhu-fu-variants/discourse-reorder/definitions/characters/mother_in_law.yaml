@@ -1,0 +1,26 @@
+id: mother_in_law
+name: "祥林嫂的婆婆"
+type: clan_matriarch
+role: background
+description: "祥林嫂的婆婆是一个精明强干的中年农村妇女，是祥林（祥林嫂第一个丈夫）的母亲。她从未在故事中直接出场，但从卫老婆子的叙述中可知，她是祥林嫂被绑架和被卖事件的策划者。祥林死后，她把儿媳视为可出售的财产——以八十千的价钱卖给贺老六，用其中五十千给自己第二个儿子娶了媳妇，还净赚了不少。她是一个懂得利用宗族制度为自己谋利的女人，同时也是这个制度的产物：她手中唯一能行使的权力就是向下压迫更弱势的儿媳。"
+appearance: "从卫老婆子的描述来看，她是一个精干、有算计的山区妇人，面容可能是严厉而精明的。文中未直接描写。"
+aliases:
+  - "婆婆"
+  - "祥林的母亲"
+gender: "女"
+age: "约四十五至五十五岁"
+profession: "农妇"
+traits:
+  - calculating
+  - ruthless
+  - shrewd
+  - patriarchal_enforcer
+  - property_minded
+initialState:
+  location: weijia_shan
+  status: alive
+  condition: well
+  motivation: financial_gain
+voiceNotes: "婆婆本人从未在故事中直接开口。她的行动全是间接呈现的——绑架计划、讨价还价。卫老婆子转述她的话时，语气是欣赏和肯定的，暗示婆婆是一个在宗族规则内精明运筹的人。"
+backstory: "她是祥林的母亲，祥林死后成为当家人。她还有一个小儿子需要彩礼娶媳妇——这是她卖掉祥林嫂的直接经济动机。在她的世界里，儿媳就是家里的资产，卖掉是合情合理的事。她自己年轻时可能也被婆婆这样对待过。"
+knownSecrets: []

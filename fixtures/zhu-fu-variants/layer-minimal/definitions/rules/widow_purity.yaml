@@ -1,0 +1,32 @@
+ruleId: widow_purity
+name: "寡妇不洁禁忌"
+category: ritual_taboo
+type: constraint
+statement: "寡妇被视为不洁、不祥的人。祭祀是洁净的仪式，容不得'不洁'的人触碰。祥林嫂因为寡妇和再寡的双重身份，被彻底排除在祝福祭祀的参与之外。她捐了门槛试图洗净自己，但禁忌的力量超越了个人的赎罪努力——四婶的一句'你放着罢'表明，只要社会认定你不洁，你永远不洁。鲁四老爷在她死后骂她'谬种'——连她的死亡都被视为对祝福仪式的玷污。"
+ruleClass: social_norm
+logicalConsequences:
+  - description: "寡妇不能触碰祭祀器皿"
+    check:
+      type: state_invariant
+      filter: "entity.gender='女' AND entity.marital_status IN ('widow', 'remarried_widow')"
+      assert: "entity.can_touch_ritual_items=false"
+      severity: error
+  - description: "寡妇死在祝福期间被视为不吉"
+    check:
+      type: transition_constraint
+      filter: "event.season='new_year_eve'"
+      assert: "widow_death.is_ritually_polluting=true"
+      severity: warning
+exceptions:
+  - condition: "如果寡妇的儿子成年并主持祭祀，母亲的身份可以部分覆盖寡妇的身份"
+    note: "子存则母贵，子亡则母坠"
+evidenceChain:
+  - rule: widow_purity
+    effect: reinforce
+    evidence: "四婶安排祝福祭祀时，祥林嫂被明确排除——'她转了几个圆圈，终于没有事情做，只得疑惑的走开'"
+  - rule: widow_purity
+    effect: reinforce
+    evidence: "祥林嫂捐了门槛后坦然去拿酒杯筷子，被四婶喝止——'你放着罢，祥林嫂！'"
+  - rule: widow_purity
+    effect: reinforce
+    evidence: "鲁四老爷听到祥林嫂死讯后的第一反应是骂她'不早不迟，偏偏要在这时候——这就可见是一个谬种！'"

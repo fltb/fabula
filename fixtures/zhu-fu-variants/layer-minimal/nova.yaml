@@ -1,0 +1,11 @@
+project: zhu-fu
+schemaVersion: 1
+title: "祝福"
+author: "鲁迅"
+defaultModel: mock
+defaultLanguage: zh
+genre: "literary"
+synopsis: "一个返乡的知识分子在鲁镇遇见沦为乞丐的祥林嫂，她问他关于灵魂和地狱的问题，随后在除夕夜冻死街头。通过倒叙，故事展现了她悲惨的一生——被婆婆卖掉改嫁、丧夫失子、被主家视为不洁、捐门槛赎罪仍被排斥，最终在众人的祝福声中孤寂死去。"
+tense: past
+snapshotInterval: 3
+defaultSceneTextTarget: 1200

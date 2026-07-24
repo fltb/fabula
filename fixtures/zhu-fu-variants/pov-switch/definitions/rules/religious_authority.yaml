@@ -1,0 +1,32 @@
+ruleId: religious_authority
+name: "神权 — 民间宗教的精神控制"
+category: belief_system
+type: constraint
+statement: "民间佛教信仰体系通过'来世惩罚'对活人进行精神控制。改嫁的女子死后在阴司将被两个死鬼丈夫争夺，阎罗王会把她锯成两半分给他们。捐门槛可以赎罪，但赎罪的效力取决于活人的认可——如果地上的人仍视你为不洁，捐了门槛也是白捐。"
+ruleClass: social_norm
+logicalConsequences:
+  - description: "改嫁的女人死后将被锯刑"
+    check:
+      type: state_invariant
+      filter: "entity.gender='女' AND entity.marital_status='remarried_widow'"
+      assert: "entity.afterlife_punishment='sawn_in_half'"
+      severity: error
+  - description: "捐门槛不足以赎罪如果社会仍排斥她"
+    check:
+      type: transition_constraint
+      filter: "entity.has_donated_threshold=true"
+      assert: "entity.ritual_purity_status!='clean' IF entity.social_acceptance='rejected'"
+      severity: warning
+exceptions:
+  - condition: "如果寺庙不收，不能捐门槛"
+    note: "土地庙的庙祝起初拒绝祥林嫂——宗教救赎本身是一桩交易，看钱办事"
+evidenceChain:
+  - rule: religious_authority
+    effect: reinforce
+    evidence: "柳妈告诉祥林嫂：来世两个死鬼丈夫会争夺她，阎罗大王要把她锯成两半分给他们"
+  - rule: religious_authority
+    effect: reinforce
+    evidence: "祥林嫂捐了门槛后精神舒畅，以为自己赎了罪——她完全相信这套体系"
+  - rule: religious_authority
+    effect: reinforce
+    evidence: "四婶喝止她触碰祭祀物品——民间的仪式禁忌比宗教理论更强大，捐了门槛也抵不过'不洁'的标签"

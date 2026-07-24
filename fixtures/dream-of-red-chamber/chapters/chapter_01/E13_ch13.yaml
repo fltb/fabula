@@ -50,3 +50,14 @@ emotionalValence: past
 conflictType: past
 storyTime: past
 narrationTime: past
+narrativeChecklist:
+  items:
+    - dimension: 心理描写
+      description: 宝玉向黛玉表明心志之赤诚与袭人向王夫人进言之深思远虑需并行展现
+      required: true
+    - dimension: 对话个性
+      description: 宝玉黛玉之私语与袭人王夫人之公论需分别体现亲密与恭敬两种语气
+      required: true
+    - dimension: 礼教规制
+      description: 袭人以礼制之名为宝玉设限，王夫人对袭人之信任体现当家主母对闺阁秩序的维护
+      required: false

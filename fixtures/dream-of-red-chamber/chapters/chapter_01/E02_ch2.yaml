@@ -36,3 +36,14 @@ styleGuidance:
   atmosphere: 官署密室，阴谋密语，权势压人
   scenePacing: 先急后缓，堂审急而密室谈缓，层层揭示
   characterVoice: {}
+narrativeChecklist:
+  items:
+    - dimension: 对话个性
+      description: 门子与贾雨村密室商议之对话需体现雨村从正义到妥协的心理变化
+      required: true
+    - dimension: 反讽距离
+      description: “护官符”一段叙事需暗含对官场黑暗的讽刺
+      required: true
+    - dimension: 环境渲染
+      description: 官署密室与堂审公堂的环境对比需营造出阴郁氛围
+      required: false

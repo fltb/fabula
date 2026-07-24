@@ -19,6 +19,7 @@ import { sourceContextSchema } from './source-context.js';
 import { durationProfileSchema } from './duration.js';
 import { frequencyProfileSchema } from './frequency.js';
 import { anachronySchema, voiceProfileSchema } from './discourse.js';
+import { modernNovelConfigSchema } from './modern-novel.js';
 export const eventFileSchema = z
   .object({
     event: z.string(),
@@ -70,5 +71,6 @@ export const eventFileSchema = z
         scope: z.string(),
       })).optional(),
     }).optional(),
+    modernNovel: modernNovelConfigSchema.optional(),
   })
   .strict();

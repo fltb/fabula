@@ -36,3 +36,14 @@ styleGuidance:
   atmosphere: 肃穆热闹交织的丧仪之中，凤姐独坐抱厦分发号令，众人屏息听命，秩序井然中透出铁腕的压迫感
   scenePacing: 先以概叙铺陈五件弊端与分派章程，节奏明快如军令；再以五七正五日场景详写，由佛事热闹渐入凤姐灵前痛哭、随后冷笑训人、从容理事，张弛有度
   characterVoice: {}
+narrativeChecklist:
+  items:
+    - dimension: 礼教规制
+      description: 凤姐整顿宁府之规程展现封建家族内务管理制度
+      required: true
+    - dimension: 对话个性
+      description: 凤姐点卯训话时之威严重令与冷笑之锋利需表里如一
+      required: true
+    - dimension: 反讽距离
+      description: 丧事中凤姐之雷厉风行与丧葬之哀戚形成微妙反差
+      required: false

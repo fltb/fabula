@@ -1,0 +1,63 @@
+event: E8
+title: 贾宝玉大醉绛芸轩 薛宝钗巧合认通灵
+narrativeOrder: 8
+sceneType: linear
+pov:
+  character: narrator_omniscient
+  type: omniscient
+sceneBrief: 贾宝玉至梨香院探视薛宝钗微恙。宝钗近前细看通灵宝玉，翻来覆去念诵"莫失莫忘，仙寿恒昌"之语。莺儿在旁笑言此与宝钗金锁上的"不离不弃，芳龄永继"恰成一对。宝玉要看金锁，宝钗推辞不过遂解排扣取出，宝玉果然念了两遍。正说间黛玉走来笑言"早知他来我就不来了"，以暖手捂嘴戏谑众人。李嬷嬷劝宝玉少饮酒，宝玉只管饮至酣醉。晚间回绛芸轩，晴雯接出来抱怨被墨污了门斗，宝玉亲书"绛芸轩"三字。李嬷嬷又来骂袭人，宝玉酒醒后不悦，其乳母李嬷嬷被撵之事初现端倪。
+preconditions: []
+expectedPostconditions: []
+threadProgress:
+  - thread: T4
+    advancement: 金锁与宝玉一对异文首度同台，钗黛之间暗潮初涌，黛玉以醋意戏谑掩饰不安
+    progressAfter: 15
+    progressTotal: 100
+  - thread: T1
+    advancement: 通灵宝玉与金锁上的铭文形成命运对应符号，"金玉良缘"之谶始露端倪
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T7
+    advancement: 李嬷嬷屡次管束生隙与晴雯等丫鬟之乖巧对比，显露贾府内宅下人结构之复杂
+    progressAfter: 5
+    progressTotal: 100
+foreshadowing:
+  - id: fs_E08_ch8_yr5p
+    hint: 金锁与宝玉之铭文成双，首提"金玉良缘"之概念，贯穿全书情感主线
+    thread: T1
+    targetRevealChapter: 80
+  - id: fs_E08_ch8_ugvn
+    hint: 李嬷嬷与丫鬟之争愈演愈烈，最终伏下晴雯日后被逐之祸根
+    thread: T1
+    targetRevealChapter: 80
+introduces:
+  - type: character
+    initialState: {}
+    id: unknown_xue_baochai
+  - type: character
+    initialState: {}
+    id: unknown_ying_er
+styleGuidance:
+  tone: 温软旖旎中暗藏醋意锋芒，醉语之中真假交织
+  targetWordCount: 600
+  atmosphere: 梨香院闺阁暖香与绛芸轩醉墨相映，半是情浓半是风波
+  scenePacing: 前半宝钗房中静谧细腻，后半醉后喧闹与李嬷嬷骂人急转直下
+  characterVoice: {}
+tense: past
+discourseMode: action
+arcPosition: opening
+emotionalValence: warm
+conflictType: person_vs_person
+storyTime: story_start
+narrationTime: story_start
+narrativeChecklist:
+  items:
+    - dimension: 对话个性
+      description: 宝钗退让羞涩、黛玉醋语戏谑、宝玉天真率性三者对话需个性分明
+      required: true
+    - dimension: 草蛇灰线
+      description: 金锁铭文与宝玉铭文成对，明确点出金玉良缘之谶
+      required: true
+    - dimension: 环境渲染
+      description: 梨香院药香闺暖与绛芸轩醉墨之景需营造不同氛围
+      required: false

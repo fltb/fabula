@@ -36,3 +36,14 @@ emotionalValence: past
 conflictType: past
 storyTime: past
 narrationTime: past
+narrativeChecklist:
+  items:
+    - dimension: 对话个性
+      description: 宝黛互谑耗子精故事需体现二人亲昵无间之独特言语风格
+      required: true
+    - dimension: 草蛇灰线
+      description: 李嬷嬷骂袭人暗伏袭人日后地位之起伏
+      required: true
+    - dimension: 心理描写
+      description: 宝玉讲耗子精故事时之狡黠玩笑需含情而不露
+      required: false

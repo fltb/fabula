@@ -52,3 +52,14 @@ emotionalValence: past
 conflictType: past
 storyTime: past
 narrationTime: past
+narrativeChecklist:
+  items:
+    - dimension: 环境渲染
+      description: 中邪之闹剧与僧道降临之玄秘需渲染出玄幻紧张之氛围
+      required: true
+    - dimension: 对话个性
+      description: 贾母痛斥赵姨娘之语与黛玉念阿弥陀佛后宝钗之讥讽需各显性情
+      required: true
+    - dimension: 反讽距离
+      description: 通灵除邪之玄幻色彩与闺中轻薄戏谑之间的叙事跳跃需处理得体
+      required: false

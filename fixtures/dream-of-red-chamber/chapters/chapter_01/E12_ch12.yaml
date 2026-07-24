@@ -36,3 +36,14 @@ emotionalValence: past
 conflictType: past
 storyTime: past
 narrationTime: past
+narrativeChecklist:
+  items:
+    - dimension: 心理描写
+      description: 黛玉窗外闻宝玉知己之言，又喜又惊又悲又叹之复杂心理需细腻呈现
+      required: true
+    - dimension: 对话个性
+      description: 湘云劝学之正统、袭人旁证之圆滑、宝玉断然拒绝之决绝需对话鲜明
+      required: true
+    - dimension: 草蛇灰线
+      description: 宝玉“林妹妹从来说过这些混帐话不曾”确立知己关系，为后文悲情结局铺垫
+      required: false

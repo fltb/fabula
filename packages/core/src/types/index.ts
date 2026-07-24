@@ -73,7 +73,19 @@ export type {
   DiegeticRelation,
   VoiceProfile,
 } from './discourse.js';
-// ——— S1: Narrative Checklist Types ———
+// ——— S3: Modern Novel Structural Types ———
+export type {
+  AntiCausalEdgeConfig,
+  ChapterOrderContested,
+  SurfaceModeConfig,
+  CausalOverloadConfig,
+  IrresolvableIndeterminacy,
+  AbsentApparatus,
+  VoiceDissonance,
+  Multiplicity,
+  MetanarrativeLevel,
+  ModernNovelConfig,
+} from './modern-novel.js';
 export type {
   NarrativeChecklistItem,
   NarrativeChecklist,

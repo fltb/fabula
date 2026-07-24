@@ -44,3 +44,14 @@ emotionalValence: past
 conflictType: past
 storyTime: past
 narrationTime: past
+narrativeChecklist:
+  items:
+    - dimension: 对话个性
+      description: 鸳鸯抗婚之刚烈、袭人平儿之同情劝慰、鸳鸯嫂子之势利需通过对话鲜明体现
+      required: true
+    - dimension: 心理描写
+      description: 鸳鸯宁可剪发为尼以死相抗之决绝心理需深刻刻画
+      required: true
+    - dimension: 草蛇灰线
+      description: 鸳鸯“剪发为尼”之誓，暗伏贾母死后鸳鸯自缢之悲剧结局
+      required: false

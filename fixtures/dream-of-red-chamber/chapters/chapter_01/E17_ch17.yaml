@@ -74,3 +74,14 @@ emotionalValence: past
 conflictType: past
 storyTime: past
 narrationTime: past
+narrativeChecklist:
+  items:
+    - dimension: 心理描写
+      description: 宝玉厌弃热闹私出祭奠金钏儿之内心深沉需与生日宴上众人之欢形成对比
+      required: true
+    - dimension: 礼教规制
+      description: 凑份子庆寿之资金运作、份子钱之分配退还应体现贵族内宅经济礼制
+      required: true
+    - dimension: 草蛇灰线
+      description: 尤氏“太满了就泼出来了”一语暗伏凤姐盛极而衰之命运
+      required: false

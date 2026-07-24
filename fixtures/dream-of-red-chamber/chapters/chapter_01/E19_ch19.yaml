@@ -1,0 +1,57 @@
+event: E19
+title: 情切切良宵花解语 意绵绵静日玉生香
+narrativeOrder: 19
+sceneType: linear
+pov:
+  character: narrator_omniscient
+  type: omniscient
+sceneBrief: 元妃省亲后，宁府请贾母赏灯看戏，宝玉嫌喧闹逛至小书房，撞见茗烟与卐儿幽会，未加追究。袭人回家探母归来，以赎身之论试探宝玉，假称家里要赎她回去，哄得宝玉真切挽留。袭人趁机约法三章：一不许赌咒发誓，二不许吃人胭脂，三要读书上进。宝玉一一应允。次日午后，宝玉至黛玉房中，见黛玉午睡，便歪在床上编耗子精偷香芋的故事逗黛玉。黛玉先捶他后缠他讲故事，二人嬉闹间，宝钗走进，取笑宝玉不知典故出处，三人说笑一团。
+preconditions: []
+expectedPostconditions: []
+threadProgress:
+  - thread: T4
+    advancement: 宝玉与黛玉午后独处嬉闹情浓，耗子精故事寓情于谐，钗黛宝玉三角关系在笑谑中微妙角力
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T7
+    advancement: 袭人赎身试探实为以退为进，约法三章以礼制规约宝玉行为，闺阁之权力规则微织其间
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T6
+    advancement: 宝玉厌弃虚礼热闹、偏爱女儿清净之心性愈加鲜明，叛逆中又含对袭人之深情
+    progressAfter: 5
+    progressTotal: 100
+foreshadowing:
+  - id: fs_E19_ch19_zt8h
+    hint: 袭人赎身之论纵是试探，亦为后文袭人出嫁伏线
+    thread: T1
+    targetRevealChapter: 80
+  - id: fs_E19_ch19_vqbp
+    hint: 茗烟与卐儿之事，暗伏后文卐儿被逐之波折
+    thread: T1
+    targetRevealChapter: 80
+introduces: []
+styleGuidance:
+  tone: 温软旖旎，假中有真，痴话谐趣中饱含深情
+  targetWordCount: 600
+  atmosphere: 夜晚袭人赎身试探之狡黠真诚，与午后黛玉房中暖香嬉闹形成一日内两种柔情
+  scenePacing: 前半晚间袭人以退为进、半真半假之试探节奏舒缓；后半午后黛玉戏谑轻松谐趣，张弛有度
+  characterVoice: {}
+tense: past
+discourseMode: action
+arcPosition: opening
+emotionalValence: warm
+conflictType: person_vs_person
+storyTime: story_start
+narrationTime: story_start
+narrativeChecklist:
+  items:
+    - dimension: 对话个性
+      description: 袭人赎身试探之言半真半假、黛玉耗子精故事之狡黠、宝玉之天真需各有风味
+      required: true
+    - dimension: 心理描写
+      description: 袭人以退为进的心理战术与黛玉午后嬉闹中对宝玉之依赖需并行刻画
+      required: true
+    - dimension: 环境渲染
+      description: 宁府赏灯之喧闹与小书房之幽静、黛玉闺房暖香之静谧需营造多重氛围
+      required: false

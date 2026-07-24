@@ -48,6 +48,18 @@ import { sourceContextSchema, sourceContextEntrySchema } from './source-context.
 import { durationProfileSchema, durationTypeSchema } from './duration.js';
 import { frequencyProfileSchema, frequencyTypeSchema } from './frequency.js';
 import { anachronySchema, voiceProfileSchema, anachronyTypeSchema, anachronyScopeSchema, anachronyFunctionSchema, narrativeLevelSchema, diegeticRelationSchema } from './discourse.js';
+import {
+  modernNovelConfigSchema,
+  antiCausalEdgeConfigSchema,
+  chapterOrderContestedSchema,
+  surfaceModeConfigSchema,
+  causalOverloadConfigSchema,
+  irresolvableIndeterminacySchema,
+  absentApparatusSchema,
+  voiceDissonanceSchema,
+  multiplicitySchema,
+  metanarrativeLevelSchema,
+} from './modern-novel.js';
 import { ideaIRSchema, thematicIntentSchema, emotionalArcDefinitionSchema, emotionalBeatSchema } from './idea-ir.js';
 import { structuralFunctionSchema, actantModelSchema, storyArchetypeSchema } from './story-ir.js';
 import { narrativePlannerModeSchema, narrativeGoalSchema, actionDefinitionSchema, effectSchema } from './planner.js';
@@ -95,6 +107,16 @@ export {
   narrativeGoalSchema,
   actionDefinitionSchema,
   effectSchema,
+  modernNovelConfigSchema,
+  antiCausalEdgeConfigSchema,
+  chapterOrderContestedSchema,
+  surfaceModeConfigSchema,
+  causalOverloadConfigSchema,
+  irresolvableIndeterminacySchema,
+  absentApparatusSchema,
+  voiceDissonanceSchema,
+  multiplicitySchema,
+  metanarrativeLevelSchema,
 };
 export {
   ruleIdSchema,

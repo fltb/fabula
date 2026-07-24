@@ -32,3 +32,14 @@ styleGuidance:
   atmosphere: 府第虽繁华排场渐生阴翳，可卿病榻与寿筵并置一冷一热
   scenePacing: 由求医延请到诊脉论症再到寿辰将行，舒缓推进
   characterVoice: {}
+narrativeChecklist:
+  items:
+    - dimension: 对话个性
+      description: 张太医诊脉论症之医学对话需专业详实，人物风范通过医论展现
+      required: true
+    - dimension: 环境渲染
+      description: 病榻之愁云与寿筵之热闹两境对照需渲染分明
+      required: true
+    - dimension: 草蛇灰线
+      description: 可卿之病“若过春分可望痊愈”暗伏不治之天命
+      required: false

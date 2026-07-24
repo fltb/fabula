@@ -12,6 +12,7 @@ import type { SourceContext } from './source-context.js';
 import type { DurationProfile } from './duration.js';
 import type { FrequencyProfile } from './frequency.js';
 import type { Anachrony, VoiceProfile } from './discourse.js';
+import type { ModernNovelConfig } from './modern-novel.js';
 import type { RuleEffectEntry, RuleTransaction } from './rule.js';
 
 // ——— Narrative Event (§7.4.1) ———
@@ -77,6 +78,8 @@ export interface NarrativeEvent {
     variation?: 'fixed' | 'variable' | 'multiple';
     characterSequence?: { character: string; scope: string }[];
   };
+  /** Modern novel structural fields — A-class validators + B-class effects (S3) */
+  modernNovel?: ModernNovelConfig;
 }
 
 export interface ThreadProgressEntry {
@@ -276,7 +279,10 @@ export interface EventFile {
   /** Genette Mood — focalization type and variation (S6c) */
   focalization?: {
     type: 'zero' | 'internal' | 'external';
+
     variation?: 'fixed' | 'variable' | 'multiple';
     characterSequence?: { character: string; scope: string }[];
   };
+  /** Modern novel structural fields — A-class validators + B-class effects (S3) */
+  modernNovel?: ModernNovelConfig;
 }

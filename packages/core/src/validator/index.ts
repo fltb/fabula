@@ -28,6 +28,10 @@ export { ConflictValidator } from './conflict.js';
 export { ChecklistValidator } from './checklist.js';
 export { ResultAggregator } from './aggregator.js';
 export { resolveDeferredFacts } from './deferred-resolver.js';
+export { AntiCausalEdgeValidator } from './anti-causal.js';
+export { ChapterOrderValidator } from './chapter-order.js';
+export { SurfaceModeValidator } from './surface-mode.js';
+export { CausalOverloadValidator } from './causal-overload.js';
 // ============================================================================
 // Aggregated analysis schema — built from built-in validator schemas
 // ============================================================================

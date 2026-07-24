@@ -1,0 +1,2690 @@
+{
+  "timestamp": "2026-07-24T05:45:25.714Z",
+  "regression": [
+    {
+      "stage": "Load entities",
+      "passed": true,
+      "ms": 25,
+      "detail": "Characters: 8, Locations: 4, Rules: 4"
+    },
+    {
+      "stage": "Load events",
+      "passed": true,
+      "ms": 13,
+      "detail": "Total events: 8 (1 genesis, 7 narrative)"
+    },
+    {
+      "stage": "Build DAG",
+      "passed": true,
+      "ms": 3,
+      "detail": "DAG order: 7 narrative events"
+    },
+    {
+      "stage": "Replay state",
+      "passed": true,
+      "ms": 0,
+      "detail": "Entities: 24, Facts: 169, Threads: 4"
+    },
+    {
+      "stage": "Run validators",
+      "passed": true,
+      "ms": 1,
+      "detail": "Errors: 0, Warnings: 0, Infos: 0 (7 events validated)"
+    },
+    {
+      "stage": "Run post-render validators (L2)",
+      "passed": true,
+      "ms": 47,
+      "detail": "L2 issues — errors: 0, warnings: 78, infos: 1"
+    },
+    {
+      "stage": "Write validation report",
+      "passed": true,
+      "ms": 0,
+      "detail": "/home/float/myfile/Projects/novalistically/fixtures/zhu-fu/output/validation.md"
+    },
+    {
+      "stage": "Compile context",
+      "passed": true,
+      "ms": 0,
+      "detail": "Chars: 5, Rels: 0, Facts: 20, Threads: 4"
+    }
+  ],
+  "performance": [
+    {
+      "name": "Run all validators (N=10)",
+      "hz": 2584.2925150334436,
+      "meanMs": 0.38695310000039174,
+      "samples": 10,
+      "scale": "10"
+    },
+    {
+      "name": "ResultAggregator (N=10)",
+      "hz": 4109.930784640672,
+      "meanMs": 0.24331310000088707,
+      "samples": 10,
+      "scale": "10"
+    },
+    {
+      "name": "Calculate ISS (N=10)",
+      "hz": 196618.16750703153,
+      "meanMs": 0.005086000000301283,
+      "samples": 10,
+      "scale": "10"
+    },
+    {
+      "name": "Replay state (N=10)",
+      "hz": 21973.38583465264,
+      "meanMs": 0.04550960000087798,
+      "samples": 10,
+      "scale": "10"
+    },
+    {
+      "name": "Compile context (N=10)",
+      "hz": 10483.114323542717,
+      "meanMs": 0.09539150000055088,
+      "samples": 10,
+      "scale": "10"
+    },
+    {
+      "name": "Run all validators (N=100)",
+      "hz": 70.8433015171795,
+      "meanMs": 14.11566060000041,
+      "samples": 5,
+      "scale": "100"
+    },
+    {
+      "name": "ResultAggregator (N=100)",
+      "hz": 69.42937730526528,
+      "meanMs": 14.403125000001456,
+      "samples": 5,
+      "scale": "100"
+    },
+    {
+      "name": "Calculate ISS (N=100)",
+      "hz": 32667.354858969346,
+      "meanMs": 0.030611599999974714,
+      "samples": 5,
+      "scale": "100"
+    },
+    {
+      "name": "Replay state (N=100)",
+      "hz": 1830.1711026973753,
+      "meanMs": 0.5463969999997061,
+      "samples": 5,
+      "scale": "100"
+    },
+    {
+      "name": "Compile context (N=100)",
+      "hz": 9928.100694843375,
+      "meanMs": 0.10072419999924023,
+      "samples": 5,
+      "scale": "100"
+    },
+    {
+      "name": "Run all validators (N=1000)",
+      "hz": 0.572445121547121,
+      "meanMs": 1746.8923436666664,
+      "samples": 3,
+      "scale": "1000"
+    },
+    {
+      "name": "ResultAggregator (N=1000)",
+      "hz": 0.5264843493495316,
+      "meanMs": 1899.3916936666672,
+      "samples": 3,
+      "scale": "1000"
+    },
+    {
+      "name": "Calculate ISS (N=1000)",
+      "hz": 2272.5740461425935,
+      "meanMs": 0.4400296666669116,
+      "samples": 3,
+      "scale": "1000"
+    },
+    {
+      "name": "Replay state (N=1000)",
+      "hz": 223.57684951138987,
+      "meanMs": 4.472735000003013,
+      "samples": 3,
+      "scale": "1000"
+    },
+    {
+      "name": "Compile context (N=1000)",
+      "hz": 1704.3362859989384,
+      "meanMs": 0.5867386666674671,
+      "samples": 3,
+      "scale": "1000"
+    }
+  ],
+  "l1Issues": [],
+  "l2Issues": [
+    {
+      "validator": "alias",
+      "severity": "warning",
+      "event": "E0",
+      "entity": "xianglins_wife",
+      "attribute": "aliases",
+      "message": "Unknown name \"一个女人\" used for character \"xianglins_wife\" — not in known names/aliases",
+      "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+      "fixAction": "add_field",
+      "fixTarget": {
+        "file": "",
+        "field": "aliases",
+        "value": "一个女人"
+      }
+    },
+    {
+      "validator": "alias",
+      "severity": "warning",
+      "event": "E1",
+      "entity": "xianglins_wife",
+      "attribute": "aliases",
+      "message": "Unknown name \"她\" used for character \"xianglins_wife\" — not in known names/aliases",
+      "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+      "fixAction": "add_field",
+      "fixTarget": {
+        "file": "",
+        "field": "aliases",
+        "value": "她"
+      }
+    },
+    {
+      "validator": "alias",
+      "severity": "warning",
+      "event": "E2",
+      "entity": "xianglins_wife",
+      "attribute": "aliases",
+      "message": "Unknown name \"她\" used for character \"xianglins_wife\" — not in known names/aliases",
+      "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+      "fixAction": "add_field",
+      "fixTarget": {
+        "file": "",
+        "field": "aliases",
+        "value": "她"
+      }
+    },
+    {
+      "validator": "alias",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "xianglins_wife",
+      "attribute": "aliases",
+      "message": "Unknown name \"她\" used for character \"xianglins_wife\" — not in known names/aliases",
+      "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+      "fixAction": "add_field",
+      "fixTarget": {
+        "file": "",
+        "field": "aliases",
+        "value": "她"
+      }
+    },
+    {
+      "validator": "alias",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "xianglins_wife",
+      "attribute": "aliases",
+      "message": "Unknown name \"她\" used for character \"xianglins_wife\" — not in known names/aliases",
+      "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+      "fixAction": "add_field",
+      "fixTarget": {
+        "file": "",
+        "field": "aliases",
+        "value": "她"
+      }
+    },
+    {
+      "validator": "alias",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "xianglins_wife",
+      "attribute": "aliases",
+      "message": "Unknown name \"她\" used for character \"xianglins_wife\" — not in known names/aliases",
+      "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+      "fixAction": "add_field",
+      "fixTarget": {
+        "file": "",
+        "field": "aliases",
+        "value": "她"
+      }
+    },
+    {
+      "validator": "alias",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "fourth_master_lu",
+      "attribute": "aliases",
+      "message": "Unknown name \"四婶\" used for character \"fourth_master_lu\" — not in known names/aliases",
+      "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+      "fixAction": "add_field",
+      "fixTarget": {
+        "file": "",
+        "field": "aliases",
+        "value": "四婶"
+      }
+    },
+    {
+      "validator": "alias",
+      "severity": "warning",
+      "event": "E6",
+      "entity": "xianglins_wife",
+      "attribute": "aliases",
+      "message": "Unknown name \"她\" used for character \"xianglins_wife\" — not in known names/aliases",
+      "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+      "fixAction": "add_field",
+      "fixTarget": {
+        "file": "",
+        "field": "aliases",
+        "value": "她"
+      }
+    },
+    {
+      "validator": "alias",
+      "severity": "warning",
+      "event": "E6",
+      "entity": "fourth_aunt",
+      "attribute": "aliases",
+      "message": "Unknown name \"她\" used for character \"fourth_aunt\" — not in known names/aliases",
+      "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+      "fixAction": "add_field",
+      "fixTarget": {
+        "file": "",
+        "field": "aliases",
+        "value": "她"
+      }
+    },
+    {
+      "validator": "alias",
+      "severity": "warning",
+      "event": "E6",
+      "entity": "fourth_master_lu",
+      "attribute": "aliases",
+      "message": "Unknown name \"他\" used for character \"fourth_master_lu\" — not in known names/aliases",
+      "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+      "fixAction": "add_field",
+      "fixTarget": {
+        "file": "",
+        "field": "aliases",
+        "value": "他"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E0",
+      "entity": "narrator",
+      "attribute": "knowledge",
+      "message": "Postcondition \"narrator.knowledge=encountered_xianglins_wife\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "knowledge"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E0",
+      "entity": "narrator",
+      "attribute": "emotionalState",
+      "message": "Postcondition \"narrator.emotionalState=guilty_uneasy\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "emotionalState"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E0",
+      "entity": "xianglins_wife",
+      "attribute": "spiritual_state",
+      "message": "Postcondition \"xianglins_wife.spiritual_state=undefined\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "spiritual_state"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E0",
+      "entity": "narrator",
+      "attribute": "knowledge_of_xianglins_wife",
+      "message": "Postcondition \"narrator.knowledge_of_xianglins_wife=saw_her_as_beggar\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "knowledge_of_xianglins_wife"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E0",
+      "entity": "narrator",
+      "attribute": "location",
+      "message": "Postcondition \"narrator.location=fourth_master_lu_house\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "location"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E0",
+      "entity": "xianglins_wife",
+      "attribute": "emotionalState",
+      "message": "Postcondition \"xianglins_wife.emotionalState=undefined\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "emotionalState"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E1",
+      "entity": "xianglins_wife",
+      "attribute": "cause_of_death",
+      "message": "Postcondition \"xianglins_wife.cause_of_death=poverty\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "cause_of_death"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E1",
+      "entity": "xianglins_wife",
+      "attribute": "time_of_death",
+      "message": "Postcondition \"xianglins_wife.time_of_death=undefined\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "time_of_death"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E1",
+      "entity": "narrator",
+      "attribute": "emotionalState",
+      "message": "Postcondition \"narrator.emotionalState=guilt_easing\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "emotionalState"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E1",
+      "entity": "fourth_master_lu",
+      "attribute": "attitude_toward_xianglins_wife",
+      "message": "Postcondition \"fourth_master_lu.attitude_toward_xianglins_wife=disgusted\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "attitude_toward_xianglins_wife"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E1",
+      "entity": "narrator",
+      "attribute": "purpose",
+      "message": "Postcondition \"narrator.purpose=recount_her_story\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "purpose"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E2",
+      "entity": "xianglins_wife",
+      "attribute": "location",
+      "message": "Postcondition \"xianglins_wife.location=fourth_master_lu_house\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "location"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E2",
+      "entity": "xianglins_wife",
+      "attribute": "status",
+      "message": "Postcondition \"xianglins_wife.status=employed_maid\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "status"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E2",
+      "entity": "xianglins_wife",
+      "attribute": "work_capability",
+      "message": "Postcondition \"xianglins_wife.work_capability=full_strength\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "work_capability"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E2",
+      "entity": "xianglins_wife",
+      "attribute": "emotionalState",
+      "message": "Postcondition \"xianglins_wife.emotionalState=content\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "emotionalState"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E2",
+      "entity": "fourth_master_lu",
+      "attribute": "attitude_toward_xianglins_wife",
+      "message": "Postcondition \"fourth_master_lu.attitude_toward_xianglins_wife=tolerant_but_suspicious\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "attitude_toward_xianglins_wife"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E2",
+      "entity": "fourth_aunt",
+      "attribute": "attitude_toward_xianglins_wife",
+      "message": "Postcondition \"fourth_aunt.attitude_toward_xianglins_wife=satisfied\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "attitude_toward_xianglins_wife"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E2",
+      "entity": "xianglins_wife",
+      "attribute": "appearance",
+      "message": "Postcondition \"xianglins_wife.appearance=pale_yellow_face_red_cheeks\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "appearance"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E2",
+      "entity": "xianglins_wife",
+      "attribute": "social_status",
+      "message": "Postcondition \"xianglins_wife.social_status=undefined\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "social_status"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "xianglins_wife",
+      "attribute": "location",
+      "message": "Postcondition \"xianglins_wife.location=he_family_hollow\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "location"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "xianglins_wife",
+      "attribute": "marital_status",
+      "message": "Postcondition \"xianglins_wife.marital_status=remarried\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "marital_status"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "xianglins_wife",
+      "attribute": "appearance",
+      "message": "Postcondition \"xianglins_wife.appearance=forehead_scar_from_altar_collision\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "appearance"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "xianglins_wife",
+      "attribute": "has_ah_mao",
+      "message": "Postcondition \"xianglins_wife.has_ah_mao=true\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "has_ah_mao"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "xianglins_wife",
+      "attribute": "emotionalState",
+      "message": "Postcondition \"xianglins_wife.emotionalState=content_with_new_family\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "emotionalState"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "he_laoliu",
+      "attribute": "marital_status",
+      "message": "Postcondition \"he_laoliu.marital_status=married\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "marital_status"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "mother_in_law",
+      "attribute": "financial_state",
+      "message": "Postcondition \"mother_in_law.financial_state=gained_80000_cash_from_sale\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "financial_state"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "xianglins_wife",
+      "attribute": "social_status",
+      "message": "Postcondition \"xianglins_wife.social_status=undefined\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "social_status"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "old_mrs_wei",
+      "attribute": "role_in_kidnapping",
+      "message": "Postcondition \"old_mrs_wei.role_in_kidnapping=inside_agent\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "role_in_kidnapping"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "xianglins_wife",
+      "attribute": "location",
+      "message": "Postcondition \"xianglins_wife.location=fourth_master_lu_house\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "location"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "xianglins_wife",
+      "attribute": "marital_status",
+      "message": "Postcondition \"xianglins_wife.marital_status=widowed_twice\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "marital_status"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "xianglins_wife",
+      "attribute": "has_ah_mao",
+      "message": "Postcondition \"xianglins_wife.has_ah_mao=false\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "has_ah_mao"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "xianglins_wife",
+      "attribute": "emotionalState",
+      "message": "Postcondition \"xianglins_wife.emotionalState=grief_stricken\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "emotionalState"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "xianglins_wife",
+      "attribute": "appearance",
+      "message": "Postcondition \"xianglins_wife.appearance=pale_face_no_red_cheeks_tear_stains_dull_eyes\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "appearance"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "he_laoliu",
+      "attribute": "status",
+      "message": "Postcondition \"he_laoliu.status=dead\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "status"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "fourth_aunt",
+      "attribute": "attitude_toward_xianglins_wife",
+      "message": "Postcondition \"fourth_aunt.attitude_toward_xianglins_wife=pitying_but_cautious\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "attitude_toward_xianglins_wife"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "xianglins_wife",
+      "attribute": "social_status",
+      "message": "Postcondition \"xianglins_wife.social_status=undefined\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "social_status"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "xianglins_wife",
+      "attribute": "storytelling_mode",
+      "message": "Postcondition \"xianglins_wife.storytelling_mode=undefined\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "storytelling_mode"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "xianglins_wife",
+      "attribute": "spiritual_state",
+      "message": "Postcondition \"xianglins_wife.spiritual_state=broken\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "spiritual_state"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "xianglins_wife",
+      "attribute": "has_donated_threshold",
+      "message": "Postcondition \"xianglins_wife.has_donated_threshold=true\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "has_donated_threshold"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "xianglins_wife",
+      "attribute": "work_capability",
+      "message": "Postcondition \"xianglins_wife.work_capability=diminished\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "work_capability"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "xianglins_wife",
+      "attribute": "appearance",
+      "message": "Postcondition \"xianglins_wife.appearance=grey_black_face_sunken_eyes_white_hair_wooden_puppet\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "appearance"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "xianglins_wife",
+      "attribute": "emotionalState",
+      "message": "Postcondition \"xianglins_wife.emotionalState=spiritually_devastated\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "emotionalState"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "fourth_aunt",
+      "attribute": "attitude_toward_xianglins_wife",
+      "message": "Postcondition \"fourth_aunt.attitude_toward_xianglins_wife=increasingly_annoyed\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "attitude_toward_xianglins_wife"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "xianglins_wife",
+      "attribute": "social_status",
+      "message": "Postcondition \"xianglins_wife.social_status=undefined\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "social_status"
+      }
+    },
+    {
+      "validator": "causality",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "liu_ma",
+      "attribute": "effect_on_xianglins_wife",
+      "message": "Postcondition \"liu_ma.effect_on_xianglins_wife=undefined\" not covered in rendered prose.",
+      "fixSuggestion": "Add explicit mention of this state change in the scene.",
+      "fixAction": "manual",
+      "fixTarget": {
+        "file": "",
+        "field": "effect_on_xianglins_wife"
+      }
+    },
+    {
+      "validator": "foreshadowing",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "her_inevitable_expulsion",
+      "attribute": "foreshadowing",
+      "message": "Foreshadowing \"her_inevitable_expulsion\" not detected in prose: \"四婶开始觉得她越来越不像样——'祥林嫂怎么这样了？倒不如那时不留她'。驱逐已是时间问题。\"",
+      "fixSuggestion": "Ensure foreshadowing is present in the rendered prose",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "foreshadowing"
+      }
+    },
+    {
+      "validator": "pov",
+      "severity": "warning",
+      "event": "E0",
+      "entity": "narrator",
+      "attribute": "pov.type",
+      "message": "First-person POV for \"narrator\" but prose does not contain first-person pronouns (\"I\", \"my\", \"me\")",
+      "fixSuggestion": "Use first-person narration consistently throughout the scene.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "pov.type"
+      }
+    },
+    {
+      "validator": "pov",
+      "severity": "warning",
+      "event": "E1",
+      "entity": "narrator",
+      "attribute": "pov.type",
+      "message": "First-person POV for \"narrator\" but prose does not contain first-person pronouns (\"I\", \"my\", \"me\")",
+      "fixSuggestion": "Use first-person narration consistently throughout the scene.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "pov.type"
+      }
+    },
+    {
+      "validator": "pov",
+      "severity": "warning",
+      "event": "E2",
+      "entity": "narrator",
+      "attribute": "pov.type",
+      "message": "First-person POV for \"narrator\" but prose does not contain first-person pronouns (\"I\", \"my\", \"me\")",
+      "fixSuggestion": "Use first-person narration consistently throughout the scene.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "pov.type"
+      }
+    },
+    {
+      "validator": "pov",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "narrator",
+      "attribute": "pov.type",
+      "message": "First-person POV for \"narrator\" but prose does not contain first-person pronouns (\"I\", \"my\", \"me\")",
+      "fixSuggestion": "Use first-person narration consistently throughout the scene.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "pov.type"
+      }
+    },
+    {
+      "validator": "pov",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "narrator",
+      "attribute": "pov.type",
+      "message": "First-person POV for \"narrator\" but prose does not contain first-person pronouns (\"I\", \"my\", \"me\")",
+      "fixSuggestion": "Use first-person narration consistently throughout the scene.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "pov.type"
+      }
+    },
+    {
+      "validator": "pov",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "narrator",
+      "attribute": "pov.type",
+      "message": "First-person POV for \"narrator\" but prose does not contain first-person pronouns (\"I\", \"my\", \"me\")",
+      "fixSuggestion": "Use first-person narration consistently throughout the scene.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "pov.type"
+      }
+    },
+    {
+      "validator": "pov",
+      "severity": "warning",
+      "event": "E6",
+      "entity": "narrator",
+      "attribute": "pov.type",
+      "message": "First-person POV for \"narrator\" but prose does not contain first-person pronouns (\"I\", \"my\", \"me\")",
+      "fixSuggestion": "Use first-person narration consistently throughout the scene.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "pov.type"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E0",
+      "entity": "T2",
+      "attribute": "threadProgress",
+      "message": "Thread \"T2\" not advanced in prose: \"祥林嫂的灵魂之问开启了故事的核心主题。她的三连问——灵魂？地狱？死去的家人能否见面？——表明她内心的终极困境：希望与恐惧并存。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E0",
+      "entity": "T3",
+      "attribute": "threadProgress",
+      "message": "Thread \"T3\" not advanced in prose: \"叙述者'我'面对祥林嫂的问题选择了逃避——'说不清'。'我'代表知识分子在目睹苦难时的道德软弱。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E0",
+      "entity": "T4",
+      "attribute": "threadProgress",
+      "message": "Thread \"T4\" not advanced in prose: \"外面的祝福忙乱与河边凄凉相遇形成对比——全镇人都在忙着迎福神，而祥林嫂正在走向死亡。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E1",
+      "entity": "T1",
+      "attribute": "threadProgress",
+      "message": "Thread \"T1\" not advanced in prose: \"祥林嫂死了。死于贫穷。死在新年祝福的最忙时刻——她的死亡本身成了对祝福仪式的'污染'。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E1",
+      "entity": "T3",
+      "attribute": "threadProgress",
+      "message": "Thread \"T3\" not advanced in prose: \"短工对她死讯的漠然（'还不是穷死的？'）、四叔的咒骂（'谬种'）、'我'的渐轻松——三种反应共同展示了鲁镇人对一个底层女人之死的完全无感。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E1",
+      "entity": "T4",
+      "attribute": "threadProgress",
+      "message": "Thread \"T4\" not advanced in prose: \"她的死亡发生在祝福仪式的高潮时刻——四叔的咒骂体现了一个祝福活动对不洁者的彻底排斥。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E2",
+      "entity": "T1",
+      "attribute": "threadProgress",
+      "message": "Thread \"T1\" not advanced in prose: \"祥林嫂逃出婆家，在鲁镇找到第一份工作。她靠自己的劳动力获得了暂时的稳定——口角有了笑影，脸上也白胖了。这是她生命中第一个短暂的安稳期。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E3",
+      "entity": "T1",
+      "attribute": "threadProgress",
+      "message": "Thread \"T1\" not advanced in prose: \"祥林嫂被婆婆卖掉，以八十千的价钱从劳动力变成了婚姻商品。但她短暂交了好运：贺老六有力气、没婆婆、有房子，年底生下阿毛——这是她一生最好的时光。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "T1",
+      "attribute": "threadProgress",
+      "message": "Thread \"T1\" not advanced in prose: \"贺老六死于伤寒，阿毛被狼叼走，大伯收房驱人——她生命中唯一的好日子结束了。她回到鲁镇，但这次是被社会视为'再寡'的污秽之人。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E4",
+      "entity": "T3",
+      "attribute": "threadProgress",
+      "message": "Thread \"T3\" not advanced in prose: \"鲁镇人第一次听阿毛故事时掉泪，但很快便厌烦了——'后来全镇的人们几乎都能背诵她的话，一听到就烦厌得头痛'。她的悲剧变成了别人的'趣味'。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "T1",
+      "attribute": "threadProgress",
+      "message": "Thread \"T1\" not advanced in prose: \"柳妈的地狱恐吓→祥林嫂捐门槛→冬至祭祀被喝止——这是祥林嫂精神崩溃的完整链条。她从恐惧到希望（捐了门槛）再到彻底绝望（捐了也没用），故事的核心悲剧在此完成。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "T2",
+      "attribute": "threadProgress",
+      "message": "Thread \"T2\" not advanced in prose: \"灵魂问题从理论变成了迫在眉睫的恐怖：柳妈的地狱描述让祥林嫂第一次具体地想象了来世惩罚。捐门槛是她尝试的答案——她遵循了规则、付出了代价，但规则被证明是无效的。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "T3",
+      "attribute": "threadProgress",
+      "message": "Thread \"T3\" not advanced in prose: \"看客对祥林嫂的态度完成了从同情到嘲弄的转变——他们专拿她的额疤取乐，还故意逗她讲阿毛。她的痛苦已经彻底沦为鲁镇人的消遣。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E5",
+      "entity": "T4",
+      "attribute": "threadProgress",
+      "message": "Thread \"T4\" not advanced in prose: \"冬至祭祀——祝福的核心仪式——成为祥林嫂精神死亡的地点。四婶的喝止不是偶然的冲动，而是整个祝福体系对'不洁者'的结构性排斥。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "thread_progress",
+      "severity": "warning",
+      "event": "E6",
+      "entity": "T2",
+      "attribute": "threadProgress",
+      "message": "Thread \"T2\" not advanced in prose: \"祥林嫂在死前问'我'灵魂问题——这说明她直到生命最后一刻还在寻找答案。她死于不知道答案的恐惧中。而'我'的'说不清'——那个逃避的回答——在她死后再也无法收回。\"",
+      "fixSuggestion": "Ensure the scene advances this narrative thread.",
+      "fixAction": "edit_file",
+      "fixTarget": {
+        "file": "",
+        "field": "threadProgress"
+      }
+    },
+    {
+      "validator": "conflict",
+      "severity": "info",
+      "event": "E2",
+      "entity": "system",
+      "attribute": "conflictType",
+      "message": "Scene \"E2\" declares conflict type \"person_vs_society\" but Pass 2 detected \"person_vs_fate\"",
+      "fixSuggestion": "Either the conflict was portrayed differently in prose, or the declaration needs updating.",
+      "fixAction": "change_value",
+      "fixTarget": {
+        "file": "",
+        "field": "conflictType"
+      }
+    }
+  ],
+  "l1PerValidator": [],
+  "l2PerValidator": [
+    {
+      "validator": "causality",
+      "category": "",
+      "errors": 0,
+      "warnings": 45,
+      "infos": 0,
+      "nCED": 160.7142857142857
+    },
+    {
+      "validator": "thread_progress",
+      "category": "",
+      "errors": 0,
+      "warnings": 15,
+      "infos": 0,
+      "nCED": 53.57142857142857
+    },
+    {
+      "validator": "alias",
+      "category": "",
+      "errors": 0,
+      "warnings": 10,
+      "infos": 0,
+      "nCED": 35.71428571428571
+    },
+    {
+      "validator": "pov",
+      "category": "",
+      "errors": 0,
+      "warnings": 7,
+      "infos": 0,
+      "nCED": 24.999999999999996
+    },
+    {
+      "validator": "foreshadowing",
+      "category": "",
+      "errors": 0,
+      "warnings": 1,
+      "infos": 0,
+      "nCED": 3.571428571428571
+    },
+    {
+      "validator": "conflict",
+      "category": "",
+      "errors": 0,
+      "warnings": 0,
+      "infos": 1,
+      "nCED": 3.571428571428571
+    }
+  ],
+  "severityCED": [
+    {
+      "severity": "error",
+      "l1CED": 0,
+      "l2CED": 0
+    },
+    {
+      "severity": "warning",
+      "l1CED": 0,
+      "l2CED": 278.57142857142856
+    },
+    {
+      "severity": "info",
+      "l1CED": 0,
+      "l2CED": 3.571428571428571
+    }
+  ],
+  "variants": {
+    "branchA": {
+      "eventsLoaded": 7,
+      "issues": [
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E0",
+          "entity": "T2",
+          "attribute": "threadProgress",
+          "message": "Thread \"T2\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E0",
+          "entity": "T3",
+          "attribute": "threadProgress",
+          "message": "Thread \"T3\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E0",
+          "entity": "T4",
+          "attribute": "threadProgress",
+          "message": "Thread \"T4\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E1",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E1",
+          "entity": "T2",
+          "attribute": "threadProgress",
+          "message": "Thread \"T2\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E1",
+          "entity": "T3",
+          "attribute": "threadProgress",
+          "message": "Thread \"T3\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E1",
+          "entity": "T4",
+          "attribute": "threadProgress",
+          "message": "Thread \"T4\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "timeline",
+          "severity": "warning",
+          "event": "E2",
+          "entity": "narrator",
+          "attribute": "narration_time",
+          "message": "Scene type is \"flashback\" but no narration_time is set",
+          "fixSuggestion": "Add narration_time field to indicate where in the narrative this scene is told.",
+          "fixAction": "add_field",
+          "fixTarget": {
+            "file": "",
+            "field": "narration_time"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E2",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E3",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "timeline",
+          "severity": "warning",
+          "event": "E3",
+          "entity": "narrator",
+          "attribute": "narration_time",
+          "message": "Scene type is \"flashback\" but no narration_time is set",
+          "fixSuggestion": "Add narration_time field to indicate where in the narrative this scene is told.",
+          "fixAction": "add_field",
+          "fixTarget": {
+            "file": "",
+            "field": "narration_time"
+          }
+        },
+        {
+          "validator": "pacing",
+          "severity": "warning",
+          "event": "E3",
+          "entity": "system",
+          "attribute": "arcPosition",
+          "message": "Climax at position 4/7 (50%) — expected between 60% and 85%",
+          "fixSuggestion": "Consider repositioning this event to fall in the 60-85% range, or change its arcPosition.",
+          "fixAction": "change_value",
+          "fixTarget": {
+            "file": "",
+            "field": "arcPosition"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E3",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E4",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E4",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E4",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "timeline",
+          "severity": "warning",
+          "event": "E4",
+          "entity": "narrator",
+          "attribute": "narration_time",
+          "message": "Scene type is \"flashback\" but no narration_time is set",
+          "fixSuggestion": "Add narration_time field to indicate where in the narrative this scene is told.",
+          "fixAction": "add_field",
+          "fixTarget": {
+            "file": "",
+            "field": "narration_time"
+          }
+        },
+        {
+          "validator": "conflict",
+          "severity": "warning",
+          "event": "E4",
+          "entity": "system",
+          "attribute": "resolutionType",
+          "message": "Scene \"E4\" declares conflict type \"person_vs_fate\" but resolution is \"unresolved\" — conflict may be left dangling",
+          "fixSuggestion": "Ensure the conflict reaches explicit resolution, or mark it as intentionally unresolved.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "resolutionType"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E4",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E4",
+          "entity": "T3",
+          "attribute": "threadProgress",
+          "message": "Thread \"T3\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E5",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E5",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E5",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "timeline",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "narrator",
+          "attribute": "narration_time",
+          "message": "Scene type is \"flashback\" but no narration_time is set",
+          "fixSuggestion": "Add narration_time field to indicate where in the narrative this scene is told.",
+          "fixAction": "add_field",
+          "fixTarget": {
+            "file": "",
+            "field": "narration_time"
+          }
+        },
+        {
+          "validator": "foreshadowing",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "her_inevitable_expulsion",
+          "attribute": "target_reveal_chapter",
+          "message": "Foreshadow \"her_inevitable_expulsion\" (四婶开始觉得她越来越不像样——'祥林嫂怎么这样了？倒不如那时不留她'。驱逐已是时间问题。) was supposed to be revealed by chapter 1, but we're at chapter 2",
+          "fixSuggestion": "Add the reveal event, or update the target_reveal_chapter.",
+          "fixAction": "change_value",
+          "fixTarget": {
+            "file": "",
+            "field": "target_reveal_chapter"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "T2",
+          "attribute": "threadProgress",
+          "message": "Thread \"T2\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "T3",
+          "attribute": "threadProgress",
+          "message": "Thread \"T3\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "T4",
+          "attribute": "threadProgress",
+          "message": "Thread \"T4\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E6",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E6",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "timeline",
+          "severity": "warning",
+          "event": "E6",
+          "entity": "narrator",
+          "attribute": "narration_time",
+          "message": "Scene type is \"flashback\" but no narration_time is set",
+          "fixSuggestion": "Add narration_time field to indicate where in the narrative this scene is told.",
+          "fixAction": "add_field",
+          "fixTarget": {
+            "file": "",
+            "field": "narration_time"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E6",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E6",
+          "entity": "T2",
+          "attribute": "threadProgress",
+          "message": "Thread \"T2\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E6",
+          "entity": "T3",
+          "attribute": "threadProgress",
+          "message": "Thread \"T3\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E6",
+          "entity": "T4",
+          "attribute": "threadProgress",
+          "message": "Thread \"T4\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        }
+      ]
+    },
+    "branchB": {
+      "eventsLoaded": 7,
+      "issues": [
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E0",
+          "entity": "T2",
+          "attribute": "threadProgress",
+          "message": "Thread \"T2\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E0",
+          "entity": "T3",
+          "attribute": "threadProgress",
+          "message": "Thread \"T3\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E0",
+          "entity": "T4",
+          "attribute": "threadProgress",
+          "message": "Thread \"T4\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E1",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E1",
+          "entity": "T3",
+          "attribute": "threadProgress",
+          "message": "Thread \"T3\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E1",
+          "entity": "T4",
+          "attribute": "threadProgress",
+          "message": "Thread \"T4\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "timeline",
+          "severity": "warning",
+          "event": "E2",
+          "entity": "narrator",
+          "attribute": "narration_time",
+          "message": "Scene type is \"flashback\" but no narration_time is set",
+          "fixSuggestion": "Add narration_time field to indicate where in the narrative this scene is told.",
+          "fixAction": "add_field",
+          "fixTarget": {
+            "file": "",
+            "field": "narration_time"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E2",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E3",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "timeline",
+          "severity": "warning",
+          "event": "E3",
+          "entity": "narrator",
+          "attribute": "narration_time",
+          "message": "Scene type is \"flashback\" but no narration_time is set",
+          "fixSuggestion": "Add narration_time field to indicate where in the narrative this scene is told.",
+          "fixAction": "add_field",
+          "fixTarget": {
+            "file": "",
+            "field": "narration_time"
+          }
+        },
+        {
+          "validator": "pacing",
+          "severity": "warning",
+          "event": "E3",
+          "entity": "system",
+          "attribute": "arcPosition",
+          "message": "Climax at position 4/7 (50%) — expected between 60% and 85%",
+          "fixSuggestion": "Consider repositioning this event to fall in the 60-85% range, or change its arcPosition.",
+          "fixAction": "change_value",
+          "fixTarget": {
+            "file": "",
+            "field": "arcPosition"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E3",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E4",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E4",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E4",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "timeline",
+          "severity": "warning",
+          "event": "E4",
+          "entity": "narrator",
+          "attribute": "narration_time",
+          "message": "Scene type is \"flashback\" but no narration_time is set",
+          "fixSuggestion": "Add narration_time field to indicate where in the narrative this scene is told.",
+          "fixAction": "add_field",
+          "fixTarget": {
+            "file": "",
+            "field": "narration_time"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E4",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E4",
+          "entity": "T2",
+          "attribute": "threadProgress",
+          "message": "Thread \"T2\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E4",
+          "entity": "T3",
+          "attribute": "threadProgress",
+          "message": "Thread \"T3\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E5",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E5",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E5",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "timeline",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "narrator",
+          "attribute": "narration_time",
+          "message": "Scene type is \"flashback\" but no narration_time is set",
+          "fixSuggestion": "Add narration_time field to indicate where in the narrative this scene is told.",
+          "fixAction": "add_field",
+          "fixTarget": {
+            "file": "",
+            "field": "narration_time"
+          }
+        },
+        {
+          "validator": "foreshadowing",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "old_age_coming",
+          "attribute": "target_reveal_chapter",
+          "message": "Foreshadow \"old_age_coming\" (贺老六的脊背微微驼了——他的身体仍然脆弱。平静的岁月并非永恒。但无论将来发生什么，祥林嫂已不再是那个在鲁镇被定义为'不洁'的女人。) was supposed to be revealed by chapter 1, but we're at chapter 2",
+          "fixSuggestion": "Add the reveal event, or update the target_reveal_chapter.",
+          "fixAction": "change_value",
+          "fixTarget": {
+            "file": "",
+            "field": "target_reveal_chapter"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "T2",
+          "attribute": "threadProgress",
+          "message": "Thread \"T2\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "T3",
+          "attribute": "threadProgress",
+          "message": "Thread \"T3\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E5",
+          "entity": "T4",
+          "attribute": "threadProgress",
+          "message": "Thread \"T4\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E6",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "character_state",
+          "severity": "error",
+          "event": "E6",
+          "entity": "xianglins_wife",
+          "attribute": "status",
+          "message": "Character \"xianglins_wife\" is dead but appears in this scene",
+          "fixSuggestion": "Remove this character from the scene, or this character's death must have been revealed as false.",
+          "fixAction": "remove_line",
+          "fixTarget": {
+            "file": "",
+            "field": "status"
+          }
+        },
+        {
+          "validator": "timeline",
+          "severity": "warning",
+          "event": "E6",
+          "entity": "narrator",
+          "attribute": "narration_time",
+          "message": "Scene type is \"flashback\" but no narration_time is set",
+          "fixSuggestion": "Add narration_time field to indicate where in the narrative this scene is told.",
+          "fixAction": "add_field",
+          "fixTarget": {
+            "file": "",
+            "field": "narration_time"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E6",
+          "entity": "T1",
+          "attribute": "threadProgress",
+          "message": "Thread \"T1\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E6",
+          "entity": "T2",
+          "attribute": "threadProgress",
+          "message": "Thread \"T2\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E6",
+          "entity": "T3",
+          "attribute": "threadProgress",
+          "message": "Thread \"T3\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        },
+        {
+          "validator": "thread_progress",
+          "severity": "warning",
+          "event": "E6",
+          "entity": "T4",
+          "attribute": "threadProgress",
+          "message": "Thread \"T4\" referenced in threadProgress is not defined in world state",
+          "fixSuggestion": "Add a matching thread definition or remove the reference.",
+          "fixAction": "edit_file",
+          "fixTarget": {
+            "file": "",
+            "field": "threadProgress"
+          }
+        }
+      ]
+    },
+    "errorInjection": [
+      {
+        "file": "001_timeline_order",
+        "description": "E3 sceneType is flashback but narrationTime is missing — timeline validator should detect missing temporal context",
+        "expectedValidator": "timeline",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "002_missing_precondition",
+        "description": "E4 references a precondition on attribute location for character xianglins_wife that is never set by any prior event's postcondition",
+        "expectedValidator": "causality",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 2
+      },
+      {
+        "file": "003_causality_break",
+        "description": "E3's postcondition says xianglins_wife.location = he_family_hollow, but E4's precondition expects xianglins_wife.location = fourth_master_lu_house — the causal chain is broken",
+        "expectedValidator": "causality",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 2
+      },
+      {
+        "file": "004_unreachable_event",
+        "description": "E5 has a precondition that xianglins_wife.attribute has_magical_power = true — but no event ever sets this; the event is unreachable",
+        "expectedValidator": "reachability",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 2
+      },
+      {
+        "file": "005_pov_violation",
+        "description": "E2 POV set to he_laoliu who is a defined character but not a scene participant — POV in-scene rule violation",
+        "expectedValidator": "pov",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "006_fact_contradiction",
+        "description": "E4 postconditions state xianglins_wife.marital_status = remarried but a worldFact in state_initial says she was never legally remarried",
+        "expectedValidator": "world_rule",
+        "expectedSeverity": "error",
+        "matched": false,
+        "actualIssueCount": 0
+      },
+      {
+        "file": "007_invented_detail",
+        "description": "An event invents a detail about xianglins_wife having a younger sister that never appears in any character definition",
+        "expectedValidator": "factual_detail",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "008_knowledge_violation",
+        "description": "E2 (first arrival, chronological start) has the narrator knowing about the kidnapping that happens in E3 — knowledge of future events",
+        "expectedValidator": "knowledge",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "009_world_rule_violation",
+        "description": "An event depicts a woman (xianglins_wife) leading a public ritual — this violates the rule patriarchal_clan_authority which says only men conduct rituals",
+        "expectedValidator": "world_rule",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "010_character_state_contradiction",
+        "description": "E5 postconditions set xianglins_wife.status = dead, but E6 preconditions expect xianglins_wife.status = alive",
+        "expectedValidator": "character_state",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 3
+      },
+      {
+        "file": "011_foreshadowing_unpaid",
+        "description": "An event plants a foreshadowing with targetRevealChapter 1, but the chapter exceeds it immediately",
+        "expectedValidator": "foreshadowing",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 2
+      },
+      {
+        "file": "012_placeholder_value",
+        "description": "A Fact.value contains 'changed' — this is a placeholder value that should be rejected by Zod schema validation",
+        "expectedValidator": "factual_detail",
+        "expectedSeverity": "warning",
+        "matched": false,
+        "actualIssueCount": 0
+      },
+      {
+        "file": "013_mutual_exclusion",
+        "description": "A Fact has both value and narrativeHint set — they must be mutually exclusive per Zod refine()",
+        "expectedValidator": "factual_detail",
+        "expectedSeverity": "error",
+        "matched": false,
+        "actualIssueCount": 0
+      },
+      {
+        "file": "014_tense_mismatch",
+        "description": "E4 sceneType is flashback but narrationTime removed — timeline validator detects missing temporal context",
+        "expectedValidator": "timeline",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "015_missing_character_reference",
+        "description": "An event's pov.character references zhen_sao — a character that does not exist in any definitions/characters/ file",
+        "expectedValidator": "pov",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 2
+      },
+      {
+        "file": "016_branch_merge_inconsistency",
+        "description": "An event has branchExistence type paths with paths A and B but its preconditions only reference facts set in branch A, not branch B",
+        "expectedValidator": "branch_merge",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 2
+      },
+      {
+        "file": "017_narration_time_missing",
+        "description": "A flashback event (sceneType: flashback) has no narrationTime field",
+        "expectedValidator": "timeline",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "018_scene_type_invalid",
+        "description": "An event has sceneType 'notarealtype' — invalid enum value",
+        "expectedValidator": "timeline",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "019_location_mismatch",
+        "description": "An event's pov.character has location beijing but that location is not in the definitions/locations/ directory",
+        "expectedValidator": "character_state",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 9
+      },
+      {
+        "file": "020_thread_progress_invalid",
+        "description": "An event's threadProgress references threadId T99 — a non-existent thread",
+        "expectedValidator": "thread_progress",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 7
+      },
+      {
+        "file": "021_pacing_anomaly",
+        "description": "All 7 events have arcPosition: 'climax' — no narrative arc structure, pacing is broken",
+        "expectedValidator": "pacing",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 8
+      },
+      {
+        "file": "022_tense_shift",
+        "description": "E2 tense field is 'present' but E0/E1 use past tense — cross-scene tense inconsistency",
+        "expectedValidator": "tense_consistency",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "023_discourse_imbalance",
+        "description": "All 7 events use discourseMode: 'description' — no narrative variety, discourse is unbalanced.",
+        "expectedValidator": "discourse_balance",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 7
+      },
+      {
+        "file": "024_alias_inconsistency",
+        "description": "Event refers to xianglins_wife as '祥林家的' which is not in the character's defined aliases list.",
+        "expectedValidator": "alias",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "025_pronoun_mismatch",
+        "description": "Event uses masculine pronoun '他' when referring to xianglins_wife who is defined as female (gender: 女).",
+        "expectedValidator": "pronoun",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "026_appearance_contradiction",
+        "description": "E2 shows xianglins_wife with 'white_hair_haggard_wooden_face' (her death-stage appearance) but she is ~26 years old at first arrival and should have red cheeks per character definition.",
+        "expectedValidator": "appearance",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "027_conflict_unresolved",
+        "description": "E6 conflictType is person_vs_society but resolutionType set to unresolved — conflict left dangling",
+        "expectedValidator": "conflict",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "028_voice_drift",
+        "description": "Xianglin's Wife uses formal classical Chinese register in dialogue ('吾夫已逝') but character profile specifies simple rustic speech — voice_formality matchLevel is 'contradicted'.",
+        "expectedValidator": "voice_drift",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "028_voice_drift",
+        "description": "Narrator's internal monologue uses modern colloquialisms like '基本上' and '搞定' which are absent from the 1920s rural Zhejiang lexical set — voice_vocabulary matchLevel is 'absent'.",
+        "expectedValidator": "voice_drift",
+        "expectedSeverity": "info",
+        "matched": true,
+        "actualIssueCount": 1
+      },
+      {
+        "file": "028_voice_drift",
+        "description": "He Laoliu's dialogue references '电报' and '报纸' in a scene set before the telegraph reached Lu Town — voice_anachronism matchLevel is 'contradicted'.",
+        "expectedValidator": "voice_drift",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 1
+      }
+    ],
+    "extremeDamage": [
+      {
+        "file": "001_event_deletion",
+        "description": "E3 event deleted from the DAG — E2 postconditions have no downstream consumer, E4 preconditions are unsatisfied.",
+        "expectedValidator": "causality",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 6
+      },
+      {
+        "file": "001_event_deletion",
+        "description": "E3 is deleted so E3's postconditions (xianglins_wife.marital_status = widowed_twice, has_ah_mao = true) are absent — E4's preconditions that depend on these values are unreachable.",
+        "expectedValidator": "reachability",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 7
+      },
+      {
+        "file": "001_event_deletion",
+        "description": "E2's postcondition (xianglins_wife.location = fourth_master_lu_house) has no downstream consumer because E3 was the event that consumed it. E2's precondition depends on now-deleted facts.",
+        "expectedValidator": "reachability",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 7
+      },
+      {
+        "file": "002_postcondition_swap",
+        "description": "E4 postcondition xianglins_wife.marital_status has value 'broken' instead of 'widowed_twice' — swapped with E5's spiritual_state postcondition, so E5's precondition expecting widowed_twice is unsatisfied.",
+        "expectedValidator": "causality",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 3
+      },
+      {
+        "file": "002_postcondition_swap",
+        "description": "E5 postcondition xianglins_wife.spiritual_state has value 'widowed_twice' instead of 'broken' — swapped with E4's marital_status postcondition, breaking E5's own causal contract.",
+        "expectedValidator": "causality",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 3
+      },
+      {
+        "file": "003_circular_dependency",
+        "description": "Circular causal dependency: E3 precondition references xianglins_wife.spiritual_state = 'broken' (E5's postcondition), creating E3→E4→E5→E3 cycle — no topological ordering possible.",
+        "expectedValidator": "causality",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 2
+      },
+      {
+        "file": "004_missing_genesis",
+        "description": "System genesis event missing — no initial world facts (xianglins_wife.marital_status = widow_of_xianglin, location = weijia_shan, etc.) available, so E1/E2 preconditions referencing genesis facts are all unsatisfied.",
+        "expectedValidator": "reachability",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 11
+      },
+      {
+        "file": "004_missing_genesis",
+        "description": "E1 precondition xianglins_wife.marital_status = 'widow_of_xianglin' depends on genesis-world fact that no longer exists — event is unreachable.",
+        "expectedValidator": "reachability",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 11
+      },
+      {
+        "file": "004_missing_genesis",
+        "description": "E2 precondition xianglins_wife.location = 'weijia_shan' depends on genesis-world fact that no longer exists — event is unreachable.",
+        "expectedValidator": "reachability",
+        "expectedSeverity": "warning",
+        "matched": true,
+        "actualIssueCount": 11
+      },
+      {
+        "file": "005_self_referencing_precondition",
+        "description": "Self-referencing precondition: E2 requires xianglins_wife.appearance = 'red_cheeks' which is only set by E2's own postconditions — creates a deadlock where E2 can never be satisfied.",
+        "expectedValidator": "causality",
+        "expectedSeverity": "error",
+        "matched": true,
+        "actualIssueCount": 2
+      }
+    ]
+  },
+  "pipelineF1": {
+    "precision": 1,
+    "recall": 0.925,
+    "f1": 0.961,
+    "matchedCount": 37,
+    "missedCount": 3,
+    "falsePositiveCount": 0
+  },
+  "l2Stats": {
+    "passed": true,
+    "ms": 47,
+    "detail": "L2 issues — errors: 0, warnings: 78, infos: 1"
+  }
+}

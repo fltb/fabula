@@ -44,3 +44,14 @@ styleGuidance:
   atmosphere: 梦幻荒凉与红尘繁华交织，神话气味浓厚，夹叙代叙并存
   scenePacing: 由作者自述到神话纲到世情开端，由远及近，由虚入实
   characterVoice: {}
+narrativeChecklist:
+  items:
+    - dimension: 诗词
+      description: 顽石偈语及太虚幻境对联应体现梦幻寓言风格
+      required: true
+    - dimension: 环境渲染
+      description: 神话与市井场景之间的过渡须虚实相生
+      required: true
+    - dimension: 反讽距离
+      description: 作者自云“假语村言”需透出叙事者与故事之间的反讽距离
+      required: false

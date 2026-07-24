@@ -1,0 +1,268 @@
+{
+  "generatedAt": "2026-07-24T05:44:03.281Z",
+  "totalEvents": 20,
+  "eventsWithChecklist": 20,
+  "perEvent": [
+    {
+      "event": "E1",
+      "title": "甄士隐梦幻识通灵 贾雨村风尘怀闺秀",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "诗词",
+        "环境渲染",
+        "反讽距离"
+      ]
+    },
+    {
+      "event": "E2",
+      "title": "葫芦庙门子献护官符 雨村徇私断薛蟠案",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "对话个性",
+        "反讽距离",
+        "环境渲染"
+      ]
+    },
+    {
+      "event": "E3",
+      "title": "林黛玉抛父进京都",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "环境渲染",
+        "对话个性",
+        "心理描写"
+      ]
+    },
+    {
+      "event": "E4",
+      "title": "张太医论病细穷源 贾敬寿排家宴见熙凤",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "对话个性",
+        "环境渲染",
+        "草蛇灰线"
+      ]
+    },
+    {
+      "event": "E5",
+      "title": "凤姐协理宁国府",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "礼教规制",
+        "对话个性",
+        "反讽距离"
+      ]
+    },
+    {
+      "event": "E6",
+      "title": "刘姥姥一进荣国府",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "对话个性",
+        "反讽距离",
+        "环境渲染"
+      ]
+    },
+    {
+      "event": "E7",
+      "title": "耗子精故事与李嬷嬷骂袭人",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "对话个性",
+        "草蛇灰线",
+        "心理描写"
+      ]
+    },
+    {
+      "event": "E8",
+      "title": "贾宝玉大醉绛芸轩 薛宝钗巧合认通灵",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "对话个性",
+        "草蛇灰线",
+        "环境渲染"
+      ]
+    },
+    {
+      "event": "E9",
+      "title": "通灵除邪",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "环境渲染",
+        "对话个性",
+        "反讽距离"
+      ]
+    },
+    {
+      "event": "E10",
+      "title": "金寡妇贪利权受辱 秦可卿病笃延名医",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "对话个性",
+        "心理描写",
+        "草蛇灰线"
+      ]
+    },
+    {
+      "event": "E11",
+      "title": "清虚观打醮惹烦扰 宝黛诉衷肠怒砸玉",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "心理描写",
+        "对话个性",
+        "礼教规制"
+      ]
+    },
+    {
+      "event": "E12",
+      "title": "湘云劝学惹风波，宝玉剖心定知己",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "心理描写",
+        "对话个性",
+        "草蛇灰线"
+      ]
+    },
+    {
+      "event": "E13",
+      "title": "宝玉挨打之后 袭人进言搬出园",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "心理描写",
+        "对话个性",
+        "礼教规制"
+      ]
+    },
+    {
+      "event": "E14",
+      "title": "林如海捐馆扬州城 贾宝玉路谒北静王",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "心理描写",
+        "礼教规制",
+        "对话个性"
+      ]
+    },
+    {
+      "event": "E15",
+      "title": "王凤姐弄权铁槛寺 秦鲸卿得趣馒头庵",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "反讽距离",
+        "对话个性",
+        "心理描写"
+      ]
+    },
+    {
+      "event": "E16",
+      "title": "刘姥姥醉闹贾府宴",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "环境渲染",
+        "对话个性",
+        "反讽距离"
+      ]
+    },
+    {
+      "event": "E17",
+      "title": "闲取乐偶攒金庆寿 不了情暂撮土为香",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "心理描写",
+        "礼教规制",
+        "草蛇灰线"
+      ]
+    },
+    {
+      "event": "E18",
+      "title": "鸳鸯抗婚诉姐妹 宝玉藏山听密语",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "对话个性",
+        "心理描写",
+        "草蛇灰线"
+      ]
+    },
+    {
+      "event": "E19",
+      "title": "情切切良宵花解语 意绵绵静日玉生香",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "对话个性",
+        "心理描写",
+        "环境渲染"
+      ]
+    },
+    {
+      "event": "E20",
+      "title": "王熙凤正言弹妒意 林黛玉俏语谑娇音",
+      "requiredCount": 2,
+      "totalCount": 3,
+      "dimensions": [
+        "对话个性",
+        "礼教规制",
+        "环境渲染"
+      ]
+    }
+  ],
+  "perDimension": [
+    {
+      "dimension": "对话个性",
+      "eventCount": 18,
+      "requiredCount": 17
+    },
+    {
+      "dimension": "心理描写",
+      "eventCount": 11,
+      "requiredCount": 8
+    },
+    {
+      "dimension": "环境渲染",
+      "eventCount": 10,
+      "requiredCount": 5
+    },
+    {
+      "dimension": "反讽距离",
+      "eventCount": 7,
+      "requiredCount": 3
+    },
+    {
+      "dimension": "草蛇灰线",
+      "eventCount": 7,
+      "requiredCount": 2
+    },
+    {
+      "dimension": "礼教规制",
+      "eventCount": 6,
+      "requiredCount": 4
+    },
+    {
+      "dimension": "诗词",
+      "eventCount": 1,
+      "requiredCount": 1
+    }
+  ],
+  "summary": {
+    "totalChecklistItems": 60,
+    "totalRequiredItems": 40
+  }
+}

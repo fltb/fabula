@@ -1,0 +1,66 @@
+event: E3
+title: 林黛玉抛父进京都
+narrativeOrder: 3
+sceneType: linear
+pov:
+  character: narrator_omniscient
+  type: omniscient
+sceneBrief: 黛玉辞别父亲林如海，随贾雨村进京投奔外祖母。至荣国府，黛玉经垂花门入内，见贾母迎出，二人抱头痛哭。贾母引黛玉见邢夫人、王夫人、李纨及迎春探春惜春三姐妹。王夫人告之宝玉乃孽根祸胎，嘱黛玉不必睬他。凤姐人未至而笑先闻，携黛玉手上下打量，夸赞其标致如嫡亲孙女，又拭泪哀叹姑母早逝，旋即转悲为喜。宝玉出场，细问黛玉有无玉，得知无玉后摘下通灵宝玉狠命摔去，贾母急劝哄方休。宝玉为黛玉取字"颦颦"。
+preconditions: []
+expectedPostconditions: []
+threadProgress:
+  - thread: T4
+    advancement: 宝黛初会，一见如故，宝玉摔玉问玉为爱情主线埋下心灵感应之根
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T7
+    advancement: 黛玉进府遵礼数见各房长辈，凤姐笑泪切换骤变的表演，尽显贾府等级与世故
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T3
+    advancement: 荣国府陈设接驾排场、奴仆成群、贾母独尊，展示贾府鼎盛时期的门面与秩序
+    progressAfter: 5
+    progressTotal: 100
+foreshadowing:
+  - id: fs_E03_ch3_pd7x
+    hint: 宝玉摔玉，为后文"金玉良缘"与"木石前盟"之争首开冲突
+    thread: T1
+    targetRevealChapter: 80
+  - id: fs_E03_ch3_jt8v
+    hint: 凤姐"竟不像老祖宗的外孙女儿，竟是嫡亲的孙女"一语，暗伏黛玉在贾府虽贵为客而非主之尴尬
+    thread: T1
+    targetRevealChapter: 80
+introduces:
+  - type: character
+    initialState: {}
+    id: unknown_lin_daiyu
+  - type: character
+    initialState: {}
+    id: unknown_jia_baoyu
+  - type: character
+    initialState: {}
+    id: unknown_wang_xifeng
+styleGuidance:
+  tone: 凄婉含泪中渐入繁华，初见之惊艳与暗伏之悲凉交织
+  targetWordCount: 600
+  atmosphere: 外祖母慈泪、凤姐笑声、宝玉狂态三者交织，荣国府排场尽收眼底
+  scenePacing: 以黛玉视角由远及近，从入府到拜见各人，节奏由缓入急，至宝玉摔玉达高潮
+  characterVoice: {}
+tense: past
+discourseMode: exposition
+arcPosition: opening
+emotionalValence: melancholic
+conflictType: person_vs_fate
+storyTime: story_start
+narrationTime: story_start
+narrativeChecklist:
+  items:
+    - dimension: 环境渲染
+      description: 黛玉初入荣国府，府第建筑陈设的描写需展现大家气派与黛玉视角的陌生感
+      required: true
+    - dimension: 对话个性
+      description: 凤姐出场语态、贾母慈语、宝玉痴言需各具性格特征
+      required: true
+    - dimension: 心理描写
+      description: 黛玉进府时步步留心、时时在意的敏感心理需细腻刻画
+      required: false

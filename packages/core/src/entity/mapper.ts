@@ -38,6 +38,7 @@ import { FsStorage, type Storage } from '../storage/index.ts';
 // ============================================================================
 
 export class EntityMapper {
+  private projectPath: string;
   private storage: Storage;
   /** S6c: Loaded narrator profiles indexed by id. */
   private narratorProfiles: Record<string, NarratorProfile> = {};

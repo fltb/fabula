@@ -32,3 +32,14 @@ emotionalValence: past
 conflictType: past
 storyTime: past
 narrationTime: past
+narrativeChecklist:
+  items:
+    - dimension: 心理描写
+      description: 宝黛因金玉之说误会而怒砸玉、痛哭吐药之激烈情感需细致刻画内心波澜
+      required: true
+    - dimension: 对话个性
+      description: 宝黛争吵中气话与真心交织，语言需具有强烈的情感张力和个性特征
+      required: true
+    - dimension: 礼教规制
+      description: 清虚观打醮引官场交际，需表现贾府之显赫与礼俗之繁缛
+      required: false

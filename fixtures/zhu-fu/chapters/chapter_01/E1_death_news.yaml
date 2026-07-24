@@ -94,3 +94,65 @@ styleGuidance:
   scenePacing: "从惴惴不安到得知死讯的震动，再到'心地渐渐轻松'的微妙转折——需展现'我'的道德回避机制。"
   characterVoice:
     narrator: "内省语气，从紧张到放松的道德曲线。'说不清'的余音在脑中回响。"
+duration:
+  type: scene
+  storyDuration: "傍晚晚餐时间，约1小时"
+  narrativeLength: 800
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: homodiegetic
+anachrony:
+  type: analepsis
+  scope: internal
+  function: completing
+  distance: "仍在同一除夕夜框架内"
+narrativeChecklist:
+  items:
+    - dimension: "对话个性"
+      description: "短工的简洁回答——'老了''穷死的'——三字一句，冷漠到极致"
+      required: true
+    - dimension: "反讽距离"
+      description: "四叔骂'谬种'与叙述者'舒畅起来'的并置——社会对个体死亡的系统性漠视"
+      required: true
+    - dimension: "孤独氛围"
+      description: "雪夜独坐灯下的内心独白——'无常打扫得干干净净'的冷抒情"
+      required: true
+    - dimension: "语言禁忌"
+      description: "祝福期间不可说'死'——'老了'替代'死了'的仪式性语言规则"
+      required: false
+sourceContext:
+  entries:
+    - excerpt: "'老了。''死了？'我的心突然紧缩，几乎跳起来……我也就镇定了自己"
+      classification: FACT
+    - excerpt: "'不早不迟，偏偏要在这时候——这就可见是一个谬种！'"
+      classification: FACT
+    - excerpt: "我独坐在发出黄光的菜油灯下，想，这百无聊赖的祥林嫂……现在总算被无常打扫得干干净净了。"
+      classification: STYLE
+      styleNote: "鲁迅的冷抒情——'无常打扫'是佛道混合修辞，'反而渐渐的舒畅起来'暴露了叙述者的自我麻醉。"
+greyLines:
+  - id: gl_snow
+    imagery: "雪与雪声"
+    nodes:
+      - eventId: E1
+        semanticAccumulation: "雪花瑟瑟有声——'我'独坐灯下听雪，祥林嫂的死被雪声覆盖，社会继续运转"
+        narrativeOrder: 2
+  - id: gl_firecracker
+    imagery: "爆竹与火药香"
+    nodes:
+      - eventId: E1
+        semanticAccumulation: "爆竹声作为祝福背景——与祥林嫂的死讯形成尖锐反差"
+        narrativeOrder: 2
+  - id: gl_lamp
+    imagery: "孤灯——孤独与确证"
+    nodes:
+      - eventId: E1
+        semanticAccumulation: "'我独坐在发出黄光的菜油灯下'——知识分子的独白时刻"
+        narrativeOrder: 2
+  - id: gl_unclear
+    imagery: "说不清——知识分子的道德逃逸"
+    nodes:
+      - eventId: E1
+        semanticAccumulation: "'我说不清'——短工回答祥林嫂何时死亡，同样使用'说不清'"
+        narrativeOrder: 2

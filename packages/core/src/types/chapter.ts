@@ -3,6 +3,7 @@
 // ============================================================================
 
 import type { StyleGuidance } from './event.js';
+import type { IdeaIR } from './idea-ir.js';
 
 // ——— Chapter Metadata ———
 
@@ -46,6 +47,7 @@ export interface ProjectConfig {
   defaultLanguage?: string;
   genre?: string;
   synopsis?: string;
+  ideaIR?: IdeaIR;
   tense?: 'past' | 'present';
   validatorOverrides?: Record<string, 'off' | 'warning' | 'error'>;
   circuitBreaker?: {

@@ -97,3 +97,58 @@ styleGuidance:
   scenePacing: "以祥林嫂的独白（'我真傻，真的'）为中心——这是全文中唯一以她的声音为主的大段叙述，需要读出节奏感。从她缓慢的讲述过渡到叙述者冷峻的评论。"
   characterVoice:
     xianglins_wife: "她讲阿毛故事时的语气——'我真傻，真的'开头，反复回到同一句话，叙述过程有固定的节奏和停顿。这是创伤后重复性叙述的文学呈现。"
+narrativeChecklist:
+  items:
+    - dimension: "创伤独白"
+      description: "'我真傻，真的'——祥林嫂最长的独白段落，创伤叙事的核心。反复讲述既是治疗也是固化。"
+      required: true
+    - dimension: "外貌衰变"
+      description: "'两颊上已经消失了血色'——与E2的'两颊却还是红的'对照，第二次丧夫后的生命力消退"
+      required: true
+    - dimension: "重复结构"
+      description: "'阿毛……豆……篮……狼……鞋……五脏……'——鲁迅用儿童的死亡道具构建最残酷的悲剧叙事"
+      required: true
+    - dimension: "看客反应"
+      description: "'四婶起初还踌躇，待到听完她自己的话，眼圈就有些红了'——这是祥林嫂最后一次获得同情"
+      required: false
+duration:
+  type: scene
+  storyDuration: "祥林嫂再到鲁家当天，约2-3小时"
+  narrativeLength: 1500
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: homodiegetic
+anachrony:
+  type: analepsis
+  scope: external
+  function: completing
+  distance: "约2年前——丧夫失子后再到鲁家"
+sourceContext:
+  entries:
+    - excerpt: "'我真傻，真的，'祥林嫂抬起她没有神采的眼睛来，接着说。'我单知道下雪的时候野兽在山坳里没有食吃，会到村里来；我不知道春天也会有。'"
+      classification: STYLE
+      styleNote: "祥林嫂的独白——'我真傻，真的'成为她创伤的核心叙事。鲁迅用这个重复句型标记她的精神创伤固化。"
+    - excerpt: "再进去；他果然躺在草窠里，肚里的五脏已经都给吃空了，手上还紧紧的捏着那只小篮呢。"
+      classification: FACT
+      styleNote: "阿毛之死的残酷细节——'五脏已经都给吃空了'是祝福全文最暴力的画面。"
+greyLines:
+  - id: gl_snow
+    imagery: "雪与雪声"
+    nodes:
+      - eventId: E4
+        semanticAccumulation: "雪景作为重复出现的背景——阿毛被狼叼走也是'雪天'"
+        narrativeOrder: 5
+  - id: gl_hair
+    imagery: "头发与容貌的逐次褪色"
+    nodes:
+      - eventId: E4
+        semanticAccumulation: "'头上扎着白头绳，脸色青黄，两颊上已经消失了血色'——第二次到鲁家，第二次丧夫"
+        narrativeOrder: 5
+  - id: gl_foolish
+    imagery: "我真傻，真的——创伤重复"
+    nodes:
+      - eventId: E4
+        semanticAccumulation: "'我真傻，真的'——阿毛之死的首次讲述，催人泪下"
+        narrativeOrder: 5

@@ -136,3 +136,14 @@ anachrony:
   scope: internal
   function: completing
   distance: "叙述者'我'在回忆数年前回鲁镇的往事"
+
+sourceContext:
+  entries:
+    - excerpt: "她是五年前的花白的头发，即今已经全白，全不像四十上下的人；脸上瘦削不堪，黄中带黑，而且消尽了先前悲哀的神色，仿佛是木刻似的；只有那眼珠间或一轮，还可以表示她是一个活物。"
+      classification: STYLE
+      styleNote: "鲁迅的白描——用外貌的逐层剥落暗示内在生命力的消亡。'眼珠间或一轮'是唯一的生命证据，也是通往死亡的渐进。"
+    - excerpt: "'就是——'她走近两步，放低了声音，极秘密似的切切的说，'一个人死了之后，究竟有没有魂灵的？'"
+      classification: FACT
+    - excerpt: "'说不清'是一句极有用的话。不更事的勇敢的少年，往往敢于给人解决疑问……然而一用这说不清来作结束，便事事逍遥自在了。"
+      classification: STYLE
+      styleNote: "鲁迅的反讽叙事距离——'我'用'说不清'为道德逃避辩护，但叙述者反讽地暴露了这种自欺。"

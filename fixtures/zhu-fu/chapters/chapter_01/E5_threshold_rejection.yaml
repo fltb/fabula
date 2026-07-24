@@ -113,3 +113,80 @@ styleGuidance:
   characterVoice:
     liu_ma: "柳妈的语气是关心的、絮叨的、认真的——她不是在吓人，而是在分享她深信的事实。'你呀，我想：这总是你自己愿意了……'——用家常话讲地狱。"
     fourth_aunt: "一声'你放着罢，祥林嫂！'——短短几个字，要读出恐慌和厌恶混合的力度。"
+
+narrativeChecklist:
+  items:
+    - dimension: "仪式排除"
+      description: "'不干不净，祖宗是不吃的'——祭祀体系的科学化排斥。祥林嫂从最勤快的祝福参与者变为永久禁忌"
+      required: true
+    - dimension: "致命对话"
+      description: "'你放着罢'两次重复——四婶用最少的字完成了最彻底的精神处决"
+      required: true
+    - dimension: "希望→崩溃"
+      description: "捐门槛的漫长积攒('快够一年')与瞬间崩溃('炮烙似的缩手')的时间对比——希望的建立与摧毁"
+      required: true
+    - dimension: "伤疤笑谈"
+      description: "镇上人用祥林嫂的伤疤开玩笑——'你那时怎么后来竟依了呢？'——创伤变成消遣，社会冷漠的微观机制"
+      required: false
+duration:
+  type: summary
+  storyDuration: "从捐门槛积攒到被喝止，数月"
+  narrativeLength: 1500
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: homodiegetic
+anachrony:
+  type: analepsis
+  scope: external
+  function: completing
+  distance: "约1年前——祥林嫂精神崩溃过程"
+sourceContext:
+  entries:
+    - excerpt: "这种人虽然似乎很可怜，但是败坏风俗的，用她帮忙还可以，祭祀时候可用不着她沾手，一切饭菜，只好自己做，否则，不干不净，祖宗是不吃的。"
+      classification: FACT
+      styleNote: "四叔的判决——'不干不净'将祥林嫂从祭祀体系永久排除。这是她社会死亡的关键转折。"
+    - excerpt: "'祥林嫂，你放着罢！我来摆。'四婶慌忙的说。她讪讪的缩了手，又去取烛台。'祥林嫂，你放着罢！我来拿。'四婶又慌忙的说。"
+      classification: STYLE
+      styleNote: "鲁迅的致命重复——'你放着罢'两次出现，第二次省略了宾语，四婶用最少的语言完成了最彻底的拒绝。这是全文最简洁也最残忍的对话。"
+    - excerpt: "她像是受了炮烙似的缩手，脸色同时变作灰黑，也不再去取烛台，只是失神的站着……这一回她的变化非常大，第二天，不但眼睛凹陷下去，连精神也更不济了。"
+      classification: FACT
+      styleNote: "捐门槛赎罪的彻底失败——'炮烙似的'是鲁迅唯一一次用酷刑比喻祥林嫂的反应，标志着精神世界的最后坍塌。"
+greyLines:
+  - id: gl_wooden
+    imagery: 木刻与木偶——物化进程
+    nodes:
+      - eventId: E5
+        semanticAccumulation: "沦为被观看的展览品——'她大约从他们的笑容和声调上，也知道是在嘲笑她'"
+        narrativeOrder: 6
+  - id: gl_eye
+    imagery: 眼珠间或一轮——最后的生命迹象
+    nodes:
+      - eventId: E5
+        semanticAccumulation: "'眼光也没有先前那样精神了'——捐门槛后希望的破灭"
+        narrativeOrder: 6
+  - id: gl_ritual
+    imagery: 祝福与祭祀——神圣与禁忌的边界
+    nodes:
+      - eventId: E5
+        semanticAccumulation: "'祭祀时候可用不着她沾手……不干不净，祖宗是不吃的'——被排除在祝福之外，捐门槛的徒劳"
+        narrativeOrder: 6
+  - id: gl_scar
+    imagery: 额角伤疤——反抗的标记沦为笑柄
+    nodes:
+      - eventId: E5
+        semanticAccumulation: "伤疤成为众人嘲笑的谈资——'你那时怎么后来竟依了呢？'——反抗被消解为八卦"
+        narrativeOrder: 6
+  - id: gl_foolish
+    imagery: 我真傻，真的——创伤重复
+    nodes:
+      - eventId: E5
+        semanticAccumulation: "重复讲述变成全镇的笑柄——'他们都能背诵她的话，一听到就烦厌得头痛'"
+        narrativeOrder: 6
+  - id: gl_hair
+    imagery: 头发与容貌的逐次褪色
+    nodes:
+      - eventId: E5
+        semanticAccumulation: "外貌进一步憔悴——'死尸似的脸上又整日没有笑影'"
+        narrativeOrder: 6

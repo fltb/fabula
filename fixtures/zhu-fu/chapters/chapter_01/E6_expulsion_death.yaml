@@ -94,3 +94,73 @@ styleGuidance:
   characterVoice:
     narrator: "最后一段的语气表面平静、甚至'懒散而且舒适'，实质上是最大的反讽——他在恭喜发财的爆竹声中，用文学的笔将祥林嫂重新埋葬。"
     avoid: "不要用任何煽情的语言描写祥林嫂的死亡——她的死需要和叙述的冷漠形成对比。"
+greyLines:
+  - id: gl_snow
+    imagery: "雪与雪声"
+    nodes:
+      - eventId: E6
+        semanticAccumulation: "除夕雪夜——祥林嫂冻死，雪既是致死之器又是掩盖之物"
+        narrativeOrder: 7
+  - id: gl_firecracker
+    imagery: "爆竹与火药香"
+    nodes:
+      - eventId: E6
+        semanticAccumulation: "祝福大典爆竹声——'天地圣众歆享了牲醴和香烟，都醉醺醺的在空中蹒跚'"
+        narrativeOrder: 7
+  - id: gl_hair
+    imagery: "头发与容貌的逐次褪色"
+    nodes:
+      - eventId: E6
+        semanticAccumulation: "从白胖→青黄→黄中带黑→木刻——完整的外貌衰变弧"
+        narrativeOrder: 7
+  - id: gl_wooden
+    imagery: "木刻与木偶——物化进程"
+    nodes:
+      - eventId: E6
+        semanticAccumulation: "'像是一个木偶人'——被彻底物化至死"
+        narrativeOrder: 7
+  - id: gl_eye
+    imagery: "眼珠间或一轮——最后的生命迹象"
+    nodes:
+      - eventId: E6
+        semanticAccumulation: "'眼珠间或一轮'——消失，死亡"
+        narrativeOrder: 7
+  - id: gl_ritual
+    imagery: "祝福与祭祀——神圣与禁忌的边界"
+    nodes:
+      - eventId: E6
+        semanticAccumulation: "祝福大典照常进行——祥林嫂的死不构成任何打扰"
+        narrativeOrder: 7
+sourceContext:
+  entries:
+    - excerpt: "我给那些因为在近旁而极响的爆竹声惊醒，看见豆一般大的黄色的灯火光，接着又听得毕毕剥剥的鞭炮，是四叔家正在'祝福'了；知道已是五更将近时候。我在朦胧中，又隐约听到远处的爆竹声连绵不断，似乎合成一天音响的浓云，夹着团团飞舞的雪花，拥抱了全市镇。"
+      classification: STYLE
+      styleNote: "鲁迅的环形收束——'拥抱'是全文唯一的温柔词，却来自祝福仪式而非对人——自然的祝福（爆竹+雪花）掩盖了人的死亡。这是最冷的反讽。"
+narrativeChecklist:
+  items:
+    - dimension: "环形结构"
+      description: "回到E0除夕夜框架——'爆竹声……雪花……祝福'——叙事的环形收束"
+      required: true
+    - dimension: "死亡留白"
+      description: "祥林嫂的死被完全省略——叙述者只说他'不知道'她如何死去，ellipsis作为道德回避"
+      required: true
+    - dimension: "反讽的顶点"
+      description: "'天地圣众歆享了牲醴和香烟，都醉醺醺的在空中蹒跚，预备给鲁镇的人们以无限的幸福'——全文最后一句，祝福的虚伪达到顶点"
+      required: true
+    - dimension: "社会葬礼"
+      description: "'谬种'一词从四叔蔓延到整个叙事——祥林嫂没有葬礼，只有标签"
+      required: false
+duration:
+  type: summary
+  storyDuration: "从被逐出到除夕冻死，数月至除夕"
+  narrativeLength: 1200
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: homodiegetic
+anachrony:
+  type: analepsis
+  scope: external
+  function: completing
+  distance: "回到除夕夜框架——叙述者回忆的最后一段"

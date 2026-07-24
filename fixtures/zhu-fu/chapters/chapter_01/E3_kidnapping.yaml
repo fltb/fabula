@@ -116,3 +116,53 @@ styleGuidance:
   tone: "戏剧化的暴力→日常的安宁。绑架场景需紧张急促，撞香案需突然而剧烈，年底的好消息需平静温暖。"
   targetWordCount: 1500
   scenePacing: "快速推进的绑架→撞香案的剧烈停顿→跳跃到年底的好消息——三个节奏形成了'暴力→反抗→平静'的叙事曲线。"
+duration:
+  type: summary
+  storyDuration: "从新年过后到年底生子，约1年"
+  narrativeLength: 1500
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: homodiegetic
+anachrony:
+  type: analepsis
+  scope: external
+  function: completing
+  distance: "约4年前——祥林嫂被卖改嫁时期"
+narrativeChecklist:
+  items:
+    - dimension: "暴力叙述"
+      description: "白篷船绑架——'一个抱住她，一个帮着，拖进船去了'——暴力被平淡叙述的叙事距离感"
+      required: true
+    - dimension: "反抗与创伤"
+      description: "'一头撞在香案角上，头上碰了一个大窟窿，鲜血直流'——祥林嫂一生唯一也是最激烈的反抗"
+      required: true
+    - dimension: "交易语言"
+      description: "卫老婆子用经济计算包装人口贩卖——'财礼'、'八十千'、'好打算'——人性的商品化"
+      required: true
+    - dimension: "话语控制"
+      description: "'出格'一词——反抗被规范化为反常，叙事者的价值观通过标签渗透"
+      required: false
+sourceContext:
+  entries:
+    - excerpt: "河里面上午就泊了一只白篷船，篷是全盖起来的，不知道什么人在里面……待到祥林嫂出来淘米，刚刚要跪下去，那船里便突然跳出两个男人来，像是山里人，一个抱住她，一个帮着，拖进船去了。"
+      classification: FACT
+    - excerpt: "'这有什么依不依。——闹是谁也总要闹一闹的，只要用绳子一捆，塞在花轿里，抬到男家，捺上花冠，拜堂，关上房门，就完事了。'"
+      classification: STYLE
+      styleNote: "卫老婆子的叙述距离——她用'完事了'三个字解构了祥林嫂的激烈反抗（撞头出血），暴露了叙述者群体的冷漠。"
+    - excerpt: "她一头撞在香案角上，头上碰了一个大窟窿，鲜血直流"
+      classification: FACT
+greyLines:
+  - id: gl_boat
+    imagery: "白篷船——命运摆渡"
+    nodes:
+      - eventId: E3
+        semanticAccumulation: "白篷船——祥林嫂被婆婆派来的人从河边绑架，'篷是全盖起来的，不知道什么人在里面'"
+        narrativeOrder: 4
+  - id: gl_scar
+    imagery: "额角伤疤——反抗的标记沦为笑柄"
+    nodes:
+      - eventId: E3
+        semanticAccumulation: "一头撞在香案角上，头上碰了一个大窟窿，鲜血直流——最激烈的反抗瞬间"
+        narrativeOrder: 4

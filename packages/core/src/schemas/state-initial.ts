@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { z } from 'zod';
-
+import { structuralFunctionSchema } from './story-ir.js';
 export const worldInitialStateSchema = z
   .object({
     info: z
@@ -32,6 +32,7 @@ export const worldInitialStateSchema = z
           type: z.string(),
           targetRevealChapter: z.number(),
           initialProgress: z.string(),
+          structuralFunction: structuralFunctionSchema.optional(),
         })
         .strict(),
     ),

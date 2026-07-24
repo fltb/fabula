@@ -32,24 +32,28 @@ threads:
     description: "祥林嫂从逃婚寡妇→勤快帮工→被卖改嫁→丧夫失子→再回鲁镇→精神崩溃→沦为乞丐→冻死街头的完整生命轨迹。跟踪她的位置、精神状态、劳动能力、社会地位的变化。"
     targetRevealChapter: 1
     initialProgress: "0.00"
+    structuralFunction: villainy
   - id: T2
     name: "灵魂之问"
     type: thematic
     description: "祥林嫂对死后世界的疑问贯穿始终——她既希望有灵魂（可以见到阿毛），又害怕有灵魂（会被锯成两半分给两个死鬼丈夫）。柳妈的地狱恐吓是转折点，捐门槛是她尝试自我救赎的最后努力。"
     targetRevealChapter: 1
     initialProgress: "0.00"
+    structuralFunction: unfounded_claims
   - id: T3
     name: "看客的冷漠"
     type: thematic
     description: "鲁镇人对祥林嫂的态度演变：初始同情（听阿毛故事流泪）→厌烦（反复讲述）→嘲弄（拿额角伤疤取乐）→排斥（祭祀不许沾手）→遗忘（她死了无人关心）。叙述者'我'的逃避代表了知识分子的道德软弱。"
     targetRevealChapter: 1
     initialProgress: "0.00"
+    structuralFunction: exposure
   - id: T4
     name: "祝福的讽刺"
     type: thematic
     description: "故事以过年祝福始、以祝福终。天地圣众醉醺醺地赐福给鲁镇人时，祥林嫂正在街头冻死。祝福的仪式性纯洁要求与祥林嫂被视为'不洁'形成根本矛盾。"
     targetRevealChapter: 1
     initialProgress: "0.00"
+    structuralFunction: recognition
 
 worldFacts:
   - id: zhu_fu_ritual

@@ -92,3 +92,51 @@ styleGuidance:
   tone: "冷峻的社会观察中透出淡淡的温暖——她脸上短暂的红晕和笑影是故事中唯一的光亮。"
   targetWordCount: 1500
   scenePacing: "缓慢的日常展开，在年终祝福的忙碌中达到高潮——注意将她的勤快与周围人的态度交织叙述。"
+narrativeChecklist:
+  items:
+    - dimension: "外貌描写"
+      description: "白头绳/乌裙/蓝夹袄/月白背心——衣着与身份的同构。'两颊却还是红的'——仅存的生命力"
+      required: true
+    - dimension: "沉默性格"
+      description: "'只是顺着眼，不开一句口'——祥林嫂的沉默是她与世界的唯一交往方式"
+      required: true
+    - dimension: "劳动即存在"
+      description: "'她反满足，口角边渐渐的有了笑影，脸上也白胖了'——劳动是她体验存在价值的唯一途径"
+      required: true
+    - dimension: "顺叙转倒叙"
+      description: "这是倒叙的第一个事件，需标记时间跳跃——'有一年的冬初'"
+      required: false
+duration:
+  type: summary
+  storyDuration: "从冬初到年底，约3个月"
+  narrativeLength: 1200
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: homodiegetic
+anachrony:
+  type: analepsis
+  scope: external
+  function: completing
+  distance: "约5年前——祥林嫂第一次到鲁家"
+sourceContext:
+  entries:
+    - excerpt: "头上扎着白头绳，乌裙，蓝夹袄，月白背心，年纪大约二十六七，脸色青黄，但两颊却还是红的……只是顺着眼，不开一句口，很像一个安分耐劳的人。"
+      classification: STYLE
+      styleNote: "鲁迅的人物出场描写——白头绳=寡妇标志，'两颊却还是红的'=尚存的生命力，为后续的容貌衰变做参照。"
+    - excerpt: "到年底，扫尘，洗地，杀鸡，宰鹅，彻夜的煮福礼，全是一人担当，竟没有添短工。然而她反满足，口角边渐渐的有了笑影，脸上也白胖了。"
+      classification: FACT
+greyLines:
+  - id: gl_ritual
+    imagery: "祝福与祭祀——神圣与禁忌的边界"
+    nodes:
+      - eventId: E2
+        semanticAccumulation: "祥林嫂第一次参与祝福——'扫尘，洗地，杀鸡，宰鹅，彻夜的煮福礼，全是一人担当'"
+        narrativeOrder: 3
+  - id: gl_lamp
+    imagery: "孤灯——孤独与确证"
+    nodes:
+      - eventId: E2
+        semanticAccumulation: "灯下祝福忙乱 vs 祥林嫂在黑暗中——孤独的对位"
+        narrativeOrder: 3

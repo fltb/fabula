@@ -1,6 +1,7 @@
 {
   "name": "@novalistically/bench",
   "version": "0.1.0",
+  "license": "GPL-3.0-only",
   "description": "Benchmark and performance suite for Novalistically — runs the full pipeline on real fixtures and measures throughput at N=10/100/1000.",
   "type": "module",
   "main": "./dist/index.js",

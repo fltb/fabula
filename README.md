@@ -1,4 +1,4 @@
-# Fabula (前 Novalistically)
+# Fabula
 
 > 叙事工程系统：结构化 YAML → Event Sourcing 状态 → 双轮 LLM → 组装小说。
 >
@@ -102,4 +102,4 @@ Stage 3 代码完成。1930 测试，110 测试文件，typecheck 干净。zhu-f
 
 ## License
 
-MIT
+GPL-3.0-only

@@ -1,83 +1,104 @@
-# Novalis
+# Fabula (前 Novalistically)
 
-> Narrative engineering: structured YAML → Event Sourcing state → two-pass LLM → assembled novel.
+> 叙事工程系统：结构化 YAML → Event Sourcing 状态 → 双轮 LLM → 组装小说。
 >
-> 让 LLM 负责创造，让系统负责稳定。
+> 核心命题：**Fabula（故事发生的时序 + 因果 DAG）**是系统的核心创新——event sourcing + causal DAG + topological sort 做对了。上层 IR 层（Idea IR、Story IR）和 Genette 五维度（Order/Duration/Frequency/Mood/Voice）现已接入基准测试。
 
-Novalis is a novel-writing engine that treats fiction as an engineering object. You define characters, world rules, and events in YAML; the engine maintains state via event sourcing, compiles minimal context for each scene, renders prose through a two-pass LLM pipeline, validates output against 18+ structured validators, and assembles the final novel.
+Fabula 是一个小说工程化引擎：作者定义角色、世界规则和事件（YAML 格式），系统通过 event sourcing 维护状态，为每个场景编译最小上下文，用双轮 LLM pipeline 渲染散文，通过 18+ 个结构化 validator 校验输出，最终组装成完整小说。
 
-## Core Concepts
+## 核心概念
 
-- **Novel IR** — a multi-layer intermediate representation (Idea → Story → Scene → Event → World State → Text), analogous to LLVM IR for programming languages.
-- **Story / Discourse separation** — *Story* (what happened, causal DAG) vs *Discourse* (how it's told, render order). Like React's Virtual DOM vs Render.
-- **Event Sourcing + Snapshots** — every narrative event is an immutable record; state is derived by replay. Supports branching, rollback, and DAG-based causal ordering.
-- **Two-pass rendering** — Pass 1 generates prose (temp 0.8); Pass 2 produces structured analysis JSON (temp 0.3, seed 42) for post-render validation.
-- **Layered validation** — deterministic facts checked via `compareFact()`; semantic dimensions checked via Pass 2 analysis; author intent carried through `narrativeChecklist` prompt passthrough.
+| 概念 | 说明 |
+|------|------|
+| **Novel IR** | 多层中间表示：Idea IR → Story IR → Scene IR → Event IR → World State → Novel Text（类比 LLVM IR） |
+| **Fabula / Syuzhet 分离** | *Fabula*（故事发生的因果链，causal DAG）vs *Syuzhet*（叙述顺序，discourse order）。topological sort on causal edges 驱动 replay，narrativeOrder 仅用于 Assembler |
+| **Event Sourcing + Snapshots** | 每个叙事事件是不可变记录；状态通过 replay 派生。支持分支、回滚、DAG 因果排序 |
+| **双轮渲染** | Pass 1：生成散文（temp 0.8）；Pass 2：结构化分析 JSON（temp 0.3, seed 42），12 个分析块供 validator 消费 |
+| **分层验证** | 确定性 fact 通过 `compareFact()` 检查；语义维度通过 Pass 2 分析检查；作者意图通过 `narrativeChecklist` prompt 透传 |
+| **传统小说为约束子集** | Schema 为最一般情况（现代小说）设计；传统小说不填现代特有字段，不是 parallel schema |
 
-## Architecture
+## 架构
 
 ```
-YAML Definitions
+YAML Definitions + Event Files
     ↓
 EntityMapper → EntityRegistry
     ↓
-StateManager (Event Sourcing + Snapshots + DAG causal edges)
+StateManager (Event Sourcing + Snapshots + DAG causal edges, topological sort)
     ↓
 ContextCompiler (5-layer priority, 8-dim relevance scoring)
     ↓
-RenderPipeline (Pass 1: prose → Pass 2: structured analysis)
+RenderPipeline (Pass 1: prose → Pass 2: 12-block structured analysis)
     ↓
 PostRenderValidation (18+ validators consuming Pass 2 analysis)
     ↓
 Assembler → output/novel.md
 ```
 
-## Quick Start
+## 基准 (zhu-fu) 接线状态
+
+`fixtures/zhu-fu/` (鲁迅《祝福》) 作为传统小说基准——7 个事件，全层接线：
+
+| 层 | 内容 | E0-E6 |
+|----|------|:--:|
+| Event IR | precondition / postcondition / threadProgress / DAG | ✅ |
+| World State | 角色、地点、关系、规则、state_initial | ✅ |
+| S6 Genette | duration / frequency / voice / anachrony | ✅ |
+| S1 narrativeChecklist | 每事件 3-4 项 must-include 维度 | ✅ |
+| S2 greyLines | 11 个共享 motif，跨事件追踪 | ✅ |
+| S4 sourceContext | 鲁迅原文摘录 (STYLE/FACT/MIXED) | ✅ |
+| S7a Idea IR | thematicIntent + emotionalArc | ✅ nova.yaml |
+| S7b Story IR | structuralFunction (Propp) + actantModel | ✅ 线程级 |
+
+## 快速开始
 
 ```bash
 npm install
-npm run build        # tsc -b (types) + esbuild (JS bundle)
-npm test             # vitest run (all packages)
-npm run bench        # bench: functional + performance
-npm run typecheck    # tsc --noEmit
-npm run lint         # biome check
+npm run build          # tsc -b (types) + esbuild (JS bundle)
+npm test               # vitest run (全包)
+npm run bench          # 功能 + 性能基准
+npm run typecheck      # tsc --noEmit
+npm run lint           # biome check
 ```
 
-Exclude e2e (needs live LLM proxy):
+排除 e2e（需要 live LLM proxy）:
 ```bash
 npx vitest run --exclude '**/e2e.test.ts'
 ```
 
-## Monorepo Layout
+## Monorepo 结构
 
-| Package | Role | Key Dependencies |
-|---------|------|-------------------|
-| `packages/core` | Engine: types, state, validators, pipeline | yaml, zod, better-sqlite3 |
+| 包 | 角色 | 关键依赖 |
+|----|------|---------|
+| `packages/core` | 引擎：types, state, validators, pipeline | yaml, zod, better-sqlite3 |
 | `packages/cli` | CLI + MCP server | commander, core |
-| `packages/bench` | Benchmarks + regression suite | tinybench, core |
+| `packages/bench` | 基准 + regression suite | tinybench, core |
 
-Build order: `core → cli` (and `bench` if needed).
+构建顺序：`core → cli`（需要时 `bench`）。
 
 ## Fixtures
 
-| Fixture | Description |
-|---------|-------------|
-| `fixtures/zhu-fu/` | 祝福 (Lu Xun) — 7 events, Chinese, full reference data |
-| `fixtures/dream-of-red-chamber/` | 红楼梦 — 12 sampled events, 40 characters, 8 locations |
-| `fixtures/most-dangerous-game/` | 6 scenes, 3 chapters, branch point |
-| `fixtures/arcane-aftermath/` | 2 events, test project |
-| `fixtures/zhu-fu-variants/` | Error injection + extreme damage variants |
+| Fixture | 描述 |
+|---------|------|
+| `fixtures/zhu-fu/` | 祝福 (鲁迅) — 7 事件，全层接线，传统小说基准 |
+| `fixtures/zhu-fu-variants/` | 变种矩阵：layer-minimal / discourse-reorder / pov-switch / branch-A / branch-B / error-injection / extreme-damage |
+| `fixtures/dream-of-red-chamber/` | 红楼梦 — 12 事件，40 角色，8 地点 |
+| `fixtures/most-dangerous-game/` | 6 场景，3 章，分支点 |
+| `fixtures/arcane-aftermath/` | 2 事件测试项目 |
 
-## Documentation
+## 文档
 
-- [Document index](docs/README.md)
-- [Architecture](docs/archive/PROJECT.md) — original system design
-- [Stage-2 audit](docs/audits/stage-2-corpus-audit.md) — capability boundary analysis
-- [Active TODO](docs/TODO.md) — current work surface
+| 文件 | 用途 |
+|------|------|
+| `docs/TODO.md` | 活跃工作面（当前至 Stage 3，70+ 项） |
+| `docs/report.md` | Stage 3 实现报告 |
+| `docs/report/stage-3-audit.md` | 代码级交叉引用审计 |
+| `docs/reference/stage-3/` | 叙事学参考：Genette 审计、IR 层映射、现代小说 survey、annotation 指南 |
+| `docs/archive/PROJECT.md` | ⚠️ 历史——原始系统设计 |
 
-## Status
+## 状态
 
-Stage 2 partial acceptance. Core engine (~28K lines) implements Event Sourcing, 18+ validators, two-pass rendering, context compiler, and assembler. Upper IR layers (Idea/Story/Scene) and Discovery Layer are designed but not yet built. See `docs/TODO.md` for the active work surface.
+Stage 3 代码完成。1930 测试，110 测试文件，typecheck 干净。zhu-fu 全层接线完成，变种矩阵就绪。已明确延后：C2/C3（人类标注）、S8（前向 planner——设计假设不适用于已完成小说的 Novel IR）、Syuzhet/Discourse 层接线（`NarratorProfile` 完整类型存在但 fixture 未接）。
 
 ## License
 

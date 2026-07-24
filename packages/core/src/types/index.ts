@@ -106,12 +106,9 @@ export type {
   ActantModel,
   StoryArchetype,
 } from './story-ir.js';
-// ——— S8: Planner Types ———
-export type {
-  NarrativePlannerMode,
-  NarrativeGoal,
-  ActionDefinition,
-} from './planner.js';
+// ——— S8 removed (design incompatible with Novel IR) ———
+// NarrativePlannerMode, NarrativeGoal, ActionDefinition types deleted 2026-07-24.
+// Correct direction: standalone YAML editor module, not forward planner.
 export type {
   Relationship,
   RelationshipDef,

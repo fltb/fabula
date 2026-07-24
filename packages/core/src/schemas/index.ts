@@ -62,7 +62,6 @@ import {
 } from './modern-novel.js';
 import { ideaIRSchema, thematicIntentSchema, emotionalArcDefinitionSchema, emotionalBeatSchema } from './idea-ir.js';
 import { structuralFunctionSchema, actantModelSchema, storyArchetypeSchema } from './story-ir.js';
-import { narrativePlannerModeSchema, narrativeGoalSchema, actionDefinitionSchema, effectSchema } from './planner.js';
 import { entityTypeCatalogSchema, entityDeclarationCatalogSchema, entityTypeRefSchema, entityRuntimeStateSchema, writePolicySchema, requiredAtSchema, attributeDefinitionSchema, entityTypeDefinitionSchema, entityDeclarationSchema } from './entity-catalog.js';
 // ── Re-export all per-entity schemas ─────────────────────────────────────────
 export {
@@ -103,10 +102,6 @@ export {
   structuralFunctionSchema,
   actantModelSchema,
   storyArchetypeSchema,
-  narrativePlannerModeSchema,
-  narrativeGoalSchema,
-  actionDefinitionSchema,
-  effectSchema,
   modernNovelConfigSchema,
   antiCausalEdgeConfigSchema,
   chapterOrderContestedSchema,

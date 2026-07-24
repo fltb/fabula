@@ -54,7 +54,7 @@
 
 | 条目 | 状态 | 证据 |
 |------|------|------|
-| 5a: 标注规范 | ✅ 已交付 | `docs/reference/annotation-guidelines.md`（634 行，v1.0 冻结）<br>`docs/reference/annotation-guidelines.zh-CN.md`（中文版） |
+| 5a: 标注规范 | ✅ 已交付 | `docs/reference/annotation-guidelines.md`（634 行，v1.0 冻结）<br>`docs/reference/stage-3/annotation-guidelines.zh-CN.md`（中文版） |
 | 5b: 抽样协议 | ✅ 已交付 | `bench/src/annotation-sampler.ts` — 分层随机抽样、复标计划、覆盖率校验 |
 | 5c: 统计分析 | ✅ 已交付 | `bench/src/annotation-stats.ts` — 二次加权 Cohen's kappa、bootstrap 95% CI、一致性统计、转移矩阵、Spearman 重测 rho |
 | **5d: 首轮标注** | ❌ **阻塞** | **需人工：≥120 问题级 + ≥50 场景级标注** |
@@ -82,7 +82,7 @@
 
 ```bash
 # 阅读中文标注指南
-cat docs/reference/annotation-guidelines.zh-CN.md
+cat docs/reference/stage-3/annotation-guidelines.zh-CN.md
 
 # 抽样器已就绪——从问题列表确定性生成样本
 # 用法（在 bench 包中）：

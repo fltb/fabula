@@ -310,7 +310,7 @@ Planner 可消费的现有资产：WorldState（实体/关系/知识/线程/规�
 
 **产出**: `NarrativeGoal` + `ActionDefinition` 类型 + schema，manual/suggest 模式实现，WorldState→候选事件管线。
 
----
+> **2026-07-24 设计修正**: S8 的原始假设（前向事件生成）与当前系统架构不兼容。本系统的 Novel IR 输入是已完成的小说——事件全部已发生，不存在"下一步该写什么"。Planner 是面向生成式写作工具（Novel OS、Sudowrite）的设计，不是面向已完成小说的结构化建模系统。如果未来需要此方向的能力，应该是独立的 **YAML 编辑器模块**（利用 LLM 辅助人工将小说原文写成稳定的 YAML），而不是 core 管线内的前向规划器。现有类型定义和 18 个测试保留作为参考实现。
 
 ## C: 测量能力 (Measured)
 

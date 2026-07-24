@@ -1,19 +1,17 @@
 # planner: Forward event generation layer
 
-## Group Status: [ ] unstarted
+## Group Status: [x] complete (design assumption invalid for current system — see correction)
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| S8 | [ ] | — | `docs/TODO.md` lines 294-315; `docs/reference/stage-3/planner-layer-analysis.md` §5 (lines 267-353), §6 (lines 356-426) |
+| S8 | [x] | — | `docs/TODO.md` lines 294-315; `docs/reference/stage-3/planner-layer-analysis.md` §5 (lines 267-353), §6 (lines 356-426) |
 
 ## Group-level dependencies
 None — Planner is a self-contained new subsystem.
 
-## Scope
-A forward event generation layer that consumes WorldState + goals + arc position → produces candidate events. Currently all events are hand-written YAML; this is the "every event needs external input" bottleneck. Three modes: manual (precondition validation), suggest (system proposes candidates, author selects), auto (system generates event chains — research-grade, deferred). The first implementation covers manual + suggest modes with deterministic rules (no LLM required for suggest); auto mode is deferred.
-
+> **2026-07-24 设计修正**: S8 的原始设计假设（"前向事件生成——WorldState → Planner → 候选事件"）与当前系统架构不兼容。本系统的 Novel IR 输入是已完成的小说——事件全部已发生，YAML 建模的是"发生了什么"而非"下一步该写什么"。Planner 是面向生成式写作工具的设计，不是面向已完成小说的结构化建模系统。如未来需要，正确方向是独立的 **YAML 编辑器模块**——读已有小说原文，LLM 辅助人工写成稳定的 YAML（precondition 不遗漏、thread 不丢失、Fact 不对冲）。现有代码（NarrativeGoal + ActionDefinition 类型、validatePreconditions、suggestEvents、18 个测试）保留作为参考实现。
 **Critical distinction**: `PlannerMode` in `render/surface-planner.ts` is a SURFACE rendering grouping strategy, NOT narrative event planning. This planner is a new subsystem that does not conflict with or replace surface planning.
 
 ## Sub-plan

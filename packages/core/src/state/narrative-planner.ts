@@ -1,10 +1,20 @@
 // ============================================================================
-// Novalistically — S8: Narrative Planner Pipeline
+// Novalistically — S8: Narrative Planner (reference implementation)
 //
-// Three modes:
-//   manual  — validate EventFile preconditions against WorldState
-//   suggest — rank candidate ActionDefinitions by arcPosition + thread priority
-//   auto    — research-grade, deferred
+// ⚠️  DESIGN CORRECTION (2026-07-24):
+// S8 was originally designed as a forward event generator for generative
+// writing tools (Novel OS, Sudowrite). However, this system's Novel IR
+// processes already-completed novels — all events have already happened.
+// There is no "what happens next" to plan. The forward-planner assumption
+// does not apply to this architecture.
+//
+// If this capability is needed in the future, the correct direction is a
+// standalone YAML editor module — LLM-assisted human authoring of stable
+// YAML from source text (no missing preconditions, no dropped threads,
+// no conflicting Facts). Not a forward planner in the core pipeline.
+//
+// The types (NarrativeGoal, ActionDefinition), algorithms (validatePreconditions,
+// suggestEvents), and 18 tests are preserved as reference material.
 // ============================================================================
 
 import type { EventFile } from '../types/event.js';

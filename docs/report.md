@@ -83,7 +83,7 @@ Replaces `foreshadowing` binary model with multi-point motif tracking. Same imag
 
 ### S3 — Modern Novel Structural Fields ✅
 
-9 fields from `docs/reference/modern-novel-structure-survey.md`:
+9 fields from `docs/reference/stage-3/modern-novel-structure-survey.md`:
 
 **A-class (deterministic validators)**:
 - `antiCausalEdge` — event postconditions unreferenced by later preconditions (>50% threshold)

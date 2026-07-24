@@ -124,7 +124,7 @@ X 列表更新：卡夫卡/现代主义建模从 X 移到 S——用分层验证
 
 ### Genette 五维度 → base schema（不是 S3）
 
-**关键校正**：Genette《叙事话语》的五维度（Order/Duration/Frequency/Mood/Voice）描述**任何叙事**，不是现代小说扩展。红楼梦同时使用全部五维度。它们属于 base schema 审计，不应在 S3 内。详见 `docs/reference/narratology-dimension-audit.md`。
+**关键校正**：Genette《叙事话语》的五维度（Order/Duration/Frequency/Mood/Voice）描述**任何叙事**，不是现代小说扩展。红楼梦同时使用全部五维度。它们属于 base schema 审计，不应在 S3 内。详见 `docs/reference/stage-3/narratology-dimension-audit.md`。
 
 | 维度 | 系统状态 | 归属 |
 |------|---------|------|
@@ -136,7 +136,7 @@ X 列表更新：卡夫卡/现代主义建模从 X 移到 S——用分层验证
 
 ### IR 层级精确状态（校正"2/5 建成"）
 
-TODO 此前声称 5 层 IR 中仅 2 层建成——**过时**。精确状态见 `docs/reference/ir-layer-narratology-mapping.md`：
+TODO 此前声称 5 层 IR 中仅 2 层建成——**过时**。精确状态见 `docs/reference/stage-3/ir-layer-narratology-mapping.md`：
 
 | 层 | 叙事学映射 | 实现状态 |
 |----|-----------|---------|
@@ -151,12 +151,12 @@ TODO 此前声称 5 层 IR 中仅 2 层建成——**过时**。精确状态见 
 
 ### Planner 完全缺失
 
-叙事学谱系第 8-9 层（Interactive/AI Narrative）有一个层当前 TODO 未覆盖：**Planner——决定下一步发生什么**。当前事件全手写 YAML，无 forward planning。TODO "核心问题" 担心前向创作成本，但只讨论 Discovery Layer（草稿→YAML 输入侧）。Planner（YAML→下一个事件，输出侧）完全缺失。详见 `docs/reference/planner-layer-analysis.md`。
+叙事学谱系第 8-9 层（Interactive/AI Narrative）有一个层当前 TODO 未覆盖：**Planner——决定下一步发生什么**。当前事件全手写 YAML，无 forward planning。TODO "核心问题" 担心前向创作成本，但只讨论 Discovery Layer（草稿→YAML 输入侧）。Planner（YAML→下一个事件，输出侧）完全缺失。详见 `docs/reference/stage-3/planner-layer-analysis.md`。
 
 ### A↔D 边界声明
 
-- **A（narratology-dimension-audit）**：Genette 五维度 → base。Duration/Frequency 完全缺失；Mood/Voice 死类型；Order 部分。
-- **D（modern-novel-structure-survey）**：S3 字段重分类。`uncloseableThread` → base（thread 层）；5 个保留 S3（含 2 个更名）；4 个新字段。S3-research 重定范围为第 2-3 层（第 1 层移至 base audit）。
+- **A（`docs/reference/stage-3/narratology-dimension-audit.md`）**：Genette 五维度 → base。Duration/Frequency 完全缺失；Mood/Voice 死类型；Order 部分。
+- **D（`docs/reference/stage-3/modern-novel-structure-survey.md`）**：S3 字段重分类。`uncloseableThread` → base（thread 层）；5 个保留 S3（含 2 个更名）；4 个新字段。S3-research 重定范围为第 2-3 层（第 1 层移至 base audit）。
 - 两份报告边界一致：A 处理 Genette 五维度（任何叙事），D 处理现代特有结构字段。D 的 `metanarrativeLevel` 正确标注扩展 Genette narrative level 但"结构性自指是现代特有的"——这是正确的边界处理。
 
 ## 核心问题
@@ -220,7 +220,7 @@ yaml 的工作量过于巨大，甚至超过了故事本身的创作成本：作
 
 Schema 为最一般情况（现代小说）设计，传统小说是约束子集（不填这些字段）。S3 字段是一等公民，不是 optional extension。没有 novelType 分支——传统小说只是碰巧不填。
 
-**⚠️ 字段集经 `docs/reference/modern-novel-structure-survey.md` 三层 survey 重分类。Genette 五维度已移至 S6（base schema）——它们描述任何叙事，不是现代小说扩展。S3 仅保留真正现代主义/后现代特有的结构。**
+**⚠️ 字段集经 `docs/reference/stage-3/modern-novel-structure-survey.md` 三层 survey 重分类。Genette 五维度已移至 S6（base schema）——它们描述任何叙事，不是现代小说扩展。S3 仅保留真正现代主义/后现代特有的结构。**
 
 修正后字段集（9 个，详见 survey 文档修正后总表）：
 
@@ -245,17 +245,17 @@ B 类依赖 S1（narrativeChecklist）的 Pass 2 通道。S1 是 S3 B 类的前�
 
 ### [x] S3-research — 现代小说结构字段系统推导（S3 前置）— 已完成
 
-S3 字段集锁定的理论推导。产出为理论文档，不是代码。**已完成**——见 `docs/reference/modern-novel-structure-survey.md`。
+S3 字段集锁定的理论推导。产出为理论文档，不是代码。**已完成**——见 `docs/reference/stage-3/modern-novel-structure-survey.md`。
 
 **重定范围**：原设计三层，现两层——第 1 层（Genette 叙事学 survey）已移至 S6（base schema audit），因 Genette 五维度描述任何叙事不是现代小说扩展。S3-research 只保留真正现代主义/后现代特有的部分。
 
-**第 1 层——叙事学 survey**：❌ **已移除**——移至 S6（`docs/reference/narratology-dimension-audit.md`）。Genette Order/Duration/Frequency/Mood/Voice 是 base schema，不是 S3。
+**第 1 层——叙事学 survey**：❌ **已移除**——移至 S6（`docs/reference/stage-3/narratology-dimension-audit.md`）。Genette Order/Duration/Frequency/Mood/Voice 是 base schema，不是 S3。
 
 **第 2 层——现代主义/后现代批评 survey**：✅ **已完成**。Eco《开放的作品》、Iser《隐含的读者》、Barthes S/Z、Derrida "Before the Law"、Deleuze & Guattari《卡夫卡》。产出：`suspension` → `irresolvableIndeterminacy`（Derrida différance），`absenceProfile` → `absentApparatus`（D&G 生产装置纠偏）。
 
 **第 3 层——多作品 survey**：✅ **已完成**。Kafka/Beckett/Borges/Robbe-Grillet/Pynchon/Calvino。产出 4 新字段：`multiplicity`（Borges）、`surfaceMode`（Robbe-Grillet）、`causalOverload`（Pynchon）、`metanarrativeLevel`（Calvino）。原 5 个已知错位全部解决。
 
-**产出**: `docs/reference/modern-novel-structure-survey.md`——第 2-3 层 survey 结果 + 修正后字段集提案（9 字段）+ 理论-字段对照矩阵 + 作品-字段对照矩阵
+**产出**: `docs/reference/stage-3/modern-novel-structure-survey.md`——第 2-3 层 survey 结果 + 修正后字段集提案（9 字段）+ 理论-字段对照矩阵 + 作品-字段对照矩阵
 
 ### [x] S4 — sourceContext: 风格透传
 
@@ -271,7 +271,7 @@ LLM 生成 YAML 后立即 schema 验证，失败则重试（最多 3 次）。�
 
 ### [x] S6 — base-narratology: Genette 五维度补全（base schema 审计）
 
-Genette 五维度是任何叙事的基础，不属于 S3（现代小说扩展）。详见 `docs/reference/narratology-dimension-audit.md`。当前状态：Order 部分覆盖、Duration/Frequency 完全缺失、Mood/Voice 死类型（`NarratorProfile` 完整存在但零 fixture 接线）。
+Genette 五维度是任何叙事的基础，不属于 S3（现代小说扩展）。详见 `docs/reference/stage-3/narratology-dimension-audit.md`。当前状态：Order 部分覆盖、Duration/Frequency 完全缺失、Mood/Voice 死类型（`NarratorProfile` 完整存在但零 fixture 接线）。
 
 子项：
 - **S6a — Duration**：新增 `DurationProfile`（scene/summary/ellipsis/pause/stretch）类型 + schema。**最大盲区**——整个系统无任何 Duration 概念。注意 `NarrativeEllipsis` 是语料诊断类型，不是 Genette 省略。
@@ -284,7 +284,7 @@ Genette 五维度是任何叙事的基础，不属于 S3（现代小说扩展）
 
 ### [x] S7 — Idea IR + Story IR: 上层 IR 层（缺失）
 
-两个上层 IR 从未实现。详见 `docs/reference/ir-layer-narratology-mapping.md`。
+两个上层 IR 从未实现。详见 `docs/reference/stage-3/ir-layer-narratology-mapping.md`。
 
 - **S7a — Idea IR**（亚里士多德 Mythos）：新增整体主题意图类型——`ThematicIntent`（主题声明 + 子主题）、`EmotionalArcDefinition`。亚里士多德认为 Mythos 是悲剧六要素中最重要的，当前系统无此层。现有的 `emotionalValence`/`conflictType` 是逐场景的，不是整体层面。
 - **S7b — Story IR**（普罗普 31 功能 + 格雷马斯行动元）：新增 `StructuralFunction`（Propp 函数子集）、`ActantModel`（主体/客体/发送者/接收者/帮助者/反对者）、`StoryArchetype`。**Thread 系统是天然起点**——`ThreadTransaction`/`ThreadLifecycle` 已跟踪目标导向叙事进程，可携带 Propp 函数标签。`arcPosition` 提供节奏位置但非功能语义。
@@ -293,7 +293,7 @@ Genette 五维度是任何叙事的基础，不属于 S3（现代小说扩展）
 
 ### [x] S8 — Planner: 前向事件生成层（完全缺失）
 
-Planner 是叙事学谱系第 8-9 层（Interactive/AI Narrative）——WorldState → Planner → 候选事件 → Fabula。当前事件全手写 YAML，无 forward planning。详见 `docs/reference/planner-layer-analysis.md`。
+Planner 是叙事学谱系第 8-9 层（Interactive/AI Narrative）——WorldState → Planner → 候选事件 → Fabula。当前事件全手写 YAML，无 forward planning。详见 `docs/reference/stage-3/planner-layer-analysis.md`。
 
 **关键区分**：Discovery Layer（草稿→YAML，输入侧）已在"核心问题"讨论。Planner（YAML→下一个事件，输出侧）完全缺失。TODO 此前只单向解决创作成本问题——Planner 打破"每个事件都需外部输入"的依赖，是前向创作成本的真正解。
 
@@ -328,7 +328,7 @@ Planner 可消费的现有资产：WorldState（实体/关系/知识/线程/规�
 
 ### [x] C3 — (scaffolds ready, awaiting human annotation) 人类标注：双轮标注（标注规范已有）
 
-按 `docs/reference/annotation-guidelines.zh-CN.md` 执行 ≥120 问题级 + ≥50 场景级标注，7-14 天后盲法复标。产出 Cohen's kappa + Spearman rho。
+按 `docs/reference/stage-3/annotation-guidelines.zh-CN.md` 执行 ≥120 问题级 + ≥50 场景级标注，7-14 天后盲法复标。产出 Cohen's kappa + Spearman rho。
 
 **产出**: 标注数据集 + 信度报告
 

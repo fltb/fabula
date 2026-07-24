@@ -105,6 +105,60 @@ X 列表更新：卡夫卡/现代主义建模从 X 移到 S——用分层验证
 
 **S3 字段集为 provisional draft**：当前 6 个字段从《审判》单文本第一性阅读提取，未经叙事学/现代主义批评系统推导。字段集在三层 survey（见 S3 段）完成前不可锁定。
 
+## 叙事学理论框架 (2026-07-24)
+
+项目命名为 **Fabula**（取自俄国形式主义 fabula/syuzhet 二分：fabula = 故事真正发生的顺序，syuzhet = 作者讲述的顺序）。这个命名锚定了系统的核心定位：**Fabula 层是系统的核心创新**——event sourcing + causal DAG + topological sort 做对了。但 Fabula 只是叙事学 8 层中的 1 层。本节用叙事学谱系校正 TODO 的理论定位。
+
+### 系统层 ↔ 叙事学层映射
+
+| 叙事学层 | 系统组件 | 状态 |
+|---------|---------|------|
+| World Model / Storyworld | `definitions/`（角色、地点、规则） | ✅ 建好 |
+| World State | StateManager + WorldState | ✅ 建好 |
+| Existents | EntityMapper → EntityRegistry | ✅ 建好 |
+| **Fabula**（事件 + 因果链） | Event IR + DAG causal edges + Event Sourcing | ✅ **核心，建好** |
+| Planner（下一步发生什么） | — | ❌ 完全缺失（见 S8） |
+| **Syuzhet**（怎么讲） | `DiscourseState` + `NarratorProfile` + `PlannedDiscourseLedger`（types/discourse.ts） | ⚠️ **死类型**——完整设计但零 fixture 接线 |
+| Surface Realization | RenderPipeline Pass 1 | ✅ 建好 |
+| Narrative Constraints | 18+ validators | ✅ 建好（3 个集成迁移 bug） |
+
+### Genette 五维度 → base schema（不是 S3）
+
+**关键校正**：Genette《叙事话语》的五维度（Order/Duration/Frequency/Mood/Voice）描述**任何叙事**，不是现代小说扩展。红楼梦同时使用全部五维度。它们属于 base schema 审计，不应在 S3 内。详见 `docs/reference/narratology-dimension-audit.md`。
+
+| 维度 | 系统状态 | 归属 |
+|------|---------|------|
+| Order（时序：analepsis/prolepsis） | `sceneType` 部分覆盖，缺 temporal distance + anachrony 分类 | **Base** |
+| Duration（时距：scene/summary/ellipsis/pause/stretch） | **完全缺失**——最大盲区 | **Base**（见 S6） |
+| Frequency（频率：singulative/repeating/iterative） | **完全缺失** | **Base**（见 S6） |
+| Mood（聚焦：zero/internal/external） | `NarratorProfile` 4 类型完整存在但**死类型**——fixture 仅用 crude `pov.type` | **Base**（见 S6） |
+| Voice（叙事声音：extra/intra/metadiegetic） | `NarratorProfile` 建模能力但非层级；`NarrativeLevel` 枚举不存在；死类型 | **Base**（见 S6） |
+
+### IR 层级精确状态（校正"2/5 建成"）
+
+TODO 此前声称 5 层 IR 中仅 2 层建成——**过时**。精确状态见 `docs/reference/ir-layer-narratology-mapping.md`：
+
+| 层 | 叙事学映射 | 实现状态 |
+|----|-----------|---------|
+| Idea IR | 亚里士多德 Mythos（主题意图） | **ABSENT**（见 S7） |
+| Story IR | 普罗普 31 功能 + 格雷马斯行动元 | **ABSENT**——Thread 系统是天然起点（见 S7） |
+| Scene IR | 热奈特话语单元 | **SCHEMA-WIRED + FIXTURE-USED**（元数据字段全面使用，CompiledSceneContract 已编译；缺 Duration/Frequency） |
+| Event IR（Fabula） | 俄国形式主义 Fabula | **FIXTURE-USED**（核心，完全活跃） |
+| World State | 查特曼存在物 | **FIXTURE-USED**（完全活跃） |
+| Syuzhet/Discourse（PROJECT.md 未命名） | 热奈特叙事话语 | **SCHEMA-WIRED + REPLAY + TESTED 但 fixture-dead**——接线缺口，非设计缺口 |
+
+**校正后**：5 层中 2 层完全建成（Event IR、World State），1 层部分建成（Scene IR，比此前承认的更完整），1 个未设计层（Syuzhet）完整存在但未接线，2 层确实缺失（Idea IR、Story IR）。
+
+### Planner 完全缺失
+
+叙事学谱系第 8-9 层（Interactive/AI Narrative）有一个层当前 TODO 未覆盖：**Planner——决定下一步发生什么**。当前事件全手写 YAML，无 forward planning。TODO "核心问题" 担心前向创作成本，但只讨论 Discovery Layer（草稿→YAML 输入侧）。Planner（YAML→下一个事件，输出侧）完全缺失。详见 `docs/reference/planner-layer-analysis.md`。
+
+### A↔D 边界声明
+
+- **A（narratology-dimension-audit）**：Genette 五维度 → base。Duration/Frequency 完全缺失；Mood/Voice 死类型；Order 部分。
+- **D（modern-novel-structure-survey）**：S3 字段重分类。`uncloseableThread` → base（thread 层）；5 个保留 S3（含 2 个更名）；4 个新字段。S3-research 重定范围为第 2-3 层（第 1 层移至 base audit）。
+- 两份报告边界一致：A 处理 Genette 五维度（任何叙事），D 处理现代特有结构字段。D 的 `metanarrativeLevel` 正确标注扩展 Genette narrative level 但"结构性自指是现代特有的"——这是正确的边界处理。
+
 ## 核心问题
 
 ### 人工审查发现
@@ -166,47 +220,42 @@ yaml 的工作量过于巨大，甚至超过了故事本身的创作成本：作
 
 Schema 为最一般情况（现代小说）设计，传统小说是约束子集（不填这些字段）。S3 字段是一等公民，不是 optional extension。没有 novelType 分支——传统小说只是碰巧不填。
 
-**⚠️ 字段集为 provisional draft——以下 6 个字段从《审判》单文本提取，未经系统推导。三层 survey（见下方 S3-research）完成前不可锁定。**
+**⚠️ 字段集经 `docs/reference/modern-novel-structure-survey.md` 三层 survey 重分类。Genette 五维度已移至 S6（base schema）——它们描述任何叙事，不是现代小说扩展。S3 仅保留真正现代主义/后现代特有的结构。**
 
-6 个字段分两类验证路径：
+修正后字段集（9 个，详见 survey 文档修正后总表）：
 
 A 类——结构元数据（deterministic check）：
-- `uncloseableThread` — 线程不收敛。验证：该线程在最终 WorldState 里未达 resolved/concluded
-- `antiCausalEdge` — 事件不产生后果。验证：该事件 postconditions 不被任何后续事件 preconditions 引用
-- `chapterOrder: contested` — 章节顺序不可决定。验证：metadata 标注存在，Assembler 按 chosen rendering 排序
+- `antiCausalEdge` — 事件不产生后果（保留，附加阈值：系统级规模 >50% 才标注为 S3，单个由 base 管理）
+- `chapterOrder: contested` — 章节顺序不可决定（保留，与 Genette Order base 的关系：base 允许多 order 时，contested 标记"无作者意图"）
+- `surfaceMode` — 结构性拒绝心理深度，叙事只描述表面（新增，Robbe-Grillet；验证：scene metadata 标注，检验是否存在内部视角）
+- `causalOverload` — 因果过载，事件产生过多可能后果（新增，Pynchon；与 antiCausalEdge 对立；验证：thread branching factor 阈值）
 
 B 类——语义效果（Pass 2 对照作者透传 prompt 检查）：
-- `suspension` — Fact value 不可决定。验证：Pass 2 对照 narrativeChecklist 透传 prompt
-- `absenceProfile` — 实体通过缺失定义。验证：同上
-- `voiceDissonance` — 语气与内容裂隙。验证：同上
+- `irresolvableIndeterminacy` — Fact value 不可解决（更名自 `suspension`——Derrida différance 证明 deferral 是终态结构，不暗示"临时悬置"）
+- `absentApparatus` — 实体通过缺席产生结构性效果（更名自 `absenceProfile`——D&G 纠偏：修正"通过缺失定义"为"缺席装置"）
+- `voiceDissonance` — 叙事者语气与所叙内容的结构性裂隙（保留但缩窄定义，Kafka 模式；不覆盖 Robbe-Grillet/Calvino）
+- `multiplicity` — 多个有效值同时合法，系统不要求选择单一（新增，Borges + Barthes S/Z）
+- `metanarrativeLevel` — 叙事以自身建构为对象的结构性自指（新增，Calvino；扩展 Genette narrative level 但"结构性自指是现代特有的"）
+
+`uncloseableThread` 已移出 S3 → base schema（thread 层，更名 `unresolvedThread`）——传统小说也有未闭合线程，非现代专属。
 
 B 类依赖 S1（narrativeChecklist）的 Pass 2 通道。S1 是 S3 B 类的前置依赖。
 
 **产出**: unified schema 扩展（S3 字段为一等公民），A 类 deterministic validator，B 类复用 S1 Pass 2 通道
 
-### [ ] S3-research — 现代小说结构字段系统推导（S3 前置）
+### [x] S3-research — 现代小说结构字段系统推导（S3 前置）— 已完成
 
-S3 字段集锁定前必须完成三层 survey。产出为理论文档，不是代码。
+S3 字段集锁定的理论推导。产出为理论文档，不是代码。**已完成**——见 `docs/reference/modern-novel-structure-survey.md`。
 
-**第 1 层——叙事学 survey**：
-Genette《叙事话语》(order/duration/frequency/mood/voice)、Chatman、Bal、Rimmon-Kenan。确定叙事学的结构维度全集，对照现有 schema 标注已覆盖/缺失。已知缺口：
-- Frequency（singulative/repeating/iterative）——Beckett 迭代静止需要
-- Narrative level（extradiegetic/intradiegetic/metadiegetic）——故事中的故事需要
+**重定范围**：原设计三层，现两层——第 1 层（Genette 叙事学 survey）已移至 S6（base schema audit），因 Genette 五维度描述任何叙事不是现代小说扩展。S3-research 只保留真正现代主义/后现代特有的部分。
 
-**第 2 层——现代主义/后现代批评 survey**：
-Eco《开放的作品》(open/closed work)、Iser《隐含的读者》(gaps/Leerstellen)、Barthes S/Z (readerly/writerly)、Derrida "Before the Law" (deferral as structure)、Deleuze & Guattari《卡夫卡》(生产装置 vs 缺席实体)。确定现代主义特有的结构属性。已知问题：
-- `suspension` 暗示"暂时悬置"，Derrida 的 différance 是"悬置即终态"
-- `absenceProfile` 把法庭建模为缺席实体，D&G 认为法庭是生产装置——两个不同结构概念
+**第 1 层——叙事学 survey**：❌ **已移除**——移至 S6（`docs/reference/narratology-dimension-audit.md`）。Genette Order/Duration/Frequency/Mood/Voice 是 base schema，不是 S3。
 
-**第 3 层——多作品 survey**：
-Kafka/Beckett/Borges/Robbe-Grillet/Pynchon/Calvino。确保字段不只在 Kafka 上 work。已知错位：
-- Beckett：需要 frequency=repeating + antiCausal 组合（反复无后果），当前只有 antiCausalEdge
-- Borges：需要 multiplicity（多个值同时合法），不是 suspension（单一不可决定）
-- Robbe-Grillet：需要 depthRefusal/surfaceMode（结构性拒绝心理深度），不是 voiceDissonance
-- Pynchon：需要 causalOverload（因果过载），和 antiCausalEdge 相反方向
-- Calvino：需要 selfReflexivity/metanarrativeLevel（元叙事自指），不是 voiceDissonance
+**第 2 层——现代主义/后现代批评 survey**：✅ **已完成**。Eco《开放的作品》、Iser《隐含的读者》、Barthes S/Z、Derrida "Before the Law"、Deleuze & Guattari《卡夫卡》。产出：`suspension` → `irresolvableIndeterminacy`（Derrida différance），`absenceProfile` → `absentApparatus`（D&G 生产装置纠偏）。
 
-**产出**: `docs/reference/modern-narrative-structure-survey.md`——三层 survey 结果 + 最终字段集提案 + 每个字段的理论出处和作品验证
+**第 3 层——多作品 survey**：✅ **已完成**。Kafka/Beckett/Borges/Robbe-Grillet/Pynchon/Calvino。产出 4 新字段：`multiplicity`（Borges）、`surfaceMode`（Robbe-Grillet）、`causalOverload`（Pynchon）、`metanarrativeLevel`（Calvino）。原 5 个已知错位全部解决。
+
+**产出**: `docs/reference/modern-novel-structure-survey.md`——第 2-3 层 survey 结果 + 修正后字段集提案（9 字段）+ 理论-字段对照矩阵 + 作品-字段对照矩阵
 
 ### [ ] S4 — sourceContext: 风格透传
 
@@ -219,6 +268,47 @@ Kafka/Beckett/Borges/Robbe-Grillet/Pynchon/Calvino。确保字段不只在 Kafka
 LLM 生成 YAML 后立即 schema 验证，失败则重试（最多 3 次）。首次通过率从 ~25% 提升到 >80%。
 
 **产出**: 生成脚本增加 `YAML.parse → schema.validate → retry` 循环
+
+### [ ] S6 — base-narratology: Genette 五维度补全（base schema 审计）
+
+Genette 五维度是任何叙事的基础，不属于 S3（现代小说扩展）。详见 `docs/reference/narratology-dimension-audit.md`。当前状态：Order 部分覆盖、Duration/Frequency 完全缺失、Mood/Voice 死类型（`NarratorProfile` 完整存在但零 fixture 接线）。
+
+子项：
+- **S6a — Duration**：新增 `DurationProfile`（scene/summary/ellipsis/pause/stretch）类型 + schema。**最大盲区**——整个系统无任何 Duration 概念。注意 `NarrativeEllipsis` 是语料诊断类型，不是 Genette 省略。
+- **S6b — Frequency**：新增 `FrequencyProfile`（singulative/repeating/iterative）类型 + schema。完全缺失。
+- **S6c — Mood 接线**：打通 `NarratorProfile`（focalizer_bound/retrospective_entity/explicit_ledger/omniscient）的 YAML 加载路径，使 fixture 可引用 NarratorProfile 而非退化到 crude `pov.type`。新增 external focalization 类型。
+- **S6d — Voice 叙事层**：新增 `NarrativeLevel`（extradiegetic/intradiegetic/metadiegetic）+ `DiegeticRelation`（homo/heterodiegetic）枚举，补全 `NarratorProfile` 的层级维度（当前只建模能力，非层级）。
+- **S6e — Order 细化**：新增 `Anachrony` 接口（type/scope/function/distance/amplitude）细化 `sceneType: flashback/flashforward` 的错时分类。
+
+**产出**: 5 个 Genette 维度的类型 + schema + fixture 接线。Mood/Voice 从死类型转为 wired。
+
+### [ ] S7 — Idea IR + Story IR: 上层 IR 层（缺失）
+
+两个上层 IR 从未实现。详见 `docs/reference/ir-layer-narratology-mapping.md`。
+
+- **S7a — Idea IR**（亚里士多德 Mythos）：新增整体主题意图类型——`ThematicIntent`（主题声明 + 子主题）、`EmotionalArcDefinition`。亚里士多德认为 Mythos 是悲剧六要素中最重要的，当前系统无此层。现有的 `emotionalValence`/`conflictType` 是逐场景的，不是整体层面。
+- **S7b — Story IR**（普罗普 31 功能 + 格雷马斯行动元）：新增 `StructuralFunction`（Propp 函数子集）、`ActantModel`（主体/客体/发送者/接收者/帮助者/反对者）、`StoryArchetype`。**Thread 系统是天然起点**——`ThreadTransaction`/`ThreadLifecycle` 已跟踪目标导向叙事进程，可携带 Propp 函数标签。`arcPosition` 提供节奏位置但非功能语义。
+
+**产出**: 两个上层 IR 的类型 + schema + Thread 系统扩展（携带结构功能标签）。
+
+### [ ] S8 — Planner: 前向事件生成层（完全缺失）
+
+Planner 是叙事学谱系第 8-9 层（Interactive/AI Narrative）——WorldState → Planner → 候选事件 → Fabula。当前事件全手写 YAML，无 forward planning。详见 `docs/reference/planner-layer-analysis.md`。
+
+**关键区分**：Discovery Layer（草稿→YAML，输入侧）已在"核心问题"讨论。Planner（YAML→下一个事件，输出侧）完全缺失。TODO 此前只单向解决创作成本问题——Planner 打破"每个事件都需外部输入"的依赖，是前向创作成本的真正解。
+
+**代码现状验证**：`render/surface-planner.ts` 的 `PlannerMode`（manual/suggest/auto）是 SURFACE 渲染分组策略，不是叙事事件规划。`ai/prompts/thread-status.ts` 有"suggest 1-3 immediate next actions"的 LLM prompt 但是一次性诊断工具，不访问 WorldState/goals/arc，不是结构化规划器。**零代码、零类型、零 schema、零 fixture 涉及前向事件生成。**
+
+Planner 可消费的现有资产：WorldState（实体/关系/知识/线程/规则）、`ThreadRuntimeState.goalStates`（active 目标是规划器输入）、`arcPosition`（弧规划数据）、`NarrativeEvent` preconditions/postconditions（因果链知识）、`RuleRuntimeState`（约束）。
+
+3 模式匹配现有 `PlannerMode` 模式：
+- **manual**：作者写下一事件，系统验证 preconditions
+- **suggest**：系统基于 state + goals 提候选事件，作者选
+- **auto**：系统生成事件链（research-grade）
+
+缺失的规划器原语：`NarrativeGoal`（目标表示，超越 thread progress 的被动标签）、`ActionDefinition`（动作空间——当前状态下哪些事件可能）、arc 约束执行（必须第 N 章到高潮）、branch-aware 规划。
+
+**产出**: `NarrativeGoal` + `ActionDefinition` 类型 + schema，manual/suggest 模式实现，WorldState→候选事件管线。
 
 ---
 
@@ -252,7 +342,7 @@ LLM 生成 YAML 后立即 schema 验证，失败则重试（最多 3 次）。�
 | 四世同堂项目 | local_external，文本已获取但待后续 |
 | 103章回译 | 用户明确放弃 |
 | 全文 LLM 自动提取 | 质量不可靠（~25% schema 合规），需人工标注 |
-| ~~卡夫卡/现代主义建模~~ | **已移至 S3**——分层验证：A 类 deterministic + B 类 Pass 2 对照作者透传 prompt。不是"当前范式不适用" |
+| ~~卡夫卡/现代主义建模~~ | **已分层至 S3+S6**——S3 现代特有结构（分层验证：A 类 deterministic + B 类 Pass 2 对照作者透传 prompt），S6 base 叙事学（Genette 五维度）。不是"当前范式不适用" |
 | 诗词结构化建模 | 诗词本质不兼容 state machine，用 sourceContext 透传 |
 | 全量 400+ 人物建模 | 投入产出比低，按 mention count 取 top 40 足够 |
 
@@ -260,9 +350,9 @@ LLM 生成 YAML 后立即 schema 验证，失败则重试（最多 3 次）。�
 
 ## 阶段 3 验收标准
 
-**S 能力**: S1-S5 全部实现 + 测试通过。S3-research 完成后字段集锁定，S3 须标注 A 类（deterministic validator）和 B 类（依赖 S1 Pass 2 通道）各自的完成度。S3 字段集在 S3-research 完成前保持 provisional
+**S 能力**: S1-S8 全部实现 + 测试通过。S3-research 已完成（字段集 9 个锁定）。S3 须标注 A 类（deterministic validator）和 B 类（依赖 S1 Pass 2 通道）各自的完成度。S6（base-narratology Genette 五维度）须标注 Duration/Frequency/Mood-wiring/Voice 各子项完成度。S7（Idea IR + Story IR）+ S8（Planner）须标注各子项完成度。
 **C 能力**: C1 覆盖报告完成 + C2 F1 ≥ 0.70 + C3 Cohen's kappa ≥ 0.60
-**项目**: `fixtures/dream-of-red-chamber/` 20 events 通过全量 validation（含 ChecklistValidator + GreyLineValidator）
+**项目**: `fixtures/dream-of-red-chamber/` 20 events 通过全量 validation（含 ChecklistValidator + GreyLineValidator + S6 Genette 维度 validator）
 
 ---
 

@@ -12,6 +12,7 @@ export { KnowledgeValidator } from './knowledge.js';
 export { WorldRuleValidator } from './world-rule.js';
 export { CausalityValidator } from './causality.js';
 export { ForeshadowingValidator } from './foreshadowing.js';
+export { GreyLineValidator } from './grey-line.js';
 export { POVValidator } from './pov.js';
 export { FactualDetailValidator } from './factual-detail.js';
 export { VoiceDriftDetector } from './voice-drift.js';
@@ -24,9 +25,9 @@ export { AliasValidator } from './alias.js';
 export { PronounValidator } from './pronoun.js';
 export { AppearanceValidator } from './appearance.js';
 export { ConflictValidator } from './conflict.js';
+export { ChecklistValidator } from './checklist.js';
 export { ResultAggregator } from './aggregator.js';
 export { resolveDeferredFacts } from './deferred-resolver.js';
-
 // ============================================================================
 // Aggregated analysis schema — built from built-in validator schemas
 // ============================================================================
@@ -43,9 +44,9 @@ import { appearanceCheckSchema } from './appearance.js';
 import { characterReferenceSchema } from './alias.js';
 import { tenseDetectedSchema } from './tense-consistency.js';
 import { conflictAnalysisSchema } from './conflict.js';
+import { checklistResultSchema } from '../schemas/narrative-checklist.js';
 import { ruleCheckSchema } from './world-rule.js';
 import { knowledgeCheckSchema } from './knowledge.js';
-
 /**
  * Static schema built from all built-in validator analysis blocks.
  * Plugin validators add fields dynamically through `ResultAggregator.getCombinedValidationSchema()`.
@@ -65,6 +66,7 @@ export const analysisContentSchema = z.object({
   conflictAnalysis: conflictAnalysisSchema,
   ruleChecks: z.array(ruleCheckSchema),
   knowledgeChecks: z.array(knowledgeCheckSchema),
+  checklistResults: z.array(checklistResultSchema).optional(),
 });
 
 export type AnalysisContent = z.infer<typeof analysisContentSchema>;

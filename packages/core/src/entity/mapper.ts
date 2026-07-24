@@ -12,6 +12,7 @@ import type {
   LocationDefinition,
   ItemDefinition,
   FactionDefinition,
+  NarratorProfile,
 } from '../types/index.js';
 import { loadProjectConfig, readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
 import { parseStoryTimestamp, factIdFrom } from './timestamp.js';
@@ -28,6 +29,7 @@ import {
   ruleDefinitionSchema,
   worldInitialStateSchema,
   eventFileSchema,
+  narratorProfileSchema,
 } from '../schemas/index.js';
 import { FsStorage, type Storage } from '../storage/index.ts';
 
@@ -36,8 +38,9 @@ import { FsStorage, type Storage } from '../storage/index.ts';
 // ============================================================================
 
 export class EntityMapper {
-  private projectPath: string;
   private storage: Storage;
+  /** S6c: Loaded narrator profiles indexed by id. */
+  private narratorProfiles: Record<string, NarratorProfile> = {};
 
   constructor(projectPath: string, storage?: Storage) {
     this.projectPath = projectPath;
@@ -58,6 +61,17 @@ export class EntityMapper {
     const locations = readYamlFilesInDir(path.join(defsDir, 'locations'), locationDefinitionSchema, this.storage) as LocationDefinition[];
     const items = readYamlFilesInDir(path.join(defsDir, 'items'), itemDefinitionSchema, this.storage) as ItemDefinition[];
     const factions = readYamlFilesInDir(path.join(defsDir, 'factions'), factionDefinitionSchema, this.storage) as FactionDefinition[];
+
+    // S6c: Load narrator profiles from definitions/narrators/
+    this.narratorProfiles = {};
+    const narratorProfileFiles = readYamlFilesInDir(
+      path.join(defsDir, 'narrators'),
+      narratorProfileSchema,
+      this.storage,
+    ) as NarratorProfile[];
+    for (const np of narratorProfileFiles) {
+      this.narratorProfiles[np.id] = np;
+    }
 
     const worldInitialState = readYamlFile({
       filePath: path.join(defsDir, 'state_initial.yaml'),

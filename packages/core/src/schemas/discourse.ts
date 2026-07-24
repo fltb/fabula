@@ -45,6 +45,30 @@ export const modelReaderProfileSchema = z.object({
   initialExposureContract: initialExposureContractSchema,
 }).strict();
 
+// ─── Voice: NarrativeLevel & DiegeticRelation (S6d) ─────────────────────────
+
+export const narrativeLevelSchema = z.enum([
+  'extradiegetic',
+  'intradiegetic',
+  'metadiegetic',
+  'hypodiegetic',
+]);
+
+export const diegeticRelationSchema = z.enum([
+  'heterodiegetic',
+  'homodiegetic',
+]);
+
+export const voiceProfileSchema = z.object({
+  level: narrativeLevelSchema,
+  relation: diegeticRelationSchema,
+  nestingDepth: z.number().int().nonnegative().optional(),
+  embeddedStory: z.object({
+    narratingCharacter: z.string(),
+    audienceCharacter: z.string().optional(),
+  }).strict().optional(),
+}).strict();
+
 // ─── NarratorProfile (§10) ──────────────────────────────────────────────────
 
 export const narratorProfileTypeSchema = z.enum([
@@ -59,7 +83,6 @@ export const narratorAssertionCapabilitySchema = z.enum(['full', 'constrained', 
 export const narratorTruthCapabilitySchema = z.enum(['full_knowledge', 'limited_knowledge', 'opaque']);
 export const narratorFidelitySchema = z.enum(['reliable', 'unreliable', 'ambiguous']);
 export const narratorSinceritySchema = z.enum(['sincere', 'deceptive', 'ambiguous']);
-
 export const narratorProfileBaseSchema = z.object({
   id: z.string(),
   access: narratorAccessSchema,
@@ -68,7 +91,6 @@ export const narratorProfileBaseSchema = z.object({
   fidelity: narratorFidelitySchema,
   sincerity: narratorSinceritySchema,
 });
-
 export const focalizerBoundProfileSchema = narratorProfileBaseSchema.extend({
   type: z.literal('focalizer_bound'),
 }).strict();
@@ -342,4 +364,21 @@ export const validationKeySchema = z.object({
   model: z.string(),
   validatorPolicy: z.string(),
   referencePolicy: z.string(),
+}).strict();
+
+// ─── Order: Anachrony schemas (S6e) ─────────────────────────────────────────
+
+export const anachronyTypeSchema = z.enum(['analepsis', 'prolepsis']);
+
+export const anachronyScopeSchema = z.enum(['internal', 'external', 'mixed']);
+
+export const anachronyFunctionSchema = z.enum(['completing', 'repeating']);
+
+export const anachronySchema = z.object({
+  type: anachronyTypeSchema,
+  scope: anachronyScopeSchema,
+  function: anachronyFunctionSchema,
+  distance: z.string(),
+  amplitude: z.string().optional(),
+  anchorEventId: z.string().optional(),
 }).strict();

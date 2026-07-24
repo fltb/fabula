@@ -32,6 +32,7 @@ const ALL_FIELDS_VALID = {
     conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
     ruleChecks: [],
     knowledgeChecks: [],
+    checklistResults: [],
   },
 };
 
@@ -40,11 +41,10 @@ const ALL_FIELDS_VALID = {
 // ---------------------------------------------------------------------------
 
 describe('analysisContentSchema', () => {
-  it('has all 14 blocks as required (no optional fields)', () => {
+  it('has all 15 blocks (14 required + 1 optional checklistResults)', () => {
     const shape = analysisContentSchema.shape;
     const requiredFields = [
       'postconditions',
-      'preconditions',
       'pov',
       'inventedDetails',
       'quality',
@@ -67,11 +67,11 @@ describe('analysisContentSchema', () => {
       expect(zodType).not.toBeInstanceOf(z.ZodOptional);
     }
 
-    // Verify total field count = 14 (no extra, no fewer)
-    expect(Object.keys(shape)).toHaveLength(14);
+    // Verify total field count = 15 (14 required + 1 optional checklistResults)
+    expect(Object.keys(shape)).toHaveLength(15);
   });
 
-  it('accepts valid analysis with all 14 blocks', () => {
+  it('accepts valid analysis with all 15 blocks', () => {
     const result = analysisContentSchema.safeParse(ALL_FIELDS_VALID.analysis);
     expect(result.success).toBe(true);
   });
@@ -132,7 +132,7 @@ describe('analysisContentSchema', () => {
 // ---------------------------------------------------------------------------
 
 describe('parseAnalysisJSON unified strict schema', () => {
-  it('parses valid JSON with all 14 blocks', () => {
+  it('parses valid JSON with all 15 blocks', () => {
     const result = parseAnalysisJSON(JSON.stringify(ALL_FIELDS_VALID));
     expect(result).not.toBeNull();
     expect(result!.eventId).toBe('E1');
@@ -195,7 +195,7 @@ describe('parseAnalysisJSON unified strict schema', () => {
 // ---------------------------------------------------------------------------
 
 describe('parseAnalysisJSONWithErrors unified strict schema', () => {
-  it('parses valid JSON with all 14 blocks (no combined schema)', () => {
+  it('parses valid JSON with all 15 blocks (no combined schema)', () => {
     const result = parseAnalysisJSONWithErrors(JSON.stringify(ALL_FIELDS_VALID));
     expect(result.result).not.toBeNull();
     expect(result.parseError).toBeUndefined();

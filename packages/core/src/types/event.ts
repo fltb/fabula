@@ -6,6 +6,12 @@ import type { EntityId, StoryTimestamp, Fact } from './entity.js';
 import type { BranchSet } from './branch.js';
 import type { RelationshipTransaction, DimensionWrite, DimensionUnset, Membership, RelationshipId, EpochId, MembershipId, EpochLifecycle, DimensionScope, RelationshipRuntimeState, EpochRuntimeState, DimensionState } from './relationship.js';
 import type { ThreadTransaction, ThreadId, ThreadRunId, ThreadLifecycle, GoalLifecycle, MilestoneLifecycle, GoalState, MilestoneState, TimeDomain, ThreadRuntimeState, ThreadTypeDefinition, ThreadTypeCatalog, ThreadDeclaration, ThreadDeclarationCatalog, ThreadMergeStrategy, ThreadMergeResult } from './thread.js';
+import type { GreyLine } from './grey-line.js';
+import type { NarrativeChecklist } from './narrative-checklist.js';
+import type { SourceContext } from './source-context.js';
+import type { DurationProfile } from './duration.js';
+import type { FrequencyProfile } from './frequency.js';
+import type { Anachrony, VoiceProfile } from './discourse.js';
 import type { RuleEffectEntry, RuleTransaction } from './rule.js';
 
 // ——— Narrative Event (§7.4.1) ———
@@ -32,6 +38,7 @@ export interface NarrativeEvent {
   preconditions: Fact[];
   postconditions: Fact[];
   threadProgress: ThreadProgressEntry[];
+  greyLines?: GreyLine[];
   foreshadowing: ForeshadowEntry[];
   relationshipEffects: RelationshipTransaction[];
   ruleEffects: RuleEffectEntry[];
@@ -49,6 +56,26 @@ export interface NarrativeEvent {
   cast?: {
     onScreen: string[];   // characters physically present
     affected: string[];   // characters affected by events (may be off-screen)
+  };
+  /** Narrative checklist — dimensions the prose must cover (S1) */
+  narrativeChecklist?: NarrativeChecklist;
+  /** Source context — style anchors (S4) */
+  sourceContext?: SourceContext;
+  /** Genette Duration (S6a) */
+  duration?: DurationProfile;
+  /** Genette Frequency (S6b) */
+  frequency?: FrequencyProfile;
+  /** Genette Anachrony (S6e) */
+  anachrony?: Anachrony;
+  /** Genette Voice (S6d) */
+  voice?: VoiceProfile;
+  /** NarratorProfile reference (S6c) */
+  narratorProfileRef?: string;
+  /** Genette Mood focalization (S6c) */
+  focalization?: {
+    type: 'zero' | 'internal' | 'external';
+    variation?: 'fixed' | 'variable' | 'multiple';
+    characterSequence?: { character: string; scope: string }[];
   };
 }
 
@@ -192,6 +219,8 @@ export interface EventFile {
     progressAfter: number;
     progressTotal: number;
   }>;
+  /** Grey line motif tracking entries */
+  greyLines?: GreyLine[];
   /** Foreshadowing entries */
   foreshadowing?: Array<{
     id: string;
@@ -230,4 +259,24 @@ export interface EventFile {
   };
   /** Absolute file path to this event's YAML file on disk (set by EntityMapper) */
   filePath?: string;
+  /** Narrative checklist — dimensions the prose must cover (S1) */
+  narrativeChecklist?: NarrativeChecklist;
+  /** Source context — style anchors from original source text (S4) */
+  sourceContext?: SourceContext;
+  /** Genette Duration profile — scene/summary/ellipsis/pause/stretch (S6a) */
+  duration?: DurationProfile;
+  /** Genette Frequency profile — singulative/repeating/iterative (S6b) */
+  frequency?: FrequencyProfile;
+  /** Genette Anachrony — refined flashback/flashforward classification (S6e) */
+  anachrony?: Anachrony;
+  /** Genette Voice — narrative level and diegetic relation (S6d) */
+  voice?: VoiceProfile;
+  /** Reference to a NarratorProfile defined in project discourse config (S6c) */
+  narratorProfileRef?: string;
+  /** Genette Mood — focalization type and variation (S6c) */
+  focalization?: {
+    type: 'zero' | 'internal' | 'external';
+    variation?: 'fixed' | 'variable' | 'multiple';
+    characterSequence?: { character: string; scope: string }[];
+  };
 }

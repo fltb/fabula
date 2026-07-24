@@ -4,6 +4,7 @@
 
 import type { StyleProfile } from '../style/default-profile.ts';
 import { z } from 'zod';
+import { ideaIRSchema } from './idea-ir.js';
 
 export const projectConfigSchema = z
   .object({
@@ -49,5 +50,6 @@ export const projectConfigSchema = z
       })
       .strict()
       .optional(),
+    ideaIR: ideaIRSchema.optional(),
   })
   .strict();

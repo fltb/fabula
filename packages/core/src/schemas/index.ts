@@ -41,8 +41,16 @@ import { relationshipDefinitionSchema } from './relationship.js';
 import { relationshipTypeDefinitionSchema, relationshipTransactionSchema, relationshipRoleDefinitionSchema, membershipSchema, dimensionWriteSchema, dimensionUnsetSchema, identityTransitionCarryEntrySchema, relationshipIdentityTransitionGroupSchema } from './relationship.js';
 import { worldInitialStateSchema } from './state-initial.js';
 import { chapterMetadataSchema } from './chapter.js';
+import { greyLineSchema, greyLineNodeSchema } from './grey-line.js';
 import { projectConfigSchema } from './project.js';
-
+import { narrativeChecklistSchema, narrativeChecklistItemSchema, checklistResultSchema } from './narrative-checklist.js';
+import { sourceContextSchema, sourceContextEntrySchema } from './source-context.js';
+import { durationProfileSchema, durationTypeSchema } from './duration.js';
+import { frequencyProfileSchema, frequencyTypeSchema } from './frequency.js';
+import { anachronySchema, voiceProfileSchema, anachronyTypeSchema, anachronyScopeSchema, anachronyFunctionSchema, narrativeLevelSchema, diegeticRelationSchema } from './discourse.js';
+import { ideaIRSchema, thematicIntentSchema, emotionalArcDefinitionSchema, emotionalBeatSchema } from './idea-ir.js';
+import { structuralFunctionSchema, actantModelSchema, storyArchetypeSchema } from './story-ir.js';
+import { narrativePlannerModeSchema, narrativeGoalSchema, actionDefinitionSchema, effectSchema } from './planner.js';
 import { entityTypeCatalogSchema, entityDeclarationCatalogSchema, entityTypeRefSchema, entityRuntimeStateSchema, writePolicySchema, requiredAtSchema, attributeDefinitionSchema, entityTypeDefinitionSchema, entityDeclarationSchema } from './entity-catalog.js';
 // ── Re-export all per-entity schemas ─────────────────────────────────────────
 export {
@@ -58,8 +66,36 @@ export {
   worldInitialStateSchema,
   projectConfigSchema,
   chapterMetadataSchema,
+  greyLineSchema,
+  greyLineNodeSchema,
+  narrativeChecklistSchema,
+  narrativeChecklistItemSchema,
+  checklistResultSchema,
+  sourceContextSchema,
+  sourceContextEntrySchema,
+  durationProfileSchema,
+  durationTypeSchema,
+  frequencyProfileSchema,
+  frequencyTypeSchema,
+  anachronySchema,
+  voiceProfileSchema,
+  anachronyTypeSchema,
+  anachronyScopeSchema,
+  anachronyFunctionSchema,
+  narrativeLevelSchema,
+  diegeticRelationSchema,
+  ideaIRSchema,
+  thematicIntentSchema,
+  emotionalArcDefinitionSchema,
+  emotionalBeatSchema,
+  structuralFunctionSchema,
+  actantModelSchema,
+  storyArchetypeSchema,
+  narrativePlannerModeSchema,
+  narrativeGoalSchema,
+  actionDefinitionSchema,
+  effectSchema,
 };
-// ——— STATE-6 Rule Schemas ———
 export {
   ruleIdSchema,
   ruleEpochIdSchema,

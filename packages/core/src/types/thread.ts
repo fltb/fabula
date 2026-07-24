@@ -8,6 +8,11 @@
 // 1. Identity (opaque branded strings)
 // ============================================================================
 
+import type { StructuralFunction, ActantModel } from './story-ir.js';
+// ============================================================================
+// 1. Identity (opaque branded strings)
+// ============================================================================
+
 /** ThreadId — permanent lineage, never reused across declarations */
 export type ThreadId = string & { readonly __brand: 'ThreadId' };
 
@@ -92,6 +97,10 @@ export interface ThreadTypeDefinition {
   stableMilestones: MilestoneState[];
   /** Optional narrative hints about this thread type */
   narrativeHints?: string[];
+  /** Optional Propp structural function label */
+  structuralFunction?: StructuralFunction;
+  /** Optional Greimas actant role assignment */
+  actantModel?: ActantModel;
   /** Provenance / author tracking */
   provenance?: string;
 }

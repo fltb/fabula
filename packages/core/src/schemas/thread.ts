@@ -4,6 +4,7 @@
 
 import { z } from 'zod';
 
+import { structuralFunctionSchema, actantModelSchema } from './story-ir.js';
 // ─── Identities ──────────────────────────────────────────────────────────────
 
 export const threadIdSchema = z.string().min(1);
@@ -53,6 +54,8 @@ export const threadTypeDefinitionSchema = z.object({
   stableMilestones: z.array(milestoneStateSchema),
   narrativeHints: z.array(z.string()).optional(),
   provenance: z.string().optional(),
+  structuralFunction: structuralFunctionSchema.optional(),
+  actantModel: actantModelSchema.optional(),
 }).strict();
 
 export const threadTypeCatalogSchema = z.object({

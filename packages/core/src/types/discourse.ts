@@ -1,3 +1,5 @@
+import type { EntityId } from './entity.js';
+
 // ============================================================================
 // Novalistically — DISCOURSE-1: Discourse State, Model Reader, Narrator &
 // spoiler-safe context types.
@@ -104,6 +106,12 @@ export interface NarratorProfileBase {
   truth: NarratorTruthCapability;
   fidelity: NarratorFidelity;
   sincerity: NarratorSincerity;
+  /**
+   * Narrative voice (level and relation) for this narrator profile.
+   * Orthogonal to narrator capabilities — an omniscient narrator can be
+   * extradiegetic (traditional omniscient) or intradiegetic (Scheherazade).
+   */
+  voice?: VoiceProfile;
 }
 
 /** Focalizer-bound narrator — limited to focalizer's POV. */
@@ -142,6 +150,52 @@ export type NarratorProfile =
   | RetrospectiveEntityProfile
   | ExplicitLedgerProfile
   | OmniscientProfile;
+
+// ─── Voice: NarrativeLevel & DiegeticRelation (S6d) ─────────────────────────
+
+/**
+ * Narrative level — Genette's diegetic levels.
+ *
+ * - `extradiegetic`: outside the story world (first-level narrator)
+ * - `intradiegetic`: inside the story world (character-narrator)
+ * - `metadiegetic`: a story within the story (second-level narrative)
+ * - `hypodiegetic`: a story within a story within the story (third-level)
+ */
+export type NarrativeLevel =
+  | 'extradiegetic'
+  | 'intradiegetic'
+  | 'metadiegetic'
+  | 'hypodiegetic';
+
+/**
+ * Diegetic relation — narrator's relationship to the story.
+ *
+ * - `heterodiegetic`: narrator is absent from the story (tells others' story)
+ * - `homodiegetic`: narrator is present in the story (tells own story)
+ */
+export type DiegeticRelation = 'heterodiegetic' | 'homodiegetic';
+
+/**
+ * VoiceProfile — Genette narrative voice (who speaks, at what level).
+ *
+ * Combines narrative level and diegetic relation with optional
+ * embedding context for embedded stories.
+ */
+export interface VoiceProfile {
+  /** Narrative level of the narrator. */
+  level: NarrativeLevel;
+  /** Narrator's relationship to the story. */
+  relation: DiegeticRelation;
+  /** Nesting depth (0 = extradiegetic primary, 1 = intradiegetic, etc.). */
+  nestingDepth?: number;
+  /** Context for embedded stories (metadiegetic/hypodiegetic). */
+  embeddedStory?: {
+    /** Character who narrates the embedded story. */
+    narratingCharacter: EntityId;
+    /** Character who is the audience for the embedded story. */
+    audienceCharacter?: EntityId;
+  };
+}
 
 // ─── NarratorAssertion (§11) ────────────────────────────────────────────────
 
@@ -513,4 +567,63 @@ export interface ValidationKey {
   model: string;
   validatorPolicy: string;
   referencePolicy: string;
+}
+
+// ─── Order: Anachrony types (S6e) ───────────────────────────────────────────
+
+/**
+ * Anachrony type — Genette's temporal order deviations.
+ *
+ * - `analepsis`: flashback (movement backward in time)
+ * - `prolepsis`: flashforward (movement forward in time)
+ */
+export type AnachronyType = 'analepsis' | 'prolepsis';
+
+/**
+ * Anachrony scope — the reach of the temporal deviation relative to the
+ * primary narrative's temporal frame.
+ *
+ * - `internal`: within the primary narrative's time span
+ * - `external`: outside the primary narrative's time span
+ * - `mixed`: both internal and external elements
+ */
+export type AnachronyScope = 'internal' | 'external' | 'mixed';
+
+/**
+ * Anachrony function — the narrative purpose of the temporal deviation.
+ *
+ * - `completing`: fills in a gap in the primary narrative
+ * - `repeating`: recounts an event already narrated (re-narration)
+ */
+export type AnachronyFunction = 'completing' | 'repeating';
+
+/**
+ * Anachrony — Genette's refined classification for temporal deviations.
+ *
+ * Refines but does NOT replace `sceneType` (backward compat).
+ * A `flashback` scene with an `anachrony.type = 'analepsis'` provides
+ * richer Genette classification.
+ */
+export interface Anachrony {
+  /** Analepsis (flashback) or prolepsis (flashforward). */
+  type: AnachronyType;
+  /** Scope relative to primary narrative's temporal frame. */
+  scope: AnachronyScope;
+  /** Narrative purpose of the deviation. */
+  function: AnachronyFunction;
+  /**
+   * Temporal distance from the primary narrative's present,
+   * e.g. "2 years earlier", "3 months later".
+   */
+  distance: string;
+  /**
+   * Time span covered by the anachrony, e.g. "6 months".
+   * Meaningful for extended analepsis/prolepsis.
+   */
+  amplitude?: string;
+  /**
+   * Anchor event ID — the primary narrative event from which the
+   * anachrony departs.
+   */
+  anchorEventId?: string;
 }

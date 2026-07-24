@@ -51,6 +51,56 @@ export type {
 } from './event.js';
 
 export type {
+  GreyLineNode,
+  GreyLine,
+} from './grey-line.js';
+
+// ——— S6: Genette Base Narratology Types ———
+export type {
+  DurationType,
+  DurationProfile,
+} from './duration.js';
+export type {
+  FrequencyType,
+  FrequencyProfile,
+} from './frequency.js';
+export type {
+  AnachronyType,
+  AnachronyScope,
+  AnachronyFunction,
+  Anachrony,
+  NarrativeLevel,
+  DiegeticRelation,
+  VoiceProfile,
+} from './discourse.js';
+// ——— S1: Narrative Checklist Types ———
+export type {
+  NarrativeChecklistItem,
+  NarrativeChecklist,
+} from './narrative-checklist.js';
+// ——— S4: Source Context Types ———
+export type {
+  SourceContextEntry,
+  SourceContext,
+} from './source-context.js';
+// ——— S7: Upper IR Types ———
+export type {
+  ThematicIntent,
+  EmotionalArcDefinition,
+  IdeaIR,
+} from './idea-ir.js';
+export type {
+  StructuralFunction,
+  ActantModel,
+  StoryArchetype,
+} from './story-ir.js';
+// ——— S8: Planner Types ———
+export type {
+  NarrativePlannerMode,
+  NarrativeGoal,
+  ActionDefinition,
+} from './planner.js';
+export type {
   Relationship,
   RelationshipDef,
   RelationshipState,
@@ -150,6 +200,7 @@ export type {
   CharacterReference,
   TenseDetected,
   ConflictAnalysis,
+  ChecklistResult,
 } from './analysis.js';
 
 export type {

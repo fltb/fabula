@@ -93,8 +93,20 @@ export interface QualityAnalysis {
  * Per-field block types are still available as z.infer<typeof validatorSchema>.
  * The `analysis` field is intentionally `Record<string, unknown>` because
  * plugin validators can add fields at runtime beyond the built-in set.
+/**
+ * Per-dimension coverage result from Pass 2 narrative checklist analysis.
+ * Indicates whether the prose covers a required/optional narrative dimension.
  */
+export interface ChecklistResult {
+  dimension: string;
+  covered: boolean;
+  /** Optional quote from prose demonstrating coverage */
+  evidence?: string;
+}
+
 export interface AnalysisResult {
   eventId: string;
   analysis: Record<string, unknown>;
+  /** Per-dimension narrative checklist coverage results from Pass 2 analysis */
+  checklistResults?: ChecklistResult[];
 }

@@ -13,7 +13,12 @@ import {
   ruleEffectSchema,
   introduceEntrySchema,
 } from './primitives.js';
-
+import { greyLineSchema } from './grey-line.js';
+import { narrativeChecklistSchema } from './narrative-checklist.js';
+import { sourceContextSchema } from './source-context.js';
+import { durationProfileSchema } from './duration.js';
+import { frequencyProfileSchema } from './frequency.js';
+import { anachronySchema, voiceProfileSchema } from './discourse.js';
 export const eventFileSchema = z
   .object({
     event: z.string(),
@@ -40,6 +45,7 @@ export const eventFileSchema = z
     expectedPostconditions: z.array(postconditionSchema),
     styleGuidance: styleGuidanceSchema.optional(),
     threadProgress: z.array(threadProgressEntrySchema).optional(),
+    greyLines: z.array(greyLineSchema).optional(),
     foreshadowing: z.array(foreshadowEntrySchema).optional(),
     relationshipEffects: z.array(relationshipChangeSchema).optional(),
     ruleEffects: z.array(ruleEffectSchema).optional(),
@@ -48,6 +54,21 @@ export const eventFileSchema = z
     cast: z.object({
       onScreen: z.array(z.string()),
       affected: z.array(z.string()),
+    }).optional(),
+    narrativeChecklist: narrativeChecklistSchema.optional(),
+    sourceContext: sourceContextSchema.optional(),
+    duration: durationProfileSchema.optional(),
+    frequency: frequencyProfileSchema.optional(),
+    anachrony: anachronySchema.optional(),
+    voice: voiceProfileSchema.optional(),
+    narratorProfileRef: z.string().optional(),
+    focalization: z.object({
+      type: z.enum(['zero', 'internal', 'external']),
+      variation: z.enum(['fixed', 'variable', 'multiple']).optional(),
+      characterSequence: z.array(z.object({
+        character: z.string(),
+        scope: z.string(),
+      })).optional(),
     }).optional(),
   })
   .strict();

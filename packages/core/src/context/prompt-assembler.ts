@@ -51,6 +51,10 @@ export class PromptAssembler {
       retryGuidance?: string;
       /** Pre-composed style profile notes from resolved project/chapter/scene profile */
       profileStyleNotes?: string;
+      /** S1: Narrative checklist items as coverage requirements for Pass 1 */
+      narrativeChecklistItems?: Array<{ dimension: string; description: string; required: boolean }>;
+      /** S4: Source context style notes (STYLE-classified only), injected as style anchors */
+      sourceContextStyleNotes?: string;
     },
   ): AssembledPrompt {
     const parts: string[] = [
@@ -86,6 +90,23 @@ export class PromptAssembler {
     }
     if (options?.profileStyleNotes) {
       parts.push(`- ${options.profileStyleNotes}`);
+    }
+    // S1: Narrative checklist items as coverage requirements
+    if (options?.narrativeChecklistItems && options.narrativeChecklistItems.length > 0) {
+      parts.push('');
+      parts.push('## Narrative Coverage Requirements');
+      parts.push('The following narrative dimensions must be addressed in this scene prose:');
+      for (const item of options.narrativeChecklistItems) {
+        const marker = item.required ? 'REQUIRED' : 'recommended';
+        parts.push(`- [${marker}] ${item.dimension}: ${item.description}`);
+      }
+    }
+    // S4: Source context style anchors (STYLE only)
+    if (options?.sourceContextStyleNotes) {
+      parts.push('');
+      parts.push('## Source Style Anchors');
+      parts.push('Reference these style elements from the original text as prose guidance:');
+      parts.push(options.sourceContextStyleNotes);
     }
     const targetAudience = context.systemContext?.targetAudience;
     if (targetAudience) {

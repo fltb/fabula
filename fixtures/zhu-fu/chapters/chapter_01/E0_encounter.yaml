@@ -111,3 +111,28 @@ styleGuidance:
   characterVoice:
     narrator: "第一人称叙述，内省而犹豫。面对问题时语无伦次——'也许有罢——我想'、'说不清'。"
     xianglins_wife: "单刀直入的三连问，不绕弯子。她已没有时间和精力客套——这是她人生最后的提问。"
+narrativeChecklist:
+  items:
+    - dimension: "对话个性"
+      description: "祥林嫂的三连问直接而急迫，'我'的回答含糊逃避——对话体现人物性格和关系张力"
+      required: true
+    - dimension: "反讽距离"
+      description: "全镇忙祝福与祥林嫂走向死亡形成叙事反讽"
+      required: true
+    - dimension: "心理描写"
+      description: "'我'的内心不安——'说不清'的自我欺骗"
+      required: false
+duration:
+  type: scene
+  storyDuration: "傍晚到入夜，约2小时"
+  narrativeLength: 800
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: homodiegetic
+anachrony:
+  type: analepsis
+  scope: internal
+  function: completing
+  distance: "叙述者'我'在回忆数年前回鲁镇的往事"

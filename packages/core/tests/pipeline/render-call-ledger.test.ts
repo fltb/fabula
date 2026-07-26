@@ -58,7 +58,7 @@ function makeEvent(id: string): NarrativeEvent {
     title: 'Test',
     storyTime: { type: 'absolute' as const, value: 'start' },
     sceneType: 'linear',
-    pov: { perspective: 'neutral', entityId: 'entity_1' as const },
+    pov: { character: 'entity_1', type: 'third_person_limited' },
     sceneBrief: 'A test scene.',
     preconditions: [],
     postconditions: [],

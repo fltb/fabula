@@ -1,14 +1,14 @@
 # validator-bugs: Pass 2 集成迁移遗留 Bug 修复
 
-## Group Status: [ ] unstarted
+## Group Status: [x] complete — verified against current source 2026-07-26
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| VB-1 | [ ] | — | `docs/TODO.md` lines 29-39 |
-| VB-2 | [ ] | — | `docs/TODO.md` lines 29-39 |
-| VB-3 | [ ] | — | `docs/TODO.md` lines 29-39 |
+| VB-1 | [x] | — | Fixed: `packages/core/src/validator/thread-progress.ts:49-50` splits on `:`/`：` before Set lookup |
+| VB-2 | [x] | — | Fixed: `packages/core/src/validator/alias.ts:122` Pass 2 instruction excludes pronouns from `namesUsed` entirely — architecturally equivalent fix (moved to separate `PronounValidator`) |
+| VB-3 | [x] | — | Fixed: `packages/core/src/validator/pov.ts` consumes Pass 2 `pov` block, no regex fallback |
 
 ## Group-level dependencies
 None — these are prerequisite bug fixes that unblock accurate validation measurement for all other groups.

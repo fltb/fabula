@@ -1,16 +1,16 @@
 # base-narratology: Genette five dimensions (base schema audit)
 
-## Group Status: [ ] unstarted
+## Group Status: [ ] type-only — verified 2026-07-26: `duration`/`frequency`/`voice`/`anachrony`/`focalization` fields exist on `NarrativeEvent` but grep across `packages/core/src` outside type/schema files finds ZERO consumption (no validator, no context compiler, no prompt assembler reads them). `docs/report/stage-3-audit.md`'s "5/5 dimensions ✅" claim is itself stale/overclaiming — same "dead type" pattern as the unwired Discourse/Syuzhet IR layer. Do not trust that audit's S6 row without re-verifying source.
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| S6a | [ ] | — | `docs/TODO.md` lines 272-283; `docs/reference/stage-3/narratology-dimension-audit.md` lines 69-132 |
-| S6b | [ ] | — | `docs/TODO.md` lines 272-283; `docs/reference/stage-3/narratology-dimension-audit.md` lines 136-188 |
-| S6c | [ ] | — | `docs/TODO.md` lines 272-283; `docs/reference/stage-3/narratology-dimension-audit.md` lines 192-246 |
-| S6d | [ ] | — | `docs/TODO.md` lines 272-283; `docs/reference/stage-3/narratology-dimension-audit.md` lines 250-316 |
-| S6e | [ ] | — | `docs/TODO.md` lines 272-283; `docs/reference/stage-3/narratology-dimension-audit.md` lines 9-65 |
+| S6a | [ ] | — | Duration — `DurationProfile` type exists on `NarrativeEvent.duration`, zero consumers |
+| S6b | [ ] | — | Frequency — `FrequencyProfile` type exists on `NarrativeEvent.frequency`, zero consumers |
+| S6c | [ ] | — | Mood/Voice wiring — `focalization`, `narratorProfileRef` fields exist, zero consumers |
+| S6d | [ ] | — | Voice — `VoiceProfile` type exists on `NarrativeEvent.voice`, zero consumers |
+| S6e | [ ] | — | Order/Anachrony — `Anachrony` type exists on `NarrativeEvent.anachrony`, zero consumers |
 
 ## Group-level dependencies
 None — all five sub-items are independent within this group. They all extend `NarrativeEvent`/`EventFile` but do not conflict.

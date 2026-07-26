@@ -24,7 +24,7 @@ const VALID_ANALYSIS_JSON = JSON.stringify({
 function makeEvent(id: string): NarrativeEvent { return {
   id, event: 'Test event', narrativeOrder: 1, title: 'Test',
   storyTime: { type: 'absolute' as const, value: 'start' }, sceneType: 'linear',
-  pov: { perspective: 'neutral', entityId: 'entity_1' as const }, sceneBrief: 'A test scene.',
+  pov: { character: 'entity_1', type: 'third_person_limited' }, sceneBrief: 'A test scene.',
   preconditions: [], postconditions: [], threadProgress: [], foreshadowing: [],
   relationshipEffects: [], ruleEffects: [], source: 'genesis',
   branchExistence: { type: 'all' as const }, participants: { entities: ['entity_1'] },

@@ -1,13 +1,13 @@
 # generation-pipeline: Source context style passthrough + schema-aware generation
 
-## Group Status: [ ] unstarted
+## Group Status: [x] complete — S4 wiring gap closed 2026-07-26 (this session), S5 confirmed
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| S4 | [ ] | — | `docs/TODO.md` lines 260-265 |
-| S5 | [ ] | — | `docs/TODO.md` lines 267-270 |
+| S4 | [x] | — | `SourceContext`/`SourceContextEntry` types exist; `RenderPipeline.renderScene()` now passes STYLE-filtered `sourceContextStyleNotes` into `PromptAssembler.assemble()` (`pipeline/render.ts:295-299`, fixed this session — was previously dead-wired; proven via new test + live-LLM zhu-fu runs) |
+| S5 | [x] | — | Zod-error-feedback retry loop confirmed directly in `pipeline/render.ts` Pass 2 handling (`feedbackErrors`, `zodErrors.issues.map(...)`, up to 4 attempts) |
 
 ## Group-level dependencies
 None — S4 and S5 are independent within this group.

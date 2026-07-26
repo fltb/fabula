@@ -1,13 +1,13 @@
 # upper-ir: Idea IR + Story IR (missing upper IR layers)
 
-## Group Status: [ ] unstarted
+## Group Status: [x] complete — verified against current source 2026-07-26
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| S7a | [ ] | — | `docs/TODO.md` lines 285-292; `docs/reference/stage-3/ir-layer-narratology-mapping.md` §1 (lines 26-34) |
-| S7b | [ ] | — | `docs/TODO.md` lines 285-292; `docs/reference/stage-3/ir-layer-narratology-mapping.md` §2 (lines 38-48) |
+| S7a | [x] | — | `packages/core/src/types/idea-ir.ts` + `schemas/idea-ir.ts`; wired into `schemas/project.ts:53`; authored in `fixtures/zhu-fu/nova.yaml` (real `thematicIntent`) |
+| S7b | [x] | — | `ThreadDefinition.structuralFunction`/`actantModel` in `types/thread.ts:100-103`; used in `fixtures/zhu-fu/definitions/state_initial.yaml` (T1-T4 with real Propp labels) |
 
 ## Group-level dependencies
 None — both IR layers are independent. They do not depend on each other.

@@ -1,13 +1,13 @@
 # narrative-checklist: Self-checking outline system + coverage benchmark
 
-## Group Status: [ ] unstarted
+## Group Status: [x] S1 complete; C1 blocked (needs live-LLM dream-of-red-chamber coverage run, not scoped this session)
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| S1 | [ ] | — | `docs/TODO.md` lines 205-211 |
-| C1 | [ ] | S1 | `docs/TODO.md` lines 317-321 |
+| S1 | [x] | — | `NarrativeChecklist`/`ChecklistValidator` implemented; `narrativeChecklistItems` wiring into Pass 1 prompt fixed this session (`pipeline/render.ts:295`); proven live via `fixtures/zhu-fu-variants/*` real-LLM full-chain runs (2026-07-26) — "## Narrative Coverage Requirements" rendered correctly |
+| C1 | [ ] | S1 | Needs `fixtures/dream-of-red-chamber/` 20-event live coverage report — separate, larger task (S1/S4/S6 metadata authoring + live render), out of this session's scope |
 
 ## Group-level dependencies
 None for S1. C1 depends on S1 (needs ChecklistValidator + checklistResults).

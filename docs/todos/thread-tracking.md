@@ -1,12 +1,12 @@
 # thread-tracking: Grey lines multi-point motif tracking
 
-## Group Status: [ ] unstarted
+## Group Status: [x] complete — verified against current source 2026-07-26
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| S2 | [ ] | — | `docs/TODO.md` lines 213-217 |
+| S2 | [x] | — | `GreyLineValidator` (`validator/grey-line.ts`) registered in `validator/index.ts`, genuinely reads `event.greyLines` and cross-checks Pass 2 `narrativeChecks` (not a stub) |
 
 ## Group-level dependencies
 None.

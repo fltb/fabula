@@ -292,6 +292,11 @@ export class RenderPipeline {
           ? previousErrorMessages.join('\n')
           : undefined,
         profileStyleNotes: styleNotes,
+        narrativeChecklistItems: job.event.narrativeChecklist?.items,
+        sourceContextStyleNotes: job.event.sourceContext?.entries
+          .filter((e) => e.classification === 'STYLE')
+          .map((e) => e.styleNote ? `- "${e.excerpt}" (${e.styleNote})` : `- "${e.excerpt}"`)
+          .join('\n'),
       });
       this.traceCollector?.record({ phase: 'pass1', state: 'start', spanId: `${eventId}:pass1`, eventId });
       const proseMessages = assembled.messages;
@@ -321,6 +326,7 @@ export class RenderPipeline {
           taskType: 'pass1',
         });
         providerCalls.push({ phase: 'pass1', attempt: attempts, outcome: 'failure', failureReason: sanitizeError(err), requestHash: pass1Hash, model: this.model, seed: null });
+        errors.push(`Pass 1 attempt ${attempts} failed: ${sanitizeError(err)}`);
         prose = '(empty)';
       }
       this.traceCollector?.record({ phase: 'pass1', state: 'end', spanId: `${eventId}:pass1`, eventId, durationMs: Date.now() - renderStart });

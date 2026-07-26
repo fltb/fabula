@@ -403,7 +403,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     return { results, errors: [] };
   }
   // ── Full rendering ────────────────────────────────────────────────
-  const resolvedModel = model ?? data.config?.defaultModel ?? 'claude-sonnet-4-20250514';
+  const resolvedModel = model ?? data.config?.defaultModel ?? process.env['NOVALISTICALLY_AI_MODEL'] ?? 'claude-sonnet-4-20250514';
   let provider: LLMProvider;
   if (injectedProvider) {
     provider = injectedProvider;

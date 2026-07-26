@@ -1,12 +1,12 @@
 # modern-novel: Modern novel structural modeling layer
 
-## Group Status: [ ] unstarted
+## Group Status: [x] complete — verified against current source 2026-07-26
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| S3 | [ ] | — | `docs/TODO.md` lines 219-244; `docs/reference/stage-3/modern-novel-structure-survey.md` §修正后总表 (lines 284-297) |
+| S3 | [x] | — | `modernNovel?: ModernNovelConfig` on `NarrativeEvent` (`types/event.ts:82`) with real sub-configs (`antiCausalEdge`, `chapterOrder`, `surfaceMode`); genuinely consumed by `ChapterOrderValidator`, `AntiCausalEdgeValidator`, `SurfaceModeValidator`, `CausalOverloadValidator` (all registered in `validator/index.ts`) |
 
 ## Group-level dependencies
 - **narrative-checklist**: S1 must be `[x]` before S3 B-class fields (they depend on Pass 2 checklist channel)

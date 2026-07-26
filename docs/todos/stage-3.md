@@ -8,17 +8,19 @@
 
 | Group | Status | Deps | Sub-plan | Items | Count |
 |-------|--------|------|----------|-------|-------|
-| validator-bugs | [ ] | — | [validator-bugs.md](validator-bugs.md) | VB-1, VB-2, VB-3 | 3 |
-| narrative-checklist | [ ] | — | [narrative-checklist.md](narrative-checklist.md) | S1, C1 | 2 |
-| thread-tracking | [ ] | — | [thread-tracking.md](thread-tracking.md) | S2 | 1 |
-| base-narratology | [ ] | — | [base-narratology.md](base-narratology.md) | S6a, S6b, S6c, S6d, S6e | 5 |
-| generation-pipeline | [ ] | — | [generation-pipeline.md](generation-pipeline.md) | S4, S5 | 2 |
-| upper-ir | [ ] | — | [upper-ir.md](upper-ir.md) | S7a, S7b | 2 |
-| planner | [ ] | — | [planner.md](planner.md) | S8 | 1 |
-| modern-novel | [ ] | narrative-checklist, base-narratology | [modern-novel.md](modern-novel.md) | S3 | 1 |
-| annotation | [ ] | — | [annotation.md](annotation.md) | C2, C3 | 2 |
+| validator-bugs | [x] | — | [validator-bugs.md](validator-bugs.md) | VB-1, VB-2, VB-3 | 3 |
+| narrative-checklist | [x] S1 / [ ] C1 | — | [narrative-checklist.md](narrative-checklist.md) | S1, C1 | 2 |
+| thread-tracking | [x] | — | [thread-tracking.md](thread-tracking.md) | S2 | 1 |
+| base-narratology | [ ] type-only, zero consumers | — | [base-narratology.md](base-narratology.md) | S6a, S6b, S6c, S6d, S6e | 5 |
+| generation-pipeline | [x] | — | [generation-pipeline.md](generation-pipeline.md) | S4, S5 | 2 |
+| upper-ir | [x] | — | [upper-ir.md](upper-ir.md) | S7a, S7b | 2 |
+| planner | [x] (removed by design, see file) | — | [planner.md](planner.md) | S8 | 1 |
+| modern-novel | [x] | narrative-checklist, base-narratology | [modern-novel.md](modern-novel.md) | S3 | 1 |
+| annotation | [ ] blocked on human review | — | [annotation.md](annotation.md) | C2, C3 | 2 |
 
 **Total**: 9 groups, 19 items (11 S-items + 3 validator bugs + 3 C-items + 2 deferred sub-items)
+
+**Verified 2026-07-26**: 6/9 groups fully complete, 1 partial (narrative-checklist: S1 done, C1 blocked), 1 genuinely incomplete despite prior audit claiming otherwise (base-narratology — types exist, zero runtime consumers), 1 blocked on human annotation (out of agent-executable scope). See individual sub-plan files for source citations; do not trust `docs/report/stage-3-audit.md`'s S6 row without re-verifying source.
 
 ## Execution waves
 

@@ -1,0 +1,212 @@
+{
+  "version": 1,
+  "provider": "mock-pass2",
+  "model": "mock-stage1",
+  "seed": 42,
+  "call": {
+    "totalCalls": 14,
+    "perEvent": [
+      {
+        "eventId": "E0",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E1",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E2",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E3",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E4",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E5",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          }
+        ]
+      },
+      {
+        "eventId": "E6",
+        "ledger": [
+          {
+            "phase": "pass1",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          },
+          {
+            "phase": "pass2",
+            "attempt": 1,
+            "outcome": "success",
+            "requestHash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "model": "mock-stage1",
+            "seed": 42
+          }
+        ]
+      }
+    ]
+  },
+  "cache": {
+    "hits": 0,
+    "misses": 14
+  },
+  "failures": [],
+  "hashes": {
+    "events": [
+      {
+        "eventId": "E0",
+        "proseHash": "2165076e5b3d88eef4ba5f00e37b67934740de47acc211b1a54325f29aabc8f8",
+        "analysisHash": "58b27ccbe27b82d3ad02bcedf9e013bb3a126dc55785ae887bbf1c73700ebf19",
+        "promptHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "eventId": "E1",
+        "proseHash": "b4e579bebd345f5c1f33a94966f0abc2c2b9afb1afe99f67a15b6775aa02f264",
+        "analysisHash": "b80ed3274ac1eb06fc14b608072ae20e6ea497be428c45542ed8c108392a89f6",
+        "promptHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "eventId": "E2",
+        "proseHash": "7a7e43c2cf16d1a4a45226ae2304546a0105c419178fd17d5523cbca2731577b",
+        "analysisHash": "ae2006a532bc258769edb270103b772d99ec1774ffc50c7cb5d8ae9c4048d696",
+        "promptHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "eventId": "E3",
+        "proseHash": "2ee33c2dfabd350d5df0c3ca8a4f1ba08d0bd0478b24f50f6223e0a7eb52c2c6",
+        "analysisHash": "c51e58401d78ea35f615bf7316707a2f3f79a93ff2928f40b39939612b6c38f1",
+        "promptHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "eventId": "E4",
+        "proseHash": "f1875c97075d9c6fb05816877e87e5548a6e55869126a23b2d151844b7aa4c1b",
+        "analysisHash": "e2c4ef087e35f187ab453adc9a77a75286bc582cd37088c577f5b1e019e91ac5",
+        "promptHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "eventId": "E5",
+        "proseHash": "8e49f8609ff3e9efe721e50f670f690c53745106114b9bec52f37c93babebabd",
+        "analysisHash": "76b2c198bb608bcf4d7fdc9ee5d78e6c71d1b81f6b705cf4e5bb212bf8acae3f",
+        "promptHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      },
+      {
+        "eventId": "E6",
+        "proseHash": "4f1bc238edd4d3f016aa7e15c2c525233c6e21335f31f9b98dbd209f5c6f3d6c",
+        "analysisHash": "f03899977876b018cd72344a12c538036f1068cd3e0f09cedccbae257c676141",
+        "promptHash": "0000000000000000000000000000000000000000000000000000000000000000"
+      }
+    ],
+    "allUnique": true
+  },
+  "generatedAt": "2026-07-21T06:32:48.487Z",
+  "reviewStatus": "approved"
+}

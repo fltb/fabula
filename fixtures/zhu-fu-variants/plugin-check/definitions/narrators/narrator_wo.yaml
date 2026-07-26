@@ -1,0 +1,8 @@
+id: narrator_wo
+type: retrospective_entity
+access: full
+assertion: constrained
+truth: limited_knowledge
+fidelity: reliable
+sincerity: sincere
+knowledgeBoundary: narrator_wo_present_day_knowledge

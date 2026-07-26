@@ -35,9 +35,9 @@ import type { StatusReport } from '@novalistically/core';
 // mcp_nova_status — Full status report
 // ============================================================================
 
-export function mcpNovaStatus(projectPath: string): StatusReport {
+export async function mcpNovaStatus(projectPath: string): Promise<StatusReport> {
   const status = getProjectStatus(projectPath);
-  const { iss, results: validationResults } = validateNovel(projectPath);
+  const { iss, results: validationResults } = await validateNovel(projectPath);
 
   // Collect all L1 issues from validateNovel
   const l1Issues: ValidationIssue[] = [];
@@ -115,11 +115,11 @@ export function mcpNovaStatus(projectPath: string): StatusReport {
 // mcp_nova_validate — Validate project or specific event
 // ============================================================================
 
-export function mcpNovaValidate(
+export async function mcpNovaValidate(
   projectPath: string,
   eventId?: string,
-): { errors: ValidationIssue[]; warnings: ValidationIssue[] } {
-  const result = validateNovel(projectPath);
+): Promise<{ errors: ValidationIssue[]; warnings: ValidationIssue[] }> {
+  const result = await validateNovel(projectPath);
 
   if (eventId) {
     const eventResult = result.results.get(eventId);
@@ -140,8 +140,8 @@ export function mcpNovaValidate(
 // mcp_nova_iss — Get ISS score
 // ============================================================================
 
-export function mcpNovaIss(projectPath: string) {
-  const result = validateNovel(projectPath);
+export async function mcpNovaIss(projectPath: string) {
+  const result = await validateNovel(projectPath);
   return { iss: result.iss };
 }
 

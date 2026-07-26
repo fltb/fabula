@@ -202,10 +202,10 @@ program
   .description('Run all validators against the project')
   .option('--strict', 'Enforce strict ISS thresholds')
   .option('--event <eventId>', 'Validate a specific event only')
-  .action((options: { strict?: boolean; event?: string }) => {
+  .action(async (options: { strict?: boolean; event?: string }) => {
     const projectDir = ensureProjectDir();
 
-    const result = validateNovel(projectDir);
+    const result = await validateNovel(projectDir);
 
     if (options.event) {
       const vr = result.results.get(options.event);
@@ -234,6 +234,7 @@ program
     console.log(`  Errors:   ${totalErrors}`);
     console.log(`  Warnings: ${totalWarnings}`);
     console.log(totalErrors === 0 ? '✅ All passed' : '❌ Has errors');
+    if (totalErrors > 0) process.exitCode = 1;
 
     if (options.strict) {
       const allGaps = result.iss.dimensions.flatMap((d) => d.gaps);
@@ -246,9 +247,9 @@ program
     }
   });
 
-function printValidationResult(result: { errors: Array<{ message: string }>; warnings: Array<{ message: string }>; infos: Array<{ message: string }>; passed: boolean }) {
+function printValidationResult(result: { errors: Array<{ message: string; validator?: string }>; warnings: Array<{ message: string; validator?: string }>; infos: Array<{ message: string }>; passed: boolean }) {
   for (const err of result.errors) {
-    console.log(`  ❌ ERROR: ${err.message}`);
+    console.log(`  ❌ ERROR${err.validator ? ` [${err.validator}]` : ''}: ${err.message}`);
   }
   for (const warn of result.warnings) {
     console.log(`  ⚠️  WARNING: ${warn.message}`);

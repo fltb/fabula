@@ -1,0 +1,165 @@
+{
+  "prose": "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的面，对鲁四老爷说：\"祥林嫂怎么这样了？倒不如那时不留她。\"声音不高，却像铁器刮过石面。鲁四老爷没有回答，只捻着胡须，眼睛看着《近思录》上的字，仿佛什么也没听见。\n\n但祥林嫂还是被打发走了。怎么走的，我不清楚。大约是四婶给了她几文钱，说了几句什么话，她就走了。没有吵闹，没有哭诉，甚至没有一声谢——她那时已经不会谢了。她是从四叔家出去就成了乞丐，还是先到卫老婆子家去，又被送了出来？我不知道。没有人知道。她在鲁镇就像一滴水消失在沙地里，连个印记也没有。\n\n再见到她，是在镇东头的河边。\n\n那是一个冬天的下午，风不大，但冷得像刀子。我正要到镇外去，远远看见一个人影，蜷在河岸的枯柳下。走近了，才认出是她。她的头发已经全白了，不是那种老年人的银白，而是灰败的、黄中带黑的白，像经了霜的败草。脸是黄中带黑的，木刻似的，没有一丝活人的表情。最可怕的是她的眼睛——眼珠间或一轮，证明她还算是个活物。她手里拄着一根开裂的竹竿，下端已经劈开了；另一只手挎着个竹篮，篮底铺着几片破布，放着个破碗。碗里空空的。她看见我，还是认得的，嘴唇动了动，似乎想说什么，却没有声音。我避开她的目光，快步走了过去。那时我还不知道，那就是我最后一次见到活着的她。\n\n当天夜里，或者第二天——我不确切知道——她死了。我是听鲁四老爷家的短工说的。那短工在灶屋里，一边喝汤一边说：\"怎么死的？还不是穷死的？\"语气平淡，像是在说一件再寻常不过的事。鲁四老爷在旁边听见了，皱了皱眉，说了一句：\"谬种。\"\n\n她的尸体不知正躺在哪里。也许是镇东的河岸边，也许是哪座破庙的墙根下，也许就扔在镇外的乱葬岗上。没有人去收殓，没有人去祭奠，甚至没有人去过问。她就这样消失了，就像她从未存在过一样。\n\n而第二天清晨，鲁镇的祝福大典照常举行。\n\n天色还没有大亮，爆竹声就响了起来，连绵不断，像是一条永不停息的河流。家家户户点起了香烛，在天地桌上的百果、鱼肉、纸马面前，恭恭敬敬地磕头礼拜。爆竹的火药味弥漫在寒冷的空气里，混着焚香的气息，竟有了几分暖意。鲁四老爷穿着崭新的长袍马褂，领着全家老小，在堂前跪拜，脸色庄重而满足。四婶也换了新衣，脸上的皱纹似乎都舒展开了。祝福大典上的每个细节都一丝不苟——上香，奠酒，献祝，焚纸，每一个动作都合乎礼法，每一个仪式都圆满无缺。\n\n然后爆竹声更加密集了，天地间仿佛都在震动。在这震耳欲聋的声响里，我忽然想到，那些爆竹的碎片，那些焚化的纸灰，会不会飘到镇东的河边，飘到那具无人问津的尸身上？没有人知道，也没有人在乎。\n\n天空渐渐亮了，紫色的云彩被爆竹的火光染成了绯红。天地圣众想必已经降临了吧？他们享用着各家各户的祭品，喝得醉醺醺的，预备给鲁镇的人们以无限的幸福。\n\n无限的幸福。",
+  "analysis": {
+    "eventId": "E6",
+    "analysis": {
+      "postconditions": {
+        "covered": [
+          "xianglins_wife.location",
+          "xianglins_wife.status",
+          "xianglins_wife.work_capability",
+          "xianglins_wife.appearance",
+          "xianglins_wife.social_status",
+          "fourth_aunt.attitude_toward_xianglins_wife"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "四婶的声音'像铁器刮过石面'。",
+          "severity": "minor"
+        },
+        {
+          "detail": "火药的碎片可能会飘到她的尸体上。",
+          "severity": "minor"
+        }
+      ],
+      "quality": {
+        "proseScore": 9,
+        "maxScore": 10,
+        "strengths": [
+          "Consistent and evocative first-person narration",
+          "Powerful imagery（如火药碎片、冰河）",
+          "Effective irony in the contrast between blessing ceremony and her death"
+        ],
+        "weaknesses": [
+          "Some speculative passages may slightly reduce narrative certainty"
+        ],
+        "estimatedWordCount": 1000
+      },
+      "threadProgressAchieved": [
+        "T1",
+        "T3",
+        "T4"
+      ],
+      "foreshadowingDeployed": [],
+      "narrativeChecks": [
+        {
+          "entityId": "scene",
+          "attribute": "time_period",
+          "hint": "The story time is new_year_eve, with the next morning being the blessing.",
+          "evidence": "当天夜里，或者第二天——我不确切知道——她死了。而第二天清晨，鲁镇的祝福大典照常举行。",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator",
+          "attribute": "voice_formality",
+          "hint": "First person, educated, introspective.",
+          "evidence": "我不知道。没有人知道。我避开她的目光。",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "attribute": "character_state",
+          "hint": "She is in a broken spiritual state and later dead.",
+          "evidence": "她那时已经不会谢了。她的死被短工提及。",
+          "matchLevel": "exact"
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "xianglins_wife",
+          "feature": "hair",
+          "declared": "white",
+          "evidence": "头发已经全白了",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "face",
+          "declared": "yellow_black_wooden",
+          "evidence": "脸是黄中带黑的，木刻似的，没有一丝活人的表情",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "eyes",
+          "declared": "occasionally_move",
+          "evidence": "眼珠间或一轮",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xianglins_wife",
+          "feature": "belongings",
+          "declared": "bamboo_basket_broken_bowl_cracked_stick",
+          "evidence": "竹篮破碗开裂的竹竿",
+          "matchLevel": "exact"
+        }
+      ],
+      "characterReferences": [
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她"
+          ]
+        },
+        {
+          "entityId": "fourth_aunt",
+          "namesUsed": [
+            "四婶",
+            "她"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "鲁四老爷",
+            "他"
+          ]
+        }
+      ],
+      "tenseDetected": "past",
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": true
+      },
+      "ruleChecks": [
+        {
+          "ruleId": "widow_purity",
+          "violated": false,
+          "evidence": "鲁四老爷在她死后称她为'谬种'，强化了规矩",
+          "severity": "minor"
+        }
+      ],
+      "knowledgeChecks": []
+    }
+  },
+  "metadata": {
+    "eventId": "E6",
+    "generatedAt": "2026-07-18T07:02:42.233Z",
+    "attempts": 1,
+    "errors": [],
+    "provider": "mock-pass2",
+    "model": "mock-stage1",
+    "seed": 42,
+    "promptVersion": "stage1-v1",
+    "promptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "analysisSchemaVersion": 1,
+    "fixtureFormatVersion": 1,
+    "reviewStatus": "approved"
+  }
+}

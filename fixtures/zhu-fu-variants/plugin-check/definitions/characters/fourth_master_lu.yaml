@@ -1,0 +1,32 @@
+id: fourth_master_lu
+name: "鲁四老爷"
+type: feudal_landlord
+archetype: patriarch
+role: antagonist
+description: "鲁四老爷是鲁镇的地主乡绅，一个'讲理学的老监生'——读过书但未能考取更高功名，以理学标榜自己。他比先前并没有什么大改变，单是老了些，见面先是寒暄，之后便大骂其新党，骂的还是康有为——一个已经过时的政治符号，揭示出他的保守与闭塞。他的书房里挂着'事理通达心气和平'的对联，案头摆着未必完全的《康熙字典》、一部《近思录集注》和一部《四书衬》——这些半吊子的理学摆设恰好暴露了他表面崇儒、内心冷酷的虚伪。他对祥林嫂的态度从始至终是厌恶的：第一次见面皱眉（因为她是寡妇），祭祀不许她沾手（她是'败坏风俗'的），她死了骂她是'谬种'（死在祝福时节晦气）。"
+appearance: "一个上了年纪的老监生，穿着传统士绅的长衫。面容威严，眉头常锁。家中陈设半旧半新，书房里挂着'事理通达心气和平'的对联。"
+aliases:
+  - "四叔"
+  - "鲁四老爷"
+  - "四老爷"
+  - "讲理学的老监生"
+gender: "男"
+age: "约五十至六十岁"
+profession: "地主士绅"
+traits:
+  - conservative
+  - hypocritical
+  - patriarchal
+  - rigid
+  - superstitious
+  - class_conscious
+  - cruel_beneath_decorum
+  - anti_reform
+initialState:
+  location: luchen_town
+  status: alive
+  condition: well
+  attitude_toward_xianglins_wife: tolerant_but_suspicious
+voiceNotes: "说话带着士绅的威严和训诫腔调。骂人时语气短促、不容置疑——'不早不迟，偏偏要在这时候——这就可见是一个谬种！'他的话语是权威的、判决式的，不需要论证和解释。对新党（康有为）的咒骂是习惯性的，近乎口头禅，显示他的保守已内化为本能。"
+backstory: "鲁四老爷是鲁镇本地的大户，一个以理学自居但未通过科举考试的读书人。他维持着传统士绅的生活方式和道德标准，是鲁镇事实上的社会权威。他对一切与新学、改革有关的东西都本能地排斥。辛亥革命虽然推翻了帝制，但像他这样的地方士绅依然是农村的统治力量。"
+knownSecrets: []

@@ -1,0 +1,12 @@
+name: valence-guard
+version: 0.1.0
+priority: 10
+provides: []
+requires: []
+conflicts: []
+authority:
+  dimensions: [emotional_valence]
+  exclusive: false
+observes:
+  eventTypes: [scene]
+  stateDomains: []

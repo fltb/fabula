@@ -45,6 +45,8 @@ import { TraceCollector } from './observability/trace.ts';
 import { TypedEventBus } from './event-bus.ts';
 import { DEFAULT_CONFIG } from './config/index.js';
 import { sanitizeError } from './errors.ts';
+import { PluginLoader, ValidatorRegistry, PluginHooksManager } from './plugin/index.js';
+import type { PluginContext, ProviderRegistry } from './plugin/types.js';
 import { LogicalDisclosureSummaryCompiler, SurfaceReferenceExtractor } from './summary/index.ts';
 import type {
   AnalysisResult,
@@ -236,6 +238,24 @@ export function initializeProject(projectDir: string, storage?: Storage): {
 
   const registry = new InMemoryEntityRegistry();
   registry.load(projectDir);
+  // Auto-register unresolved event.introduces entries so introduced entities
+  // that are not yet defined in definition files are still resolvable.
+  for (const ev of events) {
+    if (!ev.introduces) continue;
+    for (const intro of ev.introduces) {
+      if (!registry.resolve(intro.id)) {
+        registry.register({
+          id: intro.id,
+          kind: intro.type,
+          name: intro.id,
+          definitionFile: `definitions/introduces/${intro.id}.yaml`,
+          lifecycle: 'active',
+          typeRef: { typeId: intro.type, schemaVersion: 1 },
+          state: { ...intro.initialState },
+        });
+      }
+    }
+  }
   const stateManager = new StateManager(path.join(projectDir, data.config?.outputDir ?? DEFAULT_CONFIG.outputDir, 'snapshots'));
   stateManager.initialize(events);
   const state: WorldState = {
@@ -335,6 +355,67 @@ async function createProvider(
 }
 
 // ============================================================================
+// Plugin initialization helper
+// ============================================================================
+
+interface InitializePluginsResult {
+  pluginHooksManager?: PluginHooksManager;
+  validatorRegistry?: ValidatorRegistry;
+  conflictErrors: string[];
+}
+
+/**
+ * Initialize plugins for a project: load manifests, detect conflicts,
+ * build ValidatorRegistry, wire PluginHooksManager, and register hooks.
+ * Returns early (no-op) when plugins are not enabled.
+ */
+async function initializePlugins(
+  projectDir: string,
+  storage: Storage,
+  logger: Logger,
+  config?: { plugins?: { enabled: boolean; directory?: string } },
+): Promise<InitializePluginsResult> {
+  if (!config?.plugins?.enabled) {
+    return { conflictErrors: [] };
+  }
+
+  const pluginLoader = new PluginLoader(storage);
+  const hooks = await pluginLoader.loadFromDirectory(
+    path.join(projectDir, config.plugins.directory ?? 'plugins'),
+  );
+
+  // Detect and report conflicts before any plugin registration
+  const conflicts = pluginLoader.detectConflicts();
+  if (conflicts.length > 0) {
+    return {
+      conflictErrors: conflicts.map(
+        (c) => `Plugin conflict: ${c.pluginA} vs ${c.pluginB} — ${c.reason}`,
+      ),
+    };
+  }
+
+  const validatorRegistry = new ValidatorRegistry();
+  // Provider registry map — retained for future provider resolution flow
+  const providers = new Map<string, LLMProvider>();
+  const providerRegistry: ProviderRegistry = {
+    register(name: string, provider: LLMProvider): void {
+      providers.set(name, provider);
+    },
+  };
+
+  const pluginContext: PluginContext = { projectDir, storage, log: logger };
+  const hooksManager = new PluginHooksManager(pluginContext, validatorRegistry, providerRegistry);
+
+  for (const hook of hooks) {
+    hooksManager.register(hook);
+  }
+
+  await hooksManager.initialize();
+
+  return { pluginHooksManager: hooksManager, validatorRegistry, conflictErrors: [] };
+}
+
+// ============================================================================
 // 1. renderNovel — Full LLM rendering pipeline
 // ============================================================================
 
@@ -363,6 +444,14 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
 
   const { data, events, registry } = initializeProject(projectDir);
   const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
+
+  // Initialize plugins (if configured)
+  const { pluginHooksManager, validatorRegistry, conflictErrors } = await initializePlugins(
+    projectDir, storage, eventLogger, data.config ?? undefined,
+  );
+  if (conflictErrors.length > 0) {
+    return { results: [], errors: conflictErrors };
+  }
   const anchors = new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day]));
   const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, branchPath, initialThreads);
   const renderEvents = (!eventId || eventId === 'all'
@@ -379,6 +468,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     style: 'literary',
     narrativeRules: [],
     thematicIntent: data.config?.ideaIR?.thematicIntent,
+    synopsis: data.config?.synopsis,
   };
 
   // ── Dry run ───────────────────────────────────────────────────────
@@ -438,13 +528,14 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     model: resolvedModel,
     cacheDir,
     storage,
-    aggregator: new ResultAggregator(undefined, undefined, undefined, traceCollector),
+    aggregator: new ResultAggregator(undefined, validatorRegistry?.validators, undefined, traceCollector),
     logger: eventLogger,
     traceCollector,
     eventBus,
     maxRounds: opts.maxRounds,
     concurrency: opts.concurrency,
     language: data.config?.defaultLanguage ?? 'en',
+    pluginHooksManager,
   });
 
   // Initialize cache
@@ -466,11 +557,15 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     // Full DiscourseState wiring requires the planned discourse ledger, which
     // is loaded once the discourse system is fully integrated. For now the
     // summarizer is available and ready — wire it with compile options.
+    const emotionalBeat = data.config?.ideaIR?.emotionalArc?.emotionalBeats
+      ?.find((b) => b.position === ev.id || b.position === ev.arcPosition)
+      ?.emotion;
     const pkg = compiler.compile(ev, beforeState, registry, {
       systemContext: sysCtx,
       previousSceneSummary: previousSummary ?? '',
       narratorProfiles: data.narratorProfiles,
       discourseLedger: data.discourseLedger,
+      emotionalBeat,
     });
     // After rendering this scene, the surface extractor can produce a
     // reference packet from the accepted prose. Stash the summary for the
@@ -601,25 +696,53 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
  * Internally: EntityMapper → InMemoryEntityRegistry → StateManager
  * → ResultAggregator → calculateISS.
  */
-export function validateNovel(
+export async function validateNovel(
   projectDir: string,
   overrides?: Record<string, 'off' | 'warning' | 'error'>,
-): {
+): Promise<{
   passed: boolean;
   results: Map<string, ValidationResult>;
   iss: ISSSnapshot;
-} {
-  const { data, events, registry } = initializeProject(projectDir);
+}> {
+  const storage = new FsStorage();
+  const validateLogger = new Logger(new LevelFilterTransport(new JsonlLogTransport()), { module: 'validate' });
+  const { data, events, registry } = initializeProject(projectDir, storage);
 
   // Compile story boundaries for per-event pre-state
   const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
+
+  // Initialize plugins (if configured)
+  const { validatorRegistry, conflictErrors: pluginConflictErrors } = await initializePlugins(
+    projectDir, storage, validateLogger, data.config ?? undefined,
+  );
+
   const anchors = new Map((data.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day]));
   const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
 
-  // Run validators with per-event pre-state
-  const aggregator = new ResultAggregator();
+  // Run validators with per-event pre-state and plugin validators
+  const aggregator = new ResultAggregator(undefined, validatorRegistry?.validators);
   const mergedOverrides = overrides ?? data.config?.validatorOverrides;
   const validationResults = aggregator.validateAll(events, boundaries.finalState, registry, mergedOverrides, boundaries.stateBeforeByEventId);
+
+  // Add plugin conflict as synthetic validation failure if present
+  if (pluginConflictErrors.length > 0) {
+    const syntheticResult: ValidationResult = {
+      passed: false,
+      errors: pluginConflictErrors.map((msg) => ({
+        validator: 'plugin-loader',
+        severity: 'error' as const,
+        event: '__plugin__',
+        entity: 'system',
+        message: msg,
+        fixSuggestion: 'Resolve plugin conflicts (e.g., remove duplicate plugins).',
+        fixAction: 'manual' as const,
+        fixTarget: { file: '' },
+      })),
+      warnings: [],
+      infos: [],
+    };
+    validationResults.set('__plugin__', syntheticResult);
+  }
 
   // Determine overall pass/fail
   let passed = true;

@@ -51,5 +51,12 @@ export const projectConfigSchema = z
       .strict()
       .optional(),
     ideaIR: ideaIRSchema.optional(),
+    plugins: z
+      .object({
+        enabled: z.boolean(),
+        directory: z.string().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();

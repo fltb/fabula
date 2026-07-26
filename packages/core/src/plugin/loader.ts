@@ -6,9 +6,11 @@ import { logger } from '../observability/logger.ts';
 import * as path from 'node:path';
 import * as yaml from 'yaml';
 import type { PluginManifest, ArbitrationStrategy } from '../types/index.js';
+import { pathToFileURL } from 'node:url';
 import type { ConflictReport, ResolutionResult } from './types.js';
 import type { Storage } from '../storage/types.js';
 import { detectConflicts } from './conflicts.js';
+import type { PluginHooks } from './types.js';
 import { resolveConflict } from './resolve.js';
 
 export class PluginLoader {
@@ -63,11 +65,12 @@ export class PluginLoader {
     return resolveConflict(this.plugins, pluginA, pluginB, strategy);
   }
 
-  /** Load plugins from a directory */
-  async loadFromDirectory(dirPath: string): Promise<void> {
+  /** Load plugins from a directory, returning collected lifecycle hooks */
+  async loadFromDirectory(dirPath: string): Promise<PluginHooks[]> {
+    const hooks: PluginHooks[] = [];
     try {
       const entries = this.storage.list(dirPath);
-      if (!entries || entries.length === 0) return;
+      if (!entries || entries.length === 0) return hooks;
 
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
@@ -86,6 +89,20 @@ export class PluginLoader {
 
           this.register(manifest);
           logger.info('Plugin loaded', { module: 'plugin', version: manifest.version });
+
+          // Attempt to load plugin code (optional — index.js may not exist)
+          const indexPath = path.join(pluginDir, 'index.js');
+          const indexContent = this.storage.readOptional(indexPath);
+          if (indexContent !== null) {
+            try {
+              const mod = await import(pathToFileURL(indexPath).href);
+              if (mod.hooks && typeof mod.hooks === 'object' && mod.hooks.name) {
+                hooks.push(mod.hooks as PluginHooks);
+              }
+            } catch (importErr) {
+              logger.warn('Plugin code failed to load', { module: 'plugin', path: indexPath, error: String(importErr) });
+            }
+          }
         } catch {
           logger.warn('Plugin failed to load', { module: 'plugin', path: pluginDir });
         }
@@ -96,5 +113,6 @@ export class PluginLoader {
         throw err;
       }
     }
+    return hooks;
   }
 }

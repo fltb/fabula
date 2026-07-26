@@ -64,4 +64,8 @@ export interface ProjectConfig {
   traceLevel?: 'off' | 'basic' | 'detailed';
   cacheEnabled?: boolean;
   defaultSceneTextTarget?: number;
+  plugins?: {
+    enabled: boolean;
+    directory?: string;
+  };
 }

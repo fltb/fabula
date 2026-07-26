@@ -1,0 +1,150 @@
+event: E0
+title: "河边相遇——灵魂之问"
+narrativeOrder: 1
+sceneType: linear
+storyTime: new_year_eve
+narrationTime: new_year_eve
+tense: past
+discourseMode: reflection
+arcPosition: opening
+emotionalValence: "unsettling_encounter_guilt"
+conflictType: "person_vs_self"
+pov:
+  character: narrator
+  type: first_person
+narratorProfileRef: narrator_wo
+sceneBrief: "旧历年底，叙述者'我'回到故乡鲁镇，暂住在四叔鲁四老爷家。除夕前日，'我'在镇东头河边遇到沦为乞丐的祥林嫂——她头发全白，脸黄中带黑，木刻似的神情，只有眼珠间或一轮表明她还活着。她突然拦住'我'，用发亮的眼睛盯着'我'，问了三个关于灵魂和地狱的问题：人死了有没有灵魂？有没有地狱？死去的家人能不能见面？'我'在惊慌中给出含糊的回答——'也许有罢……说不清'——然后匆匆逃回四叔家，心中惴惴不安。"
+preconditions:
+  - entity: narrator
+    attribute: location
+    value: luchen_town
+  - entity: narrator
+    attribute: purpose
+    value: new_year_visit
+  - entity: fourth_master_lu
+    attribute: location
+    value: luchen_town
+  - entity: xianglins_wife
+    attribute: status
+    value: beggar
+expectedPostconditions:
+  - entity: narrator
+    attribute: knowledge
+    value: encountered_xianglins_wife
+    confidence: 1.0
+  - entity: narrator
+    attribute: emotionalState
+    value: guilty_uneasy
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: spiritual_state
+    narrativeHint: "她问灵魂问题的时刻——眼神突然发亮——是她一生中唯一主动探寻的时刻。她既希望有灵魂（能见到阿毛），又希望没有灵魂（不会被锯成两半）。她陷入了'希望其有，又希望其无'的终极困境。"
+    confidence: 1.0
+  - entity: narrator
+    attribute: knowledge_of_xianglins_wife
+    value: saw_her_as_beggar
+    confidence: 1.0
+  - entity: narrator
+    attribute: location
+    value: fourth_master_lu_house
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: emotionalState
+    narrativeHint: "她问灵魂时是'疑惑'的——她不再只是被动承受命运的人，她开始怀疑整套信仰体系的真实性。然而'我'的含糊回答让她失去了最后的确证机会。"
+    confidence: 0.9
+threadProgress:
+  - thread: T2
+    advancement: "祥林嫂的灵魂之问开启了故事的核心主题。她的三连问——灵魂？地狱？死去的家人能否见面？——表明她内心的终极困境：希望与恐惧并存。"
+    progressAfter: 20
+    progressTotal: 100
+  - thread: T3
+    advancement: "叙述者'我'面对祥林嫂的问题选择了逃避——'说不清'。'我'代表知识分子在目睹苦难时的道德软弱。"
+    progressAfter: 15
+    progressTotal: 100
+  - thread: T4
+    advancement: "外面的祝福忙乱与河边凄凉相遇形成对比——全镇人都在忙着迎福神，而祥林嫂正在走向死亡。"
+    progressAfter: 10
+    progressTotal: 100
+foreshadowing:
+  - id: soul_question_unresolved
+    hint: "叙述者'我'对祥林嫂的含糊回答——'说不清'——将在后面成为他心中不安的来源，也是他书写她一生的动机之一。"
+    targetRevealChapter: 1
+    thread: T2
+  - id: her_death_imminent
+    hint: "祥林嫂的乞丐形容——'纯乎是一个乞丐了'——预示她活不过这个除夕。她问灵魂问题不是哲学好奇，而是临终前的最后探寻。"
+    targetRevealChapter: 1
+    thread: T1
+relationshipEffects:
+  - participants:
+      - narrator
+      - xianglins_wife
+    effect: establish
+    direction: stranger_encounter_turning_into_moral_test
+    newState:
+      type: witness_subject
+      intensity: 60
+ruleEffects: []
+introduces:
+  - type: location
+    id: luchen_town
+    initialState:
+      status: active
+  - type: character
+    id: xianglins_wife
+    initialState:
+      location: luchen_east_riverbank
+      status: beggar
+      condition: dying
+      appearance: white_hair_haggard_wooden_face
+      emotionalState: desperate_seeking_answers
+  - type: character
+    id: narrator
+    initialState:
+      location: luchen_town
+      status: alive
+      condition: well
+      emotionalState: uneasy
+styleGuidance:
+  tone: "冷峻、不安、深冬的沉闷"
+  targetWordCount: 800
+  atmosphere: "灰白色的沉重晚云，满天飞舞的雪花，爆竹的火药香——鲁镇的年终氛围与祥林嫂的凄凉形成对照。"
+  scenePacing: "缓慢铺陈→突然相遇→匆促逃离"
+  characterVoice:
+    narrator: "第一人称叙述，内省而犹豫。面对问题时语无伦次——'也许有罢——我想'、'说不清'。"
+    xianglins_wife: "单刀直入的三连问，不绕弯子。她已没有时间和精力客套——这是她人生最后的提问。"
+narrativeChecklist:
+  items:
+    - dimension: "对话个性"
+      description: "祥林嫂的三连问直接而急迫，'我'的回答含糊逃避——对话体现人物性格和关系张力"
+      required: true
+    - dimension: "反讽距离"
+      description: "全镇忙祝福与祥林嫂走向死亡形成叙事反讽"
+      required: true
+    - dimension: "心理描写"
+      description: "'我'的内心不安——'说不清'的自我欺骗"
+      required: false
+duration:
+  type: scene
+  storyDuration: "傍晚到入夜，约2小时"
+  narrativeLength: 800
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: homodiegetic
+anachrony:
+  type: analepsis
+  scope: internal
+  function: completing
+  distance: "叙述者'我'在回忆数年前回鲁镇的往事"
+
+sourceContext:
+  entries:
+    - excerpt: "她是五年前的花白的头发，即今已经全白，全不像四十上下的人；脸上瘦削不堪，黄中带黑，而且消尽了先前悲哀的神色，仿佛是木刻似的；只有那眼珠间或一轮，还可以表示她是一个活物。"
+      classification: STYLE
+      styleNote: "鲁迅的白描——用外貌的逐层剥落暗示内在生命力的消亡。'眼珠间或一轮'是唯一的生命证据，也是通往死亡的渐进。"
+    - excerpt: "'就是——'她走近两步，放低了声音，极秘密似的切切的说，'一个人死了之后，究竟有没有魂灵的？'"
+      classification: FACT
+    - excerpt: "'说不清'是一句极有用的话。不更事的勇敢的少年，往往敢于给人解决疑问……然而一用这说不清来作结束，便事事逍遥自在了。"
+      classification: STYLE
+      styleNote: "鲁迅的反讽叙事距离——'我'用'说不清'为道德逃避辩护，但叙述者反讽地暴露了这种自欺。"

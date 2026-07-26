@@ -1,0 +1,157 @@
+event: E1
+title: "死讯——谬种"
+narrativeOrder: 2
+sceneType: linear
+storyTime: new_year_eve + 1 hour
+narrationTime: new_year_eve
+tense: past
+discourseMode: exposition
+arcPosition: opening
+conflictType: "person_vs_society"
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "当天傍晚，'我'坐在四叔书房里越发不安，觉得自己的回答可能害了她。晚饭时四叔照例骂新党，但语气比平日更冷。从短工的简短回答中——'老了'（死了）、'什么时候？——昨天夜里，或者就是今天罢。——我说不清'、'怎么死的？——还不是穷死的？'——'我'得知祥林嫂已经死了。四叔的反应是一句咒骂：'不早不迟，偏偏要在这时候——这就可见是一个谬种！'晚饭沉闷地吃完后，'我'独自坐在灯下，外面的雪花声似乎更大了。'我'的心地渐渐轻松起来——但偶一想到她，又仿佛有些负疚。在孤灯下，'我'开始回想起她半生事迹的断片。"
+preconditions:
+  - entity: narrator
+    attribute: location
+    value: fourth_master_lu_house
+  - entity: narrator
+    attribute: knowledge
+    value: encountered_xianglins_wife
+  - entity: narrator
+    attribute: emotionalState
+    value: guilty_uneasy
+expectedPostconditions:
+  - entity: xianglins_wife
+    attribute: status
+    value: dead
+    confidence: 1.0
+  - entity: xianglins_wife
+    attribute: cause_of_death
+    value: poverty
+    confidence: 0.8
+  - entity: xianglins_wife
+    attribute: time_of_death
+    narrativeHint: "死于除夕夜或当天——'昨天夜里，或者就是今天罢。——我说不清'。死在祝福的最忙时刻，所以她被四叔骂为'谬种'。"
+    confidence: 1.0
+  - entity: narrator
+    attribute: emotionalState
+    value: guilt_easing
+    confidence: 1.0
+  - entity: fourth_master_lu
+    attribute: attitude_toward_xianglins_wife
+    value: disgusted
+    confidence: 1.0
+  - entity: narrator
+    attribute: purpose
+    value: recount_her_story
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "祥林嫂死了。死于贫穷。死在新年祝福的最忙时刻——她的死亡本身成了对祝福仪式的'污染'。"
+    progressAfter: 25
+    progressTotal: 100
+  - thread: T3
+    advancement: "短工对她死讯的漠然（'还不是穷死的？'）、四叔的咒骂（'谬种'）、'我'的渐轻松——三种反应共同展示了鲁镇人对一个底层女人之死的完全无感。"
+    progressAfter: 30
+    progressTotal: 100
+  - thread: T4
+    advancement: "她的死亡发生在祝福仪式的高潮时刻——四叔的咒骂体现了一个祝福活动对不洁者的彻底排斥。"
+    progressAfter: 20
+    progressTotal: 100
+foreshadowing:
+  - id: flashback_triggered
+    hint: "'我'在孤灯下的回忆——'先前所见所闻的她的半生事迹的断片，至此也联成一片了'——引发了从E2开始的完整倒叙。"
+    targetRevealChapter: 1
+    thread: T1
+relationshipEffects:
+  - participants:
+      - narrator
+      - xianglins_wife
+    effect: dissolve
+    direction: death_severs_possible_help
+    newState:
+      type: witness_subject_resolved_in_death
+      intensity: 80
+  - participants:
+      - fourth_master_lu
+      - xianglins_wife
+    effect: reinforce
+    direction: disgust_confirmed
+    newState:
+      type: deceased_nuisance
+      intensity: 90
+ruleEffects:
+  - rule: widow_purity
+    effect: reinforce
+    evidence: "鲁四老爷骂她'不早不迟，偏偏要在这时候——这就可见是一个谬种！'——死在祝福时节，她的死亡玷污了祝福仪式的纯洁。"
+styleGuidance:
+  tone: "沉闷、压抑、渐趋冷峻"
+  targetWordCount: 400
+  atmosphere: "书房里'我'独自坐在灯下，外面雪花簌簌声，满屋的寂静。晚云的消夜和爆竹声成为压抑的背景音。"
+  scenePacing: "从惴惴不安到得知死讯的震动，再到'心地渐渐轻松'的微妙转折——需展现'我'的道德回避机制。"
+  characterVoice:
+    narrator: "内省语气，从紧张到放松的道德曲线。'说不清'的余音在脑中回响。"
+duration:
+  type: scene
+  storyDuration: "傍晚晚餐时间，约1小时"
+  narrativeLength: 800
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: homodiegetic
+anachrony:
+  type: analepsis
+  scope: internal
+  function: completing
+  distance: "仍在同一除夕夜框架内"
+narrativeChecklist:
+  items:
+    - dimension: "对话个性"
+      description: "短工的简洁回答——'老了''穷死的'——三字一句，冷漠到极致"
+      required: true
+    - dimension: "反讽距离"
+      description: "四叔骂'谬种'与叙述者'舒畅起来'的并置——社会对个体死亡的系统性漠视"
+      required: true
+    - dimension: "孤独氛围"
+      description: "雪夜独坐灯下的内心独白——'无常打扫得干干净净'的冷抒情"
+      required: true
+    - dimension: "语言禁忌"
+      description: "祝福期间不可说'死'——'老了'替代'死了'的仪式性语言规则"
+      required: false
+sourceContext:
+  entries:
+    - excerpt: "'老了。''死了？'我的心突然紧缩，几乎跳起来……我也就镇定了自己"
+      classification: FACT
+    - excerpt: "'不早不迟，偏偏要在这时候——这就可见是一个谬种！'"
+      classification: FACT
+    - excerpt: "我独坐在发出黄光的菜油灯下，想，这百无聊赖的祥林嫂……现在总算被无常打扫得干干净净了。"
+      classification: STYLE
+      styleNote: "鲁迅的冷抒情——'无常打扫'是佛道混合修辞，'反而渐渐的舒畅起来'暴露了叙述者的自我麻醉。"
+greyLines:
+  - id: gl_snow
+    imagery: "雪与雪声"
+    nodes:
+      - eventId: E1
+        semanticAccumulation: "雪花瑟瑟有声——'我'独坐灯下听雪，祥林嫂的死被雪声覆盖，社会继续运转"
+        narrativeOrder: 2
+  - id: gl_firecracker
+    imagery: "爆竹与火药香"
+    nodes:
+      - eventId: E1
+        semanticAccumulation: "爆竹声作为祝福背景——与祥林嫂的死讯形成尖锐反差"
+        narrativeOrder: 2
+  - id: gl_lamp
+    imagery: "孤灯——孤独与确证"
+    nodes:
+      - eventId: E1
+        semanticAccumulation: "'我独坐在发出黄光的菜油灯下'——知识分子的独白时刻"
+        narrativeOrder: 2
+  - id: gl_unclear
+    imagery: "说不清——知识分子的道德逃逸"
+    nodes:
+      - eventId: E1
+        semanticAccumulation: "'我说不清'——短工回答祥林嫂何时死亡，同样使用'说不清'"
+        narrativeOrder: 2

@@ -54,6 +54,8 @@ export interface SystemContext {
   targetAudience?: string;
   /** Whole-work thematic intent (S7a Idea IR), when declared in nova.yaml */
   thematicIntent?: ThematicIntent;
+  /** Whole-work synopsis from nova.yaml, when declared */
+  synopsis?: string;
 }
 
 export interface SceneSpecification {
@@ -62,6 +64,12 @@ export interface SceneSpecification {
   povCharacter: string;
   conflict: string;
   expectedOutcome: string;
+  /** Emotional keynote for the scene (from event.emotionalValence) */
+  emotionalValence?: string;
+  /** Emotional beat from ideaIR.emotionalArc matching this event */
+  emotionalBeat?: string;
+  /** Free-form author notes passed verbatim to the Pass 1 prompt */
+  authorNotes?: string[];
 }
 
 export interface CharacterSnapshot {
@@ -78,7 +86,6 @@ export interface RelationshipContext {
   id: string;
   participants: [EntityId, EntityId];
   currentState: RelationshipState;
-  unresolvedTensions: string[];
 }
 
 export interface WorldFact {
@@ -90,7 +97,6 @@ export interface WorldFact {
 export interface KnowledgeBoundary {
   characterId: EntityId;
   knownFacts: string[];
-  unknownFacts: string[];
 }
 
 export interface ThreadStatus {

@@ -74,6 +74,23 @@ export class ContextAssembler {
     const characterSnapshots = this._buildCharacterSnapshots(
       event, entityRegistry, state, scores,
     );
+    // L3a: Merge resolvable on-screen cast characters not already selected
+    if (event.cast?.onScreen) {
+      for (const charId of event.cast.onScreen) {
+        if (characterSnapshots.some(cs => cs.id === charId)) continue;
+        const entity = entityRegistry.resolve(charId);
+        if (!entity || entity.kind !== 'character') continue;
+        characterSnapshots.push({
+          id: entity.id,
+          name: entity.name,
+          currentState: state.entities[entity.id] ?? entity.state,
+          traits: (entity.state['traits'] as string[]) ?? [],
+          voiceNotes: (entity.state['voice_notes'] as string) ?? '',
+          archetype: entity.state['archetype'] as string | undefined,
+          appearance: entity.state['appearance'] as Record<string, string> | undefined,
+        });
+      }
+    }
 
     // L4: Relationship Context
     const relationshipContext = this._buildRelationshipContext(
@@ -87,7 +104,7 @@ export class ContextAssembler {
     const knowledgeBoundary = this._buildKnowledgeBoundary(event, state);
 
     // Active Threads
-    const activeThreads = this._buildThreadStatus(state);
+    const activeThreads = this._buildThreadStatus(event, state);
 
     // Active World Rules
     const activeRules = this._buildActiveRules(state, entityRegistry);
@@ -128,6 +145,8 @@ export class ContextAssembler {
       expectedOutcome: event.postconditions
         .map((pc) => `${pc.entityId}.${pc.attribute} = ${pc.value}`)
         .join('; '),
+      emotionalValence: event.emotionalValence,
+      authorNotes: event.authorNotes,
     };
   }
 
@@ -211,7 +230,6 @@ export class ContextAssembler {
         // incompatible types. This cast bridges the legacy RelationshipContext API. Requires
         // either a data transformation or a type unification to eliminate.
         currentState: relData as unknown as RelationshipState,
-        unresolvedTensions: [],
       });
     }
 
@@ -248,19 +266,19 @@ export class ContextAssembler {
     return {
       characterId: povChar,
       knownFacts: charKnowledge?.knownFacts ?? [],
-      unknownFacts: [],
     };
   }
 
-  private _buildThreadStatus(state: WorldState): ThreadStatus[] {
+  private _buildThreadStatus(event: NarrativeEvent, state: WorldState): ThreadStatus[] {
     return Object.entries(state.threads).map(([id, data]) => {
       const goals = Object.values(data.goalStates);
+      const progressEntry = event.threadProgress.find(tp => tp.thread === id);
       return {
         id,
         name: id,
         progress: goals.filter((s) => s === 'achieved').length,
         total: goals.length,
-        description: '',
+        description: progressEntry?.advancement ?? '',
       };
     });
   }

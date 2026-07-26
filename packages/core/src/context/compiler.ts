@@ -39,6 +39,8 @@ export class ContextCompiler {
       discourseLedger?: PlannedDiscourseLedger | null;
       /** Discourse-ledger branch label to replay; single-branch projects use 'main'. */
       discourseBranch?: string;
+      /** Emotional beat to annotate the compiled scene spec */
+      emotionalBeat?: string;
     },
   ): ContextPackage {
     const pkg = this.assembler.assemble(
@@ -50,6 +52,10 @@ export class ContextCompiler {
       options?.systemContext,
       options?.activeThreadIds,
     );
+    // Apply emotional beat from compile options
+    if (options?.emotionalBeat) {
+      pkg.sceneSpec.emotionalBeat = options.emotionalBeat;
+    }
     // S6c: resolve the event's narrator profile reference, if any
     if (event.narratorProfileRef && options?.narratorProfiles) {
       pkg.narratorProfile = options.narratorProfiles[event.narratorProfileRef];

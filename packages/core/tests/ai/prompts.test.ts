@@ -35,7 +35,6 @@ function minimalContext(): ContextPackage {
     knowledgeBoundary: {
       characterId: 'protagonist_001',
       knownFacts: [],
-      unknownFacts: [],
     },
     activeThreads: [],
     previousSceneSummary: '',

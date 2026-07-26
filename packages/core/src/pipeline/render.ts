@@ -295,6 +295,9 @@ export class RenderPipeline {
       const assembled = assembler.assemble(context, {
         targetLengthWords: this.targetLengthWords,
         styleGuidance: job.event.styleGuidance,
+        characterVoiceNotes: job.event.styleGuidance?.characterVoice && Object.keys(job.event.styleGuidance.characterVoice).length > 0
+          ? Object.entries(job.event.styleGuidance.characterVoice).map(([id, note]) => `${id}: ${note}`).join('; ')
+          : undefined,
         language: this.language,
         referenceExample: this.referenceExample,
         retryGuidance: attempts > 1 && previousErrorMessages.length > 0

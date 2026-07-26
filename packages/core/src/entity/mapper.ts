@@ -275,6 +275,9 @@ export class EntityMapper {
       anachrony: eventFile.anachrony,
       focalization: eventFile.focalization,
       narratorProfileRef: eventFile.narratorProfileRef,
+      // Entity introduction + free-form author pass-through
+      introduces: eventFile.introduces,
+      authorNotes: eventFile.authorNotes,
     };
   }
 

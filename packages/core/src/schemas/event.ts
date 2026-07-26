@@ -51,6 +51,7 @@ export const eventFileSchema = z
     relationshipEffects: z.array(relationshipChangeSchema).optional(),
     ruleEffects: z.array(ruleEffectSchema).optional(),
     introduces: z.array(introduceEntrySchema).optional(),
+    authorNotes: z.array(z.string()).optional(),
     targetAudience: z.string().optional(),
     cast: z.object({
       onScreen: z.array(z.string()),

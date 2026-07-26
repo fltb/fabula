@@ -80,6 +80,14 @@ export interface NarrativeEvent {
   };
   /** Modern novel structural fields — A-class validators + B-class effects (S3) */
   modernNovel?: ModernNovelConfig;
+  /** Entities introduced by this event (forwarded from EventFile) */
+  introduces?: Array<{
+    type: 'character' | 'location' | 'item' | 'concept';
+    id: string;
+    initialState: Record<string, unknown>;
+  }>;
+  /** Free-form author notes passed verbatim to the Pass 1 prompt (pure pass-through) */
+  authorNotes?: string[];
 }
 
 export interface ThreadProgressEntry {
@@ -285,4 +293,6 @@ export interface EventFile {
   };
   /** Modern novel structural fields — A-class validators + B-class effects (S3) */
   modernNovel?: ModernNovelConfig;
+  /** Free-form author notes passed verbatim to the Pass 1 prompt (pure pass-through) */
+  authorNotes?: string[];
 }

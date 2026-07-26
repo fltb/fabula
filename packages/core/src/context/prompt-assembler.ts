@@ -84,6 +84,13 @@ export class PromptAssembler {
         const unit = isCJK ? '字' : 'words';
         parts.push(`- This scene should be approximately ${sg.targetWordCount} ${unit} long. This is a firm target — do not significantly under- or over-write.`);
       }
+      if (sg.avoid) parts.push(`- Avoid: ${sg.avoid}.`);
+    }
+    if (context.sceneSpec?.emotionalValence) {
+      parts.push(`- Emotional keynote: ${context.sceneSpec.emotionalValence}.`);
+    }
+    if (context.sceneSpec?.emotionalBeat) {
+      parts.push(`- Emotional beat: ${context.sceneSpec.emotionalBeat}.`);
     }
     if (options?.characterVoiceNotes) {
       parts.push(`- Character voice: ${options.characterVoiceNotes}`);
@@ -112,6 +119,12 @@ export class PromptAssembler {
     if (targetAudience) {
       parts.push(`- Target audience: ${targetAudience}. Adjust vocabulary, complexity, and prose style accordingly.`);
     }
+    // S7b: Whole-work synopsis
+    if (context.systemContext?.synopsis) {
+      parts.push('');
+      parts.push('## Work Synopsis');
+      parts.push(context.systemContext.synopsis);
+    }
     // S7a: Whole-work thematic intent (Idea IR)
     if (context.systemContext?.thematicIntent) {
       parts.push('');
@@ -129,11 +142,28 @@ export class PromptAssembler {
       parts.push(`Fidelity: ${context.narratorProfile.fidelity}; Sincerity: ${context.narratorProfile.sincerity}`);
     }
 
+    // DRC: Author notes
+    if (context.sceneSpec?.authorNotes && context.sceneSpec.authorNotes.length > 0) {
+      parts.push('');
+      parts.push('## Author Notes');
+      for (const note of context.sceneSpec.authorNotes) {
+        parts.push(`- ${note}`);
+      }
+    }
+    // DRC: Active world rules
+    if (context.activeRules && context.activeRules.length > 0) {
+      parts.push('');
+      parts.push('## World Rules');
+      for (const rule of context.activeRules) {
+        parts.push(`- ${rule.ruleId}: ${rule.statement}`);
+      }
+      parts.push('Prose must not contradict these rules.');
+    }
     parts.push(
       '',
       '## Narrative Context Package',
       '```json',
-      JSON.stringify(context, null, 2),
+      JSON.stringify((({ markdown: _omitted, ...contextForPrompt }) => contextForPrompt)(context), null, 2),
       '```',
     );
 

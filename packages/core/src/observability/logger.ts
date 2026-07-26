@@ -21,7 +21,7 @@ export interface LogTransport {
 }
 
 const forbiddenField = /(?:api[_-]?key|authorization|credential|cookie|secret|token|prompt|prose|sceneBrief|reference)/i;
-const permittedField = /^(?:module|eventId|jobId|traceId|spanId|durationMs|promptTokens|completionTokens|totalTokens|calls|attempts|cacheHit|model|version|hash|code|path|validator|category|entityId|attribute|severity|issueCount)$/;
+const permittedField = /^(?:module|eventId|jobId|traceId|spanId|durationMs|promptTokens|completionTokens|totalTokens|calls|attempts|cacheHit|model|version|hash|code|path|validator|category|entityId|attribute|severity|issueCount|phase|rejection)$/;
 
 function sanitizeContext(context: LogContext): LogContext {
   const safe: LogContext = { module: context.module };
@@ -43,6 +43,21 @@ export class MemoryLogTransport implements LogTransport {
 export class JsonlLogTransport implements LogTransport {
   write(entry: LogEntry): void {
     process.stderr.write(`${JSON.stringify(entry)}\n`);
+  }
+}
+
+const LOG_LEVEL_ORDER: LogLevel[] = ['debug', 'info', 'warn', 'error'];
+
+/** Wraps another transport, dropping entries below minLevel. Used to keep
+ *  normal (non---trace) runs quiet on the success path while still
+ *  surfacing warnings/errors in real time. */
+export class LevelFilterTransport implements LogTransport {
+  constructor(private readonly inner: LogTransport, private readonly minLevel: LogLevel = 'warn') {}
+
+  write(entry: LogEntry): void {
+    if (LOG_LEVEL_ORDER.indexOf(entry.level) >= LOG_LEVEL_ORDER.indexOf(this.minLevel)) {
+      this.inner.write(entry);
+    }
   }
 }
 

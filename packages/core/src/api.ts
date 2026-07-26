@@ -40,8 +40,9 @@ import { FsStorage } from './storage/fs-storage.ts';
 import type { Storage } from './storage/types.ts';
 import type { LLMProvider } from './ai/types.ts';
 import type { BranchPath } from './types/branch.js';
-import { Logger } from './observability/logger.ts';
+import { Logger, JsonlLogTransport, LevelFilterTransport } from './observability/logger.ts';
 import { TraceCollector } from './observability/trace.ts';
+import { TypedEventBus } from './event-bus.ts';
 import { DEFAULT_CONFIG } from './config/index.js';
 import { sanitizeError } from './errors.ts';
 import { LogicalDisclosureSummaryCompiler, SurfaceReferenceExtractor } from './summary/index.ts';
@@ -129,6 +130,8 @@ export interface RenderNovelOptions {
    * error-level (S/X) failures remain blocking.
    */
   interactionManager?: InteractionManager;
+  /** Optional event bus for live render-progress observation */
+  eventBus?: TypedEventBus;
 }
 
 export interface RenderNovelResult {
@@ -346,14 +349,17 @@ async function createProvider(
  * return with prose empty.
  */
 export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovelResult> {
-  const { projectDir, model, apiKey, baseUrl, eventId, dryRun, provider: injectedProvider, branchPath, trace } = opts;
+  const { projectDir, model, apiKey, baseUrl, eventId, dryRun, provider: injectedProvider, branchPath, trace, eventBus } = opts;
   const errors: string[] = [];
   const waivedEventIds = new Set<string>();
 
   const storage = opts.storage ?? new FsStorage();
   // Observability: trace collector for this render session
   const traceCollector = trace ? new TraceCollector(eventId ?? 'render-all') : undefined;
-  const eventLogger = traceCollector ? new Logger(undefined, { module: 'render' }) : undefined;
+  const eventLogger = new Logger(
+    trace ? undefined : new LevelFilterTransport(new JsonlLogTransport()),
+    { module: 'render' },
+  );
 
   const { data, events, registry } = initializeProject(projectDir);
   const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
@@ -372,6 +378,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     genre: data.config?.genre ?? 'literary',
     style: 'literary',
     narrativeRules: [],
+    thematicIntent: data.config?.ideaIR?.thematicIntent,
   };
 
   // ── Dry run ───────────────────────────────────────────────────────
@@ -383,7 +390,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     for (const ev of renderEvents) {
       const beforeState = boundaries.stateBeforeByEventId.get(ev.id)!;
       const compiler = new ContextCompiler();
-      compiler.compile(ev, beforeState, registry, { systemContext: sysCtx });
+      compiler.compile(ev, beforeState, registry, { systemContext: sysCtx, narratorProfiles: data.narratorProfiles, discourseLedger: data.discourseLedger });
 
       results.push({
         eventId: ev.id,
@@ -403,7 +410,11 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     return { results, errors: [] };
   }
   // ── Full rendering ────────────────────────────────────────────────
-  const resolvedModel = model ?? data.config?.defaultModel ?? process.env['NOVALISTICALLY_AI_MODEL'] ?? 'claude-sonnet-4-20250514';
+  const resolvedModel = model ?? data.config?.defaultModel ?? process.env['NOVALISTICALLY_AI_MODEL'];
+  if (!resolvedModel) {
+    errors.push('No model configured. Set --model, nova.yaml "defaultModel", or the NOVALISTICALLY_AI_MODEL environment variable.');
+    return { results: [], errors };
+  }
   let provider: LLMProvider;
   if (injectedProvider) {
     provider = injectedProvider;
@@ -430,6 +441,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     aggregator: new ResultAggregator(undefined, undefined, undefined, traceCollector),
     logger: eventLogger,
     traceCollector,
+    eventBus,
     maxRounds: opts.maxRounds,
     concurrency: opts.concurrency,
     language: data.config?.defaultLanguage ?? 'en',
@@ -457,6 +469,8 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     const pkg = compiler.compile(ev, beforeState, registry, {
       systemContext: sysCtx,
       previousSceneSummary: previousSummary ?? '',
+      narratorProfiles: data.narratorProfiles,
+      discourseLedger: data.discourseLedger,
     });
     // After rendering this scene, the surface extractor can produce a
     // reference packet from the accepted prose. Stash the summary for the

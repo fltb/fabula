@@ -93,6 +93,12 @@ export {
   PronounValidator,
   AppearanceValidator,
   ConflictValidator,
+  DurationConsistencyValidator,
+  FrequencyConsistencyValidator,
+  VoiceConsistencyValidator,
+  AnachronyConsistencyValidator,
+  FocalizationConsistencyValidator,
+  DiscourseValidator,
   ResultAggregator,
 } from './validator/index.js';
 

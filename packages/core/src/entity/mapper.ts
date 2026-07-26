@@ -13,6 +13,8 @@ import type {
   ItemDefinition,
   FactionDefinition,
   NarratorProfile,
+  NarratorAssertion,
+  PlannedDiscourseLedger,
 } from '../types/index.js';
 import { loadProjectConfig, readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
 import { parseStoryTimestamp, factIdFrom } from './timestamp.js';
@@ -30,6 +32,8 @@ import {
   worldInitialStateSchema,
   eventFileSchema,
   narratorProfileSchema,
+  narratorAssertionSchema,
+  plannedDiscourseLedgerSchema,
 } from '../schemas/index.js';
 import { FsStorage, type Storage } from '../storage/index.ts';
 
@@ -72,6 +76,25 @@ export class EntityMapper {
     ) as NarratorProfile[];
     for (const np of narratorProfileFiles) {
       this.narratorProfiles[np.id] = np;
+    }
+
+    // DISCOURSE-1: Load the planned discourse ledger (optional single file)
+    const discourseLedger = readYamlFile({
+      filePath: path.join(defsDir, 'discourse-ledger.yaml'),
+      schema: plannedDiscourseLedgerSchema,
+      storage: this.storage,
+      optional: true,
+    }) as PlannedDiscourseLedger | null;
+
+    // DISCOURSE-1: Load narrator assertions (optional directory)
+    const narratorAssertionFiles = readYamlFilesInDir(
+      path.join(defsDir, 'assertions'),
+      narratorAssertionSchema,
+      this.storage,
+    ) as NarratorAssertion[];
+    const narratorAssertions: Record<string, NarratorAssertion> = {};
+    for (const na of narratorAssertionFiles) {
+      narratorAssertions[na.id] = na;
     }
 
     const worldInitialState = readYamlFile({
@@ -136,6 +159,9 @@ export class EntityMapper {
       worldInitialState,
       chapters,
       timeAnchors,
+      narratorProfiles: this.narratorProfiles,
+      discourseLedger,
+      narratorAssertions,
     };
   }
 
@@ -239,6 +265,16 @@ export class EntityMapper {
       targetAudience: eventFile.targetAudience ?? undefined,
       status: 'draft',
       cast: eventFile.cast ?? undefined,
+      // S1/S4: Pass 1 prompt inputs
+      narrativeChecklist: eventFile.narrativeChecklist,
+      sourceContext: eventFile.sourceContext,
+      // S6: Genette dimensions + narrator reference
+      duration: eventFile.duration,
+      frequency: eventFile.frequency,
+      voice: eventFile.voice,
+      anachrony: eventFile.anachrony,
+      focalization: eventFile.focalization,
+      narratorProfileRef: eventFile.narratorProfileRef,
     };
   }
 

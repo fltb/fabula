@@ -20,6 +20,7 @@ import type { EpistemicLedger } from './knowledge.js';
 import type { AnalysisResult } from './analysis.js';
 import type { EventStore } from '../state/event-store.js';
 import type { ThreadRuntimeState } from './thread.js';
+import type { ContextPackage } from './context.js';
 
 // ——— AnalysisBlockRequirement ———
 
@@ -62,6 +63,8 @@ export interface PostRenderInput {
   analysis: AnalysisResult | null;
   chapter: number;
   entityRegistry?: EntityRegistry;
+  /** Discourse-layer context package (S6c/DISCOURSE-1), when available. */
+  context?: ContextPackage;
 }
 
 // ——— Validator Context (legacy) ———

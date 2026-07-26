@@ -6,6 +6,9 @@ import type {
   FactionDefinition,
   ItemDefinition,
   LocationDefinition,
+  NarratorAssertion,
+  NarratorProfile,
+  PlannedDiscourseLedger,
   ProjectConfig,
   RuleDefinition,
   TimeAnchor,
@@ -27,4 +30,10 @@ export interface ProjectData {
   worldInitialState: WorldInitialState | null;
   chapters: Map<number, { metadata: ChapterMetadata | null; events: EventFile[] }>;
   timeAnchors: TimeAnchor[];
+  /** Narrator profiles from definitions/narrators/ (S6c), indexed by id. */
+  narratorProfiles: Record<string, NarratorProfile>;
+  /** Planned discourse ledger from definitions/discourse-ledger.yaml (DISCOURSE-1), null when absent. */
+  discourseLedger: PlannedDiscourseLedger | null;
+  /** Narrator assertions from definitions/assertions/ (DISCOURSE-1), indexed by id. */
+  narratorAssertions: Record<string, NarratorAssertion>;
 }

@@ -32,6 +32,12 @@ export { AntiCausalEdgeValidator } from './anti-causal.js';
 export { ChapterOrderValidator } from './chapter-order.js';
 export { SurfaceModeValidator } from './surface-mode.js';
 export { CausalOverloadValidator } from './causal-overload.js';
+export { DurationConsistencyValidator } from './duration-consistency.js';
+export { FrequencyConsistencyValidator } from './frequency-consistency.js';
+export { VoiceConsistencyValidator } from './voice-consistency.js';
+export { AnachronyConsistencyValidator } from './anachrony-consistency.js';
+export { FocalizationConsistencyValidator } from './focalization-consistency.js';
+export { DiscourseValidator } from './discourse.js';
 // ============================================================================
 // Aggregated analysis schema — built from built-in validator schemas
 // ============================================================================
@@ -48,6 +54,11 @@ import { appearanceCheckSchema } from './appearance.js';
 import { characterReferenceSchema } from './alias.js';
 import { tenseDetectedSchema } from './tense-consistency.js';
 import { conflictAnalysisSchema } from './conflict.js';
+import { durationDetectedSchema } from './duration-consistency.js';
+import { frequencyDetectedSchema } from './frequency-consistency.js';
+import { voiceDetectedSchema } from './voice-consistency.js';
+import { anachronyDetectedSchema } from './anachrony-consistency.js';
+import { focalizationDetectedSchema } from './focalization-consistency.js';
 import { checklistResultSchema } from '../schemas/narrative-checklist.js';
 import { ruleCheckSchema } from './world-rule.js';
 import { knowledgeCheckSchema } from './knowledge.js';
@@ -71,6 +82,14 @@ export const analysisContentSchema = z.object({
   ruleChecks: z.array(ruleCheckSchema),
   knowledgeChecks: z.array(knowledgeCheckSchema),
   checklistResults: z.array(checklistResultSchema).optional(),
+  // S6 Genette dimension blocks — optional: pre-existing reference analysis
+  // data (mock-pass2 fixtures) predates them, and each consumer validator
+  // no-ops gracefully when its block is absent.
+  durationDetected: durationDetectedSchema.optional(),
+  frequencyDetected: frequencyDetectedSchema.optional(),
+  voiceDetected: voiceDetectedSchema.optional(),
+  anachronyDetected: anachronyDetectedSchema.optional(),
+  focalizationDetected: focalizationDetectedSchema.optional(),
 });
 
 export type AnalysisContent = z.infer<typeof analysisContentSchema>;

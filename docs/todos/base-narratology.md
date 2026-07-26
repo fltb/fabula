@@ -1,16 +1,16 @@
 # base-narratology: Genette five dimensions (base schema audit)
 
-## Group Status: [ ] type-only — verified 2026-07-26: `duration`/`frequency`/`voice`/`anachrony`/`focalization` fields exist on `NarrativeEvent` but grep across `packages/core/src` outside type/schema files finds ZERO consumption (no validator, no context compiler, no prompt assembler reads them). `docs/report/stage-3-audit.md`'s "5/5 dimensions ✅" claim is itself stale/overclaiming — same "dead type" pattern as the unwired Discourse/Syuzhet IR layer. Do not trust that audit's S6 row without re-verifying source.
+## Group Status: [x] complete — wired 2026-07-26 22:07 CST（full-chain wiring session）: 5 个 consistency validator（duration/frequency/voice/anachrony/focalization）+ Pass 2 `{dimension}Detected` 分析块 + narratorProfileRef→NarratorProfile 解析进 ContextPackage/Pass 1 prompt。根因补修：`mapToNarrativeEvent` 此前静默丢弃全部 S6 字段（types/schemas 齐全但运行时零传递），现已转发（`mapper.ts:268-277`）。见 `docs/report/full-chain-wiring-acceptance.md`。
 
 ## Items in this group
 
 | Item ID | Status | Internal Deps | Source |
 |---------|--------|---------------|--------|
-| S6a | [ ] | — | Duration — `DurationProfile` type exists on `NarrativeEvent.duration`, zero consumers |
-| S6b | [ ] | — | Frequency — `FrequencyProfile` type exists on `NarrativeEvent.frequency`, zero consumers |
-| S6c | [ ] | — | Mood/Voice wiring — `focalization`, `narratorProfileRef` fields exist, zero consumers |
-| S6d | [ ] | — | Voice — `VoiceProfile` type exists on `NarrativeEvent.voice`, zero consumers |
-| S6e | [ ] | — | Order/Anachrony — `Anachrony` type exists on `NarrativeEvent.anachrony`, zero consumers |
+| S6a | [x] | — | Duration — `DurationConsistencyValidator`（`validator/duration-consistency.ts`）: pre 检查 ellipsisClarity，post 对比 Pass 2 `durationDetected`；zhu-fu E1 fixture 已声明 `duration: summary` |
+| S6b | [x] | — | Frequency — `FrequencyConsistencyValidator`: pre 检查 iterationScope，post 对比 `frequencyDetected`；zhu-fu E1 已声明 `frequency: singulative` |
+| S6c | [x] | — | Mood/Voice wiring — `narratorProfileRef` 经 mapper→`ContextCompiler.compile()` 解析为 `ContextPackage.narratorProfile`，渲染进 Pass 1 `## Narrator` 区块；`FocalizationConsistencyValidator` 消费 `focalizationDetected`；zhu-fu E0 已用 `narratorProfileRef: narrator_wo` |
+| S6d | [x] | — | Voice — `VoiceConsistencyValidator`: 对比 `voiceDetected.level/.relation`（逐子字段报 issue）；zhu-fu E1 已声明 `voice: extradiegetic/homodiegetic` |
+| S6e | [x] | — | Order/Anachrony — `AnachronyConsistencyValidator`: pre 检查 distance，post 对比 `anachronyDetected`（含 `'none'` 字面量，validatePost 在 event.anachrony 未声明时提前返回）；zhu-fu E1 已声明 `anachrony: analepsis` |
 
 ## Group-level dependencies
 None — all five sub-items are independent within this group. They all extend `NarrativeEvent`/`EventFile` but do not conflict.
@@ -182,4 +182,6 @@ Complete Genette's five narrative dimensions as base schema. All five dimensions
 **Acceptance**: Types exported. Schema validates. At least one zhu-fu fixture event uses `anachrony`. Existing `sceneType: flashback` events still work.
 
 ## Evidence
-—
+- 5 个 validator 注册于 `aggregator.ts`（validator 总数 20→26）、`validator/index.ts` barrel + `analysisContentSchema`（5 个新块 `.optional()`——既有 mock reference data 早于这些字段，required 会破坏全部 mock 测试面）、core barrel。
+- 每 validator 独立测试（match/mismatch/analysis-null 三段式）+ `schema-unification`/`dynamic-schema`/`validator.test` 契约断言同步更新。全量非 e2e 回归与既有基线逐字一致（15 failed / 3 files，全部为过期硬编码路径）。
+- 真实 LLM 全链路（DeepSeek `render E0 --all`）: 7/7 事件 committed，S6 字段经 Pass 2 往返无 validator 异常。报告：`docs/report/full-chain-wiring-acceptance.md`。

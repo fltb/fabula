@@ -5,6 +5,8 @@
 import type { EntityId } from './entity.js';
 import type { RelationshipState } from './world.js';
 import type { RuleDefinition } from './rule.js';
+import type { NarratorProfile } from './discourse.js';
+import type { ThematicIntent } from './idea-ir.js';
 
 // ——— Relevance Score ———
 
@@ -38,6 +40,10 @@ export interface ContextPackage {
   volumeSummary: string;
   markdown: string;
   activeRules?: RuleDefinition[];
+  /** Resolved narrator profile for this event, when narratorProfileRef is set (S6c). */
+  narratorProfile?: NarratorProfile;
+  /** Discourse replay error message, when replayDiscourseState() threw for this event (DISCOURSE-1). */
+  discourseReplayError?: string;
 }
 
 export interface SystemContext {
@@ -46,6 +52,8 @@ export interface SystemContext {
   narrativeRules: string[];
   /** Intended audience for this scene (e.g. "adult_literary", "young_adult") */
   targetAudience?: string;
+  /** Whole-work thematic intent (S7a Idea IR), when declared in nova.yaml */
+  thematicIntent?: ThematicIntent;
 }
 
 export interface SceneSpecification {

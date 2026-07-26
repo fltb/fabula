@@ -15,6 +15,7 @@ import type {
   PostRenderInput,
   EpistemicLedger,
   AnalysisBlockRequirement,
+  ContextPackage,
 } from '../types/index.js';
 import type { Validator } from '../types/index.js';
 import type { PluginValidator } from '../plugin/validator-registry.js';
@@ -39,6 +40,12 @@ import { AppearanceValidator } from './appearance.js';
 import { ConflictValidator } from './conflict.js';
 import { QualityValidator } from './quality.js';
 import { ThreadProgressValidator } from './thread-progress.js';
+import { DurationConsistencyValidator } from './duration-consistency.js';
+import { FrequencyConsistencyValidator } from './frequency-consistency.js';
+import { VoiceConsistencyValidator } from './voice-consistency.js';
+import { AnachronyConsistencyValidator } from './anachrony-consistency.js';
+import { FocalizationConsistencyValidator } from './focalization-consistency.js';
+import { DiscourseValidator } from './discourse.js';
 
 import type { EventStore } from '../state/event-store.js';
 import type { TraceCollector } from '../observability/trace.ts';
@@ -80,6 +87,12 @@ export class ResultAggregator {
       new ConflictValidator(),
       new QualityValidator(),
       new ThreadProgressValidator(),
+      new DurationConsistencyValidator(),
+      new FrequencyConsistencyValidator(),
+      new VoiceConsistencyValidator(),
+      new AnachronyConsistencyValidator(),
+      new FocalizationConsistencyValidator(),
+      new DiscourseValidator(),
     ];
     this.pluginValidators = pluginValidators ?? [];
   }
@@ -103,6 +116,7 @@ export class ResultAggregator {
     overrides?: Record<string, 'off' | 'warning' | 'error'>,
     registry?: EntityRegistry,
     chapter: number = 1,
+    context?: ContextPackage,
   ): ValidationResult {
     const allIssues: ValidationIssue[] = [];
     const chapterValue = chapter; // Use the parameter (defaults to 1)
@@ -115,7 +129,7 @@ export class ResultAggregator {
       this.traceCollector?.record({ phase: 'validator', state: 'start', spanId: valSpanId, eventId: event.id });
 
       if (validator.validatePost) {
-        const input: PostRenderInput = { event, worldState: state, prose, analysis: analysis ?? null, chapter: chapterValue, entityRegistry: registry };
+        const input: PostRenderInput = { event, worldState: state, prose, analysis: analysis ?? null, chapter: chapterValue, entityRegistry: registry, context };
         const issues = validator.validatePost(input);
         for (const issue of issues) {
           if (override === 'error') {

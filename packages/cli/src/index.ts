@@ -26,6 +26,7 @@ import {
   analyzeProjectImpact,
   computeEvidenceHash,
   verifyEvidenceChain,
+  TypedEventBus,
 } from '@novalistically/core';
 import type { ReviewComment } from '@novalistically/core';
 import { runAll, runRegressionBench, runPerformanceBench } from '@novalistically/bench';
@@ -521,6 +522,14 @@ program
       ? new MockPass2Provider({ referenceDir: options.referenceDir })
       : undefined;
 
+    // Live per-event progress on stderr (stdout is reserved for the final
+    // batch report — tests assert exact ✅/❌ counts there).
+    const eventBus = new TypedEventBus();
+    eventBus.on('pipeline:render:after', (data) => {
+      const mark = data.success && data.errorCount === 0 ? '✓' : '·';
+      console.error(`  ${mark} ${data.eventId}: ${data.wordCount} words, cache=${data.cacheHit}`);
+    });
+
     const result = await renderNovel({
       projectDir,
       model: options.model,
@@ -530,6 +539,7 @@ program
       storage: new FsStorage(),
       concurrency: options.concurrency ? Number(options.concurrency) : undefined,
       provider,
+      eventBus,
     });
 
     if (result.errors.length > 0 && result.results.length === 0) {

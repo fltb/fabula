@@ -345,12 +345,12 @@ describe('dynamic schema path', () => {
     expect(result.needsReview).toBe(true);
   });
 
-  it('getCombinedValidationSchema includes all 14 analysis fields', () => {
+  it('getCombinedValidationSchema includes all analysis fields', () => {
     const aggregator = new ResultAggregator();
     const schema = aggregator.getCombinedValidationSchema();
     const keys = Object.keys(schema.shape);
 
-    // All 14 fields must be present
+    // All 14 original fields must be present
     expect(keys).toContain('postconditions');
     expect(keys).toContain('preconditions');
     expect(keys).toContain('pov');
@@ -365,11 +365,25 @@ describe('dynamic schema path', () => {
     expect(keys).toContain('conflictAnalysis');
     expect(keys).toContain('ruleChecks');
     expect(keys).toContain('knowledgeChecks');
+    // S6 Genette dimension fields (optional — reference data predates them)
+    expect(keys).toContain('durationDetected');
+    expect(keys).toContain('frequencyDetected');
+    expect(keys).toContain('voiceDetected');
+    expect(keys).toContain('anachronyDetected');
+    expect(keys).toContain('focalizationDetected');
 
-    // Verify strict: no .optional() wrappers — each field is required
+    // The original 14 blocks stay strictly required; only the S6 dimension
+    // blocks are optional (pre-existing mock reference data lacks them).
+    const OPTIONAL_KEYS: Record<string, true> = {
+      durationDetected: true,
+      frequencyDetected: true,
+      voiceDetected: true,
+      anachronyDetected: true,
+      focalizationDetected: true,
+    };
     for (const key of keys) {
       const fieldSchema = schema.shape[key];
-      expect(fieldSchema.isOptional?.()).toBe(false);
+      expect(fieldSchema.isOptional?.()).toBe(OPTIONAL_KEYS[key] === true);
     }
   });
 });

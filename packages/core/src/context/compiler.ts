@@ -6,9 +6,13 @@ import type {
   ContextPackage,
   EntityRegistry,
   NarrativeEvent,
+  NarratorProfile,
+  PlannedDiscourseLedger,
   SystemContext,
   WorldState,
 } from '../types/index.js';
+
+import { replayDiscourseState } from '../state/discourse-replay.js';
 
 import { ContextAssembler } from './assembler.ts';
 
@@ -31,9 +35,13 @@ export class ContextCompiler {
       volumeSummary?: string;
       systemContext?: SystemContext;
       activeThreadIds?: string[];
+      narratorProfiles?: Record<string, NarratorProfile>;
+      discourseLedger?: PlannedDiscourseLedger | null;
+      /** Discourse-ledger branch label to replay; single-branch projects use 'main'. */
+      discourseBranch?: string;
     },
   ): ContextPackage {
-    return this.assembler.assemble(
+    const pkg = this.assembler.assemble(
       event,
       state,
       entityRegistry,
@@ -42,6 +50,22 @@ export class ContextCompiler {
       options?.systemContext,
       options?.activeThreadIds,
     );
+    // S6c: resolve the event's narrator profile reference, if any
+    if (event.narratorProfileRef && options?.narratorProfiles) {
+      pkg.narratorProfile = options.narratorProfiles[event.narratorProfileRef];
+    }
+    // DISCOURSE-1: deterministic replay-integrity check for this event's position.
+    // Position is clamped to the ledger length: replaying past the last entry
+    // means "everything disclosed so far" and must not be a bounds error.
+    if (options?.discourseLedger) {
+      try {
+        const position = Math.min(event.narrativeOrder, options.discourseLedger.entries.length);
+        replayDiscourseState(options.discourseLedger, position, options?.discourseBranch ?? 'main');
+      } catch (err) {
+        pkg.discourseReplayError = (err as Error).message;
+      }
+    }
+    return pkg;
   }
 
   /**

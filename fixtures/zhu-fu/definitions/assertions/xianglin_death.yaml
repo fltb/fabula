@@ -1,0 +1,8 @@
+id: assertion_xianglin_death
+narrator: narrator_wo
+proposition: "祥林嫂死于祝福前夜——'昨天夜里，或者就是今天罢'"
+polarity: affirmative
+type: authoritative_reveal
+truthBoundary: true
+narrationBoundary:
+  narratorId: narrator_wo

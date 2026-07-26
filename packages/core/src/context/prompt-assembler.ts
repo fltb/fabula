@@ -112,6 +112,22 @@ export class PromptAssembler {
     if (targetAudience) {
       parts.push(`- Target audience: ${targetAudience}. Adjust vocabulary, complexity, and prose style accordingly.`);
     }
+    // S7a: Whole-work thematic intent (Idea IR)
+    if (context.systemContext?.thematicIntent) {
+      parts.push('');
+      parts.push('## Thematic Intent');
+      parts.push(context.systemContext.thematicIntent.primaryTheme);
+      if (context.systemContext.thematicIntent.subThemes?.length) {
+        parts.push(`Sub-themes: ${context.systemContext.thematicIntent.subThemes.join(', ')}`);
+      }
+    }
+    // S6c: Narrator profile for this scene
+    if (context.narratorProfile) {
+      parts.push('');
+      parts.push('## Narrator');
+      parts.push(`Type: ${context.narratorProfile.type}`);
+      parts.push(`Fidelity: ${context.narratorProfile.fidelity}; Sincerity: ${context.narratorProfile.sincerity}`);
+    }
 
     parts.push(
       '',

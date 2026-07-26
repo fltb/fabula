@@ -1,0 +1,19 @@
+id: zhu_fu_main_ledger
+hash: v1
+entries:
+  - id: entry_reveal_death
+    action:
+      type: reveal
+      assertionId: assertion_xianglin_death
+      discoursePosition: 0
+    sceneId: E0
+    branch: main
+    discoursePosition: 0
+  - id: entry_claim_afterlife
+    action:
+      type: claim
+      assertionId: assertion_afterlife_uncertain
+      discoursePosition: 1
+    sceneId: E0
+    branch: main
+    discoursePosition: 1

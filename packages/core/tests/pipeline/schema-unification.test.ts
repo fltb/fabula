@@ -41,7 +41,7 @@ const ALL_FIELDS_VALID = {
 // ---------------------------------------------------------------------------
 
 describe('analysisContentSchema', () => {
-  it('has all 15 blocks (14 required + 1 optional checklistResults)', () => {
+  it('has all 20 blocks (14 required + 6 optional)', () => {
     const shape = analysisContentSchema.shape;
     const requiredFields = [
       'postconditions',
@@ -67,8 +67,9 @@ describe('analysisContentSchema', () => {
       expect(zodType).not.toBeInstanceOf(z.ZodOptional);
     }
 
-    // Verify total field count = 15 (14 required + 1 optional checklistResults)
-    expect(Object.keys(shape)).toHaveLength(15);
+    // Verify total field count = 20 (14 required + optional checklistResults
+    // + 5 optional S6 Genette dimension blocks)
+    expect(Object.keys(shape)).toHaveLength(20);
   });
 
   it('accepts valid analysis with all 15 blocks', () => {

@@ -23,6 +23,7 @@ import type {
 } from '../types/index.ts';
 import type { SurfaceReferencePacket } from '../types/render-surface.ts';
 import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
+import { countNarrativeText } from '../assembler/count.ts';
 import { buildAnalysisPrompt, type RenderAnalysisInput } from '../ai/prompts/render-analysis.ts';
 import { compareAnalysisBlocks } from '../util/compare-analysis.ts';
 import { PromptAssembler } from '../context/prompt-assembler.ts';
@@ -222,13 +223,21 @@ export class RenderPipeline {
             : parseAnalysisJSON(cachedAnalysisStr, (message) => errors.push(`Cache parse warning: ${message}`)))
           : null;
           const validation = analysis && this.aggregator
-            ? this.aggregator.validateRender(String(c.prose ?? ''), event, stateBefore, analysis)
+            ? this.aggregator.validateRender(String(c.prose ?? ''), event, stateBefore, analysis, undefined, undefined, chapter, context)
             : null;
           const needsReview = String(c.prose ?? '').trim().length === 0 || analysis === null || (validation !== null && !validation.passed);
           this.traceCollector?.record({ phase: 'cache', state: 'end', spanId: `${eventId}:cache`, eventId });
           this.traceCollector?.record({ phase: 'pipeline', state: 'end', spanId: eventId, eventId });
           this.eventBus?.emit('cache:hit', { eventId, cacheKey: cacheKey ?? '' });
           this.logger?.info('Cache hit, returning cached result', { eventId });
+          this.eventBus?.emit('pipeline:render:after', {
+            eventId,
+            durationMs: 0,
+            wordCount: countNarrativeText(String(c.prose ?? ''), this.language),
+            cacheHit: true,
+            success: analysis !== null,
+            errorCount: errors.length,
+          });
           return {
             eventId, prose: String(c.prose ?? ''), analysis,
             llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, llmPass2: null,
@@ -315,6 +324,7 @@ export class RenderPipeline {
         providerCalls.push({ phase: 'pass1', attempt: attempts, outcome: 'success', requestHash: pass1Hash, model: this.model, seed: null });
         if (!prose || prose.trim().length === 0) {
           errors.push(`Pass 1 attempt ${attempts} returned empty prose`);
+          this.logger?.warn('Pass 1 returned empty prose', { eventId, attempts });
           prose = '(empty)';
         }
       } catch (err) {
@@ -327,6 +337,7 @@ export class RenderPipeline {
         });
         providerCalls.push({ phase: 'pass1', attempt: attempts, outcome: 'failure', failureReason: sanitizeError(err), requestHash: pass1Hash, model: this.model, seed: null });
         errors.push(`Pass 1 attempt ${attempts} failed: ${sanitizeError(err)}`);
+        this.logger?.error(sanitizeError(err), { eventId, attempts, phase: 'pass1' });
         prose = '(empty)';
       }
       this.traceCollector?.record({ phase: 'pass1', state: 'end', spanId: `${eventId}:pass1`, eventId, durationMs: Date.now() - renderStart });
@@ -440,6 +451,7 @@ export class RenderPipeline {
           } else {
             errors.push('Pass 2 JSON parse/validation failed after retry');
           }
+          this.logger?.warn(errors[errors.length - 1], { eventId, attempts, phase: 'pass2', rejection: pass2Rejection ?? 'unknown' });
           analysis = null;
         }
       } catch (err) {
@@ -459,6 +471,7 @@ export class RenderPipeline {
           responseFormat: { type: 'json_object' },
         });
         providerCalls.push({ phase: 'pass2', attempt: attempts, outcome: 'failure', failureReason: sanitizeError(err), requestHash: failPass2Hash, model: this.model, seed: 42 });
+        this.logger?.error(sanitizeError(err), { eventId, attempts, phase: 'pass2' });
         analysis = null;
       }
       this.traceCollector?.record({ phase: 'pass2', state: 'end', spanId: `${eventId}:pass2`, eventId, durationMs: Date.now() - renderStart });
@@ -469,7 +482,7 @@ export class RenderPipeline {
       this.traceCollector?.record({ phase: 'validator', state: 'start', spanId: `${eventId}:validator`, eventId });
       if (this.aggregator) {
         try {
-          renderValidation = this.aggregator.validateRender(prose, event, stateBefore, analysis ?? undefined);
+          renderValidation = this.aggregator.validateRender(prose, event, stateBefore, analysis ?? undefined, undefined, undefined, chapter, context);
         } catch (err) {
           errors.push(`Post-render validation failed: ${(err as Error).message}`);
         }
@@ -540,7 +553,14 @@ export class RenderPipeline {
     }
     this.traceCollector?.record({ phase: 'pipeline', state: 'end', spanId: eventId, eventId, durationMs: renderEnd - renderStart });
     this.logger?.info('Scene render completed', { eventId, durationMs: renderEnd - renderStart, attempts, needsReview });
-    this.eventBus?.emit('pipeline:render:after', { eventId, durationMs: renderEnd - renderStart });
+    this.eventBus?.emit('pipeline:render:after', {
+      eventId,
+      durationMs: renderEnd - renderStart,
+      wordCount: countNarrativeText(prose, this.language),
+      cacheHit: false,
+      success: analysis !== null,
+      errorCount: errors.length,
+    });
 
     // ── Plugin: afterRender hook ──────────────────────────────────
     if (this.pluginHooksManager) {

@@ -1144,7 +1144,7 @@ describe('ResultAggregator', () => {
     const aggregator = new ResultAggregator();
     const validators = aggregator.listValidators();
 
-    expect(validators).toHaveLength(20);
+    expect(validators).toHaveLength(26);
     expect(validators.map((v) => v.name)).toEqual([
       'timeline',
       'character_state',
@@ -1166,6 +1166,12 @@ describe('ResultAggregator', () => {
       'conflict',
       'quality',
       'thread_progress',
+      'duration_consistency',
+      'frequency_consistency',
+      'voice_consistency',
+      'anachrony_consistency',
+      'focalization_consistency',
+      'discourse',
     ]);
   });
 

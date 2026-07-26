@@ -15,9 +15,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { tmpdir } from 'node:os';
 
-const FIXTURE_PATH = path.resolve(
-  '/home/float/myfile/Projects/novalistically/fixtures/arcane-aftermath',
-);
+const FIXTURE_PATH = path.resolve(__dirname, '../../../fixtures/arcane-aftermath');
 
 import { EntityMapper, InMemoryEntityRegistry } from '../src/entity/index.js';
 import type { ProjectData } from '../src/entity/index.js';

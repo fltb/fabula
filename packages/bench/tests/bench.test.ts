@@ -15,11 +15,10 @@ import type { RegressionResults } from '../src/index.js';
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
-const ZHU_FU_FIXTURE = path.resolve(
-  '/home/float/myfile/Projects/novalistically/fixtures/zhu-fu',
-);
+const ZHU_FU_FIXTURE = path.resolve(__dirname, '../../../fixtures/zhu-fu');
 const FALLBACK_FIXTURE = path.resolve(
-  '/home/float/myfile/Projects/novalistically/fixtures/most-dangerous-game',
+  __dirname,
+  '../../../fixtures/most-dangerous-game',
 );
 
 /** Pick the best available fixture */

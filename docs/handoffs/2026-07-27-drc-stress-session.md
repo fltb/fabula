@@ -91,3 +91,10 @@ node scripts/drc-stress-report.mjs fixtures/dream-of-red-chamber \
 ### Operating rule
 
 No unchanged timeout retry. Before any retry after timeout/failure, make and record a material change to code, configuration, input, or recovery strategy. Stability samples are distinct measurements: they clear the corresponding event cache and write to unique run directories.
+
+### Post-fix complete assembly — 2026-07-27 14:15 CST
+
+- `ConflictValidator` 已将 `setup` 与 `ongoing` 归入非收束类型；E01 的 Pass 2 `primaryType: person_vs_fate` / `resolutionAchieved: false` 现被正确接受。
+- 完整命令 `node ../../packages/cli/dist/index.js render E01 --all --model deepseek-v4-flash` 退出码 0：36 个场景全部 materialize（36 `.md`、36 metadata、36 render request），并生成 `fixtures/dream-of-red-chamber/output/novel.md`（236,081 bytes，2,022 lines）。
+- 后修复报告 `docs/report/drc-stress-report-final.md`：36 scene-backed prose、36 release、`EXCERPT_INVALID=0`；历史 run2/stability 报告已标记为 pre-fix，不再表达最终 E01 release 状态。
+

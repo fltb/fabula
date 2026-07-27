@@ -1,6 +1,8 @@
 # Stress Report — Dream of Red Chamber
 
 > **时间**: 2026-07-27 13:47 CST
+> **状态**: 历史 pre-fix 稳定性快照。保留其 E05/E21/E25 的 cache-isolated pairwise 测量（37.7%），但其中主批次 E01 release 状态已被后续 ConflictValidator 修复取代；完整装配状态见 `docs/report/drc-stress-report-final.md`。
+
 
 ## Event Metrics
 

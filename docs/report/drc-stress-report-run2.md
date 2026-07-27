@@ -1,6 +1,8 @@
 # Stress Report — Dream of Red Chamber
 
 > **时间**: 2026-07-27 13:37 CST
+> **状态**: 历史 pre-fix 压测快照。E01 当时因 `ConflictValidator` 将 `resolutionType: setup` 误判为须完成收束而被错误拒绝；不可作为最终 release 状态。修复后的完整装配见 `docs/report/drc-stress-report-final.md`。
+
 
 ## Event Metrics
 

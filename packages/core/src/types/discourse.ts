@@ -87,7 +87,9 @@ export type NarratorProfileType =
 /**
  * Independent narrator capabilities (constraint #10). Omniscience grants
  * truth read access ONLY, NEVER auto-reveal. Retrospective narrator uses
- * explicit later Knowledge boundary.
+ * explicit later Knowledge boundary. Pass 1 currently treats `focalizer_only`
+ * and `limited` alike: each may expose an assertion surface only to its
+ * matching focalizer; `full` remains unrestricted within the narrator boundary.
  */
 export type NarratorAccess = 'full' | 'focalizer_only' | 'limited';
 export type NarratorAssertionCapability = 'full' | 'constrained' | 'minimal';

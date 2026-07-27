@@ -95,20 +95,28 @@ describe('render cache', () => {
     expect(getCachedRender(cacheDir, 'E0', 'key-e1', storage)).toBeNull();
   });
 
-  it('partitions cache keys by runtime prompt scope', () => {
+  it('partitions a story branch by its explicit discourse branch label', () => {
     const storage = new MemoryStorage();
     storage.write('/project/definitions/discourse-ledger.yaml', 'id: ledger');
     storage.write('/project/events/E0.yaml', 'id: E0');
     const events = new Map([
       ['E0', { narrativeOrder: 0, filePath: '/project/events/E0.yaml', chapter: 1 }],
     ]);
+    const storyBranchScope = JSON.stringify({
+      decisions: [{ atEventId: 'E0', choiceId: 'choice_a', narrativeOrder: 0 }],
+    });
 
-    const mainKey = computeCacheKeys(events, '/project/definitions', storage, 'main').get('E0');
+    const mainKey = computeCacheKeys(
+      events,
+      '/project/definitions',
+      storage,
+      `${storyBranchScope}|discourse:main`,
+    ).get('E0');
     const alternateKey = computeCacheKeys(
       events,
       '/project/definitions',
       storage,
-      'branch:alternate',
+      `${storyBranchScope}|discourse:alternate`,
     ).get('E0');
 
     expect(mainKey).not.toBe(alternateKey);

@@ -619,6 +619,28 @@ describe('Pass 1 projection filtering (§12)', () => {
     expect(projection.accessibleClaims).toEqual([]);
   });
 
+  it('treats limited access as focalizer-bound until a narrower scope exists', () => {
+    const state = makeStateWithAssertions([], ['c1'], [], [], {
+      c1: {
+        ...makeAssertion('c1', false, 'claim'),
+        narrationBoundary: { narratorId: 'narrator_1', focalizerId: 'alice' },
+      },
+    });
+    const profile = createExplicitLedgerProfile(
+      'narrator_1',
+      'limited',
+      'constrained',
+      'limited_knowledge',
+      'reliable',
+      'sincere',
+    );
+
+    expect(projectDiscourseContext(state, profile, 'alice', ['c1']).accessibleClaims).toHaveLength(
+      1,
+    );
+    expect(projectDiscourseContext(state, profile, 'bob', ['c1']).accessibleClaims).toEqual([]);
+  });
+
   it('excludes non-authorized assertions from accessible claims', () => {
     const state = makeStateWithAssertions([], ['c1'], [], [], {
       c1: makeAssertion('c1', false, 'claim'),

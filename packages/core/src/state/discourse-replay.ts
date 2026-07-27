@@ -170,7 +170,11 @@ function findAssertion(
   return assertions[assertionId];
 }
 
-/** True only when the resolved narrator may expose this assertion's surface. */
+/**
+ * True only when the resolved narrator may expose this assertion's surface.
+ * `focalizer_only` and `limited` both require the assertion's focalizer
+ * boundary until the contract introduces a narrower limited-access scope.
+ */
 function canProjectAssertionSurface(
   assertion: NarratorAssertion,
   narratorProfile: NarratorProfile | undefined,
@@ -182,8 +186,13 @@ function canProjectAssertionSurface(
   ) {
     return false;
   }
-  if (narratorProfile.access === 'full') return true;
-  return focalizerId !== undefined && assertion.narrationBoundary.focalizerId === focalizerId;
+  switch (narratorProfile.access) {
+    case 'full':
+      return true;
+    case 'focalizer_only':
+    case 'limited':
+      return focalizerId !== undefined && assertion.narrationBoundary.focalizerId === focalizerId;
+  }
 }
 
 /**

@@ -119,6 +119,12 @@ export interface RenderNovelOptions {
   eventId?: string; // single event; omit or 'all' for all
   dryRun?: boolean;
   branchPath?: BranchPath;
+  /**
+   * Explicit discourse-ledger branch label for projection selection.
+   * When absent and branchPath is set against a multi-branch ledger,
+   * renderNovel fails with an actionable error.
+   */
+  discourseBranch?: string;
   provider?: LLMProvider;
   storage?: Storage;
   /** Opt-in trace output to .nova/traces/<jobId>.jsonl */
@@ -517,6 +523,54 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     return { results: [], errors };
   }
 
+  // DISCARD-1: Guard against silent discourse-branch mismatches before any
+  // prompt construction. Three cases:
+  //
+  //   1. Explicit discourseBranch is set but does not match any ledger entry
+  //      branch label — reject unknown/typo label.
+  //   2. Explicit discourseBranch is set but no discourse ledger exists
+  //      (definitions/discourse-ledger.yaml absent) — reject; a branch
+  //      label is meaningless without a ledger.
+  //   3. branchPath selects a non-main story branch, no explicit
+  //      discourseBranch is given, and the loaded ledger has non-main
+  //      entries — fail closed rather than silently projecting main.
+  if (opts.discourseBranch != null) {
+    if (!data.discourseLedger) {
+      errors.push(
+        'discourseBranch "' +
+          opts.discourseBranch +
+          '" was specified but no discourse ledger ' +
+          'exists (definitions/discourse-ledger.yaml is absent or optional). ' +
+          'Remove discourseBranch or add a ledger with matching entries.',
+      );
+      return { results: [], errors };
+    }
+    const branchExists = data.discourseLedger.entries.some(
+      (e) => e.branch === opts.discourseBranch,
+    );
+    if (!branchExists) {
+      errors.push(
+        'discourseBranch "' +
+          opts.discourseBranch +
+          '" does not match any branch label ' +
+          'in the discourse ledger. Valid labels: ' +
+          [...new Set(data.discourseLedger.entries.map((e) => e.branch))].join(', '),
+      );
+      return { results: [], errors };
+    }
+  } else if (branchPath && data.discourseLedger) {
+    const hasNonMainBranch = data.discourseLedger.entries.some((e) => e.branch !== 'main');
+    if (hasNonMainBranch) {
+      errors.push(
+        'Story branchPath is set but no explicit discourseBranch was provided, and ' +
+          'the discourse ledger contains non-main branches. Render would project the ' +
+          'default (main) discourse, which may be incorrect. Set discourseBranch to ' +
+          'specify the target discourse ledger branch, or omit branchPath to use main.',
+      );
+      return { results: [], errors };
+    }
+  }
+
   const sysCtx: SystemContext = {
     genre: data.config?.genre ?? 'literary',
     style: 'literary',
@@ -544,6 +598,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
         narratorProfiles: data.narratorProfiles,
         narratorAssertions: data.narratorAssertions,
         discourseLedger: data.discourseLedger,
+        discourseBranch: opts.discourseBranch,
       });
 
       // Assemble Pass-1 prompt faithfully mirroring pipeline/render.ts
@@ -647,13 +702,17 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     pluginHooksManager,
   });
 
+  const eventsFileMap = buildEventsFileMap(data);
   // Ledger and assertion YAML already participate through definitions/. Branch
   // selection is a runtime prompt input, so it gets its own cache partition.
-  const eventsFileMap = buildEventsFileMap(data);
   await pipeline.initCache(
     eventsFileMap,
     path.join(projectDir, 'definitions'),
-    branchPath ? JSON.stringify(branchPath) : 'main',
+    (() => {
+      const scopeBranch = branchPath ? JSON.stringify(branchPath) : 'main';
+      const scopeDiscourse = opts.discourseBranch;
+      return scopeDiscourse ? `${scopeBranch}|discourse:${scopeDiscourse}` : scopeBranch;
+    })(),
   );
   // Build render jobs
   const jobs: RenderJob[] = [];
@@ -680,6 +739,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
       narratorAssertions: data.narratorAssertions,
       discourseLedger: data.discourseLedger,
       emotionalBeat,
+      discourseBranch: opts.discourseBranch,
     });
     // After rendering this scene, the surface extractor can produce a
     // reference packet from the accepted prose. Stash the summary for the

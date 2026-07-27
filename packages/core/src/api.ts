@@ -27,6 +27,7 @@ import { InMemoryEntityRegistry } from './entity/registry.ts';
 import { StateManager } from './state/manager.ts';
 import { compileStoryBoundaries } from './state/story-boundaries.ts';
 import { ContextCompiler } from './context/compiler.ts';
+import { PromptAssembler } from './context/prompt-assembler.ts';
 import { assembleNovel } from './assembler/novel.ts';
 import { countNarrativeText } from './assembler/count.ts';
 import { RenderPipeline, buildAndWriteOutputs, InteractionManager } from './pipeline/index.ts';
@@ -476,11 +477,36 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     const results: RenderNovelResult['results'] = [];
     const dryRunDir = path.join(projectDir, data.config?.outputDir ?? DEFAULT_CONFIG.outputDir, 'dry-runs');
     storage.mkdirp(dryRunDir);
+    const language = data.config?.defaultLanguage ?? 'en';
 
     for (const ev of renderEvents) {
       const beforeState = boundaries.stateBeforeByEventId.get(ev.id)!;
       const compiler = new ContextCompiler();
-      compiler.compile(ev, beforeState, registry, { systemContext: sysCtx, narratorProfiles: data.narratorProfiles, discourseLedger: data.discourseLedger });
+      const pkg = compiler.compile(ev, beforeState, registry, { systemContext: sysCtx, narratorProfiles: data.narratorProfiles, discourseLedger: data.discourseLedger });
+
+      // Assemble Pass-1 prompt faithfully mirroring pipeline/render.ts
+      const assembler = new PromptAssembler();
+      const assembled = assembler.assemble(pkg, {
+        targetLengthWords: ev.styleGuidance?.targetWordCount ?? 400,
+        styleGuidance: ev.styleGuidance,
+        characterVoiceNotes: ev.styleGuidance?.characterVoice && Object.keys(ev.styleGuidance.characterVoice).length > 0
+          ? Object.entries(ev.styleGuidance.characterVoice).map(([id, note]) => `${id}: ${note}`).join('; ')
+          : undefined,
+        language,
+        narrativeChecklistItems: ev.narrativeChecklist?.items,
+        sourceContextStyleNotes: ev.sourceContext?.entries
+          .filter((e) => e.classification === 'STYLE')
+          .map((e) => e.styleNote ? `- "${e.excerpt}" (${e.styleNote})` : `- "${e.excerpt}"`)
+          .join('\n'),
+      });
+
+      const eventErrors: string[] = [];
+      const promptFile = path.join(dryRunDir, `${ev.id}_prompt.md`);
+      try {
+        storage.write(promptFile, assembled.userPrompt);
+      } catch (writeErr) {
+        eventErrors.push(`Failed to write dry-run prompt to ${promptFile}: ${sanitizeError(writeErr)}`);
+      }
 
       results.push({
         eventId: ev.id,
@@ -490,14 +516,14 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
         released: false,
         validationErrors: 0,
         validationIssueMessages: [],
-        errors: [],
+        errors: eventErrors,
         analysis: null,
         providerCalls: [],
         promptHash: '',
       });
     }
 
-    return { results, errors: [] };
+    return { results, errors };
   }
   // ── Full rendering ────────────────────────────────────────────────
   const resolvedModel = model ?? data.config?.defaultModel ?? process.env['NOVALISTICALLY_AI_MODEL'];
@@ -527,6 +553,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     provider,
     model: resolvedModel,
     cacheDir,
+    responseDir: path.join(projectDir, '.nova', 'responses'),
     storage,
     aggregator: new ResultAggregator(undefined, validatorRegistry?.validators, undefined, traceCollector),
     logger: eventLogger,

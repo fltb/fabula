@@ -112,6 +112,10 @@ export interface RenderPipelineOptions {
   provider: LLMProvider;
   model: string;
   cacheDir: string;
+  /** Directory to persist raw response files per-scene (optional).
+   *  When set, every renderScene call writes .nova/responses/{eventId}.json
+   *  before returning, including cache hits. */
+  responseDir?: string;
   storage: Storage;
   concurrency?: number;       // default 5
   maxTokens?: number;         // default 10000
@@ -143,6 +147,7 @@ export class RenderPipeline {
   private readonly pool: ConcurrencyPool;
   private readonly skipCache: boolean;
   private readonly maxTokens: number;
+  private readonly responseDir?: string;
   private readonly model: string;
   private readonly provider: LLMProvider;
   private readonly cacheDir: string;
@@ -168,6 +173,7 @@ export class RenderPipeline {
     this.storage = opts.storage;
     this.skipCache = opts.skipCache ?? false;
     this.maxTokens = opts.maxTokens ?? 10_000;
+    this.responseDir = opts.responseDir;
     this.referenceExample = opts.referenceExample;
     this.aggregator = opts.aggregator;
     this.maxRetries = opts.maxRetries ?? 3;
@@ -238,6 +244,7 @@ export class RenderPipeline {
             success: analysis !== null,
             errorCount: errors.length,
           });
+          await this.writeResponseFile(eventId, String(c.prose ?? ''), true, errors, analysis, typeof c.renderedAt === 'string' ? c.renderedAt : new Date().toISOString());
           return {
             eventId, prose: String(c.prose ?? ''), analysis,
             llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, llmPass2: null,
@@ -571,6 +578,8 @@ export class RenderPipeline {
       errors.push(...hookErrors);
     }
 
+    await this.writeResponseFile(eventId, prose, false, errors, analysis, new Date().toISOString());
+
     return {
       eventId,
       prose,
@@ -588,6 +597,41 @@ export class RenderPipeline {
       promptHash,
       ...(pass2Rejection !== null ? { pass2Rejection } : {}),
     };
+  }
+
+  /**
+   * Write a raw response artifact to responseDir/{eventId}.json.
+   * Non-fatal: catches errors, logs warning, returns void.
+   */
+  private async writeResponseFile(
+    eventId: string,
+    prose: string,
+    cacheHit: boolean,
+    errors: string[],
+    analysis: AnalysisResult | null,
+    timestamp: string,
+  ): Promise<void> {
+    if (!this.responseDir) return;
+    if (!prose || prose.trim().length === 0) return;
+    try {
+      this.storage.mkdirp(this.responseDir);
+      const payload = {
+        prose,
+        timestamp,
+        cacheHit,
+        errors,
+        analysis,
+      };
+      this.storage.write(
+        [this.responseDir, `${eventId}.json`].join('/'),
+        JSON.stringify(payload, null, 2),
+      );
+    } catch (err) {
+      this.logger?.warn(
+        `Failed to persist raw response for ${eventId}`,
+        { eventId, responseDir: this.responseDir, error: String(err) },
+      );
+    }
   }
 
   /**

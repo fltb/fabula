@@ -7,8 +7,9 @@
 // must be validated against Pass 2 analysis narrativeChecks.
 //
 // resolveDeferredFacts() consumes the Pass 2 narrativeChecks block and
-// emits error issues for any narrativeHint-only precondition whose
-// matchLevel is 'absent' or 'contradicted'.
+// emits issues for narrativeHint-only preconditions:
+//   - contradicted → error (prose actively conflicts with the hint)
+//   - absent / missing from checks → warning (prose may not restate prior context)
 // ============================================================================
 
 import { compareFact } from '../entity/compare.js';
@@ -47,14 +48,26 @@ export function resolveDeferredFacts(
       (nc) => nc.entityId === pc.entityId && nc.attribute === pc.attribute,
     );
 
-    // Flag as error when absent, contradicted, or entirely missing from narrativeChecks
-    if (!match || match.matchLevel === 'absent' || match.matchLevel === 'contradicted') {
+    if (match?.matchLevel === 'contradicted') {
       issues.push(
         makeIssue(
           'DeferredResolver',
           event.id,
           pc.entityId,
           'error',
+          `Narrative hint precondition for ${pc.entityId}.${pc.attribute} is contradicted by prose`,
+          'Ensure the prose respects this precondition or adjust the precondition.',
+          'manual',
+          pc.attribute,
+        ),
+      );
+    } else if (!match || match.matchLevel === 'absent') {
+      issues.push(
+        makeIssue(
+          'DeferredResolver',
+          event.id,
+          pc.entityId,
+          'warning',
           `Narrative hint precondition for ${pc.entityId}.${pc.attribute} is ${match?.matchLevel ?? 'unverified'}`,
           'Ensure the prose establishes this state or adjust the precondition.',
           'manual',

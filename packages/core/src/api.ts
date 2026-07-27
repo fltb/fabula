@@ -588,6 +588,25 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     results = opts.batch
       ? (await new BatchRenderPipeline(pipeline).renderBatched(jobs, opts.batch)).results
       : await pipeline.renderAll(jobs);
+    // Persist all raw LLM responses regardless of release gate verdict
+    // — enables stress-test containment metrics even when gate rejects.
+    {
+      const responseDir = path.join(projectDir, '.nova', 'responses');
+      storage.mkdirp(responseDir);
+      for (const r of results) {
+        if (r.prose.trim().length === 0) continue;
+        storage.write(
+          path.join(responseDir, `${r.eventId}.json`),
+          JSON.stringify({
+            prose: r.prose,
+            timestamp: new Date().toISOString(),
+            cacheHit: r.cacheHit,
+            errors: r.errors,
+            analysis: r.analysis,
+          }, null, 2),
+        );
+      }
+    }
     const unreleased = results.filter((result) => result.prose.trim().length === 0 || result.analysis === null || result.validation === null || !result.validation.passed || result.needsReview);
     if (unreleased.length > 0) {
       const interactionManager = opts.interactionManager;

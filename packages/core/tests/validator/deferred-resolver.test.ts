@@ -138,7 +138,7 @@ describe('resolveDeferredFacts', () => {
     const issues = resolveDeferredFacts(event, analysis);
     const deferredIssues = issues.filter((i) => i.validator === 'DeferredResolver');
     expect(deferredIssues).toHaveLength(1);
-    expect(deferredIssues[0].severity).toBe('error');
+    expect(deferredIssues[0].severity).toBe('warning');
     expect(deferredIssues[0].message).toContain('absent');
     expect(deferredIssues[0].entity).toBe('jinx');
   });
@@ -177,7 +177,7 @@ describe('resolveDeferredFacts', () => {
     const issues = resolveDeferredFacts(event, analysis);
     const deferredIssues = issues.filter((i) => i.validator === 'DeferredResolver');
     expect(deferredIssues).toHaveLength(1);
-    expect(deferredIssues[0].message).toContain('unverified');
+    expect(deferredIssues[0].severity).toBe('warning');
     expect(deferredIssues[0].entity).toBe('jinx');
   });
 

@@ -16,7 +16,7 @@
 // ============================================================================
 
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
-import { join, dirname, basename } from 'node:path';
+import { isAbsolute, join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
 import YAML from 'yaml';
@@ -110,6 +110,16 @@ function readYaml(path) {
   }
 }
 
+/** Read and parse a JSON file; return null on any failure. */
+function readJson(path) {
+  try {
+    const raw = readFileSync(path, 'utf-8');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 /** List directory entries (files + subdirs), sorted, excluding dotfiles. */
 function listDir(dir) {
   try {
@@ -148,9 +158,9 @@ function parseArgs() {
     console.warn(`No fixture dir specified, using default: ${fixtureDir}`);
   }
 
-  const resolvedFixture = join(REPO_ROOT, fixtureDir);
+  const resolvedFixture = isAbsolute(fixtureDir) ? fixtureDir : join(REPO_ROOT, fixtureDir);
   const resolvedStability = stabilityDirs
-    ? stabilityDirs.map(d => join(REPO_ROOT, d))
+    ? stabilityDirs.map(d => isAbsolute(d) ? d : join(REPO_ROOT, d))
     : null;
 
   return { fixtureDir: resolvedFixture, stabilityDirs: resolvedStability };
@@ -207,9 +217,10 @@ function discoverEvents(fixtureDir) {
         chapterNum,
         data,
         // Companion file paths (may not exist yet)
-        sceneMdPath: join(fixtureDir, 'scenes', `${eventId}.md`),
-        sceneYamlPath: join(fixtureDir, 'scenes', `${eventId}.yaml`),
+        sceneMdPath: join(fixtureDir, 'scenes', `chapter-${String(chapterNum).padStart(2, '0')}`, `${eventId}.md`),
+        sceneYamlPath: join(fixtureDir, 'scenes', `chapter-${String(chapterNum).padStart(2, '0')}`, `${eventId}.yaml`),
         referenceTxtPath: join(fixtureDir, 'reference', 'original', `${eventId}.txt`),
+        responseJsonPath: join(fixtureDir, '.nova', 'responses', `${eventId}.json`),
       });
     }
   }
@@ -220,10 +231,20 @@ function discoverEvents(fixtureDir) {
 // ── Per-event metrics ──────────────────────────────────────────────────────
 
 function computeMetrics(event, sourceBuf) {
-  const { eventId, chapterNum, sceneMdPath, sceneYamlPath, referenceTxtPath } = event;
+  const { eventId, chapterNum, sceneMdPath, sceneYamlPath, referenceTxtPath, responseJsonPath } = event;
 
-  // Rendered scene content
-  const renderText = readText(sceneMdPath);
+  // Rendered scene content — prefer scenes/{id}.md, fallback to .nova/responses/{id}.json
+  let renderText = readText(sceneMdPath);
+  let proseSource = 'none';
+  const responseData = readJson(responseJsonPath);
+
+  if (renderText !== null) {
+    proseSource = 'scene';
+  } else if (responseData && typeof responseData.prose === 'string' && responseData.prose.trim().length > 0) {
+    renderText = responseData.prose;
+    proseSource = 'response';
+  }
+
   const renderChars = renderText ? extractHan(renderText) : [];
   const renderHan = renderChars.length;
 
@@ -234,9 +255,27 @@ function computeMetrics(event, sourceBuf) {
   const origHan = origChars.length;
 
   // Scene metadata (released / attempts)
+  // Scene YAML metadata wins if it has explicitly populated fields.
+  // Otherwise read from response JSON if present; legacy fields → 'N/A'.
   const sceneMeta = readYaml(sceneYamlPath);
-  const released = sceneMeta?.released !== undefined ? sceneMeta.released : 'N/A';
-  const attempts = sceneMeta?.attempts !== undefined ? sceneMeta.attempts : 'N/A';
+
+  let released, attempts;
+
+  if (sceneMeta && sceneMeta.released !== undefined) {
+    released = sceneMeta.released;
+  } else if (responseData && responseData.released !== undefined) {
+    released = responseData.released;
+  } else {
+    released = 'N/A';
+  }
+
+  if (sceneMeta && sceneMeta.attempts !== undefined) {
+    attempts = sceneMeta.attempts;
+  } else if (responseData && responseData.attempts !== undefined) {
+    attempts = responseData.attempts;
+  } else {
+    attempts = 'N/A';
+  }
 
   // Bigram containment
   const containment = bigramContainment(renderChars, origChars);
@@ -266,6 +305,7 @@ function computeMetrics(event, sourceBuf) {
     released,
     attempts,
     excerptStatus,
+    proseSource,
   };
 }
 
@@ -284,8 +324,8 @@ function writeReport(reportPath, rows, aggregates, stabilitySection) {
   lines.push('');
   lines.push('## Event Metrics');
   lines.push('');
-  lines.push('| ID | Chapter | Render Han | Original Han | Containment | Released | Attempts | Excerpt');
-  lines.push('|----|---------|-----------|-------------|-------------|----------|----------|---------');
+  lines.push('| ID | Chapter | Render Han | Original Han | Containment | Released | Attempts | Source | Excerpt');
+  lines.push('|----|---------|-----------|-------------|-------------|----------|----------|--------|---------');
 
   for (const r of rows) {
     const ch = r.chapterNum !== null ? r.chapterNum : '?';
@@ -298,7 +338,7 @@ function writeReport(reportPath, rows, aggregates, stabilitySection) {
     else if (excerptDisplay === 'EXCERPT_INVALID') excerptDisplay = '❌ EXCERPT_INVALID';
 
     lines.push(
-      `| ${r.eventId} | ${ch} | ${renderStr} | ${origStr} | ${containmentStr} | ${r.released} | ${r.attempts} | ${excerptDisplay}`
+      `| ${r.eventId} | ${ch} | ${renderStr} | ${origStr} | ${containmentStr} | ${r.released} | ${r.attempts} | ${r.proseSource} | ${excerptDisplay}`
     );
   }
 
@@ -314,7 +354,10 @@ function writeReport(reportPath, rows, aggregates, stabilitySection) {
     : 'N/A';
 
   lines.push(`- **Events**: ${aggregates.totalEvents}`);
-  lines.push(`- **With render**: ${aggregates.withRender}`);
+  lines.push(`- **With render (scene)**: ${aggregates.withRender}`);
+  lines.push(`- **With response fallback**: ${aggregates.withResponseFallback}`);
+  lines.push(`- **With prose (total)**: ${aggregates.withProse}`);
+  lines.push(`- **Released**: ${aggregates.releasedCount}`);
   lines.push(`- **With reference**: ${aggregates.withRef}`);
   lines.push(`- **Mean containment**: ${meanContainment}`);
   lines.push(`- **Min containment**: ${minContainment}`);
@@ -345,7 +388,10 @@ function computeAggregates(rows, sourceBuf) {
     .filter(c => c !== null && c !== undefined);
 
   const totalEvents = rows.length;
-  const withRender = rows.filter(r => r.renderHan > 0).length;
+  const withRender = rows.filter(r => r.renderHan > 0 && r.proseSource === 'scene').length;
+  const withProse = rows.filter(r => r.proseSource !== 'none').length;
+  const withResponseFallback = rows.filter(r => r.proseSource === 'response').length;
+  const releasedCount = rows.filter(r => r.released === true).length;
   const withRef = rows.filter(r => r.origHan > 0).length;
   const excerptInvalidCount = rows.filter(r => r.excerptStatus === 'EXCERPT_INVALID').length;
 
@@ -362,6 +408,9 @@ function computeAggregates(rows, sourceBuf) {
   return {
     totalEvents,
     withRender,
+    withProse,
+    withResponseFallback,
+    releasedCount,
     withRef,
     meanContainment,
     minContainment,
@@ -396,18 +445,50 @@ function buildStabilitySection(stabilityDirs, eventIds) {
 
   // Load all scene texts per directory
   const scenesByDir = validDirs.map(dir => {
+    const label = basename(dir);
     const scenesDir = join(dir, 'scenes');
-    if (!existsSync(scenesDir)) return { label: basename(dir), scenes: {} };
-    const sceneFiles = listDir(scenesDir).filter(n => n.endsWith('.md'));
+    const responsesDir = join(dir, '.nova', 'responses');
     const map = {};
-    for (const sf of sceneFiles) {
-      const id = basename(sf, '.md');
-      const text = readText(join(scenesDir, sf));
-      if (text !== null) {
-        map[id] = extractHan(text);
+
+    // Load scene markdown files first
+    if (existsSync(scenesDir)) {
+      const sceneFiles = listDir(scenesDir).filter(n => n.endsWith('.md'));
+      for (const sf of sceneFiles) {
+        const id = basename(sf, '.md');
+        const text = readText(join(scenesDir, sf));
+        if (text !== null) {
+          map[id] = extractHan(text);
+        }
+      }
+      // Also scan nested chapter-NN/ subdirectories (release layout)
+      const chapterDirs = listDir(scenesDir).filter(n => n.startsWith('chapter-')).map(n => join(scenesDir, n));
+      for (const chDir of chapterDirs) {
+        const chFiles = listDir(chDir).filter(n => n.endsWith('.md'));
+        for (const cf of chFiles) {
+          const id = basename(cf, '.md');
+          if (!map[id]) {  // flat path wins, but nested fills gaps
+            const text = readText(join(chDir, cf));
+            if (text !== null) {
+              map[id] = extractHan(text);
+            }
+          }
+        }
       }
     }
-    return { label: basename(dir), scenes: map };
+
+    // Fallback to response JSON for eventIds not yet in map
+    if (existsSync(responsesDir)) {
+      for (const eid of eventIds) {
+        if (!map[eid]) {
+          const responseData = readJson(join(responsesDir, `${eid}.json`));
+          if (responseData && typeof responseData.prose === 'string' && responseData.prose.trim().length > 0) {
+            map[eid] = extractHan(responseData.prose);
+          }
+        }
+      }
+    }
+
+    return { label, scenes: map };
   });
 
   // For each event that exists in at least 2 directories, compute pairwise containment

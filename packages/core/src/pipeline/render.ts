@@ -244,7 +244,7 @@ export class RenderPipeline {
             success: analysis !== null,
             errorCount: errors.length,
           });
-          await this.writeResponseFile(eventId, String(c.prose ?? ''), true, errors, analysis, typeof c.renderedAt === 'string' ? c.renderedAt : new Date().toISOString());
+          await this.writeResponseFile(eventId, String(c.prose ?? ''), true, errors, analysis, typeof c.renderedAt === 'string' ? c.renderedAt : new Date().toISOString(), validation, needsReview, 0);
           return {
             eventId, prose: String(c.prose ?? ''), analysis,
             llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, llmPass2: null,
@@ -578,7 +578,7 @@ export class RenderPipeline {
       errors.push(...hookErrors);
     }
 
-    await this.writeResponseFile(eventId, prose, false, errors, analysis, new Date().toISOString());
+    await this.writeResponseFile(eventId, prose, false, errors, analysis, new Date().toISOString(), renderValidation, needsReview, attempts, pass2Rejection ?? undefined);
 
     return {
       eventId,
@@ -610,18 +610,34 @@ export class RenderPipeline {
     errors: string[],
     analysis: AnalysisResult | null,
     timestamp: string,
+    validation: ValidationResult | null,
+    needsReview: boolean,
+    attempts: number,
+    pass2Rejection?: Pass2RejectionCategory,
   ): Promise<void> {
     if (!this.responseDir) return;
     if (!prose || prose.trim().length === 0) return;
     try {
       this.storage.mkdirp(this.responseDir);
-      const payload = {
+      const released = prose.trim().length > 0
+        && analysis !== null
+        && validation !== null
+        && validation.passed
+        && !needsReview;
+      const payload: Record<string, unknown> = {
         prose,
         timestamp,
         cacheHit,
         errors,
         analysis,
+        validation,
+        needsReview,
+        attempts,
+        released,
       };
+      if (pass2Rejection !== undefined) {
+        payload.pass2Rejection = pass2Rejection;
+      }
       this.storage.write(
         [this.responseDir, `${eventId}.json`].join('/'),
         JSON.stringify(payload, null, 2),

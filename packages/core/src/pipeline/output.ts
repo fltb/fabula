@@ -179,6 +179,15 @@ export function buildAndWriteOutputs(
         cacheHit: r.cacheHit,
         errors: r.errors,
         analysis: r.analysis,
+        validation: r.validation,
+        needsReview: r.needsReview,
+        attempts: r.attempts,
+        released: r.prose.trim().length > 0
+          && r.analysis !== null
+          && r.validation !== null
+          && r.validation.passed
+          && !r.needsReview,
+        ...(r.pass2Rejection !== undefined ? { pass2Rejection: r.pass2Rejection } : {}),
       },
     });
   }

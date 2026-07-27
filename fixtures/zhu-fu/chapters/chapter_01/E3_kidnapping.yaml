@@ -144,15 +144,20 @@ narrativeChecklist:
     - dimension: "话语控制"
       description: "'出格'一词——反抗被规范化为反常，叙事者的价值观通过标签渗透"
       required: false
+authorNotes:
+  - "本场以《祝福》原文为唯一表述基准：优先保持 sourceContext 中原句的语序、关键词、对白与留白。"
+  - "白篷船、花轿与卫老婆子的叙述必须保留原作的平淡转述；不得用电影式追逐、旁白谴责或新增反抗细节替代。"
 sourceContext:
   entries:
     - excerpt: "河里面上午就泊了一只白篷船，篷是全盖起来的，不知道什么人在里面……待到祥林嫂出来淘米，刚刚要跪下去，那船里便突然跳出两个男人来，像是山里人，一个抱住她，一个帮着，拖进船去了。"
-      classification: FACT
+      classification: STYLE
+      styleNote: "绑架以“没人理会—突然跳出—拖进船去”的冷静句序推进；暴力不作感官夸张。"
     - excerpt: "'这有什么依不依。——闹是谁也总要闹一闹的，只要用绳子一捆，塞在花轿里，抬到男家，捺上花冠，拜堂，关上房门，就完事了。'"
       classification: STYLE
       styleNote: "卫老婆子的叙述距离——她用'完事了'三个字解构了祥林嫂的激烈反抗（撞头出血），暴露了叙述者群体的冷漠。"
     - excerpt: "她一头撞在香案角上，头上碰了一个大窟窿，鲜血直流"
-      classification: FACT
+      classification: STYLE
+      styleNote: "撞香案只用原文的突发动作、伤口与鲜血收束，不添加反抗口号或心理独白。"
 greyLines:
   - id: gl_boat
     imagery: "白篷船——命运摆渡"

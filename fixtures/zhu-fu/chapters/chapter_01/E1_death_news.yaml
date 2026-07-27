@@ -89,7 +89,7 @@ ruleEffects:
     evidence: "鲁四老爷骂她'不早不迟，偏偏要在这时候——这就可见是一个谬种！'——死在祝福时节，她的死亡玷污了祝福仪式的纯洁。"
 styleGuidance:
   tone: "沉闷、压抑、渐趋冷峻"
-  targetWordCount: 400
+  targetWordCount: 820
   atmosphere: "书房里'我'独自坐在灯下，外面雪花簌簌声，满屋的寂静。晚云的消夜和爆竹声成为压抑的背景音。"
   scenePacing: "从惴惴不安到得知死讯的震动，再到'心地渐渐轻松'的微妙转折——需展现'我'的道德回避机制。"
   characterVoice:
@@ -122,12 +122,17 @@ narrativeChecklist:
     - dimension: "语言禁忌"
       description: "祝福期间不可说'死'——'老了'替代'死了'的仪式性语言规则"
       required: false
+authorNotes:
+  - "本场以《祝福》原文为唯一表述基准：优先保持 sourceContext 中原句的语序、关键词、对白与留白。"
+  - "短工的冷淡问答、四叔的“谬种”与“我”的渐轻松必须并置；不要用概括性评语替代原句的冷漠。"
 sourceContext:
   entries:
     - excerpt: "'老了。''死了？'我的心突然紧缩，几乎跳起来……我也就镇定了自己"
-      classification: FACT
+      classification: STYLE
+      styleNote: "短工回答应短促、无抬头、无同情；“老了”是临近祝福时对死亡的避讳，不可解释成普通老去。"
     - excerpt: "'不早不迟，偏偏要在这时候——这就可见是一个谬种！'"
-      classification: FACT
+      classification: STYLE
+      styleNote: "四叔的咒骂必须作为一记突兀的原话出现，揭示仪式秩序如何将死亡称作“谬种”。"
     - excerpt: "我独坐在发出黄光的菜油灯下，想，这百无聊赖的祥林嫂……现在总算被无常打扫得干干净净了。"
       classification: STYLE
       styleNote: "鲁迅的冷抒情——'无常打扫'是佛道混合修辞，'反而渐渐的舒畅起来'暴露了叙述者的自我麻醉。"

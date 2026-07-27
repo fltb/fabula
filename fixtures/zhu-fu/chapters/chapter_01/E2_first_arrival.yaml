@@ -90,7 +90,7 @@ ruleEffects:
     evidence: "四叔皱眉——他讨厌她是一个寡妇。即使她安分耐劳，寡妇的身份本身就是瑕疵。"
 styleGuidance:
   tone: "冷峻的社会观察中透出淡淡的温暖——她脸上短暂的红晕和笑影是故事中唯一的光亮。"
-  targetWordCount: 1500
+  targetWordCount: 550
   scenePacing: "缓慢的日常展开，在年终祝福的忙碌中达到高潮——注意将她的勤快与周围人的态度交织叙述。"
 narrativeChecklist:
   items:
@@ -120,13 +120,20 @@ anachrony:
   scope: external
   function: completing
   distance: "约5年前——祥林嫂第一次到鲁家"
+authorNotes:
+  - "本场以《祝福》原文为唯一表述基准：优先保持 sourceContext 中原句的语序、关键词、对白与留白。"
+  - "从“她不是鲁镇人”到逃亡被猜明按原文顺序收束；劳动场景只呈现动作与短暂笑影，不补写救赎式抒情。"
 sourceContext:
   entries:
     - excerpt: "头上扎着白头绳，乌裙，蓝夹袄，月白背心，年纪大约二十六七，脸色青黄，但两颊却还是红的……只是顺着眼，不开一句口，很像一个安分耐劳的人。"
       classification: STYLE
       styleNote: "鲁迅的人物出场描写——白头绳=寡妇标志，'两颊却还是红的'=尚存的生命力，为后续的容貌衰变做参照。"
     - excerpt: "到年底，扫尘，洗地，杀鸡，宰鹅，彻夜的煮福礼，全是一人担当，竟没有添短工。然而她反满足，口角边渐渐的有了笑影，脸上也白胖了。"
-      classification: FACT
+      classification: STYLE
+      styleNote: "用并列动词和节制叙述写劳动与笑影；让“反满足”停在原句的轻微温度，不扩大为幸福宣言。"
+    - excerpt: "卫老婆子叫她祥林嫂，说是自己母家的邻舍，死了当家人，所以出来做工了。四叔皱了皱眉，四婶已经知道了他的意思，是在讨厌她是一个寡妇。"
+      classification: STYLE
+      styleNote: "以转述、皱眉和不明说的社会判断推进人物出场；不要用旁白替鲁四老爷下现代道德判词。"
 greyLines:
   - id: gl_ritual
     imagery: "祝福与祭祀——神圣与禁忌的边界"

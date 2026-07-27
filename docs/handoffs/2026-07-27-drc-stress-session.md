@@ -74,8 +74,7 @@ node scripts/drc-stress-report.mjs fixtures/dream-of-red-chamber
 
 ### Measured rerun
 
-- Full DRC cache-resume/replay produced 36 complete response payloads: **35 released**, E01 rejected (`released=false`, `needsReview=true`, `attempts=6`) for an actual conflict validation result. `validate` remains 0 errors (692 warnings).
-- Canonical response-backed batch report: `docs/report/drc-stress-report-run2.md` — 36 persisted prose, `EXCERPT_INVALID=0`, mean source-bigram containment **5.3%**, minimum **2.1%**.
+ - Full DRC cache-resume/replay produced 36 complete response payloads: **35 released**, E01 rejected (`released=false`, `needsReview=true`, `attempts=6`). **Pre-fix caveat:** This rejection was the conflict resolution-type validation bug — `resolutionType: setup` (E01 is `person_vs_fate` with opening-setup prose, `resolutionAchieved: false`) was incorrectly classified by ConflictValidator as requiring resolution. The prose was appropriate for its role; the rejection was a false-positive bug, not a genuine prose conflict failure. Metrics below are pre-fix evidence.
 - Stability samples: E05/E21/E25 × 3, every logged `cache=false` after its event cache was explicitly removed. Nine payload hashes differ; the combined stability report records **9 pairwise comparisons**, mean containment **37.7%**: `docs/report/drc-stress-report-final.md`.
 - Intermediate stability scene artifacts were isolated before regenerating the canonical output; final batch metrics are response-backed (`With render(scene)=0`, `With response fallback=36`), not contaminated by single-event smoke outputs.
 

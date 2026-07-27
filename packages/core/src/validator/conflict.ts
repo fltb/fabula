@@ -62,9 +62,11 @@ export class ConflictValidator implements Validator {
     const conflictAnalysis = conflictResult.data;
     const eventResolutionType = event.resolutionType; // event-level field, not in entity attribute catalog
     const eventConflictType = event.conflictType; // event-level field, not in entity attribute catalog
+    // Resolution types that explicitly do NOT expect Pass 2 to confirm achievement.
+    // These denote "conflict established/continues, no in-scene resolution required."
+    const NON_RESOLVING = new Set(['unresolved', 'negative_resolution', 'setup', 'ongoing']);
 
-    // Only a declared resolving outcome requires Pass 2 to confirm resolution.
-    const expectsResolution = eventResolutionType !== undefined && !['unresolved', 'negative_resolution'].includes(eventResolutionType);
+    const expectsResolution = eventResolutionType !== undefined && !NON_RESOLVING.has(eventResolutionType);
     if (expectsResolution && !conflictAnalysis.resolutionAchieved) {
       const message = eventConflictType
         ? `Scene "${event.id}" declares conflict type "${eventConflictType}" with resolution "${eventResolutionType}" but Pass 2 analysis indicates resolution was NOT achieved`

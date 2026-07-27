@@ -21,8 +21,7 @@
 **Total**: 9 groups, 19 items (11 S-items + 3 validator bugs + 3 C-items + 2 deferred sub-items)
 
 **Verified 2026-07-26 (updated 22:07 CST)**: 7/9 groups fully complete（base-narratology 于 full-chain wiring session 接线完成：5 个 S6 validator + Pass 2 块 + mapper 字段转发根因修复，见 `docs/report/full-chain-wiring-acceptance.md`）。后续 C1 live evidence 已于 2026-07-27 13:51 CST 闭环；仅 C2/C3 保持人工标注阻塞。
-
-**Updated 2026-07-27 13:51 CST**: 基线 15 个测试失败已清零（`7c8e0f2`，旧仓库绝对路径债）。C1 的 dream-of-red-chamber live 证据已闭环：36 场景级 fixture，36 个 response-backed 散文、35 release、E01 真实 conflict gate 拒绝、EXCERPT_INVALID=0、mean containment 5.3%；E05/E21/E25 ×3 的 9 个 cache-isolated pairwise 稳定性比较均值 37.7%。完整证据见 `docs/handoffs/2026-07-27-drc-stress-session.md` 与 `docs/report/drc-stress-report-final.md`。C2/C3 仍是人工标注阻塞项。
+ **Updated 2026-07-27 13:51 CST**: 基线 15 个测试失败已清零（`7c8e0f2`，旧仓库绝对路径债）。C1 的 dream-of-red-chamber live 证据已闭环（均为 **pre-fix 指标**，ConflictValidator 对 `resolutionType: setup/ongoing` 分类 bug 未修复时的状态）：36 场景级 fixture，36 个 response-backed 散文、35 release、E01 因 ConflictValidator resolutionType 分类 bug 被拒（`resolutionType: setup` 被错误视为需要 `resolutionAchieved=true`）、EXCERPT_INVALID=0、mean containment 5.3%；E05/E21/E25 ×3 的 9 个 cache-isolated pairwise 稳定性比较均值 37.7%。完整证据见 `docs/handoffs/2026-07-27-drc-stress-session.md` 与 `docs/report/drc-stress-report-final.md`。C2/C3 仍是人工标注阻塞项。
 
 ## Execution waves
 

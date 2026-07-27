@@ -107,4 +107,54 @@ describe('ConflictValidator', () => {
     expect(mismatchIssues.length).toBeGreaterThanOrEqual(1);
     expect(mismatchIssues[0].severity).toBe('info');
   });
+
+  it('should NOT error when resolutionType is "setup" and Pass 2 says resolutionAchieved=false', () => {
+    const event = makeEvent({
+      id: 'E1',
+      resolutionType: 'setup',
+      conflictType: 'person_vs_fate',
+    });
+    const analysis = makeAnalysis({
+      primaryType: 'person_vs_fate',
+      resolutionAchieved: false,
+    });
+    const input = makeInput(event, analysis);
+    const issues = new ConflictValidator().validatePost(input);
+    const errorIssues = issues.filter(i => i.severity === 'error');
+    // setup is non-resolving — no error about resolution not achieved
+    expect(errorIssues).toHaveLength(0);
+  });
+
+  it('should NOT error when resolutionType is "ongoing" and Pass 2 says resolutionAchieved=false', () => {
+    const event = makeEvent({
+      id: 'E1',
+      resolutionType: 'ongoing',
+      conflictType: 'person_vs_society',
+    });
+    const analysis = makeAnalysis({
+      primaryType: 'person_vs_society',
+      resolutionAchieved: false,
+    });
+    const input = makeInput(event, analysis);
+    const issues = new ConflictValidator().validatePost(input);
+    const errorIssues = issues.filter(i => i.severity === 'error');
+    expect(errorIssues).toHaveLength(0);
+  });
+
+  it('should still error when a declared resolving resolutionType has resolutionAchieved=false', () => {
+    const event = makeEvent({
+      id: 'E1',
+      resolutionType: 'character_growth',
+      conflictType: 'internal',
+    });
+    const analysis = makeAnalysis({
+      primaryType: 'internal',
+      resolutionAchieved: false,
+    });
+    const input = makeInput(event, analysis);
+    const issues = new ConflictValidator().validatePost(input);
+    const errorIssues = issues.filter(i => i.severity === 'error');
+    expect(errorIssues.length).toBeGreaterThanOrEqual(1);
+    expect(errorIssues[0].message).toContain('resolution was NOT achieved');
+  });
 });

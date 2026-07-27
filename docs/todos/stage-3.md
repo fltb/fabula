@@ -22,6 +22,8 @@
 
 **Verified 2026-07-26 (updated 22:07 CST)**: 7/9 groups fully complete（base-narratology 于 full-chain wiring session 接线完成：5 个 S6 validator + Pass 2 块 + mapper 字段转发根因修复，见 `docs/report/full-chain-wiring-acceptance.md`）, 1 partial (narrative-checklist: S1 done, C1 needs live dream-of-red-chamber run), 1 blocked on human annotation (C2/C3, out of agent-executable scope).
 
+**Updated 2026-07-27 08:25 CST**: 基线 15 个测试失败已清零（`7c8e0f2`，旧仓库绝对路径债）。C1 的 live dream-of-red-chamber run 已重做为 36 场景级 fixture 并跑通第一轮（36/36 Pass 1 产出散文，release gate 因 hint-precondition unverified 全部拒绝——链路信号见 `docs/handoffs/2026-07-27-drc-stress-session.md`）；C1 闭环待 DeferredResolver 严重度决策后重跑。
+
 ## Execution waves
 
 ### Wave 0: Prerequisite bug fixes

@@ -6,10 +6,7 @@ import type { ReviewComment } from '../types/index.js';
 import type { StatusSummary } from './types.js';
 
 /** Count comments by status, with a blocking tally */
-export function getSummary(
-  comments: ReviewComment[],
-  _currentChapter: number,
-): StatusSummary {
+export function getSummary(comments: ReviewComment[], _currentChapter: number): StatusSummary {
   const byStatus: StatusSummary = {
     total: comments.length,
     open: 0,

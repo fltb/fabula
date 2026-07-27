@@ -4,32 +4,13 @@
 // StorySnapshot, DiscourseSnapshot, dual coverage manifest.
 // ============================================================================
 
-import type {
-  BranchPath,
-} from './branch.js';
-import type {
-  NarrativeEvent,
-} from './event.js';
-import type {
-  WorldState,
-} from './world.js';
-import type {
-  EntityId,
-} from './entity.js';
-import type {
-  RelationshipId,
-  EpochId as RelEpochId,
-  MembershipId,
-} from './relationship.js';
-import type {
-  RuleId,
-  RuleEpochId,
-  RuleExceptionId,
-  RuleSpecificationId,
-} from './rule.js';
-import type {
-  ThreadId,
-} from './thread.js';
+import type { BranchPath } from './branch.js';
+import type { EntityId } from './entity.js';
+import type { NarrativeEvent } from './event.js';
+import type { MembershipId, RelationshipId, EpochId as RelEpochId } from './relationship.js';
+import type { RuleEpochId, RuleExceptionId, RuleId, RuleSpecificationId } from './rule.js';
+import type { ThreadId } from './thread.js';
+import type { WorldState } from './world.js';
 
 // ─── ProviderOutput — deterministic read result from a provider ──────────────
 
@@ -46,11 +27,7 @@ export interface ProviderOutput {
 
 // ─── AbsenceWitness — deterministic absence resolution ───────────────────────
 
-export type AbsenceBasis =
-  | 'never_written'
-  | 'pre_introduction'
-  | 'after_unset'
-  | 'branch_local';
+export type AbsenceBasis = 'never_written' | 'pre_introduction' | 'after_unset' | 'branch_local';
 
 export interface AbsenceWitness {
   /** Concrete branch this witness is bound to */

@@ -17,7 +17,7 @@
 //   - Error isolation: failFast (default) or continue-on-failure
 // ============================================================================
 
-import type { RenderPipeline, RenderJob, RenderSceneResult } from './pipeline/render.ts';
+import type { RenderJob, RenderPipeline, RenderSceneResult } from './pipeline/render.ts';
 
 // ============================================================================
 // Type Definitions

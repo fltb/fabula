@@ -34,7 +34,7 @@ export const DEFAULT_SEVERITY_WEIGHTS: SeverityWeights = { error: 1.0, warning: 
 
 function deduplicateIssues(issues: ValidationIssue[]): ValidationIssue[] {
   const seen = new Set<string>();
-  return issues.filter(i => {
+  return issues.filter((i) => {
     const key = `${i.validator}\0${i.event}\0${i.entity ?? ''}\0${i.attribute ?? ''}\0${i.severity}`;
     if (seen.has(key)) return false;
     seen.add(key);
@@ -62,7 +62,8 @@ export function computeSCED(
   wordCount: number,
   weights: SeverityWeights = DEFAULT_SEVERITY_WEIGHTS,
 ): { rawSCED: number; weightedSCED: number; totalWeightedIssues: number; totalRawIssues: number } {
-  if (wordCount <= 0) return { rawSCED: 0, weightedSCED: 0, totalWeightedIssues: 0, totalRawIssues: 0 };
+  if (wordCount <= 0)
+    return { rawSCED: 0, weightedSCED: 0, totalWeightedIssues: 0, totalRawIssues: 0 };
   const deduped = deduplicateIssues(issues);
   const totalRawIssues = deduped.length;
   const div = wordCount / 10000;
@@ -113,7 +114,7 @@ export function computeSpearmanRho(
   if (Math.abs(rho) >= 1) return { rho: rho >= 1 ? 1 : -1, pValue: 0 };
   const t = Math.abs(rho) * Math.sqrt((n - 2) / (1 - rho * rho));
   const df = n - 2;
-  const x = t * (1 - 1 / (4 * df)) / Math.sqrt(1 + t * t / (2 * df));
+  const x = (t * (1 - 1 / (4 * df))) / Math.sqrt(1 + (t * t) / (2 * df));
   const pValue = 2 * (1 - _normCDF(x));
   return { rho, pValue };
 }
@@ -122,8 +123,9 @@ function _normCDF(x: number): number {
   const a = [0.254829592, -0.284496736, 1.421413741, -1.453152027, 1.061405429];
   const p = 0.3275911;
   const sign = x < 0 ? -1 : 1;
-  const t = 1 / (1 + p * Math.abs(x) / Math.SQRT2);
-  const y = 1 - (((((a[4] * t + a[3]) * t + a[2]) * t + a[1]) * t + a[0]) * t * Math.exp(-x * x / 2));
+  const t = 1 / (1 + (p * Math.abs(x)) / Math.SQRT2);
+  const y =
+    1 - ((((a[4] * t + a[3]) * t + a[2]) * t + a[1]) * t + a[0]) * t * Math.exp((-x * x) / 2);
   return 0.5 * (1 + sign * y);
 }
 
@@ -158,17 +160,25 @@ export function computeWordCountByLanguage(prose: string, language: 'zh' | 'en')
     let inLatin = false;
     for (const ch of s) {
       const cp = ch.codePointAt(0)!;
-      const isCJK = (cp >= 0x4E00 && cp <= 0x9FFF) ||
-                     (cp >= 0x3400 && cp <= 0x4DBF) ||
-                     (cp >= 0xF900 && cp <= 0xFAFF);
-      const isLatinChar = (cp >= 0x41 && cp <= 0x5A) || (cp >= 0x61 && cp <= 0x7A) || (cp >= 0x30 && cp <= 0x39);
+      const isCJK =
+        (cp >= 0x4e00 && cp <= 0x9fff) ||
+        (cp >= 0x3400 && cp <= 0x4dbf) ||
+        (cp >= 0xf900 && cp <= 0xfaff);
+      const isLatinChar =
+        (cp >= 0x41 && cp <= 0x5a) || (cp >= 0x61 && cp <= 0x7a) || (cp >= 0x30 && cp <= 0x39);
       if (isCJK) {
-        if (inLatin) { count++; inLatin = false; }
+        if (inLatin) {
+          count++;
+          inLatin = false;
+        }
         count++;
       } else if (isLatinChar) {
         inLatin = true;
       } else {
-        if (inLatin) { count++; inLatin = false; }
+        if (inLatin) {
+          count++;
+          inLatin = false;
+        }
       }
     }
     if (inLatin) count++;
@@ -176,8 +186,8 @@ export function computeWordCountByLanguage(prose: string, language: 'zh' | 'en')
   }
   // English: split on whitespace/punctuation, keep apostrophes and hyphens within words,
   // exclude tokens that are pure numbers.
-  const tokens = s.split(/[^a-zA-Z0-9'\-]+/).filter(t => t.length > 0);
-  return tokens.filter(t => /[a-zA-Z]/.test(t)).length;
+  const tokens = s.split(/[^a-zA-Z0-9'-]+/).filter((t) => t.length > 0);
+  return tokens.filter((t) => /[a-zA-Z]/.test(t)).length;
 }
 
 // ─── Metric 6: Per-Validator Breakdown ─────────────────────────────────────
@@ -217,15 +227,17 @@ export function computeSeverityLevelCED(
   const deduped = deduplicateIssues(issues);
   const div = wordCount > 0 ? wordCount / 10000 : 1;
   const w = DEFAULT_SEVERITY_WEIGHTS;
-  let eCount = 0, wCount = 0, iCount = 0;
+  let eCount = 0,
+    wCount = 0,
+    iCount = 0;
   for (const issue of deduped) {
     if (issue.severity === 'error') eCount++;
     else if (issue.severity === 'warning') wCount++;
     else iCount++;
   }
   return {
-    error:   { nCED: eCount / div, sCED: (eCount * w.error) / div },
+    error: { nCED: eCount / div, sCED: (eCount * w.error) / div },
     warning: { nCED: wCount / div, sCED: (wCount * w.warning) / div },
-    info:    { nCED: iCount / div, sCED: (iCount * w.info) / div },
+    info: { nCED: iCount / div, sCED: (iCount * w.info) / div },
   };
 }

@@ -3,9 +3,9 @@
 // legacy knowledge shim removed, replay works without KnowledgeState types.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { ReplayEngine } from '../../src/state/replay.js';
-import type { NarrativeEvent, Fact } from '../../src/types/index.js';
+import type { Fact, NarrativeEvent } from '../../src/types/index.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

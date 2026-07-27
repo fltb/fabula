@@ -1,17 +1,17 @@
-import { describe, it, expect } from 'vitest';
-import type {
-  ThreadId,
-  ThreadRunId,
-  ThreadLifecycle,
-  ThreadRuntimeState,
-  ThreadTransaction,
-} from '../../src/types/index.js';
+import { describe, expect, it } from 'vitest';
 import {
   applyThreadTransaction,
   convertLegacyThreadProgress,
   initializeThreadRuntimeState,
   mergeThreadStates,
 } from '../../src/state/thread-replay.js';
+import type {
+  ThreadId,
+  ThreadLifecycle,
+  ThreadRunId,
+  ThreadRuntimeState,
+  ThreadTransaction,
+} from '../../src/types/index.js';
 
 describe('Thread Lifecycle Transitions', () => {
   it('planned → active is valid', () => {
@@ -38,10 +38,16 @@ describe('Thread Lifecycle Transitions', () => {
   it('active → blocked is valid', () => {
     const threads: Record<string, ThreadRuntimeState> = {};
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'active', provenance: 'E0',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'active',
+      provenance: 'E0',
     });
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'blocked', provenance: 'E1',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'blocked',
+      provenance: 'E1',
     });
     expect(threads.T1!.status).toBe('blocked');
   });
@@ -49,13 +55,22 @@ describe('Thread Lifecycle Transitions', () => {
   it('blocked → active is valid (unblock)', () => {
     const threads: Record<string, ThreadRuntimeState> = {};
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'active', provenance: 'E0',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'active',
+      provenance: 'E0',
     });
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'blocked', provenance: 'E1',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'blocked',
+      provenance: 'E1',
     });
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'active', provenance: 'E2',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'active',
+      provenance: 'E2',
     });
     expect(threads.T1!.status).toBe('active');
   });
@@ -63,10 +78,16 @@ describe('Thread Lifecycle Transitions', () => {
   it('active → completed is valid', () => {
     const threads: Record<string, ThreadRuntimeState> = {};
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'active', provenance: 'E0',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'active',
+      provenance: 'E0',
     });
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'completed', provenance: 'E1',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'completed',
+      provenance: 'E1',
     });
     expect(threads.T1!.status).toBe('completed');
   });
@@ -74,10 +95,16 @@ describe('Thread Lifecycle Transitions', () => {
   it('active → abandoned is valid', () => {
     const threads: Record<string, ThreadRuntimeState> = {};
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'active', provenance: 'E0',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'active',
+      provenance: 'E0',
     });
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'abandoned', provenance: 'E1',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'abandoned',
+      provenance: 'E1',
     });
     expect(threads.T1!.status).toBe('abandoned');
   });
@@ -85,13 +112,22 @@ describe('Thread Lifecycle Transitions', () => {
   it('completed → planned (reopen) is valid', () => {
     const threads: Record<string, ThreadRuntimeState> = {};
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'active', provenance: 'E0',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'active',
+      provenance: 'E0',
     });
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'completed', provenance: 'E1',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'completed',
+      provenance: 'E1',
     });
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-2' as ThreadRunId, status: 'planned', provenance: 'E2',
+      thread: 'T1',
+      runId: 'run-2' as ThreadRunId,
+      status: 'planned',
+      provenance: 'E2',
     });
     expect(threads.T1!.status).toBe('planned');
     expect(threads.T1!.currentRunId).toBe('run-2');
@@ -100,17 +136,26 @@ describe('Thread Lifecycle Transitions', () => {
   it('retired is terminal — no transitions out', () => {
     const threads: Record<string, ThreadRuntimeState> = {};
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'active', provenance: 'E0',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'active',
+      provenance: 'E0',
     });
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'retired', provenance: 'E1',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'retired',
+      provenance: 'E1',
     });
     expect(threads.T1!.status).toBe('retired');
 
     // Attempting any transition from retired should throw
     expect(() => {
       applyThreadTransaction(threads, {
-        thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'active', provenance: 'E2',
+        thread: 'T1',
+        runId: 'run-1' as ThreadRunId,
+        status: 'active',
+        provenance: 'E2',
       });
     }).toThrow(/retired/);
   });
@@ -118,12 +163,18 @@ describe('Thread Lifecycle Transitions', () => {
   it('invalid transition throws', () => {
     const threads: Record<string, ThreadRuntimeState> = {};
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'planned', provenance: 'E0',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'planned',
+      provenance: 'E0',
     });
     // Cannot go from planned to completed
     expect(() => {
       applyThreadTransaction(threads, {
-        thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'completed', provenance: 'E1',
+        thread: 'T1',
+        runId: 'run-1' as ThreadRunId,
+        status: 'completed',
+        provenance: 'E1',
       });
     }).toThrow(/Invalid thread lifecycle transition/);
   });
@@ -180,12 +231,16 @@ describe('Thread Lifecycle Transitions', () => {
   it('semantic state hash changes on state update', () => {
     const threads: Record<string, ThreadRuntimeState> = {};
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, status: 'active', provenance: 'E0',
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
+      status: 'active',
+      provenance: 'E0',
     });
     const hash1 = threads.T1!.semanticStateHash;
 
     applyThreadTransaction(threads, {
-      thread: 'T1', runId: 'run-1' as ThreadRunId,
+      thread: 'T1',
+      runId: 'run-1' as ThreadRunId,
       goalSet: [{ goalId: 'progress', status: 'active' }],
       provenance: 'E1',
     });
@@ -226,7 +281,11 @@ describe('initializeThreadRuntimeState', () => {
     const state = initializeThreadRuntimeState(
       'T1',
       { initialPhase: 'setup' },
-      { allowedPhases: ['setup', 'conflict', 'resolution'], stableGoals: [{ goalId: 'goal_a', status: 'pending' }], stableMilestones: [] },
+      {
+        allowedPhases: ['setup', 'conflict', 'resolution'],
+        stableGoals: [{ goalId: 'goal_a', status: 'pending' }],
+        stableMilestones: [],
+      },
       'planned',
     );
 
@@ -244,7 +303,11 @@ describe('initializeThreadRuntimeState', () => {
         initialGoalStates: [{ goalId: 'goal_a', status: 'active' }],
         initialBindings: { hero: 'xiao_ming' },
       },
-      { allowedPhases: ['phase1'], stableGoals: [{ goalId: 'goal_a', status: 'pending' }], stableMilestones: [] },
+      {
+        allowedPhases: ['phase1'],
+        stableGoals: [{ goalId: 'goal_a', status: 'pending' }],
+        stableMilestones: [],
+      },
       'active',
     );
 
@@ -294,11 +357,19 @@ describe('mergeThreadStates', () => {
 
   it('selectBranch picks right state', () => {
     const left: ThreadRuntimeState = {
-      threadId: 'T1' as ThreadId, status: 'blocked', currentRunId: 'run-1' as ThreadRunId,
-      phase: '', bindings: {}, goalStates: {}, milestoneStates: {}, semanticStateHash: 'h0',
+      threadId: 'T1' as ThreadId,
+      status: 'blocked',
+      currentRunId: 'run-1' as ThreadRunId,
+      phase: '',
+      bindings: {},
+      goalStates: {},
+      milestoneStates: {},
+      semanticStateHash: 'h0',
     };
     const right: ThreadRuntimeState = {
-      ...left, status: 'active', semanticStateHash: 'h1',
+      ...left,
+      status: 'active',
+      semanticStateHash: 'h1',
     };
 
     const result = mergeThreadStates(left, right, 'selectBranch');
@@ -307,11 +378,20 @@ describe('mergeThreadStates', () => {
 
   it('literal merge unions goal/milestone states', () => {
     const left: ThreadRuntimeState = {
-      threadId: 'T1' as ThreadId, status: 'active', currentRunId: 'run-1' as ThreadRunId,
-      phase: '', bindings: {}, goalStates: { g1: 'active' }, milestoneStates: { m1: 'achieved' }, semanticStateHash: 'h0',
+      threadId: 'T1' as ThreadId,
+      status: 'active',
+      currentRunId: 'run-1' as ThreadRunId,
+      phase: '',
+      bindings: {},
+      goalStates: { g1: 'active' },
+      milestoneStates: { m1: 'achieved' },
+      semanticStateHash: 'h0',
     };
     const right: ThreadRuntimeState = {
-      ...left, goalStates: { g2: 'pending' }, milestoneStates: { m2: 'pending' }, semanticStateHash: 'h1',
+      ...left,
+      goalStates: { g2: 'pending' },
+      milestoneStates: { m2: 'pending' },
+      semanticStateHash: 'h1',
     };
 
     const result = mergeThreadStates(left, right, 'literal');
@@ -323,11 +403,19 @@ describe('mergeThreadStates', () => {
 
   it('newRun creates merge run with new ID', () => {
     const left: ThreadRuntimeState = {
-      threadId: 'T1' as ThreadId, status: 'active', currentRunId: 'run-A' as ThreadRunId,
-      phase: '', bindings: {}, goalStates: {}, milestoneStates: {}, semanticStateHash: 'h0',
+      threadId: 'T1' as ThreadId,
+      status: 'active',
+      currentRunId: 'run-A' as ThreadRunId,
+      phase: '',
+      bindings: {},
+      goalStates: {},
+      milestoneStates: {},
+      semanticStateHash: 'h0',
     };
     const right: ThreadRuntimeState = {
-      ...left, currentRunId: 'run-B' as ThreadRunId, semanticStateHash: 'h1',
+      ...left,
+      currentRunId: 'run-B' as ThreadRunId,
+      semanticStateHash: 'h1',
     };
 
     const result = mergeThreadStates(left, right, 'newRun');

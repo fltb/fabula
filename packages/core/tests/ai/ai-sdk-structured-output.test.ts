@@ -7,7 +7,7 @@
 // is returned as raw text — pipeline owns validation and retry-with-feedback.
 // ============================================================================
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Module mocks ─────────────────────────────────────────────────────────
 // vi.mock factories are hoisted above imports, so use vi.hoisted() to
@@ -31,8 +31,8 @@ vi.mock('ai', async () => {
 
 // ── SUT ──────────────────────────────────────────────────────────────────
 
-import { AiSdkProvider } from '../../src/ai/providers/ai-sdk.ts';
 import { generateText, Output } from 'ai';
+import { AiSdkProvider } from '../../src/ai/providers/ai-sdk.ts';
 import type { CompletionRequest } from '../../src/ai/types.ts';
 
 // ============================================================================
@@ -112,9 +112,7 @@ describe('AiSdkProvider — structured output mode', () => {
   it('passes Output.json() to generateText for Pass 2 requests', async () => {
     const expectedOutput = Output.json();
 
-    mockGenerateText.mockResolvedValueOnce(successResponse(
-      JSON.stringify(VALID_ANALYSIS),
-    ));
+    mockGenerateText.mockResolvedValueOnce(successResponse(JSON.stringify(VALID_ANALYSIS)));
 
     await provider.complete(makePass2Request());
 
@@ -128,9 +126,7 @@ describe('AiSdkProvider — structured output mode', () => {
   // ── Pass 2 via responseFormat alone (no seed) ───────────────────────
 
   it('uses JSON mode when only responseFormat is set (no seed)', async () => {
-    mockGenerateText.mockResolvedValueOnce(successResponse(
-      JSON.stringify(VALID_ANALYSIS),
-    ));
+    mockGenerateText.mockResolvedValueOnce(successResponse(JSON.stringify(VALID_ANALYSIS)));
 
     const req = makePass2Request();
     delete req.seed;
@@ -143,9 +139,9 @@ describe('AiSdkProvider — structured output mode', () => {
   // ── Pass 1 stays in text mode ───────────────────────────────────────
 
   it('calls generateText without output for Pass 1 requests', async () => {
-    mockGenerateText.mockResolvedValueOnce(successResponse(
-      'The scene opened with a gentle rain falling on the cobblestones.',
-    ));
+    mockGenerateText.mockResolvedValueOnce(
+      successResponse('The scene opened with a gentle rain falling on the cobblestones.'),
+    );
 
     await provider.complete(makePass1Request());
 
@@ -157,9 +153,7 @@ describe('AiSdkProvider — structured output mode', () => {
   // ── Schema-invalid Pass 2 JSON passes through as raw text ──────────
 
   it('passes through schema-invalid Pass 2 JSON text to pipeline', async () => {
-    mockGenerateText.mockResolvedValueOnce(successResponse(
-      JSON.stringify({ foo: 'bar' }),
-    ));
+    mockGenerateText.mockResolvedValueOnce(successResponse(JSON.stringify({ foo: 'bar' })));
 
     const result = await provider.complete(makePass2Request());
 
@@ -169,9 +163,7 @@ describe('AiSdkProvider — structured output mode', () => {
   // ── Non-JSON Pass 2 response passes through as raw text ─────────────
 
   it('passes through non-JSON Pass 2 text to pipeline', async () => {
-    mockGenerateText.mockResolvedValueOnce(successResponse(
-      'This is not JSON at all.',
-    ));
+    mockGenerateText.mockResolvedValueOnce(successResponse('This is not JSON at all.'));
 
     const result = await provider.complete(makePass2Request());
 
@@ -181,9 +173,7 @@ describe('AiSdkProvider — structured output mode', () => {
   // ── Correct content still passes through schema ─────────────────────
 
   it('passes through valid Pass 2 analysis', async () => {
-    mockGenerateText.mockResolvedValueOnce(successResponse(
-      JSON.stringify(VALID_ANALYSIS),
-    ));
+    mockGenerateText.mockResolvedValueOnce(successResponse(JSON.stringify(VALID_ANALYSIS)));
 
     const result = await provider.complete(makePass2Request());
 
@@ -196,9 +186,7 @@ describe('AiSdkProvider — structured output mode', () => {
   // ── Model defaults to configured value ──────────────────────────────
 
   it('uses configured model identifier in response', async () => {
-    mockGenerateText.mockResolvedValueOnce(successResponse(
-      JSON.stringify(VALID_ANALYSIS),
-    ));
+    mockGenerateText.mockResolvedValueOnce(successResponse(JSON.stringify(VALID_ANALYSIS)));
 
     const customProvider = new AiSdkProvider({
       apiKey: 'test-key',
@@ -215,9 +203,7 @@ describe('AiSdkProvider — structured output mode', () => {
   it('fails as regression test if output is removed from Pass 2 call', async () => {
     const expectedOutput = Output.json();
 
-    mockGenerateText.mockResolvedValueOnce(successResponse(
-      JSON.stringify(VALID_ANALYSIS),
-    ));
+    mockGenerateText.mockResolvedValueOnce(successResponse(JSON.stringify(VALID_ANALYSIS)));
 
     await provider.complete(makePass2Request());
 

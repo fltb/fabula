@@ -18,7 +18,7 @@ export interface ProseOnlyInput {
   styleGuidance?: StyleGuidance;
   characterVoiceNotes?: string;
   targetLengthWords?: number;
-  referenceExample?: string;     // optional "good" example from prior similar scene
+  referenceExample?: string; // optional "good" example from prior similar scene
   /** Injected on retry: describes what was wrong with the previous attempt */
   retryGuidance?: string;
 }
@@ -34,10 +34,10 @@ export function buildProsePrompt(input: ProseOnlyInput): Message[] {
     '## Instructions',
     '- Write ONLY the scene narrative. No planning. No self-analysis. No section headers. No JSON.',
     '- Begin directly with the action or description. Do not label or explain the scene.',
-    '- Stay strictly in the POV character\'s perspective (third-person limited unless stated otherwise).',
+    "- Stay strictly in the POV character's perspective (third-person limited unless stated otherwise).",
     '- Use sensory detail and interiority. Show emotional state through physical detail, not abstract summary.',
     '- Do NOT contradict any established fact from the context package.',
-    '- End when this scene\'s narrative beat is complete. A clean break is better than over-writing.',
+    "- End when this scene's narrative beat is complete. A clean break is better than over-writing.",
     '',
     `- Target length: ~${input.targetLengthWords ?? 800} words.`,
   ];
@@ -88,7 +88,11 @@ export function buildProsePrompt(input: ProseOnlyInput): Message[] {
   );
 
   return [
-    { role: 'system', content: 'You produce clean literary prose from a narrative context package. Your output is pure narrative text with no metadata.' },
+    {
+      role: 'system',
+      content:
+        'You produce clean literary prose from a narrative context package. Your output is pure narrative text with no metadata.',
+    },
     { role: 'user', content: parts.join('\n') },
   ];
 }

@@ -1,20 +1,18 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type {
+  AnalysisResult,
+  NarrativeEvent,
+  PostRenderInput,
+  PreRenderInput,
+} from '../../src/types/index.js';
 import { AntiCausalEdgeValidator } from '../../src/validator/anti-causal.js';
+import { CausalOverloadValidator } from '../../src/validator/causal-overload.js';
 import { ChapterOrderValidator } from '../../src/validator/chapter-order.js';
 import { SurfaceModeValidator } from '../../src/validator/surface-mode.js';
-import { CausalOverloadValidator } from '../../src/validator/causal-overload.js';
-import type {
-  NarrativeEvent,
-  PreRenderInput,
-  PostRenderInput,
-  AnalysisResult,
-} from '../../src/types/index.js';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
-function makeEvent(
-  overrides: Partial<NarrativeEvent> & { id: string },
-): NarrativeEvent {
+function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
     event: overrides.id,
     narrativeOrder: 1,
@@ -87,9 +85,7 @@ function makePostInput(
   };
 }
 
-function makeAnalysis(
-  overrides: Partial<AnalysisResult> = {},
-): AnalysisResult {
+function makeAnalysis(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
   return {
     eventId: 'E1',
     analysis: {

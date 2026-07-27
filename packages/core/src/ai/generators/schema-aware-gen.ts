@@ -9,7 +9,7 @@
 // ============================================================================
 
 import YAML from 'yaml';
-import type { ZodSchema, ZodError } from 'zod';
+import type { ZodError, ZodSchema } from 'zod';
 
 // ── Retry configuration ──────────────────────────────────────────────────────
 
@@ -38,8 +38,7 @@ export interface SchemaAwareResult<T> {
 
 function formatZodErrors(error: ZodError): string[] {
   return error.issues.map(
-    (issue) =>
-      `Path: ${issue.path.join('.')} — ${issue.message} (code: ${issue.code})`,
+    (issue) => `Path: ${issue.path.join('.')} — ${issue.message} (code: ${issue.code})`,
   );
 }
 

@@ -13,18 +13,23 @@
 // 9. Independent matrix interpreter properties
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import type { WorldState, EntityRuntimeState } from '../../src/types/index.js';
-import type { ReferenceIndex, ReferenceEntry, ReferenceMode, ReferenceKind } from '../../src/types/reference.js';
+import { describe, expect, it } from 'vitest';
 import {
-  computeReferenceIndex,
+  ALL_REFERENCE_KINDS,
   checkNewReferenceEligibility,
+  computeIndexHash,
+  computeReferenceIndex,
+  validateCandidateIndex,
   validateNewReferenceSet,
   validateRetirementClosure,
-  validateCandidateIndex,
-  computeIndexHash,
-  ALL_REFERENCE_KINDS,
 } from '../../src/state/reference-index.js';
+import type { EntityRuntimeState, WorldState } from '../../src/types/index.js';
+import type {
+  ReferenceEntry,
+  ReferenceIndex,
+  ReferenceKind,
+  ReferenceMode,
+} from '../../src/types/reference.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -84,25 +89,41 @@ describe('Mode × Kind × Lifecycle eligibility matrix', () => {
       expect(checkNewReferenceEligibility('inactive', 'live', kind).outcome).toBe('ineligible');
 
       // Inactive + override → eligible
-      expect(checkNewReferenceEligibility('inactive', 'live', kind, { inactiveOverride: true }).outcome).toBe('eligible');
+      expect(
+        checkNewReferenceEligibility('inactive', 'live', kind, { inactiveOverride: true }).outcome,
+      ).toBe('eligible');
     }
   });
 
   it('historical mode needs a lifecycle (not absent) and appropriate kind for retired', () => {
     // Active/inactive → eligible for any kind
-    expect(checkNewReferenceEligibility('active', 'historical', 'declaration').outcome).toBe('eligible');
-    expect(checkNewReferenceEligibility('inactive', 'historical', 'declaration').outcome).toBe('eligible');
+    expect(checkNewReferenceEligibility('active', 'historical', 'declaration').outcome).toBe(
+      'eligible',
+    );
+    expect(checkNewReferenceEligibility('inactive', 'historical', 'declaration').outcome).toBe(
+      'eligible',
+    );
 
     // Absent → ineligible
-    expect(checkNewReferenceEligibility(undefined, 'historical', 'declaration').outcome).toBe('ineligible');
+    expect(checkNewReferenceEligibility(undefined, 'historical', 'declaration').outcome).toBe(
+      'ineligible',
+    );
 
     // Retired + non-approved kind → ineligible (needs explicit conversion)
-    expect(checkNewReferenceEligibility('retired', 'historical', 'runtime_foreign_key').outcome).toBe('ineligible');
+    expect(
+      checkNewReferenceEligibility('retired', 'historical', 'runtime_foreign_key').outcome,
+    ).toBe('ineligible');
 
     // Retired + approved kinds → eligible (historical_boundary, provenance, causal_output)
-    expect(checkNewReferenceEligibility('retired', 'historical', 'historical_boundary').outcome).toBe('eligible');
-    expect(checkNewReferenceEligibility('retired', 'historical', 'provenance').outcome).toBe('eligible');
-    expect(checkNewReferenceEligibility('retired', 'historical', 'causal_output').outcome).toBe('eligible');
+    expect(
+      checkNewReferenceEligibility('retired', 'historical', 'historical_boundary').outcome,
+    ).toBe('eligible');
+    expect(checkNewReferenceEligibility('retired', 'historical', 'provenance').outcome).toBe(
+      'eligible',
+    );
+    expect(checkNewReferenceEligibility('retired', 'historical', 'causal_output').outcome).toBe(
+      'eligible',
+    );
   });
 
   it('covers every mode × kind combination without throwing', () => {
@@ -295,7 +316,15 @@ describe('Historical conversion', () => {
     // Simulate: before conversion, we have a live ref
     const beforeIndex: ReferenceIndex = {
       byEntity: {
-        hero: [{ targetEntityId: 'hero', mode: 'live', kind: 'thread_binding', sourceDomain: 'thread', sourceId: 'quest:run1' }],
+        hero: [
+          {
+            targetEntityId: 'hero',
+            mode: 'live',
+            kind: 'thread_binding',
+            sourceDomain: 'thread',
+            sourceId: 'quest:run1',
+          },
+        ],
       },
       hash: 'pre',
     };
@@ -307,7 +336,16 @@ describe('Historical conversion', () => {
     // After historical conversion: the ref is historical and does not block
     const afterIndex: ReferenceIndex = {
       byEntity: {
-        hero: [{ targetEntityId: 'hero', mode: 'historical', kind: 'historical_boundary', sourceDomain: 'thread', sourceId: 'quest:run1', boundary: 'ch1' }],
+        hero: [
+          {
+            targetEntityId: 'hero',
+            mode: 'historical',
+            kind: 'historical_boundary',
+            sourceDomain: 'thread',
+            sourceId: 'quest:run1',
+            boundary: 'ch1',
+          },
+        ],
       },
       hash: 'post',
     };
@@ -367,9 +405,15 @@ describe('POV/narrator boundary', () => {
       sourceId: 'scene_3',
     };
 
-    expect(checkNewReferenceEligibility('active', 'live', 'pov_focalizer').outcome).toBe('eligible');
-    expect(checkNewReferenceEligibility('inactive', 'live', 'pov_focalizer').outcome).toBe('ineligible');
-    expect(checkNewReferenceEligibility('retired', 'live', 'pov_focalizer').outcome).toBe('ineligible');
+    expect(checkNewReferenceEligibility('active', 'live', 'pov_focalizer').outcome).toBe(
+      'eligible',
+    );
+    expect(checkNewReferenceEligibility('inactive', 'live', 'pov_focalizer').outcome).toBe(
+      'ineligible',
+    );
+    expect(checkNewReferenceEligibility('retired', 'live', 'pov_focalizer').outcome).toBe(
+      'ineligible',
+    );
   });
 });
 
@@ -401,16 +445,24 @@ describe('Inactive overrides', () => {
     };
 
     const lifecycleMap: Record<string, EntityRuntimeState | undefined> = { sidekick: 'inactive' };
-    const errors = validateNewReferenceSet([ref], lifecycleMap, { sidekick: { inactiveOverride: true } });
+    const errors = validateNewReferenceSet([ref], lifecycleMap, {
+      sidekick: { inactiveOverride: true },
+    });
     expect(errors).toHaveLength(0);
   });
 
   it('core safety: override CANNOT allow absent entity live ref', () => {
-    expect(checkNewReferenceEligibility(undefined, 'live', 'declaration', { inactiveOverride: true }).outcome).toBe('ineligible');
+    expect(
+      checkNewReferenceEligibility(undefined, 'live', 'declaration', { inactiveOverride: true })
+        .outcome,
+    ).toBe('ineligible');
   });
 
   it('core safety: override CANNOT allow retired entity live ref', () => {
-    expect(checkNewReferenceEligibility('retired', 'live', 'declaration', { inactiveOverride: true }).outcome).toBe('ineligible');
+    expect(
+      checkNewReferenceEligibility('retired', 'live', 'declaration', { inactiveOverride: true })
+        .outcome,
+    ).toBe('ineligible');
   });
 });
 
@@ -419,17 +471,27 @@ describe('Inactive overrides', () => {
 describe('Branch/merge/race scenarios', () => {
   it('branch filter: entity active on one branch, absent on another', () => {
     // Branch A: hero active → live ref is eligible
-    expect(checkNewReferenceEligibility('active', 'live', 'thread_binding').outcome).toBe('eligible');
+    expect(checkNewReferenceEligibility('active', 'live', 'thread_binding').outcome).toBe(
+      'eligible',
+    );
 
     // Branch B: hero absent → live ref is ineligible
-    expect(checkNewReferenceEligibility(undefined, 'live', 'thread_binding').outcome).toBe('ineligible');
+    expect(checkNewReferenceEligibility(undefined, 'live', 'thread_binding').outcome).toBe(
+      'ineligible',
+    );
   });
 
   it('merge: resolve lifecycle first, then validate refs (constraint 15)', () => {
     // Simulate merge where identity is resolved first (active)
     const lifecycleMap: Record<string, EntityRuntimeState | undefined> = { hero: 'active' };
     const refs: ReferenceEntry[] = [
-      { targetEntityId: 'hero', mode: 'live', kind: 'relationship_membership', sourceDomain: 'relationship', sourceId: 'rel:epoch:mem' },
+      {
+        targetEntityId: 'hero',
+        mode: 'live',
+        kind: 'relationship_membership',
+        sourceDomain: 'relationship',
+        sourceId: 'rel:epoch:mem',
+      },
     ];
 
     // After lifecycle resolution, live ref is eligible
@@ -443,7 +505,13 @@ describe('Branch/merge/race scenarios', () => {
     // catches ineligible refs regardless of order
     const lifecycleMap: Record<string, EntityRuntimeState | undefined> = { hero: 'retired' };
     const refs: ReferenceEntry[] = [
-      { targetEntityId: 'hero', mode: 'live', kind: 'scene_participant', sourceDomain: 'scene', sourceId: 'scene_1' },
+      {
+        targetEntityId: 'hero',
+        mode: 'live',
+        kind: 'scene_participant',
+        sourceDomain: 'scene',
+        sourceId: 'scene_1',
+      },
     ];
 
     const errors = validateNewReferenceSet(refs, lifecycleMap);
@@ -482,7 +550,13 @@ describe('Index recomputation and hash verification', () => {
   it('index is not independently writable (hash computed from entries)', () => {
     // The hash is always derived from the byEntity content
     const entries: ReferenceEntry[] = [
-      { targetEntityId: 'hero', mode: 'identity', kind: 'declaration', sourceDomain: 'entity', sourceId: 'hero' },
+      {
+        targetEntityId: 'hero',
+        mode: 'identity',
+        kind: 'declaration',
+        sourceDomain: 'entity',
+        sourceId: 'hero',
+      },
     ];
 
     const byEntity = { hero: entries };
@@ -546,14 +620,26 @@ describe('Matrix interpreter properties', () => {
     const index: ReferenceIndex = {
       byEntity: {
         villain: [
-          { targetEntityId: 'villain', mode: 'live', kind: 'scene_participant', sourceDomain: 'scene', sourceId: 'scene_1' },
+          {
+            targetEntityId: 'villain',
+            mode: 'live',
+            kind: 'scene_participant',
+            sourceDomain: 'scene',
+            sourceId: 'scene_1',
+          },
         ],
       },
       hash: 'test',
     };
 
     const newRefs: ReferenceEntry[] = [
-      { targetEntityId: 'ghost', mode: 'live', kind: 'thread_binding', sourceDomain: 'thread', sourceId: 'quest' },
+      {
+        targetEntityId: 'ghost',
+        mode: 'live',
+        kind: 'thread_binding',
+        sourceDomain: 'thread',
+        sourceId: 'quest',
+      },
     ];
 
     const result = validateCandidateIndex(index, lifecycleMap, ['villain'], newRefs);
@@ -576,14 +662,18 @@ describe('Matrix interpreter properties', () => {
       expect(checkNewReferenceEligibility(undefined, 'live', kind).outcome).toBe('ineligible');
       expect(checkNewReferenceEligibility('retired', 'live', kind).outcome).toBe('ineligible');
       expect(checkNewReferenceEligibility('inactive', 'live', kind).outcome).toBe('ineligible');
-      expect(checkNewReferenceEligibility('inactive', 'live', kind, { inactiveOverride: true }).outcome).toBe('eligible');
+      expect(
+        checkNewReferenceEligibility('inactive', 'live', kind, { inactiveOverride: true }).outcome,
+      ).toBe('eligible');
     }
 
     // Historical: needs lifecycle, retired needs specific kinds
     for (const kind of ALL_REFERENCE_KINDS) {
       expect(checkNewReferenceEligibility('active', 'historical', kind).outcome).toBe('eligible');
       expect(checkNewReferenceEligibility('inactive', 'historical', kind).outcome).toBe('eligible');
-      expect(checkNewReferenceEligibility(undefined, 'historical', kind).outcome).toBe('ineligible');
+      expect(checkNewReferenceEligibility(undefined, 'historical', kind).outcome).toBe(
+        'ineligible',
+      );
     }
   });
 });
@@ -598,7 +688,7 @@ describe('WorldState domain scanning', () => {
     const index = computeReferenceIndex(ws);
     const heroRefs = index.byEntity.hero;
     expect(heroRefs).toBeDefined();
-    expect(heroRefs!.some(r => r.kind === 'declaration' && r.mode === 'identity')).toBe(true);
+    expect(heroRefs!.some((r) => r.kind === 'declaration' && r.mode === 'identity')).toBe(true);
   });
 
   it('scans multiple entities', () => {

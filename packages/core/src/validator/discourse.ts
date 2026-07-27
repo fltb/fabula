@@ -13,10 +13,10 @@
 // ============================================================================
 
 import type {
-  Validator,
-  ValidationIssue,
   PostRenderInput,
   PreRenderInput,
+  ValidationIssue,
+  Validator,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
@@ -39,7 +39,8 @@ export class DiscourseValidator implements Validator {
     // narratorProfile if the ref resolved, undefined if it did not.
     if (
       event.narratorProfileRef &&
-      !(input as PostRenderInput & { context?: { narratorProfile?: unknown } }).context?.narratorProfile
+      !(input as PostRenderInput & { context?: { narratorProfile?: unknown } }).context
+        ?.narratorProfile
     ) {
       issues.push(
         makeIssue(

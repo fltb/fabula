@@ -6,24 +6,28 @@
 // Cache hits yield zero calls. Ledger entries never leak sensitive data.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { RenderPipeline } from '../../src/pipeline/render.ts';
-import type { RenderJob, ProviderCallLedgerEntry, Pass2RejectionCategory } from '../../src/pipeline/render.ts';
-import { MockProvider } from '../../src/ai/providers/mock.ts';
+import { describe, expect, it } from 'vitest';
 import type { MockProviderOptions } from '../../src/ai/providers/mock.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import { MockProvider } from '../../src/ai/providers/mock.ts';
 import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
+import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import type {
+  Pass2RejectionCategory,
+  ProviderCallLedgerEntry,
+  RenderJob,
+} from '../../src/pipeline/render.ts';
+import { RenderPipeline } from '../../src/pipeline/render.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import type {
+  ContextPackage,
+  KnowledgeBoundary,
+  NarrativeEvent,
+  SceneSpecification,
+  SystemContext,
+  WorldState,
+} from '../../src/types/index.ts';
 import { ResultAggregator } from '../../src/validator/aggregator.ts';
 import { makeAnalysisResult } from '../fixtures/mock-pass2-helpers.ts';
-import type {
-  NarrativeEvent,
-  WorldState,
-  ContextPackage,
-  SystemContext,
-  SceneSpecification,
-  KnowledgeBoundary,
-} from '../../src/types/index.ts';
 
 // ============================================================================
 // Test fixtures
@@ -36,7 +40,13 @@ const VALID_ANALYSIS_JSON = JSON.stringify({
     preconditions: { violated: [] },
     pov: { consistent: true, leaks: [] },
     inventedDetails: [],
-    quality: { proseScore: 80, maxScore: 100, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+    quality: {
+      proseScore: 80,
+      maxScore: 100,
+      strengths: [],
+      weaknesses: [],
+      estimatedWordCount: 300,
+    },
     threadProgressAchieved: [],
     foreshadowingDeployed: [],
     narrativeChecks: [],
@@ -105,7 +115,14 @@ function makeContext(eventId: string): ContextPackage {
 function makeJob(id: string): RenderJob {
   return {
     event: makeEvent(id),
-    stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    stateBefore: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     context: makeContext(id),
     chapter: 1,
   };
@@ -180,7 +197,15 @@ describe('dynamic schema path with aggregator', () => {
 
 describe('RenderPipeline provider call ledger', () => {
   // Helper: verify standard ledger entry fields
-  function expectValidEntry(entry: ProviderCallLedgerEntry, opts: { phase: 'pass1' | 'pass2' | 'pass2_verify'; attempt: number; outcome: 'success' | 'failure'; seed: number | null }): void {
+  function expectValidEntry(
+    entry: ProviderCallLedgerEntry,
+    opts: {
+      phase: 'pass1' | 'pass2' | 'pass2_verify';
+      attempt: number;
+      outcome: 'success' | 'failure';
+      seed: number | null;
+    },
+  ): void {
     expect(entry.phase).toBe(opts.phase);
     expect(entry.attempt).toBe(opts.attempt);
     expect(entry.outcome).toBe(opts.outcome);
@@ -228,8 +253,8 @@ describe('RenderPipeline provider call ledger', () => {
     const { pipeline } = makePipeline({
       responses: [
         'Some prose content.',
-        '{invalid json',                    // First Pass 2 — bad JSON
-        VALID_ANALYSIS_JSON,                // Retry — valid
+        '{invalid json', // First Pass 2 — bad JSON
+        VALID_ANALYSIS_JSON, // Retry — valid
       ],
     });
 
@@ -307,12 +332,17 @@ describe('RenderPipeline provider call ledger', () => {
     const entries = result.providerCalls;
 
     // First call fails, remainder succeed
-    const failEntries = entries.filter(e => e.outcome === 'failure');
+    const failEntries = entries.filter((e) => e.outcome === 'failure');
     expect(failEntries).toHaveLength(1);
-    expectValidEntry(failEntries[0], { phase: 'pass1', attempt: 1, outcome: 'failure', seed: null });
+    expectValidEntry(failEntries[0], {
+      phase: 'pass1',
+      attempt: 1,
+      outcome: 'failure',
+      seed: null,
+    });
     expect(failEntries[0].failureReason).toBe('Simulated network error');
 
-    const successEntries = entries.filter(e => e.outcome === 'success');
+    const successEntries = entries.filter((e) => e.outcome === 'success');
     expect(successEntries.length).toBeGreaterThan(0);
 
     // promptHash is present
@@ -373,7 +403,7 @@ describe('RenderPipeline provider call ledger', () => {
     });
 
     const result = await pipeline.renderScene(makeJob('evt_secret'));
-    const failEntries = result.providerCalls.filter(e => e.outcome === 'failure');
+    const failEntries = result.providerCalls.filter((e) => e.outcome === 'failure');
 
     for (const entry of failEntries) {
       const reason = entry.failureReason ?? '';
@@ -400,7 +430,7 @@ describe('RenderPipeline provider call ledger', () => {
     });
 
     const result = await pipeline.renderScene(makeJob('evt_bounded'));
-    const failEntry = result.providerCalls.find(e => e.outcome === 'failure');
+    const failEntry = result.providerCalls.find((e) => e.outcome === 'failure');
     expect(failEntry).toBeDefined();
     expect(failEntry!.failureReason).toBeDefined();
 
@@ -428,7 +458,7 @@ describe('RenderPipeline provider call ledger', () => {
     const result = await pipeline.renderScene(makeJob('evt_empty_p2'));
     expect(result.analysis).toBeNull();
     expect(result.pass2Rejection).toBe('empty' satisfies Pass2RejectionCategory);
-    expect(result.errors.some(e => e.includes('empty content'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('empty content'))).toBe(true);
     // Pass2 exhausted, needs review, not a clean release
     expect(result.needsReview).toBe(true);
     // No raw content leaks in error strings
@@ -441,17 +471,13 @@ describe('RenderPipeline provider call ledger', () => {
 
   it('sets pass2Rejection to parse when Pass2 returns invalid JSON', async () => {
     const { pipeline } = makePipeline({
-      responses: [
-        'Prose content.',
-        '{not valid json}',
-        '{also not valid}',
-      ],
+      responses: ['Prose content.', '{not valid json}', '{also not valid}'],
     });
 
     const result = await pipeline.renderScene(makeJob('evt_parse_p2'));
     expect(result.analysis).toBeNull();
     expect(result.pass2Rejection).toBe('parse' satisfies Pass2RejectionCategory);
-    expect(result.errors.some(e => e.includes('JSON parse'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('JSON parse'))).toBe(true);
     // Pass 2 is mandatory even without an aggregator.
     expect(result.needsReview).toBe(true);
     // No raw content leaks
@@ -467,17 +493,17 @@ describe('RenderPipeline provider call ledger', () => {
     const { pipeline } = makePipeline({
       responses: [
         'Prose content.',
-        JSON.stringify({ eventId: 'evt_schema' }),     // valid JSON, fails analysisResultSchema
+        JSON.stringify({ eventId: 'evt_schema' }), // valid JSON, fails analysisResultSchema
         JSON.stringify({ eventId: 'evt_schema_dup' }), // retry 2, same
         JSON.stringify({ eventId: 'evt_schema_tri' }), // retry 3
-        JSON.stringify({ eventId: 'evt_schema_quad' }),// retry 4
+        JSON.stringify({ eventId: 'evt_schema_quad' }), // retry 4
       ],
     });
 
     const result = await pipeline.renderScene(makeJob('evt_schema_p2'));
     expect(result.analysis).toBeNull();
     expect(result.pass2Rejection).toBe('validation' satisfies Pass2RejectionCategory);
-    expect(result.errors.some(e => e.includes('schema validation'))).toBe(true);
+    expect(result.errors.some((e) => e.includes('schema validation'))).toBe(true);
     // Pass 2 is mandatory even without an aggregator.
     expect(result.needsReview).toBe(true);
     // No raw content leaks (JSON payloads not in error messages)
@@ -491,8 +517,8 @@ describe('RenderPipeline provider call ledger', () => {
     const { pipeline } = makePipeline({
       responses: [
         'Some prose content.',
-        JSON.stringify({ eventId: 'evt_retry_schema' }),     // valid JSON, fails analysisResultSchema (missing analysis field)
-        VALID_ANALYSIS_JSON,                                  // Retry — valid
+        JSON.stringify({ eventId: 'evt_retry_schema' }), // valid JSON, fails analysisResultSchema (missing analysis field)
+        VALID_ANALYSIS_JSON, // Retry — valid
       ],
     });
 
@@ -534,10 +560,10 @@ describe('RenderPipeline provider call ledger', () => {
     const { pipeline } = makePipeline({
       responses: [
         'Some prose content.',
-        JSON.stringify({ eventId: 'evt_retry_4' }),     // schema-invalid (missing analysis field)
-        JSON.stringify({ eventId: 'evt_retry_4' }),     // schema-invalid
-        JSON.stringify({ eventId: 'evt_retry_4' }),     // schema-invalid
-        VALID_ANALYSIS_JSON,                              // valid — 4th Pass2 attempt succeeds
+        JSON.stringify({ eventId: 'evt_retry_4' }), // schema-invalid (missing analysis field)
+        JSON.stringify({ eventId: 'evt_retry_4' }), // schema-invalid
+        JSON.stringify({ eventId: 'evt_retry_4' }), // schema-invalid
+        VALID_ANALYSIS_JSON, // valid — 4th Pass2 attempt succeeds
       ],
     });
 
@@ -592,7 +618,7 @@ describe('RenderPipeline provider call ledger', () => {
     expect(result.pass2Rejection).toBeUndefined();
     expect(result.needsReview).toBe(true);
     // All failures are Pass1 empty-content errors, never Pass2
-    expect(result.errors.every(e => e.includes('Pass 1'))).toBe(true);
+    expect(result.errors.every((e) => e.includes('Pass 1'))).toBe(true);
   });
 
   // ── Clean Pass2 success does not set pass2Rejection ──────────────

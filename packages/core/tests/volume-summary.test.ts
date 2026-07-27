@@ -2,7 +2,7 @@
 // Volume Summary Compiler Tests (Track 6F, D15)
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { VolumeSummaryCompiler } from '../src/summary/volume-summary.ts';
 import type { ChapterMeta, SceneMeta, VolumeSummary } from '../src/types/summary.js';
 
@@ -18,7 +18,9 @@ function makeChapterMeta(overrides: Partial<ChapterMeta> & { chapter: number }):
   };
 }
 
-function makeSceneMeta(overrides: Partial<SceneMeta> & { eventId: string; chapter: number }): SceneMeta {
+function makeSceneMeta(
+  overrides: Partial<SceneMeta> & { eventId: string; chapter: number },
+): SceneMeta {
   return {
     narrativeOrder: 0,
     ...overrides,
@@ -49,10 +51,7 @@ describe('VolumeSummaryCompiler', () => {
         makeChapterMeta({ chapter: 3, summary: 'The hero returns transformed' }),
       ];
 
-      const result = compiler.compile(
-        ['scene 1', 'scene 2', 'scene 3'],
-        chapters,
-      );
+      const result = compiler.compile(['scene 1', 'scene 2', 'scene 3'], chapters);
 
       expect(result.keyArcs).toEqual([
         'The hero departs on a journey',
@@ -130,10 +129,7 @@ describe('VolumeSummaryCompiler', () => {
     });
 
     it('should build character trajectory for multiple characters', () => {
-      const sceneSummaries = [
-        'Alice: curious\nBob: worried',
-        'Alice: tired',
-      ];
+      const sceneSummaries = ['Alice: curious\nBob: worried', 'Alice: tired'];
 
       const result = compiler.compile(sceneSummaries, []);
 
@@ -149,9 +145,7 @@ describe('VolumeSummaryCompiler', () => {
     });
 
     it('should return [0] for a single scene', () => {
-      const scenes: SceneMeta[] = [
-        makeSceneMeta({ eventId: 'E1', chapter: 1 }),
-      ];
+      const scenes: SceneMeta[] = [makeSceneMeta({ eventId: 'E1', chapter: 1 })];
       expect(compiler.detectVolumeBoundary(scenes)).toEqual([0]);
     });
 
@@ -197,9 +191,21 @@ describe('VolumeSummaryCompiler', () => {
 
     it('should detect chapter-timestamp story time jumps', () => {
       const scenes: SceneMeta[] = [
-        makeSceneMeta({ eventId: 'E1', chapter: 1, storyTime: { type: 'chapter', chapter: 1, description: 'Year 1' } }),
-        makeSceneMeta({ eventId: 'E2', chapter: 1, storyTime: { type: 'chapter', chapter: 1, description: 'Year 1' } }),
-        makeSceneMeta({ eventId: 'E3', chapter: 1, storyTime: { type: 'chapter', chapter: 5, description: 'Year 5' } }),
+        makeSceneMeta({
+          eventId: 'E1',
+          chapter: 1,
+          storyTime: { type: 'chapter', chapter: 1, description: 'Year 1' },
+        }),
+        makeSceneMeta({
+          eventId: 'E2',
+          chapter: 1,
+          storyTime: { type: 'chapter', chapter: 1, description: 'Year 1' },
+        }),
+        makeSceneMeta({
+          eventId: 'E3',
+          chapter: 1,
+          storyTime: { type: 'chapter', chapter: 5, description: 'Year 5' },
+        }),
       ];
 
       const boundaries = compiler.detectVolumeBoundary(scenes);

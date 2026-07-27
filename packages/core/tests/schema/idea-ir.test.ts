@@ -2,8 +2,12 @@
 // Schema Validation Tests — Idea IR (S7a)
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { thematicIntentSchema, emotionalArcDefinitionSchema, ideaIRSchema } from '../../src/schemas/idea-ir.js';
+import { describe, expect, it } from 'vitest';
+import {
+  emotionalArcDefinitionSchema,
+  ideaIRSchema,
+  thematicIntentSchema,
+} from '../../src/schemas/idea-ir.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -34,7 +38,10 @@ const VALID_IDEA_IR_FULL = {
 
 const VALID_IDEA_IR_MINIMAL = {
   thematicIntent: { primaryTheme: 'redemption', subThemes: [] },
-  emotionalArc: { arcType: 'redemption', emotionalBeats: [{ position: 'climax', emotion: 'forgiveness' }] },
+  emotionalArc: {
+    arcType: 'redemption',
+    emotionalBeats: [{ position: 'climax', emotion: 'forgiveness' }],
+  },
 };
 
 // ---------------------------------------------------------------------------

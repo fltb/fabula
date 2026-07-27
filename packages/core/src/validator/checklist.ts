@@ -7,13 +7,9 @@
 // Events without narrativeChecklist are skipped (backward compatible).
 // ============================================================================
 
-import type {
-  Validator,
-  PostRenderInput,
-  ValidationIssue,
-} from '../types/index.js';
 import { z } from 'zod';
 import { checklistResultSchema } from '../schemas/narrative-checklist.js';
+import type { PostRenderInput, ValidationIssue, Validator } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class ChecklistValidator implements Validator {
@@ -39,9 +35,8 @@ export class ChecklistValidator implements Validator {
 
     // Parse the checklistResults from the analysis
     const rawChecklistResults = (analysis as unknown as Record<string, unknown>).checklistResults;
-    const checklistResults = z
-      .array(checklistResultSchema)
-      .safeParse(rawChecklistResults).data ?? [];
+    const checklistResults =
+      z.array(checklistResultSchema).safeParse(rawChecklistResults).data ?? [];
 
     // For each required item, find a matching coverage result
     for (const item of checklist.items) {
@@ -54,31 +49,33 @@ export class ChecklistValidator implements Validator {
 
       if (!result) {
         // Required item was not evaluated by Pass 2
-        issues.push(makeIssue(
-          this.name,
-          event.id,
-          'system',
-          'warning',
-          `Required narrative checklist item "${item.dimension}" was not evaluated by the analysis pass: ${item.description}`,
-          `Ensure Pass 2 produces a checklistResult for dimension "${item.dimension}" with covered: true.`,
-          'change_value',
-          'narrativeChecklist',
-        ));
+        issues.push(
+          makeIssue(
+            this.name,
+            event.id,
+            'system',
+            'warning',
+            `Required narrative checklist item "${item.dimension}" was not evaluated by the analysis pass: ${item.description}`,
+            `Ensure Pass 2 produces a checklistResult for dimension "${item.dimension}" with covered: true.`,
+            'change_value',
+            'narrativeChecklist',
+          ),
+        );
       } else if (!result.covered) {
         // Required item was evaluated but marked as not covered
-        const evidence = result.evidence
-          ? ` (evidence: "${result.evidence}")`
-          : '';
-        issues.push(makeIssue(
-          this.name,
-          event.id,
-          'system',
-          'warning',
-          `Required narrative checklist item "${item.dimension}" is not covered: ${item.description}${evidence}`,
-          `Revise the prose to cover dimension "${item.dimension}".`,
-          'change_value',
-          'narrativeChecklist',
-        ));
+        const evidence = result.evidence ? ` (evidence: "${result.evidence}")` : '';
+        issues.push(
+          makeIssue(
+            this.name,
+            event.id,
+            'system',
+            'warning',
+            `Required narrative checklist item "${item.dimension}" is not covered: ${item.description}${evidence}`,
+            `Revise the prose to cover dimension "${item.dimension}".`,
+            'change_value',
+            'narrativeChecklist',
+          ),
+        );
       }
     }
 
@@ -86,13 +83,15 @@ export class ChecklistValidator implements Validator {
   }
 
   getAnalysisRequirements() {
-    return [{
-      field: 'checklistResults',
-      schema: z.array(checklistResultSchema),
-      instruction:
-        'checklistResults: For each item declared in the event\'s narrativeChecklist, ' +
-        'evaluate whether the prose covers that dimension. Report each dimension with ' +
-        'covered=true/false and an optional evidence quote from the prose.',
-    }];
+    return [
+      {
+        field: 'checklistResults',
+        schema: z.array(checklistResultSchema),
+        instruction:
+          "checklistResults: For each item declared in the event's narrativeChecklist, " +
+          'evaluate whether the prose covers that dimension. Report each dimension with ' +
+          'covered=true/false and an optional evidence quote from the prose.',
+      },
+    ];
   }
 }

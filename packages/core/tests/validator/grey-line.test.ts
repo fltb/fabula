@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { AnalysisResult, NarrativeEvent, PostRenderInput } from '../../src/types/index.js';
 import { GreyLineValidator } from '../../src/validator/grey-line.js';
-import type { NarrativeEvent, PostRenderInput, AnalysisResult } from '../../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -25,10 +25,7 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  analysis: AnalysisResult | null,
-): PostRenderInput {
+function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): PostRenderInput {
   return {
     event,
     worldState: {
@@ -172,7 +169,9 @@ describe('GreyLineValidator', () => {
     const input = makeInput(event, null);
     const issues = validator.validatePost(input);
     expect(issues.length).toBeGreaterThanOrEqual(1);
-    expect(issues.some((i) => i.message.includes('duplicate') || i.message.includes('multiple nodes'))).toBe(true);
+    expect(
+      issues.some((i) => i.message.includes('duplicate') || i.message.includes('multiple nodes')),
+    ).toBe(true);
   });
 
   it('should warn when imagery text is not found in narrativeChecks evidence', () => {

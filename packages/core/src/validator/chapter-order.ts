@@ -6,11 +6,7 @@
 // means the assembler has no meaningful choices to make.
 // ============================================================================
 
-import type {
-  Validator,
-  ValidationIssue,
-  PreRenderInput,
-} from '../types/index.js';
+import type { PreRenderInput, ValidationIssue, Validator } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class ChapterOrderValidator implements Validator {

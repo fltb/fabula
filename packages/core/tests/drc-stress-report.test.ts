@@ -6,11 +6,11 @@
 // when no scene file exists, and scene-metadata winning over response metadata.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+import { describe, expect, it } from 'vitest';
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const SCRIPT = path.join(REPO_ROOT, 'scripts', 'drc-stress-report.mjs');
@@ -37,23 +37,13 @@ function setupFixture(): string {
   // ── E01 event ──────────────────────────────────────────────────────────
   fs.writeFileSync(
     path.join(chaptersDir, 'E01_sample.yaml'),
-    [
-      'event: E01',
-      'title: "甄士隐梦幻识通灵"',
-      'narrativeOrder: 1',
-      '',
-    ].join('\n'),
+    ['event: E01', 'title: "甄士隐梦幻识通灵"', 'narrativeOrder: 1', ''].join('\n'),
   );
 
   // ── E02 event ──────────────────────────────────────────────────────────
   fs.writeFileSync(
     path.join(chaptersDir, 'E02_sample.yaml'),
-    [
-      'event: E02',
-      'title: "冷子兴演说荣国府"',
-      'narrativeOrder: 2',
-      '',
-    ].join('\n'),
+    ['event: E02', 'title: "冷子兴演说荣国府"', 'narrativeOrder: 2', ''].join('\n'),
   );
 
   // ── Scenes (nested per actual pipeline output: scenes/chapter-NN/) ─────
@@ -66,10 +56,7 @@ function setupFixture(): string {
     '甄士隱夢幻識通靈 賈雨村風塵怀閨秀\n\n話說那女媧氏煉石補天之時...\n',
   );
   // Scene metadata: released true, 2 attempts → must win over response JSON
-  fs.writeFileSync(
-    path.join(scenesDir, 'E01.yaml'),
-    'released: true\nattempts: 2\n',
-  );
+  fs.writeFileSync(path.join(scenesDir, 'E01.yaml'), 'released: true\nattempts: 2\n');
 
   // E02 deliberately has NO scene files → falls back to response
 
@@ -127,11 +114,15 @@ describe('DRC Stress Report — scene discovery & fallback', () => {
 
       // ── E01: scene source wins over response ───────────────────────
       // Row format: | ID | Ch | R_Han | O_Han | Cont% | Released | Attempts | Source | Excerpt
-      const e01Row = report.match(/\| E01 \| 1 \| [\d,]+ \| [\d,]+ \| [\d.]+% \| true \| 2 \| scene \|/);
+      const e01Row = report.match(
+        /\| E01 \| 1 \| [\d,]+ \| [\d,]+ \| [\d.]+% \| true \| 2 \| scene \|/,
+      );
       expect(e01Row).toBeTruthy();
 
       // ── E02: response fallback ─────────────────────────────────────
-      const e02Row = report.match(/\| E02 \| 1 \| [\d,]+ \| [\d,]+ \| [\d.]+% \| false \| 6 \| response \|/);
+      const e02Row = report.match(
+        /\| E02 \| 1 \| [\d,]+ \| [\d,]+ \| [\d.]+% \| false \| 6 \| response \|/,
+      );
       expect(e02Row).toBeTruthy();
 
       // ── No invalid rows in the table ──────────────────────────────

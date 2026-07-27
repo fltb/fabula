@@ -4,12 +4,7 @@
 
 import { z } from 'zod';
 
-export const matchLevelSchema = z.enum([
-  'exact',
-  'similar',
-  'absent',
-  'contradicted',
-]);
+export const matchLevelSchema = z.enum(['exact', 'similar', 'absent', 'contradicted']);
 
 export const narrativeCheckSchema = z.object({
   entityId: z.string(),

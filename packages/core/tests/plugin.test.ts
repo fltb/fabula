@@ -2,10 +2,10 @@
 // Comprehensive Unit Tests — Plugin System
 // ============================================================================
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  PluginLoader,
   detectConflicts,
+  PluginLoader,
   resolveConflict,
   ValidatorRegistry,
 } from '../src/plugin/index.js';
@@ -100,12 +100,12 @@ describe('detectConflicts', () => {
   it('detects explicit conflicts entries', () => {
     const conflicts = detectConflicts([manifestA, manifestB]);
     expect(conflicts.length).toBeGreaterThanOrEqual(1);
-    expect(conflicts.some(c => c.reason.includes('explicitly declares conflict'))).toBe(true);
+    expect(conflicts.some((c) => c.reason.includes('explicitly declares conflict'))).toBe(true);
   });
 
   it('detects overlapping exclusive dimensions', () => {
     const conflicts = detectConflicts([manifestA, manifestB]);
-    const dimConflict = conflicts.find(c => c.dimension === 'dim-x');
+    const dimConflict = conflicts.find((c) => c.dimension === 'dim-x');
     expect(dimConflict).toBeDefined();
     expect(dimConflict!.reason).toContain('exclusive authority');
   });
@@ -138,16 +138,14 @@ describe('resolveConflict', () => {
 
   it('merge strategy returns both plugin names comma-separated', () => {
     const plugins = new Map<string, PluginManifest>();
-    expect(resolveConflict(plugins, 'plugin-a', 'plugin-b', 'merge')).toBe(
-      'plugin-a,plugin-b',
-    );
+    expect(resolveConflict(plugins, 'plugin-a', 'plugin-b', 'merge')).toBe('plugin-a,plugin-b');
   });
 
   it('human_arbitration strategy throws an error', () => {
     const plugins = new Map<string, PluginManifest>();
-    expect(() =>
-      resolveConflict(plugins, 'plugin-a', 'plugin-b', 'human_arbitration'),
-    ).toThrow('requires human arbitration');
+    expect(() => resolveConflict(plugins, 'plugin-a', 'plugin-b', 'human_arbitration')).toThrow(
+      'requires human arbitration',
+    );
   });
 
   it('priority returns null for unknown plugins', () => {

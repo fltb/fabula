@@ -15,10 +15,7 @@
  * - `repeating`: narrating multiple times what happened once
  * - `iterative`: narrating once what happened multiple times
  */
-export type FrequencyType =
-  | 'singulative'
-  | 'repeating'
-  | 'iterative';
+export type FrequencyType = 'singulative' | 'repeating' | 'iterative';
 
 /**
  * Genette frequency profile for a narrative segment.

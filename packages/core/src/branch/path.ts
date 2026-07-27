@@ -35,9 +35,7 @@ export function branchPathsEqual(a: BranchPath, b: BranchPath): boolean {
  */
 export function branchPathToString(bp: BranchPath): string {
   if (bp.decisions.length === 0) return 'Linear';
-  return bp.decisions
-    .map(d => `BP${d.narrativeOrder}:${d.choiceId}`)
-    .join(' → ');
+  return bp.decisions.map((d) => `BP${d.narrativeOrder}:${d.choiceId}`).join(' → ');
 }
 
 /**

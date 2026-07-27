@@ -3,7 +3,7 @@
 // narrativeHint-only facts, 'match'/'mismatch' for value facts.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { compareFact } from '../../src/entity/compare.js';
 import type { Fact } from '../../src/types/entity.js';
 

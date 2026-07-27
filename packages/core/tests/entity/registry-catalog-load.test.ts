@@ -8,10 +8,10 @@
 // confirm character promoted fields survive and rules get category/type.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
 import path from 'node:path';
-import { InMemoryEntityRegistry } from '../../src/entity/index.js';
+import { describe, expect, it } from 'vitest';
 import { defaultEntityTypeCatalog } from '../../src/entity/default-catalog.js';
+import { InMemoryEntityRegistry } from '../../src/entity/index.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..', '..', '..');
 const ZHU_FU_FIXTURE = path.resolve(ROOT, 'fixtures', 'zhu-fu');

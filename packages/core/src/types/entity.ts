@@ -8,13 +8,7 @@ import type { BranchSet } from './branch.js';
 
 export type EntityId = string;
 
-export type EntityKind =
-  | 'character'
-  | 'location'
-  | 'item'
-  | 'concept'
-  | 'faction'
-  | 'rule';
+export type EntityKind = 'character' | 'location' | 'item' | 'concept' | 'faction' | 'rule';
 
 // ——— Type Reference ———
 
@@ -41,10 +35,7 @@ export interface Entity {
 
 // ——— Timestamp System (§7.4.16) ———
 
-export type StoryTimestamp =
-  | AbsoluteTimestamp
-  | RelativeTimestamp
-  | ChapterTimestamp;
+export type StoryTimestamp = AbsoluteTimestamp | RelativeTimestamp | ChapterTimestamp;
 
 export interface AbsoluteTimestamp {
   type: 'absolute';
@@ -104,7 +95,17 @@ export interface Fact {
    * - 'exists' / 'not_exists' check attribute presence/absence (no value)
    * Omitted defaults to 'eq' when value is present.
    */
-  operator?: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'not_contains' | 'exists' | 'not_exists';
+  operator?:
+    | 'eq'
+    | 'neq'
+    | 'gt'
+    | 'gte'
+    | 'lt'
+    | 'lte'
+    | 'contains'
+    | 'not_contains'
+    | 'exists'
+    | 'not_exists';
   validity: FactValidity;
 }
 

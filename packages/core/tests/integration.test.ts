@@ -10,25 +10,31 @@
 // Additionally, E1b.yaml has a YAML duplicate-key error, so only E1a is loaded.
 // ============================================================================
 
-import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 const FIXTURE_PATH = path.resolve(__dirname, '../../../fixtures/arcane-aftermath');
 
-import { EntityMapper, InMemoryEntityRegistry } from '../src/entity/index.js';
-import type { ProjectData } from '../src/entity/index.js';
-import { StateManager, ReplayEngine } from '../src/state/index.js';
-import {
-  ResultAggregator,
-  TimelineValidator,
-  POVValidator,
-} from '../src/validator/index.js';
-import { calculateISS, detectAntiPatterns } from '../src/iss/index.js';
 import { assembleNovel, countWords } from '../src/assembler/index.js';
 import { ContextCompiler } from '../src/context/index.js';
-import type { NarrativeEvent, PreRenderInput, WorldState, ThreadRuntimeState, ThreadId, ThreadRunId, ThreadLifecycle, GoalLifecycle, MilestoneLifecycle } from '../src/types/index.js';
+import type { ProjectData } from '../src/entity/index.js';
+import { EntityMapper, InMemoryEntityRegistry } from '../src/entity/index.js';
+import { calculateISS, detectAntiPatterns } from '../src/iss/index.js';
+import { ReplayEngine, StateManager } from '../src/state/index.js';
+import type {
+  GoalLifecycle,
+  MilestoneLifecycle,
+  NarrativeEvent,
+  PreRenderInput,
+  ThreadId,
+  ThreadLifecycle,
+  ThreadRunId,
+  ThreadRuntimeState,
+  WorldState,
+} from '../src/types/index.js';
+import { POVValidator, ResultAggregator, TimelineValidator } from '../src/validator/index.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -176,44 +182,76 @@ describe('1. Full Pipeline', () => {
     const sm = new StateManager(snapDir);
 
     const genesis = makeEvent({
-      id: 'system:genesis', event: 'system:genesis',
-      narrativeOrder: 0, title: 'World Genesis',
+      id: 'system:genesis',
+      event: 'system:genesis',
+      narrativeOrder: 0,
+      title: 'World Genesis',
       storyTime: { type: 'absolute', value: 'day_0' },
       source: 'genesis',
-      postconditions: [{
-        id: 'world.council_disarray', entityId: 'world',
-        attribute: 'council_status', value: 'in_disarray', confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      postconditions: [
+        {
+          id: 'world.council_disarray',
+          entityId: 'world',
+          attribute: 'council_status',
+          value: 'in_disarray',
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
     });
 
     const e1a = makeEvent({
-      id: 'E1a', event: 'E1a', narrativeOrder: 1,
+      id: 'E1a',
+      event: 'E1a',
+      narrativeOrder: 1,
       title: 'Seraphine Detects the Anomalous Signal',
       storyTime: { type: 'absolute', value: 'day_0' },
       sceneType: 'linear',
       pov: { character: 'seraphine', type: 'third_person_limited' },
       sceneBrief: 'Seraphine detects an anomalous emotional frequency.',
-      postconditions: [{
-        id: 'seraphine.detected_anomaly', entityId: 'seraphine',
-        attribute: 'detected_anomaly', value: true, confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
-      threadProgress: [{ thread: 'T1', advancement: 'Anomaly detected', progressAfter: 20, progressTotal: 100 }],
+      postconditions: [
+        {
+          id: 'seraphine.detected_anomaly',
+          entityId: 'seraphine',
+          attribute: 'detected_anomaly',
+          value: true,
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
+      threadProgress: [
+        { thread: 'T1', advancement: 'Anomaly detected', progressAfter: 20, progressTotal: 100 },
+      ],
       participants: { entities: ['seraphine'] },
     });
 
     const e1b = makeEvent({
-      id: 'E1b', event: 'E1b', narrativeOrder: 2,
+      id: 'E1b',
+      event: 'E1b',
+      narrativeOrder: 2,
       title: 'Camille Takes the Case',
       storyTime: { type: 'absolute', value: 'day_0' },
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'Camille takes the missing-crystals case.',
-      postconditions: [{
-        id: 'camille.accepted_case', entityId: 'camille',
-        attribute: 'case_status', value: 'accepted', confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      postconditions: [
+        {
+          id: 'camille.accepted_case',
+          entityId: 'camille',
+          attribute: 'case_status',
+          value: 'accepted',
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
       threadProgress: [
         { thread: 'T1', advancement: 'Case accepted', progressAfter: 30, progressTotal: 100 },
         { thread: 'T2', advancement: 'Family involvement', progressAfter: 15, progressTotal: 100 },
@@ -227,16 +265,33 @@ describe('1. Full Pipeline', () => {
 
     // Store
     expect(sm.eventStore.count).toBe(3);
-    expect(sm.eventStore.getAll().map((e) => e.id))
-      .toEqual(['system:genesis', 'E1a', 'E1b']);
+    expect(sm.eventStore.getAll().map((e) => e.id)).toEqual(['system:genesis', 'E1a', 'E1b']);
 
     // Duplicate narrative order throws
     expect(() => sm.commit(e1a)).toThrow(/already exists/);
 
     // State
     const state = sm.getCurrentState();
-    expect(state.threads['T1']).toEqual({ threadId: 'T1' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T1' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'hx9s670' });
-    expect(state.threads['T2']).toEqual({ threadId: 'T2' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T2' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'hbe9vjr' });
+    expect(state.threads['T1']).toEqual({
+      threadId: 'T1' as ThreadId,
+      status: 'active' as ThreadLifecycle,
+      currentRunId: 'legacy-T1' as ThreadRunId,
+      phase: '',
+      bindings: {},
+      goalStates: { progress: 'active' as GoalLifecycle },
+      milestoneStates: {},
+      semanticStateHash: 'hx9s670',
+    });
+    expect(state.threads['T2']).toEqual({
+      threadId: 'T2' as ThreadId,
+      status: 'active' as ThreadLifecycle,
+      currentRunId: 'legacy-T2' as ThreadRunId,
+      phase: '',
+      bindings: {},
+      goalStates: { progress: 'active' as GoalLifecycle },
+      milestoneStates: {},
+      semanticStateHash: 'hbe9vjr',
+    });
     expect(state.entities['seraphine']?.['detected_anomaly']).toBe(true);
     expect(state.entities['camille']?.['case_status']).toBe('accepted');
 
@@ -258,24 +313,44 @@ describe('1. Full Pipeline', () => {
 
     const genesis = makeEvent({ id: 'system:genesis', narrativeOrder: 0, source: 'genesis' });
     const evt1 = makeEvent({
-      id: 'E1a', narrativeOrder: 1,
+      id: 'E1a',
+      narrativeOrder: 1,
       pov: { character: 'seraphine', type: 'third_person_limited' },
       sceneBrief: 'Seraphine detects the signal.',
       participants: { entities: ['seraphine'] },
-      postconditions: [{
-        id: 's.detected', entityId: 'seraphine', attribute: 'detected_anomaly', value: true, confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      postconditions: [
+        {
+          id: 's.detected',
+          entityId: 'seraphine',
+          attribute: 'detected_anomaly',
+          value: true,
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
     });
     const evt2 = makeEvent({
-      id: 'E1b', narrativeOrder: 2,
+      id: 'E1b',
+      narrativeOrder: 2,
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'Camille takes the case.',
       participants: { entities: ['camille'] },
-      postconditions: [{
-        id: 'c.accepted', entityId: 'camille', attribute: 'case_status', value: 'accepted', confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      postconditions: [
+        {
+          id: 'c.accepted',
+          entityId: 'camille',
+          attribute: 'case_status',
+          value: 'accepted',
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
     });
 
     sm.commit(genesis);
@@ -286,14 +361,18 @@ describe('1. Full Pipeline', () => {
     const events = sm.eventStore.getAll();
     const registry = new InMemoryEntityRegistry();
     registry.register({
-      id: 'seraphine', kind: 'character', name: 'Seraphine',
+      id: 'seraphine',
+      kind: 'character',
+      name: 'Seraphine',
       definitionFile: 'definitions/characters/seraphine.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['empathetic', 'musical'], location: 'piltover_enforcer_headquarters' },
     });
     registry.register({
-      id: 'camille', kind: 'character', name: 'Camille',
+      id: 'camille',
+      kind: 'character',
+      name: 'Camille',
       definitionFile: 'definitions/characters/camille.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'character', schemaVersion: 1 },
@@ -315,11 +394,12 @@ describe('1. Full Pipeline', () => {
     }
   });
 
-
   it('1f. Individual TimelineValidator and POVValidator produce no errors', () => {
     const registry = new InMemoryEntityRegistry();
     registry.register({
-      id: 'seraphine', kind: 'character', name: 'Seraphine',
+      id: 'seraphine',
+      kind: 'character',
+      name: 'Seraphine',
       definitionFile: 'definitions/characters/seraphine.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'character', schemaVersion: 1 },
@@ -327,15 +407,20 @@ describe('1. Full Pipeline', () => {
     });
 
     const event = makeEvent({
-      id: 'E1a', narrativeOrder: 1,
+      id: 'E1a',
+      narrativeOrder: 1,
       pov: { character: 'seraphine', type: 'third_person_limited' },
       sceneBrief: 'Seraphine detects the signal.',
       participants: { entities: ['seraphine'] },
     });
     const events = [event];
     const state: WorldState = {
-      entities: {}, relationships: {}, knowledge: {},
-      threads: {}, rules: {}, facts: [],
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
     };
     const input: PreRenderInput = {
       event,
@@ -344,7 +429,12 @@ describe('1. Full Pipeline', () => {
       entityRegistry: registry,
       chapter: 1,
       queryState: () => undefined,
-      getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] }),
+      getKnowledge: () => ({
+        worldTruth: [],
+        characterKnowledge: {},
+        readerKnowledge: [],
+        narratorKnowledge: [],
+      }),
       getThreadProgress: () => null,
     };
 
@@ -467,13 +557,22 @@ describe('4. State Transitions', () => {
 
   it('4a. After E1a: seraphine has detected anomaly', () => {
     const e1a = makeEvent({
-      id: 'E1a', narrativeOrder: 1,
+      id: 'E1a',
+      narrativeOrder: 1,
       storyTime: { type: 'absolute', value: 'day_0' },
-      postconditions: [{
-        id: 'seraphine.detected_anomaly', entityId: 'seraphine',
-        attribute: 'detected_anomaly', value: true, confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      postconditions: [
+        {
+          id: 'seraphine.detected_anomaly',
+          entityId: 'seraphine',
+          attribute: 'detected_anomaly',
+          value: true,
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
       participants: { entities: ['seraphine'] },
     });
     sm.commit(e1a);
@@ -483,13 +582,22 @@ describe('4. State Transitions', () => {
 
   it('4b. After E1b: camille has taken the case', () => {
     const e1b = makeEvent({
-      id: 'E1b', narrativeOrder: 2,
+      id: 'E1b',
+      narrativeOrder: 2,
       storyTime: { type: 'absolute', value: 'day_0' },
-      postconditions: [{
-        id: 'camille.accepted_case', entityId: 'camille',
-        attribute: 'case_status', value: 'accepted', confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      postconditions: [
+        {
+          id: 'camille.accepted_case',
+          entityId: 'camille',
+          attribute: 'case_status',
+          value: 'accepted',
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
       participants: { entities: ['camille'] },
     });
     sm.commit(e1b);
@@ -503,11 +611,13 @@ describe('4. State Transitions', () => {
 
     const genesis = makeEvent({ id: 'genesis', narrativeOrder: 0, source: 'genesis' });
     const e1a = makeEvent({
-      id: 'E1a', narrativeOrder: 1,
+      id: 'E1a',
+      narrativeOrder: 1,
       threadProgress: [{ thread: 'T1', advancement: 'a', progressAfter: 20, progressTotal: 100 }],
     });
     const e1b = makeEvent({
-      id: 'E1b', narrativeOrder: 2,
+      id: 'E1b',
+      narrativeOrder: 2,
       threadProgress: [
         { thread: 'T1', advancement: 'b', progressAfter: 30, progressTotal: 100 },
         { thread: 'T2', advancement: 'c', progressAfter: 15, progressTotal: 100 },
@@ -520,9 +630,36 @@ describe('4. State Transitions', () => {
     sm2.commit(e1b);
 
     const state = sm2.getCurrentState();
-    expect(state.threads['T1']).toEqual({ threadId: 'T1' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T1' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'hx9s670' });
-    expect(state.threads['T2']).toEqual({ threadId: 'T2' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T2' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'hbe9vjr' });
-    expect(state.threads['T3']).toEqual({ threadId: 'T3' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T3' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'h4x3zs9' });
+    expect(state.threads['T1']).toEqual({
+      threadId: 'T1' as ThreadId,
+      status: 'active' as ThreadLifecycle,
+      currentRunId: 'legacy-T1' as ThreadRunId,
+      phase: '',
+      bindings: {},
+      goalStates: { progress: 'active' as GoalLifecycle },
+      milestoneStates: {},
+      semanticStateHash: 'hx9s670',
+    });
+    expect(state.threads['T2']).toEqual({
+      threadId: 'T2' as ThreadId,
+      status: 'active' as ThreadLifecycle,
+      currentRunId: 'legacy-T2' as ThreadRunId,
+      phase: '',
+      bindings: {},
+      goalStates: { progress: 'active' as GoalLifecycle },
+      milestoneStates: {},
+      semanticStateHash: 'hbe9vjr',
+    });
+    expect(state.threads['T3']).toEqual({
+      threadId: 'T3' as ThreadId,
+      status: 'active' as ThreadLifecycle,
+      currentRunId: 'legacy-T3' as ThreadRunId,
+      phase: '',
+      bindings: {},
+      goalStates: { progress: 'active' as GoalLifecycle },
+      milestoneStates: {},
+      semanticStateHash: 'h4x3zs9',
+    });
 
     fs.rmSync(snapDir2, { recursive: true, force: true });
   });
@@ -531,19 +668,39 @@ describe('4. State Transitions', () => {
     const replay = new ReplayEngine();
     const genesis = makeEvent({ id: 'sys:g', narrativeOrder: 0, source: 'genesis' });
     const e1a = makeEvent({
-      id: 'E1a', narrativeOrder: 1,
-      postconditions: [{
-        id: 's.detected', entityId: 'seraphine', attribute: 'detected_anomaly', value: true, confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      id: 'E1a',
+      narrativeOrder: 1,
+      postconditions: [
+        {
+          id: 's.detected',
+          entityId: 'seraphine',
+          attribute: 'detected_anomaly',
+          value: true,
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
       threadProgress: [{ thread: 'T1', advancement: 'a', progressAfter: 20, progressTotal: 100 }],
     });
     const e1b = makeEvent({
-      id: 'E1b', narrativeOrder: 2,
-      postconditions: [{
-        id: 'c.accepted', entityId: 'camille', attribute: 'case_status', value: 'accepted', confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      id: 'E1b',
+      narrativeOrder: 2,
+      postconditions: [
+        {
+          id: 'c.accepted',
+          entityId: 'camille',
+          attribute: 'case_status',
+          value: 'accepted',
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
       threadProgress: [{ thread: 'T1', advancement: 'b', progressAfter: 30, progressTotal: 100 }],
     });
     const allEvents = [genesis, e1a, e1b];
@@ -578,35 +735,51 @@ describe('5. ISS Calculation', () => {
   beforeAll(() => {
     registry = new InMemoryEntityRegistry();
     registry.register({
-      id: 'seraphine', kind: 'character', name: 'Seraphine',
+      id: 'seraphine',
+      kind: 'character',
+      name: 'Seraphine',
       definitionFile: 'definitions/characters/seraphine.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'character', schemaVersion: 1 },
-      state: { traits: ['empathetic', 'musical', 'burdened_by_voices'], location: 'piltover_enforcer_headquarters' },
+      state: {
+        traits: ['empathetic', 'musical', 'burdened_by_voices'],
+        location: 'piltover_enforcer_headquarters',
+      },
     });
     registry.register({
-      id: 'camille', kind: 'character', name: 'Camille',
+      id: 'camille',
+      kind: 'character',
+      name: 'Camille',
       definitionFile: 'definitions/characters/camille.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'character', schemaVersion: 1 },
-      state: { traits: ['calculating', 'ruthless_when_necessary'], location: 'piltover_enforcer_headquarters' },
+      state: {
+        traits: ['calculating', 'ruthless_when_necessary'],
+        location: 'piltover_enforcer_headquarters',
+      },
     });
     registry.register({
-      id: 'gear', kind: 'character', name: 'Gear',
+      id: 'gear',
+      kind: 'character',
+      name: 'Gear',
       definitionFile: 'definitions/characters/npcs/npc_gear.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['greedy', 'cowardly', 'shimmer_addicted'], location: 'zaun_gray_exchange' },
     });
     registry.register({
-      id: 'piltover_enforcer_headquarters', kind: 'location', name: 'Piltover Enforcer HQ',
+      id: 'piltover_enforcer_headquarters',
+      kind: 'location',
+      name: 'Piltover Enforcer HQ',
       definitionFile: 'definitions/locations/piltover_enforcer_headquarters.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'location', schemaVersion: 1 },
       state: { status: 'operational' },
     });
     registry.register({
-      id: 'zaun_gray_exchange', kind: 'location', name: 'Gray Market Exchange',
+      id: 'zaun_gray_exchange',
+      kind: 'location',
+      name: 'Gray Market Exchange',
       definitionFile: 'definitions/locations/zaun_gray_exchange.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'location', schemaVersion: 1 },
@@ -618,29 +791,67 @@ describe('5. ISS Calculation', () => {
     const events: NarrativeEvent[] = [
       makeEvent({ id: 'system:genesis', narrativeOrder: 0, source: 'genesis' }),
       makeEvent({
-        id: 'E1a', narrativeOrder: 1,
+        id: 'E1a',
+        narrativeOrder: 1,
         pov: { character: 'seraphine', type: 'third_person_limited' },
-        preconditions: [{
-          id: 's.loc', entityId: 'seraphine', attribute: 'location', value: 'piltover_enforcer_headquarters', confidence: 1.0,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-        }],
-        postconditions: [{
-          id: 's.detected', entityId: 'seraphine', attribute: 'detected_anomaly', value: true, confidence: 1.0,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-        }],
+        preconditions: [
+          {
+            id: 's.loc',
+            entityId: 'seraphine',
+            attribute: 'location',
+            value: 'piltover_enforcer_headquarters',
+            confidence: 1.0,
+            validity: {
+              temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+              branches: { type: 'all' },
+            },
+          },
+        ],
+        postconditions: [
+          {
+            id: 's.detected',
+            entityId: 'seraphine',
+            attribute: 'detected_anomaly',
+            value: true,
+            confidence: 1.0,
+            validity: {
+              temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+              branches: { type: 'all' },
+            },
+          },
+        ],
         threadProgress: [{ thread: 'T1', advancement: 'a', progressAfter: 20, progressTotal: 100 }],
       }),
       makeEvent({
-        id: 'E1b', narrativeOrder: 2,
+        id: 'E1b',
+        narrativeOrder: 2,
         pov: { character: 'camille', type: 'third_person_limited' },
-        preconditions: [{
-          id: 'c.loc', entityId: 'camille', attribute: 'location', value: 'piltover_enforcer_headquarters', confidence: 1.0,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-        }],
-        postconditions: [{
-          id: 'c.accepted', entityId: 'camille', attribute: 'case_status', value: 'accepted', confidence: 1.0,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-        }],
+        preconditions: [
+          {
+            id: 'c.loc',
+            entityId: 'camille',
+            attribute: 'location',
+            value: 'piltover_enforcer_headquarters',
+            confidence: 1.0,
+            validity: {
+              temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+              branches: { type: 'all' },
+            },
+          },
+        ],
+        postconditions: [
+          {
+            id: 'c.accepted',
+            entityId: 'camille',
+            attribute: 'case_status',
+            value: 'accepted',
+            confidence: 1.0,
+            validity: {
+              temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+              branches: { type: 'all' },
+            },
+          },
+        ],
         threadProgress: [{ thread: 'T1', advancement: 'b', progressAfter: 30, progressTotal: 100 }],
       }),
     ];
@@ -650,11 +861,33 @@ describe('5. ISS Calculation', () => {
       { id: 'T3', name: "Seraphine's Double Burden" },
     ];
     const rules = [
-      { ruleId: 'hextech_crystal_scarcity', name: 'Hextech Crystal Scarcity', category: 'state_invariant', type: 'state_invariant', statement: '', logicalConsequences: [], evidenceChain: [] },
-      { ruleId: 'shimmer_addiction_timeline', name: 'Shimmer Addiction Timeline', category: 'progression_rule', type: 'progression_rule', statement: '', logicalConsequences: [], evidenceChain: [] },
+      {
+        ruleId: 'hextech_crystal_scarcity',
+        name: 'Hextech Crystal Scarcity',
+        category: 'state_invariant',
+        type: 'state_invariant',
+        statement: '',
+        logicalConsequences: [],
+        evidenceChain: [],
+      },
+      {
+        ruleId: 'shimmer_addiction_timeline',
+        name: 'Shimmer Addiction Timeline',
+        category: 'progression_rule',
+        type: 'progression_rule',
+        statement: '',
+        logicalConsequences: [],
+        evidenceChain: [],
+      },
     ];
 
-    const iss = calculateISS({ projectDir: FIXTURE_PATH, entityRegistry: registry, events, threads, rules });
+    const iss = calculateISS({
+      projectDir: FIXTURE_PATH,
+      entityRegistry: registry,
+      events,
+      threads,
+      rules,
+    });
     expect(iss.overall).not.toBeNaN();
     expect(typeof iss.overall).toBe('number');
     expect(iss.overall).toBeGreaterThanOrEqual(0);
@@ -665,7 +898,10 @@ describe('5. ISS Calculation', () => {
     const iss = calculateISS({
       projectDir: FIXTURE_PATH,
       entityRegistry: registry,
-      events: [makeEvent({ narrativeOrder: 0, source: 'genesis' }), makeEvent({ narrativeOrder: 1 })],
+      events: [
+        makeEvent({ narrativeOrder: 0, source: 'genesis' }),
+        makeEvent({ narrativeOrder: 1 }),
+      ],
       threads: [{ id: 'T1', name: 'Test' }],
       rules: [],
     });
@@ -683,7 +919,10 @@ describe('5. ISS Calculation', () => {
     const iss = calculateISS({
       projectDir: FIXTURE_PATH,
       entityRegistry: registry,
-      events: [makeEvent({ narrativeOrder: 0, source: 'genesis' }), makeEvent({ narrativeOrder: 1 })],
+      events: [
+        makeEvent({ narrativeOrder: 0, source: 'genesis' }),
+        makeEvent({ narrativeOrder: 1 }),
+      ],
       threads: [{ id: 'T1', name: 'Test' }],
       rules: [],
     });
@@ -703,15 +942,26 @@ describe('5. ISS Calculation', () => {
     const events: NarrativeEvent[] = [
       makeEvent({ id: 'sys:g', narrativeOrder: 0, source: 'genesis' }),
       makeEvent({
-        id: 'E1a', narrativeOrder: 1,
+        id: 'E1a',
+        narrativeOrder: 1,
         pov: { character: 'seraphine', type: 'third_person_limited' },
-        postconditions: [{
-          id: 's.a', entityId: 'seraphine', attribute: 'detected_anomaly', value: true, confidence: 1.0,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-        }],
+        postconditions: [
+          {
+            id: 's.a',
+            entityId: 'seraphine',
+            attribute: 'detected_anomaly',
+            value: true,
+            confidence: 1.0,
+            validity: {
+              temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+              branches: { type: 'all' },
+            },
+          },
+        ],
       }),
       makeEvent({
-        id: 'E1b', narrativeOrder: 2,
+        id: 'E1b',
+        narrativeOrder: 2,
         pov: { character: 'camille', type: 'third_person_limited' },
         // No postconditions — triggers "empty scene" anti-pattern
       }),
@@ -748,7 +998,9 @@ describe('6. Assembler with Empty Scenes Directory', () => {
   });
 
   it('6a. assembly rejects empty scenes directory', () => {
-    expect(() => assembleNovel({ projectDir: FIXTURE_PATH, title: 'Arcane Aftermath' })).toThrow(/scene/i);
+    expect(() => assembleNovel({ projectDir: FIXTURE_PATH, title: 'Arcane Aftermath' })).toThrow(
+      /scene/i,
+    );
   });
 
   it('6b. countWords utility works correctly', () => {
@@ -762,7 +1014,11 @@ describe('6. Assembler with Empty Scenes Directory', () => {
     const emptyDir = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-empty-'));
     fs.mkdirSync(path.join(emptyDir, 'scenes'), { recursive: true });
     fs.mkdirSync(path.join(emptyDir, 'chapters'), { recursive: true });
-    fs.writeFileSync(path.join(emptyDir, 'nova.yaml'), 'project: empty\ntitle: "Empty"\nauthor: "Test"\n', 'utf-8');
+    fs.writeFileSync(
+      path.join(emptyDir, 'nova.yaml'),
+      'project: empty\ntitle: "Empty"\nauthor: "Test"\n',
+      'utf-8',
+    );
 
     expect(() => assembleNovel({ projectDir: emptyDir, title: 'Empty' })).toThrow(/scene|chapter/i);
 
@@ -779,46 +1035,91 @@ describe('7. Context Compilation', () => {
   beforeAll(() => {
     registry = new InMemoryEntityRegistry();
     registry.register({
-      id: 'seraphine', kind: 'character', name: 'Seraphine',
+      id: 'seraphine',
+      kind: 'character',
+      name: 'Seraphine',
       definitionFile: 'definitions/characters/seraphine.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['empathetic', 'musical'], location: 'piltover_enforcer_headquarters' },
     });
     registry.register({
-      id: 'camille', kind: 'character', name: 'Camille',
+      id: 'camille',
+      kind: 'character',
+      name: 'Camille',
       definitionFile: 'definitions/characters/camille.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'character', schemaVersion: 1 },
-      state: { traits: ['calculating', 'ruthless_when_necessary'], location: 'piltover_enforcer_headquarters' },
+      state: {
+        traits: ['calculating', 'ruthless_when_necessary'],
+        location: 'piltover_enforcer_headquarters',
+      },
     });
     compiler = new ContextCompiler();
   });
 
   it('7a. Compiles context for E1a with all required sections', () => {
     const event = makeEvent({
-      id: 'E1a', narrativeOrder: 1,
+      id: 'E1a',
+      narrativeOrder: 1,
       title: 'Seraphine Detects the Anomalous Signal',
       sceneType: 'linear',
       sceneBrief: 'Seraphine detects an anomalous emotional frequency.',
       pov: { character: 'seraphine', type: 'third_person_limited' },
       storyTime: { type: 'absolute', value: 'day_0' },
-      preconditions: [{
-        id: 's.loc', entityId: 'seraphine', attribute: 'location', value: 'piltover_enforcer_headquarters', confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
-      postconditions: [{
-        id: 's.detected', entityId: 'seraphine', attribute: 'detected_anomaly', value: true, confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      preconditions: [
+        {
+          id: 's.loc',
+          entityId: 'seraphine',
+          attribute: 'location',
+          value: 'piltover_enforcer_headquarters',
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
+      postconditions: [
+        {
+          id: 's.detected',
+          entityId: 'seraphine',
+          attribute: 'detected_anomaly',
+          value: true,
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
       threadProgress: [{ thread: 'T1', advancement: 'a', progressAfter: 20, progressTotal: 100 }],
       participants: { entities: ['seraphine'] },
     });
     const state: WorldState = {
-      entities: { seraphine: { location: 'piltover_enforcer_headquarters', status: 'alive', detected_anomaly: true } },
-      relationships: {}, knowledge: {},
-      threads: { T1: { threadId: 'T1' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T1' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'h0' } },
-      rules: {}, facts: [],
+      entities: {
+        seraphine: {
+          location: 'piltover_enforcer_headquarters',
+          status: 'alive',
+          detected_anomaly: true,
+        },
+      },
+      relationships: {},
+      knowledge: {},
+      threads: {
+        T1: {
+          threadId: 'T1' as ThreadId,
+          status: 'active' as ThreadLifecycle,
+          currentRunId: 'legacy-T1' as ThreadRunId,
+          phase: '',
+          bindings: {},
+          goalStates: { progress: 'active' as GoalLifecycle },
+          milestoneStates: {},
+          semanticStateHash: 'h0',
+        },
+      },
+      rules: {},
+      facts: [],
     };
 
     const pkg = compiler.compile(event, state, registry);
@@ -844,17 +1145,22 @@ describe('7. Context Compilation', () => {
 
   it('7b. Context package includes system context, scene spec, character snapshots', () => {
     const event = makeEvent({
-      id: 'test:ctx', narrativeOrder: 1,
+      id: 'test:ctx',
+      narrativeOrder: 1,
       sceneBrief: 'A test scene.',
       pov: { character: 'camille', type: 'third_person_limited' },
       participants: { entities: ['camille'] },
     });
     const state: WorldState = {
-      entities: {}, relationships: {}, knowledge: {},
-      threads: {}, rules: {}, facts: [],
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
     };
     const pkg = compiler.compile(event, state, registry, {
-      systemContext: { genre: 'dark fantasy', style: 'noir', narrativeRules: ['Show don\'t tell'] },
+      systemContext: { genre: 'dark fantasy', style: 'noir', narrativeRules: ["Show don't tell"] },
       activeThreadIds: ['T1', 'T2'],
     });
 
@@ -868,13 +1174,18 @@ describe('7. Context Compilation', () => {
 
   it('7c. Markdown output is non-empty with expected sections', () => {
     const event = makeEvent({
-      id: 'E1a', narrativeOrder: 1,
+      id: 'E1a',
+      narrativeOrder: 1,
       sceneBrief: 'Test.',
       pov: { character: 'seraphine', type: 'third_person_limited' },
     });
     const state: WorldState = {
-      entities: {}, relationships: {}, knowledge: {},
-      threads: {}, rules: {}, facts: [],
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
     };
     const pkg = compiler.compile(event, state, registry);
     expect(pkg.markdown.length).toBeGreaterThan(0);
@@ -887,13 +1198,28 @@ describe('7. Context Compilation', () => {
 
   it('7d. ContextCompiler.inspect returns JSON with eventId, counts', () => {
     const event = makeEvent({
-      id: 'test:inspect', narrativeOrder: 1,
+      id: 'test:inspect',
+      narrativeOrder: 1,
       pov: { character: 'camille', type: 'third_person_limited' },
     });
     const state: WorldState = {
-      entities: {}, relationships: {}, knowledge: {},
-      threads: { T1: { threadId: 'T1' as ThreadId, status: 'active' as ThreadLifecycle, currentRunId: 'legacy-T1' as ThreadRunId, phase: '', bindings: {}, goalStates: { progress: 'active' as GoalLifecycle }, milestoneStates: {}, semanticStateHash: 'h0' } },
-      rules: {}, facts: [],
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {
+        T1: {
+          threadId: 'T1' as ThreadId,
+          status: 'active' as ThreadLifecycle,
+          currentRunId: 'legacy-T1' as ThreadRunId,
+          phase: '',
+          bindings: {},
+          goalStates: { progress: 'active' as GoalLifecycle },
+          milestoneStates: {},
+          semanticStateHash: 'h0',
+        },
+      },
+      rules: {},
+      facts: [],
     };
     const pkg = compiler.compile(event, state, registry, { activeThreadIds: ['T1'] });
     const parsed = JSON.parse(compiler.inspect(pkg));
@@ -917,7 +1243,9 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
   afterAll(() => {
     const outputPath = path.join(FIXTURE_PATH, 'output', 'novel.md');
     if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-    try { fs.rmSync(snapDir, { recursive: true, force: true }); } catch {}
+    try {
+      fs.rmSync(snapDir, { recursive: true, force: true });
+    } catch {}
   });
 
   it('8a. End-to-end: load → registry → state → validate → ISS → assembler → context', () => {
@@ -930,14 +1258,18 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
     // 2. REGISTRY (manual due to ruleId crash)
     const registry = new InMemoryEntityRegistry();
     registry.register({
-      id: 'seraphine', kind: 'character', name: 'Seraphine',
+      id: 'seraphine',
+      kind: 'character',
+      name: 'Seraphine',
       definitionFile: 'definitions/characters/seraphine.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'character', schemaVersion: 1 },
       state: { traits: ['empathetic'], location: 'piltover_enforcer_headquarters' },
     });
     registry.register({
-      id: 'camille', kind: 'character', name: 'Camille',
+      id: 'camille',
+      kind: 'character',
+      name: 'Camille',
       definitionFile: 'definitions/characters/camille.yaml',
       lifecycle: 'active',
       typeRef: { typeId: 'character', schemaVersion: 1 },
@@ -947,31 +1279,62 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
     // 3. STATE
     const sm = new StateManager(snapDir);
     const genesis = makeEvent({
-      id: 'system:genesis', narrativeOrder: 0, source: 'genesis',
-      postconditions: [{
-        id: 'world.init', entityId: 'world', attribute: 'status', value: 'post_arcane_s1', confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      id: 'system:genesis',
+      narrativeOrder: 0,
+      source: 'genesis',
+      postconditions: [
+        {
+          id: 'world.init',
+          entityId: 'world',
+          attribute: 'status',
+          value: 'post_arcane_s1',
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
     });
     const e1a = makeEvent({
-      id: 'E1a', narrativeOrder: 1,
+      id: 'E1a',
+      narrativeOrder: 1,
       pov: { character: 'seraphine', type: 'third_person_limited' },
       sceneBrief: 'Seraphine detects signal.',
       participants: { entities: ['seraphine'] },
-      postconditions: [{
-        id: 's.detected', entityId: 'seraphine', attribute: 'detected_anomaly', value: true, confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      postconditions: [
+        {
+          id: 's.detected',
+          entityId: 'seraphine',
+          attribute: 'detected_anomaly',
+          value: true,
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
     });
     const e1b = makeEvent({
-      id: 'E1b', narrativeOrder: 2,
+      id: 'E1b',
+      narrativeOrder: 2,
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'Camille takes case.',
       participants: { entities: ['camille'] },
-      postconditions: [{
-        id: 'c.accepted', entityId: 'camille', attribute: 'case_status', value: 'accepted', confidence: 1.0,
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
-      }],
+      postconditions: [
+        {
+          id: 'c.accepted',
+          entityId: 'camille',
+          attribute: 'case_status',
+          value: 'accepted',
+          confidence: 1.0,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
     });
     sm.commit(genesis);
     sm.commit(e1a);
@@ -997,15 +1360,33 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
         { id: 'T3', name: "Seraphine's Double Burden" },
       ],
       rules: [
-        { ruleId: 'hextech_crystal_scarcity', name: 'Hextech Crystal Scarcity', category: '', type: '', statement: '', logicalConsequences: [], evidenceChain: [] },
-        { ruleId: 'shimmer_addiction_timeline', name: 'Shimmer Addiction Timeline', category: '', type: '', statement: '', logicalConsequences: [], evidenceChain: [] },
+        {
+          ruleId: 'hextech_crystal_scarcity',
+          name: 'Hextech Crystal Scarcity',
+          category: '',
+          type: '',
+          statement: '',
+          logicalConsequences: [],
+          evidenceChain: [],
+        },
+        {
+          ruleId: 'shimmer_addiction_timeline',
+          name: 'Shimmer Addiction Timeline',
+          category: '',
+          type: '',
+          statement: '',
+          logicalConsequences: [],
+          evidenceChain: [],
+        },
       ],
     });
     expect(iss.overall).not.toBeNaN();
     expect(iss.overall).toBeGreaterThanOrEqual(0);
 
     // 6. ASSEMBLER
-    expect(() => assembleNovel({ projectDir: FIXTURE_PATH, title: 'Smoke Test' })).toThrow(/scene/i);
+    expect(() => assembleNovel({ projectDir: FIXTURE_PATH, title: 'Smoke Test' })).toThrow(
+      /scene/i,
+    );
 
     // 7. CONTEXT
     const ctx = new ContextCompiler().compile(e1a, state, registry);
@@ -1013,4 +1394,3 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
     expect(ctx.markdown).toContain('# Context Package: E1a');
   });
 });
-

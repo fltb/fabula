@@ -27,7 +27,8 @@ export function buildThreadStatusPrompt(input: ThreadStatusInput): Message[] {
     `Current event: ${input.currentEvent}`,
     '',
     ...input.threads.map(
-      (t) => `- [${t.id}] ${t.name} — progress ${(t.progress * 100).toFixed(0)}% — last event: ${t.lastEvent}`,
+      (t) =>
+        `- [${t.id}] ${t.name} — progress ${(t.progress * 100).toFixed(0)}% — last event: ${t.lastEvent}`,
     ),
     '',
     '## Task',

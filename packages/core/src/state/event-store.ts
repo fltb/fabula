@@ -3,8 +3,8 @@
 // ============================================================================
 
 import * as path from 'node:path';
-import type { NarrativeEvent } from '../types/index.js';
 import { FsStorage, type Storage } from '../storage/index.ts';
+import type { NarrativeEvent } from '../types/index.js';
 
 export class EventStore {
   private events: NarrativeEvent[] = [];

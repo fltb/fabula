@@ -7,11 +7,11 @@
 // containment is computed (not "No pairwise comparisons possible").
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { tmpdir } from 'node:os';
 import { execSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+import { describe, expect, it } from 'vitest';
 
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 const SCRIPT = path.join(REPO_ROOT, 'scripts', 'drc-stress-report.mjs');
@@ -31,13 +31,9 @@ describe('DRC Stress Report — stability (nested scene + response fallback)', (
       );
       fs.writeFileSync(
         path.join(chaptersDir, 'E01.yaml'),
-        [
-          'event: E01',
-          'title: 甄士隱夢幻識通靈',
-          'chapter: 1',
-          'metadata:',
-          '  type: main',
-        ].join('\n') + '\n',
+        ['event: E01', 'title: 甄士隱夢幻識通靈', 'chapter: 1', 'metadata:', '  type: main'].join(
+          '\n',
+        ) + '\n',
       );
 
       // No reference/original dir → excerptStatus = 'N/A (no reference)'.
@@ -118,7 +114,7 @@ describe('DRC Stress Report — stability (nested scene + response fallback)', (
 
       // Labels are the basenames of each run dir (run1, run2, run3).
       // Verify at least one pair mentions the response-fallback dirs.
-      const pairText = e01PairLines.map(m => m[0]).join(' ');
+      const pairText = e01PairLines.map((m) => m[0]).join(' ');
       expect(pairText).toContain('run2');
       expect(pairText).toContain('run3');
     } finally {

@@ -2,7 +2,7 @@
 // PropositionCatalog — Tests for PropositionCatalog construction and validation
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { validatePropositionCatalog } from '../../src/state/knowledge-replay.js';
 import type { PropositionCatalog } from '../../src/types/index.js';
 
@@ -39,9 +39,27 @@ describe('PropositionCatalog', () => {
     const catalog: PropositionCatalog = {
       version: 1,
       propositions: {
-        p1: { kind: 'grounded', id: 'p1', entityId: 'ring', attribute: 'location', value: 'mordor' },
-        p2: { kind: 'epistemic', id: 'p2', subject: 'frodo', propositionId: 'p1', attitude: 'knows' },
-        p3: { kind: 'epistemic', id: 'p3', subject: 'gollum', propositionId: 'p2', attitude: 'believes' },
+        p1: {
+          kind: 'grounded',
+          id: 'p1',
+          entityId: 'ring',
+          attribute: 'location',
+          value: 'mordor',
+        },
+        p2: {
+          kind: 'epistemic',
+          id: 'p2',
+          subject: 'frodo',
+          propositionId: 'p1',
+          attitude: 'knows',
+        },
+        p3: {
+          kind: 'epistemic',
+          id: 'p3',
+          subject: 'gollum',
+          propositionId: 'p2',
+          attitude: 'believes',
+        },
       },
       dependencyGraph: {
         p1: [],
@@ -115,7 +133,13 @@ describe('PropositionCatalog', () => {
     const catalog: PropositionCatalog = {
       version: 1,
       propositions: {
-        p_ring: { kind: 'grounded', id: 'p_ring', entityId: 'ring', attribute: 'location', value: 'mordor' },
+        p_ring: {
+          kind: 'grounded',
+          id: 'p_ring',
+          entityId: 'ring',
+          attribute: 'location',
+          value: 'mordor',
+        },
         p1: {
           kind: 'act',
           id: 'p1',

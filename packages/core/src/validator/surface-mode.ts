@@ -8,10 +8,10 @@
 // ============================================================================
 
 import type {
-  Validator,
-  ValidationIssue,
-  PostRenderInput,
   NarrativeCheck,
+  PostRenderInput,
+  ValidationIssue,
+  Validator,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
@@ -53,9 +53,7 @@ export class SurfaceModeValidator implements Validator {
     );
 
     if (internalMarkers.length > 0) {
-      const details = internalMarkers
-        .map((c) => `${c.attribute} (${c.hint})`)
-        .join('; ');
+      const details = internalMarkers.map((c) => `${c.attribute} (${c.hint})`).join('; ');
       issues.push(
         makeIssue(
           this.name,

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import {
+  clearEventCache,
+  clearRenderCache,
+  getCachedRender,
+  setCachedRender,
+} from '../src/cache/render-cache.ts';
 import { CacheCorruptionError } from '../src/errors.ts';
-import { getCachedRender, setCachedRender, clearEventCache, clearRenderCache } from '../src/cache/render-cache.ts';
 import { MemoryStorage } from '../src/storage/memory-storage.ts';
 
 const cacheDir = '/project/.nova/render-cache';
@@ -32,12 +37,17 @@ describe('render cache', () => {
     setCachedRender(cacheDir, eventId, cacheKey, renderData, storage);
     storage.write(`${cacheDir}/${eventId}/cache.meta.json`, '{');
 
-    expect(() => getCachedRender(cacheDir, eventId, cacheKey, storage)).toThrow(CacheCorruptionError);
+    expect(() => getCachedRender(cacheDir, eventId, cacheKey, storage)).toThrow(
+      CacheCorruptionError,
+    );
     try {
       getCachedRender(cacheDir, eventId, cacheKey, storage);
     } catch (error) {
       expect(error).toBeInstanceOf(CacheCorruptionError);
-      expect(error).toMatchObject({ code: 'CACHE_CORRUPT', context: { eventId, phase: 'cache-read' } });
+      expect(error).toMatchObject({
+        code: 'CACHE_CORRUPT',
+        context: { eventId, phase: 'cache-read' },
+      });
       // Error message must be safe — no prompts, no prose
       expect(String(error)).not.toMatch(/prompt|prose|narrative|scene/i);
     }
@@ -50,7 +60,9 @@ describe('render cache', () => {
     storage.write(`${cacheDir}/${eventId}/data.render.json`, '{');
 
     // First access throws corruption error
-    expect(() => getCachedRender(cacheDir, eventId, cacheKey, storage)).toThrow(CacheCorruptionError);
+    expect(() => getCachedRender(cacheDir, eventId, cacheKey, storage)).toThrow(
+      CacheCorruptionError,
+    );
 
     // Clear the corrupt event cache and re-render
     clearEventCache(cacheDir, eventId, storage);
@@ -58,7 +70,10 @@ describe('render cache', () => {
 
     // Re-render (set new value)
     setCachedRender(cacheDir, eventId, cacheKey, { prose: 're-rendered', tokens: 99 }, storage);
-    expect(getCachedRender(cacheDir, eventId, cacheKey, storage)).toEqual({ prose: 're-rendered', tokens: 99 });
+    expect(getCachedRender(cacheDir, eventId, cacheKey, storage)).toEqual({
+      prose: 're-rendered',
+      tokens: 99,
+    });
   });
 
   it('clearRenderCache removes all stored render data', () => {

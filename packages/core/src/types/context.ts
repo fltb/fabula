@@ -2,11 +2,11 @@
 // Novalistically — Context Compiler & Render Types (§7.4.6, §7.4.17)
 // ============================================================================
 
-import type { EntityId } from './entity.js';
-import type { RelationshipState } from './world.js';
-import type { RuleDefinition } from './rule.js';
 import type { NarratorProfile } from './discourse.js';
+import type { EntityId } from './entity.js';
 import type { ThematicIntent } from './idea-ir.js';
+import type { RuleDefinition } from './rule.js';
+import type { RelationshipState } from './world.js';
 
 // ——— Relevance Score ———
 
@@ -123,5 +123,3 @@ export interface FinalPrompt {
   systemPrompt: string;
   userPrompt: string;
 }
-
-

@@ -3,9 +3,15 @@
 // Tests: default fallback, precedence resolution, hash stability, config merge
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { DEFAULT_STYLE_PROFILE, StyleResolver, resolveProfile, toStyleNotes, toInternalProfile } from '../src/style/index.js';
+import { describe, expect, it } from 'vitest';
 import type { StyleResolverInput } from '../src/style/index.js';
+import {
+  DEFAULT_STYLE_PROFILE,
+  resolveProfile,
+  StyleResolver,
+  toInternalProfile,
+  toStyleNotes,
+} from '../src/style/index.js';
 
 // ============================================================================
 // DEFAULT_STYLE_PROFILE
@@ -50,9 +56,9 @@ describe('resolveProfile', () => {
       project: { voice: 'formal', diction: 'elevated', rhythm: 'flowing' },
       chapter: { voice: 'conversational' },
     });
-    expect(result.voice).toBe('conversational');  // chapter wins
-    expect(result.diction).toBe('elevated');       // from project
-    expect(result.rhythm).toBe('flowing');          // from project
+    expect(result.voice).toBe('conversational'); // chapter wins
+    expect(result.diction).toBe('elevated'); // from project
+    expect(result.rhythm).toBe('flowing'); // from project
   });
 
   it('overrides chapter with narrator profile', () => {
@@ -61,7 +67,7 @@ describe('resolveProfile', () => {
       chapter: { voice: 'conversational', diction: 'colloquial' },
       narrator: { voice: 'lyrical' },
     });
-    expect(result.voice).toBe('lyrical');     // narrator wins
+    expect(result.voice).toBe('lyrical'); // narrator wins
     expect(result.diction).toBe('colloquial'); // from chapter
   });
 
@@ -72,7 +78,7 @@ describe('resolveProfile', () => {
       scene: { voice: 'conversational' },
     });
     expect(result.voice).toBe('conversational'); // scene wins
-    expect(result.diction).toBe('elevated');      // from narrator
+    expect(result.diction).toBe('elevated'); // from narrator
   });
 
   it('handles avoid array merge', () => {
@@ -132,7 +138,12 @@ describe('toInternalProfile', () => {
   it('includes resolutionPrecedence in correct order', () => {
     const internal = toInternalProfile(
       { voice: 'formal' },
-      { project: { voice: 'formal' }, chapter: { voice: 'conversational' }, narrator: { voice: 'lyrical' }, scene: { voice: 'dramatic' } },
+      {
+        project: { voice: 'formal' },
+        chapter: { voice: 'conversational' },
+        narrator: { voice: 'lyrical' },
+        scene: { voice: 'dramatic' },
+      },
     );
     expect(internal.resolutionPrecedence.projectStyle).toBe('project_style_v1');
     expect(internal.resolutionPrecedence.chapterStyle).toBe('chapter_style_v1');

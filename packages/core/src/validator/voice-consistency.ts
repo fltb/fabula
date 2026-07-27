@@ -8,15 +8,15 @@
 //   severity choice).
 // ============================================================================
 
+import { z } from 'zod';
 import type {
-  Validator,
-  ValidationIssue,
+  AnalysisBlockRequirement,
   PostRenderInput,
   PreRenderInput,
-  AnalysisBlockRequirement,
+  ValidationIssue,
+  Validator,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
-import { z } from 'zod';
 
 export const voiceDetectedSchema = z.object({
   level: z.enum(['extradiegetic', 'intradiegetic', 'metadiegetic', 'hypodiegetic']),

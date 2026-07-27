@@ -6,10 +6,10 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
-  narrativeEllipsisSchema,
-  narrativeNodeSchema,
-  narrativeEventSchema,
   ellipsisProvenanceSchema,
+  narrativeEllipsisSchema,
+  narrativeEventSchema,
+  narrativeNodeSchema,
 } from '../../src/schemas/corpus.ts';
 
 // ─── Fixture Helpers ──────────────────────────────────────────────────────
@@ -98,7 +98,9 @@ describe('Binding 2 — Essential ellipsis fields', () => {
     delete without.summary;
     expect(narrativeEllipsisSchema.safeParse(without).success).toBe(true);
 
-    const withSummary = validEllipsisInput({ summary: 'Source text between lines 100-250 describes a journey.' });
+    const withSummary = validEllipsisInput({
+      summary: 'Source text between lines 100-250 describes a journey.',
+    });
     expect(narrativeEllipsisSchema.safeParse(withSummary).success).toBe(true);
   });
 
@@ -371,7 +373,12 @@ describe('Binding 8 — Single storyTime enforced', () => {
 
   it('rejects multiple storyTimes (array not accepted)', () => {
     // storyTime is a single value, not an array
-    const input = validEllipsisInput({ storyTime: [{ type: 'chapter', chapter: 1 }, { type: 'chapter', chapter: 2 }] });
+    const input = validEllipsisInput({
+      storyTime: [
+        { type: 'chapter', chapter: 1 },
+        { type: 'chapter', chapter: 2 },
+      ],
+    });
     const result = narrativeEllipsisSchema.safeParse(input);
     expect(result.success).toBe(false);
   });
@@ -423,7 +430,9 @@ describe('Ellipsis successful parse', () => {
     if (result.success) {
       expect(result.data.kind).toBe('ellipsis');
       expect(result.data.id).toBe('ellipsis_001');
-      expect(result.data.summary).toBe('Diagnostic: events between lines 100-250 cover the journey.');
+      expect(result.data.summary).toBe(
+        'Diagnostic: events between lines 100-250 cover the journey.',
+      );
       expect(result.data.provenance.sourceHash).toBe('abc123def456');
     }
   });

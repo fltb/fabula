@@ -2,24 +2,25 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
-  EntityMapper,
-  InMemoryEntityRegistry,
-  ResultAggregator,
-  compileStoryBoundaries,
-  expectedOutcomeManifestSchema,
-  provenanceManifestSchema,
-  ReferenceFormatError,
-  responseReferenceSchema,
   type AnalysisResult,
+  compileStoryBoundaries,
+  EntityMapper,
+  expectedOutcomeManifestSchema,
   type Fact,
+  InMemoryEntityRegistry,
   type NarrativeEvent,
   type ProjectData,
-  type Validator,
+  provenanceManifestSchema,
+  ReferenceFormatError,
+  ResultAggregator,
+  responseReferenceSchema,
   type ValidationIssue,
+  type Validator,
 } from '@novalistically/core';
 
 /** Patterns that look like secrets in metadata values. */
-const SECRET_VALUE_PATTERN = /(?:^|[^a-z])(?:sk-|api[_-]key|auth[_-]token|secret|password|credential)(?:$|[^a-z])/i;
+const SECRET_VALUE_PATTERN =
+  /(?:^|[^a-z])(?:sk-|api[_-]key|auth[_-]token|secret|password|credential)(?:$|[^a-z])/i;
 
 const EXPECTED_EVENT_IDS = ['E0', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6'];
 
@@ -135,7 +136,13 @@ function computeResponsesHash(dataDir: string): string {
 
 /** Recompute a promptHash from an ordered array of ledger entry projections. */
 function computePromptHash(
-  ledger: Array<{ phase: string; attempt: number; requestHash: string; model: string; seed: number | null }>,
+  ledger: Array<{
+    phase: string;
+    attempt: number;
+    requestHash: string;
+    model: string;
+    seed: number | null;
+  }>,
 ): string {
   const projection = ledger.map(({ phase, attempt, requestHash, model, seed }) => ({
     phase,
@@ -152,7 +159,9 @@ function computePromptHash(
 function loadReview(referenceDir: string): Stage1ReferenceReview {
   const reviewPath = join(referenceDir, 'review.json');
   if (!existsSync(reviewPath)) {
-    throw new ReferenceFormatError('Missing review.json — required for closed reference set', { path: referenceDir });
+    throw new ReferenceFormatError('Missing review.json — required for closed reference set', {
+      path: referenceDir,
+    });
   }
 
   let raw: ReturnType<typeof JSON.parse>;
@@ -179,7 +188,9 @@ function loadReview(referenceDir: string): Stage1ReferenceReview {
   // Required string fields
   for (const field of ['reviewer', 'reviewedAt', 'notes'] as const) {
     if (typeof raw[field] !== 'string' || raw[field].length === 0) {
-      throw new ReferenceFormatError(`review.json.${field} must be a non-empty string`, { path: reviewPath });
+      throw new ReferenceFormatError(`review.json.${field} must be a non-empty string`, {
+        path: reviewPath,
+      });
     }
   }
 
@@ -190,11 +201,18 @@ function loadReview(referenceDir: string): Stage1ReferenceReview {
 
   // reviewedAt should be ISO-8601 format
   if (!/^\d{4}-\d{2}-\d{2}T/.test(raw.reviewedAt)) {
-    throw new ReferenceFormatError('review.json.reviewedAt must be an ISO-8601 datetime', { path: reviewPath });
+    throw new ReferenceFormatError('review.json.reviewedAt must be an ISO-8601 datetime', {
+      path: reviewPath,
+    });
   }
 
   // Required hash fields — each must be exactly 64 lowercase hex chars
-  const hashFields = ['responsesSha256', 'generationRecordSha256', 'provenanceSha256', 'expectedOutcomesSha256'] as const;
+  const hashFields = [
+    'responsesSha256',
+    'generationRecordSha256',
+    'provenanceSha256',
+    'expectedOutcomesSha256',
+  ] as const;
   for (const field of hashFields) {
     if (typeof raw[field] !== 'string' || !is64hex(raw[field])) {
       throw new ReferenceFormatError(
@@ -242,9 +260,12 @@ interface GenerationRecord {
 function loadGenerationRecord(referenceDir: string, genHashFromReview: string): GenerationRecord {
   const genPath = join(referenceDir, 'generation-record.json');
   if (!existsSync(genPath)) {
-    throw new ReferenceFormatError('Missing generation-record.json — required for closed reference set', {
-      path: referenceDir,
-    });
+    throw new ReferenceFormatError(
+      'Missing generation-record.json — required for closed reference set',
+      {
+        path: referenceDir,
+      },
+    );
   }
 
   const genBytes = readFileSync(genPath);
@@ -265,22 +286,34 @@ function loadGenerationRecord(referenceDir: string, genHashFromReview: string): 
 
   // Basic structural validation
   if (typeof raw !== 'object' || raw === null) {
-    throw new ReferenceFormatError('generation-record.json must be a JSON object', { path: genPath });
+    throw new ReferenceFormatError('generation-record.json must be a JSON object', {
+      path: genPath,
+    });
   }
   if (typeof raw.provider !== 'string' || raw.provider.length === 0) {
-    throw new ReferenceFormatError('generation-record.json must have a non-empty provider', { path: genPath });
+    throw new ReferenceFormatError('generation-record.json must have a non-empty provider', {
+      path: genPath,
+    });
   }
   if (typeof raw.model !== 'string' || raw.model.length === 0) {
-    throw new ReferenceFormatError('generation-record.json must have a non-empty model', { path: genPath });
+    throw new ReferenceFormatError('generation-record.json must have a non-empty model', {
+      path: genPath,
+    });
   }
   if (typeof raw.seed !== 'number' || !Number.isInteger(raw.seed)) {
-    throw new ReferenceFormatError('generation-record.json must have an integer seed', { path: genPath });
+    throw new ReferenceFormatError('generation-record.json must have an integer seed', {
+      path: genPath,
+    });
   }
   if (!raw.call || !Array.isArray(raw.call.perEvent)) {
-    throw new ReferenceFormatError('generation-record.json must have call.perEvent array', { path: genPath });
+    throw new ReferenceFormatError('generation-record.json must have call.perEvent array', {
+      path: genPath,
+    });
   }
   if (!raw.hashes || !Array.isArray(raw.hashes.events)) {
-    throw new ReferenceFormatError('generation-record.json must have hashes.events array', { path: genPath });
+    throw new ReferenceFormatError('generation-record.json must have hashes.events array', {
+      path: genPath,
+    });
   }
 
   return raw;
@@ -361,7 +394,9 @@ export function loadApprovedReferences(referenceDir: string): ApprovedReferenceS
   if (!existsSync(dataDir)) {
     throw new ReferenceFormatError('Reference data directory not found', { path: dataDir });
   }
-  const files = readdirSync(dataDir).filter((file) => file.endsWith('.json')).sort();
+  const files = readdirSync(dataDir)
+    .filter((file) => file.endsWith('.json'))
+    .sort();
   const expectedFiles = EXPECTED_EVENT_IDS.map((eid) => `${eid}.json`);
   if (JSON.stringify(files) !== JSON.stringify(expectedFiles)) {
     throw new ReferenceFormatError('Reference data must contain exactly E0–E6', { path: dataDir });
@@ -397,7 +432,12 @@ export function loadApprovedReferences(referenceDir: string): ApprovedReferenceS
   }
 
   // Validate provenance covers every expected event
-  const provenanceByEvent = new Map(provenance.data.entries.map((e: { eventId: string; kind: string; runHash?: string }) => [e.eventId, e]));
+  const provenanceByEvent = new Map(
+    provenance.data.entries.map((e: { eventId: string; kind: string; runHash?: string }) => [
+      e.eventId,
+      e,
+    ]),
+  );
   // Check for duplicate event IDs in provenance
   if (provenance.data.entries.length !== provenanceByEvent.size) {
     throw new ReferenceFormatError('Provenance manifest contains duplicate event IDs', {
@@ -431,7 +471,9 @@ export function loadApprovedReferences(referenceDir: string): ApprovedReferenceS
   }
 
   // ── 5. Load and validate expected-outcomes manifest ────────────
-  const outcomesRaw = JSON.parse(readFileSync(join(referenceDir, 'expected-outcomes.json'), 'utf8'));
+  const outcomesRaw = JSON.parse(
+    readFileSync(join(referenceDir, 'expected-outcomes.json'), 'utf8'),
+  );
   const outcomes = expectedOutcomeManifestSchema.safeParse(outcomesRaw);
   if (!outcomes.success) {
     const reasons = outcomes.error.issues.map((i) => i.message).join('; ');
@@ -497,7 +539,10 @@ export function loadApprovedReferences(referenceDir: string): ApprovedReferenceS
     const parsed = responseReferenceSchema.safeParse(raw);
     if (!parsed.success) {
       const reasons = parsed.error.issues.map((i) => i.message).join('; ');
-      throw new ReferenceFormatError(`Reference response is invalid: ${reasons}`, { path: eventPath, eventId });
+      throw new ReferenceFormatError(`Reference response is invalid: ${reasons}`, {
+        path: eventPath,
+        eventId,
+      });
     }
 
     // Business rule: only approved reviewStatus passes loading

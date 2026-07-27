@@ -2,8 +2,8 @@
 // ConfigLoader — layer precedence, deep merge, Zod validation
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { ConfigLoader, resolveConfig, DEFAULT_CONFIG } from '../src/config/index.js';
+import { describe, expect, it } from 'vitest';
+import { ConfigLoader, DEFAULT_CONFIG, resolveConfig } from '../src/config/index.js';
 import { projectConfigSchema } from '../src/schemas/project.js';
 
 describe('ConfigLoader', () => {

@@ -1,15 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type {
-  ThreadId,
-  ThreadRunId,
-  ThreadTypeDefinition,
-  ThreadTypeCatalog,
-  ThreadDeclaration,
-  ThreadDeclarationCatalog,
   GoalState,
   MilestoneState,
+  ThreadDeclaration,
+  ThreadDeclarationCatalog,
+  ThreadId,
+  ThreadRunId,
   ThreadRuntimeState,
   ThreadTransaction,
+  ThreadTypeCatalog,
+  ThreadTypeDefinition,
 } from '../../src/types/index.js';
 
 describe('Thread Identity', () => {
@@ -71,7 +71,7 @@ describe('Thread Identity', () => {
   it('ThreadDeclaration can override initial states', () => {
     const decl: ThreadDeclaration = {
       threadId: 'T1',
-      name: 'Xianglin Sao\'s Fate',
+      name: "Xianglin Sao's Fate",
       description: 'Her tragic life arc',
       typeId: 'character_arc',
       initialPhase: 'setup',
@@ -129,7 +129,11 @@ describe('Thread Identity', () => {
     ];
     expect(goalStates).toHaveLength(5);
     expect(goalStates.map((g) => g.status)).toEqual([
-      'pending', 'active', 'achieved', 'failed', 'waived',
+      'pending',
+      'active',
+      'achieved',
+      'failed',
+      'waived',
     ]);
 
     const milestoneStates: MilestoneState[] = [
@@ -141,7 +145,11 @@ describe('Thread Identity', () => {
     ];
     expect(milestoneStates).toHaveLength(5);
     expect(milestoneStates.map((m) => m.status)).toEqual([
-      'pending', 'achieved', 'failed', 'waived', 'invalidated',
+      'pending',
+      'achieved',
+      'failed',
+      'waived',
+      'invalidated',
     ]);
   });
 

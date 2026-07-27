@@ -13,8 +13,8 @@
 // ============================================================================
 
 import { compareFact } from '../entity/compare.js';
+import type { AnalysisResult, NarrativeEvent, ValidationIssue } from '../types/index.js';
 import { makeIssue } from './base.js';
-import type { NarrativeEvent, AnalysisResult, ValidationIssue } from '../types/index.js';
 
 export function resolveDeferredFacts(
   event: NarrativeEvent,

@@ -34,17 +34,15 @@ export interface RepairDecision {
  * Max 5 repairable errors — beyond that it's better to abort and flag for review.
  */
 export function analyzeValidationErrors(result: ValidationResult): ReverseValidationResult {
-  const criticalErrors = result.errors
-    .filter(e => e.severity === 'error')
-    .map(e => e.message);
-  const warnings = result.warnings.map(e => e.message);
+  const criticalErrors = result.errors.filter((e) => e.severity === 'error').map((e) => e.message);
+  const warnings = result.warnings.map((e) => e.message);
 
   // Only attempt repair if there are errors and the count is manageable
   const canRepair = result.errors.length > 0 && result.errors.length <= 5;
 
   const suggestions = [
-    ...criticalErrors.map(e => `Fix: ${e}`),
-    ...warnings.map(w => `Consider: ${w}`),
+    ...criticalErrors.map((e) => `Fix: ${e}`),
+    ...warnings.map((w) => `Consider: ${w}`),
   ];
 
   const feedbackPrompt = canRepair
@@ -90,18 +88,29 @@ export function decideRepairStrategy(
   const errorCount = result.errorCount;
 
   if (round > maxRounds || errorCount > 10) {
-    return { strategy: 'abort', maxRepairRounds: maxRounds, shouldRetry: false, guidance: 'Too many errors to repair.' };
+    return {
+      strategy: 'abort',
+      maxRepairRounds: maxRounds,
+      shouldRetry: false,
+      guidance: 'Too many errors to repair.',
+    };
   }
 
   if (errorCount <= 2) {
     return { strategy: 'retry', maxRepairRounds: maxRounds, shouldRetry: true, guidance: '' };
   } else if (errorCount <= 5) {
-    return { strategy: 'prompt_fix', maxRepairRounds: maxRounds, shouldRetry: true, guidance: buildRepairGuidance(result, round, maxRounds) };
+    return {
+      strategy: 'prompt_fix',
+      maxRepairRounds: maxRounds,
+      shouldRetry: true,
+      guidance: buildRepairGuidance(result, round, maxRounds),
+    };
   } else {
     return {
-      strategy: 'context_enrich', maxRepairRounds: maxRounds, shouldRetry: true,
-      guidance: `The render has ${errorCount} issues. Additional context and style guidance will be added for the retry.\n${result.feedbackPrompt}`
+      strategy: 'context_enrich',
+      maxRepairRounds: maxRounds,
+      shouldRetry: true,
+      guidance: `The render has ${errorCount} issues. Additional context and style guidance will be added for the retry.\n${result.feedbackPrompt}`,
     };
   }
 }
-

@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { VoiceConsistencyValidator } from '../../src/validator/voice-consistency.js';
+import { describe, expect, it } from 'vitest';
 import type {
+  AnalysisResult,
   NarrativeEvent,
   PostRenderInput,
   PreRenderInput,
-  AnalysisResult,
 } from '../../src/types/index.js';
+import { VoiceConsistencyValidator } from '../../src/validator/voice-consistency.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -29,27 +29,35 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  analysis: AnalysisResult | null,
-): PostRenderInput {
+function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): PostRenderInput {
   return {
     event,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     prose: 'Some prose.',
     analysis,
     chapter: 1,
   };
 }
 
-function makePreInput(
-  event: NarrativeEvent,
-  events: NarrativeEvent[],
-): PreRenderInput {
+function makePreInput(event: NarrativeEvent, events: NarrativeEvent[]): PreRenderInput {
   return {
     event,
     events,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     entityRegistry: {
       load: () => {},
       resolve: () => null,
@@ -67,9 +75,7 @@ function makePreInput(
   };
 }
 
-function makeAnalysis(
-  overrides?: Partial<AnalysisResult['analysis']>,
-): AnalysisResult {
+function makeAnalysis(overrides?: Partial<AnalysisResult['analysis']>): AnalysisResult {
   return {
     eventId: 'E1',
     analysis: {
@@ -77,7 +83,13 @@ function makeAnalysis(
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+      quality: {
+        proseScore: 8,
+        maxScore: 10,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 300,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
       voiceDetected: { level: 'extradiegetic', relation: 'heterodiegetic' },
@@ -191,7 +203,10 @@ describe('VoiceConsistencyValidator', () => {
 
 describe('VoiceConsistencyValidator.validatePre', () => {
   it('should report nothing from validatePre', () => {
-    const event = makeEvent({ id: 'E1', voice: { level: 'extradiegetic', relation: 'heterodiegetic' } });
+    const event = makeEvent({
+      id: 'E1',
+      voice: { level: 'extradiegetic', relation: 'heterodiegetic' },
+    });
     const input = makePreInput(event, [event]);
 
     const issues = new VoiceConsistencyValidator().validatePre(input);

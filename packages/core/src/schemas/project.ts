@@ -2,8 +2,8 @@
 // Novalistically — Project Config Schema (nova.yaml)
 // ============================================================================
 
-import type { StyleProfile } from '../style/default-profile.ts';
 import { z } from 'zod';
+import type { StyleProfile } from '../style/default-profile.ts';
 import { ideaIRSchema } from './idea-ir.js';
 
 export const projectConfigSchema = z

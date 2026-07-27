@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { DiscourseValidator } from '../../src/validator/discourse.js';
+import { describe, expect, it } from 'vitest';
 import type {
+  AnalysisResult,
   NarrativeEvent,
   PostRenderInput,
   PreRenderInput,
-  AnalysisResult,
 } from '../../src/types/index.js';
+import { DiscourseValidator } from '../../src/validator/discourse.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -36,7 +36,14 @@ function makeInput(
 ): PostRenderInput & { context?: unknown } {
   return {
     event,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     prose: 'Some prose.',
     analysis,
     chapter: 1,
@@ -44,14 +51,18 @@ function makeInput(
   };
 }
 
-function makePreInput(
-  event: NarrativeEvent,
-  events: NarrativeEvent[],
-): PreRenderInput {
+function makePreInput(event: NarrativeEvent, events: NarrativeEvent[]): PreRenderInput {
   return {
     event,
     events,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     entityRegistry: {
       load: () => {},
       resolve: () => null,
@@ -111,7 +122,7 @@ describe('DiscourseValidator', () => {
       const input = makeInput(event, null, context);
 
       const issues = new DiscourseValidator().validatePost(input);
-      const discourseIssues = issues.filter(i => i.validator === 'discourse');
+      const discourseIssues = issues.filter((i) => i.validator === 'discourse');
       expect(discourseIssues.length).toBeGreaterThanOrEqual(1);
       expect(discourseIssues[0].message).toContain('narrator_wo');
       expect(discourseIssues[0].message).toContain('did not resolve');
@@ -125,7 +136,7 @@ describe('DiscourseValidator', () => {
       const input = makeInput(event, null, context);
 
       const issues = new DiscourseValidator().validatePost(input);
-      const discourseIssues = issues.filter(i => i.validator === 'discourse');
+      const discourseIssues = issues.filter((i) => i.validator === 'discourse');
       expect(discourseIssues.length).toBeGreaterThanOrEqual(1);
       expect(discourseIssues[0].message).toContain('Discourse replay failed');
       expect(discourseIssues[0].message).toContain('Truth boundary violation');
@@ -142,9 +153,9 @@ describe('DiscourseValidator', () => {
       const input = makeInput(event, null, context);
 
       const issues = new DiscourseValidator().validatePost(input);
-      const discourseIssues = issues.filter(i => i.validator === 'discourse');
+      const discourseIssues = issues.filter((i) => i.validator === 'discourse');
       expect(discourseIssues).toHaveLength(2);
-      const severities = discourseIssues.map(i => i.severity);
+      const severities = discourseIssues.map((i) => i.severity);
       expect(severities).toEqual(['error', 'error']);
     });
   });
@@ -163,7 +174,7 @@ describe('DiscourseValidator', () => {
       const issues2 = validator.validatePost(input2);
 
       // E1 should have unresolved ref issue, E2 should have no issues
-      expect(issues1.filter(i => i.validator === 'discourse')).toHaveLength(1);
+      expect(issues1.filter((i) => i.validator === 'discourse')).toHaveLength(1);
       expect(issues2).toHaveLength(0);
     });
   });

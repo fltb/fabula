@@ -7,17 +7,17 @@
 // sourceContextStyleNotes options.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { RenderPipeline } from '../../src/pipeline/render.ts';
-import type { RenderJob } from '../../src/pipeline/render.ts';
+import { describe, expect, it } from 'vitest';
 import { MockProvider } from '../../src/ai/providers/mock.ts';
+import type { RenderJob } from '../../src/pipeline/render.ts';
+import { RenderPipeline } from '../../src/pipeline/render.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type {
-  NarrativeEvent,
   ContextPackage,
-  SystemContext,
-  SceneSpecification,
   KnowledgeBoundary,
+  NarrativeEvent,
+  SceneSpecification,
+  SystemContext,
 } from '../../src/types/index.ts';
 
 const VALID_ANALYSIS_JSON = JSON.stringify({
@@ -27,7 +27,13 @@ const VALID_ANALYSIS_JSON = JSON.stringify({
     preconditions: { violated: [] },
     pov: { consistent: true, leaks: [] },
     inventedDetails: [],
-    quality: { proseScore: 80, maxScore: 100, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+    quality: {
+      proseScore: 80,
+      maxScore: 100,
+      strengths: [],
+      weaknesses: [],
+      estimatedWordCount: 300,
+    },
     threadProgressAchieved: [],
     foreshadowingDeployed: [],
     narrativeChecks: [],
@@ -60,9 +66,7 @@ function makeEvent(): NarrativeEvent {
     branchExistence: { type: 'all' as const },
     participants: { entities: ['entity_1'] },
     narrativeChecklist: {
-      items: [
-        { dimension: 'imagery', description: 'must reference moonlight', required: true },
-      ],
+      items: [{ dimension: 'imagery', description: 'must reference moonlight', required: true }],
     },
     sourceContext: {
       entries: [
@@ -105,7 +109,14 @@ function makeContext(): ContextPackage {
 function makeJob(): RenderJob {
   return {
     event: makeEvent(),
-    stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    stateBefore: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     context: makeContext(),
     chapter: 1,
   };

@@ -4,9 +4,9 @@
 // for reproducible corpus replay validation.
 // ============================================================================
 
-import type { AdjacencyList } from './dag.ts';
-import type { SourceManifest, NarrativeNodeAnchor } from './corpus-index.ts';
 import { PreconditionMismatchError } from '../errors.ts';
+import type { NarrativeNodeAnchor, SourceManifest } from './corpus-index.ts';
+import type { AdjacencyList } from './dag.ts';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Types
@@ -78,10 +78,7 @@ export interface DiscourseOracle {
  * @returns Ordered list of node IDs in deterministic topological order
  * @throws {PreconditionMismatchError} if the graph contains a cycle
  */
-export function buildMixedNodeOrder(
-  nodes: NarrativeNodeAnchor[],
-  dag: AdjacencyList,
-): string[] {
+export function buildMixedNodeOrder(nodes: NarrativeNodeAnchor[], dag: AdjacencyList): string[] {
   const nodeMap = new Map(nodes.map((n) => [n.nodeId, n]));
   const inDegree = new Map<string, number>();
   const graph = new Map<string, string[]>();
@@ -166,9 +163,7 @@ export function buildMixedNodeOrder(
 
   // Detect cycles: if not all nodes were ordered, there's a cycle
   if (ordered.length < nodes.length) {
-    const missing = nodes
-      .filter((n) => !ordered.includes(n.nodeId))
-      .map((n) => n.nodeId);
+    const missing = nodes.filter((n) => !ordered.includes(n.nodeId)).map((n) => n.nodeId);
     throw new PreconditionMismatchError(
       `Cycle detected in mixed-node causal graph: ${missing.length} unreachable nodes: ${missing.join(', ')}`,
     );
@@ -317,10 +312,7 @@ export function createBoundaryOracle(
  * @param node - Narrative node anchor containing scene metadata
  * @returns A new DiscourseOracle for the event
  */
-export function createDiscourseOracle(
-  eventId: string,
-  node: NarrativeNodeAnchor,
-): DiscourseOracle {
+export function createDiscourseOracle(eventId: string, node: NarrativeNodeAnchor): DiscourseOracle {
   // Derive narrator and POV from node context
   // In practice, the NarrativeEvent's pov field and sceneBrief are the source;
   // since NarrativeNodeAnchor only has structural metadata, use the nodeId

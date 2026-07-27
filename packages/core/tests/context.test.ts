@@ -2,20 +2,20 @@
 // Context Compiler Tests
 // ============================================================================
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import {
-  RelevanceEngine,
   ContextAssembler,
   ContextCompiler,
   InMemoryEntityRegistry,
+  RelevanceEngine,
 } from '../src/index.js';
 import type {
-  NarrativeEvent,
-  WorldState,
   Entity,
+  NarrativeEvent,
   RelevanceContext,
   ThreadId,
   ThreadRunId,
+  WorldState,
 } from '../src/types/index.js';
 
 function makeEntity(id: string, kind: string, state: Record<string, unknown>): Entity {
@@ -46,7 +46,10 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
         entityId: 'alice',
         attribute: 'location',
         value: 'entrance',
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+        validity: {
+          temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+          branches: { type: 'all' },
+        },
       },
     ],
     postconditions: [
@@ -55,7 +58,10 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
         entityId: 'alice',
         attribute: 'location',
         value: 'room',
-        validity: { temporal: { start: { type: 'absolute', value: 'day_1' }, end: null }, branches: { type: 'all' } },
+        validity: {
+          temporal: { start: { type: 'absolute', value: 'day_1' }, end: null },
+          branches: { type: 'all' },
+        },
       },
     ],
     threadProgress: [],
@@ -119,7 +125,10 @@ function makeState(overrides: Partial<WorldState> = {}): WorldState {
         entityId: 'alice',
         attribute: 'location',
         value: 'entrance',
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+        validity: {
+          temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+          branches: { type: 'all' },
+        },
       },
     ],
     ...overrides,
@@ -134,21 +143,27 @@ describe('RelevanceEngine', () => {
     engine = new RelevanceEngine();
     registry = new InMemoryEntityRegistry();
 
-    registry.register(makeEntity('alice', 'character', {
-      location: 'entrance',
-      status: 'alive',
-      traits: ['brave', 'curious'],
-      voice_notes: 'Speaks softly.',
-    }));
-    registry.register(makeEntity('bob', 'character', {
-      location: 'room',
-      status: 'alive',
-      traits: ['cautious'],
-      voice_notes: 'Loud and direct.',
-    }));
-    registry.register(makeEntity('room', 'location', {
-      atmosphere: 'tense',
-    }));
+    registry.register(
+      makeEntity('alice', 'character', {
+        location: 'entrance',
+        status: 'alive',
+        traits: ['brave', 'curious'],
+        voice_notes: 'Speaks softly.',
+      }),
+    );
+    registry.register(
+      makeEntity('bob', 'character', {
+        location: 'room',
+        status: 'alive',
+        traits: ['cautious'],
+        voice_notes: 'Loud and direct.',
+      }),
+    );
+    registry.register(
+      makeEntity('room', 'location', {
+        atmosphere: 'tense',
+      }),
+    );
   });
 
   it('should score scene participants highest', () => {
@@ -213,16 +228,34 @@ describe('RelevanceEngine', () => {
     const event = makeEvent({
       preconditions: [
         {
-          id: 'alice.location', entityId: 'alice', attribute: 'location', value: 'entrance',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          id: 'alice.location',
+          entityId: 'alice',
+          attribute: 'location',
+          value: 'entrance',
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
         {
-          id: 'alice.status', entityId: 'alice', attribute: 'status', value: 'alive',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          id: 'alice.status',
+          entityId: 'alice',
+          attribute: 'status',
+          value: 'alive',
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
         {
-          id: 'alice.mood', entityId: 'alice', attribute: 'mood', value: 'curious',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          id: 'alice.mood',
+          entityId: 'alice',
+          attribute: 'mood',
+          value: 'curious',
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -250,18 +283,22 @@ describe('ContextAssembler', () => {
     assembler = new ContextAssembler(8000);
     registry = new InMemoryEntityRegistry();
 
-    registry.register(makeEntity('alice', 'character', {
-      location: 'entrance',
-      status: 'alive',
-      traits: ['brave', 'curious', 'determined'],
-      voice_notes: 'Speaks softly but firmly.',
-    }));
-    registry.register(makeEntity('bob', 'character', {
-      location: 'room',
-      status: 'alive',
-      traits: ['cautious'],
-      voice_notes: 'Loud, direct, sometimes abrasive.',
-    }));
+    registry.register(
+      makeEntity('alice', 'character', {
+        location: 'entrance',
+        status: 'alive',
+        traits: ['brave', 'curious', 'determined'],
+        voice_notes: 'Speaks softly but firmly.',
+      }),
+    );
+    registry.register(
+      makeEntity('bob', 'character', {
+        location: 'room',
+        status: 'alive',
+        traits: ['cautious'],
+        voice_notes: 'Loud, direct, sometimes abrasive.',
+      }),
+    );
   });
 
   it('should produce a complete context package', () => {
@@ -318,12 +355,14 @@ describe('ContextCompiler', () => {
   beforeEach(() => {
     compiler = new ContextCompiler();
     registry = new InMemoryEntityRegistry();
-    registry.register(makeEntity('alice', 'character', {
-      location: 'entrance',
-      status: 'alive',
-      traits: ['brave'],
-      voice_notes: 'Soft spoken.',
-    }));
+    registry.register(
+      makeEntity('alice', 'character', {
+        location: 'entrance',
+        status: 'alive',
+        traits: ['brave'],
+        voice_notes: 'Soft spoken.',
+      }),
+    );
   });
 
   it('should compile a context package', () => {

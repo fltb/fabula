@@ -1,14 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { AnalysisResult, NarrativeEvent, PostRenderInput } from '../../src/types/index.js';
 import { ChecklistValidator } from '../../src/validator/checklist.js';
-import type {
-  NarrativeEvent,
-  PostRenderInput,
-  AnalysisResult,
-} from '../../src/types/index.js';
 
-function makeEvent(
-  overrides: Partial<NarrativeEvent> & { id: string },
-): NarrativeEvent {
+function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
     event: overrides.id,
     narrativeOrder: 1,
@@ -30,10 +24,7 @@ function makeEvent(
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  analysis: AnalysisResult | null,
-): PostRenderInput {
+function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): PostRenderInput {
   return {
     event,
     worldState: {
@@ -50,9 +41,7 @@ function makeInput(
   };
 }
 
-function makeAnalysis(
-  overrides: Partial<AnalysisResult> = {},
-): AnalysisResult {
+function makeAnalysis(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
   return {
     eventId: 'E1',
     analysis: {
@@ -115,7 +104,7 @@ describe('ChecklistValidator', () => {
 
     const input = makeInput(event, analysis);
     const issues = new ChecklistValidator().validatePost(input);
-    const checklistIssues = issues.filter(i => i.validator === 'checklist');
+    const checklistIssues = issues.filter((i) => i.validator === 'checklist');
     expect(checklistIssues).toHaveLength(0);
   });
 
@@ -135,14 +124,12 @@ describe('ChecklistValidator', () => {
 
     const analysis = makeAnalysis({
       // No checklistResults for '反讽距离'
-      checklistResults: [
-        { dimension: '诗词', covered: true },
-      ],
+      checklistResults: [{ dimension: '诗词', covered: true }],
     });
 
     const input = makeInput(event, analysis);
     const issues = new ChecklistValidator().validatePost(input);
-    const checklistIssues = issues.filter(i => i.validator === 'checklist');
+    const checklistIssues = issues.filter((i) => i.validator === 'checklist');
     expect(checklistIssues).toHaveLength(1);
     expect(checklistIssues[0].message).toContain('反讽距离');
     expect(checklistIssues[0].message).toContain('not evaluated');
@@ -174,7 +161,7 @@ describe('ChecklistValidator', () => {
 
     const input = makeInput(event, analysis);
     const issues = new ChecklistValidator().validatePost(input);
-    const checklistIssues = issues.filter(i => i.validator === 'checklist');
+    const checklistIssues = issues.filter((i) => i.validator === 'checklist');
     expect(checklistIssues).toHaveLength(1);
     expect(checklistIssues[0].message).toContain('草蛇灰线');
     expect(checklistIssues[0].message).toContain('not covered');
@@ -186,7 +173,7 @@ describe('ChecklistValidator', () => {
     const analysis = makeAnalysis();
     const input = makeInput(event, analysis);
     const issues = new ChecklistValidator().validatePost(input);
-    const checklistIssues = issues.filter(i => i.validator === 'checklist');
+    const checklistIssues = issues.filter((i) => i.validator === 'checklist');
     expect(checklistIssues).toHaveLength(0);
   });
 
@@ -206,7 +193,7 @@ describe('ChecklistValidator', () => {
 
     const input = makeInput(event, null);
     const issues = new ChecklistValidator().validatePost(input);
-    const checklistIssues = issues.filter(i => i.validator === 'checklist');
+    const checklistIssues = issues.filter((i) => i.validator === 'checklist');
     expect(checklistIssues).toHaveLength(0);
   });
 
@@ -230,7 +217,7 @@ describe('ChecklistValidator', () => {
 
     const input = makeInput(event, analysis);
     const issues = new ChecklistValidator().validatePost(input);
-    const checklistIssues = issues.filter(i => i.validator === 'checklist');
+    const checklistIssues = issues.filter((i) => i.validator === 'checklist');
     expect(checklistIssues).toHaveLength(0);
   });
 });

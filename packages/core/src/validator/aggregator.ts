@@ -3,54 +3,52 @@
 // ============================================================================
 
 import { z } from 'zod';
+import { logger } from '../observability/logger.js';
+import type { TraceCollector } from '../observability/trace.ts';
+import type { PluginValidator } from '../plugin/validator-registry.js';
+import type { EventStore } from '../state/event-store.js';
 import type {
-  NarrativeEvent,
-  WorldState,
-  EntityRegistry,
+  AnalysisBlockRequirement,
+  AnalysisResult,
+  ContextPackage,
   EntityId,
+  EntityRegistry,
+  EpistemicLedger,
+  NarrativeEvent,
+  PostRenderInput,
+  PreRenderInput,
   ValidationIssue,
   ValidationResult,
-  AnalysisResult,
-  PreRenderInput,
-  PostRenderInput,
-  EpistemicLedger,
-  AnalysisBlockRequirement,
-  ContextPackage,
+  Validator,
+  WorldState,
 } from '../types/index.js';
-import type { Validator } from '../types/index.js';
-import type { PluginValidator } from '../plugin/validator-registry.js';
-import { buildContext, makeIssue } from './base.js';
-import { TimelineValidator } from './timeline.js';
-import { CharacterStateValidator } from './character-state.js';
-import { KnowledgeValidator } from './knowledge.js';
-import { WorldRuleValidator } from './world-rule.js';
-import { CausalityValidator } from './causality.js';
-import { ForeshadowingValidator } from './foreshadowing.js';
-import { POVValidator } from './pov.js';
-import { FactualDetailValidator } from './factual-detail.js';
-import { VoiceDriftDetector } from './voice-drift.js';
-import { BranchMergeValidator } from './branch-merge.js';
-import { ReachabilityValidator } from './reachability.js';
-import { PacingValidator } from './pacing.js';
-import { TenseConsistencyValidator } from './tense-consistency.js';
-import { DiscourseBalanceValidator } from './discourse-balance.js';
 import { AliasValidator } from './alias.js';
-import { PronounValidator } from './pronoun.js';
-import { AppearanceValidator } from './appearance.js';
-import { ConflictValidator } from './conflict.js';
-import { QualityValidator } from './quality.js';
-import { ThreadProgressValidator } from './thread-progress.js';
-import { DurationConsistencyValidator } from './duration-consistency.js';
-import { FrequencyConsistencyValidator } from './frequency-consistency.js';
-import { VoiceConsistencyValidator } from './voice-consistency.js';
 import { AnachronyConsistencyValidator } from './anachrony-consistency.js';
-import { FocalizationConsistencyValidator } from './focalization-consistency.js';
+import { AppearanceValidator } from './appearance.js';
+import { buildContext, makeIssue } from './base.js';
+import { BranchMergeValidator } from './branch-merge.js';
+import { CausalityValidator } from './causality.js';
+import { CharacterStateValidator } from './character-state.js';
+import { ConflictValidator } from './conflict.js';
 import { DiscourseValidator } from './discourse.js';
-
-import type { EventStore } from '../state/event-store.js';
-import type { TraceCollector } from '../observability/trace.ts';
-import { logger } from '../observability/logger.js';
-
+import { DiscourseBalanceValidator } from './discourse-balance.js';
+import { DurationConsistencyValidator } from './duration-consistency.js';
+import { FactualDetailValidator } from './factual-detail.js';
+import { FocalizationConsistencyValidator } from './focalization-consistency.js';
+import { ForeshadowingValidator } from './foreshadowing.js';
+import { FrequencyConsistencyValidator } from './frequency-consistency.js';
+import { KnowledgeValidator } from './knowledge.js';
+import { PacingValidator } from './pacing.js';
+import { POVValidator } from './pov.js';
+import { PronounValidator } from './pronoun.js';
+import { QualityValidator } from './quality.js';
+import { ReachabilityValidator } from './reachability.js';
+import { TenseConsistencyValidator } from './tense-consistency.js';
+import { ThreadProgressValidator } from './thread-progress.js';
+import { TimelineValidator } from './timeline.js';
+import { VoiceConsistencyValidator } from './voice-consistency.js';
+import { VoiceDriftDetector } from './voice-drift.js';
+import { WorldRuleValidator } from './world-rule.js';
 
 export class ResultAggregator {
   private validators: Validator[];
@@ -126,10 +124,23 @@ export class ResultAggregator {
 
       const valSpanId = `${event.id}:validator:${validator.name}`;
       const startTime = Date.now();
-      this.traceCollector?.record({ phase: 'validator', state: 'start', spanId: valSpanId, eventId: event.id });
+      this.traceCollector?.record({
+        phase: 'validator',
+        state: 'start',
+        spanId: valSpanId,
+        eventId: event.id,
+      });
 
       if (validator.validatePost) {
-        const input: PostRenderInput = { event, worldState: state, prose, analysis: analysis ?? null, chapter: chapterValue, entityRegistry: registry, context };
+        const input: PostRenderInput = {
+          event,
+          worldState: state,
+          prose,
+          analysis: analysis ?? null,
+          chapter: chapterValue,
+          entityRegistry: registry,
+          context,
+        };
         const issues = validator.validatePost(input);
         for (const issue of issues) {
           if (override === 'error') {
@@ -152,7 +163,13 @@ export class ResultAggregator {
         }
       }
 
-      this.traceCollector?.record({ phase: 'validator', state: 'end', spanId: valSpanId, eventId: event.id, durationMs: Date.now() - startTime });
+      this.traceCollector?.record({
+        phase: 'validator',
+        state: 'end',
+        spanId: valSpanId,
+        eventId: event.id,
+        durationMs: Date.now() - startTime,
+      });
     }
 
     const errors = allIssues.filter((i) => i.severity === 'error');
@@ -187,7 +204,12 @@ export class ResultAggregator {
 
       const valSpanId = `${event.id}:validator:${validator.name}`;
       const startTime = Date.now();
-      this.traceCollector?.record({ phase: 'validator', state: 'start', spanId: valSpanId, eventId: event.id });
+      this.traceCollector?.record({
+        phase: 'validator',
+        state: 'start',
+        spanId: valSpanId,
+        eventId: event.id,
+      });
 
       // New path: validatePre
       if (validator.validatePre) {
@@ -212,7 +234,13 @@ export class ResultAggregator {
           }
           allIssues.push(issue);
         }
-        this.traceCollector?.record({ phase: 'validator', state: 'end', spanId: valSpanId, eventId: event.id, durationMs: Date.now() - startTime });
+        this.traceCollector?.record({
+          phase: 'validator',
+          state: 'end',
+          spanId: valSpanId,
+          eventId: event.id,
+          durationMs: Date.now() - startTime,
+        });
         continue;
       }
 
@@ -232,7 +260,13 @@ export class ResultAggregator {
         }
       }
 
-      this.traceCollector?.record({ phase: 'validator', state: 'end', spanId: valSpanId, eventId: event.id, durationMs: Date.now() - startTime });
+      this.traceCollector?.record({
+        phase: 'validator',
+        state: 'end',
+        spanId: valSpanId,
+        eventId: event.id,
+        durationMs: Date.now() - startTime,
+      });
     }
 
     // Run plugin validators (still use ValidatorContext)
@@ -244,15 +278,17 @@ export class ResultAggregator {
           for (const issue of result.errors) allIssues.push(issue as unknown as ValidationIssue);
           for (const issue of result.warnings) allIssues.push(issue as unknown as ValidationIssue);
         } catch (err) {
-          allIssues.push(makeIssue(
-            this.constructor.name,
-            event.id,
-            'system',
-            'error',
-            `Plugin validator "${pv.name}" failed: ${(err as Error).message}`,
-            'Check the plugin implementation.',
-            'manual',
-          ));
+          allIssues.push(
+            makeIssue(
+              this.constructor.name,
+              event.id,
+              'system',
+              'error',
+              `Plugin validator "${pv.name}" failed: ${(err as Error).message}`,
+              'Check the plugin implementation.',
+              'manual',
+            ),
+          );
         }
       }
     }
@@ -339,7 +375,7 @@ export class ResultAggregator {
             if (existingAttrs.has(attr)) {
               throw new Error(
                 `AnalysisBlockRequirement conflict: attribute "${attr}" in field "${req.field}" ` +
-                `is claimed by multiple validators. Each attribute must be unique per field.`,
+                  `is claimed by multiple validators. Each attribute must be unique per field.`,
               );
             }
             existingAttrs.add(attr);

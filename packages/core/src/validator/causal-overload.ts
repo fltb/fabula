@@ -6,11 +6,7 @@
 // factor means the event has too many possible consequences (Pynchon-style).
 // ============================================================================
 
-import type {
-  Validator,
-  ValidationIssue,
-  PreRenderInput,
-} from '../types/index.js';
+import type { PreRenderInput, ValidationIssue, Validator } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class CausalOverloadValidator implements Validator {

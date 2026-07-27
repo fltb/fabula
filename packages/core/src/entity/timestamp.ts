@@ -1,5 +1,5 @@
-import type { StoryTimestamp } from '../types/index.js';
 import { DagProviderError } from '../errors.js';
+import type { StoryTimestamp } from '../types/index.js';
 
 // ============================================================================
 // Timestamp Helpers
@@ -39,14 +39,20 @@ export function resolveTimestampToDay(ts: StoryTimestamp, anchors: Map<string, n
       if (!Number.isNaN(absoluteTime)) return absoluteTime / 86_400_000;
       const anchorDay = anchors.get(ts.value);
       if (anchorDay === undefined) {
-        throw new DagProviderError('Unknown absolute time anchor', { stateKey: ts.value, phase: 'timestamp' });
+        throw new DagProviderError('Unknown absolute time anchor', {
+          stateKey: ts.value,
+          phase: 'timestamp',
+        });
       }
       return anchorDay;
     }
     case 'relative': {
       const anchorDay = anchors.get(ts.anchor);
       if (anchorDay === undefined) {
-        throw new DagProviderError('Unknown relative time anchor', { stateKey: ts.anchor, phase: 'timestamp' });
+        throw new DagProviderError('Unknown relative time anchor', {
+          stateKey: ts.anchor,
+          phase: 'timestamp',
+        });
       }
       const unitDays: Record<string, number> = {
         minute: 1 / 1440,
@@ -62,7 +68,11 @@ export function resolveTimestampToDay(ts: StoryTimestamp, anchors: Map<string, n
   }
 }
 
-export function compareTimestamp(a: StoryTimestamp, b: StoryTimestamp, anchors: Map<string, number>): number {
+export function compareTimestamp(
+  a: StoryTimestamp,
+  b: StoryTimestamp,
+  anchors: Map<string, number>,
+): number {
   return resolveTimestampToDay(a, anchors) - resolveTimestampToDay(b, anchors);
 }
 

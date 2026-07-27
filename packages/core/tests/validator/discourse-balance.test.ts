@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { DiscourseBalanceValidator } from '../../src/validator/discourse-balance.js';
+import { describe, expect, it } from 'vitest';
 import type { NarrativeEvent, PreRenderInput } from '../../src/types/index.js';
+import { DiscourseBalanceValidator } from '../../src/validator/discourse-balance.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -24,18 +24,27 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  events: NarrativeEvent[],
-): PreRenderInput {
+function makeInput(event: NarrativeEvent, events: NarrativeEvent[]): PreRenderInput {
   return {
     event,
     events,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     entityRegistry: { entities: {} } as any,
     chapter: 1,
     queryState: () => undefined,
-    getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] }),
+    getKnowledge: () => ({
+      worldTruth: [],
+      characterKnowledge: {},
+      readerKnowledge: [],
+      narratorKnowledge: [],
+    }),
     getThreadProgress: () => null,
   };
 }
@@ -53,7 +62,7 @@ describe('DiscourseBalanceValidator', () => {
 
     const input = makeInput(events[0], events);
     const issues = new DiscourseBalanceValidator().validatePre(input);
-    const dominanceIssues = issues.filter(i => i.message.includes('dominates'));
+    const dominanceIssues = issues.filter((i) => i.message.includes('dominates'));
     expect(dominanceIssues).toHaveLength(0);
   });
 
@@ -70,7 +79,7 @@ describe('DiscourseBalanceValidator', () => {
 
     const input = makeInput(events[0], events);
     const issues = new DiscourseBalanceValidator().validatePre(input);
-    const dominanceIssues = issues.filter(i => i.message.includes('dominates'));
+    const dominanceIssues = issues.filter((i) => i.message.includes('dominates'));
     expect(dominanceIssues.length).toBeGreaterThanOrEqual(1);
     expect(dominanceIssues[0].message).toContain('action');
     expect(dominanceIssues[0].message).toContain('83%');

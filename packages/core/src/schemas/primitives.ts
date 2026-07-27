@@ -18,19 +18,38 @@ export const preconditionSchema = z
   .object({
     entity: z.string(),
     attribute: z.string(),
-    value: z.unknown().optional().refine(
-      (val) => {
-        if (val === undefined) return true;
-        if (typeof val === 'string' && PLACEHOLDER_PATTERN.test(val)) {
-          return false;
-        }
-        return true;
-      },
-      { message: 'Placeholder values (changed, resolved, updated, affected, modified, altered) are not allowed. Use concrete values.' },
-    ),
+    value: z
+      .unknown()
+      .optional()
+      .refine(
+        (val) => {
+          if (val === undefined) return true;
+          if (typeof val === 'string' && PLACEHOLDER_PATTERN.test(val)) {
+            return false;
+          }
+          return true;
+        },
+        {
+          message:
+            'Placeholder values (changed, resolved, updated, affected, modified, altered) are not allowed. Use concrete values.',
+        },
+      ),
     narrativeHint: z.string().optional(),
     confidence: z.number().optional(),
-    operator: z.enum(['eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'contains', 'not_contains', 'exists', 'not_exists']).optional(),
+    operator: z
+      .enum([
+        'eq',
+        'neq',
+        'gt',
+        'gte',
+        'lt',
+        'lte',
+        'contains',
+        'not_contains',
+        'exists',
+        'not_exists',
+      ])
+      .optional(),
   })
   .strict()
   .superRefine((data, context) => {
@@ -57,7 +76,11 @@ export const preconditionSchema = z
     }
 
     // Comparison operators (eq/neq/gt/gte/lt/lte/contains/not_contains): value required
-    if (data.operator !== undefined && data.operator !== 'exists' && data.operator !== 'not_exists') {
+    if (
+      data.operator !== undefined &&
+      data.operator !== 'exists' &&
+      data.operator !== 'not_exists'
+    ) {
       if (!hasValue) {
         context.addIssue({
           code: z.ZodIssueCode.custom,
@@ -76,16 +99,22 @@ export const postconditionSchema = z
   .object({
     entity: z.string(),
     attribute: z.string(),
-    value: z.unknown().optional().refine(
-      (val) => {
-        if (val === undefined) return true;
-        if (typeof val === 'string' && PLACEHOLDER_PATTERN.test(val)) {
-          return false;
-        }
-        return true;
-      },
-      { message: 'Placeholder values (changed, resolved, updated, affected, modified, altered) are not allowed. Use concrete values.' },
-    ),
+    value: z
+      .unknown()
+      .optional()
+      .refine(
+        (val) => {
+          if (val === undefined) return true;
+          if (typeof val === 'string' && PLACEHOLDER_PATTERN.test(val)) {
+            return false;
+          }
+          return true;
+        },
+        {
+          message:
+            'Placeholder values (changed, resolved, updated, affected, modified, altered) are not allowed. Use concrete values.',
+        },
+      ),
     narrativeHint: z.string().optional(),
     confidence: z.number().optional(),
     operation: z.enum(['set', 'unset']).optional(),

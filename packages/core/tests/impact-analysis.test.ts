@@ -2,10 +2,10 @@
 // Novalistically — Impact Analysis Tests (D10)
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
 import { analyzeProjectImpact } from '../src/api.js';
 
 // ---------------------------------------------------------------------------
@@ -125,11 +125,7 @@ describe('analyzeProjectImpact', () => {
     // Same event except narrativeOrder differs
     const eventYaml = baseE0Yaml();
     writeEvent(oldDir, 'E0.yaml', eventYaml);
-    writeEvent(
-      newDir,
-      'E0.yaml',
-      eventYaml.replace('narrativeOrder: 1', 'narrativeOrder: 2'),
-    );
+    writeEvent(newDir, 'E0.yaml', eventYaml.replace('narrativeOrder: 1', 'narrativeOrder: 2'));
 
     try {
       const result = analyzeProjectImpact(oldDir, newDir);
@@ -173,11 +169,7 @@ describe('analyzeProjectImpact', () => {
 
     writeEvent(oldDir, 'E0.yaml', baseE0Yaml());
     // Change precondition value
-    writeEvent(
-      newDir,
-      'E0.yaml',
-      baseE0Yaml().replace('value: town', 'value: village'),
-    );
+    writeEvent(newDir, 'E0.yaml', baseE0Yaml().replace('value: town', 'value: village'));
 
     try {
       const result = analyzeProjectImpact(oldDir, newDir);
@@ -226,10 +218,7 @@ describe('analyzeProjectImpact', () => {
     writeEvent(
       newDir,
       'E0.yaml',
-      baseE0Yaml().replace(
-        'value: met_character',
-        'value: met_stranger',
-      ),
+      baseE0Yaml().replace('value: met_character', 'value: met_stranger'),
     );
     writeEvent(newDir, 'E1.yaml', baseE1Yaml());
 
@@ -270,11 +259,7 @@ describe('analyzeProjectImpact', () => {
 
     // E2: narrativeOrder changes → Green
     writeEvent(oldDir, 'E2.yaml', baseE2Yaml());
-    writeEvent(
-      newDir,
-      'E2.yaml',
-      baseE2Yaml().replace('narrativeOrder: 3', 'narrativeOrder: 4'),
-    );
+    writeEvent(newDir, 'E2.yaml', baseE2Yaml().replace('narrativeOrder: 3', 'narrativeOrder: 4'));
 
     try {
       const result = analyzeProjectImpact(oldDir, newDir);

@@ -2,16 +2,15 @@
 // Plugin System — Plugin Loader
 // ============================================================================
 
-import { logger } from '../observability/logger.ts';
 import * as path from 'node:path';
-import * as yaml from 'yaml';
-import type { PluginManifest, ArbitrationStrategy } from '../types/index.js';
 import { pathToFileURL } from 'node:url';
-import type { ConflictReport, ResolutionResult } from './types.js';
+import * as yaml from 'yaml';
+import { logger } from '../observability/logger.ts';
 import type { Storage } from '../storage/types.js';
+import type { ArbitrationStrategy, PluginManifest } from '../types/index.js';
 import { detectConflicts } from './conflicts.js';
-import type { PluginHooks } from './types.js';
 import { resolveConflict } from './resolve.js';
+import type { ConflictReport, PluginHooks, ResolutionResult } from './types.js';
 
 export class PluginLoader {
   private plugins: Map<string, PluginManifest> = new Map();
@@ -100,7 +99,11 @@ export class PluginLoader {
                 hooks.push(mod.hooks as PluginHooks);
               }
             } catch (importErr) {
-              logger.warn('Plugin code failed to load', { module: 'plugin', path: indexPath, error: String(importErr) });
+              logger.warn('Plugin code failed to load', {
+                module: 'plugin',
+                path: indexPath,
+                error: String(importErr),
+              });
             }
           }
         } catch {

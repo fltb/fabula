@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { AnalysisResult, NarrativeEvent, PostRenderInput } from '../../src/types/index.js';
 import { PronounValidator } from '../../src/validator/pronoun.js';
-import type { NarrativeEvent, PostRenderInput, AnalysisResult } from '../../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -60,17 +60,29 @@ describe('PronounValidator', () => {
         preconditions: { violated: [] },
         pov: { consistent: true, leaks: [] },
         inventedDetails: [],
-        quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+        quality: {
+          proseScore: 8,
+          maxScore: 10,
+          strengths: [],
+          weaknesses: [],
+          estimatedWordCount: 50,
+        },
         threadProgressAchieved: [],
         foreshadowingDeployed: [],
         narrativeChecks: [
-          { entityId: 'char_hero', attribute: 'pronoun', hint: 'he/his', evidence: 'He walked', matchLevel: 'exact' },
+          {
+            entityId: 'char_hero',
+            attribute: 'pronoun',
+            hint: 'he/his',
+            evidence: 'He walked',
+            matchLevel: 'exact',
+          },
         ],
       },
     };
     const input = makeInput(event, prose, entities, analysis);
     const issues = new PronounValidator().validatePost(input);
-    const pronounIssues = issues.filter(i => i.validator === 'pronoun');
+    const pronounIssues = issues.filter((i) => i.validator === 'pronoun');
     expect(pronounIssues).toHaveLength(0);
   });
 
@@ -87,17 +99,29 @@ describe('PronounValidator', () => {
         preconditions: { violated: [] },
         pov: { consistent: true, leaks: [] },
         inventedDetails: [],
-        quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+        quality: {
+          proseScore: 8,
+          maxScore: 10,
+          strengths: [],
+          weaknesses: [],
+          estimatedWordCount: 50,
+        },
         threadProgressAchieved: [],
         foreshadowingDeployed: [],
         narrativeChecks: [
-          { entityId: 'char_hero', attribute: 'pronoun', hint: 'she/her', evidence: 'She walked', matchLevel: 'contradicted' },
+          {
+            entityId: 'char_hero',
+            attribute: 'pronoun',
+            hint: 'she/her',
+            evidence: 'She walked',
+            matchLevel: 'contradicted',
+          },
         ],
       },
     };
     const input = makeInput(event, prose, entities, analysis);
     const issues = new PronounValidator().validatePost(input);
-    const pronounIssues = issues.filter(i => i.validator === 'pronoun');
+    const pronounIssues = issues.filter((i) => i.validator === 'pronoun');
     expect(pronounIssues.length).toBeGreaterThanOrEqual(1);
     expect(pronounIssues[0].message).toContain('contradicted');
     expect(pronounIssues[0].severity).toBe('error');
@@ -116,17 +140,29 @@ describe('PronounValidator', () => {
         preconditions: { violated: [] },
         pov: { consistent: true, leaks: [] },
         inventedDetails: [],
-        quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+        quality: {
+          proseScore: 8,
+          maxScore: 10,
+          strengths: [],
+          weaknesses: [],
+          estimatedWordCount: 50,
+        },
         threadProgressAchieved: [],
         foreshadowingDeployed: [],
         narrativeChecks: [
-          { entityId: 'char_hero', attribute: 'pronoun', hint: 'no pronouns used', evidence: 'The figure walked', matchLevel: 'absent' },
+          {
+            entityId: 'char_hero',
+            attribute: 'pronoun',
+            hint: 'no pronouns used',
+            evidence: 'The figure walked',
+            matchLevel: 'absent',
+          },
         ],
       },
     };
     const input = makeInput(event, prose, entities, analysis);
     const issues = new PronounValidator().validatePost(input);
-    const pronounIssues = issues.filter(i => i.validator === 'pronoun');
+    const pronounIssues = issues.filter((i) => i.validator === 'pronoun');
     expect(pronounIssues.length).toBeGreaterThanOrEqual(1);
     expect(pronounIssues[0].message).toContain('absent');
     expect(pronounIssues[0].severity).toBe('warning');

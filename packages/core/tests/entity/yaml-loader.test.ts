@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConfigError } from '../../src/errors.ts';
+import { describe, expect, it } from 'vitest';
 import { readYamlFile } from '../../src/entity/yaml-loader.ts';
+import { ConfigError } from '../../src/errors.ts';
 import { eventFileSchema } from '../../src/schemas/event.ts';
 
 const event = `event: E1\nnarrativeOrder: 1\ntitle: Test\nstoryTime: day_1\npov:\n  character: narrator\n  type: first_person\nsceneBrief: test\npreconditions: []\nexpectedPostconditions: []\n`;

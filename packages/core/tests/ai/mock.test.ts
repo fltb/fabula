@@ -2,7 +2,7 @@
 // AI Provider — Mock Provider — Unit Tests
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { MockProvider } from '../../src/ai/providers/mock.ts';
 import type { CompletionRequest } from '../../src/ai/types.ts';
 

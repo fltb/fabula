@@ -2,10 +2,10 @@
 // StateManager — Coordinates EventStore + SnapshotEngine + ReplayEngine
 // ============================================================================
 
-import type { NarrativeEvent, WorldState, BranchPath } from '../types/index.js';
+import type { BranchPath, NarrativeEvent, WorldState } from '../types/index.js';
 import { EventStore } from './event-store.ts';
-import { SnapshotEngine } from './snapshot.ts';
 import { ReplayEngine } from './replay.ts';
+import { SnapshotEngine } from './snapshot.ts';
 
 export class StateManager {
   public eventStore: EventStore;
@@ -34,11 +34,7 @@ export class StateManager {
 
   /** Get state at a specific DAG position (by replaying that many events in causal order) */
   getStateAt(position: number, branchPath?: BranchPath): WorldState {
-    return this.replayEngine.getStateAt(
-      this.eventStore.getAll(),
-      position,
-      branchPath,
-    );
+    return this.replayEngine.getStateAt(this.eventStore.getAll(), position, branchPath);
   }
 
   /** Initialize with events (for testing or recovery) */

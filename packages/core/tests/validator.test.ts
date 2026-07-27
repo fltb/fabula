@@ -2,33 +2,33 @@
 // Comprehensive Unit Tests — All 11 Validators + ResultAggregator
 // ============================================================================
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { InMemoryEntityRegistry } from '../src/entity/index.js';
 import type {
-  NarrativeEvent,
   Entity,
   EntityRegistry,
-  WorldState,
-  PreRenderInput,
-  PostRenderInput,
   ForeshadowEntry,
+  NarrativeEvent,
+  PostRenderInput,
+  PreRenderInput,
   ThreadId,
   ThreadRunId,
+  WorldState,
 } from '../src/types/index.js';
 import {
-  TimelineValidator,
-  CharacterStateValidator,
-  KnowledgeValidator,
-  WorldRuleValidator,
-  CausalityValidator,
-  ForeshadowingValidator,
-  POVValidator,
-  FactualDetailValidator,
-  VoiceDriftDetector,
   BranchMergeValidator,
+  CausalityValidator,
+  CharacterStateValidator,
+  FactualDetailValidator,
+  ForeshadowingValidator,
+  KnowledgeValidator,
+  POVValidator,
   ReachabilityValidator,
   ResultAggregator,
+  TimelineValidator,
+  VoiceDriftDetector,
+  WorldRuleValidator,
 } from '../src/validator/index.js';
-import { InMemoryEntityRegistry } from '../src/entity/index.js';
 
 // ============================================================================
 // Shared Helpers & Fixtures
@@ -221,7 +221,18 @@ describe('CharacterStateValidator', () => {
     const registry = new InMemoryEntityRegistry();
     registerCharacter(registry, 'jinx', { status: 'dead', alive: false });
     const event = makeEvent({
-      preconditions: [{ id: 'jinx.status', entityId: 'jinx', attribute: 'status', value: 'dead', validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } } }],
+      preconditions: [
+        {
+          id: 'jinx.status',
+          entityId: 'jinx',
+          attribute: 'status',
+          value: 'dead',
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
     });
     const input = buildPreInput(event, {
       entityRegistry: registry,
@@ -243,7 +254,18 @@ describe('CharacterStateValidator', () => {
     const registry = new InMemoryEntityRegistry();
     registerCharacter(registry, 'jinx', { condition: 'injured' });
     const event = makeEvent({
-      postconditions: [{ id: 'jinx.condition', entityId: 'jinx', attribute: 'condition', value: 'healthy', validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } } }],
+      postconditions: [
+        {
+          id: 'jinx.condition',
+          entityId: 'jinx',
+          attribute: 'condition',
+          value: 'healthy',
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
     });
     const input = buildPreInput(event, {
       entityRegistry: registry,
@@ -267,7 +289,10 @@ describe('CharacterStateValidator', () => {
           entityId: 'vi',
           attribute: 'status',
           value: 'dead',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
       participants: { entities: ['vi'] },
@@ -308,7 +333,9 @@ describe('CharacterStateValidator', () => {
     };
 
     const issues = validator.validatePost(input);
-    const deadActionIssues = issues.filter((i) => i.severity === 'error' && i.message.includes('dead'));
+    const deadActionIssues = issues.filter(
+      (i) => i.severity === 'error' && i.message.includes('dead'),
+    );
     expect(deadActionIssues).toHaveLength(1);
     expect(deadActionIssues[0].entity).toBe('vi');
   });
@@ -329,7 +356,10 @@ describe('KnowledgeValidator', () => {
           entityId: 'jinx',
           attribute: 'knows',
           value: 'hextech_secret',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -340,11 +370,13 @@ describe('KnowledgeValidator', () => {
             subject: 'jinx',
             propositionId: 'jinx.knows',
             assessment: { type: 'settled', grade: 'know', polarity: 'affirmative' },
-            evidence: [{
-              source: 'direct_experience',
-              provenance: ['evt_prev'],
-              acquiredAt: { type: 'absolute' as const, value: 'day_0' },
-            }],
+            evidence: [
+              {
+                source: 'direct_experience',
+                provenance: ['evt_prev'],
+                acquiredAt: { type: 'absolute' as const, value: 'day_0' },
+              },
+            ],
           },
         },
         bySubject: { jinx: ['jinx.knows'] },
@@ -369,7 +401,10 @@ describe('KnowledgeValidator', () => {
           entityId: 'jinx',
           attribute: 'knows',
           value: 'hextech_secret',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -382,7 +417,10 @@ describe('KnowledgeValidator', () => {
           entityId: 'jinx',
           attribute: 'knows',
           value: 'hextech_secret',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -405,7 +443,10 @@ describe('KnowledgeValidator', () => {
           entityId: 'jinx',
           attribute: 'knows',
           value: 'hextech_secret',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -416,7 +457,6 @@ describe('KnowledgeValidator', () => {
     expect(infoIssues).toHaveLength(0);
   });
 });
-
 
 // ============================================================================
 // 4. WorldRuleValidator Tests
@@ -433,20 +473,33 @@ describe('WorldRuleValidator', () => {
           entityId: 'jayce',
           attribute: 'condition',
           value: 'operational',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
         {
           id: 'jayce.status',
           entityId: 'jayce',
           attribute: 'status',
           value: 'healthy',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
     const input: PostRenderInput = {
       event,
-      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      worldState: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       prose: '',
       analysis: null,
       chapter: 1,
@@ -472,7 +525,10 @@ describe('CausalityValidator', () => {
           entityId: 'jinx',
           attribute: 'has_key',
           value: true,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -493,7 +549,10 @@ describe('CausalityValidator', () => {
           entityId: 'jinx',
           attribute: 'status',
           value: 'injured',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
       postconditions: [
@@ -502,7 +561,10 @@ describe('CausalityValidator', () => {
           entityId: 'jinx',
           attribute: 'status',
           value: 'injured',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -524,7 +586,10 @@ describe('CausalityValidator', () => {
           entityId: 'jinx',
           attribute: 'status',
           value: 'injured',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
       postconditions: [
@@ -533,7 +598,10 @@ describe('CausalityValidator', () => {
           entityId: 'jinx',
           attribute: 'health',
           value: 'cured',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -556,7 +624,10 @@ describe('CausalityValidator', () => {
           entityId: 'jinx',
           attribute: 'location',
           value: 'piltover',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -577,11 +648,13 @@ describe('CausalityValidator', () => {
     };
 
     const issues = validator.validatePost(input);
-    const locationIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('location'));
+    const locationIssues = issues.filter(
+      (i) => i.severity === 'warning' && i.message.includes('location'),
+    );
     expect(locationIssues).toHaveLength(1);
     expect(locationIssues[0].message).toContain('piltover');
   });
-  
+
   it('should pass when precondition location is mentioned in prose', () => {
     const registry = new InMemoryEntityRegistry();
     registerCharacter(registry, 'jinx', { location: 'piltover' });
@@ -592,7 +665,10 @@ describe('CausalityValidator', () => {
           entityId: 'jinx',
           attribute: 'location',
           value: 'piltover',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -627,15 +703,15 @@ describe('ForeshadowingValidator', () => {
 
   it('should warn when foreshadow is past its reveal chapter', () => {
     const event = makeEvent({
-      foreshadowing: [
-        { id: 'f_shadow_1', hint: 'The dark secret', targetRevealChapter: 2 },
-      ],
+      foreshadowing: [{ id: 'f_shadow_1', hint: 'The dark secret', targetRevealChapter: 2 }],
     });
     // currentChapter is 3, targetRevealChapter is 2 → past due
     const input = buildPreInput(event, { chapter: 3 });
 
     const issues = validator.validatePre(input);
-    const warnIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('was supposed to be revealed'));
+    const warnIssues = issues.filter(
+      (i) => i.severity === 'warning' && i.message.includes('was supposed to be revealed'),
+    );
     expect(warnIssues).toHaveLength(1);
     expect(warnIssues[0].entity).toBe('f_shadow_1');
   });
@@ -647,9 +723,7 @@ describe('ForeshadowingValidator', () => {
     const otherEvent = makeEvent({
       id: 'evt_other',
       narrativeOrder: 1,
-      foreshadowing: [
-        { id: 'f_shadow_2', hint: 'The old wound', targetRevealChapter: 1 },
-      ],
+      foreshadowing: [{ id: 'f_shadow_2', hint: 'The old wound', targetRevealChapter: 1 }],
     });
     const currentEvent = makeEvent({
       id: 'evt_current',
@@ -667,9 +741,7 @@ describe('ForeshadowingValidator', () => {
 
   it('should pass for on-track foreshadows', () => {
     const event = makeEvent({
-      foreshadowing: [
-        { id: 'f_shadow_3', hint: 'The looming threat', targetRevealChapter: 5 },
-      ],
+      foreshadowing: [{ id: 'f_shadow_3', hint: 'The looming threat', targetRevealChapter: 5 }],
     });
     const input = buildPreInput(event, { chapter: 3, events: [event] });
 
@@ -692,7 +764,9 @@ describe('POVValidator', () => {
     const input = buildPreInput(event, { entityRegistry: registry });
 
     const issues = validator.validatePre(input);
-    const errorIssues = issues.filter((i) => i.severity === 'error' && i.message.includes('not defined'));
+    const errorIssues = issues.filter(
+      (i) => i.severity === 'error' && i.message.includes('not defined'),
+    );
     expect(errorIssues).toHaveLength(1);
     expect(errorIssues[0].entity).toBe('nonexistent');
   });
@@ -707,7 +781,9 @@ describe('POVValidator', () => {
     const input = buildPreInput(event, { entityRegistry: registry });
 
     const issues = validator.validatePre(input);
-    const warnIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('not listed'));
+    const warnIssues = issues.filter(
+      (i) => i.severity === 'warning' && i.message.includes('not listed'),
+    );
     expect(warnIssues).toHaveLength(1);
     expect(warnIssues[0].entity).toBe('jinx');
   });
@@ -721,7 +797,9 @@ describe('POVValidator', () => {
     const input = buildPreInput(event, { entityRegistry: registry });
 
     const issues = validator.validatePre(input);
-    const infoIssues = issues.filter((i) => i.severity === 'info' && i.message.includes('omniscient'));
+    const infoIssues = issues.filter(
+      (i) => i.severity === 'info' && i.message.includes('omniscient'),
+    );
     expect(infoIssues).toHaveLength(1);
   });
 
@@ -751,7 +829,14 @@ describe('VoiceDriftDetector', () => {
     });
     const input: PostRenderInput = {
       event,
-      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      worldState: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       prose: '',
       analysis: null,
       chapter: 1,
@@ -767,7 +852,14 @@ describe('VoiceDriftDetector', () => {
     });
     const input: PostRenderInput = {
       event,
-      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      worldState: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       prose: '',
       analysis: null,
       chapter: 1,
@@ -781,7 +873,14 @@ describe('VoiceDriftDetector', () => {
     const event = makeEvent();
     const input: PostRenderInput = {
       event,
-      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      worldState: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       prose: '',
       analysis: null,
       chapter: 1,
@@ -797,7 +896,14 @@ describe('VoiceDriftDetector', () => {
     });
     const input: PostRenderInput = {
       event,
-      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      worldState: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       prose: '',
       analysis: null,
       chapter: 1,
@@ -819,7 +925,10 @@ describe('BranchMergeValidator', () => {
     const prevEvent = makeEvent({
       id: 'evt_branch_a',
       narrativeOrder: 5,
-      branchExistence: { type: 'paths', paths: [{ decisions: [{ atEventId: 'evt_1', choiceId: 'path_a', narrativeOrder: 1 }] }] },
+      branchExistence: {
+        type: 'paths',
+        paths: [{ decisions: [{ atEventId: 'evt_1', choiceId: 'path_a', narrativeOrder: 1 }] }],
+      },
     });
     const mergeEvent = makeEvent({
       id: 'evt_merge',
@@ -830,7 +939,10 @@ describe('BranchMergeValidator', () => {
           entityId: 'jinx',
           attribute: 'has_key',
           value: true,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -840,7 +952,9 @@ describe('BranchMergeValidator', () => {
     });
 
     const issues = validator.validatePre(input);
-    const warnIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('Merge precondition'));
+    const warnIssues = issues.filter(
+      (i) => i.severity === 'warning' && i.message.includes('Merge precondition'),
+    );
     expect(warnIssues).toHaveLength(1);
     expect(warnIssues[0].entity).toBe('jinx');
   });
@@ -849,7 +963,10 @@ describe('BranchMergeValidator', () => {
     const prevEvent = makeEvent({
       id: 'evt_branch_b',
       narrativeOrder: 5,
-      branchExistence: { type: 'paths', paths: [{ decisions: [{ atEventId: 'evt_1', choiceId: 'path_b', narrativeOrder: 1 }] }] },
+      branchExistence: {
+        type: 'paths',
+        paths: [{ decisions: [{ atEventId: 'evt_1', choiceId: 'path_b', narrativeOrder: 1 }] }],
+      },
     });
     const mergeEvent = makeEvent({
       id: 'evt_merge',
@@ -860,7 +977,10 @@ describe('BranchMergeValidator', () => {
           entityId: 'jinx',
           attribute: 'has_key',
           value: true,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -882,7 +1002,10 @@ describe('BranchMergeValidator', () => {
           entityId: 'jinx',
           attribute: 'has_key',
           value: true,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -916,7 +1039,13 @@ describe('ReachabilityValidator', () => {
             currentRunId: 'legacy-main_plot' as ThreadRunId,
             phase: '',
             bindings: {},
-            goalStates: { goal1: 'achieved', goal2: 'achieved', goal3: 'active', goal4: 'active', goal5: 'active' },
+            goalStates: {
+              goal1: 'achieved',
+              goal2: 'achieved',
+              goal3: 'active',
+              goal4: 'active',
+              goal5: 'active',
+            },
             milestoneStates: {},
             semanticStateHash: 'h0',
           },
@@ -928,11 +1057,12 @@ describe('ReachabilityValidator', () => {
     });
 
     const issues = validator.validatePre(input);
-    const threadIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('Thread'));
+    const threadIssues = issues.filter(
+      (i) => i.severity === 'warning' && i.message.includes('Thread'),
+    );
     expect(threadIssues).toHaveLength(1);
     expect(threadIssues[0].message).toContain('behind');
   });
-
 
   it('should warn when precondition is never established by any postcondition', () => {
     const event = makeEvent({
@@ -944,7 +1074,10 @@ describe('ReachabilityValidator', () => {
           entityId: 'jinx',
           attribute: 'magic_key',
           value: true,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
       postconditions: [],
@@ -959,7 +1092,10 @@ describe('ReachabilityValidator', () => {
           entityId: 'jinx',
           attribute: 'other_attr',
           value: 'something',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -968,7 +1104,9 @@ describe('ReachabilityValidator', () => {
     });
 
     const issues = validator.validatePre(input);
-    const precondIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('never established'));
+    const precondIssues = issues.filter(
+      (i) => i.severity === 'warning' && i.message.includes('never established'),
+    );
     expect(precondIssues).toHaveLength(1);
     expect(precondIssues[0].message).toContain('magic_key');
   });
@@ -1021,7 +1159,10 @@ describe('ResultAggregator', () => {
           entityId: 'jinx',
           attribute: 'missing_attr',
           value: 'should_exist',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -1058,7 +1199,10 @@ describe('ResultAggregator', () => {
           entityId: 'jinx',
           attribute: 'missing',
           value: true,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -1129,12 +1273,17 @@ describe('ResultAggregator', () => {
 
     // Test 'off' override
     const resultOff = aggregator.validate(event, state, registry, [event], 1, { timeline: 'off' });
-    const timelineIssuesOff = [...resultOff.warnings, ...resultOff.infos, ...resultOff.errors]
-      .filter((i) => i.validator === 'timeline');
+    const timelineIssuesOff = [
+      ...resultOff.warnings,
+      ...resultOff.infos,
+      ...resultOff.errors,
+    ].filter((i) => i.validator === 'timeline');
     expect(timelineIssuesOff).toHaveLength(0);
 
     // Test 'error' override (upgrade warning to error)
-    const resultError = aggregator.validate(event, state, registry, [event], 1, { timeline: 'error' });
+    const resultError = aggregator.validate(event, state, registry, [event], 1, {
+      timeline: 'error',
+    });
     const timelineIssuesError = resultError.errors.filter((i) => i.validator === 'timeline');
     // The flashback w/o narrationTime produces a warning → upgraded to error
     expect(timelineIssuesError.length).toBeGreaterThanOrEqual(1);
@@ -1243,10 +1392,24 @@ describe('Validator Edge Cases', () => {
     });
 
     it('does not invent a missing relative time anchor', () => {
-      const prevEvent = makeEvent({ id: 'evt_prev', narrativeOrder: 5, storyTime: { type: 'absolute', value: 'day_10' }, sceneType: 'linear' });
-      const currentEvent = makeEvent({ id: 'evt_current', narrativeOrder: 10, storyTime: { type: 'relative', anchor: 'start', offset: { amount: 5, unit: 'day' } }, sceneType: 'linear' });
-      const issues = validator.validatePre(buildPreInput(currentEvent, { events: [prevEvent, currentEvent] }));
-      expect(issues.filter((issue) => issue.message.includes('before previous event'))).toHaveLength(0);
+      const prevEvent = makeEvent({
+        id: 'evt_prev',
+        narrativeOrder: 5,
+        storyTime: { type: 'absolute', value: 'day_10' },
+        sceneType: 'linear',
+      });
+      const currentEvent = makeEvent({
+        id: 'evt_current',
+        narrativeOrder: 10,
+        storyTime: { type: 'relative', anchor: 'start', offset: { amount: 5, unit: 'day' } },
+        sceneType: 'linear',
+      });
+      const issues = validator.validatePre(
+        buildPreInput(currentEvent, { events: [prevEvent, currentEvent] }),
+      );
+      expect(
+        issues.filter((issue) => issue.message.includes('before previous event')),
+      ).toHaveLength(0);
     });
   });
 
@@ -1272,7 +1435,10 @@ describe('Validator Edge Cases', () => {
             entityId: 'zaun',
             attribute: 'status',
             value: 'destroyed',
-            validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+            validity: {
+              temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+              branches: { type: 'all' },
+            },
           },
         ],
       });
@@ -1301,7 +1467,9 @@ describe('Validator Edge Cases', () => {
       const input = buildPreInput(event, { entityRegistry: registry });
 
       const issues = validator.validatePre(input);
-      const warnIssues = issues.filter((i) => i.severity === 'warning' && i.message.includes('not listed'));
+      const warnIssues = issues.filter(
+        (i) => i.severity === 'warning' && i.message.includes('not listed'),
+      );
       expect(warnIssues).toHaveLength(1);
     });
   });
@@ -1311,9 +1479,7 @@ describe('Validator Edge Cases', () => {
 
     it('should handle foreshadows with targetRevealChapter of 0 (no deadline)', () => {
       const event = makeEvent({
-        foreshadowing: [
-          { id: 'f_free', hint: 'No deadline', targetRevealChapter: 0 },
-        ],
+        foreshadowing: [{ id: 'f_free', hint: 'No deadline', targetRevealChapter: 0 }],
       });
       const input = buildPreInput(event, { chapter: 100, events: [event] });
 

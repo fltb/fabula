@@ -1,5 +1,5 @@
-import type { BranchPath, BranchSet, SceneMetadata } from '../types/index.js';
 import type { Storage } from '../storage/index.ts';
+import type { BranchPath, BranchSet, SceneMetadata } from '../types/index.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // AssemblyError — typed error for assembly failures

@@ -21,23 +21,23 @@
 // ============================================================================
 
 import type {
-  DiscourseState,
-  DiscoursePosition,
-  DiscourseContextProjection,
-  PlannedDiscourseLedger,
   DisclosureAction,
-  NarratorAssertion,
-  NarratorProfile,
+  DisclosureObservation,
+  DiscourseContextProjection,
+  DiscoursePosition,
+  DiscourseState,
   Hint,
   HintState,
-  WithholdingPolicy,
   ModelReaderProfile,
   NarratorAccess,
+  NarratorAssertion,
   NarratorAssertionCapability,
-  NarratorTruthCapability,
   NarratorFidelity,
+  NarratorProfile,
   NarratorSincerity,
-  DisclosureObservation,
+  NarratorTruthCapability,
+  PlannedDiscourseLedger,
+  WithholdingPolicy,
 } from '../types/discourse.js';
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -126,7 +126,16 @@ export function createOmniscientProfile(
   fidelity: NarratorFidelity,
   sincerity: NarratorSincerity,
 ): NarratorProfile {
-  return { type: 'omniscient', id, access, assertion, truth, fidelity, sincerity, autoReveal: false };
+  return {
+    type: 'omniscient',
+    id,
+    access,
+    assertion,
+    truth,
+    fidelity,
+    sincerity,
+    autoReveal: false,
+  };
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -166,7 +175,11 @@ function findAssertion(
  * Mutates the state in place for efficiency — caller must clone/hold
  * immutable semantics if needed.
  */
-function applyAction(state: DiscourseState, action: DisclosureAction, assertions: Record<string, NarratorAssertion>): void {
+function applyAction(
+  state: DiscourseState,
+  action: DisclosureAction,
+  assertions: Record<string, NarratorAssertion>,
+): void {
   switch (action.type) {
     case 'reveal': {
       // §5: reveal truth-boundary hard rule — MUST be true
@@ -180,7 +193,7 @@ function applyAction(state: DiscourseState, action: DisclosureAction, assertions
         state.reveals.push(action.assertionId);
       }
       // Remove from open claims if present (reveal supersedes claim)
-      state.openClaims = state.openClaims.filter(id => id !== action.assertionId);
+      state.openClaims = state.openClaims.filter((id) => id !== action.assertionId);
       break;
     }
 
@@ -194,7 +207,7 @@ function applyAction(state: DiscourseState, action: DisclosureAction, assertions
 
     case 'hint': {
       // §7: hint enters planned state
-      const existing = state.hints.find(h => h.hintId === action.hintId);
+      const existing = state.hints.find((h) => h.hintId === action.hintId);
       if (existing) {
         // Update existing hint state
         existing.state = 'planned';
@@ -218,7 +231,7 @@ function applyAction(state: DiscourseState, action: DisclosureAction, assertions
         discoursePosition: action.discoursePosition,
       });
       // Remove from open claims
-      state.openClaims = state.openClaims.filter(id => id !== action.assertionId);
+      state.openClaims = state.openClaims.filter((id) => id !== action.assertionId);
       break;
     }
 
@@ -243,7 +256,7 @@ function applyAction(state: DiscourseState, action: DisclosureAction, assertions
     }
 
     case 'withhold_start': {
-      const existingPolicy = state.activeWithholds.find(w => w.policyId === action.policyId);
+      const existingPolicy = state.activeWithholds.find((w) => w.policyId === action.policyId);
       if (!existingPolicy) {
         state.activeWithholds.push({
           policyId: action.policyId,
@@ -255,13 +268,16 @@ function applyAction(state: DiscourseState, action: DisclosureAction, assertions
       } else {
         existingPolicy.active = true;
         existingPolicy.endPosition = null;
-        existingPolicy.startPosition = Math.min(existingPolicy.startPosition, action.discoursePosition);
+        existingPolicy.startPosition = Math.min(
+          existingPolicy.startPosition,
+          action.discoursePosition,
+        );
       }
       break;
     }
 
     case 'withhold_end': {
-      const policy = state.activeWithholds.find(w => w.policyId === action.policyId);
+      const policy = state.activeWithholds.find((w) => w.policyId === action.policyId);
       if (policy) {
         policy.active = false;
         policy.endPosition = action.discoursePosition;
@@ -311,7 +327,7 @@ export function replayDiscourseState(
 
   // Filter entries for this branch up to position
   const relevantEntries = ledger.entries.filter(
-    e => e.branch === branch && e.discoursePosition <= position,
+    (e) => e.branch === branch && e.discoursePosition <= position,
   );
 
   // Sort by discourse position (should already be sorted, but be safe)
@@ -357,8 +373,8 @@ export function projectDiscourseContext(
 ): DiscourseContextProjection {
   // Visible hints — surface only, NEVER target (§12)
   const visibleHints = state.hints
-    .filter(h => h.state !== 'retracted')
-    .map(h => ({
+    .filter((h) => h.state !== 'retracted')
+    .map((h) => ({
       hintId: h.hintId,
       surfaceProposition: h.surfaceProposition,
       state: h.state,
@@ -366,11 +382,11 @@ export function projectDiscourseContext(
 
   // Accessible claims — filter by narrator access
   const accessibleClaims = state.openClaims
-    .filter(assertionId => {
+    .filter((assertionId) => {
       const assertion = state.assertions[assertionId];
       return assertion !== undefined && authorizedAssertions.includes(assertionId);
     })
-    .map(assertionId => {
+    .map((assertionId) => {
       const assertion = state.assertions[assertionId];
       return {
         assertionId,
@@ -382,12 +398,12 @@ export function projectDiscourseContext(
 
   // Authorized targets for the current scene
   const authorizedTargets = authorizedAssertions
-    .filter(assertionId => {
+    .filter((assertionId) => {
       const isReveal = state.reveals.includes(assertionId);
       const isClaim = state.openClaims.includes(assertionId);
       return isReveal || isClaim;
     })
-    .map(assertionId => ({
+    .map((assertionId) => ({
       assertionId,
       actionType: (state.reveals.includes(assertionId) ? 'reveal' : 'claim') as 'reveal' | 'claim',
       discoursePosition: state.position,
@@ -399,7 +415,7 @@ export function projectDiscourseContext(
     visibleHints,
     accessibleClaims,
     authorizedTargets,
-    activeWithholdingPolicies: state.activeWithholds.filter(w => w.active),
+    activeWithholdingPolicies: state.activeWithholds.filter((w) => w.active),
   };
 }
 

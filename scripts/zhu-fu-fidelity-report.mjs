@@ -60,8 +60,9 @@ function usage() {
     'Options:',
     '  --render-dir <dir>  Candidate directory containing E*.json prose files.',
     '  --label <name>      Label included in the report (default: current).',
-    '  --output <path>     Markdown report path (default: <fixture>/output/original-fidelity-report.md).',
+    '  --output <path>     Markdown score report path (default: <fixture>/output/original-fidelity-report.md).',
     '  --json-output <path> Machine-readable metrics path (default: report path with .json).',
+    '  --comparison-output <path> Full per-event original/generation/diff report path.',
   ].join('\n');
 }
 
@@ -72,16 +73,24 @@ function parseArgs(argv) {
   let label = 'current';
   let output = null;
   let jsonOutput = null;
+  let comparisonOutput = null;
 
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
-    if (arg === '--render-dir' || arg === '--label' || arg === '--output' || arg === '--json-output') {
+    if (
+      arg === '--render-dir' ||
+      arg === '--label' ||
+      arg === '--output' ||
+      arg === '--json-output' ||
+      arg === '--comparison-output'
+    ) {
       const value = args[++index];
       if (!value) throw new Error(`${arg} requires a value`);
       if (arg === '--render-dir') renderDir = value;
       if (arg === '--label') label = value;
       if (arg === '--output') output = value;
       if (arg === '--json-output') jsonOutput = value;
+      if (arg === '--comparison-output') comparisonOutput = value;
     } else if (arg === '--help' || arg === '-h') {
       console.log(usage());
       process.exit(0);
@@ -93,7 +102,8 @@ function parseArgs(argv) {
   }
 
   if (!fixtureDir) throw new Error('Fixture directory is required');
-  const resolveFromRoot = (candidate) => isAbsolute(candidate) ? candidate : join(REPO_ROOT, candidate);
+  const resolveFromRoot = (candidate) =>
+    isAbsolute(candidate) ? candidate : join(REPO_ROOT, candidate);
   const resolvedFixture = resolveFromRoot(fixtureDir);
   const resolvedOutput = output
     ? resolveFromRoot(output)
@@ -110,6 +120,7 @@ function parseArgs(argv) {
     label,
     output: resolvedOutput,
     jsonOutput: resolvedJsonOutput,
+    comparisonOutput: comparisonOutput ? resolveFromRoot(comparisonOutput) : null,
   };
 }
 
@@ -205,7 +216,8 @@ function score(renderText, originalText) {
   const lcs = lcsLength(renderChars, originalChars);
   const precision = renderChars.length === 0 ? 0 : lcs / renderChars.length;
   const recall = originalChars.length === 0 ? 0 : lcs / originalChars.length;
-  const directScore = precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
+  const directScore =
+    precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
   const bigram = bigramF1(renderChars, originalChars);
 
   return {
@@ -225,9 +237,11 @@ function selectOriginalSegment(originalText, eventId) {
   const start = originalText.indexOf(selector.start);
   if (start < 0) throw new Error(`${eventId}: original start marker not found`);
   const endStart = originalText.indexOf(selector.end, start + selector.start.length);
-  if (endStart < 0) throw new Error(`${eventId}: original end marker not found after its start marker`);
+  if (endStart < 0)
+    throw new Error(`${eventId}: original end marker not found after its start marker`);
   const segment = originalText.slice(start, endStart + selector.end.length);
-  if (!originalText.includes(segment)) throw new Error(`${eventId}: selected excerpt is not contained in original text`);
+  if (!originalText.includes(segment))
+    throw new Error(`${eventId}: selected excerpt is not contained in original text`);
   return segment;
 }
 
@@ -267,6 +281,15 @@ function readRenderedFixtureScene(fixtureDir, eventId) {
       source: 'scene',
       released: typeof metadata?.released === 'boolean' ? metadata.released : null,
       attempts: typeof metadata?.attempts === 'number' ? metadata.attempts : null,
+      validationErrors:
+        typeof metadata?.validationErrors === 'number' ? metadata.validationErrors : null,
+      validationIssueMessages: Array.isArray(metadata?.validationIssueMessages)
+        ? metadata.validationIssueMessages.filter((issue) => typeof issue === 'string')
+        : [],
+      errorMessages: Array.isArray(metadata?.errors)
+        ? metadata.errors.filter((error) => typeof error === 'string')
+        : [],
+      pass2Rejection: typeof metadata?.pass2Rejection === 'string' ? metadata.pass2Rejection : null,
     };
   }
 
@@ -277,6 +300,15 @@ function readRenderedFixtureScene(fixtureDir, eventId) {
       source: 'response',
       released: typeof response.released === 'boolean' ? response.released : null,
       attempts: typeof response.attempts === 'number' ? response.attempts : null,
+      validationErrors:
+        typeof response.validationErrors === 'number' ? response.validationErrors : null,
+      validationIssueMessages: Array.isArray(response.validationIssueMessages)
+        ? response.validationIssueMessages.filter((issue) => typeof issue === 'string')
+        : [],
+      errorMessages: Array.isArray(response.errors)
+        ? response.errors.filter((error) => typeof error === 'string')
+        : [],
+      pass2Rejection: typeof response.pass2Rejection === 'string' ? response.pass2Rejection : null,
     };
   }
   return null;
@@ -288,8 +320,17 @@ function readRenderedCandidate(renderDir, eventId) {
   return {
     prose: candidate.prose,
     source: 'candidate',
-    released: typeof candidate?.released === 'boolean' ? candidate.released : null,
-    attempts: typeof candidate?.metadata?.attempts === 'number' ? candidate.metadata.attempts : null,
+    released: typeof candidate.released === 'boolean' ? candidate.released : null,
+    attempts: typeof candidate.metadata?.attempts === 'number' ? candidate.metadata.attempts : null,
+    validationErrors:
+      typeof candidate.validationErrors === 'number' ? candidate.validationErrors : null,
+    validationIssueMessages: Array.isArray(candidate.validationIssueMessages)
+      ? candidate.validationIssueMessages.filter((issue) => typeof issue === 'string')
+      : [],
+    errorMessages: Array.isArray(candidate.errors)
+      ? candidate.errors.filter((error) => typeof error === 'string')
+      : [],
+    pass2Rejection: typeof candidate.pass2Rejection === 'string' ? candidate.pass2Rejection : null,
   };
 }
 
@@ -305,11 +346,60 @@ function markdownCell(value) {
   return String(value).replaceAll('|', '\\|');
 }
 
+/**
+ * Produces an order-preserving, line-level unified diff. Full source and
+ * generated passages remain visible in the surrounding sections; this block
+ * identifies which exact paragraphs are shared, removed, or added.
+ */
+function lineDiff(originalText, renderText) {
+  const originalLines = originalText.split('\n');
+  const renderLines = renderText.split('\n');
+  const matrix = Array.from(
+    { length: originalLines.length + 1 },
+    () => new Uint16Array(renderLines.length + 1),
+  );
+
+  for (let row = originalLines.length - 1; row >= 0; row--) {
+    for (let column = renderLines.length - 1; column >= 0; column--) {
+      matrix[row][column] =
+        originalLines[row] === renderLines[column]
+          ? matrix[row + 1][column + 1] + 1
+          : Math.max(matrix[row + 1][column], matrix[row][column + 1]);
+    }
+  }
+
+  const lines = [`--- original`, `+++ generated`];
+  let row = 0;
+  let column = 0;
+  while (row < originalLines.length || column < renderLines.length) {
+    if (
+      row < originalLines.length &&
+      column < renderLines.length &&
+      originalLines[row] === renderLines[column]
+    ) {
+      lines.push(`  ${originalLines[row]}`);
+      row++;
+      column++;
+    } else if (
+      column === renderLines.length ||
+      (row < originalLines.length && matrix[row + 1][column] >= matrix[row][column + 1])
+    ) {
+      lines.push(`- ${originalLines[row]}`);
+      row++;
+    } else {
+      lines.push(`+ ${renderLines[column]}`);
+      column++;
+    }
+  }
+  return lines.join('\n');
+}
+
 function reportMarkdown(result) {
   const lines = [
     '# 《祝福》原文直比评分',
     '',
     `- **标签**：${result.label}`,
+    `- **时间**：${result.generatedAtCst} CST`,
     `- **生成时间（UTC）**：${result.generatedAt}`,
     `- **渲染来源**：${result.renderDir ?? 'fixture scenes / responses'}`,
     '- **主指标**：汉字序列的 LCS-F1（保序直接 diff；$2 × LCS / (生成汉字数 + 原文汉字数)$）。',
@@ -323,20 +413,26 @@ function reportMarkdown(result) {
   ];
 
   for (const event of result.events) {
-    lines.push([
-      event.eventId,
-      markdownCell(event.title),
-      event.source,
-      integer(event.renderHan),
-      integer(event.originalHan),
-      integer(event.lcs),
-      percent(event.directScore),
-      percent(event.lcsPrecision),
-      percent(event.lcsRecall),
-      percent(event.bigramF1),
-      event.released === null ? 'N/A' : String(event.released),
-      integer(event.attempts),
-    ].map((value) => ` ${value} `).join('|').replace(/^/, '|').replace(/$/, '|'));
+    lines.push(
+      [
+        event.eventId,
+        markdownCell(event.title),
+        event.source,
+        integer(event.renderHan),
+        integer(event.originalHan),
+        integer(event.lcs),
+        percent(event.directScore),
+        percent(event.lcsPrecision),
+        percent(event.lcsRecall),
+        percent(event.bigramF1),
+        event.released === null ? 'N/A' : String(event.released),
+        integer(event.attempts),
+      ]
+        .map((value) => ` ${value} `)
+        .join('|')
+        .replace(/^/, '|')
+        .replace(/$/, '|'),
+    );
   }
 
   const aggregate = result.aggregate;
@@ -357,18 +453,89 @@ function reportMarkdown(result) {
   return lines.join('\n');
 }
 
+function comparisonMarkdown(result) {
+  const lines = [
+    '# 《祝福》逐场景原文—生成全文对比',
+    '',
+    `- **标签**：${result.label}`,
+    `- **时间**：${result.generatedAtCst} CST`,
+    `- **生成时间（UTC）**：${result.generatedAt}`,
+    `- **渲染来源**：${result.renderDir ?? 'fixture scenes / responses'}`,
+    '- **读法**：每场依次给出完整原文段、完整生成文本和行级统一 diff。` ` 表示相同行，`-` 只在原文，`+` 只在生成文本。',
+    '- **分数**：LCS-F1 是去除非汉字后保序字符的直接 diff；它与下方逐行 diff 一起使用。',
+    '',
+  ];
+
+  for (const event of result.events) {
+    lines.push(
+      `## ${event.eventId} — ${event.title}`,
+      '',
+      `- **LCS-F1**：${percent(event.directScore)}；**LCS**：${integer(event.lcs)}；**生成 / 原文汉字**：${integer(event.renderHan)} / ${integer(event.originalHan)}`,
+      `- **Release**：${event.released === null ? 'N/A' : String(event.released)}；**Attempts**：${integer(event.attempts)}；**最终记录的验证错误数**：${integer(event.validationErrors)}`,
+      `- **Pass 2 rejection**：${event.pass2Rejection ?? 'N/A'}`,
+      '',
+    );
+    if (event.validationIssueMessages.length > 0) {
+      lines.push('- **验证 issue**：');
+      for (const issue of event.validationIssueMessages) lines.push(`  - ${issue}`);
+      lines.push('');
+    }
+    if (event.errorMessages.length > 0) {
+      lines.push('- **错误链**：');
+      for (const error of event.errorMessages) lines.push(`  - ${error}`);
+      lines.push('');
+    }
+    if (
+      event.released === false &&
+      event.errorMessages.some((error) => error.startsWith('Pass 2 attempt'))
+    ) {
+      lines.push(
+        '- **Gate 原因**：最终 Pass 2 provider exception 令 `analysis === null`；严格 release gate 因此拒绝该场景。',
+        '',
+      );
+    }
+    lines.push(
+      '### 原文',
+      '',
+      '```text',
+      event.originalText,
+      '```',
+      '',
+      '### 生成文本',
+      '',
+      '```text',
+      event.renderText ?? '(missing)',
+      '```',
+      '',
+      '### 行级统一 diff',
+      '',
+      '```diff',
+      lineDiff(event.originalText, event.renderText ?? ''),
+      '```',
+      '',
+    );
+  }
+
+  return lines.join('\n');
+}
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
-  if (!existsSync(args.fixtureDir)) throw new Error(`Fixture directory not found: ${args.fixtureDir}`);
-  if (args.renderDir && !existsSync(args.renderDir)) throw new Error(`Render directory not found: ${args.renderDir}`);
+  if (!existsSync(args.fixtureDir))
+    throw new Error(`Fixture directory not found: ${args.fixtureDir}`);
+  if (args.renderDir && !existsSync(args.renderDir))
+    throw new Error(`Render directory not found: ${args.renderDir}`);
 
   const originalPath = join(args.fixtureDir, 'reference', 'original.txt');
   const originalText = readText(originalPath);
   if (originalText === null) throw new Error(`Original text not found: ${originalPath}`);
 
   const events = discoverEvents(args.fixtureDir);
-  const originalSegments = new Map(events.map((event) => [event.eventId, selectOriginalSegment(originalText, event.eventId)]));
+  const originalSegments = new Map(
+    events.map((event) => [event.eventId, selectOriginalSegment(originalText, event.eventId)]),
+  );
   const metrics = [];
+  const comparisons = [];
   const missingEventIds = [];
   let aggregateRender = '';
   let aggregateOriginal = '';
@@ -380,7 +547,7 @@ function main() {
     const originalSegment = originalSegments.get(event.eventId);
     if (!rendered) {
       missingEventIds.push(event.eventId);
-      metrics.push({
+      const missingMetric = {
         ...event,
         source: 'missing',
         renderHan: 0,
@@ -392,22 +559,36 @@ function main() {
         bigramF1: null,
         released: null,
         attempts: null,
-      });
+        validationErrors: null,
+        validationIssueMessages: [],
+        errorMessages: [],
+        pass2Rejection: null,
+      };
+      metrics.push(missingMetric);
+      comparisons.push({ ...missingMetric, originalText: originalSegment, renderText: null });
       continue;
     }
 
     const sceneScore = score(rendered.prose, originalSegment);
-    metrics.push({ ...event, ...rendered, ...sceneScore });
+    const metric = { ...event, ...rendered, ...sceneScore };
+    metrics.push(metric);
+    comparisons.push({ ...metric, originalText: originalSegment, renderText: rendered.prose });
     aggregateRender += rendered.prose;
     aggregateOriginal += originalSegment;
   }
 
   const work = score(aggregateRender, aggregateOriginal);
-  const macroDirectScore = metrics.reduce((sum, event) => sum + event.directScore, 0) / metrics.length;
+  const macroDirectScore =
+    metrics.reduce((sum, event) => sum + event.directScore, 0) / metrics.length;
+  const reportTime = new Date();
   const result = {
     version: 1,
     label: args.label,
-    generatedAt: new Date().toISOString(),
+    generatedAt: reportTime.toISOString(),
+    generatedAtCst: reportTime.toLocaleString('sv-SE', {
+      timeZone: 'Asia/Shanghai',
+      hour12: false,
+    }),
     fixtureDir: args.fixtureDir,
     renderDir: args.renderDir,
     events: metrics,
@@ -426,11 +607,18 @@ function main() {
   mkdirSync(dirname(args.jsonOutput), { recursive: true });
   writeFileSync(args.output, reportMarkdown(result));
   writeFileSync(args.jsonOutput, `${JSON.stringify(result, null, 2)}\n`);
+  if (args.comparisonOutput) {
+    mkdirSync(dirname(args.comparisonOutput), { recursive: true });
+    writeFileSync(args.comparisonOutput, comparisonMarkdown({ ...result, events: comparisons }));
+  }
 
   console.log(`Scored ${metrics.length} scenes (${args.label}).`);
   console.log(`  Work LCS-F1: ${percent(result.aggregate.workDirectScore)}`);
   console.log(`  Report: ${relative(REPO_ROOT, args.output)}`);
   console.log(`  Metrics: ${relative(REPO_ROOT, args.jsonOutput)}`);
+  if (args.comparisonOutput) {
+    console.log(`  Comparison: ${relative(REPO_ROOT, args.comparisonOutput)}`);
+  }
 }
 
 try {

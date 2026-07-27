@@ -133,10 +133,13 @@ export function canonicalDeepEqual(a: CanonicalFactValue, b: CanonicalFactValue)
     if (aKeys.length !== bKeys.length) return false;
     for (let i = 0; i < aKeys.length; i++) {
       if (aKeys[i] !== bKeys[i]) return false;
-      if (!canonicalDeepEqual(
-        (a as Record<string, CanonicalFactValue>)[aKeys[i]],
-        (b as Record<string, CanonicalFactValue>)[bKeys[i]],
-      )) return false;
+      if (
+        !canonicalDeepEqual(
+          (a as Record<string, CanonicalFactValue>)[aKeys[i]],
+          (b as Record<string, CanonicalFactValue>)[bKeys[i]],
+        )
+      )
+        return false;
     }
     return true;
   }

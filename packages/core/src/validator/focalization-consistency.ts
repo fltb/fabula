@@ -7,15 +7,15 @@
 //   Pass 2's focalizationDetected. Mismatch = warning.
 // ============================================================================
 
+import { z } from 'zod';
 import type {
-  Validator,
-  ValidationIssue,
+  AnalysisBlockRequirement,
   PostRenderInput,
   PreRenderInput,
-  AnalysisBlockRequirement,
+  ValidationIssue,
+  Validator,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
-import { z } from 'zod';
 
 export const focalizationDetectedSchema = z.enum(['zero', 'internal', 'external']);
 export type FocalizationDetected = z.infer<typeof focalizationDetectedSchema>;

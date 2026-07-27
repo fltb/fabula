@@ -2,9 +2,9 @@
 // Unit Tests — Deferred-fact resolution
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { AnalysisResult, NarrativeEvent, ValidationIssue } from '../../src/types/index.js';
 import { resolveDeferredFacts } from '../../src/validator/deferred-resolver.js';
-import type { NarrativeEvent, AnalysisResult, ValidationIssue } from '../../src/types/index.js';
 
 // ============================================================================
 // Helpers
@@ -34,13 +34,15 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
 }
 
 /** Create an AnalysisResult with the given narrativeChecks */
-function makeAnalysis(narrativeChecks: Array<{
-  entityId: string;
-  attribute: string;
-  matchLevel: string;
-  hint?: string;
-  evidence?: string;
-}>): AnalysisResult {
+function makeAnalysis(
+  narrativeChecks: Array<{
+    entityId: string;
+    attribute: string;
+    matchLevel: string;
+    hint?: string;
+    evidence?: string;
+  }>,
+): AnalysisResult {
   return {
     eventId: 'evt_test',
     analysis: {
@@ -57,33 +59,31 @@ function makeAnalysis(narrativeChecks: Array<{
 }
 
 /** Make a narrativeHint-only fact (no deterministic value) */
-function narrativeHintFact(
-  entityId: string,
-  attribute: string,
-  hint: string,
-) {
+function narrativeHintFact(entityId: string, attribute: string, hint: string) {
   return {
     id: `${entityId}.${attribute}`,
     entityId,
     attribute,
     narrativeHint: hint,
     // No value — this makes it a deferred fact
-    validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
+    validity: {
+      temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
+      branches: { type: 'all' as const },
+    },
   };
 }
 
 /** Make a deterministic fact with a concrete value */
-function deterministicFact(
-  entityId: string,
-  attribute: string,
-  value: unknown,
-) {
+function deterministicFact(entityId: string, attribute: string, value: unknown) {
   return {
     id: `${entityId}.${attribute}`,
     entityId,
     attribute,
     value,
-    validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
+    validity: {
+      temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
+      branches: { type: 'all' as const },
+    },
   };
 }
 
@@ -95,13 +95,9 @@ describe('resolveDeferredFacts', () => {
   it('should NOT flag a narrativeHint precondition when Pass 2 confirms it (matchLevel=exact)', () => {
     const event = makeEvent({
       id: 'E1',
-      preconditions: [
-        narrativeHintFact('jinx', 'mood', 'Jinx should be anxious and wary'),
-      ],
+      preconditions: [narrativeHintFact('jinx', 'mood', 'Jinx should be anxious and wary')],
     });
-    const analysis = makeAnalysis([
-      { entityId: 'jinx', attribute: 'mood', matchLevel: 'exact' },
-    ]);
+    const analysis = makeAnalysis([{ entityId: 'jinx', attribute: 'mood', matchLevel: 'exact' }]);
 
     const issues = resolveDeferredFacts(event, analysis);
     const deferredIssues = issues.filter((i) => i.validator === 'DeferredResolver');
@@ -111,13 +107,9 @@ describe('resolveDeferredFacts', () => {
   it('should NOT flag when matchLevel=similar (close enough)', () => {
     const event = makeEvent({
       id: 'E1',
-      preconditions: [
-        narrativeHintFact('jinx', 'mood', 'Jinx should be anxious and wary'),
-      ],
+      preconditions: [narrativeHintFact('jinx', 'mood', 'Jinx should be anxious and wary')],
     });
-    const analysis = makeAnalysis([
-      { entityId: 'jinx', attribute: 'mood', matchLevel: 'similar' },
-    ]);
+    const analysis = makeAnalysis([{ entityId: 'jinx', attribute: 'mood', matchLevel: 'similar' }]);
 
     const issues = resolveDeferredFacts(event, analysis);
     const deferredIssues = issues.filter((i) => i.validator === 'DeferredResolver');
@@ -127,13 +119,9 @@ describe('resolveDeferredFacts', () => {
   it('should emit error when narrativeHint precondition has matchLevel=absent', () => {
     const event = makeEvent({
       id: 'E1',
-      preconditions: [
-        narrativeHintFact('jinx', 'mood', 'Jinx should be anxious and wary'),
-      ],
+      preconditions: [narrativeHintFact('jinx', 'mood', 'Jinx should be anxious and wary')],
     });
-    const analysis = makeAnalysis([
-      { entityId: 'jinx', attribute: 'mood', matchLevel: 'absent' },
-    ]);
+    const analysis = makeAnalysis([{ entityId: 'jinx', attribute: 'mood', matchLevel: 'absent' }]);
 
     const issues = resolveDeferredFacts(event, analysis);
     const deferredIssues = issues.filter((i) => i.validator === 'DeferredResolver');
@@ -146,9 +134,7 @@ describe('resolveDeferredFacts', () => {
   it('should emit error when narrativeHint precondition has matchLevel=contradicted', () => {
     const event = makeEvent({
       id: 'E1',
-      preconditions: [
-        narrativeHintFact('jinx', 'mood', 'Jinx should be anxious and wary'),
-      ],
+      preconditions: [narrativeHintFact('jinx', 'mood', 'Jinx should be anxious and wary')],
     });
     const analysis = makeAnalysis([
       { entityId: 'jinx', attribute: 'mood', matchLevel: 'contradicted' },
@@ -165,9 +151,7 @@ describe('resolveDeferredFacts', () => {
   it('should emit error when narrativeHint precondition is absent from narrativeChecks entirely', () => {
     const event = makeEvent({
       id: 'E1',
-      preconditions: [
-        narrativeHintFact('jinx', 'mood', 'Jinx should be anxious and wary'),
-      ],
+      preconditions: [narrativeHintFact('jinx', 'mood', 'Jinx should be anxious and wary')],
     });
     // narrativeChecks array doesn't contain jinx.mood
     const analysis = makeAnalysis([
@@ -184,9 +168,7 @@ describe('resolveDeferredFacts', () => {
   it('should NOT flag deterministic preconditions (value present)', () => {
     const event = makeEvent({
       id: 'E1',
-      preconditions: [
-        deterministicFact('jinx', 'has_key', true),
-      ],
+      preconditions: [deterministicFact('jinx', 'has_key', true)],
     });
     const analysis = makeAnalysis([
       { entityId: 'jinx', attribute: 'has_key', matchLevel: 'absent' },
@@ -208,13 +190,14 @@ describe('resolveDeferredFacts', () => {
           id: 'jinx.mood',
           entityId: 'jinx',
           attribute: 'mood',
-          validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
+          validity: {
+            temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
+            branches: { type: 'all' as const },
+          },
         },
       ],
     });
-    const analysis = makeAnalysis([
-      { entityId: 'jinx', attribute: 'mood', matchLevel: 'absent' },
-    ]);
+    const analysis = makeAnalysis([{ entityId: 'jinx', attribute: 'mood', matchLevel: 'absent' }]);
 
     const issues = resolveDeferredFacts(event, analysis);
     const deferredIssues = issues.filter((i) => i.validator === 'DeferredResolver');
@@ -224,9 +207,7 @@ describe('resolveDeferredFacts', () => {
   it('should return empty array when analysis is null', () => {
     const event = makeEvent({
       id: 'E1',
-      preconditions: [
-        narrativeHintFact('jinx', 'mood', 'Anxious'),
-      ],
+      preconditions: [narrativeHintFact('jinx', 'mood', 'Anxious')],
     });
 
     const issues = resolveDeferredFacts(event, null);
@@ -236,9 +217,7 @@ describe('resolveDeferredFacts', () => {
   it('should return empty array when analysis has no narrativeChecks', () => {
     const event = makeEvent({
       id: 'E1',
-      preconditions: [
-        narrativeHintFact('jinx', 'mood', 'Anxious'),
-      ],
+      preconditions: [narrativeHintFact('jinx', 'mood', 'Anxious')],
     });
     const analysis: AnalysisResult = {
       eventId: 'E1',
@@ -268,7 +247,11 @@ describe('resolveDeferredFacts', () => {
     const issues = resolveDeferredFacts(event, analysis);
     const deferredIssues = issues.filter((i) => i.validator === 'DeferredResolver');
     expect(deferredIssues).toHaveLength(2);
-    expect(deferredIssues.find((i) => i.entity === 'jinx' && i.attribute === 'location')).toBeTruthy();
-    expect(deferredIssues.find((i) => i.entity === 'victor' && i.attribute === 'status')).toBeTruthy();
+    expect(
+      deferredIssues.find((i) => i.entity === 'jinx' && i.attribute === 'location'),
+    ).toBeTruthy();
+    expect(
+      deferredIssues.find((i) => i.entity === 'victor' && i.attribute === 'status'),
+    ).toBeTruthy();
   });
 });

@@ -32,9 +32,7 @@ export type EffectiveCoordinate = StoryCoordinate | DiscourseCoordinate;
 // ——— OutputDescriptor (§5) ———
 
 /** Value state: set (with data) or unset (reversion/removal). */
-export type OutputValue =
-  | { type: 'set'; data: unknown }
-  | { type: 'unset' };
+export type OutputValue = { type: 'set'; data: unknown } | { type: 'unset' };
 
 /**
  * Every replay effect normalises to an immutable OutputDescriptor with:
@@ -58,13 +56,7 @@ export interface OutputDescriptor {
 
 export type ReadPhase = 'stateBefore' | 'stateAfter';
 
-export type ReadOrigin =
-  | 'precondition'
-  | 'source'
-  | 'rule'
-  | 'scope'
-  | 'lifecycle'
-  | 'merge';
+export type ReadOrigin = 'precondition' | 'source' | 'rule' | 'scope' | 'lifecycle' | 'merge';
 
 /**
  * Presence-aware predicate for ReadRequirement.
@@ -284,20 +276,34 @@ export class MissingOutputError extends GraphCompileError {
 
 // — 4. AmbiguousOutput —
 export class AmbiguousOutputError extends GraphCompileError {
-  constructor(canonicalKey: string, candidates: string[], nodeId?: string, context?: Partial<GraphErrorContext>) {
-    super('AMBIGUOUS_OUTPUT', `Ambiguous output for key "${canonicalKey}": ${candidates.join(', ')}`, {
-      code: 'AMBIGUOUS_OUTPUT',
-      canonicalKey,
-      nodeId,
-      detail: `candidates: ${candidates.join(', ')}`,
-      ...context,
-    });
+  constructor(
+    canonicalKey: string,
+    candidates: string[],
+    nodeId?: string,
+    context?: Partial<GraphErrorContext>,
+  ) {
+    super(
+      'AMBIGUOUS_OUTPUT',
+      `Ambiguous output for key "${canonicalKey}": ${candidates.join(', ')}`,
+      {
+        code: 'AMBIGUOUS_OUTPUT',
+        canonicalKey,
+        nodeId,
+        detail: `candidates: ${candidates.join(', ')}`,
+        ...context,
+      },
+    );
   }
 }
 
 // — 5. AssertionMismatch —
 export class AssertionMismatchError extends GraphCompileError {
-  constructor(expected: string, actual: string, nodeId?: string, context?: Partial<GraphErrorContext>) {
+  constructor(
+    expected: string,
+    actual: string,
+    nodeId?: string,
+    context?: Partial<GraphErrorContext>,
+  ) {
     super('ASSERTION_MISMATCH', `Assertion mismatch: expected "${expected}", got "${actual}"`, {
       code: 'ASSERTION_MISMATCH',
       nodeId,
@@ -309,13 +315,22 @@ export class AssertionMismatchError extends GraphCompileError {
 
 // — 6. ReadMismatch —
 export class ReadMismatchError extends GraphCompileError {
-  constructor(readId: string, expected: string, actual: string, context?: Partial<GraphErrorContext>) {
-    super('READ_MISMATCH', `Read mismatch for "${readId}": expected "${expected}", got "${actual}"`, {
-      code: 'READ_MISMATCH',
-      readId,
-      detail: `expected: ${expected}, actual: ${actual}`,
-      ...context,
-    });
+  constructor(
+    readId: string,
+    expected: string,
+    actual: string,
+    context?: Partial<GraphErrorContext>,
+  ) {
+    super(
+      'READ_MISMATCH',
+      `Read mismatch for "${readId}": expected "${expected}", got "${actual}"`,
+      {
+        code: 'READ_MISMATCH',
+        readId,
+        detail: `expected: ${expected}, actual: ${actual}`,
+        ...context,
+      },
+    );
   }
 }
 
@@ -332,27 +347,46 @@ export class UnknownReadIdError extends GraphCompileError {
 
 // — 8. StaleProviderSelection —
 export class StaleProviderSelectionError extends GraphCompileError {
-  constructor(readId: string, selectedOutput: string, latestOutput: string, context?: Partial<GraphErrorContext>) {
-    super('STALE_PROVIDER_SELECTION', `Stale provider selection for read "${readId}": selected "${selectedOutput}" but latest is "${latestOutput}"`, {
-      code: 'STALE_PROVIDER_SELECTION',
-      readId,
-      outputId: selectedOutput,
-      detail: `latest: ${latestOutput}`,
-      ...context,
-    });
+  constructor(
+    readId: string,
+    selectedOutput: string,
+    latestOutput: string,
+    context?: Partial<GraphErrorContext>,
+  ) {
+    super(
+      'STALE_PROVIDER_SELECTION',
+      `Stale provider selection for read "${readId}": selected "${selectedOutput}" but latest is "${latestOutput}"`,
+      {
+        code: 'STALE_PROVIDER_SELECTION',
+        readId,
+        outputId: selectedOutput,
+        detail: `latest: ${latestOutput}`,
+        ...context,
+      },
+    );
   }
 }
 
 // — 9. DuplicateBranchProvider —
 export class DuplicateBranchProviderError extends GraphCompileError {
-  constructor(readId: string, branchScope: string, existing: string, conflict: string, context?: Partial<GraphErrorContext>) {
-    super('DUPLICATE_BRANCH_PROVIDER', `Duplicate provider for read "${readId}" in branch "${branchScope}": "${existing}" vs "${conflict}"`, {
-      code: 'DUPLICATE_BRANCH_PROVIDER',
-      readId,
-      branchScope,
-      detail: `existing: ${existing}, conflict: ${conflict}`,
-      ...context,
-    });
+  constructor(
+    readId: string,
+    branchScope: string,
+    existing: string,
+    conflict: string,
+    context?: Partial<GraphErrorContext>,
+  ) {
+    super(
+      'DUPLICATE_BRANCH_PROVIDER',
+      `Duplicate provider for read "${readId}" in branch "${branchScope}": "${existing}" vs "${conflict}"`,
+      {
+        code: 'DUPLICATE_BRANCH_PROVIDER',
+        readId,
+        branchScope,
+        detail: `existing: ${existing}, conflict: ${conflict}`,
+        ...context,
+      },
+    );
   }
 }
 
@@ -382,51 +416,82 @@ export class BranchIncompatibilityError extends GraphCompileError {
 
 // — 12. FutureTime —
 export class FutureTimeError extends GraphCompileError {
-  constructor(coordinate: EffectiveCoordinate, nodeId: string, predecessorCoordinate: EffectiveCoordinate, context?: Partial<GraphErrorContext>) {
-    super('FUTURE_TIME', `Future time: node "${nodeId}" at ${JSON.stringify(coordinate)} has predecessor at ${JSON.stringify(predecessorCoordinate)}`, {
-      code: 'FUTURE_TIME',
-      coordinate,
-      nodeId,
-      detail: `predecessor coordinate: ${JSON.stringify(predecessorCoordinate)}`,
-      ...context,
-    });
+  constructor(
+    coordinate: EffectiveCoordinate,
+    nodeId: string,
+    predecessorCoordinate: EffectiveCoordinate,
+    context?: Partial<GraphErrorContext>,
+  ) {
+    super(
+      'FUTURE_TIME',
+      `Future time: node "${nodeId}" at ${JSON.stringify(coordinate)} has predecessor at ${JSON.stringify(predecessorCoordinate)}`,
+      {
+        code: 'FUTURE_TIME',
+        coordinate,
+        nodeId,
+        detail: `predecessor coordinate: ${JSON.stringify(predecessorCoordinate)}`,
+        ...context,
+      },
+    );
   }
 }
 
 // — 13. IncomparableTime —
 export class IncomparableTimeError extends GraphCompileError {
-  constructor(nodeId: string, a: EffectiveCoordinate, b: EffectiveCoordinate, context?: Partial<GraphErrorContext>) {
-    super('INCOMPARABLE_TIME', `Incomparable time between nodes: "${nodeId}" at ${JSON.stringify(a)} vs ${JSON.stringify(b)}`, {
-      code: 'INCOMPARABLE_TIME',
-      nodeId,
-      detail: `a: ${JSON.stringify(a)}, b: ${JSON.stringify(b)}`,
-      ...context,
-    });
+  constructor(
+    nodeId: string,
+    a: EffectiveCoordinate,
+    b: EffectiveCoordinate,
+    context?: Partial<GraphErrorContext>,
+  ) {
+    super(
+      'INCOMPARABLE_TIME',
+      `Incomparable time between nodes: "${nodeId}" at ${JSON.stringify(a)} vs ${JSON.stringify(b)}`,
+      {
+        code: 'INCOMPARABLE_TIME',
+        nodeId,
+        detail: `a: ${JSON.stringify(a)}, b: ${JSON.stringify(b)}`,
+        ...context,
+      },
+    );
   }
 }
 
 // — 14. UnorderedSameTimeConflict —
 export class UnorderedSameTimeConflictError extends GraphCompileError {
-  constructor(nodeId: string, coordinate: EffectiveCoordinate, conflictingNode: string, context?: Partial<GraphErrorContext>) {
-    super('UNORDERED_SAME_TIME_CONFLICT', `Unordered same-time conflict: "${nodeId}" and "${conflictingNode}" share ${JSON.stringify(coordinate)}`, {
-      code: 'UNORDERED_SAME_TIME_CONFLICT',
-      coordinate,
-      nodeId,
-      detail: `conflicting node: ${conflictingNode}`,
-      ...context,
-    });
+  constructor(
+    nodeId: string,
+    coordinate: EffectiveCoordinate,
+    conflictingNode: string,
+    context?: Partial<GraphErrorContext>,
+  ) {
+    super(
+      'UNORDERED_SAME_TIME_CONFLICT',
+      `Unordered same-time conflict: "${nodeId}" and "${conflictingNode}" share ${JSON.stringify(coordinate)}`,
+      {
+        code: 'UNORDERED_SAME_TIME_CONFLICT',
+        coordinate,
+        nodeId,
+        detail: `conflicting node: ${conflictingNode}`,
+        ...context,
+      },
+    );
   }
 }
 
 // — 15. CrossClockEdge —
 export class CrossClockEdgeError extends GraphCompileError {
   constructor(predecessor: string, dependent: string, context?: Partial<GraphErrorContext>) {
-    super('CROSS_CLOCK_EDGE', `Cross-clock edge: "${predecessor}" → "${dependent}" — story/discourse clocks cannot cross-domain depend`, {
-      code: 'CROSS_CLOCK_EDGE',
-      nodeId: dependent,
-      detail: `predecessor: ${predecessor}`,
-      ...context,
-    });
+    super(
+      'CROSS_CLOCK_EDGE',
+      `Cross-clock edge: "${predecessor}" → "${dependent}" — story/discourse clocks cannot cross-domain depend`,
+      {
+        code: 'CROSS_CLOCK_EDGE',
+        nodeId: dependent,
+        detail: `predecessor: ${predecessor}`,
+        ...context,
+      },
+    );
   }
 }
 
@@ -445,24 +510,32 @@ export class EdgeOriginCycleError extends GraphCompileError {
 // — 17. InitialRootMisuse —
 export class InitialRootMisuseError extends GraphCompileError {
   constructor(nodeId: string, edgeClass: EdgeClass, context?: Partial<GraphErrorContext>) {
-    super('INITIAL_ROOT_MISUSE', `Initial root misuse: "${nodeId}" has edge class "${edgeClass}" — initial root cannot be author_origin/same_coordinate_order predecessor`, {
-      code: 'INITIAL_ROOT_MISUSE',
-      nodeId,
-      edgeClass,
-      ...context,
-    });
+    super(
+      'INITIAL_ROOT_MISUSE',
+      `Initial root misuse: "${nodeId}" has edge class "${edgeClass}" — initial root cannot be author_origin/same_coordinate_order predecessor`,
+      {
+        code: 'INITIAL_ROOT_MISUSE',
+        nodeId,
+        edgeClass,
+        ...context,
+      },
+    );
   }
 }
 
 // — 18. SemanticOutputDependency —
 export class SemanticOutputDependencyError extends GraphCompileError {
   constructor(dependent: string, canonicalKey: string, context?: Partial<GraphErrorContext>) {
-    super('SEMANTIC_OUTPUT_DEPENDENCY', `Semantic output dependency: "${dependent}" depends on "${canonicalKey}" which is not a valid output`, {
-      code: 'SEMANTIC_OUTPUT_DEPENDENCY',
-      nodeId: dependent,
-      canonicalKey,
-      ...context,
-    });
+    super(
+      'SEMANTIC_OUTPUT_DEPENDENCY',
+      `Semantic output dependency: "${dependent}" depends on "${canonicalKey}" which is not a valid output`,
+      {
+        code: 'SEMANTIC_OUTPUT_DEPENDENCY',
+        nodeId: dependent,
+        canonicalKey,
+        ...context,
+      },
+    );
   }
 }
 
@@ -504,36 +577,58 @@ export class EllipsisSummaryError extends GraphCompileError {
 
 // — 22. ProvenanceError —
 export class ProvenanceError extends GraphCompileError {
-  constructor(outputId: string, expectedHash: string, actualHash: string, context?: Partial<GraphErrorContext>) {
-    super('PROVENANCE_ERROR', `Provenance mismatch at "${outputId}": expected "${expectedHash}", got "${actualHash}"`, {
-      code: 'PROVENANCE_ERROR',
-      outputId,
-      detail: `expected: ${expectedHash}, actual: ${actualHash}`,
-      ...context,
-    });
+  constructor(
+    outputId: string,
+    expectedHash: string,
+    actualHash: string,
+    context?: Partial<GraphErrorContext>,
+  ) {
+    super(
+      'PROVENANCE_ERROR',
+      `Provenance mismatch at "${outputId}": expected "${expectedHash}", got "${actualHash}"`,
+      {
+        code: 'PROVENANCE_ERROR',
+        outputId,
+        detail: `expected: ${expectedHash}, actual: ${actualHash}`,
+        ...context,
+      },
+    );
   }
 }
 
 // — 23. NoOutputEdge —
 export class NoOutputEdgeError extends GraphCompileError {
   constructor(dependent: string, predecessor: string, context?: Partial<GraphErrorContext>) {
-    super('NO_OUTPUT_EDGE', `Edge from "${predecessor}" to "${dependent}" has no output — cannot resolve dependency`, {
-      code: 'NO_OUTPUT_EDGE',
-      nodeId: dependent,
-      detail: `predecessor: ${predecessor}`,
-      ...context,
-    });
+    super(
+      'NO_OUTPUT_EDGE',
+      `Edge from "${predecessor}" to "${dependent}" has no output — cannot resolve dependency`,
+      {
+        code: 'NO_OUTPUT_EDGE',
+        nodeId: dependent,
+        detail: `predecessor: ${predecessor}`,
+        ...context,
+      },
+    );
   }
 }
 
 // — 24. DuplicateDiscoursePosition —
 export class DuplicateDiscoursePositionError extends GraphCompileError {
-  constructor(position: number, existingNode: string, conflictingNode: string, context?: Partial<GraphErrorContext>) {
-    super('DUPLICATE_DISCOURSE_POSITION', `Duplicate discourse position ${position}: "${existingNode}" and "${conflictingNode}"`, {
-      code: 'DUPLICATE_DISCOURSE_POSITION',
-      detail: `position: ${position}, existing: ${existingNode}, conflicting: ${conflictingNode}`,
-      nodeId: conflictingNode,
-      ...context,
-    });
+  constructor(
+    position: number,
+    existingNode: string,
+    conflictingNode: string,
+    context?: Partial<GraphErrorContext>,
+  ) {
+    super(
+      'DUPLICATE_DISCOURSE_POSITION',
+      `Duplicate discourse position ${position}: "${existingNode}" and "${conflictingNode}"`,
+      {
+        code: 'DUPLICATE_DISCOURSE_POSITION',
+        detail: `position: ${position}, existing: ${existingNode}, conflicting: ${conflictingNode}`,
+        nodeId: conflictingNode,
+        ...context,
+      },
+    );
   }
 }

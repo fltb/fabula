@@ -4,20 +4,20 @@
 // (hard/audit/semantic), exception resolution, and RuleEvaluationRecord generation.
 // ============================================================================
 
+import { RuleConstraintViolationError } from '../errors.js';
 import type {
-  RuleTransaction,
-  RuleRuntimeState,
-  RuleEffectEntry,
-  RuleEvaluationRecord,
+  RuleActivation,
   RuleConstraint,
+  RuleEffectEntry,
+  RuleEffectiveness,
+  RuleEpochId,
+  RuleEvaluationRecord,
   RuleException,
   RuleId,
-  RuleEpochId,
+  RuleRuntimeState,
   RuleSpecificationId,
-  RuleActivation,
-  RuleEffectiveness,
+  RuleTransaction,
 } from '../types/index.js';
-import { RuleConstraintViolationError } from '../errors.js';
 
 // ============================================================================
 // Public API
@@ -36,7 +36,11 @@ import { RuleConstraintViolationError } from '../errors.js';
 export function applyRuleTransaction(
   rules: Record<string, RuleRuntimeState>,
   tx: RuleTransaction,
-  context?: { nodeId?: string; stateBefore?: Record<string, unknown>; stateAfter?: Record<string, unknown> },
+  context?: {
+    nodeId?: string;
+    stateBefore?: Record<string, unknown>;
+    stateAfter?: Record<string, unknown>;
+  },
 ): RuleEvaluationRecord[] {
   const evaluationRecords: RuleEvaluationRecord[] = [];
   const ruleId = tx.ruleId;
@@ -133,10 +137,7 @@ export function evaluateConstraints(
  *   introduce_exception → add_exception
  *   nullify    → set_effectiveness:nullified
  */
-export function convertLegacyRuleEffect(
-  entry: RuleEffectEntry,
-  nodeId: string,
-): RuleTransaction {
+export function convertLegacyRuleEffect(entry: RuleEffectEntry, nodeId: string): RuleTransaction {
   const base = {
     type: 'rule_transaction' as const,
     ruleId: entry.rule,
@@ -167,7 +168,11 @@ export function convertLegacyRuleEffect(
         },
       };
     case 'nullify':
-      return { ...base, operation: 'set_effectiveness' as const, newEffectiveness: 'nullified' as const };
+      return {
+        ...base,
+        operation: 'set_effectiveness' as const,
+        newEffectiveness: 'nullified' as const,
+      };
   }
 }
 
@@ -215,10 +220,7 @@ export function generateEvaluationRecord(
 // Internal helpers
 // ============================================================================
 
-function createDefaultRuntimeState(
-  ruleId: string,
-  tx: RuleTransaction,
-): RuleRuntimeState {
+function createDefaultRuntimeState(ruleId: string, tx: RuleTransaction): RuleRuntimeState {
   return {
     ruleId,
     currentEpoch: tx.epochId ?? `${ruleId}-epoch-default`,
@@ -329,10 +331,7 @@ function evaluatePredicate(
   return true;
 }
 
-function applyOperation(
-  state: RuleRuntimeState,
-  tx: RuleTransaction,
-): void {
+function applyOperation(state: RuleRuntimeState, tx: RuleTransaction): void {
   switch (tx.operation) {
     case 'enable':
       state.activation = 'enabled';

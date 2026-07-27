@@ -16,39 +16,43 @@
 //   - ValidationKey independence
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  replayDiscourseState,
-  projectDiscourseContext,
+  advanceHintState,
   areProjectionsIdentical,
   canReveal,
-  advanceHintState,
-  createObservation,
   createDefaultModelReaderProfile,
-  createFocalizerBoundProfile,
-  createRetrospectiveEntityProfile,
   createExplicitLedgerProfile,
+  createFocalizerBoundProfile,
+  createObservation,
   createOmniscientProfile,
+  createRetrospectiveEntityProfile,
+  projectDiscourseContext,
+  replayDiscourseState,
 } from '../../src/state/discourse-replay.ts';
 import type {
-  PlannedDiscourseLedger,
-  PlannedLedgerEntry,
-  DiscourseState,
+  DisclosureAction,
   DiscourseContextProjection,
+  DiscoursePosition,
+  DiscourseState,
+  Hint,
+  ModelReaderProfile,
   NarratorAssertion,
   NarratorProfile,
-  Hint,
-  DisclosureAction,
+  PlannedDiscourseLedger,
+  PlannedLedgerEntry,
   WithholdingPolicy,
-  ModelReaderProfile,
-  DiscoursePosition,
 } from '../../src/types/discourse.ts';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Helpers
 // ═════════════════════════════════════════════════════════════════════════════
 
-function makeAssertion(id: string, truthBoundary: boolean, type: NarratorAssertion['type'] = 'claim'): NarratorAssertion {
+function makeAssertion(
+  id: string,
+  truthBoundary: boolean,
+  type: NarratorAssertion['type'] = 'claim',
+): NarratorAssertion {
   return {
     id,
     narrator: 'narrator_1',
@@ -113,7 +117,12 @@ function retractionAction(assertionId: string, pos: number): DisclosureAction {
 }
 
 function correctionAction(prior: string, next: string, pos: number): DisclosureAction {
-  return { type: 'correction', priorAssertionId: prior, newAssertionId: next, discoursePosition: pos };
+  return {
+    type: 'correction',
+    priorAssertionId: prior,
+    newAssertionId: next,
+    discoursePosition: pos,
+  };
 }
 
 function withholdStartAction(policyId: string, pos: number, reason?: string): DisclosureAction {
@@ -185,12 +194,16 @@ describe('DiscourseState replay by position', () => {
 
   it('throws on out-of-bounds position (negative)', () => {
     const ledger = makeLedger([]);
-    expect(() => replayDiscourseState(ledger, -1, 'main')).toThrow('DiscoursePosition out of bounds');
+    expect(() => replayDiscourseState(ledger, -1, 'main')).toThrow(
+      'DiscoursePosition out of bounds',
+    );
   });
 
   it('throws on out-of-bounds position (beyond length)', () => {
     const ledger = makeLedger([entry('e1', revealAction('r1', 1), 's1', 'main')]);
-    expect(() => replayDiscourseState(ledger, 5, 'main')).toThrow('DiscoursePosition out of bounds');
+    expect(() => replayDiscourseState(ledger, 5, 'main')).toThrow(
+      'DiscoursePosition out of bounds',
+    );
   });
 
   it('throws on duplicate discourse positions (§19)', () => {
@@ -199,7 +212,9 @@ describe('DiscourseState replay by position', () => {
       entry('e1', revealAction('r1', 1), 'scene_1', 'main'),
       entry('e2', revealAction('r2', 1), 'scene_2', 'main'), // Same position
     ]);
-    expect(() => replayDiscourseState(ledger, 1, 'main')).toThrow('DuplicateDiscoursePositionError');
+    expect(() => replayDiscourseState(ledger, 1, 'main')).toThrow(
+      'DuplicateDiscoursePositionError',
+    );
   });
 });
 
@@ -209,17 +224,13 @@ describe('DiscourseState replay by position', () => {
 
 describe('all 7 disclosure actions', () => {
   it('reveal action adds to reveals', () => {
-    const ledger = makeLedger([
-      entry('e1', revealAction('a1', 1), 'scene_1', 'main'),
-    ]);
+    const ledger = makeLedger([entry('e1', revealAction('a1', 1), 'scene_1', 'main')]);
     const state = replayDiscourseState(ledger, 1, 'main');
     expect(state.reveals).toContain('a1');
   });
 
   it('claim action adds to openClaims', () => {
-    const ledger = makeLedger([
-      entry('e1', claimAction('a1', 1), 'scene_1', 'main'),
-    ]);
+    const ledger = makeLedger([entry('e1', claimAction('a1', 1), 'scene_1', 'main')]);
     const state = replayDiscourseState(ledger, 1, 'main');
     expect(state.openClaims).toContain('a1');
   });
@@ -295,7 +306,7 @@ describe('all 7 disclosure actions', () => {
       entry('e2', withholdEndAction('wp1', 2), 'scene_1', 'main'),
     ]);
     const state = replayDiscourseState(ledger, 2, 'main');
-    const policy = state.activeWithholds.find(w => w.policyId === 'wp1');
+    const policy = state.activeWithholds.find((w) => w.policyId === 'wp1');
     expect(policy).toBeDefined();
     expect(policy!.active).toBe(false);
     expect(policy!.endPosition).toBe(2);
@@ -385,17 +396,13 @@ describe('claim vs reveal truth-boundary enforcement (§5)', () => {
   });
 
   it('reveal action succeeds for truthBoundary=true', () => {
-    const ledger = makeLedger([
-      entry('e1', revealAction('a1', 1), 'scene_1', 'main'),
-    ]);
+    const ledger = makeLedger([entry('e1', revealAction('a1', 1), 'scene_1', 'main')]);
     const state = replayDiscourseState(ledger, 1, 'main');
     expect(state.reveals).toContain('a1');
   });
 
   it('claim action succeeds regardless of truthBoundary', () => {
-    const ledger = makeLedger([
-      entry('e1', claimAction('a2', 1), 'scene_1', 'main'),
-    ]);
+    const ledger = makeLedger([entry('e1', claimAction('a2', 1), 'scene_1', 'main')]);
     const state = replayDiscourseState(ledger, 1, 'main');
     expect(state.openClaims).toContain('a2');
   });
@@ -407,7 +414,14 @@ describe('claim vs reveal truth-boundary enforcement (§5)', () => {
 
 describe('narrator profile boundaries (§10)', () => {
   it('creates focalizer_bound profile with independent capabilities', () => {
-    const profile = createFocalizerBoundProfile('fb1', 'focalizer_only', 'constrained', 'limited_knowledge', 'reliable', 'sincere');
+    const profile = createFocalizerBoundProfile(
+      'fb1',
+      'focalizer_only',
+      'constrained',
+      'limited_knowledge',
+      'reliable',
+      'sincere',
+    );
     expect(profile.type).toBe('focalizer_bound');
     expect(profile.access).toBe('focalizer_only');
     expect(profile.assertion).toBe('constrained');
@@ -418,8 +432,13 @@ describe('narrator profile boundaries (§10)', () => {
 
   it('creates retrospective_entity profile with knowledgeBoundary', () => {
     const profile = createRetrospectiveEntityProfile(
-      're1', 'knowledge_boundary_later',
-      'full', 'full', 'full_knowledge', 'reliable', 'sincere',
+      're1',
+      'knowledge_boundary_later',
+      'full',
+      'full',
+      'full_knowledge',
+      'reliable',
+      'sincere',
     );
     expect(profile.type).toBe('retrospective_entity');
     expect(profile.knowledgeBoundary).toBe('knowledge_boundary_later');
@@ -427,26 +446,62 @@ describe('narrator profile boundaries (§10)', () => {
   });
 
   it('creates explicit_ledger profile', () => {
-    const profile = createExplicitLedgerProfile('el1', 'full', 'full', 'full_knowledge', 'reliable', 'sincere');
+    const profile = createExplicitLedgerProfile(
+      'el1',
+      'full',
+      'full',
+      'full_knowledge',
+      'reliable',
+      'sincere',
+    );
     expect(profile.type).toBe('explicit_ledger');
   });
 
   it('creates omniscient profile with autoReveal=false', () => {
-    const profile = createOmniscientProfile('omni1', 'full', 'full', 'full_knowledge', 'reliable', 'sincere');
+    const profile = createOmniscientProfile(
+      'omni1',
+      'full',
+      'full',
+      'full_knowledge',
+      'reliable',
+      'sincere',
+    );
     expect(profile.type).toBe('omniscient');
     expect(profile.autoReveal).toBe(false);
   });
 
   it('4 narrator types have distinct independent capabilities', () => {
     const profiles: NarratorProfile[] = [
-      createFocalizerBoundProfile('p1', 'focalizer_only', 'minimal', 'opaque', 'unreliable', 'deceptive'),
-      createRetrospectiveEntityProfile('p2', 'kb_later', 'full', 'constrained', 'limited_knowledge', 'reliable', 'sincere'),
-      createExplicitLedgerProfile('p3', 'limited', 'full', 'full_knowledge', 'ambiguous', 'ambiguous'),
+      createFocalizerBoundProfile(
+        'p1',
+        'focalizer_only',
+        'minimal',
+        'opaque',
+        'unreliable',
+        'deceptive',
+      ),
+      createRetrospectiveEntityProfile(
+        'p2',
+        'kb_later',
+        'full',
+        'constrained',
+        'limited_knowledge',
+        'reliable',
+        'sincere',
+      ),
+      createExplicitLedgerProfile(
+        'p3',
+        'limited',
+        'full',
+        'full_knowledge',
+        'ambiguous',
+        'ambiguous',
+      ),
       createOmniscientProfile('p4', 'full', 'constrained', 'full_knowledge', 'reliable', 'sincere'),
     ];
 
     // Each type should have different type discriminator
-    const types = profiles.map(p => p.type);
+    const types = profiles.map((p) => p.type);
     expect(new Set(types).size).toBe(4);
 
     // All should have the 5 independent capability fields
@@ -483,7 +538,13 @@ describe('Pass 1 projection filtering (§12)', () => {
 
   it('excludes hint target proposition', () => {
     const hints: Hint[] = [
-      { hintId: 'h1', state: 'contract_planted', surfaceProposition: 'visible_surface', targetProposition: 'hidden_target', discoursePosition: 1 },
+      {
+        hintId: 'h1',
+        state: 'contract_planted',
+        surfaceProposition: 'visible_surface',
+        targetProposition: 'hidden_target',
+        discoursePosition: 1,
+      },
     ];
     const state = makeStateWithAssertions([], [], hints);
     const projection = projectDiscourseContext(state, {}, []);
@@ -498,7 +559,13 @@ describe('Pass 1 projection filtering (§12)', () => {
 
   it('excludes retracted hints', () => {
     const hints: Hint[] = [
-      { hintId: 'h1', state: 'retracted', surfaceProposition: 'old_surface', targetProposition: 'old_target', discoursePosition: 1 },
+      {
+        hintId: 'h1',
+        state: 'retracted',
+        surfaceProposition: 'old_surface',
+        targetProposition: 'old_target',
+        discoursePosition: 1,
+      },
     ];
     const state = makeStateWithAssertions([], [], hints);
     const projection = projectDiscourseContext(state, {}, []);
@@ -635,7 +702,9 @@ describe('shared post-merge scene identical-projection check (§14)', () => {
       visibleHints: [{ hintId: 'h1', surfaceProposition: 'surface', state: 'planned' }],
       accessibleClaims: [{ assertionId: 'c1', narrator: 'n1', type: 'claim', surface: 'prop' }],
       authorizedTargets: [{ assertionId: 'r1', actionType: 'reveal', discoursePosition: 1 }],
-      activeWithholdingPolicies: [{ policyId: 'wp1', startPosition: 1, endPosition: null, active: true, reason: 'test' }],
+      activeWithholdingPolicies: [
+        { policyId: 'wp1', startPosition: 1, endPosition: null, active: true, reason: 'test' },
+      ],
     };
     expect(areProjectionsIdentical(proj, { ...proj })).toBe(true);
   });
@@ -680,7 +749,9 @@ describe('shared post-merge scene identical-projection check (§14)', () => {
     };
     const b: DiscourseContextProjection = {
       ...a,
-      accessibleClaims: [{ assertionId: 'c2', narrator: 'n2', type: 'authoritative_reveal', surface: 'other' }],
+      accessibleClaims: [
+        { assertionId: 'c2', narrator: 'n2', type: 'authoritative_reveal', surface: 'other' },
+      ],
     };
     expect(areProjectionsIdentical(a, b)).toBe(false);
   });
@@ -790,8 +861,20 @@ describe('ValidationKey independence (§18)', () => {
   });
 
   it('validation key fields are independently configurable', () => {
-    const vk1 = { proseHash: 'hash_a', analysisSchema: 'schema_v1', model: 'gpt4', validatorPolicy: 'strict', referencePolicy: 'ref_v1' };
-    const vk2 = { proseHash: 'hash_b', analysisSchema: 'schema_v1', model: 'gpt4', validatorPolicy: 'strict', referencePolicy: 'ref_v1' };
+    const vk1 = {
+      proseHash: 'hash_a',
+      analysisSchema: 'schema_v1',
+      model: 'gpt4',
+      validatorPolicy: 'strict',
+      referencePolicy: 'ref_v1',
+    };
+    const vk2 = {
+      proseHash: 'hash_b',
+      analysisSchema: 'schema_v1',
+      model: 'gpt4',
+      validatorPolicy: 'strict',
+      referencePolicy: 'ref_v1',
+    };
     // Changing proseHash alone is sufficient to distinguish
     expect(vk1.proseHash).not.toBe(vk2.proseHash);
   });

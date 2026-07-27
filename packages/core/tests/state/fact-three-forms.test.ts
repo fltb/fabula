@@ -4,11 +4,11 @@
 // narrativeHint-only. Schema validation + replay-level duplicate detection.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { postconditionSchema } from '../../src/schemas/primitives.js';
+import { describe, expect, it } from 'vitest';
 import { ConfigError } from '../../src/errors.js';
+import { postconditionSchema } from '../../src/schemas/primitives.js';
 import { ReplayEngine } from '../../src/state/replay.js';
-import type { NarrativeEvent, Fact, WorldState } from '../../src/types/index.js';
+import type { Fact, NarrativeEvent, WorldState } from '../../src/types/index.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -26,7 +26,10 @@ function makeFact(overrides: Partial<Fact> & { entityId: string; attribute: stri
   };
 }
 
-function makeEvent(narrativeOrder: number, overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
+function makeEvent(
+  narrativeOrder: number,
+  overrides: Partial<NarrativeEvent> = {},
+): NarrativeEvent {
   return {
     id: `E_${narrativeOrder}`,
     narrativeOrder,
@@ -55,7 +58,9 @@ describe('Postcondition three-form schema validation', () => {
   });
 
   it('accepts value + explicit set operation', () => {
-    expect(postconditionSchema.safeParse({ ...base, value: 'alive', operation: 'set' }).success).toBe(true);
+    expect(
+      postconditionSchema.safeParse({ ...base, value: 'alive', operation: 'set' }).success,
+    ).toBe(true);
   });
 
   // Form 2: unset (no value, no narrativeHint, operation: 'unset')
@@ -65,7 +70,9 @@ describe('Postcondition three-form schema validation', () => {
 
   // Form 3: narrativeHint only
   it('accepts narrativeHint only', () => {
-    expect(postconditionSchema.safeParse({ ...base, narrativeHint: 'Hero is alive' }).success).toBe(true);
+    expect(postconditionSchema.safeParse({ ...base, narrativeHint: 'Hero is alive' }).success).toBe(
+      true,
+    );
   });
 
   // Rejections
@@ -75,12 +82,20 @@ describe('Postcondition three-form schema validation', () => {
   });
 
   it('rejects unset with narrativeHint', () => {
-    const result = postconditionSchema.safeParse({ ...base, narrativeHint: 'alive', operation: 'unset' });
+    const result = postconditionSchema.safeParse({
+      ...base,
+      narrativeHint: 'alive',
+      operation: 'unset',
+    });
     expect(result.success).toBe(false);
   });
 
   it('rejects value + narrativeHint together', () => {
-    const result = postconditionSchema.safeParse({ ...base, value: 'alive', narrativeHint: 'alive' });
+    const result = postconditionSchema.safeParse({
+      ...base,
+      value: 'alive',
+      narrativeHint: 'alive',
+    });
     expect(result.success).toBe(false);
   });
 

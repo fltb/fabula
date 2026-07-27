@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { AgentRegistry } from '../src/agent/registry.ts';
-import type { Agent, AgentRole, AgentPacket, AgentConfig } from '../src/agent/types.ts';
+import type { Agent, AgentConfig, AgentPacket, AgentRole } from '../src/agent/types.ts';
 
 // ============================================================================
 // Helpers — reusable mock agents
@@ -66,8 +66,8 @@ describe('AgentRegistry', () => {
     it('supports all four roles simultaneously', () => {
       const reg = new AgentRegistry();
       const roles: AgentRole[] = ['pass1', 'pass2', 'summary', 'review'];
-      const agents = roles.map(r => createMockAgent(`${r}Agent`, r));
-      agents.forEach(a => reg.register(a));
+      const agents = roles.map((r) => createMockAgent(`${r}Agent`, r));
+      for (const agent of agents) reg.register(agent);
       for (const r of roles) {
         expect(reg.get(r)?.role).toBe(r);
       }
@@ -249,13 +249,13 @@ describe('Config override', () => {
       }),
     ];
 
-    const configs = agents.map(a => ({ name: a.name, config: a.getConfig() }));
+    const configs = agents.map((a) => ({ name: a.name, config: a.getConfig() }));
 
-    const pass1Cfg = configs.find(c => c.name === 'CheapPass1')!.config;
+    const pass1Cfg = configs.find((c) => c.name === 'CheapPass1')!.config;
     expect(pass1Cfg.model).toBe('gpt-4o-mini');
     expect(pass1Cfg.temperature).toBe(0.8);
 
-    const pass2Cfg = configs.find(c => c.name === 'ExpensivePass2')!.config;
+    const pass2Cfg = configs.find((c) => c.name === 'ExpensivePass2')!.config;
     expect(pass2Cfg.model).toBe('gpt-4o');
     expect(pass2Cfg.seed).toBe(42);
   });

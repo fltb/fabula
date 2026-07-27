@@ -8,8 +8,8 @@
 // 3. WorldState.entities[entityId] — runtime instances
 // ============================================================================
 
-import type { EntityId, EntityKind, EntityRuntimeState, EntityTypeRef } from './entity.js';
 import type { z } from 'zod';
+import type { EntityId, EntityKind, EntityRuntimeState, EntityTypeRef } from './entity.js';
 
 // ——— Attribute Definition ———
 

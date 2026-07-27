@@ -11,10 +11,10 @@ import { z } from 'zod';
 import type {
   PostRenderInput,
   PreRenderInput,
-  Validator,
   ValidationIssue,
+  Validator,
 } from '../types/index.js';
-import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
+import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
 
 // ── Schemas ───────────────────────────────────────────────────────────
 
@@ -27,7 +27,6 @@ export const qualityBlockSchema = z.object({
 });
 
 export type QualityBlock = z.infer<typeof qualityBlockSchema>;
-
 
 export class QualityValidator implements Validator {
   name = 'quality';
@@ -43,29 +42,42 @@ export class QualityValidator implements Validator {
 
     const q = qualityBlockSchema.parse(input.analysis.analysis.quality);
     if (q.proseScore < 4) {
-      issues.push(makeIssue(
-        'quality', input.event.id, 'system', 'warning',
-        `Low prose quality: score ${q.proseScore}/${q.maxScore}. Weaknesses: ${q.weaknesses.join('; ')}`,
-        'Consider rewriting this scene for higher quality.',
-        'manual',
-      ));
+      issues.push(
+        makeIssue(
+          'quality',
+          input.event.id,
+          'system',
+          'warning',
+          `Low prose quality: score ${q.proseScore}/${q.maxScore}. Weaknesses: ${q.weaknesses.join('; ')}`,
+          'Consider rewriting this scene for higher quality.',
+          'manual',
+        ),
+      );
     }
     if (q.estimatedWordCount < 100) {
-      issues.push(makeIssue(
-        'quality', input.event.id, 'system', 'info',
-        `Short scene: ${q.estimatedWordCount} words. Consider expanding.`,
-        'Add more descriptive detail or action.',
-        'manual',
-      ));
+      issues.push(
+        makeIssue(
+          'quality',
+          input.event.id,
+          'system',
+          'info',
+          `Short scene: ${q.estimatedWordCount} words. Consider expanding.`,
+          'Add more descriptive detail or action.',
+          'manual',
+        ),
+      );
     }
     return issues;
   }
 
   getAnalysisRequirements() {
-    return [{
-      field: 'quality',
-      schema: qualityBlockSchema,
-      instruction: 'quality: Self-assess the prose quality on a 0-10 scale. List specific strengths and weaknesses of the writing. Estimate the word count. Be honest and critical.',
-    }];
+    return [
+      {
+        field: 'quality',
+        schema: qualityBlockSchema,
+        instruction:
+          'quality: Self-assess the prose quality on a 0-10 scale. List specific strengths and weaknesses of the writing. Estimate the word count. Be honest and critical.',
+      },
+    ];
   }
 }

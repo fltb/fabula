@@ -2,9 +2,9 @@
 // Swear-Filter Plugin — Unit Tests
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import * as swearFilter from './index.js';
+import { describe, expect, it } from 'vitest';
 import { PluginLoader } from '../../../src/plugin/index.js';
+import * as swearFilter from './index.js';
 
 describe('swear-filter plugin', () => {
   it('manifest matches yaml fields', () => {

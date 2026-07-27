@@ -3,29 +3,29 @@
 // Model Context Protocol server for AI agent integration
 // ============================================================================
 
-import {
-  renderNovel,
-  validateNovel,
-  getProjectStatus,
-  listEntities,
-  showEntity,
-  assembleNovel,
-  ReviewManager,
-  clearEventCache,
-  FsStorage,
-  ReportWriter,
-  type AssembleResult,
-  type PipelineRunResult,
-  type ValidationIssue,
-  type ThreadSnapshot,
-  type Blocker,
-  type NextAction,
-  type ISSDimension,
-  type ReviewComment,
-} from '@novalistically/core';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { StatusReport } from '@novalistically/core';
+import type { AnalysisResult, CommentFilter, StatusReport } from '@novalistically/core';
+import {
+  type AssembleResult,
+  assembleNovel,
+  type Blocker,
+  clearEventCache,
+  FsStorage,
+  getProjectStatus,
+  type ISSDimension,
+  listEntities,
+  type NextAction,
+  type PipelineRunResult,
+  ReportWriter,
+  type ReviewComment,
+  ReviewManager,
+  renderNovel,
+  showEntity,
+  type ThreadSnapshot,
+  type ValidationIssue,
+  validateNovel,
+} from '@novalistically/core';
 
 // ============================================================================
 // MCP Tool Implementations
@@ -72,7 +72,7 @@ export async function mcpNovaStatus(projectPath: string): Promise<StatusReport> 
     }));
 
   // Next actions (helper functions defined below in this file)
-  const allErrors = l1Issues.filter(i => i.severity === 'error');
+  const allErrors = l1Issues.filter((i) => i.severity === 'error');
   const nextActions = generateNextActions(iss, allErrors, threadSnapshots, renderBlocked);
 
   // Guidance
@@ -90,7 +90,7 @@ export async function mcpNovaStatus(projectPath: string): Promise<StatusReport> 
     projectName: path.basename(projectPath),
     projectDir: projectPath,
     generatedAt: new Date().toISOString(),
-    passed: l1Issues.filter(i => i.severity === 'error').length === 0,
+    passed: l1Issues.filter((i) => i.severity === 'error').length === 0,
     l1Issues,
     l2Issues: [],
     iss,
@@ -164,9 +164,7 @@ export function mcpNovaReadState(projectPath: string, entityId?: string) {
   const status = getProjectStatus(projectPath);
   const entities = listEntities(projectPath);
   return {
-    entities: Object.fromEntries(
-      entities.map((e) => [e.id, { kind: e.kind, name: e.name }]),
-    ),
+    entities: Object.fromEntries(entities.map((e) => [e.id, { kind: e.kind, name: e.name }])),
     threads: Object.fromEntries(
       status.threads.map((t) => [t.id, { progress: t.progress, total: t.total }]),
     ),
@@ -212,9 +210,7 @@ export async function mcpNovaRender(projectPath: string, eventId: string) {
 
   // Read the saved prompt from disk
   const dryRunPath = path.join(projectPath, '.nova', 'dry-runs', `${eventId}_prompt.md`);
-  const markdown = fs.existsSync(dryRunPath)
-    ? fs.readFileSync(dryRunPath, 'utf-8')
-    : '';
+  const markdown = fs.existsSync(dryRunPath) ? fs.readFileSync(dryRunPath, 'utf-8') : '';
 
   return {
     contextPackage: null,
@@ -239,7 +235,7 @@ export async function mcpNovaRenderScene(
   wordCount: number;
   cacheHit: boolean;
   errors: string[];
-  analysis: any;
+  analysis: AnalysisResult | null;
 }> {
   const result = await renderNovel({
     projectDir: projectPath,
@@ -248,9 +244,7 @@ export async function mcpNovaRenderScene(
   });
 
   if (result.results.length === 0) {
-    throw new Error(
-      `Event "${eventId}" not found or render failed: ${result.errors.join(', ')}`,
-    );
+    throw new Error(`Event "${eventId}" not found or render failed: ${result.errors.join(', ')}`);
   }
 
   const r = result.results[0];
@@ -270,19 +264,17 @@ export async function mcpNovaRenderScene(
 
 export function mcpNovaReviewList(
   projectPath: string,
-  filter?: { status?: string; severity?: string; eventId?: string },
+  filter?: Pick<CommentFilter, 'status' | 'severity'> & { eventId?: string },
 ) {
   const manager = new ReviewManager();
   manager.load(projectPath);
 
-  const commentFilter: Record<string, string> = {};
+  const commentFilter: CommentFilter = {};
   if (filter?.status) commentFilter.status = filter.status;
   if (filter?.severity) commentFilter.severity = filter.severity;
   if (filter?.eventId) commentFilter.targetId = filter.eventId;
 
-  return manager.getComments(
-    Object.keys(commentFilter).length > 0 ? (commentFilter as any) : undefined,
-  );
+  return manager.getComments(Object.keys(commentFilter).length > 0 ? commentFilter : undefined);
 }
 
 // ============================================================================
@@ -338,9 +330,7 @@ export function mcpNovaReviewReopen(projectPath: string, commentId: string) {
   manager.save(projectPath);
 
   // Invalidate cache for the associated event
-  const comment = manager
-    .getComments()
-    .find((c: ReviewComment) => c.id === commentId);
+  const comment = manager.getComments().find((c: ReviewComment) => c.id === commentId);
   if (comment) {
     const cacheDir = path.join(projectPath, '.nova', 'render-cache');
     clearEventCache(cacheDir, comment.target.id, new FsStorage());
@@ -501,8 +491,14 @@ function generateGuidance(
 // MCP Server entry point (for standalone process)
 // ============================================================================
 
+type MCPTool = (...args: never[]) => Promise<unknown> | unknown;
+type MCPReviewAddInput = {
+  content?: string;
+  severity?: ReviewComment['severity'];
+};
+
 export function createMCPServer(projectPath: string): {
-  tools: Record<string, (...args: any[]) => Promise<unknown> | unknown>;
+  tools: Record<string, MCPTool>;
 } {
   return {
     tools: {
@@ -515,20 +511,25 @@ export function createMCPServer(projectPath: string): {
       nova_render_scene: (eventId: string, options?: { model?: string }) =>
         mcpNovaRenderScene(projectPath, eventId, options),
       nova_assemble: (outputPath?: string) => mcpNovaAssemble(projectPath, outputPath),
-      nova_review_list: (filter?: any) => mcpNovaReviewList(projectPath, filter),
-      nova_review_add: (...args: any[]) => {
-        const [eventId, content, opts] =
-          typeof args[1] === 'string'
-            ? args
-            : [args[0], args[1]?.content ?? '', args[1]];
-        return mcpNovaReviewAdd(projectPath, eventId, content, opts?.severity);
+      nova_review_list: (
+        filter?: Pick<CommentFilter, 'status' | 'severity'> & { eventId?: string },
+      ) => mcpNovaReviewList(projectPath, filter),
+      nova_review_add: (
+        eventId: string,
+        contentOrOptions?: string | MCPReviewAddInput,
+        options?: MCPReviewAddInput,
+      ) => {
+        const content =
+          typeof contentOrOptions === 'string'
+            ? contentOrOptions
+            : (contentOrOptions?.content ?? '');
+        const severity =
+          typeof contentOrOptions === 'string' ? options?.severity : contentOrOptions?.severity;
+        return mcpNovaReviewAdd(projectPath, eventId, content, severity);
       },
-      nova_review_resolve: (commentId: string) =>
-        mcpNovaReviewResolve(projectPath, commentId),
-      nova_review_reopen: (commentId: string) =>
-        mcpNovaReviewReopen(projectPath, commentId),
-      nova_review_escalate: (commentId: string) =>
-        mcpNovaReviewEscalate(projectPath, commentId),
+      nova_review_resolve: (commentId: string) => mcpNovaReviewResolve(projectPath, commentId),
+      nova_review_reopen: (commentId: string) => mcpNovaReviewReopen(projectPath, commentId),
+      nova_review_escalate: (commentId: string) => mcpNovaReviewEscalate(projectPath, commentId),
     },
   };
 }

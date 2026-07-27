@@ -2,11 +2,10 @@
 // Benchmark Reporters — Markdown + JSON output
 // ============================================================================
 
-import { FsStorage } from '@novalistically/core';
-import type { Storage } from '@novalistically/core';
-import type { ValidationIssue } from '@novalistically/core';
-import type { PerValidatorBreakdown, SeverityLevelCED } from './consistency.js';
 import * as path from 'node:path';
+import type { Storage, ValidationIssue } from '@novalistically/core';
+import { FsStorage } from '@novalistically/core';
+import type { PerValidatorBreakdown, SeverityLevelCED } from './consistency.js';
 
 export interface BenchMeasurement {
   name: string;
@@ -81,10 +80,14 @@ function trunc(s: string, max = 120): string {
 
 function severityIcon(sev: string): string {
   switch (sev) {
-    case 'error': return '🔴';
-    case 'warning': return '🟡';
-    case 'info': return '🔵';
-    default: return '⚪';
+    case 'error':
+      return '🔴';
+    case 'warning':
+      return '🟡';
+    case 'info':
+      return '🔵';
+    default:
+      return '⚪';
   }
 }
 
@@ -121,7 +124,9 @@ export function toMarkdown(results: BenchResults): string {
   lines.push('|-------|--------|-----------|--------|');
   for (const f of results.regression) {
     const icon = f.passed ? '✅' : '❌';
-    lines.push(`| ${f.stage} | ${icon} ${f.passed ? 'PASS' : 'FAIL'} | ${f.ms.toFixed(2)} | ${f.detail} |`);
+    lines.push(
+      `| ${f.stage} | ${icon} ${f.passed ? 'PASS' : 'FAIL'} | ${f.ms.toFixed(2)} | ${f.detail} |`,
+    );
   }
   lines.push('');
 
@@ -154,8 +159,12 @@ export function toMarkdown(results: BenchResults): string {
     lines.push('');
     lines.push('| Variant | Events Loaded | Issues |');
     lines.push('|---------|--------------|--------|');
-    lines.push(`| Branch A | ${results.variants.branchA.eventsLoaded} | ${results.variants.branchA.issues.length} |`);
-    lines.push(`| Branch B | ${results.variants.branchB.eventsLoaded} | ${results.variants.branchB.issues.length} |`);
+    lines.push(
+      `| Branch A | ${results.variants.branchA.eventsLoaded} | ${results.variants.branchA.issues.length} |`,
+    );
+    lines.push(
+      `| Branch B | ${results.variants.branchB.eventsLoaded} | ${results.variants.branchB.issues.length} |`,
+    );
     lines.push('');
 
     // Error injection results
@@ -164,13 +173,21 @@ export function toMarkdown(results: BenchResults): string {
       const total = results.variants.errorInjection.length;
       lines.push('### Error Injection Validation');
       lines.push('');
-      lines.push(`**Summary:** ${matched}/${total} injected errors detected (${Math.round((matched / total) * 100)}%)`);
+      lines.push(
+        `**Summary:** ${matched}/${total} injected errors detected (${Math.round((matched / total) * 100)}%)`,
+      );
       lines.push('');
-      lines.push('| File | Expected Validator | Expected Severity | Matched | Actual Issues | Description |');
-      lines.push('|------|-------------------|-------------------|---------|---------------|-------------|');
+      lines.push(
+        '| File | Expected Validator | Expected Severity | Matched | Actual Issues | Description |',
+      );
+      lines.push(
+        '|------|-------------------|-------------------|---------|---------------|-------------|',
+      );
       for (const r of results.variants.errorInjection) {
         const icon = r.matched ? '✅' : '❌';
-        lines.push(`| ${r.file} | ${r.expectedValidator} | ${r.expectedSeverity} | ${icon} ${r.matched ? 'Yes' : 'No'} | ${r.actualIssueCount} | ${trunc(r.description, 80)} |`);
+        lines.push(
+          `| ${r.file} | ${r.expectedValidator} | ${r.expectedSeverity} | ${icon} ${r.matched ? 'Yes' : 'No'} | ${r.actualIssueCount} | ${trunc(r.description, 80)} |`,
+        );
       }
       lines.push('');
     }
@@ -181,13 +198,21 @@ export function toMarkdown(results: BenchResults): string {
       const total = results.variants.extremeDamage.length;
       lines.push('### Extreme Damage Validation');
       lines.push('');
-      lines.push(`**Summary:** ${matched}/${total} injected errors detected (${Math.round((matched / total) * 100)}%)`);
+      lines.push(
+        `**Summary:** ${matched}/${total} injected errors detected (${Math.round((matched / total) * 100)}%)`,
+      );
       lines.push('');
-      lines.push('| File | Expected Validator | Expected Severity | Matched | Actual Issues | Description |');
-      lines.push('|------|-------------------|-------------------|---------|---------------|-------------|');
+      lines.push(
+        '| File | Expected Validator | Expected Severity | Matched | Actual Issues | Description |',
+      );
+      lines.push(
+        '|------|-------------------|-------------------|---------|---------------|-------------|',
+      );
       for (const r of results.variants.extremeDamage) {
         const icon = r.matched ? '✅' : '❌';
-        lines.push(`| ${r.file} | ${r.expectedValidator} | ${r.expectedSeverity} | ${icon} ${r.matched ? 'Yes' : 'No'} | ${r.actualIssueCount} | ${trunc(r.description, 80)} |`);
+        lines.push(
+          `| ${r.file} | ${r.expectedValidator} | ${r.expectedSeverity} | ${icon} ${r.matched ? 'Yes' : 'No'} | ${r.actualIssueCount} | ${trunc(r.description, 80)} |`,
+        );
       }
       lines.push('');
     }
@@ -226,7 +251,9 @@ export function toMarkdown(results: BenchResults): string {
 
   // ── L2 Issues Table ──────────────────────────────────────────────────
   if (results.l2Issues.length > 0) {
-    lines.push(`### L2 Issues (Post-Render Validation with Pass 2) — ${results.l2Issues.length} issues`);
+    lines.push(
+      `### L2 Issues (Post-Render Validation with Pass 2) — ${results.l2Issues.length} issues`,
+    );
     lines.push('');
     lines.push('| # | Validator | Severity | Event | Entity | Attribute | Message |');
     lines.push('|---|-----------|----------|-------|--------|-----------|---------|');
@@ -244,7 +271,9 @@ export function toMarkdown(results: BenchResults): string {
     lines.push('|-----------|--------|----------|-------|--------|------------------------|');
     for (const pv of results.l1PerValidator) {
       const total = pv.errors + pv.warnings + pv.infos;
-      lines.push(`| ${pv.validator} | ${pv.errors} | ${pv.warnings} | ${pv.infos} | ${total} | ${pv.nCED.toFixed(2)} |`);
+      lines.push(
+        `| ${pv.validator} | ${pv.errors} | ${pv.warnings} | ${pv.infos} | ${total} | ${pv.nCED.toFixed(2)} |`,
+      );
     }
     lines.push('');
   }
@@ -257,7 +286,9 @@ export function toMarkdown(results: BenchResults): string {
     lines.push('|-----------|--------|----------|-------|--------|------------------------|');
     for (const pv of results.l2PerValidator) {
       const total = pv.errors + pv.warnings + pv.infos;
-      lines.push(`| ${pv.validator} | ${pv.errors} | ${pv.warnings} | ${pv.infos} | ${total} | ${pv.nCED.toFixed(2)} |`);
+      lines.push(
+        `| ${pv.validator} | ${pv.errors} | ${pv.warnings} | ${pv.infos} | ${total} | ${pv.nCED.toFixed(2)} |`,
+      );
     }
     lines.push('');
   }
@@ -280,7 +311,9 @@ export function toMarkdown(results: BenchResults): string {
   lines.push('| Stage | Hz | Mean (ms) | Samples | Scale |');
   lines.push('|-------|----|-----------|---------|-------|');
   for (const p of results.performance) {
-    lines.push(`| ${p.name} | ${p.hz.toFixed(1)} | ${p.meanMs.toFixed(3)} | ${p.samples} | ${p.scale} |`);
+    lines.push(
+      `| ${p.name} | ${p.hz.toFixed(1)} | ${p.meanMs.toFixed(3)} | ${p.samples} | ${p.scale} |`,
+    );
   }
   lines.push('');
 

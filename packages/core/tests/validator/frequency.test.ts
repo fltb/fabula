@@ -2,8 +2,8 @@
 // Frequency — Schema Validation Tests (S6b)
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { frequencyTypeSchema, frequencyProfileSchema } from '../../src/schemas/frequency.js';
+import { describe, expect, it } from 'vitest';
+import { frequencyProfileSchema, frequencyTypeSchema } from '../../src/schemas/frequency.js';
 
 describe('FrequencyType schema', () => {
   it('should accept all 3 valid frequency types', () => {

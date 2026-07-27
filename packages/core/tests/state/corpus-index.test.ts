@@ -3,26 +3,26 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import {
-  freezeWorkIndex,
-  validateCoverage,
-  detectDoubleCounting,
-  ANCHORED_WORKS,
-  isAllowedInPublicCI,
-  isAnchoredWork,
-  getAnchoredWorkTitle,
-} from '../../src/state/corpus-index.ts';
 import type {
-  SourceManifest,
+  CandidateEventIndex,
   ChapterLocation,
   CharacterAnchor,
-  LocationAnchor,
-  ThreadAnchor,
-  NarrativeNodeAnchor,
   DiscourseNodeAnchor,
-  CandidateEventIndex,
-  WorkIndex,
   FreezeInput,
+  LocationAnchor,
+  NarrativeNodeAnchor,
+  SourceManifest,
+  ThreadAnchor,
+  WorkIndex,
+} from '../../src/state/corpus-index.ts';
+import {
+  ANCHORED_WORKS,
+  detectDoubleCounting,
+  freezeWorkIndex,
+  getAnchoredWorkTitle,
+  isAllowedInPublicCI,
+  isAnchoredWork,
+  validateCoverage,
 } from '../../src/state/corpus-index.ts';
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -49,9 +49,24 @@ const sampleManifest: SourceManifest = {
 };
 
 const sampleCharacters: CharacterAnchor[] = [
-  { entityId: 'char_jia_baoyu', primaryName: 'Jia Baoyu', aliases: ['Baoyu', 'Precious Jade'], firstAppearance: { chapterId: 'ch1', byteOffset: 120 } },
-  { entityId: 'char_lin_daiyu', primaryName: 'Lin Daiyu', aliases: ['Daiyu'], firstAppearance: { chapterId: 'ch1', byteOffset: 500 } },
-  { entityId: 'char_xue_baochai', primaryName: 'Xue Baochai', aliases: ['Baochai'], firstAppearance: { chapterId: 'ch2', byteOffset: 200 } },
+  {
+    entityId: 'char_jia_baoyu',
+    primaryName: 'Jia Baoyu',
+    aliases: ['Baoyu', 'Precious Jade'],
+    firstAppearance: { chapterId: 'ch1', byteOffset: 120 },
+  },
+  {
+    entityId: 'char_lin_daiyu',
+    primaryName: 'Lin Daiyu',
+    aliases: ['Daiyu'],
+    firstAppearance: { chapterId: 'ch1', byteOffset: 500 },
+  },
+  {
+    entityId: 'char_xue_baochai',
+    primaryName: 'Xue Baochai',
+    aliases: ['Baochai'],
+    firstAppearance: { chapterId: 'ch2', byteOffset: 200 },
+  },
 ];
 
 const sampleLocations: LocationAnchor[] = [
@@ -65,10 +80,38 @@ const sampleThreads: ThreadAnchor[] = [
 ];
 
 const sampleNarrativeNodes: NarrativeNodeAnchor[] = [
-  { nodeId: 'n1', type: 'scene', chapterId: 'ch1', sourceRange: { startByte: 100, endByte: 800 }, preconditions: [], postconditions: ['e_intro_baoyu'] },
-  { nodeId: 'n2', type: 'scene', chapterId: 'ch2', sourceRange: { startByte: 5200, endByte: 6200 }, preconditions: ['e_intro_baoyu'], postconditions: ['e_intro_daiyu'] },
-  { nodeId: 'n3', type: 'scene', chapterId: 'ch3', sourceRange: { startByte: 11000, endByte: 12500 }, preconditions: ['e_intro_daiyu'], postconditions: ['e_meeting'] },
-  { nodeId: 'n4', type: 'ellipsis', chapterId: 'ch1', sourceRange: { startByte: 800, endByte: 1200 }, preconditions: ['e_intro_baoyu'], postconditions: [] },
+  {
+    nodeId: 'n1',
+    type: 'scene',
+    chapterId: 'ch1',
+    sourceRange: { startByte: 100, endByte: 800 },
+    preconditions: [],
+    postconditions: ['e_intro_baoyu'],
+  },
+  {
+    nodeId: 'n2',
+    type: 'scene',
+    chapterId: 'ch2',
+    sourceRange: { startByte: 5200, endByte: 6200 },
+    preconditions: ['e_intro_baoyu'],
+    postconditions: ['e_intro_daiyu'],
+  },
+  {
+    nodeId: 'n3',
+    type: 'scene',
+    chapterId: 'ch3',
+    sourceRange: { startByte: 11000, endByte: 12500 },
+    preconditions: ['e_intro_daiyu'],
+    postconditions: ['e_meeting'],
+  },
+  {
+    nodeId: 'n4',
+    type: 'ellipsis',
+    chapterId: 'ch1',
+    sourceRange: { startByte: 800, endByte: 1200 },
+    preconditions: ['e_intro_baoyu'],
+    postconditions: [],
+  },
 ];
 
 const sampleDiscourseNodes: DiscourseNodeAnchor[] = [
@@ -181,12 +224,14 @@ describe('validateCoverage', () => {
   it('detects a chapter with no narrative nodes', () => {
     const input: FreezeInput = {
       ...sampleFreezeInput,
-      narrativeNodes: sampleNarrativeNodes.filter(n => n.chapterId !== 'ch2'),
+      narrativeNodes: sampleNarrativeNodes.filter((n) => n.chapterId !== 'ch2'),
     };
     const index = freezeWorkIndex(input, '1.0.0');
     const result = validateCoverage(index);
     expect(result.valid).toBe(false);
-    expect(result.gaps.some(g => g.type === 'missing_chapter' && g.description.includes('ch2'))).toBe(true);
+    expect(
+      result.gaps.some((g) => g.type === 'missing_chapter' && g.description.includes('ch2')),
+    ).toBe(true);
   });
 
   it('detects character first appearance in unknown chapter', () => {
@@ -203,7 +248,7 @@ describe('validateCoverage', () => {
     const index = freezeWorkIndex(input, '1.0.0');
     const result = validateCoverage(index);
     expect(result.valid).toBe(false);
-    expect(result.gaps.some(g => g.type === 'missing_character_first_appearance')).toBe(true);
+    expect(result.gaps.some((g) => g.type === 'missing_character_first_appearance')).toBe(true);
   });
 
   it('detects narrative node referencing unknown chapter', () => {
@@ -222,7 +267,9 @@ describe('validateCoverage', () => {
     const index = freezeWorkIndex(input, '1.0.0');
     const result = validateCoverage(index);
     expect(result.valid).toBe(false);
-    expect(result.gaps.some(g => g.type === 'orphan_node' && g.description.includes('n_bad'))).toBe(true);
+    expect(
+      result.gaps.some((g) => g.type === 'orphan_node' && g.description.includes('n_bad')),
+    ).toBe(true);
   });
 
   it('detects discourse node referencing unknown chapter', () => {
@@ -239,7 +286,9 @@ describe('validateCoverage', () => {
     const index = freezeWorkIndex(input, '1.0.0');
     const result = validateCoverage(index);
     expect(result.valid).toBe(false);
-    expect(result.gaps.some(g => g.type === 'orphan_node' && g.description.includes('n_bad_disc'))).toBe(true);
+    expect(
+      result.gaps.some((g) => g.type === 'orphan_node' && g.description.includes('n_bad_disc')),
+    ).toBe(true);
   });
 
   it('detects candidate referencing unknown chapter', () => {
@@ -257,14 +306,20 @@ describe('validateCoverage', () => {
     const index = freezeWorkIndex(input, '1.0.0');
     const result = validateCoverage(index);
     expect(result.valid).toBe(false);
-    expect(result.gaps.some(g => g.type === 'missing_candidate_source_range')).toBe(true);
+    expect(result.gaps.some((g) => g.type === 'missing_candidate_source_range')).toBe(true);
   });
 
   it('returns valid=true for an index with only ellipsis in a chapter', () => {
     // A chapter covered only by ellipsis nodes should still be valid
     const ellipsisOnlyChapters: ChapterLocation[] = [
       { chapterId: 'ch1', title: 'Ch1', startByte: 0, endByte: 1000, wordCount: 100 },
-      { chapterId: 'ch_only_ellipsis', title: 'Ellipsis Only', startByte: 1000, endByte: 2000, wordCount: 100 },
+      {
+        chapterId: 'ch_only_ellipsis',
+        title: 'Ellipsis Only',
+        startByte: 1000,
+        endByte: 2000,
+        wordCount: 100,
+      },
     ];
     const input: FreezeInput = {
       manifest: { ...sampleManifest, chapters: ellipsisOnlyChapters },
@@ -272,8 +327,22 @@ describe('validateCoverage', () => {
       locations: [],
       threads: [],
       narrativeNodes: [
-        { nodeId: 'e1', type: 'ellipsis', chapterId: 'ch1', sourceRange: { startByte: 10, endByte: 200 }, preconditions: [], postconditions: [] },
-        { nodeId: 'e2', type: 'ellipsis', chapterId: 'ch_only_ellipsis', sourceRange: { startByte: 1050, endByte: 1500 }, preconditions: [], postconditions: [] },
+        {
+          nodeId: 'e1',
+          type: 'ellipsis',
+          chapterId: 'ch1',
+          sourceRange: { startByte: 10, endByte: 200 },
+          preconditions: [],
+          postconditions: [],
+        },
+        {
+          nodeId: 'e2',
+          type: 'ellipsis',
+          chapterId: 'ch_only_ellipsis',
+          sourceRange: { startByte: 1050, endByte: 1500 },
+          preconditions: [],
+          postconditions: [],
+        },
       ],
       discourseNodes: [
         { nodeId: 'e1', chapterId: 'ch1', narrativeOrder: 1, narratorType: 'omniscient' },
@@ -412,13 +481,15 @@ describe('detectDoubleCounting', () => {
   });
 
   it('returns no duplicates for a single candidate', () => {
-    const result = detectDoubleCounting([{
-      candidateId: 'cand_only',
-      eligibility: 'eligible',
-      sourceRange: { chapterId: 'ch1', startByte: 0, endByte: 100 },
-      narrativeCoverage: [],
-      discourseCoverage: [],
-    }]);
+    const result = detectDoubleCounting([
+      {
+        candidateId: 'cand_only',
+        eligibility: 'eligible',
+        sourceRange: { chapterId: 'ch1', startByte: 0, endByte: 100 },
+        narrativeCoverage: [],
+        discourseCoverage: [],
+      },
+    ]);
     expect(result.hasDuplicate).toBe(false);
     expect(result.overlapping).toHaveLength(0);
   });

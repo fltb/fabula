@@ -8,19 +8,20 @@
  * Usage: npx tsx packages/core/src/ai/tools/checklist-coverage.ts
  */
 
-import { readFileSync, writeFileSync, readdirSync } from "node:fs";
-import * as YAML from "yaml";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import * as YAML from 'yaml';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const CHAPTER_DIR = resolve(
   __dirname,
-  "../../../../../fixtures/dream-of-red-chamber/chapters/chapter_01",
+  '../../../../../fixtures/dream-of-red-chamber/chapters/chapter_01',
 );
 
-const OUTPUT_DIR = resolve(__dirname, "../../../../../output");
-const OUTPUT_PATH = resolve(OUTPUT_DIR, "checklist-coverage.json");
+const OUTPUT_DIR = resolve(__dirname, '../../../../../output');
+const OUTPUT_PATH = resolve(OUTPUT_DIR, 'checklist-coverage.json');
 
 interface NarrativeChecklistItem {
   dimension: string;
@@ -59,21 +60,16 @@ interface CoverageReport {
 }
 
 function readYaml(path: string): any {
-  const content = readFileSync(path, "utf-8");
+  const content = readFileSync(path, 'utf-8');
   return YAML.parse(content);
 }
 
 function main() {
-  const allFiles = readdirSync(CHAPTER_DIR).filter(
-    (f) => f.startsWith("E") && f.endsWith(".yaml")
-  );
+  const allFiles = readdirSync(CHAPTER_DIR).filter((f) => f.startsWith('E') && f.endsWith('.yaml'));
   allFiles.sort();
 
   const perEvent: EventChecklistData[] = [];
-  const dimensionMap = new Map<
-    string,
-    { eventSet: Set<string>; requiredCount: number }
-  >();
+  const dimensionMap = new Map<string, { eventSet: Set<string>; requiredCount: number }>();
 
   for (const file of allFiles) {
     const data = readYaml(resolve(CHAPTER_DIR, file));
@@ -119,14 +115,8 @@ function main() {
     }))
     .sort((a, b) => b.eventCount - a.eventCount);
 
-  const totalChecklistItems = perEvent.reduce(
-    (sum, e) => sum + e.totalCount,
-    0,
-  );
-  const totalRequiredItems = perEvent.reduce(
-    (sum, e) => sum + e.requiredCount,
-    0,
-  );
+  const totalChecklistItems = perEvent.reduce((sum, e) => sum + e.totalCount, 0);
+  const totalRequiredItems = perEvent.reduce((sum, e) => sum + e.requiredCount, 0);
 
   const report: CoverageReport = {
     generatedAt: new Date().toISOString(),
@@ -140,7 +130,7 @@ function main() {
     },
   };
 
-  writeFileSync(OUTPUT_PATH, JSON.stringify(report, null, 2), "utf-8");
+  writeFileSync(OUTPUT_PATH, JSON.stringify(report, null, 2), 'utf-8');
   console.log(`Written to ${OUTPUT_PATH}`);
   console.log(`Total events: ${report.totalEvents}`);
   console.log(`Events with checklist: ${report.eventsWithChecklist}`);

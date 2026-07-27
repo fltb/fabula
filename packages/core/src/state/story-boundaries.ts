@@ -1,8 +1,17 @@
-import type { Fact, NarrativeEvent, WorldState, EntityRuntimeState, ThreadRuntimeState, ThreadLifecycle, ThreadId, ThreadRunId } from '../types/index.js';
-import type { BranchPath } from '../types/branch.js';
 import { compareFact } from '../entity/compare.js';
 import { canonicalizeFactValue } from '../entity/fact-value.js';
 import { ConfigError, PreconditionMismatchError } from '../errors.js';
+import type { BranchPath } from '../types/branch.js';
+import type {
+  EntityRuntimeState,
+  Fact,
+  NarrativeEvent,
+  ThreadId,
+  ThreadLifecycle,
+  ThreadRunId,
+  ThreadRuntimeState,
+  WorldState,
+} from '../types/index.js';
 import { buildCausalEdges, topologicalSort } from './dag.js';
 
 // ——— Lifecycle transition defaults ———
@@ -98,11 +107,14 @@ export function compileStoryBoundaries(
     for (const fact of event.preconditions) {
       if (fact.value === undefined) continue;
       if (compareFact(fact, state.entities[fact.entityId]?.[fact.attribute]) !== 'match') {
-        throw new PreconditionMismatchError(`Deterministic precondition does not match compiled story state for ${eventId} at ${fact.entityId}.${fact.attribute}`, {
-          eventId,
-          stateKey: `${fact.entityId}.${fact.attribute}`,
-          phase: 'story-boundaries',
-        });
+        throw new PreconditionMismatchError(
+          `Deterministic precondition does not match compiled story state for ${eventId} at ${fact.entityId}.${fact.attribute}`,
+          {
+            eventId,
+            stateKey: `${fact.entityId}.${fact.attribute}`,
+            phase: 'story-boundaries',
+          },
+        );
       }
     }
 
@@ -119,20 +131,29 @@ export function compileStoryBoundaries(
       }
 
       // Retired entity guard (prevent writes to retired entities before they happen)
-      if (state.entities[fact.entityId]?.lifecycle === 'retired' && fact.attribute !== 'lifecycle') {
-        throw new ConfigError(
-          `Cannot modify retired entity ${fact.entityId}`,
-          { path: fact.entityId, eventId, phase: 'story-boundaries' },
-        );
+      if (
+        state.entities[fact.entityId]?.lifecycle === 'retired' &&
+        fact.attribute !== 'lifecycle'
+      ) {
+        throw new ConfigError(`Cannot modify retired entity ${fact.entityId}`, {
+          path: fact.entityId,
+          eventId,
+          phase: 'story-boundaries',
+        });
       }
 
       // Lifecycle transition validation
       const rawValue = String(fact.value);
       if (fact.attribute === 'lifecycle' && LIFECYCLE_STATES[rawValue]) {
-        const currentLifecycle = (state.entities[fact.entityId]?.lifecycle as EntityRuntimeState) ?? 'active';
+        const currentLifecycle =
+          (state.entities[fact.entityId]?.lifecycle as EntityRuntimeState) ?? 'active';
         const newLifecycle = rawValue as EntityRuntimeState;
 
-        if (!DEFAULT_LIFECYCLE_TRANSITIONS.some(([from, to]) => from === currentLifecycle && to === newLifecycle)) {
+        if (
+          !DEFAULT_LIFECYCLE_TRANSITIONS.some(
+            ([from, to]) => from === currentLifecycle && to === newLifecycle,
+          )
+        ) {
           throw new ConfigError(
             `Invalid lifecycle transition: ${currentLifecycle} → ${newLifecycle} for entity ${fact.entityId}`,
             { path: fact.entityId, eventId, phase: 'story-boundaries' },
@@ -163,10 +184,11 @@ export function compileStoryBoundaries(
     if (event.participants) {
       for (const pid of event.participants.entities) {
         if (state.entities[pid]?.lifecycle === 'retired' && !introducedThisEvent.has(pid)) {
-          throw new ConfigError(
-            `Retired entity ${pid} cannot participate in event ${eventId}`,
-            { path: pid, eventId, phase: 'story-boundaries' },
-          );
+          throw new ConfigError(`Retired entity ${pid} cannot participate in event ${eventId}`, {
+            path: pid,
+            eventId,
+            phase: 'story-boundaries',
+          });
         }
       }
     }

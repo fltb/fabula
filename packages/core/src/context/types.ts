@@ -1,9 +1,4 @@
-import type {
-  EntityId,
-  EntityRegistry,
-  NarrativeEvent,
-  WorldState,
-} from '../types/index.js';
+import type { EntityId, EntityRegistry, NarrativeEvent, WorldState } from '../types/index.js';
 
 // ============================================================================
 // RelevanceContext — Input to the 8-dimension scoring algorithm

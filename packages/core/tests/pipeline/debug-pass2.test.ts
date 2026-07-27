@@ -1,50 +1,127 @@
-import { describe, it, expect } from 'vitest';
-import { RenderPipeline } from '../../src/pipeline/render.ts';
-import type { RenderJob, Pass2RejectionCategory } from '../../src/pipeline/render.ts';
-import { MockProvider } from '../../src/ai/providers/mock.ts';
+import { describe, expect, it } from 'vitest';
 import type { MockProviderOptions } from '../../src/ai/providers/mock.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import type { NarrativeEvent, WorldState, ContextPackage, SystemContext, SceneSpecification, KnowledgeBoundary } from '../../src/types/index.ts';
+import { MockProvider } from '../../src/ai/providers/mock.ts';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import type { Pass2RejectionCategory, RenderJob } from '../../src/pipeline/render.ts';
+import { RenderPipeline } from '../../src/pipeline/render.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import type {
+  ContextPackage,
+  KnowledgeBoundary,
+  NarrativeEvent,
+  SceneSpecification,
+  SystemContext,
+  WorldState,
+} from '../../src/types/index.ts';
 import { ResultAggregator } from '../../src/validator/aggregator.ts';
 import { makeAnalysisResult } from '../fixtures/mock-pass2-helpers.ts';
 
 const VALID_ANALYSIS_JSON = JSON.stringify({
-  eventId: 'evt_test', analysis: {
-    postconditions: { covered: [], dropped: [] }, preconditions: { violated: [] },
-    pov: { consistent: true, leaks: [] }, inventedDetails: [],
-    quality: { proseScore: 80, maxScore: 100, strengths: [], weaknesses: [], estimatedWordCount: 300 },
-    threadProgressAchieved: [], foreshadowingDeployed: [],
-    narrativeChecks: [], appearanceChecks: [], characterReferences: [],
-    tenseDetected: 'past', conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-    ruleChecks: [], knowledgeChecks: [],
+  eventId: 'evt_test',
+  analysis: {
+    postconditions: { covered: [], dropped: [] },
+    preconditions: { violated: [] },
+    pov: { consistent: true, leaks: [] },
+    inventedDetails: [],
+    quality: {
+      proseScore: 80,
+      maxScore: 100,
+      strengths: [],
+      weaknesses: [],
+      estimatedWordCount: 300,
+    },
+    threadProgressAchieved: [],
+    foreshadowingDeployed: [],
+    narrativeChecks: [],
+    appearanceChecks: [],
+    characterReferences: [],
+    tenseDetected: 'past',
+    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+    ruleChecks: [],
+    knowledgeChecks: [],
   },
 });
 
-function makeEvent(id: string): NarrativeEvent { return {
-  id, event: 'Test event', narrativeOrder: 1, title: 'Test',
-  storyTime: { type: 'absolute' as const, value: 'start' }, sceneType: 'linear',
-  pov: { character: 'entity_1', type: 'third_person_limited' }, sceneBrief: 'A test scene.',
-  preconditions: [], postconditions: [], threadProgress: [], foreshadowing: [],
-  relationshipEffects: [], ruleEffects: [], source: 'genesis',
-  branchExistence: { type: 'all' as const }, participants: { entities: ['entity_1'] },
-}; }
+function makeEvent(id: string): NarrativeEvent {
+  return {
+    id,
+    event: 'Test event',
+    narrativeOrder: 1,
+    title: 'Test',
+    storyTime: { type: 'absolute' as const, value: 'start' },
+    sceneType: 'linear',
+    pov: { character: 'entity_1', type: 'third_person_limited' },
+    sceneBrief: 'A test scene.',
+    preconditions: [],
+    postconditions: [],
+    threadProgress: [],
+    foreshadowing: [],
+    relationshipEffects: [],
+    ruleEffects: [],
+    source: 'genesis',
+    branchExistence: { type: 'all' as const },
+    participants: { entities: ['entity_1'] },
+  };
+}
 
-function makeContext(eventId: string): ContextPackage { return {
-  eventId, systemContext: { genre: 'literary', style: 'neutral', narrativeRules: [] } satisfies SystemContext,
-  sceneSpec: { goal: 'Advance plot', povType: 'third_person', povCharacter: 'narrator', conflict: 'none', expectedOutcome: 'Scene rendered' } satisfies SceneSpecification,
-  characterSnapshots: [], relationshipContext: [], worldFacts: [],
-  knowledgeBoundary: { entityId: 'narrator', knownFacts: [], restrictedEntities: [] } satisfies KnowledgeBoundary,
-  activeThreads: [], previousSceneSummary: '', markdown: '',
-}; }
+function makeContext(eventId: string): ContextPackage {
+  return {
+    eventId,
+    systemContext: {
+      genre: 'literary',
+      style: 'neutral',
+      narrativeRules: [],
+    } satisfies SystemContext,
+    sceneSpec: {
+      goal: 'Advance plot',
+      povType: 'third_person',
+      povCharacter: 'narrator',
+      conflict: 'none',
+      expectedOutcome: 'Scene rendered',
+    } satisfies SceneSpecification,
+    characterSnapshots: [],
+    relationshipContext: [],
+    worldFacts: [],
+    knowledgeBoundary: {
+      entityId: 'narrator',
+      knownFacts: [],
+      restrictedEntities: [],
+    } satisfies KnowledgeBoundary,
+    activeThreads: [],
+    previousSceneSummary: '',
+    markdown: '',
+  };
+}
 
 function makeJob(id: string): RenderJob {
-  return { event: makeEvent(id), stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] }, context: makeContext(id), chapter: 1 };
+  return {
+    event: makeEvent(id),
+    stateBefore: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
+    context: makeContext(id),
+    chapter: 1,
+  };
 }
 
 function makePipeline(opts: MockProviderOptions = {}) {
   const provider = new MockProvider(opts);
-  return { pipeline: new RenderPipeline({ provider, model: 'mock-model', cacheDir: '/tmp/test-cache', storage: new MemoryStorage(), skipCache: true, maxRetries: 3 }), provider };
+  return {
+    pipeline: new RenderPipeline({
+      provider,
+      model: 'mock-model',
+      cacheDir: '/tmp/test-cache',
+      storage: new MemoryStorage(),
+      skipCache: true,
+      maxRetries: 3,
+    }),
+    provider,
+  };
 }
 
 /**

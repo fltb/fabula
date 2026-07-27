@@ -1,15 +1,15 @@
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { AssembleOptions, AssembleResult } from './types.js';
-import { AssemblyError, AssemblyErrorCode } from './types.js';
-import { countWords } from './count.js';
+import { logger } from '../observability/logger.ts';
+import { FsStorage, type Storage } from '../storage/index.ts';
+import { filterScenesByBranchPath } from './branch-filter.js';
 import { loadChapterMetadata } from './chapter.js';
 import { SceneCollector } from './collector.js';
-import { NarrativeSorter } from './sorter.js';
 import { ProseConcatenator } from './concatenator.js';
-import { filterScenesByBranchPath } from './branch-filter.js';
-import { FsStorage, type Storage } from '../storage/index.ts';
-import { logger } from '../observability/logger.ts';
+import { countWords } from './count.js';
+import { NarrativeSorter } from './sorter.js';
+import type { AssembleOptions, AssembleResult } from './types.js';
+import { AssemblyError, AssemblyErrorCode } from './types.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // assembleNovel — Main Export
@@ -34,8 +34,7 @@ export function assembleNovel(options: AssembleOptions): AssembleResult {
 
   // ── Resolve paths ──────────────────────────────────────────────
   const scenesDir = path.join(projectDir, 'scenes');
-  const resolvedOutputPath =
-    outputPath ?? path.join(projectDir, 'output', 'novel.md');
+  const resolvedOutputPath = outputPath ?? path.join(projectDir, 'output', 'novel.md');
 
   // ── Load chapter metadata ──────────────────────────────────────
   const chapterMetadata = loadChapterMetadata(projectDir, st);
@@ -52,8 +51,10 @@ export function assembleNovel(options: AssembleOptions): AssembleResult {
   const seenOrders = new Set<number>();
   for (const scene of sorted) {
     if (seenOrders.has(scene.narrativeOrder)) {
-      throw new AssemblyError(AssemblyErrorCode.DUPLICATE_NARRATIVE_ORDER,
-        `Duplicate narrativeOrder ${scene.narrativeOrder} in scene ${scene.eventId}`);
+      throw new AssemblyError(
+        AssemblyErrorCode.DUPLICATE_NARRATIVE_ORDER,
+        `Duplicate narrativeOrder ${scene.narrativeOrder} in scene ${scene.eventId}`,
+      );
     }
     seenOrders.add(scene.narrativeOrder);
   }
@@ -72,11 +73,7 @@ export function assembleNovel(options: AssembleOptions): AssembleResult {
 
   // ── Concatenate ────────────────────────────────────────────────
   const concatenator = new ProseConcatenator();
-  const markdown = concatenator.concatenate(
-    sorted,
-    chapterMetadata,
-    novelTitle,
-  );
+  const markdown = concatenator.concatenate(sorted, chapterMetadata, novelTitle);
 
   const outputDir = path.dirname(resolvedOutputPath);
   if (!st.exists(outputDir)) {

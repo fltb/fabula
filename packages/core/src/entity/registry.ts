@@ -1,3 +1,4 @@
+import type { CharacterDefinition, FactionDefinition } from '../types/character.js';
 import type {
   Entity,
   EntityId,
@@ -5,14 +6,11 @@ import type {
   EntityRegistry,
   EntityTypeRef,
 } from '../types/index.js';
-import type { CharacterDefinition } from '../types/character.js';
+import type { ItemDefinition, LocationDefinition } from '../types/location.js';
 import type { RuleDefinition } from '../types/rule.js';
-import type { LocationDefinition } from '../types/location.js';
-import type { ItemDefinition } from '../types/location.js';
-import type { FactionDefinition } from '../types/character.js';
-import { EntityMapper } from './mapper.js';
-import { canonicalizeFactValue } from './fact-value.js';
 import { defaultEntityTypeCatalog } from './default-catalog.js';
+import { canonicalizeFactValue } from './fact-value.js';
+import { EntityMapper } from './mapper.js';
 
 // ============================================================================
 // InMemoryEntityRegistry — stores and resolves entities in memory
@@ -177,9 +175,7 @@ export class InMemoryEntityRegistry implements EntityRegistry {
   }
 
   findByAttribute(attribute: string, value: unknown): Entity[] {
-    return [...this.entities.values()].filter(
-      (e) => e.state[attribute] === value,
-    );
+    return [...this.entities.values()].filter((e) => e.state[attribute] === value);
   }
 
   resolveRefs(refs: EntityId[]): Map<EntityId, Entity | null> {

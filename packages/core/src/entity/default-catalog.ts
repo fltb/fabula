@@ -12,9 +12,9 @@
 
 import { z } from 'zod';
 import type {
+  AttributeDefinition,
   EntityTypeCatalog,
   EntityTypeDefinition,
-  AttributeDefinition,
 } from '../types/index.js';
 
 // ——— Attribute builder helpers ———
@@ -75,7 +75,14 @@ const characterType: EntityTypeDefinition = {
     discourse_balance: mutableAttr('discourse_balance', { semanticRole: 'narrative' }),
     discourseMode: mutableAttr('discourseMode', { semanticRole: 'narrative' }),
   },
-  lifecyclePolicy: { allowedTransitions: [['active', 'inactive'], ['active', 'retired'], ['inactive', 'active'], ['inactive', 'retired']] },
+  lifecyclePolicy: {
+    allowedTransitions: [
+      ['active', 'inactive'],
+      ['active', 'retired'],
+      ['inactive', 'active'],
+      ['inactive', 'retired'],
+    ],
+  },
   referenceCapabilities: { defaultEligibility: 'live' },
   typedInvariants: [],
 };
@@ -88,7 +95,14 @@ const locationType: EntityTypeDefinition = {
     containment: mutableAttr('containment', { semanticRole: 'structural' }),
     time_period: mutableAttr('time_period', { semanticRole: 'temporal' }),
   },
-  lifecyclePolicy: { allowedTransitions: [['active', 'inactive'], ['active', 'retired'], ['inactive', 'active'], ['inactive', 'retired']] },
+  lifecyclePolicy: {
+    allowedTransitions: [
+      ['active', 'inactive'],
+      ['active', 'retired'],
+      ['inactive', 'active'],
+      ['inactive', 'retired'],
+    ],
+  },
   referenceCapabilities: { defaultEligibility: 'live' },
   typedInvariants: [],
 };
@@ -102,7 +116,14 @@ const itemType: EntityTypeDefinition = {
     ownership: mutableAttr('ownership', { semanticRole: 'relational' }),
     location: mutableAttr('location', { semanticRole: 'location' }),
   },
-  lifecyclePolicy: { allowedTransitions: [['active', 'inactive'], ['active', 'retired'], ['inactive', 'active'], ['inactive', 'retired']] },
+  lifecyclePolicy: {
+    allowedTransitions: [
+      ['active', 'inactive'],
+      ['active', 'retired'],
+      ['inactive', 'active'],
+      ['inactive', 'retired'],
+    ],
+  },
   referenceCapabilities: { defaultEligibility: 'live' },
   typedInvariants: [],
 };
@@ -113,7 +134,14 @@ const factionType: EntityTypeDefinition = {
   attributes: {
     membership: mutableAttr('membership', { semanticRole: 'relational' }),
   },
-  lifecyclePolicy: { allowedTransitions: [['active', 'inactive'], ['active', 'retired'], ['inactive', 'active'], ['inactive', 'retired']] },
+  lifecyclePolicy: {
+    allowedTransitions: [
+      ['active', 'inactive'],
+      ['active', 'retired'],
+      ['inactive', 'active'],
+      ['inactive', 'retired'],
+    ],
+  },
   referenceCapabilities: { defaultEligibility: 'live' },
   typedInvariants: [],
 };
@@ -126,7 +154,14 @@ const conceptType: EntityTypeDefinition = {
     value: mutableAttr('value', { semanticRole: 'knowledge' }),
     description: mutableAttr('description', { semanticRole: 'knowledge' }),
   },
-  lifecyclePolicy: { allowedTransitions: [['active', 'inactive'], ['active', 'retired'], ['inactive', 'active'], ['inactive', 'retired']] },
+  lifecyclePolicy: {
+    allowedTransitions: [
+      ['active', 'inactive'],
+      ['active', 'retired'],
+      ['inactive', 'active'],
+      ['inactive', 'retired'],
+    ],
+  },
   referenceCapabilities: { defaultEligibility: 'identity' },
   typedInvariants: [],
 };
@@ -141,7 +176,14 @@ const ruleType: EntityTypeDefinition = {
     effectiveness: mutableAttr('effectiveness', { semanticRole: 'lifecycle' }),
     evidence: mutableAttr('evidence', { semanticRole: 'audit' }),
   },
-  lifecyclePolicy: { allowedTransitions: [['active', 'inactive'], ['active', 'retired'], ['inactive', 'active'], ['inactive', 'retired']] },
+  lifecyclePolicy: {
+    allowedTransitions: [
+      ['active', 'inactive'],
+      ['active', 'retired'],
+      ['inactive', 'active'],
+      ['inactive', 'retired'],
+    ],
+  },
   referenceCapabilities: { defaultEligibility: 'identity' },
   typedInvariants: [],
 };

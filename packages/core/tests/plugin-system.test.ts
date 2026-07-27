@@ -2,21 +2,13 @@
 // Comprehensive Unit Tests — Plugin System Integration (D12)
 // ============================================================================
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import {
-  PluginHooksManager,
-  ValidatorRegistry,
-} from '../src/plugin/index.js';
-import type {
-  PluginHooks,
-  PluginContext,
-  ProviderRegistry,
-} from '../src/plugin/index.js';
-import { MemoryStorage } from '../src/storage/memory-storage.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CompletionRequest, CompletionResponse, LLMProvider } from '../src/ai/types.js';
 import { Logger, MemoryLogTransport } from '../src/observability/logger.js';
+import type { PluginContext, PluginHooks, ProviderRegistry } from '../src/plugin/index.js';
+import { PluginHooksManager, PluginLoader, ValidatorRegistry } from '../src/plugin/index.js';
+import { MemoryStorage } from '../src/storage/memory-storage.js';
 import type { PluginManifest } from '../src/types/index.js';
-import { PluginLoader } from '../src/plugin/index.js';
-import type { LLMProvider, CompletionRequest, CompletionResponse } from '../src/ai/types.js';
 
 // ============================================================================
 // Test Helpers
@@ -110,14 +102,22 @@ describe('Capability gate — PluginManifest requirement', () => {
     const storage = new MemoryStorage();
     const loader = new PluginLoader(storage);
     const manifestA: PluginManifest = {
-      name: 'plugin-a', version: '1.0.0', priority: 10,
-      provides: [], requires: [], conflicts: [],
+      name: 'plugin-a',
+      version: '1.0.0',
+      priority: 10,
+      provides: [],
+      requires: [],
+      conflicts: [],
       authority: { dimensions: [], exclusive: false },
       observes: { eventTypes: [], stateDomains: [] },
     };
     const manifestB: PluginManifest = {
-      name: 'plugin-b', version: '2.0.0', priority: 20,
-      provides: [], requires: [], conflicts: [],
+      name: 'plugin-b',
+      version: '2.0.0',
+      priority: 20,
+      provides: [],
+      requires: [],
+      conflicts: [],
       authority: { dimensions: [], exclusive: false },
       observes: { eventTypes: [], stateDomains: [] },
     };
@@ -126,7 +126,7 @@ describe('Capability gate — PluginManifest requirement', () => {
     loader.register(manifestB);
     const list = loader.list();
     expect(list).toHaveLength(2);
-    expect(list.map(m => m.name)).toEqual(['plugin-a', 'plugin-b']);
+    expect(list.map((m) => m.name)).toEqual(['plugin-a', 'plugin-b']);
   });
 });
 
@@ -156,7 +156,9 @@ describe('Sandbox deny — PluginContext is read-only', () => {
     const capturedContexts: PluginContext[] = [];
     const hook: PluginHooks = {
       name: 'observer',
-      onLoad: async (c: PluginContext) => { capturedContexts.push(c); },
+      onLoad: async (c: PluginContext) => {
+        capturedContexts.push(c);
+      },
     };
 
     manager.register(hook);
@@ -192,7 +194,7 @@ describe('Validator registration via PluginHooks', () => {
 
     const validators = validatorRegistry.validators;
     expect(validators).toHaveLength(2);
-    expect(validators.map(v => v.name)).toEqual(['custom-validator-1', 'custom-validator-2']);
+    expect(validators.map((v) => v.name)).toEqual(['custom-validator-1', 'custom-validator-2']);
   });
 
   it('registerValidators can add multiple plugins', () => {
@@ -227,7 +229,9 @@ describe('Validator registration via PluginHooks', () => {
     const providerRegistry = createProviderRegistrySpy();
     const manager = new PluginHooksManager(ctx, validatorRegistry, providerRegistry);
 
-    const validateSpy = vi.fn().mockReturnValue({ passed: true, errors: [], warnings: [], infos: [] });
+    const validateSpy = vi
+      .fn()
+      .mockReturnValue({ passed: true, errors: [], warnings: [], infos: [] });
 
     const hook: PluginHooks = {
       name: 'spy-plugin',
@@ -338,9 +342,15 @@ describe('PluginHooksManager lifecycle', () => {
     const callOrder: string[] = [];
     const hook: PluginHooks = {
       name: 'order-test',
-      onLoad: async () => { callOrder.push('onLoad'); },
-      registerValidators: () => { callOrder.push('registerValidators'); },
-      registerProvider: () => { callOrder.push('registerProvider'); },
+      onLoad: async () => {
+        callOrder.push('onLoad');
+      },
+      registerValidators: () => {
+        callOrder.push('registerValidators');
+      },
+      registerProvider: () => {
+        callOrder.push('registerProvider');
+      },
     };
 
     manager.register(hook);
@@ -362,14 +372,18 @@ describe('PluginHooksManager lifecycle', () => {
     const order: string[] = [];
     const hook: PluginHooks = {
       name: 'reverse-test',
-      onUnload: async () => { order.push('first'); },
+      onUnload: async () => {
+        order.push('first');
+      },
     };
     manager.register(hook);
 
     // Register a second hook
     const hook2: PluginHooks = {
       name: 'reverse-test-2',
-      onUnload: async () => { order.push('second'); },
+      onUnload: async () => {
+        order.push('second');
+      },
     };
     manager.register(hook2);
 
@@ -448,7 +462,9 @@ describe('beforeRender / afterRender hooks', () => {
   it('runBeforeRender collects errors without throwing', async () => {
     const hook: PluginHooks = {
       name: 'error-plugin',
-      beforeRender: async () => { throw new Error('hook failure'); },
+      beforeRender: async () => {
+        throw new Error('hook failure');
+      },
     };
 
     manager.register(hook);
@@ -464,8 +480,12 @@ describe('beforeRender / afterRender hooks', () => {
 
     const hook: PluginHooks = {
       name: 'observe-only',
-      beforeRender: async (c) => { beforeCtxs.push(c); },
-      afterRender: async (c) => { afterCtxs.push(c); },
+      beforeRender: async (c) => {
+        beforeCtxs.push(c);
+      },
+      afterRender: async (c) => {
+        afterCtxs.push(c);
+      },
     };
 
     manager.register(hook);
@@ -513,7 +533,9 @@ describe('End-to-end plugin integration', () => {
     let onLoadCalled = false;
     const hook: PluginHooks = {
       name: 'integrated-plugin',
-      onLoad: async () => { onLoadCalled = true; },
+      onLoad: async () => {
+        onLoadCalled = true;
+      },
       registerValidators(registry: ValidatorRegistry) {
         registry.register(createDummyValidator('integrated-validator'));
       },
@@ -552,11 +574,21 @@ describe('End-to-end plugin integration', () => {
 
     const hook: PluginHooks = {
       name: 'full-lifecycle',
-      onLoad: async () => { lifecycle.push('load'); },
-      registerValidators: () => { lifecycle.push('registerValidators'); },
-      registerProvider: () => { lifecycle.push('registerProvider'); },
-      beforeRender: async () => { lifecycle.push('beforeRender'); },
-      afterRender: async () => { lifecycle.push('afterRender'); },
+      onLoad: async () => {
+        lifecycle.push('load');
+      },
+      registerValidators: () => {
+        lifecycle.push('registerValidators');
+      },
+      registerProvider: () => {
+        lifecycle.push('registerProvider');
+      },
+      beforeRender: async () => {
+        lifecycle.push('beforeRender');
+      },
+      afterRender: async () => {
+        lifecycle.push('afterRender');
+      },
     };
 
     hooksManager.register(hook);
@@ -566,7 +598,13 @@ describe('End-to-end plugin integration', () => {
     // Run render hooks
     await hooksManager.runBeforeRender();
     await hooksManager.runAfterRender();
-    expect(lifecycle).toEqual(['load', 'registerValidators', 'registerProvider', 'beforeRender', 'afterRender']);
+    expect(lifecycle).toEqual([
+      'load',
+      'registerValidators',
+      'registerProvider',
+      'beforeRender',
+      'afterRender',
+    ]);
 
     // Shutdown
     await hooksManager.shutdown();

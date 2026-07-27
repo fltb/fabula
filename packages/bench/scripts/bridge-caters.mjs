@@ -16,12 +16,27 @@ const ROOT = path.resolve(__dirname, '../../..');
 const BENCH_DATA = path.join(ROOT, 'bench-data');
 const INPUT = path.join(BENCH_DATA, 'caters/caters_stories.json');
 
-function mkdir(...parts) { const d = path.join(...parts); fs.mkdirSync(d, { recursive: true }); return d; }
-function writeYAML(fp, data) { fs.writeFileSync(fp, YAML.stringify(data, { lineWidth: 120 }), 'utf-8'); }
-function safeId(s) { return s.toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, ''); }
+function mkdir(...parts) {
+  const d = path.join(...parts);
+  fs.mkdirSync(d, { recursive: true });
+  return d;
+}
+function writeYAML(fp, data) {
+  fs.writeFileSync(fp, YAML.stringify(data, { lineWidth: 120 }), 'utf-8');
+}
+function safeId(s) {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+}
 
 function main() {
-  if (!fs.existsSync(INPUT)) { console.error('CaTeRS data not found at', INPUT); process.exit(1); }
+  if (!fs.existsSync(INPUT)) {
+    console.error('CaTeRS data not found at', INPUT);
+    process.exit(1);
+  }
   const stories = JSON.parse(fs.readFileSync(INPUT, 'utf-8'));
 
   // Group by split
@@ -41,9 +56,35 @@ function main() {
   for (const s of allStories) {
     const matches = s.context.match(namePattern) || [];
     for (const m of matches) {
-      if (!['He', 'She', 'They', 'It', 'The', 'A', 'An', 'When', 'After', 'While',
-             'Suddenly', 'One', 'To', 'His', 'Her', 'I', 'My', 'But', 'So', 'And',
-             'In', 'On', 'At', 'Worse', 'More'].includes(m)) {
+      if (
+        ![
+          'He',
+          'She',
+          'They',
+          'It',
+          'The',
+          'A',
+          'An',
+          'When',
+          'After',
+          'While',
+          'Suddenly',
+          'One',
+          'To',
+          'His',
+          'Her',
+          'I',
+          'My',
+          'But',
+          'So',
+          'And',
+          'In',
+          'On',
+          'At',
+          'Worse',
+          'More',
+        ].includes(m)
+      ) {
         charNames.add(m);
       }
     }
@@ -77,12 +118,19 @@ function main() {
 
   // Write state_initial.yaml
   writeYAML(path.join(defsDir, 'state_initial.yaml'), {
-    timeAnchors: [{ id: 'story_beginning', day: 0, description: 'Start of each 5-sentence CaTeRS story' }],
-    threads: [{
-      id: 'T1', name: 'Causal Chain', type: 'primary',
-      description: 'The chain of events linked by cause/enable/prevent relations.',
-      targetRevealChapter: 1, initialProgress: '0.00',
-    }],
+    timeAnchors: [
+      { id: 'story_beginning', day: 0, description: 'Start of each 5-sentence CaTeRS story' },
+    ],
+    threads: [
+      {
+        id: 'T1',
+        name: 'Causal Chain',
+        type: 'primary',
+        description: 'The chain of events linked by cause/enable/prevent relations.',
+        targetRevealChapter: 1,
+        initialProgress: '0.00',
+      },
+    ],
     worldFacts: [],
   });
 
@@ -93,15 +141,15 @@ function main() {
 
   for (let si = 0; si < allStories.length; si++) {
     const story = allStories[si];
-    const eventEntries = Object.entries(story.events);  // [span, id]
-    const eventMap = {};  // id → { text, preconds, postconds }
+    const eventEntries = Object.entries(story.events); // [span, id]
+    const eventMap = {}; // id → { text, preconds, postconds }
 
     // Build event map
     for (const [span, eid] of eventEntries) {
       eventMap[eid] = {
         text: span,
-        preconds: [],   // incoming causal edges
-        postconds: [],  // outgoing causal edges
+        preconds: [], // incoming causal edges
+        postconds: [], // outgoing causal edges
       };
     }
 
@@ -121,14 +169,14 @@ function main() {
       const evt = eventMap[eid];
       globalOrder++;
 
-      const preconditions = evt.preconds.map(p => ({
+      const preconditions = evt.preconds.map((p) => ({
         entity: 'narrative',
         attribute: 'event_completed',
         value: p.from,
         confidence: 0.9,
       }));
 
-      const expectedPostconditions = evt.postconds.map(p => ({
+      const expectedPostconditions = evt.postconds.map((p) => ({
         entity: 'narrative',
         attribute: 'event_triggered',
         value: p.to,
@@ -144,7 +192,12 @@ function main() {
         sceneType: 'linear',
         tense: 'past',
         discourseMode: 'exposition',
-        arcPosition: eid === 'E0' ? 'opening' : eid === eventEntries[eventEntries.length - 1][1] ? 'denouement' : 'rising',
+        arcPosition:
+          eid === 'E0'
+            ? 'opening'
+            : eid === eventEntries[eventEntries.length - 1][1]
+              ? 'denouement'
+              : 'rising',
         conflictType: 'person_vs_fate',
         pov: { character: 'unknown', type: 'third_person_limited' },
         preconditions: preconditions.length > 0 ? preconditions : [],
@@ -165,7 +218,8 @@ function main() {
     chapter: 1,
     title: 'CaTeRS Stories',
     summary: `${allStories.length} stories with ${totalEvents} events and ${totalPreconds} causal preconditions. Train=200, dev=60, test=20.`,
-    intent: 'Causal DAG benchmark — validates CausalityValidator, ReachabilityValidator, TimelineValidator',
+    intent:
+      'Causal DAG benchmark — validates CausalityValidator, ReachabilityValidator, TimelineValidator',
     plannedScenes: totalEvents,
   });
 

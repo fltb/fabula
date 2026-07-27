@@ -7,8 +7,8 @@
 // same-name schemas in integration.ts.
 // ============================================================================
 
-import type { EffectiveCoordinate, GraphReadResolution } from '../types/graph.js';
 import { z } from 'zod';
+import type { EffectiveCoordinate, GraphReadResolution } from '../types/graph.js';
 
 // ——— Coordinates ———
 
@@ -26,14 +26,19 @@ export const discourseCoordinateSchema = z
   })
   .strict();
 
-export const effectiveCoordinateSchema: z.ZodType<EffectiveCoordinate> = z.discriminatedUnion('type', [
-  storyCoordinateSchema,
-  discourseCoordinateSchema,
-]);
+export const effectiveCoordinateSchema: z.ZodType<EffectiveCoordinate> = z.discriminatedUnion(
+  'type',
+  [storyCoordinateSchema, discourseCoordinateSchema],
+);
 
 // ——— Edge Class ———
 
-export const edgeClassSchema = z.enum(['author_origin', 'provider', 'same_coordinate_order', 'internal']);
+export const edgeClassSchema = z.enum([
+  'author_origin',
+  'provider',
+  'same_coordinate_order',
+  'internal',
+]);
 
 // ——— OutputValue ———
 
@@ -59,7 +64,14 @@ export const outputDescriptorSchema = z
 
 export const readPhaseSchema = z.enum(['stateBefore', 'stateAfter']);
 
-export const readOriginSchema = z.enum(['precondition', 'source', 'rule', 'scope', 'lifecycle', 'merge']);
+export const readOriginSchema = z.enum([
+  'precondition',
+  'source',
+  'rule',
+  'scope',
+  'lifecycle',
+  'merge',
+]);
 
 export const presencePredicateSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('exists') }).strict(),
@@ -112,10 +124,10 @@ export const graphAbsenceWitnessSchema = z
   })
   .strict();
 
-export const graphReadResolutionSchema: z.ZodType<GraphReadResolution> = z.discriminatedUnion('type', [
-  graphProviderOutputSchema,
-  graphAbsenceWitnessSchema,
-]);
+export const graphReadResolutionSchema: z.ZodType<GraphReadResolution> = z.discriminatedUnion(
+  'type',
+  [graphProviderOutputSchema, graphAbsenceWitnessSchema],
+);
 
 // ——— BoundaryReference ———
 

@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
 import http from 'node:http';
+import http2 from 'node:http2';
 import https from 'node:https';
 import net from 'node:net';
 import tls from 'node:tls';
-import http2 from 'node:http2';
+import { describe, expect, it } from 'vitest';
 import { NetworkDeniedError } from '../src/errors.ts';
 
 describe('default offline test sentinel', () => {

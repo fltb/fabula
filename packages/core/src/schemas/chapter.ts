@@ -15,5 +15,3 @@ export const chapterMetadataSchema = z
     styleGuidance: styleGuidanceSchema.optional(),
   })
   .strict();
-
-

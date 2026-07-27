@@ -1,18 +1,33 @@
 import { describe, expect, it } from 'vitest';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import { TraceCollector } from '../../src/observability/trace.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 
 describe('TraceCollector', () => {
   it('writes safe JSONL traces with job and event correlation', () => {
     const traces = new TraceCollector('run-1');
     traces.record({ spanId: 'pass1-E0', eventId: 'E0', phase: 'pass1', state: 'start' });
-    traces.record({ spanId: 'pass1-E0', eventId: 'E0', phase: 'pass1', state: 'end', durationMs: 9 });
+    traces.record({
+      spanId: 'pass1-E0',
+      eventId: 'E0',
+      phase: 'pass1',
+      state: 'end',
+      durationMs: 9,
+    });
     const storage = new MemoryStorage();
     traces.write(storage, '/project');
 
-    const lines = storage.read('/project/.nova/traces/run-1.jsonl').trim().split('\n').map((line) => JSON.parse(line));
+    const lines = storage
+      .read('/project/.nova/traces/run-1.jsonl')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
     expect(lines).toHaveLength(2);
-    expect(lines[0]).toMatchObject({ jobId: 'run-1', traceId: 'run-1', eventId: 'E0', phase: 'pass1' });
+    expect(lines[0]).toMatchObject({
+      jobId: 'run-1',
+      traceId: 'run-1',
+      eventId: 'E0',
+      phase: 'pass1',
+    });
     expect(lines[1].durationMs).toBe(9);
   });
 
@@ -22,15 +37,39 @@ describe('TraceCollector', () => {
     traces.record({ spanId: 'E0', eventId: 'E0', phase: 'pipeline', state: 'start' });
     // Cache span (nested)
     traces.record({ spanId: 'E0:cache', eventId: 'E0', phase: 'cache', state: 'start' });
-    traces.record({ spanId: 'E0:cache', eventId: 'E0', phase: 'cache', state: 'end', durationMs: 2 });
+    traces.record({
+      spanId: 'E0:cache',
+      eventId: 'E0',
+      phase: 'cache',
+      state: 'end',
+      durationMs: 2,
+    });
     // Pass 1 span (nested)
     traces.record({ spanId: 'E0:pass1', eventId: 'E0', phase: 'pass1', state: 'start' });
-    traces.record({ spanId: 'E0:pass1', eventId: 'E0', phase: 'pass1', state: 'end', durationMs: 150 });
+    traces.record({
+      spanId: 'E0:pass1',
+      eventId: 'E0',
+      phase: 'pass1',
+      state: 'end',
+      durationMs: 150,
+    });
     // Pass 2 span (nested)
     traces.record({ spanId: 'E0:pass2', eventId: 'E0', phase: 'pass2', state: 'start' });
-    traces.record({ spanId: 'E0:pass2', eventId: 'E0', phase: 'pass2', state: 'end', durationMs: 200 });
+    traces.record({
+      spanId: 'E0:pass2',
+      eventId: 'E0',
+      phase: 'pass2',
+      state: 'end',
+      durationMs: 200,
+    });
     // Pipeline end
-    traces.record({ spanId: 'E0', eventId: 'E0', phase: 'pipeline', state: 'end', durationMs: 400 });
+    traces.record({
+      spanId: 'E0',
+      eventId: 'E0',
+      phase: 'pipeline',
+      state: 'end',
+      durationMs: 400,
+    });
 
     const events = traces.snapshot();
     expect(events).toHaveLength(8);
@@ -50,7 +89,16 @@ describe('TraceCollector', () => {
 
   it('covers all trace phase event types', () => {
     const traces = new TraceCollector('job-types');
-    const phases = ['pipeline', 'context', 'cache', 'pass1', 'pass2', 'validator', 'circuit', 'output'] as const;
+    const phases = [
+      'pipeline',
+      'context',
+      'cache',
+      'pass1',
+      'pass2',
+      'validator',
+      'circuit',
+      'output',
+    ] as const;
     for (const phase of phases) {
       traces.record({ spanId: phase, eventId: 'E0', phase, state: 'start' });
       traces.record({ spanId: phase, eventId: 'E0', phase, state: 'end', durationMs: 10 });
@@ -106,7 +154,13 @@ describe('TraceCollector', () => {
 
   it('records error events with code', () => {
     const traces = new TraceCollector('err-job');
-    traces.record({ spanId: 'E0:cache', eventId: 'E0', phase: 'cache', state: 'error', code: 'CORRUPTED' });
+    traces.record({
+      spanId: 'E0:cache',
+      eventId: 'E0',
+      phase: 'cache',
+      state: 'error',
+      code: 'CORRUPTED',
+    });
     const events = traces.snapshot();
     expect(events).toHaveLength(1);
     expect(events[0].code).toBe('CORRUPTED');
@@ -116,9 +170,21 @@ describe('TraceCollector', () => {
   it('supports multiple events in the same job', () => {
     const traces = new TraceCollector('multi-event');
     traces.record({ spanId: 'E0', eventId: 'E0', phase: 'pipeline', state: 'start' });
-    traces.record({ spanId: 'E0', eventId: 'E0', phase: 'pipeline', state: 'end', durationMs: 100 });
+    traces.record({
+      spanId: 'E0',
+      eventId: 'E0',
+      phase: 'pipeline',
+      state: 'end',
+      durationMs: 100,
+    });
     traces.record({ spanId: 'E1', eventId: 'E1', phase: 'pipeline', state: 'start' });
-    traces.record({ spanId: 'E1', eventId: 'E1', phase: 'pipeline', state: 'end', durationMs: 200 });
+    traces.record({
+      spanId: 'E1',
+      eventId: 'E1',
+      phase: 'pipeline',
+      state: 'end',
+      durationMs: 200,
+    });
     const events = traces.snapshot();
     expect(events).toHaveLength(4);
     const e0Events = events.filter((e) => e.eventId === 'E0');

@@ -11,7 +11,11 @@
 //   (see types/capability.ts header for full list)
 // ============================================================================
 
-import type { CapabilityManifest, CapabilityManifestEntry, StageGate } from '../types/capability.js';
+import type {
+  CapabilityManifest,
+  CapabilityManifestEntry,
+  StageGate,
+} from '../types/capability.js';
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
@@ -134,7 +138,7 @@ export class CapabilityRegistry {
     if (!entry.supportedInputForms.includes(inputForm)) {
       throw new CapabilityGateError(
         `Input form "${inputForm}" is not covered by capability "${capabilityId}" — ` +
-        'uncovered input hard fail, no implicit downgrade',
+          'uncovered input hard fail, no implicit downgrade',
         'UNCOVERED_INPUT',
         capabilityId,
       );

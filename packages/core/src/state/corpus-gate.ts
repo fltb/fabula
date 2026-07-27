@@ -5,10 +5,10 @@
 // All gate checks hard-fail on violation; no skip/deferred/zero-CED masking.
 // ============================================================================
 
-import type { SourceManifest, WorkIndex, CandidateEventIndex } from './corpus-index.ts';
-import type { SelectionPlan } from './corpus-selection.ts';
-import type { StoryBoundaryOracle } from './corpus-replay.ts';
 import { ConfigError } from '../errors.ts';
+import type { CandidateEventIndex, SourceManifest, WorkIndex } from './corpus-index.ts';
+import type { StoryBoundaryOracle } from './corpus-replay.ts';
+import type { SelectionPlan } from './corpus-selection.ts';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Types
@@ -65,13 +65,22 @@ function pass(name: string): GateCheck {
  */
 export function checkProvenance(manifest: SourceManifest): GateCheck {
   if (!manifest.sourceHash || manifest.sourceHash.length === 0) {
-    return fail('provenance', `Source hash is empty for "${manifest.workId}/${manifest.editionId}"`);
+    return fail(
+      'provenance',
+      `Source hash is empty for "${manifest.workId}/${manifest.editionId}"`,
+    );
   }
   if (!/^[0-9a-f]{64}$/i.test(manifest.sourceHash)) {
-    return fail('provenance', `Source hash "${manifest.sourceHash}" is not a valid SHA-256 hex string`);
+    return fail(
+      'provenance',
+      `Source hash "${manifest.sourceHash}" is not a valid SHA-256 hex string`,
+    );
   }
   if (!['public_domain', 'local_external', 'restricted'].includes(manifest.legalMode)) {
-    return fail('provenance', `Invalid legal mode "${manifest.legalMode}" for "${manifest.workId}"`);
+    return fail(
+      'provenance',
+      `Invalid legal mode "${manifest.legalMode}" for "${manifest.workId}"`,
+    );
   }
   if (!manifest.jurisdiction || manifest.jurisdiction.length === 0) {
     return fail('provenance', `Jurisdiction is empty for "${manifest.workId}"`);
@@ -94,7 +103,10 @@ export function checkCausalDeps(eventId: string, index: WorkIndex): GateCheck {
   // Find the narrative node for this event
   const node = index.narrativeNodes.find((n) => n.nodeId === eventId);
   if (!node) {
-    return fail('causal_deps', `Event "${eventId}" not found in narrative nodes of "${index.workId}"`);
+    return fail(
+      'causal_deps',
+      `Event "${eventId}" not found in narrative nodes of "${index.workId}"`,
+    );
   }
 
   // Build a set of all candidate event IDs for quick lookup
@@ -296,9 +308,7 @@ export function validateCorpusIntegrity(
 
   // Hard fail on any violation — no skip/deferred/zero-CED masking
   if (!allPassed) {
-    const failures = checks
-      .filter((c) => !c.passed)
-      .map((c) => `${c.name}: ${c.reason}`);
+    const failures = checks.filter((c) => !c.passed).map((c) => `${c.name}: ${c.reason}`);
     throw new ConfigError(
       `Corpus integrity gate FAILED for "${manifest.workId}/${manifest.editionId}":\n${failures.join('\n')}`,
     );

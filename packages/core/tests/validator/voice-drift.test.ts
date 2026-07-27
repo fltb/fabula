@@ -1,6 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type {
+  AnalysisResult,
+  NarrativeCheck,
+  NarrativeEvent,
+  PostRenderInput,
+} from '../../src/types/index.js';
 import { VoiceDriftDetector } from '../../src/validator/voice-drift.js';
-import type { NarrativeEvent, PostRenderInput, AnalysisResult, NarrativeCheck } from '../../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -24,10 +29,7 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  analysis: AnalysisResult | null,
-): PostRenderInput {
+function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): PostRenderInput {
   return {
     event,
     worldState: {
@@ -52,7 +54,13 @@ function makeAnalysis(narrativeChecks: NarrativeCheck[]): AnalysisResult {
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+      quality: {
+        proseScore: 8,
+        maxScore: 10,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 300,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
       narrativeChecks,
@@ -74,7 +82,7 @@ describe('VoiceDriftDetector', () => {
     ]);
     const input = makeInput(event, analysis);
     const issues = new VoiceDriftDetector().validatePost(input);
-    const driftIssues = issues.filter(i => i.validator === 'voice_drift');
+    const driftIssues = issues.filter((i) => i.validator === 'voice_drift');
     expect(driftIssues).toHaveLength(1);
     expect(driftIssues[0].message).toContain('Voice drift detected');
     expect(driftIssues[0].severity).toBe('info');
@@ -93,7 +101,7 @@ describe('VoiceDriftDetector', () => {
     ]);
     const input = makeInput(event, analysis);
     const issues = new VoiceDriftDetector().validatePost(input);
-    const driftIssues = issues.filter(i => i.validator === 'voice_drift');
+    const driftIssues = issues.filter((i) => i.validator === 'voice_drift');
     expect(driftIssues).toHaveLength(1);
     expect(driftIssues[0].message).toContain('Voice drift detected');
     expect(driftIssues[0].severity).toBe('warning');
@@ -112,7 +120,7 @@ describe('VoiceDriftDetector', () => {
     ]);
     const input = makeInput(event, analysis);
     const issues = new VoiceDriftDetector().validatePost(input);
-    const driftIssues = issues.filter(i => i.validator === 'voice_drift');
+    const driftIssues = issues.filter((i) => i.validator === 'voice_drift');
     expect(driftIssues).toHaveLength(1);
     expect(driftIssues[0].message).toContain('Voice drift detected');
     expect(driftIssues[0].severity).toBe('info');
@@ -131,7 +139,7 @@ describe('VoiceDriftDetector', () => {
     ]);
     const input = makeInput(event, analysis);
     const issues = new VoiceDriftDetector().validatePost(input);
-    const driftIssues = issues.filter(i => i.validator === 'voice_drift');
+    const driftIssues = issues.filter((i) => i.validator === 'voice_drift');
     expect(driftIssues).toHaveLength(0);
   });
 
@@ -169,7 +177,7 @@ describe('VoiceDriftDetector', () => {
     ]);
     const input = makeInput(event, analysis);
     const issues = new VoiceDriftDetector().validatePost(input);
-    const driftIssues = issues.filter(i => i.validator === 'voice_drift');
+    const driftIssues = issues.filter((i) => i.validator === 'voice_drift');
     expect(driftIssues).toHaveLength(4);
   });
 
@@ -208,7 +216,7 @@ describe('VoiceDriftDetector', () => {
     ]);
     const input = makeInput(event, analysis);
     const issues = new VoiceDriftDetector().validatePost(input);
-    const driftIssues = issues.filter(i => i.validator === 'voice_drift');
+    const driftIssues = issues.filter((i) => i.validator === 'voice_drift');
     expect(driftIssues).toHaveLength(0);
   });
 });

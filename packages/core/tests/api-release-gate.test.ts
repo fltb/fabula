@@ -5,7 +5,7 @@
 // (no raw provider secrets), and that released scenes are not reported.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { buildReleaseDiagnostic } from '../src/api.ts';
 import type { RenderSceneResult } from '../src/pipeline/render.ts';
 import type { ValidationResult } from '../src/types/index.js';
@@ -61,8 +61,26 @@ describe('buildReleaseDiagnostic', () => {
       validation: makeValidationResult({
         passed: false,
         errors: [
-          { validator: 'PronounValidator', severity: 'error', event: 'evt_scene_001', entity: 'jinx', message: 'pronoun reference mismatch for jinx', fixSuggestion: 'Review pronouns.', fixAction: 'change_value', fixTarget: { file: 'scenes/evt_scene_001.yaml' } },
-          { validator: 'TenseConsistencyValidator', severity: 'error', event: 'evt_scene_001', entity: 'narrator', message: 'tense shift from past to present', fixSuggestion: 'Unify tense.', fixAction: 'change_value', fixTarget: { file: 'scenes/evt_scene_001.yaml' } },
+          {
+            validator: 'PronounValidator',
+            severity: 'error',
+            event: 'evt_scene_001',
+            entity: 'jinx',
+            message: 'pronoun reference mismatch for jinx',
+            fixSuggestion: 'Review pronouns.',
+            fixAction: 'change_value',
+            fixTarget: { file: 'scenes/evt_scene_001.yaml' },
+          },
+          {
+            validator: 'TenseConsistencyValidator',
+            severity: 'error',
+            event: 'evt_scene_001',
+            entity: 'narrator',
+            message: 'tense shift from past to present',
+            fixSuggestion: 'Unify tense.',
+            fixAction: 'change_value',
+            fixTarget: { file: 'scenes/evt_scene_001.yaml' },
+          },
         ],
       }),
     });
@@ -82,7 +100,16 @@ describe('buildReleaseDiagnostic', () => {
       validation: makeValidationResult({
         passed: false,
         errors: [
-          { validator: 'LLMProvider', severity: 'error', event: 'evt_scene_001', entity: 'provider', message: 'API call failed: sk-proj-Ax7G8kL2mN4pQ6rS9tUvWxYz', fixSuggestion: 'Check API key.', fixAction: 'manual', fixTarget: { file: '' } },
+          {
+            validator: 'LLMProvider',
+            severity: 'error',
+            event: 'evt_scene_001',
+            entity: 'provider',
+            message: 'API call failed: sk-proj-Ax7G8kL2mN4pQ6rS9tUvWxYz',
+            fixSuggestion: 'Check API key.',
+            fixAction: 'manual',
+            fixTarget: { file: '' },
+          },
         ],
       }),
     });
@@ -144,7 +171,16 @@ describe('buildReleaseDiagnostic', () => {
       validation: makeValidationResult({
         passed: false,
         errors: [
-          { validator: 'CausalityValidator', severity: 'error', event: 'evt_scene_001', entity: 'scene', message: 'causal loop detected', fixSuggestion: 'Reorder events.', fixAction: 'manual', fixTarget: { file: 'scenes/evt_scene_001.yaml' } },
+          {
+            validator: 'CausalityValidator',
+            severity: 'error',
+            event: 'evt_scene_001',
+            entity: 'scene',
+            message: 'causal loop detected',
+            fixSuggestion: 'Reorder events.',
+            fixAction: 'manual',
+            fixTarget: { file: 'scenes/evt_scene_001.yaml' },
+          },
         ],
       }),
       errors: ['raw provider failure: Connection refused'],

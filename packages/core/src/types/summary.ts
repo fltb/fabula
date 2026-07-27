@@ -12,9 +12,9 @@ import type { StoryTimestamp } from './entity.js';
 
 export interface VolumeSummary {
   volumeId: string;
-  keyArcs: string[];                 // main narrative arcs in this volume
-  characterTrajectory: Map<string, string>;  // entityId → current state
-  activeThreads: string[];           // unresolved threads
+  keyArcs: string[]; // main narrative arcs in this volume
+  characterTrajectory: Map<string, string>; // entityId → current state
+  activeThreads: string[]; // unresolved threads
   sceneCount: number;
 }
 

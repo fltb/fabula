@@ -2,23 +2,23 @@
 // EpistemicLedger — Tests for claim management and epistemic state
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   applyClaimTransaction,
   evaluate,
   hasSufficientWarrant,
   recordInformationAct,
 } from '../../src/state/knowledge-replay.js';
-import { claimKey } from '../../src/types/knowledge.js';
 import type {
-  EpistemicLedger,
-  PropositionCatalog,
   ClaimAssessment,
   ClaimEvidenceRecord,
+  EpistemicLedger,
   InformationAct,
   Proposition,
+  PropositionCatalog,
   WorldState,
 } from '../../src/types/index.js';
+import { claimKey } from '../../src/types/knowledge.js';
 
 const emptyWorldState: WorldState = {
   entities: {},
@@ -55,7 +55,9 @@ describe('EpistemicLedger', () => {
         acquiredAt: { type: 'absolute' as const, value: 'day_1' },
       };
 
-      const updated = applyClaimTransaction(ledger, 'frodo', 'p_ring_location', assessment, [evidence]);
+      const updated = applyClaimTransaction(ledger, 'frodo', 'p_ring_location', assessment, [
+        evidence,
+      ]);
       const key = claimKey('frodo', 'p_ring_location');
 
       expect(updated.claims[key]).toBeDefined();
@@ -66,17 +68,22 @@ describe('EpistemicLedger', () => {
 
     it('rejects duplicate claim write', () => {
       const assessment: ClaimAssessment = {
-        type: 'settled', grade: 'believe', polarity: 'affirmative',
+        type: 'settled',
+        grade: 'believe',
+        polarity: 'affirmative',
       };
       const evidence: ClaimEvidenceRecord = {
-        source: 'testimony', provider: 'gandalf', provenance: ['evt1'],
+        source: 'testimony',
+        provider: 'gandalf',
+        provenance: ['evt1'],
         acquiredAt: { type: 'absolute' as const, value: 'day_1' },
       };
 
       const ledger: EpistemicLedger = { claims: {}, bySubject: {}, byProposition: {}, actLog: [] };
       const once = applyClaimTransaction(ledger, 'frodo', 'p1', assessment, [evidence]);
-      expect(() => applyClaimTransaction(once, 'frodo', 'p1', assessment, [evidence]))
-        .toThrow(/Duplicate claim/);
+      expect(() => applyClaimTransaction(once, 'frodo', 'p1', assessment, [evidence])).toThrow(
+        /Duplicate claim/,
+      );
     });
 
     it('records a conflcted assessment', () => {
@@ -86,8 +93,18 @@ describe('EpistemicLedger', () => {
         rejections: 1,
       };
       const evidence: ClaimEvidenceRecord[] = [
-        { source: 'testimony', provider: 'a', provenance: ['evt1'], acquiredAt: { type: 'absolute' as const, value: 'day_1' } },
-        { source: 'testimony', provider: 'b', provenance: ['evt2'], acquiredAt: { type: 'absolute' as const, value: 'day_2' } },
+        {
+          source: 'testimony',
+          provider: 'a',
+          provenance: ['evt1'],
+          acquiredAt: { type: 'absolute' as const, value: 'day_1' },
+        },
+        {
+          source: 'testimony',
+          provider: 'b',
+          provenance: ['evt2'],
+          acquiredAt: { type: 'absolute' as const, value: 'day_2' },
+        },
       ];
       const ledger: EpistemicLedger = { claims: {}, bySubject: {}, byProposition: {}, actLog: [] };
       const updated = applyClaimTransaction(ledger, 'sam', 'p2', assessment, evidence);
@@ -115,7 +132,11 @@ describe('EpistemicLedger', () => {
   describe('evaluate() grounded propositions', () => {
     it('returns true for matching world state', () => {
       const prop: Proposition = {
-        kind: 'grounded', id: 'p1', entityId: 'hero', attribute: 'alive', value: true,
+        kind: 'grounded',
+        id: 'p1',
+        entityId: 'hero',
+        attribute: 'alive',
+        value: true,
       };
       const state = {
         ...emptyWorldState,
@@ -127,7 +148,11 @@ describe('EpistemicLedger', () => {
 
     it('returns false for non-matching world state', () => {
       const prop: Proposition = {
-        kind: 'grounded', id: 'p1', entityId: 'hero', attribute: 'alive', value: true,
+        kind: 'grounded',
+        id: 'p1',
+        entityId: 'hero',
+        attribute: 'alive',
+        value: true,
       };
       const state = {
         ...emptyWorldState,
@@ -139,7 +164,11 @@ describe('EpistemicLedger', () => {
 
     it('returns indeterminate for unset attribute', () => {
       const prop: Proposition = {
-        kind: 'grounded', id: 'p1', entityId: 'hero', attribute: 'age', value: 30,
+        kind: 'grounded',
+        id: 'p1',
+        entityId: 'hero',
+        attribute: 'age',
+        value: 30,
       };
       const state = {
         ...emptyWorldState,
@@ -151,7 +180,12 @@ describe('EpistemicLedger', () => {
 
     it('evaluates "not" quantifier', () => {
       const prop: Proposition = {
-        kind: 'grounded', id: 'p1', entityId: 'hero', attribute: 'alive', value: true, quantifier: 'not',
+        kind: 'grounded',
+        id: 'p1',
+        entityId: 'hero',
+        attribute: 'alive',
+        value: true,
+        quantifier: 'not',
       };
       const state = { ...emptyWorldState, entities: { hero: { alive: false } } };
       const ledger: EpistemicLedger = { claims: {}, bySubject: {}, byProposition: {}, actLog: [] };
@@ -162,24 +196,48 @@ describe('EpistemicLedger', () => {
   describe('evaluate() epistemic propositions', () => {
     it('returns true when settled claim matches', () => {
       const ledger: EpistemicLedger = { claims: {}, bySubject: {}, byProposition: {}, actLog: [] };
-      const assessment: ClaimAssessment = { type: 'settled', grade: 'know', polarity: 'affirmative' };
-      const evidence: ClaimEvidenceRecord = { source: 'direct_experience', provenance: ['e1'], acquiredAt: { type: 'absolute' as const, value: 'day_1' } };
+      const assessment: ClaimAssessment = {
+        type: 'settled',
+        grade: 'know',
+        polarity: 'affirmative',
+      };
+      const evidence: ClaimEvidenceRecord = {
+        source: 'direct_experience',
+        provenance: ['e1'],
+        acquiredAt: { type: 'absolute' as const, value: 'day_1' },
+      };
       const updated = applyClaimTransaction(ledger, 'frodo', 'p_ring', assessment, [evidence]);
 
       const prop: Proposition = {
-        kind: 'epistemic', id: 'p_ep', subject: 'frodo', propositionId: 'p_ring', attitude: 'knows',
+        kind: 'epistemic',
+        id: 'p_ep',
+        subject: 'frodo',
+        propositionId: 'p_ring',
+        attitude: 'knows',
       };
       expect(evaluate(prop, emptyWorldState, updated, emptyCatalog)).toBe('true');
     });
 
     it('returns false when attitude does not match', () => {
       const ledger: EpistemicLedger = { claims: {}, bySubject: {}, byProposition: {}, actLog: [] };
-      const assessment: ClaimAssessment = { type: 'settled', grade: 'know', polarity: 'affirmative' };
-      const evidence: ClaimEvidenceRecord = { source: 'direct_experience', provenance: ['e1'], acquiredAt: { type: 'absolute' as const, value: 'day_1' } };
+      const assessment: ClaimAssessment = {
+        type: 'settled',
+        grade: 'know',
+        polarity: 'affirmative',
+      };
+      const evidence: ClaimEvidenceRecord = {
+        source: 'direct_experience',
+        provenance: ['e1'],
+        acquiredAt: { type: 'absolute' as const, value: 'day_1' },
+      };
       const updated = applyClaimTransaction(ledger, 'frodo', 'p_ring', assessment, [evidence]);
 
       const prop: Proposition = {
-        kind: 'epistemic', id: 'p_ep', subject: 'frodo', propositionId: 'p_ring', attitude: 'suspects',
+        kind: 'epistemic',
+        id: 'p_ep',
+        subject: 'frodo',
+        propositionId: 'p_ring',
+        attitude: 'suspects',
       };
       expect(evaluate(prop, emptyWorldState, updated, emptyCatalog)).toBe('false');
     });
@@ -187,7 +245,11 @@ describe('EpistemicLedger', () => {
     it('returns indeterminate for absent claim', () => {
       const ledger: EpistemicLedger = { claims: {}, bySubject: {}, byProposition: {}, actLog: [] };
       const prop: Proposition = {
-        kind: 'epistemic', id: 'p_ep', subject: 'gollum', propositionId: 'p_ring', attitude: 'knows',
+        kind: 'epistemic',
+        id: 'p_ep',
+        subject: 'gollum',
+        propositionId: 'p_ring',
+        attitude: 'knows',
       };
       expect(evaluate(prop, emptyWorldState, ledger, emptyCatalog)).toBe('indeterminate');
     });
@@ -207,7 +269,11 @@ describe('EpistemicLedger', () => {
       const updated = recordInformationAct(ledger, act);
 
       const prop: Proposition = {
-        kind: 'act', id: 'p_act', actType: 'testimony', actor: 'gandalf', recipients: ['frodo'],
+        kind: 'act',
+        id: 'p_act',
+        actType: 'testimony',
+        actor: 'gandalf',
+        recipients: ['frodo'],
         contentPropositions: ['p_ring_danger'],
       };
       expect(evaluate(prop, emptyWorldState, updated, emptyCatalog)).toBe('true');
@@ -216,7 +282,11 @@ describe('EpistemicLedger', () => {
     it('returns false when act is not logged', () => {
       const ledger: EpistemicLedger = { claims: {}, bySubject: {}, byProposition: {}, actLog: [] };
       const prop: Proposition = {
-        kind: 'act', id: 'p_act', actType: 'perception', actor: 'frodo', recipients: [],
+        kind: 'act',
+        id: 'p_act',
+        actType: 'perception',
+        actor: 'frodo',
+        recipients: [],
         contentPropositions: ['p_mordor'],
       };
       expect(evaluate(prop, emptyWorldState, ledger, emptyCatalog)).toBe('false');
@@ -226,7 +296,10 @@ describe('EpistemicLedger', () => {
   describe('evaluate() intensional propositions', () => {
     it('always returns indeterminate', () => {
       const prop: Proposition = {
-        kind: 'intensional', id: 'p_int', content: 'A prophecy', domain: 'prophecy',
+        kind: 'intensional',
+        id: 'p_int',
+        content: 'A prophecy',
+        domain: 'prophecy',
       };
       const ledger: EpistemicLedger = { claims: {}, bySubject: {}, byProposition: {}, actLog: [] };
       expect(evaluate(prop, emptyWorldState, ledger, emptyCatalog)).toBe('indeterminate');
@@ -236,35 +309,58 @@ describe('EpistemicLedger', () => {
   describe('hasSufficientWarrant', () => {
     it('direct_experience is sufficient', () => {
       const evidence: ClaimEvidenceRecord[] = [
-        { source: 'direct_experience', provenance: ['e1'], acquiredAt: { type: 'absolute' as const, value: 'day_1' } },
+        {
+          source: 'direct_experience',
+          provenance: ['e1'],
+          acquiredAt: { type: 'absolute' as const, value: 'day_1' },
+        },
       ];
       expect(hasSufficientWarrant(evidence)).toBe(true);
     });
 
     it('testimony with warrant and provider is sufficient', () => {
       const evidence: ClaimEvidenceRecord[] = [
-        { source: 'testimony', warrant: 'witness under oath', provider: 'gandalf', provenance: ['e1'], acquiredAt: { type: 'absolute' as const, value: 'day_1' } },
+        {
+          source: 'testimony',
+          warrant: 'witness under oath',
+          provider: 'gandalf',
+          provenance: ['e1'],
+          acquiredAt: { type: 'absolute' as const, value: 'day_1' },
+        },
       ];
       expect(hasSufficientWarrant(evidence)).toBe(true);
     });
 
     it('testimony without warrant is insufficient', () => {
       const evidence: ClaimEvidenceRecord[] = [
-        { source: 'testimony', provider: 'gandalf', provenance: ['e1'], acquiredAt: { type: 'absolute' as const, value: 'day_1' } },
+        {
+          source: 'testimony',
+          provider: 'gandalf',
+          provenance: ['e1'],
+          acquiredAt: { type: 'absolute' as const, value: 'day_1' },
+        },
       ];
       expect(hasSufficientWarrant(evidence)).toBe(false);
     });
 
     it('inference with provenance is sufficient', () => {
       const evidence: ClaimEvidenceRecord[] = [
-        { source: 'inference', provenance: ['e1', 'e2'], acquiredAt: { type: 'absolute' as const, value: 'day_1' } },
+        {
+          source: 'inference',
+          provenance: ['e1', 'e2'],
+          acquiredAt: { type: 'absolute' as const, value: 'day_1' },
+        },
       ];
       expect(hasSufficientWarrant(evidence)).toBe(true);
     });
 
     it('default source is insufficient', () => {
       const evidence: ClaimEvidenceRecord[] = [
-        { source: 'default', provenance: [], acquiredAt: { type: 'absolute' as const, value: 'day_1' } },
+        {
+          source: 'default',
+          provenance: [],
+          acquiredAt: { type: 'absolute' as const, value: 'day_1' },
+        },
       ];
       expect(hasSufficientWarrant(evidence)).toBe(false);
     });
@@ -292,8 +388,22 @@ describe('EpistemicLedger', () => {
 
     it('records multiple acts in order', () => {
       const ledger: EpistemicLedger = { claims: {}, bySubject: {}, byProposition: {}, actLog: [] };
-      const act1: InformationAct = { type: 'thought', actor: 'frodo', recipients: [], contentPropositions: ['p1'], timestamp: { type: 'chapter' as const, chapter: 1 }, eventId: 'e1' };
-      const act2: InformationAct = { type: 'assertion', actor: 'frodo', recipients: ['sam'], contentPropositions: ['p2'], timestamp: { type: 'chapter' as const, chapter: 2 }, eventId: 'e2' };
+      const act1: InformationAct = {
+        type: 'thought',
+        actor: 'frodo',
+        recipients: [],
+        contentPropositions: ['p1'],
+        timestamp: { type: 'chapter' as const, chapter: 1 },
+        eventId: 'e1',
+      };
+      const act2: InformationAct = {
+        type: 'assertion',
+        actor: 'frodo',
+        recipients: ['sam'],
+        contentPropositions: ['p2'],
+        timestamp: { type: 'chapter' as const, chapter: 2 },
+        eventId: 'e2',
+      };
       const l1 = recordInformationAct(ledger, act1);
       const l2 = recordInformationAct(l1, act2);
       expect(l2.actLog).toHaveLength(2);

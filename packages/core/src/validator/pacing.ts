@@ -8,16 +8,20 @@
 // - arcPosition should not regress (e.g., climax → rising)
 // ============================================================================
 
-import type {
-  PreRenderInput,
-  PostRenderInput,
-  Validator,
-  ValidationIssue,
-} from '../types/index.js';
 import { z } from 'zod';
+import type {
+  PostRenderInput,
+  PreRenderInput,
+  ValidationIssue,
+  Validator,
+} from '../types/index.js';
+import {
+  consumeNarrativeChecks,
+  getAttributeSemanticRole,
+  getAttributesBySemanticRole,
+  makeIssue,
+} from './base.js';
 import { narrativeCheckSchema } from './schemas.js';
-import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole, consumeNarrativeChecks } from './base.js';
-
 
 const CLIMAX_MIN_FRACTION = 0.6;
 const CLIMAX_MAX_FRACTION = 0.85;
@@ -38,31 +42,35 @@ export class PacingValidator implements Validator {
       const position = event.narrativeOrder;
       const fraction = (position - 1) / (totalEvents - 1);
       if (fraction < CLIMAX_MIN_FRACTION || fraction > CLIMAX_MAX_FRACTION) {
-        issues.push(makeIssue(
-          this.name,
-          event.id,
-          'system',
-          'warning',
-          `Climax at position ${position}/${totalEvents} (${(fraction * 100).toFixed(0)}%) — expected between ${CLIMAX_MIN_FRACTION * 100}% and ${CLIMAX_MAX_FRACTION * 100}%`,
-          'Consider repositioning this event to fall in the 60-85% range, or change its arcPosition.',
-          'change_value',
-          'arcPosition',
-        ));
+        issues.push(
+          makeIssue(
+            this.name,
+            event.id,
+            'system',
+            'warning',
+            `Climax at position ${position}/${totalEvents} (${(fraction * 100).toFixed(0)}%) — expected between ${CLIMAX_MIN_FRACTION * 100}% and ${CLIMAX_MAX_FRACTION * 100}%`,
+            'Consider repositioning this event to fall in the 60-85% range, or change its arcPosition.',
+            'change_value',
+            'arcPosition',
+          ),
+        );
       }
     }
 
     // Check 2: Early events (first 2) should typically be 'opening'
     if (event.narrativeOrder <= 2 && event.arcPosition && event.arcPosition !== 'opening') {
-      issues.push(makeIssue(
-        this.name,
-        event.id,
-        'system',
-        'info',
-        `Early event (#${event.narrativeOrder}) has arcPosition "${event.arcPosition}" — first events are typically "opening"`,
-        'Consider using "opening" for story setup events, or confirm this is intentional.',
-        'change_value',
-        'arcPosition',
-      ));
+      issues.push(
+        makeIssue(
+          this.name,
+          event.id,
+          'system',
+          'info',
+          `Early event (#${event.narrativeOrder}) has arcPosition "${event.arcPosition}" — first events are typically "opening"`,
+          'Consider using "opening" for story setup events, or confirm this is intentional.',
+          'change_value',
+          'arcPosition',
+        ),
+      );
     }
 
     return issues;
@@ -75,44 +83,55 @@ export class PacingValidator implements Validator {
     if (!analysis) return issues;
 
     // Check: narrativeChecks can surface pacing-related issues from Pass 2
-    const narrativeChecks = z.array(narrativeCheckSchema).safeParse(analysis.analysis.narrativeChecks).data ?? [];
-    issues.push(...consumeNarrativeChecks(narrativeChecks,
-      (check) => {
-        // Catalog-driven: check if attribute is a pacing-related narrative attribute
-        const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
-        if (entityKind && getAttributeSemanticRole(entityKind, check.attribute) === 'narrative') {
-          // Filter for pacing-specific attributes derived from catalog
-          const narrativeAttrs = getAttributesBySemanticRole(entityKind, 'narrative');
-          const paceAttrs = narrativeAttrs.filter(a => a.includes('pacing') || a.includes('pace'));
-          if (!paceAttrs.includes(check.attribute)) return false;
-        } else if (!entityKind) {
-          // Fallback: attribute-name heuristic when registry unavailable
-          if (!check.attribute.includes('pacing') && !check.attribute.includes('pace')) return false;
-        }
-        return check.matchLevel === 'absent' || check.matchLevel === 'contradicted';
-      },
-      (check) => makeIssue(
-        this.name,
-        event.id,
-        check.entityId,
-        'warning',
-        `Pacing issue: "${check.hint}" — ${check.matchLevel} (${check.evidence})`,
-        check.matchLevel === 'absent'
-          ? 'Expected pacing signal was not detected in the prose.'
-          : 'Prose contradicts expected pacing signal.',
-        'manual',
+    const narrativeChecks =
+      z.array(narrativeCheckSchema).safeParse(analysis.analysis.narrativeChecks).data ?? [];
+    issues.push(
+      ...consumeNarrativeChecks(
+        narrativeChecks,
+        (check) => {
+          // Catalog-driven: check if attribute is a pacing-related narrative attribute
+          const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+          if (entityKind && getAttributeSemanticRole(entityKind, check.attribute) === 'narrative') {
+            // Filter for pacing-specific attributes derived from catalog
+            const narrativeAttrs = getAttributesBySemanticRole(entityKind, 'narrative');
+            const paceAttrs = narrativeAttrs.filter(
+              (a) => a.includes('pacing') || a.includes('pace'),
+            );
+            if (!paceAttrs.includes(check.attribute)) return false;
+          } else if (!entityKind) {
+            // Fallback: attribute-name heuristic when registry unavailable
+            if (!check.attribute.includes('pacing') && !check.attribute.includes('pace'))
+              return false;
+          }
+          return check.matchLevel === 'absent' || check.matchLevel === 'contradicted';
+        },
+        (check) =>
+          makeIssue(
+            this.name,
+            event.id,
+            check.entityId,
+            'warning',
+            `Pacing issue: "${check.hint}" — ${check.matchLevel} (${check.evidence})`,
+            check.matchLevel === 'absent'
+              ? 'Expected pacing signal was not detected in the prose.'
+              : 'Prose contradicts expected pacing signal.',
+            'manual',
+          ),
       ),
-    ));
+    );
 
     return issues;
   }
 
   getAnalysisRequirements() {
-    return [{
-      field: 'narrativeChecks',
-      attributes: ['pacing', 'pace'],
-      schema: z.array(narrativeCheckSchema),
-      instruction: 'narrativeChecks[pacing]: For each character or scene element with pacing expectations, check if the prose\'s narrative pace (sentence length, action density, reflective passages) aligns with the expected pacing. Use the narrativeChecks block with attribute containing "pacing" or "pace" to report whether the pacing signal matches expectations. Report matchLevel as "exact", "similar", "absent", or "contradicted".',
-    }];
+    return [
+      {
+        field: 'narrativeChecks',
+        attributes: ['pacing', 'pace'],
+        schema: z.array(narrativeCheckSchema),
+        instruction:
+          'narrativeChecks[pacing]: For each character or scene element with pacing expectations, check if the prose\'s narrative pace (sentence length, action density, reflective passages) aligns with the expected pacing. Use the narrativeChecks block with attribute containing "pacing" or "pace" to report whether the pacing signal matches expectations. Report matchLevel as "exact", "similar", "absent", or "contradicted".',
+      },
+    ];
   }
 }

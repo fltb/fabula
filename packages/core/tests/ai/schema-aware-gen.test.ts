@@ -6,7 +6,7 @@
 // Coverage: valid YAML passes on first try, invalid YAML retries and
 // succeeds, 3 failures returns last result with accumulated errors.
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { generateWithSchemaRetry } from '../../src/ai/generators/schema-aware-gen.ts';
 
@@ -24,9 +24,7 @@ type TestCharacter = z.infer<typeof testSchema>;
 
 // ── Mock generator factory ───────────────────────────────────────────────────
 
-function makeMockGenerator(
-  outputs: Array<string | Error>,
-) {
+function makeMockGenerator(outputs: Array<string | Error>) {
   let callIndex = 0;
   return vi.fn(async (_prompt: string): Promise<string> => {
     if (callIndex >= outputs.length) {
@@ -46,9 +44,7 @@ describe('generateWithSchemaRetry', () => {
   // ── Valid YAML passes on first try ─────────────────────────────────────────
 
   it('returns validated result on first attempt for valid YAML', async () => {
-    const generator = makeMockGenerator([
-      'name: Aragorn\nage: 87\nrole: warrior\n',
-    ]);
+    const generator = makeMockGenerator(['name: Aragorn\nage: 87\nrole: warrior\n']);
 
     const { result, attempts, errors } = await generateWithSchemaRetry<TestCharacter>(
       'Generate a character',
@@ -90,7 +86,6 @@ describe('generateWithSchemaRetry', () => {
     });
     expect(generator).toHaveBeenCalledTimes(2);
   });
-
 
   it('retries on Zod validation error and succeeds on second attempt', async () => {
     const generator = makeMockGenerator([
@@ -197,9 +192,7 @@ describe('generateWithSchemaRetry', () => {
 
   it('works with simple zod schemas (string)', async () => {
     const stringSchema = z.string();
-    const generator = makeMockGenerator([
-      'hello world\n',
-    ]);
+    const generator = makeMockGenerator(['hello world\n']);
 
     const { result, attempts, errors } = await generateWithSchemaRetry<string>(
       'Generate a string',
@@ -214,9 +207,7 @@ describe('generateWithSchemaRetry', () => {
 
   it('works with simple zod schemas (number array)', async () => {
     const numArraySchema = z.array(z.number());
-    const generator = makeMockGenerator([
-      '- 1\n- 2\n- 3\n',
-    ]);
+    const generator = makeMockGenerator(['- 1\n- 2\n- 3\n']);
 
     const { result, attempts } = await generateWithSchemaRetry<number[]>(
       'Generate numbers',

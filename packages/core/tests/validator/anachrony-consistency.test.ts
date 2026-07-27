@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { AnachronyConsistencyValidator } from '../../src/validator/anachrony-consistency.js';
+import { describe, expect, it } from 'vitest';
 import type {
+  AnalysisResult,
   NarrativeEvent,
   PostRenderInput,
   PreRenderInput,
-  AnalysisResult,
 } from '../../src/types/index.js';
+import { AnachronyConsistencyValidator } from '../../src/validator/anachrony-consistency.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -29,27 +29,35 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  analysis: AnalysisResult | null,
-): PostRenderInput {
+function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): PostRenderInput {
   return {
     event,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     prose: 'Some prose.',
     analysis,
     chapter: 1,
   };
 }
 
-function makePreInput(
-  event: NarrativeEvent,
-  events: NarrativeEvent[],
-): PreRenderInput {
+function makePreInput(event: NarrativeEvent, events: NarrativeEvent[]): PreRenderInput {
   return {
     event,
     events,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     entityRegistry: {
       load: () => {},
       resolve: () => null,
@@ -75,7 +83,13 @@ function makeAnalysis(overrides?: Partial<AnalysisResult['analysis']>): Analysis
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+      quality: {
+        proseScore: 8,
+        maxScore: 10,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 300,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
       tenseDetected: 'past',
@@ -100,7 +114,7 @@ describe('AnachronyConsistencyValidator', () => {
     const input = makeInput(event, analysis);
 
     const issues = new AnachronyConsistencyValidator().validatePost(input);
-    const anachronyIssues = issues.filter(i => i.validator === 'anachrony_consistency');
+    const anachronyIssues = issues.filter((i) => i.validator === 'anachrony_consistency');
     expect(anachronyIssues).toHaveLength(0);
   });
 
@@ -118,7 +132,7 @@ describe('AnachronyConsistencyValidator', () => {
     const input = makeInput(event, analysis);
 
     const issues = new AnachronyConsistencyValidator().validatePost(input);
-    const anachronyIssues = issues.filter(i => i.validator === 'anachrony_consistency');
+    const anachronyIssues = issues.filter((i) => i.validator === 'anachrony_consistency');
     expect(anachronyIssues.length).toBeGreaterThanOrEqual(1);
     expect(anachronyIssues[0].message).toContain('analepsis');
     expect(anachronyIssues[0].message).toContain('prolepsis');
@@ -163,7 +177,7 @@ describe('AnachronyConsistencyValidator', () => {
     const input = makePreInput(event, [event]);
 
     const issues = new AnachronyConsistencyValidator().validatePre(input);
-    const anachronyIssues = issues.filter(i => i.validator === 'anachrony_consistency');
+    const anachronyIssues = issues.filter((i) => i.validator === 'anachrony_consistency');
     expect(anachronyIssues.length).toBeGreaterThanOrEqual(1);
     expect(anachronyIssues[0].message).toContain('analepsis');
     expect(anachronyIssues[0].message).toContain('distance');
@@ -183,7 +197,7 @@ describe('AnachronyConsistencyValidator', () => {
     const input = makePreInput(event, [event]);
 
     const issues = new AnachronyConsistencyValidator().validatePre(input);
-    const anachronyIssues = issues.filter(i => i.validator === 'anachrony_consistency');
+    const anachronyIssues = issues.filter((i) => i.validator === 'anachrony_consistency');
     expect(anachronyIssues.length).toBeGreaterThanOrEqual(1);
     expect(anachronyIssues[0].message).toContain('prolepsis');
     expect(anachronyIssues[0].severity).toBe('warning');
@@ -202,7 +216,7 @@ describe('AnachronyConsistencyValidator', () => {
     const input = makePreInput(event, [event]);
 
     const issues = new AnachronyConsistencyValidator().validatePre(input);
-    const anachronyIssues = issues.filter(i => i.validator === 'anachrony_consistency');
+    const anachronyIssues = issues.filter((i) => i.validator === 'anachrony_consistency');
     expect(anachronyIssues).toHaveLength(0);
   });
 });
@@ -225,7 +239,7 @@ describe('AnachronyConsistencyValidator instance state (no leakage)', () => {
       makeAnalysis({ anachronyDetected: 'analepsis' }),
     );
     const issues1 = validator.validatePost(input1);
-    expect(issues1.filter(i => i.validator === 'anachrony_consistency')).toHaveLength(0);
+    expect(issues1.filter((i) => i.validator === 'anachrony_consistency')).toHaveLength(0);
 
     // Call 2: prolepsis event + matching analysis (should NOT be affected by first call)
     const input2 = makeInput(
@@ -241,7 +255,7 @@ describe('AnachronyConsistencyValidator instance state (no leakage)', () => {
       makeAnalysis({ eventId: 'E2', anachronyDetected: 'prolepsis' }),
     );
     const issues2 = validator.validatePost(input2);
-    expect(issues2.filter(i => i.validator === 'anachrony_consistency')).toHaveLength(0);
+    expect(issues2.filter((i) => i.validator === 'anachrony_consistency')).toHaveLength(0);
   });
 
   it('should not carry state between validatePre calls with different event sets', () => {
@@ -259,7 +273,7 @@ describe('AnachronyConsistencyValidator instance state (no leakage)', () => {
       },
     });
     const issuesA = validator.validatePre(makePreInput(eA1, [eA1]));
-    expect(issuesA.filter(i => i.validator === 'anachrony_consistency')).toHaveLength(0);
+    expect(issuesA.filter((i) => i.validator === 'anachrony_consistency')).toHaveLength(0);
 
     // Set B: prolepsis without distance (should issue, independent of Set A)
     const eB1 = makeEvent({
@@ -273,6 +287,8 @@ describe('AnachronyConsistencyValidator instance state (no leakage)', () => {
       },
     });
     const issuesB = validator.validatePre(makePreInput(eB1, [eB1]));
-    expect(issuesB.filter(i => i.validator === 'anachrony_consistency').length).toBeGreaterThanOrEqual(1);
+    expect(
+      issuesB.filter((i) => i.validator === 'anachrony_consistency').length,
+    ).toBeGreaterThanOrEqual(1);
   });
 });

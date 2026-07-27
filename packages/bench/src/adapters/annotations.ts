@@ -39,7 +39,7 @@ export function annotate(
 }
 
 export function markDirect(fields: string[]): Record<string, FieldOrigin> {
-  return Object.fromEntries(fields.map(f => [f, 'direct_map' as FieldOrigin]));
+  return Object.fromEntries(fields.map((f) => [f, 'direct_map' as FieldOrigin]));
 }
 
 export function markMixed(

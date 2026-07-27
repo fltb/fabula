@@ -11,10 +11,7 @@ export function addComment(comments: ReviewComment[], comment: ReviewComment): v
 }
 
 /** Get comments with optional filtering */
-export function getComments(
-  comments: ReviewComment[],
-  filter?: CommentFilter,
-): ReviewComment[] {
+export function getComments(comments: ReviewComment[], filter?: CommentFilter): ReviewComment[] {
   let result = [...comments];
   if (filter?.status) result = result.filter((c) => c.status === filter.status);
   if (filter?.severity) result = result.filter((c) => c.severity === filter.severity);
@@ -28,17 +25,11 @@ export function getActiveBlocking(
   comments: ReviewComment[],
   _currentChapter: number,
 ): ReviewComment[] {
-  return comments.filter(
-    (c) => c.severity === 'blocking' && c.status === 'open',
-  );
+  return comments.filter((c) => c.severity === 'blocking' && c.status === 'open');
 }
 
 /** Resolve a comment */
-export function resolve(
-  comments: ReviewComment[],
-  commentId: string,
-  patchId?: string,
-): void {
+export function resolve(comments: ReviewComment[], commentId: string, patchId?: string): void {
   const comment = comments.find((c) => c.id === commentId);
   if (comment) {
     comment.status = 'resolved';
@@ -82,7 +73,12 @@ export function markWontfix(
 ): ReviewComment[] {
   return comments.map((c) =>
     c.id === commentId
-      ? { ...c, status: 'wontfix' as const, resolvedBy: resolvedBy ?? c.resolvedBy, resolvedAt: new Date().toISOString() }
+      ? {
+          ...c,
+          status: 'wontfix' as const,
+          resolvedBy: resolvedBy ?? c.resolvedBy,
+          resolvedAt: new Date().toISOString(),
+        }
       : c,
   );
 }

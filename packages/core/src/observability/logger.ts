@@ -20,8 +20,10 @@ export interface LogTransport {
   write(entry: LogEntry): void;
 }
 
-const forbiddenField = /(?:api[_-]?key|authorization|credential|cookie|secret|token|prompt|prose|sceneBrief|reference)/i;
-const permittedField = /^(?:module|eventId|jobId|traceId|spanId|durationMs|promptTokens|completionTokens|totalTokens|calls|attempts|cacheHit|model|version|hash|code|path|validator|category|entityId|attribute|severity|issueCount|phase|rejection)$/;
+const forbiddenField =
+  /(?:api[_-]?key|authorization|credential|cookie|secret|token|prompt|prose|sceneBrief|reference)/i;
+const permittedField =
+  /^(?:module|eventId|jobId|traceId|spanId|durationMs|promptTokens|completionTokens|totalTokens|calls|attempts|cacheHit|model|version|hash|code|path|validator|category|entityId|attribute|severity|issueCount|phase|rejection)$/;
 
 function sanitizeContext(context: LogContext): LogContext {
   const safe: LogContext = { module: context.module };
@@ -52,7 +54,10 @@ const LOG_LEVEL_ORDER: LogLevel[] = ['debug', 'info', 'warn', 'error'];
  *  normal (non---trace) runs quiet on the success path while still
  *  surfacing warnings/errors in real time. */
 export class LevelFilterTransport implements LogTransport {
-  constructor(private readonly inner: LogTransport, private readonly minLevel: LogLevel = 'warn') {}
+  constructor(
+    private readonly inner: LogTransport,
+    private readonly minLevel: LogLevel = 'warn',
+  ) {}
 
   write(entry: LogEntry): void {
     if (LOG_LEVEL_ORDER.indexOf(entry.level) >= LOG_LEVEL_ORDER.indexOf(this.minLevel)) {
@@ -62,19 +67,35 @@ export class LevelFilterTransport implements LogTransport {
 }
 
 export class Logger {
-  constructor(private readonly transport: LogTransport = new JsonlLogTransport(), private readonly context: LogContext = { module: 'core' }) {}
+  constructor(
+    private readonly transport: LogTransport = new JsonlLogTransport(),
+    private readonly context: LogContext = { module: 'core' },
+  ) {}
 
   child(context: Partial<LogContext>): Logger {
     return new Logger(this.transport, sanitizeContext({ ...this.context, ...context }));
   }
 
-  debug(message: string, context: Partial<LogContext> = {}): void { this.write('debug', message, context); }
-  info(message: string, context: Partial<LogContext> = {}): void { this.write('info', message, context); }
-  warn(message: string, context: Partial<LogContext> = {}): void { this.write('warn', message, context); }
-  error(message: string, context: Partial<LogContext> = {}): void { this.write('error', message, context); }
+  debug(message: string, context: Partial<LogContext> = {}): void {
+    this.write('debug', message, context);
+  }
+  info(message: string, context: Partial<LogContext> = {}): void {
+    this.write('info', message, context);
+  }
+  warn(message: string, context: Partial<LogContext> = {}): void {
+    this.write('warn', message, context);
+  }
+  error(message: string, context: Partial<LogContext> = {}): void {
+    this.write('error', message, context);
+  }
 
   private write(level: LogLevel, message: string, context: Partial<LogContext>): void {
-    this.transport.write({ timestamp: new Date().toISOString(), level, message, context: sanitizeContext({ ...this.context, ...context }) });
+    this.transport.write({
+      timestamp: new Date().toISOString(),
+      level,
+      message,
+      context: sanitizeContext({ ...this.context, ...context }),
+    });
   }
 }
 

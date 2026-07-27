@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// Atomic: extract chapters 1-80 from Gutenberg + compute byte offsets
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+// Atomic: extract chapters 1-80 from Gutenberg + compute byte offsets
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const REPO = '/home/float/myfile/Projects/novalistically';
@@ -19,10 +19,13 @@ for (let i = 0; i < lines.length; i++) {
   const m = line.match(/^第([一二三四五六七八九十百零\d]+)回/);
   if (!m) continue;
   let hasSep = false;
-  for (let j = 1; j <= 3 && (i + j) < lines.length; j++) {
+  for (let j = 1; j <= 3 && i + j < lines.length; j++) {
     const next = lines[i + j].trim();
     if (next === '') continue;
-    if (next.startsWith('---')) { hasSep = true; break; }
+    if (next.startsWith('---')) {
+      hasSep = true;
+      break;
+    }
     break;
   }
   if (hasSep) headerData.push({ lineIdx: i, line, numStr: m[1] });
@@ -37,7 +40,7 @@ const ch80 = headerData.slice(0, 80);
 const chapterTexts = [];
 for (let i = 0; i < ch80.length; i++) {
   const startLine = ch80[i].lineIdx;
-  const endLine = (i < ch80.length - 1) ? ch80[i + 1].lineIdx : lines.length;
+  const endLine = i < ch80.length - 1 ? ch80[i + 1].lineIdx : lines.length;
   chapterTexts.push(lines.slice(startLine, endLine).join('\n').trim());
 }
 
@@ -76,7 +79,14 @@ for (let i = 0; i < chapterTexts.length; i++) {
 const fileBytes = Buffer.byteLength(fullText, 'utf-8');
 const lastLoc = locations[locations.length - 1];
 console.log('Segments:', locations.length);
-console.log('Last endByte:', lastLoc.endByte, 'File size:', fileBytes, 'Match:', lastLoc.endByte === fileBytes);
+console.log(
+  'Last endByte:',
+  lastLoc.endByte,
+  'File size:',
+  fileBytes,
+  'Match:',
+  lastLoc.endByte === fileBytes,
+);
 
 // Verify monotonic
 let monotonic = true;
@@ -113,7 +123,10 @@ const manifest = {
 writeFileSync(join(CORPUS, 'source-manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8');
 
 console.log('Source hash:', sourceHash);
-console.log('Total CJK:', locations.reduce((s, c) => s + c.wordCount, 0));
+console.log(
+  'Total CJK:',
+  locations.reduce((s, c) => s + c.wordCount, 0),
+);
 console.log('First:', locations[0].chapterId, locations[0].title.slice(0, 60));
 console.log('Last:', locations[79].chapterId, locations[79].title.slice(0, 60));
 
@@ -126,8 +139,13 @@ const checks = [
   ['sourceHash 64-hex', /^[a-f0-9]{64}$/.test(manifest.sourceHash)],
   ['chapters ~80', locations.length >= 70 && locations.length <= 85],
   ['monotonic byte offsets', monotonic],
-  ['all wordCount>0', locations.every(c => c.wordCount > 0)],
-  ['hash matches file', createHash('sha256').update(readFileSync(join(CORPUS, 'source.txt'), 'utf-8')).digest('hex') === sourceHash],
+  ['all wordCount>0', locations.every((c) => c.wordCount > 0)],
+  [
+    'hash matches file',
+    createHash('sha256')
+      .update(readFileSync(join(CORPUS, 'source.txt'), 'utf-8'))
+      .digest('hex') === sourceHash,
+  ],
   ['total CJK >= 500k', locations.reduce((s, c) => s + c.wordCount, 0) >= 500000],
 ];
 let pass = 0;

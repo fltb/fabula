@@ -18,18 +18,18 @@
 import type { BranchPath } from '../types/branch.js';
 import type {
   CompiledSceneContract,
-  SurfaceDependencyGraph,
-  SurfacePolicy,
+  PlannerMode,
   RenderGroup,
   RenderGroupManifest,
   SerialLane,
-  SurfacePlanResult,
+  SurfaceDependencyGraph,
+  SurfaceErrorCode,
   SurfacePlannerOptions,
+  SurfacePlanResult,
+  SurfacePolicy,
   ValidationGate,
   ValidationGateGraph,
   ValidationPolicy,
-  SurfaceErrorCode,
-  PlannerMode,
 } from '../types/render-surface.js';
 import { SurfacePlannerError } from '../types/render-surface.js';
 
@@ -106,9 +106,7 @@ export class SurfacePlanner {
     const manifest = this.buildManifest(groups, lanes, mode);
 
     // Generate warnings for suggest mode
-    const warnings = mode === 'suggest'
-      ? this.generateSuggestWarnings(groups, lanes)
-      : undefined;
+    const warnings = mode === 'suggest' ? this.generateSuggestWarnings(groups, lanes) : undefined;
 
     return {
       manifest,
@@ -132,15 +130,12 @@ export class SurfacePlanner {
       return this.defaultParallelGroups(sceneIds);
     }
 
-    const allGroupedIds = new Set(authorLanes.flatMap(l => l.groupIds));
+    const allGroupedIds = new Set(authorLanes.flatMap((l) => l.groupIds));
 
     // Validate all scene IDs are covered
     for (const id of sceneIds) {
       if (!allGroupedIds.has(id)) {
-        throw this.createError(
-          'MISSING_CONTRACT',
-          `Scene '${id}' is not assigned to any group`,
-        );
+        throw this.createError('MISSING_CONTRACT', `Scene '${id}' is not assigned to any group`);
       }
     }
 
@@ -148,7 +143,7 @@ export class SurfacePlanner {
     const groups: RenderGroup[] = [];
     for (const lane of authorLanes) {
       for (const groupId of lane.groupIds) {
-        const sceneIdsInGroup = sceneIds.filter(id => id === groupId);
+        const sceneIdsInGroup = sceneIds.filter((id) => id === groupId);
         groups.push({
           groupId,
           sceneIds: sceneIdsInGroup,
@@ -210,8 +205,11 @@ export class SurfacePlanner {
    * Default logical_parallel: all scenes render in parallel.
    * Each scene in its own group, no serial lanes.
    */
-  private defaultParallelGroups(sceneIds: string[]): { groups: RenderGroup[]; lanes: SerialLane[] } {
-    const groups: RenderGroup[] = sceneIds.map(id => ({
+  private defaultParallelGroups(sceneIds: string[]): {
+    groups: RenderGroup[];
+    lanes: SerialLane[];
+  } {
+    const groups: RenderGroup[] = sceneIds.map((id) => ({
       groupId: `group_${id}`,
       sceneIds: [id],
       surfacePolicy: { type: 'parallel' },
@@ -234,7 +232,7 @@ export class SurfacePlanner {
   ): { groups: RenderGroup[]; lanes: SerialLane[] } | null {
     if (contracts.length < 2) return null;
 
-    const contractMap = new Map(contracts.map(c => [c.sceneId, c]));
+    const contractMap = new Map(contracts.map((c) => [c.sceneId, c]));
 
     // Find continuous transition chains
     const chains: string[][] = [];
@@ -282,7 +280,7 @@ export class SurfacePlanner {
     }
 
     // Add remaining scenes as parallel
-    const groupedIds = new Set(groups.map(g => g.sceneIds).flat());
+    const groupedIds = new Set(groups.flatMap((g) => g.sceneIds));
     for (const id of sceneIds) {
       if (!groupedIds.has(id)) {
         groups.push({
@@ -331,7 +329,7 @@ export class SurfacePlanner {
     const laneId = 'auto_order_lane';
     lanes.push({
       laneId,
-      groupIds: groups.map(g => g.groupId),
+      groupIds: groups.map((g) => g.groupId),
     });
 
     return { groups, lanes };
@@ -343,10 +341,7 @@ export class SurfacePlanner {
    * Build ValidationGateGraph for all scenes in this branch.
    * Each scene starts with a `pending` gate.
    */
-  private buildValidationGateGraph(
-    sceneIds: string[],
-    branch: BranchPath,
-  ): ValidationGateGraph {
+  private buildValidationGateGraph(sceneIds: string[], branch: BranchPath): ValidationGateGraph {
     const gates: Record<string, ValidationGate> = {};
 
     for (const sceneId of sceneIds) {
@@ -378,7 +373,7 @@ export class SurfacePlanner {
     lanes: SerialLane[],
     mode: PlannerMode,
   ): RenderGroupManifest {
-    const groupIds = groups.map(g => g.groupId);
+    const groupIds = groups.map((g) => g.groupId);
     const groupPolicies: Record<string, SurfacePolicy> = {};
     for (const g of groups) {
       groupPolicies[g.groupId] = g.surfacePolicy;
@@ -422,18 +417,12 @@ export class SurfacePlanner {
   /**
    * Validate that all scene IDs have a corresponding contract.
    */
-  private validateContracts(
-    contracts: CompiledSceneContract[],
-    sceneIds: string[],
-  ): void {
-    const contractIds = new Set(contracts.map(c => c.sceneId));
+  private validateContracts(contracts: CompiledSceneContract[], sceneIds: string[]): void {
+    const contractIds = new Set(contracts.map((c) => c.sceneId));
 
     for (const id of sceneIds) {
       if (!contractIds.has(id)) {
-        throw this.createError(
-          'MISSING_CONTRACT',
-          `Scene '${id}' has no CompiledSceneContract`,
-        );
+        throw this.createError('MISSING_CONTRACT', `Scene '${id}' has no CompiledSceneContract`);
       }
     }
   }
@@ -443,24 +432,21 @@ export class SurfacePlanner {
   /**
    * Generate human-readable warnings for suggest mode.
    */
-  private generateSuggestWarnings(
-    groups: RenderGroup[],
-    lanes: SerialLane[],
-  ): string[] {
+  private generateSuggestWarnings(groups: RenderGroup[], lanes: SerialLane[]): string[] {
     const warnings: string[] = [];
 
     if (lanes.length > 0) {
       for (const lane of lanes) {
         warnings.push(
           `Suggested serial lane '${lane.laneId}' with ${lane.groupIds.length} groups. ` +
-          'Author must explicitly adopt this grouping.',
+            'Author must explicitly adopt this grouping.',
         );
       }
     }
 
     warnings.push(
       'Suggestion mode — this manifest is a proposal only. ' +
-      'Set plannerMode to "manual" with explicit group definitions to apply.',
+        'Set plannerMode to "manual" with explicit group definitions to apply.',
     );
 
     return warnings;
@@ -471,24 +457,18 @@ export class SurfacePlanner {
   /**
    * Compute a deterministic hash from groups and lanes for the manifest.
    */
-  private computeSourceHash(
-    groups: RenderGroup[],
-    lanes: SerialLane[],
-  ): string {
+  private computeSourceHash(groups: RenderGroup[], lanes: SerialLane[]): string {
     const raw = JSON.stringify({ groups, lanes });
     let hash = 0;
     for (let i = 0; i < raw.length; i++) {
       const char = raw.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash |= 0;
     }
     return Math.abs(hash).toString(16).padStart(8, '0');
   }
 
-  private createError(
-    code: SurfaceErrorCode,
-    message: string,
-  ): SurfacePlannerError {
+  private createError(code: SurfaceErrorCode, message: string): SurfacePlannerError {
     return new SurfacePlannerError(message, code, {
       branch: this.options.branch,
       mode: this.options.mode,

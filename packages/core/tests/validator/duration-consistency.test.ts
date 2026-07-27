@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { DurationConsistencyValidator } from '../../src/validator/duration-consistency.js';
+import { describe, expect, it } from 'vitest';
 import type {
+  AnalysisResult,
   NarrativeEvent,
   PostRenderInput,
   PreRenderInput,
-  AnalysisResult,
 } from '../../src/types/index.js';
+import { DurationConsistencyValidator } from '../../src/validator/duration-consistency.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -30,28 +30,45 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  analysis: AnalysisResult | null,
-): PostRenderInput {
+function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): PostRenderInput {
   return {
     event,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     prose: 'Some prose.',
     analysis,
     chapter: 1,
   };
 }
 
-function makePreInput(
-  event: NarrativeEvent,
-  events: NarrativeEvent[],
-): PreRenderInput {
+function makePreInput(event: NarrativeEvent, events: NarrativeEvent[]): PreRenderInput {
   return {
     event,
     events,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
-    entityRegistry: { load: () => {}, resolve: () => null, findByKind: () => [], findByAttribute: () => [], resolveRefs: () => new Map(), register: () => {}, updateState: () => {}, getAll: () => [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
+    entityRegistry: {
+      load: () => {},
+      resolve: () => null,
+      findByKind: () => [],
+      findByAttribute: () => [],
+      resolveRefs: () => new Map(),
+      register: () => {},
+      updateState: () => {},
+      getAll: () => [],
+    },
     chapter: 1,
     queryState: () => undefined,
     getKnowledge: () => ({ claims: {}, bySubject: {}, byProposition: {}, actLog: [] }),
@@ -67,7 +84,13 @@ function makeAnalysis(overrides?: Partial<AnalysisResult['analysis']>): Analysis
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+      quality: {
+        proseScore: 8,
+        maxScore: 10,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 300,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
       tenseDetected: 'past',
@@ -85,17 +108,20 @@ describe('DurationConsistencyValidator', () => {
       const input = makeInput(event, analysis);
 
       const issues = new DurationConsistencyValidator().validatePost(input);
-      const durationIssues = issues.filter(i => i.validator === 'duration_consistency');
+      const durationIssues = issues.filter((i) => i.validator === 'duration_consistency');
       expect(durationIssues).toHaveLength(0);
     });
 
     it('should report nothing when durationDetected matches declared ellipsis duration', () => {
-      const event = makeEvent({ id: 'E1', duration: { type: 'ellipsis', ellipsisClarity: 'explicit' } });
+      const event = makeEvent({
+        id: 'E1',
+        duration: { type: 'ellipsis', ellipsisClarity: 'explicit' },
+      });
       const analysis = makeAnalysis({ durationDetected: 'ellipsis' });
       const input = makeInput(event, analysis);
 
       const issues = new DurationConsistencyValidator().validatePost(input);
-      const durationIssues = issues.filter(i => i.validator === 'duration_consistency');
+      const durationIssues = issues.filter((i) => i.validator === 'duration_consistency');
       expect(durationIssues).toHaveLength(0);
     });
   });
@@ -107,7 +133,7 @@ describe('DurationConsistencyValidator', () => {
       const input = makeInput(event, analysis);
 
       const issues = new DurationConsistencyValidator().validatePost(input);
-      const durationIssues = issues.filter(i => i.validator === 'duration_consistency');
+      const durationIssues = issues.filter((i) => i.validator === 'duration_consistency');
       expect(durationIssues.length).toBeGreaterThanOrEqual(1);
       expect(durationIssues[0].message).toContain('scene');
       expect(durationIssues[0].message).toContain('summary');
@@ -115,12 +141,15 @@ describe('DurationConsistencyValidator', () => {
     });
 
     it('should report issue when ellipsis declared but stretch detected', () => {
-      const event = makeEvent({ id: 'E1', duration: { type: 'ellipsis', ellipsisClarity: 'explicit' } });
+      const event = makeEvent({
+        id: 'E1',
+        duration: { type: 'ellipsis', ellipsisClarity: 'explicit' },
+      });
       const analysis = makeAnalysis({ durationDetected: 'stretch' });
       const input = makeInput(event, analysis);
 
       const issues = new DurationConsistencyValidator().validatePost(input);
-      const durationIssues = issues.filter(i => i.validator === 'duration_consistency');
+      const durationIssues = issues.filter((i) => i.validator === 'duration_consistency');
       expect(durationIssues.length).toBeGreaterThanOrEqual(1);
       expect(durationIssues[0].severity).toBe('warning');
     });
@@ -151,18 +180,21 @@ describe('DurationConsistencyValidator', () => {
       const input = makePreInput(event, [event]);
 
       const issues = new DurationConsistencyValidator().validatePre(input);
-      const durationIssues = issues.filter(i => i.validator === 'duration_consistency');
+      const durationIssues = issues.filter((i) => i.validator === 'duration_consistency');
       expect(durationIssues.length).toBeGreaterThanOrEqual(1);
       expect(durationIssues[0].message).toContain('ellipsisClarity');
       expect(durationIssues[0].severity).toBe('warning');
     });
 
     it('should report nothing when ellipsis duration has ellipsisClarity set', () => {
-      const event = makeEvent({ id: 'E1', duration: { type: 'ellipsis', ellipsisClarity: 'explicit' } });
+      const event = makeEvent({
+        id: 'E1',
+        duration: { type: 'ellipsis', ellipsisClarity: 'explicit' },
+      });
       const input = makePreInput(event, [event]);
 
       const issues = new DurationConsistencyValidator().validatePre(input);
-      const durationIssues = issues.filter(i => i.validator === 'duration_consistency');
+      const durationIssues = issues.filter((i) => i.validator === 'duration_consistency');
       expect(durationIssues).toHaveLength(0);
     });
 
@@ -171,7 +203,7 @@ describe('DurationConsistencyValidator', () => {
       const input = makePreInput(event, [event]);
 
       const issues = new DurationConsistencyValidator().validatePre(input);
-      const durationIssues = issues.filter(i => i.validator === 'duration_consistency');
+      const durationIssues = issues.filter((i) => i.validator === 'duration_consistency');
       expect(durationIssues).toHaveLength(0);
     });
   });

@@ -20,35 +20,33 @@ import type { RelationshipRuntimeState } from './types/index.js';
 
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
-
-import { EntityMapper } from './entity/mapper.ts';
-import type { ProjectData } from './entity/index.js';
-import { InMemoryEntityRegistry } from './entity/registry.ts';
-import { StateManager } from './state/manager.ts';
-import { compileStoryBoundaries } from './state/story-boundaries.ts';
+import type { LLMProvider } from './ai/types.ts';
+import { countNarrativeText } from './assembler/count.ts';
+import { assembleNovel } from './assembler/novel.ts';
+import type { BatchConfig } from './batch-renderer.ts';
+import { BatchRenderPipeline } from './batch-renderer.ts';
+import { DEFAULT_CONFIG } from './config/index.js';
 import { ContextCompiler } from './context/compiler.ts';
 import { PromptAssembler } from './context/prompt-assembler.ts';
-import { assembleNovel } from './assembler/novel.ts';
-import { countNarrativeText } from './assembler/count.ts';
-import { RenderPipeline, buildAndWriteOutputs, InteractionManager } from './pipeline/index.ts';
-import type { RenderSceneResult, RenderJob, ProviderCallLedgerEntry } from './pipeline/render.ts';
-import { BatchRenderPipeline } from './batch-renderer.ts';
-import type { BatchConfig } from './batch-renderer.ts';
-import type { SystemContext } from './types/context.js';
-import { ResultAggregator } from './validator/aggregator.ts';
+import type { ProjectData } from './entity/index.js';
+import { EntityMapper } from './entity/mapper.ts';
+import { InMemoryEntityRegistry } from './entity/registry.ts';
+import { sanitizeError } from './errors.ts';
+import type { TypedEventBus } from './event-bus.ts';
 import { calculateISS } from './iss/score.ts';
+import { JsonlLogTransport, LevelFilterTransport, Logger } from './observability/logger.ts';
+import { TraceCollector } from './observability/trace.ts';
+import { buildAndWriteOutputs, type InteractionManager, RenderPipeline } from './pipeline/index.ts';
+import type { ProviderCallLedgerEntry, RenderJob, RenderSceneResult } from './pipeline/render.ts';
+import { PluginHooksManager, PluginLoader, ValidatorRegistry } from './plugin/index.js';
+import type { PluginContext, ProviderRegistry } from './plugin/types.js';
+import { StateManager } from './state/manager.ts';
+import { compileStoryBoundaries } from './state/story-boundaries.ts';
 import { FsStorage } from './storage/fs-storage.ts';
 import type { Storage } from './storage/types.ts';
-import type { LLMProvider } from './ai/types.ts';
-import type { BranchPath } from './types/branch.js';
-import { Logger, JsonlLogTransport, LevelFilterTransport } from './observability/logger.ts';
-import { TraceCollector } from './observability/trace.ts';
-import { TypedEventBus } from './event-bus.ts';
-import { DEFAULT_CONFIG } from './config/index.js';
-import { sanitizeError } from './errors.ts';
-import { PluginLoader, ValidatorRegistry, PluginHooksManager } from './plugin/index.js';
-import type { PluginContext, ProviderRegistry } from './plugin/types.js';
 import { LogicalDisclosureSummaryCompiler, SurfaceReferenceExtractor } from './summary/index.ts';
+import type { BranchPath } from './types/branch.js';
+import type { SystemContext } from './types/context.js';
 import type {
   AnalysisResult,
   Entity,
@@ -59,7 +57,7 @@ import type {
   ValidationResult,
   WorldState,
 } from './types/index.ts';
-
+import { ResultAggregator } from './validator/aggregator.ts';
 
 // ============================================================================
 // Module-level cache for initializeProject — API-1 / API-5
@@ -77,7 +75,11 @@ interface ProjectCacheEntry {
 
 const projectCache = new Map<string, ProjectCacheEntry>();
 
-function computeProjectHash(projectDir: string, events: NarrativeEvent[], storage: Storage): string {
+function computeProjectHash(
+  projectDir: string,
+  events: NarrativeEvent[],
+  storage: Storage,
+): string {
   const hasher = crypto.createHash('sha256');
   // Hash each definition YAML, config, and event YAML by content
   const defsDir = path.join(projectDir, 'definitions');
@@ -114,7 +116,7 @@ export interface RenderNovelOptions {
   model?: string;
   apiKey?: string;
   baseUrl?: string;
-  eventId?: string;     // single event; omit or 'all' for all
+  eventId?: string; // single event; omit or 'all' for all
   dryRun?: boolean;
   branchPath?: BranchPath;
   provider?: LLMProvider;
@@ -197,19 +199,30 @@ function buildInitialState(
   events: NarrativeEvent[],
   registry: InMemoryEntityRegistry,
   data: ProjectData,
-): { initialFacts: Fact[]; authoredEvents: NarrativeEvent[]; initialThreads: Array<{ id: string }> } {
+): {
+  initialFacts: Fact[];
+  authoredEvents: NarrativeEvent[];
+  initialThreads: Array<{ id: string }>;
+} {
   const genesis = events.find((event) => event.id === 'system:genesis');
   const initialFacts: Fact[] = [
     ...(genesis?.postconditions ?? []),
-    ...registry.getAll().flatMap((entity) => Object.entries(entity.state ?? {}).map(([attribute, value]) => ({
-      id: `${entity.id}.${attribute}`,
-      entityId: entity.id,
-      attribute,
-      value,
-      validity: { temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null }, branches: { type: 'all' as const } },
-    }))),
+    ...registry.getAll().flatMap((entity) =>
+      Object.entries(entity.state ?? {}).map(([attribute, value]) => ({
+        id: `${entity.id}.${attribute}`,
+        entityId: entity.id,
+        attribute,
+        value,
+        validity: {
+          temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
+          branches: { type: 'all' as const },
+        },
+      })),
+    ),
   ];
-  const initialThreads = (data.worldInitialState?.threads ?? []).map((t: { id: string }) => ({ id: t.id }));
+  const initialThreads = (data.worldInitialState?.threads ?? []).map((t: { id: string }) => ({
+    id: t.id,
+  }));
   const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
   return { initialFacts, authoredEvents, initialThreads };
 }
@@ -218,7 +231,10 @@ function buildInitialState(
  * Load a project's mapper, data, events, registry, and state manager.
  * This is the common initialization sequence used by most functions.
  */
-export function initializeProject(projectDir: string, storage?: Storage): {
+export function initializeProject(
+  projectDir: string,
+  storage?: Storage,
+): {
   mapper: EntityMapper;
   data: ReturnType<EntityMapper['loadProject']>;
   events: NarrativeEvent[];
@@ -234,7 +250,14 @@ export function initializeProject(projectDir: string, storage?: Storage): {
 
   const cached = projectCache.get(projectDir);
   if (cached && cached.hash === hash) {
-    return { mapper: cached.mapper, data: cached.data, events: cached.events, registry: cached.registry, stateManager: cached.stateManager, state: cached.state };
+    return {
+      mapper: cached.mapper,
+      data: cached.data,
+      events: cached.events,
+      registry: cached.registry,
+      stateManager: cached.stateManager,
+      state: cached.state,
+    };
   }
 
   const registry = new InMemoryEntityRegistry();
@@ -257,7 +280,9 @@ export function initializeProject(projectDir: string, storage?: Storage): {
       }
     }
   }
-  const stateManager = new StateManager(path.join(projectDir, data.config?.outputDir ?? DEFAULT_CONFIG.outputDir, 'snapshots'));
+  const stateManager = new StateManager(
+    path.join(projectDir, data.config?.outputDir ?? DEFAULT_CONFIG.outputDir, 'snapshots'),
+  );
   stateManager.initialize(events);
   const state: WorldState = {
     entities: {},
@@ -288,7 +313,10 @@ export function initializeProject(projectDir: string, storage?: Storage): {
 function buildEventsFileMap(
   data: ReturnType<EntityMapper['loadProject']>,
 ): Map<string, { narrativeOrder: number; filePath: string; chapter: number }> {
-  const eventsFileMap = new Map<string, { narrativeOrder: number; filePath: string; chapter: number }>();
+  const eventsFileMap = new Map<
+    string,
+    { narrativeOrder: number; filePath: string; chapter: number }
+  >();
   for (const [ch, chapter] of data.chapters) {
     for (const evFile of chapter.events) {
       eventsFileMap.set(evFile.event, {
@@ -431,7 +459,18 @@ async function initializePlugins(
  * return with prose empty.
  */
 export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovelResult> {
-  const { projectDir, model, apiKey, baseUrl, eventId, dryRun, provider: injectedProvider, branchPath, trace, eventBus } = opts;
+  const {
+    projectDir,
+    model,
+    apiKey,
+    baseUrl,
+    eventId,
+    dryRun,
+    provider: injectedProvider,
+    branchPath,
+    trace,
+    eventBus,
+  } = opts;
   const errors: string[] = [];
   const waivedEventIds = new Set<string>();
 
@@ -444,21 +483,35 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
   );
 
   const { data, events, registry } = initializeProject(projectDir);
-  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
+  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(
+    events,
+    registry,
+    data,
+  );
 
   // Initialize plugins (if configured)
   const { pluginHooksManager, validatorRegistry, conflictErrors } = await initializePlugins(
-    projectDir, storage, eventLogger, data.config ?? undefined,
+    projectDir,
+    storage,
+    eventLogger,
+    data.config ?? undefined,
   );
   if (conflictErrors.length > 0) {
     return { results: [], errors: conflictErrors };
   }
   const anchors = new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day]));
-  const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, branchPath, initialThreads);
-  const renderEvents = (!eventId || eventId === 'all'
-    ? authoredEvents
-    : authoredEvents.filter((event) => event.id === eventId))
-    .filter((event) => boundaries.stateBeforeByEventId.has(event.id));
+  const boundaries = compileStoryBoundaries(
+    authoredEvents,
+    initialFacts,
+    anchors,
+    branchPath,
+    initialThreads,
+  );
+  const renderEvents = (
+    !eventId || eventId === 'all'
+      ? authoredEvents
+      : authoredEvents.filter((event) => event.id === eventId)
+  ).filter((event) => boundaries.stateBeforeByEventId.has(event.id));
   if (renderEvents.length === 0) {
     errors.push(`No events found to render${eventId ? ` for eventId "${eventId}"` : ''}`);
     return { results: [], errors };
@@ -475,28 +528,40 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
   // ── Dry run ───────────────────────────────────────────────────────
   if (dryRun) {
     const results: RenderNovelResult['results'] = [];
-    const dryRunDir = path.join(projectDir, data.config?.outputDir ?? DEFAULT_CONFIG.outputDir, 'dry-runs');
+    const dryRunDir = path.join(
+      projectDir,
+      data.config?.outputDir ?? DEFAULT_CONFIG.outputDir,
+      'dry-runs',
+    );
     storage.mkdirp(dryRunDir);
     const language = data.config?.defaultLanguage ?? 'en';
 
     for (const ev of renderEvents) {
       const beforeState = boundaries.stateBeforeByEventId.get(ev.id)!;
       const compiler = new ContextCompiler();
-      const pkg = compiler.compile(ev, beforeState, registry, { systemContext: sysCtx, narratorProfiles: data.narratorProfiles, discourseLedger: data.discourseLedger });
+      const pkg = compiler.compile(ev, beforeState, registry, {
+        systemContext: sysCtx,
+        narratorProfiles: data.narratorProfiles,
+        discourseLedger: data.discourseLedger,
+      });
 
       // Assemble Pass-1 prompt faithfully mirroring pipeline/render.ts
       const assembler = new PromptAssembler();
       const assembled = assembler.assemble(pkg, {
         targetLengthWords: ev.styleGuidance?.targetWordCount ?? 400,
         styleGuidance: ev.styleGuidance,
-        characterVoiceNotes: ev.styleGuidance?.characterVoice && Object.keys(ev.styleGuidance.characterVoice).length > 0
-          ? Object.entries(ev.styleGuidance.characterVoice).map(([id, note]) => `${id}: ${note}`).join('; ')
-          : undefined,
+        characterVoiceNotes:
+          ev.styleGuidance?.characterVoice &&
+          Object.keys(ev.styleGuidance.characterVoice).length > 0
+            ? Object.entries(ev.styleGuidance.characterVoice)
+                .map(([id, note]) => `${id}: ${note}`)
+                .join('; ')
+            : undefined,
         language,
         narrativeChecklistItems: ev.narrativeChecklist?.items,
         sourceContextStyleNotes: ev.sourceContext?.entries
           .filter((e) => e.classification === 'STYLE')
-          .map((e) => e.styleNote ? `- "${e.excerpt}" (${e.styleNote})` : `- "${e.excerpt}"`)
+          .map((e) => (e.styleNote ? `- "${e.excerpt}" (${e.styleNote})` : `- "${e.excerpt}"`))
           .join('\n'),
       });
 
@@ -505,7 +570,9 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
       try {
         storage.write(promptFile, assembled.userPrompt);
       } catch (writeErr) {
-        eventErrors.push(`Failed to write dry-run prompt to ${promptFile}: ${sanitizeError(writeErr)}`);
+        eventErrors.push(
+          `Failed to write dry-run prompt to ${promptFile}: ${sanitizeError(writeErr)}`,
+        );
       }
 
       results.push({
@@ -526,9 +593,12 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     return { results, errors };
   }
   // ── Full rendering ────────────────────────────────────────────────
-  const resolvedModel = model ?? data.config?.defaultModel ?? process.env['NOVALISTICALLY_AI_MODEL'];
+  const resolvedModel =
+    model ?? data.config?.defaultModel ?? process.env['NOVALISTICALLY_AI_MODEL'];
   if (!resolvedModel) {
-    errors.push('No model configured. Set --model, nova.yaml "defaultModel", or the NOVALISTICALLY_AI_MODEL environment variable.');
+    errors.push(
+      'No model configured. Set --model, nova.yaml "defaultModel", or the NOVALISTICALLY_AI_MODEL environment variable.',
+    );
     return { results: [], errors };
   }
   let provider: LLMProvider;
@@ -537,7 +607,9 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
   } else {
     const resolvedApiKey = apiKey ?? process.env['NOVALISTICALLY_AI_API_KEY'] ?? '';
     if (!resolvedApiKey) {
-      errors.push('No API key provided. Set NOVALISTICALLY_AI_API_KEY environment variable or pass apiKey option.');
+      errors.push(
+        'No API key provided. Set NOVALISTICALLY_AI_API_KEY environment variable or pass apiKey option.',
+      );
       return { results: [], errors };
     }
     const resolvedBaseUrl = baseUrl ?? process.env['NOVALISTICALLY_AI_BASE_URL'] ?? undefined;
@@ -548,14 +620,23 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
       return { results: [], errors };
     }
   }
-  const cacheDir = path.join(projectDir, data.config?.outputDir ?? DEFAULT_CONFIG.outputDir, 'render-cache');
+  const cacheDir = path.join(
+    projectDir,
+    data.config?.outputDir ?? DEFAULT_CONFIG.outputDir,
+    'render-cache',
+  );
   const pipeline = new RenderPipeline({
     provider,
     model: resolvedModel,
     cacheDir,
     responseDir: path.join(projectDir, '.nova', 'responses'),
     storage,
-    aggregator: new ResultAggregator(undefined, validatorRegistry?.validators, undefined, traceCollector),
+    aggregator: new ResultAggregator(
+      undefined,
+      validatorRegistry?.validators,
+      undefined,
+      traceCollector,
+    ),
     logger: eventLogger,
     traceCollector,
     eventBus,
@@ -584,9 +665,9 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     // Full DiscourseState wiring requires the planned discourse ledger, which
     // is loaded once the discourse system is fully integrated. For now the
     // summarizer is available and ready — wire it with compile options.
-    const emotionalBeat = data.config?.ideaIR?.emotionalArc?.emotionalBeats
-      ?.find((b) => b.position === ev.id || b.position === ev.arcPosition)
-      ?.emotion;
+    const emotionalBeat = data.config?.ideaIR?.emotionalArc?.emotionalBeats?.find(
+      (b) => b.position === ev.id || b.position === ev.arcPosition,
+    )?.emotion;
     const pkg = compiler.compile(ev, beforeState, registry, {
       systemContext: sysCtx,
       previousSceneSummary: previousSummary ?? '',
@@ -600,7 +681,13 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     previousSummary = pkg.markdown.includes('## Previous Scene Summary')
       ? pkg.previousSceneSummary
       : undefined;
-    traceCollector?.record({ phase: 'context', state: 'end', spanId: ev.id, eventId: ev.id, durationMs: Date.now() - ctxStart });
+    traceCollector?.record({
+      phase: 'context',
+      state: 'end',
+      spanId: ev.id,
+      eventId: ev.id,
+      durationMs: Date.now() - ctxStart,
+    });
     jobs.push({
       event: ev,
       stateBefore: beforeState,
@@ -624,26 +711,38 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
         if (r.prose.trim().length === 0) continue;
         storage.write(
           path.join(responseDir, `${r.eventId}.json`),
-          JSON.stringify({
-            prose: r.prose,
-            timestamp: new Date().toISOString(),
-            cacheHit: r.cacheHit,
-            errors: r.errors,
-            analysis: r.analysis,
-            validation: r.validation,
-            needsReview: r.needsReview,
-            attempts: r.attempts,
-            released: r.prose.trim().length > 0
-              && r.analysis !== null
-              && r.validation !== null
-              && r.validation.passed
-              && !r.needsReview,
-            ...(r.pass2Rejection !== undefined ? { pass2Rejection: r.pass2Rejection } : {}),
-          }, null, 2),
+          JSON.stringify(
+            {
+              prose: r.prose,
+              timestamp: new Date().toISOString(),
+              cacheHit: r.cacheHit,
+              errors: r.errors,
+              analysis: r.analysis,
+              validation: r.validation,
+              needsReview: r.needsReview,
+              attempts: r.attempts,
+              released:
+                r.prose.trim().length > 0 &&
+                r.analysis !== null &&
+                r.validation !== null &&
+                r.validation.passed &&
+                !r.needsReview,
+              ...(r.pass2Rejection !== undefined ? { pass2Rejection: r.pass2Rejection } : {}),
+            },
+            null,
+            2,
+          ),
         );
       }
     }
-    const unreleased = results.filter((result) => result.prose.trim().length === 0 || result.analysis === null || result.validation === null || !result.validation.passed || result.needsReview);
+    const unreleased = results.filter(
+      (result) =>
+        result.prose.trim().length === 0 ||
+        result.analysis === null ||
+        result.validation === null ||
+        !result.validation.passed ||
+        result.needsReview,
+    );
     if (unreleased.length > 0) {
       const interactionManager = opts.interactionManager;
       if (interactionManager) {
@@ -657,7 +756,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
             continue;
           }
           // Check for error-level (S/X) issues — cannot waive
-          const hasErrors = result.validation?.errors.some(issue => issue.severity === 'error');
+          const hasErrors = result.validation?.errors.some((issue) => issue.severity === 'error');
           if (hasErrors) {
             blocking.push(result);
             continue;
@@ -683,7 +782,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
           errors.push(`Release gate rejected (blocking): ${diagnostics.join('; ')}`);
         }
         if (waived.length > 0 || blocking.length === 0) {
-          const releasable = results.filter(r => !blocking.some(b => b.eventId === r.eventId));
+          const releasable = results.filter((r) => !blocking.some((b) => b.eventId === r.eventId));
           if (releasable.length > 0) {
             buildAndWriteOutputs(storage, projectDir, jobs, releasable);
           }
@@ -698,10 +797,21 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     } else {
       buildAndWriteOutputs(storage, projectDir, jobs, results);
       if (renderEvents.length === authoredEvents.length) {
-        const assembled = assembleNovel({ projectDir, storage, branchPath, language: data.config?.defaultLanguage ?? 'en' });
-        const sceneTextCount = results.reduce((total, result) => total + countNarrativeText(result.prose, data.config?.defaultLanguage ?? 'en'), 0);
+        const assembled = assembleNovel({
+          projectDir,
+          storage,
+          branchPath,
+          language: data.config?.defaultLanguage ?? 'en',
+        });
+        const sceneTextCount = results.reduce(
+          (total, result) =>
+            total + countNarrativeText(result.prose, data.config?.defaultLanguage ?? 'en'),
+          0,
+        );
         if (assembled.wordCount !== sceneTextCount) {
-          throw new Error(`Assembly text count mismatch: scenes=${sceneTextCount}, novel=${assembled.wordCount}`);
+          throw new Error(
+            `Assembly text count mismatch: scenes=${sceneTextCount}, novel=${assembled.wordCount}`,
+          );
         }
       }
     }
@@ -712,7 +822,13 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
   }
   // Record output spans (only for events that were rendered)
   for (const result of results) {
-    traceCollector?.record({ phase: 'output', state: 'end', spanId: result.eventId, eventId: result.eventId, durationMs: result.renderEnd - result.renderStart });
+    traceCollector?.record({
+      phase: 'output',
+      state: 'end',
+      spanId: result.eventId,
+      eventId: result.eventId,
+      durationMs: result.renderEnd - result.renderStart,
+    });
   }
   // Write trace file (opt-in, errors must not affect release eligibility)
   if (traceCollector) {
@@ -731,7 +847,13 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     cacheHit: r.cacheHit,
     errors: r.errors,
     analysis: r.analysis,
-    released: waivedEventIds.has(r.eventId) || (r.prose.trim().length > 0 && r.analysis !== null && r.validation !== null && r.validation.passed && !r.needsReview),
+    released:
+      waivedEventIds.has(r.eventId) ||
+      (r.prose.trim().length > 0 &&
+        r.analysis !== null &&
+        r.validation !== null &&
+        r.validation.passed &&
+        !r.needsReview),
     validationErrors: r.validation?.errors.length ?? 0,
     validationIssueMessages: r.validation?.errors.map((issue) => issue.message) ?? [],
     providerCalls: r.providerCalls,
@@ -760,24 +882,45 @@ export async function validateNovel(
   iss: ISSSnapshot;
 }> {
   const storage = new FsStorage();
-  const validateLogger = new Logger(new LevelFilterTransport(new JsonlLogTransport()), { module: 'validate' });
+  const validateLogger = new Logger(new LevelFilterTransport(new JsonlLogTransport()), {
+    module: 'validate',
+  });
   const { data, events, registry } = initializeProject(projectDir, storage);
 
   // Compile story boundaries for per-event pre-state
-  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
+  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(
+    events,
+    registry,
+    data,
+  );
 
   // Initialize plugins (if configured)
   const { validatorRegistry, conflictErrors: pluginConflictErrors } = await initializePlugins(
-    projectDir, storage, validateLogger, data.config ?? undefined,
+    projectDir,
+    storage,
+    validateLogger,
+    data.config ?? undefined,
   );
 
   const anchors = new Map((data.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day]));
-  const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
+  const boundaries = compileStoryBoundaries(
+    authoredEvents,
+    initialFacts,
+    anchors,
+    undefined,
+    initialThreads,
+  );
 
   // Run validators with per-event pre-state and plugin validators
   const aggregator = new ResultAggregator(undefined, validatorRegistry?.validators);
   const mergedOverrides = overrides ?? data.config?.validatorOverrides;
-  const validationResults = aggregator.validateAll(events, boundaries.finalState, registry, mergedOverrides, boundaries.stateBeforeByEventId);
+  const validationResults = aggregator.validateAll(
+    events,
+    boundaries.finalState,
+    registry,
+    mergedOverrides,
+    boundaries.stateBeforeByEventId,
+  );
 
   // Add plugin conflict as synthetic validation failure if present
   if (pluginConflictErrors.length > 0) {
@@ -858,15 +1001,31 @@ export function getProjectStatus(
   }
 
   // Compile story boundaries for per-event pre-state validation
-  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
+  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(
+    events,
+    registry,
+    data,
+  );
   const anchors = new Map((data.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day]));
-  const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
+  const boundaries = compileStoryBoundaries(
+    authoredEvents,
+    initialFacts,
+    anchors,
+    undefined,
+    initialThreads,
+  );
 
   // Use provided validation results or run validateAll
   if (!validationResults) {
     const aggregator = new ResultAggregator();
     const overrides = data.config?.validatorOverrides;
-    validationResults = aggregator.validateAll(events, boundaries.finalState, registry, overrides, boundaries.stateBeforeByEventId);
+    validationResults = aggregator.validateAll(
+      events,
+      boundaries.finalState,
+      registry,
+      overrides,
+      boundaries.stateBeforeByEventId,
+    );
   }
 
   const eventStatuses: ProjectStatusResult['events'] = [];
@@ -947,30 +1106,45 @@ export function getProjectStatus(
  *
  * Uses compileStoryBoundaries for DAG-ordered state with time anchors.
  */
-export function diffEvent(
-  projectDir: string,
-  eventId: string,
-): DiffResult | null {
+export function diffEvent(projectDir: string, eventId: string): DiffResult | null {
   const { events, registry, data } = initializeProject(projectDir);
 
   const targetEvent = events.find((e) => e.id === eventId);
   if (!targetEvent) return null;
 
-  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
+  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(
+    events,
+    registry,
+    data,
+  );
   const anchors = new Map((data.timeAnchors ?? []).map((a) => [a.id, a.day]));
-  const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors, undefined, initialThreads);
+  const boundaries = compileStoryBoundaries(
+    authoredEvents,
+    initialFacts,
+    anchors,
+    undefined,
+    initialThreads,
+  );
 
   const orderedIds = boundaries.orderedEventIds;
   const targetIndex = orderedIds.indexOf(eventId);
   if (targetIndex === -1) return null;
 
   // Before state: state before the target event in causal order
-  const beforeState = boundaries.stateBeforeByEventId.get(eventId) ?? { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] };
+  const beforeState = boundaries.stateBeforeByEventId.get(eventId) ?? {
+    entities: {},
+    relationships: {},
+    knowledge: {},
+    threads: {},
+    rules: {},
+    facts: [],
+  };
 
   // After state: replay including the target event
-  const afterState = targetIndex === orderedIds.length - 1
-    ? boundaries.finalState
-    : boundaries.stateBeforeByEventId.get(orderedIds[targetIndex + 1]) ?? boundaries.finalState;
+  const afterState =
+    targetIndex === orderedIds.length - 1
+      ? boundaries.finalState
+      : (boundaries.stateBeforeByEventId.get(orderedIds[targetIndex + 1]) ?? boundaries.finalState);
 
   // Build human-readable diffs
   const before: Record<string, unknown> = {};
@@ -1031,8 +1205,12 @@ export function diffEvent(
     ...Object.keys(afterState.relationships),
   ]);
   for (const relId of allRelIds) {
-    const br = (beforeState.relationships as Record<string, unknown>)[relId] as RelationshipRuntimeState | undefined;
-    const ar = (afterState.relationships as Record<string, unknown>)[relId] as RelationshipRuntimeState | undefined;
+    const br = (beforeState.relationships as Record<string, unknown>)[relId] as
+      | RelationshipRuntimeState
+      | undefined;
+    const ar = (afterState.relationships as Record<string, unknown>)[relId] as
+      | RelationshipRuntimeState
+      | undefined;
     if (JSON.stringify(br) !== JSON.stringify(ar)) {
       before[`relationship:${relId}`] = br ?? null;
       after[`relationship:${relId}`] = ar ?? null;
@@ -1062,9 +1240,7 @@ export function listEntities(
   const registry = new InMemoryEntityRegistry();
   registry.load(projectDir);
 
-  const entities: Entity[] = kind
-    ? registry.findByKind(kind as any)
-    : registry.getAll();
+  const entities: Entity[] = kind ? registry.findByKind(kind as any) : registry.getAll();
 
   return entities.map((e) => ({
     id: e.id,
@@ -1082,10 +1258,7 @@ export function listEntities(
  *
  * EntityMapper → InMemoryEntityRegistry → resolve(entityId).
  */
-export function showEntity(
-  projectDir: string,
-  entityId: string,
-): Record<string, unknown> | null {
+export function showEntity(projectDir: string, entityId: string): Record<string, unknown> | null {
   const mapper = new EntityMapper(projectDir);
   mapper.loadProject(); // validates project exists
 
@@ -1125,10 +1298,7 @@ export function showEntity(
  * @param newPath - Path to the modified project directory
  * @returns Impact analysis result with per-event levels and downstream map
  */
-export function analyzeProjectImpact(
-  oldPath: string,
-  newPath: string,
-): ImpactAnalysisResult {
+export function analyzeProjectImpact(oldPath: string, newPath: string): ImpactAnalysisResult {
   const oldMapper = new EntityMapper(oldPath);
   const newMapper = new EntityMapper(newPath);
   const oldData = oldMapper.loadProject();
@@ -1150,8 +1320,12 @@ export function analyzeProjectImpact(
   }
 
   // Helper: serialize a precondition or postcondition for comparison
-  const pcKey = (pc: { entity: string; attribute: string; value: unknown; operator?: string }): string =>
-    `${pc.entity}:${pc.attribute}:${JSON.stringify(pc.value)}:${pc.operator ?? 'eq'}`;
+  const pcKey = (pc: {
+    entity: string;
+    attribute: string;
+    value: unknown;
+    operator?: string;
+  }): string => `${pc.entity}:${pc.attribute}:${JSON.stringify(pc.value)}:${pc.operator ?? 'eq'}`;
 
   const events: Record<string, ImpactLevel> = {};
   const downstream: Record<string, string[]> = {};
@@ -1201,15 +1375,13 @@ export function analyzeProjectImpact(
     const oldPreKeys = new Set(oldEv.preconditions.map(pcKey));
     const newPreKeys = new Set(newEv.preconditions.map(pcKey));
     const preChanged =
-      oldPreKeys.size !== newPreKeys.size ||
-      [...oldPreKeys].some((k) => !newPreKeys.has(k));
+      oldPreKeys.size !== newPreKeys.size || [...oldPreKeys].some((k) => !newPreKeys.has(k));
 
     // Compare postconditions
     const oldPostKeys = new Set(oldEv.expectedPostconditions.map(pcKey));
     const newPostKeys = new Set(newEv.expectedPostconditions.map(pcKey));
     const postChanged =
-      oldPostKeys.size !== newPostKeys.size ||
-      [...oldPostKeys].some((k) => !newPostKeys.has(k));
+      oldPostKeys.size !== newPostKeys.size || [...oldPostKeys].some((k) => !newPostKeys.has(k));
 
     if (preChanged || postChanged) {
       events[id] = 'red';

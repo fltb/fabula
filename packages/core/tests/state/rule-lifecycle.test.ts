@@ -3,13 +3,9 @@
 // amend/replace operations, RuleTransaction application
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import type {
-  RuleTransaction,
-  RuleRuntimeState,
-  RuleException,
-} from '../../src/types/index.js';
+import { describe, expect, it } from 'vitest';
 import { applyRuleTransaction, convertLegacyRuleEffect } from '../../src/state/rule-replay.js';
+import type { RuleException, RuleRuntimeState, RuleTransaction } from '../../src/types/index.js';
 
 function makeEmptyState(): Record<string, RuleRuntimeState> {
   return {};
@@ -32,11 +28,17 @@ describe('Rule lifecycle — activation', () => {
   it('should suspend a rule', () => {
     const rules = makeEmptyState();
     const enable: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'enable', evidence: 'enable',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'enable',
+      evidence: 'enable',
     };
     applyRuleTransaction(rules, enable);
     const suspend: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'suspend', evidence: 'suspend',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'suspend',
+      evidence: 'suspend',
     };
     applyRuleTransaction(rules, suspend);
     expect(rules.test_rule.activation).toBe('suspended');
@@ -45,11 +47,17 @@ describe('Rule lifecycle — activation', () => {
   it('should revoke a rule', () => {
     const rules = makeEmptyState();
     const enable: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'enable', evidence: 'enable',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'enable',
+      evidence: 'enable',
     };
     applyRuleTransaction(rules, enable);
     const revoke: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'revoke', evidence: 'revoke',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'revoke',
+      evidence: 'revoke',
     };
     applyRuleTransaction(rules, revoke);
     expect(rules.test_rule.activation).toBe('revoked');
@@ -60,11 +68,18 @@ describe('Rule lifecycle — effectiveness', () => {
   it('should set effectiveness to nullified', () => {
     const rules = makeEmptyState();
     const enable: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'enable', evidence: 'enable',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'enable',
+      evidence: 'enable',
     };
     applyRuleTransaction(rules, enable);
     const nullify: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'set_effectiveness', evidence: 'nullify', newEffectiveness: 'nullified',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'set_effectiveness',
+      evidence: 'nullify',
+      newEffectiveness: 'nullified',
     };
     applyRuleTransaction(rules, nullify);
     expect(rules.test_rule.effectiveness).toBe('nullified');
@@ -75,11 +90,18 @@ describe('Rule lifecycle — effectiveness', () => {
   it('should set effectiveness to limited', () => {
     const rules = makeEmptyState();
     const enable: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'enable', evidence: 'enable',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'enable',
+      evidence: 'enable',
     };
     applyRuleTransaction(rules, enable);
     const limit: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'set_effectiveness', evidence: 'limit', newEffectiveness: 'limited',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'set_effectiveness',
+      evidence: 'limit',
+      newEffectiveness: 'limited',
     };
     applyRuleTransaction(rules, limit);
     expect(rules.test_rule.effectiveness).toBe('limited');
@@ -90,7 +112,10 @@ describe('Rule lifecycle — epoch management', () => {
   it('should amend a rule (close old epoch, start new)', () => {
     const rules = makeEmptyState();
     const enable: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'enable', evidence: 'enable',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'enable',
+      evidence: 'enable',
       epochId: 'epoch-1',
       specificationId: 'spec-v1',
     };
@@ -98,7 +123,10 @@ describe('Rule lifecycle — epoch management', () => {
     expect(rules.test_rule.currentEpoch).toBe('epoch-1');
 
     const amend: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'amend', evidence: 'amend',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'amend',
+      evidence: 'amend',
       epochId: 'epoch-2',
       specificationId: 'spec-v2',
     };
@@ -111,22 +139,35 @@ describe('Rule lifecycle — epoch management', () => {
   it('should replace a rule (new epoch, cleared exceptions)', () => {
     const rules = makeEmptyState();
     const enable: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'enable', evidence: 'enable',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'enable',
+      evidence: 'enable',
       epochId: 'epoch-1',
     };
     applyRuleTransaction(rules, enable);
     // Add an exception
     const addExc: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'add_exception', evidence: 'add',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'add_exception',
+      evidence: 'add',
       exception: {
-        exceptionId: 'exc-1', status: 'active', constraintIds: [], scopeBindings: {}, effect: { type: 'exempt' },
+        exceptionId: 'exc-1',
+        status: 'active',
+        constraintIds: [],
+        scopeBindings: {},
+        effect: { type: 'exempt' },
       },
     };
     applyRuleTransaction(rules, addExc);
     expect(rules.test_rule.exceptions).toHaveLength(1);
 
     const replace: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'replace', evidence: 'replace',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'replace',
+      evidence: 'replace',
       epochId: 'epoch-2',
       specificationId: 'spec-v2',
     };
@@ -140,14 +181,25 @@ describe('Rule lifecycle — exception management', () => {
   it('should add an exception', () => {
     const rules = makeEmptyState();
     const enable: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'enable', evidence: 'enable',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'enable',
+      evidence: 'enable',
     };
     applyRuleTransaction(rules, enable);
     const exc: RuleException = {
-      exceptionId: 'exc-1', status: 'active', constraintIds: ['c1'], scopeBindings: {}, effect: { type: 'exempt' },
+      exceptionId: 'exc-1',
+      status: 'active',
+      constraintIds: ['c1'],
+      scopeBindings: {},
+      effect: { type: 'exempt' },
     };
     const addExc: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'add_exception', evidence: 'add', exception: exc,
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'add_exception',
+      evidence: 'add',
+      exception: exc,
     };
     applyRuleTransaction(rules, addExc);
     expect(rules.test_rule.exceptions).toHaveLength(1);
@@ -157,15 +209,34 @@ describe('Rule lifecycle — exception management', () => {
   it('should remove an exception', () => {
     const rules = makeEmptyState();
     const enable: RuleTransaction = {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'enable', evidence: 'enable',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'enable',
+      evidence: 'enable',
     };
     applyRuleTransaction(rules, enable);
     const exc: RuleException = {
-      exceptionId: 'exc-1', status: 'active', constraintIds: [], scopeBindings: {}, effect: { type: 'exempt' },
+      exceptionId: 'exc-1',
+      status: 'active',
+      constraintIds: [],
+      scopeBindings: {},
+      effect: { type: 'exempt' },
     };
-    applyRuleTransaction(rules, { type: 'rule_transaction', ruleId: 'test_rule', operation: 'add_exception', evidence: 'add', exception: exc });
+    applyRuleTransaction(rules, {
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'add_exception',
+      evidence: 'add',
+      exception: exc,
+    });
     expect(rules.test_rule.exceptions).toHaveLength(1);
-    applyRuleTransaction(rules, { type: 'rule_transaction', ruleId: 'test_rule', operation: 'remove_exception', evidence: 'remove', exception: exc });
+    applyRuleTransaction(rules, {
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'remove_exception',
+      evidence: 'remove',
+      exception: exc,
+    });
     expect(rules.test_rule.exceptions).toHaveLength(0);
   });
 });

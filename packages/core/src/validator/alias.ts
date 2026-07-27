@@ -8,12 +8,8 @@
 // ============================================================================
 
 import { z } from 'zod';
-import { makeIssue, getAttributesBySemanticRole } from './base.js';
-import type {
-  PostRenderInput,
-  Validator,
-  ValidationIssue,
-} from '../types/index.js';
+import type { PostRenderInput, ValidationIssue, Validator } from '../types/index.js';
+import { getAttributesBySemanticRole, makeIssue } from './base.js';
 
 export const characterReferenceSchema = z.object({
   entityId: z.string(),
@@ -31,7 +27,8 @@ export class AliasValidator implements Validator {
 
     if (!analysis) return issues;
 
-    const charRefs = z.array(characterReferenceSchema).safeParse(analysis.analysis.characterReferences).data ?? [];
+    const charRefs =
+      z.array(characterReferenceSchema).safeParse(analysis.analysis.characterReferences).data ?? [];
     if (charRefs.length === 0) return issues;
 
     for (const ref of charRefs) {
@@ -45,7 +42,7 @@ export class AliasValidator implements Validator {
 
       // Derive the aliases attribute ID from catalog (semanticRole: 'identity')
       const identityAttrs = getAttributesBySemanticRole('character', 'identity');
-      const aliasAttrId = identityAttrs.find(a => a === 'aliases') ?? 'aliases';
+      const aliasAttrId = identityAttrs.find((a) => a === 'aliases') ?? 'aliases';
 
       // The entity ID itself is always valid
       validNames.add(entityId.toLowerCase());
@@ -96,18 +93,20 @@ export class AliasValidator implements Validator {
         }
 
         if (!matched) {
-          issues.push(makeIssue(
-            this.name,
-            event.id,
-            entityId,
-            'warning',
-            `Unknown name "${usedName}" used for character "${entityId}" — not in known names/aliases`,
-            'If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.',
-            'add_field',
-            aliasAttrId,
-            undefined,
-            usedName,
-          ));
+          issues.push(
+            makeIssue(
+              this.name,
+              event.id,
+              entityId,
+              'warning',
+              `Unknown name "${usedName}" used for character "${entityId}" — not in known names/aliases`,
+              'If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.',
+              'add_field',
+              aliasAttrId,
+              undefined,
+              usedName,
+            ),
+          );
         }
       }
     }
@@ -116,10 +115,13 @@ export class AliasValidator implements Validator {
   }
 
   getAnalysisRequirements() {
-    return [{
-      field: 'characterReferences',
-      schema: z.array(characterReferenceSchema),
-      instruction: 'characterReferences: For each character present in the scene, record every name variant used in the prose (full name, nickname, title, epithet — do NOT include pronouns; pronoun consistency is handled by PronounValidator via narrativeChecks) in the characterReferences block under namesUsed. This helps verify that all names are valid aliases for the character.',
-    }];
+    return [
+      {
+        field: 'characterReferences',
+        schema: z.array(characterReferenceSchema),
+        instruction:
+          'characterReferences: For each character present in the scene, record every name variant used in the prose (full name, nickname, title, epithet — do NOT include pronouns; pronoun consistency is handled by PronounValidator via narrativeChecks) in the characterReferences block under namesUsed. This helps verify that all names are valid aliases for the character.',
+      },
+    ];
   }
 }

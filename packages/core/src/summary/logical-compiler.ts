@@ -11,10 +11,7 @@
 // ============================================================================
 
 import * as crypto from 'node:crypto';
-import type {
-  DiscourseState,
-  DiscourseContextProjection,
-} from '../types/discourse.ts';
+import type { DiscourseContextProjection, DiscourseState } from '../types/discourse.ts';
 import type { CompiledSceneContract } from '../types/render-surface.ts';
 
 // ─── Public API ──────────────────────────────────────────────────────────────
@@ -38,19 +35,13 @@ export class LogicalDisclosureSummaryCompiler {
     // ── Safe counts (no raw IDs or propositions) ──────────────────────
     const revealCount = discourseState.reveals.length;
     const claimCount = discourseState.openClaims.length;
-    const activeHints = discourseState.hints.filter(
-      h => h.state !== 'retracted',
-    );
+    const activeHints = discourseState.hints.filter((h) => h.state !== 'retracted');
     const hintCount = activeHints.length;
-    const withholdCount = discourseState.activeWithholds.filter(
-      w => w.active,
-    ).length;
+    const withholdCount = discourseState.activeWithholds.filter((w) => w.active).length;
 
     // Narrator type(s) — disclosure-safe (no profile internals)
     const narratorTypes = [
-      ...new Set(
-        Object.values(discourseState.narratorProfiles).map(p => p.type),
-      ),
+      ...new Set(Object.values(discourseState.narratorProfiles).map((p) => p.type)),
     ];
 
     // ── Build summary ─────────────────────────────────────────────────
@@ -106,9 +97,6 @@ export class LogicalDisclosureSummaryCompiler {
       projectionRevealCount: projection.plannedReveals.length,
       projectionClaimCount: projection.openClaims.length,
     };
-    return crypto
-      .createHash('sha256')
-      .update(JSON.stringify(canonical))
-      .digest('hex');
+    return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
   }
 }

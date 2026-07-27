@@ -2,21 +2,37 @@
 // ReplayEngine — Replay events to reconstruct world state
 // ============================================================================
 
-import type { NarrativeEvent, WorldState, BranchPath, EntityRuntimeState, EntityDeclarationCatalog, EntityTypeCatalog, EntityTypeDefinition, RelationshipChange } from '../types/index.js';
-import {
-  createEmptyBranchPath,
-  includesPath,
-} from '../branch/index.js';
-import { buildCausalEdges, topologicalSort } from './dag.js';
-import { ConfigError, PreconditionMismatchError } from '../errors.js';
+import { createEmptyBranchPath, includesPath } from '../branch/index.js';
 import { compareFact } from '../entity/compare.js';
 import { canonicalizeFactValue } from '../entity/fact-value.js';
-import { applyRelationshipTransaction } from './relationship-replay.js';
+import { ConfigError, PreconditionMismatchError } from '../errors.js';
+import type {
+  BranchPath,
+  EntityDeclarationCatalog,
+  EntityRuntimeState,
+  EntityTypeCatalog,
+  EntityTypeDefinition,
+  NarrativeEvent,
+  RelationshipChange,
+  RelationshipTransaction,
+  ThreadTransaction,
+  WorldState,
+} from '../types/index.js';
 import { convertRelationshipChange } from '../types/relationship.js';
-import type { ThreadTransaction } from '../types/index.js';
-import { applyThreadTransaction, convertLegacyThreadProgress, isLegacyThreadProgress } from './thread-replay.js';
-import { applyRuleTransaction, convertLegacyRuleEffect, isLegacyRuleEffect } from './rule-replay.js';
+import { buildCausalEdges, topologicalSort } from './dag.js';
+import { applyRelationshipTransaction } from './relationship-replay.js';
+import {
+  applyRuleTransaction,
+  convertLegacyRuleEffect,
+  isLegacyRuleEffect,
+} from './rule-replay.js';
 import { emptyWorldState } from './story-boundaries.js';
+import {
+  applyThreadTransaction,
+  convertLegacyThreadProgress,
+  isLegacyThreadProgress,
+} from './thread-replay.js';
+
 const LIFECYCLE_STATES: Record<string, true> = { active: true, inactive: true, retired: true };
 
 const DEFAULT_LIFECYCLE_TRANSITIONS: Array<[EntityRuntimeState, EntityRuntimeState]> = [
@@ -26,9 +42,6 @@ const DEFAULT_LIFECYCLE_TRANSITIONS: Array<[EntityRuntimeState, EntityRuntimeSta
   ['inactive', 'retired'],
 ];
 
-
-
-
 // ——— Rule effect application helper (backward-compat) ———
 //
 // Legacy RuleEffectEntry is converted to RuleTransaction and applied
@@ -37,10 +50,14 @@ const DEFAULT_LIFECYCLE_TRANSITIONS: Array<[EntityRuntimeState, EntityRuntimeSta
 //
 function applyRuleEffect(
   state: WorldState,
-  re: { rule: string; effect: string; evidence: string }
+  re: { rule: string; effect: string; evidence: string },
 ): void {
   const tx = convertLegacyRuleEffect(
-    { rule: re.rule, effect: re.effect as 'reinforce' | 'weaken' | 'introduce_exception' | 'nullify', evidence: re.evidence },
+    {
+      rule: re.rule,
+      effect: re.effect as 'reinforce' | 'weaken' | 'introduce_exception' | 'nullify',
+      evidence: re.evidence,
+    },
     'replay',
   );
   applyRuleTransaction(state.rules, tx, { nodeId: 'replay' });
@@ -48,11 +65,7 @@ function applyRuleEffect(
 
 // ——— Precondition operator checker ———
 
-function checkOperator(
-  operator: string,
-  stateValue: unknown,
-  factValue: unknown,
-): boolean {
+function checkOperator(operator: string, stateValue: unknown, factValue: unknown): boolean {
   switch (operator) {
     case 'eq':
       return stateValue === factValue;
@@ -98,7 +111,10 @@ export class ReplayEngine {
   private entityDeclarationCatalog?: EntityDeclarationCatalog;
   private entityTypeCatalog?: EntityTypeCatalog;
 
-  constructor(catalogs?: { entityDeclarationCatalog?: EntityDeclarationCatalog; entityTypeCatalog?: EntityTypeCatalog }) {
+  constructor(catalogs?: {
+    entityDeclarationCatalog?: EntityDeclarationCatalog;
+    entityTypeCatalog?: EntityTypeCatalog;
+  }) {
     this.entityDeclarationCatalog = catalogs?.entityDeclarationCatalog;
     this.entityTypeCatalog = catalogs?.entityTypeCatalog;
   }
@@ -107,10 +123,7 @@ export class ReplayEngine {
    * Replay events to build the current world state.
    * Optionally filter by branch path for branch-aware state.
    */
-  replay(
-    events: NarrativeEvent[],
-    branchPath?: BranchPath,
-  ): WorldState {
+  replay(events: NarrativeEvent[], branchPath?: BranchPath): WorldState {
     const bp = branchPath ?? createEmptyBranchPath();
 
     const selectedEvents = events.filter((event) => includesPath(event.branchExistence, bp));
@@ -132,7 +145,6 @@ export class ReplayEngine {
     // Track lifecycle changes by storyTime for conflict detection
     const lifecycleChangesByStoryTime = new Map<string, Set<string>>();
 
-
     for (const event of sorted) {
       // Branch filtering: skip events not on this path
       if (!includesPath(event.branchExistence, bp)) continue;
@@ -148,7 +160,11 @@ export class ReplayEngine {
           if (state.entities[fact.entityId]?.[fact.attribute] === undefined) {
             throw new PreconditionMismatchError(
               `Precondition exists fails: ${fact.entityId}.${fact.attribute} is absent`,
-              { eventId: event.id, stateKey: `${fact.entityId}.${fact.attribute}`, phase: 'replay' },
+              {
+                eventId: event.id,
+                stateKey: `${fact.entityId}.${fact.attribute}`,
+                phase: 'replay',
+              },
             );
           }
           continue;
@@ -157,7 +173,11 @@ export class ReplayEngine {
           if (state.entities[fact.entityId]?.[fact.attribute] !== undefined) {
             throw new PreconditionMismatchError(
               `Precondition not_exists fails: ${fact.entityId}.${fact.attribute} is present`,
-              { eventId: event.id, stateKey: `${fact.entityId}.${fact.attribute}`, phase: 'replay' },
+              {
+                eventId: event.id,
+                stateKey: `${fact.entityId}.${fact.attribute}`,
+                phase: 'replay',
+              },
             );
           }
           continue;
@@ -195,7 +215,10 @@ export class ReplayEngine {
         // Introduce or resolve entity
         if (!state.entities[fact.entityId]) {
           // Entity not yet in state — check declaration catalog if available
-          if (this.entityDeclarationCatalog && !this.entityDeclarationCatalog.declarations[fact.entityId]) {
+          if (
+            this.entityDeclarationCatalog &&
+            !this.entityDeclarationCatalog.declarations[fact.entityId]
+          ) {
             throw new ConfigError(
               `Unknown entity ${fact.entityId}: not found in declaration catalog`,
               { path: fact.entityId, eventId: event.id, phase: 'replay' },
@@ -206,19 +229,24 @@ export class ReplayEngine {
         }
 
         // Retired entity guard: no writes allowed except lifecycle attribute itself
-        if (state.entities[fact.entityId]?.lifecycle === 'retired' && fact.attribute !== 'lifecycle') {
-          throw new ConfigError(
-            `Cannot modify retired entity ${fact.entityId}`,
-            { path: fact.entityId, eventId: event.id, phase: 'replay' },
-          );
+        if (
+          state.entities[fact.entityId]?.lifecycle === 'retired' &&
+          fact.attribute !== 'lifecycle'
+        ) {
+          throw new ConfigError(`Cannot modify retired entity ${fact.entityId}`, {
+            path: fact.entityId,
+            eventId: event.id,
+            phase: 'replay',
+          });
         }
 
         // Prevent unset of lifecycle
         if (fact.attribute === 'lifecycle' && op === 'unset') {
-          throw new ConfigError(
-            `Cannot unset lifecycle on ${fact.entityId}`,
-            { path: fact.entityId, eventId: event.id, phase: 'replay' },
-          );
+          throw new ConfigError(`Cannot unset lifecycle on ${fact.entityId}`, {
+            path: fact.entityId,
+            eventId: event.id,
+            phase: 'replay',
+          });
         }
 
         // Detect duplicate write to same (entityId, attribute) within this node
@@ -240,7 +268,8 @@ export class ReplayEngine {
           LIFECYCLE_STATES[rawValue]
         ) {
           const newLifecycle = rawValue as EntityRuntimeState;
-          const currentLifecycle = (state.entities[fact.entityId]?.lifecycle as EntityRuntimeState) ?? 'active';
+          const currentLifecycle =
+            (state.entities[fact.entityId]?.lifecycle as EntityRuntimeState) ?? 'active';
 
           // Resolve allowed transitions
           let allowedTransitions = DEFAULT_LIFECYCLE_TRANSITIONS;
@@ -282,7 +311,10 @@ export class ReplayEngine {
 
         if (op === 'unset') {
           // Form 2: unset — delete attribute
-          if (!state.entities[fact.entityId] || !(fact.attribute in state.entities[fact.entityId])) {
+          if (
+            !state.entities[fact.entityId] ||
+            !(fact.attribute in state.entities[fact.entityId])
+          ) {
             throw new ConfigError(
               `Cannot unset absent attribute ${fact.entityId}.${fact.attribute}`,
               { path: fact.entityId, eventId: event.id, phase: 'replay' },
@@ -301,23 +333,23 @@ export class ReplayEngine {
       if (event.participants) {
         for (const pid of event.participants.entities) {
           if (state.entities[pid]?.lifecycle === 'retired' && !introducedThisEvent.has(pid)) {
-            throw new ConfigError(
-              `Retired entity ${pid} cannot participate in event ${event.id}`,
-              { path: pid, eventId: event.id, phase: 'replay' },
-            );
+            throw new ConfigError(`Retired entity ${pid} cannot participate in event ${event.id}`, {
+              path: pid,
+              eventId: event.id,
+              phase: 'replay',
+            });
           }
         }
       }
-
 
       // ── Phase 3: Thread progress (STATE-5) ──
       // Backward compat: convert legacy ThreadProgressEntry to ThreadTransaction
       for (const tp of event.threadProgress) {
         const tx = isLegacyThreadProgress(tp)
           ? convertLegacyThreadProgress(tp, event.id)
-          // TODO(T3-remaining): needs (ThreadProgressEntry | ThreadTransaction) union on
-          // NarrativeEvent.threadProgress to eliminate the double-cast
-          : (tp as unknown as ThreadTransaction);
+          : // TODO(T3-remaining): needs (ThreadProgressEntry | ThreadTransaction) union on
+            // NarrativeEvent.threadProgress to eliminate the double-cast
+            (tp as unknown as ThreadTransaction);
         applyThreadTransaction(state.threads, tx);
       }
 
@@ -326,17 +358,13 @@ export class ReplayEngine {
       // Backward compat: items with 'participants' (old RelationshipChange shape)
       // are converted inline.
       for (const re of event.relationshipEffects) {
-        let tx;
+        let tx: RelationshipTransaction;
         if ('participants' in re && !('effectId' in re)) {
           // Old-style RelationshipChange — convert inline
           const idx = event.relationshipEffects.indexOf(re);
           // TODO(T3-remaining): needs (RelationshipChange | RelationshipTransaction) union on
           // NarrativeEvent.relationshipEffects to eliminate the double-cast
-          tx = convertRelationshipChange(
-            re as unknown as RelationshipChange,
-            event.id,
-            idx,
-          );
+          tx = convertRelationshipChange(re as unknown as RelationshipChange, event.id, idx);
         } else {
           tx = re;
         }
@@ -364,11 +392,7 @@ export class ReplayEngine {
   /**
    * Get state at a specific DAG position (by replaying that many events in causal order).
    */
-  getStateAt(
-    events: NarrativeEvent[],
-    position: number,
-    branchPath?: BranchPath,
-  ): WorldState {
+  getStateAt(events: NarrativeEvent[], position: number, branchPath?: BranchPath): WorldState {
     const bp = branchPath ?? createEmptyBranchPath();
     const selectedEvents = events.filter((event) => includesPath(event.branchExistence, bp));
     const anchors = new Map<string, number>();
@@ -384,6 +408,4 @@ export class ReplayEngine {
     const eventsToReplay = sortedIds.slice(0, position).map((id) => idToEvent.get(id)!);
     return this.replay(eventsToReplay, bp);
   }
-
-
 }

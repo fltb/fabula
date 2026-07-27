@@ -1,15 +1,15 @@
-import { describe, it, expect } from 'vitest';
-import type { BranchSet, BranchPoint, Condition } from '../src/types/index.js';
+import { describe, expect, it } from 'vitest';
 import {
-  createEmptyBranchPath,
   branchPathsEqual,
-  evaluateCondition,
-  includesPath,
   branchPathToString,
-  isLinearNarrative,
   createBranchPoint,
+  createEmptyBranchPath,
+  evaluateCondition,
   getAvailableChoices,
+  includesPath,
+  isLinearNarrative,
 } from '../src/branch/index.js';
+import type { BranchPoint, BranchSet, Condition } from '../src/types/index.js';
 
 // ─── Shared fixtures ────────────────────────────────────────────────────────
 
@@ -68,7 +68,9 @@ describe('branchPathsEqual', () => {
   });
 
   it('returns false when one path has more decisions', () => {
-    const short = { decisions: [{ atEventId: 'evt_1', choiceId: 'trust_seraphine', narrativeOrder: 1 }] };
+    const short = {
+      decisions: [{ atEventId: 'evt_1', choiceId: 'trust_seraphine', narrativeOrder: 1 }],
+    };
     expect(branchPathsEqual(short, pathA)).toBe(false);
   });
 });
@@ -77,7 +79,11 @@ describe('branchPathsEqual', () => {
 
 describe('evaluateCondition', () => {
   it('equals: matches a literal field value', () => {
-    const c: Condition = { type: 'equals', field: 'decisions.0.choiceId', value: 'trust_seraphine' };
+    const c: Condition = {
+      type: 'equals',
+      field: 'decisions.0.choiceId',
+      value: 'trust_seraphine',
+    };
     expect(evaluateCondition(c, pathA)).toBe(true);
     expect(evaluateCondition(c, linearPath)).toBe(false); // no decisions, field undefined
   });
@@ -93,13 +99,13 @@ describe('evaluateCondition', () => {
 
   it('greater_than: numeric comparison', () => {
     const c: Condition = { type: 'greater_than', field: 'decisions.length', value: 1 };
-    expect(evaluateCondition(c, pathA)).toBe(true);  // length 2
+    expect(evaluateCondition(c, pathA)).toBe(true); // length 2
     expect(evaluateCondition(c, linearPath)).toBe(false); // length 0
   });
 
   it('less_than: numeric comparison', () => {
     const c: Condition = { type: 'less_than', field: 'decisions.length', value: 2 };
-    expect(evaluateCondition(c, linearPath)).toBe(true);  // length 0
+    expect(evaluateCondition(c, linearPath)).toBe(true); // length 0
     expect(evaluateCondition(c, pathA)).toBe(false); // length 2
   });
 
@@ -137,8 +143,8 @@ describe('evaluateCondition', () => {
         { type: 'equals', field: 'decisions.1.choiceId', value: 'flee' },
       ],
     };
-    expect(evaluateCondition(c, pathA)).toBe(true);  // matches "attack"
-    expect(evaluateCondition(c, pathB)).toBe(true);  // matches "flee"
+    expect(evaluateCondition(c, pathA)).toBe(true); // matches "attack"
+    expect(evaluateCondition(c, pathB)).toBe(true); // matches "flee"
   });
 
   it('or: empty conditions is false', () => {
@@ -170,7 +176,12 @@ describe('includesPath', () => {
   it('empty branch path excludes scoped paths, exceptions, and conditions', () => {
     expect(includesPath({ type: 'paths', paths: [pathA] }, linearPath)).toBe(false);
     expect(includesPath({ type: 'except', branches: { type: 'all' } }, linearPath)).toBe(false);
-    expect(includesPath({ type: 'condition', condition: { type: 'equals', field: 'decisions.length', value: 5 } }, linearPath)).toBe(false);
+    expect(
+      includesPath(
+        { type: 'condition', condition: { type: 'equals', field: 'decisions.length', value: 5 } },
+        linearPath,
+      ),
+    ).toBe(false);
   });
 
   // --- "all" ---
@@ -183,7 +194,7 @@ describe('includesPath', () => {
   it('paths: matches when path is in the list', () => {
     const bs: BranchSet = { type: 'paths', paths: [pathA, pathB] };
     expect(includesPath(bs, pathA)).toBe(true);
-    expect(includesPath(bs, pathC)).toBe(true);  // deep equal to pathA
+    expect(includesPath(bs, pathC)).toBe(true); // deep equal to pathA
   });
 
   it('paths: does not match when path is not in the list', () => {
@@ -200,8 +211,8 @@ describe('includesPath', () => {
   it('except: negates the inner BranchSet', () => {
     const inner: BranchSet = { type: 'paths', paths: [pathA] };
     const bs: BranchSet = { type: 'except', branches: inner };
-    expect(includesPath(bs, pathA)).toBe(false);  // inner says yes → negated
-    expect(includesPath(bs, pathB)).toBe(true);   // inner says no → negated → yes
+    expect(includesPath(bs, pathA)).toBe(false); // inner says yes → negated
+    expect(includesPath(bs, pathB)).toBe(true); // inner says no → negated → yes
   });
 
   // --- "condition" ---
@@ -211,9 +222,11 @@ describe('includesPath', () => {
       condition: { type: 'equals', field: 'decisions.0.choiceId', value: 'trust_seraphine' },
     };
     expect(includesPath(bs, pathA)).toBe(true);
-    expect(includesPath(bs, pathB)).toBe(true);   // both trust_seraphine
+    expect(includesPath(bs, pathB)).toBe(true); // both trust_seraphine
     // path with different first decision
-    const pathDiff = { decisions: [{ atEventId: 'evt_1', choiceId: 'distrust', narrativeOrder: 1 }] };
+    const pathDiff = {
+      decisions: [{ atEventId: 'evt_1', choiceId: 'distrust', narrativeOrder: 1 }],
+    };
     expect(includesPath(bs, pathDiff)).toBe(false);
   });
 });
@@ -269,10 +282,19 @@ describe('createBranchPoint', () => {
 
   it('choices are passed through as-is', () => {
     const choices = [
-      { choiceId: 'a', label: 'A', condition: { type: 'equals' as const, field: 'decisions.length', value: 1 }, narrativeOrder: 1 },
+      {
+        choiceId: 'a',
+        label: 'A',
+        condition: { type: 'equals' as const, field: 'decisions.length', value: 1 },
+        narrativeOrder: 1,
+      },
     ];
     const bp = createBranchPoint('bp', 'evt', 'desc', choices);
-    expect(bp.choices[0].condition).toEqual({ type: 'equals', field: 'decisions.length', value: 1 });
+    expect(bp.choices[0].condition).toEqual({
+      type: 'equals',
+      field: 'decisions.length',
+      value: 1,
+    });
   });
 });
 
@@ -298,8 +320,12 @@ describe('getAvailableChoices', () => {
       },
     ]);
 
-    const pathNoPicks = { decisions: [{ atEventId: 'evt_prev', choiceId: 'search_room', narrativeOrder: 1 }] };
-    const pathWithPicks = { decisions: [{ atEventId: 'evt_prev', choiceId: 'has_lockpicks', narrativeOrder: 1 }] };
+    const pathNoPicks = {
+      decisions: [{ atEventId: 'evt_prev', choiceId: 'search_room', narrativeOrder: 1 }],
+    };
+    const pathWithPicks = {
+      decisions: [{ atEventId: 'evt_prev', choiceId: 'has_lockpicks', narrativeOrder: 1 }],
+    };
 
     const avail1 = getAvailableChoices(bp, pathNoPicks);
     expect(avail1).toHaveLength(1);

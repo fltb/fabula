@@ -3,23 +3,23 @@
 // ============================================================================
 
 import { z } from 'zod';
-import {
-  preconditionSchema,
-  postconditionSchema,
-  styleGuidanceSchema,
-  threadProgressEntrySchema,
-  foreshadowEntrySchema,
-  relationshipChangeSchema,
-  ruleEffectSchema,
-  introduceEntrySchema,
-} from './primitives.js';
-import { greyLineSchema } from './grey-line.js';
-import { narrativeChecklistSchema } from './narrative-checklist.js';
-import { sourceContextSchema } from './source-context.js';
+import { anachronySchema, voiceProfileSchema } from './discourse.js';
 import { durationProfileSchema } from './duration.js';
 import { frequencyProfileSchema } from './frequency.js';
-import { anachronySchema, voiceProfileSchema } from './discourse.js';
+import { greyLineSchema } from './grey-line.js';
 import { modernNovelConfigSchema } from './modern-novel.js';
+import { narrativeChecklistSchema } from './narrative-checklist.js';
+import {
+  foreshadowEntrySchema,
+  introduceEntrySchema,
+  postconditionSchema,
+  preconditionSchema,
+  relationshipChangeSchema,
+  ruleEffectSchema,
+  styleGuidanceSchema,
+  threadProgressEntrySchema,
+} from './primitives.js';
+import { sourceContextSchema } from './source-context.js';
 export const eventFileSchema = z
   .object({
     event: z.string(),
@@ -29,7 +29,9 @@ export const eventFileSchema = z
     storyTime: z.string(),
     narrationTime: z.string().optional(),
     sceneType: z.enum(['linear', 'flashback', 'flashforward', 'dream', 'parallel']).optional(),
-    discourseMode: z.enum(['action', 'dialogue', 'description', 'exposition', 'reflection', 'transition']).optional(),
+    discourseMode: z
+      .enum(['action', 'dialogue', 'description', 'exposition', 'reflection', 'transition'])
+      .optional(),
     arcPosition: z.enum(['opening', 'rising', 'climax', 'falling', 'denouement']).optional(),
     emotionalValence: z.string().optional(),
     conflictType: z.string().optional(),
@@ -53,10 +55,12 @@ export const eventFileSchema = z
     introduces: z.array(introduceEntrySchema).optional(),
     authorNotes: z.array(z.string()).optional(),
     targetAudience: z.string().optional(),
-    cast: z.object({
-      onScreen: z.array(z.string()),
-      affected: z.array(z.string()),
-    }).optional(),
+    cast: z
+      .object({
+        onScreen: z.array(z.string()),
+        affected: z.array(z.string()),
+      })
+      .optional(),
     narrativeChecklist: narrativeChecklistSchema.optional(),
     sourceContext: sourceContextSchema.optional(),
     duration: durationProfileSchema.optional(),
@@ -64,14 +68,20 @@ export const eventFileSchema = z
     anachrony: anachronySchema.optional(),
     voice: voiceProfileSchema.optional(),
     narratorProfileRef: z.string().optional(),
-    focalization: z.object({
-      type: z.enum(['zero', 'internal', 'external']),
-      variation: z.enum(['fixed', 'variable', 'multiple']).optional(),
-      characterSequence: z.array(z.object({
-        character: z.string(),
-        scope: z.string(),
-      })).optional(),
-    }).optional(),
+    focalization: z
+      .object({
+        type: z.enum(['zero', 'internal', 'external']),
+        variation: z.enum(['fixed', 'variable', 'multiple']).optional(),
+        characterSequence: z
+          .array(
+            z.object({
+              character: z.string(),
+              scope: z.string(),
+            }),
+          )
+          .optional(),
+      })
+      .optional(),
     modernNovel: modernNovelConfigSchema.optional(),
   })
   .strict();

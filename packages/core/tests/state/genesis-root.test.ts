@@ -1,24 +1,41 @@
 import { describe, expect, it } from 'vitest';
-import type { Fact, NarrativeEvent } from '../../src/types/index.ts';
 import { compileStoryBoundaries } from '../../src/state/story-boundaries.ts';
+import type { Fact, NarrativeEvent } from '../../src/types/index.ts';
 
 function fact(entityId: string, attribute: string, value: unknown): Fact {
   return {
-    id: `${entityId}.${attribute}`, entityId, attribute, value,
-    validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+    id: `${entityId}.${attribute}`,
+    entityId,
+    attribute,
+    value,
+    validity: {
+      temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+      branches: { type: 'all' },
+    },
   };
 }
 
-function event(id: string, day: number, preconditions: Fact[] = [], postconditions: Fact[] = []): NarrativeEvent {
+function event(
+  id: string,
+  day: number,
+  preconditions: Fact[] = [],
+  postconditions: Fact[] = [],
+): NarrativeEvent {
   return {
-    id, event: id, narrativeOrder: Number(id.replace(/\D/g, '') || 0), title: id,
+    id,
+    event: id,
+    narrativeOrder: Number(id.replace(/\D/g, '') || 0),
+    title: id,
     storyTime: { type: 'absolute', value: `day_${day}` },
     sceneType: 'linear',
     pov: { character: 'narrator', type: 'first_person' },
     sceneBrief: id,
-    preconditions, postconditions,
-    threadProgress: [], foreshadowing: [],
-    relationshipEffects: [], ruleEffects: [],
+    preconditions,
+    postconditions,
+    threadProgress: [],
+    foreshadowing: [],
+    relationshipEffects: [],
+    ruleEffects: [],
     source: 'event_file',
     branchExistence: { type: 'all' },
     participants: { entities: [] },
@@ -32,7 +49,9 @@ describe('genesis root — initialFacts applied as initialState', () => {
 
     const boundaries = compileStoryBoundaries([e1], genesisFacts, new Map());
     // Genesis fact should be in the initial state before E1
-    expect(boundaries.stateBeforeByEventId.get('E1')?.entities['world']?.['status']).toBe('created');
+    expect(boundaries.stateBeforeByEventId.get('E1')?.entities['world']?.['status']).toBe(
+      'created',
+    );
   });
 
   it('event postcondition overrides genesis initialFact for same entity+attribute', () => {
@@ -44,7 +63,9 @@ describe('genesis root — initialFacts applied as initialState', () => {
 
     const boundaries = compileStoryBoundaries([e1], genesisFacts, new Map());
     // Before E1: genesis value
-    expect(boundaries.stateBeforeByEventId.get('E1')?.entities['world']?.['status']).toBe('created');
+    expect(boundaries.stateBeforeByEventId.get('E1')?.entities['world']?.['status']).toBe(
+      'created',
+    );
     // After E1 (finalState): E1's value overrides
     expect(boundaries.finalState.entities['world']?.['status']).toBe('changed');
   });

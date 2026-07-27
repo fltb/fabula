@@ -2,6 +2,7 @@
 // ContextCompiler — Main entry point
 // ============================================================================
 
+import { replayDiscourseState } from '../state/discourse-replay.js';
 import type {
   ContextPackage,
   EntityRegistry,
@@ -11,8 +12,6 @@ import type {
   SystemContext,
   WorldState,
 } from '../types/index.js';
-
-import { replayDiscourseState } from '../state/discourse-replay.js';
 
 import { ContextAssembler } from './assembler.ts';
 

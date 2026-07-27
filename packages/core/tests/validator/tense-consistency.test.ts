@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { TenseConsistencyValidator } from '../../src/validator/tense-consistency.js';
+import { describe, expect, it } from 'vitest';
 import type {
+  AnalysisResult,
   NarrativeEvent,
   PostRenderInput,
   PreRenderInput,
-  AnalysisResult,
 } from '../../src/types/index.js';
+import { TenseConsistencyValidator } from '../../src/validator/tense-consistency.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -29,28 +29,45 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  analysis: AnalysisResult | null,
-): PostRenderInput {
+function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): PostRenderInput {
   return {
     event,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     prose: 'Some prose.',
     analysis,
     chapter: 1,
   };
 }
 
-function makePreInput(
-  event: NarrativeEvent,
-  events: NarrativeEvent[],
-): PreRenderInput {
+function makePreInput(event: NarrativeEvent, events: NarrativeEvent[]): PreRenderInput {
   return {
     event,
     events,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
-    entityRegistry: { load: () => {}, resolve: () => null, findByKind: () => [], findByAttribute: () => [], resolveRefs: () => new Map(), register: () => {}, updateState: () => {}, getAll: () => [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
+    entityRegistry: {
+      load: () => {},
+      resolve: () => null,
+      findByKind: () => [],
+      findByAttribute: () => [],
+      resolveRefs: () => new Map(),
+      register: () => {},
+      updateState: () => {},
+      getAll: () => [],
+    },
     chapter: 1,
     queryState: () => undefined,
     getKnowledge: () => ({ claims: {}, bySubject: {}, byProposition: {}, actLog: [] }),
@@ -66,7 +83,13 @@ function makeAnalysis(overrides?: Partial<AnalysisResult['analysis']>): Analysis
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+      quality: {
+        proseScore: 8,
+        maxScore: 10,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 300,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
       tenseDetected: 'past',
@@ -82,7 +105,7 @@ describe('TenseConsistencyValidator', () => {
     const input = makeInput(event, analysis);
 
     const issues = new TenseConsistencyValidator().validatePost(input);
-    const tenseIssues = issues.filter(i => i.validator === 'tense_consistency');
+    const tenseIssues = issues.filter((i) => i.validator === 'tense_consistency');
     expect(tenseIssues).toHaveLength(0);
   });
 
@@ -92,7 +115,7 @@ describe('TenseConsistencyValidator', () => {
     const input = makeInput(event, analysis);
 
     const issues = new TenseConsistencyValidator().validatePost(input);
-    const tenseIssues = issues.filter(i => i.validator === 'tense_consistency');
+    const tenseIssues = issues.filter((i) => i.validator === 'tense_consistency');
     expect(tenseIssues.length).toBeGreaterThanOrEqual(1);
     expect(tenseIssues[0].message).toContain('past');
     expect(tenseIssues[0].message).toContain('present');
@@ -116,22 +139,25 @@ describe('instance state (no leakage)', () => {
     const eA1 = makeEvent({ id: 'E1', narrativeOrder: 1, tense: 'past' });
     const eA2 = makeEvent({ id: 'E2', narrativeOrder: 2, tense: 'past' });
     const issuesA = validator.validatePre(makePreInput(eA2, [eA1, eA2]));
-    expect(issuesA.filter(i => i.validator === 'tense_consistency')).toHaveLength(0);
+    expect(issuesA.filter((i) => i.validator === 'tense_consistency')).toHaveLength(0);
 
     // Set B: present-tense events (no tense conflict within set)
     const eB1 = makeEvent({ id: 'E3', narrativeOrder: 1, tense: 'present' });
     const eB2 = makeEvent({ id: 'E4', narrativeOrder: 2, tense: 'present' });
     const issuesB = validator.validatePre(makePreInput(eB2, [eB1, eB2]));
-    expect(issuesB.filter(i => i.validator === 'tense_consistency')).toHaveLength(0);
+    expect(issuesB.filter((i) => i.validator === 'tense_consistency')).toHaveLength(0);
   });
 
   it('should not carry state between validatePost calls with different events', () => {
     const validator = new TenseConsistencyValidator();
 
     // Call with past-tense event + matching analysis
-    const input1 = makeInput(makeEvent({ id: 'E1', tense: 'past' }), makeAnalysis({ tenseDetected: 'past' }));
+    const input1 = makeInput(
+      makeEvent({ id: 'E1', tense: 'past' }),
+      makeAnalysis({ tenseDetected: 'past' }),
+    );
     const issues1 = validator.validatePost(input1);
-    expect(issues1.filter(i => i.validator === 'tense_consistency')).toHaveLength(0);
+    expect(issues1.filter((i) => i.validator === 'tense_consistency')).toHaveLength(0);
 
     // Call with present-tense event + matching analysis (should NOT be affected by first call)
     const input2 = makeInput(
@@ -139,6 +165,6 @@ describe('instance state (no leakage)', () => {
       makeAnalysis({ eventId: 'E2', tenseDetected: 'present' }),
     );
     const issues2 = validator.validatePost(input2);
-    expect(issues2.filter(i => i.validator === 'tense_consistency')).toHaveLength(0);
+    expect(issues2.filter((i) => i.validator === 'tense_consistency')).toHaveLength(0);
   });
 });

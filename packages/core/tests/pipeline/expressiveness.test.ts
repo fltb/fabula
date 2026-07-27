@@ -9,21 +9,21 @@
 // table-driven assertions against ResultAggregator.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { RenderPipeline } from '../../src/pipeline/render.ts';
-import type { RenderJob } from '../../src/pipeline/render.ts';
+import { describe, expect, it } from 'vitest';
 import { MockProvider } from '../../src/ai/providers/mock.ts';
 import type { Message } from '../../src/ai/types.ts';
-import { ResultAggregator } from '../../src/validator/aggregator.ts';
+import type { RenderJob } from '../../src/pipeline/render.ts';
+import { RenderPipeline } from '../../src/pipeline/render.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type {
-  NarrativeEvent,
   ContextPackage,
-  SystemContext,
-  SceneSpecification,
   KnowledgeBoundary,
+  NarrativeEvent,
   RuleDefinition,
+  SceneSpecification,
+  SystemContext,
 } from '../../src/types/index.ts';
+import { ResultAggregator } from '../../src/validator/aggregator.ts';
 
 // ============================================================================
 // Sentinel constants — each authored field gets an unmistakable unique value
@@ -84,13 +84,15 @@ function makeEvent(): NarrativeEvent {
     },
     targetAudience: SENTINEL_TARGET_AUDIENCE,
     narrativeChecklist: {
-      items: [
-        { dimension: 'imagery', description: SENTINEL_CHECKLIST, required: true },
-      ],
+      items: [{ dimension: 'imagery', description: SENTINEL_CHECKLIST, required: true }],
     },
     sourceContext: {
       entries: [
-        { excerpt: 'moonlit text', classification: 'STYLE' as const, styleNote: SENTINEL_STYLE_NOTE },
+        {
+          excerpt: 'moonlit text',
+          classification: 'STYLE' as const,
+          styleNote: SENTINEL_STYLE_NOTE,
+        },
         { excerpt: 'factual text', classification: 'FACT' as const },
       ],
     },
@@ -99,7 +101,11 @@ function makeEvent(): NarrativeEvent {
       affected: [],
     },
     introduces: [
-      { type: 'character' as const, id: 'entity_2', initialState: { name: SENTINEL_INTRODUCES_NAME } },
+      {
+        type: 'character' as const,
+        id: 'entity_2',
+        initialState: { name: SENTINEL_INTRODUCES_NAME },
+      },
     ],
     authorNotes: [SENTINEL_AUTHOR_NOTE],
   };
@@ -176,7 +182,14 @@ function makeContext(): ContextPackage {
 function makeJob(): RenderJob {
   return {
     event: makeEvent(),
-    stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    stateBefore: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     context: makeContext(),
     chapter: 1,
   };
@@ -194,7 +207,13 @@ function buildPipeline(): { pipeline: RenderPipeline; provider: MockProvider } {
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 80, maxScore: 100, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+      quality: {
+        proseScore: 80,
+        maxScore: 100,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 300,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
       narrativeChecks: [],

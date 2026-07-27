@@ -8,12 +8,12 @@ import type {
   EntityId,
   EntityRegistry,
   KnowledgeBoundary,
+  LogicalConsequence,
   NarrativeEvent,
   RelationshipContext,
   RelationshipState,
   RelevanceScore,
   RuleDefinition,
-  LogicalConsequence,
   RuleEffectEntry,
   SceneSpecification,
   SystemContext,
@@ -21,9 +21,8 @@ import type {
   WorldFact,
   WorldState,
 } from '../types/index.js';
-
-import { type RelevanceContext } from './types.ts';
 import { RelevanceEngine } from './relevance.ts';
+import type { RelevanceContext } from './types.ts';
 
 export class ContextAssembler {
   private relevanceEngine: RelevanceEngine;
@@ -71,13 +70,11 @@ export class ContextAssembler {
     const sceneSpec = this._buildSceneSpec(event);
 
     // L3: Character Snapshots (relevant characters only)
-    const characterSnapshots = this._buildCharacterSnapshots(
-      event, entityRegistry, state, scores,
-    );
+    const characterSnapshots = this._buildCharacterSnapshots(event, entityRegistry, state, scores);
     // L3a: Merge resolvable on-screen cast characters not already selected
     if (event.cast?.onScreen) {
       for (const charId of event.cast.onScreen) {
-        if (characterSnapshots.some(cs => cs.id === charId)) continue;
+        if (characterSnapshots.some((cs) => cs.id === charId)) continue;
         const entity = entityRegistry.resolve(charId);
         if (!entity || entity.kind !== 'character') continue;
         characterSnapshots.push({
@@ -93,9 +90,7 @@ export class ContextAssembler {
     }
 
     // L4: Relationship Context
-    const relationshipContext = this._buildRelationshipContext(
-      event, state,
-    );
+    const relationshipContext = this._buildRelationshipContext(event, state);
 
     // L5: World Facts
     const worldFacts = this._buildWorldFacts(state, scores);
@@ -110,10 +105,7 @@ export class ContextAssembler {
     const activeRules = this._buildActiveRules(state, entityRegistry);
 
     // Track recent entities for recency penalty in next call
-    this.recentEntities = [
-      ...event.participants.entities,
-      ...this.recentEntities,
-    ].slice(0, 10);
+    this.recentEntities = [...event.participants.entities, ...this.recentEntities].slice(0, 10);
 
     const pkg: ContextPackage = {
       eventId: event.id,
@@ -212,9 +204,7 @@ export class ContextAssembler {
         ? Object.values(activeEpoch.memberships).map((m) => m.entityId)
         : [];
 
-      const hasParticipant = event.participants.entities.some((p) =>
-        entityIds.includes(p),
-      );
+      const hasParticipant = event.participants.entities.some((p) => entityIds.includes(p));
       if (!hasParticipant) continue;
 
       // Build pseudo participants tuple (first 2 for binary compat)
@@ -236,15 +226,8 @@ export class ContextAssembler {
     return contexts;
   }
 
-  private _buildWorldFacts(
-    state: WorldState,
-    scores: RelevanceScore[],
-  ): WorldFact[] {
-    const topEntities = new Set(
-      scores
-        .filter((s) => s.score > 0.4)
-        .map((s) => s.entity),
-    );
+  private _buildWorldFacts(state: WorldState, scores: RelevanceScore[]): WorldFact[] {
+    const topEntities = new Set(scores.filter((s) => s.score > 0.4).map((s) => s.entity));
 
     return state.facts
       .filter((f) => topEntities.has(f.entityId))
@@ -256,10 +239,7 @@ export class ContextAssembler {
       }));
   }
 
-  private _buildKnowledgeBoundary(
-    event: NarrativeEvent,
-    state: WorldState,
-  ): KnowledgeBoundary {
+  private _buildKnowledgeBoundary(event: NarrativeEvent, state: WorldState): KnowledgeBoundary {
     const povChar = event.pov.character;
     const charKnowledge = state.knowledge[povChar];
 
@@ -272,7 +252,7 @@ export class ContextAssembler {
   private _buildThreadStatus(event: NarrativeEvent, state: WorldState): ThreadStatus[] {
     return Object.entries(state.threads).map(([id, data]) => {
       const goals = Object.values(data.goalStates);
-      const progressEntry = event.threadProgress.find(tp => tp.thread === id);
+      const progressEntry = event.threadProgress.find((tp) => tp.thread === id);
       return {
         id,
         name: id,
@@ -296,7 +276,8 @@ export class ContextAssembler {
             statement: (entity.state['statement'] as string) ?? '',
             category: (entity.state['category'] as string) ?? 'unknown',
             type: (entity.state['type'] as string) ?? 'unknown',
-            logicalConsequences: (entity.state['logicalConsequences'] as LogicalConsequence[] | undefined) ?? [],
+            logicalConsequences:
+              (entity.state['logicalConsequences'] as LogicalConsequence[] | undefined) ?? [],
             evidenceChain: (entity.state['evidenceChain'] as RuleEffectEntry[] | undefined) ?? [],
           });
         }
@@ -364,17 +345,31 @@ export class ContextAssembler {
       lines.push('## Relationships');
       for (const rc of pkg.relationshipContext) {
         lines.push(`- ${rc.participants[0]} ↔ ${rc.participants[1]}`);
-        if (rc.currentState && typeof rc.currentState === 'object' && 'direction' in rc.currentState && rc.currentState.direction) {
+        if (
+          rc.currentState &&
+          typeof rc.currentState === 'object' &&
+          'direction' in rc.currentState &&
+          rc.currentState.direction
+        ) {
           // Old-format (pre STATE-2): direction-based relationship state
-          for (const [dir, data] of Object.entries(rc.currentState.direction as Record<string, unknown>)) {
+          for (const [dir, data] of Object.entries(
+            rc.currentState.direction as Record<string, unknown>,
+          )) {
             const dims = Object.entries(data as Record<string, unknown>)
               .map(([k, v]) => `${k}: ${JSON.stringify(v)}`)
               .join(', ');
             lines.push(`  ${dir}: { ${dims} }`);
           }
-        } else if (rc.currentState && typeof rc.currentState === 'object' && 'activeEpochId' in rc.currentState) {
+        } else if (
+          rc.currentState &&
+          typeof rc.currentState === 'object' &&
+          'activeEpochId' in rc.currentState
+        ) {
           // New-format (STATE-2): render dimensions from active epoch
-          const rs = rc.currentState as { activeEpochId?: string; epochs?: Record<string, { dimensions?: Record<string, { value: unknown }> }> };
+          const rs = rc.currentState as {
+            activeEpochId?: string;
+            epochs?: Record<string, { dimensions?: Record<string, { value: unknown }> }>;
+          };
           const epoch = rs.activeEpochId ? rs.epochs?.[rs.activeEpochId] : undefined;
           if (epoch?.dimensions) {
             for (const [k, v] of Object.entries(epoch.dimensions)) {

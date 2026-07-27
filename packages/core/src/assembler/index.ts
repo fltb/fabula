@@ -5,20 +5,20 @@
 // book output.
 // ============================================================================
 
+export { filterScenesByBranchPath } from './branch-filter.js';
+export { loadChapterMetadata } from './chapter.js';
+export { SceneCollector } from './collector.js';
+export { ProseConcatenator } from './concatenator.js';
+export { countNarrativeText, countWords, NARRATIVE_TEXT_COUNT_VERSION } from './count.js';
+export { assembleNovel } from './novel.js';
+export { NarrativeSorter } from './sorter.js';
 export type {
-  SceneEntry,
-  SortedScene,
   AssembleOptions,
   AssembleResult,
+  SceneEntry,
+  SortedScene,
 } from './types.js';
 export {
   AssemblyError,
   AssemblyErrorCode,
 } from './types.js';
-export { countNarrativeText, countWords, NARRATIVE_TEXT_COUNT_VERSION } from './count.js';
-export { SceneCollector } from './collector.js';
-export { NarrativeSorter } from './sorter.js';
-export { ProseConcatenator } from './concatenator.js';
-export { loadChapterMetadata } from './chapter.js';
-export { filterScenesByBranchPath } from './branch-filter.js';
-export { assembleNovel } from './novel.js';

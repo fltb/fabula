@@ -2,34 +2,32 @@
 // Performance Benchmarks — Measure pipeline stages at 10 / 100 / 1000 events
 // ============================================================================
 
-import type { NarrativeEvent, RelationshipTransaction, WorldState } from '@novalistically/core';
-
-import {
-  InMemoryEntityRegistry,
-  TimelineValidator,
-  CharacterStateValidator,
-  KnowledgeValidator,
-  WorldRuleValidator,
-  CausalityValidator,
-  ForeshadowingValidator,
-  POVValidator,
-  FactualDetailValidator,
-  VoiceDriftDetector,
-  BranchMergeValidator,
-  ReachabilityValidator,
-  ResultAggregator,
-  ContextCompiler,
-  ReplayEngine,
-  calculateISS,
-  buildCausalEdges,
-  MemoryStorage,
-  computeEvidenceHash,
-  getCachedRender,
-  setCachedRender,
-} from '@novalistically/core';
-
-import { makePreInput } from './context-helper.js';
 import * as os from 'node:os';
+import type { NarrativeEvent, RelationshipTransaction, WorldState } from '@novalistically/core';
+import {
+  BranchMergeValidator,
+  buildCausalEdges,
+  CausalityValidator,
+  CharacterStateValidator,
+  ContextCompiler,
+  calculateISS,
+  computeEvidenceHash,
+  FactualDetailValidator,
+  ForeshadowingValidator,
+  getCachedRender,
+  InMemoryEntityRegistry,
+  KnowledgeValidator,
+  MemoryStorage,
+  POVValidator,
+  ReachabilityValidator,
+  ReplayEngine,
+  ResultAggregator,
+  setCachedRender,
+  TimelineValidator,
+  VoiceDriftDetector,
+  WorldRuleValidator,
+} from '@novalistically/core';
+import { makePreInput } from './context-helper.js';
 
 export interface PerfMeasurement {
   name: string;
@@ -83,17 +81,30 @@ export interface PoolEfficiencyResult {
 // ─── Event Factory — generate synthetic NarrativeEvent[] ───────────────────
 
 const CHARACTERS = [
-  'raincourt', 'zariel', 'mira', 'doran', 'carissa',
-  'theron', 'lydia', 'balthus', 'elara', 'finn',
+  'raincourt',
+  'zariel',
+  'mira',
+  'doran',
+  'carissa',
+  'theron',
+  'lydia',
+  'balthus',
+  'elara',
+  'finn',
 ];
 const LOCATIONS = [
-  'ship_deck', 'cabin', 'island_beach', 'jungle_trail',
-  'cliff_edge', 'cave', 'mountain_pass', 'swamp',
-  'fortress_wall', 'great_hall',
+  'ship_deck',
+  'cabin',
+  'island_beach',
+  'jungle_trail',
+  'cliff_edge',
+  'cave',
+  'mountain_pass',
+  'swamp',
+  'fortress_wall',
+  'great_hall',
 ];
-const THREADS = [
-  'survival', 'mystery_of_island', 'hunter_and_hunted', 'trust',
-];
+const THREADS = ['survival', 'mystery_of_island', 'hunter_and_hunted', 'trust'];
 
 let eventCounter = 0;
 
@@ -137,28 +148,42 @@ function makeSyntheticEvent(): NarrativeEvent {
         },
       },
     ],
-    threadProgress: [
-      { thread, advancement: `0.${idx}`, progressAfter: idx, progressTotal: 100 },
-    ],
-    foreshadowing: idx % 3 === 0 ? [
-      { id: `f_shadow_${idx}`, hint: `Something ominous about ${char2}`, targetRevealChapter: Math.min(idx + 3, 12) },
-    ] : [],
-    relationshipEffects: idx % 2 === 0 ? [{
-      effectId: `perf_rel_${idx}`,
-      relationshipId: `rel_${[char1, char2].sort().join('_')}`,
-      epochId: 'epoch_1',
-      lifecycleAfter: 'active' as const,
-      membershipAfter: [
-        { membershipId: `mem_${char1}_${idx}`, entityId: char1, role: 'member' },
-        { membershipId: `mem_${char2}_${idx}`, entityId: char2, role: 'member' },
-      ],
-      dimensionSet: [
-        { dimensionId: 'direction', scope: 'global' as const, value: `${char1} -> ${char2}` },
-        { dimensionId: 'type', scope: 'global' as const, value: 'acquainted' },
-        { dimensionId: 'intensity', scope: 'global' as const, value: 0.5 + (idx * 0.01) },
-      ],
-      provenance: 'bench:performance',
-    }] as unknown as RelationshipTransaction[] : [],
+    threadProgress: [{ thread, advancement: `0.${idx}`, progressAfter: idx, progressTotal: 100 }],
+    foreshadowing:
+      idx % 3 === 0
+        ? [
+            {
+              id: `f_shadow_${idx}`,
+              hint: `Something ominous about ${char2}`,
+              targetRevealChapter: Math.min(idx + 3, 12),
+            },
+          ]
+        : [],
+    relationshipEffects:
+      idx % 2 === 0
+        ? ([
+            {
+              effectId: `perf_rel_${idx}`,
+              relationshipId: `rel_${[char1, char2].sort().join('_')}`,
+              epochId: 'epoch_1',
+              lifecycleAfter: 'active' as const,
+              membershipAfter: [
+                { membershipId: `mem_${char1}_${idx}`, entityId: char1, role: 'member' },
+                { membershipId: `mem_${char2}_${idx}`, entityId: char2, role: 'member' },
+              ],
+              dimensionSet: [
+                {
+                  dimensionId: 'direction',
+                  scope: 'global' as const,
+                  value: `${char1} -> ${char2}`,
+                },
+                { dimensionId: 'type', scope: 'global' as const, value: 'acquainted' },
+                { dimensionId: 'intensity', scope: 'global' as const, value: 0.5 + idx * 0.01 },
+              ],
+              provenance: 'bench:performance',
+            },
+          ] as unknown as RelationshipTransaction[])
+        : [],
     ruleEffects: [],
     source: 'event_file' as const,
     branchExistence: { type: 'all' as const },
@@ -612,8 +637,15 @@ export function runCacheBench(): { coldRun: CacheStats; warmRun: CacheStats; spe
   let coldMisses = 0;
   for (const event of events) {
     const cacheKey = `bench-cold-key-${event.id}`;
-    const cached = getCachedRender(cacheDir, event.id, cacheKey, storage, evidenceHashes.get(event.id));
-    if (cached) coldHits++; else coldMisses++;
+    const cached = getCachedRender(
+      cacheDir,
+      event.id,
+      cacheKey,
+      storage,
+      evidenceHashes.get(event.id),
+    );
+    if (cached) coldHits++;
+    else coldMisses++;
   }
   const coldElapsed = performance.now() - coldStart;
 
@@ -636,8 +668,15 @@ export function runCacheBench(): { coldRun: CacheStats; warmRun: CacheStats; spe
   const totalEvents = events.length;
   for (const event of events) {
     const cacheKey = `bench-warm-key-${event.id}`;
-    const cached = getCachedRender(cacheDir, event.id, cacheKey, storage, evidenceHashes.get(event.id));
-    if (cached) warmHits++; else warmMisses++;
+    const cached = getCachedRender(
+      cacheDir,
+      event.id,
+      cacheKey,
+      storage,
+      evidenceHashes.get(event.id),
+    );
+    if (cached) warmHits++;
+    else warmMisses++;
   }
   const warmElapsed = performance.now() - warmStart;
 
@@ -700,11 +739,11 @@ export function runPoolEfficiencyBench(): PoolEfficiencyResult[] {
         batches.push(narrativeEvents.slice(i, i + poolSize));
       }
       for (const batch of batches) {
-        // Concurrent validation within batch
-        batch.map((event) => {
-          const ag = new ResultAggregator();
-          ag.validate(event, state, registry, events, Math.ceil(event.narrativeOrder / 3));
-        });
+        // Validate each event in the batch.
+        for (const event of batch) {
+          const aggregator = new ResultAggregator();
+          aggregator.validate(event, state, registry, events, Math.ceil(event.narrativeOrder / 3));
+        }
       }
 
       const elapsed = performance.now() - start;
@@ -774,12 +813,22 @@ export async function runFullOfflineBench(): Promise<PerfResults> {
     ],
     raw: {
       ...core.raw,
-      'cache:cold': { hz: 1000 / cacheResult.coldRun.elapsedMs, meanMs: cacheResult.coldRun.elapsedMs, samples: 1 },
-      'cache:warm': { hz: 1000 / cacheResult.warmRun.elapsedMs, meanMs: cacheResult.warmRun.elapsedMs, samples: 1 },
-      ...Object.fromEntries(poolResult.map((p) => [
-        `pool:size=${p.poolSize}`,
-        { hz: p.meanMs > 0 ? 1000 / p.meanMs : 0, meanMs: p.meanMs, samples: 5 },
-      ])),
+      'cache:cold': {
+        hz: 1000 / cacheResult.coldRun.elapsedMs,
+        meanMs: cacheResult.coldRun.elapsedMs,
+        samples: 1,
+      },
+      'cache:warm': {
+        hz: 1000 / cacheResult.warmRun.elapsedMs,
+        meanMs: cacheResult.warmRun.elapsedMs,
+        samples: 1,
+      },
+      ...Object.fromEntries(
+        poolResult.map((p) => [
+          `pool:size=${p.poolSize}`,
+          { hz: p.meanMs > 0 ? 1000 / p.meanMs : 0, meanMs: p.meanMs, samples: 5 },
+        ]),
+      ),
     },
     offlineCorePath: core.offlineCorePath,
     cache: cacheResult,

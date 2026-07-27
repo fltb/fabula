@@ -4,8 +4,8 @@
 // for frozen candidate event indexes.
 // ============================================================================
 
-import type { CandidateEventIndex } from './corpus-index.ts';
 import { ConfigError } from '../errors.ts';
+import type { CandidateEventIndex } from './corpus-index.ts';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Constants — Fixed Formula

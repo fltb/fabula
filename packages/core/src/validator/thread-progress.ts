@@ -2,16 +2,15 @@
 // ThreadProgressValidator — Verify narrative threads are advanced in prose
 // ============================================================================
 
+import { z } from 'zod';
 import type {
   PostRenderInput,
   PreRenderInput,
-  Validator,
   ValidationIssue,
+  Validator,
 } from '../types/index.js';
-import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
-import { z } from 'zod';
+import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
 export const threadProgressAchievedSchema = z.array(z.string());
- 
 
 export class ThreadProgressValidator implements Validator {
   name = 'thread_progress';
@@ -29,13 +28,18 @@ export class ThreadProgressValidator implements Validator {
       const threadState = input.getThreadProgress(tp.thread);
       const missing = !threadState || !input.worldState.threads[tp.thread];
       if (missing) {
-        issues.push(makeIssue(
-          this.name, input.event.id, tp.thread, 'warning',
-          `Thread "${tp.thread}" referenced in threadProgress is not defined in world state`,
-          'Add a matching thread definition or remove the reference.',
-          'edit_file',
-          'threadProgress',
-        ));
+        issues.push(
+          makeIssue(
+            this.name,
+            input.event.id,
+            tp.thread,
+            'warning',
+            `Thread "${tp.thread}" referenced in threadProgress is not defined in world state`,
+            'Add a matching thread definition or remove the reference.',
+            'edit_file',
+            'threadProgress',
+          ),
+        );
       }
     }
 
@@ -46,29 +50,40 @@ export class ThreadProgressValidator implements Validator {
     const issues: ValidationIssue[] = [];
     if (!input.analysis) return issues;
 
-    const achievedIds = (threadProgressAchievedSchema.safeParse(input.analysis.analysis.threadProgressAchieved).data ?? [])
-      .map(s => s.split(/[:：]/)[0].trim());
+    const achievedIds = (
+      threadProgressAchievedSchema.safeParse(input.analysis.analysis.threadProgressAchieved).data ??
+      []
+    ).map((s) => s.split(/[:：]/)[0].trim());
     const achieved = new Set(achievedIds);
     const declared = input.event.threadProgress ?? [];
 
     for (const tp of declared) {
       if (!achieved.has(tp.thread)) {
-        issues.push(makeIssue(
-          'thread_progress', input.event.id, tp.thread, 'warning',
-          `Thread "${tp.thread}" not advanced in prose: "${tp.advancement}"`,
-          'Ensure the scene advances this narrative thread.',
-          'edit_file', 'threadProgress',
-        ));
+        issues.push(
+          makeIssue(
+            'thread_progress',
+            input.event.id,
+            tp.thread,
+            'warning',
+            `Thread "${tp.thread}" not advanced in prose: "${tp.advancement}"`,
+            'Ensure the scene advances this narrative thread.',
+            'edit_file',
+            'threadProgress',
+          ),
+        );
       }
     }
     return issues;
   }
 
   getAnalysisRequirements() {
-    return [{
-      field: 'threadProgressAchieved',
-      schema: threadProgressAchievedSchema,
-      instruction: 'threadProgressAchieved: List the IDs of narrative threads that this scene meaningfully advances. Only include threads where new information, character development, or plot movement occurs.',
-    }];
+    return [
+      {
+        field: 'threadProgressAchieved',
+        schema: threadProgressAchievedSchema,
+        instruction:
+          'threadProgressAchieved: List the IDs of narrative threads that this scene meaningfully advances. Only include threads where new information, character development, or plot movement occurs.',
+      },
+    ];
   }
 }

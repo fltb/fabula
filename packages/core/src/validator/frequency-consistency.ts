@@ -8,15 +8,15 @@
 //   is advisory, matching DurationConsistencyValidator's severity choice).
 // ============================================================================
 
+import { z } from 'zod';
 import type {
-  Validator,
-  ValidationIssue,
+  AnalysisBlockRequirement,
   PostRenderInput,
   PreRenderInput,
-  AnalysisBlockRequirement,
+  ValidationIssue,
+  Validator,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
-import { z } from 'zod';
 
 export const frequencyDetectedSchema = z.enum(['singulative', 'repeating', 'iterative']);
 export type FrequencyDetected = z.infer<typeof frequencyDetectedSchema>;

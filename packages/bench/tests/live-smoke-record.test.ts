@@ -2,31 +2,44 @@
 // Live smoke record builder — focused tests
 // ============================================================================
 
+import type { ProviderCallLedgerEntry, RenderNovelResult } from '@novalistically/core';
+import {
+  AuthError,
+  liveSmokeRecordSchema,
+  PipelineError,
+  sanitizeError,
+} from '@novalistically/core';
 import { describe, expect, it } from 'vitest';
 import { buildLiveSmokeRecord } from '../src/live-smoke.js';
-import { AuthError, liveSmokeRecordSchema, PipelineError, sanitizeError } from '@novalistically/core';
-import type { RenderNovelResult } from '@novalistically/core';
-import type { ProviderCallLedgerEntry } from '@novalistically/core';
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-function makeProviderCalls(opts: {
-  pass1Success?: boolean;
-  pass2Success?: boolean;
-  pass2VerifySuccess?: boolean;
-  attempts?: number;
-  pass1FailureReason?: string;
-  pass2FailureReason?: string;
-} = {}): ProviderCallLedgerEntry[] {
+function makeProviderCalls(
+  opts: {
+    pass1Success?: boolean;
+    pass2Success?: boolean;
+    pass2VerifySuccess?: boolean;
+    attempts?: number;
+    pass1FailureReason?: string;
+    pass2FailureReason?: string;
+  } = {},
+): ProviderCallLedgerEntry[] {
   const calls: ProviderCallLedgerEntry[] = [];
   const attempts = opts.attempts ?? 1;
   const dummyHash = 'a'.repeat(64);
 
   for (let a = 1; a <= attempts; a++) {
     if (opts.pass1Success ?? true) {
-      calls.push({ phase: 'pass1', attempt: a, outcome: 'success', requestHash: dummyHash, model: 'test-model', seed: null });
+      calls.push({
+        phase: 'pass1',
+        attempt: a,
+        outcome: 'success',
+        requestHash: dummyHash,
+        model: 'test-model',
+        seed: null,
+      });
     } else {
       calls.push({
         phase: 'pass1',
@@ -41,9 +54,23 @@ function makeProviderCalls(opts: {
     }
 
     if (opts.pass2Success ?? true) {
-      calls.push({ phase: 'pass2', attempt: a, outcome: 'success', requestHash: dummyHash, model: 'test-model', seed: 42 });
+      calls.push({
+        phase: 'pass2',
+        attempt: a,
+        outcome: 'success',
+        requestHash: dummyHash,
+        model: 'test-model',
+        seed: 42,
+      });
       if (opts.pass2VerifySuccess ?? false) {
-        calls.push({ phase: 'pass2_verify', attempt: a, outcome: 'success', requestHash: dummyHash, model: 'test-model', seed: 42 });
+        calls.push({
+          phase: 'pass2_verify',
+          attempt: a,
+          outcome: 'success',
+          requestHash: dummyHash,
+          model: 'test-model',
+          seed: 42,
+        });
       }
     } else {
       calls.push({
@@ -80,7 +107,9 @@ function makeResult(opts: {
     released: opts.released ?? true,
     validationErrors: opts.validationErrors ?? 0,
     validationIssueMessages: [],
-    analysis: ('analysis' in opts ? opts.analysis : { entities: [] }) as RenderNovelResult['results'][number]['analysis'],
+    analysis: ('analysis' in opts
+      ? opts.analysis
+      : { entities: [] }) as RenderNovelResult['results'][number]['analysis'],
     providerCalls: resolvedCalls,
     promptHash: resolvedCalls.length > 0 ? 'a'.repeat(64) : '',
   };
@@ -197,9 +226,32 @@ describe('buildLiveSmokeRecord — retry totals (Pass 2)', () => {
           makeResult({
             eventId: 'E0',
             providerCalls: [
-              { phase: 'pass1', attempt: 1, outcome: 'failure', requestHash: 'a'.repeat(64), model: 'test-model', seed: null, failureReason: 'timeout' },
-              { phase: 'pass1', attempt: 2, outcome: 'success', requestHash: 'a'.repeat(64), model: 'test-model', seed: null },
-              { phase: 'pass2', attempt: 2, outcome: 'failure', requestHash: 'a'.repeat(64), model: 'test-model', seed: 42, failureReason: 'invalid json' },
+              {
+                phase: 'pass1',
+                attempt: 1,
+                outcome: 'failure',
+                requestHash: 'a'.repeat(64),
+                model: 'test-model',
+                seed: null,
+                failureReason: 'timeout',
+              },
+              {
+                phase: 'pass1',
+                attempt: 2,
+                outcome: 'success',
+                requestHash: 'a'.repeat(64),
+                model: 'test-model',
+                seed: null,
+              },
+              {
+                phase: 'pass2',
+                attempt: 2,
+                outcome: 'failure',
+                requestHash: 'a'.repeat(64),
+                model: 'test-model',
+                seed: 42,
+                failureReason: 'invalid json',
+              },
             ],
           }),
         ],
@@ -215,9 +267,19 @@ describe('buildLiveSmokeRecord — retry totals (Pass 2)', () => {
 
     expect(ledger).toHaveLength(3);
     expect(call.totalCalls).toBe(3);
-    expect(ledger[0]).toMatchObject({ phase: 'pass1', attempt: 1, outcome: 'failure', failureReason: 'timeout' });
+    expect(ledger[0]).toMatchObject({
+      phase: 'pass1',
+      attempt: 1,
+      outcome: 'failure',
+      failureReason: 'timeout',
+    });
     expect(ledger[1]).toMatchObject({ phase: 'pass1', attempt: 2, outcome: 'success' });
-    expect(ledger[2]).toMatchObject({ phase: 'pass2', attempt: 2, outcome: 'failure', failureReason: 'invalid json' });
+    expect(ledger[2]).toMatchObject({
+      phase: 'pass2',
+      attempt: 2,
+      outcome: 'failure',
+      failureReason: 'invalid json',
+    });
   });
 });
 
@@ -245,9 +307,7 @@ describe('buildLiveSmokeRecord — event-specific failures', () => {
   it('attributes validation errors to the specific event', () => {
     const input = baseInput({
       result: {
-        results: [
-          makeResult({ eventId: 'E2', validationErrors: 3, released: false }),
-        ],
+        results: [makeResult({ eventId: 'E2', validationErrors: 3, released: false })],
         errors: [],
       },
       requiredEvents: [],
@@ -262,9 +322,7 @@ describe('buildLiveSmokeRecord — event-specific failures', () => {
   it('attributes missing analysis to the specific event', () => {
     const input = baseInput({
       result: {
-        results: [
-          makeResult({ eventId: 'E3', analysis: null, released: false }),
-        ],
+        results: [makeResult({ eventId: 'E3', analysis: null, released: false })],
         errors: [],
       },
       requiredEvents: [],
@@ -394,8 +452,22 @@ describe('liveSmokeRecordSchema — malformed totals', () => {
           {
             eventId: 'E0',
             ledger: [
-              { phase: 'pass1', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'test-model', seed: null },
-              { phase: 'pass2', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'test-model', seed: 42 },
+              {
+                phase: 'pass1',
+                attempt: 1,
+                outcome: 'success',
+                requestHash: validHash64,
+                model: 'test-model',
+                seed: null,
+              },
+              {
+                phase: 'pass2',
+                attempt: 1,
+                outcome: 'success',
+                requestHash: validHash64,
+                model: 'test-model',
+                seed: 42,
+              },
             ],
           },
         ],
@@ -403,7 +475,16 @@ describe('liveSmokeRecordSchema — malformed totals', () => {
       },
       cache: { hits: 0, misses: 1 },
       failures: [],
-      hashes: { events: [{ eventId: 'E0', proseHash: validHash64, analysisHash: validHash64, promptHash: validHash64 }] },
+      hashes: {
+        events: [
+          {
+            eventId: 'E0',
+            proseHash: validHash64,
+            analysisHash: validHash64,
+            promptHash: validHash64,
+          },
+        ],
+      },
       generatedAt: '2026-07-20T00:00:00.000Z',
       reviewStatus: 'candidate',
     };
@@ -454,14 +535,32 @@ describe('liveSmokeRecordSchema — malformed totals', () => {
         perEvent: [
           {
             eventId: 'E0',
-            ledger: [{ phase: 'invalid_phase', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'test-model', seed: null }],
+            ledger: [
+              {
+                phase: 'invalid_phase',
+                attempt: 1,
+                outcome: 'success',
+                requestHash: validHash64,
+                model: 'test-model',
+                seed: null,
+              },
+            ],
           },
         ],
         totalCalls: 1,
       },
       cache: { hits: 0, misses: 1 },
       failures: [],
-      hashes: { events: [{ eventId: 'E0', proseHash: validHash64, analysisHash: validHash64, promptHash: validHash64 }] },
+      hashes: {
+        events: [
+          {
+            eventId: 'E0',
+            proseHash: validHash64,
+            analysisHash: validHash64,
+            promptHash: validHash64,
+          },
+        ],
+      },
       generatedAt: '2026-07-20T00:00:00.000Z',
       reviewStatus: 'failed',
     };
@@ -527,7 +626,6 @@ describe('liveSmokeRecordSchema — Pass2 failure entries', () => {
 // sanitizeError — safe-error redaction
 // ============================================================================
 
-
 describe('sanitizeError — redacts secret-like content', () => {
   it('redacts OpenAI-style API keys', () => {
     const result = sanitizeError('Request failed with key sk-proj-abc123xyz789secretkey');
@@ -542,7 +640,9 @@ describe('sanitizeError — redacts secret-like content', () => {
   });
 
   it('redacts Bearer tokens', () => {
-    const result = sanitizeError('HTTP 401: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNl5K4p4fEhGZVpBdRHzRZSQhVxhONqmjRqJxHA');
+    const result = sanitizeError(
+      'HTTP 401: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNl5K4p4fEhGZVpBdRHzRZSQhVxhONqmjRqJxHA',
+    );
     expect(result).not.toContain('eyJhbGci');
     expect(result).not.toMatch(/Bearer/i);
     expect(result).toContain('[redacted]');
@@ -563,7 +663,9 @@ describe('sanitizeError — redacts secret-like content', () => {
   });
 
   it('redacts secret/token/password params', () => {
-    const result = sanitizeError('Config error: secret=mysecret123, token=abctoken, password=supersecret');
+    const result = sanitizeError(
+      'Config error: secret=mysecret123, token=abctoken, password=supersecret',
+    );
     expect(result).toContain('[redacted]');
     expect(result).not.toContain('secret=');
     expect(result).not.toContain('token=');
@@ -587,7 +689,9 @@ describe('sanitizeError — redacts secret-like content', () => {
   });
 
   it('redacts URLs with embedded credentials', () => {
-    const result = sanitizeError('Failed to connect to https://user:password123@api.example.com/v1');
+    const result = sanitizeError(
+      'Failed to connect to https://user:password123@api.example.com/v1',
+    );
     expect(result).toContain('https://[redacted]@');
     expect(result).not.toContain('password123');
   });
@@ -663,7 +767,9 @@ describe('buildLiveSmokeRecord — secret redaction in failures', () => {
     const input = baseInput({
       result: {
         results: [],
-        errors: ['Provider error: Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.secretpayload.signature'],
+        errors: [
+          'Provider error: Authorization: Bearer eyJhbGciOiJSUzI1NiJ9.secretpayload.signature',
+        ],
       },
     });
 
@@ -702,7 +808,9 @@ describe('buildLiveSmokeRecord — secret redaction in failures', () => {
     });
 
     const output = buildLiveSmokeRecord(input);
-    const perEvent = (output.record as Record<string, unknown>).call as { perEvent: Array<{ ledger: Array<{ failureReason?: string }> }> };
+    const perEvent = (output.record as Record<string, unknown>).call as {
+      perEvent: Array<{ ledger: Array<{ failureReason?: string }> }>;
+    };
     const ledgerEntry = perEvent.perEvent[0].ledger[0];
     expect(ledgerEntry.failureReason).toBeDefined();
     expect(ledgerEntry.failureReason).not.toContain('sk-leaked-in-ledger-999');

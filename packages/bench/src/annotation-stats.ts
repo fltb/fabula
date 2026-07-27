@@ -69,7 +69,6 @@ function createWeightMatrix(k: number): number[][] {
   return w;
 }
 
-
 /**
  * Assert two arrays have identical length.
  */
@@ -111,16 +110,12 @@ export function quadraticWeightedKappa(
   }
   for (const s of rater1) {
     if (!Number.isInteger(s) || s < 0 || s >= numCategories) {
-      throw new Error(
-        `Score must be integer in [0, ${numCategories - 1}], got ${s}`,
-      );
+      throw new Error(`Score must be integer in [0, ${numCategories - 1}], got ${s}`);
     }
   }
   for (const s of rater2) {
     if (!Number.isInteger(s) || s < 0 || s >= numCategories) {
-      throw new Error(
-        `Score must be integer in [0, ${numCategories - 1}], got ${s}`,
-      );
+      throw new Error(`Score must be integer in [0, ${numCategories - 1}], got ${s}`);
     }
   }
 
@@ -156,13 +151,13 @@ export function quadraticWeightedKappa(
     }
   }
 
-  const kappa = weightedExp === 0
-    ? (weightedObs === 0 ? 1 : 0)
-    : 1 - weightedObs / weightedExp;
+  const kappa = weightedExp === 0 ? (weightedObs === 0 ? 1 : 0) : 1 - weightedObs / weightedExp;
 
   // Bootstrap confidence interval
   const clusterData: Array<{
-    rater1: number; rater2: number; cluster: string;
+    rater1: number;
+    rater2: number;
+    cluster: string;
   }> = [];
   for (let i = 0; i < n; i++) {
     clusterData.push({
@@ -178,10 +173,7 @@ export function quadraticWeightedKappa(
     ci95 = [NaN, NaN];
   } else {
     const lowerIdx = Math.max(0, Math.floor(0.025 * distribution.length));
-    const upperIdx = Math.min(
-      distribution.length - 1,
-      Math.floor(0.975 * distribution.length),
-    );
+    const upperIdx = Math.min(distribution.length - 1, Math.floor(0.975 * distribution.length));
     ci95 = [distribution[lowerIdx], distribution[upperIdx]];
   }
 
@@ -248,10 +240,7 @@ export function clusterBootstrap(
  * Internal: compute kappa without validation. Used during bootstrap.
  * Infers numCategories from the maximum score value.
  */
-function computeKappaInternal(
-  rater1: number[],
-  rater2: number[],
-): number {
+function computeKappaInternal(rater1: number[], rater2: number[]): number {
   let maxVal = 0;
   for (const v of rater1) if (v > maxVal) maxVal = v;
   for (const v of rater2) if (v > maxVal) maxVal = v;
@@ -333,10 +322,7 @@ export function agreementStats(
  * @param numCategories - Number of ordinal categories (default 4)
  * @returns Map from category index to count of scores
  */
-export function gradeDistribution(
-  scores: number[],
-  numCategories = 4,
-): Map<number, number> {
+export function gradeDistribution(scores: number[], numCategories = 4): Map<number, number> {
   const dist = new Map<number, number>();
   for (let c = 0; c < numCategories; c++) {
     dist.set(c, 0);
@@ -435,14 +421,8 @@ export function spearmanTestRetestRho(
 
 const LANCZOS_G = 7;
 const LANCZOS_C: number[] = [
-  0.99999999999980993,
-  676.5203681218851,
-  -1259.1392167224028,
-  771.32342877765313,
-  -176.61502916214059,
-  12.507343278686905,
-  -0.13857109526572012,
-  9.9843695780195716e-6,
+  0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313,
+  -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6,
   1.5056327351493116e-7,
 ];
 
@@ -482,14 +462,14 @@ function betainc(x: number, a: number, b: number): number {
   // Lentz's continued fraction
   let f = 1;
   let c = 1;
-  let d = 1 - (a + b) * x / (a + 1);
+  let d = 1 - ((a + b) * x) / (a + 1);
   if (Math.abs(d) < 1e-30) d = 1e-30;
   d = 1 / d;
   f = d;
 
   for (let m = 1; m <= 200; m++) {
     // 2m step
-    let numerator = m * (b - m) * x / ((a + 2 * m - 1) * (a + 2 * m));
+    let numerator = (m * (b - m) * x) / ((a + 2 * m - 1) * (a + 2 * m));
     d = 1 + numerator * d;
     if (Math.abs(d) < 1e-30) d = 1e-30;
     c = 1 + numerator / c;
@@ -498,7 +478,7 @@ function betainc(x: number, a: number, b: number): number {
     f *= d * c;
 
     // 2m+1 step
-    numerator = -(a + m) * (a + b + m) * x / ((a + 2 * m) * (a + 2 * m + 1));
+    numerator = (-(a + m) * (a + b + m) * x) / ((a + 2 * m) * (a + 2 * m + 1));
     d = 1 + numerator * d;
     if (Math.abs(d) < 1e-30) d = 1e-30;
     c = 1 + numerator / c;

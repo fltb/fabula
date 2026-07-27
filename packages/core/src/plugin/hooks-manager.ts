@@ -2,7 +2,7 @@
 // PluginHooksManager — Register and invoke plugin lifecycle hooks
 // ============================================================================
 
-import type { PluginHooks, PluginContext, ProviderRegistry } from './types.ts';
+import type { PluginContext, PluginHooks, ProviderRegistry } from './types.ts';
 import type { ValidatorRegistry } from './validator-registry.ts';
 
 /**
@@ -29,7 +29,7 @@ export class PluginHooksManager {
 
   /** Register a plugin's lifecycle hooks */
   register(hook: PluginHooks): void {
-    if (this.hooks.find(h => h.name === hook.name)) {
+    if (this.hooks.find((h) => h.name === hook.name)) {
       return; // silent skip on duplicate
     }
     this.hooks.push(hook);
@@ -37,7 +37,7 @@ export class PluginHooksManager {
 
   /** Unregister a plugin's lifecycle hooks */
   unregister(name: string): boolean {
-    const idx = this.hooks.findIndex(h => h.name === name);
+    const idx = this.hooks.findIndex((h) => h.name === name);
     if (idx === -1) return false;
     this.hooks.splice(idx, 1);
     return true;

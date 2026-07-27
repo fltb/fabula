@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { analysisResultSchema, countNarrativeText } from '@novalistically/core';
+import { describe, expect, it } from 'vitest';
 
 const root = resolve(import.meta.dirname, '../../..');
 const EVENT_IDS = ['E0', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6'];
@@ -17,15 +17,18 @@ describe('built CLI mock full chain', () => {
       // an older validator/analysis contract and cannot prove this CLI run.
       rmSync(join(project, '.nova', 'render-cache'), { recursive: true, force: true });
 
-
       // ── Run the full render pipeline ─────────────────────────────
       const stdout = execFileSync(
         process.execPath,
         [
           join(root, 'packages/cli/dist/index.js'),
-          'render', 'E0', '--all',
-          '--provider', 'mock-pass2',
-          '--reference-dir', join(root, 'fixtures/zhu-fu/reference/data'),
+          'render',
+          'E0',
+          '--all',
+          '--provider',
+          'mock-pass2',
+          '--reference-dir',
+          join(root, 'fixtures/zhu-fu/reference/data'),
         ],
         { cwd: project, encoding: 'utf8' },
       );
@@ -56,16 +59,18 @@ describe('built CLI mock full chain', () => {
         const expected = countNarrativeText(ref.prose, 'zh');
         const prose = readFileSync(join(sceneDir, `${id}.md`), 'utf8');
         const count = countNarrativeText(prose, 'zh');
-        expect(count, `${id} narrative text count regressed (got ${count}, expected >= ${expected})`).toBeGreaterThanOrEqual(expected);
+        expect(
+          count,
+          `${id} narrative text count regressed (got ${count}, expected >= ${expected})`,
+        ).toBeGreaterThanOrEqual(expected);
       }
 
       // ── Scene metadata files ─────────────────────────────────────
       // Every scene must have a companion YAML metadata file.
       for (const id of EVENT_IDS) {
-        expect(
-          existsSync(join(sceneDir, `${id}.yaml`)),
-          `Missing scene metadata: ${id}`,
-        ).toBe(true);
+        expect(existsSync(join(sceneDir, `${id}.yaml`)), `Missing scene metadata: ${id}`).toBe(
+          true,
+        );
       }
 
       // ── Pass 2 analysis artifacts ────────────────────────────────
@@ -77,14 +82,22 @@ describe('built CLI mock full chain', () => {
         const artifact = JSON.parse(readFileSync(artifactPath, 'utf8'));
         expect(artifact, `Pass 2 artifact ${id} missing prose`).toHaveProperty('prose');
         expect(typeof artifact.prose).toBe('string');
-        expect(artifact.prose.trim().length, `Empty Pass 2 artifact prose: ${id}`).toBeGreaterThan(0);
+        expect(artifact.prose.trim().length, `Empty Pass 2 artifact prose: ${id}`).toBeGreaterThan(
+          0,
+        );
         expect(artifact, `Pass 2 artifact ${id} missing cacheHit`).toHaveProperty('cacheHit');
         expect(typeof artifact.cacheHit).toBe('boolean');
         // Analysis must be present and schema-valid with matching eventId
         expect(artifact, `Pass 2 artifact ${id} missing analysis`).toHaveProperty('analysis');
         const analysisResult = analysisResultSchema.safeParse(artifact.analysis);
-        expect(analysisResult.success, `Pass 2 artifact ${id} analysis schema invalid: ${analysisResult.error}`).toBe(true);
-        expect(analysisResult.data!.eventId, `Pass 2 artifact ${id} analysis eventId mismatch`).toBe(id);
+        expect(
+          analysisResult.success,
+          `Pass 2 artifact ${id} analysis schema invalid: ${analysisResult.error}`,
+        ).toBe(true);
+        expect(
+          analysisResult.data!.eventId,
+          `Pass 2 artifact ${id} analysis eventId mismatch`,
+        ).toBe(id);
       }
 
       // ── No genesis scene output ──────────────────────────────────
@@ -116,7 +129,6 @@ describe('built CLI mock full chain', () => {
       // Exactly seven authored scene .md files (no extras, no missing).
       const sceneMdFiles = sceneFiles.filter((f) => /^E\d\.md$/.test(f));
       expect(sceneMdFiles, 'Expected exactly 7 scene .md files').toHaveLength(7);
-
     } finally {
       rmSync(project, { recursive: true, force: true });
     }

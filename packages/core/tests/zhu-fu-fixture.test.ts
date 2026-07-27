@@ -2,15 +2,15 @@
 // P1 verification: zhu-fu fixture loads correctly through EntityMapper
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { EntityMapper } from '../src/entity/index.js';
 import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { EntityMapper } from '../src/entity/index.js';
 
 const FIXTURE_PATH = path.resolve(
   __dirname, // packages/core/tests
-  '..',      // packages/core
-  '..',      // packages
-  '..',      // root
+  '..', // packages/core
+  '..', // packages
+  '..', // root
   'fixtures',
   'zhu-fu',
 );

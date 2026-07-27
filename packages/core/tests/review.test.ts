@@ -2,7 +2,7 @@
 // ReviewManager — Unit Tests
 // ============================================================================
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { ReviewManager } from '../src/review/index.js';
 import type { ReviewComment, ReviewPatch } from '../src/types/index.js';
 
@@ -68,16 +68,36 @@ describe('ReviewManager', () => {
   describe('getComments', () => {
     beforeEach(() => {
       manager.addComment(
-        makeComment({ id: 'c1', status: 'open', severity: 'blocking', target: { type: 'scene', id: 's1' } }),
+        makeComment({
+          id: 'c1',
+          status: 'open',
+          severity: 'blocking',
+          target: { type: 'scene', id: 's1' },
+        }),
       );
       manager.addComment(
-        makeComment({ id: 'c2', status: 'resolved', severity: 'nit', target: { type: 'chapter', id: 'ch2' } }),
+        makeComment({
+          id: 'c2',
+          status: 'resolved',
+          severity: 'nit',
+          target: { type: 'chapter', id: 'ch2' },
+        }),
       );
       manager.addComment(
-        makeComment({ id: 'c3', status: 'open', severity: 'suggestion', target: { type: 'scene', id: 's1' } }),
+        makeComment({
+          id: 'c3',
+          status: 'open',
+          severity: 'suggestion',
+          target: { type: 'scene', id: 's1' },
+        }),
       );
       manager.addComment(
-        makeComment({ id: 'c4', status: 'addressed', severity: 'blocking', target: { type: 'character', id: 'char3' } }),
+        makeComment({
+          id: 'c4',
+          status: 'addressed',
+          severity: 'blocking',
+          target: { type: 'character', id: 'char3' },
+        }),
       );
     });
 
@@ -114,18 +134,10 @@ describe('ReviewManager', () => {
   // 4. getActiveBlocking
   describe('getActiveBlocking', () => {
     it('should return only open + blocking comments', () => {
-      manager.addComment(
-        makeComment({ id: 'c1', severity: 'blocking', status: 'open' }),
-      );
-      manager.addComment(
-        makeComment({ id: 'c2', severity: 'nit', status: 'open' }),
-      );
-      manager.addComment(
-        makeComment({ id: 'c3', severity: 'blocking', status: 'resolved' }),
-      );
-      manager.addComment(
-        makeComment({ id: 'c4', severity: 'blocking', status: 'addressed' }),
-      );
+      manager.addComment(makeComment({ id: 'c1', severity: 'blocking', status: 'open' }));
+      manager.addComment(makeComment({ id: 'c2', severity: 'nit', status: 'open' }));
+      manager.addComment(makeComment({ id: 'c3', severity: 'blocking', status: 'resolved' }));
+      manager.addComment(makeComment({ id: 'c4', severity: 'blocking', status: 'addressed' }));
 
       const active = manager.getActiveBlocking(1);
       expect(active).toHaveLength(1);
@@ -133,9 +145,7 @@ describe('ReviewManager', () => {
     });
 
     it('should return empty array when no active blocking comments exist', () => {
-      manager.addComment(
-        makeComment({ id: 'c1', severity: 'nit', status: 'open' }),
-      );
+      manager.addComment(makeComment({ id: 'c1', severity: 'nit', status: 'open' }));
 
       const active = manager.getActiveBlocking(1);
       expect(active).toHaveLength(0);
@@ -188,9 +198,17 @@ describe('ReviewManager', () => {
   // 7. createPatch
   describe('createPatch', () => {
     it('should store a patch and return it', () => {
-      const patch = manager.createPatch(['c1', 'c2'], [
-        { type: 'rewrite', target: 'scene_001', newValue: 'Updated text', rationale: 'Fix grammar' },
-      ]);
+      const patch = manager.createPatch(
+        ['c1', 'c2'],
+        [
+          {
+            type: 'rewrite',
+            target: 'scene_001',
+            newValue: 'Updated text',
+            rationale: 'Fix grammar',
+          },
+        ],
+      );
 
       expect(patch).toBeDefined();
       expect(patch.sourceReviewIds).toEqual(['c1', 'c2']);

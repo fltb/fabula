@@ -42,10 +42,7 @@ export function computeEvidenceHash(
   preconditions: Fact[],
   postconditions: Fact[],
 ): string {
-  const factIds = [
-    ...preconditions.map((f) => f.id),
-    ...postconditions.map((f) => f.id),
-  ].sort();
+  const factIds = [...preconditions.map((f) => f.id), ...postconditions.map((f) => f.id)].sort();
   const hash = crypto.createHash('sha256');
   hash.update(eventId);
   for (const id of factIds) {
@@ -53,7 +50,6 @@ export function computeEvidenceHash(
   }
   return hash.digest('hex');
 }
-
 
 /**
  * Hash event files in order to produce a deterministic chain.
@@ -70,19 +66,14 @@ export function computeCacheKeys(
   const defsHash = computeDefsHash(defsDir, storage);
 
   // 2. Sort events by narrative order
-  const sorted = [...eventsMap.entries()].sort(
-    (a, b) => a[1].narrativeOrder - b[1].narrativeOrder,
-  );
+  const sorted = [...eventsMap.entries()].sort((a, b) => a[1].narrativeOrder - b[1].narrativeOrder);
 
   // 3. Chain hash
   const result = new Map<string, string>();
   let prevHash = '';
   for (const [eventId, info] of sorted) {
     const eventContent = storage.read(info.filePath);
-    const eventContentHash = crypto
-      .createHash('sha256')
-      .update(eventContent)
-      .digest('hex');
+    const eventContentHash = crypto.createHash('sha256').update(eventContent).digest('hex');
 
     const combined = prevHash + '|' + eventContentHash + '|' + defsHash;
     const chainHash = crypto.createHash('sha256').update(combined).digest('hex');
@@ -153,9 +144,16 @@ export function getCachedRender(
 
   try {
     const metaRaw = storage.read(metaPath);
-    const meta = JSON.parse(metaRaw) as { cacheKey?: unknown; formatVersion?: unknown; evidenceHash?: unknown };
+    const meta = JSON.parse(metaRaw) as {
+      cacheKey?: unknown;
+      formatVersion?: unknown;
+      evidenceHash?: unknown;
+    };
     if (typeof meta.cacheKey !== 'string') {
-      throw new CacheCorruptionError('Cache metadata has no cache key', { eventId, phase: 'cache-read' });
+      throw new CacheCorruptionError('Cache metadata has no cache key', {
+        eventId,
+        phase: 'cache-read',
+      });
     }
     if (meta.cacheKey !== cacheKey) {
       return null;
@@ -172,7 +170,10 @@ export function getCachedRender(
     }
     const data = JSON.parse(storage.read(dataPath));
     if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-      throw new CacheCorruptionError('Cache render payload must be an object', { eventId, phase: 'cache-read' });
+      throw new CacheCorruptionError('Cache render payload must be an object', {
+        eventId,
+        phase: 'cache-read',
+      });
     }
     return data as Record<string, unknown>;
   } catch (error) {
@@ -204,10 +205,7 @@ export function setCachedRender(
       2,
     ),
   );
-  storage.write(
-    path.join(eventDir, 'data.render.json'),
-    JSON.stringify(renderRecord, null, 2),
-  );
+  storage.write(path.join(eventDir, 'data.render.json'), JSON.stringify(renderRecord, null, 2));
 }
 
 /**
@@ -228,11 +226,7 @@ export function clearRenderCache(cacheDir: string, storage: Storage): void {
  * Delete cached data for a single event.
  * This triggers a cache-miss on the next render.
  */
-export function clearEventCache(
-  cacheDir: string,
-  eventId: string,
-  storage: Storage,
-): void {
+export function clearEventCache(cacheDir: string, eventId: string, storage: Storage): void {
   const eventCacheDir = path.join(cacheDir, eventId);
   if (storage.exists(eventCacheDir)) {
     try {

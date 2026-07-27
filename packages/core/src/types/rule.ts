@@ -11,7 +11,12 @@ export type RuleSpecificationId = string;
 
 // ——— RuleTypeDefinition — reusable static schema ———
 
-export type RuleClass = 'natural_law' | 'social_norm' | 'moral_principle' | 'game_rule' | 'legal_code';
+export type RuleClass =
+  | 'natural_law'
+  | 'social_norm'
+  | 'moral_principle'
+  | 'game_rule'
+  | 'legal_code';
 
 export interface RuleTypeDefinition {
   typeId: string;

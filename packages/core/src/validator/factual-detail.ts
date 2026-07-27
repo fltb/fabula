@@ -2,21 +2,20 @@
 // FactualDetailValidator — LLM-assisted detail checking
 // ============================================================================
 
+import { z } from 'zod';
 import type {
   PostRenderInput,
   PreRenderInput,
-  Validator,
   ValidationIssue,
+  Validator,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
-import { z } from 'zod';
- 
+
 export const inventedDetailSchema = z.object({
   detail: z.string(),
   severity: z.enum(['minor', 'major']),
 });
 export type InventedDetail = z.infer<typeof inventedDetailSchema>;
- 
 
 export class FactualDetailValidator implements Validator {
   name = 'factual_detail';
@@ -32,27 +31,37 @@ export class FactualDetailValidator implements Validator {
 
     if (!analysis) return issues;
 
-    const inventedResult = z.array(inventedDetailSchema).safeParse(analysis.analysis.inventedDetails);
+    const inventedResult = z
+      .array(inventedDetailSchema)
+      .safeParse(analysis.analysis.inventedDetails);
     const details = inventedResult.success ? inventedResult.data : [];
     for (const detail of details) {
       if (detail.severity !== 'major') continue;
 
-      issues.push(makeIssue(
-        this.name, input.event.id, 'system', 'warning',
-        `Major invented detail: "${detail.detail}" — not specified in event definitions.`,
-        'Add this detail to event preconditions/postconditions, or mark it intentional.',
-        'manual',
-      ));
+      issues.push(
+        makeIssue(
+          this.name,
+          input.event.id,
+          'system',
+          'warning',
+          `Major invented detail: "${detail.detail}" — not specified in event definitions.`,
+          'Add this detail to event preconditions/postconditions, or mark it intentional.',
+          'manual',
+        ),
+      );
     }
 
     return issues;
   }
 
   getAnalysisRequirements() {
-    return [{
-      field: 'inventedDetails',
-      schema: z.array(inventedDetailSchema),
-      instruction: 'inventedDetails: List any significant details in the prose that are not present in the event specification. For each invented detail, note the detail text and whether its severity is "minor" (e.g., atmospheric description) or "major" (plot or character change not in the specification). Report in the inventedDetails block.',
-    }];
+    return [
+      {
+        field: 'inventedDetails',
+        schema: z.array(inventedDetailSchema),
+        instruction:
+          'inventedDetails: List any significant details in the prose that are not present in the event specification. For each invented detail, note the detail text and whether its severity is "minor" (e.g., atmospheric description) or "major" (plot or character change not in the specification). Report in the inventedDetails block.',
+      },
+    ];
   }
 }

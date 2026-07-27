@@ -1,25 +1,42 @@
 import { describe, expect, it } from 'vitest';
-import type { Fact, NarrativeEvent } from '../../src/types/index.ts';
 import { buildCausalEdges, topologicalSort } from '../../src/state/dag.ts';
+import type { Fact, NarrativeEvent } from '../../src/types/index.ts';
 
 function fact(entityId: string, attribute: string, value: unknown): Fact {
   return {
     id: `${entityId}.${attribute}`,
-    entityId, attribute, value,
-    validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+    entityId,
+    attribute,
+    value,
+    validity: {
+      temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+      branches: { type: 'all' },
+    },
   };
 }
 
-function event(id: string, day: number, narrativeOrder: number, preconditions: Fact[] = [], postconditions: Fact[] = []): NarrativeEvent {
+function event(
+  id: string,
+  day: number,
+  narrativeOrder: number,
+  preconditions: Fact[] = [],
+  postconditions: Fact[] = [],
+): NarrativeEvent {
   return {
-    id, event: id, narrativeOrder, title: id,
+    id,
+    event: id,
+    narrativeOrder,
+    title: id,
     storyTime: { type: 'absolute', value: `day_${day}` },
     sceneType: 'linear',
     pov: { character: 'narrator', type: 'first_person' },
     sceneBrief: id,
-    preconditions, postconditions,
-    threadProgress: [], foreshadowing: [],
-    relationshipEffects: [], ruleEffects: [],
+    preconditions,
+    postconditions,
+    threadProgress: [],
+    foreshadowing: [],
+    relationshipEffects: [],
+    ruleEffects: [],
     source: 'event_file',
     branchExistence: { type: 'all' },
     participants: { entities: [] },
@@ -46,7 +63,7 @@ describe('narrativeOrder is not used as tiebreaker', () => {
     // Event with low narrativeOrder but late storyTime should come AFTER
     // event with high narrativeOrder but early storyTime
     const early = event('early', 1, 10); // storyTime day_1, narrativeOrder 10
-    const late = event('late', 5, 1);    // storyTime day_5, narrativeOrder 1
+    const late = event('late', 5, 1); // storyTime day_5, narrativeOrder 1
     const graph = buildCausalEdges([early, late]);
     const sorted = topologicalSort([early, late], graph.edges, graph.inDegree);
     // storyTime day_1 < day_5, so "early" comes first regardless of narrativeOrder

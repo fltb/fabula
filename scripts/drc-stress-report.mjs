@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // ============================================================================
 // drc-stress-report.mjs — Stress report for 红楼梦 fixture events
 //
@@ -15,10 +16,10 @@
 // and computes pairwise bigram containment for same-event output.
 // ============================================================================
 
-import { readFileSync, writeFileSync, mkdirSync, readdirSync, existsSync } from 'node:fs';
-import { isAbsolute, join, dirname, basename } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -123,7 +124,9 @@ function readJson(path) {
 /** List directory entries (files + subdirs), sorted, excluding dotfiles. */
 function listDir(dir) {
   try {
-    return readdirSync(dir).filter(n => !n.startsWith('.')).sort();
+    return readdirSync(dir)
+      .filter((n) => !n.startsWith('.'))
+      .sort();
   } catch {
     return [];
   }
@@ -143,9 +146,14 @@ function parseArgs() {
         console.error('ERROR: --stability requires a comma-separated list of run directories');
         process.exit(1);
       }
-      stabilityDirs = val.split(',').map(s => s.trim()).filter(Boolean);
+      stabilityDirs = val
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
       if (stabilityDirs.length < 2) {
-        console.error('ERROR: --stability requires at least 2 run directories for pairwise comparison');
+        console.error(
+          'ERROR: --stability requires at least 2 run directories for pairwise comparison',
+        );
         process.exit(1);
       }
     } else if (!fixtureDir) {
@@ -160,7 +168,7 @@ function parseArgs() {
 
   const resolvedFixture = isAbsolute(fixtureDir) ? fixtureDir : join(REPO_ROOT, fixtureDir);
   const resolvedStability = stabilityDirs
-    ? stabilityDirs.map(d => isAbsolute(d) ? d : join(REPO_ROOT, d))
+    ? stabilityDirs.map((d) => (isAbsolute(d) ? d : join(REPO_ROOT, d)))
     : null;
 
   return { fixtureDir: resolvedFixture, stabilityDirs: resolvedStability };
@@ -186,7 +194,7 @@ function discoverEvents(fixtureDir) {
     process.exit(1);
   }
 
-  const chapterNames = listDir(chaptersDir).filter(n => n.startsWith('chapter_'));
+  const chapterNames = listDir(chaptersDir).filter((n) => n.startsWith('chapter_'));
   const events = [];
 
   for (const chName of chapterNames) {
@@ -198,9 +206,7 @@ function discoverEvents(fixtureDir) {
     const chapterNum = chMeta?.chapter ?? null;
 
     // Gather event YAML file names (everything except _chapter.yaml)
-    const yamls = listDir(chPath).filter(
-      n => n.endsWith('.yaml') && n !== '_chapter.yaml'
-    );
+    const yamls = listDir(chPath).filter((n) => n.endsWith('.yaml') && n !== '_chapter.yaml');
 
     for (const yf of yamls) {
       const yfPath = join(chPath, yf);
@@ -217,8 +223,18 @@ function discoverEvents(fixtureDir) {
         chapterNum,
         data,
         // Companion file paths (may not exist yet)
-        sceneMdPath: join(fixtureDir, 'scenes', `chapter-${String(chapterNum).padStart(2, '0')}`, `${eventId}.md`),
-        sceneYamlPath: join(fixtureDir, 'scenes', `chapter-${String(chapterNum).padStart(2, '0')}`, `${eventId}.yaml`),
+        sceneMdPath: join(
+          fixtureDir,
+          'scenes',
+          `chapter-${String(chapterNum).padStart(2, '0')}`,
+          `${eventId}.md`,
+        ),
+        sceneYamlPath: join(
+          fixtureDir,
+          'scenes',
+          `chapter-${String(chapterNum).padStart(2, '0')}`,
+          `${eventId}.yaml`,
+        ),
         referenceTxtPath: join(fixtureDir, 'reference', 'original', `${eventId}.txt`),
         responseJsonPath: join(fixtureDir, '.nova', 'responses', `${eventId}.json`),
       });
@@ -231,7 +247,8 @@ function discoverEvents(fixtureDir) {
 // ── Per-event metrics ──────────────────────────────────────────────────────
 
 function computeMetrics(event, sourceBuf) {
-  const { eventId, chapterNum, sceneMdPath, sceneYamlPath, referenceTxtPath, responseJsonPath } = event;
+  const { eventId, chapterNum, sceneMdPath, sceneYamlPath, referenceTxtPath, responseJsonPath } =
+    event;
 
   // Rendered scene content — prefer scenes/{id}.md, fallback to .nova/responses/{id}.json
   let renderText = readText(sceneMdPath);
@@ -240,7 +257,11 @@ function computeMetrics(event, sourceBuf) {
 
   if (renderText !== null) {
     proseSource = 'scene';
-  } else if (responseData && typeof responseData.prose === 'string' && responseData.prose.trim().length > 0) {
+  } else if (
+    responseData &&
+    typeof responseData.prose === 'string' &&
+    responseData.prose.trim().length > 0
+  ) {
     renderText = responseData.prose;
     proseSource = 'response';
   }
@@ -309,13 +330,10 @@ function computeMetrics(event, sourceBuf) {
   };
 }
 
-
 // ── Report writing ─────────────────────────────────────────────────────────
 
 function writeReport(reportPath, rows, aggregates, stabilitySection) {
-  const timestamp = execSync(
-    "date '+%Y-%m-%d %H:%M %Z'", { encoding: 'utf-8' }
-  ).trim();
+  const timestamp = execSync("date '+%Y-%m-%d %H:%M %Z'", { encoding: 'utf-8' }).trim();
 
   const lines = [];
   lines.push('# Stress Report — Dream of Red Chamber');
@@ -324,8 +342,12 @@ function writeReport(reportPath, rows, aggregates, stabilitySection) {
   lines.push('');
   lines.push('## Event Metrics');
   lines.push('');
-  lines.push('| ID | Chapter | Render Han | Original Han | Containment | Released | Attempts | Source | Excerpt');
-  lines.push('|----|---------|-----------|-------------|-------------|----------|----------|--------|---------');
+  lines.push(
+    '| ID | Chapter | Render Han | Original Han | Containment | Released | Attempts | Source | Excerpt',
+  );
+  lines.push(
+    '|----|---------|-----------|-------------|-------------|----------|----------|--------|---------',
+  );
 
   for (const r of rows) {
     const ch = r.chapterNum !== null ? r.chapterNum : '?';
@@ -338,7 +360,7 @@ function writeReport(reportPath, rows, aggregates, stabilitySection) {
     else if (excerptDisplay === 'EXCERPT_INVALID') excerptDisplay = '❌ EXCERPT_INVALID';
 
     lines.push(
-      `| ${r.eventId} | ${ch} | ${renderStr} | ${origStr} | ${containmentStr} | ${r.released} | ${r.attempts} | ${r.proseSource} | ${excerptDisplay}`
+      `| ${r.eventId} | ${ch} | ${renderStr} | ${origStr} | ${containmentStr} | ${r.released} | ${r.attempts} | ${r.proseSource} | ${excerptDisplay}`,
     );
   }
 
@@ -346,12 +368,10 @@ function writeReport(reportPath, rows, aggregates, stabilitySection) {
   lines.push('## Aggregate');
   lines.push('');
 
-  const meanContainment = aggregates.meanContainment !== null
-    ? pct(aggregates.meanContainment)
-    : 'N/A';
-  const minContainment = aggregates.minContainment !== null
-    ? pct(aggregates.minContainment)
-    : 'N/A';
+  const meanContainment =
+    aggregates.meanContainment !== null ? pct(aggregates.meanContainment) : 'N/A';
+  const minContainment =
+    aggregates.minContainment !== null ? pct(aggregates.minContainment) : 'N/A';
 
   lines.push(`- **Events**: ${aggregates.totalEvents}`);
   lines.push(`- **With render (scene)**: ${aggregates.withRender}`);
@@ -365,7 +385,9 @@ function writeReport(reportPath, rows, aggregates, stabilitySection) {
   lines.push(`- **EXCERPT_INVALID count**: ${aggregates.excerptInvalidCount}`);
 
   if (aggregates.degradedSource) {
-    lines.push(`- **⚠ Source degraded**: source.txt unavailable — containment and excerpt validation limited`);
+    lines.push(
+      `- **⚠ Source degraded**: source.txt unavailable — containment and excerpt validation limited`,
+    );
   }
   if (aggregates.degradedRefs) {
     lines.push(`- **⚠ Reference degraded**: no reference/original texts available`);
@@ -383,27 +405,22 @@ function writeReport(reportPath, rows, aggregates, stabilitySection) {
 // ── Aggregate calculation ──────────────────────────────────────────────────
 
 function computeAggregates(rows, sourceBuf) {
-  const containments = rows
-    .map(r => r.containment)
-    .filter(c => c !== null && c !== undefined);
+  const containments = rows.map((r) => r.containment).filter((c) => c !== null && c !== undefined);
 
   const totalEvents = rows.length;
-  const withRender = rows.filter(r => r.renderHan > 0 && r.proseSource === 'scene').length;
-  const withProse = rows.filter(r => r.proseSource !== 'none').length;
-  const withResponseFallback = rows.filter(r => r.proseSource === 'response').length;
-  const releasedCount = rows.filter(r => r.released === true).length;
-  const withRef = rows.filter(r => r.origHan > 0).length;
-  const excerptInvalidCount = rows.filter(r => r.excerptStatus === 'EXCERPT_INVALID').length;
+  const withRender = rows.filter((r) => r.renderHan > 0 && r.proseSource === 'scene').length;
+  const withProse = rows.filter((r) => r.proseSource !== 'none').length;
+  const withResponseFallback = rows.filter((r) => r.proseSource === 'response').length;
+  const releasedCount = rows.filter((r) => r.released === true).length;
+  const withRef = rows.filter((r) => r.origHan > 0).length;
+  const excerptInvalidCount = rows.filter((r) => r.excerptStatus === 'EXCERPT_INVALID').length;
 
-  const meanContainment = containments.length > 0
-    ? containments.reduce((a, b) => a + b, 0) / containments.length
-    : null;
+  const meanContainment =
+    containments.length > 0 ? containments.reduce((a, b) => a + b, 0) / containments.length : null;
 
-  const minContainment = containments.length > 0
-    ? Math.min(...containments)
-    : null;
+  const minContainment = containments.length > 0 ? Math.min(...containments) : null;
 
-  const driftCount = containments.filter(c => c < 0.15).length;
+  const driftCount = containments.filter((c) => c < 0.15).length;
 
   return {
     totalEvents,
@@ -433,7 +450,7 @@ function buildStabilitySection(stabilityDirs, eventIds) {
   lines.push('');
 
   // Validate directories
-  const validDirs = stabilityDirs.filter(d => existsSync(d));
+  const validDirs = stabilityDirs.filter((d) => existsSync(d));
   if (validDirs.length < 2) {
     lines.push('⚠ Fewer than 2 run directories exist — cannot compute pairwise comparison.');
     lines.push('');
@@ -441,10 +458,10 @@ function buildStabilitySection(stabilityDirs, eventIds) {
   }
 
   // Label each directory by its basename
-  const dirLabels = validDirs.map(d => basename(d) || d);
+  const dirLabels = validDirs.map((d) => basename(d) || d);
 
   // Load all scene texts per directory
-  const scenesByDir = validDirs.map(dir => {
+  const scenesByDir = validDirs.map((dir) => {
     const label = basename(dir);
     const scenesDir = join(dir, 'scenes');
     const responsesDir = join(dir, '.nova', 'responses');
@@ -452,7 +469,7 @@ function buildStabilitySection(stabilityDirs, eventIds) {
 
     // Load scene markdown files first
     if (existsSync(scenesDir)) {
-      const sceneFiles = listDir(scenesDir).filter(n => n.endsWith('.md'));
+      const sceneFiles = listDir(scenesDir).filter((n) => n.endsWith('.md'));
       for (const sf of sceneFiles) {
         const id = basename(sf, '.md');
         const text = readText(join(scenesDir, sf));
@@ -461,12 +478,15 @@ function buildStabilitySection(stabilityDirs, eventIds) {
         }
       }
       // Also scan nested chapter-NN/ subdirectories (release layout)
-      const chapterDirs = listDir(scenesDir).filter(n => n.startsWith('chapter-')).map(n => join(scenesDir, n));
+      const chapterDirs = listDir(scenesDir)
+        .filter((n) => n.startsWith('chapter-'))
+        .map((n) => join(scenesDir, n));
       for (const chDir of chapterDirs) {
-        const chFiles = listDir(chDir).filter(n => n.endsWith('.md'));
+        const chFiles = listDir(chDir).filter((n) => n.endsWith('.md'));
         for (const cf of chFiles) {
           const id = basename(cf, '.md');
-          if (!map[id]) {  // flat path wins, but nested fills gaps
+          if (!map[id]) {
+            // flat path wins, but nested fills gaps
             const text = readText(join(chDir, cf));
             if (text !== null) {
               map[id] = extractHan(text);
@@ -481,7 +501,11 @@ function buildStabilitySection(stabilityDirs, eventIds) {
       for (const eid of eventIds) {
         if (!map[eid]) {
           const responseData = readJson(join(responsesDir, `${eid}.json`));
-          if (responseData && typeof responseData.prose === 'string' && responseData.prose.trim().length > 0) {
+          if (
+            responseData &&
+            typeof responseData.prose === 'string' &&
+            responseData.prose.trim().length > 0
+          ) {
             map[eid] = extractHan(responseData.prose);
           }
         }
@@ -501,7 +525,7 @@ function buildStabilitySection(stabilityDirs, eventIds) {
   for (const eid of eventIds) {
     const presentScenes = scenesByDir
       .map((d, i) => ({ idx: i, chars: d.scenes[eid] }))
-      .filter(s => s.chars && s.chars.length >= 2);
+      .filter((s) => s.chars && s.chars.length >= 2);
 
     // All pairwise combinations
     for (let i = 0; i < presentScenes.length; i++) {
@@ -511,7 +535,7 @@ function buildStabilitySection(stabilityDirs, eventIds) {
         const containment = bigramContainment(a.chars, b.chars);
         if (containment !== null) {
           lines.push(
-            `| ${eid} | ${dirLabels[a.idx]} ↔ ${dirLabels[b.idx]} | ${pct(containment)} |`
+            `| ${eid} | ${dirLabels[a.idx]} ↔ ${dirLabels[b.idx]} | ${pct(containment)} |`,
           );
           pairCount++;
           totalContainment += containment;
@@ -551,7 +575,7 @@ function main() {
   }
 
   // Compute per-event metrics
-  const rows = events.map(ev => computeMetrics(ev, sourceBuf));
+  const rows = events.map((ev) => computeMetrics(ev, sourceBuf));
 
   // Aggregate
   const aggregates = computeAggregates(rows, sourceBuf);
@@ -559,7 +583,7 @@ function main() {
   // Stability section (optional)
   let stabilitySection = null;
   if (stabilityDirs) {
-    const eventIds = events.map(e => e.eventId);
+    const eventIds = events.map((e) => e.eventId);
     stabilitySection = buildStabilitySection(stabilityDirs, eventIds);
   }
 

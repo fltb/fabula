@@ -7,11 +7,11 @@
 //   resolution + replay-integrity check) → ContextPackage.
 // ============================================================================
 
-import { describe, it, expect, beforeAll } from 'vitest';
 import * as path from 'node:path';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { ContextCompiler } from '../../src/context/compiler.ts';
 import { EntityMapper } from '../../src/entity/mapper.ts';
 import { InMemoryEntityRegistry } from '../../src/entity/registry.ts';
-import { ContextCompiler } from '../../src/context/compiler.ts';
 import type { ProjectData } from '../../src/entity/types.ts';
 import type { NarrativeEvent, WorldState } from '../../src/types/index.ts';
 

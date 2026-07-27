@@ -10,7 +10,7 @@
 //   5. runtime   — programmatic in-memory overrides
 // ============================================================================
 
-import { z } from 'zod';
+import type { z } from 'zod';
 import { DEFAULT_CONFIG, type DefaultConfig } from './defaults.js';
 
 export interface ConfigLayer {
@@ -34,9 +34,12 @@ export class ConfigLoader {
    * Returns a plain record; use `validate()` for typed access.
    */
   resolve(): Record<string, unknown> {
-    return this.layers.reduce((merged, layer) => {
-      return this.deepMerge(merged, layer.values as Record<string, unknown>);
-    }, {} as Record<string, unknown>);
+    return this.layers.reduce(
+      (merged, layer) => {
+        return this.deepMerge(merged, layer.values as Record<string, unknown>);
+      },
+      {} as Record<string, unknown>,
+    );
   }
 
   /** Resolve and validate against a Zod schema, returning typed output. */
@@ -53,13 +56,14 @@ export class ConfigLoader {
       const sv = source[key];
       const tv = target[key];
       if (
-        sv !== null && typeof sv === 'object' && !Array.isArray(sv) &&
-        tv !== null && typeof tv === 'object' && !Array.isArray(tv)
+        sv !== null &&
+        typeof sv === 'object' &&
+        !Array.isArray(sv) &&
+        tv !== null &&
+        typeof tv === 'object' &&
+        !Array.isArray(tv)
       ) {
-        result[key] = this.deepMerge(
-          tv as Record<string, unknown>,
-          sv as Record<string, unknown>,
-        );
+        result[key] = this.deepMerge(tv as Record<string, unknown>, sv as Record<string, unknown>);
       } else {
         result[key] = sv;
       }
@@ -72,9 +76,7 @@ export class ConfigLoader {
  * Convenience: build a fully resolved config from project-level overrides.
  * Layers: defaults → project overrides.
  */
-export function resolveConfig(
-  overrides?: Partial<DefaultConfig>,
-): DefaultConfig {
+export function resolveConfig(overrides?: Partial<DefaultConfig>): DefaultConfig {
   const loader = new ConfigLoader();
   if (overrides) {
     loader.addLayer('project', overrides as Record<string, unknown>);

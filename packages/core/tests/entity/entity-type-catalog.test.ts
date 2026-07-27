@@ -9,9 +9,13 @@
 // - Catalog version
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { defaultEntityTypeCatalog, getTypeDefinitionByKind, getAttributeIdsForKind } from '../../src/entity/default-catalog.js';
-import type { EntityTypeCatalog, AttributeDefinition } from '../../src/types/index.js';
+import { describe, expect, it } from 'vitest';
+import {
+  defaultEntityTypeCatalog,
+  getAttributeIdsForKind,
+  getTypeDefinitionByKind,
+} from '../../src/entity/default-catalog.js';
+import type { AttributeDefinition, EntityTypeCatalog } from '../../src/types/index.js';
 
 describe('EntityTypeCatalog', () => {
   describe('catalog structure', () => {
@@ -46,7 +50,9 @@ describe('EntityTypeCatalog', () => {
 
     it('each type definition has referenceCapabilities', () => {
       for (const def of Object.values(defaultEntityTypeCatalog.types)) {
-        expect(['identity', 'live', 'historical']).toContain(def.referenceCapabilities.defaultEligibility);
+        expect(['identity', 'live', 'historical']).toContain(
+          def.referenceCapabilities.defaultEligibility,
+        );
       }
     });
   });
@@ -57,10 +63,26 @@ describe('EntityTypeCatalog', () => {
       expect(charAttrs).toBeDefined();
 
       const expected = [
-        'gender', 'lifeStatus', 'status', 'alive', 'marital_status',
-        'character_state', 'age', 'profession', 'traits', 'aliases',
-        'appearance', 'location', 'mood', 'knows', 'pov', 'pronoun',
-        'pronoun_consistency', 'pacing', 'discourse_balance', 'discourseMode',
+        'gender',
+        'lifeStatus',
+        'status',
+        'alive',
+        'marital_status',
+        'character_state',
+        'age',
+        'profession',
+        'traits',
+        'aliases',
+        'appearance',
+        'location',
+        'mood',
+        'knows',
+        'pov',
+        'pronoun',
+        'pronoun_consistency',
+        'pacing',
+        'discourse_balance',
+        'discourseMode',
       ];
       for (const attr of expected) {
         expect(charAttrs![attr]).toBeDefined();
@@ -135,13 +157,15 @@ describe('EntityTypeCatalog', () => {
     });
 
     it('marital_status has writePolicy "mutable" (NOT immutable)', () => {
-      const maritalStatus = defaultEntityTypeCatalog.types['character']?.attributes['marital_status'];
+      const maritalStatus =
+        defaultEntityTypeCatalog.types['character']?.attributes['marital_status'];
       expect(maritalStatus!.writePolicy).toBe('mutable');
       expect(maritalStatus!.writePolicy).not.toBe('immutable');
     });
 
     it('marital_status has semanticRole "lifecycle"', () => {
-      const maritalStatus = defaultEntityTypeCatalog.types['character']?.attributes['marital_status'];
+      const maritalStatus =
+        defaultEntityTypeCatalog.types['character']?.attributes['marital_status'];
       expect(maritalStatus!.semanticRole).toBe('lifecycle');
     });
   });

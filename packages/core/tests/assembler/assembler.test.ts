@@ -1,21 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { tmpdir } from 'node:os';
-import type { BranchSet, BranchPath } from '../../src/types/index.js';
+import * as path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
-  countWords,
-  SceneCollector,
-  NarrativeSorter,
-  ProseConcatenator,
-  loadChapterMetadata,
-  filterScenesByBranchPath,
-  assembleNovel,
   AssemblyError,
   AssemblyErrorCode,
+  assembleNovel,
+  countWords,
+  filterScenesByBranchPath,
+  loadChapterMetadata,
+  NarrativeSorter,
+  ProseConcatenator,
+  SceneCollector,
   type SceneEntry,
   type SortedScene,
 } from '../../src/assembler/index.js';
+import type { BranchPath, BranchSet } from '../../src/types/index.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function createTempProject(): string {
@@ -88,7 +88,9 @@ describe('SceneCollector', () => {
   it('throws NO_SCENES when scenes directory is missing', () => {
     const collector = new SceneCollector();
     expect(() => collector.collectFrom('/nonexistent')).toThrow(AssemblyError);
-    try { collector.collectFrom('/nonexistent'); } catch (e: any) {
+    try {
+      collector.collectFrom('/nonexistent');
+    } catch (e: any) {
       expect(e.code).toBe(AssemblyErrorCode.NO_SCENES);
     }
   });
@@ -141,7 +143,12 @@ describe('SceneCollector', () => {
   });
 
   it('throws UNKNOWN_COUNT_VERSION for missing text count version', () => {
-    writeFile(scenesDir, 'chapter-01', 'E1a.yaml', committedMeta({ text_count_version: undefined }));
+    writeFile(
+      scenesDir,
+      'chapter-01',
+      'E1a.yaml',
+      committedMeta({ text_count_version: undefined }),
+    );
     writeFile(scenesDir, 'chapter-01', 'E1a.md', 'Prose.');
 
     const collector = new SceneCollector();
@@ -157,11 +164,26 @@ describe('SceneCollector', () => {
   });
 
   it('handles multiple chapters', () => {
-    writeFile(scenesDir, 'chapter-01', 'E1a.yaml', committedMeta({ event: 'E1a', narrativeOrder: 1 }));
+    writeFile(
+      scenesDir,
+      'chapter-01',
+      'E1a.yaml',
+      committedMeta({ event: 'E1a', narrativeOrder: 1 }),
+    );
     writeFile(scenesDir, 'chapter-01', 'E1a.md', 'Scene one.');
-    writeFile(scenesDir, 'chapter-01', 'E1b.yaml', committedMeta({ event: 'E1b', narrativeOrder: 2 }));
+    writeFile(
+      scenesDir,
+      'chapter-01',
+      'E1b.yaml',
+      committedMeta({ event: 'E1b', narrativeOrder: 2 }),
+    );
     writeFile(scenesDir, 'chapter-01', 'E1b.md', 'Scene two.');
-    writeFile(scenesDir, 'chapter-02', 'E2a.yaml', committedMeta({ event: 'E2a', narrativeOrder: 3 }));
+    writeFile(
+      scenesDir,
+      'chapter-02',
+      'E2a.yaml',
+      committedMeta({ event: 'E2a', narrativeOrder: 3 }),
+    );
     writeFile(scenesDir, 'chapter-02', 'E2a.md', 'Scene three.');
 
     const collector = new SceneCollector();
@@ -176,7 +198,11 @@ describe('SceneCollector', () => {
 describe('NarrativeSorter', () => {
   const allBranch: BranchSet = { type: 'all' };
   const mkEntry = (prose: string, order: number, ch: number): SceneEntry => ({
-    prose, metadata: {} as any, narrativeOrder: order, chapter: ch, branchExistence: allBranch,
+    prose,
+    metadata: {} as any,
+    narrativeOrder: order,
+    chapter: ch,
+    branchExistence: allBranch,
   });
 
   it('sorts scenes by narrativeOrder ascending', () => {
@@ -207,11 +233,19 @@ describe('NarrativeSorter', () => {
   });
 
   it('propagates branchExistence to sorted scenes', () => {
-    const paths: BranchSet = { type: 'paths', paths: [{
-      decisions: [{ atEventId: 'E', choiceId: 'a', narrativeOrder: 1 }],
-    }] };
+    const paths: BranchSet = {
+      type: 'paths',
+      paths: [
+        {
+          decisions: [{ atEventId: 'E', choiceId: 'a', narrativeOrder: 1 }],
+        },
+      ],
+    };
     const map = new Map<string, SceneEntry>([
-      ['E1', { prose: 'A', metadata: {} as any, narrativeOrder: 1, chapter: 1, branchExistence: paths }],
+      [
+        'E1',
+        { prose: 'A', metadata: {} as any, narrativeOrder: 1, chapter: 1, branchExistence: paths },
+      ],
     ]);
 
     const sorter = new NarrativeSorter();
@@ -226,14 +260,50 @@ describe('ProseConcatenator', () => {
 
   it('produces a markdown document with chapter headings', () => {
     const sorted: SortedScene[] = [
-      { eventId: 'E1a', prose: 'First scene.', narrativeOrder: 1, chapter: 1, branchExistence: allBranch },
-      { eventId: 'E1b', prose: 'Second scene.', narrativeOrder: 2, chapter: 1, branchExistence: allBranch },
-      { eventId: 'E2a', prose: 'Third scene.', narrativeOrder: 3, chapter: 2, branchExistence: allBranch },
+      {
+        eventId: 'E1a',
+        prose: 'First scene.',
+        narrativeOrder: 1,
+        chapter: 1,
+        branchExistence: allBranch,
+      },
+      {
+        eventId: 'E1b',
+        prose: 'Second scene.',
+        narrativeOrder: 2,
+        chapter: 1,
+        branchExistence: allBranch,
+      },
+      {
+        eventId: 'E2a',
+        prose: 'Third scene.',
+        narrativeOrder: 3,
+        chapter: 2,
+        branchExistence: allBranch,
+      },
     ];
 
     const chapterMetadata = new Map<number, any>([
-      [1, { chapter: 1, title: 'The Beginning', summary: 'Start of story.', intent: '', plannedScenes: 2 }],
-      [2, { chapter: 2, title: 'The Middle', summary: 'Rising action.', intent: '', plannedScenes: 1 }],
+      [
+        1,
+        {
+          chapter: 1,
+          title: 'The Beginning',
+          summary: 'Start of story.',
+          intent: '',
+          plannedScenes: 2,
+        },
+      ],
+      [
+        2,
+        {
+          chapter: 2,
+          title: 'The Middle',
+          summary: 'Rising action.',
+          intent: '',
+          plannedScenes: 1,
+        },
+      ],
     ]);
 
     const concat = new ProseConcatenator();
@@ -252,7 +322,13 @@ describe('ProseConcatenator', () => {
 
   it('handles single scene without separator at end', () => {
     const sorted: SortedScene[] = [
-      { eventId: 'E1', prose: 'Only scene.', narrativeOrder: 1, chapter: 1, branchExistence: allBranch },
+      {
+        eventId: 'E1',
+        prose: 'Only scene.',
+        narrativeOrder: 1,
+        chapter: 1,
+        branchExistence: allBranch,
+      },
     ];
 
     const concat = new ProseConcatenator();
@@ -290,13 +366,19 @@ describe('loadChapterMetadata', () => {
   });
 
   it('loads chapter metadata from _chapter.yaml files', () => {
-    writeFile(projectDir, 'chapters', 'chapter_01', '_chapter.yaml', JSON.stringify({
-      chapter: 1,
-      title: 'First Chapter',
-      summary: 'Summary of chapter one.',
-      intent: 'Set up the world.',
-      planned_scenes: 3,
-    }));
+    writeFile(
+      projectDir,
+      'chapters',
+      'chapter_01',
+      '_chapter.yaml',
+      JSON.stringify({
+        chapter: 1,
+        title: 'First Chapter',
+        summary: 'Summary of chapter one.',
+        intent: 'Set up the world.',
+        planned_scenes: 3,
+      }),
+    );
 
     const meta = loadChapterMetadata(projectDir);
     expect(meta.size).toBe(1);
@@ -316,8 +398,20 @@ describe('filterScenesByBranchPath', () => {
   const laneB: BranchPath = { decisions: [{ atEventId: 'E2', choiceId: 'b', narrativeOrder: 2 }] };
   const scenes: SortedScene[] = [
     { eventId: 'E1', prose: '', narrativeOrder: 1, chapter: 1, branchExistence: { type: 'all' } },
-    { eventId: 'E2a', prose: '', narrativeOrder: 2, chapter: 1, branchExistence: { type: 'paths', paths: [laneA] } },
-    { eventId: 'E2b', prose: '', narrativeOrder: 3, chapter: 1, branchExistence: { type: 'paths', paths: [laneB] } },
+    {
+      eventId: 'E2a',
+      prose: '',
+      narrativeOrder: 2,
+      chapter: 1,
+      branchExistence: { type: 'paths', paths: [laneA] },
+    },
+    {
+      eventId: 'E2b',
+      prose: '',
+      narrativeOrder: 3,
+      chapter: 1,
+      branchExistence: { type: 'paths', paths: [laneB] },
+    },
   ];
 
   it('includes only linear scenes for an empty path', () => {
@@ -325,8 +419,14 @@ describe('filterScenesByBranchPath', () => {
   });
 
   it('includes exactly the selected lane without leakage', () => {
-    expect(filterScenesByBranchPath(scenes, laneA).map((scene) => scene.eventId)).toEqual(['E1', 'E2a']);
-    expect(filterScenesByBranchPath(scenes, laneB).map((scene) => scene.eventId)).toEqual(['E1', 'E2b']);
+    expect(filterScenesByBranchPath(scenes, laneA).map((scene) => scene.eventId)).toEqual([
+      'E1',
+      'E2a',
+    ]);
+    expect(filterScenesByBranchPath(scenes, laneB).map((scene) => scene.eventId)).toEqual([
+      'E1',
+      'E2b',
+    ]);
   });
 });
 
@@ -337,49 +437,101 @@ describe('assembleNovel', () => {
     projectDir = createTempProject();
 
     // Project config
-    writeFile(projectDir, 'nova.yaml', JSON.stringify({
-      project: 'test',
-      title: 'Test Novel',
-      author: 'Tester',
-    }));
+    writeFile(
+      projectDir,
+      'nova.yaml',
+      JSON.stringify({
+        project: 'test',
+        title: 'Test Novel',
+        author: 'Tester',
+      }),
+    );
 
     // Chapter metadata
-    writeFile(projectDir, 'chapters', 'chapter_01', '_chapter.yaml', JSON.stringify({
-      chapter: 1,
-      title: 'The Beginning',
-      summary: 'How it all started.',
-      intent: 'Introduce the world.',
-      planned_scenes: 2,
-    }));
-    writeFile(projectDir, 'chapters', 'chapter_02', '_chapter.yaml', JSON.stringify({
-      chapter: 2,
-      title: 'The Middle',
-      summary: 'Things get complicated.',
-      intent: 'Raise the stakes.',
-      planned_scenes: 1,
-    }));
+    writeFile(
+      projectDir,
+      'chapters',
+      'chapter_01',
+      '_chapter.yaml',
+      JSON.stringify({
+        chapter: 1,
+        title: 'The Beginning',
+        summary: 'How it all started.',
+        intent: 'Introduce the world.',
+        planned_scenes: 2,
+      }),
+    );
+    writeFile(
+      projectDir,
+      'chapters',
+      'chapter_02',
+      '_chapter.yaml',
+      JSON.stringify({
+        chapter: 2,
+        title: 'The Middle',
+        summary: 'Things get complicated.',
+        intent: 'Raise the stakes.',
+        planned_scenes: 1,
+      }),
+    );
 
     // Scene prose and metadata (self-contained, no chapters/ cross-ref needed)
-    writeFile(projectDir, 'scenes', 'chapter-01', 'E1a.yaml', committedMeta({
-      event: 'E1a',
-      narrativeOrder: 1,
-      branchExistence: { type: 'all' },
-    }));
-    writeFile(projectDir, 'scenes', 'chapter-01', 'E1a.md', 'The hero woke up to a beautiful morning.\n\nSunlight streamed through the window.');
+    writeFile(
+      projectDir,
+      'scenes',
+      'chapter-01',
+      'E1a.yaml',
+      committedMeta({
+        event: 'E1a',
+        narrativeOrder: 1,
+        branchExistence: { type: 'all' },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'scenes',
+      'chapter-01',
+      'E1a.md',
+      'The hero woke up to a beautiful morning.\n\nSunlight streamed through the window.',
+    );
 
-    writeFile(projectDir, 'scenes', 'chapter-01', 'E1b.yaml', committedMeta({
-      event: 'E1b',
-      narrativeOrder: 2,
-      branchExistence: { type: 'all' },
-    }));
-    writeFile(projectDir, 'scenes', 'chapter-01', 'E1b.md', 'The mentor stood in the doorway, cloaked in shadow.');
+    writeFile(
+      projectDir,
+      'scenes',
+      'chapter-01',
+      'E1b.yaml',
+      committedMeta({
+        event: 'E1b',
+        narrativeOrder: 2,
+        branchExistence: { type: 'all' },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'scenes',
+      'chapter-01',
+      'E1b.md',
+      'The mentor stood in the doorway, cloaked in shadow.',
+    );
 
-    writeFile(projectDir, 'scenes', 'chapter-02', 'E2a.yaml', committedMeta({
-      event: 'E2a',
-      narrativeOrder: 3,
-      branchExistence: { type: 'all' },
-    }));
-    writeFile(projectDir, 'scenes', 'chapter-02', 'E2a.md', 'The battle had begun. There was no turning back now.');
+    writeFile(
+      projectDir,
+      'scenes',
+      'chapter-02',
+      'E2a.yaml',
+      committedMeta({
+        event: 'E2a',
+        narrativeOrder: 3,
+        branchExistence: { type: 'all' },
+      }),
+    );
+    writeFile(
+      projectDir,
+      'scenes',
+      'chapter-02',
+      'E2a.md',
+      'The battle had begun. There was no turning back now.',
+    );
   });
 
   afterEach(() => {
@@ -428,22 +580,34 @@ describe('assembleNovel', () => {
 
   it('throws NO_SCENES with no committed scenes', () => {
     const emptyDir = createTempProject();
-    expect(() => assembleNovel({ projectDir: emptyDir, title: 'Empty Book' })).toThrow(AssemblyError);
-    try { assembleNovel({ projectDir: emptyDir, title: 'Empty Book' }); } catch (e: any) {
+    expect(() => assembleNovel({ projectDir: emptyDir, title: 'Empty Book' })).toThrow(
+      AssemblyError,
+    );
+    try {
+      assembleNovel({ projectDir: emptyDir, title: 'Empty Book' });
+    } catch (e: any) {
       expect(e.code).toBe(AssemblyErrorCode.NO_SCENES);
     }
     fs.rmSync(emptyDir, { recursive: true, force: true });
   });
 
   it('throws DUPLICATE_NARRATIVE_ORDER for duplicate orders', () => {
-    writeFile(projectDir, 'scenes', 'chapter-02', 'E2a.yaml', committedMeta({
-      event: 'E2a',
-      narrativeOrder: 1, // Same as E1a
-      branchExistence: { type: 'all' },
-    }));
+    writeFile(
+      projectDir,
+      'scenes',
+      'chapter-02',
+      'E2a.yaml',
+      committedMeta({
+        event: 'E2a',
+        narrativeOrder: 1, // Same as E1a
+        branchExistence: { type: 'all' },
+      }),
+    );
 
     expect(() => assembleNovel({ projectDir })).toThrow(AssemblyError);
-    try { assembleNovel({ projectDir }); } catch (e: any) {
+    try {
+      assembleNovel({ projectDir });
+    } catch (e: any) {
       expect(e.code).toBe(AssemblyErrorCode.DUPLICATE_NARRATIVE_ORDER);
     }
   });

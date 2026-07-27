@@ -2,12 +2,7 @@
 // AI Provider — Mock Provider
 // ============================================================================
 
-import type {
-  CompletionRequest,
-  CompletionResponse,
-  LLMProvider,
-  Message,
-} from '../types.ts';
+import type { CompletionRequest, CompletionResponse, LLMProvider, Message } from '../types.ts';
 
 /**
  * In-process mock provider for tests and offline development.
@@ -71,12 +66,8 @@ export class MockProvider implements LLMProvider {
       content = this.responses[this.nextIndex++];
     } else {
       // Default: echo last user message with a brief narrative wrapper
-      const lastUser = [...request.messages]
-        .reverse()
-        .find((m: Message) => m.role === 'user');
-      content = lastUser
-        ? `Mock response: ${lastUser.content.slice(0, 80)}…`
-        : 'Mock response';
+      const lastUser = [...request.messages].reverse().find((m: Message) => m.role === 'user');
+      content = lastUser ? `Mock response: ${lastUser.content.slice(0, 80)}…` : 'Mock response';
     }
 
     return {
@@ -84,7 +75,10 @@ export class MockProvider implements LLMProvider {
       model: request.model ?? 'mock-model',
       content,
       usage: {
-        promptTokens: request.messages.reduce((acc: number, m: Message) => acc + m.content.length / 4, 0),
+        promptTokens: request.messages.reduce(
+          (acc: number, m: Message) => acc + m.content.length / 4,
+          0,
+        ),
         completionTokens: content.length / 4,
         totalTokens: 0,
       },

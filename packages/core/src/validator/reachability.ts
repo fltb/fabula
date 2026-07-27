@@ -3,10 +3,10 @@
 // ============================================================================
 
 import type {
-  PreRenderInput,
   PostRenderInput,
-  Validator,
+  PreRenderInput,
   ValidationIssue,
+  Validator,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
 
@@ -23,24 +23,26 @@ export class ReachabilityValidator implements Validator {
     for (const [threadId, threadData] of Object.entries(allThreads)) {
       const goalStates = threadData.goalStates ?? {};
       const totalGoals = Object.keys(goalStates!).length;
-      const achievedGoals = Object.values(goalStates!).filter(s => s === 'achieved').length;
-      if (
-        achievedGoals < totalGoals &&
-        input.chapter > event.narrativeOrder
-      ) {
+      const achievedGoals = Object.values(goalStates!).filter((s) => s === 'achieved').length;
+      if (achievedGoals < totalGoals && input.chapter > event.narrativeOrder) {
         const behind = totalGoals - achievedGoals;
         if (behind > 2 && input.chapter > 5) {
-          issues.push(makeIssue(
-            this.name, event.id, threadId, 'warning',
-            `Thread "${threadId}" is behind: ${achievedGoals}/${totalGoals} goals (${behind} remaining) at chapter ${input.chapter}`,
-            'Add events that advance this thread, or adjust the progress target.',
-            'change_value',
-            'thread_progress',
-          ));
+          issues.push(
+            makeIssue(
+              this.name,
+              event.id,
+              threadId,
+              'warning',
+              `Thread "${threadId}" is behind: ${achievedGoals}/${totalGoals} goals (${behind} remaining) at chapter ${input.chapter}`,
+              'Add events that advance this thread, or adjust the progress target.',
+              'change_value',
+              'thread_progress',
+            ),
+          );
         }
       }
     }
-    
+
     // 2. Precondition deadlock: are there events whose preconditions can never be satisfied?
     const allEvents = input.events;
     const allFactIds = new Set<string>();
@@ -61,24 +63,28 @@ export class ReachabilityValidator implements Validator {
       for (const pc of e.preconditions) {
         const factKey = `${pc.entityId}.${pc.attribute}`;
         if (!allFactIds.has(factKey)) {
-          issues.push(makeIssue(
-            this.name, e.id, pc.entityId, 'warning',
-            `Precondition "${pc.entityId}.${pc.attribute}" in event ${e.id} is never established by any postcondition`,
-            'Add an event that establishes this precondition, or remove it.',
-            'add_precondition',
-            pc.attribute,
-          ));
+          issues.push(
+            makeIssue(
+              this.name,
+              e.id,
+              pc.entityId,
+              'warning',
+              `Precondition "${pc.entityId}.${pc.attribute}" in event ${e.id} is never established by any postcondition`,
+              'Add an event that establishes this precondition, or remove it.',
+              'add_precondition',
+              pc.attribute,
+            ),
+          );
         }
       }
     }
 
     return issues;
   }
-  
+
   validatePost(_input: PostRenderInput): ValidationIssue[] {
     return [];
   }
-
 
   getAnalysisRequirements() {
     return []; // No Pass 2 analysis needed

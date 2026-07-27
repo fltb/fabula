@@ -2,15 +2,15 @@
 // ResultAggregator — integration tests for validateRender/validatePost flow
 // ============================================================================
 
-import { describe, it, expect, vi } from 'vitest';
-import { ResultAggregator } from '../../src/validator/aggregator.ts';
+import { describe, expect, it, vi } from 'vitest';
 import type {
-  NarrativeEvent,
   EntityRegistry,
+  NarrativeEvent,
   PostRenderInput,
   ValidationIssue,
   WorldState,
 } from '../../src/types/index.js';
+import { ResultAggregator } from '../../src/validator/aggregator.ts';
 
 // ——— helpers ———
 
@@ -112,11 +112,7 @@ describe('ResultAggregator.validateRender', () => {
     const { validator, received } = spyPostValidator();
     const aggregator = new ResultAggregator([validator]);
 
-    aggregator.validateRender(
-      'Some prose.',
-      makeEvent(),
-      makeWorldState(),
-    );
+    aggregator.validateRender('Some prose.', makeEvent(), makeWorldState());
 
     expect(received).toHaveLength(1);
     expect(received[0].entityRegistry).toBeUndefined();
@@ -179,13 +175,9 @@ describe('ResultAggregator.validateRender', () => {
 
     const aggregator = new ResultAggregator([validator]);
 
-    const result = aggregator.validateRender(
-      'Prose.',
-      makeEvent(),
-      makeWorldState(),
-      undefined,
-      { OverrideTester: 'error' },
-    );
+    const result = aggregator.validateRender('Prose.', makeEvent(), makeWorldState(), undefined, {
+      OverrideTester: 'error',
+    });
 
     // All three should now be errors
     expect(result.errors).toHaveLength(3);
@@ -203,9 +195,36 @@ describe('ResultAggregator.validateRender', () => {
       category: 'characterization',
       validatePost() {
         return [
-          { validator: 'MultiIssue', severity: 'error', event: 'E0', entity: '', message: 'E1', fixSuggestion: '', fixAction: 'manual', fixTarget: { file: '' } },
-          { validator: 'MultiIssue', severity: 'warning', event: 'E0', entity: '', message: 'W1', fixSuggestion: '', fixAction: 'manual', fixTarget: { file: '' } },
-          { validator: 'MultiIssue', severity: 'info', event: 'E0', entity: '', message: 'I1', fixSuggestion: '', fixAction: 'manual', fixTarget: { file: '' } },
+          {
+            validator: 'MultiIssue',
+            severity: 'error',
+            event: 'E0',
+            entity: '',
+            message: 'E1',
+            fixSuggestion: '',
+            fixAction: 'manual',
+            fixTarget: { file: '' },
+          },
+          {
+            validator: 'MultiIssue',
+            severity: 'warning',
+            event: 'E0',
+            entity: '',
+            message: 'W1',
+            fixSuggestion: '',
+            fixAction: 'manual',
+            fixTarget: { file: '' },
+          },
+          {
+            validator: 'MultiIssue',
+            severity: 'info',
+            event: 'E0',
+            entity: '',
+            message: 'I1',
+            fixSuggestion: '',
+            fixAction: 'manual',
+            fixTarget: { file: '' },
+          },
         ];
       },
     };
@@ -223,13 +242,9 @@ describe('ResultAggregator.validateRender', () => {
     const { validator, received } = spyPostValidator();
     const aggregator = new ResultAggregator([validator]);
 
-    aggregator.validateRender(
-      'Prose.',
-      makeEvent(),
-      makeWorldState(),
-      undefined,
-      { SpyPostValidator: 'off' },
-    );
+    aggregator.validateRender('Prose.', makeEvent(), makeWorldState(), undefined, {
+      SpyPostValidator: 'off',
+    });
 
     expect(received).toHaveLength(0);
   });
@@ -273,11 +288,7 @@ describe('ResultAggregator.validateRender', () => {
     const { validator, received } = spyPostValidator();
     const aggregator = new ResultAggregator([validator]);
 
-    aggregator.validateRender(
-      'Some prose.',
-      makeEvent(),
-      makeWorldState(),
-    );
+    aggregator.validateRender('Some prose.', makeEvent(), makeWorldState());
 
     expect(received).toHaveLength(1);
     expect(received[0].chapter).toBe(1);

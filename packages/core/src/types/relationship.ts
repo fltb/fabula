@@ -12,14 +12,14 @@ import type { EntityId } from './entity.js';
 
 export interface RelationshipDefinition {
   id: string;
-  type: string;             // 'friendship' | 'rivalry' | 'love' | 'fear' | 'hate' | 'professional' etc.
-  participants: [EntityId, EntityId];  // exactly 2
-  bidirectional: boolean;   // false = asymmetric (A→B different from B→A)
+  type: string; // 'friendship' | 'rivalry' | 'love' | 'fear' | 'hate' | 'professional' etc.
+  participants: [EntityId, EntityId]; // exactly 2
+  bidirectional: boolean; // false = asymmetric (A→B different from B→A)
   initialState: {
-    trust: number;            // -100 to 100
+    trust: number; // -100 to 100
     emotionalDistance: number; // 0 = close, 100 = distant
-    intensity: number;        // 0-100
-    status: string;           // 'active' | 'dormant' | 'broken' | 'formed'
+    intensity: number; // 0-100
+    status: string; // 'active' | 'dormant' | 'broken' | 'formed'
     notes?: string;
   };
   establishedEvent?: string;

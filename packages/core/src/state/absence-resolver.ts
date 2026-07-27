@@ -4,11 +4,7 @@
 // and catalog/lifecycle/closed-world basis.
 // ============================================================================
 
-import type {
-  AbsenceWitness,
-  AbsenceBasis,
-  BranchPath,
-} from '../types/index.js';
+import type { AbsenceBasis, AbsenceWitness, BranchPath } from '../types/index.js';
 
 // ─── Helper: compute a resolution hash for given parameters ──────────────────
 
@@ -31,7 +27,7 @@ function computeResolutionHash(
   const input = components.join('|');
   for (let i = 0; i < input.length; i++) {
     const char = input.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash |= 0; // Convert to 32-bit integer
   }
   return Math.abs(hash).toString(16).padStart(8, '0');
@@ -102,8 +98,8 @@ export function resolveAbsenceBasis(context: AbsenceContext): AbsenceBasis {
   if (context.afterUnset) return 'after_unset';
   if (context.branchLocal) return 'branch_local';
   throw new Error(
-    'Cannot resolve absence basis: no absence context flag is set. '
-    + 'At least one of neverWritten, preIntroduction, afterUnset, or branchLocal must be true.',
+    'Cannot resolve absence basis: no absence context flag is set. ' +
+      'At least one of neverWritten, preIntroduction, afterUnset, or branchLocal must be true.',
   );
 }
 
@@ -142,7 +138,7 @@ export function aggregateAbsenceEvaluation(witnesses: AbsenceWitness[]): {
   }
 
   // Use the strongest witness's hash
-  const strongestWitness = witnesses.find(w => w.basis === strongest) ?? witnesses[0];
+  const strongestWitness = witnesses.find((w) => w.basis === strongest) ?? witnesses[0];
 
   return {
     exists: false,

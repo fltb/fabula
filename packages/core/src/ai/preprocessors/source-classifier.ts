@@ -29,6 +29,7 @@ Return a JSON array of objects with fields:
 // ── Zod validation for LLM response ─────────────────────────────────────────
 
 import { z } from 'zod';
+
 const sourceContextEntrySchema = z.object({
   excerpt: z.string(),
   classification: z.enum(['STYLE', 'FACT', 'MIXED']),
@@ -52,11 +53,14 @@ export async function classifySourceExcerpt(
   if (!provider) {
     // Provider not available: return a single MIXED entry — the caller can still
     // use it as a unified style reference, but STYLE/FACT separation is deferred.
-    return [{
-      excerpt,
-      classification: 'MIXED',
-      styleNote: 'LLM provider not configured — entire excerpt treated as MIXED. Configure NOVALISTICALLY_AI_API_KEY for STYLE/FACT separation.',
-    }];
+    return [
+      {
+        excerpt,
+        classification: 'MIXED',
+        styleNote:
+          'LLM provider not configured — entire excerpt treated as MIXED. Configure NOVALISTICALLY_AI_API_KEY for STYLE/FACT separation.',
+      },
+    ];
   }
 
   try {
@@ -78,10 +82,12 @@ export async function classifySourceExcerpt(
     return entries;
   } catch {
     // On any failure (network, parse, validation), fall back to MIXED
-    return [{
-      excerpt,
-      classification: 'MIXED',
-      styleNote: 'Classification failed — treating entire excerpt as MIXED fallback.',
-    }];
+    return [
+      {
+        excerpt,
+        classification: 'MIXED',
+        styleNote: 'Classification failed — treating entire excerpt as MIXED fallback.',
+      },
+    ];
   }
 }

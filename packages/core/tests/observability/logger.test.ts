@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { Logger, MemoryLogTransport, JsonlLogTransport } from '../../src/observability/logger.ts';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { JsonlLogTransport, Logger, MemoryLogTransport } from '../../src/observability/logger.ts';
 
 describe('Logger', () => {
   it('emits only whitelisted safe context fields', () => {
@@ -14,7 +14,10 @@ describe('Logger', () => {
     });
 
     expect(transport.entries).toHaveLength(1);
-    expect(transport.entries[0]).toMatchObject({ level: 'info', context: { module: 'pipeline', eventId: 'E0', cacheHit: true, durationMs: 12 } });
+    expect(transport.entries[0]).toMatchObject({
+      level: 'info',
+      context: { module: 'pipeline', eventId: 'E0', cacheHit: true, durationMs: 12 },
+    });
     expect(JSON.stringify(transport.entries[0])).not.toContain('do not log');
   });
 

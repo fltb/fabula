@@ -58,4 +58,10 @@ export interface ActantModel {
  * High-level story archetype classification.
  * Maps to conventional narrative macro-structures.
  */
-export type StoryArchetype = 'hero_journey' | 'tragedy' | 'quest' | 'descent' | 'rebirth' | 'comedy';
+export type StoryArchetype =
+  | 'hero_journey'
+  | 'tragedy'
+  | 'quest'
+  | 'descent'
+  | 'rebirth'
+  | 'comedy';

@@ -3,16 +3,16 @@
 // Uses RuleRuntimeState and RuleEvaluationRecord from STATE-6.
 // ============================================================================
 
+import { z } from 'zod';
 import type {
   PostRenderInput,
   PreRenderInput,
-  Validator,
-  ValidationIssue,
-  RuleRuntimeState,
   RuleEvaluationRecord,
+  RuleRuntimeState,
+  ValidationIssue,
+  Validator,
 } from '../types/index.js';
-import { makeIssue, getAttributeWritePolicy } from './base.js';
-import { z } from 'zod';
+import { getAttributeWritePolicy, makeIssue } from './base.js';
 
 export const ruleCheckSchema = z.object({
   ruleId: z.string(),
@@ -37,14 +37,23 @@ export class WorldRuleValidator implements Validator {
       if (re.effect === 'nullify') {
         const ruleId = re.rule;
         const ruleState = worldState.rules[ruleId];
-        if (ruleState && ruleState.activation === 'enabled' && ruleState.effectiveness !== 'nullified') {
-          issues.push(makeIssue(
-            this.name, event.id, ruleId, 'error',
-            `World rule "${ruleId}" is being nullified but its current effectiveness is "${ruleState.effectiveness}"`,
-            'Either remove the nullify effect or add enough weaken/nullify evidence.',
-            'edit_file',
-            'ruleEffects',
-          ));
+        if (
+          ruleState &&
+          ruleState.activation === 'enabled' &&
+          ruleState.effectiveness !== 'nullified'
+        ) {
+          issues.push(
+            makeIssue(
+              this.name,
+              event.id,
+              ruleId,
+              'error',
+              `World rule "${ruleId}" is being nullified but its current effectiveness is "${ruleState.effectiveness}"`,
+              'Either remove the nullify effect or add enough weaken/nullify evidence.',
+              'edit_file',
+              'ruleEffects',
+            ),
+          );
         }
       }
     }
@@ -54,14 +63,23 @@ export class WorldRuleValidator implements Validator {
       const entity = input.entityRegistry.resolve(pc.entityId);
       if (!entity) continue;
       const writePolicy = getAttributeWritePolicy(entity.kind, pc.attribute);
-      if (writePolicy === 'immutable' && entity.state[pc.attribute] !== undefined && entity.state[pc.attribute] !== pc.value) {
-        issues.push(makeIssue(
-          this.name, event.id, pc.entityId, 'error',
-          `World rule contradiction: "${pc.entityId}" ${pc.attribute} set to "${pc.value}" but registry defines "${entity.state[pc.attribute]}"`,
-          'Review scene for world rule compliance, or update the character definition.',
-          'edit_file',
-          pc.attribute,
-        ));
+      if (
+        writePolicy === 'immutable' &&
+        entity.state[pc.attribute] !== undefined &&
+        entity.state[pc.attribute] !== pc.value
+      ) {
+        issues.push(
+          makeIssue(
+            this.name,
+            event.id,
+            pc.entityId,
+            'error',
+            `World rule contradiction: "${pc.entityId}" ${pc.attribute} set to "${pc.value}" but registry defines "${entity.state[pc.attribute]}"`,
+            'Review scene for world rule compliance, or update the character definition.',
+            'edit_file',
+            pc.attribute,
+          ),
+        );
       }
     }
 
@@ -72,29 +90,35 @@ export class WorldRuleValidator implements Validator {
     const issues: ValidationIssue[] = [];
     if (!input.analysis) return issues;
 
-    const ruleChecks = z.array(ruleCheckSchema).safeParse(input.analysis.analysis.ruleChecks).data ?? [];
+    const ruleChecks =
+      z.array(ruleCheckSchema).safeParse(input.analysis.analysis.ruleChecks).data ?? [];
     for (const check of ruleChecks) {
       if (check.violated) {
-        issues.push(makeIssue(
-          'world_rule',
-          input.event.id,
-          check.ruleId,
-          check.severity === 'major' ? 'error' : 'warning',
-          `World rule violation: ${check.evidence}`,
-          'Review scene for rule compliance',
-          'edit_file',
-          'ruleEffects',
-        ));
+        issues.push(
+          makeIssue(
+            'world_rule',
+            input.event.id,
+            check.ruleId,
+            check.severity === 'major' ? 'error' : 'warning',
+            `World rule violation: ${check.evidence}`,
+            'Review scene for rule compliance',
+            'edit_file',
+            'ruleEffects',
+          ),
+        );
       }
     }
     return issues;
   }
 
   getAnalysisRequirements() {
-    return [{
-      field: 'ruleChecks',
-      schema: z.array(ruleCheckSchema),
-      instruction: 'ruleChecks: For each active world rule, check if the prose complies with or violates the stated rule. Report in the ruleChecks block with the ruleId, whether the rule was violated (true/false), a direct quote from the prose as evidence, and severity as "minor" or "major". A rule is violated if the prose depicts an action, event, or state that directly contradicts the rule\'s statement.',
-    }];
+    return [
+      {
+        field: 'ruleChecks',
+        schema: z.array(ruleCheckSchema),
+        instruction:
+          'ruleChecks: For each active world rule, check if the prose complies with or violates the stated rule. Report in the ruleChecks block with the ruleId, whether the rule was violated (true/false), a direct quote from the prose as evidence, and severity as "minor" or "major". A rule is violated if the prose depicts an action, event, or state that directly contradicts the rule\'s statement.',
+      },
+    ];
   }
 }

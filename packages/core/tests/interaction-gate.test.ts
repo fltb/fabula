@@ -1,9 +1,9 @@
 // ============================================================================
 // Interaction Gate — Test Suite
 // ============================================================================
-import { describe, it, expect, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { InteractionGate, WaiverRecord } from '../src/pipeline/interaction-gate.ts';
 import { InteractionManager } from '../src/pipeline/interaction-gate.ts';
-import type { WaiverRecord, InteractionGate } from '../src/pipeline/interaction-gate.ts';
 
 // ============================================================================
 // InteractionManager unit tests

@@ -3,8 +3,8 @@
 // ============================================================================
 
 import { readFileSync } from 'node:fs';
-import type { ContextPackage, StyleGuidance } from '../types/index.ts';
 import type { Message } from '../ai/types.ts';
+import type { ContextPackage, StyleGuidance } from '../types/index.ts';
 
 export interface AssembledPrompt {
   systemPrompt: string;
@@ -52,7 +52,11 @@ export class PromptAssembler {
       /** Pre-composed style profile notes from resolved project/chapter/scene profile */
       profileStyleNotes?: string;
       /** S1: Narrative checklist items as coverage requirements for Pass 1 */
-      narrativeChecklistItems?: Array<{ dimension: string; description: string; required: boolean }>;
+      narrativeChecklistItems?: Array<{
+        dimension: string;
+        description: string;
+        required: boolean;
+      }>;
       /** S4: Source context style notes (STYLE-classified only), injected as style anchors */
       sourceContextStyleNotes?: string;
     },
@@ -69,7 +73,8 @@ export class PromptAssembler {
       parts.push(this.scribeInstructions);
     } else {
       // Fallback to built-in instructions
-      const effectiveTarget = options?.styleGuidance?.targetWordCount ?? options?.targetLengthWords ?? 800;
+      const effectiveTarget =
+        options?.styleGuidance?.targetWordCount ?? options?.targetLengthWords ?? 800;
       const lang = options?.language ?? 'en';
       parts.push(...this.getBuiltInInstructions(effectiveTarget, lang));
     }
@@ -82,7 +87,9 @@ export class PromptAssembler {
       if (sg.targetWordCount) {
         const isCJK = (options?.language ?? 'en').startsWith('zh');
         const unit = isCJK ? '字' : 'words';
-        parts.push(`- This scene should be approximately ${sg.targetWordCount} ${unit} long. This is a firm target — do not significantly under- or over-write.`);
+        parts.push(
+          `- This scene should be approximately ${sg.targetWordCount} ${unit} long. This is a firm target — do not significantly under- or over-write.`,
+        );
       }
       if (sg.avoid) parts.push(`- Avoid: ${sg.avoid}.`);
     }
@@ -117,7 +124,9 @@ export class PromptAssembler {
     }
     const targetAudience = context.systemContext?.targetAudience;
     if (targetAudience) {
-      parts.push(`- Target audience: ${targetAudience}. Adjust vocabulary, complexity, and prose style accordingly.`);
+      parts.push(
+        `- Target audience: ${targetAudience}. Adjust vocabulary, complexity, and prose style accordingly.`,
+      );
     }
     // S7b: Whole-work synopsis
     if (context.systemContext?.synopsis) {
@@ -139,7 +148,9 @@ export class PromptAssembler {
       parts.push('');
       parts.push('## Narrator');
       parts.push(`Type: ${context.narratorProfile.type}`);
-      parts.push(`Fidelity: ${context.narratorProfile.fidelity}; Sincerity: ${context.narratorProfile.sincerity}`);
+      parts.push(
+        `Fidelity: ${context.narratorProfile.fidelity}; Sincerity: ${context.narratorProfile.sincerity}`,
+      );
     }
 
     // DRC: Author notes
@@ -163,7 +174,11 @@ export class PromptAssembler {
       '',
       '## Narrative Context Package',
       '```json',
-      JSON.stringify((({ markdown: _omitted, ...contextForPrompt }) => contextForPrompt)(context), null, 2),
+      JSON.stringify(
+        (({ markdown: _omitted, ...contextForPrompt }) => contextForPrompt)(context),
+        null,
+        2,
+      ),
       '```',
     );
 
@@ -197,17 +212,23 @@ export class PromptAssembler {
     const userPrompt = parts.join('\n');
 
     return {
-      systemPrompt: 'You produce clean literary prose from a narrative context package. Your output is pure narrative text with no metadata.',
+      systemPrompt:
+        'You produce clean literary prose from a narrative context package. Your output is pure narrative text with no metadata.',
       userPrompt,
       messages: [
-        { role: 'system', content: 'You produce clean literary prose from a narrative context package. Your output is pure narrative text with no metadata.' },
+        {
+          role: 'system',
+          content:
+            'You produce clean literary prose from a narrative context package. Your output is pure narrative text with no metadata.',
+        },
         { role: 'user', content: userPrompt },
       ],
     };
   }
 
   private getBuiltInInstructions(targetLength: number, language: string): string[] {
-    const isCJK = language.startsWith('zh') || language.startsWith('ja') || language.startsWith('ko');
+    const isCJK =
+      language.startsWith('zh') || language.startsWith('ja') || language.startsWith('ko');
     const unit = isCJK ? '字（characters）' : 'words';
     return [
       '- Write ONLY the scene narrative. No planning. No self-analysis. No section headers. No JSON.',

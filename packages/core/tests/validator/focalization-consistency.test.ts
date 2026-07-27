@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { FocalizationConsistencyValidator } from '../../src/validator/focalization-consistency.js';
+import { describe, expect, it } from 'vitest';
 import type {
+  AnalysisResult,
   NarrativeEvent,
   PostRenderInput,
   PreRenderInput,
-  AnalysisResult,
 } from '../../src/types/index.js';
+import { FocalizationConsistencyValidator } from '../../src/validator/focalization-consistency.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -29,27 +29,35 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  analysis: AnalysisResult | null,
-): PostRenderInput {
+function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): PostRenderInput {
   return {
     event,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     prose: 'Some prose.',
     analysis,
     chapter: 1,
   };
 }
 
-function makePreInput(
-  event: NarrativeEvent,
-  events: NarrativeEvent[],
-): PreRenderInput {
+function makePreInput(event: NarrativeEvent, events: NarrativeEvent[]): PreRenderInput {
   return {
     event,
     events,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     entityRegistry: {
       load: () => {},
       resolve: () => null,
@@ -75,7 +83,13 @@ function makeAnalysis(overrides?: Partial<AnalysisResult['analysis']>): Analysis
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+      quality: {
+        proseScore: 8,
+        maxScore: 10,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 300,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
       tenseDetected: 'past',
@@ -98,7 +112,7 @@ describe('FocalizationConsistencyValidator', () => {
     const input = makePreInput(event, [event]);
 
     const issues = new FocalizationConsistencyValidator().validatePre(input);
-    const focalizationIssues = issues.filter(i => i.validator === 'focalization_consistency');
+    const focalizationIssues = issues.filter((i) => i.validator === 'focalization_consistency');
     expect(focalizationIssues.length).toBeGreaterThanOrEqual(1);
     expect(focalizationIssues[0].message).toContain('fewer than 2 entries');
     expect(focalizationIssues[0].severity).toBe('warning');
@@ -119,7 +133,7 @@ describe('FocalizationConsistencyValidator', () => {
     const input = makePreInput(event, [event]);
 
     const issues = new FocalizationConsistencyValidator().validatePre(input);
-    const focalizationIssues = issues.filter(i => i.validator === 'focalization_consistency');
+    const focalizationIssues = issues.filter((i) => i.validator === 'focalization_consistency');
     expect(focalizationIssues).toHaveLength(0);
   });
 
@@ -140,7 +154,7 @@ describe('FocalizationConsistencyValidator', () => {
     const input = makeInput(event, analysis);
 
     const issues = new FocalizationConsistencyValidator().validatePost(input);
-    const focalizationIssues = issues.filter(i => i.validator === 'focalization_consistency');
+    const focalizationIssues = issues.filter((i) => i.validator === 'focalization_consistency');
     expect(focalizationIssues).toHaveLength(0);
   });
 
@@ -153,7 +167,7 @@ describe('FocalizationConsistencyValidator', () => {
     const input = makeInput(event, analysis);
 
     const issues = new FocalizationConsistencyValidator().validatePost(input);
-    const focalizationIssues = issues.filter(i => i.validator === 'focalization_consistency');
+    const focalizationIssues = issues.filter((i) => i.validator === 'focalization_consistency');
     expect(focalizationIssues.length).toBeGreaterThanOrEqual(1);
     expect(focalizationIssues[0].message).toContain('internal');
     expect(focalizationIssues[0].message).toContain('external');
@@ -196,12 +210,14 @@ describe('FocalizationConsistencyValidator: instance state (no leakage)', () => 
       },
     });
     const issuesA = validator.validatePre(makePreInput(eA1, [eA1]));
-    expect(issuesA.filter(i => i.validator === 'focalization_consistency').length).toBeGreaterThanOrEqual(1);
+    expect(
+      issuesA.filter((i) => i.validator === 'focalization_consistency').length,
+    ).toBeGreaterThanOrEqual(1);
 
     // Set B: no focalization field
     const eB1 = makeEvent({ id: 'E2', narrativeOrder: 2 });
     const issuesB = validator.validatePre(makePreInput(eB1, [eB1]));
-    expect(issuesB.filter(i => i.validator === 'focalization_consistency')).toHaveLength(0);
+    expect(issuesB.filter((i) => i.validator === 'focalization_consistency')).toHaveLength(0);
   });
 
   it('should not carry state between validatePost calls with different events', () => {
@@ -213,7 +229,7 @@ describe('FocalizationConsistencyValidator: instance state (no leakage)', () => 
       makeAnalysis({ focalizationDetected: 'internal' }),
     );
     const issues1 = validator.validatePost(input1);
-    expect(issues1.filter(i => i.validator === 'focalization_consistency')).toHaveLength(0);
+    expect(issues1.filter((i) => i.validator === 'focalization_consistency')).toHaveLength(0);
 
     // Call with external focalization + matching analysis (should NOT be affected by first call)
     const input2 = makeInput(
@@ -221,6 +237,6 @@ describe('FocalizationConsistencyValidator: instance state (no leakage)', () => 
       makeAnalysis({ eventId: 'E2', focalizationDetected: 'external' }),
     );
     const issues2 = validator.validatePost(input2);
-    expect(issues2.filter(i => i.validator === 'focalization_consistency')).toHaveLength(0);
+    expect(issues2.filter((i) => i.validator === 'focalization_consistency')).toHaveLength(0);
   });
 });

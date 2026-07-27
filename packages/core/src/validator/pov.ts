@@ -4,12 +4,12 @@
 
 import { z } from 'zod';
 import type {
-  PreRenderInput,
   PostRenderInput,
-  Validator,
+  PreRenderInput,
   ValidationIssue,
+  Validator,
 } from '../types/index.js';
-import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
+import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
 
 // ── Schemas ───────────────────────────────────────────────────────────
 
@@ -19,7 +19,6 @@ export const povBlockSchema = z.object({
 });
 
 export type PovBlock = z.infer<typeof povBlockSchema>;
-
 
 export class POVValidator implements Validator {
   name = 'pov';
@@ -34,38 +33,53 @@ export class POVValidator implements Validator {
     // Check: POV character must exist in entity registry
     const povEntity = input.entityRegistry.resolve(povChar);
     if (!povEntity) {
-      issues.push(makeIssue(
-        this.name, event.id, povChar, 'error',
-        `POV character "${povChar}" is not defined in entity registry`,
-        'Define this character in definitions/characters/ or use an existing character.',
-        'create_file',
-        'character',
-        `definitions/characters/${povChar}.yaml`,
-      ));
+      issues.push(
+        makeIssue(
+          this.name,
+          event.id,
+          povChar,
+          'error',
+          `POV character "${povChar}" is not defined in entity registry`,
+          'Define this character in definitions/characters/ or use an existing character.',
+          'create_file',
+          'character',
+          `definitions/characters/${povChar}.yaml`,
+        ),
+      );
     }
 
     // For third_person_limited: POV character should be in the scene
     if (povType === 'third_person_limited' || povType === 'first_person') {
       const inScene = event.participants.entities.includes(povChar); // event-level field, not in entity attribute catalog
       if (!inScene) {
-        issues.push(makeIssue(
-          this.name, event.id, povChar, 'warning',
-          `POV character "${povChar}" is not listed as a participant in this scene (${povType} POV)`,
-          'Add the POV character to the scene participants.',
-          'change_value',
-          'participants',
-        ));
+        issues.push(
+          makeIssue(
+            this.name,
+            event.id,
+            povChar,
+            'warning',
+            `POV character "${povChar}" is not listed as a participant in this scene (${povType} POV)`,
+            'Add the POV character to the scene participants.',
+            'change_value',
+            'participants',
+          ),
+        );
       }
     }
 
     // For omniscient: should not use omniscient for character-heavy scenes without reason
     if (povType === 'omniscient') {
-      issues.push(makeIssue(
-        this.name, event.id, povChar, 'info',
-        'Using omniscient POV — ensure this is intentional. Limited POV often creates stronger reader engagement.',
-        'Consider switching to third_person_limited for a specific character.',
-        'manual',
-      ));
+      issues.push(
+        makeIssue(
+          this.name,
+          event.id,
+          povChar,
+          'info',
+          'Using omniscient POV — ensure this is intentional. Limited POV often creates stronger reader engagement.',
+          'Consider switching to third_person_limited for a specific character.',
+          'manual',
+        ),
+      );
     }
 
     return issues;
@@ -86,38 +100,48 @@ export class POVValidator implements Validator {
       if (povResult.success) {
         const leaks = povResult.data.leaks ?? [];
         for (const leak of leaks) {
-          issues.push(makeIssue(
-            this.name,
-            event.id,
-            event.pov.character,
-            'warning',
-            `POV leak detected: ${leak}`,
-            'Review POV consistency',
-            'edit_file',
-            'pov',
-          ));
+          issues.push(
+            makeIssue(
+              this.name,
+              event.id,
+              event.pov.character,
+              'warning',
+              `POV leak detected: ${leak}`,
+              'Review POV consistency',
+              'edit_file',
+              'pov',
+            ),
+          );
         }
 
         if (!povResult.data.consistent) {
-          issues.push(makeIssue(
-            'pov', input.event.id, input.event.pov.character, 'warning',
-            'POV inconsistency detected: the prose does not maintain consistent point of view.',
-            'Review POV consistency throughout the scene.',
-            'edit_file', 'pov',
-          ));
+          issues.push(
+            makeIssue(
+              'pov',
+              input.event.id,
+              input.event.pov.character,
+              'warning',
+              'POV inconsistency detected: the prose does not maintain consistent point of view.',
+              'Review POV consistency throughout the scene.',
+              'edit_file',
+              'pov',
+            ),
+          );
         }
       }
     }
-
 
     return issues;
   }
 
   getAnalysisRequirements() {
-    return [{
-      field: 'pov.leaks',
-      schema: povBlockSchema,
-      instruction: 'pov.leaks: Determine if the prose maintains the specified POV type throughout. List any phrases where the narration leaks into another character\'s internal thoughts, perceptions, or knowledge that the POV character could not access. Report in the pov block with consistent (true/false) and an array of leaked phrases. Pay attention to free indirect discourse that might blur POV boundaries.',
-    }];
+    return [
+      {
+        field: 'pov.leaks',
+        schema: povBlockSchema,
+        instruction:
+          "pov.leaks: Determine if the prose maintains the specified POV type throughout. List any phrases where the narration leaks into another character's internal thoughts, perceptions, or knowledge that the POV character could not access. Report in the pov block with consistent (true/false) and an array of leaked phrases. Pay attention to free indirect discourse that might blur POV boundaries.",
+      },
+    ];
   }
 }

@@ -1,12 +1,44 @@
 import { describe, expect, it } from 'vitest';
-import type { Fact, NarrativeEvent } from '../../src/types/index.ts';
 import { compileStoryBoundaries } from '../../src/state/story-boundaries.ts';
+import type { Fact, NarrativeEvent } from '../../src/types/index.ts';
 
 function fact(value: string): Fact {
-  return { id: 'wife.status', entityId: 'wife', attribute: 'status', value, validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } } };
+  return {
+    id: 'wife.status',
+    entityId: 'wife',
+    attribute: 'status',
+    value,
+    validity: {
+      temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+      branches: { type: 'all' },
+    },
+  };
 }
-function event(id: string, day: number, preconditions: Fact[] = [], postconditions: Fact[] = []): NarrativeEvent {
-  return { id, event: id, narrativeOrder: Number(id.slice(1)), title: id, storyTime: { type: 'absolute', value: `day_${day}` }, sceneType: 'linear', pov: { character: 'narrator', type: 'first_person' }, sceneBrief: id, preconditions, postconditions, threadProgress: [], foreshadowing: [], relationshipEffects: [], ruleEffects: [], source: 'event_file', branchExistence: { type: 'all' }, participants: { entities: [] } };
+function event(
+  id: string,
+  day: number,
+  preconditions: Fact[] = [],
+  postconditions: Fact[] = [],
+): NarrativeEvent {
+  return {
+    id,
+    event: id,
+    narrativeOrder: Number(id.slice(1)),
+    title: id,
+    storyTime: { type: 'absolute', value: `day_${day}` },
+    sceneType: 'linear',
+    pov: { character: 'narrator', type: 'first_person' },
+    sceneBrief: id,
+    preconditions,
+    postconditions,
+    threadProgress: [],
+    foreshadowing: [],
+    relationshipEffects: [],
+    ruleEffects: [],
+    source: 'event_file',
+    branchExistence: { type: 'all' },
+    participants: { entities: [] },
+  };
 }
 
 describe('compileStoryBoundaries', () => {

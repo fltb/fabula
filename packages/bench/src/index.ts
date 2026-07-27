@@ -2,78 +2,80 @@
 // Bench Module — Entry point
 // ============================================================================
 
-export { runRegressionBench, validateFixtureIssues } from './regression.js';
-export { loadApprovedReferences, collectReferenceIssueIdentities } from './reference.js';
-export type { ApprovedReference, ApprovedReferenceSet, ValidatorIssueIdentity, ProvenanceManifest, Stage1ReferenceReview } from './reference.js';
-export type { RegressionResults, RegressionStageResult } from './regression.js';
-
-export { runVariantBench } from './variants.js';
-export type { VariantResults, VariantResult, VariantIssueResult, InjectedEntry } from './variants.js';
-
-export { runExternalBench } from './external.js';
-export type { ExternalBenchResult } from './external.js';
-
-export {
-  runPerformanceBench,
-  runOfflineCorePathBench,
-  runCacheBench,
-  runPoolEfficiencyBench,
-  runFullOfflineBench,
-} from './performance.js';
 export type {
-  PerfResults,
-  PerfMeasurement,
-  CacheStats,
-  PoolEfficiencyResult,
-} from './performance.js';
-
-export { toJson, toMarkdown, writeResults } from './reporters.js';
-export type { BenchResults, BenchMeasurement } from './reporters.js';
-
-// Consistency metric types
-export type { PerValidatorBreakdown, SeverityLevelCED } from './consistency.js';
-
-// Annotation statistics — human evaluation agreement metrics
-export {
-  quadraticWeightedKappa,
-  clusterBootstrap,
-  agreementStats,
-  gradeDistribution,
-  transitionMatrix,
-  spearmanTestRetestRho,
-  rankWithTies,
-} from './annotation-stats.js';
-
+  AgentSFTConversionResult,
+  ChiNovelKEConversionResult,
+  ChiNovelKERelationOutput,
+  IN3KConversionResult,
+} from './adapters/index.js';
 // Adapter exports — for downstream consumers to call conversion functions directly
 export {
+  convertAgentSFT,
+  convertAgentSFTChapter,
+  convertAgentSFTEvent,
   convertChiNovelKE,
   convertChiNovelKECharacter,
   convertChiNovelKELocation,
   convertChiNovelKERelation,
-} from './adapters/index.js';
-export type { ChiNovelKEConversionResult, ChiNovelKERelationOutput } from './adapters/index.js';
-export {
-  convertAgentSFT,
-  convertAgentSFTEvent,
-  convertAgentSFTChapter,
-} from './adapters/index.js';
-export type { AgentSFTConversionResult } from './adapters/index.js';
-export {
-  convertIN3KNovel,
   convertIN3KChapterToEvents,
+  convertIN3KNovel,
 } from './adapters/index.js';
-export type { IN3KConversionResult } from './adapters/index.js';
-
+// Annotation statistics — human evaluation agreement metrics
+export {
+  agreementStats,
+  clusterBootstrap,
+  gradeDistribution,
+  quadraticWeightedKappa,
+  rankWithTies,
+  spearmanTestRetestRho,
+  transitionMatrix,
+} from './annotation-stats.js';
+// Consistency metric types
+export type { PerValidatorBreakdown, SeverityLevelCED } from './consistency.js';
+export type { ExternalBenchResult } from './external.js';
+export { runExternalBench } from './external.js';
+export type { LiveSmokeRecordInput, LiveSmokeRecordOutput } from './live-smoke.js';
 // Live smoke record builder
 export { buildLiveSmokeRecord } from './live-smoke.js';
-export type { LiveSmokeRecordInput, LiveSmokeRecordOutput } from './live-smoke.js';
+export type {
+  CacheStats,
+  PerfMeasurement,
+  PerfResults,
+  PoolEfficiencyResult,
+} from './performance.js';
+export {
+  runCacheBench,
+  runFullOfflineBench,
+  runOfflineCorePathBench,
+  runPerformanceBench,
+  runPoolEfficiencyBench,
+} from './performance.js';
+export type {
+  ApprovedReference,
+  ApprovedReferenceSet,
+  ProvenanceManifest,
+  Stage1ReferenceReview,
+  ValidatorIssueIdentity,
+} from './reference.js';
+export { collectReferenceIssueIdentities, loadApprovedReferences } from './reference.js';
+export type { RegressionResults, RegressionStageResult } from './regression.js';
+export { runRegressionBench, validateFixtureIssues } from './regression.js';
+export type { BenchMeasurement, BenchResults } from './reporters.js';
+export { toJson, toMarkdown, writeResults } from './reporters.js';
+export type {
+  InjectedEntry,
+  VariantIssueResult,
+  VariantResult,
+  VariantResults,
+} from './variants.js';
+export { runVariantBench } from './variants.js';
 
-import { runRegressionBench } from './regression.js';
-import { runVariantBench } from './variants.js';
 import { runExternalBench } from './external.js';
 import { runPerformanceBench } from './performance.js';
-import { writeResults } from './reporters.js';
+import { runRegressionBench } from './regression.js';
 import type { BenchResults } from './reporters.js';
+import { writeResults } from './reporters.js';
+import { runVariantBench } from './variants.js';
 
 /**
  * Run all benchmarks (regression + variants + external + performance)
@@ -92,7 +94,9 @@ export async function runAll(fixturePath?: string): Promise<BenchResults> {
     const icon = s.passed ? '✅' : '❌';
     console.log(`  ${icon} ${s.stage}: ${s.passed ? 'PASS' : 'FAIL'} (${s.ms}ms) — ${s.detail}`);
   }
-  console.log(`  ── ${regression.totalPassed}/${regression.stages.length} passed, ${regression.totalFailed} failed, ${regression.totalTime}ms total ──`);
+  console.log(
+    `  ── ${regression.totalPassed}/${regression.stages.length} passed, ${regression.totalFailed} failed, ${regression.totalTime}ms total ──`,
+  );
   console.log('');
 
   // Variants
@@ -111,28 +115,36 @@ export async function runAll(fixturePath?: string): Promise<BenchResults> {
   if (variants.errorInjection.length > 0) {
     const matched = variants.errorInjection.filter((r) => r.matched).length;
     const total = variants.errorInjection.length;
-    console.log(`  Error injection: ${matched}/${total} matched (${Math.round((matched / total) * 100)}%)`);
+    console.log(
+      `  Error injection: ${matched}/${total} matched (${Math.round((matched / total) * 100)}%)`,
+    );
   }
   if (variants.extremeDamage.length > 0) {
     const matched = variants.extremeDamage.filter((r) => r.matched).length;
     const total = variants.extremeDamage.length;
-    console.log(`  Extreme damage: ${matched}/${total} matched (${Math.round((matched / total) * 100)}%)`);
+    console.log(
+      `  Extreme damage: ${matched}/${total} matched (${Math.round((matched / total) * 100)}%)`,
+    );
   }
   if (variants.pipelineF1) {
     const f = variants.pipelineF1;
-    console.log(`  Pipeline F1: P=${f.precision} R=${f.recall} F1=${f.f1} (matched=${f.matchedCount}, missed=${f.missedCount}, fp=${f.falsePositiveCount})`);
+    console.log(
+      `  Pipeline F1: P=${f.precision} R=${f.recall} F1=${f.f1} (matched=${f.matchedCount}, missed=${f.missedCount}, fp=${f.falsePositiveCount})`,
+    );
   }
   console.log('');
 
   // External
   console.log('── External Benchmarks ──');
   const external = await runExternalBench();
-  console.table(external.map((r) => ({
-    Dataset: r.dataset,
-    Benchmark: r.benchmark,
-    Metric: r.metric,
-    Status: r.status,
-  })));
+  console.table(
+    external.map((r) => ({
+      Dataset: r.dataset,
+      Benchmark: r.benchmark,
+      Metric: r.metric,
+      Status: r.status,
+    })),
+  );
   console.log('');
 
   // Performance
@@ -141,7 +153,7 @@ export async function runAll(fixturePath?: string): Promise<BenchResults> {
   console.table(
     perf.measurements.map((m) => ({
       Stage: m.name,
-      'Hz': m.hz.toFixed(1),
+      Hz: m.hz.toFixed(1),
       'Mean (ms)': m.meanMs.toFixed(3),
       Samples: m.samples,
       Scale: m.scale,
@@ -195,14 +207,16 @@ export async function runAll(fixturePath?: string): Promise<BenchResults> {
         actualIssueCount: r.actualIssues.length,
       })),
     },
-    pipelineF1: variants.pipelineF1 ? {
-      precision: variants.pipelineF1.precision,
-      recall: variants.pipelineF1.recall,
-      f1: variants.pipelineF1.f1,
-      matchedCount: variants.pipelineF1.matchedCount,
-      missedCount: variants.pipelineF1.missedCount,
-      falsePositiveCount: variants.pipelineF1.falsePositiveCount,
-    } : undefined,
+    pipelineF1: variants.pipelineF1
+      ? {
+          precision: variants.pipelineF1.precision,
+          recall: variants.pipelineF1.recall,
+          f1: variants.pipelineF1.f1,
+          matchedCount: variants.pipelineF1.matchedCount,
+          missedCount: variants.pipelineF1.missedCount,
+          falsePositiveCount: variants.pipelineF1.falsePositiveCount,
+        }
+      : undefined,
   };
 
   // Include L2 stats if present

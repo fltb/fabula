@@ -2,9 +2,9 @@
 // Plugin System — Local Types
 // ============================================================================
 
-import type { Storage } from '../storage/types.js';
-import type { Logger } from '../observability/logger.ts';
 import type { LLMProvider } from '../ai/types.ts';
+import type { Logger } from '../observability/logger.ts';
+import type { Storage } from '../storage/types.js';
 import type { ValidatorRegistry } from './validator-registry.js';
 
 // ——— Conflict Detection ———

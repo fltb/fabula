@@ -36,8 +36,11 @@ function writeYAML(filePath, data) {
 
 function safeId(name) {
   // Keep Chinese chars + ASCII, replace problematic ones
-  return name.replace(/[^\u4e00-\u9fff_a-zA-Z0-9]/g, '_')
-    .replace(/_+/g, '_').replace(/^_|_$/g, '').toLowerCase();
+  return name
+    .replace(/[^\u4e00-\u9fff_a-zA-Z0-9]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+    .toLowerCase();
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -65,7 +68,12 @@ function buildChiNovelKEProject(raw) {
 
   // Characters
   for (const c of raw.characters) {
-    const roleMap = { protagonist: 'supporting', antagonist: 'antagonist', supporting: 'supporting', background: 'background' };
+    const roleMap = {
+      protagonist: 'supporting',
+      antagonist: 'antagonist',
+      supporting: 'supporting',
+      background: 'background',
+    };
     writeYAML(path.join(charsDir, `${safeId(c.id)}.yaml`), {
       id: c.id,
       name: c.name,
@@ -105,7 +113,9 @@ function buildChiNovelKEProject(raw) {
 
   // state_initial.yaml
   writeYAML(path.join(defsDir, 'state_initial.yaml'), {
-    timeAnchors: [{ id: 'default_time', day: 0, description: 'Default time anchor for ChiNovelKE data' }],
+    timeAnchors: [
+      { id: 'default_time', day: 0, description: 'Default time anchor for ChiNovelKE data' },
+    ],
     threads: [],
     worldFacts: [],
   });
@@ -120,7 +130,12 @@ function buildChiNovelKEProject(raw) {
     plannedScenes: 0,
   });
 
-  return { projDir, chars: raw.characters.length, locs: raw.locations.length, rels: raw.relations.length };
+  return {
+    projDir,
+    chars: raw.characters.length,
+    locs: raw.locations.length,
+    rels: raw.relations.length,
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -178,12 +193,19 @@ function buildAgentSFTProject(chapters) {
     for (const e of ch.events || []) {
       eventCount++;
       const conflictMap = {
-        '人物冲突': 'person_vs_person', '社会冲突': 'person_vs_society',
-        '自我冲突': 'person_vs_self', '命运冲突': 'person_vs_fate', '自然冲突': 'person_vs_nature',
+        人物冲突: 'person_vs_person',
+        社会冲突: 'person_vs_society',
+        自我冲突: 'person_vs_self',
+        命运冲突: 'person_vs_fate',
+        自然冲突: 'person_vs_nature',
       };
       const emotionMap = {
-        '悲伤': 'sad', '愤怒': 'angry', '喜悦': 'joyful',
-        '恐惧': 'fearful', '紧张': 'tense', '平静': 'calm',
+        悲伤: 'sad',
+        愤怒: 'angry',
+        喜悦: 'joyful',
+        恐惧: 'fearful',
+        紧张: 'tense',
+        平静: 'calm',
       };
 
       writeYAML(path.join(chDir, `E_${e.event_id}.yaml`), {
@@ -195,7 +217,12 @@ function buildAgentSFTProject(chapters) {
         sceneType: 'linear',
         tense: 'past',
         discourseMode: 'exposition',
-        arcPosition: eventCount <= 2 ? 'opening' : eventCount >= chapters.reduce((s, c) => s + (c.events?.length || 0), 0) * 0.7 ? 'climax' : 'rising',
+        arcPosition:
+          eventCount <= 2
+            ? 'opening'
+            : eventCount >= chapters.reduce((s, c) => s + (c.events?.length || 0), 0) * 0.7
+              ? 'climax'
+              : 'rising',
         conflictType: conflictMap[e.conflict_type] || 'person_vs_self',
         emotionalValence: emotionMap[e.emotional_tone] || 'neutral',
         pov: { character: (e.characters_involved || ['unknown'])[0], type: 'third_person_limited' },
@@ -255,11 +282,11 @@ function buildIN3KProject(batchPath) {
     worldFacts: [],
   });
 
-  for (const novel of batch.slice(0, 3)) { // limit to 3 novels
+  for (const novel of batch.slice(0, 3)) {
+    // limit to 3 novels
     for (const ch of novel.chapters) {
       if (eventCount >= 200) break; // cap events for reasonable output
-      const charCount = Object.entries(ch.character_appearances || {})
-        .sort((a, b) => b[1] - a[1]);
+      const charCount = Object.entries(ch.character_appearances || {}).sort((a, b) => b[1] - a[1]);
       const povChar = charCount[0]?.[0] || 'unknown';
 
       eventCount++;
@@ -308,7 +335,9 @@ async function main() {
   if (fs.existsSync(cnkBridged)) {
     const raw = JSON.parse(fs.readFileSync(cnkBridged, 'utf-8'));
     const r = buildChiNovelKEProject(raw);
-    console.log(`ChiNovelKE:          ${r.chars} chars, ${r.locs} locs, ${r.rels} rels → ${r.projDir}`);
+    console.log(
+      `ChiNovelKE:          ${r.chars} chars, ${r.locs} locs, ${r.rels} rels → ${r.projDir}`,
+    );
     results.push(r);
   }
 

@@ -10,11 +10,7 @@
 // event store and compare against worldState facts.
 // ============================================================================
 
-import type {
-  Validator,
-  ValidationIssue,
-  PostRenderInput,
-} from '../types/index.js';
+import type { PostRenderInput, ValidationIssue, Validator } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 export class AntiCausalEdgeValidator implements Validator {

@@ -6,11 +6,7 @@
 // scenes to constitute a meaningful narrative sequence.
 // ============================================================================
 
-import type {
-  PreRenderInput,
-  Validator,
-  ValidationIssue,
-} from '../types/index.js';
+import type { PreRenderInput, ValidationIssue, Validator } from '../types/index.js';
 import { makeIssue } from './base.js';
 
 /** Default minimum number of scenes before a warning is emitted. */
@@ -25,15 +21,17 @@ export class CountingValidator implements Validator {
     const { events, event } = input;
 
     if (events.length < MIN_SCENES) {
-      issues.push(makeIssue(
-        this.name,
-        event.id,
-        'system',
-        'warning',
-        `Only ${events.length} scene(s) in event list; minimum recommended is ${MIN_SCENES}.`,
-        `Add more scenes to reach at least ${MIN_SCENES} total events in the sequence.`,
-        'add_field',
-      ));
+      issues.push(
+        makeIssue(
+          this.name,
+          event.id,
+          'system',
+          'warning',
+          `Only ${events.length} scene(s) in event list; minimum recommended is ${MIN_SCENES}.`,
+          `Add more scenes to reach at least ${MIN_SCENES} total events in the sequence.`,
+          'add_field',
+        ),
+      );
     }
 
     return issues;

@@ -2,9 +2,9 @@ import * as path from 'node:path';
 import YAML from 'yaml';
 import type { ZodType } from 'zod';
 import { ConfigError } from '../errors.js';
-import { FsStorage, type Storage } from '../storage/index.ts';
-import { migrateToLatest, CURRENT_SCHEMA_VERSION } from '../migration/registry.js';
+import { CURRENT_SCHEMA_VERSION, migrateToLatest } from '../migration/registry.js';
 import { projectConfigSchema } from '../schemas/project.js';
+import { FsStorage, type Storage } from '../storage/index.ts';
 import type { ProjectConfig } from '../types/chapter.js';
 
 export interface ReadYamlOptions<T> {
@@ -15,7 +15,12 @@ export interface ReadYamlOptions<T> {
 }
 
 /** Reads YAML through one strict, path-aware compiler boundary. */
-export function readYamlFile<T>({ filePath, schema, storage, optional = false }: ReadYamlOptions<T>): T | null {
+export function readYamlFile<T>({
+  filePath,
+  schema,
+  storage,
+  optional = false,
+}: ReadYamlOptions<T>): T | null {
   const st = storage ?? new FsStorage();
   if (!st.exists(filePath)) {
     if (optional) return null;
@@ -33,7 +38,10 @@ export function readYamlFile<T>({ filePath, schema, storage, optional = false }:
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     const yamlPath = issue?.path.join('.') ?? '';
-    throw new ConfigError(`YAML schema validation failed at ${yamlPath || '<root>'}: ${issue?.message ?? 'unknown issue'}`, { path: yamlPath ? `${filePath}:${yamlPath}` : filePath });
+    throw new ConfigError(
+      `YAML schema validation failed at ${yamlPath || '<root>'}: ${issue?.message ?? 'unknown issue'}`,
+      { path: yamlPath ? `${filePath}:${yamlPath}` : filePath },
+    );
   }
   return parsed.data;
 }
@@ -82,8 +90,7 @@ export function loadProjectConfig(filePath: string, storage?: Storage): ProjectC
 
   // Check schemaVersion and migrate if needed
   const raw = document as Record<string, unknown>;
-  const currentVersion =
-    typeof raw.schemaVersion === 'number' ? raw.schemaVersion : 0;
+  const currentVersion = typeof raw.schemaVersion === 'number' ? raw.schemaVersion : 0;
 
   if (currentVersion > CURRENT_SCHEMA_VERSION) {
     throw new ConfigError(
@@ -140,8 +147,7 @@ export function migrateProjectFile(filePath: string, storage?: Storage): number 
   }
 
   const raw = document as Record<string, unknown>;
-  const currentVersion =
-    typeof raw.schemaVersion === 'number' ? raw.schemaVersion : 0;
+  const currentVersion = typeof raw.schemaVersion === 'number' ? raw.schemaVersion : 0;
 
   if (currentVersion > CURRENT_SCHEMA_VERSION) {
     throw new ConfigError(
@@ -155,7 +161,7 @@ export function migrateProjectFile(filePath: string, storage?: Storage): number 
   }
 
   // Run migration
-  let migrated = migrateToLatest(raw, currentVersion, CURRENT_SCHEMA_VERSION);
+  const migrated = migrateToLatest(raw, currentVersion, CURRENT_SCHEMA_VERSION);
 
   // Validate migrated data
   const parsed = projectConfigSchema.safeParse(migrated);

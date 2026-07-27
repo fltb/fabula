@@ -2,8 +2,8 @@
 // ISS — Strict Mode Validation
 // ============================================================================
 
-import { type ValidationIssue } from '../types/index.js';
-import { type StrictValidationContext, isPlaceholderValue } from './types.js';
+import type { ValidationIssue } from '../types/index.js';
+import { isPlaceholderValue, type StrictValidationContext } from './types.js';
 
 /**
  * validateStrict — Enforces minimum structural thresholds derived from the
@@ -66,7 +66,9 @@ export function validateStrict(context: StrictValidationContext): ValidationIssu
 
   // ═══ 3. Each rule must have ≥ 1 executable check ═══
   for (const rule of rules) {
-    const hasCheck = rule.logicalConsequences.some(lc => lc.check !== null && lc.check !== undefined);
+    const hasCheck = rule.logicalConsequences.some(
+      (lc) => lc.check !== null && lc.check !== undefined,
+    );
     if (!hasCheck) {
       issues.push({
         validator: 'iss-strict',
@@ -85,7 +87,7 @@ export function validateStrict(context: StrictValidationContext): ValidationIssu
   }
 
   // ═══ 4. Each thread must be referenced within the first 3 chapters ═══
-  const earlyEvents = sortedEvents.filter(e => e.narrativeOrder <= 3);
+  const earlyEvents = sortedEvents.filter((e) => e.narrativeOrder <= 3);
   const earlyThreadRefs = new Set<string>();
   for (const event of earlyEvents) {
     for (const tp of event.threadProgress) {
@@ -123,8 +125,7 @@ export function validateStrict(context: StrictValidationContext): ValidationIssu
           message:
             `Postcondition "${post.attribute}" for entity "${post.entityId}" uses placeholder value ` +
             `"${String(post.value)}". Strict mode prohibits vague placeholder values.`,
-          fixSuggestion:
-            `Replace "${String(post.value)}" with a specific concrete value that reflects the actual change.`,
+          fixSuggestion: `Replace "${String(post.value)}" with a specific concrete value that reflects the actual change.`,
           fixAction: 'change_value',
           fixTarget: { file: `events/${event.event}.yaml`, field: 'expectedPostconditions' },
         });

@@ -6,10 +6,10 @@
 // and that no lenient/optional path exists for Pass 2 analysis validation.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { analysisContentSchema } from '../../src/validator/index.js';
 import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../../src/schemas/analysis.js';
+import { analysisContentSchema } from '../../src/validator/index.js';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -22,7 +22,13 @@ const ALL_FIELDS_VALID = {
     preconditions: { violated: [] },
     pov: { consistent: true, leaks: [] },
     inventedDetails: [],
-    quality: { proseScore: 8, maxScore: 10, strengths: ['good'], weaknesses: [], estimatedWordCount: 350 },
+    quality: {
+      proseScore: 8,
+      maxScore: 10,
+      strengths: ['good'],
+      weaknesses: [],
+      estimatedWordCount: 350,
+    },
     threadProgressAchieved: ['thread-1'],
     foreshadowingDeployed: [],
     narrativeChecks: [],
@@ -89,7 +95,14 @@ describe('analysisContentSchema', () => {
   });
 
   it('rejects analysis missing multiple required blocks', () => {
-    const { narrativeChecks, tenseDetected, conflictAnalysis, ruleChecks, knowledgeChecks, ...partial } = ALL_FIELDS_VALID.analysis;
+    const {
+      narrativeChecks,
+      tenseDetected,
+      conflictAnalysis,
+      ruleChecks,
+      knowledgeChecks,
+      ...partial
+    } = ALL_FIELDS_VALID.analysis;
     const result = analysisContentSchema.safeParse(partial);
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -109,7 +122,13 @@ describe('analysisContentSchema', () => {
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 3, maxScore: 5, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+      quality: {
+        proseScore: 3,
+        maxScore: 5,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 50,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
     };
@@ -147,7 +166,8 @@ describe('parseAnalysisJSON unified strict schema', () => {
   });
 
   it('returns null for JSON missing multiple required blocks', () => {
-    const { narrativeChecks, tenseDetected, conflictAnalysis, ...analysisPartial } = ALL_FIELDS_VALID.analysis;
+    const { narrativeChecks, tenseDetected, conflictAnalysis, ...analysisPartial } =
+      ALL_FIELDS_VALID.analysis;
     const partial = { eventId: 'E1', analysis: analysisPartial };
     const result = parseAnalysisJSON(JSON.stringify(partial));
     expect(result).toBeNull();
@@ -161,7 +181,13 @@ describe('parseAnalysisJSON unified strict schema', () => {
         preconditions: { violated: [] },
         pov: { consistent: true, leaks: [] },
         inventedDetails: [],
-        quality: { proseScore: 3, maxScore: 5, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+        quality: {
+          proseScore: 3,
+          maxScore: 5,
+          strengths: [],
+          weaknesses: [],
+          estimatedWordCount: 50,
+        },
         threadProgressAchieved: [],
         foreshadowingDeployed: [],
       },
@@ -179,7 +205,13 @@ describe('parseAnalysisJSON unified strict schema', () => {
         preconditions: { violated: [] },
         pov: { consistent: true, leaks: [] },
         inventedDetails: [],
-        quality: { proseScore: 3, maxScore: 5, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+        quality: {
+          proseScore: 3,
+          maxScore: 5,
+          strengths: [],
+          weaknesses: [],
+          estimatedWordCount: 50,
+        },
         threadProgressAchieved: [],
         foreshadowingDeployed: [],
       },

@@ -1,4 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import {
+  applyThreadTransaction,
+  assertClockCompatibility,
+  getThreadTimeDomain,
+} from '../../src/state/thread-replay.js';
 import type {
   ThreadId,
   ThreadRunId,
@@ -6,11 +11,6 @@ import type {
   ThreadTransaction,
   TimeDomain,
 } from '../../src/types/index.js';
-import {
-  applyThreadTransaction,
-  getThreadTimeDomain,
-  assertClockCompatibility,
-} from '../../src/state/thread-replay.js';
 
 describe('Clock Isolation — TimeDomain', () => {
   it('getThreadTimeDomain defaults to story when no catalog', () => {
@@ -41,12 +41,20 @@ describe('Clock Isolation — TimeDomain', () => {
 
   it('assertClockCompatibility is a no-op (hook for future checks)', () => {
     // Should not throw
-    expect(() => assertClockCompatibility('story', {
-      thread: 'T1', runId: 'run-1' as ThreadRunId, provenance: 'E0',
-    })).not.toThrow();
-    expect(() => assertClockCompatibility('discourse', {
-      thread: 'T2', runId: 'run-1' as ThreadRunId, provenance: 'E0',
-    })).not.toThrow();
+    expect(() =>
+      assertClockCompatibility('story', {
+        thread: 'T1',
+        runId: 'run-1' as ThreadRunId,
+        provenance: 'E0',
+      }),
+    ).not.toThrow();
+    expect(() =>
+      assertClockCompatibility('discourse', {
+        thread: 'T2',
+        runId: 'run-1' as ThreadRunId,
+        provenance: 'E0',
+      }),
+    ).not.toThrow();
   });
 });
 

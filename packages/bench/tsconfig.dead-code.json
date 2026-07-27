@@ -5,7 +5,5 @@
     "rootDir": "./src"
   },
   "include": ["src/**/*.ts"],
-  "references": [
-    { "path": "../core/tsconfig.dead-code.json" }
-  ]
+  "references": [{ "path": "../core/tsconfig.dead-code.json" }]
 }

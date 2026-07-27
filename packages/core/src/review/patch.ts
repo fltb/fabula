@@ -2,7 +2,7 @@
 // Review System — Patch operations (pure functions)
 // ============================================================================
 
-import type { ReviewPatch, PatchChange } from '../types/index.js';
+import type { PatchChange, ReviewPatch } from '../types/index.js';
 
 /** Create a patch from resolved comments and store it */
 export function createPatch(
@@ -14,4 +14,3 @@ export function createPatch(
   patches.push(patch);
   return patch;
 }
-

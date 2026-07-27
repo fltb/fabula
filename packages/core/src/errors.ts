@@ -33,17 +33,32 @@ export class StorageError extends defineError('StorageError', 'STORAGE_FAILURE')
 export class ValidationError extends defineError('ValidationError', 'VALIDATION_FAILED') {}
 export class DagProviderError extends defineError('DagProviderError', 'DAG_PROVIDER_INVALID') {}
 export class DagCycleError extends defineError('DagCycleError', 'DAG_CYCLE') {}
-export class PreconditionMismatchError extends defineError('PreconditionMismatchError', 'PRECONDITION_MISMATCH') {}
-export class ReferenceFormatError extends defineError('ReferenceFormatError', 'REFERENCE_FORMAT_INVALID') {}
+export class PreconditionMismatchError extends defineError(
+  'PreconditionMismatchError',
+  'PRECONDITION_MISMATCH',
+) {}
+export class ReferenceFormatError extends defineError(
+  'ReferenceFormatError',
+  'REFERENCE_FORMAT_INVALID',
+) {}
 export class CacheCorruptionError extends defineError('CacheCorruptionError', 'CACHE_CORRUPT') {}
 export class PipelineError extends defineError('PipelineError', 'PIPELINE_FAILURE') {}
 export class AuthError extends defineError('AuthError', 'PROVIDER_AUTH') {}
 export class RateLimitError extends defineError('RateLimitError', 'PROVIDER_RATE_LIMIT') {}
 export class TimeoutError extends defineError('TimeoutError', 'PROVIDER_TIMEOUT') {}
-export class ModelNotFoundError extends defineError('ModelNotFoundError', 'PROVIDER_MODEL_NOT_FOUND') {}
-export class AssemblyIncompleteError extends defineError('AssemblyIncompleteError', 'ASSEMBLY_INCOMPLETE') {}
+export class ModelNotFoundError extends defineError(
+  'ModelNotFoundError',
+  'PROVIDER_MODEL_NOT_FOUND',
+) {}
+export class AssemblyIncompleteError extends defineError(
+  'AssemblyIncompleteError',
+  'ASSEMBLY_INCOMPLETE',
+) {}
 export class NetworkDeniedError extends defineError('NetworkDeniedError', 'NETWORK_DENIED') {}
-export class RuleConstraintViolationError extends defineError('RuleConstraintViolationError', 'RULE_CONSTRAINT_VIOLATION') {}
+export class RuleConstraintViolationError extends defineError(
+  'RuleConstraintViolationError',
+  'RULE_CONSTRAINT_VIOLATION',
+) {}
 
 // ============================================================================
 // Safe-error sanitizer — shared by core ledger + bench smoke artifacts

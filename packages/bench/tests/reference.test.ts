@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve, join } from 'node:path';
-import { loadApprovedReferences } from '../src/reference.ts';
+import { join, resolve } from 'node:path';
 import { liveSmokeRecordSchema, renderNovel } from '@novalistically/core';
+import { describe, expect, it } from 'vitest';
+import { loadApprovedReferences } from '../src/reference.ts';
 
 // ─── Constants ──────────────────────────────────────────────────────────
 
@@ -26,9 +26,9 @@ function canonicalJson(value: unknown): string {
   }
   if (value !== null && typeof value === 'object') {
     const keys = Object.keys(value as Record<string, unknown>)
-      .filter(k => (value as Record<string, unknown>)[k] !== undefined)
+      .filter((k) => (value as Record<string, unknown>)[k] !== undefined)
       .sort();
-    return `{${keys.map(k => `${JSON.stringify(k)}:${canonicalJson((value as Record<string, unknown>)[k])}`).join(',')}}`;
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson((value as Record<string, unknown>)[k])}`).join(',')}}`;
   }
   if (typeof value === 'string') return JSON.stringify(value);
   if (value === null) return 'null';
@@ -50,35 +50,84 @@ function computeResponseHash(dataDir: string, eventIds: readonly string[] = EVEN
 
 /** Compute promptHash from an ordered array of ledger entry projections. */
 function computePromptHash(
-  ledger: Array<{ phase: string; attempt: number; requestHash: string; model: string; seed: number | null }>,
+  ledger: Array<{
+    phase: string;
+    attempt: number;
+    requestHash: string;
+    model: string;
+    seed: number | null;
+  }>,
 ): string {
-  return sha256hex(canonicalJson(ledger.map(({ phase, attempt, requestHash, model, seed }) => ({ phase, attempt, requestHash, model, seed }))));
+  return sha256hex(
+    canonicalJson(
+      ledger.map(({ phase, attempt, requestHash, model, seed }) => ({
+        phase,
+        attempt,
+        requestHash,
+        model,
+        seed,
+      })),
+    ),
+  );
 }
 
 // ─── Fixture builders ──────────────────────────────────────────────────
 
 const MIN_ANALYSIS_CONTENT = {
   postconditions: { covered: [] as string[], dropped: [] as string[] },
-  preconditions: { violated: [] as Array<{ entityId: string; attribute: string; expectedValue: string; issue: string }> },
+  preconditions: {
+    violated: [] as Array<{
+      entityId: string;
+      attribute: string;
+      expectedValue: string;
+      issue: string;
+    }>,
+  },
   pov: { consistent: true as const, leaks: [] as string[] },
   inventedDetails: [] as Array<{ detail: string; severity: 'minor' | 'major' }>,
-  quality: { proseScore: 85, maxScore: 100, strengths: [] as string[], weaknesses: [] as string[], estimatedWordCount: 200 },
+  quality: {
+    proseScore: 85,
+    maxScore: 100,
+    strengths: [] as string[],
+    weaknesses: [] as string[],
+    estimatedWordCount: 200,
+  },
   threadProgressAchieved: [] as string[],
   foreshadowingDeployed: [] as string[],
-  narrativeChecks: [] as Array<{ entityId: string; attribute: string; matchLevel: 'exact' | 'similar' | 'absent' | 'contradicted'; evidence: string }>,
-  appearanceChecks: [] as Array<{ entityId: string; feature: string; declared: string; evidence: string; matchLevel: 'exact' | 'similar' | 'absent' | 'contradicted' }>,
+  narrativeChecks: [] as Array<{
+    entityId: string;
+    attribute: string;
+    matchLevel: 'exact' | 'similar' | 'absent' | 'contradicted';
+    evidence: string;
+  }>,
+  appearanceChecks: [] as Array<{
+    entityId: string;
+    feature: string;
+    declared: string;
+    evidence: string;
+    matchLevel: 'exact' | 'similar' | 'absent' | 'contradicted';
+  }>,
   characterReferences: [] as Array<{ entityId: string; namesUsed: string[] }>,
   tenseDetected: 'past' as const,
   conflictAnalysis: { primaryType: '' as string, resolutionAchieved: false as boolean },
   ruleChecks: [] as Array<{ ruleId: string; satisfied: boolean; evidence: string }>,
-  knowledgeChecks: [] as Array<{ entityId: string; propositionId: string; matchLevel: 'exact' | 'similar' | 'absent' | 'contradicted'; evidence: string }>,
+  knowledgeChecks: [] as Array<{
+    entityId: string;
+    propositionId: string;
+    matchLevel: 'exact' | 'similar' | 'absent' | 'contradicted';
+    evidence: string;
+  }>,
 };
 
 function makeAnalysis(eventId: string) {
   return { eventId, analysis: { ...MIN_ANALYSIS_CONTENT } };
 }
 
-function makeMetadata(eventId: string, promptHash: string, overrides: Record<string, unknown> = {}) {
+function makeMetadata(
+  eventId: string,
+  promptHash: string,
+  overrides: Record<string, unknown> = {},
+) {
   return {
     eventId,
     provider: 'ai-sdk',
@@ -98,8 +147,22 @@ function makeMetadata(eventId: string, promptHash: string, overrides: Record<str
 
 /** Standard two-call ledger used for every event in basic fixtures. */
 const BASIC_LEDGER = [
-  { phase: 'pass1' as const, attempt: 1, outcome: 'success' as const, requestHash: H64_A, model: 'deepseek-v4-flash', seed: null },
-  { phase: 'pass2' as const, attempt: 1, outcome: 'success' as const, requestHash: H64_B, model: 'deepseek-v4-flash', seed: 42 },
+  {
+    phase: 'pass1' as const,
+    attempt: 1,
+    outcome: 'success' as const,
+    requestHash: H64_A,
+    model: 'deepseek-v4-flash',
+    seed: null,
+  },
+  {
+    phase: 'pass2' as const,
+    attempt: 1,
+    outcome: 'success' as const,
+    requestHash: H64_B,
+    model: 'deepseek-v4-flash',
+    seed: 42,
+  },
 ];
 
 const BASIC_PROMPT_HASH = computePromptHash(BASIC_LEDGER);
@@ -116,7 +179,9 @@ function makeProvenance(opts: { runHash?: string; entries?: unknown[] } = {}) {
   const runHash = opts.runHash ?? H64_A;
   return {
     version: 1,
-    entries: opts.entries ?? EVENT_IDS.map(eid => ({ eventId: eid, kind: 'generated' as const, runHash })),
+    entries:
+      opts.entries ??
+      EVENT_IDS.map((eid) => ({ eventId: eid, kind: 'generated' as const, runHash })),
   };
 }
 
@@ -135,16 +200,16 @@ function makeGenerationRecord(overrides: Record<string, unknown> = {}) {
     versions: { code: '0.1.0', fixture: '1', schema: 1, prompt: '1', capability: '1' },
     command: 'node packages/bench/scripts/generate-reference.mjs zhu-fu',
     call: {
-      perEvent: EVENT_IDS.map(eid => ({
+      perEvent: EVENT_IDS.map((eid) => ({
         eventId: eid,
-        ledger: BASIC_LEDGER.map(e => ({ ...e })),
+        ledger: BASIC_LEDGER.map((e) => ({ ...e })),
       })),
       totalCalls: 14,
     },
     cache: { hits: 0, misses: 7 },
     failures: [],
     hashes: {
-      events: EVENT_IDS.map(eid => ({
+      events: EVENT_IDS.map((eid) => ({
         eventId: eid,
         proseHash: H64_A,
         analysisHash: H64_B,
@@ -211,7 +276,7 @@ function createTempReference(
   mkdirSync(dataDir, { recursive: true });
 
   const skipEvents = new Set(overrides.missingEvents ?? []);
-  const writtenEventIds = EVENT_IDS.filter(id => !skipEvents.has(id));
+  const writtenEventIds = EVENT_IDS.filter((id) => !skipEvents.has(id));
 
   // Pick which events to write via raw body or via metadata overrides
   const rawEventBodies = overrides.events ?? {};
@@ -221,7 +286,10 @@ function createTempReference(
     if (rawEventBodies[eventId] !== undefined) {
       writeFileSync(join(dataDir, `${eventId}.json`), JSON.stringify(rawEventBodies[eventId]));
     } else {
-      writeFileSync(join(dataDir, `${eventId}.json`), JSON.stringify(makeEventBody(eventId, metaOverrides[eventId] ?? {})));
+      writeFileSync(
+        join(dataDir, `${eventId}.json`),
+        JSON.stringify(makeEventBody(eventId, metaOverrides[eventId] ?? {})),
+      );
     }
   }
 
@@ -258,22 +326,26 @@ function createTempReference(
   writeFileSync(join(dir, 'provenance.json'), JSON.stringify(provData));
 
   // Write expected-outcomes
-  writeFileSync(join(dir, 'expected-outcomes.json'), JSON.stringify(overrides.outcomes ?? makeOutcomes()));
+  writeFileSync(
+    join(dir, 'expected-outcomes.json'),
+    JSON.stringify(overrides.outcomes ?? makeOutcomes()),
+  );
 
   // Compute hashes
-  const responsesSha256 = writtenEventIds.length === EVENT_IDS.length
-    ? computeResponseHash(dataDir, EVENT_IDS)
-    : computeResponseHash(dataDir, writtenEventIds);
+  const responsesSha256 =
+    writtenEventIds.length === EVENT_IDS.length
+      ? computeResponseHash(dataDir, EVENT_IDS)
+      : computeResponseHash(dataDir, writtenEventIds);
   const provBytes = readFileSync(join(dir, 'provenance.json'));
   const provHash = sha256hex(provBytes);
   const outBytes = readFileSync(join(dir, 'expected-outcomes.json'));
   const outHash = sha256hex(outBytes);
 
-
   // Write review
-  writeFileSync(join(dir, 'review.json'), JSON.stringify(
-    makeReview(responsesSha256, genHash, provHash, outHash, overrides.review ?? {}),
-  ));
+  writeFileSync(
+    join(dir, 'review.json'),
+    JSON.stringify(makeReview(responsesSha256, genHash, provHash, outHash, overrides.review ?? {})),
+  );
 
   return dir;
 }
@@ -332,8 +404,10 @@ describe('approved zhu-fu references', () => {
     const dir = createTempReference({
       provenance: {
         version: 1,
-        entries: EVENT_IDS.filter(id => id !== 'E6').map(eid => ({
-          eventId: eid, kind: 'generated', runHash: H64_A,
+        entries: EVENT_IDS.filter((id) => id !== 'E6').map((eid) => ({
+          eventId: eid,
+          kind: 'generated',
+          runHash: H64_A,
         })),
       },
     });
@@ -346,9 +420,10 @@ describe('approved zhu-fu references', () => {
     const dir = createTempReference({
       provenance: {
         version: 1,
-        entries: EVENT_IDS.map(eid => eid === 'E6'
-          ? { eventId: eid, kind: 'generated' }
-          : { eventId: eid, kind: 'generated', runHash: H64_A },
+        entries: EVENT_IDS.map((eid) =>
+          eid === 'E6'
+            ? { eventId: eid, kind: 'generated' }
+            : { eventId: eid, kind: 'generated', runHash: H64_A },
         ),
       },
     });
@@ -459,7 +534,7 @@ describe('approved zhu-fu references', () => {
     const dir = createTempReference({
       provenance: {
         version: 1,
-        entries: EVENT_IDS.map(eid => ({
+        entries: EVENT_IDS.map((eid) => ({
           eventId: eid,
           kind: 'source_quotation',
           edition: '1st',
@@ -520,18 +595,163 @@ describe('live smoke record schema (offline)', () => {
     model: 'deepseek-v4-flash',
     seed: 42,
     events: ['E0', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6'],
-    system: { nodeVersion: 'v24.0.0', os: 'linux', arch: 'x64', cpu: '12th Gen Intel(R) Core(TM) i5-12400F' },
+    system: {
+      nodeVersion: 'v24.0.0',
+      os: 'linux',
+      arch: 'x64',
+      cpu: '12th Gen Intel(R) Core(TM) i5-12400F',
+    },
     versions: { code: '0.1.0', fixture: '1', schema: 1, prompt: '1', capability: '1' },
     command: 'node packages/bench/scripts/generate-reference.mjs zhu-fu',
     call: {
       perEvent: [
-        { eventId: 'E0', ledger: [{ phase: 'pass1', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: null }, { phase: 'pass2', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: 42 }] },
-        { eventId: 'E1', ledger: [{ phase: 'pass1', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: null }, { phase: 'pass2', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: 42 }] },
-        { eventId: 'E2', ledger: [{ phase: 'pass1', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: null }, { phase: 'pass2', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: 42 }] },
-        { eventId: 'E3', ledger: [{ phase: 'pass1', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: null }, { phase: 'pass2', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: 42 }] },
-        { eventId: 'E4', ledger: [{ phase: 'pass1', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: null }, { phase: 'pass2', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: 42 }] },
-        { eventId: 'E5', ledger: [{ phase: 'pass1', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: null }, { phase: 'pass2', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: 42 }] },
-        { eventId: 'E6', ledger: [{ phase: 'pass1', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: null }, { phase: 'pass2', attempt: 1, outcome: 'success', requestHash: validHash64, model: 'deepseek-v4-flash', seed: 42 }] },
+        {
+          eventId: 'E0',
+          ledger: [
+            {
+              phase: 'pass1',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: null,
+            },
+            {
+              phase: 'pass2',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: 42,
+            },
+          ],
+        },
+        {
+          eventId: 'E1',
+          ledger: [
+            {
+              phase: 'pass1',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: null,
+            },
+            {
+              phase: 'pass2',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: 42,
+            },
+          ],
+        },
+        {
+          eventId: 'E2',
+          ledger: [
+            {
+              phase: 'pass1',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: null,
+            },
+            {
+              phase: 'pass2',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: 42,
+            },
+          ],
+        },
+        {
+          eventId: 'E3',
+          ledger: [
+            {
+              phase: 'pass1',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: null,
+            },
+            {
+              phase: 'pass2',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: 42,
+            },
+          ],
+        },
+        {
+          eventId: 'E4',
+          ledger: [
+            {
+              phase: 'pass1',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: null,
+            },
+            {
+              phase: 'pass2',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: 42,
+            },
+          ],
+        },
+        {
+          eventId: 'E5',
+          ledger: [
+            {
+              phase: 'pass1',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: null,
+            },
+            {
+              phase: 'pass2',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: 42,
+            },
+          ],
+        },
+        {
+          eventId: 'E6',
+          ledger: [
+            {
+              phase: 'pass1',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: null,
+            },
+            {
+              phase: 'pass2',
+              attempt: 1,
+              outcome: 'success',
+              requestHash: validHash64,
+              model: 'deepseek-v4-flash',
+              seed: 42,
+            },
+          ],
+        },
       ],
       totalCalls: 14,
     },
@@ -539,13 +759,48 @@ describe('live smoke record schema (offline)', () => {
     failures: [],
     hashes: {
       events: [
-        { eventId: 'E0', proseHash: validHash64, analysisHash: validHash64, promptHash: validHash64 },
-        { eventId: 'E1', proseHash: validHash64, analysisHash: validHash64, promptHash: validHash64 },
-        { eventId: 'E2', proseHash: validHash64, analysisHash: validHash64, promptHash: validHash64 },
-        { eventId: 'E3', proseHash: validHash64, analysisHash: validHash64, promptHash: validHash64 },
-        { eventId: 'E4', proseHash: validHash64, analysisHash: validHash64, promptHash: validHash64 },
-        { eventId: 'E5', proseHash: validHash64, analysisHash: validHash64, promptHash: validHash64 },
-        { eventId: 'E6', proseHash: validHash64, analysisHash: validHash64, promptHash: validHash64 },
+        {
+          eventId: 'E0',
+          proseHash: validHash64,
+          analysisHash: validHash64,
+          promptHash: validHash64,
+        },
+        {
+          eventId: 'E1',
+          proseHash: validHash64,
+          analysisHash: validHash64,
+          promptHash: validHash64,
+        },
+        {
+          eventId: 'E2',
+          proseHash: validHash64,
+          analysisHash: validHash64,
+          promptHash: validHash64,
+        },
+        {
+          eventId: 'E3',
+          proseHash: validHash64,
+          analysisHash: validHash64,
+          promptHash: validHash64,
+        },
+        {
+          eventId: 'E4',
+          proseHash: validHash64,
+          analysisHash: validHash64,
+          promptHash: validHash64,
+        },
+        {
+          eventId: 'E5',
+          proseHash: validHash64,
+          analysisHash: validHash64,
+          promptHash: validHash64,
+        },
+        {
+          eventId: 'E6',
+          proseHash: validHash64,
+          analysisHash: validHash64,
+          promptHash: validHash64,
+        },
       ],
     },
     reviewStatus: 'candidate',
@@ -561,7 +816,11 @@ describe('live smoke record schema (offline)', () => {
   });
 
   it('validates a failed record with reviewStatus:failed', () => {
-    const failed = { ...validRecord, reviewStatus: 'failed' as const, failures: ['E3: release gate'] };
+    const failed = {
+      ...validRecord,
+      reviewStatus: 'failed' as const,
+      failures: ['E3: release gate'],
+    };
     const result = liveSmokeRecordSchema.safeParse(failed);
     expect(result.success).toBe(true);
     expect(result.data?.reviewStatus).toBe('failed');

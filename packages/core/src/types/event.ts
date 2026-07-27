@@ -2,18 +2,48 @@
 // Novalistically — Narrative Event & Event File Types
 // ============================================================================
 
-import type { EntityId, StoryTimestamp, Fact } from './entity.js';
 import type { BranchSet } from './branch.js';
-import type { RelationshipTransaction, DimensionWrite, DimensionUnset, Membership, RelationshipId, EpochId, MembershipId, EpochLifecycle, DimensionScope, RelationshipRuntimeState, EpochRuntimeState, DimensionState } from './relationship.js';
-import type { ThreadTransaction, ThreadId, ThreadRunId, ThreadLifecycle, GoalLifecycle, MilestoneLifecycle, GoalState, MilestoneState, TimeDomain, ThreadRuntimeState, ThreadTypeDefinition, ThreadTypeCatalog, ThreadDeclaration, ThreadDeclarationCatalog, ThreadMergeStrategy, ThreadMergeResult } from './thread.js';
-import type { GreyLine } from './grey-line.js';
-import type { NarrativeChecklist } from './narrative-checklist.js';
-import type { SourceContext } from './source-context.js';
-import type { DurationProfile } from './duration.js';
-import type { FrequencyProfile } from './frequency.js';
 import type { Anachrony, VoiceProfile } from './discourse.js';
+import type { DurationProfile } from './duration.js';
+import type { EntityId, Fact, StoryTimestamp } from './entity.js';
+import type { FrequencyProfile } from './frequency.js';
+import type { GreyLine } from './grey-line.js';
 import type { ModernNovelConfig } from './modern-novel.js';
+import type { NarrativeChecklist } from './narrative-checklist.js';
+import type {
+  DimensionScope,
+  DimensionState,
+  DimensionUnset,
+  DimensionWrite,
+  EpochId,
+  EpochLifecycle,
+  EpochRuntimeState,
+  Membership,
+  MembershipId,
+  RelationshipId,
+  RelationshipRuntimeState,
+  RelationshipTransaction,
+} from './relationship.js';
 import type { RuleEffectEntry, RuleTransaction } from './rule.js';
+import type { SourceContext } from './source-context.js';
+import type {
+  GoalLifecycle,
+  GoalState,
+  MilestoneLifecycle,
+  MilestoneState,
+  ThreadDeclaration,
+  ThreadDeclarationCatalog,
+  ThreadId,
+  ThreadLifecycle,
+  ThreadMergeResult,
+  ThreadMergeStrategy,
+  ThreadRunId,
+  ThreadRuntimeState,
+  ThreadTransaction,
+  ThreadTypeCatalog,
+  ThreadTypeDefinition,
+  TimeDomain,
+} from './thread.js';
 
 // ——— Narrative Event (§7.4.1) ———
 
@@ -25,7 +55,13 @@ export interface NarrativeEvent {
   storyTime: StoryTimestamp;
   narrationTime?: StoryTimestamp;
   sceneType: 'linear' | 'flashback' | 'flashforward' | 'dream' | 'parallel';
-  discourseMode?: 'action' | 'dialogue' | 'description' | 'exposition' | 'reflection' | 'transition';
+  discourseMode?:
+    | 'action'
+    | 'dialogue'
+    | 'description'
+    | 'exposition'
+    | 'reflection'
+    | 'transition';
   arcPosition?: 'opening' | 'rising' | 'climax' | 'falling' | 'denouement';
   emotionalValence?: string;
   conflictType?: string;
@@ -50,13 +86,13 @@ export interface NarrativeEvent {
     entities: EntityId[];
   };
   /** Intended audience for this scene (affects prose style, vocabulary, complexity) */
-  targetAudience?: string;  // e.g. "adult_literary", "young_adult", "middle_grade", "academic"
+  targetAudience?: string; // e.g. "adult_literary", "young_adult", "middle_grade", "academic"
   /** Runtime status: authored events are 'draft' until rendered, then 'rendered' */
   status?: 'draft' | 'rendered' | 'blocked' | 'needs_review';
   /** Characters present in the scene, with semantic roles */
   cast?: {
-    onScreen: string[];   // characters physically present
-    affected: string[];   // characters affected by events (may be off-screen)
+    onScreen: string[]; // characters physically present
+    affected: string[]; // characters affected by events (may be off-screen)
   };
   /** Narrative checklist — dimensions the prose must cover (S1) */
   narrativeChecklist?: NarrativeChecklist;
@@ -120,45 +156,44 @@ export interface RelationshipChange {
 // Binary relationships are a specialization of n-ary (2 members, role='member').
 
 export type {
-  RelationshipTransaction,
-  DimensionWrite,
-  DimensionUnset,
-  Membership,
-  RelationshipId,
-  EpochId,
-  MembershipId,
-  EpochLifecycle,
   DimensionScope,
-  RelationshipRuntimeState,
-  EpochRuntimeState,
   DimensionState,
-  RelationshipTypeDefinition,
-  RelationshipRoleDefinition,
-  RelationshipIdentityTransitionGroup,
+  DimensionUnset,
+  DimensionWrite,
+  EpochId,
+  EpochLifecycle,
+  EpochRuntimeState,
   IdentityTransitionCarryEntry,
+  Membership,
+  MembershipId,
+  RelationshipId,
+  RelationshipIdentityTransitionGroup,
+  RelationshipRoleDefinition,
+  RelationshipRuntimeState,
+  RelationshipTransaction,
+  RelationshipTypeDefinition,
 } from './relationship.js';
 // ——— STATE-5 ThreadTransaction ———
 // ThreadProgressEntry is kept as a backward-compat type; the replay engine
 // converts it to ThreadTransaction at application time.
 export type {
-  ThreadTransaction,
-  ThreadId,
-  ThreadRunId,
-  ThreadLifecycle,
   GoalLifecycle,
-  MilestoneLifecycle,
   GoalState,
+  MilestoneLifecycle,
   MilestoneState,
-  TimeDomain,
-  ThreadRuntimeState,
-  ThreadTypeDefinition,
-  ThreadTypeCatalog,
   ThreadDeclaration,
   ThreadDeclarationCatalog,
-  ThreadMergeStrategy,
+  ThreadId,
+  ThreadLifecycle,
   ThreadMergeResult,
+  ThreadMergeStrategy,
+  ThreadRunId,
+  ThreadRuntimeState,
+  ThreadTransaction,
+  ThreadTypeCatalog,
+  ThreadTypeDefinition,
+  TimeDomain,
 } from './thread.js';
-
 
 export interface StyleGuidance {
   tone?: string;
@@ -187,7 +222,13 @@ export interface EventFile {
   /** Scene type */
   sceneType?: 'linear' | 'flashback' | 'flashforward' | 'dream' | 'parallel';
   /** Discourse mode */
-  discourseMode?: 'action' | 'dialogue' | 'description' | 'exposition' | 'reflection' | 'transition';
+  discourseMode?:
+    | 'action'
+    | 'dialogue'
+    | 'description'
+    | 'exposition'
+    | 'reflection'
+    | 'transition';
   /** Arc position within the story structure */
   arcPosition?: 'opening' | 'rising' | 'climax' | 'falling' | 'denouement';
   /** Emotional valence of the scene */

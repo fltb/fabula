@@ -2,14 +2,14 @@
 // KnowledgeValidator — Knowledge boundary enforcement
 // ============================================================================
 
-import type {
-  Validator,
-  ValidationIssue,
-  PreRenderInput,
-  PostRenderInput,
-} from '../types/index.js';
-import { makeIssue, getAttributeSemanticRole } from './base.js';
 import { z } from 'zod';
+import type {
+  PostRenderInput,
+  PreRenderInput,
+  ValidationIssue,
+  Validator,
+} from '../types/index.js';
+import { getAttributeSemanticRole, makeIssue } from './base.js';
 import { matchLevelSchema } from './schemas.js';
 
 export const knowledgeCheckSchema = z.object({
@@ -32,7 +32,6 @@ export class KnowledgeValidator implements Validator {
     const povChar = event.pov.character;
     const ledger = getKnowledge(povChar);
 
-
     // For each postcondition that sets "knows" on the POV character,
     // check if they could have learned this at this point in time
     for (const pc of event.postconditions) {
@@ -47,12 +46,17 @@ export class KnowledgeValidator implements Validator {
         existingClaim.assessment.polarity === 'affirmative';
 
       if (alreadyKnown) {
-        issues.push(makeIssue(
-          this.name, event.id, povChar, 'info',
-          `Character "${povChar}" already knows proposition "${pc.value}" (fact: ${pc.id})`,
-          'This is a duplicate knowledge acquisition. Consider removing if redundant.',
-          'manual',
-        ));
+        issues.push(
+          makeIssue(
+            this.name,
+            event.id,
+            povChar,
+            'info',
+            `Character "${povChar}" already knows proposition "${pc.value}" (fact: ${pc.id})`,
+            'This is a duplicate knowledge acquisition. Consider removing if redundant.',
+            'manual',
+          ),
+        );
       }
     }
 
@@ -67,18 +71,24 @@ export class KnowledgeValidator implements Validator {
           (e) =>
             e.narrativeOrder > event.narrativeOrder &&
             e.postconditions.some(
-              (p) => p.entityId === pc.entityId && p.attribute === pc.attribute && p.value === pc.value,
+              (p) =>
+                p.entityId === pc.entityId && p.attribute === pc.attribute && p.value === pc.value,
             ),
         );
 
         if (factEvents.length > 0) {
-          issues.push(makeIssue(
-            this.name, event.id, povChar, 'error',
-            `Character "${povChar}" appears to know fact "${pc.value}" before it is established (in ${factEvents[0].id})`,
-            'Reorder events so the fact is established before the character learns it.',
-            'add_precondition',
-            'knows',
-          ));
+          issues.push(
+            makeIssue(
+              this.name,
+              event.id,
+              povChar,
+              'error',
+              `Character "${povChar}" appears to know fact "${pc.value}" before it is established (in ${factEvents[0].id})`,
+              'Reorder events so the fact is established before the character learns it.',
+              'add_precondition',
+              'knows',
+            ),
+          );
         }
       }
     }
@@ -90,29 +100,35 @@ export class KnowledgeValidator implements Validator {
     const issues: ValidationIssue[] = [];
     if (!input.analysis) return issues;
 
-    const knowledgeChecks = z.array(knowledgeCheckSchema).safeParse(input.analysis.analysis.knowledgeChecks).data ?? [];
+    const knowledgeChecks =
+      z.array(knowledgeCheckSchema).safeParse(input.analysis.analysis.knowledgeChecks).data ?? [];
     for (const check of knowledgeChecks) {
       if (check.matchLevel === 'contradicted') {
-        issues.push(makeIssue(
-          'knowledge',
-          input.event.id,
-          check.entityId,
-          'warning',
-          `Knowledge boundary violation: ${check.entityId} knows about ${check.leakedEntity} — ${check.leakedInfo}`,
-          `${check.evidence}`,
-          'edit_file',
-          'knowledge',
-        ));
+        issues.push(
+          makeIssue(
+            'knowledge',
+            input.event.id,
+            check.entityId,
+            'warning',
+            `Knowledge boundary violation: ${check.entityId} knows about ${check.leakedEntity} — ${check.leakedInfo}`,
+            `${check.evidence}`,
+            'edit_file',
+            'knowledge',
+          ),
+        );
       }
     }
     return issues;
   }
 
   getAnalysisRequirements() {
-    return [{
-      field: 'knowledgeChecks',
-      schema: z.array(knowledgeCheckSchema),
-      instruction: 'knowledgeChecks: For the POV character, check if the prose reveals information they could not know given their established knowledge boundaries. Report leaks in the knowledgeChecks block with the POV character entityId, the leaked entity, what information was leaked, a direct quote as evidence, and matchLevel. A knowledge leak occurs when prose describes facts, observations, internal states of other characters, or historical events that the POV character has not acquired through direct experience, being told, or inference.',
-    }];
+    return [
+      {
+        field: 'knowledgeChecks',
+        schema: z.array(knowledgeCheckSchema),
+        instruction:
+          'knowledgeChecks: For the POV character, check if the prose reveals information they could not know given their established knowledge boundaries. Report leaks in the knowledgeChecks block with the POV character entityId, the leaked entity, what information was leaked, a direct quote as evidence, and matchLevel. A knowledge leak occurs when prose describes facts, observations, internal states of other characters, or historical events that the POV character has not acquired through direct experience, being told, or inference.',
+      },
+    ];
   }
 }

@@ -2,16 +2,16 @@
 // ReportWriter — Unified report output format generator (D11)
 // ============================================================================
 
+import type { ProviderCallLedgerEntry } from '../pipeline/render.js';
 import type {
-  ValidationIssue,
+  AnalysisResult,
+  Blocker,
   ISSSnapshot,
+  NextAction,
   StatusReport,
   ThreadSnapshot,
-  Blocker,
-  NextAction,
-  AnalysisResult,
+  ValidationIssue,
 } from '../types/index.js';
-import type { ProviderCallLedgerEntry } from '../pipeline/render.js';
 
 // ——— PipelineRunResult ———
 
@@ -90,10 +90,14 @@ export interface BenchReport {
 
 function severityIcon(sev: string): string {
   switch (sev) {
-    case 'error': return '🔴';
-    case 'warning': return '🟡';
-    case 'info': return '🔵';
-    default: return '⚪';
+    case 'error':
+      return '🔴';
+    case 'warning':
+      return '🟡';
+    case 'info':
+      return '🔵';
+    default:
+      return '⚪';
   }
 }
 
@@ -125,12 +129,12 @@ export class ReportWriter {
     lines.push(`**Generated:** ${r.generatedAt}`);
     lines.push('');
 
-    const l1Errors = r.l1Issues.filter(i => i.severity === 'error').length;
-    const l1Warnings = r.l1Issues.filter(i => i.severity === 'warning').length;
-    const l1Infos = r.l1Issues.filter(i => i.severity === 'info').length;
-    const l2Errors = r.l2Issues.filter(i => i.severity === 'error').length;
-    const l2Warnings = r.l2Issues.filter(i => i.severity === 'warning').length;
-    const l2Infos = r.l2Issues.filter(i => i.severity === 'info').length;
+    const l1Errors = r.l1Issues.filter((i) => i.severity === 'error').length;
+    const l1Warnings = r.l1Issues.filter((i) => i.severity === 'warning').length;
+    const l1Infos = r.l1Issues.filter((i) => i.severity === 'info').length;
+    const l2Errors = r.l2Issues.filter((i) => i.severity === 'error').length;
+    const l2Warnings = r.l2Issues.filter((i) => i.severity === 'warning').length;
+    const l2Infos = r.l2Issues.filter((i) => i.severity === 'info').length;
 
     // Summary header with pass/fail
     if (r.passed) {
@@ -144,8 +148,12 @@ export class ReportWriter {
     lines.push('');
     lines.push('| Layer | Errors | Warnings | Infos | Total |');
     lines.push('|-------|--------|----------|-------|-------|');
-    lines.push(`| L1 (Pre-render) | ${l1Errors} | ${l1Warnings} | ${l1Infos} | ${r.l1Issues.length} |`);
-    lines.push(`| L2 (Post-render) | ${l2Errors} | ${l2Warnings} | ${l2Infos} | ${r.l2Issues.length} |`);
+    lines.push(
+      `| L1 (Pre-render) | ${l1Errors} | ${l1Warnings} | ${l1Infos} | ${r.l1Issues.length} |`,
+    );
+    lines.push(
+      `| L2 (Post-render) | ${l2Errors} | ${l2Warnings} | ${l2Infos} | ${r.l2Issues.length} |`,
+    );
     lines.push('');
 
     // L1 Issues
@@ -154,13 +162,17 @@ export class ReportWriter {
       lines.push('');
       lines.push('| # | Validator | Severity | Event | Entity | Attribute | Message |');
       lines.push('|---|-----------|----------|-------|--------|-----------|---------|');
-      lines.push(...issueTableRows(r.l1Issues.sort((a, b) => {
-        if (a.severity !== b.severity) {
-          const order = { error: 0, warning: 1, info: 2 };
-          return order[a.severity] - order[b.severity];
-        }
-        return a.validator.localeCompare(b.validator);
-      })));
+      lines.push(
+        ...issueTableRows(
+          r.l1Issues.sort((a, b) => {
+            if (a.severity !== b.severity) {
+              const order = { error: 0, warning: 1, info: 2 };
+              return order[a.severity] - order[b.severity];
+            }
+            return a.validator.localeCompare(b.validator);
+          }),
+        ),
+      );
       lines.push('');
     }
 
@@ -170,18 +182,23 @@ export class ReportWriter {
       lines.push('');
       lines.push('| # | Validator | Severity | Event | Entity | Attribute | Message |');
       lines.push('|---|-----------|----------|-------|--------|-----------|---------|');
-      lines.push(...issueTableRows(r.l2Issues.sort((a, b) => {
-        if (a.severity !== b.severity) {
-          const order = { error: 0, warning: 1, info: 2 };
-          return order[a.severity] - order[b.severity];
-        }
-        return a.validator.localeCompare(b.validator);
-      }), r.l1Issues.length + 1));
+      lines.push(
+        ...issueTableRows(
+          r.l2Issues.sort((a, b) => {
+            if (a.severity !== b.severity) {
+              const order = { error: 0, warning: 1, info: 2 };
+              return order[a.severity] - order[b.severity];
+            }
+            return a.validator.localeCompare(b.validator);
+          }),
+          r.l1Issues.length + 1,
+        ),
+      );
       lines.push('');
     }
 
     // Render summary
-    const renderedCount = r.results.filter(res => res.prose && res.prose.length > 0).length;
+    const renderedCount = r.results.filter((res) => res.prose && res.prose.length > 0).length;
     if (r.results.length > 0) {
       lines.push('## Render Summary');
       lines.push('');
@@ -189,8 +206,10 @@ export class ReportWriter {
       lines.push('|--------|-------|');
       lines.push(`| Total events | ${r.results.length} |`);
       lines.push(`| Rendered | ${renderedCount} |`);
-      lines.push(`| Cache hits | ${r.results.filter(res => res.cacheHit).length} |`);
-      lines.push(`| Render errors | ${r.results.filter(res => res.errors && res.errors.length > 0).length} |`);
+      lines.push(`| Cache hits | ${r.results.filter((res) => res.cacheHit).length} |`);
+      lines.push(
+        `| Render errors | ${r.results.filter((res) => res.errors && res.errors.length > 0).length} |`,
+      );
       const totalTime = r.results.reduce((sum, res) => {
         if (res.renderStart !== undefined && res.renderEnd !== undefined) {
           return sum + (res.renderEnd - res.renderStart);
@@ -210,8 +229,17 @@ export class ReportWriter {
       lines.push('| Priority | Category | Action | Target |');
       lines.push('|----------|----------|--------|--------|');
       for (const action of r.nextActions) {
-        const priorityIcon = action.priority === 'critical' ? '🔴' : action.priority === 'high' ? '🟠' : action.priority === 'medium' ? '🟡' : '🔵';
-        lines.push(`| ${priorityIcon} ${action.priority} | ${action.category} | ${action.action} | ${action.targetFile ?? '-'} |`);
+        const priorityIcon =
+          action.priority === 'critical'
+            ? '🔴'
+            : action.priority === 'high'
+              ? '🟠'
+              : action.priority === 'medium'
+                ? '🟡'
+                : '🔵';
+        lines.push(
+          `| ${priorityIcon} ${action.priority} | ${action.category} | ${action.action} | ${action.targetFile ?? '-'} |`,
+        );
       }
       lines.push('');
     }
@@ -241,30 +269,34 @@ export class ReportWriter {
         l1Issues: this.result.l1Issues,
         l2Issues: this.result.l2Issues,
         total: {
-          errors: this.result.l1Issues.filter(i => i.severity === 'error').length +
-                  this.result.l2Issues.filter(i => i.severity === 'error').length,
-          warnings: this.result.l1Issues.filter(i => i.severity === 'warning').length +
-                    this.result.l2Issues.filter(i => i.severity === 'warning').length,
-          infos: this.result.l1Issues.filter(i => i.severity === 'info').length +
-                 this.result.l2Issues.filter(i => i.severity === 'info').length,
+          errors:
+            this.result.l1Issues.filter((i) => i.severity === 'error').length +
+            this.result.l2Issues.filter((i) => i.severity === 'error').length,
+          warnings:
+            this.result.l1Issues.filter((i) => i.severity === 'warning').length +
+            this.result.l2Issues.filter((i) => i.severity === 'warning').length,
+          infos:
+            this.result.l1Issues.filter((i) => i.severity === 'info').length +
+            this.result.l2Issues.filter((i) => i.severity === 'info').length,
         },
       },
       iss: this.result.iss ?? null,
       render: {
-        events: this.result.results.map(res => ({
+        events: this.result.results.map((res) => ({
           eventId: res.eventId,
           wordCount: res.wordCount ?? 0,
           cacheHit: res.cacheHit ?? false,
           validationErrors: res.validationErrors ?? 0,
           errors: res.errors ?? [],
           pass2Rejection: res.pass2Rejection ?? null,
-          renderTimeMs: res.renderStart !== undefined && res.renderEnd !== undefined
-            ? res.renderEnd - res.renderStart
-            : undefined,
+          renderTimeMs:
+            res.renderStart !== undefined && res.renderEnd !== undefined
+              ? res.renderEnd - res.renderStart
+              : undefined,
         })),
         status: this.result.renderStatus,
       },
-      threads: this.result.threads.map(t => ({
+      threads: this.result.threads.map((t) => ({
         id: t.id,
         name: t.name,
         progress: t.progress,
@@ -282,8 +314,14 @@ export class ReportWriter {
 
   toStatusReport(): StatusReport {
     const r = this.result;
-    const allErrors: ValidationIssue[] = [...r.l1Issues.filter(i => i.severity === 'error'), ...r.l2Issues.filter(i => i.severity === 'error')];
-    const allWarnings: ValidationIssue[] = [...r.l1Issues.filter(i => i.severity === 'warning'), ...r.l2Issues.filter(i => i.severity === 'warning')];
+    const allErrors: ValidationIssue[] = [
+      ...r.l1Issues.filter((i) => i.severity === 'error'),
+      ...r.l2Issues.filter((i) => i.severity === 'error'),
+    ];
+    const allWarnings: ValidationIssue[] = [
+      ...r.l1Issues.filter((i) => i.severity === 'warning'),
+      ...r.l2Issues.filter((i) => i.severity === 'warning'),
+    ];
 
     return {
       project: r.projectName,
@@ -315,15 +353,19 @@ export class ReportWriter {
 
   toBenchReport(): BenchReport {
     const r = this.result;
-    const renderedResults = r.results.filter(res => res.renderStart !== undefined || (res.prose && res.prose.length > 0));
+    const renderedResults = r.results.filter(
+      (res) => res.renderStart !== undefined || (res.prose && res.prose.length > 0),
+    );
     const totalRenderTimeMs = r.results.reduce((sum, res) => {
       if (res.renderStart !== undefined && res.renderEnd !== undefined) {
         return sum + (res.renderEnd - res.renderStart);
       }
       return sum;
     }, 0);
-    const timedCount = r.results.filter(res => res.renderStart !== undefined && res.renderEnd !== undefined).length;
-    const cacheHits = r.results.filter(res => res.cacheHit).length;
+    const timedCount = r.results.filter(
+      (res) => res.renderStart !== undefined && res.renderEnd !== undefined,
+    ).length;
+    const cacheHits = r.results.filter((res) => res.cacheHit).length;
     const totalIssues = r.l1Issues.length + r.l2Issues.length;
 
     return {
@@ -332,12 +374,15 @@ export class ReportWriter {
       totalEvents: r.results.length,
       renderedEvents: renderedResults.length,
       totalValidationIssues: totalIssues,
-      errorsCount: r.l1Issues.filter(i => i.severity === 'error').length +
-                   r.l2Issues.filter(i => i.severity === 'error').length,
-      warningsCount: r.l1Issues.filter(i => i.severity === 'warning').length +
-                     r.l2Issues.filter(i => i.severity === 'warning').length,
-      infosCount: r.l1Issues.filter(i => i.severity === 'info').length +
-                  r.l2Issues.filter(i => i.severity === 'info').length,
+      errorsCount:
+        r.l1Issues.filter((i) => i.severity === 'error').length +
+        r.l2Issues.filter((i) => i.severity === 'error').length,
+      warningsCount:
+        r.l1Issues.filter((i) => i.severity === 'warning').length +
+        r.l2Issues.filter((i) => i.severity === 'warning').length,
+      infosCount:
+        r.l1Issues.filter((i) => i.severity === 'info').length +
+        r.l2Issues.filter((i) => i.severity === 'info').length,
       cacheHitCount: cacheHits,
       cacheHitRate: r.results.length > 0 ? cacheHits / r.results.length : 0,
       averageRenderTimeMs: timedCount > 0 ? Math.round(totalRenderTimeMs / timedCount) : 0,

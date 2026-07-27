@@ -13,10 +13,10 @@ import type { BranchPath } from '../types/branch.js';
 import type { DiscoursePosition } from '../types/discourse.js';
 import type {
   CompiledSceneContract,
-  StyleProfile,
-  StyleResolutionPath,
   ContinuityPacket,
   SceneTransition,
+  StyleProfile,
+  StyleResolutionPath,
 } from '../types/render-surface.js';
 
 // ─── Default Style Profiles ──────────────────────────────────────────────────
@@ -127,9 +127,7 @@ export function compileSceneContract(input: SceneContractInput): CompiledSceneCo
  * Resolve StyleProfile by project → chapter → narrator/POV → scene precedence.
  * Falls back to parent level if a more specific profile is not found.
  */
-export function resolveStyleProfile(
-  styleHints?: SceneContractInput['styleHints'],
-): StyleProfile {
+export function resolveStyleProfile(styleHints?: SceneContractInput['styleHints']): StyleProfile {
   // Start with project default
   const projectStyle = getProfile(DEFAULT_PROJECT_STYLE.profileId) ?? DEFAULT_PROJECT_STYLE;
 
@@ -153,7 +151,8 @@ export function resolveStyleProfile(
 
   // Resolve final profile: scene wins over narrator/POV, narrator/POV wins over
   // chapter, chapter wins over project. Each level provides overrides.
-  const finalProfile = sceneStyle ?? narratorPovStyle ?? chapterStyle ?? projectStyle ?? DEFAULT_PROJECT_STYLE;
+  const finalProfile =
+    sceneStyle ?? narratorPovStyle ?? chapterStyle ?? projectStyle ?? DEFAULT_PROJECT_STYLE;
 
   const resolutionPrecedence: StyleResolutionPath = {
     projectStyle: projectStyle?.profileId,
@@ -233,7 +232,7 @@ export function simpleHash(input: string): string {
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
     const char = input.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash |= 0; // Convert to 32bit integer
   }
   return Math.abs(hash).toString(16).padStart(8, '0');

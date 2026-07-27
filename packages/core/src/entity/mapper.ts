@@ -1,41 +1,41 @@
 import * as path from 'node:path';
-import type {
-  ChapterMetadata,
-  EventFile,
-  Fact,
-  NarrativeEvent,
-  TimeAnchor,
-  WorldInitialState,
-  CharacterDefinition,
-  RelationshipDefinition,
-  RuleDefinition,
-  LocationDefinition,
-  ItemDefinition,
-  FactionDefinition,
-  NarratorProfile,
-  NarratorAssertion,
-  PlannedDiscourseLedger,
-} from '../types/index.js';
-import { loadProjectConfig, readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
-import { parseStoryTimestamp, factIdFrom } from './timestamp.js';
-import { convertRelationshipChange } from '../types/relationship.js';
-import type { ProjectData } from './types.js';
 import {
   chapterMetadataSchema,
   characterDefinitionSchema,
+  eventFileSchema,
   factionDefinitionSchema,
   itemDefinitionSchema,
   locationDefinitionSchema,
+  narratorAssertionSchema,
+  narratorProfileSchema,
+  plannedDiscourseLedgerSchema,
   projectConfigSchema,
   relationshipDefinitionSchema,
   ruleDefinitionSchema,
   worldInitialStateSchema,
-  eventFileSchema,
-  narratorProfileSchema,
-  narratorAssertionSchema,
-  plannedDiscourseLedgerSchema,
 } from '../schemas/index.js';
 import { FsStorage, type Storage } from '../storage/index.ts';
+import type {
+  ChapterMetadata,
+  CharacterDefinition,
+  EventFile,
+  Fact,
+  FactionDefinition,
+  ItemDefinition,
+  LocationDefinition,
+  NarrativeEvent,
+  NarratorAssertion,
+  NarratorProfile,
+  PlannedDiscourseLedger,
+  RelationshipDefinition,
+  RuleDefinition,
+  TimeAnchor,
+  WorldInitialState,
+} from '../types/index.js';
+import { convertRelationshipChange } from '../types/relationship.js';
+import { factIdFrom, parseStoryTimestamp } from './timestamp.js';
+import type { ProjectData } from './types.js';
+import { loadProjectConfig, readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
 
 // ============================================================================
 // EntityMapper — reads YAML definitions and maps to internal types
@@ -54,18 +54,39 @@ export class EntityMapper {
 
   /** Load all project data from the filesystem */
   loadProject(): ProjectData {
-    const config = loadProjectConfig(
-      path.join(this.projectPath, 'nova.yaml'),
-      this.storage,
-    );
+    const config = loadProjectConfig(path.join(this.projectPath, 'nova.yaml'), this.storage);
 
     const defsDir = path.join(this.projectPath, 'definitions');
-    const characters = readYamlFilesInDir(path.join(defsDir, 'characters'), characterDefinitionSchema, this.storage) as CharacterDefinition[];
-    const relationships = readYamlFilesInDir(path.join(defsDir, 'relationships'), relationshipDefinitionSchema, this.storage) as RelationshipDefinition[];
-    const rules = readYamlFilesInDir(path.join(defsDir, 'rules'), ruleDefinitionSchema, this.storage) as RuleDefinition[];
-    const locations = readYamlFilesInDir(path.join(defsDir, 'locations'), locationDefinitionSchema, this.storage) as LocationDefinition[];
-    const items = readYamlFilesInDir(path.join(defsDir, 'items'), itemDefinitionSchema, this.storage) as ItemDefinition[];
-    const factions = readYamlFilesInDir(path.join(defsDir, 'factions'), factionDefinitionSchema, this.storage) as FactionDefinition[];
+    const characters = readYamlFilesInDir(
+      path.join(defsDir, 'characters'),
+      characterDefinitionSchema,
+      this.storage,
+    ) as CharacterDefinition[];
+    const relationships = readYamlFilesInDir(
+      path.join(defsDir, 'relationships'),
+      relationshipDefinitionSchema,
+      this.storage,
+    ) as RelationshipDefinition[];
+    const rules = readYamlFilesInDir(
+      path.join(defsDir, 'rules'),
+      ruleDefinitionSchema,
+      this.storage,
+    ) as RuleDefinition[];
+    const locations = readYamlFilesInDir(
+      path.join(defsDir, 'locations'),
+      locationDefinitionSchema,
+      this.storage,
+    ) as LocationDefinition[];
+    const items = readYamlFilesInDir(
+      path.join(defsDir, 'items'),
+      itemDefinitionSchema,
+      this.storage,
+    ) as ItemDefinition[];
+    const factions = readYamlFilesInDir(
+      path.join(defsDir, 'factions'),
+      factionDefinitionSchema,
+      this.storage,
+    ) as FactionDefinition[];
 
     // S6c: Load narrator profiles from definitions/narrators/
     this.narratorProfiles = {};
@@ -129,9 +150,9 @@ export class EntityMapper {
         });
 
         const events: EventFile[] = [];
-        const eventFiles = this.storage.listFiles(chapterPath).filter(
-          (f) => f.startsWith('E') && (f.endsWith('.yaml') || f.endsWith('.yml')),
-        );
+        const eventFiles = this.storage
+          .listFiles(chapterPath)
+          .filter((f) => f.startsWith('E') && (f.endsWith('.yaml') || f.endsWith('.yml')));
         for (const ef of eventFiles) {
           const fullPath = path.join(chapterPath, ef);
           const event = readYamlFile({
@@ -166,11 +187,7 @@ export class EntityMapper {
   }
 
   /** Map EventFile to NarrativeEvent (internal type) */
-  mapToNarrativeEvent(
-    eventFile: EventFile,
-  ): NarrativeEvent {
-
-
+  mapToNarrativeEvent(eventFile: EventFile): NarrativeEvent {
     const preconditions: Fact[] = (eventFile.preconditions ?? []).map((pc) => ({
       id: factIdFrom(pc.entity, pc.attribute),
       entityId: pc.entity,
@@ -221,7 +238,9 @@ export class EntityMapper {
       narrativeOrder: eventFile.narrativeOrder,
       title: eventFile.title,
       storyTime,
-      narrationTime: eventFile.narrationTime ? parseStoryTimestamp(eventFile.narrationTime) : undefined,
+      narrationTime: eventFile.narrationTime
+        ? parseStoryTimestamp(eventFile.narrationTime)
+        : undefined,
       sceneType: eventFile.sceneType ?? 'linear',
       discourseMode: eventFile.discourseMode,
       arcPosition: eventFile.arcPosition,
@@ -282,7 +301,9 @@ export class EntityMapper {
   }
 
   /** Load all events as NarrativeEvent objects */
-  loadAllEvents(chapters: Map<number, { metadata: ChapterMetadata | null; events: EventFile[] }>): NarrativeEvent[] {
+  loadAllEvents(
+    chapters: Map<number, { metadata: ChapterMetadata | null; events: EventFile[] }>,
+  ): NarrativeEvent[] {
     const projectData = this.loadProject();
 
     const allEvents: NarrativeEvent[] = [];

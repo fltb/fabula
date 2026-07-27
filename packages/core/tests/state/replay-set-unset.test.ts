@@ -3,10 +3,10 @@
 // precondition validation before effects.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { ReplayEngine } from '../../src/state/replay.js';
+import { describe, expect, it } from 'vitest';
 import { ConfigError, PreconditionMismatchError } from '../../src/errors.js';
-import type { NarrativeEvent, Fact } from '../../src/types/index.js';
+import { ReplayEngine } from '../../src/state/replay.js';
+import type { Fact, NarrativeEvent } from '../../src/types/index.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 // Each event gets storyTime day_N so DAG builder can order and find providers.
@@ -64,8 +64,12 @@ describe('ReplayEngine set/unset semantics', () => {
   it('overwrite replaces existing value', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
-      makeEvent(1, 1, { postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })] }),
-      makeEvent(2, 2, { postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' })] }),
+      makeEvent(1, 1, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })],
+      }),
+      makeEvent(2, 2, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' })],
+      }),
     ];
     const state = engine.replay(events);
     expect(state.entities.hero?.status).toBe('dead');
@@ -74,8 +78,12 @@ describe('ReplayEngine set/unset semantics', () => {
   it('unset removes attribute from entity state', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
-      makeEvent(1, 1, { postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })] }),
-      makeEvent(2, 2, { postconditions: [makeFact({ entityId: 'hero', attribute: 'status', operation: 'unset' })] }),
+      makeEvent(1, 1, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })],
+      }),
+      makeEvent(2, 2, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', operation: 'unset' })],
+      }),
     ];
     const state = engine.replay(events);
     expect(state.entities.hero?.status).toBeUndefined();
@@ -84,9 +92,15 @@ describe('ReplayEngine set/unset semantics', () => {
   it('re-set after unset restores value', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
-      makeEvent(1, 1, { postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })] }),
-      makeEvent(2, 2, { postconditions: [makeFact({ entityId: 'hero', attribute: 'status', operation: 'unset' })] }),
-      makeEvent(3, 3, { postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'revived' })] }),
+      makeEvent(1, 1, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })],
+      }),
+      makeEvent(2, 2, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', operation: 'unset' })],
+      }),
+      makeEvent(3, 3, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'revived' })],
+      }),
     ];
     const state = engine.replay(events);
     expect(state.entities.hero?.status).toBe('revived');
@@ -95,9 +109,15 @@ describe('ReplayEngine set/unset semantics', () => {
   it('last writer wins for same attribute across events', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
-      makeEvent(1, 1, { postconditions: [makeFact({ entityId: 'hero', attribute: 'color', value: 'red' })] }),
-      makeEvent(2, 2, { postconditions: [makeFact({ entityId: 'hero', attribute: 'color', value: 'blue' })] }),
-      makeEvent(3, 3, { postconditions: [makeFact({ entityId: 'hero', attribute: 'color', value: 'red' })] }),
+      makeEvent(1, 1, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'color', value: 'red' })],
+      }),
+      makeEvent(2, 2, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'color', value: 'blue' })],
+      }),
+      makeEvent(3, 3, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'color', value: 'red' })],
+      }),
     ];
     const state = engine.replay(events);
     expect(state.entities.hero?.color).toBe('red');
@@ -134,11 +154,17 @@ describe('ReplayEngine hard errors', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       // DAG provider: set magic=200
-      makeEvent(1, 1, { postconditions: [makeFact({ entityId: 'hero', attribute: 'magic', value: 200 })] }),
+      makeEvent(1, 1, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'magic', value: 200 })],
+      }),
       // Overwrite: magic is now 100
-      makeEvent(2, 2, { postconditions: [makeFact({ entityId: 'hero', attribute: 'magic', value: 100 })] }),
+      makeEvent(2, 2, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'magic', value: 100 })],
+      }),
       // Precondition expects 200 but state is 100 → mismatch
-      makeEvent(3, 3, { preconditions: [makeFact({ entityId: 'hero', attribute: 'magic', value: 200 })] }),
+      makeEvent(3, 3, {
+        preconditions: [makeFact({ entityId: 'hero', attribute: 'magic', value: 200 })],
+      }),
     ];
     expect(() => engine.replay(events)).toThrow(PreconditionMismatchError);
   });
@@ -147,9 +173,13 @@ describe('ReplayEngine hard errors', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       // DAG provider: set status='dead'
-      makeEvent(1, 1, { postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' })] }),
+      makeEvent(1, 1, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' })],
+      }),
       // Overwrite: status is now 'alive'
-      makeEvent(2, 2, { postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })] }),
+      makeEvent(2, 2, {
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })],
+      }),
       // Precondition expects 'dead' but state is 'alive' → mismatch
       makeEvent(3, 3, {
         preconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' })],

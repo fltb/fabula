@@ -7,7 +7,7 @@
 //   - scene metadata (narrative order, story time, arc position)
 // ============================================================================
 
-import type { VolumeSummary, ChapterMeta, SceneMeta } from '../types/summary.js';
+import type { ChapterMeta, SceneMeta, VolumeSummary } from '../types/summary.js';
 
 export interface VolumeSummaryOptions {
   /** Label for the volume (derived from story time or chapter range) */
@@ -44,9 +44,7 @@ export class VolumeSummaryCompiler {
     }
 
     // Derive volumeId from chapter range or explicit label.
-    const volumeId =
-      options?.volumeId ??
-      this._deriveVolumeId(chapterMetadata);
+    const volumeId = options?.volumeId ?? this._deriveVolumeId(chapterMetadata);
 
     // Active threads: extract from scene summaries that mention unresolved
     // threads (lines prefixed with "Thread:" or containing "unresolved").
@@ -97,10 +95,7 @@ export class VolumeSummaryCompiler {
 
       // Major arc transition: climax → anything else signals a structural
       // boundary.
-      if (
-        prev.arcPosition === 'climax' &&
-        curr.arcPosition !== prev.arcPosition
-      ) {
+      if (prev.arcPosition === 'climax' && curr.arcPosition !== prev.arcPosition) {
         boundaries.push(i);
         continue;
       }
@@ -115,7 +110,6 @@ export class VolumeSummaryCompiler {
         curr.storyTime.chapter !== prev.storyTime.chapter
       ) {
         boundaries.push(i);
-        continue;
       }
     }
 
@@ -185,10 +179,7 @@ export class VolumeSummaryCompiler {
         }
 
         // Lines mentioning "unresolved" and "thread" are heuristic markers.
-        if (
-          /\bunresolved\b/i.test(trimmed) &&
-          /\bthread\b/i.test(trimmed)
-        ) {
+        if (/\bunresolved\b/i.test(trimmed) && /\bthread\b/i.test(trimmed)) {
           // Try to extract a thread name after "thread:" or before ":"
           const match = trimmed.match(/thread[:\s]+([^,.]+)/i);
           if (match) {
@@ -201,9 +192,7 @@ export class VolumeSummaryCompiler {
     return [...threadSet].sort();
   }
 
-  private _buildCharacterTrajectory(
-    sceneSummaries: string[],
-  ): Map<string, string> {
+  private _buildCharacterTrajectory(sceneSummaries: string[]): Map<string, string> {
     const trajectory = new Map<string, string>();
 
     // Process in reverse so the most recent description wins.

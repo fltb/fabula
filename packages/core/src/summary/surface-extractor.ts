@@ -7,10 +7,7 @@
 // ============================================================================
 
 import * as crypto from 'node:crypto';
-import type {
-  SurfaceReferencePacket,
-  StyleMetrics,
-} from '../types/render-surface.ts';
+import type { StyleMetrics, SurfaceReferencePacket } from '../types/render-surface.ts';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -45,10 +42,7 @@ export class SurfaceReferenceExtractor {
     budget?: number,
   ): SurfaceReferencePacket {
     const maxBudget = budget ?? this.defaultBudget;
-    const sourceHash = crypto
-      .createHash('sha256')
-      .update(prose)
-      .digest('hex');
+    const sourceHash = crypto.createHash('sha256').update(prose).digest('hex');
 
     // ── Determine excerpt mode and content ────────────────────────────
     let excerptMode: 'tail' | 'full' | 'authored_anchor';
@@ -97,19 +91,16 @@ export class SurfaceReferenceExtractor {
    * Deterministic style metrics from prose text.
    */
   private computeStyleMetrics(prose: string): StyleMetrics {
-    const sentences = prose.split(/[.!?]+/).filter(s => s.trim().length > 0);
-    const words = prose.split(/\s+/).filter(w => w.length > 0);
+    const sentences = prose.split(/[.!?]+/).filter((s) => s.trim().length > 0);
+    const words = prose.split(/\s+/).filter((w) => w.length > 0);
     const totalChars = prose.length;
 
     // Average words per sentence
     const avgSentenceLength =
-      sentences.length > 0
-        ? Math.round((words.length / sentences.length) * 10) / 10
-        : 0;
+      sentences.length > 0 ? Math.round((words.length / sentences.length) * 10) / 10 : 0;
 
     // Simplified reading-level heuristic (Flesch-Kincaid-like)
-    const avgSyllablesEstimate =
-      words.length > 0 ? totalChars / words.length : 0;
+    const avgSyllablesEstimate = words.length > 0 ? totalChars / words.length : 0;
     const readingLevel =
       sentences.length > 0 && words.length > 0
         ? Math.round(
@@ -124,11 +115,9 @@ export class SurfaceReferenceExtractor {
     const tokenCount = words.length;
 
     // Lexical diversity — unique / total ratio
-    const uniqueWords = new Set(words.map(w => w.toLowerCase()));
+    const uniqueWords = new Set(words.map((w) => w.toLowerCase()));
     const lexicalDiversity =
-      words.length > 0
-        ? Math.round((uniqueWords.size / words.length) * 1000) / 1000
-        : 0;
+      words.length > 0 ? Math.round((uniqueWords.size / words.length) * 1000) / 1000 : 0;
 
     // Dialogue ratio — heuristic: content inside paired quote characters
     let dialogueChars = 0;
@@ -141,9 +130,7 @@ export class SurfaceReferenceExtractor {
       }
     }
     const dialogueRatio =
-      totalChars > 0
-        ? Math.round((dialogueChars / totalChars) * 1000) / 1000
-        : 0;
+      totalChars > 0 ? Math.round((dialogueChars / totalChars) * 1000) / 1000 : 0;
 
     return {
       avgSentenceLength,

@@ -2,13 +2,22 @@
 // Entity — barrel exports
 // ============================================================================
 
-export { loadProjectConfig, migrateProjectFile, readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
-export { parseStoryTimestamp, resolveTimestampToDay, compareTimestamp } from './timestamp.js';
+export type { CompareOutcome } from './compare.js';
+export { compareFact } from './compare.js';
+export {
+  defaultEntityTypeCatalog,
+  getAttributeIdsForKind,
+  getTypeDefinitionByKind,
+} from './default-catalog.js';
+export type { CanonicalFactValue } from './fact-value.js';
+export { canonicalDeepEqual, canonicalizeFactValue, isCanonicalFactValue } from './fact-value.js';
 export { EntityMapper } from './mapper.js';
 export { InMemoryEntityRegistry } from './registry.js';
-export { compareFact } from './compare.js';
-export type { CompareOutcome } from './compare.js';
+export { compareTimestamp, parseStoryTimestamp, resolveTimestampToDay } from './timestamp.js';
 export type { ProjectData } from './types.js';
-export { canonicalizeFactValue, isCanonicalFactValue, canonicalDeepEqual } from './fact-value.js';
-export type { CanonicalFactValue } from './fact-value.js';
-export { defaultEntityTypeCatalog, getTypeDefinitionByKind, getAttributeIdsForKind } from './default-catalog.js';
+export {
+  loadProjectConfig,
+  migrateProjectFile,
+  readYamlFile,
+  readYamlFilesInDir,
+} from './yaml-loader.js';

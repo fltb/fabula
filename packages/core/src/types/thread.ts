@@ -8,7 +8,7 @@
 // 1. Identity (opaque branded strings)
 // ============================================================================
 
-import type { StructuralFunction, ActantModel } from './story-ir.js';
+import type { ActantModel, StructuralFunction } from './story-ir.js';
 // ============================================================================
 // 1. Identity (opaque branded strings)
 // ============================================================================
@@ -52,12 +52,7 @@ export type GoalLifecycle = 'pending' | 'active' | 'achieved' | 'failed' | 'waiv
  * Milestone lifecycle:
  *  pending → achieved | failed | waived | invalidated
  */
-export type MilestoneLifecycle =
-  | 'pending'
-  | 'achieved'
-  | 'failed'
-  | 'waived'
-  | 'invalidated';
+export type MilestoneLifecycle = 'pending' | 'achieved' | 'failed' | 'waived' | 'invalidated';
 
 export interface GoalState {
   goalId: string;
@@ -179,11 +174,7 @@ export interface ThreadTransaction {
 // 9. Branch merge types
 // ============================================================================
 
-export type ThreadMergeStrategy =
-  | 'requireEqual'
-  | 'selectBranch'
-  | 'literal'
-  | 'newRun';
+export type ThreadMergeStrategy = 'requireEqual' | 'selectBranch' | 'literal' | 'newRun';
 
 export interface ThreadMergeResult {
   threadId: ThreadId;

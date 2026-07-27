@@ -2,4 +2,4 @@
 // Report — Barrelled exports
 // ============================================================================
 
-export { ReportWriter, type PipelineRunResult, type BenchReport } from './writer.js';
+export { type BenchReport, type PipelineRunResult, ReportWriter } from './writer.js';

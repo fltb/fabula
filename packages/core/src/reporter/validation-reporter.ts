@@ -2,23 +2,20 @@
 // Validation Report Writer — Human-readable output/validation.md
 // ============================================================================
 
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ValidationIssue } from '../types/validator.js';
-import { ReportWriter } from '../report/writer.js';
 import type { PipelineRunResult } from '../report/writer.js';
+import { ReportWriter } from '../report/writer.js';
+import type { ValidationIssue } from '../types/validator.js';
 
 export interface ValidationReport {
   projectName: string;
   generatedAt: string;
-  l1Issues: ValidationIssue[];   // pre-render issues
-  l2Issues: ValidationIssue[];   // post-render issues
+  l1Issues: ValidationIssue[]; // pre-render issues
+  l2Issues: ValidationIssue[]; // post-render issues
 }
 
-export function writeValidationReport(
-  projectDir: string,
-  report: ValidationReport,
-): string {
+export function writeValidationReport(projectDir: string, report: ValidationReport): string {
   // Build a PipelineRunResult from the ValidationReport and delegate to ReportWriter
   const runResult: PipelineRunResult = {
     projectName: report.projectName,

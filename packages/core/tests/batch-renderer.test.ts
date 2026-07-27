@@ -5,11 +5,10 @@
 // Uses a mock RenderPipeline to test batch logic without LLM calls.
 // ============================================================================
 
-import { describe, it, expect, vi } from 'vitest';
-import { BatchRenderPipeline } from '../src/batch-renderer.ts';
-import type { RenderPipeline } from '../src/pipeline/render.ts';
-import type { RenderJob, RenderSceneResult } from '../src/pipeline/render.ts';
+import { describe, expect, it, vi } from 'vitest';
 import type { BatchConfig, BatchProgressEvent } from '../src/batch-renderer.ts';
+import { BatchRenderPipeline } from '../src/batch-renderer.ts';
+import type { RenderJob, RenderPipeline, RenderSceneResult } from '../src/pipeline/render.ts';
 
 // ============================================================================
 // Mock helpers
@@ -76,9 +75,10 @@ function defaultResultFn(jobs: RenderJob[]): RenderSceneResult[] {
  * @param resultFn  Called with the batch of jobs; returns RenderSceneResult[].
  *                  Default: one result per job with generic prose.
  */
-function createMockPipeline(
-  resultFn?: (jobs: RenderJob[]) => RenderSceneResult[],
-): { pipeline: RenderPipeline; renderAll: ReturnType<typeof vi.fn> } {
+function createMockPipeline(resultFn?: (jobs: RenderJob[]) => RenderSceneResult[]): {
+  pipeline: RenderPipeline;
+  renderAll: ReturnType<typeof vi.fn>;
+} {
   const fn = resultFn ?? defaultResultFn;
   const renderAll = vi.fn((jobs: RenderJob[]) => Promise.resolve(fn(jobs)));
 

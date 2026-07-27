@@ -5,24 +5,20 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import type {
-  ReviewComment,
-  ReviewPatch,
-  PatchChange,
-} from '../types/index.js';
-import type { CommentFilter, StatusSummary } from './types.js';
+import type { PatchChange, ReviewComment, ReviewPatch } from '../types/index.js';
 import {
   addComment,
-  getComments,
-  getActiveBlocking,
-  resolve,
   address,
-  reopen,
   escalate,
+  getActiveBlocking,
+  getComments,
   markWontfix as markWontfixFunc,
+  reopen,
+  resolve,
 } from './comment.js';
 import { createPatch } from './patch.js';
 import { getSummary } from './summary.js';
+import type { CommentFilter, StatusSummary } from './types.js';
 
 export class ReviewManager {
   private comments: ReviewComment[] = [];

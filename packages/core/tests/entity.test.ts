@@ -2,26 +2,26 @@
 // EntityMapper & InMemoryEntityRegistry — Comprehensive Tests
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type {
-  EventFile,
-  StoryTimestamp,
-  TimeAnchor,
-  Fact,
-  CharacterDefinition,
-  WorldInitialState,
-  Entity,
-  BranchSet,
-} from '../src/types/index.js';
+import { describe, expect, it } from 'vitest';
 import {
+  compareTimestamp,
   EntityMapper,
   InMemoryEntityRegistry,
   parseStoryTimestamp,
-  compareTimestamp,
   resolveTimestampToDay,
 } from '../src/entity/index.js';
+import type {
+  BranchSet,
+  CharacterDefinition,
+  Entity,
+  EventFile,
+  Fact,
+  StoryTimestamp,
+  TimeAnchor,
+  WorldInitialState,
+} from '../src/types/index.js';
 
 // ─── Fixture path ───────────────────────────────────────────────────────────−
 const FIXTURE_PATH = path.resolve(
@@ -157,9 +157,7 @@ describe('EntityMapper.loadAllEvents()', () => {
       storyTime: 'arcane_s1_end + 3 weeks',
       pov: { character: 'seraphine', type: 'third_person_limited' },
       sceneBrief: 'Seraphine detects an anomalous emotional signal.',
-      preconditions: [
-        { entity: 'seraphine', attribute: 'status', value: 'alive' },
-      ],
+      preconditions: [{ entity: 'seraphine', attribute: 'status', value: 'alive' }],
       expectedPostconditions: [
         { entity: 'seraphine', attribute: 'has_detected_anomaly', value: true },
       ],
@@ -177,7 +175,11 @@ describe('EntityMapper.loadAllEvents()', () => {
         },
       ],
       ruleEffects: [
-        { rule: 'hextech_crystal_scarcity', effect: 'reinforce', evidence: 'Signal suggests hextech misuse' },
+        {
+          rule: 'hextech_crystal_scarcity',
+          effect: 'reinforce',
+          evidence: 'Signal suggests hextech misuse',
+        },
       ],
     };
 
@@ -342,9 +344,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       preconditions: [
         { entity: 'camille', attribute: 'location', value: 'piltover_enforcer_headquarters' },
       ],
-      expectedPostconditions: [
-        { entity: 'seraphine', attribute: 'status', value: 'alert' },
-      ],
+      expectedPostconditions: [{ entity: 'seraphine', attribute: 'status', value: 'alert' }],
       relationshipEffects: [
         {
           participants: ['camille', 'seraphine'] as [string, string],
@@ -407,11 +407,14 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       preconditions: [{ entity: 'camille', attribute: 'status', value: 'alive' }],
       expectedPostconditions: [{ entity: 'world', attribute: 'crisis', value: 'escalated' }],
       threadProgress: [
-        { thread: 'T1', advancement: 'investigation_started', progressAfter: 0.15, progressTotal: 1.0 },
+        {
+          thread: 'T1',
+          advancement: 'investigation_started',
+          progressAfter: 0.15,
+          progressTotal: 1.0,
+        },
       ],
-      foreshadowing: [
-        { id: 'foreshadow_01', hint: 'Something is wrong', targetRevealChapter: 3 },
-      ],
+      foreshadowing: [{ id: 'foreshadow_01', hint: 'Something is wrong', targetRevealChapter: 3 }],
       relationshipEffects: [
         {
           participants: ['camille', 'seraphine'] as [string, string],
@@ -421,7 +424,11 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
         },
       ],
       ruleEffects: [
-        { rule: 'hextech_crystal_scarcity', effect: 'reinforce', evidence: 'Crystals still missing' },
+        {
+          rule: 'hextech_crystal_scarcity',
+          effect: 'reinforce',
+          evidence: 'Crystals still missing',
+        },
       ],
       styleGuidance: { tone: 'suspenseful', scenePacing: 'deliberate' },
     };
@@ -731,7 +738,6 @@ describe('InMemoryEntityRegistry', () => {
 // ============================================================================
 
 describe('parseStoryTimestamp()', () => {
-
   it('should parse relative timestamps like "arcane_s1_end + 3 weeks"', () => {
     const result = parseStoryTimestamp('arcane_s1_end + 3 weeks');
     expect(result).toEqual({
@@ -818,8 +824,12 @@ describe('resolveTimestampToDay()', () => {
   });
 
   it('rejects unknown absolute timestamps', () => {
-    expect(() => resolveTimestampToDay({ type: 'absolute', value: 'foo' }, anchors)).toThrow('Unknown absolute time anchor');
-    expect(() => resolveTimestampToDay({ type: 'absolute', value: '' }, anchors)).toThrow('Unknown absolute time anchor');
+    expect(() => resolveTimestampToDay({ type: 'absolute', value: 'foo' }, anchors)).toThrow(
+      'Unknown absolute time anchor',
+    );
+    expect(() => resolveTimestampToDay({ type: 'absolute', value: '' }, anchors)).toThrow(
+      'Unknown absolute time anchor',
+    );
   });
 
   it('should resolve relative timestamps', () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TypedEventBus } from '../src/event-bus.ts';
 import type { EventMap } from '../src/event-bus.ts';
+import { TypedEventBus } from '../src/event-bus.ts';
 
 // ——— Typed events ———
 // TypeScript compile-time test: uncommenting any of the following should fail to compile

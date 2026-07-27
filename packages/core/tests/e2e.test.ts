@@ -7,31 +7,31 @@
 // network calls are made.
 // ============================================================================
 
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { tmpdir } from 'node:os';
+import * as path from 'node:path';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 const FIXTURE_PATH = path.resolve('fixtures/arcane-aftermath');
 
 import {
-  EntityMapper,
-  InMemoryEntityRegistry,
-  StateManager,
-  ReplayEngine,
-  ContextCompiler,
-  MockProvider,
-  LLMError,
   buildSceneRenderPrompt,
   buildThreadStatusPrompt,
+  ContextCompiler,
+  EntityMapper,
+  InMemoryEntityRegistry,
+  LLMError,
+  MockProvider,
+  ReplayEngine,
+  StateManager,
 } from '../src/index.js';
 import type {
-  NarrativeEvent,
-  WorldState,
   CompletionResponse,
+  NarrativeEvent,
+  ProjectData,
   SceneRenderInput,
   StyleGuidance,
-  ProjectData,
+  WorldState,
 } from '../src/types/index.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -170,7 +170,7 @@ describe('1. Full Pipeline with MockProvider', () => {
     // (depends on the fixture — check has_detected_anomaly or knows_mysterious_signal)
     expect(
       state.entities['seraphine']?.['has_detected_anomaly'] ||
-      state.entities['seraphine']?.['detected_anomaly'],
+        state.entities['seraphine']?.['detected_anomaly'],
     ).toBeDefined();
   });
 
@@ -198,9 +198,7 @@ describe('1. Full Pipeline with MockProvider', () => {
     expect(pkg.sceneSpec.povType).toBe('third_person_limited');
 
     // Character snapshots include seraphine
-    const seraphineSnap = pkg.characterSnapshots.find(
-      (cs) => cs.id === 'seraphine',
-    );
+    const seraphineSnap = pkg.characterSnapshots.find((cs) => cs.id === 'seraphine');
     expect(seraphineSnap).toBeDefined();
     expect(seraphineSnap!.traits).toContain('empathetic');
 
@@ -290,9 +288,7 @@ describe('1. Full Pipeline with MockProvider', () => {
   it('1h. uses MockProvider generator for dynamic responses', async () => {
     const mock = new MockProvider({
       generator: (req) => {
-        const lastUser = [...req.messages]
-          .reverse()
-          .find((m) => m.role === 'user');
+        const lastUser = [...req.messages].reverse().find((m) => m.role === 'user');
         return `Dynamic prose generated from ${lastUser?.content.length ?? 0} chars of context.`;
       },
     });
@@ -422,7 +418,6 @@ describe('2. LLMError class behavior', () => {
   });
 });
 
-
 // ─── 4. buildThreadStatusPrompt ─────────────────────────────────────────────
 
 describe('4. buildThreadStatusPrompt', () => {
@@ -453,9 +448,7 @@ describe('4. buildThreadStatusPrompt', () => {
 
   it('4b. builds prompt with 1 thread — non-empty content mentions thread', () => {
     const messages = buildThreadStatusPrompt({
-      threads: [
-        { id: 'T1', name: 'Hextech Weapon Smuggling', progress: 0.2, lastEvent: 'E1a' },
-      ],
+      threads: [{ id: 'T1', name: 'Hextech Weapon Smuggling', progress: 0.2, lastEvent: 'E1a' }],
       currentChapter: 1,
       currentEvent: 'E1a',
     });
@@ -500,11 +493,14 @@ describe('4. buildThreadStatusPrompt', () => {
 
   it('4d. system message content is consistent regardless of input', () => {
     const msgs1 = buildThreadStatusPrompt({
-      threads: [], currentChapter: 1, currentEvent: 'E1a',
+      threads: [],
+      currentChapter: 1,
+      currentEvent: 'E1a',
     });
     const msgs2 = buildThreadStatusPrompt({
       threads: [{ id: 'T1', name: 'Test', progress: 0.5, lastEvent: 'E1' }],
-      currentChapter: 2, currentEvent: 'E2',
+      currentChapter: 2,
+      currentEvent: 'E2',
     });
 
     // System message should be the same (it's static)
@@ -513,9 +509,7 @@ describe('4. buildThreadStatusPrompt', () => {
 
   it('4e. all messages have valid roles', () => {
     const messages = buildThreadStatusPrompt({
-      threads: [
-        { id: 'T1', name: 'Test', progress: 0.5, lastEvent: 'E1' },
-      ],
+      threads: [{ id: 'T1', name: 'Test', progress: 0.5, lastEvent: 'E1' }],
       currentChapter: 1,
       currentEvent: 'E1',
     });
@@ -546,9 +540,9 @@ describe('5. MockProvider failOnCall behavior', () => {
     expect(mock.callCount).toBe(1);
 
     // Second call throws — does NOT consume a response
-    await expect(
-      mock.complete({ messages: [{ role: 'user', content: 'req2' }] }),
-    ).rejects.toThrow('Intentional failure on call 2');
+    await expect(mock.complete({ messages: [{ role: 'user', content: 'req2' }] })).rejects.toThrow(
+      'Intentional failure on call 2',
+    );
     expect(mock.callCount).toBe(2);
 
     // Third call succeeds — consumes 'second' (the next unconsumed response)
@@ -565,9 +559,9 @@ describe('5. MockProvider failOnCall behavior', () => {
       failOnCall: 1,
     });
 
-    await expect(
-      mock.complete({ messages: [{ role: 'user', content: 'x' }] }),
-    ).rejects.toThrow('Mock failure on call 1');
+    await expect(mock.complete({ messages: [{ role: 'user', content: 'x' }] })).rejects.toThrow(
+      'Mock failure on call 1',
+    );
   });
 
   it('5c. failOnCall beyond call count never triggers', async () => {

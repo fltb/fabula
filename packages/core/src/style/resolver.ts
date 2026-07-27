@@ -10,12 +10,12 @@
 // and the same inputs always produce the same output.
 // ============================================================================
 
-import type { StyleProfile as SimpleStyleProfile } from './default-profile.ts';
-import { DEFAULT_STYLE_PROFILE } from './default-profile.ts';
 import type {
   StyleProfile as InternalStyleProfile,
   StyleResolutionPath,
 } from '../types/render-surface.ts';
+import type { StyleProfile as SimpleStyleProfile } from './default-profile.ts';
+import { DEFAULT_STYLE_PROFILE } from './default-profile.ts';
 
 export interface StyleResolverInput {
   project?: SimpleStyleProfile;

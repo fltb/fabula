@@ -2,34 +2,34 @@
 // Novalistically CLI — Command-line interface
 // ============================================================================
 
-import { Command } from 'commander';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { runAll, runPerformanceBench, runRegressionBench } from '@novalistically/bench';
+import type { ReviewComment } from '@novalistically/core';
 import {
-  renderNovel,
-  validateNovel,
-  getProjectStatus,
-  diffEvent,
-  listEntities,
-  showEntity,
+  analyzeProjectImpact,
   assembleNovel,
-  ReviewManager,
-  clearEventCache,
-  FsStorage,
-  EntityMapper,
-  initializeProject,
   buildCausalEdges,
-  MockPass2Provider,
+  clearEventCache,
+  computeEvidenceHash,
+  diffEvent,
+  EntityMapper,
   exportDAGtoDOT,
   exportDAGtoMermaid,
+  FsStorage,
+  getProjectStatus,
+  initializeProject,
+  listEntities,
+  MockPass2Provider,
   migrateProjectFile,
-  analyzeProjectImpact,
-  computeEvidenceHash,
-  verifyEvidenceChain,
+  ReviewManager,
+  renderNovel,
+  showEntity,
   TypedEventBus,
+  validateNovel,
+  verifyEvidenceChain,
 } from '@novalistically/core';
-import type { ReviewComment } from '@novalistically/core';
-import { runAll, runRegressionBench, runPerformanceBench } from '@novalistically/bench';
+import { Command } from 'commander';
 
 // ============================================================================
 // Helpers
@@ -51,10 +51,7 @@ function ensureProjectDir(): string {
 
 const program = new Command();
 
-program
-  .name('nova')
-  .description('Novalistically — Narrative Engineering System')
-  .version('0.1.0');
+program.name('nova').description('Novalistically — Narrative Engineering System').version('0.1.0');
 
 // --- project init ---
 program
@@ -110,7 +107,11 @@ program
 #         branch_id: branch_b
 #         label: "Go alone"
 `;
-    fs.writeFileSync(path.join(projectDir, 'branches', 'branch_points.yaml'), branchPointsYaml, 'utf-8');
+    fs.writeFileSync(
+      path.join(projectDir, 'branches', 'branch_points.yaml'),
+      branchPointsYaml,
+      'utf-8',
+    );
 
     // Write nova.yaml
     const novaYaml = `project: ${name}
@@ -150,7 +151,11 @@ threads: []
 
 world_facts: []
 `;
-    fs.writeFileSync(path.join(projectDir, 'definitions', 'state_initial.yaml'), stateInitial, 'utf-8');
+    fs.writeFileSync(
+      path.join(projectDir, 'definitions', 'state_initial.yaml'),
+      stateInitial,
+      'utf-8',
+    );
 
     // Write PROJECT_STATUS.md
     const statusMd = `# ${name} — Project Status
@@ -247,7 +252,12 @@ program
     }
   });
 
-function printValidationResult(result: { errors: Array<{ message: string; validator?: string }>; warnings: Array<{ message: string; validator?: string }>; infos: Array<{ message: string }>; passed: boolean }) {
+function printValidationResult(result: {
+  errors: Array<{ message: string; validator?: string }>;
+  warnings: Array<{ message: string; validator?: string }>;
+  infos: Array<{ message: string }>;
+  passed: boolean;
+}) {
   for (const err of result.errors) {
     console.log(`  ❌ ERROR${err.validator ? ` [${err.validator}]` : ''}: ${err.message}`);
   }
@@ -270,11 +280,15 @@ program
     const projectDir = ensureProjectDir();
     const status = getProjectStatus(projectDir, undefined, new FsStorage());
 
-    console.log(`\nSummary: ${status.summary.totalEvents} events, ${status.summary.renderedCount} rendered, ${status.summary.blockedCount} blocked`);
+    console.log(
+      `\nSummary: ${status.summary.totalEvents} events, ${status.summary.renderedCount} rendered, ${status.summary.blockedCount} blocked`,
+    );
 
     console.log('\n## Events');
     for (const ev of status.events) {
-      console.log(`  ${ev.id}: ${ev.status} (chapter ${ev.chapter})${ev.wordCount ? `, ${ev.wordCount} words` : ''}`);
+      console.log(
+        `  ${ev.id}: ${ev.status} (chapter ${ev.chapter})${ev.wordCount ? `, ${ev.wordCount} words` : ''}`,
+      );
     }
 
     console.log('\n## Thread Progress');
@@ -282,7 +296,6 @@ program
       console.log(`  ${t.id}: ${t.progress}/${t.total}`);
     }
   });
-
 
 // --- migrate ---
 program
@@ -340,17 +353,17 @@ entityCmd
       const mapper = new EntityMapper(projectDir);
       const data = mapper.loadProject();
       const events = mapper.loadAllEvents(data.chapters);
-      
-      const filtered = events.filter(e => {
+
+      const filtered = events.filter((e) => {
         if (e.id === 'system:genesis') return false;
         return e.status === options!.status;
       });
-      
+
       if (filtered.length === 0) {
         console.log(`No events with status "${options.status}".`);
         return;
       }
-      
+
       for (const e of filtered) {
         console.log(`  ${e.id}: "${e.title}" — ${e.status}`);
       }
@@ -401,102 +414,114 @@ program
   .argument('<action>', 'list | add | resolve | reopen | escalate')
   .argument('[targetId]', 'Event ID or comment ID to target')
   .argument('[message]', 'Comment text (for "add" action)')
-  .option('--severity <severity>', 'Severity for "add" action: info | warning | blocking', 'warning')
-  .action((action: string, targetId: string | undefined, message: string | undefined, opts: { severity?: string }) => {
-    const projectDir = ensureProjectDir();
-    const mapper = new EntityMapper(projectDir);
-    const data = mapper.loadProject();
-    const events = mapper.loadAllEvents(data.chapters);
+  .option(
+    '--severity <severity>',
+    'Severity for "add" action: info | warning | blocking',
+    'warning',
+  )
+  .action(
+    (
+      action: string,
+      targetId: string | undefined,
+      message: string | undefined,
+      opts: { severity?: string },
+    ) => {
+      const projectDir = ensureProjectDir();
+      const mapper = new EntityMapper(projectDir);
+      const data = mapper.loadProject();
+      const events = mapper.loadAllEvents(data.chapters);
 
+      const manager = new ReviewManager();
+      manager.load(projectDir);
 
-    const manager = new ReviewManager();
-    manager.load(projectDir);
-
-    switch (action) {
-      case 'list': {
-        const filter = targetId ? { targetId } as any : undefined;
-        const comments = manager.getComments(filter);
-        if (comments.length === 0) {
-          console.log('No review comments found.');
-          return;
+      switch (action) {
+        case 'list': {
+          const filter = targetId ? ({ targetId } as any) : undefined;
+          const comments = manager.getComments(filter);
+          if (comments.length === 0) {
+            console.log('No review comments found.');
+            return;
+          }
+          for (const c of comments) {
+            console.log(
+              `[${c.severity}] ${c.status} ${c.target.type}:${c.target.id} — ${c.content}`,
+            );
+            console.log(`  ID: ${c.id}, created: ${c.createdAt}`);
+            if (c.resolvedAt) console.log(`  Resolved: ${c.resolvedAt}`);
+            console.log('');
+          }
+          break;
         }
-        for (const c of comments) {
-          console.log(`[${c.severity}] ${c.status} ${c.target.type}:${c.target.id} — ${c.content}`);
-          console.log(`  ID: ${c.id}, created: ${c.createdAt}`);
-          if (c.resolvedAt) console.log(`  Resolved: ${c.resolvedAt}`);
-          console.log('');
-        }
-        break;
-      }
 
-      case 'add': {
-        if (!targetId || !message) {
-          console.error('Usage: nova review add <eventId> "<message>"');
+        case 'add': {
+          if (!targetId || !message) {
+            console.error('Usage: nova review add <eventId> "<message>"');
+            process.exit(1);
+          }
+          const event = events.find((e: { id: string }) => e.id === targetId);
+          if (!event) {
+            console.error(`Event "${targetId}" not found.`);
+            process.exit(1);
+          }
+          const comment: ReviewComment = {
+            id: `rev_${Date.now()}`,
+            author: 'human',
+            target: { type: 'scene', id: targetId },
+            severity: severityMap[opts.severity || 'warning'] ?? 'suggestion',
+            category: 'style',
+            content: message,
+            status: 'open',
+            createdAt: new Date().toISOString(),
+          };
+          manager.addComment(comment);
+          manager.save(projectDir);
+          console.log(`Review comment added: ${comment.id}`);
+          break;
+        }
+
+        case 'resolve': {
+          if (!targetId) {
+            console.error('Usage: nova review resolve <commentId>');
+            process.exit(1);
+          }
+          manager.resolve(targetId);
+          manager.save(projectDir);
+          console.log(`Comment resolved: ${targetId}`);
+          break;
+        }
+
+        case 'reopen': {
+          if (!targetId) {
+            console.error('Usage: nova review reopen <commentId>');
+            process.exit(1);
+          }
+          manager.reopen(targetId);
+          manager.save(projectDir);
+
+          // Invalidate cache on reopen
+          const cacheDir = path.join(projectDir, '.nova', 'render-cache');
+          clearEventCache(cacheDir, targetId, new FsStorage());
+          console.log(`Comment reopened and cache invalidated: ${targetId}`);
+          break;
+        }
+
+        case 'escalate': {
+          if (!targetId) {
+            console.error('Usage: nova review escalate <commentId>');
+            process.exit(1);
+          }
+          manager.escalate(targetId);
+          manager.save(projectDir);
+          console.log(`Comment escalated: ${targetId}`);
+          break;
+        }
+
+        default:
+          console.error(`Unknown action: "${action}". Use: list, add, resolve, reopen, escalate`);
           process.exit(1);
-        }
-        const event = events.find((e: { id: string }) => e.id === targetId);
-        if (!event) {
-          console.error(`Event "${targetId}" not found.`);
-          process.exit(1);
-        }
-        const comment: ReviewComment = {
-          id: `rev_${Date.now()}`,
-          author: 'human',
-          target: { type: 'scene', id: targetId },
-          severity: severityMap[opts.severity || 'warning'] ?? 'suggestion',
-          category: 'style',
-          content: message,
-          status: 'open',
-          createdAt: new Date().toISOString(),
-        };
-        manager.addComment(comment);
-        manager.save(projectDir);
-        console.log(`Review comment added: ${comment.id}`);
-        break;
       }
-
-      case 'resolve': {
-        if (!targetId) {
-          console.error('Usage: nova review resolve <commentId>');
-          process.exit(1);
-        }
-        manager.resolve(targetId);
-        manager.save(projectDir);
-        console.log(`Comment resolved: ${targetId}`);
-        break;
-      }
-
-      case 'reopen': {
-        if (!targetId) {
-          console.error('Usage: nova review reopen <commentId>');
-          process.exit(1);
-        }
-        manager.reopen(targetId);
-        manager.save(projectDir);
-
-        // Invalidate cache on reopen
-        const cacheDir = path.join(projectDir, '.nova', 'render-cache');
-        clearEventCache(cacheDir, targetId, new FsStorage());
-        console.log(`Comment reopened and cache invalidated: ${targetId}`);
-        break;
-      }
-
-      case 'escalate': {
-        if (!targetId) {
-          console.error('Usage: nova review escalate <commentId>');
-          process.exit(1);
-        }
-        manager.escalate(targetId);
-        manager.save(projectDir);
-        console.log(`Comment escalated: ${targetId}`);
-        break;
-      }
-
-      default:
-        console.error(`Unknown action: "${action}". Use: list, add, resolve, reopen, escalate`);
-        process.exit(1);
-    }
-  });
+    },
+  );
 
 // --- render ---
 program
@@ -509,73 +534,90 @@ program
   .option('--reference-dir <path>', 'Approved mock reference directory')
   .option('--trace', 'Emit trace JSONL to .nova/traces/<job>.jsonl')
   .option('--concurrency <number>', 'Max concurrent LLM calls')
-  .action(async (eventId: string, options: { dryRun?: boolean; all?: boolean; model?: string; provider?: string; referenceDir?: string; trace?: boolean; concurrency?: string }) => {
-    const projectDir = ensureProjectDir();
-    if (options.provider === 'mock-pass2' && !options.referenceDir) {
-      console.error('--provider mock-pass2 requires --reference-dir');
-      process.exit(1);
-    }
-    if (options.provider && options.provider !== 'ai-sdk' && options.provider !== 'mock-pass2') {
-      console.error(`Unsupported provider: ${options.provider}`);
-      process.exit(1);
-    }
-    const provider = options.provider === 'mock-pass2'
-      ? new MockPass2Provider({ referenceDir: options.referenceDir })
-      : undefined;
-
-    // Live per-event progress on stderr (stdout is reserved for the final
-    // batch report — tests assert exact ✅/❌ counts there).
-    const eventBus = new TypedEventBus();
-    eventBus.on('pipeline:render:after', (data) => {
-      const mark = data.success && data.errorCount === 0 ? '✓' : '·';
-      console.error(`  ${mark} ${data.eventId}: ${data.wordCount} words, cache=${data.cacheHit}`);
-    });
-
-    const result = await renderNovel({
-      projectDir,
-      model: options.model,
-      eventId: options.all ? undefined : eventId,
-      dryRun: options.dryRun,
-      trace: options.trace,
-      storage: new FsStorage(),
-      concurrency: options.concurrency ? Number(options.concurrency) : undefined,
-      provider,
-      eventBus,
-    });
-
-    if (result.errors.length > 0 && result.results.length === 0) {
-      console.error('Render errors:');
-      for (const err of result.errors) {
-        console.error(`  ❌ ${err}`);
+  .action(
+    async (
+      eventId: string,
+      options: {
+        dryRun?: boolean;
+        all?: boolean;
+        model?: string;
+        provider?: string;
+        referenceDir?: string;
+        trace?: boolean;
+        concurrency?: string;
+      },
+    ) => {
+      const projectDir = ensureProjectDir();
+      if (options.provider === 'mock-pass2' && !options.referenceDir) {
+        console.error('--provider mock-pass2 requires --reference-dir');
+        process.exit(1);
       }
-      process.exit(1);
-    }
-
-    for (const resultEntry of result.results) {
-      const status = resultEntry.released ? '✅' : '❌';
-      if (options.dryRun) {
-        console.log(`  ${status} ${resultEntry.eventId}: Dry-run (saved to .nova/dry-runs/)`);
-      } else {
-        console.log(`  ${status} ${resultEntry.eventId}: ${resultEntry.wordCount} words, cache=${resultEntry.cacheHit}`);
+      if (options.provider && options.provider !== 'ai-sdk' && options.provider !== 'mock-pass2') {
+        console.error(`Unsupported provider: ${options.provider}`);
+        process.exit(1);
       }
-      for (const error of resultEntry.errors) console.log(`       Error: ${error}`);
-      for (const message of resultEntry.validationIssueMessages) console.log(`       Validation: ${message}`);
-    }
+      const provider =
+        options.provider === 'mock-pass2'
+          ? new MockPass2Provider({ referenceDir: options.referenceDir })
+          : undefined;
 
-    if (result.errors.length > 0) {
-      console.error('\nPipeline errors:');
-      for (const err of result.errors) {
-        console.error(`  ❌ ${err}`);
+      // Live per-event progress on stderr (stdout is reserved for the final
+      // batch report — tests assert exact ✅/❌ counts there).
+      const eventBus = new TypedEventBus();
+      eventBus.on('pipeline:render:after', (data) => {
+        const mark = data.success && data.errorCount === 0 ? '✓' : '·';
+        console.error(`  ${mark} ${data.eventId}: ${data.wordCount} words, cache=${data.cacheHit}`);
+      });
+
+      const result = await renderNovel({
+        projectDir,
+        model: options.model,
+        eventId: options.all ? undefined : eventId,
+        dryRun: options.dryRun,
+        trace: options.trace,
+        storage: new FsStorage(),
+        concurrency: options.concurrency ? Number(options.concurrency) : undefined,
+        provider,
+        eventBus,
+      });
+
+      if (result.errors.length > 0 && result.results.length === 0) {
+        console.error('Render errors:');
+        for (const err of result.errors) {
+          console.error(`  ❌ ${err}`);
+        }
+        process.exit(1);
       }
-    }
-    if (!options.dryRun && result.results.some((entry) => !entry.released)) {
-      process.exit(1);
-    }
 
-    if (!options.dryRun && result.results.length > 0) {
-      console.log(`\nDone. Output written to scenes/`);
-    }
-  });
+      for (const resultEntry of result.results) {
+        const status = resultEntry.released ? '✅' : '❌';
+        if (options.dryRun) {
+          console.log(`  ${status} ${resultEntry.eventId}: Dry-run (saved to .nova/dry-runs/)`);
+        } else {
+          console.log(
+            `  ${status} ${resultEntry.eventId}: ${resultEntry.wordCount} words, cache=${resultEntry.cacheHit}`,
+          );
+        }
+        for (const error of resultEntry.errors) console.log(`       Error: ${error}`);
+        for (const message of resultEntry.validationIssueMessages)
+          console.log(`       Validation: ${message}`);
+      }
+
+      if (result.errors.length > 0) {
+        console.error('\nPipeline errors:');
+        for (const err of result.errors) {
+          console.error(`  ❌ ${err}`);
+        }
+      }
+      if (!options.dryRun && result.results.some((entry) => !entry.released)) {
+        process.exit(1);
+      }
+
+      if (!options.dryRun && result.results.length > 0) {
+        console.log(`\nDone. Output written to scenes/`);
+      }
+    },
+  );
 // --- trace ---
 const traceCmd = program.command('trace').description('Inspect pipeline trace output');
 
@@ -622,7 +664,9 @@ traceCmd
       const state = String(ev.state ?? '').padEnd(6);
       const dur = ev.durationMs != null ? ` ${String(ev.durationMs).padStart(4)}ms` : '       ';
       const code = ev.code ? ` [${ev.code}]` : '';
-      console.log(`  ${String(ev.timestamp ?? '').slice(11, 23)}  ${phase} ${state}${dur}${code}  span=${ev.spanId}`);
+      console.log(
+        `  ${String(ev.timestamp ?? '').slice(11, 23)}  ${phase} ${state}${dur}${code}  span=${ev.spanId}`,
+      );
     }
   });
 
@@ -674,9 +718,13 @@ traceCmd
         const avg = (durs.reduce((a, b) => a + b, 0) / durs.length).toFixed(1);
         const min = Math.min(...durs).toFixed(0);
         const max = Math.max(...durs).toFixed(0);
-        console.log(`  ${phase.padEnd(20)} ${String(count).padStart(5)}  ${avg.padStart(8)}  ${min.padStart(7)}  ${max.padStart(7)}`);
+        console.log(
+          `  ${phase.padEnd(20)} ${String(count).padStart(5)}  ${avg.padStart(8)}  ${min.padStart(7)}  ${max.padStart(7)}`,
+        );
       } else {
-        console.log(`  ${phase.padEnd(20)} ${String(count).padStart(5)}       N/A       N/A       N/A`);
+        console.log(
+          `  ${phase.padEnd(20)} ${String(count).padStart(5)}       N/A       N/A       N/A`,
+        );
       }
     }
   });
@@ -702,18 +750,23 @@ program
 
       const redEvents = Object.entries(result.events)
         .filter(([, level]) => level === 'red')
-        .map(([id]) => id).sort();
+        .map(([id]) => id)
+        .sort();
       const yellowEvents = Object.entries(result.events)
         .filter(([, level]) => level === 'yellow')
-        .map(([id]) => id).sort();
+        .map(([id]) => id)
+        .sort();
       const greenEvents = Object.entries(result.events)
         .filter(([, level]) => level === 'green')
-        .map(([id]) => id).sort();
+        .map(([id]) => id)
+        .sort();
 
       console.log('\nImpact Analysis:');
       console.log('  ' + '━'.repeat(50));
       if (redEvents.length > 0) {
-        console.log(`  Red (causal chain broken): ${redEvents.length} event${redEvents.length !== 1 ? 's' : ''} (${redEvents.join(', ')})`);
+        console.log(
+          `  Red (causal chain broken): ${redEvents.length} event${redEvents.length !== 1 ? 's' : ''} (${redEvents.join(', ')})`,
+        );
         for (const [id, downstreamIds] of Object.entries(result.downstream)) {
           console.log(`    ${id} downstream: ${downstreamIds.join(', ')}`);
         }
@@ -721,12 +774,16 @@ program
         console.log('  Red (causal chain broken):  0 events');
       }
       if (yellowEvents.length > 0) {
-        console.log(`  Yellow (needs rewrite):     ${yellowEvents.length} event${yellowEvents.length !== 1 ? 's' : ''} (${yellowEvents.join(', ')})`);
+        console.log(
+          `  Yellow (needs rewrite):     ${yellowEvents.length} event${yellowEvents.length !== 1 ? 's' : ''} (${yellowEvents.join(', ')})`,
+        );
       } else {
         console.log('  Yellow (needs rewrite):     0 events');
       }
       if (greenEvents.length > 0) {
-        console.log(`  Green (no effect):          ${greenEvents.length} event${greenEvents.length !== 1 ? 's' : ''} (${greenEvents.join(', ')})`);
+        console.log(
+          `  Green (no effect):          ${greenEvents.length} event${greenEvents.length !== 1 ? 's' : ''} (${greenEvents.join(', ')})`,
+        );
       } else {
         console.log('  Green (no effect):          0 events');
       }
@@ -774,7 +831,11 @@ program
     const evidenceHashes = new Map<string, string>();
     for (const event of events) {
       if (event.source === 'genesis') continue; // skip genesis system event
-      const hash = computeEvidenceHash(event.id, event.preconditions ?? [], event.postconditions ?? []);
+      const hash = computeEvidenceHash(
+        event.id,
+        event.preconditions ?? [],
+        event.postconditions ?? [],
+      );
       evidenceHashes.set(event.id, hash);
     }
 
@@ -852,9 +913,10 @@ program
       sceneType: e.sceneType,
     }));
 
-    const output = options.format === 'mermaid'
-      ? exportDAGtoMermaid(edges, eventProps)
-      : exportDAGtoDOT(edges, eventProps);
+    const output =
+      options.format === 'mermaid'
+        ? exportDAGtoMermaid(edges, eventProps)
+        : exportDAGtoDOT(edges, eventProps);
 
     console.log(output);
   });
@@ -876,9 +938,13 @@ program
       const r = await runRegressionBench(projectDir);
       for (const s of r.stages) {
         const icon = s.passed ? '✅' : '❌';
-        console.log(`  ${icon} ${s.stage}: ${s.passed ? 'PASS' : 'FAIL'} (${s.ms}ms) — ${s.detail}`);
+        console.log(
+          `  ${icon} ${s.stage}: ${s.passed ? 'PASS' : 'FAIL'} (${s.ms}ms) — ${s.detail}`,
+        );
       }
-      console.log(`  ── ${r.totalPassed}/${r.stages.length} passed, ${r.totalFailed} failed, ${r.totalTime}ms total ──`);
+      console.log(
+        `  ── ${r.totalPassed}/${r.stages.length} passed, ${r.totalFailed} failed, ${r.totalTime}ms total ──`,
+      );
       return;
     }
 
@@ -886,13 +952,21 @@ program
       console.log('── Performance Benchmarks ──');
       const r = await runPerformanceBench();
       console.table(
-        r.measurements.map((m: { name: string; hz: number; meanMs: number; samples: number; scale: string | number }) => ({
-          Stage: m.name,
-          'Hz': m.hz.toFixed(1),
-          'Mean (ms)': m.meanMs.toFixed(3),
-          Samples: m.samples,
-          Scale: m.scale,
-        })),
+        r.measurements.map(
+          (m: {
+            name: string;
+            hz: number;
+            meanMs: number;
+            samples: number;
+            scale: string | number;
+          }) => ({
+            Stage: m.name,
+            Hz: m.hz.toFixed(1),
+            'Mean (ms)': m.meanMs.toFixed(3),
+            Samples: m.samples,
+            Scale: m.scale,
+          }),
+        ),
       );
       return;
     }
@@ -907,6 +981,9 @@ export async function main(args: string[] = process.argv) {
 }
 
 // Allow running directly
-if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith('/cli/dist/index.js')) {
+if (
+  import.meta.url === `file://${process.argv[1]}` ||
+  process.argv[1]?.endsWith('/cli/dist/index.js')
+) {
   main();
 }

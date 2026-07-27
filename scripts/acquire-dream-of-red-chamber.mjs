@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 // ============================================================================
 // acquire-dream-of-red-chamber.mjs — Download & process 红楼梦 前80回
 //
@@ -13,11 +14,11 @@
 // 6. Run gate validation
 // ============================================================================
 
-import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
@@ -60,11 +61,11 @@ console.log('\n=== Step 3: Chapter split ===');
 // Chinese numeral parser for chapter numbers
 // Supports traditional form (十一=11, 二十=20, 九十九=99) and digit form (一零零=100, 一一五=115)
 function parseChapterNum(chineseNum) {
-  const d = { '零': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9 };
+  const d = { 零: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
   const numStr = chineseNum.match(/[一二三四五六七八九十百零]+/)[0];
 
   // Digit form: every char is a decimal digit; used for chapters 100+
-  const allAreDigits = [...numStr].every(ch => ch in d);
+  const allAreDigits = [...numStr].every((ch) => ch in d);
   if (allAreDigits && numStr.length >= 3) {
     let n = 0;
     for (const ch of numStr) n = n * 10 + d[ch];
@@ -72,12 +73,18 @@ function parseChapterNum(chineseNum) {
   }
 
   // Traditional Chinese positional form (1-99)
-  let total = 0, acc = 0;
+  let total = 0,
+    acc = 0;
   for (const ch of numStr) {
-    if (ch === '百') { acc = acc === 0 ? 100 : acc * 100; }
-    else if (ch === '十') { acc = acc === 0 ? 10 : acc * 10; }
-    else {
-      if (acc > 0) { total += acc; acc = 0; }
+    if (ch === '百') {
+      acc = acc === 0 ? 100 : acc * 100;
+    } else if (ch === '十') {
+      acc = acc === 0 ? 10 : acc * 10;
+    } else {
+      if (acc > 0) {
+        total += acc;
+        acc = 0;
+      }
       acc = d[ch];
     }
   }
@@ -105,16 +112,20 @@ for (const m of allMatches) {
 selected.sort((a, b) => a.match.index - b.match.index);
 
 if (selected.length !== 80) {
-  throw new Error(`FAIL: expected 80 chapter headers for 1-80, found ${selected.length}. ` +
-    `Check regex against Gutenberg source.`);
+  throw new Error(
+    `FAIL: expected 80 chapter headers for 1-80, found ${selected.length}. ` +
+      `Check regex against Gutenberg source.`,
+  );
 }
 console.log(`  Selected chapters 1-80 (deduplicated): ${selected.length}`);
 
 // Collect ALL heading positions (including chapters 81-120) for range boundary calculation
-const allPositions = allMatches.map(m => ({
-  num: parseChapterNum(m[0]),
-  index: m.index,
-})).sort((a, b) => a.index - b.index);
+const allPositions = allMatches
+  .map((m) => ({
+    num: parseChapterNum(m[0]),
+    index: m.index,
+  }))
+  .sort((a, b) => a.index - b.index);
 
 // Build chapter text: from each header to the next heading with a different chapter number
 const chapters = [];
@@ -123,7 +134,7 @@ for (let i = 0; i < selected.length; i++) {
   const startPos = match.index;
 
   // End at the next heading whose chapter number differs (skipping duplicate headings)
-  const nextDiff = allPositions.find(p => p.index > startPos && p.num !== num);
+  const nextDiff = allPositions.find((p) => p.index > startPos && p.num !== num);
   const endPos = nextDiff ? nextDiff.index : text.length;
 
   const chapterTitle = match[0].replace(/\n/g, ' ').trim();
@@ -136,7 +147,9 @@ for (let i = 0; i < selected.length; i++) {
     startPos,
     endPos,
   });
-  console.log(`  Ch ${String(num).padStart(2)}: "${chapterTitle.slice(0, 40)}..." (${chapterText.length} chars)`);
+  console.log(
+    `  Ch ${String(num).padStart(2)}: "${chapterTitle.slice(0, 40)}..." (${chapterText.length} chars)`,
+  );
 }
 
 // ── Invariant validation before writing ──────────────────────────────────────
@@ -153,12 +166,16 @@ for (let i = 0; i < chapters.length; i++) {
 
   // 1. Exactly chapters 1-80, each once, in ascending order
   if (c.num !== expectedNum) {
-    throw new Error(`FAIL: ordering at index ${i}: expected ch${expectedNum}, got ch${c.num} (byte ${c.startPos})`);
+    throw new Error(
+      `FAIL: ordering at index ${i}: expected ch${expectedNum}, got ch${c.num} (byte ${c.startPos})`,
+    );
   }
 
   // 2. Ranges strictly ascending, non-overlapping
   if (i > 0 && c.startPos < chapters[i - 1].endPos) {
-    throw new Error(`FAIL: overlap ch${c.num}: start=${c.startPos} < ch${chapters[i-1].num} end=${chapters[i-1].endPos}`);
+    throw new Error(
+      `FAIL: overlap ch${c.num}: start=${c.startPos} < ch${chapters[i - 1].num} end=${chapters[i - 1].endPos}`,
+    );
   }
   if (c.endPos <= c.startPos) {
     throw new Error(`FAIL: empty range ch${c.num}: start=${c.startPos}, end=${c.endPos}`);
@@ -183,7 +200,7 @@ console.log(`  All ${chapters.length} chapters pass invariant checks`);
 console.log('\n=== Step 4: Write source.txt ===');
 mkdirSync(CORPUS_DIR, { recursive: true });
 
-const fullText = chapters.map(c => c.text).join('\n\n');
+const fullText = chapters.map((c) => c.text).join('\n\n');
 writeFileSync(OUTPUT_FILE, fullText, 'utf-8');
 const sourceHash = sha256(fullText);
 console.log(`  Written: ${OUTPUT_FILE}`);
@@ -267,7 +284,7 @@ try {
 try {
   const result = execSync(
     'npx vitest run --config vitest.config.ts packages/core/tests/state/corpus-index.test.ts 2>&1',
-    { cwd: REPO_ROOT, timeout: 30000 }
+    { cwd: REPO_ROOT, timeout: 30000 },
   );
   console.log('  corpus-index test: PASS');
 } catch (e) {

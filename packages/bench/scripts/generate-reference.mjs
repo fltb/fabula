@@ -8,13 +8,19 @@
 // fixture's .nova/smoke-candidates/{timestamp}/ directory.
 // NEVER writes to the approved reference/data directory.
 // ============================================================================
-import { renderNovel, responseReferenceSchema, provenanceManifestSchema, sanitizeError } from '../../core/dist/index.js';
-import { buildLiveSmokeRecord, collectReferenceIssueIdentities } from '../dist/index.js';
-import { writeFileSync, mkdirSync, cpSync, rmSync, mkdtempSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+
 import { createHash } from 'node:crypto';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  provenanceManifestSchema,
+  renderNovel,
+  responseReferenceSchema,
+  sanitizeError,
+} from '../../core/dist/index.js';
+import { buildLiveSmokeRecord, collectReferenceIssueIdentities } from '../dist/index.js';
 import 'dotenv/config';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -55,13 +61,18 @@ async function main() {
     cpSync(projectDir, workDir, {
       recursive: true,
       filter: (src) => {
-        const rest = src[projectDir.length] === '/' ? src.slice(projectDir.length + 1) : src.slice(projectDir.length);
+        const rest =
+          src[projectDir.length] === '/'
+            ? src.slice(projectDir.length + 1)
+            : src.slice(projectDir.length);
         const top = rest.split('/')[0];
         return top !== '.nova' && top !== 'scenes' && top !== 'output';
       },
     });
   } catch (err) {
-    throw new Error(`Failed to copy fixture to temp directory: ${(err instanceof Error ? err.message : String(err))}`);
+    throw new Error(
+      `Failed to copy fixture to temp directory: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   // ── Render via public API ───────────────────────────────────────────
@@ -113,7 +124,9 @@ async function main() {
       },
     });
   } catch (err) {
-    throw new Error(`Smoke record build failed: ${(err instanceof Error ? err.message : String(err))}`);
+    throw new Error(
+      `Smoke record build failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
 
   // ── Serialise smoke record and compute runHash ────────────────────────
@@ -130,9 +143,10 @@ async function main() {
   const validatedEntries = [];
   const failures = [];
   for (const r of result.results) {
-    const attempts = (r.providerCalls && r.providerCalls.length > 0)
-      ? Math.max(...r.providerCalls.map((c) => c.attempt))
-      : 1;
+    const attempts =
+      r.providerCalls && r.providerCalls.length > 0
+        ? Math.max(...r.providerCalls.map((c) => c.attempt))
+        : 1;
 
     const entry = {
       prose: r.prose,
@@ -184,7 +198,9 @@ async function main() {
     };
     writeFileSync(join(candidateDir, 'fatal-error.json'), JSON.stringify(fatal, null, 2));
     const detail = failures.map((f) => `${f.eventId}: ${f.reason}`).join('; ');
-    throw new Error(`Candidate validation failed: ${failures.length}/${result.results.length} events invalid. ${detail}`);
+    throw new Error(
+      `Candidate validation failed: ${failures.length}/${result.results.length} events invalid. ${detail}`,
+    );
   }
 
   // ── All validated — write candidate scene outputs ─────────────────────
@@ -212,7 +228,10 @@ async function main() {
   if (!provParsed.success) {
     throw new Error(`Invalid provenance manifest: ${JSON.stringify(provParsed.error.issues)}`);
   }
-  writeFileSync(join(candidateDir, 'candidate-provenance.json'), JSON.stringify(provParsed.data, null, 2));
+  writeFileSync(
+    join(candidateDir, 'candidate-provenance.json'),
+    JSON.stringify(provParsed.data, null, 2),
+  );
 
   // ── Write smoke record ───────────────────────────────────────────────
   const recordPath = join(candidateDir, 'smoke-record.json');

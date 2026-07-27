@@ -3,8 +3,8 @@
 // ============================================================================
 
 import * as path from 'node:path';
-import type { WorldState, Snapshot } from '../types/index.js';
 import { FsStorage, type Storage } from '../storage/index.ts';
+import type { Snapshot, WorldState } from '../types/index.js';
 
 export class SnapshotEngine {
   private snapshotInterval: number;
@@ -45,7 +45,8 @@ export class SnapshotEngine {
   findNearest(targetCount: number): Snapshot | null {
     if (!this.storage.exists(this.snapshotsDir)) return null;
 
-    const files = this.storage.listFiles(this.snapshotsDir)
+    const files = this.storage
+      .listFiles(this.snapshotsDir)
       .filter((f) => f.startsWith('snapshot_') && f.endsWith('.json'))
       .map((f) => {
         const match = f.match(/snapshot_(\d+)\.json/);
@@ -69,7 +70,8 @@ export class SnapshotEngine {
   invalidateFrom(eventCount: number): void {
     if (!this.storage.exists(this.snapshotsDir)) return;
 
-    const files = this.storage.listFiles(this.snapshotsDir)
+    const files = this.storage
+      .listFiles(this.snapshotsDir)
       .filter((f) => f.startsWith('snapshot_') && f.endsWith('.json'));
 
     for (const file of files) {
@@ -87,7 +89,8 @@ export class SnapshotEngine {
   listSnapshots(): number[] {
     if (!this.storage.exists(this.snapshotsDir)) return [];
 
-    return this.storage.listFiles(this.snapshotsDir)
+    return this.storage
+      .listFiles(this.snapshotsDir)
       .filter((f) => f.startsWith('snapshot_') && f.endsWith('.json'))
       .map((f) => {
         const match = f.match(/snapshot_(\d+)\.json/);
@@ -97,4 +100,3 @@ export class SnapshotEngine {
       .sort((a, b) => a - b);
   }
 }
-

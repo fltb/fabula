@@ -13,9 +13,9 @@
 //   .nova/derived/rules.yaml                       — rule evidence chain
 // ============================================================================
 
+import { countNarrativeText, NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/count.ts';
 import type { Storage } from '../storage/index.js';
 import type { RenderJob, RenderSceneResult } from './render.js';
-import { countNarrativeText, NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/count.ts';
 
 export interface OutputEntry {
   eventId: string;
@@ -38,10 +38,7 @@ export interface DerivedData {
  * Extracts thread progress, foreshadowing entries, relationship effects,
  * and rule effects from each event that has a corresponding render result.
  */
-function collectAllReferenceFiles(
-  jobs: RenderJob[],
-  results: RenderSceneResult[],
-): DerivedData {
+function collectAllReferenceFiles(jobs: RenderJob[], results: RenderSceneResult[]): DerivedData {
   const resultMap = new Map(results.map((r) => [r.eventId, r]));
   const threads: Record<string, unknown> = {};
   const foreshadowing: Array<Record<string, unknown>> = [];
@@ -65,8 +62,8 @@ function collectAllReferenceFiles(
     for (const f of event.foreshadowing) {
       foreshadowing.push({
         eventId: event.id,
-            hint: f.hint,
-            targetChapter: f.targetRevealChapter,
+        hint: f.hint,
+        targetChapter: f.targetRevealChapter,
         thread: f.thread,
       });
     }
@@ -81,9 +78,13 @@ function collectAllReferenceFiles(
         participants: participants.length >= 2 ? [participants[0], participants[1]] : [],
         effect: re.provenance?.replace('compat:RelationshipChange:', '') ?? 'change',
         direction: (directionDim?.value as string) ?? '',
-        newState: typeDim || intensityDim
-          ? { type: (typeDim?.value as string) ?? '', intensity: (intensityDim?.value as number) ?? 0 }
-          : undefined,
+        newState:
+          typeDim || intensityDim
+            ? {
+                type: (typeDim?.value as string) ?? '',
+                intensity: (intensityDim?.value as number) ?? 0,
+              }
+            : undefined,
       });
     }
 
@@ -114,20 +115,42 @@ function writeRenderOutputs(
   const writes: Array<{ path: string; content: string }> = [];
 
   for (const entry of entries) {
-    const sceneDir = [projectDir, 'scenes', `chapter-${String(entry.chapterNumber).padStart(2, '0')}`].join('/');
+    const sceneDir = [
+      projectDir,
+      'scenes',
+      `chapter-${String(entry.chapterNumber).padStart(2, '0')}`,
+    ].join('/');
     writes.push(
       { path: [sceneDir, `${entry.eventId}.md`].join('/'), content: entry.prose },
-      { path: [sceneDir, `${entry.eventId}.yaml`].join('/'), content: `${yamlify(entry.metadata)}\n` },
-      { path: [sceneDir, `${entry.eventId}_render_request.yaml`].join('/'), content: `${yamlify(entry.renderRequest)}\n` },
-      { path: [responseDir, `${entry.eventId}.json`].join('/'), content: JSON.stringify(entry.rawResponse, null, 2) },
+      {
+        path: [sceneDir, `${entry.eventId}.yaml`].join('/'),
+        content: `${yamlify(entry.metadata)}\n`,
+      },
+      {
+        path: [sceneDir, `${entry.eventId}_render_request.yaml`].join('/'),
+        content: `${yamlify(entry.renderRequest)}\n`,
+      },
+      {
+        path: [responseDir, `${entry.eventId}.json`].join('/'),
+        content: JSON.stringify(entry.rawResponse, null, 2),
+      },
     );
   }
 
   const derivedDir = [projectDir, '.nova', 'derived'].join('/');
   writes.push(
-    { path: [derivedDir, 'threads.yaml'].join('/'), content: JSON.stringify(derived.threads, null, 2) },
-    { path: [derivedDir, 'foreshadowing.yaml'].join('/'), content: JSON.stringify(derived.foreshadowing, null, 2) },
-    { path: [derivedDir, 'relationships.yaml'].join('/'), content: JSON.stringify(derived.relationships, null, 2) },
+    {
+      path: [derivedDir, 'threads.yaml'].join('/'),
+      content: JSON.stringify(derived.threads, null, 2),
+    },
+    {
+      path: [derivedDir, 'foreshadowing.yaml'].join('/'),
+      content: JSON.stringify(derived.foreshadowing, null, 2),
+    },
+    {
+      path: [derivedDir, 'relationships.yaml'].join('/'),
+      content: JSON.stringify(derived.relationships, null, 2),
+    },
     { path: [derivedDir, 'rules.yaml'].join('/'), content: JSON.stringify(derived.rules, null, 2) },
   );
   st.commitBatch(writes);
@@ -162,7 +185,9 @@ export function buildAndWriteOutputs(
         word_count: countNarrativeText(r.prose, 'zh'),
         text_count_version: NARRATIVE_TEXT_COUNT_VERSION,
         rendered_at: new Date(r.renderStart).toISOString(),
-        edit_history: r.cacheHit ? [] : [{ action: 'llm_generated', timestamp: new Date().toISOString() }],
+        edit_history: r.cacheHit
+          ? []
+          : [{ action: 'llm_generated', timestamp: new Date().toISOString() }],
         branchExistence: job.event.branchExistence ?? { type: 'all' },
       },
       renderRequest: {
@@ -182,11 +207,12 @@ export function buildAndWriteOutputs(
         validation: r.validation,
         needsReview: r.needsReview,
         attempts: r.attempts,
-        released: r.prose.trim().length > 0
-          && r.analysis !== null
-          && r.validation !== null
-          && r.validation.passed
-          && !r.needsReview,
+        released:
+          r.prose.trim().length > 0 &&
+          r.analysis !== null &&
+          r.validation !== null &&
+          r.validation.passed &&
+          !r.needsReview,
         ...(r.pass2Rejection !== undefined ? { pass2Rejection: r.pass2Rejection } : {}),
       },
     });

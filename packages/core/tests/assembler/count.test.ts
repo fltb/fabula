@@ -7,7 +7,9 @@ describe('countNarrativeText', () => {
   });
 
   it('normalizes NFC and excludes presentation syntax', () => {
-    expect(countNarrativeText('# 标题\n[祥林](https://example.test) <em>嫂</em>，e\u0301。', 'zh')).toBe(5);
+    expect(
+      countNarrativeText('# 标题\n[祥林](https://example.test) <em>嫂</em>，e\u0301。', 'zh'),
+    ).toBe(5);
   });
 
   it('counts English lexical tokens without markdown syntax', () => {

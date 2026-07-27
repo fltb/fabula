@@ -1,5 +1,4 @@
-import type { SceneEntry } from './types.js';
-import type { SortedScene } from './types.js';
+import type { SceneEntry, SortedScene } from './types.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // NarrativeSorter

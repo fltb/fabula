@@ -3,13 +3,9 @@
 // constraint replacement, epoch isolation
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import type {
-  RuleException,
-  RuleRuntimeState,
-  RuleConstraint,
-} from '../../src/types/index.js';
-import { evaluateConstraints, applyRuleTransaction } from '../../src/state/rule-replay.js';
+import { describe, expect, it } from 'vitest';
+import { applyRuleTransaction, evaluateConstraints } from '../../src/state/rule-replay.js';
+import type { RuleConstraint, RuleException, RuleRuntimeState } from '../../src/types/index.js';
 
 function makeRuleState(overrides: Partial<RuleRuntimeState> = {}): RuleRuntimeState {
   return {
@@ -69,21 +65,33 @@ describe('RuleException — structure', () => {
 describe('RuleException — status lifecycle', () => {
   it('should start active', () => {
     const exc: RuleException = {
-      exceptionId: 'exc-001', status: 'active', constraintIds: [], scopeBindings: {}, effect: { type: 'exempt' },
+      exceptionId: 'exc-001',
+      status: 'active',
+      constraintIds: [],
+      scopeBindings: {},
+      effect: { type: 'exempt' },
     };
     expect(exc.status).toBe('active');
   });
 
   it('can be suspended', () => {
     const exc: RuleException = {
-      exceptionId: 'exc-001', status: 'suspended', constraintIds: [], scopeBindings: {}, effect: { type: 'exempt' },
+      exceptionId: 'exc-001',
+      status: 'suspended',
+      constraintIds: [],
+      scopeBindings: {},
+      effect: { type: 'exempt' },
     };
     expect(exc.status).toBe('suspended');
   });
 
   it('can be revoked', () => {
     const exc: RuleException = {
-      exceptionId: 'exc-001', status: 'revoked', constraintIds: [], scopeBindings: {}, effect: { type: 'exempt' },
+      exceptionId: 'exc-001',
+      status: 'revoked',
+      constraintIds: [],
+      scopeBindings: {},
+      effect: { type: 'exempt' },
     };
     expect(exc.status).toBe('revoked');
   });
@@ -100,13 +108,15 @@ describe('RuleException — constraint exemption', () => {
       predicate: { version: '1.0', type: 'simple', expression: 'no_match' },
     };
     const state = makeRuleState({
-      exceptions: [{
-        exceptionId: 'exc-1',
-        status: 'active',
-        constraintIds: ['c1'],
-        scopeBindings: {},
-        effect: { type: 'exempt' },
-      }],
+      exceptions: [
+        {
+          exceptionId: 'exc-1',
+          status: 'active',
+          constraintIds: ['c1'],
+          scopeBindings: {},
+          effect: { type: 'exempt' },
+        },
+      ],
     });
     const records = evaluateConstraints([constraint], state, 'node-1');
     expect(records[0].result).toBe('exempt');
@@ -132,13 +142,15 @@ describe('RuleException — constraint exemption', () => {
       },
     ];
     const state = makeRuleState({
-      exceptions: [{
-        exceptionId: 'exc-c1-only',
-        status: 'active',
-        constraintIds: ['c1'],
-        scopeBindings: {},
-        effect: { type: 'exempt' },
-      }],
+      exceptions: [
+        {
+          exceptionId: 'exc-c1-only',
+          status: 'active',
+          constraintIds: ['c1'],
+          scopeBindings: {},
+          effect: { type: 'exempt' },
+        },
+      ],
     });
     const records = evaluateConstraints(constraints, state, 'node-1');
     expect(records[0].result).toBe('exempt'); // c1 exempted
@@ -151,18 +163,33 @@ describe('RuleException — epoch isolation', () => {
     const rules: Record<string, RuleRuntimeState> = {};
     // Enable rule with an exception
     applyRuleTransaction(rules, {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'enable', evidence: 'enable',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'enable',
+      evidence: 'enable',
       epochId: 'epoch-1',
     });
     applyRuleTransaction(rules, {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'add_exception', evidence: 'add',
-      exception: { exceptionId: 'exc-1', status: 'active', constraintIds: [], scopeBindings: {}, effect: { type: 'exempt' } },
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'add_exception',
+      evidence: 'add',
+      exception: {
+        exceptionId: 'exc-1',
+        status: 'active',
+        constraintIds: [],
+        scopeBindings: {},
+        effect: { type: 'exempt' },
+      },
     });
     expect(rules.test_rule.exceptions).toHaveLength(1);
 
     // Replace (new epoch) — exceptions are cleared
     applyRuleTransaction(rules, {
-      type: 'rule_transaction', ruleId: 'test_rule', operation: 'replace', evidence: 'replace',
+      type: 'rule_transaction',
+      ruleId: 'test_rule',
+      operation: 'replace',
+      evidence: 'replace',
       epochId: 'epoch-2',
       specificationId: 'spec-v2',
     });
@@ -199,13 +226,15 @@ describe('RuleException — replaceWith effect', () => {
       predicate: { version: '1.0', type: 'simple', expression: 'no_match' },
     };
     const state = makeRuleState({
-      exceptions: [{
-        exceptionId: 'exc-replace',
-        status: 'active',
-        constraintIds: ['c1'],
-        scopeBindings: {},
-        effect: { type: 'replaceWith', replacementConstraintId: 'c1_alt' },
-      }],
+      exceptions: [
+        {
+          exceptionId: 'exc-replace',
+          status: 'active',
+          constraintIds: ['c1'],
+          scopeBindings: {},
+          effect: { type: 'replaceWith', replacementConstraintId: 'c1_alt' },
+        },
+      ],
     });
     const records = evaluateConstraints([constraint], state, 'node-1');
     expect(records[0].result).toBe('exempt');

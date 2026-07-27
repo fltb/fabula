@@ -5,6 +5,6 @@
 // Low ISS = the system is running "empty" with nothing to validate.
 // ============================================================================
 
-export { calculateISS } from './score.js';
 export { detectAntiPatterns } from './anti-patterns.js';
+export { calculateISS } from './score.js';
 export { validateStrict } from './strict.js';

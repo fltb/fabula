@@ -40,42 +40,47 @@ export const stageGateSchemaZ: z.ZodType<StageGate> = stageGateSchema;
 
 // ─── CapabilityManifestEntry ─────────────────────────────────────────────────
 
-export const capabilityManifestEntrySchema = z.object({
-  capabilityId: z.string().min(1),
-  status: capabilityStatusSchema,
-  schemaVersions: z.array(z.string().min(1)).min(1),
-  normalizationVersions: z.array(z.string().min(1)).min(1),
-  supportedInputForms: z.array(z.string().min(1)).min(1),
-  referenceCaseIds: z.array(z.string().min(1)),
-  propertyCaseIds: z.array(z.string().min(1)),
-  rejectionCaseIds: z.array(z.string().min(1)),
-  snapshotCases: z.array(z.string().min(1)),
-  fixtureIds: z.array(z.string().min(1)),
-  provenanceRequirements: z.array(z.string().min(1)),
-  stageGate: stageGateSchema,
-  evidenceArtifactHash: z.string().min(1),
-}).strict();
+export const capabilityManifestEntrySchema = z
+  .object({
+    capabilityId: z.string().min(1),
+    status: capabilityStatusSchema,
+    schemaVersions: z.array(z.string().min(1)).min(1),
+    normalizationVersions: z.array(z.string().min(1)).min(1),
+    supportedInputForms: z.array(z.string().min(1)).min(1),
+    referenceCaseIds: z.array(z.string().min(1)),
+    propertyCaseIds: z.array(z.string().min(1)),
+    rejectionCaseIds: z.array(z.string().min(1)),
+    snapshotCases: z.array(z.string().min(1)),
+    fixtureIds: z.array(z.string().min(1)),
+    provenanceRequirements: z.array(z.string().min(1)),
+    stageGate: stageGateSchema,
+    evidenceArtifactHash: z.string().min(1),
+  })
+  .strict();
 
-export const capabilityManifestEntrySchemaZ: z.ZodType<CapabilityManifestEntry> = capabilityManifestEntrySchema;
+export const capabilityManifestEntrySchemaZ: z.ZodType<CapabilityManifestEntry> =
+  capabilityManifestEntrySchema;
 
 // ─── CapabilityManifest ──────────────────────────────────────────────────────
 
-export const capabilityManifestSchema = z.object({
-  version: z.string().min(1),
-  entries: z.array(capabilityManifestEntrySchema).superRefine((entries, context) => {
-    const ids = new Set<string>();
-    for (const [index, entry] of entries.entries()) {
-      if (ids.has(entry.capabilityId)) {
-        context.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: [index, 'capabilityId'],
-          message: 'Duplicate capabilityId in manifest',
-        });
+export const capabilityManifestSchema = z
+  .object({
+    version: z.string().min(1),
+    entries: z.array(capabilityManifestEntrySchema).superRefine((entries, context) => {
+      const ids = new Set<string>();
+      for (const [index, entry] of entries.entries()) {
+        if (ids.has(entry.capabilityId)) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [index, 'capabilityId'],
+            message: 'Duplicate capabilityId in manifest',
+          });
+        }
+        ids.add(entry.capabilityId);
       }
-      ids.add(entry.capabilityId);
-    }
-  }),
-  registryHash: z.string().min(1),
-}).strict();
+    }),
+    registryHash: z.string().min(1),
+  })
+  .strict();
 
 export const capabilityManifestSchemaZ: z.ZodType<CapabilityManifest> = capabilityManifestSchema;

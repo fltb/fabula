@@ -4,12 +4,7 @@
 // BranchPath replay NEVER reads other branch state.
 // ============================================================================
 
-import type {
-  MergePlan,
-  MergePolicy,
-  StorySnapshot,
-  BranchPath,
-} from '../types/index.js';
+import type { BranchPath, MergePlan, MergePolicy, StorySnapshot } from '../types/index.js';
 
 // ─── Helper: generate a merge timestamp ──────────────────────────────────────
 
@@ -22,7 +17,7 @@ function nowISO(): string {
 function shortHash(input: string): string {
   let hash = 0;
   for (let i = 0; i < input.length; i++) {
-    hash = ((hash << 5) - hash) + input.charCodeAt(i);
+    hash = (hash << 5) - hash + input.charCodeAt(i);
     hash |= 0;
   }
   return Math.abs(hash).toString(16).padStart(8, '0');
@@ -71,7 +66,7 @@ export function compileMergePlan(params: CompileMergePlanParams): MergePlan {
     if (policy.type === 'selectBranch' && !policy.branchId) {
       throw new Error(
         `MergePlan validation failed: selectBranch policy for domain "${domain}" ` +
-        'requires a non-empty branchId',
+          'requires a non-empty branchId',
       );
     }
   }
@@ -125,7 +120,7 @@ export function reconcileMergePlan(
   // Phase 1: Resolve identity/lifecycle/reference
   const identityResolution = resolveIdentityLifecycleReference(plan, incomingSnapshots);
   if (identityResolution.errors.length > 0) {
-    errors.push(...identityResolution.errors.map(e => `Identity conflict: ${e}`));
+    errors.push(...identityResolution.errors.map((e) => `Identity conflict: ${e}`));
     return {
       success: false,
       planSnapshotHash: plan.provenance.mergeTimestamp,

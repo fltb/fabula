@@ -15,7 +15,7 @@
 // ============================================================================
 
 import { existsSync, readFileSync } from 'node:fs';
-import { join, dirname, extname } from 'node:path';
+import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -62,14 +62,24 @@ function parseNamedExports(source, filePath) {
       }
       const m = block.match(/^export\s*\{\s*([^}]+)\s*\}\s*(from\s+['"][^'"]+['"]\s*)?;?$/);
       if (m) {
-        const names = m[1].split(',').map(n => n.trim()).filter(Boolean);
+        const names = m[1]
+          .split(',')
+          .map((n) => n.trim())
+          .filter(Boolean);
         for (const n of names) {
           // Handle `A as B` → actual name is B
           const parts = n.split(/\s+as\s+/i);
           const name = parts[parts.length - 1].trim();
           // Handle `type A` or `type { A }` mixed inline type markers
           if (n.startsWith('type ')) {
-            types.add(n.replace(/^type\s+/, '').replace(/\s+as\s+/i, ' ').split(/\s+as\s+/i).pop().trim());
+            types.add(
+              n
+                .replace(/^type\s+/, '')
+                .replace(/\s+as\s+/i, ' ')
+                .split(/\s+as\s+/i)
+                .pop()
+                .trim(),
+            );
           } else if (n.match(/^\s*type\s+/)) {
             // another form of inline type marker
           } else {
@@ -93,7 +103,10 @@ function parseNamedExports(source, filePath) {
       }
       const m = block.match(/^export\s+type\s*\{\s*([^}]+)\s*\}\s*(from\s+['"][^'"]+['"]\s*)?;?$/);
       if (m) {
-        const names = m[1].split(',').map(n => n.trim()).filter(Boolean);
+        const names = m[1]
+          .split(',')
+          .map((n) => n.trim())
+          .filter(Boolean);
         for (const n of names) {
           // Handle `A as B` → actual name is B
           const parts = n.split(/\s+as\s+/i);
@@ -197,13 +210,18 @@ function resolveStarExports(relPath, baseDir) {
     if (!existsSync(resolved)) {
       for (const ext of ['.ts', '.js', '.mjs', '']) {
         const candidate = targetPath + ext;
-        if (existsSync(candidate)) { resolved = candidate; break; }
+        if (existsSync(candidate)) {
+          resolved = candidate;
+          break;
+        }
         // also try /index.ts etc.
         if (ext === '' && existsSync(join(targetPath, 'index.ts'))) {
-          resolved = join(targetPath, 'index.ts'); break;
+          resolved = join(targetPath, 'index.ts');
+          break;
         }
         if (ext === '' && existsSync(join(targetPath, 'index.js'))) {
-          resolved = join(targetPath, 'index.js'); break;
+          resolved = join(targetPath, 'index.js');
+          break;
         }
       }
     }
@@ -223,7 +241,10 @@ function checkTypeBarrel(relPath) {
     return `typeBarrel file not found: ${relPath}`;
   }
   const content = readFileSync(abs, 'utf-8');
-  const firstNonBlank = content.split('\n').map(l => l.trim()).find(l => l && !l.startsWith('//') && !l.startsWith('/*') && !l.startsWith('*'));
+  const firstNonBlank = content
+    .split('\n')
+    .map((l) => l.trim())
+    .find((l) => l && !l.startsWith('//') && !l.startsWith('/*') && !l.startsWith('*'));
   if (!firstNonBlank || !firstNonBlank.startsWith('export type')) {
     return `typeBarrel file ${relPath} does not start with type exports`;
   }
@@ -262,7 +283,11 @@ function main() {
     }
 
     const source = readFileSync(entryAbs, 'utf-8');
-    const { values: actualValues, types: actualTypes, errors: parseErrors } = parseNamedExports(source, entryAbs);
+    const {
+      values: actualValues,
+      types: actualTypes,
+      errors: parseErrors,
+    } = parseNamedExports(source, entryAbs);
 
     if (parseErrors.length > 0) {
       for (const pe of parseErrors) {
@@ -291,14 +316,18 @@ function main() {
     // 3. Actual values not in manifest
     for (const name of actualValues) {
       if (!manifestValues.has(name)) {
-        allOk = err(`${pkgName}: undeclared value export "${name}" in source (add to manifest or make internal)`);
+        allOk = err(
+          `${pkgName}: undeclared value export "${name}" in source (add to manifest or make internal)`,
+        );
       }
     }
 
     // 4. Actual types not in manifest
     for (const name of actualTypes) {
       if (!manifestTypes.has(name)) {
-        allOk = err(`${pkgName}: undeclared type export "${name}" in source (add to manifest or make internal)`);
+        allOk = err(
+          `${pkgName}: undeclared type export "${name}" in source (add to manifest or make internal)`,
+        );
       }
     }
 

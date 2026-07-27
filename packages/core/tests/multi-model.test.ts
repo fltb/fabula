@@ -10,7 +10,7 @@
 //   - Constructor throws when routing.default is missing
 // ============================================================================
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Module mocks ─────────────────────────────────────────────────────────
 
@@ -110,11 +110,13 @@ describe('AiSdkProvider — multi-model routing', () => {
     });
     mockGenerateText.mockResolvedValueOnce(successResponse(JSON.stringify({ analysis: 'ok' })));
 
-    const result = await provider.complete(makeRequest({
-      taskType: 'pass2',
-      seed: 42,
-      responseFormat: { type: 'json_object' },
-    }));
+    const result = await provider.complete(
+      makeRequest({
+        taskType: 'pass2',
+        seed: 42,
+        responseFormat: { type: 'json_object' },
+      }),
+    );
 
     expect(result.model).toBe('precise-model');
   });
@@ -160,11 +162,13 @@ describe('AiSdkProvider — multi-model routing', () => {
     });
     mockGenerateText.mockResolvedValueOnce(successResponse(JSON.stringify({ analysis: 'ok' })));
 
-    const result = await provider.complete(makeRequest({
-      taskType: 'pass2',
-      seed: 42,
-      responseFormat: { type: 'json_object' },
-    }));
+    const result = await provider.complete(
+      makeRequest({
+        taskType: 'pass2',
+        seed: 42,
+        responseFormat: { type: 'json_object' },
+      }),
+    );
 
     expect(result.model).toBe('fallback-model');
   });
@@ -245,11 +249,13 @@ describe('AiSdkProvider — multi-model routing', () => {
     });
     mockGenerateText.mockResolvedValueOnce(successResponse(JSON.stringify({ analysis: 'ok' })));
 
-    const result = await provider.complete(makeRequest({
-      taskType: 'pass2',
-      seed: 42,
-      responseFormat: { type: 'json_object' },
-    }));
+    const result = await provider.complete(
+      makeRequest({
+        taskType: 'pass2',
+        seed: 42,
+        responseFormat: { type: 'json_object' },
+      }),
+    );
 
     expect(result.model).toBe('precise-model');
     expect(typeof result.model).toBe('string');

@@ -10,17 +10,14 @@
 //   then old methods and types are deleted.
 // ============================================================================
 
-import type {
-  EntityId,
-  EntityRegistry,
-} from './entity.js';
-import type { NarrativeEvent } from './event.js';
-import type { WorldState } from './world.js';
-import type { EpistemicLedger } from './knowledge.js';
-import type { AnalysisResult } from './analysis.js';
 import type { EventStore } from '../state/event-store.js';
-import type { ThreadRuntimeState } from './thread.js';
+import type { AnalysisResult } from './analysis.js';
 import type { ContextPackage } from './context.js';
+import type { EntityId, EntityRegistry } from './entity.js';
+import type { NarrativeEvent } from './event.js';
+import type { EpistemicLedger } from './knowledge.js';
+import type { ThreadRuntimeState } from './thread.js';
+import type { WorldState } from './world.js';
 
 // ——— AnalysisBlockRequirement ———
 
@@ -93,7 +90,16 @@ export interface ValidationIssue {
   attribute?: string;
   message: string;
   fixSuggestion: string;
-  fixAction: 'add_knowledge' | 'remove_line' | 'change_value' | 'add_precondition' | 'declare_flashback' | 'manual' | 'add_field' | 'create_file' | 'edit_file';
+  fixAction:
+    | 'add_knowledge'
+    | 'remove_line'
+    | 'change_value'
+    | 'add_precondition'
+    | 'declare_flashback'
+    | 'manual'
+    | 'add_field'
+    | 'create_file'
+    | 'edit_file';
   fixTarget: {
     file: string;
     field?: string;
@@ -105,7 +111,13 @@ export interface ValidationIssue {
 
 export interface Validator {
   name: string;
-  category: 'characterization' | 'factual_detail' | 'timeline_plot' | 'worldbuilding' | 'narrative_style' | 'prose_quality';
+  category:
+    | 'characterization'
+    | 'factual_detail'
+    | 'timeline_plot'
+    | 'worldbuilding'
+    | 'narrative_style'
+    | 'prose_quality';
 
   // ── New methods ──────────────────────────────────────────────────
 

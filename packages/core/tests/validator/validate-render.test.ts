@@ -7,20 +7,20 @@
 // edge case — we test the "common case" for each.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { TimelineValidator } from '../../src/validator/timeline.ts';
-import { CharacterStateValidator } from '../../src/validator/character-state.ts';
-import { KnowledgeValidator } from '../../src/validator/knowledge.ts';
-import { WorldRuleValidator } from '../../src/validator/world-rule.ts';
-import { CausalityValidator } from '../../src/validator/causality.ts';
-import { ForeshadowingValidator } from '../../src/validator/foreshadowing.ts';
-import { POVValidator } from '../../src/validator/pov.ts';
-import { FactualDetailValidator } from '../../src/validator/factual-detail.ts';
-import { VoiceDriftDetector } from '../../src/validator/voice-drift.ts';
-import { BranchMergeValidator } from '../../src/validator/branch-merge.ts';
-import { ReachabilityValidator } from '../../src/validator/reachability.ts';
-import { PronounValidator } from '../../src/validator/pronoun.ts';
+import { describe, expect, it } from 'vitest';
 import type { NarrativeEvent, PostRenderInput, PreRenderInput } from '../../src/types/index.js';
+import { BranchMergeValidator } from '../../src/validator/branch-merge.ts';
+import { CausalityValidator } from '../../src/validator/causality.ts';
+import { CharacterStateValidator } from '../../src/validator/character-state.ts';
+import { FactualDetailValidator } from '../../src/validator/factual-detail.ts';
+import { ForeshadowingValidator } from '../../src/validator/foreshadowing.ts';
+import { KnowledgeValidator } from '../../src/validator/knowledge.ts';
+import { POVValidator } from '../../src/validator/pov.ts';
+import { PronounValidator } from '../../src/validator/pronoun.ts';
+import { ReachabilityValidator } from '../../src/validator/reachability.ts';
+import { TimelineValidator } from '../../src/validator/timeline.ts';
+import { VoiceDriftDetector } from '../../src/validator/voice-drift.ts';
+import { WorldRuleValidator } from '../../src/validator/world-rule.ts';
 
 function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
   return {
@@ -76,10 +76,31 @@ function makePreInput(overrides: Partial<PreRenderInput> = {}): PreRenderInput {
       facts: [],
     },
     events: [],
-    entityRegistry: { resolve() { return undefined; }, list() { return []; }, getAll() { return {}; }, getEntity() { return undefined; }, getEntitiesByKind() { return []; } },
+    entityRegistry: {
+      resolve() {
+        return undefined;
+      },
+      list() {
+        return [];
+      },
+      getAll() {
+        return {};
+      },
+      getEntity() {
+        return undefined;
+      },
+      getEntitiesByKind() {
+        return [];
+      },
+    },
     chapter: 1,
     queryState: () => undefined,
-    getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] }),
+    getKnowledge: () => ({
+      worldTruth: [],
+      characterKnowledge: {},
+      readerKnowledge: [],
+      narratorKnowledge: [],
+    }),
     getThreadProgress: () => null,
     ...overrides,
   };
@@ -187,7 +208,13 @@ describe('validatePost actually checks the prose', () => {
           preconditions: { violated: [] },
           pov: { consistent: true, leaks: [] },
           inventedDetails: [],
-          quality: { proseScore: 5, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+          quality: {
+            proseScore: 5,
+            maxScore: 10,
+            strengths: [],
+            weaknesses: [],
+            estimatedWordCount: 50,
+          },
           threadProgressAchieved: [],
           foreshadowingDeployed: [],
           narrativeChecks: [
@@ -224,10 +251,16 @@ describe('validatePost actually checks the prose', () => {
           preconditions: { violated: [] },
           pov: {
             consistent: false,
-            leaks: ['Whitney\'s emotional state is described despite Rainford not knowing it'],
+            leaks: ["Whitney's emotional state is described despite Rainford not knowing it"],
           },
           inventedDetails: [],
-          quality: { proseScore: 5, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+          quality: {
+            proseScore: 5,
+            maxScore: 10,
+            strengths: [],
+            weaknesses: [],
+            estimatedWordCount: 50,
+          },
           threadProgressAchieved: [],
           foreshadowingDeployed: [],
         },
@@ -249,7 +282,10 @@ describe('validatePost actually checks the prose', () => {
           attribute: 'hours_elapsed',
           value: '3 hours',
           confidence: 1.0,
-          validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
       ],
     });
@@ -274,7 +310,13 @@ describe('validatePost actually checks the prose', () => {
           preconditions: { violated: [] },
           pov: { consistent: true, leaks: [] },
           inventedDetails: [],
-          quality: { proseScore: 5, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 50 },
+          quality: {
+            proseScore: 5,
+            maxScore: 10,
+            strengths: [],
+            weaknesses: [],
+            estimatedWordCount: 50,
+          },
           threadProgressAchieved: [],
           foreshadowingDeployed: [],
           narrativeChecks: [

@@ -3,11 +3,16 @@
 // active↔inactive, terminal enforcement, same-storyTime conflicts.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { compileStoryBoundaries } from '../../src/state/story-boundaries.js';
-import { ReplayEngine } from '../../src/state/replay.js';
+import { describe, expect, it } from 'vitest';
 import { ConfigError } from '../../src/errors.js';
-import type { NarrativeEvent, Fact, EntityDeclarationCatalog, EntityTypeCatalog } from '../../src/types/index.js';
+import { ReplayEngine } from '../../src/state/replay.js';
+import { compileStoryBoundaries } from '../../src/state/story-boundaries.js';
+import type {
+  EntityDeclarationCatalog,
+  EntityTypeCatalog,
+  Fact,
+  NarrativeEvent,
+} from '../../src/types/index.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -56,10 +61,26 @@ function makeEvent(
 
 const mockDeclarationCatalog: EntityDeclarationCatalog = {
   declarations: {
-    hero: { entityId: 'hero', typeRef: { typeId: 'character', schemaVersion: 1 }, immutableMetadata: { name: 'Hero', definitionFile: 'hero.yaml' } },
-    sidekick: { entityId: 'sidekick', typeRef: { typeId: 'character', schemaVersion: 1 }, immutableMetadata: { name: 'Sidekick', definitionFile: 'sidekick.yaml' } },
-    world: { entityId: 'world', typeRef: { typeId: 'location', schemaVersion: 1 }, immutableMetadata: { name: 'World', definitionFile: 'world.yaml' } },
-    sword: { entityId: 'sword', typeRef: { typeId: 'item', schemaVersion: 1 }, immutableMetadata: { name: 'Sword', definitionFile: 'sword.yaml' } },
+    hero: {
+      entityId: 'hero',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
+      immutableMetadata: { name: 'Hero', definitionFile: 'hero.yaml' },
+    },
+    sidekick: {
+      entityId: 'sidekick',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
+      immutableMetadata: { name: 'Sidekick', definitionFile: 'sidekick.yaml' },
+    },
+    world: {
+      entityId: 'world',
+      typeRef: { typeId: 'location', schemaVersion: 1 },
+      immutableMetadata: { name: 'World', definitionFile: 'world.yaml' },
+    },
+    sword: {
+      entityId: 'sword',
+      typeRef: { typeId: 'item', schemaVersion: 1 },
+      immutableMetadata: { name: 'Sword', definitionFile: 'sword.yaml' },
+    },
   },
   version: 1,
 };
@@ -119,7 +140,10 @@ const mockTypeCatalog: EntityTypeCatalog = {
 
 describe('Entity lifecycle — introduce', () => {
   it('introduce creates entity with lifecycle:active and applies writes', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [
@@ -135,7 +159,10 @@ describe('Entity lifecycle — introduce', () => {
   });
 
   it('introduce unknown entity (not in catalog) throws ConfigError', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [
@@ -150,9 +177,7 @@ describe('Entity lifecycle — introduce', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'any_entity', attribute: 'color', value: 'blue' }),
-        ],
+        postconditions: [makeFact({ entityId: 'any_entity', attribute: 'color', value: 'blue' })],
       }),
     ];
     const state = engine.replay(events);
@@ -161,7 +186,10 @@ describe('Entity lifecycle — introduce', () => {
   });
 
   it('introduce + multiple writes in same event are atomic', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [
@@ -179,22 +207,19 @@ describe('Entity lifecycle — introduce', () => {
 
 describe('Entity lifecycle — active ↔ inactive', () => {
   it('active→inactive→active round trip', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })],
       }),
       makeEvent(2, 2, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' })],
       }),
       makeEvent(3, 3, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'active' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'active' })],
       }),
     ];
     const state = engine.replay(events);
@@ -203,7 +228,10 @@ describe('Entity lifecycle — active ↔ inactive', () => {
   });
 
   it('inactive entities retain state', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [
@@ -220,12 +248,13 @@ describe('Entity lifecycle — active ↔ inactive', () => {
 
 describe('Entity lifecycle — retire (terminal)', () => {
   it('active→retired is allowed', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' })],
       }),
     ];
     const state = engine.replay(events);
@@ -233,17 +262,16 @@ describe('Entity lifecycle — retire (terminal)', () => {
   });
 
   it('inactive→retired is allowed', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' })],
       }),
       makeEvent(2, 2, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' })],
       }),
     ];
     const state = engine.replay(events);
@@ -251,63 +279,61 @@ describe('Entity lifecycle — retire (terminal)', () => {
   });
 
   it('retired→active throws ConfigError (terminal)', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' })],
       }),
       makeEvent(2, 2, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'active' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'active' })],
       }),
     ];
     expect(() => engine.replay(events)).toThrow(ConfigError);
   });
 
   it('retired→inactive throws ConfigError (terminal)', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' })],
       }),
       makeEvent(2, 2, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' })],
       }),
     ];
     expect(() => engine.replay(events)).toThrow(ConfigError);
   });
 
   it('write to retired entity throws ConfigError', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' })],
       }),
       makeEvent(2, 2, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'status', value: 'gone' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'gone' })],
       }),
     ];
     expect(() => engine.replay(events)).toThrow(ConfigError);
   });
 
   it('lifecycle write to retired entity also throws (not an escape hatch for unretire)', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' })],
       }),
       makeEvent(2, 2, {
         postconditions: [
@@ -342,9 +368,7 @@ describe('Entity lifecycle — unset lifecycle', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'active' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'active' })],
       }),
       makeEvent(2, 2, {
         postconditions: [
@@ -358,32 +382,32 @@ describe('Entity lifecycle — unset lifecycle', () => {
 
 describe('Entity lifecycle — same storyTime conflict', () => {
   it('two events at same storyTime changing same entity lifecycle throws ConfigError', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         storyTime: { type: 'absolute', value: 'day_1' },
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' })],
       }),
       makeEvent(2, 1, {
         storyTime: { type: 'absolute', value: 'day_1' },
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'active' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'active' })],
       }),
     ];
     expect(() => engine.replay(events)).toThrow(ConfigError);
   });
 
   it('same storyTime, different entity lifecycle changes are allowed', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         storyTime: { type: 'absolute', value: 'day_1' },
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' })],
       }),
       makeEvent(2, 1, {
         storyTime: { type: 'absolute', value: 'day_1' },
@@ -402,15 +426,11 @@ describe('Entity lifecycle — same storyTime conflict', () => {
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         storyTime: { type: 'absolute', value: 'day_1' },
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' })],
       }),
       makeEvent(2, 2, {
         storyTime: { type: 'absolute', value: 'day_2' },
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'active' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'active' })],
       }),
     ];
     const state = engine.replay(events);
@@ -420,12 +440,13 @@ describe('Entity lifecycle — same storyTime conflict', () => {
 
 describe('Entity lifecycle — death domain state vs retire', () => {
   it('character death writes lifeStatus:dead but lifecycle stays active', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifeStatus', value: 'dead' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifeStatus', value: 'dead' })],
       }),
     ];
     const state = engine.replay(events);
@@ -438,9 +459,7 @@ describe('Entity lifecycle — death domain state vs retire', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' })],
       }),
     ];
     const state = engine.replay(events);
@@ -450,12 +469,13 @@ describe('Entity lifecycle — death domain state vs retire', () => {
   });
 
   it('retire is only for permanent departure - explicit lifecycle:retired', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' })],
       }),
     ];
     const state = engine.replay(events);
@@ -465,32 +485,31 @@ describe('Entity lifecycle — death domain state vs retire', () => {
 
 describe('Entity lifecycle — participant check', () => {
   it('retired entity participating in event throws ConfigError', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' })],
       }),
       makeEvent(2, 2, {
         participants: { entities: ['hero'] },
-        postconditions: [
-          makeFact({ entityId: 'sidekick', attribute: 'status', value: 'present' }),
-        ],
+        postconditions: [makeFact({ entityId: 'sidekick', attribute: 'status', value: 'present' })],
       }),
     ];
     expect(() => engine.replay(events)).toThrow(ConfigError);
   });
 
-
   it('active entity participating is allowed', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         participants: { entities: ['hero'] },
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })],
       }),
     ];
     const state = engine.replay(events);
@@ -498,18 +517,17 @@ describe('Entity lifecycle — participant check', () => {
   });
 
   it('inactive entity participating is allowed', () => {
-    const engine = new ReplayEngine({ entityDeclarationCatalog: mockDeclarationCatalog, entityTypeCatalog: mockTypeCatalog });
+    const engine = new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    });
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' })],
       }),
       makeEvent(2, 2, {
         participants: { entities: ['hero'] },
-        postconditions: [
-          makeFact({ entityId: 'sidekick', attribute: 'status', value: 'present' }),
-        ],
+        postconditions: [makeFact({ entityId: 'sidekick', attribute: 'status', value: 'present' })],
       }),
     ];
     const state = engine.replay(events);
@@ -522,14 +540,25 @@ describe('Entity lifecycle — story-boundaries integration', () => {
     // Using imported compileStoryBoundaries (top-level import)
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
-        postconditions: [
-          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' }),
-        ],
+        postconditions: [makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'inactive' })],
       }),
     ];
-    const result = compileStoryBoundaries(events, [
-      { id: 'init.status', entityId: 'hero', attribute: 'status', value: 'alive', validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } } },
-    ], new Map());
+    const result = compileStoryBoundaries(
+      events,
+      [
+        {
+          id: 'init.status',
+          entityId: 'hero',
+          attribute: 'status',
+          value: 'alive',
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
+      new Map(),
+    );
     expect(result.finalState.entities['hero']?.lifecycle).toBe('inactive');
     expect(result.finalState.entities['hero']?.status).toBe('alive');
   });

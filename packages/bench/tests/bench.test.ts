@@ -3,32 +3,29 @@
 // inside vitest `it()` blocks, printing tables and writing results.
 // ============================================================================
 
-import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import {
-  runRegressionBench,
-  runPerformanceBench,
-  writeResults,
-} from '../src/index.js';
+import { beforeAll, describe, expect, it } from 'vitest';
 import type { RegressionResults } from '../src/index.js';
+import { runPerformanceBench, runRegressionBench, writeResults } from '../src/index.js';
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
 const ZHU_FU_FIXTURE = path.resolve(__dirname, '../../../fixtures/zhu-fu');
-const FALLBACK_FIXTURE = path.resolve(
-  __dirname,
-  '../../../fixtures/most-dangerous-game',
-);
+const FALLBACK_FIXTURE = path.resolve(__dirname, '../../../fixtures/most-dangerous-game');
 
 /** Pick the best available fixture */
 function pickFixture(): string {
   try {
     if (fs.existsSync(path.join(ZHU_FU_FIXTURE, 'nova.yaml'))) return ZHU_FU_FIXTURE;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   try {
     if (fs.existsSync(path.join(FALLBACK_FIXTURE, 'nova.yaml'))) return FALLBACK_FIXTURE;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return ZHU_FU_FIXTURE;
 }
 
@@ -48,7 +45,7 @@ describe('Regression Benchmarks', () => {
     expect(results.stages.length).toBeGreaterThan(0);
     console.log(
       `[Regression] ${results.totalPassed}/${results.stages.length} passed, ` +
-      `${results.totalFailed} failed, ${results.totalTime}ms total`,
+        `${results.totalFailed} failed, ${results.totalTime}ms total`,
     );
   });
 
@@ -155,7 +152,9 @@ describe('Regression Benchmarks', () => {
       expect(first.validator).toBeTruthy();
       expect(typeof first.nCED).toBe('number');
       expect(first.nCED).toBeGreaterThanOrEqual(0);
-      console.log(`[L1 PerValidator] ${results.l1PerValidator.length} validators, top: ${first.validator} (N-CED=${first.nCED.toFixed(2)})`);
+      console.log(
+        `[L1 PerValidator] ${results.l1PerValidator.length} validators, top: ${first.validator} (N-CED=${first.nCED.toFixed(2)})`,
+      );
     }
   });
 
@@ -167,7 +166,9 @@ describe('Regression Benchmarks', () => {
       expect(first.validator).toBeTruthy();
       expect(typeof first.nCED).toBe('number');
       expect(first.nCED).toBeGreaterThanOrEqual(0);
-      console.log(`[L2 PerValidator] ${results.l2PerValidator.length} validators, top: ${first.validator} (N-CED=${first.nCED.toFixed(2)})`);
+      console.log(
+        `[L2 PerValidator] ${results.l2PerValidator.length} validators, top: ${first.validator} (N-CED=${first.nCED.toFixed(2)})`,
+      );
     }
   });
 
@@ -188,7 +189,9 @@ describe('Regression Benchmarks', () => {
     expect(errorEntry).toBeDefined();
     expect(warningEntry).toBeDefined();
     expect(infoEntry).toBeDefined();
-    console.log(`[Severity CED] error: L1=${errorEntry!.l1CED.toFixed(2)} L2=${errorEntry!.l2CED.toFixed(2)}, warning: L1=${warningEntry!.l1CED.toFixed(2)} L2=${warningEntry!.l2CED.toFixed(2)}, info: L1=${infoEntry!.l1CED.toFixed(2)} L2=${infoEntry!.l2CED.toFixed(2)}`);
+    console.log(
+      `[Severity CED] error: L1=${errorEntry!.l1CED.toFixed(2)} L2=${errorEntry!.l2CED.toFixed(2)}, warning: L1=${warningEntry!.l1CED.toFixed(2)} L2=${warningEntry!.l2CED.toFixed(2)}, info: L1=${infoEntry!.l1CED.toFixed(2)} L2=${infoEntry!.l2CED.toFixed(2)}`,
+    );
   });
 });
 
@@ -212,7 +215,7 @@ describe('Performance Benchmarks', () => {
   it('prints performance table grouped by stage and scale', () => {
     const table = perfResults.measurements.map((m) => ({
       Stage: m.name,
-      'Hz': m.hz.toFixed(1),
+      Hz: m.hz.toFixed(1),
       'Mean (ms)': m.meanMs.toFixed(3),
       Samples: m.samples,
       'Scale (N)': m.scale,
@@ -236,10 +239,11 @@ describe('Performance Benchmarks', () => {
       const c10 = n10 ? `${n10.meanMs.toFixed(2)}ms` : '-';
       const c100 = n100 ? `${n100.meanMs.toFixed(2)}ms` : '-';
       const c1000 = n1000 ? `${n1000.meanMs.toFixed(2)}ms` : '-';
-      const p50 = n10 && n1000 && n10.meanMs > 0
-        ? `~O(${(n1000.meanMs / n10.meanMs).toFixed(1)}x)`
-        : '-';
-      console.log(`${name.padEnd(24)} | ${c10.padEnd(10)} | ${c100.padEnd(10)} | ${c1000.padEnd(10)} | ${p50}`);
+      const p50 =
+        n10 && n1000 && n10.meanMs > 0 ? `~O(${(n1000.meanMs / n10.meanMs).toFixed(1)}x)` : '-';
+      console.log(
+        `${name.padEnd(24)} | ${c10.padEnd(10)} | ${c100.padEnd(10)} | ${c1000.padEnd(10)} | ${p50}`,
+      );
     }
   });
 
@@ -344,7 +348,9 @@ describe('Benchmark Reporting', () => {
     // Verify Markdown contains issue tables when issues exist
     if (results.l1Issues.length > 0) {
       expect(mdContent).toContain('L1 Issues (Pre-Render Validation)');
-      expect(mdContent).toContain('| # | Validator | Severity | Event | Entity | Attribute | Message |');
+      expect(mdContent).toContain(
+        '| # | Validator | Severity | Event | Entity | Attribute | Message |',
+      );
     }
     if (results.l2Issues.length > 0) {
       expect(mdContent).toContain('L2 Issues (Post-Render Validation with Pass 2)');
@@ -354,7 +360,9 @@ describe('Benchmark Reporting', () => {
     try {
       fs.unlinkSync(jsonPath);
       fs.unlinkSync(mdPath);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
 
     console.log(`[Report] Written and cleaned up: ${basePath}.{json,md}`);
   });

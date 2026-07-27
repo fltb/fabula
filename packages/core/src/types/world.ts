@@ -4,15 +4,14 @@
 
 import type { EntityId, Fact, FactId } from './entity.js';
 import type { NarrativeEvent } from './event.js';
+import type { EpistemicLedger, PropositionCatalog } from './knowledge.js';
 import type {
-  RelationshipRuntimeState,
-  RelationshipId,
   DimensionState,
   EpochRuntimeState,
   Membership,
+  RelationshipId,
+  RelationshipRuntimeState,
 } from './relationship.js';
-
-import type { EpistemicLedger, PropositionCatalog } from './knowledge.js';
 import type { ThreadRuntimeState } from './thread.js';
 
 // ——— Relationship System (§7.4.3) ———
@@ -31,10 +30,13 @@ export interface RelationshipDef {
 }
 
 export interface RelationshipState {
-  direction: Record<EntityId, {
-    dimensions: Record<string, number | string>;
-    perceivedBy: Record<EntityId, number>;
-  }>;
+  direction: Record<
+    EntityId,
+    {
+      dimensions: Record<string, number | string>;
+      perceivedBy: Record<EntityId, number>;
+    }
+  >;
 }
 
 export interface RelationshipEffect {
@@ -45,12 +47,8 @@ export interface RelationshipEffect {
     | { type: 'qualitative'; trigger: string; from: string; to: string };
 }
 
-
 // ——— World State ———
 import type { RuleRuntimeState } from './rule.js';
-
-
-
 
 export interface WorldState {
   entities: Record<EntityId, Record<string, unknown>>;

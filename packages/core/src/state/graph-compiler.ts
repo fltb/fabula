@@ -1,44 +1,44 @@
 import type {
+  DiscourseGraph,
+  EdgeClass,
+  EffectiveCoordinate,
+  GraphAbsenceWitness,
+  GraphCacheEntry,
   GraphCompilerOptions,
   GraphCompilerResult,
-  StoryGraph,
-  DiscourseGraph,
   GraphEdge,
+  GraphProviderOutput,
+  GraphReadResolution,
   OutputDescriptor,
   ReadRequirement,
-  GraphProviderOutput,
-  GraphAbsenceWitness,
-  GraphReadResolution,
-  EffectiveCoordinate,
-  GraphCacheEntry,
-  EdgeClass,
+  StoryGraph,
 } from '../types/graph.js';
 import {
-  UnknownPredecessorError,
-  SelfPredecessorError,
-  MissingOutputError,
   AmbiguousOutputError,
   AssertionMismatchError,
-  ReadMismatchError,
-  UnknownReadIdError,
-  StaleProviderSelectionError,
-  DuplicateBranchProviderError,
   BranchCoverageError,
   BranchIncompatibilityError,
-  FutureTimeError,
-  IncomparableTimeError,
-  UnorderedSameTimeConflictError,
   CrossClockEdgeError,
-  EdgeOriginCycleError,
-  InitialRootMisuseError,
-  SemanticOutputDependencyError,
-  DynamicLifecycleError,
-  MergeInputError,
-  EllipsisSummaryError,
-  ProvenanceError,
-  NoOutputEdgeError,
+  DuplicateBranchProviderError,
   DuplicateDiscoursePositionError,
-  GraphCompileError,
+  DynamicLifecycleError,
+  EdgeOriginCycleError,
+  EllipsisSummaryError,
+  FutureTimeError,
+  type GraphCompileError,
+  IncomparableTimeError,
+  InitialRootMisuseError,
+  MergeInputError,
+  MissingOutputError,
+  NoOutputEdgeError,
+  ProvenanceError,
+  ReadMismatchError,
+  SelfPredecessorError,
+  SemanticOutputDependencyError,
+  StaleProviderSelectionError,
+  UnknownPredecessorError,
+  UnknownReadIdError,
+  UnorderedSameTimeConflictError,
 } from '../types/graph.js';
 // Novalistically — Graph Compiler (GRAPH-1)
 // Compiled graph layer over deterministic replay effects.
@@ -143,7 +143,9 @@ function normalizeOutputs(state: CompileState, nodes: CompileNode[]): void {
         value: effect.isUnset ? { type: 'unset' } : { type: 'set', data: effect.value },
         branchScope: node.branchScope,
         effectiveCoordinate: node.coordinate,
-        provenanceHash: simpleHash(`${effect.effectId}:${effect.canonicalKey}:${JSON.stringify(effect.value)}:${node.branchScope}`),
+        provenanceHash: simpleHash(
+          `${effect.effectId}:${effect.canonicalKey}:${JSON.stringify(effect.value)}:${node.branchScope}`,
+        ),
       };
       state.outputs.push(output);
     }
@@ -160,9 +162,10 @@ function extractReads(state: CompileState, nodes: CompileNode[]): void {
       const read: ReadRequirement = {
         readId: raw.requirementId,
         canonicalKey: raw.canonicalKey,
-        predicate: raw.predicate.type === 'equals'
-          ? { type: 'equals', value: raw.predicate.value }
-          : raw.predicate,
+        predicate:
+          raw.predicate.type === 'equals'
+            ? { type: 'equals', value: raw.predicate.value }
+            : raw.predicate,
         phase: raw.phase,
         branchScope: node.branchScope,
         origin: raw.origin,
@@ -176,7 +179,11 @@ function extractReads(state: CompileState, nodes: CompileNode[]): void {
 // Stage 3: Filter branch
 // ============================================================================
 
-function filterBranch(state: CompileState, nodes: CompileNode[], branchFilter?: string): CompileNode[] {
+function filterBranch(
+  state: CompileState,
+  nodes: CompileNode[],
+  branchFilter?: string,
+): CompileNode[] {
   if (!branchFilter) return nodes;
   return nodes.filter((n) => {
     if (n.branchScope === branchFilter) return true;
@@ -211,7 +218,10 @@ function resolveDeclarations(state: CompileState, nodes: CompileNode[]): void {
 
       // Check initial root misuse (§18)
       // initialState CANNOT be author_origin/same_coordinate_order predecessor
-      if (decl.predecessor !== '' && (decl.edgeClass === 'author_origin' || decl.edgeClass === 'same_coordinate_order')) {
+      if (
+        decl.predecessor !== '' &&
+        (decl.edgeClass === 'author_origin' || decl.edgeClass === 'same_coordinate_order')
+      ) {
         const preNode = state.nodeById.get(decl.predecessor);
         if (preNode?.isInitialRoot) {
           state.errors.push(new InitialRootMisuseError(decl.dependent, decl.edgeClass));
@@ -260,7 +270,9 @@ function validateCoordinateOrder(state: CompileState, nodes: CompileNode[]): voi
     if (node.coordinate.type === 'discoursePosition') {
       const existing = discoursePositions.get(node.coordinate.value);
       if (existing) {
-        state.errors.push(new DuplicateDiscoursePositionError(node.coordinate.value, existing, node.id));
+        state.errors.push(
+          new DuplicateDiscoursePositionError(node.coordinate.value, existing, node.id),
+        );
       } else {
         discoursePositions.set(node.coordinate.value, node.id);
       }
@@ -283,13 +295,17 @@ function validateCoordinateOrder(state: CompileState, nodes: CompileNode[]): voi
 
     // Future time (§16)
     if (cmp !== null && cmp > 0) {
-      state.errors.push(new FutureTimeError(depNode.coordinate, edge.dependent, preNode.coordinate));
+      state.errors.push(
+        new FutureTimeError(depNode.coordinate, edge.dependent, preNode.coordinate),
+      );
       continue;
     }
 
     // Incomparable time (§16)
     if (cmp === null) {
-      state.errors.push(new IncomparableTimeError(edge.dependent, preNode.coordinate, depNode.coordinate));
+      state.errors.push(
+        new IncomparableTimeError(edge.dependent, preNode.coordinate, depNode.coordinate),
+      );
       continue;
     }
 
@@ -359,11 +375,13 @@ function inferProviders(state: CompileState, nodes: CompileNode[]): void {
       }
 
       if (!predicateSatisfied) {
-        state.errors.push(new AssertionMismatchError(
-          JSON.stringify(read.predicate),
-          JSON.stringify(provider.value),
-          read.readId,
-        ));
+        state.errors.push(
+          new AssertionMismatchError(
+            JSON.stringify(read.predicate),
+            JSON.stringify(provider.value),
+            read.readId,
+          ),
+        );
         continue;
       }
 
@@ -378,7 +396,11 @@ function inferProviders(state: CompileState, nodes: CompileNode[]): void {
 
       // Record provider edge
       const outputNode = nodes.find((n) =>
-        state.outputs.some((o) => o.outputId === provider.outputId && n.effects.some((e) => e.effectId === provider.outputId)),
+        state.outputs.some(
+          (o) =>
+            o.outputId === provider.outputId &&
+            n.effects.some((e) => e.effectId === provider.outputId),
+        ),
       );
       if (outputNode) {
         state.edges.push({
@@ -449,11 +471,7 @@ function validateCommutativity(state: CompileState, nodes: CompileNode[]): void 
           [...bKeys].some((k) => aReadKeys.has(k));
 
         if (overlap) {
-          state.errors.push(new UnorderedSameTimeConflictError(
-            a.id,
-            a.coordinate,
-            b.id,
-          ));
+          state.errors.push(new UnorderedSameTimeConflictError(a.id, a.coordinate, b.id));
         }
       }
     }
@@ -481,7 +499,9 @@ function validateBranches(state: CompileState, nodes: CompileNode[]): void {
     if (!providerByBranch.has(branch)) providerByBranch.set(branch, new Set());
     const set = providerByBranch.get(branch)!;
     if (set.has(res.outputId)) {
-      state.errors.push(new DuplicateBranchProviderError(res.outputId, branch, res.outputId, res.outputId));
+      state.errors.push(
+        new DuplicateBranchProviderError(res.outputId, branch, res.outputId, res.outputId),
+      );
     }
     set.add(res.outputId);
   }
@@ -534,11 +554,14 @@ function detectCycles(state: CompileState): void {
 // ============================================================================
 
 function computeGraphHash(state: CompileState, nodes: CompileNode[]): string {
-  const input = state.edges.map((e) => `${e.predecessor}:${e.dependent}:${e.edgeClass}`).join('|') +
-    '|' + state.outputs.map((o) => o.provenanceHash).join('|') +
-    '|' + [...state.resolutions.values()].map((r) =>
-      r.type === 'output' ? r.provenanceHash : `${r.readId}:absent`
-    ).join('|');
+  const input =
+    state.edges.map((e) => `${e.predecessor}:${e.dependent}:${e.edgeClass}`).join('|') +
+    '|' +
+    state.outputs.map((o) => o.provenanceHash).join('|') +
+    '|' +
+    [...state.resolutions.values()]
+      .map((r) => (r.type === 'output' ? r.provenanceHash : `${r.readId}:absent`))
+      .join('|');
   return simpleHash(input);
 }
 
@@ -567,7 +590,10 @@ function buildCacheEntry(state: CompileState, coordinatePrefix: string): GraphCa
  * @param options  Compiler options (branch filter, etc.)
  * @returns  Compiler result with graphs, cache, and errors
  */
-export function compileGraph(nodes: CompileNode[], options: GraphCompilerOptions = {}): GraphCompilerResult {
+export function compileGraph(
+  nodes: CompileNode[],
+  options: GraphCompilerOptions = {},
+): GraphCompilerResult {
   const state = emptyState(nodes);
 
   // ── Stage 1: Normalize outputs ──────────────────────────────────────────
@@ -610,7 +636,9 @@ export function compileGraph(nodes: CompileNode[], options: GraphCompilerOptions
   const discourseNodes = branchNodes.filter((n) => n.coordinate.type === 'discoursePosition');
 
   if (storyNodes.length > 0) {
-    const storyOutputs = state.outputs.filter((o) => o.effectiveCoordinate.type === 'storyTime' && branchOutputIds.has(o.outputId));
+    const storyOutputs = state.outputs.filter(
+      (o) => o.effectiveCoordinate.type === 'storyTime' && branchOutputIds.has(o.outputId),
+    );
     const storyReads = state.reads.filter((r) =>
       storyNodes.some((n) => n.requirements.some((req) => req.requirementId === r.readId)),
     );
@@ -624,13 +652,18 @@ export function compileGraph(nodes: CompileNode[], options: GraphCompilerOptions
       reads: storyReads,
       resolutions: [...state.resolutions.values()],
       hash: simpleHash(`story:${hash}`),
-      effectiveCoordinate: { type: 'storyTime', value: storyNodes[0].coordinate.type === 'storyTime' ? storyNodes[0].coordinate.value : '' },
+      effectiveCoordinate: {
+        type: 'storyTime',
+        value: storyNodes[0].coordinate.type === 'storyTime' ? storyNodes[0].coordinate.value : '',
+      },
     };
     state.storyGraphs.push(storyGraph);
   }
 
   if (discourseNodes.length > 0) {
-    const discourseOutputs = state.outputs.filter((o) => o.effectiveCoordinate.type === 'discoursePosition' && branchOutputIds.has(o.outputId));
+    const discourseOutputs = state.outputs.filter(
+      (o) => o.effectiveCoordinate.type === 'discoursePosition' && branchOutputIds.has(o.outputId),
+    );
 
     const discourseGraph: DiscourseGraph = {
       type: 'discourse',
@@ -639,7 +672,13 @@ export function compileGraph(nodes: CompileNode[], options: GraphCompilerOptions
       ),
       outputs: discourseOutputs,
       hash: simpleHash(`discourse:${hash}`),
-      effectiveCoordinate: { type: 'discoursePosition', value: discourseNodes[0].coordinate.type === 'discoursePosition' ? discourseNodes[0].coordinate.value : 0 },
+      effectiveCoordinate: {
+        type: 'discoursePosition',
+        value:
+          discourseNodes[0].coordinate.type === 'discoursePosition'
+            ? discourseNodes[0].coordinate.value
+            : 0,
+      },
     };
     state.discourseGraphs.push(discourseGraph);
   }
@@ -660,7 +699,10 @@ export function compileGraph(nodes: CompileNode[], options: GraphCompilerOptions
  * Build a single StoryGraph from story-time nodes.
  * Thin wrapper over compileGraph for convenience.
  */
-export function compileStoryGraph(nodes: CompileNode[], options: GraphCompilerOptions = {}): StoryGraph | null {
+export function compileStoryGraph(
+  nodes: CompileNode[],
+  options: GraphCompilerOptions = {},
+): StoryGraph | null {
   const result = compileGraph(nodes, options);
   return result.storyGraphs[0] ?? null;
 }
@@ -669,7 +711,10 @@ export function compileStoryGraph(nodes: CompileNode[], options: GraphCompilerOp
  * Build a single DiscourseGraph from discourse-position nodes.
  * Thin wrapper over compileGraph for convenience.
  */
-export function compileDiscourseGraph(nodes: CompileNode[], options: GraphCompilerOptions = {}): DiscourseGraph | null {
+export function compileDiscourseGraph(
+  nodes: CompileNode[],
+  options: GraphCompilerOptions = {},
+): DiscourseGraph | null {
   const result = compileGraph(nodes, options);
   return result.discourseGraphs[0] ?? null;
 }

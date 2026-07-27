@@ -3,10 +3,10 @@
 // exclusively from renderNovel providerCalls and results.
 // ============================================================================
 
-import { liveSmokeRecordSchema, sanitizeError } from '@novalistically/core';
-import type { RenderNovelResult } from '@novalistically/core';
 import { createHash } from 'node:crypto';
-import { platform, arch, cpus } from 'node:os';
+import { arch, cpus, platform } from 'node:os';
+import type { RenderNovelResult } from '@novalistically/core';
+import { liveSmokeRecordSchema, sanitizeError } from '@novalistically/core';
 
 // ============================================================================
 // Types
@@ -76,14 +76,15 @@ export function buildLiveSmokeRecord(input: LiveSmokeRecordInput): LiveSmokeReco
   const totalCalls = perEvent.reduce((sum, ev) => sum + ev.ledger.length, 0);
 
   // ── Global failures — derived summary, never fabricates secrets ──────
-  const failures: string[] = result.errors.map(e => sanitizeError(e));
+  const failures: string[] = result.errors.map((e) => sanitizeError(e));
 
   // Per-event release failure reasons (no secrets/prose in messages)
   for (const r of result.results) {
     if (!r.released) {
       const parts: string[] = [];
       if (r.prose.trim().length === 0) parts.push('empty prose');
-      if (r.errors.length > 0) parts.push(`render errors: ${r.errors.map(e => sanitizeError(e)).join('; ')}`);
+      if (r.errors.length > 0)
+        parts.push(`render errors: ${r.errors.map((e) => sanitizeError(e)).join('; ')}`);
       if (r.analysis == null) parts.push('no analysis');
       if (r.validationErrors > 0) parts.push(`${r.validationErrors} validation error(s)`);
       if (parts.length > 0) {
@@ -96,12 +97,13 @@ export function buildLiveSmokeRecord(input: LiveSmokeRecordInput): LiveSmokeReco
 
   // ── Event hashes — full 64-hex SHA-256 ──────────────────────────────
   const eventHashes = result.results.map((r) => {
-    const entry: { eventId: string; proseHash: string; analysisHash: string; promptHash: string } = {
-      eventId: r.eventId,
-      proseHash: createHash('sha256').update(r.prose).digest('hex'),
-      analysisHash: createHash('sha256').update(JSON.stringify(r.analysis)).digest('hex'),
-      promptHash: r.promptHash,
-    };
+    const entry: { eventId: string; proseHash: string; analysisHash: string; promptHash: string } =
+      {
+        eventId: r.eventId,
+        proseHash: createHash('sha256').update(r.prose).digest('hex'),
+        analysisHash: createHash('sha256').update(JSON.stringify(r.analysis)).digest('hex'),
+        promptHash: r.promptHash,
+      };
     return entry;
   });
 
@@ -112,7 +114,10 @@ export function buildLiveSmokeRecord(input: LiveSmokeRecordInput): LiveSmokeReco
   // ── Candidate success gate ───────────────────────────────────────────
   const renderedEventIds = new Set(result.results.filter((r) => r.released).map((r) => r.eventId));
   const allExpectedPresent = expectedEvents.every((id) => renderedEventIds.has(id));
-  const success = result.errors.length === 0 && allExpectedPresent && renderedEventIds.size === expectedEvents.length;
+  const success =
+    result.errors.length === 0 &&
+    allExpectedPresent &&
+    renderedEventIds.size === expectedEvents.length;
 
   // ── Assemble record ──────────────────────────────────────────────────
   const record = {

@@ -2,8 +2,8 @@
 // Duration — Schema Validation Tests (S6a)
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { durationTypeSchema, durationProfileSchema } from '../../src/schemas/duration.js';
+import { describe, expect, it } from 'vitest';
+import { durationProfileSchema, durationTypeSchema } from '../../src/schemas/duration.js';
 
 describe('DurationType schema', () => {
   it('should accept all 5 valid duration types', () => {
@@ -75,21 +75,15 @@ describe('DurationProfile schema', () => {
   });
 
   it('should reject extra unknown fields (strict)', () => {
-    expect(() =>
-      durationProfileSchema.parse({ type: 'scene', unknownField: true }),
-    ).toThrow();
+    expect(() => durationProfileSchema.parse({ type: 'scene', unknownField: true })).toThrow();
   });
 
   it('should reject negative narrative length', () => {
-    expect(() =>
-      durationProfileSchema.parse({ type: 'scene', narrativeLength: -1 }),
-    ).toThrow();
+    expect(() => durationProfileSchema.parse({ type: 'scene', narrativeLength: -1 })).toThrow();
   });
 
   it('should reject negative compression ratio', () => {
-    expect(() =>
-      durationProfileSchema.parse({ type: 'summary', compressionRatio: -1 }),
-    ).toThrow();
+    expect(() => durationProfileSchema.parse({ type: 'summary', compressionRatio: -1 })).toThrow();
   });
 
   it('should reject invalid ellipsis clarity', () => {

@@ -2,6 +2,11 @@
   "name": "fabula",
   "private": true,
   "type": "module",
+  "packageManager": "npm@11.17.0",
+  "engines": {
+    "node": ">=26.5.0 <27",
+    "npm": ">=11.17.0 <12"
+  },
   "workspaces": [
     "packages/*"
   ],
@@ -21,7 +26,8 @@
     "dead-code:knip": "node scripts/check-public-api.mjs && knip"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.8",
+    "@biomejs/biome": "^2.5.5",
+    "@types/node": "^26.1.1",
     "@vitest/coverage-v8": "^3.2.4",
     "dotenv": "^17.4.2",
     "knip": "^6.0.0",

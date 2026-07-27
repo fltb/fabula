@@ -30,11 +30,11 @@ interface IN3KChapter {
   chapter_id: string;
   chapter_index: number;
   title: string;
-  content: string;           // full chapter text
+  content: string; // full chapter text
   word_count: number;
-  time_markers: string[];    // extracted time references
+  time_markers: string[]; // extracted time references
   location_changes: string[];
-  character_appearances: Record<string, number>;  // char_id → mention count
+  character_appearances: Record<string, number>; // char_id → mention count
 }
 
 interface IN3KNovel {
@@ -78,10 +78,21 @@ export function convertIN3KChapterToEvents(
   const povCharacter = getMostMentionedCharacter(raw.character_appearances);
 
   const unavailableFields: string[] = [
-    'preconditions', 'expectedPostconditions', 'tense', 'sceneType',
-    'discourseMode', 'conflictType', 'resolutionType', 'arcPosition',
-    'narrationTime', 'emotionalValence', 'styleGuidance', 'threadProgress',
-    'foreshadowing', 'relationshipEffects', 'introduces',
+    'preconditions',
+    'expectedPostconditions',
+    'tense',
+    'sceneType',
+    'discourseMode',
+    'conflictType',
+    'resolutionType',
+    'arcPosition',
+    'narrationTime',
+    'emotionalValence',
+    'styleGuidance',
+    'threadProgress',
+    'foreshadowing',
+    'relationshipEffects',
+    'introduces',
   ];
 
   if (raw.time_markers.length === 0) {

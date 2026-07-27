@@ -5,21 +5,21 @@
 import type { ValidationIssue } from '@novalistically/core';
 
 export interface StratumDefinition {
-  name: string;            // e.g. 'error_severity', 'conflict_validator'
+  name: string; // e.g. 'error_severity', 'conflict_validator'
   validator?: string;
   severity?: ValidationIssue['severity'];
   sceneType?: string;
 }
 
 export interface SamplingConfig {
-  targetProblemCount: number;   // ≥120 per TODO L101
-  targetSceneCount: number;     // ≥50 per TODO L101
-  seed: number;                 // frozen before scoring
+  targetProblemCount: number; // ≥120 per TODO L101
+  targetSceneCount: number; // ≥50 per TODO L101
+  seed: number; // frozen before scoring
   reannotationFraction: number; // min(0.20, max(0.50, 50/N))
 }
 
 export interface AnnotationSample {
-  issueId: string;          // composite key
+  issueId: string; // composite key
   issue: ValidationIssue;
   stratum: string;
   index: number;
@@ -27,7 +27,7 @@ export interface AnnotationSample {
 
 export interface ReannotationPlan {
   sampleIds: string[];
-  gapDays: number;          // 7-14 days
+  gapDays: number; // 7-14 days
   randomized: boolean;
   hiddenFirstScores: boolean;
 }
@@ -36,7 +36,7 @@ export interface ReannotationPlan {
  * Compute re-annotation count: min(N, max(50, ceil(0.20 * N)))
  */
 export function computeReannotationCount(totalSamples: number): number {
-  return Math.min(totalSamples, Math.max(50, Math.ceil(0.20 * totalSamples)));
+  return Math.min(totalSamples, Math.max(50, Math.ceil(0.2 * totalSamples)));
 }
 
 /**
@@ -45,7 +45,7 @@ export function computeReannotationCount(totalSamples: number): number {
 function mulberry32(seed: number): () => number {
   return () => {
     seed |= 0;
-    seed = (seed + 0x6D2B79F5) | 0;
+    seed = (seed + 0x6d2b79f5) | 0;
     let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
@@ -127,7 +127,7 @@ export function createReannotationPlan(
   const selected = shuffled.slice(0, reannotateCount);
 
   return {
-    sampleIds: selected.map(s => s.issueId),
+    sampleIds: selected.map((s) => s.issueId),
     gapDays: 7 + Math.floor(rng() * 7), // 7-14 days
     randomized: true,
     hiddenFirstScores: true,
@@ -147,16 +147,15 @@ export function validateAnnotationCoverage(
   missingSeverities: string[];
   warnings: string[];
 } {
-  const seenValidators = new Set(samples.map(s => s.issue.validator));
-  const seenSeverities = new Set(samples.map(s => s.issue.severity));
+  const seenValidators = new Set(samples.map((s) => s.issue.validator));
+  const seenSeverities = new Set(samples.map((s) => s.issue.severity));
   const allSeverities: ValidationIssue['severity'][] = ['error', 'warning', 'info'];
 
   return {
-    covered: validators.every(v => seenValidators.has(v)),
-    missingValidators: validators.filter(v => !seenValidators.has(v)),
-    missingSeverities: allSeverities.filter(s => !seenSeverities.has(s)),
-    warnings: samples.length < 120
-      ? [`Only ${samples.length} problem-level samples (target ≥120)`]
-      : [],
+    covered: validators.every((v) => seenValidators.has(v)),
+    missingValidators: validators.filter((v) => !seenValidators.has(v)),
+    missingSeverities: allSeverities.filter((s) => !seenSeverities.has(s)),
+    warnings:
+      samples.length < 120 ? [`Only ${samples.length} problem-level samples (target ≥120)`] : [],
   };
 }

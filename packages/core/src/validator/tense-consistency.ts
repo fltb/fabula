@@ -8,13 +8,13 @@
 // ============================================================================
 
 import { z } from 'zod';
-import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
 import type {
   PostRenderInput,
   PreRenderInput,
-  Validator,
   ValidationIssue,
+  Validator,
 } from '../types/index.js';
+import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
 
 export const tenseDetectedSchema = z.enum(['past', 'present', 'mixed']);
 export type TenseDetected = z.infer<typeof tenseDetectedSchema>;
@@ -37,13 +37,18 @@ export class TenseConsistencyValidator implements Validator {
       if (earlierEvents.length > 0) {
         const earlierTenses = new Set(earlierEvents.map((e) => e.tense));
         if (!earlierTenses.has(event.tense)) {
-          issues.push(makeIssue(
-            this.name, event.id, 'system', 'error',
-            `Tense "${event.tense}" differs from earlier scenes' tense(s): [${[...earlierTenses].join(', ')}]`,
-            'Ensure tense is consistent across scenes, or mark the transition clearly.',
-            'edit_file',
-            'tense',
-          ));
+          issues.push(
+            makeIssue(
+              this.name,
+              event.id,
+              'system',
+              'error',
+              `Tense "${event.tense}" differs from earlier scenes' tense(s): [${[...earlierTenses].join(', ')}]`,
+              'Ensure tense is consistent across scenes, or mark the transition clearly.',
+              'edit_file',
+              'tense',
+            ),
+          );
         }
       }
     }
@@ -64,27 +69,31 @@ export class TenseConsistencyValidator implements Validator {
     // event-level field, not in entity attribute catalog
     if (event.tense) {
       if (tenseDetected === 'mixed') {
-        issues.push(makeIssue(
-          this.name,
-          event.id,
-          'system',
-          'warning',
-          `Scene "${event.id}" declares tense "${event.tense}" but Pass 2 detected mixed tense usage`,
-          'Review the prose to ensure consistent tense throughout this scene.',
-          'edit_file',
-          'tense',
-        ));
+        issues.push(
+          makeIssue(
+            this.name,
+            event.id,
+            'system',
+            'warning',
+            `Scene "${event.id}" declares tense "${event.tense}" but Pass 2 detected mixed tense usage`,
+            'Review the prose to ensure consistent tense throughout this scene.',
+            'edit_file',
+            'tense',
+          ),
+        );
       } else if (tenseDetected !== event.tense) {
-        issues.push(makeIssue(
-          this.name,
-          event.id,
-          'system',
-          'warning',
-          `Scene "${event.id}" declares tense "${event.tense}" but Pass 2 detected "${tenseDetected}"`,
-          'Update the prose to match the declared tense, or change the tense declaration.',
-          'edit_file',
-          'tense',
-        ));
+        issues.push(
+          makeIssue(
+            this.name,
+            event.id,
+            'system',
+            'warning',
+            `Scene "${event.id}" declares tense "${event.tense}" but Pass 2 detected "${tenseDetected}"`,
+            'Update the prose to match the declared tense, or change the tense declaration.',
+            'edit_file',
+            'tense',
+          ),
+        );
       }
     }
 
@@ -92,10 +101,13 @@ export class TenseConsistencyValidator implements Validator {
   }
 
   getAnalysisRequirements() {
-    return [{
-      field: 'tenseDetected',
-      schema: tenseDetectedSchema,
-      instruction: 'tenseDetected: Determine the grammatical tense used in the prose and report it as "past", "present", or "mixed" in the tenseDetected field. If mixed, note which sections deviate from the event\'s specified tense.',
-    }];
+    return [
+      {
+        field: 'tenseDetected',
+        schema: tenseDetectedSchema,
+        instruction:
+          'tenseDetected: Determine the grammatical tense used in the prose and report it as "past", "present", or "mixed" in the tenseDetected field. If mixed, note which sections deviate from the event\'s specified tense.',
+      },
+    ];
   }
 }

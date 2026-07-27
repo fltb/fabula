@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
+import {
+  aggregateAbsenceEvaluation,
+  type BuildAbsenceWitnessParams,
+  buildAbsenceWitness,
+  resolveAbsenceBasis,
+} from '../../src/state/absence-resolver.ts';
 import type {
-  AbsenceWitness,
   AbsenceBasis,
+  AbsenceWitness,
   BranchPath,
   ProviderOutput,
   ReadResolution,
 } from '../../src/types/index.ts';
-import {
-  buildAbsenceWitness,
-  resolveAbsenceBasis,
-  aggregateAbsenceEvaluation,
-  type BuildAbsenceWitnessParams,
-} from '../../src/state/absence-resolver.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -23,7 +23,12 @@ function testBranch(decisions: BranchPath['decisions'] = []): BranchPath {
 
 describe('AbsenceWitness basis values', () => {
   it('has exactly 4 distinct basis values', () => {
-    const bases = new Set<AbsenceBasis>(['never_written', 'pre_introduction', 'after_unset', 'branch_local']);
+    const bases = new Set<AbsenceBasis>([
+      'never_written',
+      'pre_introduction',
+      'after_unset',
+      'branch_local',
+    ]);
     expect(bases.size).toBe(4);
   });
 });
@@ -45,7 +50,11 @@ describe('buildAbsenceWitness — four basis constructions', () => {
   });
 
   it('constructs pre_introduction absence witness', () => {
-    const witness = buildAbsenceWitness({ branch, temporalPrefix: prefix, basis: 'pre_introduction' });
+    const witness = buildAbsenceWitness({
+      branch,
+      temporalPrefix: prefix,
+      basis: 'pre_introduction',
+    });
     expect(witness.basis).toBe('pre_introduction');
     expect(witness.resolutionHash).toBeTruthy();
   });
@@ -120,17 +129,38 @@ describe('aggregateAbsenceEvaluation — three-valued evaluation', () => {
   });
 
   it('single witness returns its basis', () => {
-    const w = buildAbsenceWitness({ branch, temporalPrefix: prefix, basis: 'after_unset', latestUnsetOutput: 'u1' });
+    const w = buildAbsenceWitness({
+      branch,
+      temporalPrefix: prefix,
+      basis: 'after_unset',
+      latestUnsetOutput: 'u1',
+    });
     const result = aggregateAbsenceEvaluation([w]);
     expect(result.basis).toBe('after_unset');
     expect(result.witnessCount).toBe(1);
   });
 
   it('never_written beats pre_introduction beats after_unset beats branch_local', () => {
-    const branchLocal = buildAbsenceWitness({ branch, temporalPrefix: prefix, basis: 'branch_local' });
-    const afterUnset = buildAbsenceWitness({ branch, temporalPrefix: prefix, basis: 'after_unset' });
-    const preIntro = buildAbsenceWitness({ branch, temporalPrefix: prefix, basis: 'pre_introduction' });
-    const neverWritten = buildAbsenceWitness({ branch, temporalPrefix: prefix, basis: 'never_written' });
+    const branchLocal = buildAbsenceWitness({
+      branch,
+      temporalPrefix: prefix,
+      basis: 'branch_local',
+    });
+    const afterUnset = buildAbsenceWitness({
+      branch,
+      temporalPrefix: prefix,
+      basis: 'after_unset',
+    });
+    const preIntro = buildAbsenceWitness({
+      branch,
+      temporalPrefix: prefix,
+      basis: 'pre_introduction',
+    });
+    const neverWritten = buildAbsenceWitness({
+      branch,
+      temporalPrefix: prefix,
+      basis: 'never_written',
+    });
 
     // Mixed — never_written strongest
     const result = aggregateAbsenceEvaluation([branchLocal, afterUnset, preIntro, neverWritten]);
@@ -191,7 +221,11 @@ describe('ReadResolution — exactly one per deterministic read', () => {
       resolutionHash: '12345678',
       causality: 'provider_edge',
     };
-    const witness: ReadResolution = buildAbsenceWitness({ branch, temporalPrefix: prefix, basis: 'branch_local' });
+    const witness: ReadResolution = buildAbsenceWitness({
+      branch,
+      temporalPrefix: prefix,
+      basis: 'branch_local',
+    });
 
     const isProvider = (r: ReadResolution): r is ProviderOutput => 'causality' in r;
     expect(isProvider(provider)).toBe(true);
@@ -214,7 +248,12 @@ describe('AbsenceWitness — not a WorldState write', () => {
   });
 
   it('is not initialState unset', () => {
-    const witness = buildAbsenceWitness({ branch, temporalPrefix: prefix, basis: 'after_unset', latestUnsetOutput: 'u1' });
+    const witness = buildAbsenceWitness({
+      branch,
+      temporalPrefix: prefix,
+      basis: 'after_unset',
+      latestUnsetOutput: 'u1',
+    });
     // Has latestUnsetOutput but does NOT represent the unset itself
     expect(witness.latestUnsetOutput).toBe('u1');
     expect(witness.basis).toBe('after_unset');
@@ -230,7 +269,11 @@ describe('AbsenceWitness — not a WorldState write', () => {
   });
 
   it('is not narrative causation', () => {
-    const witness = buildAbsenceWitness({ branch, temporalPrefix: prefix, basis: 'pre_introduction' });
+    const witness = buildAbsenceWitness({
+      branch,
+      temporalPrefix: prefix,
+      basis: 'pre_introduction',
+    });
     // No narrative causation field
     expect('narrativeCause' in witness).toBe(false);
   });
@@ -240,32 +283,68 @@ describe('AbsenceWitness — not a WorldState write', () => {
 
 describe('resolveAbsenceBasis', () => {
   it('resolves never_written when set', () => {
-    expect(resolveAbsenceBasis({ neverWritten: true, preIntroduction: false, afterUnset: false, branchLocal: false }))
-      .toBe('never_written');
+    expect(
+      resolveAbsenceBasis({
+        neverWritten: true,
+        preIntroduction: false,
+        afterUnset: false,
+        branchLocal: false,
+      }),
+    ).toBe('never_written');
   });
 
   it('resolves pre_introduction when neverWritten is false', () => {
-    expect(resolveAbsenceBasis({ neverWritten: false, preIntroduction: true, afterUnset: false, branchLocal: false }))
-      .toBe('pre_introduction');
+    expect(
+      resolveAbsenceBasis({
+        neverWritten: false,
+        preIntroduction: true,
+        afterUnset: false,
+        branchLocal: false,
+      }),
+    ).toBe('pre_introduction');
   });
 
   it('resolves after_unset when only that is set', () => {
-    expect(resolveAbsenceBasis({ neverWritten: false, preIntroduction: false, afterUnset: true, branchLocal: false }))
-      .toBe('after_unset');
+    expect(
+      resolveAbsenceBasis({
+        neverWritten: false,
+        preIntroduction: false,
+        afterUnset: true,
+        branchLocal: false,
+      }),
+    ).toBe('after_unset');
   });
 
   it('resolves branch_local when only that is set', () => {
-    expect(resolveAbsenceBasis({ neverWritten: false, preIntroduction: false, afterUnset: false, branchLocal: true }))
-      .toBe('branch_local');
+    expect(
+      resolveAbsenceBasis({
+        neverWritten: false,
+        preIntroduction: false,
+        afterUnset: false,
+        branchLocal: true,
+      }),
+    ).toBe('branch_local');
   });
 
   it('prioritizes never_written when multiple flags set', () => {
-    expect(resolveAbsenceBasis({ neverWritten: true, preIntroduction: true, afterUnset: true, branchLocal: true }))
-      .toBe('never_written');
+    expect(
+      resolveAbsenceBasis({
+        neverWritten: true,
+        preIntroduction: true,
+        afterUnset: true,
+        branchLocal: true,
+      }),
+    ).toBe('never_written');
   });
 
   it('throws when no flag is set', () => {
-    expect(() => resolveAbsenceBasis({ neverWritten: false, preIntroduction: false, afterUnset: false, branchLocal: false }))
-      .toThrow('Cannot resolve absence basis');
+    expect(() =>
+      resolveAbsenceBasis({
+        neverWritten: false,
+        preIntroduction: false,
+        afterUnset: false,
+        branchLocal: false,
+      }),
+    ).toThrow('Cannot resolve absence basis');
   });
 });

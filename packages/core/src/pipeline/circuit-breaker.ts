@@ -7,7 +7,13 @@
 //   Round 2: prompt_fix (retry with repair guidance injected)
 //   Round 3: abort (stop trying, mark for review)
 // ============================================================================
-import { AuthError, ModelNotFoundError, RateLimitError, TimeoutError, ValidationError } from '../errors.ts';
+import {
+  AuthError,
+  ModelNotFoundError,
+  RateLimitError,
+  TimeoutError,
+  ValidationError,
+} from '../errors.ts';
 
 /**
  * Retry strategy result.
@@ -66,29 +72,28 @@ export function getRetryStrategy(error: unknown, attempt: number = 0): RetryStra
   };
 }
 
-
 export interface CircuitBreakerState {
-  round: number;          // 1-3
+  round: number; // 1-3
   totalAttempts: number;
   consecutiveFailures: number;
   lastError?: string;
-  isOpen: boolean;         // true = stop trying
+  isOpen: boolean; // true = stop trying
   escalatedStrategy: 'retry' | 'prompt_fix' | 'abort';
 }
 
 export interface CircuitBreakerConfig {
-  maxRounds: number;       // default 3
+  maxRounds: number; // default 3
   maxAttemptsPerRound: number; // default 2
   failureThreshold: number; // default 3
-  escalationDelay: number;  // ms between rounds, default 0
+  escalationDelay: number; // ms between rounds, default 0
 }
 
 export function createCircuitBreaker(config?: Partial<CircuitBreakerConfig>): {
   state: () => CircuitBreakerState;
-  attempt: () => boolean;       // returns true if should try again
+  attempt: () => boolean; // returns true if should try again
   recordSuccess: () => void;
   recordFailure: (error: string) => void;
-  escalate: () => boolean;       // returns true if escalated to next round
+  escalate: () => boolean; // returns true if escalated to next round
   reset: () => void;
 } {
   const cfg: CircuitBreakerConfig = {

@@ -20,7 +20,7 @@
 
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 import { generateText, type LanguageModel, Output } from 'ai';
-import type { LLMProvider, CompletionRequest, CompletionResponse } from '../types.ts';
+import type { CompletionRequest, CompletionResponse, LLMProvider } from '../types.ts';
 import { LLMError } from '../types.ts';
 
 export interface AiSdkProviderOptions {
@@ -52,9 +52,7 @@ export class AiSdkProvider implements LLMProvider {
   constructor(options: AiSdkProviderOptions = {}) {
     this.options = options;
     const baseURL =
-      options.baseURL ??
-      process.env['NOVALISTICALLY_AI_BASE_URL'] ??
-      'https://opencode.ai/zen/v1';
+      options.baseURL ?? process.env['NOVALISTICALLY_AI_BASE_URL'] ?? 'https://opencode.ai/zen/v1';
 
     const apiKey = options.apiKey ?? process.env['NOVALISTICALLY_AI_API_KEY'] ?? '';
     if (!apiKey) {
@@ -64,9 +62,7 @@ export class AiSdkProvider implements LLMProvider {
     }
 
     this.modelId =
-      options.model ??
-      process.env['NOVALISTICALLY_AI_MODEL'] ??
-      'deepseek-v4-flash-free';
+      options.model ?? process.env['NOVALISTICALLY_AI_MODEL'] ?? 'deepseek-v4-flash-free';
 
     // ── Create client ───────────────────────────────────────────────────
     this.client = createOpenAICompatible({
@@ -107,15 +103,12 @@ export class AiSdkProvider implements LLMProvider {
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
-    const isPass2 =
-      request.seed !== undefined ||
-      request.responseFormat?.type === 'json_object';
+    const isPass2 = request.seed !== undefined || request.responseFormat?.type === 'json_object';
 
     // Resolve model via routing (if configured and taskType is present)
     const usedModelId = this.resolveModelId(request.taskType);
-    const usedModel = usedModelId === this.modelId
-      ? this.model
-      : this.getOrCreateModel(usedModelId);
+    const usedModel =
+      usedModelId === this.modelId ? this.model : this.getOrCreateModel(usedModelId);
 
     // Warn when routing changes the model from the base
     if (this.options.routing && usedModelId !== this.modelId) {
@@ -146,7 +139,7 @@ export class AiSdkProvider implements LLMProvider {
         ...(outputSpec ? { output: outputSpec } : {}),
       });
 
-      const content = result.text;  // raw text — pipeline owns Pass 2 parsing/validation
+      const content = result.text; // raw text — pipeline owns Pass 2 parsing/validation
 
       return {
         id: result.response?.id ?? 'ai-sdk',
@@ -167,4 +160,3 @@ export class AiSdkProvider implements LLMProvider {
     }
   }
 }
-

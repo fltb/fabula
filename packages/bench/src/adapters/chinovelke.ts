@@ -14,10 +14,7 @@
 //
 // Fields are tracked per-field via ProvenanceAnnotation for transparency.
 
-import type {
-  CharacterDefinition,
-  LocationDefinition,
-} from '@novalistically/core';
+import type { CharacterDefinition, LocationDefinition } from '@novalistically/core';
 import { annotate, markDirect, type ProvenanceAnnotation } from './annotations.js';
 
 // ─── Raw ChiNovelKE types ──────────────────────────────────────────────────
@@ -31,8 +28,8 @@ interface ChiNovelKECharacter {
   role: 'protagonist' | 'antagonist' | 'supporting' | 'background';
   description: string;
   traits: string[];
-  relations: string[];  // IDs of related characters
-  locations: string[];  // IDs of associated locations
+  relations: string[]; // IDs of related characters
+  locations: string[]; // IDs of associated locations
 }
 
 interface ChiNovelKELocation {
@@ -49,7 +46,7 @@ interface ChiNovelKERelationData {
   from_id: string;
   to_id: string;
   direction: string;
-  intensity: number;  // 0-100
+  intensity: number; // 0-100
   description: string;
 }
 
@@ -67,22 +64,36 @@ interface ChiNovelKERawData {
 // 'protagonist' maps to 'minor' (closest available — protagonist is not a
 // distinct role level in core, it's a story-structural position).
 
-function mapChiNovelKERole(role: ChiNovelKECharacter['role']): 'minor' | 'supporting' | 'antagonist' | 'background' {
+function mapChiNovelKERole(
+  role: ChiNovelKECharacter['role'],
+): 'minor' | 'supporting' | 'antagonist' | 'background' {
   switch (role) {
-    case 'antagonist': return 'antagonist';
-    case 'supporting': return 'supporting';
-    case 'background': return 'background';
-    case 'protagonist': return 'minor';
+    case 'antagonist':
+      return 'antagonist';
+    case 'supporting':
+      return 'supporting';
+    case 'background':
+      return 'background';
+    case 'protagonist':
+      return 'minor';
   }
 }
 
 // ─── Conversion functions ──────────────────────────────────────────────────
 
-export function convertChiNovelKECharacter(
-  raw: ChiNovelKECharacter,
-): { data: CharacterDefinition; annotation: ProvenanceAnnotation } {
+export function convertChiNovelKECharacter(raw: ChiNovelKECharacter): {
+  data: CharacterDefinition;
+  annotation: ProvenanceAnnotation;
+} {
   const fieldOrigins = markDirect([
-    'id', 'name', 'aliases', 'gender', 'age', 'role', 'description', 'traits',
+    'id',
+    'name',
+    'aliases',
+    'gender',
+    'age',
+    'role',
+    'description',
+    'traits',
   ]);
 
   const data: CharacterDefinition = {
@@ -101,9 +112,10 @@ export function convertChiNovelKECharacter(
   return { data, annotation: annotate('chinovelke', raw.id, 'character', fieldOrigins) };
 }
 
-export function convertChiNovelKELocation(
-  raw: ChiNovelKELocation,
-): { data: LocationDefinition; annotation: ProvenanceAnnotation } {
+export function convertChiNovelKELocation(raw: ChiNovelKELocation): {
+  data: LocationDefinition;
+  annotation: ProvenanceAnnotation;
+} {
   const fieldOrigins = markDirect(['id', 'name', 'description', 'kind', 'parent']);
 
   const data: LocationDefinition = {
@@ -127,10 +139,18 @@ export interface ChiNovelKERelationOutput {
   direction: string;
 }
 
-export function convertChiNovelKERelation(
-  raw: ChiNovelKERelationData,
-): { data: ChiNovelKERelationOutput; annotation: ProvenanceAnnotation } {
-  const fieldOrigins = markDirect(['id', 'participants', 'type', 'direction', 'intensity', 'description']);
+export function convertChiNovelKERelation(raw: ChiNovelKERelationData): {
+  data: ChiNovelKERelationOutput;
+  annotation: ProvenanceAnnotation;
+} {
+  const fieldOrigins = markDirect([
+    'id',
+    'participants',
+    'type',
+    'direction',
+    'intensity',
+    'description',
+  ]);
 
   return {
     data: {

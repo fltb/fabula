@@ -1,9 +1,9 @@
-import { describe, it, expect } from 'vitest';
-import YAML from 'yaml';
 import fs from 'node:fs';
 import path from 'node:path';
-import { runVariantBench } from '../../bench/src/variants.ts';
+import { describe, expect, it } from 'vitest';
+import YAML from 'yaml';
 import type { VariantIssueResult } from '../../bench/src/variants.ts';
+import { runVariantBench } from '../../bench/src/variants.ts';
 
 // ============================================================
 // P1b: zhu-fu-variants test suite
@@ -37,12 +37,12 @@ describe('zhu-fu-variants / branch-A (honest answer)', () => {
 
     // Check postconditions reflect honesty, not guilt
     const knowledgePost = e0.expectedPostconditions.find(
-      (p: any) => p.entity === 'narrator' && p.attribute === 'knowledge'
+      (p: any) => p.entity === 'narrator' && p.attribute === 'knowledge',
     );
     expect(knowledgePost.value).toBe('gave_honest_answer_to_xianglins_wife');
 
     const emotionalPost = e0.expectedPostconditions.find(
-      (p: any) => p.entity === 'narrator' && p.attribute === 'emotionalState'
+      (p: any) => p.entity === 'narrator' && p.attribute === 'emotionalState',
     );
     expect(emotionalPost.value).toBe('truthful_but_uncertain');
   });
@@ -53,15 +53,15 @@ describe('zhu-fu-variants / branch-A (honest answer)', () => {
     expect(e1.sceneBrief).toContain('愤怒');
 
     const emotionalPost = e1.expectedPostconditions.find(
-      (p: any) => p.entity === 'narrator' && p.attribute === 'emotionalState'
+      (p: any) => p.entity === 'narrator' && p.attribute === 'emotionalState',
     );
     expect(emotionalPost.value).toBe('melancholy_but_not_guilty');
   });
 
   it('should have 7 event files', () => {
-    const files = fs.readdirSync(chapterDir).filter(
-      (f) => f.startsWith('E') && f.endsWith('.yaml')
-    );
+    const files = fs
+      .readdirSync(chapterDir)
+      .filter((f) => f.startsWith('E') && f.endsWith('.yaml'));
     expect(files.length).toBe(7);
   });
 
@@ -96,12 +96,12 @@ describe('zhu-fu-variants / branch-B (He Laoliu survives)', () => {
     expect(e4.sceneBrief).toContain('活过来了');
 
     const heLaoliuStatus = e4.expectedPostconditions.find(
-      (p: any) => p.entity === 'he_laoliu' && p.attribute === 'status'
+      (p: any) => p.entity === 'he_laoliu' && p.attribute === 'status',
     );
     expect(heLaoliuStatus.value).toBe('alive');
 
     const locationPost = e4.expectedPostconditions.find(
-      (p: any) => p.entity === 'xianglins_wife' && p.attribute === 'location'
+      (p: any) => p.entity === 'xianglins_wife' && p.attribute === 'location',
     );
     expect(locationPost.value).toBe('he_family_hollow');
   });
@@ -113,7 +113,7 @@ describe('zhu-fu-variants / branch-B (He Laoliu survives)', () => {
     expect(e5.sceneBrief).toContain('春丫头');
 
     const hasSecondChild = e5.expectedPostconditions.find(
-      (p: any) => p.entity === 'xianglins_wife' && p.attribute === 'has_second_child'
+      (p: any) => p.entity === 'xianglins_wife' && p.attribute === 'has_second_child',
     );
     expect(hasSecondChild.value).toBe(true);
   });
@@ -124,20 +124,20 @@ describe('zhu-fu-variants / branch-B (He Laoliu survives)', () => {
     expect(e6.sceneBrief).toContain('灶上还有粥');
 
     const heDeathCause = e6.expectedPostconditions.find(
-      (p: any) => p.entity === 'he_laoliu' && p.attribute === 'cause_of_death'
+      (p: any) => p.entity === 'he_laoliu' && p.attribute === 'cause_of_death',
     );
     expect(heDeathCause.value).toBe('old_age');
 
     const xlDeathLocation = e6.expectedPostconditions.find(
-      (p: any) => p.entity === 'xianglins_wife' && p.attribute === 'death_location'
+      (p: any) => p.entity === 'xianglins_wife' && p.attribute === 'death_location',
     );
     expect(xlDeathLocation.value).toBe('own_home_he_family_hollow');
   });
 
   it('should have 7 event files (E0-E3 from base, E4-E6 new)', () => {
-    const files = fs.readdirSync(chapterDir).filter(
-      (f) => f.startsWith('E') && f.endsWith('.yaml')
-    );
+    const files = fs
+      .readdirSync(chapterDir)
+      .filter((f) => f.startsWith('E') && f.endsWith('.yaml'));
     expect(files.length).toBe(7);
     expect(files).toContain('E0_encounter.yaml');
     expect(files).toContain('E4_survival.yaml');
@@ -164,12 +164,12 @@ describe('zhu-fu-variants / error-injection (28 files)', () => {
   const eiDir = path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'error-injection');
 
   it('should have exactly 28 error-injection files', () => {
-    const files = fs.readdirSync(eiDir).filter(f => f.endsWith('.yaml'));
+    const files = fs.readdirSync(eiDir).filter((f) => f.endsWith('.yaml'));
     expect(files.length).toBe(28);
   });
 
   it('each file should have valid injected array', () => {
-    const files = fs.readdirSync(eiDir).filter(f => f.endsWith('.yaml'));
+    const files = fs.readdirSync(eiDir).filter((f) => f.endsWith('.yaml'));
     for (const file of files) {
       const data = loadYaml(path.join(eiDir, file));
       expect(data.injected).toBeDefined();
@@ -188,7 +188,7 @@ describe('zhu-fu-variants / error-injection (28 files)', () => {
   });
 
   it('should target multiple validators (coverage check)', () => {
-    const files = fs.readdirSync(eiDir).filter(f => f.endsWith('.yaml'));
+    const files = fs.readdirSync(eiDir).filter((f) => f.endsWith('.yaml'));
     const validators = new Set<string>();
     for (const file of files) {
       const data = loadYaml(path.join(eiDir, file));
@@ -217,12 +217,12 @@ describe('zhu-fu-variants / extreme-damage (5 files)', () => {
   const edDir = path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'extreme-damage');
 
   it('should have exactly 5 extreme-damage files', () => {
-    const files = fs.readdirSync(edDir).filter(f => f.endsWith('.yaml'));
+    const files = fs.readdirSync(edDir).filter((f) => f.endsWith('.yaml'));
     expect(files.length).toBe(5);
   });
 
   it('each file should have valid injected array', () => {
-    const files = fs.readdirSync(edDir).filter(f => f.endsWith('.yaml'));
+    const files = fs.readdirSync(edDir).filter((f) => f.endsWith('.yaml'));
     for (const file of files) {
       const data = loadYaml(path.join(edDir, file));
       expect(data.injected).toBeDefined();
@@ -240,7 +240,7 @@ describe('zhu-fu-variants / extreme-damage (5 files)', () => {
   });
 
   it('should target CausalityValidator and ReachabilityValidator', () => {
-    const files = fs.readdirSync(edDir).filter(f => f.endsWith('.yaml'));
+    const files = fs.readdirSync(edDir).filter((f) => f.endsWith('.yaml'));
     const validators = new Set<string>();
     for (const file of files) {
       const data = loadYaml(path.join(edDir, file));
@@ -261,9 +261,7 @@ describe('zhu-fu-variants / extreme-damage (5 files)', () => {
   it('should have missing genesis test file', () => {
     const data = loadYaml(path.join(edDir, '004_missing_genesis.yaml'));
     expect(data.injected.length).toBeGreaterThanOrEqual(1);
-    const genesisEntry = data.injected.find(
-      (e: any) => e.entityId === 'system:genesis'
-    );
+    const genesisEntry = data.injected.find((e: any) => e.entityId === 'system:genesis');
     expect(genesisEntry).toBeDefined();
     expect(genesisEntry.expectedValidator).toBe('reachability');
   });
@@ -348,7 +346,9 @@ describe('zhu-fu-variants / validation result contracts', () => {
       entries: [{ expectedValidator: 'causality', expectedSeverity: 'error', expectMatch: true }],
     },
     '004_unreachable_event': {
-      entries: [{ expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true }],
+      entries: [
+        { expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true },
+      ],
     },
     '005_pov_violation': {
       entries: [{ expectedValidator: 'pov', expectedSeverity: 'warning', expectMatch: true }],
@@ -357,7 +357,9 @@ describe('zhu-fu-variants / validation result contracts', () => {
       entries: [{ expectedValidator: 'world_rule', expectedSeverity: 'error', expectMatch: false }],
     },
     '007_invented_detail': {
-      entries: [{ expectedValidator: 'factual_detail', expectedSeverity: 'warning', expectMatch: true }],
+      entries: [
+        { expectedValidator: 'factual_detail', expectedSeverity: 'warning', expectMatch: true },
+      ],
     },
     '008_knowledge_violation': {
       entries: [{ expectedValidator: 'knowledge', expectedSeverity: 'error', expectMatch: true }],
@@ -366,16 +368,24 @@ describe('zhu-fu-variants / validation result contracts', () => {
       entries: [{ expectedValidator: 'world_rule', expectedSeverity: 'error', expectMatch: true }],
     },
     '010_character_state_contradiction': {
-      entries: [{ expectedValidator: 'character_state', expectedSeverity: 'error', expectMatch: true }],
+      entries: [
+        { expectedValidator: 'character_state', expectedSeverity: 'error', expectMatch: true },
+      ],
     },
     '011_foreshadowing_unpaid': {
-      entries: [{ expectedValidator: 'foreshadowing', expectedSeverity: 'warning', expectMatch: true }],
+      entries: [
+        { expectedValidator: 'foreshadowing', expectedSeverity: 'warning', expectMatch: true },
+      ],
     },
     '012_placeholder_value': {
-      entries: [{ expectedValidator: 'factual_detail', expectedSeverity: 'warning', expectMatch: false }],
+      entries: [
+        { expectedValidator: 'factual_detail', expectedSeverity: 'warning', expectMatch: false },
+      ],
     },
     '013_mutual_exclusion': {
-      entries: [{ expectedValidator: 'factual_detail', expectedSeverity: 'error', expectMatch: false }],
+      entries: [
+        { expectedValidator: 'factual_detail', expectedSeverity: 'error', expectMatch: false },
+      ],
     },
     '014_tense_mismatch': {
       entries: [{ expectedValidator: 'timeline', expectedSeverity: 'warning', expectMatch: true }],
@@ -384,7 +394,9 @@ describe('zhu-fu-variants / validation result contracts', () => {
       entries: [{ expectedValidator: 'pov', expectedSeverity: 'error', expectMatch: true }],
     },
     '016_branch_merge_inconsistency': {
-      entries: [{ expectedValidator: 'branch_merge', expectedSeverity: 'warning', expectMatch: true }],
+      entries: [
+        { expectedValidator: 'branch_merge', expectedSeverity: 'warning', expectMatch: true },
+      ],
     },
     '017_narration_time_missing': {
       entries: [{ expectedValidator: 'timeline', expectedSeverity: 'warning', expectMatch: true }],
@@ -393,19 +405,27 @@ describe('zhu-fu-variants / validation result contracts', () => {
       entries: [{ expectedValidator: 'timeline', expectedSeverity: 'error', expectMatch: true }],
     },
     '019_location_mismatch': {
-      entries: [{ expectedValidator: 'character_state', expectedSeverity: 'error', expectMatch: true }],
+      entries: [
+        { expectedValidator: 'character_state', expectedSeverity: 'error', expectMatch: true },
+      ],
     },
     '020_thread_progress_invalid': {
-      entries: [{ expectedValidator: 'thread_progress', expectedSeverity: 'warning', expectMatch: true }],
+      entries: [
+        { expectedValidator: 'thread_progress', expectedSeverity: 'warning', expectMatch: true },
+      ],
     },
     '021_pacing_anomaly': {
       entries: [{ expectedValidator: 'pacing', expectedSeverity: 'warning', expectMatch: true }],
     },
     '022_tense_shift': {
-      entries: [{ expectedValidator: 'tense_consistency', expectedSeverity: 'error', expectMatch: true }],
+      entries: [
+        { expectedValidator: 'tense_consistency', expectedSeverity: 'error', expectMatch: true },
+      ],
     },
     '023_discourse_imbalance': {
-      entries: [{ expectedValidator: 'discourse_balance', expectedSeverity: 'warning', expectMatch: true }],
+      entries: [
+        { expectedValidator: 'discourse_balance', expectedSeverity: 'warning', expectMatch: true },
+      ],
     },
     '024_alias_inconsistency': {
       entries: [{ expectedValidator: 'alias', expectedSeverity: 'warning', expectMatch: true }],
@@ -462,10 +482,7 @@ describe('zhu-fu-variants / validation result contracts', () => {
       const label = `${fileName} entry[${idx}] → ${entry.expectedValidator}/${entry.expectedSeverity}`;
       it(`${label}: ${entry.expectMatch ? 'VALIDATOR FIRES' : 'EXPLICIT FAILURE'}`, () => {
         // Collect all results for this file, preserving injection order
-        const allResults = [
-          ...benchResults.errorInjection,
-          ...benchResults.extremeDamage,
-        ];
+        const allResults = [...benchResults.errorInjection, ...benchResults.extremeDamage];
         const fileResults = allResults.filter((r) => r.file === fileName);
         expect(fileResults.length).toBeGreaterThan(idx);
         const match = fileResults[idx];
@@ -485,26 +502,22 @@ describe('zhu-fu-variants / validation result contracts', () => {
 
   // ── Variant isolation: inventedDetails and narratorKnowledge must not bleed ──
   it('007_invented_detail: knowledge validator should NOT fire for invented-detail injection', () => {
-    const fileResults = [
-      ...benchResults.errorInjection,
-      ...benchResults.extremeDamage,
-    ].filter((r) => r.file === '007_invented_detail');
+    const fileResults = [...benchResults.errorInjection, ...benchResults.extremeDamage].filter(
+      (r) => r.file === '007_invented_detail',
+    );
     expect(fileResults.length).toBeGreaterThan(0);
     // If inventedDetails falls through into narratorKnowledge, the knowledge
     // validator would fire for this file, leaking into unexpectedIssues.
     for (const result of fileResults) {
-      const knowledgeLeak = result.unexpectedIssues.filter(
-        (i) => i.validator === 'knowledge',
-      );
+      const knowledgeLeak = result.unexpectedIssues.filter((i) => i.validator === 'knowledge');
       expect(knowledgeLeak).toHaveLength(0);
     }
   });
 
   it('008_knowledge_violation: factual_detail validator should NOT fire for knowledge injection', () => {
-    const fileResults = [
-      ...benchResults.errorInjection,
-      ...benchResults.extremeDamage,
-    ].filter((r) => r.file === '008_knowledge_violation');
+    const fileResults = [...benchResults.errorInjection, ...benchResults.extremeDamage].filter(
+      (r) => r.file === '008_knowledge_violation',
+    );
     expect(fileResults.length).toBeGreaterThan(0);
     // NarratorKnowledge has its own break, so factual_detail should never
     // appear as an unexpected issue for this file.
@@ -518,36 +531,30 @@ describe('zhu-fu-variants / validation result contracts', () => {
 
   // ── Post-render mockAnalysis path: validators consuming AnalysisResult ──
   it('024_alias_inconsistency: post-render mockAnalysis produces alias issues with expected severity', () => {
-    const fileResults = [
-      ...benchResults.errorInjection,
-      ...benchResults.extremeDamage,
-    ].filter((r) => r.file === '024_alias_inconsistency');
+    const fileResults = [...benchResults.errorInjection, ...benchResults.extremeDamage].filter(
+      (r) => r.file === '024_alias_inconsistency',
+    );
     expect(fileResults.length).toBeGreaterThan(0);
     for (const result of fileResults) {
       // The alias validator consumes mockAnalysis (characterReferences)
       // via validateRender; it must fire with the expected severity.
       expect(result.matched).toBe(true);
-      const aliasIssues = result.actualIssues.filter(
-        (i) => i.validator === 'alias',
-      );
+      const aliasIssues = result.actualIssues.filter((i) => i.validator === 'alias');
       expect(aliasIssues.length).toBeGreaterThan(0);
       expect(aliasIssues.some((i) => i.severity === result.expectedSeverity)).toBe(true);
     }
   });
 
   it('028_voice_drift: post-render mockAnalysis produces voice_drift issues with expected severity', () => {
-    const fileResults = [
-      ...benchResults.errorInjection,
-      ...benchResults.extremeDamage,
-    ].filter((r) => r.file === '028_voice_drift');
+    const fileResults = [...benchResults.errorInjection, ...benchResults.extremeDamage].filter(
+      (r) => r.file === '028_voice_drift',
+    );
     expect(fileResults.length).toBeGreaterThan(0);
     for (const result of fileResults) {
       // The voice_drift validator consumes mockAnalysis (narrativeChecks)
       // via validateRender; it must fire with the expected severity.
       expect(result.matched).toBe(true);
-      const driftIssues = result.actualIssues.filter(
-        (i) => i.validator === 'voice_drift',
-      );
+      const driftIssues = result.actualIssues.filter((i) => i.validator === 'voice_drift');
       expect(driftIssues.length).toBeGreaterThan(0);
       expect(driftIssues.some((i) => i.severity === result.expectedSeverity)).toBe(true);
     }
@@ -561,11 +568,11 @@ describe('zhu-fu-variants / validation result contracts', () => {
 // ============================================================================
 
 import {
-  InMemoryEntityRegistry,
-  EntityMapper,
-  ResultAggregator,
-  type EntityRegistry,
   type AnalysisResult,
+  EntityMapper,
+  type EntityRegistry,
+  InMemoryEntityRegistry,
+  ResultAggregator,
   type WorldState,
 } from '../src/index.ts';
 
@@ -679,7 +686,13 @@ describe('zhu-fu-variants / alias validator issue emission', () => {
         preconditions: { violated: [] },
         pov: { consistent: true, leaks: [] },
         inventedDetails: [],
-        quality: { proseScore: 0, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 0 },
+        quality: {
+          proseScore: 0,
+          maxScore: 10,
+          strengths: [],
+          weaknesses: [],
+          estimatedWordCount: 0,
+        },
         threadProgressAchieved: [],
         foreshadowingDeployed: [],
         // P0g optional blocks — all present so every post-render validator
@@ -693,9 +706,7 @@ describe('zhu-fu-variants / alias validator issue emission', () => {
         ruleChecks: [],
         knowledgeChecks: [],
         // The alias validator consumes characterReferences — this is the actual test payload
-        characterReferences: [
-          { entityId: 'xianglins_wife', namesUsed: ['祥林家的'] },
-        ],
+        characterReferences: [{ entityId: 'xianglins_wife', namesUsed: ['祥林家的'] }],
       },
     };
 
@@ -764,7 +775,13 @@ describe('zhu-fu-variants / pronoun validator issue emission', () => {
         preconditions: { violated: [] },
         pov: { consistent: true, leaks: [] },
         inventedDetails: [],
-        quality: { proseScore: 0, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 0 },
+        quality: {
+          proseScore: 0,
+          maxScore: 10,
+          strengths: [],
+          weaknesses: [],
+          estimatedWordCount: 0,
+        },
         threadProgressAchieved: [],
         foreshadowingDeployed: [],
         narrativeChecks: [
@@ -785,7 +802,14 @@ describe('zhu-fu-variants / pronoun validator issue emission', () => {
     };
 
     const aggregator = new ResultAggregator();
-    const result = aggregator.validateRender(prose, event, state, mockAnalysis, undefined, registry);
+    const result = aggregator.validateRender(
+      prose,
+      event,
+      state,
+      mockAnalysis,
+      undefined,
+      registry,
+    );
 
     // The pronoun validator should fire via Pass 2 narrativeChecks
     const pronounIssues = result.errors.filter((i) => i.validator === 'pronoun');
@@ -861,7 +885,11 @@ describe('zhu-fu-variants / gate: circuit-breaker flow', () => {
   });
 
   it('escalate with consecutive failures auto-opens after escalation', () => {
-    const breaker = createCircuitBreaker({ maxRounds: 3, failureThreshold: 2, maxAttemptsPerRound: 2 });
+    const breaker = createCircuitBreaker({
+      maxRounds: 3,
+      failureThreshold: 2,
+      maxAttemptsPerRound: 2,
+    });
     // Simulate 2 consecutive failures in round 1
     breaker.recordFailure('e1');
     breaker.recordFailure('e2');
@@ -907,9 +935,7 @@ describe('zhu-fu-variants / gate: malformed reference rejection', () => {
     const result = eventFileSchema.safeParse(malformed);
     expect(result.success).toBe(false);
     // Missing sceneBrief (required string)
-    expect(result.error?.issues.some((i) =>
-      i.path.includes('sceneBrief'),
-    )).toBe(true);
+    expect(result.error?.issues.some((i) => i.path.includes('sceneBrief'))).toBe(true);
   });
 
   it('rejects event file with invalid character reference (non-string entity)', () => {
@@ -967,9 +993,7 @@ describe('zhu-fu-variants / gate: missing-provenance rejection', () => {
   it('rejects provenance entry without eventId', () => {
     const invalid = {
       version: 1,
-      entries: [
-        { kind: 'generated' as const, runHash: 'abc123' },
-      ],
+      entries: [{ kind: 'generated' as const, runHash: 'abc123' }],
     };
     const result = provenanceManifestSchema.safeParse(invalid);
     expect(result.success).toBe(false);
@@ -978,9 +1002,7 @@ describe('zhu-fu-variants / gate: missing-provenance rejection', () => {
   it('rejects provenance entry with empty runHash', () => {
     const invalid = {
       version: 1,
-      entries: [
-        { eventId: 'E0', kind: 'generated' as const, runHash: '' },
-      ],
+      entries: [{ eventId: 'E0', kind: 'generated' as const, runHash: '' }],
     };
     const result = provenanceManifestSchema.safeParse(invalid);
     expect(result.success).toBe(false);
@@ -989,9 +1011,7 @@ describe('zhu-fu-variants / gate: missing-provenance rejection', () => {
   it('rejects provenance entry with missing runHash', () => {
     const invalid = {
       version: 1,
-      entries: [
-        { eventId: 'E0', kind: 'generated' as const },
-      ],
+      entries: [{ eventId: 'E0', kind: 'generated' as const }],
     };
     const result = provenanceManifestSchema.safeParse(invalid);
     expect(result.success).toBe(false);
@@ -1028,9 +1048,7 @@ describe('zhu-fu-variants / gate: missing-provenance rejection', () => {
   it('rejects manifest with invalid version format', () => {
     const invalid = {
       version: 'not-a-version',
-      entries: [
-        { eventId: 'E0', kind: 'generated' as const, runHash: 'abc123' },
-      ],
+      entries: [{ eventId: 'E0', kind: 'generated' as const, runHash: 'abc123' }],
     };
     const result = provenanceManifestSchema.safeParse(invalid);
     expect(result.success).toBe(false);

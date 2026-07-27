@@ -3,35 +3,44 @@
 // group epistemic forms
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
+  applyClaimTransaction,
   applyKnowledgeBoundary,
   evaluateGroupEpistemic,
-  applyClaimTransaction,
 } from '../../src/state/knowledge-replay.js';
 import type {
-  EpistemicLedger,
   ClaimAssessment,
   ClaimEvidenceRecord,
+  EpistemicLedger,
 } from '../../src/types/index.js';
 
 const settledKnow: ClaimAssessment = {
-  type: 'settled', grade: 'know', polarity: 'affirmative',
+  type: 'settled',
+  grade: 'know',
+  polarity: 'affirmative',
 };
 const settledBelieve: ClaimAssessment = {
-  type: 'settled', grade: 'believe', polarity: 'affirmative',
+  type: 'settled',
+  grade: 'believe',
+  polarity: 'affirmative',
 };
 const forgotten: ClaimAssessment = { type: 'forgotten' };
 
-const evidence: ClaimEvidenceRecord[] = [{
-  source: 'direct_experience',
-  provenance: ['evt1'],
-  acquiredAt: { type: 'absolute' as const, value: 'day_1' },
-}];
+const evidence: ClaimEvidenceRecord[] = [
+  {
+    source: 'direct_experience',
+    provenance: ['evt1'],
+    acquiredAt: { type: 'absolute' as const, value: 'day_1' },
+  },
+];
 
 function buildLedgerWithClaims(): EpistemicLedger {
   let ledger: EpistemicLedger = {
-    claims: {}, bySubject: {}, byProposition: {}, actLog: [],
+    claims: {},
+    bySubject: {},
+    byProposition: {},
+    actLog: [],
   };
   ledger = applyClaimTransaction(ledger, 'frodo', 'p_ring', settledKnow, evidence);
   ledger = applyClaimTransaction(ledger, 'frodo', 'p_mordor', settledBelieve, evidence);

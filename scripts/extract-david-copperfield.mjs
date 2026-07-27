@@ -14,14 +14,20 @@
 // ============================================================================
 
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, '..');
 const CORPUS_DIR = join(REPO_ROOT, 'bench-data', 'corpus', 'david-copperfield');
-const CACHE_FILE = join(REPO_ROOT, 'bench-data', 'corpus', '.cache', 'david_copperfield_gutenberg.txt');
+const CACHE_FILE = join(
+  REPO_ROOT,
+  'bench-data',
+  'corpus',
+  '.cache',
+  'david_copperfield_gutenberg.txt',
+);
 const OUTPUT_FILE = join(CORPUS_DIR, 'source.txt');
 const MANIFEST_FILE = join(CORPUS_DIR, 'source-manifest.json');
 const SOURCE_URL = 'https://www.gutenberg.org/ebooks/766.txt.utf-8';
@@ -38,7 +44,7 @@ if (!existsSync(CACHE_FILE)) {
   process.exit(1);
 }
 
-let rawText = readFileSync(CACHE_FILE, 'utf-8');
+const rawText = readFileSync(CACHE_FILE, 'utf-8');
 let text = rawText.normalize('NFC');
 text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
 const lines = text.split('\n');
@@ -85,7 +91,9 @@ for (let i = 0; i < headerLineIdxs.length; i++) {
   const chTitle = lines[startLine];
   chapters.push({ text: chText, title: chTitle });
   if (i < 3 || i >= headerLineIdxs.length - 3) {
-    console.log(`  ch${String(i + 1).padStart(2, '0')}: ${chTitle} — ${chText.length} chars, ${Buffer.byteLength(chText, 'utf-8')} bytes`);
+    console.log(
+      `  ch${String(i + 1).padStart(2, '0')}: ${chTitle} — ${chText.length} chars, ${Buffer.byteLength(chText, 'utf-8')} bytes`,
+    );
   } else if (i === 3) {
     console.log('  ...');
   }
@@ -119,7 +127,7 @@ for (let i = 0; i < chapters.length; i++) {
   const endByte = currentPos;
 
   // Word count: English content words
-  const words = chText.split(/\s+/).filter(w => /[a-zA-Z]+/.test(w));
+  const words = chText.split(/\s+/).filter((w) => /[a-zA-Z]+/.test(w));
   const wordCount = words.length;
 
   const chapterId = `ch${String(i + 1).padStart(2, '0')}`;
@@ -186,14 +194,22 @@ allPass &&= g3;
 
 // Gate 4: chapters === 64
 const g4 = manifest.chapters.length === CHAPTER_COUNT;
-results.push({ gate: `chapters = ${CHAPTER_COUNT}`, pass: g4, detail: String(manifest.chapters.length) });
+results.push({
+  gate: `chapters = ${CHAPTER_COUNT}`,
+  pass: g4,
+  detail: String(manifest.chapters.length),
+});
 allPass &&= g4;
 
 // Gate 5: monotonic byte offsets
 let g5 = true;
 for (let i = 0; i < chapterLocations.length; i++) {
   const c = chapterLocations[i];
-  if (c.startByte < 0 || c.endByte <= c.startByte || (i > 0 && c.startByte !== chapterLocations[i - 1].endByte + SEP_BYTES)) {
+  if (
+    c.startByte < 0 ||
+    c.endByte <= c.startByte ||
+    (i > 0 && c.startByte !== chapterLocations[i - 1].endByte + SEP_BYTES)
+  ) {
     // Allow first chapter startByte === 0
     if (i === 0 && c.startByte === 0) continue;
     g5 = false;
@@ -206,13 +222,21 @@ g5 = chapterLocations.every((c, i) => {
   if (i > 0 && c.startByte !== chapterLocations[i - 1].endByte + SEP_BYTES) return false;
   return true;
 });
-results.push({ gate: 'monotonic byte offsets', pass: g5, detail: `startBytes: [${chapterLocations[0].startByte}..${chapterLocations[CHAPTER_COUNT - 1].startByte}]` });
+results.push({
+  gate: 'monotonic byte offsets',
+  pass: g5,
+  detail: `startBytes: [${chapterLocations[0].startByte}..${chapterLocations[CHAPTER_COUNT - 1].startByte}]`,
+});
 allPass &&= g5;
 
 // Gate 6: all wordCount > 0
-const g6 = chapterLocations.every(c => c.wordCount > 0);
-const zeroWords = chapterLocations.filter(c => c.wordCount === 0).map(c => c.chapterId);
-results.push({ gate: 'all wordCount > 0', pass: g6, detail: zeroWords.length > 0 ? `zero: ${zeroWords.join(',')}` : 'ok' });
+const g6 = chapterLocations.every((c) => c.wordCount > 0);
+const zeroWords = chapterLocations.filter((c) => c.wordCount === 0).map((c) => c.chapterId);
+results.push({
+  gate: 'all wordCount > 0',
+  pass: g6,
+  detail: zeroWords.length > 0 ? `zero: ${zeroWords.join(',')}` : 'ok',
+});
 allPass &&= g6;
 
 // Gate 7: hash matches
@@ -233,7 +257,7 @@ for (const r of results) {
   console.log(`  ${icon}: ${r.gate} — ${r.detail}`);
 }
 
-console.log(`\n  ${results.filter(r => r.pass).length}/${results.length} gates passed`);
+console.log(`\n  ${results.filter((r) => r.pass).length}/${results.length} gates passed`);
 if (allPass) {
   console.log('\n  All 8 gates PASS');
 } else {

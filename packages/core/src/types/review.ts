@@ -13,7 +13,13 @@ export interface ReviewComment {
     lineRange?: [number, number];
   };
   severity: 'nit' | 'suggestion' | 'blocking';
-  category: 'style' | 'pacing' | 'character_voice' | 'plot_logic' | 'world_consistency' | 'reader_experience';
+  category:
+    | 'style'
+    | 'pacing'
+    | 'character_voice'
+    | 'plot_logic'
+    | 'world_consistency'
+    | 'reader_experience';
   content: string;
   status: 'open' | 'addressed' | 'resolved' | 'wontfix';
   resolvedBy?: string;

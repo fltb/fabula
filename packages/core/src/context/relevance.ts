@@ -11,9 +11,9 @@ import type {
   WorldState,
 } from '../types/index.js';
 
-import { type RelevanceContext } from './types.ts';
+import type { RelevanceContext } from './types.ts';
 
-export { type RelevanceContext } from './types.ts';
+export type { RelevanceContext } from './types.ts';
 
 const IMPORTANCE_BONUS: Record<string, number> = {
   antagonist: 0.25,
@@ -53,10 +53,10 @@ export class RelevanceEngine {
       };
 
       const score =
-        basis.participation * 0.30 +
-        basis.threadAssociation * 0.20 +
+        basis.participation * 0.3 +
+        basis.threadAssociation * 0.2 +
         basis.spatioTemporal * 0.15 +
-        basis.knowledgeIntersection * 0.10 +
+        basis.knowledgeIntersection * 0.1 +
         basis.relationshipRelevance * 0.15 +
         basis.specificityBonus * 0.05 -
         basis.recencyPenalty * 0.05 +
@@ -75,7 +75,8 @@ export class RelevanceEngine {
   /** Entity is directly participating in this scene → high relevance */
   private _participationScore(entity: Entity, sceneParticipants: Set<EntityId>): number {
     if (sceneParticipants.has(entity.id)) return 1.0;
-    if (entity.state['location'] && sceneParticipants.has(entity.state['location'] as string)) return 0.6;
+    if (entity.state['location'] && sceneParticipants.has(entity.state['location'] as string))
+      return 0.6;
     return 0.0;
   }
 
@@ -85,19 +86,13 @@ export class RelevanceEngine {
     threadProgress: ThreadProgressEntry[],
   ): number {
     // Entities that appear in thread progress entries get associated
-    const entityThreads = threadProgress
-      .filter((tp) => sceneThreads.has(tp.thread))
-      .length;
+    const entityThreads = threadProgress.filter((tp) => sceneThreads.has(tp.thread)).length;
     if (entityThreads > 0) return 0.5 + entityThreads * 0.1;
     return 0.0;
   }
 
   /** Entity is spatially or temporally close to the scene */
-  private _spatioTemporalScore(
-    entity: Entity,
-    event: NarrativeEvent,
-    state: WorldState,
-  ): number {
+  private _spatioTemporalScore(entity: Entity, event: NarrativeEvent, state: WorldState): number {
     let score = 0;
 
     // Same location as POV character or participants
@@ -131,9 +126,7 @@ export class RelevanceEngine {
 
     // Check if entity knows facts relevant to scene preconditions
     const relevantFacts = event.preconditions.map((p) => p.id);
-    const knownCount = relevantFacts.filter((f) =>
-      entityKnowledge.knownFacts.includes(f),
-    ).length;
+    const knownCount = relevantFacts.filter((f) => entityKnowledge.knownFacts.includes(f)).length;
 
     if (relevantFacts.length === 0) return 0;
     return knownCount / relevantFacts.length;
@@ -168,10 +161,11 @@ export class RelevanceEngine {
         if (otherParty) {
           score += 0.4;
           // Higher intensity = higher relevance — read from active epoch global dimension
-          const activeEpoch = relData.activeEpochId ? relData.epochs[relData.activeEpochId] : undefined;
+          const activeEpoch = relData.activeEpochId
+            ? relData.epochs[relData.activeEpochId]
+            : undefined;
           const globalIntensityKey = 'global::intensity';
-          const intensity =
-            activeEpoch?.dimensions?.[globalIntensityKey]?.value ?? 0;
+          const intensity = activeEpoch?.dimensions?.[globalIntensityKey]?.value ?? 0;
           if (typeof intensity === 'number') {
             score += intensity * 0.3;
           }
@@ -184,9 +178,7 @@ export class RelevanceEngine {
 
   /** More specific preconditions → bonus (anti-laziness) */
   private _specificityBonus(entity: Entity, event: NarrativeEvent): number {
-    const entityPreconditions = event.preconditions.filter(
-      (p) => p.entityId === entity.id,
-    );
+    const entityPreconditions = event.preconditions.filter((p) => p.entityId === entity.id);
     if (entityPreconditions.length === 0) return 0;
     // More preconditions = more specific = higher bonus
     return Math.min(0.3, entityPreconditions.length * 0.1);

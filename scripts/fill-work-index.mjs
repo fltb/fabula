@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 // Fill WorkIndex with text-matching based per-chapter appearances
 import { readFileSync, writeFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = join(__dirname, '..');
 
 const workId = process.argv[2];
-if (!workId) { console.error('Usage: node scripts/fill-work-index.mjs <work-id>'); process.exit(1); }
+if (!workId) {
+  console.error('Usage: node scripts/fill-work-index.mjs <work-id>');
+  process.exit(1);
+}
 
 const dirs = {
   'dream-of-red-chamber': 'bench-data/corpus/dream-of-red-chamber',
@@ -16,7 +19,10 @@ const dirs = {
   'four-generations-87': 'bench-data/corpus/four-generations/four-generations-87',
 };
 const dir = dirs[workId];
-if (!dir) { console.error('Unknown work-id:', workId); process.exit(1); }
+if (!dir) {
+  console.error('Unknown work-id:', workId);
+  process.exit(1);
+}
 
 const wi = JSON.parse(readFileSync(join(REPO, dir, 'work-index.json'), 'utf-8'));
 const src = readFileSync(join(REPO, dir, 'source.txt'), 'utf-8');
@@ -121,8 +127,8 @@ wi.extractionMethod = 'text-matching + wikipedia';
 writeFileSync(join(REPO, dir, 'work-index.json'), JSON.stringify(wi, null, 2), 'utf-8');
 
 // Stats
-const charsWithApps = wi.characters.filter(c => c.chapters.length > 0).length;
-const locsWithApps = wi.locations.filter(l => l.chapters.length > 0).length;
+const charsWithApps = wi.characters.filter((c) => c.chapters.length > 0).length;
+const locsWithApps = wi.locations.filter((l) => l.chapters.length > 0).length;
 console.log(`  Characters with appearances: ${charsWithApps}/${wi.characters.length}`);
 console.log(`  Locations with appearances: ${locsWithApps}/${wi.locations.length}`);
 console.log(`  Scene candidates: ${wi.candidates.length}`);

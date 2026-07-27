@@ -10,11 +10,7 @@
 // gracefully. Results are reported as ExternalBenchResult entries that
 // can be consumed by the main bench runner in index.ts.
 
-import {
-  convertChiNovelKE,
-  convertAgentSFT,
-  convertIN3KNovel,
-} from './adapters/index.js';
+import { convertAgentSFT, convertChiNovelKE, convertIN3KNovel } from './adapters/index.js';
 
 export interface ExternalBenchResult {
   dataset: string;
@@ -29,40 +25,68 @@ export interface ExternalBenchOptions {
   /** Raw ChiNovelKE dataset characters/locations/relations */
   chinovelke?: {
     characters: Array<{
-      id: string; name: string; aliases: string[];
-      gender: '男' | '女' | '未知'; age_range?: string;
+      id: string;
+      name: string;
+      aliases: string[];
+      gender: '男' | '女' | '未知';
+      age_range?: string;
       role: 'protagonist' | 'antagonist' | 'supporting' | 'background';
-      description: string; traits: string[];
-      relations: string[]; locations: string[];
+      description: string;
+      traits: string[];
+      relations: string[];
+      locations: string[];
     }>;
     locations: Array<{
-      id: string; name: string; parent_id?: string;
-      description: string; era?: string;
+      id: string;
+      name: string;
+      parent_id?: string;
+      description: string;
+      era?: string;
     }>;
     relations: Array<{
-      id: string; type: string; from_id: string; to_id: string;
-      direction: string; intensity: number; description: string;
+      id: string;
+      type: string;
+      from_id: string;
+      to_id: string;
+      direction: string;
+      intensity: number;
+      description: string;
     }>;
     events?: Array<Record<string, unknown>>;
   };
   /** Raw NovelAgentSFT chapter data */
   novelsft?: Array<{
-    chapter_id: string; chapter_index: number; title: string;
-    summary: string; word_count: number;
+    chapter_id: string;
+    chapter_index: number;
+    title: string;
+    summary: string;
+    word_count: number;
     events: Array<{
-      event_id: string; description: string;
-      characters_involved: string[]; location: string;
-      conflict_type?: string; emotional_tone?: string;
+      event_id: string;
+      description: string;
+      characters_involved: string[];
+      location: string;
+      conflict_type?: string;
+      emotional_tone?: string;
     }>;
-    characters_appearing: string[]; locations: string[];
+    characters_appearing: string[];
+    locations: string[];
   }>;
   /** Raw InteractiveNovels3K novel data */
   in3k?: Array<{
-    novel_id: string; title: string; author: string; genre: string;
+    novel_id: string;
+    title: string;
+    author: string;
+    genre: string;
     chapters: Array<{
-      novel_id: string; chapter_id: string; chapter_index: number;
-      title: string; content: string; word_count: number;
-      time_markers: string[]; location_changes: string[];
+      novel_id: string;
+      chapter_id: string;
+      chapter_index: number;
+      title: string;
+      content: string;
+      word_count: number;
+      time_markers: string[];
+      location_changes: string[];
       character_appearances: Record<string, number>;
     }>;
   }>;

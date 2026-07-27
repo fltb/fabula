@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  setCachedRender,
-  getCachedRender,
-  computeEvidenceHash,
-  verifyEvidenceChain,
   clearEventCache,
+  computeEvidenceHash,
+  getCachedRender,
+  setCachedRender,
+  verifyEvidenceChain,
 } from '../../src/cache/render-cache.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type { Fact } from '../../src/types/entity.js';
@@ -92,7 +92,9 @@ describe('cache evidence verification', () => {
     const hash = computeEvidenceHash(eventId, pre, post);
     setCachedRender(cacheDir, eventId, cacheKey, { prose: 'valid scene' }, storage, hash);
 
-    expect(getCachedRender(cacheDir, eventId, cacheKey, storage, hash)).toEqual({ prose: 'valid scene' });
+    expect(getCachedRender(cacheDir, eventId, cacheKey, storage, hash)).toEqual({
+      prose: 'valid scene',
+    });
   });
 
   it('backward compat: read cache without evidence hash', () => {
@@ -106,7 +108,15 @@ describe('cache evidence verification', () => {
     expect(getCachedRender(cacheDir, eventId, cacheKey, storage)).toEqual({ prose: 'old format' });
 
     // Read with currentEvidenceHash when none stored — should still work (backward compat)
-    expect(getCachedRender(cacheDir, eventId, cacheKey, storage, computeEvidenceHash(eventId, [makeFact('f1')], []))).toEqual({ prose: 'old format' });
+    expect(
+      getCachedRender(
+        cacheDir,
+        eventId,
+        cacheKey,
+        storage,
+        computeEvidenceHash(eventId, [makeFact('f1')], []),
+      ),
+    ).toEqual({ prose: 'old format' });
   });
 
   it('corrupt evidence hash in meta is treated as stale', () => {
@@ -134,7 +144,10 @@ describe('verifyEvidenceChain', () => {
     setCachedRender(cacheDir, 'E0', 'key-e0', { prose: 'e0' }, storage, hashE0);
     setCachedRender(cacheDir, 'E1', 'key-e1', { prose: 'e1' }, storage, hashE1);
 
-    const hashes = new Map([['E0', hashE0], ['E1', hashE1]]);
+    const hashes = new Map([
+      ['E0', hashE0],
+      ['E1', hashE1],
+    ]);
     const result = verifyEvidenceChain(cacheDir, hashes, storage);
 
     expect(result.valid).toBe(2);
@@ -167,7 +180,10 @@ describe('verifyEvidenceChain', () => {
     setCachedRender(cacheDir, 'E0', 'key-e0', { prose: 'e0' }, storage, hashE0);
 
     const hashE1 = computeEvidenceHash('E1', [makeFact('f2')], []);
-    const hashes = new Map([['E0', hashE0], ['E1', hashE1]]);
+    const hashes = new Map([
+      ['E0', hashE0],
+      ['E1', hashE1],
+    ]);
     const result = verifyEvidenceChain(cacheDir, hashes, storage);
 
     expect(result.valid).toBe(1);

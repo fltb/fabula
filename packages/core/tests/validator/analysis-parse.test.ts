@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { parseAnalysisJSON } from '../../src/schemas/analysis.js';
 
 const validJSON = {
@@ -8,7 +8,13 @@ const validJSON = {
     preconditions: { violated: [] },
     pov: { consistent: true, leaks: [] },
     inventedDetails: [],
-    quality: { proseScore: 8, maxScore: 10, strengths: ['good'], weaknesses: [], estimatedWordCount: 350 },
+    quality: {
+      proseScore: 8,
+      maxScore: 10,
+      strengths: ['good'],
+      weaknesses: [],
+      estimatedWordCount: 350,
+    },
     threadProgressAchieved: ['thread-1'],
     foreshadowingDeployed: [],
     narrativeChecks: [],

@@ -11,7 +11,14 @@
 
 export type EventMap = {
   'pipeline:render:before': { eventId: string };
-  'pipeline:render:after': { eventId: string; durationMs: number; wordCount: number; cacheHit: boolean; success: boolean; errorCount: number };
+  'pipeline:render:after': {
+    eventId: string;
+    durationMs: number;
+    wordCount: number;
+    cacheHit: boolean;
+    success: boolean;
+    errorCount: number;
+  };
   'pipeline:validation:complete': { eventId: string; issueCount: number };
   'cache:hit': { eventId: string; cacheKey: string };
   'cache:miss': { eventId: string };

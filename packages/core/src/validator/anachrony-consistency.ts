@@ -9,15 +9,15 @@
 //   is advisory, matching TenseConsistencyValidator's severity choice).
 // ============================================================================
 
+import { z } from 'zod';
 import type {
-  Validator,
-  ValidationIssue,
+  AnalysisBlockRequirement,
   PostRenderInput,
   PreRenderInput,
-  AnalysisBlockRequirement,
+  ValidationIssue,
+  Validator,
 } from '../types/index.js';
 import { makeIssue } from './base.js';
-import { z } from 'zod';
 
 export const anachronyDetectedSchema = z.enum(['analepsis', 'prolepsis', 'none']);
 export type AnachronyDetected = z.infer<typeof anachronyDetectedSchema>;
@@ -33,16 +33,18 @@ export class AnachronyConsistencyValidator implements Validator {
     // Check: if anachrony type is analepsis or prolepsis, distance must be set
     if (event.anachrony?.type === 'analepsis' || event.anachrony?.type === 'prolepsis') {
       if (!event.anachrony.distance) {
-        issues.push(makeIssue(
-          this.name,
-          event.id,
-          'narrative_style',
-          'warning',
-          `Scene "${event.id}" declares a ${event.anachrony.type} anachrony without distance`,
-          'Set distance to describe how far the anachrony reaches.',
-          'edit_file',
-          'anachrony',
-        ));
+        issues.push(
+          makeIssue(
+            this.name,
+            event.id,
+            'narrative_style',
+            'warning',
+            `Scene "${event.id}" declares a ${event.anachrony.type} anachrony without distance`,
+            'Set distance to describe how far the anachrony reaches.',
+            'edit_file',
+            'anachrony',
+          ),
+        );
       }
     }
 
@@ -64,26 +66,31 @@ export class AnachronyConsistencyValidator implements Validator {
     if (!detected.success) return issues;
 
     if (detected.data !== event.anachrony.type) {
-      issues.push(makeIssue(
-        this.name,
-        event.id,
-        'narrative_style',
-        'warning',
-        `Scene "${event.id}" declares anachrony type "${event.anachrony.type}" but Pass 2 detected "${detected.data}"`,
-        'Update the prose to match the declared anachrony, or change the anachrony declaration.',
-        'edit_file',
-        'anachrony',
-      ));
+      issues.push(
+        makeIssue(
+          this.name,
+          event.id,
+          'narrative_style',
+          'warning',
+          `Scene "${event.id}" declares anachrony type "${event.anachrony.type}" but Pass 2 detected "${detected.data}"`,
+          'Update the prose to match the declared anachrony, or change the anachrony declaration.',
+          'edit_file',
+          'anachrony',
+        ),
+      );
     }
 
     return issues;
   }
 
   getAnalysisRequirements(): AnalysisBlockRequirement[] {
-    return [{
-      field: 'anachronyDetected',
-      schema: anachronyDetectedSchema.optional(),
-      instruction: 'anachronyDetected: Classify temporal order deviation in the prose relative to story chronology: "analepsis" (flashback — narrating earlier story time out of order), "prolepsis" (flashforward — narrating later story time out of order), or "none" (no anachrony, chronological). Report one value in the anachronyDetected field.',
-    }];
+    return [
+      {
+        field: 'anachronyDetected',
+        schema: anachronyDetectedSchema.optional(),
+        instruction:
+          'anachronyDetected: Classify temporal order deviation in the prose relative to story chronology: "analepsis" (flashback — narrating earlier story time out of order), "prolepsis" (flashforward — narrating later story time out of order), or "none" (no anachrony, chronological). Report one value in the anachronyDetected field.',
+      },
+    ];
   }
 }

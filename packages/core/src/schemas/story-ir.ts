@@ -37,14 +37,16 @@ export const structuralFunctionSchema = z.enum([
 
 // ─── ActantModel ────────────────────────────────────────────────────────────
 
-export const actantModelSchema = z.object({
-  subject: z.string(),
-  object: z.string(),
-  sender: z.string(),
-  receiver: z.string(),
-  helper: z.string(),
-  opponent: z.string(),
-}).strict();
+export const actantModelSchema = z
+  .object({
+    subject: z.string(),
+    object: z.string(),
+    sender: z.string(),
+    receiver: z.string(),
+    helper: z.string(),
+    opponent: z.string(),
+  })
+  .strict();
 
 // ─── StoryArchetype ─────────────────────────────────────────────────────────
 

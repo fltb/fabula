@@ -11,14 +11,14 @@
 // attributes. Catalog functions imported for future use.
 // ============================================================================
 
+import { z } from 'zod';
 import type {
   PostRenderInput,
   PreRenderInput,
-  Validator,
   ValidationIssue,
+  Validator,
 } from '../types/index.js';
-import { makeIssue, getAttributeSemanticRole, getAttributesBySemanticRole } from './base.js';
-import { z } from 'zod';
+import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
 
 export const conflictAnalysisSchema = z.object({
   primaryType: z.string(),
@@ -40,13 +40,18 @@ export class ConflictValidator implements Validator {
     // flag a warning
     // event-level field, not in entity attribute catalog
     if (event.resolutionType === 'unresolved' && event.conflictType) {
-      issues.push(makeIssue(
-        this.name, event.id, 'system', 'warning',
-        `Scene "${event.id}" declares conflict type "${event.conflictType}" but resolution is "unresolved" — conflict may be left dangling`,
-        'Ensure the conflict reaches explicit resolution, or mark it as intentionally unresolved.',
-        'edit_file',
-        'resolutionType',
-      ));
+      issues.push(
+        makeIssue(
+          this.name,
+          event.id,
+          'system',
+          'warning',
+          `Scene "${event.id}" declares conflict type "${event.conflictType}" but resolution is "unresolved" — conflict may be left dangling`,
+          'Ensure the conflict reaches explicit resolution, or mark it as intentionally unresolved.',
+          'edit_file',
+          'resolutionType',
+        ),
+      );
     }
 
     return issues;
@@ -66,60 +71,70 @@ export class ConflictValidator implements Validator {
     // These denote "conflict established/continues, no in-scene resolution required."
     const NON_RESOLVING = new Set(['unresolved', 'negative_resolution', 'setup', 'ongoing']);
 
-    const expectsResolution = eventResolutionType !== undefined && !NON_RESOLVING.has(eventResolutionType);
+    const expectsResolution =
+      eventResolutionType !== undefined && !NON_RESOLVING.has(eventResolutionType);
     if (expectsResolution && !conflictAnalysis.resolutionAchieved) {
       const message = eventConflictType
         ? `Scene "${event.id}" declares conflict type "${eventConflictType}" with resolution "${eventResolutionType}" but Pass 2 analysis indicates resolution was NOT achieved`
         : `Scene "${event.id}" declares resolution type "${eventResolutionType}" but Pass 2 analysis indicates resolution was NOT achieved`;
 
-      issues.push(makeIssue(
-        this.name,
-        event.id,
-        'system',
-        'error',
-        message,
-        'Rewrite the scene to explicitly resolve the conflict according to the declared resolution type, or remove the resolutionType if this is a setup scene.',
-        'edit_file',
-        'resolutionType',
-      ));
+      issues.push(
+        makeIssue(
+          this.name,
+          event.id,
+          'system',
+          'error',
+          message,
+          'Rewrite the scene to explicitly resolve the conflict according to the declared resolution type, or remove the resolutionType if this is a setup scene.',
+          'edit_file',
+          'resolutionType',
+        ),
+      );
     }
 
     // Check 2: If conflict type is declared, verify the analysis detected it
     if (eventConflictType && conflictAnalysis.primaryType !== eventConflictType) {
-      issues.push(makeIssue(
-        this.name,
-        event.id,
-        'system',
-        'info',
-        `Scene "${event.id}" declares conflict type "${eventConflictType}" but Pass 2 detected "${conflictAnalysis.primaryType}"`,
-        'Either the conflict was portrayed differently in prose, or the declaration needs updating.',
-        'change_value',
-        'conflictType',
-      ));
+      issues.push(
+        makeIssue(
+          this.name,
+          event.id,
+          'system',
+          'info',
+          `Scene "${event.id}" declares conflict type "${eventConflictType}" but Pass 2 detected "${conflictAnalysis.primaryType}"`,
+          'Either the conflict was portrayed differently in prose, or the declaration needs updating.',
+          'change_value',
+          'conflictType',
+        ),
+      );
     }
 
     // Check 3: If analysis says resolution achieved but no resolution type declared
     if (conflictAnalysis.resolutionAchieved && !eventResolutionType) {
-      issues.push(makeIssue(
-        this.name,
-        event.id,
-        'system',
-        'info',
-        `Pass 2 indicates conflict resolution was achieved, but no resolutionType is declared for this scene`,
-        'Consider adding a resolutionType to document how this conflict wraps up.',
-        'add_field',
-        'resolutionType',
-      ));
+      issues.push(
+        makeIssue(
+          this.name,
+          event.id,
+          'system',
+          'info',
+          `Pass 2 indicates conflict resolution was achieved, but no resolutionType is declared for this scene`,
+          'Consider adding a resolutionType to document how this conflict wraps up.',
+          'add_field',
+          'resolutionType',
+        ),
+      );
     }
 
     return issues;
   }
 
   getAnalysisRequirements() {
-    return [{
-      field: 'conflictAnalysis',
-      schema: conflictAnalysisSchema,
-      instruction: 'conflictAnalysis: Identify the primary type of conflict depicted in the scene (e.g., character vs. character, character vs. self, character vs. nature, character vs. society) and whether it achieves resolution by the end of the scene. Report in the conflictAnalysis block with primaryType and resolutionAchieved.',
-    }];
+    return [
+      {
+        field: 'conflictAnalysis',
+        schema: conflictAnalysisSchema,
+        instruction:
+          'conflictAnalysis: Identify the primary type of conflict depicted in the scene (e.g., character vs. character, character vs. self, character vs. nature, character vs. society) and whether it achieves resolution by the end of the scene. Report in the conflictAnalysis block with primaryType and resolutionAchieved.',
+      },
+    ];
   }
 }

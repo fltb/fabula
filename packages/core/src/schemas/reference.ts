@@ -23,16 +23,20 @@ export const referenceKindSchema = z.enum([
   'historical_boundary',
 ]);
 
-export const referenceEntrySchema = z.object({
-  targetEntityId: z.string(),
-  mode: referenceModeSchema,
-  kind: referenceKindSchema,
-  sourceDomain: z.string(),
-  sourceId: z.string(),
-  boundary: z.string().optional(),
-}).strict();
+export const referenceEntrySchema = z
+  .object({
+    targetEntityId: z.string(),
+    mode: referenceModeSchema,
+    kind: referenceKindSchema,
+    sourceDomain: z.string(),
+    sourceId: z.string(),
+    boundary: z.string().optional(),
+  })
+  .strict();
 
-export const referenceIndexSchema = z.object({
-  byEntity: z.record(z.string(), z.array(referenceEntrySchema)),
-  hash: z.string(),
-}).strict();
+export const referenceIndexSchema = z
+  .object({
+    byEntity: z.record(z.string(), z.array(referenceEntrySchema)),
+    hash: z.string(),
+  })
+  .strict();

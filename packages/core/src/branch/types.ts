@@ -3,9 +3,9 @@
 // ============================================================================
 
 export type {
-  BranchPath,
-  BranchSet,
-  BranchPoint,
   BranchChoice,
+  BranchPath,
+  BranchPoint,
+  BranchSet,
   Condition,
 } from '../types/index.ts';

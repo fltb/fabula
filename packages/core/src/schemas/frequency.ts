@@ -8,24 +8,22 @@ import { z } from 'zod';
 
 // ─── Frequency Type ───────────────────────────────────────────────────────────
 
-export const frequencyTypeSchema = z.enum([
-  'singulative',
-  'repeating',
-  'iterative',
-]);
+export const frequencyTypeSchema = z.enum(['singulative', 'repeating', 'iterative']);
 
 // ─── Frequency Profile ────────────────────────────────────────────────────────
 
-export const frequencyProfileSchema = z.object({
-  type: frequencyTypeSchema,
-  sourceEventCount: z.number().int().nonnegative().optional(),
-  occurrenceCount: z.number().int().nonnegative().optional(),
-  iterationScope: z
-    .object({
-      start: z.string(),
-      end: z.string(),
-    })
-    .strict()
-    .optional(),
-  otherOccurrences: z.array(z.string()).optional(),
-}).strict();
+export const frequencyProfileSchema = z
+  .object({
+    type: frequencyTypeSchema,
+    sourceEventCount: z.number().int().nonnegative().optional(),
+    occurrenceCount: z.number().int().nonnegative().optional(),
+    iterationScope: z
+      .object({
+        start: z.string(),
+        end: z.string(),
+      })
+      .strict()
+      .optional(),
+    otherOccurrences: z.array(z.string()).optional(),
+  })
+  .strict();

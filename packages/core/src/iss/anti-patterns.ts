@@ -2,11 +2,7 @@
 // ISS — Anti-pattern Detection
 // ============================================================================
 
-import {
-  type EntityRegistry,
-  type NarrativeEvent,
-  type ValidationIssue,
-} from '../types/index.js';
+import type { EntityRegistry, NarrativeEvent, ValidationIssue } from '../types/index.js';
 
 /**
  * detectAntiPatterns — Scans the input data for known structural anti-patterns
@@ -57,7 +53,7 @@ export function detectAntiPatterns(options: {
   for (const event of events) {
     if (event.preconditions.length === 0) continue;
     const serialized = event.preconditions
-      .map(p => `${p.entityId}:${p.attribute}:${JSON.stringify(p.value)}`)
+      .map((p) => `${p.entityId}:${p.attribute}:${JSON.stringify(p.value)}`)
       .sort()
       .join('|');
     if (!precondMap.has(serialized)) {
@@ -68,7 +64,7 @@ export function detectAntiPatterns(options: {
 
   for (const [serialized, eventIds] of precondMap.entries()) {
     if (serialized && eventIds.length > 1) {
-      const others = eventIds.filter(e => e !== eventIds[0]);
+      const others = eventIds.filter((e) => e !== eventIds[0]);
       for (const eventId of eventIds) {
         issues.push({
           validator: 'iss-anti-pattern',
@@ -90,7 +86,7 @@ export function detectAntiPatterns(options: {
 
   // ═══ 3. Dead threads ═══
   const sortedEvents = [...events].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
-  const eventsPast5 = sortedEvents.filter(e => e.narrativeOrder > 5);
+  const eventsPast5 = sortedEvents.filter((e) => e.narrativeOrder > 5);
 
   // Track the latest progress per thread among events past chapter 5
   const threadProgressPast5 = new Map<string, { progress: number; total: number }>();

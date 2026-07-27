@@ -220,12 +220,15 @@ export interface WorkIndex {
  * - David Copperfield: Fixed public-domain English edition (public domain)
  * - 《四世同堂》87 章 + 103 章 extension: local-external, excluded from default CI
  */
-export const ANCHORED_WORKS: Record<string, {
-  title: string;
-  language: 'zh' | 'en';
-  chapters: number;
-  legalMode: LegalMode;
-}> = {
+export const ANCHORED_WORKS: Record<
+  string,
+  {
+    title: string;
+    language: 'zh' | 'en';
+    chapters: number;
+    legalMode: LegalMode;
+  }
+> = {
   'dream-of-red-chamber': {
     title: 'Dream of the Red Chamber (红楼梦)',
     language: 'zh',
@@ -301,7 +304,12 @@ export function freezeWorkIndex(input: FreezeInput, version: string): WorkIndex 
  */
 export interface CoverageGap {
   /** Type of coverage gap */
-  type: 'missing_chapter' | 'missing_character_first_appearance' | 'orphan_node' | 'missing_candidate_source_range' | 'chapter_not_in_range';
+  type:
+    | 'missing_chapter'
+    | 'missing_character_first_appearance'
+    | 'orphan_node'
+    | 'missing_candidate_source_range'
+    | 'chapter_not_in_range';
   /** Description of the gap */
   description: string;
 }
@@ -332,10 +340,10 @@ export interface CoverageResult {
  */
 export function validateCoverage(index: WorkIndex): CoverageResult {
   const gaps: CoverageGap[] = [];
-  const manifestChapterIds = new Set(index.manifest.chapters.map(c => c.chapterId));
+  const manifestChapterIds = new Set(index.manifest.chapters.map((c) => c.chapterId));
 
   // Check that every chapter in the manifest has at least one narrative node
-  const nodeChapterIds = new Set(index.narrativeNodes.map(n => n.chapterId));
+  const nodeChapterIds = new Set(index.narrativeNodes.map((n) => n.chapterId));
   for (const chapterId of manifestChapterIds) {
     if (!nodeChapterIds.has(chapterId)) {
       gaps.push({

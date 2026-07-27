@@ -4,12 +4,12 @@
 // NOT independently writable; snapshot/cache MUST match recomputation hash.
 // ============================================================================
 
-import type { WorldState, EntityRuntimeState } from '../types/index.js';
+import type { EntityRuntimeState, WorldState } from '../types/index.js';
 import type {
-  ReferenceIndex,
   ReferenceEntry,
-  ReferenceMode,
+  ReferenceIndex,
   ReferenceKind,
+  ReferenceMode,
 } from '../types/reference.js';
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -344,9 +344,7 @@ export function validateRetirementClosure(
         );
         break;
       case 'rule_scope':
-        unclosed.push(
-          `Live rule_scope not closed: ${ref.sourceId} references ${retiringEntityId}`,
-        );
+        unclosed.push(`Live rule_scope not closed: ${ref.sourceId} references ${retiringEntityId}`);
         break;
       case 'scene_participant':
       case 'pov_focalizer':
@@ -484,7 +482,7 @@ export function computeIndexHash(byEntity: Record<string, ReferenceEntry[]>): st
 function simpleHash(input: string): string {
   let hash = 5381;
   for (let i = 0; i < input.length; i++) {
-    hash = ((hash << 5) + hash) + input.charCodeAt(i);
+    hash = (hash << 5) + hash + input.charCodeAt(i);
     hash = hash >>> 0; // unsigned 32-bit
   }
   return hash.toString(16);

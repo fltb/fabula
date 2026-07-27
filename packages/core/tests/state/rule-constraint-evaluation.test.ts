@@ -3,14 +3,14 @@
 // enforcement channels, exception resolution, evaluation records
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { RuleConstraintViolationError } from '../../src/errors.js';
+import { applyRuleTransaction, evaluateConstraints } from '../../src/state/rule-replay.js';
 import type {
   RuleConstraint,
-  RuleRuntimeState,
   RuleEvaluationRecord,
+  RuleRuntimeState,
 } from '../../src/types/index.js';
-import { evaluateConstraints, applyRuleTransaction } from '../../src/state/rule-replay.js';
-import { RuleConstraintViolationError } from '../../src/errors.js';
 
 function makeRuleState(overrides: Partial<RuleRuntimeState> = {}): RuleRuntimeState {
   return {
@@ -86,13 +86,15 @@ describe('Constraint evaluation — exception handling', () => {
       predicate: { version: '1.0', type: 'simple', expression: 'true' },
     };
     const state = makeRuleState({
-      exceptions: [{
-        exceptionId: 'exc-1',
-        status: 'active',
-        constraintIds: ['c1'],
-        scopeBindings: {},
-        effect: { type: 'exempt' },
-      }],
+      exceptions: [
+        {
+          exceptionId: 'exc-1',
+          status: 'active',
+          constraintIds: ['c1'],
+          scopeBindings: {},
+          effect: { type: 'exempt' },
+        },
+      ],
     });
     const records = evaluateConstraints([constraint], state, 'node-1');
     expect(records).toHaveLength(1);
@@ -110,13 +112,15 @@ describe('Constraint evaluation — exception handling', () => {
       predicate: { version: '1.0', type: 'simple', expression: 'true' },
     };
     const state = makeRuleState({
-      exceptions: [{
-        exceptionId: 'exc-global',
-        status: 'active',
-        constraintIds: [],
-        scopeBindings: {},
-        effect: { type: 'exempt' },
-      }],
+      exceptions: [
+        {
+          exceptionId: 'exc-global',
+          status: 'active',
+          constraintIds: [],
+          scopeBindings: {},
+          effect: { type: 'exempt' },
+        },
+      ],
     });
     const records = evaluateConstraints([constraint], state, 'node-1');
     expect(records[0].result).toBe('exempt');
@@ -132,13 +136,15 @@ describe('Constraint evaluation — exception handling', () => {
       predicate: { version: '1.0', type: 'simple', expression: 'true' },
     };
     const state = makeRuleState({
-      exceptions: [{
-        exceptionId: 'exc-suspended',
-        status: 'suspended',
-        constraintIds: ['c1'],
-        scopeBindings: {},
-        effect: { type: 'exempt' },
-      }],
+      exceptions: [
+        {
+          exceptionId: 'exc-suspended',
+          status: 'suspended',
+          constraintIds: ['c1'],
+          scopeBindings: {},
+          effect: { type: 'exempt' },
+        },
+      ],
     });
     const records = evaluateConstraints([constraint], state, 'node-1');
     // Suspended exception does not apply
@@ -152,7 +158,7 @@ describe('Constraint evaluation — applicability', () => {
       constraintId: 'c1',
       kind: 'state_invariant',
       enforcement: 'hard',
-      applicableEffectiveness: ['full'],  // only applies to 'full'
+      applicableEffectiveness: ['full'], // only applies to 'full'
       scope: {},
       predicate: { version: '1.0', type: 'simple', expression: 'true' },
     };
@@ -204,14 +210,16 @@ describe('Constraint evaluation — transaction with constraintEvaluation', () =
       ruleId: 'test_rule',
       operation: 'enable' as const,
       evidence: 'test',
-      constraintEvaluation: [{
-        constraintId: 'c1',
-        kind: 'state_invariant' as const,
-        enforcement: 'hard' as const,
-        applicableEffectiveness: ['full' as const],
-        scope: {},
-        predicate: { version: '1.0', type: 'simple' as const, expression: 'true' },
-      }],
+      constraintEvaluation: [
+        {
+          constraintId: 'c1',
+          kind: 'state_invariant' as const,
+          enforcement: 'hard' as const,
+          applicableEffectiveness: ['full' as const],
+          scope: {},
+          predicate: { version: '1.0', type: 'simple' as const, expression: 'true' },
+        },
+      ],
     };
     const records = applyRuleTransaction(rules, tx, { nodeId: 'node-1' });
     expect(records).toHaveLength(1);
@@ -228,14 +236,16 @@ describe('Constraint evaluation — transaction with constraintEvaluation', () =
       ruleId: 'test_rule',
       operation: 'enable' as const,
       evidence: 'test',
-      constraintEvaluation: [{
-        constraintId: 'c1',
-        kind: 'state_invariant' as const,
-        enforcement: 'hard' as const,
-        applicableEffectiveness: ['full' as const],
-        scope: {},
-        predicate: { version: '1.0', type: 'simple' as const, expression: 'true' },
-      }],
+      constraintEvaluation: [
+        {
+          constraintId: 'c1',
+          kind: 'state_invariant' as const,
+          enforcement: 'hard' as const,
+          applicableEffectiveness: ['full' as const],
+          scope: {},
+          predicate: { version: '1.0', type: 'simple' as const, expression: 'true' },
+        },
+      ],
     };
     expect(() => applyRuleTransaction(rules, tx, { nodeId: 'node-1' })).not.toThrow();
   });

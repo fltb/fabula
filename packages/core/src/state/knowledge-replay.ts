@@ -3,28 +3,23 @@
 // Claim/act transaction application + evaluate() deterministic three-valued logic
 // ============================================================================
 
+import type { EntityId, FactId, StoryTimestamp, WorldState } from '../types/index.js';
 import type {
-  EntityId,
-  FactId,
-  WorldState,
-  StoryTimestamp,
-} from '../types/index.js';
-import type {
-  Proposition,
-  GroundedProposition,
-  EpistemicProposition,
   ActProposition,
-  IntensionalProposition,
-  PropositionId,
-  PropositionCatalog,
-  EpistemicLedger,
   Claim,
   ClaimAssessment,
   ClaimEvidenceRecord,
-  InformationAct,
-  InformationActType,
+  EpistemicLedger,
+  EpistemicProposition,
   EvaluationResult,
   EvidenceSource,
+  GroundedProposition,
+  InformationAct,
+  InformationActType,
+  IntensionalProposition,
+  Proposition,
+  PropositionCatalog,
+  PropositionId,
 } from '../types/knowledge.js';
 import { claimKey } from '../types/knowledge.js';
 
@@ -252,9 +247,7 @@ export function validatePropositionCatalog(catalog: PropositionCatalog): void {
     // All deps must exist
     for (const dep of depList) {
       if (!propositions[dep]) {
-        throw new Error(
-          `Proposition ${propId} depends on ${dep}, which is not in the catalog`,
-        );
+        throw new Error(`Proposition ${propId} depends on ${dep}, which is not in the catalog`);
       }
     }
   }
@@ -361,7 +354,11 @@ export function applyKnowledgeBoundary(
  * - Empty audience → false for mutual (no vacuous truth).
  */
 export function evaluateGroupEpistemic(
-  groupClaim: { mode: 'institutional' | 'distributed' | 'mutual'; propositionId: FactId; audience: EntityId[] },
+  groupClaim: {
+    mode: 'institutional' | 'distributed' | 'mutual';
+    propositionId: FactId;
+    audience: EntityId[];
+  },
   ledger: EpistemicLedger,
 ): boolean {
   if (groupClaim.mode === 'mutual' && groupClaim.audience.length === 0) {
@@ -373,29 +370,20 @@ export function evaluateGroupEpistemic(
       // Check if the group entity itself has a claim
       const key = claimKey(groupClaim.audience[0] ?? 'unknown', groupClaim.propositionId);
       const claim = ledger.claims[key];
-      return (
-        claim?.assessment.type === 'settled' &&
-        claim.assessment.polarity === 'affirmative'
-      );
+      return claim?.assessment.type === 'settled' && claim.assessment.polarity === 'affirmative';
     }
     case 'distributed': {
       return groupClaim.audience.some((member) => {
         const key = claimKey(member, groupClaim.propositionId);
         const claim = ledger.claims[key];
-        return (
-          claim?.assessment.type === 'settled' &&
-          claim.assessment.polarity === 'affirmative'
-        );
+        return claim?.assessment.type === 'settled' && claim.assessment.polarity === 'affirmative';
       });
     }
     case 'mutual': {
       return groupClaim.audience.every((member) => {
         const key = claimKey(member, groupClaim.propositionId);
         const claim = ledger.claims[key];
-        return (
-          claim?.assessment.type === 'settled' &&
-          claim.assessment.polarity === 'affirmative'
-        );
+        return claim?.assessment.type === 'settled' && claim.assessment.polarity === 'affirmative';
       });
     }
   }

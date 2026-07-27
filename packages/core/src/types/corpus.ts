@@ -8,12 +8,12 @@
 // ============================================================================
 
 import type { BranchPath } from './branch.js';
-import type { StoryTimestamp, Fact } from './entity.js';
+import type { Fact, StoryTimestamp } from './entity.js';
 import type { NarrativeEvent } from './event.js';
-import type { RelationshipTransaction } from './relationship.js';
 import type { InformationAct } from './knowledge.js';
-import type { ThreadTransaction } from './thread.js';
+import type { RelationshipTransaction } from './relationship.js';
 import type { RuleTransaction } from './rule.js';
+import type { ThreadTransaction } from './thread.js';
 
 // ─── EllipsisProvenance — atomic source grounding (§CORPUS-1) ─────────────
 

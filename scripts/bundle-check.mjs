@@ -1,21 +1,26 @@
 #!/usr/bin/env node
+
 // ============================================================================
 // Bundle check — validates esbuild metafiles, warning count, expected outputs,
 // and built CLI help.  Offline and deterministic.
 // ============================================================================
 
-import { existsSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 
 const packages = [
-  { name: 'core',   dir: 'packages/core',   outputs: ['index.js', 'index.js.map'] },
-  { name: 'bench',  dir: 'packages/bench',  outputs: ['index.js', 'index.js.map'] },
-  { name: 'cli',    dir: 'packages/cli',    outputs: ['index.js', 'index.js.map', 'mcp-server.js', 'mcp-server.js.map'] },
+  { name: 'core', dir: 'packages/core', outputs: ['index.js', 'index.js.map'] },
+  { name: 'bench', dir: 'packages/bench', outputs: ['index.js', 'index.js.map'] },
+  {
+    name: 'cli',
+    dir: 'packages/cli',
+    outputs: ['index.js', 'index.js.map', 'mcp-server.js', 'mcp-server.js.map'],
+  },
 ];
 
 let allOk = true;
@@ -94,7 +99,10 @@ console.log('\n── CLI --help check ──');
 const cliPath = join(root, 'packages/cli/dist/index.js');
 if (existsSync(cliPath)) {
   try {
-    const helpText = execSync(`node "${cliPath}" --help 2>&1`, { encoding: 'utf-8', timeout: 10000 });
+    const helpText = execSync(`node "${cliPath}" --help 2>&1`, {
+      encoding: 'utf-8',
+      timeout: 10000,
+    });
     if (helpText.includes('--help') || helpText.includes('Usage') || helpText.includes('Options')) {
       ok('CLI --help produces expected output');
     } else {

@@ -1,11 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { FrequencyConsistencyValidator } from '../../src/validator/frequency-consistency.js';
+import { describe, expect, it } from 'vitest';
 import type {
+  AnalysisResult,
   NarrativeEvent,
   PostRenderInput,
   PreRenderInput,
-  AnalysisResult,
 } from '../../src/types/index.js';
+import { FrequencyConsistencyValidator } from '../../src/validator/frequency-consistency.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -29,27 +29,35 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  analysis: AnalysisResult | null,
-): PostRenderInput {
+function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): PostRenderInput {
   return {
     event,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     prose: 'Some prose.',
     analysis,
     chapter: 1,
   };
 }
 
-function makePreInput(
-  event: NarrativeEvent,
-  events: NarrativeEvent[],
-): PreRenderInput {
+function makePreInput(event: NarrativeEvent, events: NarrativeEvent[]): PreRenderInput {
   return {
     event,
     events,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     entityRegistry: {
       load: () => {},
       resolve: () => null,
@@ -75,7 +83,13 @@ function makeAnalysis(overrides?: Partial<AnalysisResult['analysis']>): Analysis
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+      quality: {
+        proseScore: 8,
+        maxScore: 10,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 300,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
       frequencyDetected: 'singulative',
@@ -244,7 +258,10 @@ describe('FrequencyConsistencyValidator — instance state (no leakage)', () => 
 
     // Call with repeating + matching analysis (should NOT be affected by first call)
     const input2 = makeInput(
-      makeEvent({ id: 'E2', frequency: { type: 'repeating', iterationScope: { start: 'day_1', end: 'day_5' } } }),
+      makeEvent({
+        id: 'E2',
+        frequency: { type: 'repeating', iterationScope: { start: 'day_1', end: 'day_5' } },
+      }),
       makeAnalysis({ eventId: 'E2', frequencyDetected: 'repeating' }),
     );
     const issues2 = validator.validatePost(input2);

@@ -7,11 +7,7 @@
 // paths that should tolerate empty results.
 // ============================================================================
 
-import type {
-  CompletionRequest,
-  CompletionResponse,
-  LLMProvider,
-} from '../types.ts';
+import type { CompletionRequest, CompletionResponse, LLMProvider } from '../types.ts';
 
 export class NoOpProvider implements LLMProvider {
   public readonly name = 'noop';

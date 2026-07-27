@@ -6,14 +6,14 @@
 // when context.narratorProfile is set, and omits both when unset.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { PromptAssembler } from '../../src/context/prompt-assembler.ts';
 import type {
   ContextPackage,
-  SystemContext,
-  SceneSpecification,
   KnowledgeBoundary,
   NarratorProfile,
+  SceneSpecification,
+  SystemContext,
 } from '../../src/types/index.ts';
 
 function makeContext(overrides?: Partial<ContextPackage>): ContextPackage {

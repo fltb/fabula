@@ -3,7 +3,7 @@
 import { logger } from '../observability/logger.ts';
 // ============================================================================
 
-import type { PluginManifest, ArbitrationStrategy } from '../types/index.js';
+import type { ArbitrationStrategy, PluginManifest } from '../types/index.js';
 import type { ResolutionResult } from './types.js';
 
 /**
@@ -35,7 +35,7 @@ export function resolveConflict(
     case 'human_arbitration':
       throw new Error(
         `Conflict between "${pluginA}" and "${pluginB}" requires human arbitration. ` +
-        'Resolve manually and re-run with an explicit strategy.',
+          'Resolve manually and re-run with an explicit strategy.',
       );
     default: {
       logger.warn('Unknown conflict resolution strategy', { module: 'plugin' });

@@ -2,9 +2,9 @@
 // Schema Migration — Tests
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { migrateToLatest, CURRENT_SCHEMA_VERSION } from '../src/migration/index.js';
+import { describe, expect, it } from 'vitest';
 import { loadProjectConfig } from '../src/entity/yaml-loader.js';
+import { CURRENT_SCHEMA_VERSION, migrateToLatest } from '../src/migration/index.js';
 import { projectConfigSchema } from '../src/schemas/project.js';
 import { MemoryStorage } from '../src/storage/index.ts';
 
@@ -110,10 +110,7 @@ describe('loadProjectConfig', () => {
 
   it('loads config with explicit schemaVersion: 1', () => {
     const storage = new MemoryStorage();
-    storage.write(
-      '/nova.yaml',
-      'project: test\ntitle: "Test"\nauthor: "A"\nschemaVersion: 1\n',
-    );
+    storage.write('/nova.yaml', 'project: test\ntitle: "Test"\nauthor: "A"\nschemaVersion: 1\n');
 
     const config = loadProjectConfig('/nova.yaml', storage);
     expect(config).not.toBeNull();
@@ -122,10 +119,7 @@ describe('loadProjectConfig', () => {
 
   it('throws on future schemaVersion', () => {
     const storage = new MemoryStorage();
-    storage.write(
-      '/nova.yaml',
-      'project: test\ntitle: "Test"\nauthor: "A"\nschemaVersion: 999\n',
-    );
+    storage.write('/nova.yaml', 'project: test\ntitle: "Test"\nauthor: "A"\nschemaVersion: 999\n');
 
     expect(() => loadProjectConfig('/nova.yaml', storage)).toThrow(
       /schema version 999 is newer than supported/,

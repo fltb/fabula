@@ -23,8 +23,8 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import type { Fact, NarrativeEvent, Snapshot } from '../../src/types/index.ts';
 import { ReplayEngine } from '../../src/state/replay.ts';
+import type { Fact, NarrativeEvent, Snapshot } from '../../src/types/index.ts';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -34,7 +34,10 @@ function fact(entityId: string, attribute: string, value: unknown): Fact {
     entityId,
     attribute,
     value,
-    validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+    validity: {
+      temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+      branches: { type: 'all' },
+    },
   };
 }
 
@@ -82,7 +85,6 @@ describe('DAG divergence: snapshot-based optimization vs full replay', () => {
     expect(state.entities['hero']?.['location']).toBe('end');
   });
 
-
   it('getStateAt with position produces consistent state', () => {
     // After DAG-5b: getStateAtOptimized is deleted, getStateAt uses
     // DAG-position-based filtering. This test verifies the unified path.
@@ -103,5 +105,5 @@ describe('DAG divergence: snapshot-based optimization vs full replay', () => {
     // getStateAt matches replay() for full position
     const fullReplay = engine.replay([B, A, C]);
     expect(state3.entities['hero']?.['status']).toBe(fullReplay.entities['hero']?.['status']);
-});
+  });
 });

@@ -1,7 +1,6 @@
 import type {
-  CharacterDefinition,
-  RelationshipDefinition,
   ChapterMetadata,
+  CharacterDefinition,
   EventFile,
   FactionDefinition,
   ItemDefinition,
@@ -10,6 +9,7 @@ import type {
   NarratorProfile,
   PlannedDiscourseLedger,
   ProjectConfig,
+  RelationshipDefinition,
   RuleDefinition,
   TimeAnchor,
   WorldInitialState,

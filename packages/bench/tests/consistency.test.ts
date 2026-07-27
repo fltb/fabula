@@ -2,23 +2,28 @@
 // Consistency Metrics — focused tests for every exported function
 // ============================================================================
 
+import type { ValidationIssue } from '@novalistically/core';
 import { describe, expect, it } from 'vitest';
 import {
-  computeNCED,
-  computeSCED,
-  computeSpearmanRho,
   computeDisattenuatedRho,
-  computeWordCountByLanguage,
+  computeNCED,
   computePerValidatorBreakdown,
+  computeSCED,
   computeSeverityLevelCED,
+  computeSpearmanRho,
+  computeWordCountByLanguage,
 } from '../src/consistency.js';
-import type { ValidationIssue } from '@novalistically/core';
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-function makeIssue(overrides: Partial<ValidationIssue> & { validator: string; severity: ValidationIssue['severity'] }): ValidationIssue {
+function makeIssue(
+  overrides: Partial<ValidationIssue> & {
+    validator: string;
+    severity: ValidationIssue['severity'];
+  },
+): ValidationIssue {
   return {
     event: 'E0',
     entity: 'system',
@@ -92,8 +97,20 @@ describe('computeSCED', () => {
 
   it('preserves issues differing only by attribute', () => {
     const issues: ValidationIssue[] = [
-      makeIssue({ validator: 'V1', severity: 'error', event: 'E0', entity: 'sys', attribute: 'attr1' }),
-      makeIssue({ validator: 'V1', severity: 'error', event: 'E0', entity: 'sys', attribute: 'attr2' }),
+      makeIssue({
+        validator: 'V1',
+        severity: 'error',
+        event: 'E0',
+        entity: 'sys',
+        attribute: 'attr1',
+      }),
+      makeIssue({
+        validator: 'V1',
+        severity: 'error',
+        event: 'E0',
+        entity: 'sys',
+        attribute: 'attr2',
+      }),
     ];
 
     const result = computeSCED(issues, 10000);

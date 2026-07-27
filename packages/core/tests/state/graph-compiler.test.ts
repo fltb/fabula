@@ -16,41 +16,41 @@
 // 13. snapshot/full replay/cache invalidation
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { compileGraph, type CompileNode } from '../../src/state/graph-compiler.ts';
+import { describe, expect, it } from 'vitest';
+import { type CompileNode, compileGraph } from '../../src/state/graph-compiler.ts';
 import type {
-  StoryGraph,
   DiscourseGraph,
+  GraphAbsenceWitness,
   GraphCacheEntry,
   GraphCompileError,
   GraphProviderOutput,
-  GraphAbsenceWitness,
+  StoryGraph,
 } from '../../src/types/graph.ts';
 import {
-  UnknownPredecessorError,
-  SelfPredecessorError,
-  MissingOutputError,
   AmbiguousOutputError,
   AssertionMismatchError,
-  ReadMismatchError,
-  UnknownReadIdError,
-  StaleProviderSelectionError,
-  DuplicateBranchProviderError,
   BranchCoverageError,
   BranchIncompatibilityError,
+  CrossClockEdgeError,
+  DuplicateBranchProviderError,
+  DuplicateDiscoursePositionError,
+  DynamicLifecycleError,
+  EdgeOriginCycleError,
+  EllipsisSummaryError,
   FutureTimeError,
   IncomparableTimeError,
-  UnorderedSameTimeConflictError,
-  CrossClockEdgeError,
-  EdgeOriginCycleError,
   InitialRootMisuseError,
-  SemanticOutputDependencyError,
-  DynamicLifecycleError,
   MergeInputError,
-  EllipsisSummaryError,
-  ProvenanceError,
+  MissingOutputError,
   NoOutputEdgeError,
-  DuplicateDiscoursePositionError,
+  ProvenanceError,
+  ReadMismatchError,
+  SelfPredecessorError,
+  SemanticOutputDependencyError,
+  StaleProviderSelectionError,
+  UnknownPredecessorError,
+  UnknownReadIdError,
+  UnorderedSameTimeConflictError,
 } from '../../src/types/graph.ts';
 
 // ============================================================================
@@ -60,8 +60,19 @@ import {
 function storyNode(
   id: string,
   storyValue: string,
-  effects: Array<{ effectId: string; canonicalKey: string; value: unknown; isUnset?: boolean }> = [],
-  requirements: Array<{ requirementId: string; canonicalKey: string; predicate: { type: 'exists' } | { type: 'absent' } | { type: 'equals'; value: unknown }; phase: 'stateBefore' | 'stateAfter'; origin: 'precondition' | 'source' | 'rule' | 'scope' | 'lifecycle' | 'merge' }> = [],
+  effects: Array<{
+    effectId: string;
+    canonicalKey: string;
+    value: unknown;
+    isUnset?: boolean;
+  }> = [],
+  requirements: Array<{
+    requirementId: string;
+    canonicalKey: string;
+    predicate: { type: 'exists' } | { type: 'absent' } | { type: 'equals'; value: unknown };
+    phase: 'stateBefore' | 'stateAfter';
+    origin: 'precondition' | 'source' | 'rule' | 'scope' | 'lifecycle' | 'merge';
+  }> = [],
   branchScope: string = 'main',
   explicitEdges?: CompileNode['explicitEdges'],
   isInitialRoot?: boolean,
@@ -80,8 +91,19 @@ function storyNode(
 function discourseNode(
   id: string,
   position: number,
-  effects: Array<{ effectId: string; canonicalKey: string; value: unknown; isUnset?: boolean }> = [],
-  requirements: Array<{ requirementId: string; canonicalKey: string; predicate: { type: 'exists' } | { type: 'absent' } | { type: 'equals'; value: unknown }; phase: 'stateBefore' | 'stateAfter'; origin: 'precondition' | 'source' | 'rule' | 'scope' | 'lifecycle' | 'merge' }> = [],
+  effects: Array<{
+    effectId: string;
+    canonicalKey: string;
+    value: unknown;
+    isUnset?: boolean;
+  }> = [],
+  requirements: Array<{
+    requirementId: string;
+    canonicalKey: string;
+    predicate: { type: 'exists' } | { type: 'absent' } | { type: 'equals'; value: unknown };
+    phase: 'stateBefore' | 'stateAfter';
+    origin: 'precondition' | 'source' | 'rule' | 'scope' | 'lifecycle' | 'merge';
+  }> = [],
   branchScope: string = 'main',
   explicitEdges?: CompileNode['explicitEdges'],
 ): CompileNode {
@@ -104,34 +126,52 @@ describe('GraphCompiler', () => {
   describe('1. all domain selector/output/read', () => {
     it('creates StoryGraph from story nodes', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }]),
-        storyNode('evt2', 'day_2', [{ effectId: 'o2', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' }]),
+        storyNode('evt1', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' },
+        ]),
+        storyNode('evt2', 'day_2', [
+          { effectId: 'o2', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' },
+        ]),
       ];
       const result = compileGraph(nodes);
       expect(result.storyGraphs).toHaveLength(1);
       expect(result.storyGraphs[0].type).toBe('story');
       expect(result.storyGraphs[0].outputs).toHaveLength(2);
       expect(result.storyGraphs[0].outputs[0].canonicalKey).toBe('entity:char/hero/name');
-      expect(result.storyGraphs[0].outputs[0].effectiveCoordinate).toEqual({ type: 'storyTime', value: 'day_1' });
+      expect(result.storyGraphs[0].outputs[0].effectiveCoordinate).toEqual({
+        type: 'storyTime',
+        value: 'day_1',
+      });
       expect(result.storyGraphs[0].hash).toBeTruthy();
     });
 
     it('creates DiscourseGraph from discourse nodes', () => {
       const nodes: CompileNode[] = [
-        discourseNode('disc1', 1, [{ effectId: 'd1', canonicalKey: 'disclosure:scene1/reveal', value: 'Hero arrives' }]),
-        discourseNode('disc2', 2, [{ effectId: 'd2', canonicalKey: 'disclosure:scene2/hint', value: 'Mystery deepens' }]),
+        discourseNode('disc1', 1, [
+          { effectId: 'd1', canonicalKey: 'disclosure:scene1/reveal', value: 'Hero arrives' },
+        ]),
+        discourseNode('disc2', 2, [
+          { effectId: 'd2', canonicalKey: 'disclosure:scene2/hint', value: 'Mystery deepens' },
+        ]),
       ];
       const result = compileGraph(nodes);
       expect(result.discourseGraphs).toHaveLength(1);
       expect(result.discourseGraphs[0].type).toBe('discourse');
       expect(result.discourseGraphs[0].outputs).toHaveLength(2);
-      expect(result.discourseGraphs[0].effectiveCoordinate).toEqual({ type: 'discoursePosition', value: 1 });
+      expect(result.discourseGraphs[0].effectiveCoordinate).toEqual({
+        type: 'discoursePosition',
+        value: 1,
+      });
     });
 
     it('separates story and discourse into distinct graphs', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }]),
-        discourseNode('disc1', 1, [{ effectId: 'd1', canonicalKey: 'disclosure:scene1/reveal', value: 'Hero arrives' }]),
+        storyNode('evt1', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' },
+        ]),
+        discourseNode('disc1', 1, [
+          { effectId: 'd1', canonicalKey: 'disclosure:scene1/reveal', value: 'Hero arrives' },
+        ]),
       ];
       const result = compileGraph(nodes);
       expect(result.storyGraphs).toHaveLength(1);
@@ -145,21 +185,33 @@ describe('GraphCompiler', () => {
     it('supports relationship canonical selectors', () => {
       const nodes: CompileNode[] = [
         storyNode('rel_evt', 'day_1', [
-          { effectId: 'ro1', canonicalKey: 'relationship:guild/faction/allegiance/epoch:1/member:hero', value: 'active' },
+          {
+            effectId: 'ro1',
+            canonicalKey: 'relationship:guild/faction/allegiance/epoch:1/member:hero',
+            value: 'active',
+          },
         ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.storyGraphs[0].outputs[0].canonicalKey).toBe('relationship:guild/faction/allegiance/epoch:1/member:hero');
+      expect(result.storyGraphs[0].outputs[0].canonicalKey).toBe(
+        'relationship:guild/faction/allegiance/epoch:1/member:hero',
+      );
     });
 
     it('supports knowledge claim canonical selectors', () => {
       const nodes: CompileNode[] = [
         storyNode('know_evt', 'day_1', [
-          { effectId: 'ko1', canonicalKey: 'knowledge:char/hero/claim:oracle_prophecy', value: 'chosen_one' },
+          {
+            effectId: 'ko1',
+            canonicalKey: 'knowledge:char/hero/claim:oracle_prophecy',
+            value: 'chosen_one',
+          },
         ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.storyGraphs[0].outputs[0].canonicalKey).toBe('knowledge:char/hero/claim:oracle_prophecy');
+      expect(result.storyGraphs[0].outputs[0].canonicalKey).toBe(
+        'knowledge:char/hero/claim:oracle_prophecy',
+      );
     });
   });
 
@@ -167,12 +219,23 @@ describe('GraphCompiler', () => {
   describe('2. initial root', () => {
     it('accepts initial root node without predecessor', () => {
       const nodes: CompileNode[] = [
-        storyNode('root', 'day_0', [
-          { effectId: 'init1', canonicalKey: 'entity:world/created', value: true },
-        ], [], 'main', undefined, true),
-        storyNode('evt1', 'day_1', [
-          { effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' },
-        ], [], 'main', [{ predecessor: '', dependent: 'evt1', edgeClass: 'provider' }]),
+        storyNode(
+          'root',
+          'day_0',
+          [{ effectId: 'init1', canonicalKey: 'entity:world/created', value: true }],
+          [],
+          'main',
+          undefined,
+          true,
+        ),
+        storyNode(
+          'evt1',
+          'day_1',
+          [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }],
+          [],
+          'main',
+          [{ predecessor: '', dependent: 'evt1', edgeClass: 'provider' }],
+        ),
       ];
       const result = compileGraph(nodes);
       expect(result.errors).toHaveLength(0);
@@ -182,9 +245,15 @@ describe('GraphCompiler', () => {
 
     it('rejects initial root misuse with author_origin edge', () => {
       const nodes: CompileNode[] = [
-        storyNode('root', 'day_0', [
-          { effectId: 'init1', canonicalKey: 'entity:world/created', value: true },
-        ], [], 'main', undefined, true),
+        storyNode(
+          'root',
+          'day_0',
+          [{ effectId: 'init1', canonicalKey: 'entity:world/created', value: true }],
+          [],
+          'main',
+          undefined,
+          true,
+        ),
         storyNode('evt1', 'day_1', [], [], 'main', [
           { predecessor: 'root', dependent: 'evt1', edgeClass: 'author_origin' },
         ]),
@@ -199,8 +268,17 @@ describe('GraphCompiler', () => {
   describe('3. reversion/unset/stale selection', () => {
     it('handles unset (reversion) output', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/title', value: 'Captain' }]),
-        storyNode('evt2', 'day_2', [{ effectId: 'o2', canonicalKey: 'entity:char/hero/title', value: undefined, isUnset: true }]),
+        storyNode('evt1', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/title', value: 'Captain' },
+        ]),
+        storyNode('evt2', 'day_2', [
+          {
+            effectId: 'o2',
+            canonicalKey: 'entity:char/hero/title',
+            value: undefined,
+            isUnset: true,
+          },
+        ]),
       ];
       const result = compileGraph(nodes);
       const outputs = result.storyGraphs[0].outputs;
@@ -209,27 +287,58 @@ describe('GraphCompiler', () => {
 
     it('selects maximal provider (latest coordinate)', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }]),
-        storyNode('evt2', 'day_2', [{ effectId: 'o2', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' }]),
-        storyNode('evt3', 'day_3', [], [
-          { requirementId: 'r1', canonicalKey: 'entity:char/hero/name', predicate: { type: 'exists' }, phase: 'stateBefore', origin: 'precondition' },
+        storyNode('evt1', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' },
         ]),
+        storyNode('evt2', 'day_2', [
+          { effectId: 'o2', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' },
+        ]),
+        storyNode(
+          'evt3',
+          'day_3',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:char/hero/name',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+        ),
       ];
       const result = compileGraph(nodes);
       const res = [...result.storyGraphs[0].resolutions];
-      const outputRes = res.find((r): r is GraphProviderOutput => r.type === 'output' && r.canonicalKey === 'entity:char/hero/name');
+      const outputRes = res.find(
+        (r): r is GraphProviderOutput =>
+          r.type === 'output' && r.canonicalKey === 'entity:char/hero/name',
+      );
       expect(outputRes).toBeDefined();
       expect(outputRes!.outputId).toBe('o2');
     });
 
     it('creates AbsenceWitness when no matching output exists', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [], [
-          { requirementId: 'r1', canonicalKey: 'entity:char/hero/name', predicate: { type: 'exists' }, phase: 'stateBefore', origin: 'precondition' },
-        ]),
+        storyNode(
+          'evt1',
+          'day_1',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:char/hero/name',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+        ),
       ];
       const result = compileGraph(nodes);
-      const absences = result.storyGraphs[0].resolutions.filter((r): r is GraphAbsenceWitness => r.type === 'absence');
+      const absences = result.storyGraphs[0].resolutions.filter(
+        (r): r is GraphAbsenceWitness => r.type === 'absence',
+      );
       expect(absences).toHaveLength(1);
       expect(absences[0].canonicalKey).toBe('entity:char/hero/name');
     });
@@ -239,7 +348,9 @@ describe('GraphCompiler', () => {
   describe('4. author-origin/provider separation', () => {
     it('author_origin edges create distinct edge class from provider', () => {
       const nodes: CompileNode[] = [
-        storyNode('cause', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/motivation', value: 'revenge' }]),
+        storyNode('cause', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/motivation', value: 'revenge' },
+        ]),
         storyNode('effect', 'day_2', [], [], 'main', [
           { predecessor: 'cause', dependent: 'effect', edgeClass: 'author_origin' },
         ]),
@@ -252,10 +363,23 @@ describe('GraphCompiler', () => {
 
     it('provider edges are automatically inferred from read resolution', () => {
       const nodes: CompileNode[] = [
-        storyNode('provider_evt', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/weapon', value: 'Sword' }]),
-        storyNode('reader_evt', 'day_2', [], [
-          { requirementId: 'r1', canonicalKey: 'entity:char/hero/weapon', predicate: { type: 'equals', value: 'Sword' }, phase: 'stateBefore', origin: 'precondition' },
+        storyNode('provider_evt', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/weapon', value: 'Sword' },
         ]),
+        storyNode(
+          'reader_evt',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:char/hero/weapon',
+              predicate: { type: 'equals', value: 'Sword' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+        ),
       ];
       const result = compileGraph(nodes);
       const edges = result.storyGraphs[0].edges;
@@ -264,13 +388,17 @@ describe('GraphCompiler', () => {
 
     it('author_origin never covers provider resolution', () => {
       const nodes: CompileNode[] = [
-        storyNode('src', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:place/forest/mood', value: 'dark' }]),
+        storyNode('src', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:place/forest/mood', value: 'dark' },
+        ]),
         storyNode('dst', 'day_2', [], [], 'main', [
           { predecessor: 'src', dependent: 'dst', edgeClass: 'author_origin' },
         ]),
       ];
       const result = compileGraph(nodes);
-      const authorEdges = result.storyGraphs[0].edges.filter((e) => e.edgeClass === 'author_origin');
+      const authorEdges = result.storyGraphs[0].edges.filter(
+        (e) => e.edgeClass === 'author_origin',
+      );
       const providerEdges = result.storyGraphs[0].edges.filter((e) => e.edgeClass === 'provider');
       expect(authorEdges).toHaveLength(1);
       expect(providerEdges).toHaveLength(0);
@@ -282,8 +410,16 @@ describe('GraphCompiler', () => {
     it('supports n-ary relationship canonical keys with MembershipId/EpochId', () => {
       const nodes: CompileNode[] = [
         storyNode('nary_evt', 'day_1', [
-          { effectId: 'nary1', canonicalKey: 'relationship:alliance/kingdoms/epoch:3/member:kingdom_a/role:protector', value: 'active' },
-          { effectId: 'nary2', canonicalKey: 'relationship:alliance/kingdoms/epoch:3/member:kingdom_b/role:protected', value: 'active' },
+          {
+            effectId: 'nary1',
+            canonicalKey: 'relationship:alliance/kingdoms/epoch:3/member:kingdom_a/role:protector',
+            value: 'active',
+          },
+          {
+            effectId: 'nary2',
+            canonicalKey: 'relationship:alliance/kingdoms/epoch:3/member:kingdom_b/role:protected',
+            value: 'active',
+          },
         ]),
       ];
       const result = compileGraph(nodes);
@@ -295,11 +431,27 @@ describe('GraphCompiler', () => {
     it('reads n-ary relationship state', () => {
       const nodes: CompileNode[] = [
         storyNode('nary_write', 'day_1', [
-          { effectId: 'nw1', canonicalKey: 'relationship:alliance/kingdoms/epoch:3/member:kingdom_a/role:protector', value: 'active' },
+          {
+            effectId: 'nw1',
+            canonicalKey: 'relationship:alliance/kingdoms/epoch:3/member:kingdom_a/role:protector',
+            value: 'active',
+          },
         ]),
-        storyNode('nary_read', 'day_2', [], [
-          { requirementId: 'nr1', canonicalKey: 'relationship:alliance/kingdoms/epoch:3/member:kingdom_a/role:protector', predicate: { type: 'equals', value: 'active' }, phase: 'stateBefore', origin: 'precondition' },
-        ]),
+        storyNode(
+          'nary_read',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'nr1',
+              canonicalKey:
+                'relationship:alliance/kingdoms/epoch:3/member:kingdom_a/role:protector',
+              predicate: { type: 'equals', value: 'active' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+        ),
       ];
       const result = compileGraph(nodes);
       expect(result.errors).toHaveLength(0);
@@ -311,21 +463,42 @@ describe('GraphCompiler', () => {
     it('tracks knowledge claim outputs', () => {
       const nodes: CompileNode[] = [
         storyNode('knowledge_evt', 'day_1', [
-          { effectId: 'kc1', canonicalKey: 'knowledge:char/oracle/claim:prophecy/grade', value: 'settled_truth' },
+          {
+            effectId: 'kc1',
+            canonicalKey: 'knowledge:char/oracle/claim:prophecy/grade',
+            value: 'settled_truth',
+          },
         ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.storyGraphs[0].outputs.some((o) => o.canonicalKey.startsWith('knowledge:'))).toBe(true);
+      expect(
+        result.storyGraphs[0].outputs.some((o) => o.canonicalKey.startsWith('knowledge:')),
+      ).toBe(true);
     });
 
     it('reads knowledge state as precondition', () => {
       const nodes: CompileNode[] = [
         storyNode('know_write', 'day_1', [
-          { effectId: 'kw1', canonicalKey: 'knowledge:char/hero/claim:destiny', value: 'fulfilled' },
+          {
+            effectId: 'kw1',
+            canonicalKey: 'knowledge:char/hero/claim:destiny',
+            value: 'fulfilled',
+          },
         ]),
-        storyNode('know_read', 'day_2', [], [
-          { requirementId: 'kr1', canonicalKey: 'knowledge:char/hero/claim:destiny', predicate: { type: 'exists' }, phase: 'stateBefore', origin: 'precondition' },
-        ]),
+        storyNode(
+          'know_read',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'kr1',
+              canonicalKey: 'knowledge:char/hero/claim:destiny',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+        ),
       ];
       const result = compileGraph(nodes);
       expect(result.errors).toHaveLength(0);
@@ -334,7 +507,11 @@ describe('GraphCompiler', () => {
     it('supports information act outputs', () => {
       const nodes: CompileNode[] = [
         storyNode('info_act', 'day_1', [
-          { effectId: 'ia1', canonicalKey: 'information_act:char/herald/announce:war', value: 'declared' },
+          {
+            effectId: 'ia1',
+            canonicalKey: 'information_act:char/herald/announce:war',
+            value: 'declared',
+          },
         ]),
       ];
       const result = compileGraph(nodes);
@@ -347,21 +524,42 @@ describe('GraphCompiler', () => {
     it('tracks thread outputs', () => {
       const nodes: CompileNode[] = [
         storyNode('thread_evt', 'day_1', [
-          { effectId: 'tr1', canonicalKey: 'thread:quest/find_artifact/run:1/status', value: 'active' },
+          {
+            effectId: 'tr1',
+            canonicalKey: 'thread:quest/find_artifact/run:1/status',
+            value: 'active',
+          },
         ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.storyGraphs[0].outputs.some((o) => o.canonicalKey.startsWith('thread:'))).toBe(true);
+      expect(result.storyGraphs[0].outputs.some((o) => o.canonicalKey.startsWith('thread:'))).toBe(
+        true,
+      );
     });
 
     it('reads thread state', () => {
       const nodes: CompileNode[] = [
         storyNode('thread_write', 'day_1', [
-          { effectId: 'tw1', canonicalKey: 'thread:quest/find_artifact/run:1/status', value: 'active' },
+          {
+            effectId: 'tw1',
+            canonicalKey: 'thread:quest/find_artifact/run:1/status',
+            value: 'active',
+          },
         ]),
-        storyNode('thread_read', 'day_2', [], [
-          { requirementId: 'trr1', canonicalKey: 'thread:quest/find_artifact/run:1/goal:retrieve/gate:open', predicate: { type: 'exists' }, phase: 'stateBefore', origin: 'rule' },
-        ]),
+        storyNode(
+          'thread_read',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'trr1',
+              canonicalKey: 'thread:quest/find_artifact/run:1/goal:retrieve/gate:open',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'rule',
+            },
+          ],
+        ),
       ];
       const result = compileGraph(nodes);
       expect(result.errors).toHaveLength(0);
@@ -370,11 +568,26 @@ describe('GraphCompiler', () => {
     it('reads rule evaluation results', () => {
       const nodes: CompileNode[] = [
         storyNode('rule_evt', 'day_1', [
-          { effectId: 're1', canonicalKey: 'rule:magic/enchantment/epoch:2/effect', value: 'activated' },
+          {
+            effectId: 're1',
+            canonicalKey: 'rule:magic/enchantment/epoch:2/effect',
+            value: 'activated',
+          },
         ]),
-        storyNode('rule_check', 'day_2', [], [
-          { requirementId: 'rr1', canonicalKey: 'rule:magic/enchantment/epoch:2/effect', predicate: { type: 'equals', value: 'activated' }, phase: 'stateBefore', origin: 'rule' },
-        ]),
+        storyNode(
+          'rule_check',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'rr1',
+              canonicalKey: 'rule:magic/enchantment/epoch:2/effect',
+              predicate: { type: 'equals', value: 'activated' },
+              phase: 'stateBefore',
+              origin: 'rule',
+            },
+          ],
+        ),
       ];
       const result = compileGraph(nodes);
       expect(result.errors).toHaveLength(0);
@@ -385,31 +598,52 @@ describe('GraphCompiler', () => {
   describe('8. same-time commutativity/order', () => {
     it('allows commutative same-time operations on disjoint keys', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt_a', 'day_1', [{ effectId: 'oa', canonicalKey: 'entity:char/hero/weapon', value: 'Sword' }]),
-        storyNode('evt_b', 'day_1', [{ effectId: 'ob', canonicalKey: 'entity:char/hero/armor', value: 'Shield' }]),
+        storyNode('evt_a', 'day_1', [
+          { effectId: 'oa', canonicalKey: 'entity:char/hero/weapon', value: 'Sword' },
+        ]),
+        storyNode('evt_b', 'day_1', [
+          { effectId: 'ob', canonicalKey: 'entity:char/hero/armor', value: 'Shield' },
+        ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.errors.filter((e) => e instanceof UnorderedSameTimeConflictError)).toHaveLength(0);
+      expect(result.errors.filter((e) => e instanceof UnorderedSameTimeConflictError)).toHaveLength(
+        0,
+      );
     });
 
     it('detects unordered conflicting same-time operations', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt_a', 'day_1', [{ effectId: 'oa', canonicalKey: 'entity:char/hero/name', value: 'Aria' }]),
-        storyNode('evt_b', 'day_1', [{ effectId: 'ob', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' }]),
+        storyNode('evt_a', 'day_1', [
+          { effectId: 'oa', canonicalKey: 'entity:char/hero/name', value: 'Aria' },
+        ]),
+        storyNode('evt_b', 'day_1', [
+          { effectId: 'ob', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' },
+        ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.errors.filter((e) => e instanceof UnorderedSameTimeConflictError)).toHaveLength(1);
+      expect(result.errors.filter((e) => e instanceof UnorderedSameTimeConflictError)).toHaveLength(
+        1,
+      );
     });
 
     it('allows ordered same-time operations with same_coordinate_order edge', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt_a', 'day_1', [{ effectId: 'oa', canonicalKey: 'entity:char/hero/name', value: 'Aria' }]),
-        storyNode('evt_b', 'day_1', [{ effectId: 'ob', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' }], [], 'main', [
-          { predecessor: 'evt_a', dependent: 'evt_b', edgeClass: 'same_coordinate_order' },
+        storyNode('evt_a', 'day_1', [
+          { effectId: 'oa', canonicalKey: 'entity:char/hero/name', value: 'Aria' },
         ]),
+        storyNode(
+          'evt_b',
+          'day_1',
+          [{ effectId: 'ob', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' }],
+          [],
+          'main',
+          [{ predecessor: 'evt_a', dependent: 'evt_b', edgeClass: 'same_coordinate_order' }],
+        ),
       ];
       const result = compileGraph(nodes);
-      expect(result.errors.filter((e) => e instanceof UnorderedSameTimeConflictError)).toHaveLength(0);
+      expect(result.errors.filter((e) => e instanceof UnorderedSameTimeConflictError)).toHaveLength(
+        0,
+      );
     });
   });
 
@@ -418,11 +652,17 @@ describe('GraphCompiler', () => {
     it('handles dynamic entity catalog declarations', () => {
       const nodes: CompileNode[] = [
         storyNode('declare_entity', 'day_1', [
-          { effectId: 'de1', canonicalKey: 'entity:catalog/char/mysterious_stranger', value: { kind: 'character', name: '???', introduced: true } },
+          {
+            effectId: 'de1',
+            canonicalKey: 'entity:catalog/char/mysterious_stranger',
+            value: { kind: 'character', name: '???', introduced: true },
+          },
         ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.storyGraphs[0].outputs[0].canonicalKey).toBe('entity:catalog/char/mysterious_stranger');
+      expect(result.storyGraphs[0].outputs[0].canonicalKey).toBe(
+        'entity:catalog/char/mysterious_stranger',
+      );
     });
 
     it('reads dynamic entity lifecycle status', () => {
@@ -430,9 +670,20 @@ describe('GraphCompiler', () => {
         storyNode('entity_born', 'day_1', [
           { effectId: 'eb1', canonicalKey: 'entity:char/dragon/lifecycle', value: 'active' },
         ]),
-        storyNode('entity_check', 'day_2', [], [
-          { requirementId: 'ec1', canonicalKey: 'entity:char/dragon/lifecycle', predicate: { type: 'equals', value: 'active' }, phase: 'stateBefore', origin: 'lifecycle' },
-        ]),
+        storyNode(
+          'entity_check',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'ec1',
+              canonicalKey: 'entity:char/dragon/lifecycle',
+              predicate: { type: 'equals', value: 'active' },
+              phase: 'stateBefore',
+              origin: 'lifecycle',
+            },
+          ],
+        ),
       ];
       const result = compileGraph(nodes);
       expect(result.errors).toHaveLength(0);
@@ -443,8 +694,20 @@ describe('GraphCompiler', () => {
   describe('10. branch partition/convergence/merge', () => {
     it('filters by branch scope', () => {
       const nodes: CompileNode[] = [
-        storyNode('main_evt', 'day_1', [{ effectId: 'm1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }], [], 'main'),
-        storyNode('branch_evt', 'day_1', [{ effectId: 'b1', canonicalKey: 'entity:char/hero/name', value: 'Aria (alternate)' }], [], 'alternate'),
+        storyNode(
+          'main_evt',
+          'day_1',
+          [{ effectId: 'm1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }],
+          [],
+          'main',
+        ),
+        storyNode(
+          'branch_evt',
+          'day_1',
+          [{ effectId: 'b1', canonicalKey: 'entity:char/hero/name', value: 'Aria (alternate)' }],
+          [],
+          'alternate',
+        ),
       ];
       const result = compileGraph(nodes, { branchPath: 'main' });
       const outputs = result.storyGraphs[0].outputs;
@@ -454,13 +717,33 @@ describe('GraphCompiler', () => {
 
     it('creates AbsenceWitness for reads with no compatible provider across branches', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }], [], 'branch_a'),
-        storyNode('evt2', 'day_2', [], [
-          { requirementId: 'r1', canonicalKey: 'entity:char/hero/name', predicate: { type: 'exists' }, phase: 'stateBefore', origin: 'precondition' },
-        ], 'branch_b'),
+        storyNode(
+          'evt1',
+          'day_1',
+          [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }],
+          [],
+          'branch_a',
+        ),
+        storyNode(
+          'evt2',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:char/hero/name',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+          'branch_b',
+        ),
       ];
       const result = compileGraph(nodes, { branchPath: 'branch_b' });
-      const absences = result.storyGraphs[0].resolutions.filter((r): r is GraphAbsenceWitness => r.type === 'absence');
+      const absences = result.storyGraphs[0].resolutions.filter(
+        (r): r is GraphAbsenceWitness => r.type === 'absence',
+      );
       expect(absences).toHaveLength(1);
       expect(absences[0].readId).toBe('r1');
     });
@@ -531,7 +814,9 @@ describe('GraphCompiler', () => {
   describe('13. snapshot/full replay/cache invalidation', () => {
     it('produces cache entries with all required fields', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }]),
+        storyNode('evt1', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' },
+        ]),
       ];
       const result = compileGraph(nodes);
       expect(result.cache).toHaveLength(1);
@@ -545,10 +830,14 @@ describe('GraphCompiler', () => {
 
     it('replay hash changes when outputs change', () => {
       const nodes1: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }]),
+        storyNode('evt1', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' },
+        ]),
       ];
       const nodes2: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Kael' }]),
+        storyNode('evt1', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Kael' },
+        ]),
       ];
       const result1 = compileGraph(nodes1);
       const result2 = compileGraph(nodes2);
@@ -557,7 +846,13 @@ describe('GraphCompiler', () => {
 
     it('cache entries differ for different branch scopes', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }], [], 'main'),
+        storyNode(
+          'evt1',
+          'day_1',
+          [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }],
+          [],
+          'main',
+        ),
       ];
       const result = compileGraph(nodes, { branchPath: 'main' });
       expect(result.cache[0].targetCoordinatePrefix).toBe('main');
@@ -565,8 +860,12 @@ describe('GraphCompiler', () => {
 
     it('produces consistent results from same inputs', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }]),
-        storyNode('evt2', 'day_2', [{ effectId: 'o2', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' }]),
+        storyNode('evt1', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' },
+        ]),
+        storyNode('evt2', 'day_2', [
+          { effectId: 'o2', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' },
+        ]),
       ];
       const result1 = compileGraph(nodes);
       const result2 = compileGraph(nodes);
@@ -600,10 +899,7 @@ describe('GraphCompiler', () => {
     });
 
     it('DuplicateDiscoursePositionError', () => {
-      const nodes: CompileNode[] = [
-        discourseNode('disc1', 1),
-        discourseNode('disc2', 1),
-      ];
+      const nodes: CompileNode[] = [discourseNode('disc1', 1), discourseNode('disc2', 1)];
       const result = compileGraph(nodes);
       expect(result.errors.some((e) => e instanceof DuplicateDiscoursePositionError)).toBe(true);
     });
@@ -633,10 +929,23 @@ describe('GraphCompiler', () => {
 
     it('AssertionMismatchError on predicate mismatch', () => {
       const nodes: CompileNode[] = [
-        storyNode('write_evt', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:char/hero/status', value: 'sleeping' }]),
-        storyNode('read_evt', 'day_2', [], [
-          { requirementId: 'r1', canonicalKey: 'entity:char/hero/status', predicate: { type: 'equals', value: 'awake' }, phase: 'stateBefore', origin: 'precondition' },
+        storyNode('write_evt', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/status', value: 'sleeping' },
         ]),
+        storyNode(
+          'read_evt',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:char/hero/status',
+              predicate: { type: 'equals', value: 'awake' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+        ),
       ];
       const result = compileGraph(nodes);
       expect(result.errors.some((e) => e instanceof AssertionMismatchError)).toBe(true);
@@ -649,7 +958,9 @@ describe('GraphCompiler', () => {
       const classes = ['author_origin', 'provider', 'same_coordinate_order', 'internal'] as const;
       for (const ec of classes) {
         const nodes: CompileNode[] = [
-          storyNode('src', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:test/key', value: 'val' }]),
+          storyNode('src', 'day_1', [
+            { effectId: 'o1', canonicalKey: 'entity:test/key', value: 'val' },
+          ]),
           storyNode('tgt', 'day_2', [], [], 'main', [
             { predecessor: 'src', dependent: 'tgt', edgeClass: ec },
           ]),
@@ -664,15 +975,22 @@ describe('GraphCompiler', () => {
   describe('OutputDescriptor normalization', () => {
     it('normalizes set values', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:test/key', value: { nested: 'data' } }]),
+        storyNode('evt1', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:test/key', value: { nested: 'data' } },
+        ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.storyGraphs[0].outputs[0].value).toEqual({ type: 'set', data: { nested: 'data' } });
+      expect(result.storyGraphs[0].outputs[0].value).toEqual({
+        type: 'set',
+        data: { nested: 'data' },
+      });
     });
 
     it('normalizes unset values', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:test/key', value: undefined, isUnset: true }]),
+        storyNode('evt1', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:test/key', value: undefined, isUnset: true },
+        ]),
       ];
       const result = compileGraph(nodes);
       expect(result.storyGraphs[0].outputs[0].value).toEqual({ type: 'unset' });
@@ -680,7 +998,13 @@ describe('GraphCompiler', () => {
 
     it('includes provenance hash', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [{ effectId: 'o1', canonicalKey: 'entity:test/key', value: 'data' }], [], 'branch_x'),
+        storyNode(
+          'evt1',
+          'day_1',
+          [{ effectId: 'o1', canonicalKey: 'entity:test/key', value: 'data' }],
+          [],
+          'branch_x',
+        ),
       ];
       const result = compileGraph(nodes);
       expect(result.storyGraphs[0].outputs[0].provenanceHash).toBeTruthy();
@@ -691,26 +1015,61 @@ describe('GraphCompiler', () => {
   describe('ReadRequirement exposure', () => {
     it('exposes read phase and origin', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [], [
-          { requirementId: 'r1', canonicalKey: 'entity:test/key', predicate: { type: 'exists' }, phase: 'stateBefore', origin: 'precondition' },
-          { requirementId: 'r2', canonicalKey: 'entity:test/key', predicate: { type: 'absent' }, phase: 'stateAfter', origin: 'rule' },
-        ]),
+        storyNode(
+          'evt1',
+          'day_1',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:test/key',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+            {
+              requirementId: 'r2',
+              canonicalKey: 'entity:test/key',
+              predicate: { type: 'absent' },
+              phase: 'stateAfter',
+              origin: 'rule',
+            },
+          ],
+        ),
       ];
       const result = compileGraph(nodes);
       const reads = result.storyGraphs[0].reads;
       expect(reads).toHaveLength(2);
-      expect(reads.some((r) => r.phase === 'stateBefore' && r.origin === 'precondition')).toBe(true);
+      expect(reads.some((r) => r.phase === 'stateBefore' && r.origin === 'precondition')).toBe(
+        true,
+      );
       expect(reads.some((r) => r.phase === 'stateAfter' && r.origin === 'rule')).toBe(true);
     });
 
     it('exposes all six read origins', () => {
       const origins: Array<'precondition' | 'source' | 'rule' | 'scope' | 'lifecycle' | 'merge'> = [
-        'precondition', 'source', 'rule', 'scope', 'lifecycle', 'merge',
+        'precondition',
+        'source',
+        'rule',
+        'scope',
+        'lifecycle',
+        'merge',
       ];
       const nodes: CompileNode[] = origins.map((origin, i) =>
-        storyNode(`evt${i}`, `day_${i}`, [], [
-          { requirementId: `r${i}`, canonicalKey: `entity:test/key${i}`, predicate: { type: 'exists' }, phase: 'stateBefore', origin },
-        ]),
+        storyNode(
+          `evt${i}`,
+          `day_${i}`,
+          [],
+          [
+            {
+              requirementId: `r${i}`,
+              canonicalKey: `entity:test/key${i}`,
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin,
+            },
+          ],
+        ),
       );
       const result = compileGraph(nodes);
       const readOrigins = new Set(result.storyGraphs[0].reads.map((r) => r.origin));
@@ -721,11 +1080,34 @@ describe('GraphCompiler', () => {
 
     it('exposes all presence predicate types', () => {
       const nodes: CompileNode[] = [
-        storyNode('evt1', 'day_1', [], [
-          { requirementId: 'r1', canonicalKey: 'entity:test/key_exists', predicate: { type: 'exists' }, phase: 'stateBefore', origin: 'precondition' },
-          { requirementId: 'r2', canonicalKey: 'entity:test/key_absent', predicate: { type: 'absent' }, phase: 'stateBefore', origin: 'source' },
-          { requirementId: 'r3', canonicalKey: 'entity:test/key_equals', predicate: { type: 'equals', value: 'match' }, phase: 'stateBefore', origin: 'rule' },
-        ]),
+        storyNode(
+          'evt1',
+          'day_1',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:test/key_exists',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+            {
+              requirementId: 'r2',
+              canonicalKey: 'entity:test/key_absent',
+              predicate: { type: 'absent' },
+              phase: 'stateBefore',
+              origin: 'source',
+            },
+            {
+              requirementId: 'r3',
+              canonicalKey: 'entity:test/key_equals',
+              predicate: { type: 'equals', value: 'match' },
+              phase: 'stateBefore',
+              origin: 'rule',
+            },
+          ],
+        ),
       ];
       const result = compileGraph(nodes);
       const predicates = result.storyGraphs[0].reads.map((r) => r.predicate.type);

@@ -9,8 +9,8 @@
 // ============================================================================
 
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
 import { renderNovel, sanitizeError } from '../packages/core/dist/index.js';
@@ -78,11 +78,14 @@ async function main() {
   }
 
   const generatedAt = new Date().toISOString();
-  const sorted = [...result.results].sort((left, right) => left.eventId.localeCompare(right.eventId, undefined, { numeric: true }));
+  const sorted = [...result.results].sort((left, right) =>
+    left.eventId.localeCompare(right.eventId, undefined, { numeric: true }),
+  );
   for (const scene of sorted) {
-    const attempts = scene.providerCalls.length === 0
-      ? 0
-      : Math.max(...scene.providerCalls.map((call) => call.attempt));
+    const attempts =
+      scene.providerCalls.length === 0
+        ? 0
+        : Math.max(...scene.providerCalls.map((call) => call.attempt));
     writeJson(join(runDir, `${scene.eventId}.json`), {
       prose: scene.prose,
       released: scene.released,
@@ -90,6 +93,10 @@ async function main() {
       validationIssueMessages: scene.validationIssueMessages,
       errors: scene.errors,
       pass2Rejection: scene.pass2Rejection ?? null,
+      analysis: scene.analysis,
+      validation: scene.validation,
+      needsReview: scene.needsReview,
+      providerCalls: scene.providerCalls,
       metadata: {
         eventId: scene.eventId,
         generatedAt,
@@ -122,7 +129,9 @@ async function main() {
     errors: result.errors,
   });
 
-  console.log(`Captured ${result.results.length} scenes; release gate: ${released}/${result.results.length}.`);
+  console.log(
+    `Captured ${result.results.length} scenes; release gate: ${released}/${result.results.length}.`,
+  );
   console.log(`  Results: ${runDir}`);
 }
 

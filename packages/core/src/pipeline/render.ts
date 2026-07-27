@@ -11,38 +11,38 @@
 //   maxTokens: 10000 (far above target; we take what we get)
 // ============================================================================
 
-import { StyleResolver, toStyleNotes, resolveProfile, type StyleProfile } from '../style/index.ts';
 import * as crypto from 'node:crypto';
-import type { LLMProvider, CompletionRequest, CompletionResponse, Message } from '../ai/types.ts';
-import type {
-  NarrativeEvent,
-  WorldState,
-  ContextPackage,
-  AnalysisResult,
-  ValidationResult,
-} from '../types/index.ts';
-import type { SurfaceReferencePacket } from '../types/render-surface.ts';
-import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
-import { countNarrativeText } from '../assembler/count.ts';
 import { buildAnalysisPrompt, type RenderAnalysisInput } from '../ai/prompts/render-analysis.ts';
-import { compareAnalysisBlocks } from '../util/compare-analysis.ts';
-import { PromptAssembler } from '../context/prompt-assembler.ts';
+import type { CompletionRequest, CompletionResponse, LLMProvider, Message } from '../ai/types.ts';
+import { countNarrativeText } from '../assembler/count.ts';
 import {
   computeCacheKeys,
   computeEvidenceHash,
   getCachedRender,
   setCachedRender,
 } from '../cache/render-cache.ts';
-import { ConcurrencyPool } from '../util/pool.ts';
-import type { Storage } from '../storage/index.ts';
-import { ResultAggregator } from '../validator/aggregator.ts';
-import { createCircuitBreaker } from './circuit-breaker.ts';
+import { PromptAssembler } from '../context/prompt-assembler.ts';
 import { CacheCorruptionError, sanitizeError } from '../errors.ts';
-import { analyzeValidationErrors, decideRepairStrategy } from './reverse-validate.ts';
+import type { TypedEventBus } from '../event-bus.ts';
 import type { Logger } from '../observability/logger.ts';
 import type { TraceCollector } from '../observability/trace.ts';
 import type { PluginHooksManager } from '../plugin/hooks-manager.ts';
-import { TypedEventBus } from '../event-bus.ts';
+import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
+import type { Storage } from '../storage/index.ts';
+import { resolveProfile, type StyleProfile, StyleResolver, toStyleNotes } from '../style/index.ts';
+import type {
+  AnalysisResult,
+  ContextPackage,
+  NarrativeEvent,
+  ValidationResult,
+  WorldState,
+} from '../types/index.ts';
+import type { SurfaceReferencePacket } from '../types/render-surface.ts';
+import { compareAnalysisBlocks } from '../util/compare-analysis.ts';
+import { ConcurrencyPool } from '../util/pool.ts';
+import type { ResultAggregator } from '../validator/aggregator.ts';
+import { createCircuitBreaker } from './circuit-breaker.ts';
+import { analyzeValidationErrors, decideRepairStrategy } from './reverse-validate.ts';
 
 export interface RenderJob {
   event: NarrativeEvent;
@@ -85,7 +85,6 @@ export interface ProviderCallLedgerEntry {
  *  Never set when Pass 2 succeeds, the outer loop retries, or Pass 2 throws. */
 export type Pass2RejectionCategory = 'empty' | 'parse' | 'validation';
 
-
 export interface RenderSceneResult {
   eventId: string;
   prose: string;
@@ -94,12 +93,12 @@ export interface RenderSceneResult {
   llmPass2: NonNullable<CompletionResponse['usage']> | null;
   cacheHit: boolean;
   errors: string[];
-  promptHash: string;                   // SHA-256 of ordered provider-call identities
+  promptHash: string; // SHA-256 of ordered provider-call identities
   renderStart: number;
   renderEnd: number;
-  validation: ValidationResult | null;   // post-render validation result
+  validation: ValidationResult | null; // post-render validation result
   providerCalls: ProviderCallLedgerEntry[];
-  attempts: number;                      // number of render attempts
+  attempts: number; // number of render attempts
   /** True if all retries exhausted and validation still has errors */
   needsReview: boolean;
   /** Categorises Pass 2 exhaustion: 'empty' | 'parse' | 'validation'.
@@ -117,11 +116,11 @@ export interface RenderPipelineOptions {
    *  before returning, including cache hits. */
   responseDir?: string;
   storage: Storage;
-  concurrency?: number;       // default 5
-  maxTokens?: number;         // default 10000
-  skipCache?: boolean;        // force re-render
-  referenceExample?: string;  // optional "good" prose example for Pass 1
-  aggregator?: ResultAggregator;         // optional, for post-render validation
+  concurrency?: number; // default 5
+  maxTokens?: number; // default 10000
+  skipCache?: boolean; // force re-render
+  referenceExample?: string; // optional "good" prose example for Pass 1
+  aggregator?: ResultAggregator; // optional, for post-render validation
   /** Maximum render+validate attempts before giving up (default 3) */
   maxRetries?: number;
   /** Logger for structured observability (optional) */
@@ -217,23 +216,67 @@ export class RenderPipeline {
 
     // ── Cache check ──────────────────────────────────────────────
     if (!this.skipCache && cacheKey) {
-      this.traceCollector?.record({ phase: 'cache', state: 'start', spanId: `${eventId}:cache`, eventId });
+      this.traceCollector?.record({
+        phase: 'cache',
+        state: 'start',
+        spanId: `${eventId}:cache`,
+        eventId,
+      });
       try {
-        const evidenceHash = computeEvidenceHash(event.id, event.preconditions ?? [], event.postconditions ?? []);
-        const cached = getCachedRender(this.cacheDir, eventId, cacheKey, this.storage, evidenceHash);
+        const evidenceHash = computeEvidenceHash(
+          event.id,
+          event.preconditions ?? [],
+          event.postconditions ?? [],
+        );
+        const cached = getCachedRender(
+          this.cacheDir,
+          eventId,
+          cacheKey,
+          this.storage,
+          evidenceHash,
+        );
         if (cached) {
           const c = cached as Record<string, unknown>;
           const cachedAnalysisStr = c.analysis ? String(c.analysis) : null;
-          const analysis = cachedAnalysisStr ? (this.aggregator
-            ? parseAnalysisJSONWithErrors(cachedAnalysisStr, this.aggregator.getCombinedValidationSchema()).result
-            : parseAnalysisJSON(cachedAnalysisStr, (message) => errors.push(`Cache parse warning: ${message}`)))
-          : null;
-          const validation = analysis && this.aggregator
-            ? this.aggregator.validateRender(String(c.prose ?? ''), event, stateBefore, analysis, undefined, undefined, chapter, context)
+          const analysis = cachedAnalysisStr
+            ? this.aggregator
+              ? parseAnalysisJSONWithErrors(
+                  cachedAnalysisStr,
+                  this.aggregator.getCombinedValidationSchema(),
+                ).result
+              : parseAnalysisJSON(cachedAnalysisStr, (message) =>
+                  errors.push(`Cache parse warning: ${message}`),
+                )
             : null;
-          const needsReview = String(c.prose ?? '').trim().length === 0 || analysis === null || (validation !== null && !validation.passed);
-          this.traceCollector?.record({ phase: 'cache', state: 'end', spanId: `${eventId}:cache`, eventId });
-          this.traceCollector?.record({ phase: 'pipeline', state: 'end', spanId: eventId, eventId });
+          const validation =
+            analysis && this.aggregator
+              ? this.aggregator.validateRender(
+                  String(c.prose ?? ''),
+                  event,
+                  stateBefore,
+                  analysis,
+                  undefined,
+                  undefined,
+                  chapter,
+                  context,
+                )
+              : null;
+          const needsReview =
+            String(c.prose ?? '').trim().length === 0 ||
+            analysis === null ||
+            (validation !== null && !validation.passed);
+          this.traceCollector?.record({
+            phase: 'cache',
+            state: 'end',
+            spanId: `${eventId}:cache`,
+            eventId,
+          });
+          this.traceCollector?.record({
+            phase: 'pipeline',
+            state: 'end',
+            spanId: eventId,
+            eventId,
+          });
           this.eventBus?.emit('cache:hit', { eventId, cacheKey: cacheKey ?? '' });
           this.logger?.info('Cache hit, returning cached result', { eventId });
           this.eventBus?.emit('pipeline:render:after', {
@@ -244,23 +287,53 @@ export class RenderPipeline {
             success: analysis !== null,
             errorCount: errors.length,
           });
-          await this.writeResponseFile(eventId, String(c.prose ?? ''), true, errors, analysis, typeof c.renderedAt === 'string' ? c.renderedAt : new Date().toISOString(), validation, needsReview, 0);
+          await this.writeResponseFile(
+            eventId,
+            String(c.prose ?? ''),
+            true,
+            errors,
+            analysis,
+            typeof c.renderedAt === 'string' ? c.renderedAt : new Date().toISOString(),
+            validation,
+            needsReview,
+            0,
+          );
           return {
-            eventId, prose: String(c.prose ?? ''), analysis,
-            llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }, llmPass2: null,
-            cacheHit: true, errors, renderStart: typeof c.renderedAt === 'string' ? new Date(c.renderedAt).getTime() : renderStart,
-            renderEnd: renderStart, validation, attempts: 0, needsReview,
+            eventId,
+            prose: String(c.prose ?? ''),
+            analysis,
+            llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+            llmPass2: null,
+            cacheHit: true,
+            errors,
+            renderStart:
+              typeof c.renderedAt === 'string' ? new Date(c.renderedAt).getTime() : renderStart,
+            renderEnd: renderStart,
+            validation,
+            attempts: 0,
+            needsReview,
             providerCalls: [],
             promptHash: typeof c.promptHash === 'string' ? c.promptHash : '',
           };
         }
-        this.traceCollector?.record({ phase: 'cache', state: 'end', spanId: `${eventId}:cache`, eventId });
+        this.traceCollector?.record({
+          phase: 'cache',
+          state: 'end',
+          spanId: `${eventId}:cache`,
+          eventId,
+        });
         this.logger?.info('Cache miss, proceeding to render', { eventId });
         this.eventBus?.emit('cache:miss', { eventId });
       } catch (error) {
         if (!(error instanceof CacheCorruptionError)) throw error;
         errors.push(`Cache read failed for ${eventId}: ${error.code}`);
-        this.traceCollector?.record({ phase: 'cache', state: 'error', spanId: `${eventId}:cache`, eventId, code: error.code });
+        this.traceCollector?.record({
+          phase: 'cache',
+          state: 'error',
+          spanId: `${eventId}:cache`,
+          eventId,
+          code: error.code,
+        });
       }
     }
 
@@ -274,8 +347,13 @@ export class RenderPipeline {
     let prose = '';
     let analysis: AnalysisResult | null = null;
     let analysisRaw: string | null = null;
-    let llmPass1: { promptTokens: number; completionTokens: number; totalTokens: number } = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-    let llmPass2: { promptTokens: number; completionTokens: number; totalTokens: number } | null = null;
+    let llmPass1: { promptTokens: number; completionTokens: number; totalTokens: number } = {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+    };
+    let llmPass2: { promptTokens: number; completionTokens: number; totalTokens: number } | null =
+      null;
     let renderValidation: ValidationResult | null = null;
     let previousErrorMessages: string[] = [];
     let attempts = 0;
@@ -295,29 +373,45 @@ export class RenderPipeline {
       : undefined;
     while (breaker.attempt()) {
       attempts = breaker.state().totalAttempts;
-      this.traceCollector?.record({ phase: 'circuit', state: 'start', spanId: `${eventId}:circuit:attempt_${attempts}`, eventId, code: `round_${breaker.state().round}_attempt_${attempts}` });
+      this.traceCollector?.record({
+        phase: 'circuit',
+        state: 'start',
+        spanId: `${eventId}:circuit:attempt_${attempts}`,
+        eventId,
+        code: `round_${breaker.state().round}_attempt_${attempts}`,
+      });
 
       // ── Pass 1: Pure prose (with retry guidance on retry) ────────
       const assembler = new PromptAssembler();
       const assembled = assembler.assemble(context, {
         targetLengthWords: this.targetLengthWords,
         styleGuidance: job.event.styleGuidance,
-        characterVoiceNotes: job.event.styleGuidance?.characterVoice && Object.keys(job.event.styleGuidance.characterVoice).length > 0
-          ? Object.entries(job.event.styleGuidance.characterVoice).map(([id, note]) => `${id}: ${note}`).join('; ')
-          : undefined,
+        characterVoiceNotes:
+          job.event.styleGuidance?.characterVoice &&
+          Object.keys(job.event.styleGuidance.characterVoice).length > 0
+            ? Object.entries(job.event.styleGuidance.characterVoice)
+                .map(([id, note]) => `${id}: ${note}`)
+                .join('; ')
+            : undefined,
         language: this.language,
         referenceExample: this.referenceExample,
-        retryGuidance: attempts > 1 && previousErrorMessages.length > 0
-          ? previousErrorMessages.join('\n')
-          : undefined,
+        retryGuidance:
+          attempts > 1 && previousErrorMessages.length > 0
+            ? previousErrorMessages.join('\n')
+            : undefined,
         profileStyleNotes: styleNotes,
         narrativeChecklistItems: job.event.narrativeChecklist?.items,
         sourceContextStyleNotes: job.event.sourceContext?.entries
           .filter((e) => e.classification === 'STYLE')
-          .map((e) => e.styleNote ? `- "${e.excerpt}" (${e.styleNote})` : `- "${e.excerpt}"`)
+          .map((e) => (e.styleNote ? `- "${e.excerpt}" (${e.styleNote})` : `- "${e.excerpt}"`))
           .join('\n'),
       });
-      this.traceCollector?.record({ phase: 'pass1', state: 'start', spanId: `${eventId}:pass1`, eventId });
+      this.traceCollector?.record({
+        phase: 'pass1',
+        state: 'start',
+        spanId: `${eventId}:pass1`,
+        eventId,
+      });
       const proseMessages = assembled.messages;
       try {
         const pass1Request: CompletionRequest = {
@@ -331,7 +425,14 @@ export class RenderPipeline {
         const result1 = await this.provider.complete(pass1Request);
         prose = result1.content ?? '';
         llmPass1 = result1.usage ?? llmPass1;
-        providerCalls.push({ phase: 'pass1', attempt: attempts, outcome: 'success', requestHash: pass1Hash, model: this.model, seed: null });
+        providerCalls.push({
+          phase: 'pass1',
+          attempt: attempts,
+          outcome: 'success',
+          requestHash: pass1Hash,
+          model: this.model,
+          seed: null,
+        });
         if (!prose || prose.trim().length === 0) {
           errors.push(`Pass 1 attempt ${attempts} returned empty prose`);
           this.logger?.warn('Pass 1 returned empty prose', { eventId, attempts });
@@ -345,13 +446,33 @@ export class RenderPipeline {
           maxTokens: this.maxTokens,
           taskType: 'pass1',
         });
-        providerCalls.push({ phase: 'pass1', attempt: attempts, outcome: 'failure', failureReason: sanitizeError(err), requestHash: pass1Hash, model: this.model, seed: null });
+        providerCalls.push({
+          phase: 'pass1',
+          attempt: attempts,
+          outcome: 'failure',
+          failureReason: sanitizeError(err),
+          requestHash: pass1Hash,
+          model: this.model,
+          seed: null,
+        });
         errors.push(`Pass 1 attempt ${attempts} failed: ${sanitizeError(err)}`);
         this.logger?.error(sanitizeError(err), { eventId, attempts, phase: 'pass1' });
         prose = '(empty)';
       }
-      this.traceCollector?.record({ phase: 'pass1', state: 'end', spanId: `${eventId}:pass1`, eventId, durationMs: Date.now() - renderStart });
-      this.logger?.info('Pass 1 completed', { eventId, attempts, promptTokens: llmPass1.promptTokens, completionTokens: llmPass1.completionTokens, totalTokens: llmPass1.totalTokens });
+      this.traceCollector?.record({
+        phase: 'pass1',
+        state: 'end',
+        spanId: `${eventId}:pass1`,
+        eventId,
+        durationMs: Date.now() - renderStart,
+      });
+      this.logger?.info('Pass 1 completed', {
+        eventId,
+        attempts,
+        promptTokens: llmPass1.promptTokens,
+        completionTokens: llmPass1.completionTokens,
+        totalTokens: llmPass1.totalTokens,
+      });
 
       if (prose === '(empty)') {
         breaker.recordFailure('Pass 1 returned empty prose');
@@ -367,14 +488,21 @@ export class RenderPipeline {
       llmPass2 = null;
       pass2Rejection = null;
       let lastAnalysisMessages: Message[] | undefined;
-      this.traceCollector?.record({ phase: 'pass2', state: 'start', spanId: `${eventId}:pass2`, eventId });
+      this.traceCollector?.record({
+        phase: 'pass2',
+        state: 'start',
+        spanId: `${eventId}:pass2`,
+        eventId,
+      });
       try {
         let analysisObj: AnalysisResult | null = null;
         let feedbackErrors: string[] | undefined;
         // Up to 4 attempts: initial + up to 3 retries with Zod error feedback
         for (let attempt2 = 0; attempt2 < 4 && !analysisObj; attempt2++) {
           const analysisInput: RenderAnalysisInput = {
-            event, prose, context,
+            event,
+            prose,
+            context,
             previousErrors: feedbackErrors,
             analysisRequirements: this.aggregator?.getAnalysisRequirements(),
           };
@@ -392,10 +520,20 @@ export class RenderPipeline {
           const result2 = await this.provider.complete(pass2Request);
           analysisRaw = result2.content ?? null;
           llmPass2 = result2.usage ?? null;
-          providerCalls.push({ phase: 'pass2', attempt: attempts, outcome: 'success', requestHash: pass2Hash, model: this.model, seed: 42 });
+          providerCalls.push({
+            phase: 'pass2',
+            attempt: attempts,
+            outcome: 'success',
+            requestHash: pass2Hash,
+            model: this.model,
+            seed: 42,
+          });
 
           if (analysisRaw) {
-            const parseResult = parseAnalysisJSONWithErrors(analysisRaw, this.aggregator?.getCombinedValidationSchema());
+            const parseResult = parseAnalysisJSONWithErrors(
+              analysisRaw,
+              this.aggregator?.getCombinedValidationSchema(),
+            );
             if (parseResult.result) {
               analysisObj = parseResult.result;
               break;
@@ -408,8 +546,8 @@ export class RenderPipeline {
               feedbackErrors = [`JSON parse error: ${parseResult.parseError}`];
             } else if (parseResult.zodErrors) {
               pass2Rejection = 'validation';
-              feedbackErrors = parseResult.zodErrors.issues.map(i =>
-                `Validation error at "${i.path.join('.')}": ${i.message}`,
+              feedbackErrors = parseResult.zodErrors.issues.map(
+                (i) => `Validation error at "${i.path.join('.')}": ${i.message}`,
               );
             }
           } else {
@@ -435,7 +573,14 @@ export class RenderPipeline {
               };
               verifyHash = this.computeRequestHash(verifyRequest);
               const result2b = await this.provider.complete(verifyRequest);
-              providerCalls.push({ phase: 'pass2_verify', attempt: attempts, outcome: 'success', requestHash: verifyHash, model: this.model, seed: 42 });
+              providerCalls.push({
+                phase: 'pass2_verify',
+                attempt: attempts,
+                outcome: 'success',
+                requestHash: verifyHash,
+                model: this.model,
+                seed: 42,
+              });
               const analysis2Raw = result2b.content;
               if (analysis2Raw) {
                 const parsed2 = parseAnalysisJSONWithErrors(analysis2Raw);
@@ -447,7 +592,15 @@ export class RenderPipeline {
                 }
               }
             } catch {
-              providerCalls.push({ phase: 'pass2_verify', attempt: attempts, outcome: 'failure', failureReason: sanitizeError('Double-run non-fatal error'), requestHash: verifyHash, model: this.model, seed: 42 });
+              providerCalls.push({
+                phase: 'pass2_verify',
+                attempt: attempts,
+                outcome: 'failure',
+                failureReason: sanitizeError('Double-run non-fatal error'),
+                requestHash: verifyHash,
+                model: this.model,
+                seed: 42,
+              });
             }
           }
         } else {
@@ -461,7 +614,12 @@ export class RenderPipeline {
           } else {
             errors.push('Pass 2 JSON parse/validation failed after retry');
           }
-          this.logger?.warn(errors[errors.length - 1], { eventId, attempts, phase: 'pass2', rejection: pass2Rejection ?? 'unknown' });
+          this.logger?.warn(errors[errors.length - 1], {
+            eventId,
+            attempts,
+            phase: 'pass2',
+            rejection: pass2Rejection ?? 'unknown',
+          });
           analysis = null;
         }
       } catch (err) {
@@ -480,24 +638,58 @@ export class RenderPipeline {
           taskType: 'pass2',
           responseFormat: { type: 'json_object' },
         });
-        providerCalls.push({ phase: 'pass2', attempt: attempts, outcome: 'failure', failureReason: sanitizeError(err), requestHash: failPass2Hash, model: this.model, seed: 42 });
+        providerCalls.push({
+          phase: 'pass2',
+          attempt: attempts,
+          outcome: 'failure',
+          failureReason: sanitizeError(err),
+          requestHash: failPass2Hash,
+          model: this.model,
+          seed: 42,
+        });
         this.logger?.error(sanitizeError(err), { eventId, attempts, phase: 'pass2' });
         analysis = null;
       }
-      this.traceCollector?.record({ phase: 'pass2', state: 'end', spanId: `${eventId}:pass2`, eventId, durationMs: Date.now() - renderStart });
+      this.traceCollector?.record({
+        phase: 'pass2',
+        state: 'end',
+        spanId: `${eventId}:pass2`,
+        eventId,
+        durationMs: Date.now() - renderStart,
+      });
       this.logger?.info('Pass 2 completed', { eventId, attempts });
 
       // ── Post-render validation ────────────────────────────────────
       renderValidation = null;
-      this.traceCollector?.record({ phase: 'validator', state: 'start', spanId: `${eventId}:validator`, eventId });
+      this.traceCollector?.record({
+        phase: 'validator',
+        state: 'start',
+        spanId: `${eventId}:validator`,
+        eventId,
+      });
       if (this.aggregator) {
         try {
-          renderValidation = this.aggregator.validateRender(prose, event, stateBefore, analysis ?? undefined, undefined, undefined, chapter, context);
+          renderValidation = this.aggregator.validateRender(
+            prose,
+            event,
+            stateBefore,
+            analysis ?? undefined,
+            undefined,
+            undefined,
+            chapter,
+            context,
+          );
         } catch (err) {
           errors.push(`Post-render validation failed: ${(err as Error).message}`);
         }
       }
-      this.traceCollector?.record({ phase: 'validator', state: 'end', spanId: `${eventId}:validator`, eventId, durationMs: Date.now() - renderStart });
+      this.traceCollector?.record({
+        phase: 'validator',
+        state: 'end',
+        spanId: `${eventId}:validator`,
+        eventId,
+        durationMs: Date.now() - renderStart,
+      });
       const issueCount = renderValidation?.errors.length ?? 0;
       this.eventBus?.emit('pipeline:validation:complete', { eventId, issueCount });
 
@@ -513,8 +705,18 @@ export class RenderPipeline {
       // After 2 consecutive failures, escalate to next round
       if (breaker.state().consecutiveFailures >= 2) {
         breaker.escalate();
-        this.traceCollector?.record({ phase: 'circuit', state: 'end', spanId: `${eventId}:circuit`, eventId, code: `round_${breaker.state().round}_escalated` });
-        this.logger?.warn('Circuit escalation', { eventId, round: breaker.state().round, strategy: breaker.state().escalatedStrategy });
+        this.traceCollector?.record({
+          phase: 'circuit',
+          state: 'end',
+          spanId: `${eventId}:circuit`,
+          eventId,
+          code: `round_${breaker.state().round}_escalated`,
+        });
+        this.logger?.warn('Circuit escalation', {
+          eventId,
+          round: breaker.state().round,
+          strategy: breaker.state().escalatedStrategy,
+        });
       }
 
       // Build structured repair guidance from validation errors
@@ -522,10 +724,17 @@ export class RenderPipeline {
       previousErrorMessages = renderValidation.errors.map((e) => e.message);
 
       // Use decideRepairStrategy for strategy selection based on error count
-      const repairDecision = decideRepairStrategy(revResult, breaker.state().round, this.maxRetries);
+      const repairDecision = decideRepairStrategy(
+        revResult,
+        breaker.state().round,
+        this.maxRetries,
+      );
 
       // Inject repair guidance into retry prompt
-      if (repairDecision.strategy === 'prompt_fix' || repairDecision.strategy === 'context_enrich') {
+      if (
+        repairDecision.strategy === 'prompt_fix' ||
+        repairDecision.strategy === 'context_enrich'
+      ) {
         if (repairDecision.guidance) {
           previousErrorMessages.push(repairDecision.guidance);
         }
@@ -533,36 +742,69 @@ export class RenderPipeline {
 
       errors.push(
         `Attempt ${attempts} failed validation (${renderValidation.errors.length} errors), ` +
-        `round ${breaker.state().round}, strategy: ${breaker.state().escalatedStrategy}`,
+          `round ${breaker.state().round}, strategy: ${breaker.state().escalatedStrategy}`,
       );
     }
 
     const renderEnd = Date.now();
-    const needsReview = analysis === null || breaker.state().isOpen || (!!renderValidation && !renderValidation.passed);
+    const needsReview =
+      analysis === null ||
+      breaker.state().isOpen ||
+      (!!renderValidation && !renderValidation.passed);
 
     // Compute aggregate promptHash from ordered provider-call identities
-    const promptHash = crypto.createHash('sha256')
-      .update(this.canonicalJson(
-        providerCalls.map(({ phase, attempt, requestHash, model, seed }) =>
-          ({ phase, attempt, requestHash, model, seed })),
-      ))
+    const promptHash = crypto
+      .createHash('sha256')
+      .update(
+        this.canonicalJson(
+          providerCalls.map(({ phase, attempt, requestHash, model, seed }) => ({
+            phase,
+            attempt,
+            requestHash,
+            model,
+            seed,
+          })),
+        ),
+      )
       .digest('hex');
 
     // Save cache ONLY if validation passed (don't cache bad renders)
     if (cacheKey && !needsReview) {
-      const evidenceHash = computeEvidenceHash(event.id, event.preconditions ?? [], event.postconditions ?? []);
-      setCachedRender(this.cacheDir, eventId, cacheKey, {
-        prose,
-        analysis: analysisRaw, // Store raw JSON string in cache
-        llmPass1,
-        llmPass2,
-        promptHash,
-        renderedAt: new Date().toISOString(),
-        chapters: [chapter],
-      }, this.storage, evidenceHash);
+      const evidenceHash = computeEvidenceHash(
+        event.id,
+        event.preconditions ?? [],
+        event.postconditions ?? [],
+      );
+      setCachedRender(
+        this.cacheDir,
+        eventId,
+        cacheKey,
+        {
+          prose,
+          analysis: analysisRaw, // Store raw JSON string in cache
+          llmPass1,
+          llmPass2,
+          promptHash,
+          renderedAt: new Date().toISOString(),
+          chapters: [chapter],
+        },
+        this.storage,
+        evidenceHash,
+      );
     }
-    this.traceCollector?.record({ phase: 'pipeline', state: 'end', spanId: eventId, eventId, durationMs: renderEnd - renderStart });
-    this.logger?.info('Scene render completed', { eventId, durationMs: renderEnd - renderStart, attempts, needsReview });
+    this.traceCollector?.record({
+      phase: 'pipeline',
+      state: 'end',
+      spanId: eventId,
+      eventId,
+      durationMs: renderEnd - renderStart,
+    });
+    this.logger?.info('Scene render completed', {
+      eventId,
+      durationMs: renderEnd - renderStart,
+      attempts,
+      needsReview,
+    });
     this.eventBus?.emit('pipeline:render:after', {
       eventId,
       durationMs: renderEnd - renderStart,
@@ -578,7 +820,18 @@ export class RenderPipeline {
       errors.push(...hookErrors);
     }
 
-    await this.writeResponseFile(eventId, prose, false, errors, analysis, new Date().toISOString(), renderValidation, needsReview, attempts, pass2Rejection ?? undefined);
+    await this.writeResponseFile(
+      eventId,
+      prose,
+      false,
+      errors,
+      analysis,
+      new Date().toISOString(),
+      renderValidation,
+      needsReview,
+      attempts,
+      pass2Rejection ?? undefined,
+    );
 
     return {
       eventId,
@@ -619,11 +872,12 @@ export class RenderPipeline {
     if (!prose || prose.trim().length === 0) return;
     try {
       this.storage.mkdirp(this.responseDir);
-      const released = prose.trim().length > 0
-        && analysis !== null
-        && validation !== null
-        && validation.passed
-        && !needsReview;
+      const released =
+        prose.trim().length > 0 &&
+        analysis !== null &&
+        validation !== null &&
+        validation.passed &&
+        !needsReview;
       const payload: Record<string, unknown> = {
         prose,
         timestamp,
@@ -643,10 +897,11 @@ export class RenderPipeline {
         JSON.stringify(payload, null, 2),
       );
     } catch (err) {
-      this.logger?.warn(
-        `Failed to persist raw response for ${eventId}`,
-        { eventId, responseDir: this.responseDir, error: String(err) },
-      );
+      this.logger?.warn(`Failed to persist raw response for ${eventId}`, {
+        eventId,
+        responseDir: this.responseDir,
+        error: String(err),
+      });
     }
   }
 
@@ -668,11 +923,15 @@ export class RenderPipeline {
       return JSON.stringify(value);
     }
     if (Array.isArray(value)) {
-      return '[' + value.map(v => this.canonicalJson(v)).join(',') + ']';
+      return '[' + value.map((v) => this.canonicalJson(v)).join(',') + ']';
     }
     const obj = value as Record<string, unknown>;
-    const keys = Object.keys(obj).filter(k => obj[k] !== undefined).sort();
-    return '{' + keys.map(k => JSON.stringify(k) + ':' + this.canonicalJson(obj[k])).join(',') + '}';
+    const keys = Object.keys(obj)
+      .filter((k) => obj[k] !== undefined)
+      .sort();
+    return (
+      '{' + keys.map((k) => JSON.stringify(k) + ':' + this.canonicalJson(obj[k])).join(',') + '}'
+    );
   }
   /**
    * Compute the SHA-256 request hash for a provider call.
@@ -694,4 +953,3 @@ export class RenderPipeline {
     return crypto.createHash('sha256').update(json, 'utf-8').digest('hex');
   }
 }
-

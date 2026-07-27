@@ -3,25 +3,24 @@
 // Runs actual validators against injected-error fixtures, not just YAML counting.
 // ============================================================================
 
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import {
-  EntityMapper,
-  InMemoryEntityRegistry,
-  ResultAggregator,
-  compileStoryBoundaries,
   type AnalysisResult,
+  compileStoryBoundaries,
+  EntityMapper,
   type EntityRegistry,
   type Fact,
+  InMemoryEntityRegistry,
   type NarrativeEvent,
-  type ValidationIssue,
-  type WorldState,
-  type ThreadRuntimeState,
+  ResultAggregator,
   type ThreadId,
   type ThreadRunId,
+  type ThreadRuntimeState,
+  type ValidationIssue,
+  type WorldState,
 } from '@novalistically/core';
-import * as path from 'node:path';
-import * as fs from 'node:fs';
 import YAML from 'yaml';
-
 
 /** Deterministic injection ID counter — replaces non-deterministic Date.now() */
 let _injIdCounter = 1;
@@ -104,7 +103,7 @@ function normalizeValidatorName(name: string): string {
     world_rule: 'world_rule',
     worldRule: 'world_rule',
     foreshadowing: 'foreshadowing',
-    schema: 'schema',              // not a validator — Zod-level check
+    schema: 'schema', // not a validator — Zod-level check
     factual_detail: 'factual_detail',
     factualDetail: 'factual_detail',
     knowledge: 'knowledge',
@@ -169,10 +168,7 @@ function makeBaselineAnalysisContent(): Record<string, unknown> {
  * Each mutation is designed to trigger a specific validator.
  * Returns descriptions of what was mutated.
  */
-function applyInjections(
-  events: NarrativeEvent[],
-  injections: InjectedEntry[],
-): string[] {
+function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]): string[] {
   const applied: string[] = [];
 
   for (const inj of injections) {
@@ -238,7 +234,9 @@ function applyInjections(
               value: pc.value,
               validity: makeFactValidity(),
             });
-            applied.push(`Added self-referencing precondition: ${pc.entityId}.${pc.attribute}=${JSON.stringify(pc.value)}`);
+            applied.push(
+              `Added self-referencing precondition: ${pc.entityId}.${pc.attribute}=${JSON.stringify(pc.value)}`,
+            );
           }
         } else {
           // Causality break: add an unsatisfiable precondition.
@@ -250,7 +248,9 @@ function applyInjections(
             value: 'nonexistent_faraway_land',
             validity: makeFactValidity(),
           });
-          applied.push('Added unsatisfiable precondition: xianglins_wife.location=nonexistent_faraway_land');
+          applied.push(
+            'Added unsatisfiable precondition: xianglins_wife.location=nonexistent_faraway_land',
+          );
         }
         break;
       }
@@ -265,7 +265,9 @@ function applyInjections(
           if (event.postconditions.length > 0) {
             const target = event.postconditions[0];
             target.value = `CORRUPTED_${nextInjId()}`;
-            applied.push(`Corrupted postcondition: ${target.entityId}.${target.attribute}=CORRUPTED`);
+            applied.push(
+              `Corrupted postcondition: ${target.entityId}.${target.attribute}=CORRUPTED`,
+            );
           }
           // For extreme-damage 002_postcondition_swap: swap values
           // between two events' postconditions
@@ -276,12 +278,18 @@ function applyInjections(
             );
             if (paired) {
               const otherEvent = events.find((e) => e.id === paired.entityId);
-              if (otherEvent && otherEvent.postconditions.length > 0 && event.postconditions.length > 0) {
+              if (
+                otherEvent &&
+                otherEvent.postconditions.length > 0 &&
+                event.postconditions.length > 0
+              ) {
                 const aVal = event.postconditions[event.postconditions.length - 1].value;
                 const bVal = otherEvent.postconditions[otherEvent.postconditions.length - 1].value;
                 event.postconditions[event.postconditions.length - 1].value = bVal;
                 otherEvent.postconditions[otherEvent.postconditions.length - 1].value = aVal;
-                applied.push(`Swapped postcondition values between ${inj.entityId} and ${paired.entityId}`);
+                applied.push(
+                  `Swapped postcondition values between ${inj.entityId} and ${paired.entityId}`,
+                );
               }
             }
           }
@@ -374,7 +382,7 @@ function applyInjections(
         applied.push('Added invented detail about nonexistent entity');
         break;
       }
- 
+
       // ── narratorKnowledge / knowledge ───────────────────────────────
       case 'narratorKnowledge':
       case 'narrator_knowledge': {
@@ -726,9 +734,7 @@ function processInjectionFile(
     // Validate event against current (pre-event) state
     const eventAggregator = new ResultAggregator();
     const chapter = Math.max(1, Math.ceil(event.narrativeOrder / 3));
-    const result = eventAggregator.validate(
-      event, incrementalState, registry, sorted, chapter,
-    );
+    const result = eventAggregator.validate(event, incrementalState, registry, sorted, chapter);
     allIssues.push(...result.errors, ...result.warnings, ...result.infos);
 
     // Apply event's effects to state for subsequent events
@@ -740,9 +746,7 @@ function processInjectionFile(
     const expectedName = normalizeValidatorName(inj.expectedValidator);
 
     // Collect ALL pre-render issues from the expected validator (any severity).
-    const preIssues = allIssues.filter(
-      (issue) => issue.validator === expectedName,
-    );
+    const preIssues = allIssues.filter((issue) => issue.validator === expectedName);
 
     // Post-render validation: run validateRender for entries with mock analysis data
     let postIssues: ValidationIssue[] = [];
@@ -782,11 +786,9 @@ function processInjectionFile(
           undefined,
           registry,
         );
-        postIssues = [
-          ...postResult.errors,
-          ...postResult.warnings,
-          ...postResult.infos,
-        ].filter((i) => i.validator === expectedName);
+        postIssues = [...postResult.errors, ...postResult.warnings, ...postResult.infos].filter(
+          (i) => i.validator === expectedName,
+        );
       }
     }
 
@@ -806,15 +808,16 @@ function processInjectionFile(
       expectedValidator: inj.expectedValidator,
       expectedSeverity: inj.expectedSeverity,
       actualIssues: allFromValidator,
-      unexpectedIssues: allIssues.filter(
-        (issue) => issue.validator !== expectedName,
-      ),
+      unexpectedIssues: allIssues.filter((issue) => issue.validator !== expectedName),
       matched,
     };
   });
 
   if (results.some((r) => r.matched)) {
-    const matchedDesc = results.filter((r) => r.matched).map((r) => r.expectedValidator).join(', ');
+    const matchedDesc = results
+      .filter((r) => r.matched)
+      .map((r) => r.expectedValidator)
+      .join(', ');
     console.log(`  [variants] ${fileName}: matched ${matchedDesc} (${appliedDesc.join('; ')})`);
   } else {
     console.log(`  [variants] ${fileName}: NO match (${appliedDesc.join('; ')})`);
@@ -829,12 +832,8 @@ function processInjectionFile(
  * Run all variant benchmarks against zhu-fu-variants fixture directories.
  */
 export async function runVariantBench(): Promise<VariantResults> {
-  const root = path.resolve(
-    __dirname, '..', '..', '..', 'fixtures', 'zhu-fu-variants',
-  );
-  const baseFixturePath = path.resolve(
-    __dirname, '..', '..', '..', 'fixtures', 'zhu-fu',
-  );
+  const root = path.resolve(__dirname, '..', '..', '..', 'fixtures', 'zhu-fu-variants');
+  const baseFixturePath = path.resolve(__dirname, '..', '..', '..', 'fixtures', 'zhu-fu');
 
   const startTime = Date.now();
 
@@ -891,7 +890,8 @@ export async function runVariantBench(): Promise<VariantResults> {
       type: 'error_injection',
       eventsLoaded: errorInjectionResults.length,
       errorsDetected: errorInjectionResults.filter((r) => r.expectedSeverity === 'error').length,
-      warningsDetected: errorInjectionResults.filter((r) => r.expectedSeverity === 'warning').length,
+      warningsDetected: errorInjectionResults.filter((r) => r.expectedSeverity === 'warning')
+        .length,
       infosDetected: errorInjectionResults.filter((r) => r.expectedSeverity === 'info').length,
       ms: 0,
     },
@@ -985,12 +985,18 @@ function applyEventToState(event: NarrativeEvent, state: WorldState): void {
       };
     }
     const epoch = epochs[epochId];
-    const memberships = epoch.memberships as Record<string, { membershipId: string; entityId: string; role?: string }>;
+    const memberships = epoch.memberships as Record<
+      string,
+      { membershipId: string; entityId: string; role?: string }
+    >;
     for (const m of re.membershipAfter) {
       memberships[m.membershipId] = m;
     }
     if (re.dimensionSet) {
-      const dimensions = epoch.dimensions as Record<string, { value: unknown; scope: string; lastUpdatedEffectId: string }>;
+      const dimensions = epoch.dimensions as Record<
+        string,
+        { value: unknown; scope: string; lastUpdatedEffectId: string }
+      >;
       for (const d of re.dimensionSet) {
         const key = `${d.scope}::${d.dimensionId}`;
         dimensions[key] = { value: d.value, scope: d.scope, lastUpdatedEffectId: re.effectId };
@@ -1089,12 +1095,9 @@ function applyRegistryState(state: WorldState, registry: EntityRegistry): void {
   }
 }
 
-
 // ─── Branch variant runner ──────────────────────────────────────────────────
 
-function runBranchVariant(
-  dir: string,
-): { eventsLoaded: number; issues: ValidationIssue[] } {
+function runBranchVariant(dir: string): { eventsLoaded: number; issues: ValidationIssue[] } {
   const mapper = new EntityMapper(dir);
   const projectData = mapper.loadProject();
   const registry = new InMemoryEntityRegistry();
@@ -1129,11 +1132,14 @@ function runBranchVariant(
   const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors);
 
   // Only validate events that survived causal filtering
-  const selectedEvents = authoredEvents.filter(
-    (e) => boundaries.stateBeforeByEventId.has(e.id),
-  );
+  const selectedEvents = authoredEvents.filter((e) => boundaries.stateBeforeByEventId.has(e.id));
 
-  const issues = runValidators(selectedEvents, boundaries.finalState, registry, boundaries.stateBeforeByEventId);
+  const issues = runValidators(
+    selectedEvents,
+    boundaries.finalState,
+    registry,
+    boundaries.stateBeforeByEventId,
+  );
   return { eventsLoaded: selectedEvents.length, issues };
 }
 
@@ -1221,17 +1227,16 @@ function computeF1(results: VariantIssueResult[]): {
   }
 
   const total = matchedCount + missedCount;
-  const precision = matchedCount + falsePositiveCount > 0
-    ? matchedCount / (matchedCount + falsePositiveCount)
-    : total > 0 ? 0 : 1;
+  const precision =
+    matchedCount + falsePositiveCount > 0
+      ? matchedCount / (matchedCount + falsePositiveCount)
+      : total > 0
+        ? 0
+        : 1;
 
-  const recall = total > 0
-    ? matchedCount / total
-    : 1;
+  const recall = total > 0 ? matchedCount / total : 1;
 
-  const f1 = precision + recall > 0
-    ? 2 * (precision * recall) / (precision + recall)
-    : 0;
+  const f1 = precision + recall > 0 ? (2 * (precision * recall)) / (precision + recall) : 0;
 
   return {
     precision: Math.round(precision * 1000) / 1000,

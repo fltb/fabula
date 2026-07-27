@@ -46,20 +46,20 @@ interface AgentSFTEvent {
 // ─── Taxonomy mappings ──────────────────────────────────────────────────────
 
 const CONFLICT_TYPE_MAP: Record<string, string> = {
-  '人物冲突': 'person_vs_person',
-  '社会冲突': 'person_vs_society',
-  '自我冲突': 'person_vs_self',
-  '命运冲突': 'person_vs_fate',
-  '自然冲突': 'person_vs_nature',
+  人物冲突: 'person_vs_person',
+  社会冲突: 'person_vs_society',
+  自我冲突: 'person_vs_self',
+  命运冲突: 'person_vs_fate',
+  自然冲突: 'person_vs_nature',
 };
 
 const EMOTIONAL_TONE_MAP: Record<string, string> = {
-  '悲伤': 'sad',
-  '愤怒': 'angry',
-  '喜悦': 'joyful',
-  '恐惧': 'fearful',
-  '紧张': 'tense',
-  '平静': 'calm',
+  悲伤: 'sad',
+  愤怒: 'angry',
+  喜悦: 'joyful',
+  恐惧: 'fearful',
+  紧张: 'tense',
+  平静: 'calm',
 };
 
 function mapConflictType(ct?: string): string {
@@ -80,15 +80,30 @@ export function convertAgentSFTEvent(
     ['event', 'narrativeOrder', 'sceneBrief', 'pov', 'storyTime'],
     ['conflictType', 'emotionalValence'],
     [
-      'preconditions', 'expectedPostconditions', 'tense', 'sceneType',
-      'discourseMode', 'resolutionType', 'arcPosition', 'narrationTime',
-      'styleGuidance', 'threadProgress', 'foreshadowing', 'relationshipEffects',
+      'preconditions',
+      'expectedPostconditions',
+      'tense',
+      'sceneType',
+      'discourseMode',
+      'resolutionType',
+      'arcPosition',
+      'narrationTime',
+      'styleGuidance',
+      'threadProgress',
+      'foreshadowing',
+      'relationshipEffects',
       'introduces',
     ],
   );
 
   const sceneType: 'linear' | 'flashback' | 'flashforward' | 'dream' | 'parallel' = 'linear';
-  const discourseMode: 'action' | 'dialogue' | 'description' | 'exposition' | 'reflection' | 'transition' = 'exposition';
+  const discourseMode:
+    | 'action'
+    | 'dialogue'
+    | 'description'
+    | 'exposition'
+    | 'reflection'
+    | 'transition' = 'exposition';
 
   const data: EventFile = {
     event: raw.event_id,
@@ -119,7 +134,7 @@ export function convertAgentSFTEvent(
 export function convertAgentSFTChapter(
   raw: AgentSFTChapter,
 ): Array<{ data: EventFile; annotation: ProvenanceAnnotation }> {
-  return raw.events.map(e => convertAgentSFTEvent(e, raw.chapter_index));
+  return raw.events.map((e) => convertAgentSFTEvent(e, raw.chapter_index));
 }
 
 export interface AgentSFTConversionResult {

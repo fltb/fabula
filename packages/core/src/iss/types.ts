@@ -2,19 +2,25 @@
 // ISS — Shared Types & Utilities
 // ============================================================================
 
-import {
-  type EntityRegistry,
-  type NarrativeEvent,
-  type RuleDefinition,
-} from '../types/index.js';
+import type { EntityRegistry, NarrativeEvent, RuleDefinition } from '../types/index.js';
 
 // ─── Placeholder Detection ──────────────────────────────────────────────────
 
-const PLACEHOLDER_VALUES = ['changed', 'resolved', 'updated', 'affected', 'modified', 'altered'] as const;
+const PLACEHOLDER_VALUES = [
+  'changed',
+  'resolved',
+  'updated',
+  'affected',
+  'modified',
+  'altered',
+] as const;
 export type PlaceholderValue = (typeof PLACEHOLDER_VALUES)[number];
 
 export function isPlaceholderValue(value: unknown): value is PlaceholderValue {
-  return typeof value === 'string' && PLACEHOLDER_VALUES.includes(value.toLowerCase() as PlaceholderValue);
+  return (
+    typeof value === 'string' &&
+    PLACEHOLDER_VALUES.includes(value.toLowerCase() as PlaceholderValue)
+  );
 }
 
 // ─── Options ────────────────────────────────────────────────────────────────

@@ -117,10 +117,12 @@ export const identityTransitionCarryEntrySchema = z
 export const relationshipIdentityTransitionGroupSchema = z
   .object({
     oldEpochClosures: z.array(
-      z.object({
-        relationshipId: z.string(),
-        epochId: z.string(),
-      }).strict(),
+      z
+        .object({
+          relationshipId: z.string(),
+          epochId: z.string(),
+        })
+        .strict(),
     ),
     newTransactions: z.array(relationshipTransactionSchema),
     carryMap: z.array(identityTransitionCarryEntrySchema).optional(),

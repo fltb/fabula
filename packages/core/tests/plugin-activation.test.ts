@@ -10,67 +10,51 @@
 //      authoritative dimension with one exclusive: true.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
 import path from 'node:path';
-
-// ——— Project loading ———
-import { initializeProject, validateNovel } from '../src/api.js';
-
-// ——— Plugin system ———
-import {
-  PluginLoader,
-  PluginHooksManager,
-  ValidatorRegistry,
-  detectConflicts,
-} from '../src/plugin/index.js';
-import type {
-  PluginManifest,
-  PluginHooks,
-  PluginContext,
-  ProviderRegistry,
-} from '../src/plugin/types.js';
-
-// ——— Validation ———
-import { ResultAggregator } from '../src/validator/aggregator.ts';
-
-// ——— Pipeline ———
-import { RenderPipeline } from '../src/pipeline/render.ts';
-import type { RenderJob } from '../src/pipeline/render.ts';
-
-// ——— Storage ———
-import { FsStorage } from '../src/storage/fs-storage.ts';
-import { MemoryStorage } from '../src/storage/memory-storage.ts';
-
+import { describe, expect, it } from 'vitest';
 // ——— AI / Mock ———
 import { MockPass2Provider } from '../src/ai/providers/mock-pass2.ts';
-import { makeAnalysisResult } from './fixtures/mock-pass2-helpers.ts';
-
+// ——— Project loading ———
+import { initializeProject, validateNovel } from '../src/api.js';
 // ——— Context ———
 import { ContextCompiler } from '../src/context/index.js';
 import { InMemoryEntityRegistry } from '../src/entity/index.js';
-import type { SystemContext, EntityRegistry } from '../src/types/index.ts';
-
 // ——— Logger ———
 import { Logger } from '../src/observability/logger.ts';
+import type { RenderJob } from '../src/pipeline/render.ts';
+// ——— Pipeline ———
+import { RenderPipeline } from '../src/pipeline/render.ts';
+// ——— Plugin system ———
+import {
+  detectConflicts,
+  PluginHooksManager,
+  PluginLoader,
+  ValidatorRegistry,
+} from '../src/plugin/index.js';
+import type {
+  PluginContext,
+  PluginHooks,
+  PluginManifest,
+  ProviderRegistry,
+} from '../src/plugin/types.js';
+// ——— Storage ———
+import { FsStorage } from '../src/storage/fs-storage.ts';
+import { MemoryStorage } from '../src/storage/memory-storage.ts';
+import type { EntityRegistry, SystemContext } from '../src/types/index.ts';
+// ——— Validation ———
+import { ResultAggregator } from '../src/validator/aggregator.ts';
+import { makeAnalysisResult } from './fixtures/mock-pass2-helpers.ts';
 
 // ——— Fixture paths ———
 const ROOT = path.resolve(__dirname, '..', '..', '..');
-const PLUGIN_CHECK_DIR = path.join(
-  ROOT,
-  'fixtures',
-  'zhu-fu-variants',
-  'plugin-check',
-);
+const PLUGIN_CHECK_DIR = path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'plugin-check');
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
 /** Create a minimal PluginContext for test use. */
-function makePluginContext(
-  projectDir: string,
-  storage: MemoryStorage | FsStorage,
-): PluginContext {
+function makePluginContext(projectDir: string, storage: MemoryStorage | FsStorage): PluginContext {
   return {
     projectDir,
     storage,
@@ -100,16 +84,12 @@ describe('plugin activation — real fixture validation', () => {
     // E1 must not have emotionalValence (fixture invariant)
     expect((e1 as Record<string, unknown>).emotionalValence).toBeUndefined();
     // E0 does have it
-    expect((e0 as Record<string, unknown>).emotionalValence).toBe(
-      'unsettling_encounter_guilt',
-    );
+    expect((e0 as Record<string, unknown>).emotionalValence).toBe('unsettling_encounter_guilt');
 
     // ── Load plugins from the real fixture directory ──────────────────
     const fsStorage = new FsStorage();
     const loader = new PluginLoader(fsStorage);
-    const hooks = await loader.loadFromDirectory(
-      path.join(PLUGIN_CHECK_DIR, 'plugins'),
-    );
+    const hooks = await loader.loadFromDirectory(path.join(PLUGIN_CHECK_DIR, 'plugins'));
     expect(hooks).toHaveLength(1);
     expect(hooks[0].name).toBe('valence-guard');
 
@@ -140,9 +120,7 @@ describe('plugin activation — real fixture validation', () => {
     expect(e1Result!.passed).toBe(false);
 
     // Locate the valence-guard issue among the errors
-    const valenceError = e1Result!.errors.find(
-      (issue) => issue.validator === 'valence-guard',
-    );
+    const valenceError = e1Result!.errors.find((issue) => issue.validator === 'valence-guard');
     expect(valenceError).toBeDefined();
 
     // Assert specific value shape (not just "failed")
@@ -313,8 +291,7 @@ describe('plugin activation — render with hooks', () => {
     expect(resultB.errors.length).toBeGreaterThan(0);
     // Error should mention missing entry (provider error), not plugin hooks
     const providerError = resultB.errors.find(
-      (e) =>
-        e.includes('MockPass2Provider') || e.includes('no entry for event'),
+      (e) => e.includes('MockPass2Provider') || e.includes('no entry for event'),
     );
     expect(providerError).toBeDefined();
     // Hooks still ran despite the error

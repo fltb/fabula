@@ -161,11 +161,7 @@ export type NarratorProfile =
  * - `metadiegetic`: a story within the story (second-level narrative)
  * - `hypodiegetic`: a story within a story within the story (third-level)
  */
-export type NarrativeLevel =
-  | 'extradiegetic'
-  | 'intradiegetic'
-  | 'metadiegetic'
-  | 'hypodiegetic';
+export type NarrativeLevel = 'extradiegetic' | 'intradiegetic' | 'metadiegetic' | 'hypodiegetic';
 
 /**
  * Diegetic relation — narrator's relationship to the story.

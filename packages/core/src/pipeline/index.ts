@@ -2,9 +2,19 @@
 // Pipeline barrel
 // ============================================================================
 
-export { RenderPipeline } from './render.ts';
-export type { RenderJob, RenderSceneResult, RenderPipelineOptions, ProviderCallLedgerEntry, Pass2RejectionCategory } from './render.ts';
-export { buildAndWriteOutputs } from './output.ts';
-export type { ReverseValidationResult, RepairStrategy, RepairDecision } from './reverse-validate.ts';
-export { InteractionManager } from './interaction-gate.ts';
 export type { InteractionGate, WaiverRecord } from './interaction-gate.ts';
+export { InteractionManager } from './interaction-gate.ts';
+export { buildAndWriteOutputs } from './output.ts';
+export type {
+  Pass2RejectionCategory,
+  ProviderCallLedgerEntry,
+  RenderJob,
+  RenderPipelineOptions,
+  RenderSceneResult,
+} from './render.ts';
+export { RenderPipeline } from './render.ts';
+export type {
+  RepairDecision,
+  RepairStrategy,
+  ReverseValidationResult,
+} from './reverse-validate.ts';

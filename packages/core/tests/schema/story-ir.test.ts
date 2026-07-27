@@ -2,8 +2,12 @@
 // Schema Validation Tests — Story IR (S7b)
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { structuralFunctionSchema, actantModelSchema, storyArchetypeSchema } from '../../src/schemas/story-ir.js';
+import { describe, expect, it } from 'vitest';
+import {
+  actantModelSchema,
+  storyArchetypeSchema,
+  structuralFunctionSchema,
+} from '../../src/schemas/story-ir.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -25,13 +29,32 @@ const VALID_ACTANT_MODEL = {
 describe('structuralFunctionSchema', () => {
   it('accepts each of the 26 Propp function values', () => {
     const functions = [
-      'absentation', 'interdiction', 'violation', 'departure',
-      'first_function_of_donor', 'hero_reaction', 'acquisition',
-      'spatial_translocation', 'villainy', 'mediation', 'beginning_counteraction',
-      'first_villainy', 'hero_departure', 'donor_test', 'hero_reaction_donor',
-      'receipt_of_agent', 'guidance', 'arrival', 'unrecognized_arrival',
-      'unfounded_claims', 'difficult_task', 'solution', 'recognition',
-      'exposure', 'punishment', 'wedding',
+      'absentation',
+      'interdiction',
+      'violation',
+      'departure',
+      'first_function_of_donor',
+      'hero_reaction',
+      'acquisition',
+      'spatial_translocation',
+      'villainy',
+      'mediation',
+      'beginning_counteraction',
+      'first_villainy',
+      'hero_departure',
+      'donor_test',
+      'hero_reaction_donor',
+      'receipt_of_agent',
+      'guidance',
+      'arrival',
+      'unrecognized_arrival',
+      'unfounded_claims',
+      'difficult_task',
+      'solution',
+      'recognition',
+      'exposure',
+      'punishment',
+      'wedding',
     ] as const;
     for (const fn of functions) {
       const result = structuralFunctionSchema.safeParse(fn);
@@ -121,7 +144,14 @@ describe('actantModelSchema', () => {
 
 describe('storyArchetypeSchema', () => {
   it('accepts each of the 6 archetype values', () => {
-    const archetypes = ['hero_journey', 'tragedy', 'quest', 'descent', 'rebirth', 'comedy'] as const;
+    const archetypes = [
+      'hero_journey',
+      'tragedy',
+      'quest',
+      'descent',
+      'rebirth',
+      'comedy',
+    ] as const;
     for (const archetype of archetypes) {
       const result = storyArchetypeSchema.safeParse(archetype);
       expect(result.success).toBe(true);

@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { AnalysisResult, NarrativeEvent, PostRenderInput } from '../../src/types/index.js';
 import { WorldRuleValidator } from '../../src/validator/world-rule.js';
-import type { NarrativeEvent, PostRenderInput, AnalysisResult } from '../../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -24,25 +24,31 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  analysis: AnalysisResult | null,
-): PostRenderInput {
+function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): PostRenderInput {
   return {
     event,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     prose: 'Some prose.',
     analysis,
     chapter: 1,
   };
 }
 
-function makeAnalysis(ruleChecks: Array<{
-  ruleId: string;
-  violated: boolean;
-  evidence: string;
-  severity: 'minor' | 'major';
-}>): AnalysisResult {
+function makeAnalysis(
+  ruleChecks: Array<{
+    ruleId: string;
+    violated: boolean;
+    evidence: string;
+    severity: 'minor' | 'major';
+  }>,
+): AnalysisResult {
   return {
     eventId: 'E1',
     analysis: {
@@ -50,7 +56,13 @@ function makeAnalysis(ruleChecks: Array<{
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+      quality: {
+        proseScore: 8,
+        maxScore: 10,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 300,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
       ruleChecks,
@@ -71,7 +83,7 @@ describe('WorldRuleValidator', () => {
     ]);
     const input = makeInput(event, analysis);
     const issues = new WorldRuleValidator().validatePost(input);
-    const ruleIssues = issues.filter(i => i.validator === 'world_rule');
+    const ruleIssues = issues.filter((i) => i.validator === 'world_rule');
     expect(ruleIssues).toHaveLength(1);
     expect(ruleIssues[0].severity).toBe('error');
     expect(ruleIssues[0].entity).toBe('R1');
@@ -90,7 +102,7 @@ describe('WorldRuleValidator', () => {
     ]);
     const input = makeInput(event, analysis);
     const issues = new WorldRuleValidator().validatePost(input);
-    const ruleIssues = issues.filter(i => i.validator === 'world_rule');
+    const ruleIssues = issues.filter((i) => i.validator === 'world_rule');
     expect(ruleIssues).toHaveLength(1);
     expect(ruleIssues[0].severity).toBe('warning');
     expect(ruleIssues[0].entity).toBe('R2');
@@ -109,7 +121,7 @@ describe('WorldRuleValidator', () => {
     ]);
     const input = makeInput(event, analysis);
     const issues = new WorldRuleValidator().validatePost(input);
-    const ruleIssues = issues.filter(i => i.validator === 'world_rule');
+    const ruleIssues = issues.filter((i) => i.validator === 'world_rule');
     expect(ruleIssues).toHaveLength(0);
   });
 

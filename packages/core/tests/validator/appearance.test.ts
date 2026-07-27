@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { AnalysisResult, NarrativeEvent, PostRenderInput } from '../../src/types/index.js';
 import { AppearanceValidator } from '../../src/validator/appearance.js';
-import type { NarrativeEvent, PostRenderInput, AnalysisResult } from '../../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -45,13 +45,15 @@ function makeInput(
   };
 }
 
-function makeAnalysis(appearanceChecks: Array<{
-  entityId: string;
-  feature: string;
-  declared: string;
-  evidence: string;
-  matchLevel: 'exact' | 'similar' | 'absent' | 'contradicted';
-}>): AnalysisResult {
+function makeAnalysis(
+  appearanceChecks: Array<{
+    entityId: string;
+    feature: string;
+    declared: string;
+    evidence: string;
+    matchLevel: 'exact' | 'similar' | 'absent' | 'contradicted';
+  }>,
+): AnalysisResult {
   return {
     eventId: 'E1',
     analysis: {
@@ -59,7 +61,13 @@ function makeAnalysis(appearanceChecks: Array<{
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+      quality: {
+        proseScore: 8,
+        maxScore: 10,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 300,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
       appearanceChecks,
@@ -84,7 +92,7 @@ describe('AppearanceValidator', () => {
     };
     const input = makeInput(event, analysis, worldEntities);
     const issues = new AppearanceValidator().validatePost(input);
-    const appIssues = issues.filter(i => i.validator === 'appearance');
+    const appIssues = issues.filter((i) => i.validator === 'appearance');
     expect(appIssues).toHaveLength(0);
   });
 
@@ -104,7 +112,7 @@ describe('AppearanceValidator', () => {
     };
     const input = makeInput(event, analysis, worldEntities);
     const issues = new AppearanceValidator().validatePost(input);
-    const appIssues = issues.filter(i => i.validator === 'appearance');
+    const appIssues = issues.filter((i) => i.validator === 'appearance');
     expect(appIssues.length).toBeGreaterThanOrEqual(1);
     expect(appIssues[0].message).toContain('Contradicted');
     expect(appIssues[0].severity).toBe('error');

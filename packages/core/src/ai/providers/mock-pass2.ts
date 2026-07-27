@@ -8,13 +8,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type {
-  CompletionRequest,
-  CompletionResponse,
-  LLMProvider,
-  Message,
-} from '../types.ts';
 import type { AnalysisResult } from '../../types/analysis.ts';
+import type { CompletionRequest, CompletionResponse, LLMProvider, Message } from '../types.ts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -70,12 +65,12 @@ export class MockPass2Provider implements LLMProvider {
 
     const refDir = path.resolve(baseDir);
     if (!fs.existsSync(refDir)) {
-      throw new Error(
-        `MockPass2Provider: reference directory does not exist: ${refDir}`,
-      );
+      throw new Error(`MockPass2Provider: reference directory does not exist: ${refDir}`);
     }
 
-    const files = fs.readdirSync(refDir).filter((file) => file.endsWith('.json') && file !== 'system:genesis.json');
+    const files = fs
+      .readdirSync(refDir)
+      .filter((file) => file.endsWith('.json') && file !== 'system:genesis.json');
     for (const file of files) {
       const filePath = path.join(refDir, file);
       const data = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as MockPass2Entry;
@@ -100,10 +95,7 @@ export class MockPass2Provider implements LLMProvider {
 
   /** Returns true if the given request appears to be a Pass 2 (analysis) request. */
   static isPass2Request(request: CompletionRequest): boolean {
-    return (
-      request.seed !== undefined ||
-      request.responseFormat?.type === 'json_object'
-    );
+    return request.seed !== undefined || request.responseFormat?.type === 'json_object';
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
@@ -129,9 +121,7 @@ export class MockPass2Provider implements LLMProvider {
       );
     }
 
-    const content = isPass2
-      ? JSON.stringify(entry.analysis)
-      : entry.prose;
+    const content = isPass2 ? JSON.stringify(entry.analysis) : entry.prose;
 
     // Estimate tokens (rough: 4 chars per token)
     const estimatedTokens = Math.ceil(content.length / 4);
@@ -181,17 +171,13 @@ export class MockPass2Provider implements LLMProvider {
     if (idMatch) return idMatch[1];
 
     // Last resort: use a hash of the last user message
-    const lastUser = [...request.messages]
-      .reverse()
-      .find((m: Message) => m.role === 'user');
+    const lastUser = [...request.messages].reverse().find((m: Message) => m.role === 'user');
     if (lastUser) {
       const hash = this.simpleHash(lastUser.content);
       return `msg-${hash}`;
     }
 
-    throw new Error(
-      'MockPass2Provider: could not extract eventId from request',
-    );
+    throw new Error('MockPass2Provider: could not extract eventId from request');
   }
 
   /** Simple string hash for fallback id extraction. */

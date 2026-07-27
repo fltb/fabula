@@ -6,487 +6,462 @@
 // ============================================================================
 
 export type {
-  EntityId,
-  EntityKind,
-  Entity,
-  EntityTypeRef,
-  EntityRuntimeState,
-  StoryTimestamp,
-  AbsoluteTimestamp,
-  RelativeTimestamp,
-  ChapterTimestamp,
-  TimeAnchor,
-  FactId,
-  Fact,
-  FactValidity,
-  EntityRegistry,
-} from './entity.js';
-
+  AnalysisResult,
+  AppearanceCheck,
+  CharacterReference,
+  ChecklistResult,
+  ConflictAnalysis,
+  InventedDetail,
+  MatchLevel,
+  NarrativeCheck,
+  POVAnalysis,
+  PreconditionAnalysis,
+  QualityAnalysis,
+  TenseDetected,
+} from './analysis.js';
 export type {
-  AttributeDefinition,
-  WritePolicy,
-  RequiredAt,
-  EntityTypeDefinition,
-  EntityDeclaration,
-  EntityTypeCatalog,
-  EntityDeclarationCatalog,
-} from './entity-catalog.js';
-
-export type {
-  BranchPath,
-  BranchSet,
-  BranchPoint,
   BranchChoice,
-  Condition,
+  BranchPath,
+  BranchPoint,
   BranchPointsFile,
+  BranchSet,
+  Condition,
 } from './branch.js';
-
 export type {
-  NarrativeEvent,
-  ThreadProgressEntry,
-  ForeshadowEntry,
-  RelationshipChange,
-  StyleGuidance,
-  EventFile,
-} from './event.js';
-
+  ChapterMetadata,
+  ProjectConfig,
+  SceneMetadata,
+} from './chapter.js';
 export type {
-  GreyLineNode,
-  GreyLine,
-} from './grey-line.js';
-
-// ——— S6: Genette Base Narratology Types ———
+  CharacterDefinition,
+  CharacterRelationshipDef,
+  FactionDefinition,
+} from './character.js';
 export type {
-  DurationType,
-  DurationProfile,
-} from './duration.js';
+  CharacterSnapshot,
+  ContextPackage,
+  FinalPrompt,
+  KnowledgeBoundary,
+  RelationshipContext,
+  RelevanceScore,
+  RenderRequest,
+  SceneSpecification,
+  SystemContext,
+  ThreadStatus,
+  WorldFact,
+} from './context.js';
+// ——— CORPUS-1: NarrativeEllipsis & NarrativeNode ———
 export type {
-  FrequencyType,
-  FrequencyProfile,
-} from './frequency.js';
+  EllipsisProvenance,
+  NarrativeEllipsis as CorpusEllipsis,
+  NarrativeNode as CorpusNode,
+} from './corpus.js';
 export type {
-  AnachronyType,
-  AnachronyScope,
-  AnachronyFunction,
   Anachrony,
-  NarrativeLevel,
+  AnachronyFunction,
+  AnachronyScope,
+  AnachronyType,
   DiegeticRelation,
+  NarrativeLevel,
   VoiceProfile,
 } from './discourse.js';
-// ——— S3: Modern Novel Structural Types ———
+// ——— S6: Genette Base Narratology Types ———
 export type {
-  AntiCausalEdgeConfig,
-  ChapterOrderContested,
-  SurfaceModeConfig,
-  CausalOverloadConfig,
-  IrresolvableIndeterminacy,
-  AbsentApparatus,
-  VoiceDissonance,
-  Multiplicity,
-  MetanarrativeLevel,
-  ModernNovelConfig,
-} from './modern-novel.js';
+  DurationProfile,
+  DurationType,
+} from './duration.js';
 export type {
-  NarrativeChecklistItem,
-  NarrativeChecklist,
-} from './narrative-checklist.js';
-// ——— S4: Source Context Types ———
+  AbsoluteTimestamp,
+  ChapterTimestamp,
+  Entity,
+  EntityId,
+  EntityKind,
+  EntityRegistry,
+  EntityRuntimeState,
+  EntityTypeRef,
+  Fact,
+  FactId,
+  FactValidity,
+  RelativeTimestamp,
+  StoryTimestamp,
+  TimeAnchor,
+} from './entity.js';
 export type {
-  SourceContextEntry,
-  SourceContext,
-} from './source-context.js';
+  AttributeDefinition,
+  EntityDeclaration,
+  EntityDeclarationCatalog,
+  EntityTypeCatalog,
+  EntityTypeDefinition,
+  RequiredAt,
+  WritePolicy,
+} from './entity-catalog.js';
+export type {
+  EventFile,
+  ForeshadowEntry,
+  NarrativeEvent,
+  RelationshipChange,
+  StyleGuidance,
+  ThreadProgressEntry,
+} from './event.js';
+export type {
+  FrequencyProfile,
+  FrequencyType,
+} from './frequency.js';
+// ——— GRAPH-1: Typed Causal Graph Types ———
+export type {
+  AmbiguousOutputError,
+  AssertionMismatchError,
+  BranchCoverageError,
+  BranchIncompatibilityError,
+  CrossClockEdgeError,
+  DiscourseCoordinate,
+  DiscourseGraph,
+  DuplicateBranchProviderError,
+  DuplicateDiscoursePositionError,
+  DynamicLifecycleError,
+  EdgeClass,
+  EdgeOriginCycleError,
+  EffectiveCoordinate,
+  EllipsisSummaryError,
+  FutureTimeError,
+  GraphAbsenceWitness,
+  GraphBoundaryReference,
+  GraphCacheEntry,
+  GraphCompileError,
+  GraphCompilerOptions,
+  GraphCompilerResult,
+  GraphEdge,
+  GraphErrorContext,
+  GraphNarrativeEllipsis,
+  GraphProviderOutput,
+  GraphReadResolution,
+  IncomparableTimeError,
+  InitialRootMisuseError,
+  MergeInputError,
+  MissingOutputError,
+  NoOutputEdgeError,
+  OutputDescriptor,
+  OutputValue,
+  PresencePredicate,
+  ProvenanceError,
+  ReadMismatchError,
+  ReadOrigin,
+  ReadPhase,
+  ReadRequirement,
+  SelfPredecessorError,
+  SemanticOutputDependencyError,
+  StaleProviderSelectionError,
+  StoryCoordinate,
+  StoryGraph,
+  UnknownPredecessorError,
+  UnknownReadIdError,
+  UnorderedSameTimeConflictError,
+} from './graph.js';
+export type {
+  GreyLine,
+  GreyLineNode,
+} from './grey-line.js';
 // ——— S7: Upper IR Types ———
 export type {
-  ThematicIntent,
   EmotionalArcDefinition,
   IdeaIR,
+  ThematicIntent,
 } from './idea-ir.js';
 export type {
-  StructuralFunction,
+  ISSDimension,
+  ISSGap,
+  ISSSnapshot,
+} from './iss.js';
+// ——— STATE-4 Knowledge/Belief Types ———
+export type {
+  ActProposition,
+  Claim,
+  ClaimAssessment,
+  ClaimEvidenceRecord,
+  ClaimGrade,
+  ClaimPolarity,
+  CommonGroundRecord,
+  ConflictedAssessment,
+  claimKey,
+  EpistemicLedger,
+  EpistemicProposition,
+  EvaluationResult,
+  EvidenceSource,
+  ForgottenAssessment,
+  GroundedProposition,
+  GroupEpistemicMode,
+  GroupEpistemicQueryDefinition,
+  InformationAct,
+  InformationActType,
+  IntensionalProposition,
+  NarrativeKnowledgeBoundary,
+  Proposition,
+  PropositionCatalog,
+  PropositionId,
+  PropositionKind,
+  SettledAssessment,
+  SuspendedAssessment,
+  UnsetAssessment,
+} from './knowledge.js';
+export type {
+  ItemDefinition,
+  LocationDefinition,
+} from './location.js';
+export type {
+  MergeConflict,
+  MergeConflictReport,
+  SceneQuality,
+} from './merge.js';
+// ——— S3: Modern Novel Structural Types ———
+export type {
+  AbsentApparatus,
+  AntiCausalEdgeConfig,
+  CausalOverloadConfig,
+  ChapterOrderContested,
+  IrresolvableIndeterminacy,
+  MetanarrativeLevel,
+  ModernNovelConfig,
+  Multiplicity,
+  SurfaceModeConfig,
+  VoiceDissonance,
+} from './modern-novel.js';
+export type {
+  NarrativeChecklist,
+  NarrativeChecklistItem,
+} from './narrative-checklist.js';
+export type {
+  ArbitrationStrategy,
+  PluginManifest,
+} from './plugin.js';
+export type {
+  DimensionScope,
+  DimensionState,
+  DimensionUnset,
+  DimensionWrite,
+  EpochId,
+  EpochLifecycle,
+  EpochRuntimeState,
+  IdentityTransitionCarryEntry,
+  Membership,
+  MembershipId,
+  RelationshipDefinition,
+  RelationshipEvent,
+  RelationshipEventType,
+  RelationshipId,
+  RelationshipIdentityTransitionGroup,
+  RelationshipRoleDefinition,
+  RelationshipRuntimeState,
+  RelationshipTransaction,
+  RelationshipTypeDefinition,
+} from './relationship.js';
+export type {
+  PatchChange,
+  ReviewComment,
+  ReviewPatch,
+} from './review.js';
+export type {
+  LogicalConsequence,
+  RuleActivation,
+  RuleApplicableEffectiveness,
+  RuleClass,
+  RuleConstraint,
+  RuleConstraintKind,
+  RuleDefinition,
+  RuleEffectEntry,
+  RuleEffectiveness,
+  RuleEnforcement,
+  RuleEpochId,
+  RuleEvaluationRecord,
+  RuleEvaluationResult,
+  RuleException,
+  RuleExceptionCondition,
+  RuleExceptionEffect,
+  RuleExceptionId,
+  RuleExceptionStatus,
+  RuleId,
+  RulePredicate,
+  RuleRuntimeState,
+  RuleSpecification,
+  RuleSpecificationId,
+  RuleTransaction,
+  RuleTransactionOperation,
+  RuleTypeDefinition,
+} from './rule.js';
+// ——— S4: Source Context Types ———
+export type {
+  SourceContext,
+  SourceContextEntry,
+} from './source-context.js';
+export type {
+  Blocker,
+  NextAction,
+  StatusReport,
+  ThreadSnapshot,
+} from './status.js';
+export type {
   ActantModel,
   StoryArchetype,
+  StructuralFunction,
 } from './story-ir.js';
+// ——— STATE-5 Thread Types ———
+export type {
+  GoalLifecycle,
+  GoalState,
+  MilestoneLifecycle,
+  MilestoneState,
+  ThreadDeclaration,
+  ThreadDeclarationCatalog,
+  ThreadId,
+  ThreadLifecycle,
+  ThreadMergeResult,
+  ThreadMergeStrategy,
+  ThreadRunId,
+  ThreadRuntimeState,
+  ThreadTransaction,
+  ThreadTypeCatalog,
+  ThreadTypeDefinition,
+  TimeDomain,
+} from './thread.js';
+export type {
+  AnalysisBlockRequirement,
+  PostRenderInput,
+  PreRenderInput,
+  ValidationIssue,
+  ValidationResult,
+  Validator,
+  ValidatorContext,
+} from './validator.js';
 // ——— S8 removed (design incompatible with Novel IR) ———
 // NarrativePlannerMode, NarrativeGoal, ActionDefinition types deleted 2026-07-24.
 // Correct direction: standalone YAML editor module, not forward planner.
 export type {
   Relationship,
   RelationshipDef,
-  RelationshipState,
   RelationshipEffect,
-  WorldState,
+  RelationshipState,
   Snapshot,
   WorldInitialState,
+  WorldState,
 } from './world.js';
 
-export type {
-  CharacterDefinition,
-  FactionDefinition,
-  CharacterRelationshipDef,
-} from './character.js';
-
-
-export type {
-  RelationshipDefinition,
-  RelationshipEvent,
-  RelationshipEventType,
-  RelationshipTypeDefinition,
-  RelationshipRoleDefinition,
-  RelationshipId,
-  EpochId,
-  MembershipId,
-  EpochLifecycle,
-  DimensionScope,
-  Membership,
-  RelationshipTransaction,
-  DimensionWrite,
-  DimensionUnset,
-  RelationshipRuntimeState,
-  EpochRuntimeState,
-  DimensionState,
-  RelationshipIdentityTransitionGroup,
-  IdentityTransitionCarryEntry,
-} from './relationship.js';
-
-export type {
-  LocationDefinition,
-  ItemDefinition,
-} from './location.js';
-
-export type {
-  RuleDefinition,
-  LogicalConsequence,
-  RuleId,
-  RuleEpochId,
-  RuleExceptionId,
-  RuleSpecificationId,
-  RuleTypeDefinition,
-  RuleSpecification,
-  RuleConstraint,
-  RuleConstraintKind,
-  RuleEnforcement,
-  RuleApplicableEffectiveness,
-  RulePredicate,
-  RuleRuntimeState,
-  RuleActivation,
-  RuleEffectiveness,
-  RuleEvaluationRecord,
-  RuleEvaluationResult,
-  RuleException,
-  RuleExceptionStatus,
-  RuleExceptionEffect,
-  RuleExceptionCondition,
-  RuleTransaction,
-  RuleTransactionOperation,
-  RuleEffectEntry,
-  RuleClass,
-} from './rule.js';
-
-export type {
-  PluginManifest,
-  ArbitrationStrategy,
-} from './plugin.js';
-
-export type {
-  PreRenderInput,
-  PostRenderInput,
-  ValidatorContext,
-  ValidationIssue,
-  Validator,
-  ValidationResult,
-  AnalysisBlockRequirement,
-} from './validator.js';
-
-export type {
-  AnalysisResult,
-  PreconditionAnalysis,
-  POVAnalysis,
-  InventedDetail,
-  QualityAnalysis,
-  MatchLevel,
-  NarrativeCheck,
-  AppearanceCheck,
-  CharacterReference,
-  TenseDetected,
-  ConflictAnalysis,
-  ChecklistResult,
-} from './analysis.js';
-
-export type {
-  RelevanceScore,
-  ContextPackage,
-  SystemContext,
-  SceneSpecification,
-  CharacterSnapshot,
-  RelationshipContext,
-  WorldFact,
-  KnowledgeBoundary,
-  ThreadStatus,
-  RenderRequest,
-  FinalPrompt,
-} from './context.js';
-
-export type {
-  ReviewComment,
-  ReviewPatch,
-  PatchChange,
-} from './review.js';
-
-export type {
-  ISSSnapshot,
-  ISSDimension,
-  ISSGap,
-} from './iss.js';
-
-export type {
-  StatusReport,
-  ThreadSnapshot,
-  Blocker,
-  NextAction,
-} from './status.js';
-
-export type {
-  ChapterMetadata,
-  SceneMetadata,
-  ProjectConfig,
-} from './chapter.js';
-
-export type {
-  MergeConflict,
-  MergeConflictReport,
-  SceneQuality,
-} from './merge.js';
-
-// ——— STATE-4 Knowledge/Belief Types ———
-export type {
-  PropositionId,
-  PropositionKind,
-  Proposition,
-  GroundedProposition,
-  EpistemicProposition,
-  ActProposition,
-  IntensionalProposition,
-  PropositionCatalog,
-  ClaimGrade,
-  ClaimPolarity,
-  ClaimAssessment,
-  SettledAssessment,
-  ConflictedAssessment,
-  SuspendedAssessment,
-  ForgottenAssessment,
-  UnsetAssessment,
-  EvidenceSource,
-  ClaimEvidenceRecord,
-  Claim,
-  EpistemicLedger,
-  InformationActType,
-  InformationAct,
-  GroupEpistemicMode,
-  GroupEpistemicQueryDefinition,
-  CommonGroundRecord,
-  NarrativeKnowledgeBoundary,
-  EvaluationResult,
-  claimKey,
-} from './knowledge.js';
-// ——— STATE-5 Thread Types ———
-export type {
-  ThreadId,
-  ThreadRunId,
-  ThreadLifecycle,
-  GoalLifecycle,
-  MilestoneLifecycle,
-  GoalState,
-  MilestoneState,
-  TimeDomain,
-  ThreadTypeDefinition,
-  ThreadTypeCatalog,
-  ThreadDeclaration,
-  ThreadDeclarationCatalog,
-  ThreadRuntimeState,
-  ThreadTransaction,
-  ThreadMergeStrategy,
-  ThreadMergeResult,
-} from './thread.js';
-
-// ——— GRAPH-1: Typed Causal Graph Types ———
-export type {
-  EdgeClass,
-  StoryCoordinate,
-  DiscourseCoordinate,
-  EffectiveCoordinate,
-  OutputValue,
-  OutputDescriptor,
-  ReadPhase,
-  ReadOrigin,
-  PresencePredicate,
-  ReadRequirement,
-  GraphEdge,
-  GraphProviderOutput,
-  GraphAbsenceWitness,
-  GraphReadResolution,
-  GraphBoundaryReference,
-  GraphNarrativeEllipsis,
-  StoryGraph,
-  DiscourseGraph,
-  GraphCacheEntry,
-  GraphCompilerOptions,
-  GraphCompilerResult,
-  GraphErrorContext,
-  GraphCompileError,
-  UnknownPredecessorError,
-  SelfPredecessorError,
-  MissingOutputError,
-  AmbiguousOutputError,
-  AssertionMismatchError,
-  ReadMismatchError,
-  UnknownReadIdError,
-  StaleProviderSelectionError,
-  DuplicateBranchProviderError,
-  BranchCoverageError,
-  BranchIncompatibilityError,
-  FutureTimeError,
-  IncomparableTimeError,
-  UnorderedSameTimeConflictError,
-  CrossClockEdgeError,
-  EdgeOriginCycleError,
-  InitialRootMisuseError,
-  SemanticOutputDependencyError,
-  DynamicLifecycleError,
-  MergeInputError,
-  EllipsisSummaryError,
-  ProvenanceError,
-  NoOutputEdgeError,
-  DuplicateDiscoursePositionError,
-} from './graph.js';
-// ——— CORPUS-1: NarrativeEllipsis & NarrativeNode ———
-export type {
-  NarrativeEllipsis as CorpusEllipsis,
-  EllipsisProvenance,
-  NarrativeNode as CorpusNode,
-} from './corpus.js';
 // The above are aliased to avoid conflict with INTEGRATION-1 NarrativeEllipsis/NarrativeNode.
 // CORPUS-1 types supersede the integration.ts stubs and should be used for all new code.
 
+// ——— CAPABILITY-1: Capability Manifest types ———
+export type {
+  CapabilityManifest,
+  CapabilityManifestEntry,
+  CapabilityStatus,
+  EvidenceClass,
+  StageGate,
+} from './capability.js';
+// ——— DISCOURSE-1: Discourse State & Narrator types ———
+export type {
+  AssertionEvidence,
+  AssertionPolarity,
+  AssertionType,
+  AudienceSemantics,
+  ClaimAction,
+  CorrectionAction,
+  DisclosureAction,
+  DisclosureActionType,
+  DisclosureObservation,
+  DiscourseCacheKey,
+  DiscourseContextProjection,
+  DiscoursePosition,
+  DiscourseState,
+  ExcerptDisclosureCheckpoint,
+  ExplicitLedgerProfile,
+  FocalizerBoundProfile,
+  FullWorkContext,
+  Hint,
+  HintAction,
+  HintState,
+  InitialExposureContract,
+  ModelReaderProfile,
+  ModelReaderProfileId,
+  NarrationBoundary,
+  NarrationDisclosurePolicy,
+  NarratorAccess,
+  NarratorAssertion,
+  NarratorAssertionCapability,
+  NarratorFidelity,
+  NarratorProfile,
+  NarratorProfileBase,
+  NarratorProfileType,
+  NarratorSincerity,
+  NarratorTruthCapability,
+  OmniscientProfile,
+  PlannedDiscourseLedger,
+  PlannedLedgerEntry,
+  RetractionAction,
+  RetrospectiveEntityProfile,
+  RevealAction,
+  SparseCorpusMode,
+  SparseRunDeclaration,
+  TruthBoundary,
+  ValidationKey,
+  WithholdEndAction,
+  WithholdingPolicy,
+  WithholdStartAction,
+} from './discourse.js';
 // ——— INTEGRATION-1: Cross-domain resolution, Merge & dual coverage ———
 export type {
-  ProviderOutput,
-  AbsenceWitness,
   AbsenceBasis,
-  ReadResolution,
+  AbsenceWitness,
   BoundaryReference,
+  CoverageManifest,
+  DiscourseBridge,
+  DiscourseNode,
+  DiscourseSnapshot,
   MergePlan,
   MergePolicy,
   NarrativeEllipsis,
   NarrativeNode,
+  ProviderOutput,
+  ReadResolution,
   ScenePresentation,
-  DiscourseBridge,
-  DiscourseNode,
-  CoverageManifest,
   StorySnapshot,
-  DiscourseSnapshot,
 } from './integration.js';
-
 // ——— INTEGRATION-2: ReferenceEligibility & lifecycle closure ———
 export type {
-  ReferenceMode,
-  ReferenceKind,
   ReferenceEntry,
   ReferenceIndex,
+  ReferenceKind,
+  ReferenceMode,
 } from './reference.js';
-
-// ——— DISCOURSE-1: Discourse State & Narrator types ———
-export type {
-  DiscoursePosition,
-  ModelReaderProfileId,
-  AudienceSemantics,
-  NarrationDisclosurePolicy,
-  InitialExposureContract,
-  ModelReaderProfile,
-  NarratorProfileType,
-  NarratorAccess,
-  NarratorAssertionCapability,
-  NarratorTruthCapability,
-  NarratorFidelity,
-  NarratorSincerity,
-  NarratorProfileBase,
-  FocalizerBoundProfile,
-  RetrospectiveEntityProfile,
-  ExplicitLedgerProfile,
-  OmniscientProfile,
-  NarratorProfile,
-  AssertionType,
-  AssertionPolarity,
-  TruthBoundary,
-  NarrationBoundary,
-  AssertionEvidence,
-  NarratorAssertion,
-  DisclosureActionType,
-  RevealAction,
-  ClaimAction,
-  HintAction,
-  RetractionAction,
-  CorrectionAction,
-  WithholdStartAction,
-  WithholdEndAction,
-  DisclosureAction,
-  HintState,
-  Hint,
-  WithholdingPolicy,
-  PlannedDiscourseLedger,
-  PlannedLedgerEntry,
-  DiscourseState,
-  DiscourseContextProjection,
-  DisclosureObservation,
-  SparseCorpusMode,
-  ExcerptDisclosureCheckpoint,
-  FullWorkContext,
-  SparseRunDeclaration,
-  DiscourseCacheKey,
-  ValidationKey,
-} from './discourse.js';
-
 // ——— RENDER-SURFACE-1: Surface render, groups & cache keys ———
 export type {
+  AttemptKey,
+  AutoGroupConfig,
+  CompiledSceneContract,
+  ContinuityPacket,
+  LogicalRenderKey,
+  PlannerMode,
+  RenderGroup,
+  RenderGroupManifest,
+  SceneTransition,
+  SerialLane,
+  StyleMetrics,
   StyleProfile,
   StyleResolutionPath,
-  ContinuityPacket,
-  SceneTransition,
-  CompiledSceneContract,
   SurfaceDependencyGraph,
-  SerialLane,
-  ValidationGateGraph,
-  ValidationGate,
-  ValidationGateStatus,
-  ValidationPolicy,
-  RenderGroup,
+  SurfaceErrorCode,
+  SurfacePlannerError,
+  SurfacePlannerOptions,
+  SurfacePlanResult,
   SurfacePolicy,
-  RenderGroupManifest,
-  PlannerMode,
   SurfaceReferencePacket,
-  StyleMetrics,
-  LogicalRenderKey,
   SurfaceRenderKey,
   SurfaceValidationKey,
-  AttemptKey,
-  SurfacePlannerOptions,
-  AutoGroupConfig,
-  SurfacePlanResult,
-  SurfacePlannerError,
-  SurfaceErrorCode,
+  ValidationGate,
+  ValidationGateGraph,
+  ValidationGateStatus,
+  ValidationPolicy,
 } from './render-surface.js';
-
 // ——— SUMMARY: Volume Summary types ———
 export type {
-  VolumeSummary,
   ChapterMeta,
   SceneMeta,
+  VolumeSummary,
 } from './summary.js';
-
-// ——— CAPABILITY-1: Capability Manifest types ———
-export type {
-  CapabilityStatus,
-  EvidenceClass,
-  StageGate,
-  CapabilityManifestEntry,
-  CapabilityManifest,
-} from './capability.js';

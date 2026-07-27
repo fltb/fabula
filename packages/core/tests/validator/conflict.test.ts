@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import type { AnalysisResult, NarrativeEvent, PostRenderInput } from '../../src/types/index.js';
 import { ConflictValidator } from '../../src/validator/conflict.js';
-import type { NarrativeEvent, PostRenderInput, AnalysisResult } from '../../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -24,13 +24,17 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  analysis: AnalysisResult | null,
-): PostRenderInput {
+function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): PostRenderInput {
   return {
     event,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     prose: 'Some prose.',
     analysis,
     chapter: 1,
@@ -48,7 +52,13 @@ function makeAnalysis(conflictAnalysis: {
       preconditions: { violated: [] },
       pov: { consistent: true, leaks: [] },
       inventedDetails: [],
-      quality: { proseScore: 8, maxScore: 10, strengths: [], weaknesses: [], estimatedWordCount: 300 },
+      quality: {
+        proseScore: 8,
+        maxScore: 10,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 300,
+      },
       threadProgressAchieved: [],
       foreshadowingDeployed: [],
       conflictAnalysis,
@@ -69,7 +79,7 @@ describe('ConflictValidator', () => {
     });
     const input = makeInput(event, analysis);
     const issues = new ConflictValidator().validatePost(input);
-    const conflictIssues = issues.filter(i => i.validator === 'conflict');
+    const conflictIssues = issues.filter((i) => i.validator === 'conflict');
     expect(conflictIssues).toHaveLength(0);
   });
 
@@ -85,7 +95,7 @@ describe('ConflictValidator', () => {
     });
     const input = makeInput(event, analysis);
     const issues = new ConflictValidator().validatePost(input);
-    const conflictIssues = issues.filter(i => i.validator === 'conflict');
+    const conflictIssues = issues.filter((i) => i.validator === 'conflict');
     expect(conflictIssues.length).toBeGreaterThanOrEqual(1);
     expect(conflictIssues[0].message).toContain('resolution was NOT achieved');
     expect(conflictIssues[0].severity).toBe('error');
@@ -103,7 +113,7 @@ describe('ConflictValidator', () => {
     });
     const input = makeInput(event, analysis);
     const issues = new ConflictValidator().validatePost(input);
-    const mismatchIssues = issues.filter(i => i.message.includes('declares conflict type'));
+    const mismatchIssues = issues.filter((i) => i.message.includes('declares conflict type'));
     expect(mismatchIssues.length).toBeGreaterThanOrEqual(1);
     expect(mismatchIssues[0].severity).toBe('info');
   });
@@ -120,7 +130,7 @@ describe('ConflictValidator', () => {
     });
     const input = makeInput(event, analysis);
     const issues = new ConflictValidator().validatePost(input);
-    const errorIssues = issues.filter(i => i.severity === 'error');
+    const errorIssues = issues.filter((i) => i.severity === 'error');
     // setup is non-resolving — no error about resolution not achieved
     expect(errorIssues).toHaveLength(0);
   });
@@ -137,7 +147,7 @@ describe('ConflictValidator', () => {
     });
     const input = makeInput(event, analysis);
     const issues = new ConflictValidator().validatePost(input);
-    const errorIssues = issues.filter(i => i.severity === 'error');
+    const errorIssues = issues.filter((i) => i.severity === 'error');
     expect(errorIssues).toHaveLength(0);
   });
 
@@ -153,7 +163,7 @@ describe('ConflictValidator', () => {
     });
     const input = makeInput(event, analysis);
     const issues = new ConflictValidator().validatePost(input);
-    const errorIssues = issues.filter(i => i.severity === 'error');
+    const errorIssues = issues.filter((i) => i.severity === 'error');
     expect(errorIssues.length).toBeGreaterThanOrEqual(1);
     expect(errorIssues[0].message).toContain('resolution was NOT achieved');
   });

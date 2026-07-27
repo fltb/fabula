@@ -2,7 +2,18 @@
 // Context Helper — build PreRenderInput for performance benchmarks
 // ============================================================================
 
-import type { NarrativeEvent, WorldState, EntityRegistry, PreRenderInput, EpistemicLedger, ThreadRuntimeState, ThreadId, ThreadRunId, GoalLifecycle, MilestoneLifecycle } from '@novalistically/core';
+import type {
+  EntityRegistry,
+  EpistemicLedger,
+  GoalLifecycle,
+  MilestoneLifecycle,
+  NarrativeEvent,
+  PreRenderInput,
+  ThreadId,
+  ThreadRunId,
+  ThreadRuntimeState,
+  WorldState,
+} from '@novalistically/core';
 
 /**
  * Build a PreRenderInput for use in benchmarks.
@@ -20,14 +31,14 @@ export function makePreInput(
     events,
     entityRegistry: registry,
     chapter: Math.ceil(event.narrativeOrder / 3),
-    queryState: (entityId: string, attribute: string) =>
-      state.entities[entityId]?.[attribute],
-    getKnowledge: () => ({
-      claims: {},
-      bySubject: {},
-      byProposition: {},
-      actLog: [],
-    } as EpistemicLedger),
+    queryState: (entityId: string, attribute: string) => state.entities[entityId]?.[attribute],
+    getKnowledge: () =>
+      ({
+        claims: {},
+        bySubject: {},
+        byProposition: {},
+        actLog: [],
+      }) as EpistemicLedger,
     getThreadProgress: (threadId: string) => {
       const state: ThreadRuntimeState = {
         threadId: threadId as ThreadId,

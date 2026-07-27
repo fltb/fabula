@@ -78,7 +78,12 @@ function countChineseWords(text) {
 
 // ─── Main bridge ───────────────────────────────────────────────────────────
 
-async function bridgeInteractiveNovels3K(arrowDir, outputDir, maxNovels = 50, maxChaptersPerNovel = 200) {
+async function bridgeInteractiveNovels3K(
+  arrowDir,
+  outputDir,
+  maxNovels = 50,
+  maxChaptersPerNovel = 200,
+) {
   const shard0 = path.join(arrowDir, 'data-00000-of-00002.arrow');
   const shard1 = path.join(arrowDir, 'data-00001-of-00002.arrow');
 
@@ -112,7 +117,7 @@ async function bridgeInteractiveNovels3K(arrowDir, outputDir, maxNovels = 50, ma
         const contentItems = Array.from(ch.content || []);
 
         // Build full text
-        const fullText = contentItems.map(c => c.content || '').join('\n');
+        const fullText = contentItems.map((c) => c.content || '').join('\n');
         const wordCount = countChineseWords(fullText);
         if (wordCount < 20) continue; // skip empty/tiny chapters
 
@@ -174,15 +179,26 @@ async function bridgeInteractiveNovels3K(arrowDir, outputDir, maxNovels = 50, ma
   }
 
   // Save metadata
-  fs.writeFileSync(path.join(outputDir, 'bridged_meta.json'), JSON.stringify({
-    totalNovels: allNovels.length,
-    totalChapters,
-    estimatedEvents: totalEvents,
-    totalChineseChars: allNovels.reduce((sum, n) =>
-      sum + n.chapters.reduce((cs, ch) => cs + ch.word_count, 0), 0),
-  }, null, 2));
+  fs.writeFileSync(
+    path.join(outputDir, 'bridged_meta.json'),
+    JSON.stringify(
+      {
+        totalNovels: allNovels.length,
+        totalChapters,
+        estimatedEvents: totalEvents,
+        totalChineseChars: allNovels.reduce(
+          (sum, n) => sum + n.chapters.reduce((cs, ch) => cs + ch.word_count, 0),
+          0,
+        ),
+      },
+      null,
+      2,
+    ),
+  );
 
-  console.log(`Bridged InteractiveNovels3K: ${allNovels.length} novels, ${totalChapters} chapters, ~${totalEvents} estimated events → ${outputDir}/`);
+  console.log(
+    `Bridged InteractiveNovels3K: ${allNovels.length} novels, ${totalChapters} chapters, ~${totalEvents} estimated events → ${outputDir}/`,
+  );
 }
 
 // ─── Run ────────────────────────────────────────────────────────────────────
@@ -190,7 +206,7 @@ async function bridgeInteractiveNovels3K(arrowDir, outputDir, maxNovels = 50, ma
 const arrowDir = path.join(ROOT, 'bench-data/interactive-novels-3k');
 const outputDir = path.join(ROOT, 'bench-data/interactive-novels-3k/bridged');
 
-bridgeInteractiveNovels3K(arrowDir, outputDir).catch(err => {
+bridgeInteractiveNovels3K(arrowDir, outputDir).catch((err) => {
   console.error('Bridge failed:', err);
   process.exit(1);
 });

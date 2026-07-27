@@ -22,12 +22,7 @@
  * - `stretch`: narrative time > story time (slow-motion, detailed
  *   analysis)
  */
-export type DurationType =
-  | 'scene'
-  | 'summary'
-  | 'ellipsis'
-  | 'pause'
-  | 'stretch';
+export type DurationType = 'scene' | 'summary' | 'ellipsis' | 'pause' | 'stretch';
 
 /**
  * Genette duration profile for a narrative segment.

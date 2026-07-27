@@ -2,5 +2,10 @@
 // Novalistically — Branch System
 // ============================================================================
 
-export { createEmptyBranchPath, branchPathsEqual, branchPathToString, isLinearNarrative } from './path.ts';
-export { evaluateCondition, includesPath, createBranchPoint, getAvailableChoices } from './set.ts';
+export {
+  branchPathsEqual,
+  branchPathToString,
+  createEmptyBranchPath,
+  isLinearNarrative,
+} from './path.ts';
+export { createBranchPoint, evaluateCondition, getAvailableChoices, includesPath } from './set.ts';

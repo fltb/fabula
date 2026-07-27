@@ -3,11 +3,11 @@
 // freezing, and deep equality
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
-  isCanonicalFactValue,
-  canonicalizeFactValue,
   canonicalDeepEqual,
+  canonicalizeFactValue,
+  isCanonicalFactValue,
 } from '../../src/entity/fact-value.js';
 import { ConfigError } from '../../src/errors.js';
 
@@ -126,7 +126,9 @@ describe('CanonicalFactValue freezing', () => {
 
   it('prevents mutation of frozen copy', () => {
     const canon = canonicalizeFactValue({ a: 1 }) as Record<string, unknown>;
-    expect(() => { (canon as Record<string, unknown>).b = 2; }).toThrow();
+    expect(() => {
+      (canon as Record<string, unknown>).b = 2;
+    }).toThrow();
   });
 });
 

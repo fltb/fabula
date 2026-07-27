@@ -2,10 +2,10 @@
 // ISS (Input Structure Score) Tests
 // ============================================================================
 
-import { describe, it, expect, beforeEach } from 'vitest';
-import { calculateISS, detectAntiPatterns, validateStrict } from '../src/iss/index.js';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { InMemoryEntityRegistry } from '../src/entity/index.js';
-import type { NarrativeEvent, RuleDefinition, Entity } from '../src/types/index.js';
+import { calculateISS, detectAntiPatterns, validateStrict } from '../src/iss/index.js';
+import type { Entity, NarrativeEvent, RuleDefinition } from '../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
   return {
@@ -19,14 +19,26 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
     sceneBrief: 'Test scene.',
     preconditions: [
       {
-        id: 'alice.location', entityId: 'alice', attribute: 'location', value: 'start',
-        validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } },
+        id: 'alice.location',
+        entityId: 'alice',
+        attribute: 'location',
+        value: 'start',
+        validity: {
+          temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+          branches: { type: 'all' },
+        },
       },
     ],
     postconditions: [
       {
-        id: 'alice.location', entityId: 'alice', attribute: 'location', value: 'end',
-        validity: { temporal: { start: { type: 'absolute', value: 'day_1' }, end: null }, branches: { type: 'all' } },
+        id: 'alice.location',
+        entityId: 'alice',
+        attribute: 'location',
+        value: 'end',
+        validity: {
+          temporal: { start: { type: 'absolute', value: 'day_1' }, end: null },
+          branches: { type: 'all' },
+        },
       },
     ],
     threadProgress: [],
@@ -40,7 +52,9 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
   };
 }
 
-function makeRegistry(characters: Array<{ id: string; traits: string[] }> = []): InMemoryEntityRegistry {
+function makeRegistry(
+  characters: Array<{ id: string; traits: string[] }> = [],
+): InMemoryEntityRegistry {
   const registry = new InMemoryEntityRegistry();
   for (const c of characters) {
     registry.register({
@@ -158,14 +172,22 @@ describe('calculateISS', () => {
 
   it('should detect placeholder postcondition values', () => {
     const registry = makeRegistry([{ id: 'alice', traits: ['brave'] }]);
-    const events = [makeEvent({
-      postconditions: [
-        {
-          id: 'alice.state', entityId: 'alice', attribute: 'state', value: 'changed',
-          validity: { temporal: { start: { type: 'absolute', value: 'day_1' }, end: null }, branches: { type: 'all' } },
-        },
-      ],
-    })];
+    const events = [
+      makeEvent({
+        postconditions: [
+          {
+            id: 'alice.state',
+            entityId: 'alice',
+            attribute: 'state',
+            value: 'changed',
+            validity: {
+              temporal: { start: { type: 'absolute', value: 'day_1' }, end: null },
+              branches: { type: 'all' },
+            },
+          },
+        ],
+      }),
+    ];
     const threads: Array<{ id: string; name: string }> = [];
     const rules: RuleDefinition[] = [];
 
@@ -216,7 +238,12 @@ describe('detectAntiPatterns', () => {
       rules,
     });
 
-    const emptyIssues = issues.filter((i) => i.message.includes('空场景') || i.message.includes('empty') || i.message.includes('postcondition'));
+    const emptyIssues = issues.filter(
+      (i) =>
+        i.message.includes('空场景') ||
+        i.message.includes('empty') ||
+        i.message.includes('postcondition'),
+    );
     // Should have at least some detection
     expect(issues.length).toBeGreaterThanOrEqual(0);
   });
@@ -326,7 +353,8 @@ describe('validateStrict', () => {
     });
 
     const ruleIssues = issues.filter(
-      (i) => i.message.includes('check') || i.message.includes('规则') || i.message.includes('execut'),
+      (i) =>
+        i.message.includes('check') || i.message.includes('规则') || i.message.includes('execut'),
     );
     expect(ruleIssues.length).toBeGreaterThan(0);
   });
@@ -342,10 +370,12 @@ describe('validateStrict', () => {
         category: 'world_rule',
         type: 'conditional',
         statement: 'has checks',
-        logicalConsequences: [{
-          description: 'd',
-          check: { type: 'state_invariant', filter: 'x', assert: 'y', severity: 'warning' },
-        }],
+        logicalConsequences: [
+          {
+            description: 'd',
+            check: { type: 'state_invariant', filter: 'x', assert: 'y', severity: 'warning' },
+          },
+        ],
         evidenceChain: [],
       },
     ];
@@ -358,7 +388,8 @@ describe('validateStrict', () => {
     });
 
     const ruleIssues = issues.filter(
-      (i) => i.message.includes('check') || i.message.includes('规则') || i.message.includes('execut'),
+      (i) =>
+        i.message.includes('check') || i.message.includes('规则') || i.message.includes('execut'),
     );
     expect(ruleIssues.length).toBe(0);
   });

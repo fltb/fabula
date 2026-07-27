@@ -2,13 +2,13 @@
 // ISS — Score Calculation
 // ============================================================================
 
-import {
-  type EntityRegistry,
-  type NarrativeEvent,
-  type RuleDefinition,
-  type ISSSnapshot,
-  type ISSDimension,
-  type ISSGap,
+import type {
+  EntityRegistry,
+  ISSDimension,
+  ISSGap,
+  ISSSnapshot,
+  NarrativeEvent,
+  RuleDefinition,
 } from '../types/index.js';
 import { type ISSOptions, isPlaceholderValue } from './types.js';
 
@@ -105,7 +105,9 @@ function calcRuleExecutability(rules: RuleDefinition[]): ISSDimension {
   const gaps: ISSGap[] = [];
 
   for (const rule of rules) {
-    const hasCheck = rule.logicalConsequences.some(lc => lc.check !== null && lc.check !== undefined);
+    const hasCheck = rule.logicalConsequences.some(
+      (lc) => lc.check !== null && lc.check !== undefined,
+    );
     if (hasCheck) {
       rulesWithChecks++;
     } else {
@@ -172,7 +174,10 @@ function calcPreconditionDepth(sortedEvents: NarrativeEvent[]): ISSDimension {
     }
   }
 
-  const score = eventsToCheck.length > 0 ? Math.round((eventsWithPreconditions / eventsToCheck.length) * MAX) : MAX;
+  const score =
+    eventsToCheck.length > 0
+      ? Math.round((eventsWithPreconditions / eventsToCheck.length) * MAX)
+      : MAX;
   const status = scoreToStatus(score, THRESHOLD);
 
   return {
@@ -218,7 +223,10 @@ function calcPostconditionSpecificity(events: NarrativeEvent[]): ISSDimension {
     }
   }
 
-  const score = totalPostconditions > 0 ? Math.round((specificPostconditions / totalPostconditions) * MAX) : MAX;
+  const score =
+    totalPostconditions > 0
+      ? Math.round((specificPostconditions / totalPostconditions) * MAX)
+      : MAX;
   const status = scoreToStatus(score, THRESHOLD);
 
   return {
@@ -315,7 +323,8 @@ function calcForeshadowCoverage(events: NarrativeEvent[]): ISSDimension {
     }
   }
 
-  const score = totalForeshadows > 0 ? Math.round((validForeshadows / totalForeshadows) * MAX) : MAX;
+  const score =
+    totalForeshadows > 0 ? Math.round((validForeshadows / totalForeshadows) * MAX) : MAX;
   const status = scoreToStatus(score, THRESHOLD);
 
   return {

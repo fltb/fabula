@@ -4,19 +4,19 @@
 // RuleTypeDefinition, RuleSpecification, RuleConstraint structure
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type {
-  RuleId,
-  RuleEpochId,
-  RuleExceptionId,
-  RuleSpecificationId,
-  RuleTypeDefinition,
-  RuleSpecification,
+  RuleApplicableEffectiveness,
   RuleConstraint,
-  RulePredicate,
   RuleConstraintKind,
   RuleEnforcement,
-  RuleApplicableEffectiveness,
+  RuleEpochId,
+  RuleExceptionId,
+  RuleId,
+  RulePredicate,
+  RuleSpecification,
+  RuleSpecificationId,
+  RuleTypeDefinition,
 } from '../../src/types/index.js';
 
 describe('Rule identity — type definitions', () => {

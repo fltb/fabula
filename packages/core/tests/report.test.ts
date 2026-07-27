@@ -2,10 +2,10 @@
 // ReportWriter — Unit Tests
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { ReportWriter } from '../src/report/writer.js';
+import { describe, expect, it } from 'vitest';
 import type { PipelineRunResult } from '../src/report/writer.js';
-import type { StatusReport, ThreadSnapshot, Blocker, NextAction } from '../src/types/index.js';
+import { ReportWriter } from '../src/report/writer.js';
+import type { Blocker, NextAction, StatusReport, ThreadSnapshot } from '../src/types/index.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -63,7 +63,12 @@ function makeSampleResult(overrides?: Partial<PipelineRunResult>): PipelineRunRe
           threshold: 60,
           status: 'yellow',
           gaps: [
-            { entity: 'protagonist', suggestion: 'Add more traits', fixAction: 'add_field', fixTarget: 'entities/protagonist.yaml' },
+            {
+              entity: 'protagonist',
+              suggestion: 'Add more traits',
+              fixAction: 'add_field',
+              fixTarget: 'entities/protagonist.yaml',
+            },
           ],
         },
       ],

@@ -17,8 +17,8 @@ export function zodExample(s: z.ZodTypeAny): unknown {
   ) {
     if (current instanceof z.ZodEffects) {
       current = current._def.schema;
-    } else if ('type' in current._def && (current._def as any).type) {
-      current = (current._def as any).type;
+    } else if ('type' in current._def && current._def.type instanceof z.ZodType) {
+      current = current._def.type;
     } else {
       break;
     }

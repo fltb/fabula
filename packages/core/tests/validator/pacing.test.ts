@@ -1,6 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { PacingValidator } from '../../src/validator/pacing.js';
+import { describe, expect, it } from 'vitest';
 import type { NarrativeEvent, PreRenderInput } from '../../src/types/index.js';
+import { PacingValidator } from '../../src/validator/pacing.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -24,19 +24,28 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
   };
 }
 
-function makeInput(
-  event: NarrativeEvent,
-  extraEvents: NarrativeEvent[] = [],
-): PreRenderInput {
+function makeInput(event: NarrativeEvent, extraEvents: NarrativeEvent[] = []): PreRenderInput {
   const events = [event, ...extraEvents];
   return {
     event,
     events,
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     entityRegistry: { entities: {} } as any,
     chapter: 1,
     queryState: () => undefined,
-    getKnowledge: () => ({ worldTruth: [], characterKnowledge: {}, readerKnowledge: [], narratorKnowledge: [] }),
+    getKnowledge: () => ({
+      worldTruth: [],
+      characterKnowledge: {},
+      readerKnowledge: [],
+      narratorKnowledge: [],
+    }),
     getThreadProgress: () => null,
   };
 }
@@ -49,13 +58,23 @@ describe('PacingValidator', () => {
       const n = i + 1;
       if (n === 8) return null;
       const arc: string | undefined =
-        n < 8 ? (n <= 2 ? 'opening' : 'rising') : n === 8 ? undefined : n <= 9 ? 'falling' : 'denouement';
+        n < 8
+          ? n <= 2
+            ? 'opening'
+            : 'rising'
+          : n === 8
+            ? undefined
+            : n <= 9
+              ? 'falling'
+              : 'denouement';
       return makeEvent({ id: `E${n}`, narrativeOrder: n, arcPosition: arc as any });
     }).filter(Boolean) as NarrativeEvent[];
 
     const input = makeInput(event, others);
     const issues = new PacingValidator().validatePre(input);
-    const pacingIssues = issues.filter(i => i.validator === 'pacing' && i.attribute === 'arcPosition');
+    const pacingIssues = issues.filter(
+      (i) => i.validator === 'pacing' && i.attribute === 'arcPosition',
+    );
     expect(pacingIssues).toHaveLength(0);
   });
 
@@ -70,7 +89,9 @@ describe('PacingValidator', () => {
 
     const input = makeInput(event, others);
     const issues = new PacingValidator().validatePre(input);
-    const pacingIssues = issues.filter(i => i.validator === 'pacing' && i.attribute === 'arcPosition');
+    const pacingIssues = issues.filter(
+      (i) => i.validator === 'pacing' && i.attribute === 'arcPosition',
+    );
     expect(pacingIssues.length).toBeGreaterThanOrEqual(1);
     expect(pacingIssues[0].message).toContain('Climax at position');
     expect(pacingIssues[0].severity).toBe('warning');
@@ -80,11 +101,11 @@ describe('PacingValidator', () => {
     const event = makeEvent({ id: 'E5', narrativeOrder: 5 });
     const others = Array.from({ length: 5 }, (_, i) =>
       makeEvent({ id: `E${i + 1}`, narrativeOrder: i + 1 }),
-    ).filter(e => e.id !== 'E5');
+    ).filter((e) => e.id !== 'E5');
 
     const input = makeInput(event, others);
     const issues = new PacingValidator().validatePre(input);
-    const arcIssues = issues.filter(i => i.attribute === 'arcPosition');
+    const arcIssues = issues.filter((i) => i.attribute === 'arcPosition');
     expect(arcIssues).toHaveLength(0);
   });
 });

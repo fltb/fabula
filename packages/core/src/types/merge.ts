@@ -25,9 +25,9 @@ export interface MergeConflictReport {
 /** Quality score for a rendered scene */
 export interface SceneQuality {
   eventId: string;
-  proseScore: number;        // 1-10
-  consistencyScore: number;   // 1-10
-  completenessScore: number;  // 1-10
-  overallScore: number;       // weighted average
+  proseScore: number; // 1-10
+  consistencyScore: number; // 1-10
+  completenessScore: number; // 1-10
+  overallScore: number; // weighted average
   issues: string[];
 }

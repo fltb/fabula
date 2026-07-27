@@ -2,19 +2,16 @@
 // Summary Compiler & Surface Extractor Tests (Track 6A, D13)
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   LogicalDisclosureSummaryCompiler,
   SurfaceReferenceExtractor,
 } from '../src/summary/index.ts';
-import type {
-  DiscourseState,
-  DiscourseContextProjection,
-} from '../src/types/discourse.ts';
+import type { DiscourseContextProjection, DiscourseState } from '../src/types/discourse.ts';
 import type {
   CompiledSceneContract,
-  StyleProfile,
   ContinuityPacket,
+  StyleProfile,
 } from '../src/types/render-surface.ts';
 
 // ============================================================================
@@ -55,7 +52,9 @@ function makeDiscourseState(overrides: Partial<DiscourseState> = {}): DiscourseS
   };
 }
 
-function makeDiscourseProjection(overrides: Partial<DiscourseContextProjection> = {}): DiscourseContextProjection {
+function makeDiscourseProjection(
+  overrides: Partial<DiscourseContextProjection> = {},
+): DiscourseContextProjection {
   return {
     plannedReveals: [],
     openClaims: [],
@@ -260,11 +259,7 @@ describe('LogicalDisclosureSummaryCompiler', () => {
 
     it('does NOT leak thread numeric progress', () => {
       const contract = makeSceneContract({ sceneId: 'test-scene' });
-      const result = compiler.compile(
-        makeDiscourseState(),
-        contract,
-        makeDiscourseProjection(),
-      );
+      const result = compiler.compile(makeDiscourseState(), contract, makeDiscourseProjection());
       // Thread progress is part of WorldState/ContextPackage, not the
       // discourse summary — verify no progress-like patterns leak.
       expect(result).not.toMatch(/\d+\/\d+/);
@@ -307,11 +302,7 @@ describe('LogicalDisclosureSummaryCompiler', () => {
           },
         },
       });
-      const result = compiler.compile(
-        ds,
-        makeSceneContract(),
-        makeDiscourseProjection(),
-      );
+      const result = compiler.compile(ds, makeSceneContract(), makeDiscourseProjection());
 
       // Must not contain the actual proposition text
       expect(result).not.toContain('hero knows');
@@ -461,8 +452,7 @@ describe('SurfaceReferenceExtractor', () => {
       expect(packet.excerpt.length).toBeLessThanOrEqual(51);
     });
     it('appends truncation marker when auth anchor excerpt is truncated', () => {
-      const prose =
-        'The beginning of a very long scene. '.repeat(200);
+      const prose = 'The beginning of a very long scene. '.repeat(200);
       const tinyExtractor = new SurfaceReferenceExtractor(50);
       const anchor = 'beginning';
 

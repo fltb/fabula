@@ -16,9 +16,12 @@
 // For narrativeChecks, the attribute enum is built from merged attributes.
 // ============================================================================
 
-import type { ContextPackage, NarrativeEvent } from '../../types/index.ts';
+import type {
+  AnalysisBlockRequirement,
+  ContextPackage,
+  NarrativeEvent,
+} from '../../types/index.ts';
 import type { RuleDefinition } from '../../types/rule.ts';
-import type { AnalysisBlockRequirement } from '../../types/index.ts';
 import type { Message } from '../types.ts';
 import { zodExample } from '../util/zod-example.ts';
 
@@ -108,7 +111,8 @@ function buildDynamicJsonTemplate(
  * Build Pass 2 prompt: analyze the just-generated prose vs the source event.
  */
 export function buildAnalysisPrompt(input: RenderAnalysisInput): Message[] {
-  const sys = 'You are a literary editor and quality assurance agent. Given a scene specification and the rendered prose, produce a structured analysis of how well the prose matches the specification. Output ONLY valid JSON.';
+  const sys =
+    'You are a literary editor and quality assurance agent. Given a scene specification and the rendered prose, produce a structured analysis of how well the prose matches the specification. Output ONLY valid JSON.';
 
   const userParts: string[] = [
     '## Scene Specification',
@@ -189,12 +193,11 @@ export function buildAnalysisPrompt(input: RenderAnalysisInput): Message[] {
   );
 
   // ── Dynamic instructions from requirements ────────────────
-  const instructions = requirements
-    .map(r => r.instruction)
-    .join('\n\n');
+  const instructions = requirements.map((r) => r.instruction).join('\n\n');
 
   userParts.push(
-    instructions || 'Analyze the prose for consistency with the specification. Follow the structure defined in the JSON schema above.',
+    instructions ||
+      'Analyze the prose for consistency with the specification. Follow the structure defined in the JSON schema above.',
     '',
   );
 
@@ -207,10 +210,7 @@ export function buildAnalysisPrompt(input: RenderAnalysisInput): Message[] {
     );
   }
 
-  userParts.push(
-    '',
-    'Output ONLY the JSON object. No preamble, no explanation.',
-  );
+  userParts.push('', 'Output ONLY the JSON object. No preamble, no explanation.');
 
   return [
     { role: 'system', content: sys },

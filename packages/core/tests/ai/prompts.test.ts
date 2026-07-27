@@ -2,13 +2,13 @@
 // AI Provider — Prompt Builders — Unit Tests
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { buildSceneRenderPrompt } from '../../src/ai/prompts/scene-render.ts';
-import { buildThreadStatusPrompt } from '../../src/ai/prompts/thread-status.ts';
+import { describe, expect, it } from 'vitest';
 import type { SceneRenderInput } from '../../src/ai/prompts/scene-render.ts';
+import { buildSceneRenderPrompt } from '../../src/ai/prompts/scene-render.ts';
 import type { ThreadStatusInput } from '../../src/ai/prompts/thread-status.ts';
-import type { ContextPackage, StyleGuidance } from '../../src/types/index.ts';
+import { buildThreadStatusPrompt } from '../../src/ai/prompts/thread-status.ts';
 import type { Message } from '../../src/ai/types.ts';
+import type { ContextPackage, StyleGuidance } from '../../src/types/index.ts';
 
 // ============================================================================
 // Factory helpers
@@ -259,9 +259,7 @@ describe('buildThreadStatusPrompt', () => {
 
   it('handles a single thread', () => {
     const input: ThreadStatusInput = {
-      threads: [
-        { id: 't1', name: 'Solo thread', progress: 1.0, lastEvent: 'End' },
-      ],
+      threads: [{ id: 't1', name: 'Solo thread', progress: 1.0, lastEvent: 'End' }],
       currentChapter: 10,
       currentEvent: 'Final act',
     };
@@ -273,9 +271,7 @@ describe('buildThreadStatusPrompt', () => {
 
   it('handles zero progress', () => {
     const input: ThreadStatusInput = {
-      threads: [
-        { id: 't_new', name: 'New thread', progress: 0, lastEvent: 'Initiated' },
-      ],
+      threads: [{ id: 't_new', name: 'New thread', progress: 0, lastEvent: 'Initiated' }],
       currentChapter: 1,
       currentEvent: 'Prologue',
     };

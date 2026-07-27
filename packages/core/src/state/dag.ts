@@ -1,8 +1,8 @@
-import type { Fact, NarrativeEvent } from '../types/index.js';
-import type { BranchPath } from '../types/branch.js';
 import { includesPath } from '../branch/index.js';
-import { DagCycleError, DagProviderError } from '../errors.js';
 import { resolveTimestampToDay } from '../entity/timestamp.js';
+import { DagCycleError, DagProviderError } from '../errors.js';
+import type { BranchPath } from '../types/branch.js';
+import type { Fact, NarrativeEvent } from '../types/index.js';
 
 export type AdjacencyList = Map<string, string[]>;
 
@@ -26,18 +26,27 @@ function eventDay(event: NarrativeEvent, anchors: Map<string, number>): number {
 }
 
 /** Compiles deterministic causal dependencies for one concrete branch. */
-export function buildCausalEdges(events: NarrativeEvent[], options: CausalGraphOptions = {}): { edges: AdjacencyList; inDegree: Map<string, number> } {
+export function buildCausalEdges(
+  events: NarrativeEvent[],
+  options: CausalGraphOptions = {},
+): { edges: AdjacencyList; inDegree: Map<string, number> } {
   const anchors = options.anchors ?? new Map<string, number>();
   const selectedEvents = options.branchPath
     ? events.filter((event) => includesPath(event.branchExistence, options.branchPath!))
     : events.filter((event) => event.branchExistence.type === 'all');
   const writes = new Map<string, Write[]>();
-  const initial = new Set((options.initialFacts ?? []).filter((fact) => fact.value !== undefined).map(factKey));
+  const initial = new Set(
+    (options.initialFacts ?? []).filter((fact) => fact.value !== undefined).map(factKey),
+  );
   const edges: AdjacencyList = new Map();
   const inDegree = new Map<string, number>();
 
   for (const event of selectedEvents) {
-    if (edges.has(event.id)) throw new DagProviderError('Duplicate event ID', { eventId: event.id, phase: 'causal-compile' });
+    if (edges.has(event.id))
+      throw new DagProviderError('Duplicate event ID', {
+        eventId: event.id,
+        phase: 'causal-compile',
+      });
     edges.set(event.id, []);
     inDegree.set(event.id, 0);
     const day = eventDay(event, anchors);
@@ -58,16 +67,25 @@ export function buildCausalEdges(events: NarrativeEvent[], options: CausalGraphO
       const candidates = (writes.get(key) ?? []).filter((writer) => writer.day < consumerDay);
       if (candidates.length === 0) {
         if (initial.has(key)) continue;
-        throw new DagProviderError(`No earlier provider for deterministic precondition in event ${event.id} at ${key}`, { eventId: event.id, stateKey: key, phase: 'causal-compile' });
+        throw new DagProviderError(
+          `No earlier provider for deterministic precondition in event ${event.id} at ${key}`,
+          { eventId: event.id, stateKey: key, phase: 'causal-compile' },
+        );
       }
       const newestDay = Math.max(...candidates.map((c) => c.day));
       const newest = candidates.filter((candidate) => candidate.day === newestDay);
       if (newest.length !== 1) {
-        throw new DagProviderError(`Ambiguous latest provider for deterministic precondition in event ${event.id} at ${key}`, { eventId: event.id, stateKey: key, phase: 'causal-compile' });
+        throw new DagProviderError(
+          `Ambiguous latest provider for deterministic precondition in event ${event.id} at ${key}`,
+          { eventId: event.id, stateKey: key, phase: 'causal-compile' },
+        );
       }
       const provider = newest[0];
       if (provider.eventId === event.id) {
-        throw new DagProviderError(`Event ${event.id} cannot provide its own precondition at ${key}`, { eventId: event.id, stateKey: key, phase: 'causal-compile' });
+        throw new DagProviderError(
+          `Event ${event.id} cannot provide its own precondition at ${key}`,
+          { eventId: event.id, stateKey: key, phase: 'causal-compile' },
+        );
       }
       edges.get(provider.eventId)!.push(event.id);
       inDegree.set(event.id, (inDegree.get(event.id) ?? 0) + 1);
@@ -95,7 +113,7 @@ export function topologicalSort(
     const eb = eventById.get(b)!;
     const dayA = anchors ? resolveTimestampToDay(ea.storyTime, anchors) : 0;
     const dayB = anchors ? resolveTimestampToDay(eb.storyTime, anchors) : 0;
-    return (dayA - dayB) || a.localeCompare(b);
+    return dayA - dayB || a.localeCompare(b);
   }
 
   const ready = events
@@ -123,6 +141,7 @@ export function topologicalSort(
     const cycle = events.filter((event) => !result.includes(event.id)).map((event) => event.id);
     throw new DagCycleError('Causal graph contains a cycle', { cycle, phase: 'causal-sort' });
   }
-  if (result.some((id) => !eventById.has(id))) throw new DagProviderError('Causal graph contains an unknown event', { phase: 'causal-sort' });
+  if (result.some((id) => !eventById.has(id)))
+    throw new DagProviderError('Causal graph contains an unknown event', { phase: 'causal-sort' });
   return result;
 }

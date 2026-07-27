@@ -3,16 +3,16 @@
 // Applies RelationshipTransaction to WorldState for STATE-2 n-ary relationships.
 // ============================================================================
 
-import type {
-  RelationshipTransaction,
-  RelationshipRuntimeState,
-  EpochRuntimeState,
-  DimensionState,
-  RelationshipId,
-  EpochLifecycle,
-  DimensionScope,
-} from '../types/index.js';
 import { ConfigError } from '../errors.js';
+import type {
+  DimensionScope,
+  DimensionState,
+  EpochLifecycle,
+  EpochRuntimeState,
+  RelationshipId,
+  RelationshipRuntimeState,
+  RelationshipTransaction,
+} from '../types/index.js';
 
 // ============================================================================
 // Public API
@@ -157,10 +157,7 @@ export function applyRelationshipTransaction(
 /**
  * applyDimensionSet — writes dimensionSet entries to an epoch runtime state.
  */
-function applyDimensionSet(
-  epoch: EpochRuntimeState,
-  tx: RelationshipTransaction,
-): void {
+function applyDimensionSet(epoch: EpochRuntimeState, tx: RelationshipTransaction): void {
   if (!tx.dimensionSet) return;
 
   for (const dw of tx.dimensionSet) {
@@ -222,9 +219,7 @@ function validateLifecycleTransition(
 /**
  * getEntityIdsInEpoch — returns all entity IDs participating in a given epoch.
  */
-export function getEntityIdsInEpoch(
-  epoch: EpochRuntimeState,
-): string[] {
+export function getEntityIdsInEpoch(epoch: EpochRuntimeState): string[] {
   return Object.values(epoch.memberships).map((m) => m.entityId);
 }
 
@@ -237,9 +232,7 @@ export function findEpochsForEntity(
 ): string[] {
   const result: string[] = [];
   for (const [epochId, epoch] of Object.entries(relState.epochs)) {
-    const hasEntity = Object.values(epoch.memberships).some(
-      (m) => m.entityId === entityId,
-    );
+    const hasEntity = Object.values(epoch.memberships).some((m) => m.entityId === entityId);
     if (hasEntity) result.push(epochId);
   }
   return result;

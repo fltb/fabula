@@ -1,5 +1,8 @@
-import type { ValidatorContext, ValidationResult, AnalysisBlockRequirement } from '../types/index.js';
-
+import type {
+  AnalysisBlockRequirement,
+  ValidationResult,
+  ValidatorContext,
+} from '../types/index.js';
 
 export interface PluginValidator {
   name: string;
@@ -16,7 +19,7 @@ export class ValidatorRegistry {
   }
 
   runAll(ctx: ValidatorContext): ValidationResult[] {
-    return this._validators.map(v => v.validate(ctx));
+    return this._validators.map((v) => v.validate(ctx));
   }
 
   /** Get all registered plugin validators */

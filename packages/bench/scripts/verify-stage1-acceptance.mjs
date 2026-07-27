@@ -23,28 +23,29 @@
 // ============================================================================
 
 import { createHash } from 'node:crypto';
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname, '../../..');
 
-// dist imports (follow same pattern as generate-reference.mjs)
-import { loadApprovedReferences, collectReferenceIssueIdentities } from '../dist/index.js';
 import {
-  responseReferenceSchema,
-  provenanceManifestSchema,
   expectedOutcomeManifestSchema,
   liveSmokeRecordSchema,
+  provenanceManifestSchema,
   ReferenceFormatError,
+  responseReferenceSchema,
 } from '../../core/dist/index.js';
+// dist imports (follow same pattern as generate-reference.mjs)
+import { collectReferenceIssueIdentities, loadApprovedReferences } from '../dist/index.js';
 
 // ─── Constants ─────────────────────────────────────────────────────────
 
 const EXPECTED_EVENT_IDS = ['E0', 'E1', 'E2', 'E3', 'E4', 'E5', 'E6'];
 const H64 = /^[0-9a-f]{64}$/;
-const SECRET_VALUE_PATTERN = /(?:^|[^a-z])(?:sk-|api[_-]key|auth[_-]token|secret|password|credential)(?:$|[^a-z])/i;
+const SECRET_VALUE_PATTERN =
+  /(?:^|[^a-z])(?:sk-|api[_-]key|auth[_-]token|secret|password|credential)(?:$|[^a-z])/i;
 
 // ─── Helpers (replicated from reference.ts — not exported) ─────────────
 
@@ -190,7 +191,9 @@ function runHashPrint(referenceDir) {
     // Reject secret-like metadata
     for (const [key, val] of Object.entries(parsed.data.metadata)) {
       if (containsSecret(val)) {
-        console.error(`ERROR: Response ${eventId} metadata field '${key}' contains a secret-like value`);
+        console.error(
+          `ERROR: Response ${eventId} metadata field '${key}' contains a secret-like value`,
+        );
         process.exit(1);
       }
     }
@@ -339,7 +342,7 @@ function runHashPrint(referenceDir) {
       if (!genHashEntry || genHashEntry.promptHash !== responsePH) {
         console.error(
           `ERROR: Response promptHash for ${eventId} cannot be verified against generation-record ledger ` +
-          `(computed=${computedPH}, response=${responsePH})`
+            `(computed=${computedPH}, response=${responsePH})`,
         );
         process.exit(1);
       }
@@ -387,7 +390,7 @@ function runVerify(referenceDir, fixtureDir) {
   if (computedResponsesHash !== review.responsesSha256) {
     console.error(
       `ERROR: Response data hash mismatch: review expects ${review.responsesSha256}, ` +
-      `computed ${computedResponsesHash}`
+        `computed ${computedResponsesHash}`,
     );
     process.exit(1);
   }
@@ -402,7 +405,7 @@ function runVerify(referenceDir, fixtureDir) {
   if (computedGenHash !== review.generationRecordSha256) {
     console.error(
       `ERROR: generation-record.json hash mismatch: review expects ${review.generationRecordSha256}, ` +
-      `computed ${computedGenHash}`
+        `computed ${computedGenHash}`,
     );
     process.exit(1);
   }
@@ -413,7 +416,7 @@ function runVerify(referenceDir, fixtureDir) {
   if (computedProvHash !== review.provenanceSha256) {
     console.error(
       `ERROR: Provenance hash mismatch: review expects ${review.provenanceSha256}, ` +
-      `computed ${computedProvHash}`
+        `computed ${computedProvHash}`,
     );
     process.exit(1);
   }
@@ -424,7 +427,7 @@ function runVerify(referenceDir, fixtureDir) {
   if (computedOutHash !== review.expectedOutcomesSha256) {
     console.error(
       `ERROR: Expected-outcomes hash mismatch: review expects ${review.expectedOutcomesSha256}, ` +
-      `computed ${computedOutHash}`
+        `computed ${computedOutHash}`,
     );
     process.exit(1);
   }
@@ -510,7 +513,12 @@ function runVerify(referenceDir, fixtureDir) {
     console.error('ERROR: review.json notes must be non-empty');
     process.exit(1);
   }
-  for (const field of ['responsesSha256', 'generationRecordSha256', 'provenanceSha256', 'expectedOutcomesSha256']) {
+  for (const field of [
+    'responsesSha256',
+    'generationRecordSha256',
+    'provenanceSha256',
+    'expectedOutcomesSha256',
+  ]) {
     if (!is64hex(review[field])) {
       console.error(`ERROR: review.json.${field} must be 64 lowercase hex`);
       process.exit(1);
@@ -618,12 +626,8 @@ function validateLiveSmokeRecord(livePath, review) {
       process.exit(1);
     }
 
-    const hasPass1Success = ledger.some(
-      (e) => e.phase === 'pass1' && e.outcome === 'success',
-    );
-    const hasPass2Success = ledger.some(
-      (e) => e.phase === 'pass2' && e.outcome === 'success',
-    );
+    const hasPass1Success = ledger.some((e) => e.phase === 'pass1' && e.outcome === 'success');
+    const hasPass2Success = ledger.some((e) => e.phase === 'pass2' && e.outcome === 'success');
 
     if (!hasPass1Success) {
       console.error(`ERROR: live-smoke-record ${eventId} missing successful pass1`);
@@ -639,7 +643,7 @@ function validateLiveSmokeRecord(livePath, review) {
       if (entry.phase === 'pass2' && entry.seed !== record.seed) {
         console.error(
           `ERROR: live-smoke-record ${eventId} pass2 seed ${entry.seed} does not match ` +
-          `record seed ${record.seed}`
+            `record seed ${record.seed}`,
         );
         process.exit(1);
       }
@@ -650,7 +654,7 @@ function validateLiveSmokeRecord(livePath, review) {
       if (entry.model !== record.model) {
         console.error(
           `ERROR: live-smoke-record ${eventId} ledger model "${entry.model}" does not ` +
-          `match record model "${record.model}"`
+            `match record model "${record.model}"`,
         );
         process.exit(1);
       }
@@ -670,7 +674,7 @@ function validateLiveSmokeRecord(livePath, review) {
     if (computedPH !== recordPH) {
       console.error(
         `ERROR: live-smoke-record ${eventId} promptHash mismatch: ` +
-        `computed=${computedPH}, record=${recordPH}`
+          `computed=${computedPH}, record=${recordPH}`,
       );
       process.exit(1);
     }
@@ -678,7 +682,9 @@ function validateLiveSmokeRecord(livePath, review) {
 
   // ── 4f. Positive totalCalls ──────────────────────────────────────
   if (record.call.totalCalls <= 0) {
-    console.error(`ERROR: live-smoke-record totalCalls must be positive, got ${record.call.totalCalls}`);
+    console.error(
+      `ERROR: live-smoke-record totalCalls must be positive, got ${record.call.totalCalls}`,
+    );
     process.exit(1);
   }
 

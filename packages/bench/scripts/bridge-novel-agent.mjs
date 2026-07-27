@@ -35,7 +35,10 @@ function buildChaptersFromNarrativeUnits(units) {
     const unit = units[i];
 
     // Detect chapter boundary: action after long dialogue sequence, or every ~5 units
-    if (currentChapter.events.length >= 5 || (i > 0 && units[i - 1].type === 'dialogue' && unit.type === 'scene_description')) {
+    if (
+      currentChapter.events.length >= 5 ||
+      (i > 0 && units[i - 1].type === 'dialogue' && unit.type === 'scene_description')
+    ) {
       if (currentChapter.events.length > 0) {
         chapters.push(finalizeChapter(currentChapter, chapterIdx++));
       }
@@ -44,7 +47,9 @@ function buildChaptersFromNarrativeUnits(units) {
 
     const eventId = `evt_${chapterIdx}_${currentChapter.events.length}`;
     // Extract character names from text (simple: look for 2-3 char names before action verbs)
-    const charMatch = unit.text.match(/([\u4e00-\u9fff]{2,3})(?:道|说|问|答|喊|叫|笑|哭|想|看|走|来|去)/);
+    const charMatch = unit.text.match(
+      /([\u4e00-\u9fff]{2,3})(?:道|说|问|答|喊|叫|笑|哭|想|看|走|来|去)/,
+    );
     const chars = charMatch ? [charMatch[1]] : ['未知'];
 
     currentChapter.events.push({
@@ -56,9 +61,11 @@ function buildChaptersFromNarrativeUnits(units) {
       emotional_tone: mapToEmotionalTone(unit.text),
     });
 
-    chars.forEach(c => currentChapter.chars.add(c));
+    for (const character of chars) currentChapter.chars.add(character);
     // Simple location extraction
-    const locMatch = unit.text.match(/([\u4e00-\u9fff]{2,4})(?:山|殿|堂|院|室|厅|房|楼|阁|庙|寺|观|城|镇|村|园|岛)/);
+    const locMatch = unit.text.match(
+      /([\u4e00-\u9fff]{2,4})(?:山|殿|堂|院|室|厅|房|楼|阁|庙|寺|观|城|镇|村|园|岛)/,
+    );
     if (locMatch) currentChapter.locs.add(locMatch[0]);
   }
 
@@ -73,7 +80,7 @@ function finalizeChapter(ch, idx) {
   const events = ch.events;
   const chars = [...ch.chars];
   const locs = [...ch.locs];
-  const allText = events.map(e => e.description).join(' ');
+  const allText = events.map((e) => e.description).join(' ');
 
   return {
     chapter_id: `ch_${idx}`,
@@ -93,7 +100,8 @@ function mapToConflictType(type, text) {
   if (text.includes('哭') || text.includes('悲伤') || text.includes('痛苦')) return '人物冲突';
   if (text.includes('杀') || text.includes('打') || text.includes('战')) return '人物冲突';
   if (text.includes('命') || text.includes('运') || text.includes('注定')) return '命运冲突';
-  if (text.includes('雪') || text.includes('风') || text.includes('雨') || text.includes('山')) return '自然冲突';
+  if (text.includes('雪') || text.includes('风') || text.includes('雨') || text.includes('山'))
+    return '自然冲突';
   if (text.includes('礼') || text.includes('规') || text.includes('不许')) return '社会冲突';
   if (type === 'thought') return '自我冲突';
   return undefined;
@@ -115,16 +123,20 @@ function bridgeNovelAgentSFT(samplesDir, outputPath) {
 
   // Process each narrative sample file (representing different novels/chapters)
   const files = fs.existsSync(samplesDir)
-    ? fs.readdirSync(samplesDir).filter(f => f.startsWith('narrative_') && f.endsWith('.json'))
+    ? fs.readdirSync(samplesDir).filter((f) => f.startsWith('narrative_') && f.endsWith('.json'))
     : [];
 
   // If no samples_by_type directory, use the top-level sample files
   const narrativePath = path.join(ROOT, 'bench-data/novel-agent-sft/narrative_sample.json');
-  const narrativeFiles = files.length > 0
-    ? files.map(f => path.join(samplesDir, f))
-    : (fs.existsSync(narrativePath) ? [narrativePath] : []);
+  const narrativeFiles =
+    files.length > 0
+      ? files.map((f) => path.join(samplesDir, f))
+      : fs.existsSync(narrativePath)
+        ? [narrativePath]
+        : [];
 
-  for (const file of narrativeFiles.slice(0, 5)) { // limit to 5 for reasonable output
+  for (const file of narrativeFiles.slice(0, 5)) {
+    // limit to 5 for reasonable output
     try {
       const units = JSON.parse(fs.readFileSync(file, 'utf-8'));
       if (Array.isArray(units)) {
@@ -147,7 +159,9 @@ function bridgeNovelAgentSFT(samplesDir, outputPath) {
 
   fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, JSON.stringify(allChapters, null, 2), 'utf-8');
-  console.log(`Bridged NovelAgentSFT: ${allChapters.length} chapters from narrative samples → ${outputPath}`);
+  console.log(
+    `Bridged NovelAgentSFT: ${allChapters.length} chapters from narrative samples → ${outputPath}`,
+  );
 }
 
 // ─── Run ────────────────────────────────────────────────────────────────────

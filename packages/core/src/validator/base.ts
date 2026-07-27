@@ -2,18 +2,18 @@
 // Shared helpers for all validators
 // ============================================================================
 
+import { defaultEntityTypeCatalog } from '../entity/index.js';
 import type {
-  NarrativeEvent,
-  WorldState,
-  EntityRegistry,
-  ValidatorContext,
-  ValidationIssue,
   EntityId,
   EntityKind,
-  WritePolicy,
+  EntityRegistry,
   NarrativeCheck,
+  NarrativeEvent,
+  ValidationIssue,
+  ValidatorContext,
+  WorldState,
+  WritePolicy,
 } from '../types/index.js';
-import { defaultEntityTypeCatalog } from '../entity/index.js';
 
 // ============================================================================
 // Helper: build ValidatorContext from current state
@@ -33,12 +33,10 @@ export function buildContext(
     currentEvent: event,
     currentChapter: chapter,
     narrativeOrder: event.narrativeOrder,
-    queryState: (entityId: EntityId, attribute: string) =>
-      state.entities[entityId]?.[attribute],
+    queryState: (entityId: EntityId, attribute: string) => state.entities[entityId]?.[attribute],
     getKnowledge: (characterId: EntityId) =>
       state.epistemicLedger ?? { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
-    getThreadProgress: (threadId: string) =>
-      state.threads[threadId] ?? null,
+    getThreadProgress: (threadId: string) => state.threads[threadId] ?? null,
   };
 }
 
@@ -75,7 +73,10 @@ export function makeIssue(
 // ============================================================================
 
 /** Look up the semanticRole for a given entity kind + attributeId */
-export function getAttributeSemanticRole(kind: EntityKind, attributeId: string): string | undefined {
+export function getAttributeSemanticRole(
+  kind: EntityKind,
+  attributeId: string,
+): string | undefined {
   const typeDef = defaultEntityTypeCatalog.types[kind];
   if (!typeDef) return undefined;
   const attrDef = typeDef.attributes[attributeId];
@@ -83,7 +84,10 @@ export function getAttributeSemanticRole(kind: EntityKind, attributeId: string):
 }
 
 /** Look up the writePolicy for a given entity kind + attributeId */
-export function getAttributeWritePolicy(kind: EntityKind, attributeId: string): WritePolicy | undefined {
+export function getAttributeWritePolicy(
+  kind: EntityKind,
+  attributeId: string,
+): WritePolicy | undefined {
   const typeDef = defaultEntityTypeCatalog.types[kind];
   if (!typeDef) return undefined;
   const attrDef = typeDef.attributes[attributeId];
@@ -95,10 +99,9 @@ export function getAttributesBySemanticRole(kind: EntityKind, semanticRole: stri
   const typeDef = defaultEntityTypeCatalog.types[kind];
   if (!typeDef) return [];
   return Object.values(typeDef.attributes)
-    .filter(a => a.semanticRole === semanticRole)
-    .map(a => a.attributeId);
+    .filter((a) => a.semanticRole === semanticRole)
+    .map((a) => a.attributeId);
 }
-
 
 // ============================================================================
 // consumeNarrativeChecks — Iterate parsed narrative checks with predicate

@@ -18,8 +18,8 @@
 //  12. Performance constraints
 // ============================================================================
 
-import type { DiscoursePosition } from './discourse.js';
 import type { BranchPath } from './branch.js';
+import type { DiscoursePosition } from './discourse.js';
 
 // ─── StyleProfile (§2) ──────────────────────────────────────────────────────
 
@@ -209,7 +209,14 @@ export interface ValidationGate {
   fallbackWithoutSurface: boolean;
 }
 
-export type ValidationGateStatus = 'pending' | 'pass1_required' | 'pass1_complete' | 'validation_pending' | 'accepted' | 'retry' | 'blocked';
+export type ValidationGateStatus =
+  | 'pending'
+  | 'pass1_required'
+  | 'pass1_complete'
+  | 'validation_pending'
+  | 'accepted'
+  | 'retry'
+  | 'blocked';
 
 export interface ValidationPolicy {
   /** Maximum retry attempts per scene. */

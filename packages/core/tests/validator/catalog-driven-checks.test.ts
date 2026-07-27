@@ -8,22 +8,22 @@
 // 4. Character-state validator uses semanticRole: 'lifecycle' to detect dead chars
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import {
-  getAttributeSemanticRole,
-  getAttributeWritePolicy,
-  getAttributesBySemanticRole,
-} from '../../src/validator/base.js';
-import { WorldRuleValidator } from '../../src/validator/world-rule.js';
-import { CharacterStateValidator } from '../../src/validator/character-state.js';
+import { describe, expect, it } from 'vitest';
 import { defaultEntityTypeCatalog } from '../../src/entity/index.js';
 import type {
-  NarrativeEvent,
-  PreRenderInput,
-  EntityRegistry,
   Entity,
   EntityKind,
+  EntityRegistry,
+  NarrativeEvent,
+  PreRenderInput,
 } from '../../src/types/index.js';
+import {
+  getAttributeSemanticRole,
+  getAttributesBySemanticRole,
+  getAttributeWritePolicy,
+} from '../../src/validator/base.js';
+import { CharacterStateValidator } from '../../src/validator/character-state.js';
+import { WorldRuleValidator } from '../../src/validator/world-rule.js';
 
 // ─── Helpers ───
 
@@ -48,7 +48,9 @@ function makeRegistry(entities: Entity[]): EntityRegistry {
     findByKind: (kind: EntityKind) => entities.filter((e) => e.kind === kind),
     findByAttribute: () => [],
     resolveRefs: () => new Map(),
-    register: (e: Entity) => { map.set(e.id, e); },
+    register: (e: Entity) => {
+      map.set(e.id, e);
+    },
     updateState: () => {},
     getAll: () => entities,
   };
@@ -139,21 +141,30 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
     // Event that changes marital_status to 'remarried'
     const event = makeEvent({
       id: 'E1',
-      postconditions: [{
-        id: 'F1',
-        entityId: charEntity.id,
-        attribute: 'marital_status',
-        value: 'remarried',
-        validity: {
-          temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
-          branches: { type: 'all' },
+      postconditions: [
+        {
+          id: 'F1',
+          entityId: charEntity.id,
+          attribute: 'marital_status',
+          value: 'remarried',
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
-      }],
+      ],
     });
 
     const input: PreRenderInput = {
       event,
-      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      worldState: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       events: [event],
       entityRegistry: registry,
       chapter: 1,
@@ -169,7 +180,7 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
 
     const issues = validator.validatePre(input);
     // marital_status is mutable/lifecycle — changing it is NOT a world rule violation
-    expect(issues.filter(i => i.validator === 'world_rule')).toHaveLength(0);
+    expect(issues.filter((i) => i.validator === 'world_rule')).toHaveLength(0);
   });
 
   it('DOES flag immutable attribute changes (e.g. gender)', () => {
@@ -181,21 +192,30 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
 
     const event = makeEvent({
       id: 'E2',
-      postconditions: [{
-        id: 'F2',
-        entityId: charEntity.id,
-        attribute: 'gender',
-        value: 'male',
-        validity: {
-          temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
-          branches: { type: 'all' },
+      postconditions: [
+        {
+          id: 'F2',
+          entityId: charEntity.id,
+          attribute: 'gender',
+          value: 'male',
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
-      }],
+      ],
     });
 
     const input: PreRenderInput = {
       event,
-      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      worldState: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       events: [event],
       entityRegistry: registry,
       chapter: 1,
@@ -211,7 +231,7 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
 
     const issues = validator.validatePre(input);
     // gender is immutable — changing it IS a world rule violation
-    expect(issues.filter(i => i.validator === 'world_rule')).toHaveLength(1);
+    expect(issues.filter((i) => i.validator === 'world_rule')).toHaveLength(1);
     expect(issues[0].attribute).toBe('gender');
   });
 
@@ -222,21 +242,30 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
 
     const event = makeEvent({
       id: 'E3',
-      postconditions: [{
-        id: 'F3',
-        entityId: charEntity.id,
-        attribute: 'unknown_attr',
-        value: 'some_value',
-        validity: {
-          temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
-          branches: { type: 'all' },
+      postconditions: [
+        {
+          id: 'F3',
+          entityId: charEntity.id,
+          attribute: 'unknown_attr',
+          value: 'some_value',
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
         },
-      }],
+      ],
     });
 
     const input: PreRenderInput = {
       event,
-      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      worldState: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       events: [event],
       entityRegistry: registry,
       chapter: 1,
@@ -251,7 +280,7 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
     };
 
     const issues = validator.validatePre(input);
-    expect(issues.filter(i => i.validator === 'world_rule')).toHaveLength(0);
+    expect(issues.filter((i) => i.validator === 'world_rule')).toHaveLength(0);
   });
 });
 
@@ -264,12 +293,27 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
 
     const event = makeEvent({
       id: 'E4',
-      preconditions: [{ id: 'F4', entityId: charEntity.id, attribute: 'status', value: 'some_value', validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } } }],
+      preconditions: [
+        {
+          id: 'F4',
+          entityId: charEntity.id,
+          attribute: 'status',
+          value: 'some_value',
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
     });
 
     const worldState = {
       entities: { [charEntity.id]: { status: 'dead' } },
-      relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [],
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
     };
 
     const input: PreRenderInput = {
@@ -289,7 +333,7 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
     };
 
     const issues = validator.validatePre(input);
-    expect(issues.filter(i => i.validator === 'character_state')).toHaveLength(1);
+    expect(issues.filter((i) => i.validator === 'character_state')).toHaveLength(1);
     expect(issues[0].message).toContain('is dead');
   });
 
@@ -299,12 +343,27 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
 
     const event = makeEvent({
       id: 'E5',
-      preconditions: [{ id: 'F5', entityId: charEntity.id, attribute: 'alive', value: false, validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } } }],
+      preconditions: [
+        {
+          id: 'F5',
+          entityId: charEntity.id,
+          attribute: 'alive',
+          value: false,
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
     });
 
     const worldState = {
       entities: { [charEntity.id]: { alive: false } },
-      relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [],
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
     };
 
     const input: PreRenderInput = {
@@ -324,7 +383,7 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
     };
 
     const issues = validator.validatePre(input);
-    expect(issues.filter(i => i.validator === 'character_state')).toHaveLength(1);
+    expect(issues.filter((i) => i.validator === 'character_state')).toHaveLength(1);
     expect(issues[0].message).toContain('is dead');
   });
 
@@ -334,12 +393,27 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
 
     const event = makeEvent({
       id: 'E6',
-      preconditions: [{ id: 'F6', entityId: charEntity.id, attribute: 'status', value: 'alive', validity: { temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } } }],
+      preconditions: [
+        {
+          id: 'F6',
+          entityId: charEntity.id,
+          attribute: 'status',
+          value: 'alive',
+          validity: {
+            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+            branches: { type: 'all' },
+          },
+        },
+      ],
     });
 
     const worldState = {
       entities: { [charEntity.id]: { status: 'alive', alive: true } },
-      relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [],
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
     };
 
     const input: PreRenderInput = {
@@ -359,6 +433,6 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
     };
 
     const issues = validator.validatePre(input);
-    expect(issues.filter(i => i.validator === 'character_state')).toHaveLength(0);
+    expect(issues.filter((i) => i.validator === 'character_state')).toHaveLength(0);
   });
 });

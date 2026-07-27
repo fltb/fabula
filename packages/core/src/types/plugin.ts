@@ -23,8 +23,4 @@ export interface PluginManifest {
 
 // ——— Arbitration Strategy ———
 
-export type ArbitrationStrategy =
-  | 'priority'
-  | 'human_arbitration'
-  | 'first_writer_wins'
-  | 'merge';
+export type ArbitrationStrategy = 'priority' | 'human_arbitration' | 'first_writer_wins' | 'merge';

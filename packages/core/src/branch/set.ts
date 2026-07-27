@@ -2,8 +2,8 @@
 // Novalistically — Branch Set Logic & Condition Evaluation
 // ============================================================================
 
-import type { BranchPath, BranchSet, BranchPoint, BranchChoice, Condition } from './types.ts';
 import { branchPathsEqual } from './path.ts';
+import type { BranchChoice, BranchPath, BranchPoint, BranchSet, Condition } from './types.ts';
 
 /**
  * Resolves a dot-notation field path against an object.
@@ -70,12 +70,12 @@ export function evaluateCondition(condition: Condition, branchPath: BranchPath):
 
     case 'and': {
       if (!condition.conditions || condition.conditions.length === 0) return true;
-      return condition.conditions.every(c => evaluateCondition(c, branchPath));
+      return condition.conditions.every((c) => evaluateCondition(c, branchPath));
     }
 
     case 'or': {
       if (!condition.conditions || condition.conditions.length === 0) return false;
-      return condition.conditions.some(c => evaluateCondition(c, branchPath));
+      return condition.conditions.some((c) => evaluateCondition(c, branchPath));
     }
 
     default:
@@ -102,7 +102,7 @@ export function includesPath(branchSet: BranchSet, branchPath: BranchPath): bool
       return true;
 
     case 'paths':
-      return branchSet.paths.some(p => branchPathsEqual(p, branchPath));
+      return branchSet.paths.some((p) => branchPathsEqual(p, branchPath));
 
     case 'except':
       return !includesPath(branchSet.branches, branchPath);
@@ -144,7 +144,7 @@ export function getAvailableChoices(
   branchPoint: BranchPoint,
   currentBranchPath: BranchPath,
 ): BranchChoice[] {
-  return branchPoint.choices.filter(choice => {
+  return branchPoint.choices.filter((choice) => {
     if (!choice.condition) return true;
     return evaluateCondition(choice.condition, currentBranchPath);
   });

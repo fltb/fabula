@@ -1,24 +1,24 @@
 import { describe, expect, it } from 'vitest';
+import {
+  type CompileMergePlanParams,
+  compileMergePlan,
+  isTransactionLegal,
+  reconcileMergePlan,
+} from '../../src/state/merge-plan.ts';
 import type {
-  MergePlan,
-  MergePolicy,
-  StorySnapshot,
-  DiscourseSnapshot,
-  DiscourseBridge,
-  CoverageManifest,
-  NarrativeNode,
-  DiscourseNode,
-  NarrativeEllipsis,
-  ScenePresentation,
   BoundaryReference,
   BranchPath,
+  CoverageManifest,
+  DiscourseBridge,
+  DiscourseNode,
+  DiscourseSnapshot,
+  MergePlan,
+  MergePolicy,
+  NarrativeEllipsis,
+  NarrativeNode,
+  ScenePresentation,
+  StorySnapshot,
 } from '../../src/types/index.ts';
-import {
-  compileMergePlan,
-  reconcileMergePlan,
-  isTransactionLegal,
-  type CompileMergePlanParams,
-} from '../../src/state/merge-plan.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -31,14 +31,31 @@ function emptyStorySnapshot(hash: string): StorySnapshot {
     branch: testBranch(),
     temporalPrefix: 'node_1',
     orderedOutputIds: [],
-    worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    worldState: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     providerIndex: {},
     absenceIndex: {},
     tombstones: {
-      entities: [], relationships: [], threads: [],
-      ruleEpochs: [], ruleExceptions: [], ruleSpecifications: [], retiredIds: [],
+      entities: [],
+      relationships: [],
+      threads: [],
+      ruleEpochs: [],
+      ruleExceptions: [],
+      ruleSpecifications: [],
+      retiredIds: [],
     },
-    catalogHashes: { entityTypes: '', entityDeclarations: '', threadTypes: '', relationshipTypes: '' },
+    catalogHashes: {
+      entityTypes: '',
+      entityDeclarations: '',
+      threadTypes: '',
+      relationshipTypes: '',
+    },
     graphHash: '',
     stateHash: hash,
   };
@@ -129,19 +146,24 @@ describe('compileMergePlan — three policy variants', () => {
 
     expect(Object.keys(plan.policies)).toHaveLength(4);
     expect(plan.policies.entity_lifecycle).toEqual({ type: 'requireEqual' });
-    expect(plan.policies.relationship_state).toEqual({ type: 'selectBranch', branchId: 'branch_beta' });
+    expect(plan.policies.relationship_state).toEqual({
+      type: 'selectBranch',
+      branchId: 'branch_beta',
+    });
     expect(plan.policies.thread_state).toEqual({ type: 'literal' });
     expect(plan.policies.rule_epoch).toEqual({ type: 'requireEqual' });
   });
 
   it('rejects selectBranch with empty branchId', () => {
-    expect(() => compileMergePlan({
-      incomingSnapshotHashes: ['snap_a'],
-      mergeNode: 'merge_point_1',
-      effectiveCoordinate: 'coord_1',
-      policies: { test: { type: 'selectBranch', branchId: '' } },
-      sourceBranch,
-    })).toThrow('requires a non-empty branchId');
+    expect(() =>
+      compileMergePlan({
+        incomingSnapshotHashes: ['snap_a'],
+        mergeNode: 'merge_point_1',
+        effectiveCoordinate: 'coord_1',
+        policies: { test: { type: 'selectBranch', branchId: '' } },
+        sourceBranch,
+      }),
+    ).toThrow('requires a non-empty branchId');
   });
 });
 
@@ -293,8 +315,12 @@ describe('CoverageManifest — dual coverage orthogonality', () => {
     expect(manifest.narrativeNodes).toHaveLength(2);
     expect(manifest.discourseNodes).toHaveLength(2);
     // No overlap in type identity
-    const allNarrativeTypes = manifest.narrativeNodes.map(n => 'sourceRange' in n ? 'NarrativeEllipsis' : 'NarrativeEvent');
-    const allDiscourseTypes = manifest.discourseNodes.map(d => 'sceneId' in d ? 'ScenePresentation' : 'DiscourseBridge');
+    const allNarrativeTypes = manifest.narrativeNodes.map((n) =>
+      'sourceRange' in n ? 'NarrativeEllipsis' : 'NarrativeEvent',
+    );
+    const allDiscourseTypes = manifest.discourseNodes.map((d) =>
+      'sceneId' in d ? 'ScenePresentation' : 'DiscourseBridge',
+    );
     expect(allNarrativeTypes).toContain('NarrativeEllipsis');
     expect(allNarrativeTypes).toContain('NarrativeEvent');
     expect(allDiscourseTypes).toContain('ScenePresentation');
@@ -313,9 +339,9 @@ describe('CoverageManifest — dual coverage orthogonality', () => {
     };
     expect(manifest.narrativeNodes.length + manifest.discourseNodes.length).toBe(3);
     // Orthogonal — no node appears in both arrays
-    const narrativeIds = manifest.narrativeNodes.map(n => n.id);
-    const discourseIds = manifest.discourseNodes.map(d => d.id);
-    const overlap = narrativeIds.filter(id => discourseIds.includes(id));
+    const narrativeIds = manifest.narrativeNodes.map((n) => n.id);
+    const discourseIds = manifest.discourseNodes.map((d) => d.id);
+    const overlap = narrativeIds.filter((id) => discourseIds.includes(id));
     expect(overlap).toHaveLength(0);
   });
 });
@@ -400,7 +426,14 @@ describe('StorySnapshot — selection-independent full-replay equivalence', () =
       branch,
       temporalPrefix: 'node_1_node_2_node_3',
       orderedOutputIds: ['out_1', 'out_2'],
-      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      worldState: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       providerIndex: { out_1: 'llm_provider' },
       absenceIndex: {
         read_key_1: {
@@ -447,14 +480,31 @@ describe('StorySnapshot — selection-independent full-replay equivalence', () =
       branch: testBranch(),
       temporalPrefix: 'node_1',
       orderedOutputIds: [],
-      worldState: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      worldState: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       providerIndex: {},
       absenceIndex: {},
       tombstones: {
-        entities: [], relationships: [], threads: [],
-        ruleEpochs: [], ruleExceptions: [], ruleSpecifications: [], retiredIds: [],
+        entities: [],
+        relationships: [],
+        threads: [],
+        ruleEpochs: [],
+        ruleExceptions: [],
+        ruleSpecifications: [],
+        retiredIds: [],
       },
-      catalogHashes: { entityTypes: '', entityDeclarations: '', threadTypes: '', relationshipTypes: '' },
+      catalogHashes: {
+        entityTypes: '',
+        entityDeclarations: '',
+        threadTypes: '',
+        relationshipTypes: '',
+      },
       graphHash: '',
       stateHash: '',
     };

@@ -2,14 +2,14 @@
 // AI Provider — Type Definitions — Unit Tests
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { LLMError } from '../../src/ai/types.ts';
+import { describe, expect, it } from 'vitest';
 import type {
-  Message,
   CompletionRequest,
   CompletionResponse,
   LLMProvider,
+  Message,
 } from '../../src/ai/types.ts';
+import { LLMError } from '../../src/ai/types.ts';
 
 // ============================================================================
 // LLMError

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
+
 // ============================================================================
 // Build bench package with esbuild
 // ============================================================================
 
-import { build } from 'esbuild';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const outdir = join(__dirname, 'dist');
@@ -21,17 +22,16 @@ const result = await build({
   outfile: join(outdir, 'index.js'),
   sourcemap: true,
   metafile: true,
-  external: [
-    'node:*',
-    '@novalistically/core',
-    'tinybench',
-    'yaml',
-  ],
+  external: ['node:*', '@novalistically/core', 'tinybench', 'yaml'],
   logLevel: 'info',
 });
 
 const metaPath = join(outdir, 'meta.json');
-const meta = { inputs: result.metafile.inputs, outputs: result.metafile.outputs, warnings: result.warnings };
+const meta = {
+  inputs: result.metafile.inputs,
+  outputs: result.metafile.outputs,
+  warnings: result.warnings,
+};
 writeFileSync(metaPath, JSON.stringify(meta, null, 2));
 console.log('📊 Metafile written to', metaPath);
 console.log('✅ Bench bundle built to', join(outdir, 'index.js'));

@@ -1,12 +1,13 @@
 #!/usr/bin/env node
+
 // ============================================================================
 // Build CLI package with esbuild
 // ============================================================================
 
-import { build } from 'esbuild';
-import { existsSync, mkdirSync, chmodSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { chmodSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { build } from 'esbuild';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = __dirname;
@@ -22,12 +23,7 @@ const result = await build({
   outdir,
   sourcemap: true,
   metafile: true,
-  external: [
-    'node:*',
-    'commander',
-    '@novalistically/core',
-    '@novalistically/bench',
-  ],
+  external: ['node:*', 'commander', '@novalistically/core', '@novalistically/bench'],
   logLevel: 'info',
 });
 
@@ -35,7 +31,11 @@ const result = await build({
 chmodSync(join(outdir, 'index.js'), 0o755);
 
 const metaPath = join(outdir, 'meta.json');
-const meta = { inputs: result.metafile.inputs, outputs: result.metafile.outputs, warnings: result.warnings };
+const meta = {
+  inputs: result.metafile.inputs,
+  outputs: result.metafile.outputs,
+  warnings: result.warnings,
+};
 writeFileSync(metaPath, JSON.stringify(meta, null, 2));
 console.log('📊 Metafile written to', metaPath);
 console.log('✅ CLI bundle built to', outdir);

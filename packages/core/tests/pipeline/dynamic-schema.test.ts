@@ -11,22 +11,23 @@
 // produce rejection.
 // ============================================================================
 
-import { describe, it, expect } from 'vitest';
-import { RenderPipeline } from '../../src/pipeline/render.ts';
-import type { RenderJob, AnalysisResult } from '../../src/types/index.ts';
-import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import { describe, expect, it } from 'vitest';
 import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
-import { ResultAggregator } from '../../src/validator/aggregator.ts';
-import { makeAnalysisResult } from '../fixtures/mock-pass2-helpers.ts';
+import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import { RenderPipeline } from '../../src/pipeline/render.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type {
-  NarrativeEvent,
-  WorldState,
+  AnalysisResult,
   ContextPackage,
-  SystemContext,
-  SceneSpecification,
   KnowledgeBoundary,
+  NarrativeEvent,
+  RenderJob,
+  SceneSpecification,
+  SystemContext,
+  WorldState,
 } from '../../src/types/index.ts';
+import { ResultAggregator } from '../../src/validator/aggregator.ts';
+import { makeAnalysisResult } from '../fixtures/mock-pass2-helpers.ts';
 
 // ============================================================================
 // Test fixtures

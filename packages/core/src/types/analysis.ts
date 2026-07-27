@@ -59,7 +59,6 @@ interface KnowledgeCheck {
 
 // ── Existing block types ──────────────────────────────────────────────────────
 
-
 interface ViolatedPrecondition {
   entityId: string;
   attribute: string;

@@ -6,17 +6,17 @@
 // ============================================================================
 
 import type {
-  ThreadTransaction,
-  ThreadRuntimeState,
-  ThreadLifecycle,
   GoalLifecycle,
   MilestoneLifecycle,
   ThreadId,
-  ThreadRunId,
-  ThreadMergeStrategy,
+  ThreadLifecycle,
   ThreadMergeResult,
-  TimeDomain,
+  ThreadMergeStrategy,
   ThreadProgressEntry,
+  ThreadRunId,
+  ThreadRuntimeState,
+  ThreadTransaction,
+  TimeDomain,
 } from '../types/index.js';
 
 // ============================================================================
@@ -82,7 +82,6 @@ export function applyThreadTransaction(
     state.status = tx.status;
   }
 
-
   // Update run ID if provided
   state.currentRunId = tx.runId;
 
@@ -131,19 +130,13 @@ function validateThreadTransition(
   }
 
   // completed/abandoned can only go to planned or active (reopen)
-  if (
-    (from === 'completed' || from === 'abandoned') &&
-    to !== 'planned' &&
-    to !== 'active'
-  ) {
+  if ((from === 'completed' || from === 'abandoned') && to !== 'planned' && to !== 'active') {
     throw new Error(
       `Invalid thread lifecycle transition: ${from}→${to}. Only planned/active allowed for reopen. Provenance: ${provenance}`,
     );
   }
 
-  const isValid = VALID_THREAD_TRANSITIONS.some(
-    ([f, t]) => f === from && t === to,
-  );
+  const isValid = VALID_THREAD_TRANSITIONS.some(([f, t]) => f === from && t === to);
   if (!isValid) {
     throw new Error(
       `Invalid thread lifecycle transition: ${from}→${to}. Provenance: ${provenance}`,
@@ -165,10 +158,8 @@ export function convertLegacyThreadProgress(
   eventId: string,
 ): ThreadTransaction {
   const runId = `legacy-${tp.thread}` as ThreadRunId;
-  const status: ThreadLifecycle =
-    tp.progressAfter >= tp.progressTotal ? 'completed' : 'active';
-  const goalStatus: GoalLifecycle =
-    tp.progressAfter >= tp.progressTotal ? 'achieved' : 'active';
+  const status: ThreadLifecycle = tp.progressAfter >= tp.progressTotal ? 'completed' : 'active';
+  const goalStatus: GoalLifecycle = tp.progressAfter >= tp.progressTotal ? 'achieved' : 'active';
 
   return {
     thread: tp.thread,
@@ -190,9 +181,7 @@ export function convertLegacyThreadProgress(
  * isLegacyThreadProgress — Duck-type check: returns true if the object
  * has the old scalar-progress shape (progressAfter/progressTotal).
  */
-export function isLegacyThreadProgress(
-  entry: unknown,
-): entry is ThreadProgressEntry {
+export function isLegacyThreadProgress(entry: unknown): entry is ThreadProgressEntry {
   if (typeof entry !== 'object' || entry === null) return false;
   const e = entry as Record<string, unknown>;
   return (
@@ -235,10 +224,7 @@ export function getThreadTimeDomain(
  * is a no-op at the transaction level (the constraint is enforced
  * structurally by the replay ordering), but provided for explicit checks.
  */
-export function assertClockCompatibility(
-  domain: TimeDomain,
-  tx: ThreadTransaction,
-): void {
+export function assertClockCompatibility(domain: TimeDomain, tx: ThreadTransaction): void {
   // Clock domain is a type-level constraint, not per-transaction.
   // This function is a hook for future cross-clock-provider edge detection.
   void domain;
@@ -350,7 +336,7 @@ function computeSemanticHash(state: ThreadRuntimeState): string {
   let hash = 0;
   for (let i = 0; i < canonical.length; i++) {
     const char = canonical.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash |= 0; // Convert to 32-bit integer
   }
   return `h${Math.abs(hash).toString(36)}`;
@@ -362,8 +348,17 @@ function computeSemanticHash(state: ThreadRuntimeState): string {
  */
 export function initializeThreadRuntimeState(
   threadId: string,
-  declaration: { initialPhase?: string; initialBindings?: Record<string, string>; initialGoalStates?: { goalId: string; status: GoalLifecycle }[]; initialMilestoneStates?: { milestoneId: string; status: MilestoneLifecycle }[] },
-  typeDef: { allowedPhases: string[]; stableGoals: { goalId: string; status: GoalLifecycle }[]; stableMilestones: { milestoneId: string; status: MilestoneLifecycle }[] },
+  declaration: {
+    initialPhase?: string;
+    initialBindings?: Record<string, string>;
+    initialGoalStates?: { goalId: string; status: GoalLifecycle }[];
+    initialMilestoneStates?: { milestoneId: string; status: MilestoneLifecycle }[];
+  },
+  typeDef: {
+    allowedPhases: string[];
+    stableGoals: { goalId: string; status: GoalLifecycle }[];
+    stableMilestones: { milestoneId: string; status: MilestoneLifecycle }[];
+  },
   initialStatus: ThreadLifecycle = 'planned',
 ): ThreadRuntimeState {
   const goalStates: Record<string, GoalLifecycle> = {};

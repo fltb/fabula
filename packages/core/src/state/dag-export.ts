@@ -19,7 +19,9 @@ export function exportDAGtoDOT(
   for (const event of events) {
     const label = event.title ?? event.eventId;
     const color = event.sceneType === 'flashback' ? 'lightblue' : 'lightgreen';
-    lines.push(`  "${event.eventId}" [label="${event.eventId}\\n${label}", fillcolor=${color}, style="filled,rounded"];`);
+    lines.push(
+      `  "${event.eventId}" [label="${event.eventId}\\n${label}", fillcolor=${color}, style="filled,rounded"];`,
+    );
   }
 
   // Add edges

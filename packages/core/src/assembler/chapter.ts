@@ -1,8 +1,8 @@
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import type { ChapterMetadata } from '../types/index.js';
-import { FsStorage, type Storage } from '../storage/index.ts';
 import { logger } from '../observability/logger.ts';
+import { FsStorage, type Storage } from '../storage/index.ts';
+import type { ChapterMetadata } from '../types/index.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // Chapter Metadata Loader
@@ -43,8 +43,7 @@ export function loadChapterMetadata(
         title: (parsed.title as string) ?? '',
         summary: (parsed.summary as string) ?? '',
         intent: (parsed.intent as string) ?? '',
-        plannedScenes:
-          ((parsed.planned_scenes ?? parsed.plannedScenes) as number) ?? 0,
+        plannedScenes: ((parsed.planned_scenes ?? parsed.plannedScenes) as number) ?? 0,
         ...(parsed.style_guidance
           ? { styleGuidance: parsed.style_guidance as ChapterMetadata['styleGuidance'] }
           : {}),

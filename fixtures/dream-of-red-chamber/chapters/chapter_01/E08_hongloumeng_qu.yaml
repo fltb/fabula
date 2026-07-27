@@ -1,0 +1,98 @@
+event: E08
+title: "警幻仙曲演红楼梦十二支"
+narrativeOrder: 8
+sceneType: dream
+storyTime: lin_daiyu_enters_jiafu + 90days
+tense: past
+discourseMode: description
+arcPosition: rising
+emotionalValence: "foreboding_tragic_beauty"
+conflictType: "person_vs_fate"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "宝玉看完判词仍不解，警幻仙子遂领他来到歌舞场，命十二舞女演奏《红楼梦》十二支曲子。先引子《红楼梦引》：'开辟鸿蒙，谁为情种？'随后十二支曲逐一演奏：《终身误》'都道是金玉良姻，俺只念木石前盟'，《枉凝眉》'一个是阆苑仙葩，一个是美玉无瑕'，《恨无常》元春之曲，《分骨肉》探春之曲，《乐中悲》湘云之曲，《世难容》妙玉之曲，《喜冤家》迎春之曲，《虚花悟》惜春之曲，《聪明累》凤姐之曲，《留余庆》巧姐之曲，《晚韶华》李纨之曲，《好事终》可卿之曲。收尾《飞鸟各投林》：'好一似食尽鸟投林，落了片白茫茫大地真干净！'宝玉听了散漫无稽，竟未悟得其中奥妙——警幻叹其痴儿尚未悟。"
+preconditions:
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "宝玉此时仍在太虚幻境的歌舞场中，正准备听警幻仙子安排的《红楼梦》十二支曲。"
+  - entity: jiabaoyu
+    attribute: state
+    narrativeHint: "宝玉依然处于梦魇状态，他的意识在梦幻与真实之间飘摇，准备接受命运的又一次启示。"
+  - entity: jiabaoyu
+    attribute: knowledge
+    narrativeHint: "宝玉刚刚在薄命司翻阅了金陵十二钗的判词和画册，每首判词都是一个女子的命运谶语。他看了仍然不解，但这些命运的密码已经印在心中。"
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: knowledge
+    value: heard_fate_songs
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: understanding_of_fate
+    narrativeHint: "宝玉听完《红楼梦》十二支曲子——从引子'开辟鸿蒙'到收尾'落了片白茫茫大地真干净'——但他依然'散漫无稽，并未悟出'。命运的密码以判词和曲文两种形式展示在他面前，他却两次错过。警幻的警醒计划以失败告终——宝玉注定要在红尘中亲历一切后方能悟得。"
+    confidence: 1.0
+  - entity: jinghuanxiangu
+    attribute: mission_outcome
+    value: failed_to_enlighten
+    confidence: 1.0
+  - entity: narrator_omniscient
+    attribute: prophecy_completed
+    narrativeHint: "判词加曲文——金陵十二钗的命运通过诗谶和曲谶双重系统宣告完毕。所有的结局——黛玉泪尽、宝钗守寡、探春远嫁、湘云流离、凤姐被休、巧姐沦落、惜春出家、迎春惨死、妙玉遭劫、李纨封诰、可卿悬梁、元春薨逝——以及最终的'白茫茫大地真干净'，都以最高密度的形式预置于此。"
+    confidence: 1.0
+threadProgress:
+  - thread: T5
+    advancement: "《红楼梦》十二支曲子是全书宿命论的巅峰表达——从引子'开辟鸿蒙'到收尾'飞鸟各投林'，十二支曲逐一对应十二位女子的命运轨迹。'落了片白茫茫大地真干净'不仅是贾府的最终结局，也是全书'万境归空'哲学的最强音。"
+    progressAfter: 20
+    progressTotal: 100
+  - thread: T2
+    advancement: "'都道是金玉良姻，俺只念木石前盟'——《终身误》是宝黛钗三角关系最凝练的宣告。'空对着山中高士晶莹雪，终不忘世外仙姝寂寞林'——宝玉对钗黛的情感态度在曲中已经明确。'若说没奇缘，今生偏又遇着他'——《枉凝眉》以最凄美的笔触写尽了宝黛的爱情悲剧。"
+    progressAfter: 12
+    progressTotal: 100
+  - thread: T4
+    advancement: "十二支曲子每一支对应一位金陵十二钗的命运：元春的宫闱悲、探春的远嫁、湘云的流离、妙玉的遭劫、迎春的惨死、惜春的出家、凤姐的被休、巧姐的烟花劫、李纨的虚名、可卿的淫丧——十二种不同的悲剧，共同谱写了一曲'千红一哭、万艳同悲'的哀歌。"
+    progressAfter: 15
+    progressTotal: 100
+narrativeChecklist:
+  items:
+    - dimension: "曲文系统"
+      description: "《红楼梦》十二支曲配十二位女子——每支曲牌名本身即为诗谶，曲文展开判词未尽的命运细节"
+      required: true
+    - dimension: "叙事反讽"
+      description: "宝玉听了曲文却'散漫无稽，并未悟出'——读者已知结局而剧中人浑然不觉的叙事反讽在此达到极致"
+      required: true
+    - dimension: "收尾总结"
+      description: "《飞鸟各投林》——'好一似食尽鸟投林，落了片白茫茫大地真干净'——全书最经典的收尾意象，也是红楼梦哲学主旨的诗意表达"
+      required: true
+cast:
+  onScreen:
+    - narrator_omniscient
+    - jiabaoyu
+    - jinghuanxiangu
+  affected:
+    - lindaiyu
+    - xuebaochai
+    - shixiangyun
+    - tanchun
+    - yingchun
+    - xichun
+    - wangxifeng
+    - liwan
+    - miaoyu
+    - qinkeqing
+    - yuanchun
+styleGuidance:
+  tone: "仙乐飘飘中透着彻骨的悲凉——曲词典雅华美，但内容却句句是悲剧预言"
+  atmosphere: "太虚幻境的管弦丝竹与曲词中的悲音——歌声越美、词意越悲，形式与内容的张力达到巅峰"
+  targetWordCount: 1200
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+anachrony:
+  type: prolepsis
+  scope: external
+  function: completing
+  distance: "红楼梦曲预示了全书的完整结局——从元春薨逝到巧姐沦落到贾府败落到宝玉出家，跨度涵盖全书剩余所有时间"
+  anchorEventId: E08
+authorNotes:
+  - "《红楼梦》十二支曲的原文需以曲文形式完整呈现——每支曲的牌名如《终身误》《枉凝眉》等不可省略，曲文须保持曹雪芹原文的韵文格式。《飞鸟各投林》作为收尾曲需在叙述中凸显其总结性的哲学意涵。"

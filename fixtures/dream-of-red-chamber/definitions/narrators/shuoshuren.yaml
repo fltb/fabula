@@ -1,0 +1,12 @@
+id: shuoshuren
+type: omniscient
+access: full
+assertion: full
+truth: full_knowledge
+fidelity: reliable
+sincerity: sincere
+autoReveal: false
+# 《红楼梦》的"说书人"叙述者——凌驾于故事世界之上的全知叙事声音。
+# 知晓贾府百年兴衰的全部因果，预知金陵十二钗的命运判词，却按章回节奏择时披露。
+# extradiegetic/heterodiegetic：不属于故事世界、不参与情节，以"看官"口吻与读者对话，
+# 以文白相间的章回体语言——"且说""却说""不在话下"——织就贾府兴衰的叙事长卷。

@@ -1,0 +1,113 @@
+event: E25
+title: "不肖种种大承笞挞（宝玉挨打）"
+narrativeOrder: 25
+sceneType: linear
+storyTime: sisters_move_into_garden + 150 days
+discourseMode: action
+arcPosition: climax
+emotionalValence: "violence_grief"
+conflictType: "person_vs_society"
+resolutionType: "authority_intervention"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: 忠顺亲王府长史官前来索要琪官蒋玉菡——宝玉私交戏子之事败露，贾政又羞又怒。贾环趁机告密，说宝玉强奸金钏未遂致其投井。贾政气得面如金纸，喝令"拿宝玉来！拿大棍！拿绳子捆上！"亲自动手，将宝玉按在凳上狠打。宝玉先是哀哀求饶，后痛得乱喊乱叫，贾政更怒——板子下得又狠又快，直打得宝玉皮开肉绽、昏死过去。王夫人闻讯赶来，抱住板子哭诉"既要勒死他，先勒死我"，贾政泪如雨下却仍不肯饶。贾母颤巍巍赶到，厉声喝道"先打死我，再打死他"，贾政方才跪下告罪。宝玉被抬回怡红院，已是面白气弱、臀腿血肉模糊。袭人含泪照看，宝钗送来丸药，黛玉哭得两眼红肿。夜间袭人偷偷向王夫人进言——请求让宝玉搬出大观园，以免再生事端。王夫人深以为然。
+preconditions:
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "宝玉被贾政召到荣国府内，将要遭受这次惨烈的鞭打。"
+  - entity: jiazheng
+    attribute: anger_toward_jiabaoyu
+    narrativeHint: "贾政因忠顺王府索要琪官已怒不可遏，贾环又添油加醋说金钏之事——贾政早已积累的对宝玉'不肖'的愤怒终于总爆发。"
+  - entity: wangfuren
+    attribute: location
+    narrativeHint: "王夫人在荣国府内，听到贾政怒打宝玉，急忙赶来救场。"
+  - entity: jiamu
+    attribute: location
+    narrativeHint: "贾母也在荣国府中，颤巍巍赶来，以最高权威压服贾政。"
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: health
+    value: severely_beaten
+    confidence: 1.0
+  - entity: jiazheng
+    attribute: emotional_state
+    narrativeHint: "贾政打了儿子之后自己也痛心疾首——他的眼泪既有对宝玉的愤怒，也有对家族前途的绝望。他是'恨铁不成钢'的典型中国式严父。"
+    confidence: 1.0
+  - entity: jiamu
+    attribute: relationship_with_jiazheng
+    narrativeHint: "贾母以最高权威压服贾政——'先打死我，再打死他'。这场冲突既是父子之战，也是家族权力结构的显影。"
+    confidence: 1.0
+  - entity: xiren
+    attribute: intention_to_report
+    value: determined_to_speak_to_wangfuren
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: relationship_with_lindaiyu
+    narrativeHint: "黛玉哭肿了眼来看他，宝玉反而安慰她——'我虽然挨了打，并不觉疼'。这是宝黛之间在苦难中升华的感情。"
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "宝玉遭父亲重打——他的一切叛逆行为（结交戏子、同情自杀、不务正业）在此被旧势力的父亲以暴力'纠正'。这是宝玉'悟'之路上最惨烈的惩罚。"
+    progressAfter: 0.66
+    progressTotal: 100
+  - thread: T3
+    advancement: "贾政痛打宝玉不仅是一个父亲教训儿子——它象征着世家大族对'不肖子孙'的制度性惩罚。忠顺王府的压力、金钏事件的声音、贾环的告密，共同构成了一张权力网络。"
+    progressAfter: 0.67
+    progressTotal: 100
+  - thread: T4
+    advancement: "宝钗送药、黛玉哭肿了眼——两位与宝玉感情最深的女子以不同方式表达关切。而袭人向王夫人的进言则开启了逐晴雯、抄检大观园的连锁反应。"
+    progressAfter: 0.68
+    progressTotal: 100
+  - thread: T5
+    advancement: "宝玉挨打后各路人马的反应——贾母的权威压制了贾政，但家族内部的裂痕更深了。神话框架下，顽石在红尘中所受之苦又添一道。"
+    progressAfter: 0.68
+    progressTotal: 100
+styleGuidance:
+  tone: "从忠顺王府来索人的紧张到贾政雷霆大怒到痛打的惨烈到众人哭求的戏剧性高潮——层层推进。打完之后各人探视的温情段落作为缓和，最后以袭人进言的暗流收束。"
+  atmosphere: "荣国府笼罩在暴力的阴影中——贾政的雷霆大怒、板子落下的声音、王夫人的哭喊、贾母的怒斥交织在一起。这是全书最为惨烈的家庭冲突。"
+  targetWordCount: 1200
+narrativeChecklist:
+  items:
+    - dimension: "宝玉挨打"
+      description: "贾政亲自执板痛打宝玉——从哀求到昏死，板子下得又狠又快。这是全书最为暴力的场景，也是父子冲突的顶点。"
+      required: true
+    - dimension: "王夫人贾母救场"
+      description: "王夫人抱板哭求、贾母怒斥贾政——这两个女人用各自的方式拯救了宝玉。贾府的最高权力结构在此清晰显现：贾母才是真正的权威。"
+      required: true
+    - dimension: "钗黛探视"
+      description: "宝钗送药、黛玉哭肿了眼——两位女子的不同关怀方式：宝钗务实周到，黛玉真情流露。"
+      required: true
+cast:
+  onScreen:
+    - jiabaoyu
+    - jiazheng
+    - wangfuren
+    - jiamu
+    - xiren
+    - qingwen
+    - lindaiyu
+    - xuebaochai
+    - zijuan
+  affected:
+    - jiabaoyu
+    - jiazheng
+    - jiamu
+    - wangfuren
+    - lindaiyu
+    - xuebaochai
+    - xiren
+duration:
+  type: scene
+  storyDuration: "从午后到深夜——约半日"
+  narrativeLength: 600
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+authorNotes:
+  - "宝玉挨打是全书暴力描写的顶点——板子落在宝玉身上的声音需要写得直击人心。贾政的愤怒中既有'恨铁不成钢'的父爱，也有家族危机感酿成的疯狂"
+  - "黛玉哭肿了眼来看宝玉——曹雪芹只写了'两个眼睛肿得桃儿一般'，这是极简而极有力的描写，需要用心呈现"
+  - "袭人向王夫人进言是全书的重大转折——她说'如今二爷也大了，里头姑娘们也大了'——这句话直接触发了抄检大观园的连锁反应"

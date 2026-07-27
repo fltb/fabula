@@ -1,0 +1,90 @@
+event: E03
+title: "黛玉初进荣国府拜见贾母"
+narrativeOrder: 3
+sceneType: linear
+storyTime: lin_daiyu_enters_jiafu + 0days
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: "tender_grief_and_wonder"
+conflictType: "person_vs_society"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "林黛玉辞别父亲林如海，随贾雨村进京投奔外祖母贾母。初入荣国府，黛玉步步留心——府门巍峨、仆从肃然、气派非凡。她先拜见贾母，祖孙相拥大哭。随后依次拜见大舅母邢夫人、二舅母王夫人、李纨与迎春、探春、惜春三姊妹。众人见黛玉举止不俗而体弱怯不胜衣，问及所服何药，黛玉答以人参养荣丸。贾母怜其孤弱，拨紫鹃服侍，安排住于碧纱橱内。正谈及黛玉之母贾敏生前事，忽听后院传来一阵笑声，有人朗声道：'我来迟了，不曾迎接远客！'——凤姐到了。"
+preconditions:
+  - entity: lindaiyu
+    attribute: location
+    narrativeHint: "林黛玉随贾雨村从扬州进京赴京城，在驿站和旅途中多日奔波，将到达外祖母贾母所居的荣国府。"
+  - entity: lindaiyu
+    attribute: purpose
+    narrativeHint: "林黛玉的父亲林如海病故在即，母亲贾敏已逝，黛玉失去双亲后孤苦无依，投靠外祖母贾母是唯一的出路和生存希望。"
+  - entity: jiamu
+    attribute: location
+    narrativeHint: "荣国府的主母贾母此时正在府中料理家务，等待着远方孙女林黛玉的到来。"
+expectedPostconditions:
+  - entity: lindaiyu
+    attribute: location
+    value: rongguofu
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: met_family_members
+    narrativeHint: "黛玉与贾母、邢王二夫人、李纨、迎春探春惜春三姊妹初见。祖孙相拥大哭，黛玉被贾母安排住在碧纱橱，拨紫鹃服侍。"
+    confidence: 1.0
+  - entity: jiamu
+    attribute: emotional_state
+    value: grief_and_joy_at_granddaughters_arrival
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: impression_of_rongguofu
+    narrativeHint: "黛玉留心观察荣国府的排场规矩——仆从的衣着气度、府中的陈设布局、各房人物的言谈举止，处处体现百年世家的礼数森严。她从此开始以'步步留心、时时在意'的姿态生活在贾府。"
+    confidence: 1.0
+threadProgress:
+  - thread: T2
+    advancement: "黛玉入府标志着木石前盟的主角进入贾府叙事场域。她与贾母的祖孙相见、与三春姊妹的初会，为她此后在贾府的生活搭建了人际网络。"
+    progressAfter: 5
+    progressTotal: 100
+  - thread: T4
+    advancement: "金陵十二钗中的黛玉、迎春、探春、惜春、李纨同场。黛玉的柔弱体态和超凡气质从第一面就给众人留下深刻印象——病如西子胜三分，为后面泪尽而亡的宿命埋下伏笔。"
+    progressAfter: 5
+    progressTotal: 100
+  - thread: T3
+    advancement: "荣国府的排场和礼数在黛玉眼中一一呈现——府门的建制、仆从的着装、贾母的威仪、各房妇人的次序，百年世家的物质繁华在黛玉初入时达到视觉巅峰。"
+    progressAfter: 6
+    progressTotal: 100
+narrativeChecklist:
+  items:
+    - dimension: "视角引导"
+      description: "全知叙述者引导读者通过黛玉的眼光第一次审视荣国府——'步步留心，时时在意'的视角限定了叙事的信息量"
+      required: true
+    - dimension: "人物群像"
+      description: "通过黛玉的初入，贾母、邢夫人、王夫人、李纨、三春先后登场，各人言行中见性格"
+      required: true
+    - dimension: "环境描写"
+      description: "荣国府大门、垂花门、贾母正房——建筑的描写既是写实又是权力的空间表达"
+      required: false
+cast:
+  onScreen:
+    - narrator_omniscient
+    - lindaiyu
+    - jiamu
+    - wangfuren
+    - xingfuren
+    - liwan
+    - yingchun
+    - tanchun
+    - xichun
+    - zijuan
+  affected:
+    - jiabaoyu
+    - wangxifeng
+styleGuidance:
+  tone: "细腻温婉的叙述中透出淡淡的忧伤——黛玉的视角带着丧母孤女的凄楚，与贾府的热闹排场形成对照"
+  atmosphere: "荣国府的深宅大院、雕梁画栋与黛玉瘦弱的身影——富贵气象中暗含孤零之感"
+  targetWordCount: 1200
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+authorNotes:
+  - "黛玉初入荣国府的段落在原著中是最精细的人物出场描写之一——需以黛玉的限知视角展现荣国府的空间布局和人物次序。贾母大哭'我这些儿女，所疼者独有你母'是祖孙情感的核心台词。"

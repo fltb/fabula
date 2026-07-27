@@ -1,0 +1,94 @@
+event: E18
+title: "西厢记妙词通戏语——共读西厢"
+narrativeOrder: 18
+sceneType: linear
+storyTime: sisters_move_into_garden + 30 days
+narrationTime: sisters_move_into_garden + 30
+tense: past
+discourseMode: dialogue
+arcPosition: rising
+emotionalValence: "tender_playful_awakening"
+conflictType: "person_vs_self"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "阳春三月，大观园中百花盛开。宝玉在沁芳闸桥边桃花树下读《西厢记》，桃花落满书页，他抖花入池。恰逢黛玉来葬花——肩担花锄、手挂花囊。见宝玉读的是《会真记》，也要看。宝玉用书中词句打趣——'我就是个'多愁多病身'，你就是那'倾国倾城貌''。黛玉怒斥他拿淫词欺负人，宝玉慌忙赔罪。黛玉嗤地一笑，回了一句'呸，原来是个银样镴枪头'。两人共读入神。黛玉归途路过梨香院墙外，听见戏班演习《牡丹亭》——'原来姹紫嫣红开遍，似这般都付与断井颓垣'——不觉心动神摇、如醉如痴，蹲身坐于山石上细嚼曲中滋味，眼中滚下泪来。"
+preconditions:
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "贾宝玉此时正在大观园沁芳闸桥边，在桃花树下读书。"
+  - entity: lindaiyu
+    attribute: location
+    narrativeHint: "林黛玉此时正在大观园内活动。"
+  - entity: lindaiyu
+    attribute: activity
+    narrativeHint: "林黛玉肩担花锄、手提花囊，正在大观园内扫落花、埋落花——这是她每天都要进行的活动，象征她对生命消逝的悲悯。"
+  - entity: jiabaoyu
+    attribute: possession
+    narrativeHint: "贾宝玉手中持有《西厢记》的抄本（会真记）。"
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: emotionalState
+    narrativeHint: "宝玉用《西厢记》词句向黛玉表白——他借戏文说的'多愁多病身'与'倾国倾城貌'是宝黛关系中最直白的一次情感表达。他的表白戏谑中带着真心。"
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: emotionalState
+    narrativeHint: "黛玉从怒到笑再到心动神摇——先是嗔宝玉用淫词欺负她，转身却悄悄记下了所有曲词。路过梨香院听到《牡丹亭》后更是如醉如痴、眼中落泪——她的少女情思在文学与音乐中全面觉醒。"
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: knowledge
+    value: read_western_chamber_and_peony_pavilion_excerpts
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: knowledge
+    value: deepened_literary_bond_with_daiyu
+    confidence: 1.0
+threadProgress:
+  - thread: T2
+    advancement: "宝黛共读《西厢记》是二人情感的里程碑事件——宝玉借戏文表白、黛玉表面动怒实则心动。黛玉虽因礼教约束不能承认自己的情感，却在《牡丹亭》曲文中找到了自己生命的回响：'姹紫嫣红开遍，似这般都付与断井颓垣'——她看到了自己的命运预演。"
+    progressAfter: 0.50
+    progressTotal: 1.0
+  - thread: T5
+    advancement: "西厢记与牡丹亭——两部'禁书'同时闯入大观园的春天。大观园中的青春与古典文学中的爱情产生互文：宝玉黛玉不是在读别人的故事，他们在读自己的命运。"
+    progressAfter: 0.50
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "文学互文"
+      description: "《西厢记》'多愁多病身'与'倾国倾城貌'——宝黛借戏文传情。这是文学文本与人物情感的直接对话，也是曹雪芹对元杂剧的致敬与化用。"
+      required: true
+    - dimension: "牡丹亭惊梦"
+      description: "黛玉听《牡丹亭》——'原来姹紫嫣红开遍，似这般都付与断井颓垣'——她不是听不懂，而是听懂了太多。这段曲文直接启动了黛玉的少女情思觉醒。"
+      required: true
+    - dimension: "葬花作为仪式"
+      description: "黛玉葬花——她不是普通的赏花人，她是花的送葬者。她扫花、葬花的行为使她与大观园中其他女子有了本质区别：她看到了美的消逝，并用行动完成了对逝去之美的告别仪式。"
+      required: true
+styleGuidance:
+  tone: "春日明媚中透出惘然——甜蜜、羞涩、惆怅、情思萌动的复合情绪"
+  targetWordCount: 1200
+  atmosphere: "大观园春日——桃花落红成阵、春风拂面、溪水潺潺。沁芳闸桥边：宝玉在桃花树下读禁书、花瓣落满书页。黛玉葬花而来，肩上花锄系着锦囊、手里是花帚——她是春天的诗人也是春天的悼亡者。"
+  scenePacing: "宝玉读西厢→黛玉葬花来→共读西厢→宝玉戏语→黛玉嗔怒→赔礼和解→共读共鸣→归途闻曲→牡丹亭动心→心痛神痴泪下"
+  characterVoice:
+    jiabaoyu: "用戏文表白是勇敢也是冒失——他说出'多愁多病身'和'倾国倾城貌'时不是调戏，是真情的泄露。被黛玉斥责后立刻慌了手脚——他在真挚情感面前是笨拙的。"
+    lindaiyu: "表面怒斥宝玉用淫词欺负她，实则已将戏文记在心底。她回宝玉的'银样镴枪头'说明她也在看同一本书——而且同样入了迷。她在梨香院墙外听曲时的反应——'如醉如痴，站立不住'——是她情感到达巅峰的瞬间。那是文字、音乐、情感的三重共振。"
+cast:
+  onScreen:
+    - jiabaoyu
+    - lindaiyu
+  affected:
+    - zijuan
+    - xiren
+    - xuebaochai
+authorNotes:
+  - "务必引用宝玉'我就是个'多愁多病身'，你就是那'倾国倾城貌''的对白及黛玉回应的'银样镴枪头'"
+  - "需包含黛玉听《牡丹亭》曲文——'原来姹紫嫣红开遍''良辰美景奈何天'——及她'如醉如痴、眼中落泪'的完整心理描写"
+duration:
+  type: scene
+  storyDuration: "春日一整日——从午后共读到日暮归途闻曲"
+  narrativeLength: 600
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: heterodiegetic

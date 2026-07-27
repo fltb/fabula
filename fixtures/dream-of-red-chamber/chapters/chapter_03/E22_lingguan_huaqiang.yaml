@@ -1,0 +1,73 @@
+event: E22
+title: "龄官划蔷痴及局外"
+narrativeOrder: 22
+sceneType: linear
+storyTime: sisters_move_into_garden + 120 days
+discourseMode: description
+arcPosition: rising
+emotionalValence: "poignant_obsession"
+conflictType: "person_vs_fate"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: 一日午后，宝玉在大观园中心烦意乱，信步行至蔷薇花架下。只见一个小戏子模样的女孩子蹲在花下，手里拿着根绾头的簪子，在地上不停地画着什么。宝玉初以为她在作诗，然近前细看——那女孩子画来画去只是一个"蔷"字。她画了一遍又一遍，每一笔都带着说不尽的心事。宝玉痴看，心内暗想："她难道也是个痴情人？"不觉从她画第一个字一直数到几千个。正在出神间，天空忽然落雨。宝玉浑身淋得冰凉，却忍不住喊了一句："不用写了，你看身上都湿了。"那女孩子猛然抬头——龄官——见是一个陌生公子提醒她，反而提醒他："多谢姐姐提醒，难道姐姐有什么遮雨的？"宝玉这才意识到自己也被淋透了，忙跑回怡红院，却被门内的人误认为是晚归的丫鬟，一脚踢在肋上——给他开门的正是袭人。
+preconditions:
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "宝玉在大观园中心烦意乱，漫步至蔷薇花架下。"
+  - entity: lingguan
+    attribute: location
+    narrativeHint: "龄官也在大观园中，蹲在花下一遍遍划着'蔷'字。"
+  - entity: daguanyuan
+    attribute: atmosphere
+    narrativeHint: "夏日午后的大观园静寂而压抑，宝玉与龄官在此邂逅了彼此的痴情。"
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: understanding_of_love
+    narrativeHint: "龄官在地上一遍遍划'蔷'字——她对贾蔷的痴情震撼了宝玉。宝玉从'我便是那多愁多病的身'的自我中心，第一次意识到世上还有别人跟他一样痴情——甚至更痴。"
+    confidence: 1.0
+  - entity: lingguan
+    attribute: emotional_state
+    value: lovesick_for_jiaqiang
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: physical_state
+    value: rain_drenched
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "宝玉见到龄官划蔷，第一次意识到'痴情'不是他一个人的专利——'难道这也是个痴丫头？'他从中悟到了情之博大与专一。"
+    progressAfter: 0.56
+    progressTotal: 100
+  - thread: T4
+    advancement: "龄官对贾蔷的痴恋是十二官中最为动人的一段——一个无权无势的小戏子，用几千个'蔷'字诉尽衷肠。"
+    progressAfter: 0.59
+    progressTotal: 100
+styleGuidance:
+  tone: "淡淡的哀伤与痴迷——龄官在地上划字的画面需要以极简的笔法写出极深的痴情。宝玉旁观者的视角构成了双重情感的镜像。"
+  atmosphere: "夏日的静谧与惆怅——花架、蝉声、细雨、泥地上密密麻麻的'蔷'字。这座花园里每一个角落都有人在不为人知地爱着、痛着。"
+  targetWordCount: 1200
+narrativeChecklist:
+  items:
+    - dimension: "划蔷一字"
+      description: "龄官以簪子在地上一遍遍划'蔷'字——几千个'蔷'字是《红楼梦》中最为简洁也最为决绝的爱情表达。"
+      required: true
+    - dimension: "宝玉旁观"
+      description: "宝玉从头看到尾，从迷惑到痴看——这是他对'情'的又一次深度教育。他不再只是'被爱者'，而是开始看见别人的爱情。"
+      required: true
+    - dimension: "淋雨回去"
+      description: "宝玉提醒龄官避雨，自己却淋透——回家被袭人误踢一脚。这是典型的'由痴致厄'——痴情者总是以自身的受难为代价。"
+      required: false
+cast:
+  onScreen:
+    - jiabaoyu
+    - lingguan
+  affected:
+    - jiabaoyu
+    - lingguan
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+authorNotes:
+  - "龄官划蔷的画面需要写出重复的力量——从第一笔到几千笔，簪尖在泥土上留下的不是文字，是刻骨铭心的思念"

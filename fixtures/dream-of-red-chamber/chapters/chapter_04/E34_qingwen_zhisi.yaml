@@ -1,0 +1,86 @@
+event: E34
+title: "俏丫鬟抱屈夭风流（晴雯之死）"
+narrativeOrder: 34
+sceneType: linear
+storyTime: chaojian_daguanyuan + 20 days
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "晴雯因抄检后被王夫人以'狐狸精'之名撵出大观园，病卧在表哥多浑虫家。宝玉偷偷出府探望，只见晴雯卧在芦席土炕上，瘦如枯柴，茶水俱无。晴雯又悲又愤——'我虽生得比别人好些，并没有私情勾引，怎么一口死咬定了我是个狐狸精？'她铰下两根葱管般的指甲，脱下贴身的旧红绫袄交给宝玉作念想，又让宝玉给自己倒茶——那茶竟是凉的，全无茶味。当夜晴雯含冤而终，临死前叫了一夜娘。宝玉悲痛欲绝，却无法留下她的遗体，更无力为她正名——这是全书最令人心碎的底层悲剧之一。"
+preconditions:
+  - entity: qingwen
+    attribute: status
+    narrativeHint: "晴雯因抄检被冤枉后被王夫人撵出大观园，身患重病，无人照料。"
+  - entity: qingwen
+    attribute: location
+    narrativeHint: "晴雯被逐后，卧在表哥多浑虫的家里，环境简陋，形同囚禁。"
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "宝玉仍住在荣国府怡红院，但心思全在病中的晴雯身上。"
+  - entity: jiabaoyu
+    attribute: emotionalState
+    narrativeHint: "宝玉为被诬为狐狸精而遭遇不公的晴雯感到深深的忧虑和怜悯。"
+expectedPostconditions:
+  - entity: qingwen
+    attribute: fate
+    value: died_unjustly
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: emotionalState
+    value: deep_grief_and_helpless_rage
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: knowledge
+    narrativeHint: "宝玉在晴雯之死中第一次真切地感受到封建礼教杀人的残酷——他爱重的女孩被以'莫须有'之名摧折，而他自己丝毫无力保护。"
+    confidence: 0.9
+  - entity: jiabaoyu
+    attribute: keepsake
+    value: qingwens_nails_and_undergarment
+    confidence: 1.0
+threadProgress:
+  - thread: T4
+    advancement: "晴雯之死是十二钗副册中最惨烈的一页——她不是死于疾病，而是死于流言和偏见。'狐狸精'的污名象征了封建社会对女性美貌与率真的集体绞杀。"
+    progressAfter: 0.90
+    progressTotal: 1.0
+  - thread: T1
+    advancement: "晴雯的冤死是宝玉精神成长的关键磨刀石——他从富贵闲人第一次直面死亡和不公，心中的'情'字遭遇了现实的冰冷碾压。"
+    progressAfter: 0.90
+    progressTotal: 1.0
+  - thread: T3
+    advancement: "一个丫鬟的冤死说明了贾府统治阶层的昏聩与冷酷——王夫人为了维护礼教体面不惜摧折无辜生命，世家衰败的征兆已不再只是经济问题，而是人心的溃烂。"
+    progressAfter: 0.89
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "临终场景"
+      description: "晴雯临终与宝玉诀别的场景——剪指甲、赠衣裳、倒凉茶——层层渲染，是全中最催人泪下的段落之一，必须细致呈现每一个细节。"
+      required: true
+    - dimension: "对比手法"
+      description: "晴雯死前叫了一夜娘——这个细节揭示她再刚烈也不过是个渴望母爱的少女。与宝玉无力回天的沉默形成强烈对比。"
+      required: true
+    - dimension: "冤屈主题"
+      description: "'我并没有私情勾引，怎么一口死咬定了我是个狐狸精'——晴雯的控诉将个人悲剧升华为对封建贞洁观的系统性批判。"
+      required: false
+styleGuidance:
+  tone: "悲愤、凄凉、绝望中夹杂着最后一丝人性的温暖"
+  targetWordCount: 1200
+  atmosphere: "城外芦席土炕的简陋凄凉与怡红院的锦绣繁华形成残酷对照——晴雯枯瘦的手与葱管般的指甲的对比暗示美好的毁灭"
+authorNotes:
+  - "要求呈现晴雯临终数段的核心对白——'我虽生得比别人好些……'以及铰指甲、赠衣裳的细节，以此凝聚全书的抗辩精神。晴雯之死是对封建礼教杀人最直接的血泪控诉。"
+duration:
+  type: scene
+  storyDuration: "午后到深夜，约半天"
+frequency:
+  type: singulative
+cast:
+  onScreen:
+    - qingwen
+    - jiabaoyu
+    - xiren
+    - wangfuren
+  affected:
+    - lindaiyu
+    - xuebaochai
+    - sheyue
+    - qiuwen

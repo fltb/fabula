@@ -1,0 +1,75 @@
+event: E30
+title: "香菱学诗"
+narrativeOrder: 30
+sceneType: linear
+storyTime: sisters_move_into_garden + 330 days
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "香菱随薛宝钗入住大观园蘅芜苑，一心向学作诗。她拜黛玉为师，黛玉命她先读王维五律一百首、杜甫七律一百二十首、李白七绝一百首——'肚子里先有了这三个人做了底子'。香菱拿到诗稿后如痴如醉，白天夜里都在吟哦揣摩，'茶饭无心，坐卧不定'。她以'咏月'为题练笔：第一首语词堆砌被评不好；第二首拘泥月色仍不够；第三首竟在梦中得句——'精华欲掩料应难，影自娟娟魄自寒'——博得众钗一致称赞。宝钗笑她'诗魔'，宝玉赞她'老天生人再不虚赋情性'。"
+preconditions:
+  - entity: xiangling
+    attribute: location
+    narrativeHint: "香菱住在蘅芜苑薛宝钗的住处，朝夕与宝钗相处。"
+  - entity: xiangling
+    attribute: desire
+    narrativeHint: "香菱一心痴迷于诗道，渴望跟黛玉学作诗，茶饭无心只想琢磨诗句。"
+  - entity: lindaiyu
+    attribute: location
+    narrativeHint: "黛玉在潇湘馆住着，香菱拜她为师学诗。"
+expectedPostconditions:
+  - entity: xiangling
+    attribute: skill
+    value: mastered_basic_poetry
+    confidence: 1.0
+  - entity: xiangling
+    attribute: emotionalState
+    value: fulfilled_and_proud
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: emotionalState
+    narrativeHint: "黛玉在倾囊相授中找到了做老师的满足感，也因香菱的痴学精神想起了自己幼年学诗的时光。"
+    confidence: 0.8
+  - entity: xiangling
+    attribute: socialStatus
+    narrativeHint: "香菱学诗是她人格觉醒和自我超越的高光时刻——一个被卖为婢的薄命女，凭借对美的执着追求，在诗的世界里获得了短暂却真实的精神自由。"
+    confidence: 0.9
+threadProgress:
+  - thread: T4
+    advancement: "香菱作为金陵十二钗副册之首，学诗是她短暂人生中唯一的精神巅峰——她的苦学痴迷证明了底层女子亦有不输于大家的才情，却终究无法改变命定的悲剧。"
+    progressAfter: 0.79
+    progressTotal: 1.0
+  - thread: T2
+    advancement: "黛玉悉心教诗展现了她的另一面——在宝黛情感纠葛之外，她也有为人师表的才情与热忱。薛宝钗旁观香菱学诗的态度也暗示她对'女子无才便是德'的认同差异。"
+    progressAfter: 0.78
+    progressTotal: 1.0
+  - thread: T1
+    advancement: "宝玉说'老天生人再不虚赋情性'，他对香菱学诗的支持表明他始终是园中女孩们的知音——但也仅止于赞赏，无法改变香菱被卖的命运。"
+    progressAfter: 0.78
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "人物成长"
+      description: "香菱从'连平仄都不懂'到梦中得佳句的完整学诗历程，展现一个底层女子通过艺术实现精神超越的动人轨迹。"
+      required: true
+    - dimension: "诗论旨趣"
+      description: "黛玉的诗教方法——先读王维、杜甫、李白打底——体现了曹雪芹自己的诗学观，需在文本中自然流露。"
+      required: true
+    - dimension: "痴与悟"
+      description: "香菱'茶饭无心'的痴学状态与最终梦中得句的灵光一现，体现中国诗论中'工夫在诗外'的创作哲学。"
+      required: false
+styleGuidance:
+  tone: "专注执着的学诗氛围，带有发现新世界的纯粹喜悦"
+  atmosphere: "潇湘馆书卷满架的诗香、蘅芜苑的幽静、香菱日夜吟哦的痴迷状态"
+  targetWordCount: 1200
+cast:
+  onScreen:
+    - xiangling
+    - lindaiyu
+    - xuebaochai
+    - jiabaoyu
+    - tanchun
+  affected:
+    - xiren
+    - xiangling

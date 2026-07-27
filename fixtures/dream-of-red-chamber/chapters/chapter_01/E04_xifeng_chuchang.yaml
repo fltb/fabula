@@ -1,0 +1,83 @@
+event: E04
+title: "王熙凤出场——'我来迟了，不曾迎接远客'"
+narrativeOrder: 4
+sceneType: linear
+storyTime: lin_daiyu_enters_jiafu + 0days
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: "dazzling_entrance_curiosity"
+conflictType: "none"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "众人正说话间，忽听后院传来笑声：'我来迟了，不曾迎接远客！'黛玉心下纳罕——这人是谁，竟在贾母面前如此放诞无礼？只见一群媳妇丫鬟围拥着一个丽人从后房进来：头上戴着金丝八宝攒珠髻，绾着朝阳五凤挂珠钗，项上带着赤金盘螭璎珞圈，裙边系着豆绿宫绦双衡比目玫瑰佩，身上穿着缕金百蝶穿花大红洋缎窄裉袄——通身的气派非凡。贾母笑着介绍说她是'凤辣子'、王熙凤。凤姐携着黛玉的手上下打量，笑道：'天下真有这样标致的人物，我今儿才算见了！竟不像老祖宗的外孙女儿，竟是个嫡亲的孙女。'又因黛玉母亲去世而用帕拭泪，贾母劝止后立刻转悲为喜，连声吩咐黛玉缺什么要什么只管告诉她。凤姐又问月钱放过了不曾、找缎子给黛玉裁衣裳，雷厉风行间尽显管家少奶奶的精明干练。"
+preconditions:
+  - entity: lindaiyu
+    attribute: location
+    narrativeHint: "黛玉方才进了荣国府，正在贾母房中与外祖母及众姊妹相见叙话。"
+  - entity: jiamu
+    attribute: location
+    narrativeHint: "贾母作为贾府的族长和精神支柱，在后院正堂中主持全府的日常起居。此刻她正在自己的房间中与众人谈话。"
+  - entity: wangxifeng
+    attribute: location
+    narrativeHint: "凤姐作为荣国府最活跃的人物，在府中各处频繁出入，此刻刚从后院听到黛玉的消息，笑声未闻其人地先入众人耳中。"
+expectedPostconditions:
+  - entity: wangxifeng
+    attribute: met_lindaiyu
+    narrativeHint: "凤姐以'我来迟了'的独特方式出场——未见其人先闻其声，凸显她在贾府中的特殊地位。她携黛玉手仔细打量、夸赞、用帕拭泪又转悲为喜，一整套表演展现了她八面玲珑的社交手腕。"
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: impression_of_wangxifeng
+    narrativeHint: "黛玉初见凤姐即感受到她与众不同的气派——放诞无礼中透着自信、热情中藏着机心、夸赞中带着表演。凤姐的管家权威和受宠地位在这场初见中展露无遗。"
+    confidence: 1.0
+  - entity: wangxifeng
+    attribute: status_in_jiafu
+    value: confirmed_as_household_manager
+    confidence: 1.0
+threadProgress:
+  - thread: T3
+    advancement: "凤姐的出场是荣国府日常权力运作的第一次具象展示——她以笑声先于仪仗入场，在贾母面前纵情表演，一面夸黛玉一面安排下人裁衣放钱，权威与宠信兼而有之。这个家族的实际管理者以最戏剧化的方式登场。"
+    progressAfter: 8
+    progressTotal: 100
+  - thread: T4
+    advancement: "王熙凤作为金陵十二钗之一首次亮相——'凤辣子'的绰号、通身的气派、雷厉风行的管家作风，她泼辣能干的形象一开场便令人难忘。从这场出场已可窥见她后来协理宁国府、弄权铁槛寺的强势底色。"
+    progressAfter: 7
+    progressTotal: 100
+  - thread: T2
+    advancement: "凤姐对黛玉的夸赞——'竟不像老祖宗的外孙女儿，竟是个嫡亲的孙女'——一语双关，既捧了黛玉的美貌又讨好了贾母，也暗示了黛玉在贾府中微妙的外姓身份。"
+    progressAfter: 6
+    progressTotal: 100
+narrativeChecklist:
+  items:
+    - dimension: "人物出场"
+      description: "'未见其人先闻其声'——红楼梦中最经典的人物出场之一，笑声先于身体入场，先声夺人"
+      required: true
+    - dimension: "服饰白描"
+      description: "凤姐的服饰描写——金丝八宝攒珠髻、朝阳五凤挂珠钗、缕金百蝶穿花大红袄——浓墨重彩的服饰语言与其张扬性格高度统一"
+      required: true
+    - dimension: "语言节奏"
+      description: "凤姐的语言——从夸赞到拭泪到转喜到吩咐下人——瞬息万变的情绪转换展现她的语言操控能力和社交智慧"
+      required: true
+cast:
+  onScreen:
+    - narrator_omniscient
+    - wangxifeng
+    - lindaiyu
+    - jiamu
+    - wangfuren
+    - xingfuren
+    - liwan
+    - yingchun
+    - tanchun
+    - xichun
+  affected:
+    - jiabaoyu
+styleGuidance:
+  tone: "明快热烈——凤姐的笑声和话语带来全场气氛的骤然转变，从黛玉初见的凄楚转为热闹"
+  atmosphere: "凤姐华丽张扬的出场使满堂生辉——笑声、钗环声、衣裙窸窣声交织，荣国府的富贵气在此达到高点"
+  targetWordCount: 1200
+voice:
+  level: extradiegetic
+  relation: heterodiegetic

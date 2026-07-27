@@ -1,0 +1,93 @@
+event: E11
+title: "贾瑞正照风月宝鉴"
+narrativeOrder: 11
+sceneType: linear
+storyTime: xue_family_arrives + 180 days
+narrationTime: xue_family_arrives + 180
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: "sordid_moralistic_tragic"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "宁国府庆寿辰，贾瑞偶遇王熙凤便起淫心，上前搭讪调戏。凤姐表面敷衍应允，心中已定下毒计。她先约贾瑞夜间在穿堂等候，却让人锁了穿堂门，使贾瑞在腊月的寒风中冻了一夜，差点冻死，回家又被祖父贾代儒打了三四十板子。贾瑞色心不死，凤姐二次约他在空屋等候，这次派贾蓉和贾蔷前去捉拿，勒索了各五十两银子，又泼了他一身粪水。贾瑞又羞又病，加之功课繁重，终于卧床不起。百般求医无效，忽来一僧一道送'风月宝鉴'，叮嘱只可照反面。贾瑞照反面见一骷髅，吓得大骂道士；转而照正面，见凤姐在镜中招手，便入镜与之云雨，如此三四次后精竭而亡。贾代儒夫妇悲痛欲绝，欲烧宝鉴，镜中哭喊'谁叫你们瞧正面了的'，随后飘然远去。"
+preconditions:
+  - entity: jiarui
+    attribute: location
+    narrativeHint: "贾瑞当时正在宁国府。"
+  - entity: jiarui
+    attribute: emotionalState
+    narrativeHint: "贾瑞见到王熙凤，心中生起了淫心，对凤姐产生了欲望。"
+  - entity: wangxifeng
+    attribute: location
+    narrativeHint: "王熙凤此时出现在宁国府。"
+  - entity: jiarui
+    attribute: status
+    value: alive
+expectedPostconditions:
+  - entity: jiarui
+    attribute: status
+    value: dead
+    confidence: 1.0
+  - entity: wangxifeng
+    attribute: reputation
+    narrativeHint: "凤姐用计致贾瑞于死地，手段毒辣。此事无人公开追究，但凤姐的狠辣形象更添一笔。"
+    confidence: 1.0
+  - entity: fengyue_baojian
+    attribute: fate
+    narrativeHint: "风月宝鉴被火焚时哭喊而去——这件宝物完成了它的使命。镜子的正反之喻警示世人：贪恋幻象则亡，直面真相或可生。"
+    confidence: 1.0
+  - entity: jiarui
+    attribute: cause_of_death
+    value: lust_and_self_destruction
+    confidence: 1.0
+threadProgress:
+  - thread: T3
+    advancement: "贾瑞作为贾府旁支子孙，因好色贪婪而丧命——这不是凤姐一个的狠毒，而是整个贾府道德败坏的一个缩影。贾府子弟不肖至此。"
+    progressAfter: 0.31
+    progressTotal: 1.0
+  - thread: T5
+    advancement: "风月宝鉴是红楼'梦'主题的具象化——镜子正反两面即人生真幻，贾瑞选了幻象走向死亡。这面镜子是整个故事寓言的浓缩。" 
+    progressAfter: 0.31
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "道德寓言"
+      description: "风月宝鉴的正反之辨——反面骷髅代表真实与死亡，正面凤姐代表欲望与诱惑。贾瑞选择正面，即选择了死。"
+      required: true
+    - dimension: "凤姐性格"
+      description: "凤姐对贾瑞的态度从始至终是戏弄与杀心——'几时叫他死在我手里'——她的狠辣与笑里藏刀在此完全展现"
+      required: true
+    - dimension: "荒诞与写实交织"
+      description: "僧道送镜、镜中招手的超现实元素与贾府日常的现实叙事融合——这是红楼叙事的一个典型手法"
+      required: false
+styleGuidance:
+  tone: "从猥琐到阴冷，再到荒诞的寓言式收尾"
+  targetWordCount: 1200
+  atmosphere: "前半段寒冬夜色中的穿堂冷风、冻得发僵的贾瑞；后半段病榻上镜中招手的妖艳与骷髅的骇人。荒凉与淫艳交织。"
+  scenePacing: "调戏→一设局（穿堂冻夜）→二设局（空屋被擒泼粪）→病笃→僧道送镜→照镜身亡→焚镜远逝"
+  characterVoice:
+    wangxifeng: "表面甜言蜜语、满口答应，实则句句是陷阱。'果然你是个明白人'是她的开场白——越是客气，越是危险。"
+    jiarui: "痴迷而愚蠢。凤姐的假意他全信，两次被捉弄仍不死心。临死前照镜——他的悲剧是看不清真幻。"
+cast:
+  onScreen:
+    - jiarui
+    - wangxifeng
+    - jiarong
+    - youshi
+  affected:
+    - jiazhen
+    - jialian
+authorNotes:
+  - "要求保留风月宝鉴'反面一个骷髅'与'正面凤姐招手'的对照描写及镜子被焚时的哭喊声"
+duration:
+  type: summary
+  storyDuration: "从冬日至贾瑞病亡，约数周"
+  narrativeLength: 600
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: heterodiegetic

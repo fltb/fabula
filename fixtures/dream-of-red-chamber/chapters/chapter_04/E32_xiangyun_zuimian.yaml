@@ -1,0 +1,82 @@
+event: E32
+title: "憨湘云醉眠芍药裀"
+narrativeOrder: 32
+sceneType: linear
+storyTime: sisters_move_into_garden + 380 days
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "宝玉生日，群芳在红香圃设宴行令。湘云豪爽贪杯，几轮下来已醉意蹒跚。她悄悄离席外出，众人寻遍不见。有小丫头指山石后芍药花丛——湘云以鲛帕为枕，醉卧芍药花丛中，满头满身都是落花，扇坠般芍药花瓣散落一地，蜂蝶围绕飞舞，她犹在半梦半醒中念着酒令——'泉香而酒冽，玉碗盛来琥珀光，直饮到梅梢月上，醉扶归，却为宜会亲友'。众人笑醒她，她起来还吃了一碗醒酒汤，又忙着划拳行令。黛玉笑她'死也要吃酒'。这场是湘云最经典的形象定格——以花为床、以天为幕的名士风流。"
+preconditions:
+  - entity: shixiangyun
+    attribute: location
+    narrativeHint: "湘云此时正在大观园的红香圃与众人宴饮，贾宝玉为她设生日宴。"
+  - entity: shixiangyun
+    attribute: mood
+    narrativeHint: "湘云豪爽贪杯，兴致高昂，频频劝酒行令，醉意蹒跚。"
+  - entity: jiabaoyu
+    attribute: occasion
+    narrativeHint: "今日是贾宝玉的生日，贾母特意在大观园设宴庆祝，群芳齐聚。"
+  - entity: daguanyuan
+    attribute: season
+    narrativeHint: "当下正是晚春时节，大观园内芍药盛开，红香圃的花事最浓。"
+expectedPostconditions:
+  - entity: shixiangyun
+    attribute: display
+    value: tipsy_sleeping_on_peonies
+    confidence: 1.0
+  - entity: shixiangyun
+    attribute: emotionalState
+    value: carefree_and_happy
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: memory
+    narrativeHint: "宝玉目睹湘云醉卧花丛的场景，这是他心中大观园最美好自由的画面之一——一年后众人星散，此情此景再不重来。"
+    confidence: 0.9
+  - entity: daguanyuan
+    attribute: atmosphere
+    value: lively_and_free
+    confidence: 1.0
+threadProgress:
+  - thread: T4
+    advancement: "湘云醉卧芍药丛是十二钗中最具名士风流的时刻——她以天性豪迈超越了闺阁女子的束缚，是整个大观园自由精神的象征。然而这样的率性自由随着园中风波渐起将一去不返。"
+    progressAfter: 0.85
+    progressTotal: 1.0
+  - thread: T5
+    advancement: "这场花团锦簇的生日宴饮——行令、射覆、划拳、醉卧——是大观园梦境最后的狂欢，其绚丽恰似春尽之前的最后一场花事。湘云梦中的酒令诗句已暗含繁华将尽的谶语。"
+    progressAfter: 0.84
+    progressTotal: 1.0
+  - thread: T1
+    advancement: "宝玉生日宴上群芳齐聚是他最幸福的时刻之一，他以'和合'之心与所有姐妹相处，不知这欢乐的宴席已是鼎盛之巅。"
+    progressAfter: 0.84
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "名士风流"
+      description: "湘云醉卧芍药花的形象——以花为枕、花瓣满身、蜂蝶围绕——是全书最富诗意的人物定型，需以细腻的白描和诗意的画面感呈现。"
+      required: true
+    - dimension: "宴饮之乐"
+      description: "红香圃射覆行令的欢快场面——划拳、罚酒、机智应对——需有节奏地铺陈，展现大观园姐妹间最无拘束的欢乐时光。"
+      required: true
+    - dimension: "群像速写"
+      description: "席间各人的不同表现——黛玉的促狭、宝钗的稳重、探春的爽利——在觥筹交错间自然流露。"
+      required: false
+styleGuidance:
+  tone: "欢快恣意，充满青春活力和不受拘束的自由气息"
+  atmosphere: "红香圃花团锦簇、芍药灿烂的暮春光景，酒令声、笑声、笑声交织的欢乐氛围"
+  targetWordCount: 1200
+cast:
+  onScreen:
+    - shixiangyun
+    - jiabaoyu
+    - lindaiyu
+    - xuebaochai
+    - tanchun
+    - liwan
+    - xiren
+    - pinger
+    - xiangling
+  affected:
+    - xichun
+    - yingchun

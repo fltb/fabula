@@ -1,0 +1,102 @@
+event: E28
+title: "史太君两宴大观园（刘姥姥行酒令）"
+narrativeOrder: 28
+sceneType: linear
+storyTime: sisters_move_into_garden + 240 days
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "刘姥姥二进荣国府，贾母携她遍游大观园。在秋爽斋、晓翠堂设两宴，鸳鸯行令、凤姐促狭。刘姥姥故意以村言俚语行酒令——'大火烧了毛毛虫''一个萝卜一头蒜''花儿落了结个大倭瓜'——粗鄙可笑，满座哄堂。众人笑态各异：湘云喷饭、黛玉伏桌、宝玉滚到贾母怀里。宴后又游栊翠庵，妙玉用旧年蠲的雨水沏老君眉待客，引出了另一番茶中雅趣。这场是贾府鼎盛时期最和乐欢快的全景式大观园宴乐图，亦是刘姥姥二进荣国府的高潮。"
+preconditions:
+  - entity: liulaolao
+    attribute: location
+    narrativeHint: "刘姥姥二进荣国府，受贾母邀请前来赴宴。"
+  - entity: jiamu
+    attribute: mood
+    narrativeHint: "贾母想要款待这位从乡间来的老妇人，心里盘算着怎样对待她。"
+  - entity: daguanyuan
+    attribute: state
+    narrativeHint: "大观园为了接待刘姥姥和贾母的两宴做好了万全准备，厨房、仆役、宴席一应俱全。"
+  - entity: wangxifeng
+    attribute: intention
+    narrativeHint: "凤姐打定主意要在宴席上和刘姥姥打趣戏弄，看这个村妇如何应对。"
+expectedPostconditions:
+  - entity: liulaolao
+    attribute: status
+    value: rewarded_and_honored
+    confidence: 1.0
+  - entity: jiamu
+    attribute: emotionalState
+    value: delighted
+    confidence: 1.0
+  - entity: yuanyang
+    attribute: relationshipWithLiulaolao
+    narrativeHint: "鸳鸯与刘姥姥行酒令时配合默契，虽以戏弄为表，实则暗生亲切之情。"
+    confidence: 0.8
+  - entity: jiabaoyu
+    attribute: knowledge
+    value: saw_liulaolaos_wit
+    confidence: 1.0
+  - entity: miaoyu
+    attribute: attitude
+    narrativeHint: "妙玉以珍贵茶具待贾母和刘姥姥，却嫌刘姥姥脏，要扔掉杯子，暴露出她孤高自许、嫌贫爱富的另一面。"
+    confidence: 0.9
+threadProgress:
+  - thread: T3
+    advancement: "两宴大观园是贾府物质繁华的顶点——宴席之丰、排场之大、欢宴之盛，暗合'盛宴必散'的家族隐喻。刘姥姥的不伦不类的酒令与贾府的精致风雅形成对照，象征草根视角下的世家浮华。"
+    progressAfter: 0.74
+    progressTotal: 1.0
+  - thread: T4
+    advancement: "刘姥姥与贾府众钗的互动——尤其是与凤姐、鸳鸯的戏谑往来——展现了下层老妇与贵族女性之间的身份对照与人性共通。"
+    progressAfter: 0.73
+    progressTotal: 1.0
+  - thread: T5
+    advancement: "欢乐极致的宴饮场景与后续的荒凉形成反差——'到底是务农人家'的质朴对照大观园的奇幻富丽，强化了红楼一梦的虚幻感。"
+    progressAfter: 0.75
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "人物群像"
+      description: "行酒令一节以众人的笑态刻画性格——湘云喷饭豪爽、黛玉伏桌娇弱、宝玉滚进贾母怀里撒娇——各人一笑，身份性情全然不同。"
+      required: true
+    - dimension: "方言俚俗"
+      description: "刘姥姥的酒令全部采用村野口语，与整个大观园的雅致氛围形成强烈反差，制造了全书最自然的喜剧效果。"
+      required: true
+    - dimension: "以乐写哀"
+      description: "极盛之欢中已埋伏后文的衰败——刘姥姥'花儿落了结个大倭瓜'暗含繁华落尽的隐喻。"
+      required: false
+styleGuidance:
+  tone: "明快喜乐中暗藏机锋，俚俗与风雅对照"
+  atmosphere: "秋爽斋晓翠堂的山水之美、金碧辉煌的宴席之盛、刘姥姥村语的粗野喜感交织"
+  targetWordCount: 1200
+cast:
+  onScreen:
+    - jiamu
+    - liulaolao
+    - wangxifeng
+    - yuanyang
+    - jiabaoyu
+    - lindaiyu
+    - xuebaochai
+    - shixiangyun
+    - tanchun
+    - xichun
+    - yingchun
+    - liwan
+    - xiren
+    - xiangling
+    - pinger
+    - miaoyu
+  affected:
+    - yuanyang
+    - xingfuren
+    - jiashe
+authorNotes:
+  - "要求刘姥姥行酒令时以原著的俚俗口语呈现——'大火烧了毛毛虫''一个萝卜一头蒜''花儿落了结个大倭瓜'——并细致刻画众人听到每句令词时的不同笑态反应，形成俚俗与风雅的对照。"
+frequency:
+  type: singulative
+  occurrenceCount: 1
+duration:
+  type: scene
+  storyDuration: "半日宴饮游园"

@@ -1,0 +1,92 @@
+event: E24
+title: "诉肺腑心迷活宝玉"
+narrativeOrder: 24
+sceneType: linear
+storyTime: sisters_move_into_garden + 140 days
+discourseMode: dialogue
+arcPosition: climax
+emotionalValence: "heartrending_confession"
+conflictType: "person_vs_self"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: 史湘云来怡红院，劝宝玉留心仕途经济。宝玉当即拉下脸说："林妹妹从不说这些混账话。"黛玉在窗外听见，又惊又喜又悲又叹——喜的是认他为知己，悲的是父母早逝无人做主。宝玉出来撞见黛玉独自垂泪，追上去替她拭泪。黛玉说："你死了倒不值什么，只是丢下了什么金、什么麒麟的。"宝玉急得满脸通红，一把抓住她，半晌只说出三个字："你放心。"黛玉怔住，如雷击顶。宝玉又说："你皆因总是不放心的原故，才弄了一身病。"黛玉点了点头转身离去。宝玉痴立出神，袭人赶来送扇，宝玉一把拉住她，口中说道："好妹妹——我为你也弄了一身的病，这睡里梦里也忘不了你！"——这原是满心要对黛玉说的话，却错对袭人说了出来。袭人听了，吓得魂飞魄散。
+preconditions:
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "宝玉在怡红院中与湘云相处，听她劝说仕途经济。"
+  - entity: lindaiyu
+    attribute: location
+    narrativeHint: "黛玉在潇湘馆中，正巧听到宝玉说'林妹妹从不说这些混账话'，这让她欣喜而又悲伤。"
+  - entity: shixiangyun
+    attribute: location
+    narrativeHint: "史湘云此时在怡红院中，她正在劝宝玉留心仕途经济。"
+  - entity: jiabaoyu
+    attribute: emotional_state
+    narrativeHint: "宝玉因湘云劝他谈仕途而反感——他最厌恶的就是这些'混账话'。他的叛逆性格在此不加掩饰地展现。"
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: understanding_of_love
+    narrativeHint: "宝玉对黛玉说出'你放心'三字——这是全书宝黛爱情最关键的确认。此后二人再无猜忌，只在命运面前无可奈何。"
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: emotional_state
+    value: released_from_jealousy
+    confidence: 1.0
+  - entity: xiren
+    attribute: knowledge_of_baodai_love
+    narrativeHint: "袭人听到宝玉错说的'睡里梦里也忘不了你'——她知道了宝黛之间逾矩的感情。这成为日后她在王夫人面前进言的重要依据。"
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: relationship_with_lindaiyu
+    narrativeHint: "宝黛之间完成了第一次也是最重要的情感确认——'你放心'三个字胜过千言万语。从此二人进入了'知己'阶段。"
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "宝玉对黛玉说出'你放心'——这是他第一次主动而明确地表达对黛玉的感情。他从一个被动的'多情公子'开始走向'专情'。"
+    progressAfter: 0.62
+    progressTotal: 100
+  - thread: T2
+    advancement: "'你放心'三字——宝黛爱情的转折点。黛玉从'总不放心'到'如雷击电掣'，金玉良缘之说在这一刻被真情击退。但宝钗的影子并未消失，袭人听见的秘密则为未来的悲剧埋下伏笔。"
+    progressAfter: 0.64
+    progressTotal: 100
+  - thread: T4
+    advancement: "黛玉在窗外听得宝玉的'混账话'——她此生第一次也是唯一一次确认自己在宝玉心中的位置。然而'悲'始终多于'喜'——她的自知之明让她清醒地看到这份感情没有未来。"
+    progressAfter: 0.62
+    progressTotal: 100
+styleGuidance:
+  tone: "从湘云劝仕途的紧张到宝玉'放心'的重磅告白到袭人误听的惊恐——情绪在短时间内的剧烈转换是本场的结构特征。"
+  atmosphere: "怡红院内的紧张→门外黛玉偷听的屏息→相对流泪的柔情→袭人误听的恐惧——空间与情绪的不断切换。"
+  targetWordCount: 1200
+narrativeChecklist:
+  items:
+    - dimension: "林妹妹不说混账话"
+      description: "宝玉当着湘云的面说'林妹妹从不说这些混账话'——黛玉在窗外听见，这是她获得的最大安慰与确认。"
+      required: true
+    - dimension: "你放心"
+      description: "宝玉抓住黛玉说出的三个字——'你放心'是宝黛爱情的核心密码，是全书最重要的对白之一。"
+      required: true
+    - dimension: "错说梦话"
+      description: "宝玉错把袭人当作黛玉，说出了'睡里梦里也忘不了你'——这个致命的口误被袭人听去，直接导致后来的抄检大观园与晴雯被逐。"
+      required: true
+cast:
+  onScreen:
+    - jiabaoyu
+    - lindaiyu
+    - shixiangyun
+    - xiren
+  affected:
+    - jiabaoyu
+    - lindaiyu
+    - xiren
+duration:
+  type: scene
+  storyDuration: "午后至傍晚——约两三个时辰"
+  narrativeLength: 600
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+authorNotes:
+  - "'你放心'三个字是全书宝黛恋情的核心密电码——宝玉没有长篇大论，只用这三个字回应了黛玉全部的焦虑和猜疑。需要写出这三个字的力量"
+  - "袭人误听后的惊恐反应预示了她日后向王夫人告密的伏线——这是大观园悲剧链条的关键一环"

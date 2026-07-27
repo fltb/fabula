@@ -1,0 +1,87 @@
+event: E09
+title: "刘姥姥一进荣国府见凤姐"
+narrativeOrder: 9
+sceneType: linear
+storyTime: xue_family_arrives + 60days
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: "humble_perspective_kindness"
+conflictType: "person_vs_economy"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "刘姥姥是一个久经世代的老寡妇，靠女婿狗儿度日。因年关将近家中吃食不继，刘姥姥想起狗儿祖上曾与金陵王家连过宗，王家之女王夫人现是荣国府二房太太。于是刘姥姥带着外孙板儿天不亮便进城，来到荣国府角门前。她先找到周瑞家的（周瑞之妻）求见。周瑞家的念及旧日情分又想在刘姥姥面前显弄体面，便带她先见了平儿——凤姐贴身丫鬟。平儿见刘姥姥朴实可怜便去回禀凤姐。刘姥姥等候时只闻满屋香气、陈设耀眼争光，浑身不自在。凤姐召见，刘姥姥在地下拜了数拜。凤姐满面春风问好，一面让刘姥姥吃饭。饭后凤姐先说了贾府大有大的艰难去处——但终究给了二十两银子和一吊钱的车马费，说'暂且给这孩子做件冬衣罢'。刘姥姥千恩万谢而去。"
+preconditions:
+  - entity: liulaolao
+    attribute: location
+    narrativeHint: "刘姥姥是一个住在乡下的老寡妇，靠女婿狗儿度日。她在农村的窘迫生活中年关将近，粮米告急，才想起要进城求助。"
+  - entity: liulaolao
+    attribute: condition
+    narrativeHint: "刘姥姥虽然久经世代、饱经沧桑，但已是穷苦老妇。她为了活命，不得不忍辱偷生，想起陈年旧日的亲戚关系来碰碰运气。"
+  - entity: liulaolao
+    attribute: purpose
+    narrativeHint: "刘姥姥此番进城的唯一目的就是求财求济——想从王夫人和贾府得到一些银两或粮食，来度过寒冷的冬天。"
+expectedPostconditions:
+  - entity: liulaolao
+    attribute: location
+    value: rongguofu
+    confidence: 1.0
+  - entity: liulaolao
+    attribute: received_aid
+    value: 20_taels_and_1_string_of_coins
+    confidence: 1.0
+  - entity: wangxifeng
+    attribute: charity_given
+    narrativeHint: "凤姐给了刘姥姥二十两银子——这对贾府来说是寻常的一笔小钱，对刘姥姥一家却是救命的年货。凤姐在施舍中既展现了管家太太的体面大方，也流露出了不经意的施恩态度。刘姥姥一进荣国府是全书视角的第一次下沉——从贵族生活看到了底层人的视角。"
+    confidence: 1.0
+  - entity: liulaolao
+    attribute: emotional_state
+    value: grateful_and_awed
+    confidence: 1.0
+  - entity: liulaolao
+    attribute: impression_of_rongguofu
+    narrativeHint: "刘姥姥在荣国府角门的卑微等待、在平儿房中的眼花缭乱、在凤姐面前的紧张局促——底层农民眼中的荣国府与在黛玉/宝玉眼中的荣国府截然不同，富贵在此体现了压迫性的巨大。"
+    confidence: 1.0
+threadProgress:
+  - thread: T3
+    advancement: "刘姥姥一进荣国府是全书底层视角的第一次介入——贾府的一顿闲饭、二十两银子在刘姥姥眼中是天大的恩典，在贾府却不过是一笔小银子。'大有大的艰难去处'——凤姐这句半真半假的诉苦是百年世家经济困境的首次侧面透露。"
+    progressAfter: 18
+    progressTotal: 100
+  - thread: T4
+    advancement: "刘姥姥虽是乡野村妪，但与金陵十二钗中的巧姐有着最深的宿命关联——她后来在贾府败落之际救了凤姐之女巧姐。一进荣国府时的卑微与未来的恩人身份构成了全书最动人的命运反转之一。"
+    progressAfter: 18
+    progressTotal: 100
+narrativeChecklist:
+  items:
+    - dimension: "平民视角"
+      description: "刘姥姥的眼睛——满屋耀眼争光的陈设、钟摆的响声、丰盛的菜肴——从农民视角重新审视贾府的富贵"
+      required: true
+    - dimension: "凤姐两面"
+      description: "凤姐对刘姥姥既有贵族太太的疏离（'大有大的艰难去处'）又有不失体面的施舍（二十两银子）——她的施恩中暗含世故的算计"
+      required: true
+    - dimension: "伏笔千里"
+      description: "刘姥姥一进荣国府时凤姐随手给的二十两银子——与后来巧姐被刘姥姥搭救形成全书最宏大的因果报应"
+      required: true
+cast:
+  onScreen:
+    - narrator_omniscient
+    - liulaolao
+    - wangxifeng
+    - pinger
+    - zhouruijiade
+  affected:
+    - jiamu
+    - wangfuren
+    - jiabaoyu
+    - qiaojie
+styleGuidance:
+  tone: "朴素的视角与富贵的场景之间的反差——刘姥姥的紧张局促和凤姐的体面大方形成有趣的对照"
+  atmosphere: "荣国府角门的冷落、平儿房中的异香、凤姐堂上的珠光宝气——从底层角度看到的富贵世界既令人眩惑又不失温暖"
+  targetWordCount: 1200
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+authorNotes:
+  - "刘姥姥一进荣国府的叙述重心在于'底层视角'——用刘姥姥的眼睛重新审视荣国府。凤姐的'大有大的艰难去处'一语需在叙述中凸显其双重含义：既是托词也是实情。刘姥姥的紧张和朴实是这段叙述的幽默元素。"

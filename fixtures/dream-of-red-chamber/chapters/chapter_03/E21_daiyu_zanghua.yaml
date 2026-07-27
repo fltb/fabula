@@ -1,0 +1,91 @@
+event: E21
+title: "埋香冢黛玉泣残红（葬花吟）"
+narrativeOrder: 21
+sceneType: linear
+storyTime: sisters_move_into_garden + 91 days
+discourseMode: reflection
+arcPosition: rising
+emotionalValence: "lyrical_grief"
+conflictType: "person_vs_fate"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: 前一日宝玉因晴雯不开门而心中烦闷，次日晨独立沁芳闸桥下看《会真记》。一阵风吹过，落花如雨，满身皆是。他不忍践踏，用衣襟兜了撒入流水。恰遇黛玉肩上担着花锄、手挂纱囊、缓步而来——她认为落花入水流到外面肮脏之地，不如以绢袋盛了埋在花冢中，日久化为净土。二人遂共葬前日之落花。宝玉以《会真记》中词句打趣，黛玉嗔怒。午后宝玉各处寻黛玉不见，忽闻山坡那边传来呜咽之声。他悄悄过去，只见黛玉于花冢前边哭边吟——"花谢花飞花满天，红消香断有谁怜……"一字一句，如泣如诉。宝玉初听不觉痴倒，细品更觉断肠。黛玉吟完全诗转身欲去，被宝玉追上。宝玉哭道"我今儿才算是明白了"，二人相对流泪，互诉衷肠。
+preconditions:
+  - entity: lindaiyu
+    attribute: location
+    narrativeHint: "黛玉在大观园中与宝玉一起埋葬落花，这是她最悲伤的时刻。"
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "宝玉在大观园中看到黛玉哭吟葬花词，他被彻底打动。"
+  - entity: daguanyuan
+    attribute: atmosphere
+    narrativeHint: "春天快要过去了，大观园中落花纷纷，呈现出衰败的景象。"
+  - entity: lindaiyu
+    attribute: emotional_state
+    narrativeHint: "黛玉此刻的心情极其悲伤，她为花而哀，也为自己的命运而哭。"
+expectedPostconditions:
+  - entity: lindaiyu
+    attribute: burial_of_flowers
+    value: completed
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: emotional_state
+    value: grief_released
+    confidence: 0.9
+  - entity: jiabaoyu
+    attribute: understanding_of_daiyu
+    narrativeHint: "宝玉第一次真正听到了黛玉内心深处的绝望——葬花词让他彻底理解了黛玉的自悲身世。这是宝黛感情从'两小无猜'走向'灵魂知己'的关键转折。"
+    confidence: 1.0
+  - entity: daguanyuan
+    attribute: atmosphere
+    value: sorrowful_aftermath
+    confidence: 0.8
+threadProgress:
+  - thread: T1
+    advancement: "宝玉听葬花吟而痴倒——'一朝春尽红颜老，花落人亡两不知'击穿了他的灵魂。他开始从'富贵闲人'走向对生命无常的深切体悟。"
+    progressAfter: 0.54
+    progressTotal: 100
+  - thread: T2
+    advancement: "黛玉以花自况——'质本洁来还洁去，强于污淖陷渠沟'是她对自身命运的悲壮宣言。宝玉听完葬花词后追上她哭诉衷肠，宝黛之心在此彻底相通。"
+    progressAfter: 0.55
+    progressTotal: 100
+  - thread: T4
+    advancement: "葬花词是黛玉一生的诗谶——'红消香断'不止是花，是她自己的命运。她提前为自己写下了挽歌。"
+    progressAfter: 0.56
+    progressTotal: 100
+  - thread: T5
+    advancement: "'花落人亡两不知'——葬花词将整部《红楼梦》的虚无底色浓缩于一曲。大观园的春天在此由盛转衰。"
+    progressAfter: 0.57
+    progressTotal: 100
+duration:
+  type: stretch
+  storyDuration: "葬花吟的吟唱与倾听，叙事时间被拉长——一首葬花词的时间在文本中无限延宕"
+  narrativeLength: 200
+styleGuidance:
+  tone: "极致的诗化抒情——葬花词是《红楼梦》中最具悲剧美学的篇章。从温柔葬花到撕心裂肺的哭吟，情绪的张力逐步攀升至顶点。宝玉当场痴倒——这是全书最为'痴'的时刻。"
+  atmosphere: "春末花谢的残败之美——落花、泪痕、悲吟交织成一场凄美的葬礼。葬的不是花，是青春，是生命本身。"
+  targetWordCount: 1200
+narrativeChecklist:
+  items:
+    - dimension: "葬花词全篇"
+      description: "从'花谢花飞花满天'到'花落人亡两不知'——全词52句需完整呈现，是全书最重要的抒情段落，也是黛玉命运的总宣言。"
+      required: true
+    - dimension: "宝黛共葬"
+      description: "两个'痴人'以葬花结缘——宝玉认为落花该随水流去，黛玉认为该净土掩埋，二人的不同态度反映了各自的性格。"
+      required: true
+    - dimension: "痴倒入神"
+      description: "宝玉听葬花词的反应——先是点头感叹，继而不觉痴倒，最后恸倒在山坡上——这是情感认知的唤醒仪式。"
+      required: true
+cast:
+  onScreen:
+    - lindaiyu
+    - jiabaoyu
+  affected:
+    - lindaiyu
+    - jiabaoyu
+authorNotes:
+  - "葬花词全文需原文呈现——'花谢花飞花满天，红消香断有谁怜……质本洁来还洁去，强于污淖陷渠沟……一朝春尽红颜老，花落人亡两不知'——全诗52句，是《红楼梦》中最长、最重要的自度曲"
+  - "宝玉首次听到葬花词后的'痴倒'需要写出从迷惑到震颤到恸倒的完整心理过程——这是全书最关键的顿悟时刻之一"
+  - "葬花的仪式感——花锄、纱囊、花帚、花冢——这些道具构成了大观园中最具诗意的仪式，每一件都值得细腻描写"

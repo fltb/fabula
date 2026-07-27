@@ -1,0 +1,38 @@
+id: narrator_omniscient
+name: 说书人
+type: narrative_device
+archetype: omniscient_narrator
+role: supporting
+description: >
+  《红楼梦》的全知叙述者——脱胎于章回小说"说书人"传统的叙事装置。他不是故事世界中的
+  人物，而是凌驾于故事之上的声音：知晓贾府百年兴衰的全部因果，预知金陵十二钗的命运
+  判词，却按章回节奏择时披露。他时而以"看官"口吻直接与读者对话，时而隐入场景之后
+  纯然呈现人物言行，时而借石头"亲历亲闻"的框架自证叙述来源。
+appearance: >
+  无形——叙事声音本身，不具肉身。其"面貌"即语体：文白相间、雅俗并陈的章回叙述语言。
+aliases:
+  - 说书人
+  - 石头
+  - 作者
+gender: 无
+age: 无
+profession: 叙述者（叙事装置）
+traits:
+  - omniscient
+  - storyteller_voice
+  - ironic_distance
+  - fate_foreknowing
+  - chapter_rhythm_keeper
+initialState:
+  location: everywhere
+  status: alive
+  condition: well
+voiceNotes: >
+  章回体全知叙述：回目对仗提纲挈领，正文文白相间。全知视角下自由出入各人物内心，
+  但披露有节制——判词、谶语、脂批式暗示先于情节兑现。惯用"且说""却说""不在话下"
+  等说书套语转场，偶以"看官听说"直接评点。反讽距离是其标志：以繁华写幻灭，以热闹
+  写苍凉。
+backstory: >
+  框架设定：女娲补天弃石经茫茫大士、渺渺真人携入红尘，历尽悲欢离合后将亲历刻于石上，
+  空空道人抄录传世——故全知叙述者兼有"亲历者石头"与"传述者说书人"双重来源。
+knownSecrets: []

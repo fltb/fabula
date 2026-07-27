@@ -1,0 +1,115 @@
+event: E16
+title: "元妃省亲"
+narrativeOrder: 16
+sceneType: linear
+storyTime: jia_yuanchun_visited + 0 days
+narrationTime: jia_yuanchun_visited + 0
+tense: past
+discourseMode: description
+arcPosition: climax
+emotionalValence: "solemn_ostentatious_bittersweet"
+conflictType: "person_vs_destiny"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "元宵佳节，贾元春奉旨省亲。大观园内张灯结彩、香烟缭绕，处处珠光宝气。元春先乘金顶金黄绣凤版舆入大观园游览，见园中太过奢华，暗自叹息。至贾母正室，元春与贾母、王夫人等亲人终于相见，满眼垂泪、呜咽对泣——'当日既送我到那不得见人的去处'。她一一见过家中各人，问及宝玉学业。元春命宝玉及众姊妹题诗，看了薛林二人的诗作后赞赏有加，独指黛玉代宝玉所作《杏帘在望》为最佳。又请戏班唱戏，点了四出戏。临别时元春再三叮嘱'不可奢华'，又嘱咐贾母等保重身体。众人含泪送别。省亲盛事更胜皇家庆典，但表面的辉煌之下是骨肉分离的悲酸——皇妃身份隔绝了天伦之乐，大观园再华美也只是一座'石头的牢狱'中的片刻欢愉。"
+preconditions:
+  - entity: daguanyuan
+    attribute: status
+    narrativeHint: "大观园已经经过精心装饰布置，完全准备好迎接皇妃的驾临。"
+  - entity: yuanchun
+    attribute: status
+    narrativeHint: "贾元春现在是皇上选中的贵妃，被册立为皇妃。"
+  - entity: jiamu
+    attribute: location
+    narrativeHint: "贾母此时在荣国府主室内等候元春驾临。"
+  - entity: wangfuren
+    attribute: location
+    narrativeHint: "王夫人此时在荣国府内。"
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "贾宝玉此时在荣国府内等候姐姐元春的来临。"
+expectedPostconditions:
+  - entity: jia_yuanchun
+    attribute: emotionalState
+    narrativeHint: "元春省亲全程悲多喜少——'当日既送我到那不得见人的去处'一句话道尽了深宫女子的全部悲哀。她是贾家的荣耀，也是皇权的囚徒。"
+    confidence: 1.0
+  - entity: daguanyuan
+    attribute: status
+    value: officially_inaugurated
+    confidence: 1.0
+  - entity: jia_yuanchun
+    attribute: approval
+    narrativeHint: "元春特别赞赏黛玉代宝玉作的《杏帘在望》——这既是欣赏诗才，也是她对宝黛关系的微妙态度"
+    confidence: 1.0
+  - entity: jiazheng
+    attribute: emotionalState
+    narrativeHint: "贾政隔帘拜见元春时，臣子的叩拜代替了父女之情。他说'今上体天地生生之大德……庶不负上眷顾隆恩也'——这是父亲对女儿的官方致辞，也是皇权对亲情的吞噬。"
+    confidence: 1.0
+  - entity: rongguofu
+    attribute: financial_state
+    narrativeHint: "省亲花费之巨难以计数——大观园、仪仗、戏班、赏赐——贾府为此元气大伤。'烈火烹油、鲜花着锦'的极盛之中已埋伏着衰败的种子。"
+    confidence: 1.0
+threadProgress:
+  - thread: T4
+    advancement: "元春省亲是金陵十二钗中元春的唯一一次出场——她的皇妃身份是荣耀也是牢笼。'不得见人的去处'——十二钗中元春的命运是'虎兕相逢大梦归'。"
+    progressAfter: 0.44
+    progressTotal: 1.0
+  - thread: T5
+    advancement: "大观园因省亲而正式启用——这园子是太虚幻境在人间的投影，元春的驾临如同警幻仙姑降临，给这座园林赋予了梦境般的合法性。游园、题咏、点戏——每一件事都在暗示未来的悲剧走向。"
+    progressAfter: 0.44
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "皇家仪仗"
+      description: "元春省亲的全套仪仗——金黄绣凤版舆、太监执事、龙旌凤扇——这是封建时代皇室威仪的极致展现"
+      required: true
+    - dimension: "骨肉悲欢"
+      description: "亲人相见先是'满眼垂泪'——皇妃省亲本应是荣耀，但元春的眼泪暴露了深宫生活的真实痛苦。'不得见人的去处'是全场的总基调"
+      required: true
+    - dimension: "诗才竞技"
+      description: "元春命众人题咏大观园——宝钗、黛玉的诗歌暗中较量。黛玉代宝玉作《杏帘在望》被评为最佳，显示了她的诗才全面超越众人"
+      required: false
+styleGuidance:
+  tone: "极盛中透悲凉——表面的钟鸣鼎食与内心的骨肉离散"
+  targetWordCount: 1200
+  atmosphere: "元宵月圆之夜，大观园内灯火如昼、香烟缭绕。金顶版舆缓慢穿行于雕梁画栋之间。钟磬声、念诵声、丝竹声交织。一切辉煌到不真实——像一场精心编排的梦。然而元春三次流泪——这梦是悲的。"
+  scenePacing: "候驾→入园游览→行礼→亲人相见痛哭→题诗品评→点戏→赏赐→告别→銮驾远去园中空寂"
+  characterVoice:
+    jia_yuanchun: "三句话是她的核心台词——'好奢华'（对大观园的叹息）、'当日既送我到那不得见人的去处'（对命运的控诉）、'不可如此奢华靡费了'（临别叮嘱）。她说的每句话都带着深宫压抑的气息。"
+    jiazheng: "以臣子之礼跪拜女儿——'臣草莽寒门，鸠群鸦属之中，岂意得征凤鸾之瑞'——用最隆重的官话对答，父女之间的私人情感完全消弭在君臣礼数中。"
+    jiabaoyu: "在元春面前的宝玉是拘谨而敬重的——元春对他的关爱与母亲无异，但身份已隔天壤。"
+cast:
+  onScreen:
+    - jia_yuanchun
+    - jiamu
+    - wangfuren
+    - jiabaoyu
+    - lindaiyu
+    - xuebaochai
+    - tanchun
+    - yingchun
+    - xichun
+    - liwan
+    - wangxifeng
+    - jiazheng
+    - yuanyang
+  affected:
+    - xiren
+    - qingwen
+    - zijuan
+    - xingfuren
+    - jiashe
+authorNotes:
+  - "务必引用元春'当日既送我到那不得见人的去处'原文——这是元春整部书中最重要的一句控诉"
+  - "需保留黛玉代宝玉作《杏帘在望》全诗——'杏帘招客饮，在望有山庄'——及元春指为最佳的品评"
+duration:
+  type: scene
+  storyDuration: "元宵之夜，自傍晚至深夜约七八个时辰"
+  narrativeLength: 600
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: heterodiegetic

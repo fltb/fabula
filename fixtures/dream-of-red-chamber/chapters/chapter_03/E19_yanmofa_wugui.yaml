@@ -1,0 +1,110 @@
+event: E19
+title: "魇魔法姊弟逢五鬼"
+narrativeOrder: 19
+sceneType: linear
+storyTime: sisters_move_into_garden + 60 days
+discourseMode: action
+arcPosition: rising
+emotionalValence: "horror_crisis"
+conflictType: "person_vs_person"
+resolutionType: "deus_ex_machina"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: 赵姨娘深恨王熙凤与贾宝玉，暗请马道婆施魇魔法，将二人年度庚帖咒符压于床下。不数日，宝玉突发癫狂——胡言乱语、持刀弄棒、见人就砍，合府上下愕然。正乱间，凤姐亦提刀冲入，见鸡杀鸡、见狗杀狗、见人瞪眼即欲杀之。贾政束手无策，贾母痛哭"已无指望"。一日二人气息渐弱，忽闻木鱼声响，一僧一道飘然而至，谓那通灵宝玉已被声色货利所迷，故招邪祟。和尚持诵三十三天，将玉摩挲复灵，恶咒方解，二人渐次痊愈。经此一难，赵姨娘险恶之心毕露，而凤姐与宝玉皆元气大伤。
+preconditions:
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "宝玉此时在怡红院中，突然癫狂发作。"
+  - entity: wangxifeng
+    attribute: location
+    narrativeHint: "王熙凤正在荣国府内料理家务，被咒符所害亦发癫狂。"
+  - entity: zhaoyiniang
+    attribute: resentment_toward
+    narrativeHint: "赵姨娘深恨王熙凤与宝玉——因宝玉冷落了她，王熙凤又从不给她好脸色。"
+    confidence: 1.0
+  - entity: yihongyuan
+    attribute: atmosphere
+    narrativeHint: "怡红院本应是宝玉的清净之所，如今却成为邪祟的场所——一片恐怖笼罩。"
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: health
+    value: recovered_from_possession
+    confidence: 1.0
+  - entity: wangxifeng
+    attribute: health
+    value: recovered_from_possession
+    confidence: 1.0
+  - entity: zhaoyiniang
+    attribute: plan_success
+    narrativeHint: "赵姨娘的魇魔法虽未致死，但她险恶之心已暴露无遗。此后她更加隐忍，等待下一次机会。"
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: spiritual_state
+    value: weakened_after_possession
+    confidence: 0.8
+  - entity: yihongyuan
+    attribute: atmosphere
+    value: panic_healing
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "宝玉经此魇魔之劫，险些丧命——他尚未觉悟，已在不知不觉中成为家族内部斗争的牺牲品。"
+    progressAfter: 0.50
+    progressTotal: 100
+  - thread: T3
+    advancement: "赵姨娘与马道婆内外勾结施魇——贾府内部宗法隐斗由暗转明。凤姐与宝玉同遭此难，暴露了掌权者与外戚之间的矛盾已深不可测。"
+    progressAfter: 0.51
+    progressTotal: 100
+  - thread: T4
+    advancement: "凤姐几乎被杀，象征着十二钗之一在面对家族内斗时的无力。她的元气大伤早已埋下伏笔。"
+    progressAfter: 0.50
+    progressTotal: 100
+  - thread: T5
+    advancement: "一僧一道再次出场持诵灵玉——从开篇的'顽石入世'到此处'玉石蒙尘'，神话框架的循环再度显现。"
+    progressAfter: 0.52
+    progressTotal: 100
+styleGuidance:
+  tone: "诡异惊悚，从日常急转至魔幻恐怖。马道婆的魇魔法细节需写得毛骨悚然——剪纸人、卷咒符、焚香诵咒的过程是全书少有的巫术场景。"
+  atmosphere: "魔幻恐怖，合府上下从惊慌到绝望再到得救——情绪大起大落。一僧一道的出场要营造出超自然的结界感。"
+  targetWordCount: 1200
+narrativeChecklist:
+  items:
+    - dimension: "巫术场景"
+      description: "马道婆施魇魔法的过程——剪纸人、卷符咒、焚香念咒，是《红楼梦》中唯一的巫术描写，需要骇人而真实。"
+      required: true
+    - dimension: "二人同疯"
+      description: "宝玉持刀弄棒与凤姐提刀杀人的双重癫狂——两人同时中邪的荒诞恐怖感是场景核心。"
+      required: true
+    - dimension: "僧道救场"
+      description: "一僧一道持诵通灵宝玉——与开篇呼应，是全书神话线索的一次重要复现。“一除邪祟、二疗冤疾”的灵玉功能在此展现。"
+      required: true
+cast:
+  onScreen:
+    - jiabaoyu
+    - wangxifeng
+    - jiamu
+    - wangfuren
+    - jiazheng
+    - xiren
+    - qingwen
+    - zhaoyiniang
+    - lindaiyu
+    - xuebaochai
+  affected:
+    - jiabaoyu
+    - wangxifeng
+    - jiamu
+    - jiazheng
+    - zhaoyiniang
+frequency:
+  type: singulative
+  sourceEventCount: 1
+  occurrenceCount: 1
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+authorNotes:
+  - "一僧一道的出场需营造超自然结界感——木鱼声自远而近，凤姐与宝玉的癫狂在诵经声中渐趋平静"
+  - "赵姨娘与马道婆的交易细节需写出民间巫术的真实样貌——剪的纸人、画的符咒、念的咒语都需有一定考据支撑"

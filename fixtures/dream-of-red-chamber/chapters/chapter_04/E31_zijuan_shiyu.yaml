@@ -1,0 +1,76 @@
+event: E31
+title: "慧紫鹃情辞试忙玉"
+narrativeOrder: 31
+sceneType: linear
+storyTime: sisters_move_into_garden + 360 days
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "紫鹃为试探宝玉对黛玉的真心，故意谎称黛玉不日就要回苏州老家。宝玉听罢如遭雷击——'一头热汗，满脸紫胀'，继而人事不知，口不能言，眼直手凉。贾府上下慌作一团，袭人哭求紫鹃告知原由。贾母赶来痛斥紫鹃，紫鹃说出是玩笑话。宝玉这才渐渐苏醒，拉住紫鹃不放，说'要去连我也带了去'。待他好转后，紫鹃回到潇湘馆，劝黛玉趁老太太硬朗时早做大事打算——'万两黄金容易得，知心一个也难求'——然而黛玉终究只能暗自垂泪，主仆二人都知道这件大事无人做主。"
+preconditions:
+  - entity: zijuan
+    attribute: location
+    narrativeHint: "紫鹃此刻在怡红院里，与宝玉同处一处，寻机试探他对黛玉的真心。"
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "宝玉在怡红院里，此时心情欢快，毫不知晓紫鹃即将给他的沉重一击。"
+  - entity: jiabaoyu
+    attribute: emotionalState
+    narrativeHint: "宝玉此时心情轻松愉快，正沉浸在园中的日常闲适之中。"
+  - entity: lindaiyu
+    attribute: status
+    narrativeHint: "黛玉静坐在潇湘馆里，对于宝玉和紫鹃这一刻的互动毫不知情。"
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: emotionalState
+    value: severe_shock_from_fear_of_losing_daiyu
+    confidence: 1.0
+  - entity: zijuan
+    attribute: knowledge
+    value: confirmed_baoyus_devotion_to_daiyu
+    confidence: 1.0
+  - entity: jiamu
+    attribute: emotionalState
+    value: angry_at_zijuan_then_distressed
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: emotionalState
+    narrativeHint: "黛玉听闻宝玉因紫鹃一句玩笑几近丧命，既心痛又甜蜜，但紫鹃劝她早作打算时，她只能含泪沉默——她的命运从来不在自己手中。"
+    confidence: 0.9
+threadProgress:
+  - thread: T1
+    advancement: "宝玉听闻黛玉要走的反应——从呆滞到昏迷——是他从富贵闲人到为情痴狂的关键节点，他对黛玉的依赖已经到了生死相系的程度。"
+    progressAfter: 0.82
+    progressTotal: 1.0
+  - thread: T2
+    advancement: "紫鹃试玉以极端方式验证了木石前盟的深度——宝玉的反应向所有人宣告了黛玉在他心中的不可替代地位。然而贾母的'这丫头太傻'的评语暗示长辈们并未真正重视这份感情。"
+    progressAfter: 0.83
+    progressTotal: 1.0
+  - thread: T4
+    advancement: "紫鹃虽是丫鬟，却有着超越身份的清醒和忠义。她在夜劝黛玉时不直说婚事，而是以'知心一个也难求'点破黛玉的处境——十二钗中，黛玉是最无力也最无法为自己命运抗争的一个。"
+    progressAfter: 0.81
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "戏剧张力"
+      description: "紫鹃试玉从玩笑到危机的层层递进——宝玉的突发急症、全府的惊慌、紫鹃的后悔——节奏由缓入急，情绪张力拉满。"
+      required: true
+    - dimension: "人物忠义"
+      description: "紫鹃试玉的动机不是恶意而是忠诚——她比黛玉自己更关心黛玉的终身，她的'私心'恰恰是全书中最无私的关怀之一。"
+      required: true
+styleGuidance:
+  tone: "从轻松的玩笑陡然转入急切的紧张，再落入无奈的感伤"
+  atmosphere: "怡红院的春日欢快转瞬间化为混乱恐慌，紫鹃夜劝黛玉时窗外虫鸣月色下的凄凉"
+  targetWordCount: 1200
+cast:
+  onScreen:
+    - zijuan
+    - jiabaoyu
+    - xiren
+    - wangfuren
+    - jiamu
+    - lindaiyu
+  affected:
+    - xuebaochai
+    - wangxifeng

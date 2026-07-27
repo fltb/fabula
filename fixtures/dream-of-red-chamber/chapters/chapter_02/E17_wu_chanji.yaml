@@ -1,0 +1,103 @@
+event: E17
+title: "听曲文宝玉悟禅机"
+narrativeOrder: 17
+sceneType: linear
+storyTime: sisters_move_into_garden + 20 days
+narrationTime: sisters_move_into_garden + 20
+tense: past
+discourseMode: reflection
+arcPosition: rising
+emotionalValence: "playful_then_thoughtful"
+conflictType: "person_vs_self"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "薛宝钗及笄生日，贾母出资摆酒唱戏。宝钗点了《鲁智深醉闹五台山》，宝玉嫌热闹，宝钗笑念戏中《寄生草》——'赤条条来去无牵挂'。宝玉拍膝叫好。席间凤姐说小旦像某人，湘云直口说像黛玉，宝玉使眼色制止，湘黛皆恼。宝玉两头劝解不成，反被抢白，回想'赤条条来去无牵挂'的句意，回房提笔写下禅偈——'你证我证，心证意证。无可云证，是立足境。'又续填一支《寄生草》。黛玉看了偈子，笑改一句——‘“无立足境，是方干净”——你这偈子还不通透呢！’宝玉无言以对，只得笑道'谁又参禅了'。"
+preconditions:
+  - entity: xuebaochai
+    attribute: occasion
+    narrativeHint: "薛宝钗今天正好是她及笄成人的生日，贾母为她摆酒唱戏庆祝。"
+  - entity: jiamu
+    attribute: location
+    narrativeHint: "贾母此时在荣国府内宴请众人庆贺宝钗生日。"
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "贾宝玉此时在荣国府参加宝钗的生日宴会。"
+  - entity: shixiangyun
+    attribute: location
+    narrativeHint: "史湘云此时也在荣国府参加宝钗的生日宴会。"
+  - entity: lindaiyu
+    attribute: location
+    value: rongguofu
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: spiritual_state
+    narrativeHint: "宝玉听了《寄生草》的'赤条条来去无牵挂'后第一次产生禅悟冲动——他写偈子是试图超越情感纠葛，但他为情所困而求悟，本身即是执念。黛玉一句'无立足境，是方干净'才是更高一层的透彻。"
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: knowledge
+    value: wrote_first_chan_buddhist_gatha
+    confidence: 1.0
+  - entity: xuebaochai
+    attribute: reputation
+    narrativeHint: "宝钗点的《山门》一出曲文让宝玉大加赞赏——宝钗对曲文的熟悉和她的博学在此展露：'你白听了这几年的戏，哪里知道这出戏的好处'"
+    confidence: 1.0
+  - entity: shixiangyun
+    attribute: emotionalState
+    narrativeHint: "湘云因宝玉使眼色而不悦——她是率性之人，看不惯宝玉处处顾虑黛玉感受的细腻。她性子直，当晚便收拾行李要走。"
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "宝玉因湘黛之争和《寄生草》的双重触动而写下第一首禅偈——'你证我证，心证意证'。这是宝玉'悟'的起点：他在情感纠缠中第一次试图用禅理超越痛苦，但这还只是少年人情感挫折后的一次哲学游戏。"
+    progressAfter: 0.47
+    progressTotal: 1.0
+  - thread: T2
+    advancement: "宝钗生日宴上，黛玉打趣宝钗点戏、湘云与黛玉因宝玉使眼色而矛盾——宝黛钗湘四人情感关系的复杂性在这场生日宴上充分展现。"
+    progressAfter: 0.47
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "禅机对话"
+      description: "宝玉写偈—黛玉笑评—宝玉释然——三层禅机对话：宝玉的悟是真悟还是假悟？黛玉的'无立足境，是方干净'是更高层次的解构。"
+      required: true
+    - dimension: "宝钗的博学"
+      description: "宝钗点《山门》并熟念《寄生草》——在大观园众女子中，宝钗的杂学修养（戏曲、禅宗、绘画）是独特的"
+      required: true
+    - dimension: "湘黛冲突"
+      description: "湘云的直爽与黛玉的敏感形成对照——宝玉在中间的左右为难是他在两性人际关系中的典型困境"
+      required: false
+styleGuidance:
+  tone: "先热闹谐趣，后转入沉思参悟"
+  targetWordCount: 1200
+  atmosphere: "贾母院内灯火辉煌、戏台上锣鼓丝竹。众人围坐看戏，说笑吃酒。宝玉拍膝叫好的兴奋，黛玉斜眼打趣的酸意，湘云不悦的静默——看似热闹，底下已是情丝千缕。"
+  scenePacing: "宝钗点戏→宝玉嫌→宝钗念曲→宝玉称赏→湘云说像→宝玉使眼色→湘黛皆恼→宝玉写偈→黛玉改偈→释然"
+  characterVoice:
+    jiabaoyu: "从热闹中的兴奋到独处的沉思——写偈子时的宝玉与席上的判若两人。但被黛玉一问便'谁又参禅了'——他的悟终究还浅，一句玩笑话便回到了世间。"
+    xuebaochai: "点戏时信口念出整支《寄生草》——她在文学和戏曲方面的修养令人刮目相看。她念曲文时那种低回婉转的语调，是她在众人面前少有的展露才华时刻。"
+    lindaiyu: "两次打趣——先是'还没唱《山门》，你倒《妆疯》了'，后是'无立足境，是方干净'——她的机锋与智慧在此刻完全压倒了宝玉。她是唯一能从禅理上点醒宝玉的人。"
+    shixiangyun: "心直口快，被宝玉的'使眼色'惹恼。'我也原不如你林妹妹'——湘云吃醋也是坦坦荡荡的，不高兴就是不高兴。"
+cast:
+  onScreen:
+    - jiabaoyu
+    - xuebaochai
+    - lindaiyu
+    - shixiangyun
+    - jiamu
+    - wangfuren
+    - xiren
+  affected:
+    - xueyan
+    - qingwen
+authorNotes:
+  - "需保留《寄生草》原文——'漫揾英雄泪，相离处士家……赤条条来去无牵挂'"
+  - "要求包含宝玉所写偈子'你证我证，心证意证……'及黛玉改偈'无立足境，是方干净'的完整禅机对话"
+duration:
+  type: scene
+  storyDuration: "宝钗生日宴席及当晚，约半日至入夜"
+  narrativeLength: 600
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: heterodiegetic

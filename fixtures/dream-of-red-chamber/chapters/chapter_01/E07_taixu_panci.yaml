@@ -1,0 +1,99 @@
+event: E07
+title: "太虚幻境阅金陵十二钗判词"
+narrativeOrder: 7
+sceneType: dream
+storyTime: lin_daiyu_enters_jiafu + 90days
+tense: past
+discourseMode: description
+arcPosition: rising
+emotionalValence: "mystical_foreboding"
+conflictType: "person_vs_fate"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "宁国府贾珍之妻尤氏请贾母等来府赏梅。宝玉饭后犯困，被秦可卿引至自己房中安睡。恍恍惚惚睡去，来到太虚幻境。警幻仙子奉宁荣二公之灵所托，带宝玉至薄命司。宝玉开了金陵省大橱，拿出又副册、副册、正册三册册籍。又副册晴雯判词'霁月难逢，彩云易散'，副册香菱判词'根并荷花一茎香'。正册十二钗判词逐一展开：钗黛合幅'玉带林中挂，金簪雪里埋'，元春'榴花开处照宫闱'，探春'生于末世运偏消'，湘云'襁褓之间父母违'，妙玉'欲洁何曾洁，云空未必空'，迎春'子系中山狼'，惜春'勘破三春景不长'，凤姐'凡鸟偏从末世来'，巧姐'势败休云贵'，李纨'到头谁似一盆兰'，可卿'情天情海幻情身'。宝玉看完仍不解，警幻遂带他去听红楼梦曲。"
+preconditions:
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "贾宝玉随贾母来到宁国府赏梅花，宴毕之后在秦可卿的房中歇息，这是他进入太虚幻境梦境的地理起点。"
+  - entity: jiabaoyu
+    attribute: state
+    narrativeHint: "宝玉在饭后犯困，眼皮打架，身体疲乏，正是梦境入侵的最佳时刻。他的精神状态介于清醒与梦幻之间。"
+  - entity: jiabaoyu
+    attribute: purpose
+    narrativeHint: "宝玉此时只想在秦可卿温柔的陪伴下小睡一会儿，却不知自己即将踏入太虚幻境，看到众钗的命运谶语。"
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: location
+    value: taixuhuanjing
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: knowledge
+    value: glimpsed_fate_registers
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: understanding_of_fate
+    narrativeHint: "宝玉在薄命司翻阅了金陵十二钗的判词——又副册晴雯、副册香菱、正册十二钗——每一幅画和每一首诗都预示了一个女子的命运。但宝玉'看了仍不解'——命运的密码虽然摆在他面前，他却无法参透。这正是全书的宿命论底色：命运早已写定，人却懵然无知。"
+    confidence: 1.0
+  - entity: jinghuanxiangu
+    attribute: mission
+    value: attempt_to_enlighten_baoyu
+    confidence: 1.0
+threadProgress:
+  - thread: T5
+    advancement: "太虚幻境的薄命司判词是全书宿命论的核心装置——金陵十二钗的命运以诗谶的形式预先展示。判词既是EPIPHANY式的命运预告，也是作者对读者的一次知情权让渡：读者知道了结局，人物却浑然不觉。"
+    progressAfter: 15
+    progressTotal: 100
+  - thread: T4
+    advancement: "金陵十二钗的判词逐首呈现——从黛玉宝钗的同一幅到可卿的最后一首，十二位女子的命运以最浓缩的诗歌形式宣告。每首判词中暗藏的人名和谜语，构成了全书最精妙的诗谶系统。"
+    progressAfter: 12
+    progressTotal: 100
+  - thread: T1
+    advancement: "宝玉在薄命司看到众女子的判词却'不解'——他的懵然无知与读者的知悉形成反讽。宁荣二公嘱托警幻以情欲声色警醒宝玉，希望他跳出情欲的网罗，但宝玉注定无法被警醒。"
+    progressAfter: 8
+    progressTotal: 100
+narrativeChecklist:
+  items:
+    - dimension: "诗谶系统"
+      description: "金陵十二钗判词——每首一个女子命运，诗画结合的艺术结构是全书最独特的叙事创造"
+      required: true
+    - dimension: "梦境结构"
+      description: "宝玉梦入太虚幻境——从宁府赏梅到秦可卿引睡到幻觉入梦，入梦的铺垫层层递进"
+      required: true
+    - dimension: "命运预示"
+      description: "黛玉宝钗同一幅判词——'玉带林中挂，金簪雪里埋'预示了两人最终一死一守寡的悲剧结局"
+      required: true
+cast:
+  onScreen:
+    - narrator_omniscient
+    - jiabaoyu
+    - jinghuanxiangu
+    - qinkeqing
+  affected:
+    - lindaiyu
+    - xuebaochai
+    - shixiangyun
+    - tanchun
+    - yingchun
+    - xichun
+    - wangxifeng
+    - liwan
+    - miaoyu
+    - qingwen
+    - xiangling
+styleGuidance:
+  tone: "梦幻迷离中透着宿命的悲凉——仙境的光怪陆离与判词的沉重宿命形成张力"
+  atmosphere: "太虚幻境的烟霞雾霭、薄命司的幽暗橱柜、判词画面的诡异意象——非人间的超现实氛围"
+  targetWordCount: 1200
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+anachrony:
+  type: prolepsis
+  scope: external
+  function: completing
+  distance: "判词预示了金陵十二钗的完整命运轨迹——从黛玉之死到巧姐沦落，跨度约数年至十数年"
+  anchorEventId: E07
+authorNotes:
+  - "要求判词以原文韵文形式逐首呈现。金陵十二钗正册的每首判词——从'可叹停机德，堪怜咏絮才'到'情天情海幻情身'——均需以曹雪芹原文的五言/七言绝句形式插入叙述，不可改写为白话。每首判词前的画亦须以白描叙述。"

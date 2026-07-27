@@ -1,0 +1,103 @@
+event: E10
+title: "比通灵金莺微露意——识金锁"
+narrativeOrder: 10
+sceneType: linear
+storyTime: xue_family_arrives + 90 days
+narrationTime: xue_family_arrives + 90
+tense: past
+discourseMode: dialogue
+arcPosition: rising
+emotionalValence: "mild_curiosity_mixed_with_premonition"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "薛宝钗微恙，贾宝玉前往梨香院探望。宝钗要看宝玉的通灵玉，翻来覆去念着上面的字——'莫失莫忘，仙寿恒昌'。丫鬟莺儿笑说这两句话倒像与姑娘金锁上的'不离不弃，芳龄永继'是一对，宝钗不等她说完便嗔她多话。宝玉索要金锁细看，也念了两遍，笑称'姐姐这八个字倒真与我的是一对'。正说话间，林黛玉来了，一见宝玉在宝钗处便笑道'嗳哟，我来的不巧了'，后又借雪雁送手炉之机暗讽宝玉听宝钗的话。宝玉的奶妈李嬷嬷唠叨劝阻饮酒，黛玉反替宝钗说话，言语间机锋暗藏。这场梨香院的小聚，表面笑语融融，实则金玉良缘之说初露端倪，宝黛钗三人微妙关系从此刻开始浮现。"
+preconditions:
+  - entity: xuebaochai
+    attribute: health
+    narrativeHint: "薛宝钗确实微恙在身，需要在梨香院养病调理。"
+  - entity: xuebaochai
+    attribute: location
+    narrativeHint: "薛宝钗此时住在荣国府梨香院修养。"
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "贾宝玉因探病而来到荣国府梨香院。"
+  - entity: jiabaoyu
+    attribute: mood
+    narrativeHint: "宝玉此时心情闲适，没有烦恼，因此来探病时态度温和悠闲。"
+  - entity: lindaiyu
+    attribute: location
+    value: rongguofu
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: knowledge
+    value: knows_baochai_has_gold_locket_with_matching_inscription
+    confidence: 1.0
+  - entity: xuebaochai
+    attribute: knowledge
+    value: knows_baoyu_jade_inscription
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: emotionalState
+    narrativeHint: "黛玉见宝玉和宝钗亲近，已生微妙醋意——'我来的不巧了'是玩笑话，也是试探话。她以送手炉为由暗讽宝玉听宝钗之劝。"
+    confidence: 1.0
+  - entity: xuebaochai
+    attribute: emotionalState
+    narrativeHint: "宝钗被莺儿说破金玉相对之事时嗔怒，但并未真正否认——她的态度是含混而克制的，既不愿张扬，也不否认金玉相对之说。"
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: emotionalState
+    value: cheerful_intrigued
+    confidence: 1.0
+threadProgress:
+  - thread: T2
+    advancement: "金玉良缘之说在此场首次被具体人物提及——莺儿无意间说破玉上字与金锁上字恰成一对。宝钗虽制止了莺儿，但此信息已落地生根。"
+    progressAfter: 0.28
+    progressTotal: 1.0
+  - thread: T5
+    advancement: "通灵玉与金锁的相遇，是太虚幻境'木石前盟'与'金玉良缘'两条宿命线在人间的第一次物质对照。"
+    progressAfter: 0.28
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "对话暗语"
+      description: "表面是家常闲谈，实则是金玉良缘的第一次公开化——莺儿的多嘴、宝钗的制止、黛玉的酸话、宝玉的天真，四层对话暗流"
+      required: true
+    - dimension: "物品寓意"
+      description: "通灵玉与金锁的文字配对——'莫失莫忘，仙寿恒昌'对'不离不弃，芳龄永继'——两件物品的相遇是命运隐喻"
+      required: true
+    - dimension: "人物关系"
+      description: "黛玉的早到是偶然还是必然？她'嗳哟，我来的不巧了'一句话奠定了她在这场三人戏中的位置——永远的'后来者'"
+      required: false
+styleGuidance:
+  tone: "表面轻松温馨，底下暗含微妙醋意与命运暗示"
+  targetWordCount: 1200
+  atmosphere: "冬日梨香院暖意融融，药香与茶香交织。宝钗半倚在炕上，家常打扮。宝玉踏雪而来，笑声先于人到。梨香院的温暖与外间雪景形成对照。"
+  scenePacing: "缓起——探病闲谈——金锁亮相——黛玉突至——言语机锋——散场"
+  characterVoice:
+    xuebaochai: "温和克制，被说破心事时微嗔却未真恼。言语中透出大家闺秀的得体与分寸。"
+    yinger: "天真多话，脱口说出金锁与玉上的字是一对——她是无心之举，却起了命运的点题作用。"
+    lindaiyu: "表面说笑、实则酸楚。话语带机锋：'我来的不巧了''也亏你倒听他的话'——句句是玩笑，句句有心。"
+    jiabaoyu: "天真好奇，连连称赞金锁上的字，毫无心机地笑说'姐姐这八个字倒真与我的是一对'，不知自己正在命运的网中央。"
+cast:
+  onScreen:
+    - jiabaoyu
+    - xuebaochai
+    - lindaiyu
+    - yinger
+    - xiren
+  affected:
+    - xueyima
+authorNotes:
+  - "要求原文引用通灵玉上篆文'莫失莫忘，仙寿恒昌'与金锁上'不离不弃，芳龄永继'的具体字样及宝玉宝钗互看的场景"
+  - "需要保留黛玉'嗳哟，我来的不巧了'及借手炉暗讽的关键对白"
+duration:
+  type: scene
+  storyDuration: "午后至傍晚，约两三个时辰"
+  narrativeLength: 600
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: heterodiegetic

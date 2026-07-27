@@ -1,0 +1,102 @@
+event: E12
+title: "秦可卿死封龙禁尉"
+narrativeOrder: 12
+sceneType: linear
+storyTime: xue_family_arrives + 210 days
+narrationTime: xue_family_arrives + 210
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "solemn_mournful_lavish"
+conflictType: "person_vs_fate"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "宁国府贾珍之媳、贾蓉之妻秦可卿病逝。贾珍悲痛欲绝，哭得泪人一般，倾尽所有为儿媳办丧事，要丧礼风光体面。尤氏却突然犯了旧疾，卧床不起，宁国府内务无人主持。贾珍为丧礼更加体面，花一千二百两银子给贾蓉捐了五品龙禁尉的官衔，以便灵牌上好看。又请钦天监择日，停灵四十九日，请一百零八众僧人在大厅拜大悲忏，设坛于天香楼。葬礼规格之高、排场之大，逾制越礼，引来满城议论。各路王公贵族皆来祭吊，四王六公的祭棚摆满长街。秦可卿的棺木本是坏了事的义忠亲王老千岁的樯木，贾珍执意使用。这场丧事是宁国府由盛转衰的一个警示性节点——表面的风光之下是逾矩和亏空。"
+preconditions:
+  - entity: qinkeqing
+    attribute: status
+    value: alive
+  - entity: qinkeqing
+    attribute: health
+    narrativeHint: "秦可卿已病了很久，张太医诊治过但未见起色"
+  - entity: jiazhen
+    attribute: location
+    narrativeHint: "贾珍此时正在宁国府。"
+  - entity: jiarong
+    attribute: location
+    narrativeHint: "贾蓉此时正在宁国府。"
+expectedPostconditions:
+  - entity: qinkeqing
+    attribute: status
+    value: dead
+    confidence: 1.0
+  - entity: jiarong
+    attribute: official_title
+    value: longjinwei
+    confidence: 1.0
+  - entity: jiazhen
+    attribute: emotionalState
+    narrativeHint: "贾珍哭得泪人一般——他的悲痛超乎寻常公媳关系，可卿之死对他的打击非同寻常。他倾尽家财办丧事，近乎疯狂。"
+    confidence: 1.0
+  - entity: youshi
+    attribute: health
+    narrativeHint: "尤氏突然犯了旧疾，卧床不起——她的病来得正是时候，以生病为由避开了主持丧事的责任，也避开了处理秦可卿身后事的尴尬"
+    confidence: 1.0
+  - entity: ningguofu
+    attribute: financial_state
+    narrativeHint: "为办这场逾制葬礼，宁国府花费巨大——捐官一千二百两、樯木棺材、四十九日法事——为日后的经济危机埋下伏笔"
+    confidence: 1.0
+threadProgress:
+  - thread: T4
+    advancement: "秦可卿位列金陵十二钗，她是第一个死去的人。她的葬礼成为整部作品中第一场大规模死亡仪式，宣告十二钗悲剧的序幕拉开。"
+    progressAfter: 0.33
+    progressTotal: 1.0
+  - thread: T3
+    advancement: "宁国府为丧事逾制越礼、倾尽财力，表面是风光体面，实则暴露了世家大族在礼法和财政上的双重失控。"
+    progressAfter: 0.33
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "丧礼场面"
+      description: "一百零八僧众、四十九日停灵、樯木棺材、捐五品龙禁尉——丧礼的每个细节都在彰显宁国府的排场和逾矩"
+      required: true
+    - dimension: "贾珍之悲"
+      description: "贾珍哭得泪人一般的过激反应暗示了可卿之死背后可能的不伦关系——这也是红楼疑案之一"
+      required: true
+    - dimension: "尤氏称病"
+      description: "尤氏恰好犯旧疾不起，以病避开丧事主持——她的回避意味深长"
+      required: false
+styleGuidance:
+  tone: "庄重而压抑，奢华之中暗含不祥"
+  targetWordCount: 1200
+  atmosphere: "宁国府白幔如雪，幡幢飘摇。僧道诵经之声日夜不绝。棺木为樯木——棺材竟然散发着奇香。满城王公的仪仗与祭棚连绵不绝。表面极尽哀荣，底下暗流涌动。"
+  scenePacing: "报丧→贾珍悲痛→尤氏称病→商议丧事→买棺→捐官→大殓→四十九日法事全景"
+  characterVoice:
+    jiazhen: "悲痛欲绝——'我这媳妇比儿子还强十倍'。他倾尽家财办丧事近乎疯狂，言语间对可卿的赞美和对丧事的执着超出了公公对儿媳的感情。"
+    jiarong: "贾蓉全程近乎隐形，没有一句台词——这个丈夫的存在感之弱，更显可卿之死的诡异。"
+cast:
+  onScreen:
+    - qinkeqing
+    - jiazhen
+    - youshi
+    - jiarong
+    - jiabaoyu
+    - wangxifeng
+  affected:
+    - jiamu
+    - jiazheng
+    - jiashe
+authorNotes:
+  - "要求原文保留贾珍哭诉'我这媳妇比儿子还强十倍'和樯木棺材的描写"
+  - "需要体现停灵四十九日、一百零八僧人超度的丧礼规模"
+duration:
+  type: summary
+  storyDuration: "从秦可卿病故到出殡，历时约两个月（含停灵四十九日）"
+  narrativeLength: 600
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: heterodiegetic

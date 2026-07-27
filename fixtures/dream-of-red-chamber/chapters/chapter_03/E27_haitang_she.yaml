@@ -1,0 +1,119 @@
+event: E27
+title: "秋爽斋偶结海棠社"
+narrativeOrder: 27
+sceneType: linear
+storyTime: sisters_move_into_garden + 200 days
+discourseMode: dialogue
+arcPosition: falling
+emotionalValence: "joyful_camaraderie"
+conflictType: "person_vs_fate"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: 宝玉自挨打后闭门养息，一日收到探春送来的一幅花笺——欲邀结诗社。宝玉欣然而往。秋爽斋中李纨、黛玉、宝钗、迎春、惜春已到。李纨自荐掌坛，众人商议取别号：李纨号"稻香老农"，探春号"蕉下客"，黛玉号"潇湘妃子"，宝钗号"蘅芜君"，宝玉先取"绛洞花主"又改"怡红公子"，迎春号"菱洲"，惜春号"藕榭"。李纨出题——以白海棠为题吟七律一首，限门盆魂痕昏韵。众人各展才情。黛玉一面想一面写又一面抹——末了以"半卷湘帘半掩门"起笔，至"娇羞默默同谁诉"收束。李纨评定蘅芜君第一（"珍重芳姿昼掩门"），潇湘妃子第二。宝玉落第，却心服口服。社名定"海棠社"，约每月初二、十六两社。诗社既立，大观园从此有了自己的文学传统，众姐妹的青春也因此有了最美的寄托。
+preconditions:
+  - entity: tanchun
+    attribute: location
+    narrativeHint: "探春在大观园中筹办诗社，发起这项文学雅集。"
+  - entity: lindaiyu
+    attribute: location
+    narrativeHint: "黛玉在大观园中参加海棠诗社，以'潇湘妃子'的别号参赛。"
+  - entity: xuebaochai
+    attribute: location
+    narrativeHint: "宝钗也在大观园中，以'蘅芜君'的别号参加诗社。"
+  - entity: jiabaoyu
+    attribute: health
+    narrativeHint: "宝玉挨打后已经康复，如今精神焕发地参与诗社活动。"
+  - entity: liwan
+    attribute: location
+    narrativeHint: "李纨在大观园中担任诗社的掌坛人，主持这次海棠诗会。"
+expectedPostconditions:
+  - entity: tanchun
+    attribute: achievement
+    narrativeHint: "探春发起海棠诗社——她不仅是有志气的庶出小姐，更是一个有组织才能的才女。诗社是她为自己也为众姐妹创造的一方精神天地。"
+    confidence: 1.0
+  - entity: liwan
+    attribute: social_role
+    value: poetry_club_leader
+    confidence: 1.0
+  - entity: xuebaochai
+    attribute: poetic_reputation
+    narrativeHint: "宝钗以'珍重芳姿昼掩门'夺得第一——她的诗端庄含蓄、自矜自重，正如她本人。李纨的评定也反映了她的审美标准。"
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: poetic_reputation
+    narrativeHint: "黛玉以'半卷湘帘半掩门'屈居第二——但她的诗清新灵动、自抒怀抱。李纨评宝钗第一黛玉第二，是她保守的审美所致，并非高下之判。"
+    confidence: 1.0
+  - entity: daguanyuan
+    attribute: atmosphere
+    value: literary_flourishing
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "宝玉在诗社中虽屡屡落第，却乐在其中——他爱的是姐妹们在一起的热闹和才情的绽放，而不是争名次。这是他'情不情'的另一面：以众人的快乐为自己的快乐。"
+    progressAfter: 0.71
+    progressTotal: 100
+  - thread: T2
+    advancement: "钗黛同台赛诗——宝钗的'珍重芳姿'与黛玉的'娇羞默默'各擅胜场。李纨评宝钗第一，暗示了日后宝钗在贾府更被认可的命运。而黛玉虽屈居第二，却以'半卷湘帘'的意象永远留在了读者心中。"
+    progressAfter: 0.72
+    progressTotal: 100
+  - thread: T3
+    advancement: "海棠诗社的成立象征着大观园文化生活的顶峰——一群贵族少女和宝玉在世家庇护下拥有了短暂的精神自由。然而诗社存在的本身依赖于贾府的繁荣，当大厦倾覆时，诗社亦将烟消云散。"
+    progressAfter: 0.72
+    progressTotal: 100
+  - thread: T4
+    advancement: "众芳聚首——十二钗中的探春、黛玉、宝钗、李纨、迎春、惜春同台。这是金陵十二钗在大观园中最欢乐的时刻之一。而湘云将至，诗社将进入全盛。"
+    progressAfter: 0.72
+    progressTotal: 100
+  - thread: T5
+    advancement: "诗社成立——群芳以诗赋志。在红楼之梦的框架下，这正是'梦'中最美丽的段落。然而此时越美好，梦醒时就越荒凉。"
+    progressAfter: 0.72
+    progressTotal: 100
+styleGuidance:
+  tone: "欢快、文雅、充满青春气息——众人取别号的打趣、写诗时的各展才情、评诗时的认真与不服，整场洋溢着大观园最明亮的光彩。"
+  atmosphere: "秋爽斋中的文人雅集——笔墨纸砚、各色名号、限韵赋诗。这是中国古典文学中最美的文人雅集场景之一。"
+  targetWordCount: 1200
+narrativeChecklist:
+  items:
+    - dimension: "结社立约"
+      description: "探春花笺邀社，李纨自荐掌坛——诗社的创立过程展现了大观园中贵族青年的文化自觉。"
+      required: true
+    - dimension: "众人别号"
+      description: "潇湘妃子、蘅芜君、怡红公子、蕉下客、稻香老农、菱洲、藕榭——这些别号是每个人性格与命运的浓缩。"
+      required: true
+    - dimension: "咏白海棠"
+      description: "李纨出题限韵——宝钗'珍重芳姿'第一，黛玉'半卷湘帘'第二。两首诗代表了两种人生态度：自持与自由。"
+      required: true
+cast:
+  onScreen:
+    - tanchun
+    - lindaiyu
+    - xuebaochai
+    - jiabaoyu
+    - liwan
+    - yingchun
+    - xichun
+  affected:
+    - tanchun
+    - lindaiyu
+    - xuebaochai
+    - jiabaoyu
+    - liwan
+frequency:
+  type: iterative
+  sourceEventCount: 1
+  occurrenceCount: 6
+  iterationScope:
+    start: "海棠社首次雅集"
+    end: "至大观园抄检、诗社消散"
+  otherOccurrences:
+    - "咏菊花诗（第三十八回）"
+    - "咏螃蟹诗（第三十八回）"
+    - "咏柳絮词（第七十回）"
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+authorNotes:
+  - "众人取别号是了解每个人性格的绝佳窗口——黛玉'潇湘妃子'呼应娥皇女英泪竹典故，宝钗'蘅芜君'端庄含蓄，探春'蕉下客'灵动自嘲——每个号都有深意"
+  - "海棠诗限'门盆魂痕昏'韵——这是最经典的限韵之一，宝钗和黛玉的两首七律各有千秋。李纨评宝钗'含蓄浑厚'第一、黛玉'风流别致'第二，体现了她本人的审美取向"

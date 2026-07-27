@@ -1,0 +1,76 @@
+event: E01
+title: "甄士隐梦幻识通灵（僧道论石、太虚对联）"
+narrativeOrder: 1
+sceneType: linear
+storyTime: stone_myth + 0days
+tense: past
+discourseMode: exposition
+arcPosition: opening
+emotionalValence: "mythical_wonder"
+conflictType: "person_vs_fate"
+resolutionType: "setup"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "女娲炼石补天，遗一顽石于大荒山青埂峰下。石经煅炼灵性已通，因无材补天，自怨自叹。一日一僧一道坐于石边论及红尘荣华，顽石心动，恳求携入红尘。僧人以幻术将大石化为一枚美玉，与道人飘然而去。几世几劫后，空空道人经青埂峰见大石上字迹历历，抄录《石头记》传世。另叙姑苏甄士隐伏几入梦，随僧道至太虚幻境牌坊前，见“假作真时真亦假，无为有处有还无”对联，正欲跨入，被霹雳惊醒。"
+preconditions:
+  - entity: narrator_omniscient
+    attribute: temporal_position
+    narrativeHint: "故事开端于神话时代女娲补天之后，远在甄士隐时代之前，更在贾府故事之前。叙事时间从苍茫远古开始。"
+  - entity: narrator_omniscient
+    attribute: purpose
+    narrativeHint: "全知叙述者以神话起源的宣示者身份出现，用说书人的口吻讲述女娲补天遗石的源头故事，确立全书从神话到人伦的宇宙观。"
+expectedPostconditions:
+  - entity: narrator_omniscient
+    attribute: story_origin_established
+    value: stone_myth_told
+    confidence: 1.0
+  - entity: zhenshiyin
+    attribute: knowledge
+    value: glimpsed_taixuhuanjing
+    confidence: 1.0
+  - entity: narrator_omniscient
+    attribute: mythical_framework_established
+    narrativeHint: "太虚幻境对联'假作真时真亦假，无为有处有还无'确立了全书真幻相生的叙事逻辑。甄士隐的梦境是全书'梦'的第一次呈现，预示了红尘万境皆归虚幻的主题。僧道携石入世的框架为整个故事提供了神话依据。"
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "顽石因无材补天而自叹，求入红尘经历——这为宝玉'衔玉而生'的身世提供了神话依据，也预示了宝玉最终看破红尘、回归本真的宿命。石头的入世与出世是宝玉之悟的预演。"
+    progressAfter: 3
+    progressTotal: 100
+  - thread: T5
+    advancement: "全书'梦''幻'之哲学基调通过太虚幻境对联和甄士隐梦境初次确立——'假作真时真亦假，无为有处有还无'点破全书虚实相生的叙事逻辑。《石头记》的传世框架在此建立。"
+    progressAfter: 3
+    progressTotal: 100
+  - thread: T2
+    advancement: "神瑛侍者与绛珠仙草的还泪之约的叙事框架在此埋下伏笔。僧道口中所说的'风流冤家'下凡造历幻缘、勾销风流账，暗示了木石前盟的神话维度——宝黛钗三人的情感纠葛在故事尚未真正开始前已被设定。"
+    progressAfter: 3
+    progressTotal: 100
+narrativeChecklist:
+  items:
+    - dimension: "神话框架"
+      description: "女娲补天遗石——石上字迹自述来历的叙事框架，确立了《石头记》的说书源头与顽石下凡历劫的整体架构"
+      required: true
+    - dimension: "说书套语"
+      description: "章回体回目对仗与'列位看官'口吻——保留了传统说书人叙事姿态，文白相间、雅俗并陈"
+      required: true
+    - dimension: "真幻相生"
+      description: "太虚幻境对联'假作真时真亦假，无为有处有还无'——全书最核心的叙事哲学宣言，真与幻的辩证关系在此确立"
+      required: true
+cast:
+  onScreen:
+    - narrator_omniscient
+    - zhenshiyin
+  affected:
+    - jiabaoyu
+    - lindaiyu
+styleGuidance:
+  tone: "神话的苍茫悠远与章回说书的亲切诙谐交织，文白相间"
+  atmosphere: "大荒山青埂峰的无始无终、太虚幻境的缥缈神秘、甄士隐梦中的恍惚迷离"
+  targetWordCount: 1200
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+authorNotes:
+  - "开篇女娲补天遗石的神话需以章回体口吻叙述，保留说书人语气。甄士隐的梦境段落需写出似梦非梦的恍惚感。太虚幻境对联是全书的哲学总纲，需在叙事中凸显。"

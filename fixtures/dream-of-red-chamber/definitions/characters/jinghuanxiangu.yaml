@@ -1,0 +1,24 @@
+id: jinghuanxiangu
+name: 警幻仙姑
+type: mythical
+role: background
+description: 警幻仙姑，太虚幻境司主，掌管人间风情月债、女怨男痴。第五回出现在贾宝玉梦中，引宝玉游历太虚幻境、观金陵十二钗判词、听红楼梦十二支曲子，是全书神话框架的关键人物。
+appearance: 蹁跹袅娜，有诗为赞：方离柳坞，乍出花房。但行处鸟惊庭树，将到时影度回廊
+aliases:
+  - 警幻仙子
+  - 警幻
+gender: 女
+age: 无（仙家）
+profession: 太虚幻境司主
+traits:
+  - 超然
+  - 洞悉天命
+  - 慈悲
+initialState:
+  location: 太虚幻境
+  status: alive
+  condition: mythical
+backstory: 居于离恨天之上、灌愁海之中的太虚幻境，掌管普天之下所有女子的命运簿册——金陵十二钗正册、副册、又副册均在其司中。受宁荣二公之灵所托，以警示之法点化宝玉，使其看透"情"之本质。将妹妹可卿许配宝玉，欲使其领悟"仙闺幻境之风光尚如此，何况尘境之情景哉"，然宝玉终未悟。
+knownSecrets:
+  - 知晓金陵十二钗全部命运判词
+  - 宁荣二公之灵曾托付她点化宝玉

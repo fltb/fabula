@@ -1,0 +1,18 @@
+id: lengzixing
+name: 冷子兴
+type: minor
+role: background
+description: 冷子兴，都中古董商，贾府管家周瑞的女婿。第二回"冷子兴演说荣国府"中的关键人物，通过他与贾雨村在村野酒肆中的闲谈，向读者宏观介绍贾府世系、人物关系及"一代不如一代"的现状。
+appearance: 相貌堂堂，谈吐不俗
+gender: 男
+age: 中年
+profession: 古董商
+traits:
+  - 健谈
+  - 见识广
+  - 世故
+initialState:
+  location: 金陵
+  status: alive
+  condition: well
+backstory: 都中古董商人，为人精明世故，对金陵城中世家大族的内情颇为了解。因买卖常出入荣国府，娶周瑞之女为妻，对贾府内幕知之甚详。在扬州郊外酒肆中偶遇贾雨村，长篇大论演说荣国府的衰败先兆——"如今外面的架子虽未甚倒，内囊却也尽上来了"。

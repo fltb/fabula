@@ -1,0 +1,87 @@
+event: E26
+title: "情中情因情感妹妹（赠帕题诗）"
+narrativeOrder: 26
+sceneType: linear
+storyTime: sisters_move_into_garden + 152 days
+discourseMode: reflection
+arcPosition: falling
+emotionalValence: "passionate_tender"
+conflictType: "person_vs_fate"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: 宝玉挨打后卧病在床，心中最放不下的是黛玉。他想让晴雯去看看黛玉，又恐袭人多心，便使了个调虎离山之计——支开袭人去借书。晴雯来后，宝玉取了两条半旧的绢帕交给她，让她送去潇湘馆。晴雯不解——送旧帕子未免太奇怪了。宝玉笑道"你放心，她自然明白"。黛玉收到旧帕后，初时一怔，继而细细思忖——忽而大悟：这旧帕子正是宝玉"令她私相传递"之意。她不禁五内沸然，由不得余意缠绵，命掌灯铺纸，研墨蘸笔，在三方帕上题下绝句三首。其一："眼空蓄泪泪空垂，暗洒闲抛却为谁？尺幅鲛绡劳解赠，叫人焉得不伤悲！"其二："抛珠滚玉只偷潸，镇日无心镇日闲。枕上袖边难拂拭，任他点点与斑斑。"其三："彩线难收面上珠，湘江旧迹已模糊。窗前亦有千竿竹，不识香痕渍也无。"题完后只觉浑身火热，面上作烧——走至镜前，腮上通红，真合压倒桃花——却不知病由此萌。
+preconditions:
+  - entity: jiabaoyu
+    attribute: health
+    narrativeHint: "宝玉挨打后伤势严重，卧病在床，心中最放不下的是黛玉。"
+  - entity: lindaiyu
+    attribute: location
+    narrativeHint: "黛玉在潇湘馆中，收到宝玉通过晴雯送来的旧帕子。"
+  - entity: xiren
+    attribute: location
+    narrativeHint: "袭人在怡红院中服侍宝玉，宝玉支开她去借书。"
+  - entity: qingwen
+    attribute: location
+    narrativeHint: "晴雯在怡红院中，受宝玉之命去潇湘馆送旧帕给黛玉。"
+expectedPostconditions:
+  - entity: lindaiyu
+    attribute: understanding_of_baoyu_love
+    narrativeHint: "黛玉收到旧帕便悟出宝玉之意——'令她私相传递'。这份心领神会证明了二人之间无需言语的默契。旧帕题诗完成了宝黛之间最私密、最深情的情感交换。"
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: health
+    narrativeHint: "黛玉题诗后浑身火热、腮上通红——这是她的感情最激烈的抒发，也是她的'还泪'之旅的又一次消耗。'病由此萌'——每一次感情的波动都在加重她的病情。"
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: emotional_state
+    value: comforted_by_sending_handkerchiefs
+    confidence: 1.0
+threadProgress:
+  - thread: T2
+    advancement: "旧帕题诗——宝黛之间最私密的感情仪式。两条旧帕、三首诗，完成了从'你放心'口述到以物证情的升华。宝黛爱情至此已达极致，也预示着盛极而衰。"
+    progressAfter: 0.69
+    progressTotal: 100
+  - thread: T4
+    advancement: "黛玉在三方帕上题诗——'湘江旧迹已模糊'以娥皇女英自况，她已将自己完全交付给了这份必死的感情。题诗后浑身发热'病由此萌'，她的命运在诗行间悄然下沉。"
+    progressAfter: 0.70
+    progressTotal: 100
+styleGuidance:
+  tone: "从宝玉的深情挂念到晴雯送帕的微妙到黛玉收到后的心潮澎湃到题诗的激情——全篇需要以浓厚的抒情笔法写出。黛玉题诗后的'腮上通红'是全书最美的画面之一。"
+  atmosphere: "潇湘馆的深夜——烛光、砚墨、泪痕、诗帕。竹影摇曳中，一个女孩子的全部爱情化作三首绝句，永铸于绢帕之上。"
+  targetWordCount: 1200
+narrativeChecklist:
+  items:
+    - dimension: "送旧帕"
+      description: "宝玉支开袭人，让晴雯送两条旧帕子给黛玉——'你放心，她自然明白'。旧帕寓意'令她私相传递之情'，是《红楼梦》中最微妙的情感密码。"
+      required: true
+    - dimension: "题帕三绝"
+      description: "黛玉在三方帕上题诗三首——从'暗洒闲抛却为谁'到'湘江旧迹已模糊'到'不识香痕渍也无'。三首诗层层递进，道尽了她对这份感情的执着与绝望。"
+      required: true
+    - dimension: "病由此萌"
+      description: "黛玉题诗后'腮上通红，压倒桃花'——美到极致，也是不祥之兆。曹雪芹在此暗示：这份感情的每一次深入都在消耗黛玉的生命。"
+      required: true
+cast:
+  onScreen:
+    - lindaiyu
+    - zijuan
+    - jiabaoyu
+    - qingwen
+  affected:
+    - lindaiyu
+    - jiabaoyu
+duration:
+  type: scene
+  storyDuration: "挨打次日，宝玉嘱晴雯送帕、黛玉收帕题诗——约半日之间"
+  narrativeLength: 600
+frequency:
+  type: singulative
+focalization:
+  type: internal
+  variation: variable
+  characterSequence:
+    - character: narrator_omniscient
+      scope: "全知视角为主，对黛玉内心独白有深入描写——'五内沸然，余意缠绵'"
+    - character: lindaiyu
+      scope: "黛收帕后的心理活动——从迷惑到领悟到激情澎湃"

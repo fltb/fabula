@@ -1,0 +1,85 @@
+event: E02
+title: "冷子兴演说荣国府"
+narrativeOrder: 2
+sceneType: linear
+storyTime: stone_myth + 1600days
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "curiosity_anticipation"
+conflictType: "none"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "贾雨村中举升官后罢职，游历至扬州，在林如海家做西宾教授林黛玉。一日偶游郊外，遇旧友冷子兴，二人于村肆中饮酒闲谈。冷子兴向贾雨村细说金陵贾府之事：宁荣二公之后分为宁国府与荣国府两支；荣国府如今萧索，外面的架子虽未甚倒，内囊却也尽上来了；当家的是二房贾政，其长子贾珠早夭，次子贾宝玉衔玉而生，抓周时只取脂粉钗环，政老爹断言其将来必是酒色之徒；长女元春因贤孝才德选入宫中。冷子兴又详介贾赦、贾琏、王熙凤等人。这一番谈话为贾府的家族谱系和当下处境画出了全景图。"
+preconditions:
+  - entity: jiayucun
+    attribute: location
+    narrativeHint: "贾雨村中举后罢职，游历至苏州扬州，借宿林府，靠教授林黛玉诗书礼仪维持生计，身份是西宾家庭教师。"
+  - entity: jiayucun
+    attribute: occupation
+    narrativeHint: "贾雨村在林家做西宾，日日与林黛玉诗书相伴，是才子佳人式的师生关系，也为后来他与黛玉进京投靠贾府打下了联系基础。"
+  - entity: lengzixing
+    attribute: relationship_to_jiayucun
+    narrativeHint: "冷子兴与贾雨村是旧相识，二人在郊外村肆偶遇，虽然是酒友局面，却足以让冷子兴对贾雨村详细介绍贾府的家世谱系。"
+expectedPostconditions:
+  - entity: jiayucun
+    attribute: knowledge_of_jia_family
+    narrativeHint: "通过冷子兴的演说，贾雨村得知了贾府的完整谱系——宁荣二公的分支、贾政贾赦两房、贾宝玉抓周的异事、元春入宫等。这些信息为他后续攀附贾府铺平了道路。"
+    confidence: 1.0
+  - entity: narrator_omniscient
+    attribute: jia_family_panorama_revealed
+    narrativeHint: "冷子兴的演说是全书第一次完整介绍贾府的家世谱系——'外面的架子虽未甚倒，内囊却也尽上来了'点明了贾府外盛内衰的真实处境。宝玉抓周只取脂粉的逸事暗示了他的性格基调。"
+    confidence: 1.0
+  - entity: jiayucun
+    attribute: ambition
+    value: revived_interest_in_jia_connection
+    confidence: 0.8
+threadProgress:
+  - thread: T3
+    advancement: "冷子兴的演说首次揭露贾府的家世谱系和真实处境——'外面架子虽未甚倒，内囊却也尽上来了'，百年世家表面上荣华依旧，实则已从内部开始腐朽。这是T3百年世家之衰的揭幕。"
+    progressAfter: 5
+    progressTotal: 100
+  - thread: T1
+    advancement: "宝玉抓周只取脂粉钗环的逸事首次勾画了宝玉'行为偏僻性乖张'的性格底色——父亲贾政从此时起便认定他是'酒色之徒'，父子矛盾的种子已经埋下。"
+    progressAfter: 4
+    progressTotal: 100
+narrativeChecklist:
+  items:
+    - dimension: "话本对话"
+      description: "一场村肆闲谈用对话铺陈了整个家族的背景——冷子兴作为消息传递者，贾雨村作为聆听者和评论者"
+      required: true
+    - dimension: "家族图谱"
+      description: "宁荣二公到贾宝玉四代人的谱系介绍——家族中每一个人物的身份和位置在此勾勒"
+      required: true
+    - dimension: "衰兆伏笔"
+      description: "'外面的架子虽未甚倒，内囊却也尽上来了'——全书对贾府衰败最经典的一处预言式陈述，经济困境的主线由此引出"
+      required: true
+cast:
+  onScreen:
+    - narrator_omniscient
+    - jiayucun
+    - lengzixing
+  affected:
+    - jiabaoyu
+    - lindaiyu
+    - jiazheng
+    - jiamu
+styleGuidance:
+  tone: "市井闲谈式的轻松语气，夹杂着对贾府现状的冷眼观察和世故评论"
+  atmosphere: "郊外村肆二人对酌，街市烟火气中暗藏家族兴衰的沉重话题"
+  targetWordCount: 1200
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+duration:
+  type: summary
+  storyDuration: "从宁荣二公创立贾府到冷子兴演说之时——跨越数十年的家族史被浓缩在村肆一场闲谈中"
+frequency:
+  type: iterative
+  iterationScope:
+    start: "宁荣二公立业"
+    end: "冷子兴演说之时"
+authorNotes:
+  - "冷子兴的演说是叙事经济学的一例——用一场对话交代四代人的家族谱系。'内囊尽上来'是理解全书经济主线和经济隐喻的关键词。"

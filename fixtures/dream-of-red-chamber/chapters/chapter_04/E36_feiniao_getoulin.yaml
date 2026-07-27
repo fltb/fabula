@@ -1,0 +1,87 @@
+event: E36
+title: "飞鸟各投林（红楼梦曲终·收束）"
+narrativeOrder: 36
+sceneType: dream
+storyTime: lin_daiyu_enters_jiafu + 90 days
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "宝玉重游太虚幻境，警幻仙姑再展金陵十二钗册籍。十二钗判词依次闪过——从林黛玉薛宝钗的'玉带林中挂，金簪雪里埋'到王熙凤的'一从二令三人木'——宝玉虽见而未能全解。继而十二支红楼梦曲奏响：《枉凝眉》叹宝黛之泪债、《分骨肉》诉探春之远嫁、《乐中悲》怜湘云之坎坷、《世难容》惜妙玉之高洁、《喜冤家》悲迎春之被虐、《虚花悟》证惜春之出家、《聪明累》醒凤姐之机关、《留余庆》叹巧姐之侥幸、《晚韶华》悼李纨之虚名、《好事终》哭可卿之纲常坏。收尾以《飞鸟各投林》作结——'好一似食尽鸟投林，落了片白茫茫大地真干净！'宝玉在幻境中悲戚不已。此场与E08同游幻境并行，但以曲终收束金陵十二钗的全部命运预言。"
+preconditions:
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "宝玉此刻正在荣国府中，身体安息，但灵魂遨游在太虚幻境里。"
+  - entity: jiabaoyu
+    attribute: state
+    narrativeHint: "宝玉已经入睡，在梦中重游警幻仙姑之处，准备接受最终的宿命启示。"
+  - entity: jiabaoyu
+    attribute: fate
+    narrativeHint: "宝玉命中注定要在幻境中窥见十二钗的完整命运走向，这是他的宿命安排。"
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: knowledge
+    value: heard_all_twelve_songs_and_judgments
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: understanding
+    narrativeHint: "宝玉在幻境中听到了全部判词和曲文，却如雾里看花——他'尚未悟'，这正是曹雪芹最精妙的反讽：预言先给读者，人物却仍蒙在鼓里。"
+    confidence: 0.9
+  - entity: jinghuanxiangu
+    attribute: role
+    narrativeHint: "警幻仙姑以曲终飞鸟各投林完成对十二钗命运的最终揭示——众钗的命运在此浓缩为一支曲、一幅画，在宝玉的梦境中完整呈现。"
+    confidence: 0.9
+threadProgress:
+  - thread: T5
+    advancement: "飞鸟各投林是红楼之梦主线的终极呈现——从太虚幻境册籍到红楼梦曲十二支，再到收尾曲'白茫茫大地真干净'，红楼梦的神话框架在此圆满闭合。"
+    progressAfter: 0.95
+    progressTotal: 1.0
+  - thread: T2
+    advancement: "'枉凝眉'一曲集中咏叹宝黛的还泪神话——'一个是阆苑仙葩，一个是美玉无瑕……想眼中能有多少泪珠儿，怎禁得秋流到冬尽，春流到夏'——木石前盟在仙界层面的完整表达。"
+    progressAfter: 0.94
+    progressTotal: 1.0
+  - thread: T4
+    advancement: "金陵十二钗的每一支判词和曲都是一位女子的命运速写——飞鸟各投林曲将这十二支悲歌收束为一，'食尽鸟投林'是众钗各奔东西的最终图景。"
+    progressAfter: 0.94
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "判词曲文"
+      description: "十二支红楼梦曲需以原文或高度贴近的韵文形式逐曲呈现——'枉凝眉''分骨肉''聪明累'等——每支曲对应一位钗的命运概述。"
+      required: true
+    - dimension: "象征结构"
+      description: "飞鸟各投林作为收束曲的哲学意味——'好一似食尽鸟投林'的意象是全书的终极隐喻，需要在叙事中予以揭示和升华。"
+      required: true
+    - dimension: "叙境嵌套"
+      description: "此场叙事时间与E08（演红楼梦曲）并行，但叙境不同——一场在E08的初始揭幕，一场在此场的最终收束——需在叙事中保持既重叠又区别的微妙关系。"
+      required: false
+styleGuidance:
+  tone: "华美而悲凉，仙界的神秘缥缈与命运的不可逆转交织"
+  targetWordCount: 1200
+  atmosphere: "太虚幻境的迷离烟云、朱栏玉砌之景与苍凉悲怆的曲声交替——从判词画像的静态恐怖到曲声流淌的时间悲剧"
+authorNotes:
+  - "要求以原文曲词逐支呈现红楼梦十二支曲——《枉凝眉》《分骨肉》《乐中悲》《世难容》《喜冤家》《虚花悟》《聪明累》《留余庆》《晚韶华》《好事终》——最终以《飞鸟各投林》收束。注意这场与E08的叙境重叠关系：E08是首次听曲，这场是最终的收束回顾。"
+anachrony:
+  type: prolepsis
+  scope: external
+  function: completing
+  distance: "从故事时间观曲时刻预叙金陵十二钗的最终结局——从判词到曲文完整揭示众钗命运"
+  anchorEventId: taixu_huanjing
+focalization:
+  type: zero
+  variation: fixed
+cast:
+  onScreen:
+    - jiabaoyu
+    - jinghuanxiangu
+  affected:
+    - lindaiyu
+    - xuebaochai
+    - shixiangyun
+    - wangxifeng
+    - tanchun
+    - yingchun
+    - xichun
+    - liwan
+    - miaoyu
+    - qinkeqing

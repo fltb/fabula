@@ -1,0 +1,88 @@
+event: E05
+title: "宝黛初会——摔玉、取字颦颦"
+narrativeOrder: 5
+sceneType: linear
+storyTime: lin_daiyu_enters_jiafu + 0days
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: "electric_connection_crisis"
+conflictType: "person_vs_fate"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "凤姐刚走，贾母传宝玉来见。只听一阵脚步声，一位年轻公子进来：面若中秋之月，色如春晓之花，鬓若刀裁，眉如墨画，项上金螭璎珞系着一块美玉。宝玉请安后一眼看见黛玉便笑道：'这个妹妹我曾见过的。'宝玉解释说虽没见过却看着面善，像是远别重逢一般。宝玉走近细问黛玉可有玉？闻知没有，登时摘下通灵玉狠命摔在地上，骂'什么罕物！我也不要这劳什子了！'吓得众人一拥去拾玉。贾母急搂着宝玉哄劝，宝玉流泪说'家里姐姐妹妹都没有，单我有，如今来了个神仙似的妹妹也没有，可知这不是好东西。'经再三哄劝方重新戴上。晚间宝玉为黛玉取字'颦颦'，说西方有石名黛可代画眉之墨。"
+preconditions:
+  - entity: lindaiyu
+    attribute: location
+    narrativeHint: "林黛玉已顺利进入荣国府，并在贾母的安排下住进了碧纱橱，开始了在贾府的新生活。"
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "贾宝玉此时正在荣国府中，被贾母召唤而出现在众人面前，来见新来的妹妹林黛玉。"
+  - entity: lindaiyu
+    attribute: met_family_members
+    narrativeHint: "林黛玉已经在贾母的安排下依次拜见了大舅母邢夫人、二舅母王夫人、李纨和迎春探春惜春三位堂姐妹，并与贾母有过祖孙相拥而哭的深情相见。"
+expectedPostconditions:
+  - entity: jiabaoyu
+    attribute: reaction_to_daiyu
+    narrativeHint: "宝玉初见黛玉即说'这个妹妹我曾见过的'——这是木石前盟在红尘中的第一次呼应。神瑛侍者与绛珠仙草的前世因果投射为这似曾相识的强烈默契。"
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: emotional_state
+    value: frantic_jade_smashing
+    confidence: 1.0
+  - entity: lindaiyu
+    attribute: impression_of_baoyu
+    narrativeHint: "黛玉初见宝玉便被他的目光和话语震动——'倒像在那里见过一般'，两人心中同时涌起的熟悉感暗合了前世因果。宝玉摔玉的狂态令她惊异又莫名感动。"
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: gave_nickname_to_daiyu
+    value: pinpin
+    confidence: 1.0
+threadProgress:
+  - thread: T2
+    advancement: "宝黛初会是木石前盟在人间舞台的正式开启。'这个妹妹我曾见过的'——前世的神瑛侍者与绛珠仙草以似曾相识的直觉重逢。宝玉摔玉的理由'家里姐姐妹妹都没有'彰显了他对'女儿'的绝对平等观，也预示了金玉良缘与木石前盟的冲突。"
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T1
+    advancement: "宝玉摔玉是他的第一次性格宣言——他对通灵玉的否认态度与E01顽石求入红尘形成对照：石已入红尘却遭主人厌弃。宝玉'衔玉而生'的特殊身份从一开始就让他与周围人不同。"
+    progressAfter: 6
+    progressTotal: 100
+  - thread: T4
+    advancement: "林黛玉与贾宝玉的命运纠葛从这一刻开始。'颦颦'之字——取蹙眉之意——本身就是一个命运谶语，预示了黛玉终生以泪洗面的悲剧宿命。"
+    progressAfter: 8
+    progressTotal: 100
+narrativeChecklist:
+  items:
+    - dimension: "宿命初见"
+      description: "'这个妹妹我曾见过的'——两人同时感到似曾相识，前世因果在今生的第一次回响"
+      required: true
+    - dimension: "摔玉冲突"
+      description: "宝玉摔玉是全书的第一场剧烈冲突——'什么罕物！'对通灵玉的否定揭示了他对'女儿'的绝对平等伦理"
+      required: true
+    - dimension: "语言个性"
+      description: "宝玉初见黛玉时的直率欣喜、摔玉时的任性狂怒、为黛玉取字时的调皮博学——三变之中尽显性格"
+      required: true
+cast:
+  onScreen:
+    - narrator_omniscient
+    - jiabaoyu
+    - lindaiyu
+    - jiamu
+    - wangfuren
+    - xiren
+    - zijuan
+  affected:
+    - wangxifeng
+    - xuebaochai
+styleGuidance:
+  tone: "从宝玉出场时的明朗喜悦到摔玉时的激烈狂躁再到取字时的轻松顽皮——情绪起伏中刻画初遇的深刻印记"
+  atmosphere: "荣国府内的温暖灯光与宝玉摔玉时的惶乱——一室之中悲喜交加，命运的暗流在初见时已显端倪"
+  targetWordCount: 900
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+authorNotes:
+  - "要求'这个妹妹我曾见过的'与摔玉对白入文。宝玉初见黛玉的原著对白——'这个妹妹我曾见过的''虽然未曾见过他，然我看着面善，心里倒像是远别重逢的一般'——以及摔玉时的'什么罕物！连人之高低不择，还说通灵不通灵呢！我也不要这劳什子了！'须以原文呈现。"
+  - "宝玉为黛玉取字'颦颦'是二人关系中一个重要仪式——需在叙述中呈现取字的缘由和两人的互动氛围。"

@@ -1,0 +1,93 @@
+event: E14
+title: "王凤姐弄权铁槛寺"
+narrativeOrder: 14
+sceneType: linear
+storyTime: xue_family_arrives + 225 days
+narrationTime: xue_family_arrives + 225
+tense: past
+discourseMode: action
+arcPosition: rising
+emotionalValence: "calculating_moral_compromise"
+conflictType: "person_vs_ethics"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "秦可卿殡仪队伍送至铁槛寺安灵，凤姐嫌铁槛寺不便，带了宝玉和秦钟住进附近的馒头庵（水月庵）。庵中老尼净虚趁机求凤姐办事——有一大户人家张财主的女儿金哥已许配守备之子，却被长安府太爷的小舅子李衙内看中，两家争聘打官司。净虚请凤姐以贾府权势出面摆平守备退亲。凤姐起初推托，经净虚激将——'虽说如此，只是太太知道，连我也不敢去的'——凤姐好胜心起，开价三千两银子。凤姐以贾琏名义写信给长安节度使云光，云光便压守备退婚。不料金哥是个多情烈女，闻退婚消息后自缢身亡；守备之子也投河殉情。凤姐坐享三千两，此后胆子更大，从此'所作所为，诸如此类，不可胜数'——这是凤姐手上沾上的第一条人命。"
+preconditions:
+  - entity: wangxifeng
+    attribute: location
+    narrativeHint: "王熙凤此时暂住在馒头庵（水月庵）附近，照应秦可卿的灵柩。"
+  - entity: wangxifeng
+    attribute: involvement
+    narrativeHint: "净虚老尼求王熙凤以贾府权势干预司法，弄权受贿处理金哥的婚事纠纷——金哥原定与守备之子成婚，却被长安府太爷的小舅子李衙内看中，两家争讼。"
+expectedPostconditions:
+  - entity: jinqge
+    attribute: status
+    value: dead_by_suicide
+    confidence: 1.0
+  - entity: garrison_commander_son
+    attribute: status
+    value: dead_by_suicide
+    confidence: 1.0
+  - entity: wangxifeng
+    attribute: wealth
+    value: gained_3000_taels
+    confidence: 1.0
+  - entity: wangxifeng
+    attribute: moral_state
+    narrativeHint: "凤姐首次公然弄权受贿，两条人命因此丧生。她虽'也不曾当回事'，但这是她道德堕落的第一个重要台阶——此后'诸如此类，不可胜数'。"
+    confidence: 1.0
+  - entity: jingxu_nun
+    attribute: emotionalState
+    value: satisfied
+    confidence: 1.0
+threadProgress:
+  - thread: T3
+    advancement: "凤姐弄权铁槛寺是她由管家走向擅权的转折点——以贾府权势干预司法、从中牟利，两条人命就此断送。这是贾府衰败的内在原因之一：掌权者以权谋私，法纪废弛。"
+    progressAfter: 0.39
+    progressTotal: 1.0
+  - thread: T4
+    advancement: "凤姐的狠辣在这一事件中从'整治下人'升级为'漠视人命'。她并非不知后果，而是'从来不信什么阴司地狱报应的'——这种无所畏惧是她的力量也是她的悲剧。"
+    progressAfter: 0.39
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "权力运作"
+      description: "凤姐以贾府之名写信给节度使——世家大族对地方司法的干预赤裸裸地展现。一个深宅奶奶的一封信就能决定一场官司的胜负。"
+      required: true
+    - dimension: "道德转折"
+      description: "凤姐并非不知道退亲会有什么后果——净虚说'不过是两家情愿'，但凤姐清楚这是仗势欺人。她的选择标志着一个道德门槛的跨过。"
+      required: true
+    - dimension: "悲剧对照"
+      description: "金哥和守备之子的殉情是一对底层年轻人的纯真爱情悲剧，与凤姐在馒头庵里数银子的场面形成极端对照"
+      required: false
+styleGuidance:
+  tone: "冷峻、精于算计，结尾急转直下的悲剧"
+  targetWordCount: 1200
+  atmosphere: "馒头庵本是停灵之所，却成了权钱交易的密谋地。老尼净虚的精明、凤姐的精算、最终两条年轻生命的消逝——佛寺之净与此事之污形成反讽。"
+  scenePacing: "停灵铁槛寺→住进馒头庵→净虚求助→凤姐要价→双方议定→写信云光→金哥自缢→守备子投河→凤姐从容收银"
+  characterVoice:
+    wangxifeng: "表面推辞实则精算——'我又不等着银钱使，也不做这样的事'——以退为进。被净虚一激立刻接话：'你是素日知道我的，从来不信什么阴司地狱报应的'——这句话是她整个人生哲学的注脚。"
+    jingxu_nun: "老尼姑口齿伶俐，深谙人情世故。她以'太太知道'激将凤姐——她精准抓住了凤姐最大的软肋：好胜心。"
+cast:
+  onScreen:
+    - wangxifeng
+    - jingxu_nun
+    - jiabaoyu
+    - qinzhong
+  affected:
+    - jinqge
+    - garrison_commander_son
+    - jialian
+authorNotes:
+  - "要求保留凤姐'我从来不信什么阴司地狱报应的，凭是什么事，我说要行就行'的原文——这是理解凤姐为人的关键一句"
+duration:
+  type: scene
+  storyDuration: "从停灵到办妥，约数日"
+  narrativeLength: 600
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: heterodiegetic

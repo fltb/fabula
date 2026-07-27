@@ -1,0 +1,75 @@
+event: E20
+title: "滴翠亭宝钗戏彩蝶"
+narrativeOrder: 20
+sceneType: linear
+storyTime: sisters_move_into_garden + 90 days
+discourseMode: action
+arcPosition: rising
+emotionalValence: "playful_then_uneasy"
+conflictType: "person_vs_society"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: 芒种节后，大观园中众姐妹正行饯花之礼，独不见黛玉。宝钗自告奋勇去潇湘馆寻她，途中见宝玉进了潇湘馆，便抽身而退。行至池边，忽见一双玉色蝴蝶大如团扇，迎风翩跹、上下翻飞。宝钗取出袖中扇子扑了上去——蹑手蹑脚、屏气凝神，从池心亭直追到滴翠亭，累得香汗涔涔、娇喘细细。正待放弃，忽听亭内有人说话。她止步细听，原来是小红与坠儿在密谈芸儿赠帕定情之事——这是不为人知的丫鬟私情。宝钗心知不妥，怕被发觉招怨，急中生智，故意放重脚步笑说"颦儿，我看你往哪里藏！"假装追寻黛玉至此。小红与坠儿果然只当是黛玉听了去，不再起疑。宝钗金蝉脱壳而去，心头却掠过一丝不安。
+preconditions:
+  - entity: xuebaochai
+    attribute: location
+    narrativeHint: "宝钗在大观园中的大湾处，她正在追捕玉色蝴蝶。"
+  - entity: daguanyuan
+    attribute: atmosphere
+    narrativeHint: "大观园在芒种节后呈现出盛开的春天景象，但这美丽之下隐藏了丫鬟之间的秘密。"
+  - entity: lindaiyu
+    attribute: location
+    narrativeHint: "黛玉在潇湘馆中，众人去饯花，却不见她的踪影。"
+    confidence: 0.9
+expectedPostconditions:
+  - entity: xuebaochai
+    attribute: awareness_of_servants_secrets
+    value: aware_of_xiaohong_yun_er_affair
+    confidence: 1.0
+  - entity: xuebaochai
+    attribute: moral_state
+    narrativeHint: "宝钗用了'金蝉脱壳'之计——将小红和坠儿的疑心巧妙引向黛玉。她虽躲过了一时之窘，却无意中让黛玉背上了'偷听私聊'的嫌疑。宝钗心头掠过一丝不安，但很快便释然——这是她机变冷静的秉性使然。"
+    confidence: 0.9
+  - entity: xiaohong
+    attribute: suspicion_target
+    value: lindaiyu
+    confidence: 1.0
+  - entity: daguanyuan
+    attribute: atmosphere
+    value: summer_buzzing
+    confidence: 1.0
+threadProgress:
+  - thread: T2
+    advancement: "宝钗无意中让黛玉背上了'偷听'的嫌疑——金玉良缘的竞争中，宝钗的理智与黛玉的'被算计'形成了微妙对比。这是钗黛关系中的一次暗涌。"
+    progressAfter: 0.52
+    progressTotal: 100
+  - thread: T4
+    advancement: "宝钗的'金蝉脱壳'展现了她冷静应对危机的一面，但也暴露了她的世故与自我保护的本能。"
+    progressAfter: 0.53
+    progressTotal: 100
+styleGuidance:
+  tone: "前半段轻快明媚——芒种饯花、玉蝶翻飞、宝钗扑蝶的画面是大观园中最富诗意的瞬间之一。后半段突转机心——滴翠亭听私语、金蝉脱壳之计，暴露了大观园并非纯粹的桃花源。"
+  atmosphere: "由明媚转到隐晦。花丛与蝴蝶的生机勃勃对比亭内密谈的阴暗忐忑。"
+  targetWordCount: 1200
+narrativeChecklist:
+  items:
+    - dimension: "宝钗扑蝶"
+      description: "一双玉色蝴蝶大如团扇——这是《红楼梦》最经典的画面之一，需要写出动态的青春之美。"
+      required: true
+    - dimension: "金蝉脱壳"
+      description: "宝钗巧用黛玉之名脱身——这是宝钗性格中'理智'与'机心'并存的经典例证，她不是纯善之人。"
+      required: true
+    - dimension: "丫鬟私情"
+      description: "小红与坠儿密谈芸儿赠帕事——大观园中的下层丫鬟也有自己的情感世界和秘密。"
+      required: false
+cast:
+  onScreen:
+    - xuebaochai
+  affected:
+    - lindaiyu
+    - xiaohong
+voice:
+  level: extradiegetic
+  relation: heterodiegetic

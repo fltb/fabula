@@ -1,0 +1,92 @@
+event: E15
+title: "大观园试才题对额"
+narrativeOrder: 15
+sceneType: linear
+storyTime: xue_family_arrives + 290 days
+narrationTime: xue_family_arrives + 290
+tense: past
+discourseMode: description
+arcPosition: rising
+emotionalValence: "pride_mixed_with_anxiety"
+conflictType: "person_vs_family_expectation"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "大观园工程告竣，贾政带着一众清客相公进园题匾额对联。恰巧撞见宝玉在园中闲逛，便喝命他跟从，实则要试他的才学。众人一路游园：从迎门翠嶂（宝玉题'曲径通幽处'）到沁芳亭（宝玉拟'沁芳'对联'绕堤柳借三篙翠，隔岸花分一脉香'），从潇湘馆（有凤来仪）到稻香村（浣葛山庄），从蘅芜苑（蘅芷清芬）到大观楼，再到怡红院（红香绿玉改怡红快绿）。每到一处贾政先命清客拟名，再问宝玉意见。宝玉才思敏捷、题对连连出彩，贾政心中虽暗喜，面子上却严厉斥责——喝命'叉出去'后又叫回来。清客们知趣地一路捧场。这场游园不仅是宝玉展示才学的舞台，更是大观园在读者面前的第一次全景亮相。"
+preconditions:
+  - entity: daguanyuan
+    attribute: status
+    narrativeHint: "大观园的建筑工程已经全部完成，园中各处都已修缮一新。"
+  - entity: jiabaoyu
+    attribute: location
+    narrativeHint: "贾宝玉此时正在大观园内游历。"
+  - entity: jiazheng
+    attribute: location
+    narrativeHint: "贾政此时在荣国府内。"
+  - entity: jiazheng
+    attribute: need
+    narrativeHint: "贾政需要为大观园的各处景致题写匾额和对联，以完成园林建设的最后一环。"
+expectedPostconditions:
+  - entity: daguanyuan
+    attribute: inscriptions
+    value: completed
+    confidence: 1.0
+  - entity: jiabaoyu
+    attribute: reputation
+    narrativeHint: "宝玉今天展露的才学令清客们暗暗称奇、贾政心中欢喜。他的才情在题对中自然流露但不卖弄——'沁芳'二字既雅致又切景。这是宝玉在公共场合少有的高光时刻。"
+    confidence: 1.0
+  - entity: jiazheng
+    attribute: emotionalState
+    narrativeHint: "贾政心中对宝玉的才学是满意的，但他从不当面夸奖——'畜生，畜生，可谓管窥蠡测矣'的呵斥背后是掩饰不住的欣赏。他怕宝玉得意忘形，更怕自己纵容了他。"
+    confidence: 1.0
+threadProgress:
+  - thread: T5
+    advancement: "大观园第一次以完整面貌呈现——从翠嶂到沁芳亭、潇湘馆到怡红院，每一处匾额都在为后续事件（省亲、结社、葬花）预定舞台。这园子是人间的太虚幻境。"
+    progressAfter: 0.42
+    progressTotal: 1.0
+  - thread: T3
+    advancement: "大观园的奢华令贾政也觉'太富丽了些'——他深知此园耗资巨大，'省亲不过一瞬间，这园子却要用一辈子来养'。世家大族的体面是沉重的经济负担。"
+    progressAfter: 0.42
+    progressTotal: 1.0
+narrativeChecklist:
+  items:
+    - dimension: "空间叙事"
+      description: "大观园的各处景致通过游园动线逐一亮相——从大门到后院，每一处都是建筑与文学的结合，园林格局本身即叙事结构"
+      required: true
+    - dimension: "父子关系"
+      description: "贾政对宝玉的严厉训斥与心中暗喜的张力——'叉出去'又叫回来、骂得越狠心里越满意，这是典型的严父心态"
+      required: true
+    - dimension: "宝玉才学"
+      description: "宝玉的题对不模仿古人、不堆砌辞藻——'沁芳'清新自然、'有凤来仪'典雅庄重——展示了他被父亲压抑但真实存在的文学才能"
+      required: false
+styleGuidance:
+  tone: "雅致中带着训诫，轻松中暗含紧张"
+  targetWordCount: 1200
+  atmosphere: "大观园初秋景色——翠嶂叠石、清溪泻雪、雕甍绣槛、竹影苔痕。贾政一路扶杖而行，清客们满口称赞，宝玉战战兢兢又忍不住展才。"
+  scenePacing: "入园翠嶂→沁芳亭→潇湘馆→稻香村→蘅芜苑→大观楼→怡红院→出园"
+  characterVoice:
+    jiabaoyu: "在父亲面前紧张但不怯场，题对句句是真心所感。'编新不如述旧，刻古终胜雕今'是他的文学主张——但他自己也突破了这一主张，'沁芳'便是自创新词。"
+    jiazheng: "满口'畜生''叉出去'的训斥中掩饰着满意。他评价宝玉题对时总是先反话否定，再'也罢''也还使得'——这种含混的认可使宝玉始终活在父亲的影子下。"
+    qingke_guests: "专会凑趣的清客们对一切称赞有加，但也确实烘托了题对的氛围——他们的功能类似古希腊戏剧的歌队。"
+cast:
+  onScreen:
+    - jiabaoyu
+    - jiazheng
+    - qingke_guests
+  affected:
+    - jiamu
+    - lindaiyu
+    - xuebaochai
+authorNotes:
+  - "需保留宝玉题'沁芳'对联'绕堤柳借三篙翠，隔岸花分一脉香'及'有凤来仪'等关键题咏"
+  - "要求体现贾政骂中藏赏的微妙父子互动——'叉出去'旋即叫回的经典场景"
+duration:
+  type: scene
+  storyDuration: "秋日一整日游园题对"
+  narrativeLength: 600
+frequency:
+  type: singulative
+voice:
+  level: extradiegetic
+  relation: heterodiegetic

@@ -1,0 +1,92 @@
+event: E06
+title: "葫芦僧乱判葫芦案"
+narrativeOrder: 6
+sceneType: linear
+storyTime: lin_daiyu_enters_jiafu + 30days
+tense: past
+discourseMode: exposition
+arcPosition: rising
+emotionalValence: "moral_compromise_corruption"
+conflictType: "person_vs_society"
+resolutionType: "moral_defeat"
+pov:
+  character: narrator_omniscient
+  type: omniscient
+narratorProfileRef: shuoshuren
+sceneBrief: "贾雨村因林如海举荐和贾政相助，补授应天府知府。到任即接一桩人命案：薛蟠打死冯渊后抢走婢女扬长而去，冯家告了一年状无人敢受理。雨村大怒欲发签拿人，案边一门子向他使眼色。雨村退堂密召门子——原来是当年葫芦庙的小沙弥。门子取出一张'护官符'：贾史王薛四大家族谚语，解释道四家联络有亲，薛蟠正是薛家之人，若拿了他官位性命皆难保。被抢婢女竟是甄士隐当年丢失的女儿英莲。雨村听罢徇情枉法，谎称薛蟠已死，冯家得烧埋银了事——遂胡乱判了此案。事后他写信向贾政王子腾报功，又将门子远远发配。"
+preconditions:
+  - entity: jiayucun
+    attribute: location
+    narrativeHint: "贾雨村因林如海举荐和贾政的援引，补授了应天府（即现今的南京府）知府的官职，此时已经到任赴官履职。"
+  - entity: jiayucun
+    attribute: occupation
+    narrativeHint: "贾雨村作为应天府知府，一到任即上堂审理刑名案件。他原本是个正直的读书人，却将在这个位置上与权势家族发生瓜葛，开始他道德妥协的历程。"
+  - entity: xuepan
+    attribute: legal_status
+    narrativeHint: "薛蟠因为打死冯渊、抢走丫鬟而成为案件被告，他的所作所为本应被法律制裁，然而他背后有薛家的权势作为靠山。"
+expectedPostconditions:
+  - entity: xuepan
+    attribute: legal_status
+    value: acquitted_by_corruption
+    confidence: 1.0
+  - entity: jiayucun
+    attribute: moral_state
+    value: compromised_for_career
+    confidence: 1.0
+  - entity: xiangling
+    attribute: status
+    value: xue_family_slave
+    confidence: 1.0
+  - entity: jiayucun
+    attribute: allegiance
+    value: bound_to_four_families
+    confidence: 1.0
+  - entity: narrator_omniscient
+    attribute: social_critique_introduced
+    narrativeHint: "'护官符'——贾史王薛四大家族的权势谚语——是全书社会批判的核心象征。贾雨村从一个正义的读书人堕落为徇情枉法的官僚，这桩葫芦案是全书司法腐败的缩影。"
+    confidence: 1.0
+threadProgress:
+  - thread: T3
+    advancement: "葫芦案是全书司法腐败的缩影——护官符'贾不假，白玉为堂金作马'揭示了四大家族通过姻亲关系构成的权力网络。贾雨村从'怒不可遏'到'徇情枉法'的转变展示了科举官僚在权力网络面前的迅速堕落。"
+    progressAfter: 12
+    progressTotal: 100
+  - thread: T4
+    advancement: "英莲（香菱/甄英莲）的悲惨命运从她被薛蟠抢走时已经注定——甄士隐当年丢失的女儿经历了被拐、被卖、打死人案的劫难，最终沦为薛家的侍妾。她的遭遇是金陵十二钗副册之首的序幕。"
+    progressAfter: 10
+    progressTotal: 100
+  - thread: T1
+    advancement: "贾雨村从正义到堕落的转变是全书政治寓言的一部分。他后来为了讨好贾赦而抄没石呆子古扇、为了攀附忠顺王而背叛贾府——葫芦案是他道德滑坡的起点。"
+    progressAfter: 7
+    progressTotal: 100
+narrativeChecklist:
+  items:
+    - dimension: "护官符"
+      description: "'贾不假，白玉为堂金作马'——四大家族谚语是全书社会批判的浓缩，用民间歌谣形式揭露了官商勾结的权力结构"
+      required: true
+    - dimension: "人物转变"
+      description: "贾雨村从'大怒'到与门子密谋的转变——一个正直书生如何在权力逻辑面前迅速完成道德妥协"
+      required: true
+    - dimension: "因果交织"
+      description: "丫鬟英莲正是甄士隐丢失的女儿英莲——昔日的葫芦庙邻居的女儿今日成为他案中的被害人，因果轮回的宿命感贯穿始终"
+      required: true
+cast:
+  onScreen:
+    - narrator_omniscient
+    - jiayucun
+    - menzi
+  affected:
+    - xuepan
+    - xiangling
+    - zhenshiyin
+    - fenger
+    - wangfuren
+    - jiazheng
+styleGuidance:
+  tone: "冷峻的反讽——贾雨村从正义凛然到妥协的转变以白描手法呈现，反讽的叙事距离贯穿全案"
+  atmosphere: "公堂上的威严与后堂密谋的阴暗形成对照——官服的赫赫威仪掩盖着最龌龊的交易"
+  targetWordCount: 1200
+voice:
+  level: extradiegetic
+  relation: heterodiegetic
+authorNotes:
+  - "护官符中的四句谚语需以韵文形式插入叙述——这是全书社会批判的宣言，也奠定了全书'诗谶'式的叙事技法。香菱（英莲）的身世需在叙述中与前文甄士隐丢失女儿的情节呼应。"

@@ -542,6 +542,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
       const pkg = compiler.compile(ev, beforeState, registry, {
         systemContext: sysCtx,
         narratorProfiles: data.narratorProfiles,
+        narratorAssertions: data.narratorAssertions,
         discourseLedger: data.discourseLedger,
       });
 
@@ -646,9 +647,14 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     pluginHooksManager,
   });
 
-  // Initialize cache
+  // Ledger and assertion YAML already participate through definitions/. Branch
+  // selection is a runtime prompt input, so it gets its own cache partition.
   const eventsFileMap = buildEventsFileMap(data);
-  await pipeline.initCache(eventsFileMap, path.join(projectDir, 'definitions'));
+  await pipeline.initCache(
+    eventsFileMap,
+    path.join(projectDir, 'definitions'),
+    branchPath ? JSON.stringify(branchPath) : 'main',
+  );
   // Build render jobs
   const jobs: RenderJob[] = [];
   const disclosureCompiler = new LogicalDisclosureSummaryCompiler();
@@ -661,10 +667,9 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
     const ctxStart = Date.now();
     traceCollector?.record({ phase: 'context', state: 'start', spanId: ev.id, eventId: ev.id });
 
-    // Compute disclosure-safe summary for prior discoure context
-    // Full DiscourseState wiring requires the planned discourse ledger, which
-    // is loaded once the discourse system is fully integrated. For now the
-    // summarizer is available and ready — wire it with compile options.
+    // ContextCompiler attaches a Pass 1-safe discourse projection from the
+    // planned ledger and assertion catalog; PromptAssembler serializes it in
+    // the context package.
     const emotionalBeat = data.config?.ideaIR?.emotionalArc?.emotionalBeats?.find(
       (b) => b.position === ev.id || b.position === ev.arcPosition,
     )?.emotion;
@@ -672,6 +677,7 @@ export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovel
       systemContext: sysCtx,
       previousSceneSummary: previousSummary ?? '',
       narratorProfiles: data.narratorProfiles,
+      narratorAssertions: data.narratorAssertions,
       discourseLedger: data.discourseLedger,
       emotionalBeat,
     });

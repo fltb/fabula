@@ -192,12 +192,15 @@ export class RenderPipeline {
    * Initialize cache keys from events + definitions.
    * Must be called before render().
    * eventsFileMap: Map<eventId, { narrativeOrder: number, filePath: string, chapter: number }>
+   * cacheScope: deterministic runtime input that changes the assembled prompt,
+   * such as a selected branch path.
    */
   async initCache(
     eventsFileMap: Map<string, { narrativeOrder: number; filePath: string; chapter: number }>,
     defsDir: string,
+    cacheScope?: string,
   ): Promise<void> {
-    this.cacheKeys = computeCacheKeys(eventsFileMap, defsDir, this.storage);
+    this.cacheKeys = computeCacheKeys(eventsFileMap, defsDir, this.storage, cacheScope);
   }
 
   /**

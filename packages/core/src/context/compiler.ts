@@ -2,11 +2,12 @@
 // ContextCompiler — Main entry point
 // ============================================================================
 
-import { replayDiscourseState } from '../state/discourse-replay.js';
+import { projectDiscourseContext, replayDiscourseState } from '../state/discourse-replay.js';
 import type {
   ContextPackage,
   EntityRegistry,
   NarrativeEvent,
+  NarratorAssertion,
   NarratorProfile,
   PlannedDiscourseLedger,
   SystemContext,
@@ -36,6 +37,8 @@ export class ContextCompiler {
       activeThreadIds?: string[];
       narratorProfiles?: Record<string, NarratorProfile>;
       discourseLedger?: PlannedDiscourseLedger | null;
+      /** Assertion catalog loaded from definitions/assertions/. */
+      narratorAssertions?: Record<string, NarratorAssertion>;
       /** Discourse-ledger branch label to replay; single-branch projects use 'main'. */
       discourseBranch?: string;
       /** Emotional beat to annotate the compiled scene spec */
@@ -59,13 +62,34 @@ export class ContextCompiler {
     if (event.narratorProfileRef && options?.narratorProfiles) {
       pkg.narratorProfile = options.narratorProfiles[event.narratorProfileRef];
     }
-    // DISCOURSE-1: deterministic replay-integrity check for this event's position.
-    // Position is clamped to the ledger length: replaying past the last entry
-    // means "everything disclosed so far" and must not be a bounds error.
+    // DISCOURSE-1: replay and project the disclosure state for Pass 1.
     if (options?.discourseLedger) {
       try {
-        const position = Math.min(event.narrativeOrder, options.discourseLedger.entries.length);
-        replayDiscourseState(options.discourseLedger, position, options?.discourseBranch ?? 'main');
+        const branch = options.discourseBranch ?? 'main';
+        const sceneEntries = options.discourseLedger.entries.filter(
+          (entry) => entry.branch === branch && entry.sceneId === event.id,
+        );
+        const position = Math.min(
+          Math.max(event.narrativeOrder, ...sceneEntries.map((entry) => entry.discoursePosition)),
+          options.discourseLedger.entries.length,
+        );
+        const discourseState = replayDiscourseState(
+          options.discourseLedger,
+          position,
+          branch,
+          options.narratorAssertions,
+        );
+        const authorizedAssertions = sceneEntries.flatMap((entry) =>
+          entry.action.type === 'reveal' || entry.action.type === 'claim'
+            ? [entry.action.assertionId]
+            : [],
+        );
+        pkg.discourseProjection = projectDiscourseContext(
+          discourseState,
+          pkg.narratorProfile,
+          event.pov.character,
+          authorizedAssertions,
+        );
       } catch (err) {
         pkg.discourseReplayError = (err as Error).message;
       }

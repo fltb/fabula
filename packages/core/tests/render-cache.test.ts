@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   clearEventCache,
   clearRenderCache,
+  computeCacheKeys,
   getCachedRender,
   setCachedRender,
 } from '../src/cache/render-cache.ts';
@@ -92,5 +93,24 @@ describe('render cache', () => {
     expect(getCachedRender(cacheDir, 'E0', 'key-e0', storage)).toEqual({ prose: 'e0' });
     expect(getCachedRender(cacheDir, 'E1', 'key-e1', storage)).toEqual({ prose: 'e1' });
     expect(getCachedRender(cacheDir, 'E0', 'key-e1', storage)).toBeNull();
+  });
+
+  it('partitions cache keys by runtime prompt scope', () => {
+    const storage = new MemoryStorage();
+    storage.write('/project/definitions/discourse-ledger.yaml', 'id: ledger');
+    storage.write('/project/events/E0.yaml', 'id: E0');
+    const events = new Map([
+      ['E0', { narrativeOrder: 0, filePath: '/project/events/E0.yaml', chapter: 1 }],
+    ]);
+
+    const mainKey = computeCacheKeys(events, '/project/definitions', storage, 'main').get('E0');
+    const alternateKey = computeCacheKeys(
+      events,
+      '/project/definitions',
+      storage,
+      'branch:alternate',
+    ).get('E0');
+
+    expect(mainKey).not.toBe(alternateKey);
   });
 });

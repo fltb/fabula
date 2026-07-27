@@ -4,12 +4,13 @@
 // Proves the discourse layer is reachable from the real fixture-loading path:
 //   fixtures/zhu-fu YAML → EntityMapper.loadProject() (narrator profiles,
 //   discourse ledger, assertions) → ContextCompiler.compile() (narrator
-//   resolution + replay-integrity check) → ContextPackage.
+//   resolution + Pass 1-safe disclosure projection) → PromptAssembler.
 // ============================================================================
 
 import * as path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { ContextCompiler } from '../../src/context/compiler.ts';
+import { PromptAssembler } from '../../src/context/prompt-assembler.ts';
 import { EntityMapper } from '../../src/entity/mapper.ts';
 import { InMemoryEntityRegistry } from '../../src/entity/registry.ts';
 import type { ProjectData } from '../../src/entity/types.ts';
@@ -67,11 +68,40 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
 
     const pkg = new ContextCompiler().compile(e0!, EMPTY_STATE, registry, {
       narratorProfiles: data.narratorProfiles,
+      narratorAssertions: data.narratorAssertions,
       discourseLedger: data.discourseLedger,
     });
 
     expect(pkg.narratorProfile?.id).toBe('narrator_wo');
     expect(pkg.discourseReplayError).toBeUndefined();
+  });
+
+  it('projects E0 claim surface into the Pass 1 context package', () => {
+    const e0 = events.find((ev) => ev.id === 'E0')!;
+    const registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+
+    const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
+      narratorProfiles: data.narratorProfiles,
+      narratorAssertions: data.narratorAssertions,
+      discourseLedger: data.discourseLedger,
+    });
+
+    expect(pkg.discourseProjection).toMatchObject({
+      plannedReveals: ['assertion_xianglin_death'],
+      openClaims: ['assertion_afterlife_uncertain'],
+      accessibleClaims: [
+        {
+          assertionId: 'assertion_afterlife_uncertain',
+          surface: "灵魂和地狱是否存在——'也许有罢……说不清'",
+        },
+      ],
+    });
+    expect(pkg.discourseProjection?.authorizedTargets).toHaveLength(2);
+
+    const prompt = new PromptAssembler().assemble(pkg).userPrompt;
+    expect(prompt).toContain('"discourseProjection"');
+    expect(prompt).toContain("灵魂和地狱是否存在——'也许有罢……说不清'");
   });
 
   it('compile() surfaces a replay error for a corrupt ledger (duplicate positions)', () => {

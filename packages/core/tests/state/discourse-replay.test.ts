@@ -401,6 +401,15 @@ describe('claim vs reveal truth-boundary enforcement (§5)', () => {
     expect(state.reveals).toContain('a1');
   });
 
+  it('rejects a loaded assertion without a truth boundary', () => {
+    const assertion = makeAssertion('a2', false, 'claim');
+    const ledger = makeLedger([entry('e1', revealAction('a2', 1), 'scene_1', 'main')]);
+
+    expect(() => replayDiscourseState(ledger, 1, 'main', { a2: assertion })).toThrow(
+      'Reveal requires truthBoundary=true',
+    );
+  });
+
   it('claim action succeeds regardless of truthBoundary', () => {
     const ledger = makeLedger([entry('e1', claimAction('a2', 1), 'scene_1', 'main')]);
     const state = replayDiscourseState(ledger, 1, 'main');
@@ -531,7 +540,7 @@ describe('narrator profile boundaries (§10)', () => {
 describe('Pass 1 projection filtering (§12)', () => {
   it('includes planned reveals and open claims', () => {
     const state = makeStateWithAssertions(['r1'], ['c1']);
-    const projection = projectDiscourseContext(state, {}, []);
+    const projection = projectDiscourseContext(state, undefined, undefined, []);
     expect(projection.plannedReveals).toContain('r1');
     expect(projection.openClaims).toContain('c1');
   });
@@ -547,7 +556,7 @@ describe('Pass 1 projection filtering (§12)', () => {
       },
     ];
     const state = makeStateWithAssertions([], [], hints);
-    const projection = projectDiscourseContext(state, {}, []);
+    const projection = projectDiscourseContext(state, undefined, undefined, []);
 
     // Visible hints should only expose surface, never target
     expect(projection.visibleHints).toHaveLength(1);
@@ -568,24 +577,53 @@ describe('Pass 1 projection filtering (§12)', () => {
       },
     ];
     const state = makeStateWithAssertions([], [], hints);
-    const projection = projectDiscourseContext(state, {}, []);
+    const projection = projectDiscourseContext(state, undefined, undefined, []);
     expect(projection.visibleHints).toHaveLength(0);
   });
 
-  it('includes open claims as accessible claims when authorized', () => {
+  it('includes open claims as accessible claims when authorized and narrator-visible', () => {
     const state = makeStateWithAssertions([], ['c1'], [], [], {
       c1: makeAssertion('c1', false, 'claim'),
     });
-    const projection = projectDiscourseContext(state, {}, ['c1']);
+    const profile = createExplicitLedgerProfile(
+      'narrator_1',
+      'full',
+      'full',
+      'full_knowledge',
+      'reliable',
+      'sincere',
+    );
+    const projection = projectDiscourseContext(state, profile, undefined, ['c1']);
     expect(projection.accessibleClaims).toHaveLength(1);
     expect(projection.accessibleClaims[0].assertionId).toBe('c1');
+  });
+
+  it('excludes a claim outside a focalizer-only narrator boundary', () => {
+    const state = makeStateWithAssertions([], ['c1'], [], [], {
+      c1: {
+        ...makeAssertion('c1', false, 'claim'),
+        narrationBoundary: { narratorId: 'narrator_1', focalizerId: 'alice' },
+      },
+    });
+    const profile = createFocalizerBoundProfile(
+      'narrator_1',
+      'focalizer_only',
+      'constrained',
+      'limited_knowledge',
+      'reliable',
+      'sincere',
+    );
+
+    const projection = projectDiscourseContext(state, profile, 'bob', ['c1']);
+
+    expect(projection.accessibleClaims).toEqual([]);
   });
 
   it('excludes non-authorized assertions from accessible claims', () => {
     const state = makeStateWithAssertions([], ['c1'], [], [], {
       c1: makeAssertion('c1', false, 'claim'),
     });
-    const projection = projectDiscourseContext(state, {}, []); // empty authorized list
+    const projection = projectDiscourseContext(state, undefined, undefined, []); // empty authorized list
     expect(projection.accessibleClaims).toHaveLength(0);
   });
 
@@ -594,7 +632,7 @@ describe('Pass 1 projection filtering (§12)', () => {
       { policyId: 'wp1', startPosition: 1, endPosition: null, active: true },
     ];
     const state = makeStateWithAssertions([], [], [], policies);
-    const projection = projectDiscourseContext(state, {}, []);
+    const projection = projectDiscourseContext(state, undefined, undefined, []);
     expect(projection.activeWithholdingPolicies).toHaveLength(1);
     expect(projection.activeWithholdingPolicies[0].policyId).toBe('wp1');
   });
@@ -604,7 +642,7 @@ describe('Pass 1 projection filtering (§12)', () => {
       { policyId: 'wp1', startPosition: 1, endPosition: 2, active: false },
     ];
     const state = makeStateWithAssertions([], [], [], policies);
-    const projection = projectDiscourseContext(state, {}, []);
+    const projection = projectDiscourseContext(state, undefined, undefined, []);
     expect(projection.activeWithholdingPolicies).toHaveLength(0);
   });
 });

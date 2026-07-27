@@ -13,9 +13,9 @@
 //        any prior event changes, scene N's world state may differ)
 //     3. ALL definition files (characters, rules, locations, etc.)
 //
-//   We use a hash chain: defsHash = sha256(all defs sorted by path)
-//   For event 0: eventHash0 = sha256("event:" + fileContent + "|defs:" + defsHash)
-//   For event N: eventHashN = sha256(eventHash{N-1} + "|event:" + fileContent + "|defs:" + defsHash)
+//   cacheScopeHash = sha256(runtime cache scope, such as selected branch)
+//   For event 0: eventHash0 = sha256("event:" + fileContent + "|defs:" + defsHash + "|scope:" + cacheScopeHash)
+//   For event N: eventHashN = sha256(eventHash{N-1} + "|event:" + fileContent + "|defs:" + defsHash + "|scope:" + cacheScopeHash)
 //   Cache key for scene N = "novalistically-scene:chapter-{NN}:{eventId}:{eventHashN}"
 //   (plain string, not re-hashed — chainHash is already SHA256)
 //
@@ -56,15 +56,17 @@ export function computeEvidenceHash(
  * eventsMap: Map<eventId, { narrativeOrder: number, filePath: string, chapter: number }>
  * defsDir: path to project's definitions/ directory
  * storage: FS abstraction
+ * cacheScope: deterministic runtime prompt input, such as the selected branch
  */
 export function computeCacheKeys(
   eventsMap: Map<string, { narrativeOrder: number; filePath: string; chapter: number }>,
   defsDir: string,
   storage: Storage,
+  cacheScope = 'main',
 ): Map<string, string> {
-  // 1. Compute defs hash: all definition YAML files sorted by path
+  // 1. Compute definitions and runtime scope hashes.
   const defsHash = computeDefsHash(defsDir, storage);
-
+  const scopeHash = crypto.createHash('sha256').update(cacheScope).digest('hex');
   // 2. Sort events by narrative order
   const sorted = [...eventsMap.entries()].sort((a, b) => a[1].narrativeOrder - b[1].narrativeOrder);
 
@@ -75,7 +77,7 @@ export function computeCacheKeys(
     const eventContent = storage.read(info.filePath);
     const eventContentHash = crypto.createHash('sha256').update(eventContent).digest('hex');
 
-    const combined = prevHash + '|' + eventContentHash + '|' + defsHash;
+    const combined = prevHash + '|' + eventContentHash + '|' + defsHash + '|' + scopeHash;
     const chainHash = crypto.createHash('sha256').update(combined).digest('hex');
 
     const cacheKey = `novalistically-scene:chapter-${String(info.chapter).padStart(2, '0')}:${eventId}:${chainHash}`;

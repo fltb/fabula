@@ -170,6 +170,22 @@ function findAssertion(
   return assertions[assertionId];
 }
 
+/** True only when the resolved narrator may expose this assertion's surface. */
+function canProjectAssertionSurface(
+  assertion: NarratorAssertion,
+  narratorProfile: NarratorProfile | undefined,
+  focalizerId: string | undefined,
+): boolean {
+  if (
+    narratorProfile === undefined ||
+    narratorProfile.id !== assertion.narrationBoundary.narratorId
+  ) {
+    return false;
+  }
+  if (narratorProfile.access === 'full') return true;
+  return focalizerId !== undefined && assertion.narrationBoundary.focalizerId === focalizerId;
+}
+
 /**
  * Apply a single disclosure action to a DiscourseState.
  * Mutates the state in place for efficiency — caller must clone/hold
@@ -182,12 +198,11 @@ function applyAction(
 ): void {
   switch (action.type) {
     case 'reveal': {
-      // §5: reveal truth-boundary hard rule — MUST be true
+      // §5: when a catalog is supplied, reveal truth-boundary is a hard rule.
+      // Sparse ledgers without a matching assertion retain legacy replay semantics.
       const assertion = findAssertion(assertions, action.assertionId);
-      if (assertion && assertion.truthBoundary !== true) {
-        // Hard fail: cannot reveal assertion without truthBoundary=true
-        // Return silently — the caller should validate before calling
-        return;
+      if (assertion !== undefined && assertion.truthBoundary !== true) {
+        throw new Error(`Reveal requires truthBoundary=true for assertion "${action.assertionId}"`);
       }
       if (!state.reveals.includes(action.assertionId)) {
         state.reveals.push(action.assertionId);
@@ -310,8 +325,10 @@ export function replayDiscourseState(
   ledger: PlannedDiscourseLedger,
   position: DiscoursePosition,
   branch: string,
+  narratorAssertions: Record<string, NarratorAssertion> = {},
 ): DiscourseState {
   const state = emptyDiscourseState(branch);
+  state.assertions = { ...narratorAssertions };
   state.ledgerHash = ledger.hash;
 
   // Validate position bounds
@@ -321,9 +338,9 @@ export function replayDiscourseState(
     );
   }
 
-  // Collect assertions from entries that reference them
-  // (assertions must be pre-loaded via the ledger context)
-  const assertions: Record<string, NarratorAssertion> = {};
+  // Assertion definitions are loaded separately from the ledger. Keep them in
+  // the replayed state so truth boundaries and Pass 1 claim surfaces are usable.
+  const assertions = state.assertions;
 
   // Filter entries for this branch up to position
   const relevantEntries = ledger.entries.filter(
@@ -354,13 +371,7 @@ export function replayDiscourseState(
 }
 
 /**
- * Build a Pass 1 DiscourseContextProjection from a DiscourseState.
- *
- * ONLY includes (§12):
- * - planned reader reveals
- * - open claims
- * - visible hint surfaces (NEVER target proposition)
- * - accessible claims (focalizer/narrator)
+ * - accessible claims whose narrator/focalizer boundary permits their surface
  * - authorized targets
  * - active withholding policies
  *
@@ -368,7 +379,8 @@ export function replayDiscourseState(
  */
 export function projectDiscourseContext(
   state: DiscourseState,
-  narratorProfiles: Record<string, NarratorProfile>,
+  narratorProfile: NarratorProfile | undefined,
+  focalizerId: string | undefined,
   authorizedAssertions: string[],
 ): DiscourseContextProjection {
   // Visible hints — surface only, NEVER target (§12)
@@ -380,11 +392,15 @@ export function projectDiscourseContext(
       state: h.state,
     }));
 
-  // Accessible claims — filter by narrator access
+  // Accessible claims require both the scene authorization and narrator boundary.
   const accessibleClaims = state.openClaims
     .filter((assertionId) => {
       const assertion = state.assertions[assertionId];
-      return assertion !== undefined && authorizedAssertions.includes(assertionId);
+      return (
+        assertion !== undefined &&
+        authorizedAssertions.includes(assertionId) &&
+        canProjectAssertionSurface(assertion, narratorProfile, focalizerId)
+      );
     })
     .map((assertionId) => {
       const assertion = state.assertions[assertionId];

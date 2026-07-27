@@ -2,7 +2,7 @@
 // Novalistically — Context Compiler & Render Types (§7.4.6, §7.4.17)
 // ============================================================================
 
-import type { NarratorProfile } from './discourse.js';
+import type { DiscourseContextProjection, NarratorProfile } from './discourse.js';
 import type { EntityId } from './entity.js';
 import type { ThematicIntent } from './idea-ir.js';
 import type { RuleDefinition } from './rule.js';
@@ -42,6 +42,8 @@ export interface ContextPackage {
   activeRules?: RuleDefinition[];
   /** Resolved narrator profile for this event, when narratorProfileRef is set (S6c). */
   narratorProfile?: NarratorProfile;
+  /** Pass 1-safe disclosure state derived from the planned discourse ledger. */
+  discourseProjection?: DiscourseContextProjection;
   /** Discourse replay error message, when replayDiscourseState() threw for this event (DISCOURSE-1). */
   discourseReplayError?: string;
 }

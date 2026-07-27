@@ -59,6 +59,36 @@ node scripts/drc-stress-report.mjs fixtures/dream-of-red-chamber
 
 ## 边界与未动项
 
-- 未改任何 validator 语义（DeferredResolver 校准按 review 裁定仅作提案，见上）。
+- 第一轮未改 validator 语义；continuation 已批准并落地 DeferredResolver 校准（`contradicted`=error，`absent`/missing precondition hints=warning），见下文。
 - `docs/todos/annotation.md`（C2/C3 人工标注）未动。
 - `bench-data/`、`fixtures/*/output/`、`.nova/` 均 gitignore，不入库；语料由 acquire 脚本可重现（含 .cache 断点）。
+
+## Continuation — 2026-07-27 13:51 CST
+
+### Approved calibration and observability changes
+
+- `DeferredResolver` now preserves `contradicted` as an error while treating `absent` and missing Pass-2 coverage for **precondition** `narrativeHint` as warnings. This distinguishes an active prose contradiction from a scene not restating prior context.
+- Raw response persistence now happens inside `RenderPipeline.renderScene()` for both fresh and cache-hit results, before return. Payloads carry `validation`、`needsReview`、`attempts`、`released` and `pass2Rejection`; API/output writers preserve the same shape rather than overwriting it.
+- Dry-run writes the actual Pass-1 prompt to `.nova/dry-runs/{eventId}_prompt.md`.
+- `drc-stress-report.mjs` supports absolute fixture/stability paths, actual nested scene output (`scenes/chapter-NN/`), response fallback, conservative release reporting, and stability fallback. New deterministic tests cover all of these paths.
+
+### Measured rerun
+
+- Full DRC cache-resume/replay produced 36 complete response payloads: **35 released**, E01 rejected (`released=false`, `needsReview=true`, `attempts=6`) for an actual conflict validation result. `validate` remains 0 errors (692 warnings).
+- Canonical response-backed batch report: `docs/report/drc-stress-report-run2.md` — 36 persisted prose, `EXCERPT_INVALID=0`, mean source-bigram containment **5.3%**, minimum **2.1%**.
+- Stability samples: E05/E21/E25 × 3, every logged `cache=false` after its event cache was explicitly removed. Nine payload hashes differ; the combined stability report records **9 pairwise comparisons**, mean containment **37.7%**: `docs/report/drc-stress-report-final.md`.
+- Intermediate stability scene artifacts were isolated before regenerating the canonical output; final batch metrics are response-backed (`With render(scene)=0`, `With response fallback=36`), not contaminated by single-event smoke outputs.
+
+### Final verification
+
+```bash
+npm run typecheck
+npx vitest run --exclude '**/e2e.test.ts' # 122 files / 2003 tests
+cd fixtures/dream-of-red-chamber && node ../../packages/cli/dist/index.js validate # 0 errors
+node scripts/drc-stress-report.mjs fixtures/dream-of-red-chamber \
+  --stability fixtures/dream-of-red-chamber/output/stability/all/run1,fixtures/dream-of-red-chamber/output/stability/all/run2,fixtures/dream-of-red-chamber/output/stability/all/run3
+```
+
+### Operating rule
+
+No unchanged timeout retry. Before any retry after timeout/failure, make and record a material change to code, configuration, input, or recovery strategy. Stability samples are distinct measurements: they clear the corresponding event cache and write to unique run directories.

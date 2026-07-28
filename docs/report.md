@@ -2,7 +2,7 @@
 
 **Date**: 2026-07-24  
 **Source Plan**: `docs/TODO.md` Stage 3 (lines 203-355)  
-**Sub-plans**: `docs/todos/stage-3.md` + 9 group files
+**Sub-plans**: `docs/todos/stage-3-2026-07-27.md` + 9 group files
 
 ---
 

@@ -14,6 +14,7 @@ Novalistically 是一个叙事工程系统：结构化 YAML 定义 → 事件溯
 
 - **[YAML 格式](./reference/yaml-format/)** — 事件、角色、规则、关系和场景定义的 schema
 - **[渲染流水线](./reference/pipeline.md)** — Pass 1 散文（温度 0.8）+ Pass 2 分析（温度 0.3，种子 42）+ 缓存 + 验证 + 熔断器
+- **[完整接线图](./reference/wiring.md)** — YAML→内部模型、Storage/state、strict discourse、job/contract、cache/Pass 1/Pass 2、release、surface wave 与 artifact ownership 的 current wiring
 - **[Pass 2 分析](./reference/pass-2-analysis.md)** — 验证器消费的 14 个模块的 AnalysisResult JSON
 - **[验证器](./reference/validators.md)** — 全部 20 个验证器：每个检查的内容、哪些消费 Pass 2 分析、哪些在渲染前运行
 - **[状态管理](./reference/state-management.md)** — 事件溯源、DAG 因果边、ReplayEngine、快照、拓扑排序

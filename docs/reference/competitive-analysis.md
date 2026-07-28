@@ -76,7 +76,7 @@ P4 — 补充（开发链、历史 QA）
 | 摘要层级 | L0（每章）+ L1（每 ~100 章） | 仅 per-scene（可扩展 L1） |
 | 上下文编译 | Packet Compiler（P0-P4） | ContextCompiler（5 层优先级） |
 | 信息源 | PostgreSQL Canon Store | Event Sourcing + YAML |
-| 叙事模型 | 线性章节流 | DAG 因果边 + 分支叙事 |
+| 叙事模型 | 线性章节流 | DAG 因果边 + runtime/API branch primitives；authoring YAML 目前未接入 story branch |
 | 渲染方式 | 串行（人审批→下一章） | 批量并行（滑动窗口） |
 | 缓存 | 无 | 哈希链全依赖缓存 |
 | 验证 | 单 QA agent（LLM） | 18 Validator + Pass 2 分析 |
@@ -171,12 +171,17 @@ Composer agent 按相关性从 truth files 中检索内容，只拉取当前章�
 ```
 闪回：E6 的 storyTime 在 E4 之前，但 causal edges 正确追溯因果前驱
 并行线：E3a（camille 线）和 E3b（seraphine 线）共存于同一 DAG
-分支汇聚：E4 的 causalPredecessors = [E2, E3]（多前驱自然支持）
+多前驱：E4 的 causalPredecessors = [E2, E3]（DAG 自然支持）
 ```
 
-### ② 原生分支叙事
+### ② EventFile-local authoring-level game dialogue tree
 
-从 schema 层（`BranchSet` / `BranchPath`）到 replay 层（`filterScenesByBranchPath()`）到 validator 层（`BranchMergeValidator`）完整实现。对标系统中**不存在**。
+`choices[] { id, label, description, targetEvent, effects? }` 现在直接属于严格的 `E*.yaml`
+合同。compiler 要求单 root、无 merge、无 cycle、全可达树，并将 choice effects 编译为
+branch-scoped synthetic transition；selected route replay 因而使用 canonical state，而不是 prose
+或 session reducer。`renderGameDialogueTree()` 以 representative leaf path 渲染所有 node 一次，
+再交付带 YAML mapping 与 target anchors 的 `output/dialogue-tree.md`。遗留
+`branches.yaml` / `branch_points.yaml` 仍不解析。详见 [分支游戏对话](./yaml-format/branch.md)。
 
 ### ③ 批量并行渲染 + 哈希链缓存
 

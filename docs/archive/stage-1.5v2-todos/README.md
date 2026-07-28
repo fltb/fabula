@@ -7,10 +7,10 @@
 - 从基础（Wave 1）到可选特性（Wave 6）
 - 39 项工作，涵盖错误类型体系、schema 迁移、EpistemicLedger 布线、trace/logging/config、validator 修复、schema 统一、类型清理、Style/MultiModel/Evidence/Impact/Reporter 特性、Summarizer/Interaction/Plugin/Agent/EventBus/Volume 可选特性
 
-正式的验收报告见 `docs/report/stage-1.5v2-acceptance.md`，包含全部轨道的关键交付、测试轨迹和代码规模数据。
+正式的验收报告见 `docs/report/stage-1.5v2-acceptance-2026-07-22.md`，包含全部轨道的关键交付、测试轨迹和代码规模数据。
 
 ## 参考文件
 
-- 验收报告：`docs/report/stage-1.5v2-acceptance.md`
+- 验收报告：`docs/report/stage-1.5v2-acceptance-2026-07-22.md`
 - 当前 TODO 状态：`docs/TODO.md`
-- 审计报告：`docs/audits/stage-1.5v2-audit.md`
+- 审计报告：`docs/audits/stage-1.5v2-audit-2026-07-24.md`

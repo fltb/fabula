@@ -30,6 +30,11 @@ facts          Fact[]
 `compileStoryBoundaries()` 是渲染编排使用的唯一 story-state 边界：initial writes 独立输入，不合成 `system:genesis` narrative event；它产出 causal order、每个 event 的 `stateBefore` 与 final state。空 BranchPath 只包含 `{ type: "all" }` 事件，绝不泄漏 path-scoped scenes。
 
 最小 diamond 只支持显式 `{ type: "all" }` trunk 与 `{ type: "paths" }` lane；DAG 和 assembler 共享同一 `includesPath()` predicate。无 decision 的 linear run 绝不包含 lane-scoped event；选定 lane 绝不读取另一 lane 的 provider 或 scene。
+> **YAML game tree**：production `EventFile.choices` 现在编译为 rooted tree。mapper 对每个
+> authored event、ordinary Fact 与 synthetic choice transition 写入 derived `BranchSet`；tree
+> replay 因而在 selected leaf 中只读取本 lane 的 Fact provider。explicit
+> `causalPredecessors` 同样必须在 selected branch 内存在。外部 `branches.yaml` 与
+> `branchPoint` 仍未解析；详见 [分支游戏对话](./yaml-format/branch.md)。
 
 快照优化尚未证明与因果边界等价；阶段一受限路径不得把快照作为 render state 的来源。
 

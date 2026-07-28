@@ -60,7 +60,7 @@ YAML files (.yaml)
 ┌────────────────────┐
 │    Assembler       │  SceneCollector → NarrativeSorter → ProseConcatenator
 │  (assembler/)      │  → assembleNovel() → output/novel.md
-│                    │  支持章节感知、分支感知
+│                    │  支持章节感知；branch filtering 仅为 runtime/API 层，当前 YAML 输入仍线性
 └────────────────────┘
 ```
 
@@ -106,7 +106,7 @@ Monorepo 包含三个包，按以下顺序构建：`core → cli`（bench 独立
 ### `state/` — 事件溯源与状态管理
 
 - **`EventStore`** — 仅追加的事件日志。`commit()` 添加事件，`getAll()` 返回所有事件，`load()` 用于初始化。
-- **`ReplayEngine`** — 按 DAG 拓扑顺序重放事件以重建 `WorldState`。按分支路径过滤。应用前置条件、后置条件、知识变更、关系影响、规则影响、线索进展。
+- **`ReplayEngine`** — 按 DAG 拓扑顺序重放事件以重建 `WorldState`。可按 `BranchPath` 过滤程序构造的 branch-scoped event；当前 YAML mapper 只产生 `{ type: 'all' }` scope。
 - **`SnapshotEngine`** — 在 `snapshot_interval`（默认 20）处创建快照。`findNearest(n)` 用于从快照优化的重放。
 - **`StateManager`** — 协调 EventStore + SnapshotEngine + ReplayEngine。
 - **`buildCausalEdges()` / `topologicalSort()`** — 通过后置条件→前置条件匹配构建 DAG。导出为 DOT 和 Mermaid 格式。
@@ -167,7 +167,7 @@ Monorepo 包含三个包，按以下顺序构建：`core → cli`（bench 独立
 - **`SceneCollector`** — 收集已提交的场景散文。
 - **`NarrativeSorter`** — 按 `narrativeOrder` 排序。
 - **`ProseConcatenator`** — 将场景拼接成一部完整小说。
-- **`assembleNovel()`** — 完整组装流水线。支持章节感知、分支感知。
+- **`assembleNovel()`** — 完整组装流水线。支持章节感知，并可按已写 scene metadata 的 runtime/API branch scope 过滤；当前 authoring YAML 不产生该 scope。
 - **`countWords()`** — 字数统计工具。
 
 ### `reporter/` — 报告写入

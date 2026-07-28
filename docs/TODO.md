@@ -1,7 +1,7 @@
 # TODO.md - 系统的整体计划
 
 > **前身**: `docs/archive/TODO-stage-1-1.5.md` (1420 lines, stage 1 + 1.5 complete)
-> **阶段 2 部分验收**: `docs/audits/stage-2-corpus-audit.md`
+> **阶段 2 部分验收**: `docs/audits/stage-2-corpus-audit-2026-07-24.md`
 > **基准项目**: `fixtures/dream-of-red-chamber/` — 12 events, 40 characters, 8 locations, 5 rules
 
 ---
@@ -48,7 +48,7 @@ PROJECT.md 设计 5 层 IR：Idea IR → Story IR → Scene IR → Event IR → 
 
 信息丢失的根因是 IR 层级建少了（2/5），不是 YAML 表达力不足。
 
-> **2026-07-26 校正**：以上"IR 层级缺口"分析已过期（写于 wave1 提交之前）。直接对源码校验（非文档信任）：Idea IR（`types/idea-ir.ts` + `schemas/idea-ir.ts`，已接入 `schemas/project.ts`，`fixtures/zhu-fu/nova.yaml` 有真实 `thematicIntent` 内容）和 Story IR（`ThreadDefinition.structuralFunction`/`actantModel`，zhu-fu fixture 的 4 条 Thread 有真实 Propp 标签）均已建成并接入真实 fixture。Scene IR（Genette `sceneType`/`discourseMode`/`arcPosition` 等元数据字段）已广泛使用。真实剩余缺口：PROJECT.md 未命名的第 6 层 Discourse/Syuzhet（`types/discourse.ts`：`DiscourseState`/`NarratorProfile`/`PlannedDiscourseLedger`，类型+回放引擎+测试齐全，但 fixtures 下零使用，是死代码路径）。另外，`docs/report/stage-3-audit.md` 声称的 S6（Duration/Frequency/Mood/Voice/Order 五维度）"5/5 ✅"同样过期——五个字段在 `NarrativeEvent` 上确实存在，但 grep 全仓库找不到任何消费者（无 validator、无 context compiler、无 prompt assembler 读取），是与 Discourse/Syuzhet 同类的"死类型"。详见 `docs/todos/stage-3.md`、`docs/todos/base-narratology.md`。
+> **2026-07-26 校正**：以上"IR 层级缺口"分析已过期（写于 wave1 提交之前）。直接对源码校验（非文档信任）：Idea IR（`types/idea-ir.ts` + `schemas/idea-ir.ts`，已接入 `schemas/project.ts`，`fixtures/zhu-fu/nova.yaml` 有真实 `thematicIntent` 内容）和 Story IR（`ThreadDefinition.structuralFunction`/`actantModel`，zhu-fu fixture 的 4 条 Thread 有真实 Propp 标签）均已建成并接入真实 fixture。Scene IR（Genette `sceneType`/`discourseMode`/`arcPosition` 等元数据字段）已广泛使用。真实剩余缺口：PROJECT.md 未命名的第 6 层 Discourse/Syuzhet（`types/discourse.ts`：`DiscourseState`/`NarratorProfile`/`PlannedDiscourseLedger`，类型+回放引擎+测试齐全，但 fixtures 下零使用，是死代码路径）。另外，`docs/report/stage-3-audit-2026-07-24.md` 声称的 S6（Duration/Frequency/Mood/Voice/Order 五维度）"5/5 ✅"同样过期——五个字段在 `NarrativeEvent` 上确实存在，但 grep 全仓库找不到任何消费者（无 validator、无 context compiler、无 prompt assembler 读取），是与 Discourse/Syuzhet 同类的"死类型"。详见 `docs/todos/stage-3-2026-07-27.md`、`docs/todos/base-narratology-2026-07-26.md`。
 >
 > zhu-fu + 5 个变种 fixture（layer-minimal/pov-switch/branch-A/branch-B/discourse-reorder）已用真实 LLM（DeepSeek `deepseek-v4-flash`）跑通全链路验证（YAML → EntityMapper → StateManager → ContextCompiler → RenderPipeline Pass1+Pass2 → PostRenderValidation → Assembler）：5/6 全部成功（含 branch-A 之前用复用参考数据触发的误报，真实生成后已消失），branch-B 的 E5 被 PronounValidator + ConflictAnalysis 交叉校验正确拒绝（叙述者应为第一人称但 prose 未使用第一人称代词）——证明 release gate 在真实内容上确实生效，不只是理论机制。过程中发现并修复两个真实 bug：`api.ts` 的模型解析从不读取 `NOVALISTICALLY_AI_MODEL` 环境变量（硬编码回退到一个 Claude 模型名，导致对 DeepSeek 端点发起必然失败的请求）；`render.ts` 的 Pass 1 catch 块吞掉了真实失败原因，不像 Pass 2 catch 块那样正确写入 `errors[]`（导致 CLI 只显示"1 words"而看不到真实错误文本）。另外发现一个可观测性缺口：`render --all` 在多事件运行中没有增量进度输出，只能靠轮询 `.nova/render-cache/` 或等待整批结束才知道卡在哪个事件。
 

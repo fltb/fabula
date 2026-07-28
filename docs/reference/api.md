@@ -41,6 +41,8 @@
 | `PreRenderInput` | `types/validator.ts` | 渲染前验证器的输入：`{ event, worldState, events, entityRegistry, queryState, getKnowledge, getThreadProgress }` |
 | `WorldState` | `types/world.ts` | 当前状态：实体、关系、知识、线索、规则、事实 |
 | `ContextPackage` | `types/context.ts` | 为 LLM 渲染编译的 8 层上下文 |
+| `GameDialogueChoice` | `types/game-dialogue.ts` | EventFile-local 玩家选择：`id`、`label`、`description`、`targetEvent`、`effects` |
+| `CompiledGameDialogueTree` | `branch/game-dialogue-tree.ts` | leaf paths、event scopes、representative paths、synthetic choice transitions 与 source choices |
 
 ### 核心函数
 
@@ -52,6 +54,9 @@
 | `writeValidationReport(projectDir, report)` | `reporter/validation-reporter.ts` | 写入 `output/validation.md`，包含摘要和问题表格 |
 | `calculateISS(input)` | `iss/score.ts` | 计算各维度的实现状态评分（Implementation Status Score） |
 | `analyzeProjectImpact(oldPath, newPath)` | `api.ts` | 比较两个项目目录的 YAML 事件定义，按影响等级（Red/Yellow/Green）分类变更，检测下游事件。返回 `{ events, downstream }` |
+| `compileGameDialogueTree(events)` | `branch/game-dialogue-tree.ts` | 验证 EventFile-local choices tree 并生成 exact BranchPath / BranchSet / transition events；无 choices 返回 `null` |
+| `renderGameDialogueTree(opts)` | `api.ts` | 以每个 event 的 representative leaf path 渲染完整游戏树；所有 node accepted 后写 `output/dialogue-tree.md` |
+| `assembleGameDialogueTree(opts)` | `assembler/game-dialogue-tree.ts` | 只从 fully released scene documents 组装带 choice target anchors 的 dialogue tree |
 
 ### 存储抽象层
 

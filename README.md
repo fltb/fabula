@@ -92,7 +92,7 @@ npx vitest run --exclude '**/e2e.test.ts'
 |------|------|
 | `docs/TODO.md` | 活跃工作面（当前至 Stage 3，70+ 项） |
 | `docs/report.md` | Stage 3 实现报告 |
-| `docs/report/stage-3-audit.md` | 代码级交叉引用审计 |
+| `docs/report/stage-3-audit-2026-07-24.md` | 代码级交叉引用审计 |
 | `docs/reference/stage-3/` | 叙事学参考：Genette 审计、IR 层映射、现代小说 survey、annotation 指南 |
 | `docs/archive/PROJECT.md` | ⚠️ 历史——原始系统设计 |
 

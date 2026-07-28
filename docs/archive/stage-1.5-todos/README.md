@@ -3,8 +3,8 @@
 These 9 group sub-plan files were the working tracking documents for Stage 1.5 (33 architecture + engineering TODOs across 8 groups, 5 execution waves). All items are `[x]` with passing evidence.
 
 **Archived:** 2026-07-22
-**Acceptance report:** `docs/report/stage-1.5-acceptance.md`
-**Audit findings:** `docs/audits/stage-1.5-audit.md`
+**Acceptance report:** `docs/report/stage-1.5-acceptance-2026-07-22.md`
+**Audit findings:** `docs/audits/stage-1.5-audit-2026-07-22.md`
 
 ## Files
 
@@ -22,4 +22,4 @@ These 9 group sub-plan files were the working tracking documents for Stage 1.5 (
 
 ## Remaining active
 
-`docs/todos/corpus.md` — CORPUS-1..5 (Phase 2 external benchmark work). CORPUS-1 completed as Stage 2 entry point; CORPUS-2..5 require external fixtures not yet present in the repo.
+`docs/todos/corpus-2026-07-22.md` — CORPUS-1..5 (Phase 2 external benchmark work). CORPUS-1 completed as Stage 2 entry point; CORPUS-2..5 require external fixtures not yet present in the repo.

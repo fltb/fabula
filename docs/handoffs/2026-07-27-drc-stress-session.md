@@ -14,7 +14,7 @@
 - 9 个接线缺口全部修复：characterVoice、styleGuidance.avoid、emotionalValence、synopsis、emotionalArc beat、threadProgress.advancement、cast.onScreen 并入 snapshots、introduces 自动注册、新字段 `authorNotes: string[]`（纯透传）。
 - Prompt 卫生：JSON blob 剔除重复 `markdown` 字段（~15-20% token）；恒空 `unknownFacts`/`unresolvedTensions` 类型级删除；Pass 1 增加 `## World Rules` 区块。
 - 回归锁：`packages/core/tests/pipeline/expressiveness.test.ts`（每字段哨兵入 Pass 1 prompt + validator 消费表驱动断言）。
-- 审计报告：`docs/report/expressiveness-audit.md`（字段去向矩阵 + 29 项叙事技巧表达路径矩阵）。
+- 审计报告：`docs/report/expressiveness-audit-2026-07-26.md`（字段去向矩阵 + 29 项叙事技巧表达路径矩阵）。
 - Live 实证：zhu-fu 临时副本 E0 + authorNotes 指令"必须出现琉璃灯三字" → DeepSeek 渲染稿中 `琉璃灯` 出现 1 次（透传全链路打通）。mock-pass2 渲染 7/7 released 不回归。
 
 ### WS3 — Plugin 系统激活
@@ -37,14 +37,14 @@
 - 根因链：36 事件的 hint 型 precondition（本 session 按 DAG provider 规则从确定性 value 转换而来，共 119 条）→ Pass 2 `narrativeChecks` 大量未覆盖 → `DeferredResolver`（`packages/core/src/validator/deferred-resolver.ts:51-58`）把 **absent/missing 一律记 error** → 每场景 6-9 个 error → 全部 unreleased。
 - 链路本身工作正常的证据：E33 出现真实矛盾捕获（"前提要求探春对抄检浑然不觉，但散文显示她已提前得知"）——contradicted 判定有效。
 - 连带观察：`.nova/responses/{id}.json`（"full raw LLM response"）实际只在 release 通过时由 `buildAndWriteOutputs` 写盘（`packages/core/src/api.ts` release gate 分支）→ 拒绝时散文不落盘 → 压测报告 containment 全 N/A。`.nova/dry-runs/{id}_prompt.md` 也是文档承诺但无写入者（MCP reader 读空）。
-- 第一轮报告（36 行、EXCERPT_INVALID=0、渲染列全 N/A）：`fixtures/dream-of-red-chamber/output/stress-report.md`（output/ 被 gitignore，永久副本在 `docs/report/drc-stress-report-run1.md`）。
+- 第一轮报告（36 行、EXCERPT_INVALID=0、渲染列全 N/A）：`fixtures/dream-of-red-chamber/output/stress-report.md`（output/ 被 gitignore，永久副本在 `docs/report/drc-stress-report-run1-2026-07-27.md`）。
 
 ## 下一步（需要决策，按序建议）
 
 1. **观测性修复（建议先做，非语义变更）**：`.nova/responses` 改为无论 release 与否都写盘（或新增 `.nova/rejected/`），使压测在 gate 拒绝时仍可测 containment。同时补上 `.nova/dry-runs/{id}_prompt.md` 的缺失写入者。
 2. **DeferredResolver 严重度提案（需批准，全局语义变更）**：precondition 的 hint 检查 `contradicted` 保持 error；`absent`/缺失降为 warning（前提是"先前语境"，散文无义务复述）。postcondition/narrativeChecks 语义不变。附带更新 `deferred-resolver.test.ts` 两处 error 期望。
 3. 以上任一落地后重跑 live（约 80 次调用）+ 稳定性 3×3（E05/E21/E25）→ 报告补齐 containment 与稳定性节。
-4. `docs/todos/stage-3.md` 的 C1（live drc run）在 gate 语义决策后才能真正闭环。
+4. `docs/todos/stage-3-2026-07-27.md` 的 C1（live drc run）在 gate 语义决策后才能真正闭环。
 
 ## 验证命令
 
@@ -60,7 +60,7 @@ node scripts/drc-stress-report.mjs fixtures/dream-of-red-chamber
 ## 边界与未动项
 
 - 第一轮未改 validator 语义；continuation 已批准并落地 DeferredResolver 校准（`contradicted`=error，`absent`/missing precondition hints=warning），见下文。
-- `docs/todos/annotation.md`（C2/C3 人工标注）未动。
+- `docs/todos/annotation-2026-07-24.md`（C2/C3 人工标注）未动。
 - `bench-data/`、`fixtures/*/output/`、`.nova/` 均 gitignore，不入库；语料由 acquire 脚本可重现（含 .cache 断点）。
 
 ## Continuation — 2026-07-27 13:51 CST
@@ -75,7 +75,7 @@ node scripts/drc-stress-report.mjs fixtures/dream-of-red-chamber
 ### Measured rerun
 
  - Full DRC cache-resume/replay produced 36 complete response payloads: **35 released**, E01 rejected (`released=false`, `needsReview=true`, `attempts=6`). **Pre-fix caveat:** This rejection was the conflict resolution-type validation bug — `resolutionType: setup` (E01 is `person_vs_fate` with opening-setup prose, `resolutionAchieved: false`) was incorrectly classified by ConflictValidator as requiring resolution. The prose was appropriate for its role; the rejection was a false-positive bug, not a genuine prose conflict failure. Metrics below are pre-fix evidence.
-- Stability samples: E05/E21/E25 × 3, every logged `cache=false` after its event cache was explicitly removed. Nine payload hashes differ; the combined stability report records **9 pairwise comparisons**, mean containment **37.7%**: `docs/report/drc-stress-report-final.md`.
+- Stability samples: E05/E21/E25 × 3, every logged `cache=false` after its event cache was explicitly removed. Nine payload hashes differ; the combined stability report records **9 pairwise comparisons**, mean containment **37.7%**: `docs/report/drc-stress-report-final-2026-07-27.md`.
 - Intermediate stability scene artifacts were isolated before regenerating the canonical output; final batch metrics are response-backed (`With render(scene)=0`, `With response fallback=36`), not contaminated by single-event smoke outputs.
 
 ### Final verification
@@ -96,5 +96,5 @@ No unchanged timeout retry. Before any retry after timeout/failure, make and rec
 
 - `ConflictValidator` 已将 `setup` 与 `ongoing` 归入非收束类型；E01 的 Pass 2 `primaryType: person_vs_fate` / `resolutionAchieved: false` 现被正确接受。
 - 完整命令 `node ../../packages/cli/dist/index.js render E01 --all --model deepseek-v4-flash` 退出码 0：36 个场景全部 materialize（36 `.md`、36 metadata、36 render request），并生成 `fixtures/dream-of-red-chamber/output/novel.md`（236,081 bytes，2,022 lines）。
-- 后修复报告 `docs/report/drc-stress-report-final.md`：36 scene-backed prose、36 release、`EXCERPT_INVALID=0`；历史 run2/stability 报告已标记为 pre-fix，不再表达最终 E01 release 状态。
+- 后修复报告 `docs/report/drc-stress-report-final-2026-07-27.md`：36 scene-backed prose、36 release、`EXCERPT_INVALID=0`；历史 run2/stability 报告已标记为 pre-fix，不再表达最终 E01 release 状态。
 

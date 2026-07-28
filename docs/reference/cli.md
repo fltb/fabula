@@ -22,10 +22,11 @@ npx nova --help        # 或全局链接
 
 | 命令 | 描述 |
 |---------|-------------|
-| `project init <name>` | 创建新的项目目录，包含 definitions/、chapters/、scenes/、.nova/ 目录结构、branch_points.yaml 模板、nova.yaml 配置和 state_initial.yaml |
+| `project init <name>` | 创建 definitions/、`chapters/chapter_01/E1.yaml`、scenes/、.nova/ 和启动配置。E1 comments 展示 event-local `choices`；不再生成 `branches/branch_points.yaml`。 |
 | `validate` | 通过 `ResultAggregator.validateAll()` + ISS 计算运行全部 18 个验证器。`--strict` 强制执行 ISS 阈值；`--event <id>` 验证单个事件 |
-| `render <event>` | 完整的 LLM 渲染管道（两轮：Pass 1 prose → Pass 2 结构化分析）。每轮输出分别写入 `scenes/chapter-NN/{eventId}.md`（prose）、`scenes/chapter-NN/{eventId}.yaml`（元数据）、`scenes/chapter-NN/{eventId}_render_request.yaml`（上下文）、`.nova/responses/{eventId}.json`（Pass 2 原始响应含 prose + 分析 artifact）。`--all` 渲染全部 authored event；`--dry-run` 只编译上下文；`--model` 覆盖模型。离线 deterministic run 必须显式传 `--provider mock-pass2 --reference-dir <approved-reference-data>`。mock 无 reference dir、未知 provider 或任一场未通过 release gate 都以非零退出。Release gate 要求：prose 非空、Pass 2 分析符合 schema、全部 18 个 validator 通过。支持交互式审批：C 级别（warning）问题可通过 `InteractionManager.recordWaiver()` 记录 signed waiver 后放行；S/X 级别（error）问题必须修复，不可豁免。当 `--all` 渲染所有 authored event 时，自动调用 assembleNovel() 生成 `output/novel.md`，每个场景恰好出现一次，验证文本计数完整性。`syst…
-| `assemble` | 通过 `assembleNovel()` 将已提交的场景组装到 `output/novel.md`；`--output` 指定自定义路径 |
+| `render <event>` | 完整的两轮 LLM 渲染。`--all` 渲染 selected route 的 authored EventFile；`--branch-path '<json>'` 必须是完整 leaf `BranchPath`。decision scene 的 accepted `.md` 由系统追加 deterministic `FABULA:PLAYER_CHOICES:v1` YAML block；raw prose、Pass 2 和 response artifact 不含该 block。`--dry-run` 只编译上下文；`--model` 覆盖模型。离线 deterministic run 必须显式传 `--provider mock-pass2 --reference-dir <approved-reference-data>`。 |
+| `render-tree` | 通过 `renderGameDialogueTree()` 渲染所有 event-local game-tree node 一次；拒绝 surface scheduling 和非 `main` discourse ledger。只有所有节点 accepted 时写 `output/dialogue-tree.md`，从不写 `output/novel.md`。支持 `--model`、`--provider`、`--reference-dir`、`--trace`、`--concurrency`。 |
+| `assemble` | 通过 `assembleNovel()` 将线性项目或 `--branch-path '<json>'` 选择的完整 leaf route 组装到 `output/novel.md`；`--output` 指定自定义路径。 |
 | `entity list [kind]` | 按类型筛选列出实体；`--status` 按渲染状态筛选事件 |
 | `entity show <id>` | 显示实体详情、状态和定义文件路径 |
 | `diff <event>` | 通过 `diffEvent()` 显示某事件的世界状态变化（前后对比） |
@@ -44,10 +45,10 @@ npx nova --help        # 或全局链接
 - `nova_iss` — 获取 ISS 评分维度
 - `nova_read_state` — 读取当前世界状态（实体级别或项目级别）
 - `nova_thread_status` — 线索进度，可选择按 ID 筛选
-- `nova_render` — 预演：编译上下文但不调用 LLM
-- `nova_render_scene` — 完整的 LLM 渲染 + 输出写入
-- `nova_assemble` — 从已渲染场景组装小说
-- `nova_review_*` — 列出、添加、解决、重新打开和升级审阅评论
+- `nova_render` — 预演：编译 context；可选完整 story `BranchPath`
+- `nova_render_scene` — 完整的 LLM 渲染 + 输出写入；可选完整 story `BranchPath`
+- `nova_render_tree` — 渲染所有 event-local game-tree node，返回 compiled tree、YAML-derived choices 与 dialogue-tree artifact
+- `nova_assemble` — 从已渲染场景组装线性或 selected-route novel；可选完整 story `BranchPath`
 
 所有 MCP 工具的结果以结构化 JSON 格式输出，并包含面向 LLM 代理的中文引导文本。
 

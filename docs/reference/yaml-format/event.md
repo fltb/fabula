@@ -24,6 +24,30 @@
 | `expectedPostconditions` | `Fact[]` | 事件发生后应为真的事实 |
 | `styleGuidance` | `StyleGuidance`（可选） | 供 LLM 使用的语调、氛围、角色声音、节奏指令 |
 
+### 玩家选择与游戏对话树
+
+`choices?` 直接写在 decision event 上；无 `choices` 的 event 是终端。显式 choices 必须非空且
+同 event 内 `id` 唯一。每个 choice 是 strict object：
+
+```yaml
+choices:
+  - id: accept_hunt
+    label: "Accept the hunt"
+    description: "Enter the jungle with a knife and three hours' head start."
+    targetEvent: E1a
+    effects:
+      - entity: hero
+        attribute: chose_hunt
+        value: true
+```
+
+`effects` 默认 `[]`，完全复用 `expectedPostconditions` 的 value / `narrativeHint` /
+`operation: unset` 互斥校验。`targetEvent` 必须存在且其 `storyTime` 严格晚于 decision；
+所有 choices 合成单 root、无 cycle、无 merge、全可达的 tree。`branchPoint`、`condition`、
+snake_case key 以及外部 `branches.yaml` / `branches/branch_points.yaml` 都不是支持的 alias。
+完整游戏树、derived `BranchPath`、synthetic transition 与交付格式见
+[分支游戏对话](./branch.md)。
+
 ### 新增字段（P0c/P0g）
 
 | 字段 | 类型 | 描述 |

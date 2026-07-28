@@ -1,0 +1,11 @@
+{
+  "label": "expanded",
+  "generatedAt": "2026-07-27T06:53:35.269Z",
+  "provider": "ai-sdk",
+  "model": "deepseek-v4-flash",
+  "pipeline": "renderNovel(eventId: all, isolated fixture copy, no runtime cache)",
+  "events": 7,
+  "released": 7,
+  "rejected": [],
+  "errors": []
+}

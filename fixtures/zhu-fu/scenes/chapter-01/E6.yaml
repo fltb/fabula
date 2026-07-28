@@ -1,10 +1,8 @@
 narrativeOrder: 7
 event: E6
-prose_source: cache
-model_used: null
-rendered_at: 2026-07-20T05:03:22.198Z
+prose_source: llm
 word_count: 985
 text_count_version: 1
-branchExistence:
-  type: all
-edit_history: []
+rendered_at: 2026-07-27T06:24:36.399Z
+edit_history: [{"action":"llm_generated","timestamp":"2026-07-27T06:24:36.402Z"}]
+branchExistence: {"type":"all"}

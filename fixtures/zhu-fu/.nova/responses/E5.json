@@ -1,6 +1,270 @@
 {
   "prose": "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮着洗器皿，蒸糕点，心里却一直想着那件心事。她听人说，像她这样嫁过两个男人的女人，死后要被阎罗王锯成两半分给两个男人。她害怕极了，于是用她做工积攒的工钱，到土地庙去捐了一条门槛，当作自己的替身，给千人踏万人跨，以赎罪过。捐了门槛之后，她精神格外爽快，眼光也分外有神。冬至那天，她坦然地去拿酒杯和筷子——'你放着罢，祥林嫂！'四婶慌忙大声说。她像是受了炮烙似的缩手，脸色同时变作灰黑，也不再去取烛台。这一回她的变化非常大，第二天，不但眼睛凹陷下去，连精神也更不济了。",
-  "timestamp": "2026-07-20T05:07:51.850Z",
+  "timestamp": "2026-07-27T06:24:36.402Z",
   "cacheHit": false,
-  "errors": []
+  "errors": [],
+  "analysis": {
+    "eventId": "E5",
+    "analysis": {
+      "narrativeChecks": [],
+      "knowledgeChecks": [],
+      "ruleChecks": [],
+      "postconditions": {
+        "covered": [],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "foreshadowingDeployed": [],
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [],
+      "tenseDetected": "past",
+      "characterReferences": [
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四婶"
+          ]
+        },
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "xianglins_wife",
+          "feature": "appearance",
+          "declared": "眼睛凹陷_精神不济",
+          "evidence": "眼睛凹陷下去，连精神也更不济了",
+          "matchLevel": "exact"
+        }
+      ],
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": false
+      },
+      "quality": {
+        "proseScore": 9,
+        "maxScore": 10,
+        "strengths": [
+          "climactic scene",
+          "emotional devastation"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 300
+      },
+      "threadProgressAchieved": [
+        "T2: spiritual_crisis",
+        "T4: rejection_climax"
+      ]
+    }
+  },
+  "validation": {
+    "passed": true,
+    "errors": [],
+    "warnings": [
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "xianglins_wife",
+        "attribute": "spiritual_state",
+        "message": "Postcondition \"xianglins_wife.spiritual_state=broken\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "spiritual_state"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "xianglins_wife",
+        "attribute": "has_donated_threshold",
+        "message": "Postcondition \"xianglins_wife.has_donated_threshold=true\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "has_donated_threshold"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "xianglins_wife",
+        "attribute": "work_capability",
+        "message": "Postcondition \"xianglins_wife.work_capability=diminished\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "work_capability"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "xianglins_wife",
+        "attribute": "appearance",
+        "message": "Postcondition \"xianglins_wife.appearance=grey_black_face_sunken_eyes_white_hair_wooden_puppet\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "appearance"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "xianglins_wife",
+        "attribute": "emotionalState",
+        "message": "Postcondition \"xianglins_wife.emotionalState=spiritually_devastated\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "emotionalState"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "fourth_aunt",
+        "attribute": "attitude_toward_xianglins_wife",
+        "message": "Postcondition \"fourth_aunt.attitude_toward_xianglins_wife=increasingly_annoyed\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "attitude_toward_xianglins_wife"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "xianglins_wife",
+        "attribute": "social_status",
+        "message": "Postcondition \"xianglins_wife.social_status=undefined\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "social_status"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "liu_ma",
+        "attribute": "effect_on_xianglins_wife",
+        "message": "Postcondition \"liu_ma.effect_on_xianglins_wife=undefined\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "effect_on_xianglins_wife"
+        }
+      },
+      {
+        "validator": "foreshadowing",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "her_inevitable_expulsion",
+        "attribute": "foreshadowing",
+        "message": "Foreshadowing \"her_inevitable_expulsion\" not detected in prose: \"四婶开始觉得她越来越不像样——'祥林嫂怎么这样了？倒不如那时不留她'。驱逐已是时间问题。\"",
+        "fixSuggestion": "Ensure foreshadowing is present in the rendered prose",
+        "fixAction": "edit_file",
+        "fixTarget": {
+          "file": "",
+          "field": "foreshadowing"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "xianglins_wife",
+        "attribute": "aliases",
+        "message": "Unknown name \"她\" used for character \"xianglins_wife\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "她"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "fourth_master_lu",
+        "attribute": "aliases",
+        "message": "Unknown name \"四婶\" used for character \"fourth_master_lu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "四婶"
+        }
+      },
+      {
+        "validator": "thread_progress",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "T1",
+        "attribute": "threadProgress",
+        "message": "Thread \"T1\" not advanced in prose: \"柳妈的地狱恐吓→祥林嫂捐门槛→冬至祭祀被喝止——这是祥林嫂精神崩溃的完整链条。她从恐惧到希望（捐了门槛）再到彻底绝望（捐了也没用），故事的核心悲剧在此完成。\"",
+        "fixSuggestion": "Ensure the scene advances this narrative thread.",
+        "fixAction": "edit_file",
+        "fixTarget": {
+          "file": "",
+          "field": "threadProgress"
+        }
+      },
+      {
+        "validator": "thread_progress",
+        "severity": "warning",
+        "event": "E5",
+        "entity": "T3",
+        "attribute": "threadProgress",
+        "message": "Thread \"T3\" not advanced in prose: \"看客对祥林嫂的态度完成了从同情到嘲弄的转变——他们专拿她的额疤取乐，还故意逗她讲阿毛。她的痛苦已经彻底沦为鲁镇人的消遣。\"",
+        "fixSuggestion": "Ensure the scene advances this narrative thread.",
+        "fixAction": "edit_file",
+        "fixTarget": {
+          "file": "",
+          "field": "threadProgress"
+        }
+      }
+    ],
+    "infos": []
+  },
+  "needsReview": false,
+  "attempts": 1,
+  "released": true
 }

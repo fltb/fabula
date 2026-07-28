@@ -131,6 +131,7 @@ greyLines:
       - eventId: E6
         semanticAccumulation: "祝福大典照常进行——祥林嫂的死不构成任何打扰"
         narrativeOrder: 7
+discourseCursor: 2
 authorNotes:
   - "本场以《祝福》原文为唯一表述基准：优先保持 sourceContext 中原句的语序、关键词、对白与留白。"
   - "保留“我可不知道”的死亡留白；不得描写死亡现场或为任何人物补写悔意。结尾以原文爆竹、雪花与天地圣众收束。"

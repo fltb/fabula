@@ -1,0 +1,15 @@
+{
+  "label": "calibrated",
+  "generatedAt": "2026-07-27T07:00:47.678Z",
+  "provider": "ai-sdk",
+  "model": "deepseek-v4-flash",
+  "pipeline": "renderNovel(eventId: all, isolated fixture copy, no runtime cache)",
+  "events": 7,
+  "released": 6,
+  "rejected": [
+    "E6"
+  ],
+  "errors": [
+    "Release gate rejected: E6: Attempt 1 failed validation (1 errors), round 1, strategy: retry | Pass 2 attempt 2 failed: ai-sdk error: No object generated: could not parse the response."
+  ]
+}

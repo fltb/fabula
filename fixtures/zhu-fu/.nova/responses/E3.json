@@ -1,6 +1,231 @@
 {
   "prose": "有一年年底，祥林嫂的婆婆来了。她是一个精明强干的女人，一进门就和四婶说要带祥林嫂回去。原来祥林嫂的丈夫死了之后，她的婆婆要把她卖掉，嫁给深山里的贺老六。祥林嫂不愿意，逃了出来，到鲁镇做工。但她婆婆终于找到了她。祥林嫂被婆婆带走后，在半路上被几个人按住，塞进轿子，抬到了深山里的贺家坳。她一路上哭骂，但没有人理睬她。拜天地的时候，她一头撞在香案角上，头上碰了一个大窟窿，鲜血直流。人们都说她'出格'，但到底还是成了亲。",
-  "timestamp": "2026-07-20T05:07:51.850Z",
+  "timestamp": "2026-07-27T06:24:36.402Z",
   "cacheHit": false,
-  "errors": []
+  "errors": [],
+  "analysis": {
+    "eventId": "E3",
+    "analysis": {
+      "narrativeChecks": [],
+      "knowledgeChecks": [],
+      "ruleChecks": [],
+      "postconditions": {
+        "covered": [],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "foreshadowingDeployed": [],
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [],
+      "tenseDetected": "past",
+      "characterReferences": [
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她"
+          ]
+        },
+        {
+          "entityId": "mother_in_law",
+          "namesUsed": [
+            "婆婆"
+          ]
+        },
+        {
+          "entityId": "he_laoliu",
+          "namesUsed": [
+            "贺老六"
+          ]
+        }
+      ],
+      "appearanceChecks": [],
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": false
+      },
+      "quality": {
+        "proseScore": 7,
+        "maxScore": 10,
+        "strengths": [
+          "narrative pace"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 250
+      },
+      "threadProgressAchieved": [
+        "T4: forced_remarriage"
+      ]
+    }
+  },
+  "validation": {
+    "passed": true,
+    "errors": [],
+    "warnings": [
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E3",
+        "entity": "xianglins_wife",
+        "attribute": "location",
+        "message": "Postcondition \"xianglins_wife.location=he_family_hollow\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E3",
+        "entity": "xianglins_wife",
+        "attribute": "marital_status",
+        "message": "Postcondition \"xianglins_wife.marital_status=remarried\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "marital_status"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E3",
+        "entity": "xianglins_wife",
+        "attribute": "appearance",
+        "message": "Postcondition \"xianglins_wife.appearance=forehead_scar_from_altar_collision\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "appearance"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E3",
+        "entity": "xianglins_wife",
+        "attribute": "has_ah_mao",
+        "message": "Postcondition \"xianglins_wife.has_ah_mao=true\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "has_ah_mao"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E3",
+        "entity": "xianglins_wife",
+        "attribute": "emotionalState",
+        "message": "Postcondition \"xianglins_wife.emotionalState=content_with_new_family\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "emotionalState"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E3",
+        "entity": "he_laoliu",
+        "attribute": "marital_status",
+        "message": "Postcondition \"he_laoliu.marital_status=married\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "marital_status"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E3",
+        "entity": "mother_in_law",
+        "attribute": "financial_state",
+        "message": "Postcondition \"mother_in_law.financial_state=gained_80000_cash_from_sale\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "financial_state"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E3",
+        "entity": "xianglins_wife",
+        "attribute": "social_status",
+        "message": "Postcondition \"xianglins_wife.social_status=undefined\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "social_status"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E3",
+        "entity": "old_mrs_wei",
+        "attribute": "role_in_kidnapping",
+        "message": "Postcondition \"old_mrs_wei.role_in_kidnapping=inside_agent\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "role_in_kidnapping"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E3",
+        "entity": "xianglins_wife",
+        "attribute": "aliases",
+        "message": "Unknown name \"她\" used for character \"xianglins_wife\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "她"
+        }
+      },
+      {
+        "validator": "thread_progress",
+        "severity": "warning",
+        "event": "E3",
+        "entity": "T1",
+        "attribute": "threadProgress",
+        "message": "Thread \"T1\" not advanced in prose: \"祥林嫂被婆婆卖掉，以八十千的价钱从劳动力变成了婚姻商品。但她短暂交了好运：贺老六有力气、没婆婆、有房子，年底生下阿毛——这是她一生最好的时光。\"",
+        "fixSuggestion": "Ensure the scene advances this narrative thread.",
+        "fixAction": "edit_file",
+        "fixTarget": {
+          "file": "",
+          "field": "threadProgress"
+        }
+      }
+    ],
+    "infos": []
+  },
+  "needsReview": false,
+  "attempts": 1,
+  "released": true
 }

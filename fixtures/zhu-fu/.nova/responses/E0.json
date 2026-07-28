@@ -1,6 +1,205 @@
 {
   "prose": "旧历的年底毕竟最像年底，村镇上不必说，就在天空中也显出将到新年的气象来。灰白色的沉重的晚云中间时时发出闪光，接着一声钝响，是送灶的爆竹；近处燃放的可就更强烈了，震耳的大音还没有息，空气里已经散满了幽微的火药香。我是正在这一夜回到我的故乡鲁镇的。虽说故乡，然而已没有家，所以只得暂寓在鲁四老爷的宅子里。他是我的本家，比我长一辈，应该称之曰'四叔'，是一个讲理学的老监生。他见面时先是寒暄几句，然后便说我'胖了'，接着便大骂其新党。但我知道，这并非借题骂我：因为他所骂的还是康有为。但是，谈话是总不投机的了，于是不多久，我便一个人剩在书房里。第二天我起得很迟，午饭之后，出去看了几个本家和朋友；第三天也照样。他们也都没有什么大改变，单是老了些。天色愈阴暗了，下午竟下起雪来，雪花大的有梅花那么大，满天飞舞，将鲁镇笼罩在一片死寂之中。我坐在窗前，向窗外望去——这时突然看见一个女人，从镇东头的河边走来，她全白头发，脸上黄中带黑，瘦削不堪，木刻似的，只有那眼珠间或一轮，还可以表示她是一个活物。她一手提着竹篮，内中一个破碗，空的；一手拄着一支比她更长的竹竿，下端开了裂：她分明已经纯乎是一个乞丐了。",
-  "timestamp": "2026-07-20T05:07:51.850Z",
-  "cacheHit": true,
-  "errors": []
+  "timestamp": "2026-07-27T06:24:36.402Z",
+  "cacheHit": false,
+  "errors": [],
+  "analysis": {
+    "eventId": "E0",
+    "analysis": {
+      "narrativeChecks": [],
+      "knowledgeChecks": [],
+      "ruleChecks": [],
+      "postconditions": {
+        "covered": [
+          "encountered_xianglins_wife"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "foreshadowingDeployed": [
+        "soul_question_unresolved",
+        "her_death_imminent"
+      ],
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [],
+      "tenseDetected": "past",
+      "characterReferences": [
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四叔",
+            "鲁四老爷"
+          ]
+        },
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "一个女人",
+            "祥林嫂"
+          ]
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "xianglins_wife",
+          "feature": "appearance",
+          "declared": "white_hair_haggard_wooden_face",
+          "evidence": "全白头发，脸上黄中带黑，瘦削不堪，木刻似的",
+          "matchLevel": "exact"
+        }
+      ],
+      "conflictAnalysis": {
+        "primaryType": "person_vs_self",
+        "resolutionAchieved": false
+      },
+      "quality": {
+        "proseScore": 8,
+        "maxScore": 10,
+        "strengths": [
+          "atmospheric description",
+          "character introduction"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 450
+      },
+      "threadProgressAchieved": [
+        "T2: soul_question_opened",
+        "T3: narrator_moral_weakness"
+      ]
+    }
+  },
+  "validation": {
+    "passed": true,
+    "errors": [],
+    "warnings": [
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E0",
+        "entity": "narrator",
+        "attribute": "knowledge",
+        "message": "Postcondition \"narrator.knowledge=encountered_xianglins_wife\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "knowledge"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E0",
+        "entity": "narrator",
+        "attribute": "emotionalState",
+        "message": "Postcondition \"narrator.emotionalState=guilty_uneasy\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "emotionalState"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E0",
+        "entity": "xianglins_wife",
+        "attribute": "spiritual_state",
+        "message": "Postcondition \"xianglins_wife.spiritual_state=undefined\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "spiritual_state"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E0",
+        "entity": "narrator",
+        "attribute": "knowledge_of_xianglins_wife",
+        "message": "Postcondition \"narrator.knowledge_of_xianglins_wife=saw_her_as_beggar\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "knowledge_of_xianglins_wife"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E0",
+        "entity": "narrator",
+        "attribute": "location",
+        "message": "Postcondition \"narrator.location=fourth_master_lu_house\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E0",
+        "entity": "xianglins_wife",
+        "attribute": "emotionalState",
+        "message": "Postcondition \"xianglins_wife.emotionalState=undefined\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "emotionalState"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E0",
+        "entity": "xianglins_wife",
+        "attribute": "aliases",
+        "message": "Unknown name \"一个女人\" used for character \"xianglins_wife\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "一个女人"
+        }
+      },
+      {
+        "validator": "thread_progress",
+        "severity": "warning",
+        "event": "E0",
+        "entity": "T4",
+        "attribute": "threadProgress",
+        "message": "Thread \"T4\" not advanced in prose: \"外面的祝福忙乱与河边凄凉相遇形成对比——全镇人都在忙着迎福神，而祥林嫂正在走向死亡。\"",
+        "fixSuggestion": "Ensure the scene advances this narrative thread.",
+        "fixAction": "edit_file",
+        "fixTarget": {
+          "file": "",
+          "field": "threadProgress"
+        }
+      }
+    ],
+    "infos": []
+  },
+  "needsReview": false,
+  "attempts": 1,
+  "released": true
 }

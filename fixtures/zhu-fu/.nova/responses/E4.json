@@ -1,6 +1,254 @@
 {
   "prose": "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。她头上扎着白头绳，脸色青黄，但两颊上已经消失了血色。她见人便讲起她日夜不忘的悲惨故事：'我真傻，真的。我单知道雪天是野兽在山坳里没有食吃，会到村里来；我不知道春天也会有。我一清早起来就开了门，拿小篮盛了一篮豆，叫我们的阿毛坐在门槛上剥豆去。他是很听话的，我的话句句听。他就出去了。他出去了——到了下午我就寻不见了——各处去一问——都没有。到了下半天，几个人去寻到山坳里一看，只见刺柴上挂着一只他的小鞋。大家都说，完了，怕是遭了狼了。再进去；果然，他躺在草窠里，肚里的五脏已经都给吃空了，可怜他手里还紧紧的捏着那只小篮呢。'她反复地讲这个故事，起初人们还陪出眼泪，后来就厌烦了。",
-  "timestamp": "2026-07-20T05:07:51.850Z",
+  "timestamp": "2026-07-27T06:24:36.402Z",
   "cacheHit": false,
-  "errors": []
+  "errors": [],
+  "analysis": {
+    "eventId": "E4",
+    "analysis": {
+      "narrativeChecks": [],
+      "knowledgeChecks": [],
+      "ruleChecks": [],
+      "postconditions": {
+        "covered": [],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "foreshadowingDeployed": [],
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [],
+      "tenseDetected": "past",
+      "characterReferences": [
+        {
+          "entityId": "xianglins_wife",
+          "namesUsed": [
+            "祥林嫂",
+            "她"
+          ]
+        },
+        {
+          "entityId": "narrator",
+          "namesUsed": [
+            "我"
+          ]
+        },
+        {
+          "entityId": "fourth_master_lu",
+          "namesUsed": [
+            "四叔"
+          ]
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "xianglins_wife",
+          "feature": "appearance",
+          "declared": "白头绳_脸色青黄_两颊失色",
+          "evidence": "头上扎着白头绳，脸色青黄，但两颊上已经消失了血色",
+          "matchLevel": "exact"
+        }
+      ],
+      "conflictAnalysis": {
+        "primaryType": "person_vs_fate",
+        "resolutionAchieved": false
+      },
+      "quality": {
+        "proseScore": 9,
+        "maxScore": 10,
+        "strengths": [
+          "emotional impact",
+          "repetition as device"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 350
+      },
+      "threadProgressAchieved": [
+        "T2: grief_narrative"
+      ]
+    }
+  },
+  "validation": {
+    "passed": true,
+    "errors": [],
+    "warnings": [
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "xianglins_wife",
+        "attribute": "location",
+        "message": "Postcondition \"xianglins_wife.location=fourth_master_lu_house\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "xianglins_wife",
+        "attribute": "marital_status",
+        "message": "Postcondition \"xianglins_wife.marital_status=widowed_twice\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "marital_status"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "xianglins_wife",
+        "attribute": "has_ah_mao",
+        "message": "Postcondition \"xianglins_wife.has_ah_mao=false\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "has_ah_mao"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "xianglins_wife",
+        "attribute": "emotionalState",
+        "message": "Postcondition \"xianglins_wife.emotionalState=grief_stricken\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "emotionalState"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "xianglins_wife",
+        "attribute": "appearance",
+        "message": "Postcondition \"xianglins_wife.appearance=pale_face_no_red_cheeks_tear_stains_dull_eyes\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "appearance"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "he_laoliu",
+        "attribute": "status",
+        "message": "Postcondition \"he_laoliu.status=dead\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "status"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "fourth_aunt",
+        "attribute": "attitude_toward_xianglins_wife",
+        "message": "Postcondition \"fourth_aunt.attitude_toward_xianglins_wife=pitying_but_cautious\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "attitude_toward_xianglins_wife"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "xianglins_wife",
+        "attribute": "social_status",
+        "message": "Postcondition \"xianglins_wife.social_status=undefined\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "social_status"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "xianglins_wife",
+        "attribute": "storytelling_mode",
+        "message": "Postcondition \"xianglins_wife.storytelling_mode=undefined\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "storytelling_mode"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "xianglins_wife",
+        "attribute": "aliases",
+        "message": "Unknown name \"她\" used for character \"xianglins_wife\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "她"
+        }
+      },
+      {
+        "validator": "thread_progress",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "T1",
+        "attribute": "threadProgress",
+        "message": "Thread \"T1\" not advanced in prose: \"贺老六死于伤寒，阿毛被狼叼走，大伯收房驱人——她生命中唯一的好日子结束了。她回到鲁镇，但这次是被社会视为'再寡'的污秽之人。\"",
+        "fixSuggestion": "Ensure the scene advances this narrative thread.",
+        "fixAction": "edit_file",
+        "fixTarget": {
+          "file": "",
+          "field": "threadProgress"
+        }
+      },
+      {
+        "validator": "thread_progress",
+        "severity": "warning",
+        "event": "E4",
+        "entity": "T3",
+        "attribute": "threadProgress",
+        "message": "Thread \"T3\" not advanced in prose: \"鲁镇人第一次听阿毛故事时掉泪，但很快便厌烦了——'后来全镇的人们几乎都能背诵她的话，一听到就烦厌得头痛'。她的悲剧变成了别人的'趣味'。\"",
+        "fixSuggestion": "Ensure the scene advances this narrative thread.",
+        "fixAction": "edit_file",
+        "fixTarget": {
+          "file": "",
+          "field": "threadProgress"
+        }
+      }
+    ],
+    "infos": []
+  },
+  "needsReview": false,
+  "attempts": 1,
+  "released": true
 }

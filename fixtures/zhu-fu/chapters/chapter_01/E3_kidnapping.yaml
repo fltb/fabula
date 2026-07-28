@@ -144,6 +144,7 @@ narrativeChecklist:
     - dimension: "话语控制"
       description: "'出格'一词——反抗被规范化为反常，叙事者的价值观通过标签渗透"
       required: false
+discourseCursor: 2
 authorNotes:
   - "本场以《祝福》原文为唯一表述基准：优先保持 sourceContext 中原句的语序、关键词、对白与留白。"
   - "白篷船、花轿与卫老婆子的叙述必须保留原作的平淡转述；不得用电影式追逐、旁白谴责或新增反抗细节替代。"

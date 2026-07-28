@@ -1,0 +1,461 @@
+{
+  "prose": "史湘云正说得兴头，宝玉的脸色已经渐渐沉了下去。她仍不觉，只管侃侃而谈：“还是宝姐姐明白事理，常劝你，你倒不耐烦。若也像她那样多读些书，多会会那些为官做宰的人，也不枉生在公侯之家……”\n\n宝玉蓦地起身，把湘云吓了一跳。他脸上那股子不耐烦的神色已经遮掩不住，又碍着情面不便发作，只冷笑了一声道：“姑娘请到别处坐坐罢，我这里仔细污了你那知经济、讲仕途的学问。”湘云涨红了脸，正要分辨，宝玉已抢过话头，声音里带着一种斩钉截铁的决绝：“林妹妹从不说这些混账话！她若也说这些混账话，我早和她生分了。”\n\n窗外，黛玉的脚步猛地钉住了。\n\n她原是听说湘云来了，心想宝玉素来与湘云亲密，不免又吃些暗醋，便悄悄走来想觑个究竟。谁知刚一走近，便听见这几句话。那句话像一道闪电，直劈进她心底最柔软的地方——他竟当着人的面，这样夸她；他竟把她与她们截然分开，说她“从不说混账话”。霎时间，又惊、又喜、又悲、又叹。惊的是宝玉竟将她抬得这样高；喜的是自己果然不曾看错人，他竟是个知己；悲的是既为知己，偏又有那“金玉”之说横亘其间；叹的是父母早逝，无人为她主张，纵有这份心意，终究前路茫茫。\n\n她怔怔地站在窗外，眼泪止不住地落了下来。正要转身离去，却见宝玉已从屋里出来，一眼便望见了她。她忙背过身去拭泪，又怕被他看见，偏已是迟了。\n\n宝玉见她满面泪痕，心头一紧，赶上前来道：“妹妹怎么又哭了？”说着，便伸手替她拭泪。黛玉往后一退，低了头道：“我做什么哭？我好好的。”声音里却带着哽咽。\n\n宝玉哪里肯信，只望着她，目光里满是焦灼。黛玉被他看得心慌，抬眼道：“你死了倒不值什么，只是丢下了什么金、什么麒麟的，可怎么好？”\n\n这话一出口，宝玉的脸色立时变了。他知道她又在拈酸吃醋，心里又急又痛，一张脸涨得通红，额上的青筋都暴了起来。他一把抓住她的手腕，力气大得让黛玉挣了一下没有挣开。\n\n“你放心。”他只说了三个字。\n\n黛玉怔住了。这三个字像是一记重锤，又像是一泓甘泉，直直地砸进她心里，又缓缓地浸透了她浑身的血脉。她抬头望着他，目光里满是惊疑。他从未说过这样的话，从未用这样的语气——那样笃定，那样沉静，像是千言万语都凝结在这三个字里了。\n\n宝玉见她怔怔地望着自己，便又道：“你皆因总是不放心的原故，才弄了一身病。但凡宽慰些，这病也不得一日重似一日。”\n\n黛玉低了头，一句话也说不出来。良久，她轻轻点了点头，挣开他的手，转身便走，脚步却比来时轻快了许多。\n\n宝玉痴痴地站在原地，目送她的背影转过假山，消失在碧桃花影里。他出了一会儿神，心里有千言万语翻涌着，恨不得追上去再说些什么，却又觉得话已说尽——那三个字，已是他能给的全部了。\n\n他正出神间，袭人赶了来，手里拿着一把扇子，道：“二爷怎么站在这里？天这样热，仔细中了暑。”说着将扇子递过来。\n\n宝玉接过扇子，心绪却还在方才那一幕里翻腾。他望着袭人，恍惚间竟像是看见了黛玉——那眉眼，那身影，那站在窗外落泪的模样，不住地在他眼前晃。他心里的话堵在喉咙口，憋得难受，竟一把抓住袭人的手，叫道：“好妹妹——”\n\n袭人吓了一跳，忙要缩手，却已被他攥得紧紧的。\n\n“我为你也弄了一身的病——”宝玉的声音低下去，像是梦呓一般，“这睡里梦里也忘不了你！”\n\n袭人的脸刷地白了。\n\n她呆呆地望着宝玉，只见他目光虚浮，脸色潮红，分明是把另外一个人看成了自己。那句话像一根冰刺，直直扎进她的心里——睡里梦里也忘不了——这哪里是对她说的！这分明是对林姑娘说的！\n\n她的手在他掌心里冰凉，身体却发起抖来。她想抽手，又想喊醒他，又不敢出声。一阵风过，满院的碧桃花簌簌落下几片，打着旋儿落在她脚边。她只觉得天旋地转，脑子里只有四个字反反复复地响着——睡里梦里，睡里梦里。",
+  "timestamp": "2026-07-27T06:14:32.496Z",
+  "cacheHit": true,
+  "errors": [],
+  "analysis": {
+    "eventId": "E24",
+    "analysis": {
+      "narrativeChecks": [
+        {
+          "entityId": "scene",
+          "attribute": "time_period",
+          "hint": "Season and time of day consistent with story time offset (140 days after move to garden, likely summer)",
+          "evidence": "袭人道：‘天这样热，仔细中了暑。’",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "jiabaoyu",
+          "attribute": "character_state",
+          "hint": "Location in Yihong Court, emotional state of disgust at career talk",
+          "evidence": "宝玉的脸色已经渐渐沉了下去……他脸上那股子不耐烦的神色已经遮掩不住",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "lindaiyu",
+          "attribute": "character_state",
+          "hint": "Location outside window, emotional state of joy and sorrow",
+          "evidence": "黛玉的脚步猛地钉住了……又惊、又喜、又悲、又叹",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "shixiangyun",
+          "attribute": "character_state",
+          "hint": "Location in Yihong Court, urging Baoyu to pursue career",
+          "evidence": "史湘云正说得兴头……只管侃侃而谈",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "xiren",
+          "attribute": "character_state",
+          "hint": "Arrives to give fan, later hears Baoyu's misdirected confession",
+          "evidence": "袭人赶了来，手里拿着一把扇子……脸刷地白了",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator_omniscient",
+          "attribute": "voice_formality",
+          "hint": "Literary, semi-classical Chinese style with mixed vernacular",
+          "evidence": "那句话像一道闪电，直劈进她心底最柔软的地方",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "scene",
+          "attribute": "discourse_balance",
+          "hint": "Primarily dialogue interspersed with narrative description and internal thought",
+          "evidence": "Balanced between characters' speech and narrator's description/analysis",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator_omniscient",
+          "attribute": "voice_anachronism",
+          "hint": "No anachronistic language or concepts",
+          "evidence": "All vocabulary and phrasing consistent with 18th-century Chinese novel style",
+          "matchLevel": "exact"
+        }
+      ],
+      "knowledgeChecks": [],
+      "ruleChecks": [],
+      "postconditions": {
+        "covered": [
+          "jiabaoyu.understanding_of_love (implicitly confirmed via '你放心')",
+          "lindaiyu.emotional_state = released_from_jealousy",
+          "xiren.knowledge_of_baodai_love",
+          "jiabaoyu.relationship_with_lindaiyu (deepened)"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "foreshadowingDeployed": [],
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "黛玉悄悄走来想觑个究竟的原因为‘又吃些暗醋’——虽合理但非规范直接给出",
+          "severity": "minor"
+        },
+        {
+          "detail": "袭人内心活动‘她想抽手，又想喊醒他，又不敢出声’——全知叙述允许",
+          "severity": "minor"
+        }
+      ],
+      "tenseDetected": "past",
+      "characterReferences": [
+        {
+          "entityId": "shixiangyun",
+          "namesUsed": [
+            "史湘云",
+            "湘云",
+            "姑娘"
+          ]
+        },
+        {
+          "entityId": "jiabaoyu",
+          "namesUsed": [
+            "宝玉",
+            "二爷"
+          ]
+        },
+        {
+          "entityId": "lindaiyu",
+          "namesUsed": [
+            "林妹妹",
+            "黛玉",
+            "妹妹"
+          ]
+        },
+        {
+          "entityId": "xiren",
+          "namesUsed": [
+            "袭人"
+          ]
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "lindaiyu",
+          "feature": "face",
+          "declared": "罥烟眉，含情目",
+          "evidence": "文中未直接描写外貌，但通过动作和神态暗示（‘满面泪痕’等）",
+          "matchLevel": "absent"
+        },
+        {
+          "entityId": "jiabaoyu",
+          "feature": "face",
+          "declared": "面若中秋之月，色如春晓之花",
+          "evidence": "文中未直接描写外貌，但通过动作和神态暗示（‘脸色潮红’等）",
+          "matchLevel": "absent"
+        }
+      ],
+      "conflictAnalysis": {
+        "primaryType": "person_vs_self",
+        "resolutionAchieved": true
+      },
+      "quality": {
+        "proseScore": 9,
+        "maxScore": 10,
+        "strengths": [
+          "情感表达细腻，内心独白动人",
+          "对话自然，符合人物性格",
+          "场景过渡流畅，误会桥段巧妙",
+          "语言风格贴近原著"
+        ],
+        "weaknesses": [
+          "稍显冗长，个别句子可精简",
+          "部分心理描写略直白"
+        ],
+        "estimatedWordCount": 680
+      },
+      "threadProgressAchieved": [
+        "T1",
+        "T2",
+        "T4"
+      ],
+      "durationDetected": "scene",
+      "frequencyDetected": "singulative",
+      "voiceDetected": {
+        "level": "extradiegetic",
+        "relation": "heterodiegetic"
+      },
+      "anachronyDetected": "none",
+      "focalizationDetected": "zero"
+    }
+  },
+  "validation": {
+    "passed": true,
+    "errors": [],
+    "warnings": [
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "jiabaoyu",
+        "attribute": "location",
+        "message": "Narrative hint precondition for jiabaoyu.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "lindaiyu",
+        "attribute": "location",
+        "message": "Narrative hint precondition for lindaiyu.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "shixiangyun",
+        "attribute": "location",
+        "message": "Narrative hint precondition for shixiangyun.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "jiabaoyu",
+        "attribute": "emotional_state",
+        "message": "Narrative hint precondition for jiabaoyu.emotional_state is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "emotional_state"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "jiabaoyu",
+        "attribute": "location",
+        "message": "Narrative hint precondition for jiabaoyu.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "lindaiyu",
+        "attribute": "location",
+        "message": "Narrative hint precondition for lindaiyu.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "shixiangyun",
+        "attribute": "location",
+        "message": "Narrative hint precondition for shixiangyun.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "jiabaoyu",
+        "attribute": "emotional_state",
+        "message": "Narrative hint precondition for jiabaoyu.emotional_state is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "emotional_state"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "shixiangyun",
+        "attribute": "aliases",
+        "message": "Unknown name \"史湘云\" used for character \"shixiangyun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "史湘云"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "shixiangyun",
+        "attribute": "aliases",
+        "message": "Unknown name \"湘云\" used for character \"shixiangyun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "湘云"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "shixiangyun",
+        "attribute": "aliases",
+        "message": "Unknown name \"姑娘\" used for character \"shixiangyun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "姑娘"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "jiabaoyu",
+        "attribute": "aliases",
+        "message": "Unknown name \"二爷\" used for character \"jiabaoyu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "二爷"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "lindaiyu",
+        "attribute": "aliases",
+        "message": "Unknown name \"林妹妹\" used for character \"lindaiyu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "林妹妹"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "lindaiyu",
+        "attribute": "aliases",
+        "message": "Unknown name \"黛玉\" used for character \"lindaiyu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "黛玉"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "lindaiyu",
+        "attribute": "aliases",
+        "message": "Unknown name \"妹妹\" used for character \"lindaiyu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "妹妹"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "xiren",
+        "attribute": "aliases",
+        "message": "Unknown name \"袭人\" used for character \"xiren\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "袭人"
+        }
+      },
+      {
+        "validator": "appearance",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "lindaiyu",
+        "message": "Missing appearance detail: \"face\" for \"lindaiyu\" — declared as \"罥烟眉，含情目\" but not found in prose",
+        "fixSuggestion": "Add a visual description of face to the scene prose where lindaiyu appears.",
+        "fixAction": "edit_file",
+        "fixTarget": {
+          "file": "",
+          "value": "罥烟眉，含情目"
+        }
+      },
+      {
+        "validator": "appearance",
+        "severity": "warning",
+        "event": "E24",
+        "entity": "jiabaoyu",
+        "message": "Missing appearance detail: \"face\" for \"jiabaoyu\" — declared as \"面若中秋之月，色如春晓之花\" but not found in prose",
+        "fixSuggestion": "Add a visual description of face to the scene prose where jiabaoyu appears.",
+        "fixAction": "edit_file",
+        "fixTarget": {
+          "file": "",
+          "value": "面若中秋之月，色如春晓之花"
+        }
+      }
+    ],
+    "infos": [
+      {
+        "validator": "conflict",
+        "severity": "info",
+        "event": "E24",
+        "entity": "system",
+        "attribute": "resolutionType",
+        "message": "Pass 2 indicates conflict resolution was achieved, but no resolutionType is declared for this scene",
+        "fixSuggestion": "Consider adding a resolutionType to document how this conflict wraps up.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "resolutionType"
+        }
+      }
+    ]
+  },
+  "needsReview": false,
+  "attempts": 0,
+  "released": true
+}

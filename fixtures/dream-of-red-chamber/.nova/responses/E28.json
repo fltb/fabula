@@ -1,0 +1,583 @@
+{
+  "prose": "那秋爽斋的宴，是天上才有的排场。四面雕栏外，芭蕉翠得欺霜，梧桐叶大如掌，衬着远山近水，竟不似凡间院落。晓翠堂上，金碧辉煌，杯盘碗碟皆是上用的官窑，亮晶晶照得人脸发晕。\n\n鸳鸯早得了凤姐的暗号，手里捏着令盅，笑道：“酒令大如军令，今儿老祖宗在座，咱们不论尊卑，都要依令而行。说不上来的，罚酒一大杯。”说着便把令盅递到刘姥姥跟前。\n\n刘姥姥已知是凤姐鸳鸯做局要她出丑，却故意装疯卖傻，接过令盅，嘴里唠叨着：“我们乡下人闲了也常吃酒，可没这些花哨规矩。姑娘说怎么的，我依着就是了。”一面说，一面把个脑袋摇得拨浪鼓似的，头上那几朵绢花乱抖。\n\n鸳鸯便道：“左边‘大四’是个人。”刘姥姥听了，想了半日，把手一拍，笑道：“这有什么难的！——是个庄家人罢。”众人听了，已是哄然一笑。鸳鸯又道：“中间‘三四’绿配红。”刘姥姥道：“大火烧了毛毛虫。”众人笑成一片。鸳鸯忍着笑又道：“右边‘么四’真好看。”刘姥姥道：“一个萝卜一头蒜。”众人更是笑得前仰后合。鸳鸯最后道：“凑成便是一枝花。”刘姥姥两手比划着，大声道：“花儿落了结个大倭瓜——”\n\n这话未说完，满堂炸开了锅。\n\n史湘云撑不住，一口茶都喷了出来，笑得直拍桌子，那点子茶水溅了一地。林黛玉伏在桌上，笑得岔了气，一面揉着胸口，一面拿帕子掩着嘴，脸都涨红了。宝玉早笑得滚到贾母怀里，贾母搂着他，自己也笑得眼泪都出来了，嘴里直说：“我的儿，仔细笑岔了气！”王夫人笑得只是用手指着凤姐儿，却说不出一句话来。薛姨妈也撑不住，口里的茶喷了探春一裙子。探春手里的饭碗都合在迎春身上，迎春哎哟一声，却也跟着笑。惜春离了座，拉着她奶母叫揉一揉肠子。底下站着的丫鬟婆子们，有的笑弯了腰，有的蹲在地上，有的偷偷擦眼泪，只不敢放声罢了。\n\n凤姐和鸳鸯两个，更是笑得打跌。凤姐一面笑一面指着刘姥姥道：“姥姥，你这一句，倒把咱们家的花都笑谢了！”刘姥姥却一本正经地道：“这有什么好笑的？我们乡下种倭瓜，可不就是这个理儿！春天开花，秋天结瓜，天经地义的事。你们城里人，连这也不知道？”说着还摇头晃脑，做出一副正经模样，越发惹得众人笑了个不住。\n\n鸳鸯强忍着笑，又斟了一杯酒递过去道：“姥姥说得极好，该吃一杯。”刘姥姥接过酒，仰头一饮而尽，咂咂嘴道：“好酒！比我们村里的烧刀子强多了。不过我们那烧刀子，冬天喝了暖和身子，一锄头下去，地都能刨三尺深呢。”众人听了，又是一阵笑。\n\n贾母笑得缓过气来，指着鸳鸯和凤姐道：“我把你们两个促狭鬼，明儿叫你们也学姥姥说一句，看你们说得上来说不来！”鸳鸯笑道：“我们哪有姥姥这本事，姥姥说这些本色的，才是真有趣，比那些装腔作势的强百倍呢。”\n\n刘姥姥便道：“老太太夸奖了。我们乡下人，只会说乡下话。如今老太太带着我见了世面，回去也能跟老姐妹们说道说道，说我在你们府上吃了这样的山珍海味，说了这样的笑话，够我念叨一辈子了。”\n\n众人听她说得诚恳，又见她虽然粗鄙却也不失几分真趣，反倒添了几分敬重。宝玉此时从贾母怀里坐起身来，眼睛亮晶晶地望着刘姥姥，心里想：这老婆子虽是个村野之人，倒比那些装模作样的强得多，说的每句话都带着土地的味儿，比我们这些人的酸文假醋鲜活多了。\n\n一时宴罢，残席撤下，众人仍是意犹未尽。那窗外的秋光正好，天高云淡，一只孤雁掠过天际，往南飞去。",
+  "timestamp": "2026-07-27T06:14:32.496Z",
+  "cacheHit": true,
+  "errors": [],
+  "analysis": {
+    "eventId": "E28",
+    "analysis": {
+      "narrativeChecks": [
+        {
+          "entityId": "scene_setting",
+          "attribute": "time_period",
+          "hint": "秋光正好，天高云淡",
+          "evidence": "那窗外的秋光正好，天高云淡",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "jiamu",
+          "attribute": "character_state",
+          "hint": "mood: delighted",
+          "evidence": "贾母搂着他，自己也笑得眼泪都出来了，嘴里直说：'我的儿，仔细笑岔了气！'",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "wangxifeng",
+          "attribute": "character_state",
+          "hint": "intention: 打趣刘姥姥",
+          "evidence": "鸳鸯早得了凤姐的暗号",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "liulaolao",
+          "attribute": "character_state",
+          "hint": "location: 荣国府",
+          "evidence": "那秋爽斋的宴...晓翠堂上",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "liulaolao",
+          "attribute": "voice_formality",
+          "hint": "村言俚语，粗鄙可笑",
+          "evidence": "大火烧了毛毛虫\n一个萝卜一头蒜\n花儿落了结个大倭瓜",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "shixiangyun",
+          "attribute": "pronoun_consistency",
+          "hint": "gender: 女 → 她",
+          "evidence": "史湘云撑不住，一口茶都喷了出来",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "lindaiyu",
+          "attribute": "pronoun_consistency",
+          "hint": "gender: 女 → 她",
+          "evidence": "林黛玉伏在桌上，笑得岔了气",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "jiabaoyu",
+          "attribute": "pronoun_consistency",
+          "hint": "gender: 男 → 他",
+          "evidence": "宝玉早笑得滚到贾母怀里",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "liulaolao",
+          "attribute": "voice_anachronism",
+          "hint": "无时代错误",
+          "evidence": "大火烧了毛毛虫 等语，符合农村语境",
+          "matchLevel": "exact"
+        }
+      ],
+      "knowledgeChecks": [],
+      "ruleChecks": [],
+      "postconditions": {
+        "covered": [
+          "jiamu.emotionalState = delighted",
+          "jiabaoyu.knowledge = saw_liulaolaos_wit",
+          "yuanyang.relationshipWithLiulaolao (implied closeness)"
+        ],
+        "dropped": [
+          "liulaolao.status = rewarded_and_honored (未明确赏赐)",
+          "miaoyu.attitude (未出现)"
+        ]
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "foreshadowingDeployed": [],
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "一只孤雁掠过天际，往南飞去",
+          "severity": "minor"
+        }
+      ],
+      "tenseDetected": "past",
+      "characterReferences": [
+        {
+          "entityId": "jiamu",
+          "namesUsed": [
+            "贾母",
+            "老太太"
+          ]
+        },
+        {
+          "entityId": "liulaolao",
+          "namesUsed": [
+            "刘姥姥",
+            "姥姥"
+          ]
+        },
+        {
+          "entityId": "yuanyang",
+          "namesUsed": [
+            "鸳鸯"
+          ]
+        },
+        {
+          "entityId": "wangxifeng",
+          "namesUsed": [
+            "凤姐"
+          ]
+        },
+        {
+          "entityId": "jiabaoyu",
+          "namesUsed": [
+            "宝玉",
+            "我的儿"
+          ]
+        },
+        {
+          "entityId": "lindaiyu",
+          "namesUsed": [
+            "林黛玉",
+            "黛玉"
+          ]
+        },
+        {
+          "entityId": "shixiangyun",
+          "namesUsed": [
+            "史湘云",
+            "湘云"
+          ]
+        },
+        {
+          "entityId": "wangfuren",
+          "namesUsed": [
+            "王夫人"
+          ]
+        },
+        {
+          "entityId": "xueyima",
+          "namesUsed": [
+            "薛姨妈"
+          ]
+        },
+        {
+          "entityId": "tanchun",
+          "namesUsed": [
+            "探春"
+          ]
+        },
+        {
+          "entityId": "yingchun",
+          "namesUsed": [
+            "迎春"
+          ]
+        },
+        {
+          "entityId": "xichun",
+          "namesUsed": [
+            "惜春"
+          ]
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "liulaolao",
+          "feature": "头上插花",
+          "declared": "头上插花",
+          "evidence": "头上那几朵绢花乱抖",
+          "matchLevel": "exact"
+        }
+      ],
+      "conflictAnalysis": {
+        "primaryType": "none",
+        "resolutionAchieved": true
+      },
+      "quality": {
+        "proseScore": 8,
+        "maxScore": 10,
+        "strengths": [
+          "生动再现酒令场景和众人笑态",
+          "刘姥姥语言质朴有趣",
+          "细腻描写贾府豪华排场"
+        ],
+        "weaknesses": [
+          "缺少栊翠庵品茶片段",
+          "刘姥姥最终赏赐未明确"
+        ],
+        "estimatedWordCount": 850
+      },
+      "threadProgressAchieved": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "durationDetected": "scene",
+      "frequencyDetected": "singulative",
+      "voiceDetected": {
+        "level": "extradiegetic",
+        "relation": "heterodiegetic"
+      },
+      "anachronyDetected": "none",
+      "focalizationDetected": "zero"
+    }
+  },
+  "validation": {
+    "passed": true,
+    "errors": [],
+    "warnings": [
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "liulaolao",
+        "attribute": "location",
+        "message": "Narrative hint precondition for liulaolao.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "jiamu",
+        "attribute": "mood",
+        "message": "Narrative hint precondition for jiamu.mood is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "mood"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "daguanyuan",
+        "attribute": "state",
+        "message": "Narrative hint precondition for daguanyuan.state is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "state"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "wangxifeng",
+        "attribute": "intention",
+        "message": "Narrative hint precondition for wangxifeng.intention is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "intention"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "liulaolao",
+        "attribute": "status",
+        "message": "Postcondition \"liulaolao.status=rewarded_and_honored\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "status"
+        }
+      },
+      {
+        "validator": "causality",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "miaoyu",
+        "attribute": "attitude",
+        "message": "Postcondition \"miaoyu.attitude=undefined\" not covered in rendered prose.",
+        "fixSuggestion": "Add explicit mention of this state change in the scene.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "attitude"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "liulaolao",
+        "attribute": "location",
+        "message": "Narrative hint precondition for liulaolao.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "jiamu",
+        "attribute": "mood",
+        "message": "Narrative hint precondition for jiamu.mood is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "mood"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "daguanyuan",
+        "attribute": "state",
+        "message": "Narrative hint precondition for daguanyuan.state is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "state"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "wangxifeng",
+        "attribute": "intention",
+        "message": "Narrative hint precondition for wangxifeng.intention is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "intention"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "jiamu",
+        "attribute": "aliases",
+        "message": "Unknown name \"贾母\" used for character \"jiamu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "贾母"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "jiamu",
+        "attribute": "aliases",
+        "message": "Unknown name \"老太太\" used for character \"jiamu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "老太太"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "yuanyang",
+        "attribute": "aliases",
+        "message": "Unknown name \"鸳鸯\" used for character \"yuanyang\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "鸳鸯"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "jiabaoyu",
+        "attribute": "aliases",
+        "message": "Unknown name \"我的儿\" used for character \"jiabaoyu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "我的儿"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "lindaiyu",
+        "attribute": "aliases",
+        "message": "Unknown name \"林黛玉\" used for character \"lindaiyu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "林黛玉"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "lindaiyu",
+        "attribute": "aliases",
+        "message": "Unknown name \"黛玉\" used for character \"lindaiyu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "黛玉"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "shixiangyun",
+        "attribute": "aliases",
+        "message": "Unknown name \"史湘云\" used for character \"shixiangyun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "史湘云"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "shixiangyun",
+        "attribute": "aliases",
+        "message": "Unknown name \"湘云\" used for character \"shixiangyun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "湘云"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "wangfuren",
+        "attribute": "aliases",
+        "message": "Unknown name \"王夫人\" used for character \"wangfuren\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "王夫人"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "xueyima",
+        "attribute": "aliases",
+        "message": "Unknown name \"薛姨妈\" used for character \"xueyima\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "薛姨妈"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "tanchun",
+        "attribute": "aliases",
+        "message": "Unknown name \"探春\" used for character \"tanchun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "探春"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "yingchun",
+        "attribute": "aliases",
+        "message": "Unknown name \"迎春\" used for character \"yingchun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "迎春"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E28",
+        "entity": "xichun",
+        "attribute": "aliases",
+        "message": "Unknown name \"惜春\" used for character \"xichun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "惜春"
+        }
+      }
+    ],
+    "infos": [
+      {
+        "validator": "conflict",
+        "severity": "info",
+        "event": "E28",
+        "entity": "system",
+        "attribute": "resolutionType",
+        "message": "Pass 2 indicates conflict resolution was achieved, but no resolutionType is declared for this scene",
+        "fixSuggestion": "Consider adding a resolutionType to document how this conflict wraps up.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "resolutionType"
+        }
+      }
+    ]
+  },
+  "needsReview": false,
+  "attempts": 0,
+  "released": true
+}

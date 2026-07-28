@@ -1,0 +1,461 @@
+{
+  "prose": "那夜，大观园里的灯比平日亮得刺眼。\n\n王熙凤带着一群人，从潇湘馆起，挨院搜过去。林黛玉已经睡下，被唤起时只披了件外裳，倚在床边冷冷看着。紫鹃与雪雁开了箱子，任由翻检。王善保家的倒还规矩——到底黛玉是贾母的心尖儿上人，不敢太过造次。只是眼角眉梢压不住的得意，像是终于等到这一日了。\n\n到秋爽斋时，探春已经得了信。她并未睡下，秉烛坐在厅中，一身的端正。门大敞着，烛火映着她的脸，那双眼亮得骇人。\n\n“都搜明白了？”她问。\n\n王熙凤笑道：“三姑娘别多心，不过是奉了太太的命——”\n\n“既是太太的命，我这里自然要依。”探春站了起来，声音不高，却字字分明，“我的东西倒许你们搜阅——要想搜我的丫头，这却不能。”\n\n她命侍书、翠墨将箱笼尽数打开，自己却站在门口，目光扫过众人：“我原比众人歹毒，凡丫头所有的东西我都知道，都在我这里收着。你们不依，只管去回太太。说我违背了太太的命，该怎么处治，我去自领。”\n\n院子里的风忽然大了起来，灯影摇晃，一众人竟无人敢动。\n\n王善保家的不知深浅，仗着自己是邢夫人的陪房，老着脸皮上前去掀探春的衣襟，口里笑道：“连姑娘身上我都翻了，果然没有什么——”\n\n探春扬手就是一掌，清脆地落在王善保家的脸上。\n\n那一掌下去，整个秋爽斋静得能听见火苗舔着灯芯的声音。\n\n“你是什么东西，敢来拉扯我的衣裳！”探春的声音在静夜里尖锐而清晰，“我不过看在太太的面上，叫你一声妈妈。你就狗仗人势，天天作耗，专管生事！”\n\n王善保家的捂着脸，羞得满面紫胀，退到廊下只是哭。王熙凤一面劝探春，一面心里却暗暗解气——这老货平日里倚老卖老，她早就看不惯了。\n\n探春却不依不饶，她转过身来，面对着院子里的人，声音忽然沉了下去。那沉，是压着什么东西的——压着一腔的悲愤，压着一座府邸将倾的预感。\n\n“你们别忙，自然连你们抄的日子有呢。”她说着，眼里忽然有了泪光，“可知这样大族人家，若从外头杀来，一时是杀不死的。必须先从家里自杀自灭起来，才能一败涂地！”\n\n夜风忽然大了起来，将院子里的灯笼吹得东倒西歪。火光跳动着，映在每个人的脸上，像是一张张扭曲的面具。\n\n从秋爽斋出来，王熙凤一行人又去了紫菱洲。迎春那里倒是太平，她本就懦弱，只坐在一边低头不语。司棋却是不怕的，挺直了腰板让人搜检。谁知这一搜，便搜出大事来了——从她的箱子里翻出了潘又安的情书，还有一双男子的鞋袜。\n\n司棋的脸在灯下白得像纸，却始终没有辩解一句。她只咬着下唇，眼睛直直地看着前方，仿佛看的不是眼前这些人，而是不知名的远方。迎春吓得脸色发白，只哆嗦着说“怎会如此”，却一句都不敢替司棋求情。\n\n到了藕香榭，惜春那里又是另一番光景。入画跪在地上哭着求饶，说那些银锞子和玉带板子是哥哥寄存在她这里的。惜春坐在灯下，年纪虽小，脸上却是一派漠然：“这个我也难管。你们搜检出来就是了，与我无干。”\n\n王熙凤看了一回，念在入画平日老实，只说回去再斟酌。惜春却忽然接了一句：“嫂子，这些丫鬟我一个也不要了。该打发的打发，该撵的撵出去。”\n\n入画跪在地上，抬起头来看惜春，满脸的不敢置信。\n\n一路转回怡红院时，夜色已经深了。袭人、晴雯几个大丫鬟都被唤起来，挨个儿开了箱子。晴雯正生着病，头发也没梳，披着衣裳往那一站，那股子不服气的劲儿分明写在脸上。王善保家的吃了探春的亏，不敢再闹，只草草翻了一遍便罢。\n\n这一夜抄检下来，倒查出不少事情来。可是查出的那点子东西，与这夜闹下的动静相比，又算得了什么呢？\n\n天亮之前，各院都静了下来。可是谁都知道，这静底下埋着什么——就像探春说的，这家里头，先自己杀了自己。那些翻过的箱子，虽然都重新关上了，可大观园里的人心，却再也关不回去了。",
+  "timestamp": "2026-07-27T06:14:32.496Z",
+  "cacheHit": true,
+  "errors": [],
+  "analysis": {
+    "eventId": "E33",
+    "analysis": {
+      "narrativeChecks": [
+        {
+          "entityId": "narrator_omniscient",
+          "attribute": "time_period",
+          "hint": "The prose should depict nighttime.",
+          "evidence": "那夜，大观园里的灯比平日亮得刺眼。天亮之前",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "tanchun",
+          "attribute": "character_state",
+          "hint": "She should be in Qiushuang Studio, awaiting the search.",
+          "evidence": "到秋爽斋时，探春已经得了信。她并未睡下，秉烛坐在厅中",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "wangxifeng",
+          "attribute": "character_state",
+          "hint": "She should be leading the raid.",
+          "evidence": "王熙凤带着一群人",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "daguanyuan",
+          "attribute": "character_state",
+          "hint": "Surface calm before the raid.",
+          "evidence": "那夜，大观园里的灯比平日亮得刺眼。这静底下埋着什么",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "narrator_omniscient",
+          "attribute": "voice_formality",
+          "hint": "Literary, slightly formal style with classical elements.",
+          "evidence": "秉烛坐在厅中，一声清脆的掌掴",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "narrator_omniscient",
+          "attribute": "voice_vocabulary",
+          "hint": "Use of classical Chinese words like 秉烛, 震怒.",
+          "evidence": "秉烛",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "narrator_omniscient",
+          "attribute": "voice_anachronism",
+          "hint": "No modern anachronisms.",
+          "evidence": "整个文本无现代词汇",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "narrator_omniscient",
+          "attribute": "discourse_balance",
+          "hint": "Mix of action, dialogue, and reflection.",
+          "evidence": "Dialogue: '都搜明白了？' Action: '探春扬手就是一掌' Reflection: '可知这样大族人家...'",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "tanchun",
+          "attribute": "pronoun_consistency",
+          "hint": "Use of 她.",
+          "evidence": "探春站了起来，她",
+          "matchLevel": "exact"
+        }
+      ],
+      "knowledgeChecks": [],
+      "ruleChecks": [],
+      "postconditions": {
+        "covered": [
+          "tanchun.display = opened_boxes_and_protested",
+          "xichun.resolve",
+          "yingchun.emotionalState = helpless_and_painful_siqi_removed",
+          "wangxifeng.emotionalState",
+          "daguanyuan.socialClimate = trust_broken_morale_damaged"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "foreshadowingDeployed": [],
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "林黛玉已经睡下，被唤起时只披了件外裳",
+          "severity": "minor"
+        },
+        {
+          "detail": "晴雯正生着病，头发也没梳",
+          "severity": "minor"
+        }
+      ],
+      "tenseDetected": "past",
+      "characterReferences": [
+        {
+          "entityId": "tanchun",
+          "namesUsed": [
+            "探春",
+            "三姑娘"
+          ]
+        },
+        {
+          "entityId": "wangxifeng",
+          "namesUsed": [
+            "王熙凤"
+          ]
+        },
+        {
+          "entityId": "wangfuren",
+          "namesUsed": [
+            "太太"
+          ]
+        },
+        {
+          "entityId": "xichun",
+          "namesUsed": [
+            "惜春"
+          ]
+        },
+        {
+          "entityId": "yingchun",
+          "namesUsed": [
+            "迎春"
+          ]
+        },
+        {
+          "entityId": "zijuan",
+          "namesUsed": [
+            "紫鹃"
+          ]
+        },
+        {
+          "entityId": "xiren",
+          "namesUsed": [
+            "袭人"
+          ]
+        },
+        {
+          "entityId": "qingwen",
+          "namesUsed": [
+            "晴雯"
+          ]
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "tanchun",
+          "feature": "eyes",
+          "declared": "俊眼修眉，顾盼神飞",
+          "evidence": "那双眼亮得骇人",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "yingchun",
+          "feature": "overall",
+          "declared": "肌肤微丰，温柔沉默",
+          "evidence": "迎春那里倒是太平，她本就懦弱",
+          "matchLevel": "similar"
+        }
+      ],
+      "conflictAnalysis": {
+        "primaryType": "character_vs_society",
+        "resolutionAchieved": false
+      },
+      "quality": {
+        "proseScore": 9,
+        "maxScore": 10,
+        "strengths": [
+          "Vivid imagery",
+          "Faithful to original characterization",
+          "Emotionally impactful"
+        ],
+        "weaknesses": [
+          "Slightly uneven pacing at moments"
+        ],
+        "estimatedWordCount": 1200
+      },
+      "threadProgressAchieved": [
+        "T3",
+        "T4",
+        "T5"
+      ],
+      "durationDetected": "scene",
+      "frequencyDetected": "singulative",
+      "voiceDetected": {
+        "level": "extradiegetic",
+        "relation": "heterodiegetic"
+      },
+      "anachronyDetected": "none",
+      "focalizationDetected": "zero"
+    }
+  },
+  "validation": {
+    "passed": true,
+    "errors": [],
+    "warnings": [
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "wangfuren",
+        "attribute": "suspicion",
+        "message": "Narrative hint precondition for wangfuren.suspicion is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "suspicion"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "wangxifeng",
+        "attribute": "location",
+        "message": "Narrative hint precondition for wangxifeng.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "daguanyuan",
+        "attribute": "state",
+        "message": "Narrative hint precondition for daguanyuan.state is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "state"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "tanchun",
+        "attribute": "location",
+        "message": "Narrative hint precondition for tanchun.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "wangfuren",
+        "attribute": "suspicion",
+        "message": "Narrative hint precondition for wangfuren.suspicion is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "suspicion"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "wangxifeng",
+        "attribute": "location",
+        "message": "Narrative hint precondition for wangxifeng.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "daguanyuan",
+        "attribute": "state",
+        "message": "Narrative hint precondition for daguanyuan.state is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "state"
+        }
+      },
+      {
+        "validator": "DeferredResolver",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "tanchun",
+        "attribute": "location",
+        "message": "Narrative hint precondition for tanchun.location is unverified",
+        "fixSuggestion": "Ensure the prose establishes this state or adjust the precondition.",
+        "fixAction": "manual",
+        "fixTarget": {
+          "file": "",
+          "field": "location"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "tanchun",
+        "attribute": "aliases",
+        "message": "Unknown name \"探春\" used for character \"tanchun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "探春"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "tanchun",
+        "attribute": "aliases",
+        "message": "Unknown name \"三姑娘\" used for character \"tanchun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "三姑娘"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "wangxifeng",
+        "attribute": "aliases",
+        "message": "Unknown name \"王熙凤\" used for character \"wangxifeng\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "王熙凤"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "wangfuren",
+        "attribute": "aliases",
+        "message": "Unknown name \"太太\" used for character \"wangfuren\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "太太"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "xichun",
+        "attribute": "aliases",
+        "message": "Unknown name \"惜春\" used for character \"xichun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "惜春"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "yingchun",
+        "attribute": "aliases",
+        "message": "Unknown name \"迎春\" used for character \"yingchun\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "迎春"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "zijuan",
+        "attribute": "aliases",
+        "message": "Unknown name \"紫鹃\" used for character \"zijuan\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "紫鹃"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "xiren",
+        "attribute": "aliases",
+        "message": "Unknown name \"袭人\" used for character \"xiren\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "袭人"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E33",
+        "entity": "qingwen",
+        "attribute": "aliases",
+        "message": "Unknown name \"晴雯\" used for character \"qingwen\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "晴雯"
+        }
+      }
+    ],
+    "infos": []
+  },
+  "needsReview": false,
+  "attempts": 0,
+  "released": true
+}

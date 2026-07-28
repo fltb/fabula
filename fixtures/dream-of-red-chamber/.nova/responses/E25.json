@@ -1,0 +1,405 @@
+{
+  "prose": "那忠顺王府的长史官前脚刚走，贾政送客回来，已是气得面如金纸，浑身乱颤。他回身便命小厮：“拿宝玉来！拿大棍！拿绳子捆上！”两边的仆人见他脸色不对，一个个吓得战战兢兢，飞也似地去寻人。\n\n宝玉在里头早听见了风声，急得在厅上团团打转。他还想央人去求老太太或太太来救，可还没等叫出口，几个仆人已上前七手八脚将他按住。贾政迎面便是一声断喝：“堵起嘴来！着实打死！”小厮们不敢不应，却也不敢真下死手——贾政见他们绑得慢了，一把夺过绳索，亲自将宝玉按在长凳上，夺过大板，劈头盖脸便打。\n\n那板子又宽又厚，落下来时带着风声，砸在肉上发出沉闷的响声。第一板下去，宝玉全身猛地一颤，喊都还没来得及喊出口，第二板又落了下来。贾政的手越抡越狠，每一板都像要把积压多年的怒气全砸出来。宝玉疼得在凳上乱挣，嘴被堵着，只能发出含糊的呜咽声。他起初还拼命摇头，眼里满是哀求之色，但贾政视若无睹，只是咬着牙狠狠往下砸，板板落在臀腿之间，那地方的血渐渐洇透了裤子，顺着腿往下淌。\n\n“还不快住手！”王夫人从后院跌跌撞撞跑进来时，板子已经停了。倒不是贾政自己要停——是小厮们实在看不下去了，跪在地上抱住了他的腿。王夫人一见宝玉的样子，眼泪便扑簌簌地落下来。她扑到宝玉身上，握住那已被打得血肉模糊的腿，哭道：“老爷要勒死他，不如先勒死我，再勒死他！我快五十的人了，只有这一个孽障——你要打死他，索性连我一同打死！”她哭得撕心裂肺，贾政手里的板子举在半空中，却怎么也落不下去了。他的泪也下来了，一滴一滴打在衣襟上，但那苍白的脸仍然铁青，胸中那口气怎么也散不出去。\n\n“给我打！”门口忽然传来一声苍老的怒喝。众人一惊，回头一看，贾母由鸳鸯扶着，颤巍巍地走进来。她那双老眼怒视着贾政，银发几乎根根都立了起来：“先打死我，再打死他，岂不干净！”贾政见母亲亲临，腿一软便跪了下去，连手里的板子都掉在地上。贾母指着他的鼻子，声音虽然苍老却字字清晰：“你打死他，我明日便搬出荣国府，你倒清净了！”这话比王夫人的哭喊还要沉重百倍，贾政跪在地上已说不出话来，只是泪流满面地磕头。\n\n宝玉被抬回怡红院时，已是面白如纸、气息微弱。袭人一见那血肉模糊的臀腿，眼泪便如断线珠子一般，止也止不住。她忍着泪替宝玉收拾，又急急打发人去取伤药。正忙乱间，薛宝钗来了——她手里端着一个小瓷瓶，见了宝玉的样子，眼圈儿虽有些红，可到底稳住了神色，轻轻将药放在桌上，低声嘱咐袭人如何敷、如何服。她的声音平静，手指却在微微发抖。\n\n宝钗走后不久，林黛玉才来。她也没声响，只悄悄站在门口，眼睛肿得跟桃儿一般，泪痕未干。她看着宝玉那张惨白昏睡的脸，一句话没说，先抽抽噎噎地哭了起来。宝玉迷糊中听见哭声，睁眼一看是她，勉强扯出一个笑来安慰她：“没事……疼一疼就过去了……”她的泪流得更凶了，又怕吵着他，只能转过身去，肩膀一耸一耸地抖着。袭人递了帕子过去，她攥着那帕子，哭得气都喘不上来。\n\n夜深了。怡红院里的人渐渐散去，王夫人也回房了。袭人服侍宝玉睡下，见他呼吸平稳了些，才悄悄起身出了门。她一路疾步走到王夫人院中，跪在王夫人面前，开口道：“太太——二爷如今也大了，里头姑娘们也大了，太太这件事须要早作主张才是。”王夫人听她说完，脸色一变，沉吟半晌，缓缓点了头。",
+  "timestamp": "2026-07-27T06:14:32.496Z",
+  "cacheHit": true,
+  "errors": [],
+  "analysis": {
+    "eventId": "E25",
+    "analysis": {
+      "narrativeChecks": [
+        {
+          "entityId": "jiabaoyu",
+          "attribute": "location",
+          "hint": "宝玉被贾政召到荣国府内",
+          "evidence": "在里头早听见了风声，急得在厅上团团打转",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "jiazheng",
+          "attribute": "anger_toward_jiabaoyu",
+          "hint": "贾政因忠顺王府索要琪官已怒不可遏，贾环又添油加醋说金钏之事",
+          "evidence": "散文中只有忠顺王府长史官一事，未提及贾环告密和金钏",
+          "matchLevel": "similar"
+        },
+        {
+          "entityId": "wangfuren",
+          "attribute": "location",
+          "hint": "王夫人在荣国府内",
+          "evidence": "王夫人从后院跌跌撞撞跑进来",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "jiamu",
+          "attribute": "location",
+          "hint": "贾母也在荣国府中",
+          "evidence": "贾母由鸳鸯扶着，颤巍巍地走进来",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "jiazheng",
+          "attribute": "voice_formality",
+          "hint": "贾政说话严厉正式",
+          "evidence": "贾政的言语如'拿宝玉来！拿大棍！拿绳子捆上！'语气威严",
+          "matchLevel": "exact"
+        },
+        {
+          "entityId": "jiamu",
+          "attribute": "pronoun",
+          "hint": "贾母女性，应用'她'",
+          "evidence": "散文中'她那双老眼怒视着'",
+          "matchLevel": "exact"
+        }
+      ],
+      "knowledgeChecks": [],
+      "ruleChecks": [],
+      "postconditions": {
+        "covered": [
+          "jiabaoyu.health",
+          "jiazheng.emotional_state",
+          "jiamu.relationship_with_jiazheng",
+          "xiren.intention_to_report",
+          "jiabaoyu.relationship_with_lindaiyu"
+        ],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "foreshadowingDeployed": [],
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
+      "inventedDetails": [
+        {
+          "detail": "小厮们跪在地上抱住了他的腿",
+          "severity": "minor"
+        },
+        {
+          "detail": "两边的仆人一个个吓得战战兢兢",
+          "severity": "minor"
+        },
+        {
+          "detail": "鸳鸯扶着贾母",
+          "severity": "minor"
+        }
+      ],
+      "tenseDetected": "past",
+      "characterReferences": [
+        {
+          "entityId": "jiazheng",
+          "namesUsed": [
+            "贾政",
+            "老爷"
+          ]
+        },
+        {
+          "entityId": "jiabaoyu",
+          "namesUsed": [
+            "宝玉",
+            "二爷"
+          ]
+        },
+        {
+          "entityId": "wangfuren",
+          "namesUsed": [
+            "王夫人",
+            "太太"
+          ]
+        },
+        {
+          "entityId": "jiamu",
+          "namesUsed": [
+            "贾母",
+            "老太太"
+          ]
+        },
+        {
+          "entityId": "xiren",
+          "namesUsed": [
+            "袭人"
+          ]
+        },
+        {
+          "entityId": "xuebaochai",
+          "namesUsed": [
+            "薛宝钗",
+            "宝钗"
+          ]
+        },
+        {
+          "entityId": "lindaiyu",
+          "namesUsed": [
+            "林黛玉",
+            "黛玉"
+          ]
+        },
+        {
+          "entityId": "yuanyang",
+          "namesUsed": [
+            "鸳鸯"
+          ]
+        }
+      ],
+      "appearanceChecks": [
+        {
+          "entityId": "jiamu",
+          "feature": "头发颜色",
+          "declared": "鬓发如银",
+          "evidence": "银发几乎根根都立了起来",
+          "matchLevel": "exact"
+        }
+      ],
+      "conflictAnalysis": {
+        "primaryType": "person_vs_society",
+        "resolutionAchieved": true
+      },
+      "quality": {
+        "proseScore": 8,
+        "maxScore": 10,
+        "strengths": [
+          "强烈的情感张力，动作描写生动",
+          "人物反应符合各自性格",
+          "节奏紧凑，连贯性强"
+        ],
+        "weaknesses": [
+          "缺少贾环告密环节，与规范预设略有出入",
+          "宝玉的哀求过程略有简化"
+        ],
+        "estimatedWordCount": 980
+      },
+      "threadProgressAchieved": [
+        "T1",
+        "T4",
+        "T5"
+      ],
+      "durationDetected": "scene",
+      "frequencyDetected": "singulative",
+      "voiceDetected": {
+        "level": "extradiegetic",
+        "relation": "heterodiegetic"
+      },
+      "anachronyDetected": "none",
+      "focalizationDetected": "zero"
+    }
+  },
+  "validation": {
+    "passed": true,
+    "errors": [],
+    "warnings": [
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "jiazheng",
+        "attribute": "aliases",
+        "message": "Unknown name \"贾政\" used for character \"jiazheng\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "贾政"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "jiazheng",
+        "attribute": "aliases",
+        "message": "Unknown name \"老爷\" used for character \"jiazheng\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "老爷"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "jiabaoyu",
+        "attribute": "aliases",
+        "message": "Unknown name \"二爷\" used for character \"jiabaoyu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "二爷"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "wangfuren",
+        "attribute": "aliases",
+        "message": "Unknown name \"王夫人\" used for character \"wangfuren\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "王夫人"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "wangfuren",
+        "attribute": "aliases",
+        "message": "Unknown name \"太太\" used for character \"wangfuren\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "太太"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "jiamu",
+        "attribute": "aliases",
+        "message": "Unknown name \"贾母\" used for character \"jiamu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "贾母"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "jiamu",
+        "attribute": "aliases",
+        "message": "Unknown name \"老太太\" used for character \"jiamu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "老太太"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "xiren",
+        "attribute": "aliases",
+        "message": "Unknown name \"袭人\" used for character \"xiren\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "袭人"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "xuebaochai",
+        "attribute": "aliases",
+        "message": "Unknown name \"薛宝钗\" used for character \"xuebaochai\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "薛宝钗"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "xuebaochai",
+        "attribute": "aliases",
+        "message": "Unknown name \"宝钗\" used for character \"xuebaochai\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "宝钗"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "lindaiyu",
+        "attribute": "aliases",
+        "message": "Unknown name \"林黛玉\" used for character \"lindaiyu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "林黛玉"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "lindaiyu",
+        "attribute": "aliases",
+        "message": "Unknown name \"黛玉\" used for character \"lindaiyu\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "黛玉"
+        }
+      },
+      {
+        "validator": "alias",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "yuanyang",
+        "attribute": "aliases",
+        "message": "Unknown name \"鸳鸯\" used for character \"yuanyang\" — not in known names/aliases",
+        "fixSuggestion": "If this is a deliberate variation, add it to the character definition aliases. Otherwise, use a consistent name.",
+        "fixAction": "add_field",
+        "fixTarget": {
+          "file": "",
+          "field": "aliases",
+          "value": "鸳鸯"
+        }
+      },
+      {
+        "validator": "thread_progress",
+        "severity": "warning",
+        "event": "E25",
+        "entity": "T3",
+        "attribute": "threadProgress",
+        "message": "Thread \"T3\" not advanced in prose: \"贾政痛打宝玉不仅是一个父亲教训儿子——它象征着世家大族对'不肖子孙'的制度性惩罚。忠顺王府的压力、金钏事件的声音、贾环的告密，共同构成了一张权力网络。\"",
+        "fixSuggestion": "Ensure the scene advances this narrative thread.",
+        "fixAction": "edit_file",
+        "fixTarget": {
+          "file": "",
+          "field": "threadProgress"
+        }
+      }
+    ],
+    "infos": []
+  },
+  "needsReview": false,
+  "attempts": 0,
+  "released": true
+}

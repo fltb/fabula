@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { StyleProfile } from '../style/default-profile.ts';
 import { ideaIRSchema } from './idea-ir.js';
+import { renderSurfaceConfigSchema } from './render-surface.js';
 
 export const projectConfigSchema = z
   .object({
@@ -58,5 +59,6 @@ export const projectConfigSchema = z
       })
       .strict()
       .optional(),
+    renderSurface: renderSurfaceConfigSchema.optional(),
   })
   .strict();

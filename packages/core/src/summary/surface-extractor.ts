@@ -7,7 +7,7 @@
 // ============================================================================
 
 import * as crypto from 'node:crypto';
-import type { StyleMetrics, SurfaceReferencePacket } from '../types/render-surface.ts';
+import type { AcceptedSceneArtifact, StyleMetrics, SurfaceReferencePacket } from '../types/render-surface.ts';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -27,20 +27,29 @@ export class SurfaceReferenceExtractor {
   }
 
   /**
-   * Extract a budget-limited excerpt and style packet from accepted prose.
+   * Extract a budget-limited excerpt and style packet from an accepted scene
+   * artifact.  Rejects any artifact whose `releaseDecision` is not `'accepted'`.
    *
-   * @param sceneId  Scene identifier.
-   * @param prose    Full accepted prose.
+   * The returned packet is always non-authoritative — YAML contract overrides it.
+   *
+   * @param artifact  Accepted scene artifact from the release gate.
    * @param authoredAnchor  Optional anchor string to pin the excerpt.
    * @param budget   Override budget in characters (defaults to constructor value).
-   * @returns Non-authoritative SurfaceReferencePacket.
+   * @returns Non-authoritative SurfaceReferencePacket with `accepted: true`.
+   * @throws Error if the artifact has not been accepted.
    */
   extract(
-    sceneId: string,
-    prose: string,
+    artifact: AcceptedSceneArtifact,
     authoredAnchor?: string,
     budget?: number,
   ): SurfaceReferencePacket {
+    if (artifact.releaseDecision.status !== 'accepted') {
+      throw new Error(
+        `Cannot extract non-accepted source '${artifact.eventId}' (releaseDecision.status='${artifact.releaseDecision.status}')`,
+      );
+    }
+
+    const prose = artifact.prose;
     const maxBudget = budget ?? this.defaultBudget;
     const sourceHash = crypto.createHash('sha256').update(prose).digest('hex');
 
@@ -74,13 +83,13 @@ export class SurfaceReferenceExtractor {
     const styleMetrics = this.computeStyleMetrics(prose);
 
     return {
-      sceneId,
+      sceneId: artifact.eventId,
       excerptMode,
       excerpt,
       styleMetrics,
       authoredAnchor,
       sourceProseHash: sourceHash,
-      accepted: false, // always non-authoritative from the extractor
+      accepted: true, // source was accepted by the release gate
       extractorVersion: EXTRACTOR_VERSION,
     };
   }

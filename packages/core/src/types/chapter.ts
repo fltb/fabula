@@ -4,6 +4,7 @@
 
 import type { StyleGuidance } from './event.js';
 import type { IdeaIR } from './idea-ir.js';
+import type { RenderSurfaceConfig } from './render-surface.js';
 
 // ——— Chapter Metadata ———
 
@@ -67,5 +68,11 @@ export interface ProjectConfig {
   plugins?: {
     enabled: boolean;
     directory?: string;
+    /** Select a provider registered by a plugin.
+     *  When set, must match a provider name registered via registerProvider.
+     *  When absent, the default model provider (AiSdkProvider) is used.
+     *  Hard-fails at pipeline start if the named provider is not registered. */
+    provider?: string;
   };
+  renderSurface?: RenderSurfaceConfig;
 }

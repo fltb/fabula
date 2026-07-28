@@ -1,7 +1,7 @@
 // ============================================================================
 // Novalistically — FREQUENCY-1: Genette Frequency Types (S6b)
 //
-// Binding constraints from docs/todos/base-narratology.md §S6b:
+// Binding constraints from docs/todos/base-narratology-2026-07-26.md §S6b:
 //   1. FrequencyType has exactly 3 enum values
 //   2. FrequencyProfile captures narrative frequency relationships
 //      between story events and narrative statements

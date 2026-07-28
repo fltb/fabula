@@ -40,7 +40,6 @@ export class ContextAssembler {
     event: NarrativeEvent,
     state: WorldState,
     entityRegistry: EntityRegistry,
-    previousSceneSummary = '',
     volumeSummary = '',
     systemContext?: SystemContext,
     activeThreadIds?: string[],
@@ -116,7 +115,6 @@ export class ContextAssembler {
       worldFacts,
       knowledgeBoundary,
       activeThreads,
-      previousSceneSummary,
       volumeSummary,
       markdown: '',
       activeRules,
@@ -412,13 +410,6 @@ export class ContextAssembler {
       for (const t of pkg.activeThreads) {
         lines.push(`- ${t.id}: ${t.progress}/${t.total}`);
       }
-      lines.push('');
-    }
-
-    // Previous Scene Summary
-    if (pkg.previousSceneSummary) {
-      lines.push('## Previous Scene Summary');
-      lines.push(pkg.previousSceneSummary);
       lines.push('');
     }
 

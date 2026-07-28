@@ -5,12 +5,21 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { AnalysisResult, CommentFilter, StatusReport } from '@novalistically/core';
+import type {
+  AnalysisResult,
+  BranchPath,
+  CommentFilter,
+  RenderGameDialogueTreeOptions,
+  StatusReport,
+} from '@novalistically/core';
 import {
   type AssembleResult,
   assembleNovel,
   type Blocker,
+  branchPathsEqual,
   clearEventCache,
+  compileGameDialogueTree,
+  EntityMapper,
   FsStorage,
   getProjectStatus,
   type ISSDimension,
@@ -20,6 +29,7 @@ import {
   ReportWriter,
   type ReviewComment,
   ReviewManager,
+  renderGameDialogueTree,
   renderNovel,
   showEntity,
   type ThreadSnapshot,
@@ -197,10 +207,11 @@ export function mcpNovaThreadStatus(projectPath: string, threadId?: string) {
 // mcp_nova_render — Compile context for rendering (dry-run)
 // ============================================================================
 
-export async function mcpNovaRender(projectPath: string, eventId: string) {
+export async function mcpNovaRender(projectPath: string, eventId: string, branchPath?: BranchPath) {
   const result = await renderNovel({
     projectDir: projectPath,
     eventId,
+    branchPath,
     dryRun: true,
   });
 
@@ -228,7 +239,7 @@ export async function mcpNovaRender(projectPath: string, eventId: string) {
 export async function mcpNovaRenderScene(
   projectPath: string,
   eventId: string,
-  options?: { model?: string },
+  options?: { model?: string; branchPath?: BranchPath },
 ): Promise<{
   eventId: string;
   prose: string;
@@ -241,6 +252,7 @@ export async function mcpNovaRenderScene(
     projectDir: projectPath,
     model: options?.model,
     eventId,
+    branchPath: options?.branchPath,
   });
 
   if (result.results.length === 0) {
@@ -355,11 +367,51 @@ export function mcpNovaReviewEscalate(projectPath: string, commentId: string) {
 // mcp_nova_assemble — Assemble novel
 // ============================================================================
 
-export function mcpNovaAssemble(projectPath: string, outputPath?: string): AssembleResult {
+export function mcpNovaAssemble(
+  projectPath: string,
+  options?: { outputPath?: string; branchPath?: BranchPath },
+): AssembleResult {
+  const mapper = new EntityMapper(projectPath, new FsStorage());
+  const data = mapper.loadProject();
+  const tree = compileGameDialogueTree(
+    [...data.chapters.values()].flatMap((chapter) => chapter.events),
+    new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day])),
+  );
+  if (tree) {
+    const branchPath = options?.branchPath;
+    if (!branchPath || !tree.leafPaths.some((leafPath) => branchPathsEqual(leafPath, branchPath))) {
+      throw new Error('Game dialogue assembly requires one complete, ordered leaf branchPath');
+    }
+  }
   return assembleNovel({
     projectDir: projectPath,
-    outputPath,
+    outputPath: options?.outputPath,
+    branchPath: options?.branchPath,
   });
+}
+
+export async function mcpNovaRenderTree(
+  projectPath: string,
+  options?: Omit<RenderGameDialogueTreeOptions, 'projectDir'>,
+) {
+  const result = await renderGameDialogueTree({ projectDir: projectPath, ...options });
+  const choicesByEventId = Object.fromEntries(result.tree.choicesByEventId);
+  return {
+    tree: {
+      leafPaths: result.tree.leafPaths,
+      eventScopes: Object.fromEntries(result.tree.eventScopes),
+      representativePathByEventId: Object.fromEntries(result.tree.representativePathByEventId),
+      choicesByEventId,
+    },
+    results: result.results,
+    errors: result.errors,
+    choicesByEventId,
+    outputPath: result.outputPath,
+    dialogueTree:
+      result.outputPath && fs.existsSync(result.outputPath)
+        ? fs.readFileSync(result.outputPath, 'utf-8')
+        : undefined,
+  };
 }
 
 // ============================================================================
@@ -507,10 +559,14 @@ export function createMCPServer(projectPath: string): {
       nova_iss: () => mcpNovaIss(projectPath),
       nova_read_state: (entityId?: string) => mcpNovaReadState(projectPath, entityId),
       nova_thread_status: (threadId?: string) => mcpNovaThreadStatus(projectPath, threadId),
-      nova_render: (eventId: string) => mcpNovaRender(projectPath, eventId),
-      nova_render_scene: (eventId: string, options?: { model?: string }) =>
+      nova_render: (eventId: string, branchPath?: BranchPath) =>
+        mcpNovaRender(projectPath, eventId, branchPath),
+      nova_render_scene: (eventId: string, options?: { model?: string; branchPath?: BranchPath }) =>
         mcpNovaRenderScene(projectPath, eventId, options),
-      nova_assemble: (outputPath?: string) => mcpNovaAssemble(projectPath, outputPath),
+      nova_render_tree: (options?: Omit<RenderGameDialogueTreeOptions, 'projectDir'>) =>
+        mcpNovaRenderTree(projectPath, options),
+      nova_assemble: (options?: { outputPath?: string; branchPath?: BranchPath }) =>
+        mcpNovaAssemble(projectPath, options),
       nova_review_list: (
         filter?: Pick<CommentFilter, 'status' | 'severity'> & { eventId?: string },
       ) => mcpNovaReviewList(projectPath, filter),

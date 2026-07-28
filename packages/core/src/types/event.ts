@@ -7,6 +7,7 @@ import type { Anachrony, VoiceProfile } from './discourse.js';
 import type { DurationProfile } from './duration.js';
 import type { EntityId, Fact, StoryTimestamp } from './entity.js';
 import type { FrequencyProfile } from './frequency.js';
+import type { GameDialogueChoice } from './game-dialogue.js';
 import type { GreyLine } from './grey-line.js';
 import type { ModernNovelConfig } from './modern-novel.js';
 import type { NarrativeChecklist } from './narrative-checklist.js';
@@ -74,6 +75,8 @@ export interface NarrativeEvent {
   sceneBrief: string;
   preconditions: Fact[];
   postconditions: Fact[];
+  /** Event-local player choices leading to child game-tree nodes. */
+  choices?: GameDialogueChoice[];
   threadProgress: ThreadProgressEntry[];
   greyLines?: GreyLine[];
   foreshadowing: ForeshadowEntry[];
@@ -81,6 +84,8 @@ export interface NarrativeEvent {
   ruleEffects: RuleEffectEntry[];
   styleGuidance?: StyleGuidance;
   source: 'genesis' | 'event_file' | 'branch_point' | 'system';
+  /** Explicit predecessor events injected by trusted internal compilation. */
+  causalPredecessors?: string[];
   branchExistence: BranchSet;
   participants: {
     entities: EntityId[];
@@ -124,6 +129,9 @@ export interface NarrativeEvent {
   }>;
   /** Free-form author notes passed verbatim to the Pass 1 prompt (pure pass-through) */
   authorNotes?: string[];
+  /** Planned discourse cursor: -1 = no discourse actions; nonnegative = position visible at scene start.
+   *  Required for scenes with NO ledger actions; scenes owning ledger actions derive cursor from those entries. */
+  discourseCursor?: number;
 }
 
 export interface ThreadProgressEntry {
@@ -251,7 +259,7 @@ export interface EventFile {
     entity: string;
     attribute: string;
     value: unknown;
-    operator?: 'eq' | 'neq' | 'gt' | 'lt' | 'contains';
+    operator?: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'not_contains' | 'exists' | 'not_exists';
     narrativeHint?: string;
   }>;
   /** Expected postconditions after this event */
@@ -261,7 +269,10 @@ export interface EventFile {
     value: unknown;
     confidence?: number;
     narrativeHint?: string;
+    operation?: 'set' | 'unset';
   }>;
+  /** Event-local player choices leading to child game-tree nodes. */
+  choices?: GameDialogueChoice[];
   /** Style guidance for the LLM */
   styleGuidance?: StyleGuidance;
   /** Thread progress entries */
@@ -336,4 +347,7 @@ export interface EventFile {
   modernNovel?: ModernNovelConfig;
   /** Free-form author notes passed verbatim to the Pass 1 prompt (pure pass-through) */
   authorNotes?: string[];
+  /** Planned discourse cursor: -1 = no discourse actions; nonnegative = position visible at scene start.
+   *  Required for scenes with NO ledger actions; scenes owning ledger actions derive cursor from those entries. */
+  discourseCursor?: number;
 }

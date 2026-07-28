@@ -2,14 +2,12 @@
 // ContextCompiler — Main entry point
 // ============================================================================
 
-import { projectDiscourseContext, replayDiscourseState } from '../state/discourse-replay.js';
+import type { CompiledDiscourseRenderContext } from '../state/discourse-context.js';
 import type {
   ContextPackage,
   EntityRegistry,
   NarrativeEvent,
-  NarratorAssertion,
   NarratorProfile,
-  PlannedDiscourseLedger,
   SystemContext,
   WorldState,
 } from '../types/index.js';
@@ -31,16 +29,12 @@ export class ContextCompiler {
     state: WorldState,
     entityRegistry: EntityRegistry,
     options?: {
-      previousSceneSummary?: string;
       volumeSummary?: string;
       systemContext?: SystemContext;
       activeThreadIds?: string[];
       narratorProfiles?: Record<string, NarratorProfile>;
-      discourseLedger?: PlannedDiscourseLedger | null;
-      /** Assertion catalog loaded from definitions/assertions/. */
-      narratorAssertions?: Record<string, NarratorAssertion>;
-      /** Discourse-ledger branch label to replay; single-branch projects use 'main'. */
-      discourseBranch?: string;
+      /** Precompiled strict discourse context for this event. */
+      discourseContext?: CompiledDiscourseRenderContext;
       /** Emotional beat to annotate the compiled scene spec */
       emotionalBeat?: string;
     },
@@ -49,7 +43,6 @@ export class ContextCompiler {
       event,
       state,
       entityRegistry,
-      options?.previousSceneSummary ?? '',
       options?.volumeSummary ?? '',
       options?.systemContext,
       options?.activeThreadIds,
@@ -62,37 +55,9 @@ export class ContextCompiler {
     if (event.narratorProfileRef && options?.narratorProfiles) {
       pkg.narratorProfile = options.narratorProfiles[event.narratorProfileRef];
     }
-    // DISCOURSE-1: replay and project the disclosure state for Pass 1.
-    if (options?.discourseLedger) {
-      try {
-        const branch = options.discourseBranch ?? 'main';
-        const sceneEntries = options.discourseLedger.entries.filter(
-          (entry) => entry.branch === branch && entry.sceneId === event.id,
-        );
-        const position = Math.min(
-          Math.max(event.narrativeOrder, ...sceneEntries.map((entry) => entry.discoursePosition)),
-          options.discourseLedger.entries.length,
-        );
-        const discourseState = replayDiscourseState(
-          options.discourseLedger,
-          position,
-          branch,
-          options.narratorAssertions,
-        );
-        const authorizedAssertions = sceneEntries.flatMap((entry) =>
-          entry.action.type === 'reveal' || entry.action.type === 'claim'
-            ? [entry.action.assertionId]
-            : [],
-        );
-        pkg.discourseProjection = projectDiscourseContext(
-          discourseState,
-          pkg.narratorProfile,
-          event.pov.character,
-          authorizedAssertions,
-        );
-      } catch (err) {
-        pkg.discourseReplayError = (err as Error).message;
-      }
+    // DISCOURSE-1: use precompiled strict discourse context's safe projection for Pass 1.
+    if (options?.discourseContext) {
+      pkg.discourseProjection = options.discourseContext.projection;
     }
     return pkg;
   }

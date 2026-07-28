@@ -1,15 +1,13 @@
 // ============================================================================
-// DiscourseValidator — Narrator profile resolution + discourse replay integrity
+// DiscourseValidator — Narrator profile resolution integrity
 // ============================================================================
 // Purely deterministic (no Pass 2 analysis-block dependency):
 //   validatePre: always returns [] — PreRenderInput does not carry narrator profiles
 //     or ContextPackage data (only event, worldState, events, entityRegistry, etc.).
 //     Narrator profile resolution requires context compiled in Pass 1, available only post-render.
-//   validatePost: checks two conditions:
+//   validatePost: checks one condition:
 //     1. If event.narratorProfileRef is set but context.narratorProfile is undefined,
 //        the reference did not resolve to a loaded profile (fatal).
-//     2. If context.discourseReplayError is set, the discourse replay engine caught
-//        a constraint violation (truth-boundary, hint lifecycle, retraction, etc.).
 // ============================================================================
 
 import type {
@@ -34,7 +32,7 @@ export class DiscourseValidator implements Validator {
     const issues: ValidationIssue[] = [];
     const { event } = input;
 
-    // Check 1: If event declares a narratorProfileRef, it must resolve successfully.
+    // Check: If event declares a narratorProfileRef, it must resolve successfully.
     // This check assumes PostRenderInput.context (being added by orchestrator) carries
     // narratorProfile if the ref resolved, undefined if it did not.
     if (
@@ -52,28 +50,6 @@ export class DiscourseValidator implements Validator {
           'Define the referenced narrator profile in definitions/narrators/, or remove narratorProfileRef.',
           'edit_file',
           'narratorProfileRef',
-        ),
-      );
-    }
-
-    // Check 2: If discourse replay encountered a constraint violation, surface it.
-    // discourseReplayError is populated by ContextCompiler.compile() when
-    // replayDiscourseState() throws (truth-boundary, hint-state, retraction violations, etc.).
-    const discourseReplayError = (
-      input as PostRenderInput & { context?: { discourseReplayError?: string } }
-    ).context?.discourseReplayError;
-
-    if (discourseReplayError) {
-      issues.push(
-        makeIssue(
-          this.name,
-          event.id,
-          'system',
-          'error',
-          `Discourse replay failed for "${event.id}": ${discourseReplayError}`,
-          'Fix the discourse ledger entry referencing this scene — check truth-boundary, hint-state, or retraction constraints in discourse-replay.ts.',
-          'edit_file',
-          'discourse',
         ),
       );
     }

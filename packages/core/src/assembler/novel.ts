@@ -47,6 +47,15 @@ export function assembleNovel(options: AssembleOptions): AssembleResult {
   const sorter = new NarrativeSorter();
   let sorted = sorter.sortByOrder(collected);
 
+  // ── Branch-path filter ─────────────────────────────────────────
+  if (branchPath) {
+    const before = sorted.length;
+    sorted = filterScenesByBranchPath(sorted, branchPath);
+    if (sorted.length < before) {
+      logger.info('Branch filter removed scenes', { module: 'assembler', eventId: undefined });
+    }
+  }
+
   // ── Validate no duplicate narrativeOrders ──────────────────────
   const seenOrders = new Set<number>();
   for (const scene of sorted) {
@@ -57,15 +66,6 @@ export function assembleNovel(options: AssembleOptions): AssembleResult {
       );
     }
     seenOrders.add(scene.narrativeOrder);
-  }
-
-  // ── Branch-path filter ─────────────────────────────────────────
-  if (branchPath) {
-    const before = sorted.length;
-    sorted = filterScenesByBranchPath(sorted, branchPath);
-    if (sorted.length < before) {
-      logger.info('Branch filter removed scenes', { module: 'assembler', eventId: undefined });
-    }
   }
 
   // ── Resolve title ──────────────────────────────────────────────

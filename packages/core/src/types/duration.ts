@@ -1,7 +1,7 @@
 // ============================================================================
 // Novalistically — DURATION-1: Genette Duration Types (S6a)
 //
-// Binding constraints from docs/todos/base-narratology.md §S6a:
+// Binding constraints from docs/todos/base-narratology-2026-07-26.md §S6a:
 //   1. DurationType has exactly 5 enum values
 //   2. DurationProfile captures story time / narrative time relationship
 //   3. DurationProfile.type === 'ellipsis' is Genette discourse-level

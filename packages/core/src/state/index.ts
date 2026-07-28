@@ -51,5 +51,8 @@ export {
 export { StateManager } from './manager.ts';
 export { ReplayEngine } from './replay.ts';
 export { SnapshotEngine } from './snapshot.ts';
+export type { CompiledDiscourseRenderContext } from './discourse-context.ts';
+export { compileDiscourseBoundaries } from './discourse-context.ts';
+
 export type { StoryBoundaries } from './story-boundaries.ts';
 export { compileStoryBoundaries } from './story-boundaries.ts';

@@ -14,6 +14,8 @@ import {
   ruleDefinitionSchema,
   worldInitialStateSchema,
 } from '../schemas/index.js';
+import { compileGameDialogueTree } from '../branch/game-dialogue-tree.ts';
+import { ConfigError } from '../errors.ts';
 import { FsStorage, type Storage } from '../storage/index.ts';
 import type {
   ChapterMetadata,
@@ -115,6 +117,11 @@ export class EntityMapper {
     ) as NarratorAssertion[];
     const narratorAssertions: Record<string, NarratorAssertion> = {};
     for (const na of narratorAssertionFiles) {
+      if (narratorAssertions[na.id] !== undefined) {
+        throw new ConfigError(
+          `Duplicate assertion id "${na.id}" in definitions/assertions/ — assertion IDs must be unique`,
+        );
+      }
       narratorAssertions[na.id] = na;
     }
 
@@ -193,6 +200,7 @@ export class EntityMapper {
       entityId: pc.entity,
       attribute: pc.attribute,
       value: pc.value,
+      operator: pc.operator,
       confidence: 1.0,
       narrativeHint: pc.narrativeHint,
       validity: {
@@ -203,12 +211,12 @@ export class EntityMapper {
         branches: { type: 'all' as const },
       },
     }));
-
     const postconditions: Fact[] = (eventFile.expectedPostconditions ?? []).map((pc) => ({
       id: factIdFrom(pc.entity, pc.attribute),
       entityId: pc.entity,
       attribute: pc.attribute,
       value: pc.value,
+      operation: pc.operation,
       confidence: pc.confidence ?? 1.0,
       narrativeHint: pc.narrativeHint,
       validity: {
@@ -255,6 +263,7 @@ export class EntityMapper {
       sceneBrief: eventFile.sceneBrief,
       preconditions,
       postconditions,
+      choices: eventFile.choices,
       threadProgress: (eventFile.threadProgress ?? []).map((tp) => ({
         thread: tp.thread,
         advancement: tp.advancement,
@@ -297,6 +306,7 @@ export class EntityMapper {
       // Entity introduction + free-form author pass-through
       introduces: eventFile.introduces,
       authorNotes: eventFile.authorNotes,
+      discourseCursor: eventFile.discourseCursor,
     };
   }
 
@@ -305,6 +315,11 @@ export class EntityMapper {
     chapters: Map<number, { metadata: ChapterMetadata | null; events: EventFile[] }>,
   ): NarrativeEvent[] {
     const projectData = this.loadProject();
+    const eventFiles = [...chapters.values()].flatMap((chapter) => chapter.events);
+    const gameDialogueTree = compileGameDialogueTree(
+      eventFiles,
+      new Map(projectData.timeAnchors.map((anchor) => [anchor.id, anchor.day])),
+    );
 
     const allEvents: NarrativeEvent[] = [];
 
@@ -314,11 +329,40 @@ export class EntityMapper {
       allEvents.push(genesisEvent);
     }
 
-    for (const [, chapter] of chapters) {
-      for (const ef of chapter.events) {
-        const ne = this.mapToNarrativeEvent(ef);
-        allEvents.push(ne);
+    const authoredEvents = eventFiles.map((eventFile) => this.mapToNarrativeEvent(eventFile));
+    if (gameDialogueTree) {
+      const authoredEventById = new Map(authoredEvents.map((event) => [event.id, event]));
+      for (const event of authoredEvents) {
+        const scope = gameDialogueTree.eventScopes.get(event.id);
+        if (!scope) {
+          throw new ConfigError(`Missing game dialogue scope for event '${event.id}'`, {
+            eventId: event.id,
+            phase: 'game_dialogue_tree',
+          });
+        }
+        event.branchExistence = scope;
+        for (const fact of [...event.preconditions, ...event.postconditions]) {
+          fact.validity.branches = scope;
+        }
       }
+
+      for (const [eventId, choices] of gameDialogueTree.choicesByEventId) {
+        for (const choice of choices) {
+          const target = authoredEventById.get(choice.targetEvent);
+          if (!target) {
+            throw new ConfigError(`Missing game dialogue target event '${choice.targetEvent}'`, {
+              eventId,
+              phase: 'game_dialogue_tree',
+            });
+          }
+          (target.causalPredecessors ??= []).push(
+            `system:branch-choice:${eventId}:${choice.id}`,
+          );
+        }
+      }
+      allEvents.push(...authoredEvents, ...gameDialogueTree.transitionEvents);
+    } else {
+      allEvents.push(...authoredEvents);
     }
 
     // Sort by narrative order

@@ -3,6 +3,7 @@
 // ============================================================================
 
 import type { BranchPath, NarrativeEvent, WorldState } from '../types/index.js';
+import type { Storage } from '../storage/types.ts';
 import { EventStore } from './event-store.ts';
 import { ReplayEngine } from './replay.ts';
 import { SnapshotEngine } from './snapshot.ts';
@@ -12,9 +13,9 @@ export class StateManager {
   public snapshotEngine: SnapshotEngine;
   public replayEngine: ReplayEngine;
 
-  constructor(snapshotsDir: string, snapshotInterval = 20) {
-    this.eventStore = new EventStore();
-    this.snapshotEngine = new SnapshotEngine(snapshotsDir, snapshotInterval);
+  constructor(snapshotsDir: string, snapshotInterval = 20, storage?: Storage) {
+    this.eventStore = new EventStore(storage);
+    this.snapshotEngine = new SnapshotEngine(snapshotsDir, snapshotInterval, storage);
     this.replayEngine = new ReplayEngine();
   }
 

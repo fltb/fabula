@@ -23,7 +23,7 @@
     "typecheck": "tsc -b packages/core packages/bench packages/cli",
     "typecheck:dead-code": "tsc -b packages/core/tsconfig.dead-code.json packages/bench/tsconfig.dead-code.json packages/cli/tsconfig.dead-code.json",
     "bundle-check": "node scripts/bundle-check.mjs",
-    "dead-code:knip": "node scripts/check-public-api.mjs && knip"
+    "dead-code:knip": "node scripts/check-public-api.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",

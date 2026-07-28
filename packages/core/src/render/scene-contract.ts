@@ -9,6 +9,7 @@
 //   project → chapter → narrator/POV → scene
 // ============================================================================
 
+import * as crypto from 'node:crypto';
 import type { BranchPath } from '../types/branch.js';
 import type { DiscoursePosition } from '../types/discourse.js';
 import type {
@@ -72,6 +73,9 @@ export interface SceneContractInput {
   /** Hash of planned discourse boundary. */
   plannedDiscourseHash: string;
 
+  /** Hash of assertion catalog (definitions/assertions). */
+  catalogHash?: string;
+
   /** Style resolution hints (chapter/narrator/POV/scene style IDs). */
   styleHints?: {
     chapterStyle?: string;
@@ -89,8 +93,10 @@ export interface SceneContractInput {
 
   /** Prompt provider identifier. */
   promptProviderId?: string;
-}
 
+  /** Version of the prompt provider used. */
+  promptProviderVersion?: string;
+}
 /**
  * Compile a scene contract from input data.
  * Resolves the deterministic style profile and builds the continuity packet.
@@ -116,10 +122,12 @@ export function compileSceneContract(input: SceneContractInput): CompiledSceneCo
     knowledgeStateHash: input.knowledgeStateHash,
     narratorProfileHash: input.narratorProfileHash,
     plannedDiscourseHash: input.plannedDiscourseHash,
+    catalogHash: input.catalogHash,
     styleProfile,
     continuityPacket,
     promptContractHash,
     promptProviderId: input.promptProviderId,
+    promptProviderVersion: input.promptProviderVersion,
   };
 }
 
@@ -196,19 +204,19 @@ export function clearStyleProfileRegistry(): void {
   styleProfileRegistry.set(DEFAULT_PROJECT_STYLE.profileId, DEFAULT_PROJECT_STYLE);
 }
 
-// ─── Hash computation ─────────────────────────────────────────────────────────
-
 /**
  * Compute the prompt contract hash from the input and resolved values.
- * Uses a simple deterministic hash for now; in production this would be
- * a real SHA-256 of the serialised contract.
+ * Uses canonical-key-sorted JSON SHA-256 for deterministic cryptographic identity.
  */
 function computePromptContractHash(
   input: SceneContractInput,
   styleProfile: StyleProfile,
   continuityPacket: ContinuityPacket,
 ): string {
-  const raw = JSON.stringify({
+  // Build comprehensive payload covering ALL contract identity inputs:
+  // world-state boundary, knowledge boundary, narrator/profile,
+  // planned discourse/catalog, style, branch, prompt-provider/version.
+  const payload: Record<string, unknown> = {
     sceneId: input.sceneId,
     branch: input.branch,
     discoursePosition: input.discoursePosition,
@@ -216,24 +224,42 @@ function computePromptContractHash(
     knowledgeStateHash: input.knowledgeStateHash,
     narratorProfileHash: input.narratorProfileHash,
     plannedDiscourseHash: input.plannedDiscourseHash,
-    styleProfileId: styleProfile.profileId,
-    continuityTransition: continuityPacket.transition,
-    promptProviderId: input.promptProviderId,
-  });
+    catalogHash: input.catalogHash ?? null,
+    styleProfile,
+    continuity: continuityPacket,
+    promptProviderId: input.promptProviderId ?? null,
+    promptProviderVersion: input.promptProviderVersion ?? null,
+  };
 
-  return simpleHash(raw);
+  const raw = canonicalJson(payload);
+  return crypto.createHash('sha256').update(raw, 'utf-8').digest('hex');
 }
 
 /**
- * Simple deterministic hash for string content.
- * Not cryptographic — for deterministic contract hashing only.
+ * Deterministic recursive sorted-key canonical JSON serialization.
+ * Arrays preserve original order; object keys are sorted lexicographically;
+ * undefined members are omitted; primitives serialize normally.
  */
-export function simpleHash(input: string): string {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    const char = input.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0; // Convert to 32bit integer
+export function canonicalJson(value: unknown): string {
+  if (typeof value !== 'object' || value === null) {
+    return JSON.stringify(value);
   }
-  return Math.abs(hash).toString(16).padStart(8, '0');
+  if (Array.isArray(value)) {
+    return '[' + value.map((v) => canonicalJson(v)).join(',') + ']';
+  }
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj)
+    .filter((k) => obj[k] !== undefined)
+    .sort();
+  return (
+    '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalJson(obj[k])).join(',') + '}'
+  );
+}
+
+/**
+ * Compute SHA-256 hex digest of the input string.
+ * Cryptographic — suitable for contract identity.
+ */
+export function computeSha256Hex(input: string): string {
+  return crypto.createHash('sha256').update(input, 'utf-8').digest('hex');
 }

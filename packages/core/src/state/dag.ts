@@ -31,27 +31,62 @@ export function buildCausalEdges(
   options: CausalGraphOptions = {},
 ): { edges: AdjacencyList; inDegree: Map<string, number> } {
   const anchors = options.anchors ?? new Map<string, number>();
-  const selectedEvents = options.branchPath
-    ? events.filter((event) => includesPath(event.branchExistence, options.branchPath!))
-    : events.filter((event) => event.branchExistence.type === 'all');
+  const selectedBranch = options.branchPath ?? { decisions: [] };
+  const selectedEvents = events.filter((event) =>
+    includesPath(event.branchExistence, selectedBranch),
+  );
+  const selectedEventIds = new Set(selectedEvents.map((event) => event.id));
+  const isFactSelected = (fact: Fact): boolean =>
+    includesPath(fact.validity.branches, selectedBranch);
   const writes = new Map<string, Write[]>();
   const initial = new Set(
-    (options.initialFacts ?? []).filter((fact) => fact.value !== undefined).map(factKey),
+    (options.initialFacts ?? [])
+      .filter((fact) => fact.value !== undefined && isFactSelected(fact))
+      .map(factKey),
   );
   const edges: AdjacencyList = new Map();
   const inDegree = new Map<string, number>();
 
   for (const event of selectedEvents) {
-    if (edges.has(event.id))
+    if (edges.has(event.id)) {
       throw new DagProviderError('Duplicate event ID', {
         eventId: event.id,
         phase: 'causal-compile',
       });
+    }
     edges.set(event.id, []);
     inDegree.set(event.id, 0);
+  }
+
+  const addEdge = (predecessorId: string, eventId: string): void => {
+    const successors = edges.get(predecessorId);
+    if (!successors) {
+      throw new DagProviderError(`Unknown predecessor '${predecessorId}' for event '${eventId}'`, {
+        eventId,
+        phase: 'causal-compile',
+      });
+    }
+    if (successors.includes(eventId)) return;
+    successors.push(eventId);
+    inDegree.set(eventId, (inDegree.get(eventId) ?? 0) + 1);
+  };
+
+  for (const event of selectedEvents) {
+    for (const predecessorId of event.causalPredecessors ?? []) {
+      if (!selectedEventIds.has(predecessorId)) {
+        throw new DagProviderError(
+          `Predecessor '${predecessorId}' for event '${event.id}' is unknown or excluded by the selected branch`,
+          { eventId: event.id, phase: 'causal-compile' },
+        );
+      }
+      addEdge(predecessorId, event.id);
+    }
+  }
+
+  for (const event of selectedEvents) {
     const day = eventDay(event, anchors);
     for (const fact of event.postconditions) {
-      if (fact.value === undefined) continue;
+      if (!isFactSelected(fact) || fact.value === undefined) continue;
       const key = factKey(fact);
       const writers = writes.get(key) ?? [];
       writers.push({ eventId: event.id, day });
@@ -62,7 +97,7 @@ export function buildCausalEdges(
   for (const event of selectedEvents) {
     const consumerDay = eventDay(event, anchors);
     for (const precondition of event.preconditions) {
-      if (precondition.value === undefined) continue;
+      if (!isFactSelected(precondition) || precondition.value === undefined) continue;
       const key = factKey(precondition);
       const candidates = (writes.get(key) ?? []).filter((writer) => writer.day < consumerDay);
       if (candidates.length === 0) {
@@ -72,7 +107,7 @@ export function buildCausalEdges(
           { eventId: event.id, stateKey: key, phase: 'causal-compile' },
         );
       }
-      const newestDay = Math.max(...candidates.map((c) => c.day));
+      const newestDay = Math.max(...candidates.map((candidate) => candidate.day));
       const newest = candidates.filter((candidate) => candidate.day === newestDay);
       if (newest.length !== 1) {
         throw new DagProviderError(
@@ -80,15 +115,14 @@ export function buildCausalEdges(
           { eventId: event.id, stateKey: key, phase: 'causal-compile' },
         );
       }
-      const provider = newest[0];
+      const provider = newest[0]!;
       if (provider.eventId === event.id) {
         throw new DagProviderError(
           `Event ${event.id} cannot provide its own precondition at ${key}`,
           { eventId: event.id, stateKey: key, phase: 'causal-compile' },
         );
       }
-      edges.get(provider.eventId)!.push(event.id);
-      inDegree.set(event.id, (inDegree.get(event.id) ?? 0) + 1);
+      addEdge(provider.eventId, event.id);
     }
   }
 

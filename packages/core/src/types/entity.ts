@@ -2,6 +2,7 @@
 // Novalistically — Entity, Timestamp & Fact Types
 // ============================================================================
 
+import type { Storage } from '../storage/types.ts';
 import type { BranchSet } from './branch.js';
 
 // ——— IDs ———
@@ -117,7 +118,7 @@ export interface FactValidity {
 // ——— Entity Registry (§7.4.14) ———
 
 export interface EntityRegistry {
-  load: (projectPath: string) => void;
+  load: (projectPath: string, storage?: Storage) => void;
   resolve: (id: EntityId) => Entity | null;
   findByKind: (kind: EntityKind) => Entity[];
   findByAttribute: (attribute: string, value: unknown) => Entity[];

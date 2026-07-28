@@ -6,7 +6,6 @@
 //   scenes/chapter-NN/{eventId}.md                — prose
 //   scenes/chapter-NN/{eventId}.yaml               — metadata (prose_source, edit_history)
 //   scenes/chapter-NN/{eventId}_render_request.yaml — context package sent to LLM
-//   .nova/responses/{eventId}.json                 — full raw LLM response
 //   .nova/derived/threads.yaml                     — thread progress tracking
 //   .nova/derived/foreshadowing.yaml               — foreshadowing state tracking
 //   .nova/derived/relationships.yaml               — relationship evolution tracking
@@ -16,14 +15,14 @@
 import { countNarrativeText, NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/count.ts';
 import type { Storage } from '../storage/index.js';
 import type { RenderJob, RenderSceneResult } from './render.js';
+import type { GameDialogueChoice } from '../types/index.ts';
 
 export interface OutputEntry {
   eventId: string;
   chapterNumber: number;
   prose: string;
   metadata: Record<string, unknown>;
-  renderRequest: Record<string, unknown>;
-  rawResponse: Record<string, unknown>;
+  renderRequest?: Record<string, unknown>;
 }
 
 export interface DerivedData {
@@ -31,6 +30,29 @@ export interface DerivedData {
   foreshadowing: Array<Record<string, unknown>>;
   relationships: Array<Record<string, unknown>>;
   rules: Array<Record<string, unknown>>;
+}
+
+function yamlScalar(value: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_-]*$/.test(value) && !/^(true|false|null|yes|no|on|off)$/i.test(value)
+    ? value
+    : JSON.stringify(value);
+}
+
+function appendPlayerChoicesBlock(prose: string, choices: readonly GameDialogueChoice[]): string {
+  const lines = [
+    '<!-- FABULA:PLAYER_CHOICES:v1 -->',
+    '```yaml',
+    'playerChoices:',
+    ...choices.flatMap((choice) => [
+      `  - id: ${yamlScalar(choice.id)}`,
+      `    label: ${JSON.stringify(choice.label)}`,
+      `    description: ${JSON.stringify(choice.description)}`,
+      `    targetEvent: ${yamlScalar(choice.targetEvent)}`,
+    ]),
+    '```',
+    '<!-- /FABULA:PLAYER_CHOICES -->',
+  ];
+  return `${prose.trimEnd()}\n\n${lines.join('\n')}`;
 }
 
 /**
@@ -111,7 +133,6 @@ function writeRenderOutputs(
   entries: OutputEntry[],
   derived: DerivedData,
 ): void {
-  const responseDir = [projectDir, '.nova', 'responses'].join('/');
   const writes: Array<{ path: string; content: string }> = [];
 
   for (const entry of entries) {
@@ -126,15 +147,13 @@ function writeRenderOutputs(
         path: [sceneDir, `${entry.eventId}.yaml`].join('/'),
         content: `${yamlify(entry.metadata)}\n`,
       },
-      {
+    );
+    if (entry.renderRequest) {
+      writes.push({
         path: [sceneDir, `${entry.eventId}_render_request.yaml`].join('/'),
         content: `${yamlify(entry.renderRequest)}\n`,
-      },
-      {
-        path: [responseDir, `${entry.eventId}.json`].join('/'),
-        content: JSON.stringify(entry.rawResponse, null, 2),
-      },
-    );
+      });
+    }
   }
 
   const derivedDir = [projectDir, '.nova', 'derived'].join('/');
@@ -174,10 +193,14 @@ export function buildAndWriteOutputs(
     const r = resultMap.get(job.event.id);
     if (!r) continue;
 
+    // Cache hits deliberately carry no request record: old cache metadata
+    // cannot be promoted into a fabricated provider request artifact.
     entries.push({
       eventId: job.event.id,
       chapterNumber: job.chapter,
-      prose: r.prose,
+      prose: job.gameDialogue
+        ? appendPlayerChoicesBlock(r.prose, job.gameDialogue.choices)
+        : r.prose,
       metadata: {
         narrativeOrder: job.event.narrativeOrder,
         event: job.event.id,
@@ -189,32 +212,18 @@ export function buildAndWriteOutputs(
           ? []
           : [{ action: 'llm_generated', timestamp: new Date().toISOString() }],
         branchExistence: job.event.branchExistence ?? { type: 'all' },
+        ...(job.gameDialogue ? { playerChoices: job.gameDialogue.choices } : {}),
       },
-      renderRequest: {
-        eventId: job.event.id,
-        chapter: job.chapter,
-        sceneBrief: job.event.sceneBrief,
-        styleGuidance: job.event.styleGuidance ?? null,
-        contextFactCount: job.context?.worldFacts?.length ?? 0,
-        contextCharCount: job.context?.characterSnapshots?.length ?? 0,
-      },
-      rawResponse: {
-        prose: r.prose,
-        timestamp: new Date().toISOString(),
-        cacheHit: r.cacheHit,
-        errors: r.errors,
-        analysis: r.analysis,
-        validation: r.validation,
-        needsReview: r.needsReview,
-        attempts: r.attempts,
-        released:
-          r.prose.trim().length > 0 &&
-          r.analysis !== null &&
-          r.validation !== null &&
-          r.validation.passed &&
-          !r.needsReview,
-        ...(r.pass2Rejection !== undefined ? { pass2Rejection: r.pass2Rejection } : {}),
-      },
+      renderRequest:
+        r.requestRecords.length > 0
+          ? {
+              eventId: job.event.id,
+              chapter: job.chapter,
+              logicalDisclosureSummary: job.logicalDisclosureSummary,
+              surfaceReferencePacket: job.surfaceReferencePacket,
+              requests: r.requestRecords,
+            }
+          : undefined,
     });
   }
 

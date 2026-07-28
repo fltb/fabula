@@ -4,7 +4,9 @@
 
 import { readFileSync } from 'node:fs';
 import type { Message } from '../ai/types.ts';
-import type { ContextPackage, StyleGuidance } from '../types/index.ts';
+import type { ContextPackage, GameDialogueChoice, StyleGuidance } from '../types/index.ts';
+import type { SurfaceReferencePacket } from '../types/render-surface.ts';
+import type { PromptDecoration } from '../plugin/types.ts';
 
 export interface AssembledPrompt {
   systemPrompt: string;
@@ -59,6 +61,22 @@ export class PromptAssembler {
       }>;
       /** S4: Source context style notes (STYLE-classified only), injected as style anchors */
       sourceContextStyleNotes?: string;
+      /** Planned disclosure context — hash-pinned summary from LogicalDisclosureSummaryCompiler,
+       *  rendered before the Narrative Context Package. Only present when a discourse ledger exists. */
+      logicalDisclosureSummary?: string;
+      /** Non-authoritative surface reference packet from a prior render pass.
+       *  Rendered as ## Surface Reference (Non-authoritative) with explicit YAML priority.
+       *  Never passed to Pass 2. */
+      surfaceReferencePacket?: SurfaceReferencePacket;
+      /** Non-authoritative plugin prompt decorations.
+       *  Rendered as a ## Plugin Decorations (Non-authoritative) section.
+       *  Merged in plugin-name order, each with its cache identity.
+       *  These are decorative only — never override authoritative context. */
+      decorations?: PromptDecoration[];
+      /** YAML-authored player choices; serialized by the system after raw prose. */
+      gameDialogue?: {
+        choices: readonly GameDialogueChoice[];
+      };
     },
   ): AssembledPrompt {
     const parts: string[] = [
@@ -170,6 +188,13 @@ export class PromptAssembler {
       }
       parts.push('Prose must not contradict these rules.');
     }
+
+    // ── Planned Disclosure Context ────────────────────────────────
+    if (options?.logicalDisclosureSummary) {
+      parts.push('');
+      parts.push('## Planned Disclosure Context');
+      parts.push(options.logicalDisclosureSummary);
+    }
     parts.push(
       '',
       '## Narrative Context Package',
@@ -200,6 +225,63 @@ export class PromptAssembler {
         'The previous rendering of this scene failed quality checks. You MUST address ALL of them in this rewrite.',
         '',
         options.retryGuidance,
+      );
+    }
+
+
+    // ── Surface Reference (Non-authoritative) ─────────────────────
+    if (options?.surfaceReferencePacket) {
+      const pkt = options.surfaceReferencePacket;
+      parts.push('');
+      parts.push('## Surface Reference (Non-authoritative)');
+      parts.push('The following excerpt and metrics are from a prior render pass and are non-authoritative.');
+      parts.push('In case of conflict, the YAML scene definition, compiled scene contract, and narrative context package take precedence.');
+      parts.push('');
+      parts.push('### Excerpt');
+      parts.push('```');
+      parts.push(pkt.excerpt);
+      parts.push('```');
+      parts.push('');
+      parts.push('### Style Metrics');
+      parts.push(`- Average sentence length: ${pkt.styleMetrics.avgSentenceLength}`);
+      parts.push(`- Reading level: ${pkt.styleMetrics.readingLevel}`);
+      parts.push(`- Token count: ${pkt.styleMetrics.tokenCount}`);
+      parts.push(`- Lexical diversity: ${pkt.styleMetrics.lexicalDiversity}`);
+      parts.push(`- Dialogue ratio: ${pkt.styleMetrics.dialogueRatio}`);
+      if (pkt.authoredAnchor) {
+        parts.push('');
+        parts.push('### Authored Anchor');
+        parts.push(pkt.authoredAnchor);
+      }
+      parts.push('');
+      parts.push('### Source');
+      parts.push(`- Scene ID: ${pkt.sceneId}`);
+      parts.push(`- Excerpt mode: ${pkt.excerptMode}`);
+      parts.push(`- Source prose hash: ${pkt.sourceProseHash}`);
+      parts.push(`- Extractor version: ${pkt.extractorVersion}`);
+    }
+
+    // ── Plugin Decorations (Non-authoritative) ─────────────────────
+    if (options?.decorations && options.decorations.length > 0) {
+      parts.push('');
+      parts.push('## Plugin Decorations (Non-authoritative)');
+      parts.push('The following sections are provided by plugins and are non-authoritative.');
+      parts.push('In case of conflict, the YAML scene definition, compiled scene contract,');
+      parts.push('narrative context package, and other core sections take precedence.');
+      parts.push('');
+      for (const dec of options.decorations) {
+        parts.push(`<!-- decoration-id: ${dec.id} cache-key: ${dec.cacheKey} -->`);
+        parts.push(dec.content);
+        parts.push('');
+      }
+    }
+
+    if (options?.gameDialogue) {
+      parts.push(
+        '',
+        '## Player Decision',
+        'End this scene at the decision beat. Write only the narrative lead-in and do not enumerate, label, or format player choices.',
+        'The system will append the YAML-authored choices after your raw prose.',
       );
     }
 

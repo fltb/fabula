@@ -21,6 +21,7 @@ const branchPathSchema = z.object({
 });
 
 import type {
+  AcceptedSceneArtifact,
   CompiledSceneContract,
   ContinuityPacket,
   RenderGroupManifest,
@@ -199,6 +200,28 @@ export const renderGroupManifestSchema = z
 
 export const renderGroupManifestSchemaZ: z.ZodType<RenderGroupManifest> = renderGroupManifestSchema;
 
+
+// ─── ReleaseDecision (§9) ─────────────────────────────────────────────────
+
+export const releaseDecisionSchema = z.object({
+  status: z.enum(['accepted', 'pending_waiver', 'blocked']),
+  scopeHash: z.string(),
+  validationIdentity: z.string(),
+  reasons: z.array(z.string()),
+  waiverId: z.string().optional(),
+});
+
+export const acceptedSceneArtifactSchema = z
+  .object({
+    eventId: z.string(),
+    prose: z.string(),
+    scopeHash: z.string(),
+    releaseDecision: releaseDecisionSchema,
+  })
+  .strict();
+
+export const acceptedSceneArtifactSchemaZ: z.ZodType<AcceptedSceneArtifact> =
+  acceptedSceneArtifactSchema;
 // ─── SurfaceReferencePacket (non-authoritative) ─────────────────────────────
 
 export const excerptModeSchema = z.enum(['tail', 'full', 'authored_anchor']);
@@ -247,12 +270,20 @@ export const surfacePlannerOptionsSchema = z
     sceneIds: z.array(z.string()),
     contracts: z.array(compiledSceneContractSchema),
     authorLanes: z.array(serialLaneSchema).optional(),
+    authorGroups: z.array(renderGroupSchema).optional(),
     autoConfig: autoGroupConfigSchema.optional(),
   })
   .strict();
 
-export const surfacePlannerOptionsSchemaZ: z.ZodType<SurfacePlannerOptions> =
-  surfacePlannerOptionsSchema;
+export const surfacePlanProposalSchema = z
+  .object({
+    groups: z.array(renderGroupSchema),
+    lanes: z.array(serialLaneSchema),
+    hash: z.string(),
+  })
+  .strict();
+export const surfacePlanProposalSchemaZ: z.ZodType<import('../types/render-surface.js').SurfacePlanProposal> =
+  surfacePlanProposalSchema;
 
 export const surfacePlanResultSchema = z
   .object({
@@ -260,11 +291,53 @@ export const surfacePlanResultSchema = z
     surfaceDependencyGraph: surfaceDependencyGraphSchema,
     validationGateGraph: validationGateGraphSchema,
     warnings: z.array(z.string()).optional(),
+    proposal: surfacePlanProposalSchema.optional(),
   })
   .strict();
 
 export const surfacePlanResultSchemaZ: z.ZodType<SurfacePlanResult> = surfacePlanResultSchema;
 
+
+// ─── Project-level RenderSurface Config ────────────────────────────────────
+
+export const renderSurfaceGroupSchema = z
+  .object({
+    groupId: z.string(),
+    sceneIds: z.array(z.string()),
+    surfacePolicy: z.enum(['parallel', 'serial_surface', 'fallback_without_surface']),
+  })
+  .strict();
+
+export const renderSurfaceLaneSchema = z
+  .object({
+    laneId: z.string(),
+    groupIds: z.array(z.string()),
+  })
+  .strict();
+
+export const renderSurfaceExtractionSchema = z
+  .object({
+    budget: z.number().int().min(0),
+    anchors: z.record(z.string(), z.string()).optional(),
+  })
+  .strict();
+
+export const renderSurfaceAutoConfigSchema = z
+  .object({
+    authorized: z.boolean(),
+    maxParallelGroupSize: z.number().int().min(1),
+  })
+  .strict();
+
+export const renderSurfaceConfigSchema = z
+  .object({
+    mode: plannerModeSchema.optional(),
+    groups: z.array(renderSurfaceGroupSchema).optional(),
+    lanes: z.array(renderSurfaceLaneSchema).optional(),
+    extraction: renderSurfaceExtractionSchema.optional(),
+    auto: renderSurfaceAutoConfigSchema.optional(),
+  })
+  .strict();
 // ─── Cache Keys (§10) ───────────────────────────────────────────────────────
 
 export const logicalRenderKeySchema = z
@@ -310,16 +383,22 @@ export const attemptKeySchema = z
 // ─── Error Codes ──────────────────────────────────────────────────────────────
 
 export const surfaceErrorCodeSchema = z.enum([
-  'CROSS_BRANCH_SURFACE_EDGE',
-  'SURFACE_CYCLE',
-  'UNACCEPTED_SOURCE_PROSE',
-  'UNVERSIONED_EXTRACTION',
-  'UNVERSIONED_BUDGET',
-  'MISSING_CONTRACT',
-  'INVALID_POLICY',
-  'UNAUTHORIZED_AUTO_MODE',
   'BRANCH_MISMATCH',
-  'GROUP_SCENE_CONFLICT',
-  'FALLBACK_WITHOUT_SURFACE_NOT_ALLOWED',
+  'CROSS_BRANCH_SURFACE_EDGE',
+  'DUPLICATE_GROUP_ID',
   'EXHAUSTED_RETRY',
+  'FALLBACK_WITHOUT_SURFACE_NOT_ALLOWED',
+  'GROUP_SCENE_CONFLICT',
+  'INVALID_POLICY',
+  'MISSING_CONTRACT',
+  'MISSING_SCENE_IN_GROUP',
+  'MISSING_SURFACE_SOURCE',
+  'SERIAL_GROUP_MULTIPLE_SCENES',
+  'SURFACE_CYCLE',
+  'UNAUTHORIZED_AUTO_MODE',
+  'UNACCEPTED_SOURCE_PROSE',
+  'UNVERSIONED_BUDGET',
+  'UNVERSIONED_EXTRACTION',
+  'UNVERSIONED_MANIFEST',
+  'UNKNOWN_GROUP_ID',
 ]);

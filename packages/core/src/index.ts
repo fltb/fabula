@@ -22,22 +22,37 @@ export type {
 } from './ai/index.ts';
 export { AiSdkProvider, LLMError, MockPass2Provider, MockProvider } from './ai/index.ts';
 // Assembler
+export type { AssembleOptions, AssembleResult } from './assembler/index.js';
 export {
-  type AssembleOptions,
-  type AssembleResult,
   assembleNovel,
   countNarrativeText,
   countWords,
 } from './assembler/index.js';
+export { assembleGameDialogueTree } from './assembler/game-dialogue-tree.ts';
+export type {
+  AssembleGameDialogueTreeOptions,
+  AssembleGameDialogueTreeResult,
+} from './assembler/game-dialogue-tree.ts';
+export { compileGameDialogueTree } from './branch/game-dialogue-tree.ts';
+export type { CompiledGameDialogueTree } from './branch/game-dialogue-tree.ts';
+export { branchPathsEqual } from './branch/path.ts';
 // Batch types only
 export type { BatchConfig, BatchProgressEvent, BatchResult, BatchStats } from './batch-renderer.js';
-export type { VerifyChainResult } from './cache/render-cache.js';
+export type { CacheDiagnostics, VerifyChainResult } from './cache/render-cache.js';
 // Cache
 export {
+  buildAttemptKeyMaterial,
+  buildLogicalKeyMaterial,
+  buildSurfaceKeyMaterial,
+  buildValidationKeyMaterial,
+  canonicalJson,
   clearEventCache,
+  clearRenderCache,
   computeEvidenceHash,
+  computeFlatCacheKey,
   getCachedRender,
   setCachedRender,
+  sha256Canonical,
   verifyEvidenceChain,
 } from './cache/render-cache.js';
 export type { RelevanceContext } from './context/index.js';
@@ -83,10 +98,9 @@ export type { EventMap } from './event-bus.ts';
 // Event bus
 export { TypedEventBus } from './event-bus.ts';
 export { calculateISS } from './iss/index.js';
-// Migration
+export type { MigrationFn } from './migration/index.js';
 export {
   CURRENT_SCHEMA_VERSION,
-  type MigrationFn,
   migrateToLatest,
 } from './migration/index.js';
 // Observability types only
@@ -110,10 +124,10 @@ export type {
   ResolutionResult,
 } from './plugin/index.js';
 export { PluginHooksManager } from './plugin/index.js';
-// Report
-export { type BenchReport, type PipelineRunResult, ReportWriter } from './report/index.js';
-// Reporter (legacy, delegates to ReportWriter)
-export { type ValidationReport, writeValidationReport } from './reporter/index.js';
+export type { BenchReport, PipelineRunResult } from './report/index.js';
+export { ReportWriter } from './report/index.js';
+export type { ValidationReport } from './reporter/index.js';
+export { writeValidationReport } from './reporter/index.js';
 // Review
 export { ReviewManager } from './review/index.js';
 export type { CommentFilter, StatusSummary } from './review/types.js';
@@ -180,6 +194,8 @@ export {
 
 export type {
   DiffResult,
+  RenderGameDialogueTreeOptions,
+  RenderGameDialogueTreeResult,
   ImpactAnalysisResult,
   ImpactLevel,
   ProjectStatusResult,
@@ -189,6 +205,7 @@ export type {
 // API — Orchestration functions (public API)
 export {
   analyzeProjectImpact,
+  renderGameDialogueTree,
   diffEvent,
   getProjectStatus,
   initializeProject,

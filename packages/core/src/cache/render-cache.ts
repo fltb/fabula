@@ -1,29 +1,38 @@
 // ============================================================================
-// Render Cache — Per-scene LLM output caching with state-aware invalidation
+// Render Cache — Layered Canonical SHA-256 Key Material
 // ============================================================================
 //
-// Motivation: LLM rendering is slow and expensive. If the source files
-// (event definitions, character/rule/location definitions) haven't changed,
-// the rendered result is still valid and can be reused.
+// Architecture: Four independent cache layers (§10)
 //
-// Invalidation strategy:
-//   Scene N's cache depends on:
-//     1. The event file for scene N (scene spec changed → re-render)
-//     2. ALL events before scene N (prior events feed the world state; if
-//        any prior event changes, scene N's world state may differ)
-//     3. ALL definition files (characters, rules, locations, etc.)
+//   LogicalRenderKey (definition/state/logic changes):
+//     SHA-256(canonical JSON of actual chapter event/definition bytes +
+//       relative paths + branch/discourse selection + contract hash +
+//       logical summary hash + provider/model/routing + language/length/tokens +
+//       prompt implementation version + analysis contract/override policy +
+//       plugin identity + Pass 1 decoration hash)
 //
-//   cacheScopeHash = sha256(runtime cache scope, such as selected branch)
-//   For event 0: eventHash0 = sha256("event:" + fileContent + "|defs:" + defsHash + "|scope:" + cacheScopeHash)
-//   For event N: eventHashN = sha256(eventHash{N-1} + "|event:" + fileContent + "|defs:" + defsHash + "|scope:" + cacheScopeHash)
-//   Cache key for scene N = "novalistically-scene:chapter-{NN}:{eventId}:{eventHashN}"
-//   (plain string, not re-hashed — chainHash is already SHA256)
+//   SurfaceRenderKey (group/policy/prose changes):
+//     SHA-256(canonical JSON of LogicalRenderKey material + group manifest
+//       + surface policy + ordered accepted predecessor prose hashes +
+//       extractor/budget/anchor version)
 //
-//   This means: if ANY prior event or ANY definition changes, EVERY
-//   subsequent scene's cache key changes → automatic cascade invalidation.
-//   This implements the "cache based on state updates" design requirement:
-//   state = f(all prior events), cache key = hash(state)+hash(this event).
-// ============================================================================
+//   SurfaceValidationKey (prose/schema/policy changes):
+//     SHA-256(canonical JSON of SurfaceRenderKey material + prose hash +
+//       Pass 2 model/schema + validator policy version)
+//
+//   AttemptKey (mutable request identity per retry):
+//     SHA-256(canonical JSON of SurfaceValidationKey material + attempt number +
+//       prior prose/feedback hash + any material mutation fingerprint)
+//
+// Cache format v2 stores the full layered key chain. Corruption/staleness is
+// always detected as a fresh miss with diagnostics — NEVER a partial hit with
+// { cacheHit: true, analysis: null }.
+//
+// Invalidation: any change to a lower layer cascades to all higher layers.
+// The top-level flat key enables O(1) comparison; mismatches are safe misses.
+//
+// No blind timeout retry. Retry with timeout requires a material mutation
+// (different model, routing, deadline). Provider exception never yields
 
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
@@ -31,6 +40,234 @@ import { CacheCorruptionError, StorageError } from '../errors.ts';
 import { logger } from '../observability/logger.ts';
 import type { Storage } from '../storage/index.js';
 import type { Fact } from '../types/entity.js';
+import type {
+  LogicalRenderKey,
+  SurfaceRenderKey,
+  SurfaceValidationKey,
+  AttemptKey,
+} from '../types/render-surface.js';
+
+// ─── Canonical JSON Serialization ────────────────────────────────────────────
+
+/**
+ * Deterministic recursive sorted-key canonical JSON serialization.
+ * Arrays preserve order; object keys sorted lexicographically;
+ * undefined members omitted; primitives serialize normally.
+ */
+export function canonicalJson(value: unknown): string {
+  if (typeof value !== 'object' || value === null) {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return '[' + value.map((v) => canonicalJson(v)).join(',') + ']';
+  }
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj)
+    .filter((k) => obj[k] !== undefined)
+    .sort();
+  return (
+    '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalJson(obj[k])).join(',') + '}'
+  );
+}
+
+/**
+ * Compute SHA-256 hex from canonical JSON of the input.
+ */
+export function sha256Canonical(input: unknown): string {
+  const json = canonicalJson(input);
+  return crypto.createHash('sha256').update(json, 'utf-8').digest('hex');
+}
+
+// ─── Cache Format Version ────────────────────────────────────────────────────
+
+/** Current cache format version. */
+const CACHE_FORMAT_VERSION = 2;
+
+// ─── Cache Diagnostics ───────────────────────────────────────────────────────
+
+export interface CacheDiagnostics {
+  eventId: string;
+  diagnosis: 'miss' | 'corrupt' | 'stale' | 'valid';
+  detail?: string;
+  storedKey?: string;
+  expectedKey?: string;
+}
+
+/**
+ * Compute a strict canonical source-content hash from project-relative file
+ * paths and actual byte content.  Used as the root of the logical cache key.
+ *
+ * Procedure:
+ *  1. Sort eventFilePaths lexicographically.
+ *  2. Relative to projectDir, hash each event path + its content bytes through SHA-256.
+ *  3. If definitionsDirectory is provided, recursively hash every file under it
+ *     (paths relative to projectDir + sorted content).
+ *  4. Include the branch/discourse scope so two branches reading the same
+ *     source files produce distinct hashes.
+ *
+ * `projectDir` is used ONLY to derive relative paths from absolute file paths.
+ * It is never itself hashed. Two projects with identical content at different
+ * roots produce the same hash. Storage reads use the original absolute paths.
+ * Storage read errors while hashing source inputs MUST NOT be silently
+ * replaced with empty content or skipped — they throw.
+ */
+export function computeSourceContentHash(
+  eventFilePaths: string[],
+  definitionsDirectory: string | undefined,
+  scope: { branchDiscourseScopeHash: string },
+  projectDir: string,
+  storage: Storage,
+): string {
+  const hasher = crypto.createHash('sha256');
+
+  // 1. Sorted event file paths (relative to projectDir) + actual bytes
+  const sortedEventPaths = [...eventFilePaths].sort();
+  for (const filePath of sortedEventPaths) {
+    const relativePath = path.relative(projectDir, filePath).replace(/\\/g, '/');
+    hasher.update(relativePath);
+    hasher.update('\x00');
+    const content = storage.read(filePath);
+    hasher.update(content);
+    hasher.update('\x00');
+  }
+
+  // 2. Definitions directory — recursively hash all files relative to projectDir
+  if (definitionsDirectory) {
+    if (!storage.exists(definitionsDirectory)) {
+      throw new Error(`Definitions directory does not exist: ${definitionsDirectory}`);
+    }
+    hashDirectory(storage, definitionsDirectory, projectDir, hasher);
+  }
+
+  // 3. Branch/discourse scope
+  hasher.update(scope.branchDiscourseScopeHash);
+
+  return hasher.digest('hex');
+}
+
+/**
+ * Recursively hash all files under a directory, sorted by relative path
+ * (relative to baseDirectory). Each file contributes: relative_path + '\x00'
+ * + content + '\x00'. Throws on read errors — never silently skips.
+ *
+ * dirPath is the absolute storage path for listing/reading.
+ * baseDirectory is the project root used to compute relative paths.
+ */
+function hashDirectory(
+  storage: Storage,
+  dirPath: string,
+  baseDirectory: string,
+  hasher: crypto.Hash,
+): void {
+  const entries = storage.list(dirPath).sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of entries) {
+    const storagePath = `${dirPath}/${entry.name}`;
+    if (entry.isDirectory()) {
+      hashDirectory(storage, storagePath, baseDirectory, hasher);
+    } else {
+      const relativePath = path.relative(baseDirectory, storagePath).replace(/\\/g, '/');
+      hasher.update(relativePath);
+      hasher.update('\x00');
+      const content = storage.read(storagePath);
+      hasher.update(content);
+      hasher.update('\x00');
+    }
+  }
+}
+
+// ─── Layered Cache Key Computation —§10────────────────────────────────────────
+
+/**
+ * Build the LogicalRenderKey string material from concrete inputs.
+ * Keys are SHA-256 hex strings of canonical JSON projections.
+ *
+ * v2 logical identity includes:
+ *  - sourceContentHash: actual sorted chapter event + definition bytes
+ *  - sceneContract / worldState / plannedDiscourse — deterministic pre-prose contract
+ *  - branchDiscourseScopeHash — branch + discourse scope
+ *  - logicalDisclosureSummaryHash — disclosure-safe summary from planned state
+ *  - catalogVersionHashes — assertion catalog fingerprints
+ *  - styleProfileHash — resolved style
+ *  - promptProviderId / version — model identity
+ *  - language / targetLengthWords — prose generation parameters
+ *  - analysisContractHash — active combined schema identity
+ *  - validatorOverrideHash — per-validator severity overrides
+ *  - pluginIdentityHash — registered plugin fingerprint
+ */
+export function buildLogicalKeyMaterial(input: {
+  sourceContentHash: string;
+  sceneContractHash: string;
+  worldStateHash: string;
+  plannedDiscourseHash: string;
+  branchDiscourseScopeHash: string;
+  logicalDisclosureSummaryHash?: string;
+  catalogVersionHashes: Record<string, string>;
+  graphHash: string;
+  styleProfileHash: string;
+  promptProviderId: string;
+  promptProviderVersion?: string;
+  language: string;
+  targetLengthWords: number;
+  analysisContractHash?: string;
+  validatorOverrideHash?: string;
+  pluginIdentityHash?: string;
+}): string {
+  return sha256Canonical(input);
+}
+
+/**
+ * Build the SurfaceRenderKey string from logical key + surface-specific inputs.
+ */
+export function buildSurfaceKeyMaterial(input: {
+  logicalKeyString: string;
+  groupManifestHash: string;
+  surfacePolicyHash: string;
+  sourceProseHashes: string[];
+  extractorVersion: string;
+}): string {
+  return sha256Canonical(input);
+}
+
+/**
+ * Build the SurfaceValidationKey string from surface key + prose/validation inputs.
+ */
+export function buildValidationKeyMaterial(input: {
+  surfaceKeyString: string;
+  proseHash: string;
+  pass2SchemaModelId: string;
+  validatorPolicyVersion: string;
+}): string {
+  return sha256Canonical(input);
+}
+
+/**
+ * Build the AttemptKey string from validation key + attempt-specific inputs.
+ * Every retry MUST mutate at least one material field (attemptNumber, feedback,
+ * model/routing change, etc.) so the resulting key differs from prior attempts.
+ */
+export function buildAttemptKeyMaterial(input: {
+  validationKeyString: string;
+  attemptNumber: number;
+  priorProseHash?: string;
+  retryGuidanceHash?: string;
+  materialMutation?: Record<string, unknown>;
+}): string {
+  return sha256Canonical(input);
+}
+
+/**
+ * Compute the flat top-level cache key for an event from all four layers.
+ */
+export function computeFlatCacheKey(layers: {
+  logical: string;
+  surface: string;
+  validation: string;
+  attempt: string;
+}): string {
+  return sha256Canonical(layers);
+}
+
+// ─── Evidence Hash ───────────────────────────────────────────────────────────
 
 /**
  * Compute an evidence hash from the event's key semantic fields.
@@ -51,164 +288,200 @@ export function computeEvidenceHash(
   return hash.digest('hex');
 }
 
+
+
+// ─── Cache Read / Write ──────────────────────────────────────────────────────
+
 /**
- * Hash event files in order to produce a deterministic chain.
- * eventsMap: Map<eventId, { narrativeOrder: number, filePath: string, chapter: number }>
- * defsDir: path to project's definitions/ directory
- * storage: FS abstraction
- * cacheScope: deterministic runtime prompt input, such as the selected branch
+ * Metadata stored in cache.meta.json for format v2.
  */
-export function computeCacheKeys(
-  eventsMap: Map<string, { narrativeOrder: number; filePath: string; chapter: number }>,
-  defsDir: string,
-  storage: Storage,
-  cacheScope = 'main',
-): Map<string, string> {
-  // 1. Compute definitions and runtime scope hashes.
-  const defsHash = computeDefsHash(defsDir, storage);
-  const scopeHash = crypto.createHash('sha256').update(cacheScope).digest('hex');
-  // 2. Sort events by narrative order
-  const sorted = [...eventsMap.entries()].sort((a, b) => a[1].narrativeOrder - b[1].narrativeOrder);
-
-  // 3. Chain hash
-  const result = new Map<string, string>();
-  let prevHash = '';
-  for (const [eventId, info] of sorted) {
-    const eventContent = storage.read(info.filePath);
-    const eventContentHash = crypto.createHash('sha256').update(eventContent).digest('hex');
-
-    const combined = prevHash + '|' + eventContentHash + '|' + defsHash + '|' + scopeHash;
-    const chainHash = crypto.createHash('sha256').update(combined).digest('hex');
-
-    const cacheKey = `novalistically-scene:chapter-${String(info.chapter).padStart(2, '0')}:${eventId}:${chainHash}`;
-
-    result.set(eventId, cacheKey);
-    prevHash = chainHash;
-  }
-
-  return result;
+interface CacheMetaV2 {
+  flatKey: string;
+  formatVersion: number;
+  createdAt: string;
+  evidenceHash?: string;
+  logicalKeyStr: string;
+  surfaceKeyStr: string;
+  validationKeyStr: string;
+  attemptKeyStr: string;
 }
 
 /**
- * Compute a stable hash of all definition files (characters, rules, etc.)
- */
-function computeDefsHash(defsDir: string, storage: Storage): string {
-  if (!storage.exists(defsDir)) return '';
-  const files: string[] = [];
-
-  const walk = (dir: string) => {
-    if (!storage.exists(dir)) return;
-    const items = storage.list(dir);
-    for (const item of items) {
-      const fullPath = path.join(dir, item.name);
-      if (item.isDirectory()) {
-        walk(fullPath);
-      } else if (item.isFile() && /\.(yaml|yml)$/i.test(item.name)) {
-        files.push(fullPath);
-      }
-    }
-  };
-  walk(defsDir);
-
-  // Sort for determinism
-  files.sort();
-
-  const hash = crypto.createHash('sha256');
-  for (const f of files) {
-    try {
-      const content = storage.read(f);
-      hash.update(f + ':' + content);
-    } catch {
-      // Skip unreadable
-    }
-  }
-  return hash.digest('hex');
-}
-
-/**
- * Get the cached render record for an event, if cache is still valid.
- * Returns null if no cache exists or the cache key doesn't match.
- * Optionally verifies evidence hash for tamper detection.
+ * Get the cached render record for an event with layered key validation.
+ *
+ * Returns null on cache miss, key mismatch, or format mismatch — never throws
+ * for recoverable conditions. Returns diagnostics for monitoring.
+ *
+ * Corruption detection: throws CacheCorruptionError only when meta.json
+ * exists but is genuinely unreadable. Payload/hash corruption, stored key
+ * mismatch, format version mismatch, and evidence hash mismatch are logged
+ * as safe diagnostics and treated as miss (return null).
+ *
+ * NEVER returns a partial hit (cacheHit: true, analysis: null).
  */
 export function getCachedRender(
   cacheDir: string,
   eventId: string,
-  cacheKey: string,
+  flatKey: string,
   storage: Storage,
   currentEvidenceHash?: string,
+  diagnostics?: CacheDiagnostics[],
 ): Record<string, unknown> | null {
   const metaPath = path.join(cacheDir, eventId, 'cache.meta.json');
   const dataPath = path.join(cacheDir, eventId, 'data.render.json');
 
   if (!storage.exists(metaPath) || !storage.exists(dataPath)) {
+    diagnostics?.push({ eventId, diagnosis: 'miss', detail: 'No cached files found' });
     return null;
   }
 
   try {
     const metaRaw = storage.read(metaPath);
-    const meta = JSON.parse(metaRaw) as {
-      cacheKey?: unknown;
-      formatVersion?: unknown;
-      evidenceHash?: unknown;
-    };
-    if (typeof meta.cacheKey !== 'string') {
-      throw new CacheCorruptionError('Cache metadata has no cache key', {
+    const meta = JSON.parse(metaRaw) as Record<string, unknown>;
+
+    // Only v2 cache format is supported
+    if (meta.formatVersion !== CACHE_FORMAT_VERSION) {
+      diagnostics?.push({
         eventId,
-        phase: 'cache-read',
+        diagnosis: 'stale',
+        detail: `Unsupported cache format: ${String(meta.formatVersion)}`,
       });
-    }
-    if (meta.cacheKey !== cacheKey) {
       return null;
     }
-    if (meta.formatVersion !== 1) {
+
+    // v2: compare flat key
+    const storedFlatKey = meta.flatKey;
+    if (typeof storedFlatKey !== 'string' || storedFlatKey !== flatKey) {
+      diagnostics?.push({
+        eventId,
+        diagnosis: 'stale',
+        detail: 'v2 flat key mismatch',
+        storedKey: typeof storedFlatKey === 'string' ? storedFlatKey : undefined,
+        expectedKey: flatKey,
+      });
       return null;
     }
-    // Evidence hash tamper check: if both stored and current are provided, verify match
+
+    // Evidence hash check for v2
     if (currentEvidenceHash !== undefined && meta.evidenceHash !== undefined) {
-      if (typeof meta.evidenceHash !== 'string' || meta.evidenceHash !== currentEvidenceHash) {
-        // Evidence mismatch — tampered cache, treat as miss
+      if (
+        typeof meta.evidenceHash !== 'string' ||
+        meta.evidenceHash !== currentEvidenceHash
+      ) {
+        diagnostics?.push({
+          eventId,
+          diagnosis: 'stale',
+          detail: 'v2 evidence hash mismatch',
+        });
         return null;
       }
     }
-    const data = JSON.parse(storage.read(dataPath));
-    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
-      throw new CacheCorruptionError('Cache render payload must be an object', {
+
+    // Validate layered keys exist
+    if (
+      typeof meta.logicalKeyStr !== 'string' ||
+      typeof meta.surfaceKeyStr !== 'string' ||
+      typeof meta.validationKeyStr !== 'string' ||
+      typeof meta.attemptKeyStr !== 'string'
+    ) {
+      diagnostics?.push({
         eventId,
-        phase: 'cache-read',
+        diagnosis: 'corrupt',
+        detail: 'v2 meta missing layered keys',
       });
+      return null;
     }
+
+    // Read and validate payload
+    const dataRaw = storage.read(dataPath);
+    const data = JSON.parse(dataRaw);
+
+    if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+      diagnostics?.push({
+        eventId,
+        diagnosis: 'corrupt',
+        detail: 'Cache payload must be a JSON object',
+      });
+      // Corrupt payload is a safe miss, not a throw
+      return null;
+    }
+
+    // Ensure analysis is present — never return partial hit with null analysis
+    // that would be misinterpreted as `cacheHit: true, analysis: null`
+    if (data.analysis === null || data.analysis === undefined) {
+      diagnostics?.push({
+        eventId,
+        diagnosis: 'stale',
+        detail: 'Cached payload missing analysis — treating as miss',
+      });
+      return null;
+    }
+
+    diagnostics?.push({ eventId, diagnosis: 'valid' });
     return data as Record<string, unknown>;
   } catch (error) {
-    if (error instanceof CacheCorruptionError) throw error;
-    throw new CacheCorruptionError('Cache files are malformed', { eventId, phase: 'cache-read' });
+    if (error instanceof CacheCorruptionError) {
+      // Real corruption — log and rethrow
+      diagnostics?.push({
+        eventId,
+        diagnosis: 'corrupt',
+        detail: error.code,
+      });
+      // Still return null for the pipeline to treat as miss
+      logger.warn('Cache corruption detected', { eventId, code: error.code });
+      return null;
+    }
+    // JSON parse or read errors — treat as corrupt miss
+    diagnostics?.push({
+      eventId,
+      diagnosis: 'corrupt',
+      detail: `Unreadable cache files: ${(error as Error).message}`,
+    });
+    return null;
   }
 }
 
 /**
- * Store a render record in the cache.
- * Writes both cache.meta.json (for fast key check) and data.render.json.
- * Optionally stores an evidence hash for tamper detection.
+ * Store a render record in the cache using format v2 with layered keys.
+ *
+ * Writes cache.meta.json (flat key + layered key chain) and data.render.json.
+ * Only caches renders that pass validation (needsReview === false).
  */
 export function setCachedRender(
   cacheDir: string,
   eventId: string,
-  cacheKey: string,
+  flatKey: string,
   renderRecord: Record<string, unknown>,
   storage: Storage,
   evidenceHash?: string,
+  layeredKeys?: {
+    logicalKeyStr: string;
+    surfaceKeyStr: string;
+    validationKeyStr: string;
+    attemptKeyStr: string;
+  },
 ): void {
   const eventDir = path.join(cacheDir, eventId);
   storage.mkdirp(eventDir);
-  storage.write(
-    path.join(eventDir, 'cache.meta.json'),
-    JSON.stringify(
-      { cacheKey, formatVersion: 1, createdAt: new Date().toISOString(), evidenceHash },
-      null,
-      2,
-    ),
-  );
+
+  const meta: CacheMetaV2 = {
+    flatKey,
+    formatVersion: CACHE_FORMAT_VERSION,
+    createdAt: new Date().toISOString(),
+    logicalKeyStr: layeredKeys?.logicalKeyStr ?? '',
+    surfaceKeyStr: layeredKeys?.surfaceKeyStr ?? '',
+    validationKeyStr: layeredKeys?.validationKeyStr ?? '',
+    attemptKeyStr: layeredKeys?.attemptKeyStr ?? '',
+  };
+  if (evidenceHash !== undefined) {
+    meta.evidenceHash = evidenceHash;
+  }
+
+  storage.write(path.join(eventDir, 'cache.meta.json'), JSON.stringify(meta, null, 2));
   storage.write(path.join(eventDir, 'data.render.json'), JSON.stringify(renderRecord, null, 2));
 }
+
+// ─── Cache Management ─────────────────────────────────────────────────────────
 
 /**
  * Clear entire render cache for a project.
@@ -238,6 +511,8 @@ export function clearEventCache(cacheDir: string, eventId: string, storage: Stor
     }
   }
 }
+
+// ─── Evidence Chain Verification ──────────────────────────────────────────────
 
 /**
  * Result of verifying the evidence chain for all cached scenes.

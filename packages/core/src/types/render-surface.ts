@@ -130,6 +130,9 @@ export interface CompiledSceneContract {
   /** Hash of planned discourse boundary (PlannedDiscourseLedger excerpt). */
   plannedDiscourseHash: string;
 
+  /** Hash of assertion catalog (ledger definitions/assertions). */
+  catalogHash?: string;
+
   /** Resolved versioned StyleProfile. */
   styleProfile: StyleProfile;
 
@@ -141,6 +144,9 @@ export interface CompiledSceneContract {
 
   /** Prompt provider identifier (model/system prompt version). */
   promptProviderId?: string;
+
+  /** Version of the prompt provider used. */
+  promptProviderVersion?: string;
 }
 
 // ─── SurfaceDependencyGraph (§1) ────────────────────────────────────────────
@@ -284,7 +290,46 @@ export interface RenderGroupManifest {
 
 export type PlannerMode = 'manual' | 'suggest' | 'auto';
 
-// ─── SurfaceReferencePacket (§4) — Non-authoritative ────────────────────────
+
+// ─── ReleaseDecision (§9) ──────────────────────────────────────────────────
+
+/**
+ * ReleaseDecision — verdict for a scene artifact after validation gate.
+ * The `status` field determines eligibility:
+ *  - `accepted`: all checks pass (or warnings waived)
+ *  - `pending_waiver`: warnings exist but no matching waiver
+ *  - `blocked`: errors prevent release
+ * `scopeHash` identifies the render/validation scope (branch, discourse, etc.).
+ * `validationIdentity` uniquely identifies the validator set and overrides.
+ * `reasons` lists human-readable explanations for non-accepted status.
+ * `waiverId` is set when a pending_waiver was resolved via waiver.
+ */
+export interface ReleaseDecision {
+  status: 'accepted' | 'pending_waiver' | 'blocked';
+  scopeHash: string;
+  validationIdentity: string;
+  reasons: string[];
+  waiverId?: string;
+}
+
+/**
+ * AcceptedSceneArtifact — scene prose that has (or has not) passed the
+ * release gate.  Required by SurfaceReferenceExtractor; only artifacts
+ * with `releaseDecision.status: 'accepted'` can produce a SurfaceReferencePacket.
+ *
+ * Carries the event ID, full prose text, scope hash (branch/discourse
+ * selection), and the release decision itself.
+ */
+export interface AcceptedSceneArtifact {
+  /** Unique scene or event identifier. */
+  eventId: string;
+  /** Full prose text of the scene. */
+  prose: string;
+  /** Hash of the render scope (branch, discourse selection, etc.). */
+  scopeHash: string;
+  /** Release gate decision.  Only `status: 'accepted'` is valid for extraction. */
+  releaseDecision: ReleaseDecision;
+}
 
 /**
  * SurfaceReferencePacket — fixed tail/full excerpt of accepted source prose
@@ -461,9 +506,62 @@ export interface SurfacePlannerOptions {
   /** Serial surface group lanes (author-specified for manual mode). */
   authorLanes?: SerialLane[];
 
+  /** Author-defined groups for manual mode (RenderGroup with groupId/sceneIds/policy). */
+  authorGroups?: RenderGroup[];
+
   /** Auto/suggest mode config. */
   autoConfig?: AutoGroupConfig;
 }
+
+// ─── Project-level RenderSurface Config ─────────────────────────────────────
+
+/**
+ * Top-level `renderSurface` config from project YAML.
+ * mode='manual' default-parallel when absent or no groups provided.
+ * suggest persists proposal-only; auto requires authorization.
+ */
+export interface RenderSurfaceConfig {
+  /** Planner mode; absent => 'manual' default-parallel. */
+  mode?: PlannerMode;
+
+  /** Explicit group definitions (manual mode). */
+  groups?: RenderSurfaceGroup[];
+
+  /** Serial lane definitions referencing group IDs. */
+  lanes?: RenderSurfaceLane[];
+
+  /** Extraction budget and anchors. */
+  extraction?: RenderSurfaceExtraction;
+
+  /** Auto-mode authorization & config (only when mode='auto'). */
+  auto?: RenderSurfaceAutoConfig;
+}
+
+/** Config-time surface group (string-based policy for YAML ergonomics). */
+export interface RenderSurfaceGroup {
+  groupId: string;
+  sceneIds: string[];
+  surfacePolicy: 'parallel' | 'serial_surface' | 'fallback_without_surface';
+}
+
+/** Config-time lane referencing group IDs for serial ordering. */
+export interface RenderSurfaceLane {
+  laneId: string;
+  groupIds: string[];
+}
+
+/** Extraction budget and optional authored anchors. */
+export interface RenderSurfaceExtraction {
+  budget: number;
+  /** Named anchors for surface reference extraction. */
+  anchors?: Record<string, string>;
+}
+
+/** Auto-mode authorization and group-size config. */
+export interface RenderSurfaceAutoConfig {
+  authorized: boolean;
+  maxParallelGroupSize: number;
+ }
 
 export interface AutoGroupConfig {
   /** Maximum parallel group size before splitting. */
@@ -472,6 +570,30 @@ export interface AutoGroupConfig {
   /** Whether auto mode is authorized for this project. */
   authorized: boolean;
 }
+
+// ─── Surface Plan Proposal (suggest mode only) ────────────────────────────────
+
+/**
+ * SurfacePlanProposal — a suggested grouping from suggest mode.
+ *
+ * The planner's effective plan in suggest mode is always default-parallel;
+ * the proposal preserves any suggested serial groups/lanes for a later
+ * API caller to persist (e.g. to `.nova/render-plans/{branch}.suggestion.json`)
+ * without duplicating planner algorithms.
+ *
+ * The proposal hash is deterministic and excludes wall-clock fields.
+ */
+export interface SurfacePlanProposal {
+  /** Proposed groups (may include serial_surface groups). */
+  groups: RenderGroup[];
+
+  /** Proposed serial lanes. */
+  lanes: SerialLane[];
+
+  /** Deterministic SHA-256 hash of the proposal (excludes generatedAt). */
+  hash: string;
+}
+
 
 export interface SurfacePlanResult {
   /** Generated manifest. */
@@ -485,6 +607,15 @@ export interface SurfacePlanResult {
 
   /** Any planner warnings (e.g., suggestions in suggest mode). */
   warnings?: string[];
+
+  /**
+   * Proposal from suggest mode.
+   * Present only when mode is 'suggest' and the planner found
+   * candidate serial groups. The effective plan is always default-parallel;
+   * this field preserves the suggestion for later persistence.
+   * Undefined for manual/auto mode.
+   */
+  proposal?: SurfacePlanProposal;
 }
 
 // ─── Errors ─────────────────────────────────────────────────────────────────
@@ -512,4 +643,10 @@ export type SurfaceErrorCode =
   | 'BRANCH_MISMATCH'
   | 'GROUP_SCENE_CONFLICT'
   | 'FALLBACK_WITHOUT_SURFACE_NOT_ALLOWED'
-  | 'EXHAUSTED_RETRY';
+  | 'EXHAUSTED_RETRY'
+  | 'DUPLICATE_GROUP_ID'
+  | 'MISSING_SCENE_IN_GROUP'
+  | 'MISSING_SURFACE_SOURCE'
+  | 'SERIAL_GROUP_MULTIPLE_SCENES'
+  | 'UNVERSIONED_MANIFEST'
+  | 'UNKNOWN_GROUP_ID';

@@ -8,6 +8,7 @@ import type {
 } from '../types/index.js';
 import type { ItemDefinition, LocationDefinition } from '../types/location.js';
 import type { RuleDefinition } from '../types/rule.js';
+import type { Storage } from '../storage/types.ts';
 import { defaultEntityTypeCatalog } from './default-catalog.js';
 import { canonicalizeFactValue } from './fact-value.js';
 import { EntityMapper } from './mapper.js';
@@ -76,8 +77,8 @@ function buildGenericState(
 export class InMemoryEntityRegistry implements EntityRegistry {
   private entities: Map<EntityId, Entity> = new Map();
 
-  load(projectPath: string): void {
-    const mapper = new EntityMapper(projectPath);
+  load(projectPath: string, storage?: Storage): void {
+    const mapper = new EntityMapper(projectPath, storage);
     const data = mapper.loadProject();
 
     // Load characters

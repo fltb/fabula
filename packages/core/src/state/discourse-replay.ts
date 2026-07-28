@@ -142,7 +142,7 @@ export function createOmniscientProfile(
 // Internal: empty DiscourseState
 // ═════════════════════════════════════════════════════════════════════════════
 
-function emptyDiscourseState(branch: string): DiscourseState {
+export function emptyDiscourseState(branch: string): DiscourseState {
   return {
     position: 0,
     reveals: [],
@@ -314,7 +314,6 @@ function applyAction(
 // ═════════════════════════════════════════════════════════════════════════════
 // Public API
 // ═════════════════════════════════════════════════════════════════════════════
-
 /**
  * Replay a PlannedDiscourseLedger up to (and including) the given position
  * for the specified branch.
@@ -322,13 +321,14 @@ function applyAction(
  * Returns the DiscourseState at that position.
  *
  * @param ledger - The canonical planned discourse ledger.
- * @param position - Discourse position to replay to (0-indexed).
+ * @param position - Discourse position to replay to. -1 returns a pristine empty state.
+ *                  Nonnegative positions are sparse-safe (no upper-bound against entry count).
  * @param branch - Branch path to filter entries by.
  * @returns Immutable DiscourseState snapshot.
  *
  * Hard fails (§19):
- * - position out of bounds
  * - duplicate discourse position in entries
+ * - negative position other than -1
  */
 export function replayDiscourseState(
   ledger: PlannedDiscourseLedger,
@@ -336,22 +336,29 @@ export function replayDiscourseState(
   branch: string,
   narratorAssertions: Record<string, NarratorAssertion> = {},
 ): DiscourseState {
+  // -1 returns a pristine empty state (before any discourse)
+  if (position === -1) {
+    const state = emptyDiscourseState(branch);
+    state.assertions = { ...narratorAssertions };
+    state.ledgerHash = ledger.hash;
+    return state;
+  }
+
+  if (position < -1) {
+    throw new Error(
+      `DiscoursePosition out of range: ${position}. Must be -1 or nonnegative.`,
+    );
+  }
+
   const state = emptyDiscourseState(branch);
   state.assertions = { ...narratorAssertions };
   state.ledgerHash = ledger.hash;
-
-  // Validate position bounds
-  if (position < 0 || position > ledger.entries.length) {
-    throw new Error(
-      `DiscoursePosition out of bounds: ${position} not in [0, ${ledger.entries.length}]`,
-    );
-  }
 
   // Assertion definitions are loaded separately from the ledger. Keep them in
   // the replayed state so truth boundaries and Pass 1 claim surfaces are usable.
   const assertions = state.assertions;
 
-  // Filter entries for this branch up to position
+  // Filter entries for this branch up to position (sparse-safe: no upper-bound on entry count)
   const relevantEntries = ledger.entries.filter(
     (e) => e.branch === branch && e.discoursePosition <= position,
   );

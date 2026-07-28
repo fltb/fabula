@@ -36,7 +36,6 @@ export interface ContextPackage {
   worldFacts: WorldFact[];
   knowledgeBoundary: KnowledgeBoundary;
   activeThreads: ThreadStatus[];
-  previousSceneSummary: string;
   volumeSummary: string;
   markdown: string;
   activeRules?: RuleDefinition[];
@@ -44,8 +43,6 @@ export interface ContextPackage {
   narratorProfile?: NarratorProfile;
   /** Pass 1-safe disclosure state derived from the planned discourse ledger. */
   discourseProjection?: DiscourseContextProjection;
-  /** Discourse replay error message, when replayDiscourseState() threw for this event (DISCOURSE-1). */
-  discourseReplayError?: string;
 }
 
 export interface SystemContext {

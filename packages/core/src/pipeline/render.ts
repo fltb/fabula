@@ -16,10 +16,15 @@ import { buildAnalysisPrompt, type RenderAnalysisInput } from '../ai/prompts/ren
 import type { CompletionRequest, CompletionResponse, LLMProvider, Message } from '../ai/types.ts';
 import { countNarrativeText } from '../assembler/count.ts';
 import {
-  computeCacheKeys,
+  buildAttemptKeyMaterial,
+  buildLogicalKeyMaterial,
+  buildSurfaceKeyMaterial,
+  buildValidationKeyMaterial,
   computeEvidenceHash,
   getCachedRender,
   setCachedRender,
+  CacheDiagnostics,
+  sha256Canonical,
 } from '../cache/render-cache.ts';
 import { PromptAssembler } from '../context/prompt-assembler.ts';
 import { CacheCorruptionError, sanitizeError } from '../errors.ts';
@@ -27,12 +32,16 @@ import type { TypedEventBus } from '../event-bus.ts';
 import type { Logger } from '../observability/logger.ts';
 import type { TraceCollector } from '../observability/trace.ts';
 import type { PluginHooksManager } from '../plugin/hooks-manager.ts';
+import type { BuildPromptInput, PromptDecoration } from '../plugin/types.ts';
 import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
 import type { Storage } from '../storage/index.ts';
-import { resolveProfile, type StyleProfile, StyleResolver, toStyleNotes } from '../style/index.ts';
+import { type StyleProfile, StyleResolver, toStyleNotes } from '../style/index.ts';
 import type {
   AnalysisResult,
+  CompiledSceneContract,
   ContextPackage,
+  EntityRegistry,
+  GameDialogueChoice,
   NarrativeEvent,
   ValidationResult,
   WorldState,
@@ -40,7 +49,7 @@ import type {
 import type { SurfaceReferencePacket } from '../types/render-surface.ts';
 import { compareAnalysisBlocks } from '../util/compare-analysis.ts';
 import { ConcurrencyPool } from '../util/pool.ts';
-import type { ResultAggregator } from '../validator/aggregator.ts';
+import type { AnalysisContract, ResultAggregator } from '../validator/aggregator.ts';
 import { createCircuitBreaker } from './circuit-breaker.ts';
 import { analyzeValidationErrors, decideRepairStrategy } from './reverse-validate.ts';
 
@@ -49,6 +58,35 @@ export interface RenderJob {
   stateBefore: WorldState;
   context: ContextPackage;
   chapter: number;
+
+  /** Deterministic player-choice data owned by a decision scene. */
+  gameDialogue?: {
+    choices: readonly GameDialogueChoice[];
+  };
+
+  /** Compiled scene contract — deterministic pre-prose contract with
+   *  branch/discourse position, boundary hashes, style profile, etc.
+   *  Every scene has one before prose (RENDER-SURFACE-1 §2). */
+  contract: CompiledSceneContract;
+
+  /** Surface dependency graph edge for this job.
+   *  Determines ordering, predecessor waiting, and fallback policy
+   *  within a surface dependency graph lane. */
+  surfaceDependency: {
+    groupId: string;
+    laneId?: string;
+    predecessorEventId?: string;
+    policy: 'parallel' | 'serial_surface' | 'fallback_without_surface';
+    manifestHash: string;
+  };
+
+  /**
+   * Canonical source-content hash computed from sorted event file paths +
+   * definition bytes under project-relative paths, and branch/discourse scope.
+   * Injected by API before RenderPipeline cache use.
+   * A source read failure is a hard render configuration failure.
+   */
+  sourceContentHash: string;
 
   /**
    * Hash-pinned disclosure-safe summary of prior discourse state.
@@ -76,6 +114,14 @@ export interface ProviderCallLedgerEntry {
   /** Safe failure reason — set only on failure, never contains prompts/secrets/keys */
   failureReason?: string;
 }
+export interface RenderRequestRecord {
+  phase: 'pass1' | 'pass2';
+  attempt: number;
+  requestHash: string;
+  messages: readonly Message[];
+  responseContent?: string | null;
+}
+
 
 /** Categorises why Pass 2 analysis is null after all retries exhaust.
  *  - 'empty': provider returned null or empty content
@@ -98,6 +144,8 @@ export interface RenderSceneResult {
   renderEnd: number;
   validation: ValidationResult | null; // post-render validation result
   providerCalls: ProviderCallLedgerEntry[];
+  /** Actual provider requests for fresh candidates; empty for cache hits. */
+  requestRecords: RenderRequestRecord[];
   attempts: number; // number of render attempts
   /** True if all retries exhausted and validation still has errors */
   needsReview: boolean;
@@ -111,16 +159,18 @@ export interface RenderPipelineOptions {
   provider: LLMProvider;
   model: string;
   cacheDir: string;
-  /** Directory to persist raw response files per-scene (optional).
-   *  When set, every renderScene call writes .nova/responses/{eventId}.json
-   *  before returning, including cache hits. */
-  responseDir?: string;
   storage: Storage;
   concurrency?: number; // default 5
   maxTokens?: number; // default 10000
   skipCache?: boolean; // force re-render
   referenceExample?: string; // optional "good" prose example for Pass 1
   aggregator?: ResultAggregator; // optional, for post-render validation
+  /** Entity registry for validator access to entity definitions (optional) */
+  entityRegistry?: EntityRegistry;
+  /** Per-validator severity overrides (optional) */
+  validatorOverrides?: Record<string, 'off' | 'warning' | 'error'>;
+  /** Pre-computed analysis contract for consistent Pass 2 schema (optional) */
+  analysisContract?: AnalysisContract;
   /** Maximum render+validate attempts before giving up (default 3) */
   maxRetries?: number;
   /** Logger for structured observability (optional) */
@@ -146,25 +196,26 @@ export class RenderPipeline {
   private readonly pool: ConcurrencyPool;
   private readonly skipCache: boolean;
   private readonly maxTokens: number;
-  private readonly responseDir?: string;
   private readonly model: string;
   private readonly provider: LLMProvider;
   private readonly cacheDir: string;
   private readonly storage: Storage;
   private readonly referenceExample?: string;
   private readonly aggregator?: ResultAggregator;
+  private readonly entityRegistry?: EntityRegistry;
+  private readonly validatorOverrides?: Record<string, 'off' | 'warning' | 'error'>;
+  private readonly analysisContract?: AnalysisContract;
   private readonly maxRetries: number;
   private readonly doubleRunVerification: boolean;
   private readonly logger?: Logger;
   private readonly traceCollector?: TraceCollector;
   private readonly eventBus?: TypedEventBus;
   private readonly targetLengthWords: number;
+  private readonly maxRounds: number;
   private readonly styleProfile?: StyleProfile;
   private readonly styleResolver: StyleResolver;
   private readonly language: string;
   private readonly pluginHooksManager?: PluginHooksManager;
-  private cacheKeys: Map<string, string> | null = null;
-  private readonly maxRounds: number;
   constructor(opts: RenderPipelineOptions) {
     this.provider = opts.provider;
     this.model = opts.model;
@@ -172,9 +223,11 @@ export class RenderPipeline {
     this.storage = opts.storage;
     this.skipCache = opts.skipCache ?? false;
     this.maxTokens = opts.maxTokens ?? 10_000;
-    this.responseDir = opts.responseDir;
     this.referenceExample = opts.referenceExample;
     this.aggregator = opts.aggregator;
+    this.entityRegistry = opts.entityRegistry;
+    this.validatorOverrides = opts.validatorOverrides;
+    this.analysisContract = opts.analysisContract;
     this.maxRetries = opts.maxRetries ?? 3;
     this.doubleRunVerification = opts.doubleRunVerification ?? false;
     this.logger = opts.logger;
@@ -188,20 +241,7 @@ export class RenderPipeline {
     this.pluginHooksManager = opts.pluginHooksManager;
     this.pool = new ConcurrencyPool(opts.concurrency ?? 5);
   }
-  /**
-   * Initialize cache keys from events + definitions.
-   * Must be called before render().
-   * eventsFileMap: Map<eventId, { narrativeOrder: number, filePath: string, chapter: number }>
-   * cacheScope: deterministic runtime input that changes the assembled prompt,
-   * such as a selected branch path.
-   */
-  async initCache(
-    eventsFileMap: Map<string, { narrativeOrder: number; filePath: string; chapter: number }>,
-    defsDir: string,
-    cacheScope?: string,
-  ): Promise<void> {
-    this.cacheKeys = computeCacheKeys(eventsFileMap, defsDir, this.storage, cacheScope);
-  }
+
 
   /**
    * Render a single scene job: cache lookup → Pass 1 → Pass 2 → write cache.
@@ -210,14 +250,53 @@ export class RenderPipeline {
     const { event, stateBefore, context, chapter } = job;
     const eventId = event.id;
     const errors: string[] = [];
-    const renderStart = Date.now();
-    const cacheKey = this.cacheKeys?.get(eventId);
+    const requestRecords: RenderRequestRecord[] = [];
+    // Compute canonical cache key from deterministic job inputs (logical + surface layers only).
+    // All identity-determining fields flow through canonical JSON → SHA-256.
+    const logicalKeyStr = buildLogicalKeyMaterial({
+      sourceContentHash: job.sourceContentHash,
+      sceneContractHash: job.contract.promptContractHash,
+      worldStateHash: job.contract.worldStateHash,
+      plannedDiscourseHash: job.contract.plannedDiscourseHash,
+      branchDiscourseScopeHash: job.contract.plannedDiscourseHash,
+      logicalDisclosureSummaryHash: job.logicalDisclosureSummary
+        ? sha256Canonical(job.logicalDisclosureSummary)
+        : undefined,
+      catalogVersionHashes: { default: job.contract.catalogHash ?? '' },
+      graphHash: '',
+      styleProfileHash: sha256Canonical(job.contract.styleProfile),
+      promptProviderId: this.model,
+      promptProviderVersion: this.model,
+      language: this.language,
+      targetLengthWords: this.targetLengthWords,
+      analysisContractHash: this.aggregator
+        ? this.aggregator.getAnalysisContract(this.validatorOverrides).hash
+        : undefined,
+      validatorOverrideHash: this.validatorOverrides
+        ? sha256Canonical(this.validatorOverrides)
+        : undefined,
+      pluginIdentityHash: this.pluginHooksManager
+        ? sha256Canonical(this.pluginHooksManager.getPluginIdentities())
+        : undefined,
+    });
+    const surfaceKeyStr = buildSurfaceKeyMaterial({
+      logicalKeyString: logicalKeyStr,
+      groupManifestHash: job.surfaceDependency.manifestHash,
+      surfacePolicyHash: sha256Canonical(job.surfaceDependency.policy),
+      sourceProseHashes: job.surfaceReferencePacket
+        ? [job.surfaceReferencePacket.sourceProseHash]
+        : [],
+      extractorVersion: '1',
+    });
+    const cacheKey = sha256Canonical({ logical: logicalKeyStr, surface: surfaceKeyStr });
+    const cacheDiagnostics: CacheDiagnostics[] = [];
     // Observability: pipeline span start
     this.traceCollector?.record({ phase: 'pipeline', state: 'start', spanId: eventId, eventId });
     this.logger?.info('Starting scene render', { eventId, chapter });
     this.eventBus?.emit('pipeline:render:before', { eventId });
+    const renderStart = Date.now();
 
-    // ── Cache check ──────────────────────────────────────────────
+    // ── Cache check with layered diagnostics ──────────────────────
     if (!this.skipCache && cacheKey) {
       this.traceCollector?.record({
         phase: 'cache',
@@ -225,32 +304,48 @@ export class RenderPipeline {
         spanId: `${eventId}:cache`,
         eventId,
       });
-      try {
-        const evidenceHash = computeEvidenceHash(
-          event.id,
-          event.preconditions ?? [],
-          event.postconditions ?? [],
-        );
-        const cached = getCachedRender(
-          this.cacheDir,
-          eventId,
-          cacheKey,
-          this.storage,
-          evidenceHash,
-        );
-        if (cached) {
-          const c = cached as Record<string, unknown>;
-          const cachedAnalysisStr = c.analysis ? String(c.analysis) : null;
-          const analysis = cachedAnalysisStr
-            ? this.aggregator
-              ? parseAnalysisJSONWithErrors(
-                  cachedAnalysisStr,
-                  this.aggregator.getCombinedValidationSchema(),
-                ).result
-              : parseAnalysisJSON(cachedAnalysisStr, (message) =>
-                  errors.push(`Cache parse warning: ${message}`),
-                )
-            : null;
+      const evidenceHash = computeEvidenceHash(
+        event.id,
+        event.preconditions ?? [],
+        event.postconditions ?? [],
+      );
+      const cached = getCachedRender(
+        this.cacheDir,
+        eventId,
+        cacheKey,
+        this.storage,
+        evidenceHash,
+        cacheDiagnostics,
+      );
+      if (cached) {
+        const c = cached as Record<string, unknown>;
+        // Always re-parse and re-validate cached analysis under current contract
+        const cachedAnalysisStr = c.analysis ? String(c.analysis) : null;
+        const analysis = cachedAnalysisStr
+          ? this.aggregator
+            ? parseAnalysisJSONWithErrors(
+                cachedAnalysisStr,
+                this.aggregator.getCombinedValidationSchema(),
+              ).result
+            : parseAnalysisJSON(cachedAnalysisStr, (message) =>
+                errors.push(`Cache parse warning: ${message}`),
+              )
+          : null;
+
+        // If analysis is null after re-parse, this is NOT a valid cache hit.
+        // Never return cacheHit: true with null analysis.
+        if (analysis === null) {
+          this.traceCollector?.record({
+            phase: 'cache',
+            state: 'end',
+            spanId: `${eventId}:cache`,
+            eventId,
+          });
+          this.logger?.info('Cache stale — analysis re-parse failed, proceeding to render', {
+            eventId,
+          });
+          this.eventBus?.emit('cache:miss', { eventId });
+        } else {
           const validation =
             analysis && this.aggregator
               ? this.aggregator.validateRender(
@@ -258,15 +353,14 @@ export class RenderPipeline {
                   event,
                   stateBefore,
                   analysis,
-                  undefined,
-                  undefined,
+                  this.validatorOverrides,
+                  this.entityRegistry,
                   chapter,
                   context,
                 )
               : null;
           const needsReview =
             String(c.prose ?? '').trim().length === 0 ||
-            analysis === null ||
             (validation !== null && !validation.passed);
           this.traceCollector?.record({
             phase: 'cache',
@@ -290,17 +384,6 @@ export class RenderPipeline {
             success: analysis !== null,
             errorCount: errors.length,
           });
-          await this.writeResponseFile(
-            eventId,
-            String(c.prose ?? ''),
-            true,
-            errors,
-            analysis,
-            typeof c.renderedAt === 'string' ? c.renderedAt : new Date().toISOString(),
-            validation,
-            needsReview,
-            0,
-          );
           return {
             eventId,
             prose: String(c.prose ?? ''),
@@ -317,8 +400,10 @@ export class RenderPipeline {
             needsReview,
             providerCalls: [],
             promptHash: typeof c.promptHash === 'string' ? c.promptHash : '',
+            requestRecords,
           };
         }
+      } else {
         this.traceCollector?.record({
           phase: 'cache',
           state: 'end',
@@ -327,15 +412,12 @@ export class RenderPipeline {
         });
         this.logger?.info('Cache miss, proceeding to render', { eventId });
         this.eventBus?.emit('cache:miss', { eventId });
-      } catch (error) {
-        if (!(error instanceof CacheCorruptionError)) throw error;
-        errors.push(`Cache read failed for ${eventId}: ${error.code}`);
-        this.traceCollector?.record({
-          phase: 'cache',
-          state: 'error',
-          spanId: `${eventId}:cache`,
+      }
+      // Cache diagnostics for observability
+      if (cacheDiagnostics.length > 0) {
+        this.logger?.info('Cache diagnostics', {
           eventId,
-          code: error.code,
+          diagnostics: cacheDiagnostics.map((d) => d.diagnosis + (d.detail ? ': ' + d.detail : '')).join('; '),
         });
       }
     }
@@ -367,12 +449,10 @@ export class RenderPipeline {
       maxRounds: this.maxRounds,
       maxAttemptsPerRound: 2,
       failureThreshold: 3,
-      escalationDelay: 0,
     });
-
     // Resolve style profile from project config (chapter/narrator/scene levels can be added later)
     const styleNotes = this.styleProfile
-      ? toStyleNotes(resolveProfile({ project: this.styleProfile }))
+      ? toStyleNotes(this.styleResolver.resolve({ project: this.styleProfile }).simple)
       : undefined;
     while (breaker.attempt()) {
       attempts = breaker.state().totalAttempts;
@@ -383,6 +463,27 @@ export class RenderPipeline {
         eventId,
         code: `round_${breaker.state().round}_attempt_${attempts}`,
       });
+
+      // ── Collect plugin decorations for Pass 1 ───────────────────
+      let pass1Decorations: readonly PromptDecoration[] = [];
+      if (this.pluginHooksManager) {
+        const buildInput: BuildPromptInput = {
+          phase: 'pass1',
+          eventId: event.id,
+          chapter,
+          attempt: attempts,
+          contractHash: job.contract.promptContractHash,
+          messages: [],
+        };
+        try {
+          pass1Decorations = await this.pluginHooksManager.runOnBuildPass1Prompt(buildInput);
+        } catch (err) {
+          errors.push(`Pass 1 decoration hook failed: ${sanitizeError(err)}`);
+          // Hard failure — break out of retry loop
+          breaker.recordFailure('Pass 1 decoration hook failed');
+          break;
+        }
+      }
 
       // ── Pass 1: Pure prose (with retry guidance on retry) ────────
       const assembler = new PromptAssembler();
@@ -408,6 +509,10 @@ export class RenderPipeline {
           .filter((e) => e.classification === 'STYLE')
           .map((e) => (e.styleNote ? `- "${e.excerpt}" (${e.styleNote})` : `- "${e.excerpt}"`))
           .join('\n'),
+        logicalDisclosureSummary: job.logicalDisclosureSummary,
+        surfaceReferencePacket: job.surfaceReferencePacket,
+        decorations: pass1Decorations.length > 0 ? [...pass1Decorations] : undefined,
+        gameDialogue: job.gameDialogue,
       });
       this.traceCollector?.record({
         phase: 'pass1',
@@ -428,6 +533,13 @@ export class RenderPipeline {
         const result1 = await this.provider.complete(pass1Request);
         prose = result1.content ?? '';
         llmPass1 = result1.usage ?? llmPass1;
+        requestRecords.push({
+          phase: 'pass1',
+          attempt: attempts,
+          requestHash: pass1Hash,
+          messages: [...proseMessages],
+          responseContent: result1.content ?? null,
+        });
         providerCalls.push({
           phase: 'pass1',
           attempt: attempts,
@@ -439,7 +551,12 @@ export class RenderPipeline {
         if (!prose || prose.trim().length === 0) {
           errors.push(`Pass 1 attempt ${attempts} returned empty prose`);
           this.logger?.warn('Pass 1 returned empty prose', { eventId, attempts });
-          prose = '(empty)';
+          previousErrorMessages = [`Pass 1 attempt ${attempts} returned empty prose`];
+          breaker.recordFailure('Pass 1 returned empty prose');
+          if (breaker.state().consecutiveFailures >= 2) {
+            breaker.escalate();
+          }
+          continue;
         }
       } catch (err) {
         const pass1Hash = this.computeRequestHash({
@@ -449,18 +566,46 @@ export class RenderPipeline {
           maxTokens: this.maxTokens,
           taskType: 'pass1',
         });
+        requestRecords.push({
+          phase: 'pass1',
+          attempt: attempts,
+          requestHash: pass1Hash,
+          messages: [...proseMessages],
+        });
+        // Detect timeout before recording — so we can normalize the failure reason
+        const errStr = String(err);
+        const isTimeout = /timeout/i.test(errStr) || errStr.includes('timed out');
         providerCalls.push({
           phase: 'pass1',
           attempt: attempts,
           outcome: 'failure',
-          failureReason: sanitizeError(err),
+          failureReason: isTimeout
+            ? `timeout — ${sanitizeError(err)}`
+            : sanitizeError(err),
           requestHash: pass1Hash,
           model: this.model,
           seed: null,
         });
+        // Timeout — only retry with a material mutation
+        if (isTimeout) {
+          errors.push(`Pass 1 attempt ${attempts} timed out — only retrying with material mutation`);
+          this.logger?.warn('Pass 1 timeout', { eventId, attempts });
+          // A timeout without prior material mutation (different model/routing/deadline)
+          // is NOT retryable. Let circuit breaker handle it.
+          breaker.recordFailure('Pass 1 timeout — no material mutation');
+          if (breaker.state().consecutiveFailures >= 2) {
+            breaker.escalate();
+          }
+          continue;
+        }
+        // All other provider exceptions are hard failures, NOT retried with '(empty)'.
         errors.push(`Pass 1 attempt ${attempts} failed: ${sanitizeError(err)}`);
         this.logger?.error(sanitizeError(err), { eventId, attempts, phase: 'pass1' });
-        prose = '(empty)';
+        breaker.recordFailure('Pass 1 provider error');
+        if (breaker.state().consecutiveFailures >= 2) {
+          breaker.escalate();
+        }
+        continue;
       }
       this.traceCollector?.record({
         phase: 'pass1',
@@ -476,14 +621,6 @@ export class RenderPipeline {
         completionTokens: llmPass1.completionTokens,
         totalTokens: llmPass1.totalTokens,
       });
-
-      if (prose === '(empty)') {
-        breaker.recordFailure('Pass 1 returned empty prose');
-        if (breaker.state().consecutiveFailures >= 2) {
-          breaker.escalate();
-        }
-        continue;
-      }
 
       // ── Pass 2: Structured analysis (with retry-with-feedback) ────
       analysisRaw = null;
@@ -501,15 +638,48 @@ export class RenderPipeline {
         let analysisObj: AnalysisResult | null = null;
         let feedbackErrors: string[] | undefined;
         // Up to 4 attempts: initial + up to 3 retries with Zod error feedback
+        // ── Collect plugin decorations for Pass 2 ───────────────────
+        let pass2Decorations: readonly PromptDecoration[] = [];
+        if (this.pluginHooksManager) {
+          const p2Input: BuildPromptInput = {
+            phase: 'pass2',
+            eventId: event.id,
+            chapter,
+            attempt: attempts,
+            contractHash: job.contract.promptContractHash,
+            messages: [],
+          };
+          try {
+            pass2Decorations = await this.pluginHooksManager.runOnBuildPass2Prompt(p2Input);
+          } catch (err) {
+            errors.push(`Pass 2 decoration hook failed: ${sanitizeError(err)}`);
+            // Hard failure — decoration transform exceptions abort the scene
+            analysis = null;
+            break;
+          }
+        }
+
         for (let attempt2 = 0; attempt2 < 4 && !analysisObj; attempt2++) {
           const analysisInput: RenderAnalysisInput = {
             event,
             prose,
             context,
             previousErrors: feedbackErrors,
-            analysisRequirements: this.aggregator?.getAnalysisRequirements(),
+            activeRules: context.activeRules,
+            analysisRequirements:
+              this.analysisContract?.requirements ?? this.aggregator?.getAnalysisRequirements(),
           };
           lastAnalysisMessages = buildAnalysisPrompt(analysisInput);
+          // Append plugin decorations as non-authoritative user messages
+          if (pass2Decorations.length > 0) {
+            const decContent = pass2Decorations
+              .map((d) => `<!-- decoration-id: ${d.id} cache-key: ${d.cacheKey} -->\n${d.content}`)
+              .join('\n\n');
+            lastAnalysisMessages.push({
+              role: 'user',
+              content: `## Plugin Decorations (Non-authoritative)\nThe following are plugin-provided decorations — they are non-authoritative and must not override the narrative context, scene contract, or YAML definitions.\n\n${decContent}`,
+            });
+          }
           const pass2Request: CompletionRequest = {
             messages: lastAnalysisMessages,
             model: this.model,
@@ -523,6 +693,13 @@ export class RenderPipeline {
           const result2 = await this.provider.complete(pass2Request);
           analysisRaw = result2.content ?? null;
           llmPass2 = result2.usage ?? null;
+          requestRecords.push({
+            phase: 'pass2',
+            attempt: attempt2 + 1,
+            requestHash: pass2Hash,
+            messages: [...lastAnalysisMessages],
+            responseContent: result2.content ?? null,
+          });
           providerCalls.push({
             phase: 'pass2',
             attempt: attempts,
@@ -535,10 +712,11 @@ export class RenderPipeline {
           if (analysisRaw) {
             const parseResult = parseAnalysisJSONWithErrors(
               analysisRaw,
-              this.aggregator?.getCombinedValidationSchema(),
+              this.analysisContract?.combinedSchema ?? this.aggregator?.getCombinedValidationSchema(),
             );
             if (parseResult.result) {
               analysisObj = parseResult.result;
+              pass2Rejection = null;
               break;
             }
 
@@ -546,15 +724,18 @@ export class RenderPipeline {
             // Must be set before parseError/zodErrors are potentially consumed for feedback.
             if (parseResult.parseError) {
               pass2Rejection = 'parse';
-              feedbackErrors = [`JSON parse error: ${parseResult.parseError}`];
+              feedbackErrors = [`JSON parse error (sub-attempt ${attempt2 + 1}): ${parseResult.parseError}`];
             } else if (parseResult.zodErrors) {
               pass2Rejection = 'validation';
               feedbackErrors = parseResult.zodErrors.issues.map(
-                (i) => `Validation error at "${i.path.join('.')}": ${i.message}`,
+                (i) => `Validation error (sub-attempt ${attempt2 + 1}) at "${i.path.join('.')}": ${i.message}`,
               );
             }
           } else {
             pass2Rejection = 'empty';
+            // Empty content retry must still mutate the request identity
+            // by providing structured feedback — never a blind retry.
+            feedbackErrors = [`Pass 2 sub-attempt ${attempt2 + 1} returned empty. Please provide a valid structured JSON analysis for the scene.`];
           }
         }
 
@@ -677,8 +858,8 @@ export class RenderPipeline {
             event,
             stateBefore,
             analysis ?? undefined,
-            undefined,
-            undefined,
+            this.validatorOverrides,
+            this.entityRegistry,
             chapter,
             context,
           );
@@ -772,12 +953,35 @@ export class RenderPipeline {
       .digest('hex');
 
     // Save cache ONLY if validation passed (don't cache bad renders)
-    if (cacheKey && !needsReview) {
+    // Cache only analysable, no-error candidates (warning-only ok)
+    const hasErrorIssues = renderValidation?.errors.some((e) => e.severity === 'error') ?? false;
+    const isCacheable = analysis !== null && !hasErrorIssues;
+    if (cacheKey && isCacheable) {
       const evidenceHash = computeEvidenceHash(
         event.id,
         event.preconditions ?? [],
         event.postconditions ?? [],
       );
+
+      // Use builder functions for canonical layered keys (validation + attempt layers
+      // are stored as metadata; storage key remains logical+surface only).
+      const proseHash = sha256Canonical(prose);
+      const validationKeyStr = buildValidationKeyMaterial({
+        surfaceKeyString: surfaceKeyStr,
+        proseHash,
+        pass2SchemaModelId: this.model,
+        validatorPolicyVersion: '1',
+      });
+
+      const attemptGuidance = previousErrorMessages.length > 0
+        ? sha256Canonical(previousErrorMessages)
+        : undefined;
+      const attemptKeyStr = buildAttemptKeyMaterial({
+        validationKeyString: validationKeyStr,
+        attemptNumber: attempts,
+        retryGuidanceHash: attemptGuidance,
+      });
+
       setCachedRender(
         this.cacheDir,
         eventId,
@@ -793,6 +997,7 @@ export class RenderPipeline {
         },
         this.storage,
         evidenceHash,
+        { logicalKeyStr, surfaceKeyStr, validationKeyStr, attemptKeyStr },
       );
     }
     this.traceCollector?.record({
@@ -823,19 +1028,6 @@ export class RenderPipeline {
       errors.push(...hookErrors);
     }
 
-    await this.writeResponseFile(
-      eventId,
-      prose,
-      false,
-      errors,
-      analysis,
-      new Date().toISOString(),
-      renderValidation,
-      needsReview,
-      attempts,
-      pass2Rejection ?? undefined,
-    );
-
     return {
       eventId,
       prose,
@@ -848,6 +1040,7 @@ export class RenderPipeline {
       renderEnd,
       validation: renderValidation,
       providerCalls,
+      requestRecords,
       attempts,
       needsReview,
       promptHash,
@@ -855,58 +1048,6 @@ export class RenderPipeline {
     };
   }
 
-  /**
-   * Write a raw response artifact to responseDir/{eventId}.json.
-   * Non-fatal: catches errors, logs warning, returns void.
-   */
-  private async writeResponseFile(
-    eventId: string,
-    prose: string,
-    cacheHit: boolean,
-    errors: string[],
-    analysis: AnalysisResult | null,
-    timestamp: string,
-    validation: ValidationResult | null,
-    needsReview: boolean,
-    attempts: number,
-    pass2Rejection?: Pass2RejectionCategory,
-  ): Promise<void> {
-    if (!this.responseDir) return;
-    if (!prose || prose.trim().length === 0) return;
-    try {
-      this.storage.mkdirp(this.responseDir);
-      const released =
-        prose.trim().length > 0 &&
-        analysis !== null &&
-        validation !== null &&
-        validation.passed &&
-        !needsReview;
-      const payload: Record<string, unknown> = {
-        prose,
-        timestamp,
-        cacheHit,
-        errors,
-        analysis,
-        validation,
-        needsReview,
-        attempts,
-        released,
-      };
-      if (pass2Rejection !== undefined) {
-        payload.pass2Rejection = pass2Rejection;
-      }
-      this.storage.write(
-        [this.responseDir, `${eventId}.json`].join('/'),
-        JSON.stringify(payload, null, 2),
-      );
-    } catch (err) {
-      this.logger?.warn(`Failed to persist raw response for ${eventId}`, {
-        eventId,
-        responseDir: this.responseDir,
-        error: String(err),
-      });
-    }
-  }
 
   /**
    * Render multiple scenes in parallel using the concurrency pool.

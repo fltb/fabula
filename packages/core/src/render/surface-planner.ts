@@ -25,6 +25,7 @@ import type {
   SurfaceDependencyGraph,
   SurfaceErrorCode,
   SurfacePlannerOptions,
+  SurfacePlanProposal,
   SurfacePlanResult,
   SurfacePolicy,
   ValidationGate,
@@ -32,6 +33,7 @@ import type {
   ValidationPolicy,
 } from '../types/render-surface.js';
 import { SurfacePlannerError } from '../types/render-surface.js';
+import { canonicalJson, computeSha256Hex } from './scene-contract.js';
 
 // ─── Default Configuration ───────────────────────────────────────────────────
 
@@ -76,14 +78,30 @@ export class SurfacePlanner {
 
     let groups: RenderGroup[];
     let lanes: SerialLane[];
+    let proposal: SurfacePlanProposal | undefined;
 
     switch (mode) {
       case 'manual':
         ({ groups, lanes } = this.planManual());
         break;
-      case 'suggest':
-        ({ groups, lanes } = this.planSuggest());
+      case 'suggest': {
+        const suggestResult = this.planSuggest();
+        groups = suggestResult.groups;
+        lanes = suggestResult.lanes;
+        // Build a deterministic proposal from any suggested serial grouping
+        if (suggestResult.suggestedGroups && suggestResult.suggestedLanes) {
+          proposal = {
+            groups: suggestResult.suggestedGroups,
+            lanes: suggestResult.suggestedLanes,
+            hash: this.computeSourceHash(
+              suggestResult.suggestedGroups,
+              suggestResult.suggestedLanes,
+              'suggest',
+            ),
+          };
+        }
         break;
+      }
       case 'auto':
         ({ groups, lanes } = this.planAuto());
         break;
@@ -102,57 +120,52 @@ export class SurfacePlanner {
     // Build validation gate graph (§9)
     const validationGateGraph = this.buildValidationGateGraph(sceneIds, branch);
 
-    // Build manifest
+    // Build manifest (always from effective groups/lanes, never proposal)
     const manifest = this.buildManifest(groups, lanes, mode);
 
-    // Generate warnings for suggest mode
-    const warnings = mode === 'suggest' ? this.generateSuggestWarnings(groups, lanes) : undefined;
+    // Generate warnings for suggest mode (reference proposal lanes, not empty effective ones)
+    const warnings = mode === 'suggest'
+      ? this.generateSuggestWarnings(proposal?.groups ?? groups, proposal?.lanes ?? lanes)
+      : undefined;
 
     return {
       manifest,
       surfaceDependencyGraph,
       validationGateGraph,
       warnings,
+      proposal,
     };
   }
 
   // ─── Manual Mode ────────────────────────────────────────────────────────────
 
   /**
-   * Manual mode: use author-provided lanes and group definitions directly.
-   * Author must write groups — planner does NOT infer them.
+   * Manual mode: use author-provided groups directly.
+   * Each group has explicit groupId, sceneIds, and surfacePolicy.
+   * Lanes reference group IDs for serial ordering — NOT scene IDs.
+   * Defaults to one parallel group per scene when no groups provided.
    */
   private planManual(): { groups: RenderGroup[]; lanes: SerialLane[] } {
-    const { authorLanes, sceneIds } = this.options;
+    const { authorGroups, authorLanes, sceneIds } = this.options;
 
-    if (!authorLanes || authorLanes.length === 0) {
-      // No author lanes provided — default to one parallel group per scene
+    if (!authorGroups || authorGroups.length === 0) {
+      // No author groups — default to one parallel group per scene (§3)
       return this.defaultParallelGroups(sceneIds);
     }
 
-    const allGroupedIds = new Set(authorLanes.flatMap((l) => l.groupIds));
+    // ── Validation ───────────────────────────────────────────────────────
+    this.validateNoDuplicateGroupIds(authorGroups);
+    this.validateAllScenesAssigned(sceneIds, authorGroups);
+    this.validateGroupPolicies(authorGroups);
 
-    // Validate all scene IDs are covered
-    for (const id of sceneIds) {
-      if (!allGroupedIds.has(id)) {
-        throw this.createError('MISSING_CONTRACT', `Scene '${id}' is not assigned to any group`);
-      }
+    const lanes = authorLanes ?? [];
+    if (lanes.length > 0) {
+      this.validateLaneReferences(authorGroups, lanes);
+      this.validateSerialGroupSingleScene(authorGroups, lanes);
+      this.validateNoCycles(authorGroups, lanes);
     }
 
-    // Build groups from the lane definitions
-    const groups: RenderGroup[] = [];
-    for (const lane of authorLanes) {
-      for (const groupId of lane.groupIds) {
-        const sceneIdsInGroup = sceneIds.filter((id) => id === groupId);
-        groups.push({
-          groupId,
-          sceneIds: sceneIdsInGroup,
-          surfacePolicy: { type: 'serial_surface' },
-        });
-      }
-    }
-
-    return { groups, lanes: authorLanes };
+    return { groups: authorGroups, lanes };
   }
 
   // ─── Suggest Mode ───────────────────────────────────────────────────────────
@@ -162,18 +175,25 @@ export class SurfacePlanner {
    * The manifest is generated with `suggest` mode, and warnings detail
    * the proposal. Author must manually adopt the suggestions.
    */
-  private planSuggest(): { groups: RenderGroup[]; lanes: SerialLane[] } {
+  private planSuggest(): {
+    groups: RenderGroup[];
+    lanes: SerialLane[];
+    suggestedGroups?: RenderGroup[];
+    suggestedLanes?: SerialLane[];
+  } {
     const { sceneIds, contracts } = this.options;
 
-    // Default: logical_parallel — all scenes in parallel (§3)
-    const { groups, lanes } = this.defaultParallelGroups(sceneIds);
+    // Effective: logical_parallel — all scenes in parallel (§3)
+    const effective = this.defaultParallelGroups(sceneIds);
 
-    // Suggest serial lanes for scenes with related discourse transitions
+    // Suggestion: candidate serial lanes based on scene transitions
     const suggested = this.suggestSerialLanes(sceneIds, contracts);
 
     return {
-      groups: suggested?.groups ?? groups,
-      lanes: suggested?.lanes ?? lanes,
+      groups: effective.groups,
+      lanes: effective.lanes,
+      suggestedGroups: suggested?.groups,
+      suggestedLanes: suggested?.lanes,
     };
   }
 
@@ -251,7 +271,7 @@ export class SurfacePlanner {
         if (currentChain.length >= 2) {
           chains.push([...currentChain]);
         }
-        currentChain = [id];
+        currentChain = [];
       }
     }
     if (currentChain.length >= 2) {
@@ -379,8 +399,8 @@ export class SurfacePlanner {
       groupPolicies[g.groupId] = g.surfacePolicy;
     }
 
-    // Compute source definition hash from deterministic inputs
-    const sourceHash = this.computeSourceHash(groups, lanes);
+    // Compute source definition hash from deterministic inputs (excludes generatedAt)
+    const sourceHash = this.computeSourceHash(groups, lanes, mode);
 
     return {
       manifestVersion: this.manifestVersion,
@@ -427,6 +447,128 @@ export class SurfacePlanner {
     }
   }
 
+  // ─── Manual-Mode Validations ─────────────────────────────────────────────
+
+  /**
+   * Validate that no two groups share the same group ID.
+   */
+  private validateNoDuplicateGroupIds(groups: RenderGroup[]): void {
+    const seen = new Set<string>();
+    for (const g of groups) {
+      if (seen.has(g.groupId)) {
+        throw this.createError(
+          'DUPLICATE_GROUP_ID',
+          `Duplicate group ID '${g.groupId}' in surface plan`,
+        );
+      }
+      seen.add(g.groupId);
+    }
+  }
+
+  /**
+   * Validate that every scene in sceneIds appears exactly once across all groups.
+   */
+  private validateAllScenesAssigned(sceneIds: string[], groups: RenderGroup[]): void {
+    const assigned = new Set<string>();
+    for (const g of groups) {
+      for (const sid of g.sceneIds) {
+        if (assigned.has(sid)) {
+          throw this.createError(
+            'GROUP_SCENE_CONFLICT',
+            `Scene '${sid}' appears in multiple groups`,
+          );
+        }
+        assigned.add(sid);
+      }
+    }
+    for (const sid of sceneIds) {
+      if (!assigned.has(sid)) {
+        throw this.createError(
+          'MISSING_SCENE_IN_GROUP',
+          `Scene '${sid}' is not assigned to any group`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Validate group surface policies are valid.
+   * fallback_without_surface must be explicitly declared (enforced by type).
+   */
+  private validateGroupPolicies(groups: RenderGroup[]): void {
+    for (const g of groups) {
+      const policy = g.surfacePolicy.type;
+      if (policy === 'serial_surface' && g.sceneIds.length !== 1) {
+        throw this.createError(
+          'SERIAL_GROUP_MULTIPLE_SCENES',
+          `Serial surface group '${g.groupId}' has ${g.sceneIds.length} scenes; v1 requires exactly one`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Validate that lane group IDs reference existing groups.
+   */
+  private validateLaneReferences(groups: RenderGroup[], lanes: SerialLane[]): void {
+    const groupIds = new Set(groups.map((g) => g.groupId));
+    for (const lane of lanes) {
+      for (const gid of lane.groupIds) {
+        if (!groupIds.has(gid)) {
+          throw this.createError(
+            'UNKNOWN_GROUP_ID',
+            `Lane '${lane.laneId}' references unknown group ID '${gid}'`,
+          );
+        }
+      }
+    }
+  }
+
+  /**
+   * Validate serial_v1 constraint: groups in a serial lane can only have
+   * a single scene each (v1 limitation).
+   */
+  private validateSerialGroupSingleScene(groups: RenderGroup[], lanes: SerialLane[]): void {
+    const laneGroupIds = new Set(lanes.flatMap((l) => l.groupIds));
+    for (const g of groups) {
+      if (laneGroupIds.has(g.groupId) && g.sceneIds.length !== 1) {
+        throw this.createError(
+          'SERIAL_GROUP_MULTIPLE_SCENES',
+          `Serial-lane group '${g.groupId}' has ${g.sceneIds.length} scenes; v1 requires exactly one`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Validate no cycles in lane ordering.
+   * In v1, each group appears in at most one lane, so cycles within a single lane
+   * are impossible. Cross-lane cycles are also impossible since lanes are independent.
+   * Check: no group appears in more than one lane; no group repeats within a lane.
+   */
+  private validateNoCycles(_groups: RenderGroup[], lanes: SerialLane[]): void {
+    const groupToLane = new Map<string, string>();
+    for (const lane of lanes) {
+      const seenInLane = new Set<string>();
+      for (const gid of lane.groupIds) {
+        if (seenInLane.has(gid)) {
+          throw this.createError(
+            'SURFACE_CYCLE',
+            `Duplicate group ID '${gid}' in lane '${lane.laneId}'`,
+          );
+        }
+        seenInLane.add(gid);
+        if (groupToLane.has(gid)) {
+          throw this.createError(
+            'SURFACE_CYCLE',
+            `Group '${gid}' appears in multiple lanes ('${groupToLane.get(gid)}' and '${lane.laneId}')`,
+          );
+        }
+        groupToLane.set(gid, lane.laneId);
+      }
+    }
+  }
+
   // ─── Suggest Warnings ───────────────────────────────────────────────────────
 
   /**
@@ -452,21 +594,21 @@ export class SurfacePlanner {
     return warnings;
   }
 
-  // ─── Utilities ──────────────────────────────────────────────────────────────
-
   /**
-   * Compute a deterministic hash from groups and lanes for the manifest.
+   * Compute a deterministic SHA-256 hash from groups, lanes, and mode.
+   * Uses canonical JSON (sorted key order) for deterministic identity.
+   * Excludes wall-clock `generatedAt` field.
    */
-  private computeSourceHash(groups: RenderGroup[], lanes: SerialLane[]): string {
-    const raw = JSON.stringify({ groups, lanes });
-    let hash = 0;
-    for (let i = 0; i < raw.length; i++) {
-      const char = raw.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash |= 0;
-    }
-    return Math.abs(hash).toString(16).padStart(8, '0');
+  private computeSourceHash(
+    groups: RenderGroup[],
+    lanes: SerialLane[],
+    mode: PlannerMode,
+  ): string {
+    const payload = { groups, lanes, mode };
+    const json = canonicalJson(payload);
+    return computeSha256Hex(json);
   }
+
 
   private createError(code: SurfaceErrorCode, message: string): SurfacePlannerError {
     return new SurfacePlannerError(message, code, {

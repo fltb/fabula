@@ -7,9 +7,11 @@ export { PluginHooksManager } from './hooks-manager.js';
 export { PluginLoader } from './loader.js';
 export { resolveConflict } from './resolve.js';
 export type {
+  BuildPromptInput,
   ConflictReport,
   PluginContext,
   PluginHooks,
+  PromptDecoration,
   ProviderRegistry,
   ResolutionResult,
 } from './types.js';

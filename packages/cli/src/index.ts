@@ -5,14 +5,16 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { runAll, runPerformanceBench, runRegressionBench } from '@novalistically/bench';
-import type { ReviewComment } from '@novalistically/core';
+import type { BranchPath, ReviewComment } from '@novalistically/core';
 import {
   analyzeProjectImpact,
+  branchPathsEqual,
   assembleNovel,
   buildCausalEdges,
   clearEventCache,
   computeEvidenceHash,
   diffEvent,
+  compileGameDialogueTree,
   EntityMapper,
   exportDAGtoDOT,
   exportDAGtoMermaid,
@@ -24,6 +26,7 @@ import {
   migrateProjectFile,
   ReviewManager,
   renderNovel,
+  renderGameDialogueTree,
   showEntity,
   TypedEventBus,
   validateNovel,
@@ -43,6 +46,58 @@ function ensureProjectDir(): string {
     process.exit(1);
   }
   return cwd;
+}
+
+function parseBranchPath(raw: string | undefined): BranchPath | undefined {
+  if (raw === undefined) return undefined;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error('--branch-path must be valid JSON');
+  }
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    Array.isArray(parsed) ||
+    Object.keys(parsed).length !== 1 ||
+    !('decisions' in parsed) ||
+    !Array.isArray(parsed.decisions)
+  ) {
+    throw new Error('--branch-path must be exactly { "decisions": [...] }');
+  }
+  for (const decision of parsed.decisions) {
+    if (
+      typeof decision !== 'object' ||
+      decision === null ||
+      Array.isArray(decision) ||
+      Object.keys(decision).length !== 3 ||
+      typeof decision.atEventId !== 'string' ||
+      typeof decision.choiceId !== 'string' ||
+      typeof decision.narrativeOrder !== 'number' ||
+      !Number.isFinite(decision.narrativeOrder)
+    ) {
+      throw new Error(
+        '--branch-path decisions must contain exactly atEventId, choiceId, and narrativeOrder',
+      );
+    }
+  }
+  return parsed as BranchPath;
+}
+
+function requireCompleteGameLeaf(projectDir: string, branchPath: BranchPath | undefined): void {
+  const mapper = new EntityMapper(projectDir, new FsStorage());
+  const data = mapper.loadProject();
+  const tree = compileGameDialogueTree(
+    [...data.chapters.values()].flatMap((chapter) => chapter.events),
+    new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day])),
+  );
+  if (
+    tree &&
+    (!branchPath || !tree.leafPaths.some((leafPath) => branchPathsEqual(leafPath, branchPath)))
+  ) {
+    throw new Error('Game dialogue assembly requires one complete, ordered leaf --branch-path');
+  }
 }
 
 // ============================================================================
@@ -72,13 +127,12 @@ program
       'definitions/locations',
       'definitions/items',
       'definitions/factions',
-      'chapters',
+      'chapters/chapter_01',
       'scenes',
       'notes',
       'reference',
       'output',
       'reviews',
-      'branches',
       'rejected_proposals',
       '.nova/responses',
       '.nova/derived',
@@ -91,27 +145,6 @@ program
     // Create .gitkeep in rejected_proposals
     fs.writeFileSync(path.join(projectDir, 'rejected_proposals', '.gitkeep'), '', 'utf-8');
 
-    // Write branch_points.yaml template
-    const branchPointsYaml = `# Branch Points
-# Define narrative branch points here.
-# Each branch point occurs at a specific event and offers choices.
-# branch_points:
-#   - id: BP1
-#     at_event: E5
-#     description: "The protagonist faces a critical decision"
-#     choices:
-#       - path: trust_ally
-#         branch_id: branch_a
-#         label: "Trust the ally"
-#       - path: go_alone
-#         branch_id: branch_b
-#         label: "Go alone"
-`;
-    fs.writeFileSync(
-      path.join(projectDir, 'branches', 'branch_points.yaml'),
-      branchPointsYaml,
-      'utf-8',
-    );
 
     // Write nova.yaml
     const novaYaml = `project: ${name}
@@ -156,6 +189,31 @@ world_facts: []
       stateInitial,
       'utf-8',
     );
+
+    // Write an initial event with the event-local choice contract as comments.
+    const eventFile = `# chapters/chapter_01/E1.yaml
+event: E1
+narrativeOrder: 1
+title: "Opening scene"
+storyTime: story_beginning
+pov:
+  character: narrator
+  type: omniscient
+sceneBrief: "Describe this continuous dramatic unit."
+preconditions: []
+expectedPostconditions: []
+
+# choices:
+#   - id: accept_hunt
+#     label: "Accept the hunt"
+#     description: "Enter the jungle with a knife and three hours' head start."
+#     targetEvent: E2
+#     effects:
+#       - entity: protagonist
+#         attribute: chose_hunt
+#         value: true
+`;
+    fs.writeFileSync(path.join(projectDir, 'chapters', 'chapter_01', 'E1.yaml'), eventFile, 'utf-8');
 
     // Write PROJECT_STATUS.md
     const statusMd = `# ${name} — Project Status
@@ -210,7 +268,7 @@ program
   .action(async (options: { strict?: boolean; event?: string }) => {
     const projectDir = ensureProjectDir();
 
-    const result = await validateNovel(projectDir);
+    const result = await validateNovel(projectDir, undefined, new FsStorage());
 
     if (options.event) {
       const vr = result.results.get(options.event);
@@ -326,12 +384,22 @@ program
   .command('assemble')
   .description('Assemble all committed scenes into output/novel.md')
   .option('--output <path>', 'Custom output path')
-  .action((options: { output?: string }) => {
+  .option('--branch-path <json>', 'Complete game-tree BranchPath JSON')
+  .action((options: { output?: string; branchPath?: string }) => {
     const projectDir = ensureProjectDir();
+    let branchPath: BranchPath | undefined;
+    try {
+      branchPath = parseBranchPath(options.branchPath);
+      requireCompleteGameLeaf(projectDir, branchPath);
+    } catch (error) {
+      console.error(`Invalid --branch-path: ${(error as Error).message}`);
+      process.exit(1);
+    }
 
     const result = assembleNovel({
       projectDir,
       outputPath: options.output,
+      branchPath,
     });
 
     console.log(`✅ Novel assembled: ${result.wordCount} words, ${result.sceneCount} scenes`);
@@ -370,7 +438,7 @@ entityCmd
       return;
     }
 
-    const entities = listEntities(projectDir, kind);
+    const entities = listEntities(projectDir, kind, new FsStorage());
 
     for (const e of entities) {
       console.log(`  [${e.kind}] ${e.name || e.id} (${e.id})`);
@@ -382,7 +450,7 @@ entityCmd
   .description('Show entity details')
   .action((id: string) => {
     const projectDir = ensureProjectDir();
-    const entity = showEntity(projectDir, id);
+    const entity = showEntity(projectDir, id, new FsStorage());
 
     if (!entity) {
       console.error(`Entity "${id}" not found.`);
@@ -534,6 +602,7 @@ program
   .option('--reference-dir <path>', 'Approved mock reference directory')
   .option('--trace', 'Emit trace JSONL to .nova/traces/<job>.jsonl')
   .option('--concurrency <number>', 'Max concurrent LLM calls')
+  .option('--branch-path <json>', 'Complete game-tree BranchPath JSON')
   .action(
     async (
       eventId: string,
@@ -545,9 +614,18 @@ program
         referenceDir?: string;
         trace?: boolean;
         concurrency?: string;
+        branchPath?: string;
       },
     ) => {
       const projectDir = ensureProjectDir();
+      let branchPath: BranchPath | undefined;
+      try {
+        branchPath = parseBranchPath(options.branchPath);
+      } catch (error) {
+        console.error(`Invalid --branch-path: ${(error as Error).message}`);
+        process.exit(1);
+      }
+
       if (options.provider === 'mock-pass2' && !options.referenceDir) {
         console.error('--provider mock-pass2 requires --reference-dir');
         process.exit(1);
@@ -575,6 +653,7 @@ program
         eventId: options.all ? undefined : eventId,
         dryRun: options.dryRun,
         trace: options.trace,
+        branchPath,
         storage: new FsStorage(),
         concurrency: options.concurrency ? Number(options.concurrency) : undefined,
         provider,
@@ -615,6 +694,68 @@ program
 
       if (!options.dryRun && result.results.length > 0) {
         console.log(`\nDone. Output written to scenes/`);
+      }
+    },
+  );
+
+program
+  .command('render-tree')
+  .description('Render every event-local game dialogue node exactly once')
+  .option('--model <model>', 'LLM model to use (overrides config)')
+  .option('--provider <provider>', 'Provider: ai-sdk or mock-pass2')
+  .option('--reference-dir <path>', 'Approved mock reference directory')
+  .option('--trace', 'Emit trace JSONL to .nova/traces/<job>.jsonl')
+  .option('--concurrency <number>', 'Max concurrent LLM calls')
+  .action(
+    async (options: {
+      model?: string;
+      provider?: string;
+      referenceDir?: string;
+      trace?: boolean;
+      concurrency?: string;
+    }) => {
+      const projectDir = ensureProjectDir();
+      if (options.provider === 'mock-pass2' && !options.referenceDir) {
+        console.error('--provider mock-pass2 requires --reference-dir');
+        process.exit(1);
+      }
+      if (options.provider && options.provider !== 'ai-sdk' && options.provider !== 'mock-pass2') {
+        console.error(`Unsupported provider: ${options.provider}`);
+        process.exit(1);
+      }
+      const provider =
+        options.provider === 'mock-pass2'
+          ? new MockPass2Provider({ referenceDir: options.referenceDir })
+          : undefined;
+      const eventBus = new TypedEventBus();
+      eventBus.on('pipeline:render:after', (data) => {
+        const mark = data.success && data.errorCount === 0 ? '✓' : '·';
+        console.error(`  ${mark} ${data.eventId}: ${data.wordCount} words, cache=${data.cacheHit}`);
+      });
+
+      const result = await renderGameDialogueTree({
+        projectDir,
+        model: options.model,
+        trace: options.trace,
+        storage: new FsStorage(),
+        concurrency: options.concurrency ? Number(options.concurrency) : undefined,
+        provider,
+        eventBus,
+      });
+      for (const entry of result.results) {
+        console.log(
+          `  ${entry.released ? '✅' : '❌'} ${entry.eventId}: ${entry.wordCount} words, cache=${entry.cacheHit}`,
+        );
+      }
+      if (result.errors.length > 0) {
+        console.error('Render-tree errors:');
+        for (const error of result.errors) console.error(`  ❌ ${error}`);
+      }
+      if (result.errors.length > 0 || result.results.some((entry) => !entry.released)) {
+        process.exit(1);
+      }
+      if (result.outputPath) {
+        console.log(`\nDone. Dialogue tree written to ${result.outputPath}`);
       }
     },
   );
@@ -796,7 +937,7 @@ program
     }
 
     // Existing event state diff mode
-    const result = diffEvent(projectDir, eventId);
+    const result = diffEvent(projectDir, eventId, new FsStorage());
 
     if (!result) {
       console.error(`Error: Event "${eventId}" not found.`);
@@ -876,22 +1017,9 @@ program
   .description('Commit current state (auto-run after validation)')
   .action(() => {
     const projectDir = ensureProjectDir();
+    const storage = new FsStorage();
 
-    const { events, stateManager } = initializeProject(projectDir);
-
-    if (events.length <= 1) {
-      console.log('Nothing to commit.');
-      return;
-    }
-
-    for (const event of events) {
-      stateManager.commit(event);
-    }
-
-    const lastEvent = events[events.length - 1];
-    console.log(`✅ Committed: ${lastEvent.id} — "${lastEvent.title}"`);
-    console.log(`   Narrative order: ${lastEvent.narrativeOrder}`);
-    console.log(`   Total events: ${events.length - 1} (excluding genesis)`);
+    const { events, stateManager } = initializeProject(projectDir, storage);
   });
 
 // --- graph ---

@@ -99,6 +99,11 @@ import {
 import { sourceContextEntrySchema, sourceContextSchema } from './source-context.js';
 import { worldInitialStateSchema } from './state-initial.js';
 import { actantModelSchema, storyArchetypeSchema, structuralFunctionSchema } from './story-ir.js';
+import {
+  gameDialogueChoiceSchema,
+  gameDialogueChoicesSchema,
+  gameDialogueEffectSchema,
+} from './game-dialogue.js';
 
 // ——— CORPUS-1: NarrativeEllipsis & NarrativeNode Schemas ———
 export {
@@ -206,6 +211,9 @@ export {
   entityTypeCatalogSchema,
   entityTypeDefinitionSchema,
   entityTypeRefSchema,
+  gameDialogueChoiceSchema,
+  gameDialogueChoicesSchema,
+  gameDialogueEffectSchema,
   eventFileSchema,
   factionDefinitionSchema,
   frequencyProfileSchema,
@@ -367,6 +375,11 @@ export {
   plannerModeSchema,
   renderGroupManifestSchema,
   renderGroupSchema,
+  renderSurfaceAutoConfigSchema,
+  renderSurfaceConfigSchema,
+  renderSurfaceExtractionSchema,
+  renderSurfaceGroupSchema,
+  renderSurfaceLaneSchema,
   sceneTransitionSchema,
   serialLaneSchema,
   styleMetricsSchema,

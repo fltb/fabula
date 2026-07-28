@@ -9,6 +9,7 @@ import { frequencyProfileSchema } from './frequency.js';
 import { greyLineSchema } from './grey-line.js';
 import { modernNovelConfigSchema } from './modern-novel.js';
 import { narrativeChecklistSchema } from './narrative-checklist.js';
+import { gameDialogueChoicesSchema } from './game-dialogue.js';
 import {
   foreshadowEntrySchema,
   introduceEntrySchema,
@@ -47,6 +48,7 @@ export const eventFileSchema = z
     preconditions: z.array(preconditionSchema),
     expectedPostconditions: z.array(postconditionSchema),
     styleGuidance: styleGuidanceSchema.optional(),
+    choices: gameDialogueChoicesSchema.optional(),
     threadProgress: z.array(threadProgressEntrySchema).optional(),
     greyLines: z.array(greyLineSchema).optional(),
     foreshadowing: z.array(foreshadowEntrySchema).optional(),
@@ -80,6 +82,13 @@ export const eventFileSchema = z
             }),
           )
           .optional(),
+      })
+      .optional(),
+    discourseCursor: z
+      .number()
+      .int()
+      .refine((v) => v === -1 || v >= 0, {
+        message: 'discourseCursor must be -1 or a nonnegative integer',
       })
       .optional(),
     modernNovel: modernNovelConfigSchema.optional(),

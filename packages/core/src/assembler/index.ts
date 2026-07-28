@@ -10,6 +10,11 @@ export { loadChapterMetadata } from './chapter.js';
 export { SceneCollector } from './collector.js';
 export { ProseConcatenator } from './concatenator.js';
 export { countNarrativeText, countWords, NARRATIVE_TEXT_COUNT_VERSION } from './count.js';
+export type {
+  AssembleGameDialogueTreeOptions,
+  AssembleGameDialogueTreeResult,
+} from './game-dialogue-tree.ts';
+export { assembleGameDialogueTree } from './game-dialogue-tree.ts';
 export { assembleNovel } from './novel.js';
 export { NarrativeSorter } from './sorter.js';
 export type {

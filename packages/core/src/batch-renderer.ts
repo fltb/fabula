@@ -172,7 +172,8 @@ export class BatchRenderPipeline {
     const inFlight = new Map<number, Promise<BatchFlight>>();
     let nextToSubmit = 0;
     let completedBatches = 0;
-    const allResults: RenderSceneResult[] = [];
+    const resultsByBatch = new Map<number, RenderSceneResult[]>();
+    let totalCompleted = 0;
     const allErrors: Array<{ batchIndex: number; error: string }> = [];
     let aborted = false;
 
@@ -238,8 +239,8 @@ export class BatchRenderPipeline {
       inFlight.delete(flightResult.batchIndex);
       completedBatches++;
 
-      // Collect results
-      allResults.push(...flightResult.results);
+      resultsByBatch.set(flightResult.batchIndex, flightResult.results);
+      totalCompleted += flightResult.results.length;
 
       // Lifecycle hooks
       if (config.onAfterBatch) {
@@ -251,7 +252,7 @@ export class BatchRenderPipeline {
           batchIndex: flightResult.batchIndex,
           totalBatches,
           completedInBatch: flightResult.results.length,
-          totalCompleted: allResults.length,
+          totalCompleted,
           totalJobs: jobs.length,
           elapsedMs,
           batchResults: flightResult.results,
@@ -266,6 +267,67 @@ export class BatchRenderPipeline {
           throw { batchIndex: idx, error: msg };
         });
         inFlight.set(idx, flight);
+      }
+    }
+
+    // ── Drain all remaining in-flight batches ──────────────────────
+    // After an abort or failFast break, any in-flight promises must be
+    // observed: successful results are collected, rejections are caught
+    // into allErrors. No new batches are submitted.
+    const remainingEntries = Array.from(inFlight.entries());
+    inFlight.clear();
+
+    if (remainingEntries.length > 0) {
+      const settled = await Promise.allSettled(
+        remainingEntries.map(([_, p]) => p),
+      );
+
+      for (let i = 0; i < remainingEntries.length; i++) {
+        const [batchIndex] = remainingEntries[i];
+        const s = settled[i];
+
+        if (s.status === 'fulfilled') {
+          const { results } = s.value;
+          resultsByBatch.set(batchIndex, results);
+          totalCompleted += results.length;
+
+          // Fire lifecycle hooks for the drained batch
+          if (config.onAfterBatch) {
+            await config.onAfterBatch(results, batchIndex);
+          }
+          if (config.onProgress) {
+            const elapsedMs = performance.now() - startTime;
+            config.onProgress({
+              batchIndex,
+              totalBatches,
+              completedInBatch: results.length,
+              totalCompleted,
+              totalJobs: jobs.length,
+              elapsedMs,
+              batchResults: results,
+            });
+          }
+        } else {
+          const reason = s.reason;
+          allErrors.push({
+            batchIndex,
+            error:
+              typeof reason === 'object' && reason !== null && 'error' in reason
+                ? String(reason.error)
+                : String(reason),
+          });
+        }
+
+        completedBatches++;
+      }
+    }
+
+    // ── Flatten results in input job order ────────────────────────
+    const allResults: RenderSceneResult[] = [];
+    for (let i = 0; i < totalBatches; i++) {
+      const batchResults = resultsByBatch.get(i);
+      if (batchResults) {
+        allResults.push(...batchResults);
       }
     }
 

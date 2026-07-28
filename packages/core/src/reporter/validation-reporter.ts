@@ -2,8 +2,8 @@
 // Validation Report Writer — Human-readable output/validation.md
 // ============================================================================
 
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import * as path from 'node:path';
+import type { Storage } from '../storage/types.ts';
 import type { PipelineRunResult } from '../report/writer.js';
 import { ReportWriter } from '../report/writer.js';
 import type { ValidationIssue } from '../types/validator.js';
@@ -15,7 +15,7 @@ export interface ValidationReport {
   l2Issues: ValidationIssue[]; // post-render issues
 }
 
-export function writeValidationReport(projectDir: string, report: ValidationReport): string {
+export function writeValidationReport(storage: Storage, projectDir: string, report: ValidationReport): string {
   // Build a PipelineRunResult from the ValidationReport and delegate to ReportWriter
   const runResult: PipelineRunResult = {
     projectName: report.projectName,
@@ -34,9 +34,9 @@ export function writeValidationReport(projectDir: string, report: ValidationRepo
   };
   const markdown = new ReportWriter(runResult).toMarkdown();
 
-  const outDir = join(projectDir, 'output');
-  mkdirSync(outDir, { recursive: true });
-  const outPath = join(outDir, 'validation.md');
-  writeFileSync(outPath, markdown);
+  const outDir = path.join(projectDir, 'output');
+  storage.mkdirp(outDir);
+  const outPath = path.join(outDir, 'validation.md');
+  storage.write(outPath, markdown);
   return outPath;
 }

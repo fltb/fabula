@@ -28,6 +28,10 @@ export type {
   Condition,
 } from './branch.js';
 export type {
+  GameDialogueChoice,
+  GameDialogueEffect,
+} from './game-dialogue.js';
+export type {
   ChapterMetadata,
   ProjectConfig,
   SceneMetadata,
@@ -430,16 +434,22 @@ export type {
   ReferenceKind,
   ReferenceMode,
 } from './reference.js';
-// ——— RENDER-SURFACE-1: Surface render, groups & cache keys ———
 export type {
+  AcceptedSceneArtifact,
   AttemptKey,
   AutoGroupConfig,
   CompiledSceneContract,
   ContinuityPacket,
   LogicalRenderKey,
   PlannerMode,
+  ReleaseDecision,
   RenderGroup,
   RenderGroupManifest,
+  RenderSurfaceAutoConfig,
+  RenderSurfaceConfig,
+  RenderSurfaceExtraction,
+  RenderSurfaceGroup,
+  RenderSurfaceLane,
   SceneTransition,
   SerialLane,
   StyleMetrics,
@@ -447,6 +457,7 @@ export type {
   StyleResolutionPath,
   SurfaceDependencyGraph,
   SurfaceErrorCode,
+  SurfacePlanProposal,
   SurfacePlannerError,
   SurfacePlannerOptions,
   SurfacePlanResult,

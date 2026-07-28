@@ -13,6 +13,7 @@ import type { RenderJob } from '../../src/pipeline/render.ts';
 import { RenderPipeline } from '../../src/pipeline/render.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type {
+  CompiledSceneContract,
   ContextPackage,
   KnowledgeBoundary,
   NarrativeEvent,
@@ -100,8 +101,6 @@ function makeContext(): ContextPackage {
       knownFacts: [],
       restrictedEntities: [],
     } satisfies KnowledgeBoundary,
-    activeThreads: [],
-    previousSceneSummary: '',
     markdown: '',
   };
 }
@@ -119,6 +118,26 @@ function makeJob(): RenderJob {
     },
     context: makeContext(),
     chapter: 1,
+    contract: {
+      sceneId: 'evt_checklist',
+      branch: { decisions: [] },
+      discoursePosition: 1,
+      worldStateHash: 'a00',
+      knowledgeStateHash: 'a00',
+      narratorProfileHash: 'a00',
+      plannedDiscourseHash: 'a00',
+      styleProfile: {
+        profileId: 'default',
+        resolutionPrecedence: { projectStyle: 'default' },
+      },
+      continuityPacket: { transition: 'continuous' },
+      promptContractHash: 'a00',
+    } satisfies CompiledSceneContract,
+    surfaceDependency: {
+      groupId: 'default',
+      policy: 'parallel',
+      manifestHash: 'a00',
+    },
   };
 }
 

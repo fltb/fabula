@@ -90,24 +90,35 @@ describe('cache evidence verification', () => {
     const post = [makeFact('f2')];
 
     const hash = computeEvidenceHash(eventId, pre, post);
-    setCachedRender(cacheDir, eventId, cacheKey, { prose: 'valid scene' }, storage, hash);
+    setCachedRender(
+      cacheDir,
+      eventId,
+      cacheKey,
+      { prose: 'valid scene', analysis: { blocks: [] } },
+      storage,
+      hash,
+    );
 
-    expect(getCachedRender(cacheDir, eventId, cacheKey, storage, hash)).toEqual({
+    expect(getCachedRender(cacheDir, eventId, cacheKey, storage, hash)).toMatchObject({
       prose: 'valid scene',
     });
   });
 
-  it('backward compat: read cache without evidence hash', () => {
+  it('v2 candidate supports an absent optional evidence hash', () => {
     const storage = new MemoryStorage();
     const eventId = 'E0';
 
-    // Write without evidence hash (old cache format)
-    setCachedRender(cacheDir, eventId, cacheKey, { prose: 'old format' }, storage);
+    setCachedRender(
+      cacheDir,
+      eventId,
+      cacheKey,
+      { prose: 'candidate', analysis: { blocks: [] } },
+      storage,
+    );
 
-    // Read without passing currentEvidenceHash — should still work
-    expect(getCachedRender(cacheDir, eventId, cacheKey, storage)).toEqual({ prose: 'old format' });
-
-    // Read with currentEvidenceHash when none stored — should still work (backward compat)
+    expect(getCachedRender(cacheDir, eventId, cacheKey, storage)).toMatchObject({
+      prose: 'candidate',
+    });
     expect(
       getCachedRender(
         cacheDir,
@@ -116,7 +127,7 @@ describe('cache evidence verification', () => {
         storage,
         computeEvidenceHash(eventId, [makeFact('f1')], []),
       ),
-    ).toEqual({ prose: 'old format' });
+    ).toMatchObject({ prose: 'candidate' });
   });
 
   it('corrupt evidence hash in meta is treated as stale', () => {

@@ -86,9 +86,8 @@ function makeContext(eventId: string): ContextPackage {
       entityId: 'narrator',
       knownFacts: [],
       restrictedEntities: [],
-    } satisfies KnowledgeBoundary,
+    },
     activeThreads: [],
-    previousSceneSummary: '',
     markdown: '',
   };
 }
@@ -106,6 +105,26 @@ function makeJob(id: string): RenderJob {
     },
     context: makeContext(id),
     chapter: 1,
+    contract: {
+      sceneId: id,
+      branch: { decisions: [] },
+      discoursePosition: 0,
+      worldStateHash: 'a00',
+      knowledgeStateHash: 'a00',
+      narratorProfileHash: 'a00',
+      plannedDiscourseHash: 'a00',
+      styleProfile: {
+        profileId: 'default',
+        resolutionPrecedence: { projectStyle: 'default' },
+      },
+      continuityPacket: { transition: 'continuous' },
+      promptContractHash: 'a00',
+    },
+    surfaceDependency: {
+      groupId: 'default',
+      policy: 'parallel' as const,
+      manifestHash: 'a00',
+    },
   };
 }
 

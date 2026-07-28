@@ -30,6 +30,7 @@ import {
   projectDiscourseContext,
   replayDiscourseState,
 } from '../../src/state/discourse-replay.ts';
+import { compileDiscourseBoundaries } from '../../src/state/discourse-context.ts';
 import type {
   DisclosureAction,
   DiscourseContextProjection,
@@ -43,6 +44,7 @@ import type {
   PlannedLedgerEntry,
   WithholdingPolicy,
 } from '../../src/types/discourse.ts';
+import type { NarrativeEvent } from '../../src/types/event.js';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Helpers
@@ -192,18 +194,57 @@ describe('DiscourseState replay by position', () => {
     expect(state.reveals).toEqual(['r1', 'r2']);
   });
 
-  it('throws on out-of-bounds position (negative)', () => {
+  it('throws on out-of-bounds position (< -1)', () => {
+    // Position -1 is the planned "no discourse" sentinel; values strictly below -1
+    // are always out of bounds regardless of ledger contents.
     const ledger = makeLedger([]);
-    expect(() => replayDiscourseState(ledger, -1, 'main')).toThrow(
-      'DiscoursePosition out of bounds',
+    expect(() => replayDiscourseState(ledger, -2, 'main')).toThrow(
+      'DiscoursePosition out of range',
     );
   });
+  // strict preflight: position -1 IS a valid sentinel for "no discourse actions in scene"
+  // and returns an empty DiscourseState at position -1.
 
-  it('throws on out-of-bounds position (beyond length)', () => {
+  it('replays only positions ≤ target for sparse entries', () => {
+    const ledger = makeLedger([
+      entry('e1', revealAction('r1', 1), 'scene_1', 'main'),
+      entry('e2', revealAction('r2', 3), 'scene_1', 'main'),
+      entry('e3', revealAction('r3', 5), 'scene_1', 'main'),
+    ]);
+    const state = replayDiscourseState(ledger, 3, 'main');
+    expect(state.position).toBe(3);
+    expect(state.reveals).toEqual(['r1', 'r2']);
+  });
+
+  it('replays unordered entries in position order', () => {
+    const ledger = makeLedger([
+      entry('e3', revealAction('r3', 3), 'scene_1', 'main'),
+      entry('e1', revealAction('r1', 1), 'scene_1', 'main'),
+      entry('e2', revealAction('r2', 2), 'scene_1', 'main'),
+    ]);
+    const state = replayDiscourseState(ledger, 3, 'main');
+    expect(state.position).toBe(3);
+    // Entries sorted by position before apply
+    expect(state.reveals).toEqual(['r1', 'r2', 'r3']);
+  });
+
+  it('position 0 returns empty state when actions start at higher positions', () => {
+    const ledger = makeLedger([
+      entry('e1', revealAction('r1', 1), 'scene_1', 'main'),
+    ]);
+    const state = replayDiscourseState(ledger, 0, 'main');
+    expect(state.position).toBe(0);
+    expect(state.reveals).toEqual([]);
+    expect(state.openClaims).toEqual([]);
+  });
+
+  it('replays past last sparse entry returns current state at last position', () => {
+    // Sparse positions: replaying past the last entry is allowed and yields
+    // the state at the last prior position (no upper-bound check).
     const ledger = makeLedger([entry('e1', revealAction('r1', 1), 's1', 'main')]);
-    expect(() => replayDiscourseState(ledger, 5, 'main')).toThrow(
-      'DiscoursePosition out of bounds',
-    );
+    const state = replayDiscourseState(ledger, 5, 'main');
+    expect(state.position).toBe(1);
+    expect(state.reveals).toEqual(['r1']);
   });
 
   it('throws on duplicate discourse positions (§19)', () => {
@@ -414,6 +455,38 @@ describe('claim vs reveal truth-boundary enforcement (§5)', () => {
     const ledger = makeLedger([entry('e1', claimAction('a2', 1), 'scene_1', 'main')]);
     const state = replayDiscourseState(ledger, 1, 'main');
     expect(state.openClaims).toContain('a2');
+  });
+
+  it('reveal action with truthBoundary=false assertion fails when catalog supplied (§5)', () => {
+    const ledger = makeLedger([entry('e1', revealAction('a_false', 1), 'scene_1', 'main')]);
+    expect(() =>
+      replayDiscourseState(ledger, 1, 'main', {
+        a_false: makeAssertion('a_false', false, 'claim'),
+      }),
+    ).toThrow('Reveal requires truthBoundary=true');
+  });
+
+  it('claim action with truthBoundary=true assertion succeeds as claim (not reveal)', () => {
+    const ledger = makeLedger([entry('e1', claimAction('true_a', 1), 'scene_1', 'main')]);
+    const state = replayDiscourseState(ledger, 1, 'main', {
+      true_a: makeAssertion('true_a', true, 'authoritative_reveal'),
+    });
+    // Claim always adds to openClaims regardless of assertion truthBoundary
+    expect(state.openClaims).toContain('true_a');
+    // It does NOT become a reveal
+    expect(state.reveals).not.toContain('true_a');
+  });
+
+  it('reveal supersedes prior claim of same assertion', () => {
+    const ledger = makeLedger([
+      entry('e1', claimAction('same_id', 1), 'scene_1', 'main'),
+      entry('e2', revealAction('same_id', 2), 'scene_1', 'main'),
+    ]);
+    const state = replayDiscourseState(ledger, 2, 'main', {
+      same_id: makeAssertion('same_id', true, 'authoritative_reveal'),
+    });
+    expect(state.reveals).toContain('same_id');
+    expect(state.openClaims).not.toContain('same_id');
   });
 });
 
@@ -667,6 +740,57 @@ describe('Pass 1 projection filtering (§12)', () => {
     const projection = projectDiscourseContext(state, undefined, undefined, []);
     expect(projection.activeWithholdingPolicies).toHaveLength(0);
   });
+
+  it('hint target NEVER appears in projection even when hint is active', () => {
+    const hints: Hint[] = [
+      {
+        hintId: 'h1',
+        state: 'contract_fulfilled',
+        surfaceProposition: 'surface_story',
+        targetProposition: 'deep_target',
+        discoursePosition: 1,
+      },
+    ];
+    const state = makeStateWithAssertions([], [], hints);
+    const projection = projectDiscourseContext(state, undefined, undefined, []);
+    expect(projection.visibleHints).toHaveLength(1);
+    // Surface is visible
+    const hint = projection.visibleHints[0];
+    expect(hint.surfaceProposition).toBe('surface_story');
+    // targetProposition is NEVER exposed in projection
+    expect(JSON.stringify(projection)).not.toContain('deep_target');
+    // The type of visibleHints does not include targetProposition
+    expect(Object.prototype.hasOwnProperty.call(hint, 'targetProposition')).toBe(false);
+  });
+
+  it('hints do not appear in authorizedTargets', () => {
+    const hints: Hint[] = [
+      {
+        hintId: 'h1',
+        state: 'contract_planted',
+        surfaceProposition: 'surface_hint',
+        targetProposition: 'hidden_target',
+        discoursePosition: 1,
+      },
+    ];
+    const state = makeStateWithAssertions([], [], hints);
+    const projection = projectDiscourseContext(state, undefined, undefined, ['h1']);
+    // Hint assertions are not authorized targets
+    expect(projection.authorizedTargets).toHaveLength(0);
+    // Hint does not appear in plannedReveals or openClaims
+    expect(projection.plannedReveals).toEqual([]);
+    expect(projection.openClaims).toEqual([]);
+  });
+
+  it('replayed hint action target remains absent from projection', () => {
+    const ledger = makeLedger([
+      entry('e1', hintAction('h1', 'surface_only', 'hidden_link', 1), 'scene_1', 'main'),
+    ]);
+    const state = replayDiscourseState(ledger, 1, 'main');
+    const projection = projectDiscourseContext(state, undefined, undefined, []);
+    expect(projection.visibleHints[0].surfaceProposition).toBe('surface_only');
+    expect(JSON.stringify(projection)).not.toContain('hidden_link');
+  });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -748,6 +872,55 @@ describe('branch-independent discourse (§14)', () => {
     // Branch alternate entries should be absent from main state
     expect(state.openClaims).toEqual([]);
   });
+
+  it('main branch entries do not leak into alternate branch state', () => {
+    const ledger = makeLedger([
+      entry('e1', revealAction('main_r1', 1), 'scene_1', 'main'),
+      entry('e2', revealAction('alt_r1', 1), 'scene_1', 'alternate'),
+    ]);
+    const stateAlt = replayDiscourseState(ledger, 1, 'alternate');
+    expect(stateAlt.reveals).toContain('alt_r1');
+    expect(stateAlt.reveals).not.toContain('main_r1');
+  });
+
+  it('same sceneId on two branches has independent discourse positions', () => {
+    const ledger = makeLedger([
+      entry('e1', revealAction('r_main', 1), 'scene_X', 'main'),
+      entry('e2', revealAction('r_alt', 1), 'scene_X', 'alternate'),
+    ]);
+    const stateMain = replayDiscourseState(ledger, 1, 'main');
+    const stateAlt = replayDiscourseState(ledger, 1, 'alternate');
+    expect(stateMain.reveals).toEqual(['r_main']);
+    expect(stateAlt.reveals).toEqual(['r_alt']);
+  });
+
+  it('same branch entries for a scene form a continuous range', () => {
+    // Within a single branch+scene, entries should occupy contiguous positions.
+    // This test verifies replay works when entries are contiguous.
+    const ledger = makeLedger([
+      entry('e1', revealAction('a1', 0), 'scene_M', 'main'),
+      entry('e2', claimAction('c1', 1), 'scene_M', 'main'),
+      entry('e3', revealAction('a2', 2), 'scene_N', 'main'),
+    ]);
+    const stateAt1 = replayDiscourseState(ledger, 1, 'main');
+    expect(stateAt1.reveals).toEqual(['a1']);
+    expect(stateAt1.openClaims).toEqual(['c1']);
+    // Scene_M entries occupy [0, 1] continuously
+    // STRICT PREFLIGHT: non-continuous same-branch-scene positions is a ConfigError.
+  });
+
+  it('independent positions per branch allow same position on different branches', () => {
+    // Positions are per-branch — same position on different branches is valid
+    const ledger = makeLedger([
+      entry('e1', revealAction('r1', 1), 's1', 'main'),
+      entry('e2', revealAction('r2', 1), 's1', 'alternate'),
+    ]);
+    // Choosing main: no error — position 1 on main is different branch from position 1 on alternate
+    const stateMain = replayDiscourseState(ledger, 1, 'main');
+    expect(stateMain.reveals).toEqual(['r1']);
+    const stateAlt = replayDiscourseState(ledger, 1, 'alternate');
+    expect(stateAlt.reveals).toEqual(['r2']);
+  });
 });
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -811,6 +984,108 @@ describe('shared post-merge scene identical-projection check (§14)', () => {
       ...a,
       accessibleClaims: [
         { assertionId: 'c2', narrator: 'n2', type: 'authoritative_reveal', surface: 'other' },
+      ],
+    };
+    expect(areProjectionsIdentical(a, b)).toBe(false);
+  });
+
+  it('different authorizedTargets returns false', () => {
+    const base: DiscourseContextProjection = {
+      plannedReveals: [],
+      openClaims: [],
+      visibleHints: [],
+      accessibleClaims: [],
+      authorizedTargets: [{ assertionId: 'r1', actionType: 'reveal', discoursePosition: 1 }],
+      activeWithholdingPolicies: [],
+    };
+    const modified = {
+      ...base,
+      authorizedTargets: [{ assertionId: 'r2', actionType: 'claim', discoursePosition: 2 }],
+    };
+    expect(areProjectionsIdentical(base, modified)).toBe(false);
+  });
+
+  it('different activeWithholdingPolicies returns false', () => {
+    const base: DiscourseContextProjection = {
+      plannedReveals: [],
+      openClaims: [],
+      visibleHints: [],
+      accessibleClaims: [],
+      authorizedTargets: [],
+      activeWithholdingPolicies: [
+        { policyId: 'wp1', startPosition: 1, endPosition: null, active: true, reason: 'test' },
+      ],
+    };
+    const modified = {
+      ...base,
+      activeWithholdingPolicies: [
+        { policyId: 'wp2', startPosition: 2, endPosition: null, active: true, reason: 'other' },
+      ],
+    };
+    expect(areProjectionsIdentical(base, modified)).toBe(false);
+  });
+
+  it('order-sensitive fields respect position ordering', () => {
+    // The function compares arrays element-wise, so order matters
+    const a: DiscourseContextProjection = {
+      plannedReveals: ['r1', 'r2'],
+      openClaims: [],
+      visibleHints: [],
+      accessibleClaims: [],
+      authorizedTargets: [],
+      activeWithholdingPolicies: [],
+    };
+    const b: DiscourseContextProjection = {
+      plannedReveals: ['r2', 'r1'],
+      openClaims: [],
+      visibleHints: [],
+      accessibleClaims: [],
+      authorizedTargets: [],
+      activeWithholdingPolicies: [],
+    };
+    expect(areProjectionsIdentical(a, b)).toBe(false);
+  });
+
+  it('projection identity survives deep clone', () => {
+    const proj: DiscourseContextProjection = {
+      plannedReveals: ['r1', 'r2'],
+      openClaims: ['c1'],
+      visibleHints: [
+        { hintId: 'h1', surfaceProposition: 's1', state: 'contract_fulfilled' },
+      ],
+      accessibleClaims: [
+        { assertionId: 'c1', narrator: 'n1', type: 'claim', surface: 'prop_text' },
+      ],
+      authorizedTargets: [
+        { assertionId: 'r1', actionType: 'reveal', discoursePosition: 1 },
+        { assertionId: 'c1', actionType: 'claim', discoursePosition: 2 },
+      ],
+      activeWithholdingPolicies: [
+        { policyId: 'wp1', startPosition: 1, endPosition: null, active: true, reason: 'test' },
+      ],
+    };
+    // Deep clone via JSON round-trip
+    const clone = JSON.parse(JSON.stringify(proj)) as DiscourseContextProjection;
+    expect(areProjectionsIdentical(proj, clone)).toBe(true);
+  });
+
+  it('completely different projections return false', () => {
+    const a: DiscourseContextProjection = {
+      plannedReveals: ['r1'],
+      openClaims: [],
+      visibleHints: [],
+      accessibleClaims: [],
+      authorizedTargets: [{ assertionId: 'r1', actionType: 'reveal', discoursePosition: 1 }],
+      activeWithholdingPolicies: [],
+    };
+    const b: DiscourseContextProjection = {
+      plannedReveals: [],
+      openClaims: ['c2'],
+      visibleHints: [{ hintId: 'h2', surfaceProposition: 's2', state: 'planned' }],
+      accessibleClaims: [{ assertionId: 'c2', narrator: 'n2', type: 'claim', surface: 'other' }],
+      authorizedTargets: [{ assertionId: 'c2', actionType: 'claim', discoursePosition: 5 }],
+      activeWithholdingPolicies: [
+        { policyId: 'wp2', startPosition: 3, endPosition: null, active: true, reason: 'other' },
       ],
     };
     expect(areProjectionsIdentical(a, b)).toBe(false);
@@ -978,5 +1253,327 @@ describe('§9 — correction NEVER retcons WorldState', () => {
     // The DiscourseState has no WorldState fields — cannot retcon
     expect(Object.keys(state)).not.toContain('entities');
     expect(Object.keys(state)).not.toContain('relationships');
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 15. Strict preflight: invalid catalog scenarios (§19)
+// ═════════════════════════════════════════════════════════════════════════════
+// These tests encode strict preflight expectations for the planned
+// compileDiscourseBoundaries(). Some scenarios are permitted by the current
+// permissive replay code but should fail preflight before provider/cache.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('§19 — strict preflight: invalid catalog scenarios', () => {
+  it('retraction of never-claimed assertion records retraction (current permissive)', () => {
+    // STRICT PREFLIGHT: retraction must reference an earlier, still-active
+    // claim or reveal on the same concrete branch. Should fail preflight.
+    // Current code permissively records the retraction.
+    const ledger = makeLedger([
+      entry('e1', retractionAction('ghost', 1), 'scene_1', 'main'),
+    ]);
+    const state = replayDiscourseState(ledger, 1, 'main');
+    expect(state.retractions).toHaveLength(1);
+    expect(state.retractions[0].assertionId).toBe('ghost');
+  });
+
+  it('correction with unknown prior assertion applies partial correction (current permissive)', () => {
+    // STRICT PREFLIGHT: priorAssertionId must exist and be active.
+    // Current code: correction with unknown prior does nothing to reveals/claims
+    // but still records the correction.
+    const ledger = makeLedger([
+      entry('e1', correctionAction('unknown_prior', 'new_a', 1), 'scene_1', 'main'),
+    ]);
+    const state = replayDiscourseState(ledger, 1, 'main');
+    expect(state.corrections).toHaveLength(1);
+    expect(state.corrections[0].priorAssertionId).toBe('unknown_prior');
+    // new_a doesn't appear in reveals because unknown_prior was never there
+    expect(state.reveals).not.toContain('new_a');
+  });
+
+  it('correction with unknown new assertion supersedes prior (current permissive)', () => {
+    // STRICT PREFLIGHT: newAssertionId must exist and be different from prior.
+    const ledger = makeLedger([
+      entry('e1', revealAction('existing_a', 1), 'scene_1', 'main'),
+      entry('e2', correctionAction('existing_a', 'nonexistent_new', 2), 'scene_1', 'main'),
+    ]);
+    const state = replayDiscourseState(ledger, 2, 'main');
+    // existing_a is replaced by nonexistent_new in reveals
+    expect(state.reveals).toContain('nonexistent_new');
+    expect(state.reveals).not.toContain('existing_a');
+  });
+
+  it('duplicate assertion IDs in catalog use last-write-wins (current permissive)', () => {
+    // STRICT PREFLIGHT: duplicate assertion IDs should be a catalog error,
+    // not last-write-wins via object property overwrite.
+    const dupAssertions: Record<string, NarratorAssertion> = {
+      a1: makeAssertion('a1', true, 'authoritative_reveal'),
+    };
+    // Overwrite a1 with different assertion (same id, different props)
+    dupAssertions.a1 = makeAssertion('a1', false, 'claim');
+    // Last write wins with plain object
+    expect(dupAssertions.a1.truthBoundary).toBe(false);
+  });
+
+  it('entry referencing unknown scene produces no authorized targets', () => {
+    // When an entry's sceneId doesn't match the event being compiled,
+    // the compiler filters it out — no authorized targets for this scene
+    const ledger = makeLedger([
+      entry('e1', revealAction('r1', 1), 'scene_other', 'main'),
+    ]);
+    const state = replayDiscourseState(ledger, 1, 'main');
+    // Entry still replays into discourse state since replayDiscourseState
+    // doesn't filter by sceneId — that's the compiler's job
+    expect(state.reveals).toContain('r1');
+    // But compile() would filter by event.id, so an event with id 'scene_current'
+    // would get no authorized targets from an entry for 'scene_other'
+  });
+
+  it('non-reveal/non-claim actions do not create authorized targets', () => {
+    // Hint, retraction, withhold actions never produce authorizedTargets entries
+    const ledger = makeLedger([
+      entry('e1', hintAction('h1', 'surface', 'target', 1), 'scene_1', 'main'),
+      entry('e2', retractionAction('nonexistent', 2), 'scene_1', 'main'),
+      entry('e3', withholdStartAction('wp1', 3), 'scene_1', 'main'),
+    ]);
+    const state = replayDiscourseState(ledger, 3, 'main');
+    // These actions are in discourse state but aren't "authorized targets"
+    expect(state.hints).toHaveLength(1);
+    expect(state.retractions).toHaveLength(1);
+    expect(state.activeWithholds).toHaveLength(1);
+    // The projectDiscourseContext with empty authorized list has no targets
+    const projection = projectDiscourseContext(state, undefined, undefined, []);
+    expect(projection.authorizedTargets).toHaveLength(0);
+    // Hint surface only — no target proposition leak
+    expect(projection.visibleHints).toHaveLength(1);
+  });
+
+  it('withhold_end without prior withhold_start is silently ignored', () => {
+    // STRICT PREFLIGHT: withhold_end for unknown policy should be a preflight error.
+    const ledger = makeLedger([
+      entry('e1', withholdEndAction('ghost_policy', 1), 'scene_1', 'main'),
+    ]);
+    const state = replayDiscourseState(ledger, 1, 'main');
+    // No active withholds — the end has no effect
+    expect(state.activeWithholds).toHaveLength(0);
+  });
+
+  it('correction of non-active assertion (already corrected) is permissive', () => {
+    // Correcting an assertion that was already corrected — current code allows
+    // chaining corrections
+    const ledger = makeLedger([
+      entry('e1', revealAction('orig', 1), 'scene_1', 'main'),
+      entry('e2', correctionAction('orig', 'v2', 2), 'scene_1', 'main'),
+      entry('e3', correctionAction('orig', 'v3', 3), 'scene_1', 'main'), // orig already corrected
+    ]);
+    const state = replayDiscourseState(ledger, 3, 'main');
+    // v3 replaces orig in reveals (e2: v2 replaces orig, e3: nothing to replace since
+    // reveals has 'v2' not 'orig', but code does indexOf('orig') === -1 so no-op)
+    // This depends on the order: after e2, reveals = ['v2']; e3 tries to find 'orig' in ['v2'] -> -1
+    expect(state.reveals).toContain('v2');
+    // The third correction records but doesn't replace
+    expect(state.corrections).toHaveLength(2);
+  });
+
+  it('non-continuous same-scene positions throw ConfigError in compileDiscourseBoundaries preflight', () => {
+    // Per-scene action positions must form a contiguous range with no gaps.
+    const ledger = makeLedger([
+      entry('e1', revealAction('r1', 0), 'scene_A', 'main'),
+      entry('e2', revealAction('r2', 2), 'scene_A', 'main'), // gap: position 1 missing
+    ]);
+    const assertions: Record<string, NarratorAssertion> = {
+      r1: makeAssertion('r1', true, 'reveal'),
+      r2: makeAssertion('r2', true, 'reveal'),
+    };
+    const eventA = makeEvent({ id: 'scene_A', narratorProfileRef: 'narrator_1' });
+    const profiles: Record<string, NarratorProfile> = {
+      narrator_1: createExplicitLedgerProfile(
+        'narrator_1', 'full', 'full', 'full_knowledge', 'reliable', 'sincere',
+      ),
+    };
+    expect(() =>
+      compileDiscourseBoundaries([eventA], ledger, assertions, profiles, 'main'),
+    ).toThrow('has non-continuous action positions');
+  });
+});
+
+function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
+  return {
+    event: 'test_event',
+    narrativeOrder: 1,
+    title: 'Test Event',
+    storyTime: { type: 'absolute', value: 'day_1' },
+    sceneType: 'linear',
+    pov: { character: 'test-char', type: 'third_person_limited' },
+    sceneBrief: 'Test scene for compiled discourse boundary projection.',
+    preconditions: [],
+    postconditions: [],
+    threadProgress: [],
+    foreshadowing: [],
+    relationshipEffects: [],
+    ruleEffects: [],
+    source: 'event_file',
+    branchExistence: { type: 'all' },
+    participants: { entities: [] },
+    ...overrides,
+  };
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// 16. Compiled discourse boundary projection from stateAfter (§12)
+// ═════════════════════════════════════════════════════════════════════════════
+// These tests verify that compileDiscourseBoundaries derives its safe Pass 1
+// projection from stateAfter (including the current scene's own reveal/claim
+// actions), while stateBefore remains empty for the first action position.
+// Hint targets must NEVER appear in the projection.
+
+describe('compiled discourse boundary projection from stateAfter (§12)', () => {
+  it('two-action scene: projection includes both reveal and claim from stateAfter', () => {
+    const ledger = makeLedger([
+      entry('e1', revealAction('r1', 0), 'scene_1', 'main'),
+      entry('e2', claimAction('c1', 1), 'scene_1', 'main'),
+    ]);
+    const assertions: Record<string, NarratorAssertion> = {
+      r1: makeAssertion('r1', true, 'reveal'),
+      c1: makeAssertion('c1', false, 'claim'),
+    };
+    const profiles: Record<string, NarratorProfile> = {
+      narrator_1: createExplicitLedgerProfile(
+        'narrator_1', 'full', 'full', 'full_knowledge', 'reliable', 'sincere',
+      ),
+    };
+    const event = makeEvent({ id: 'scene_1', narratorProfileRef: 'narrator_1' });
+
+    const ctx = compileDiscourseBoundaries(
+      [event], ledger, assertions, profiles, 'main',
+    );
+
+    const compiled = ctx['scene_1'];
+
+    // stateBefore is empty (pre-range — position 0 is the first action)
+    expect(compiled.stateBefore.reveals).toEqual([]);
+    expect(compiled.stateBefore.openClaims).toEqual([]);
+
+    // stateAfter includes both actions
+    expect(compiled.stateAfter.reveals).toContain('r1');
+    expect(compiled.stateAfter.openClaims).toContain('c1');
+
+    // projection (derived from stateAfter) includes both
+    expect(compiled.projection.plannedReveals).toContain('r1');
+    expect(compiled.projection.openClaims).toContain('c1');
+    expect(compiled.projection.authorizedTargets).toHaveLength(2);
+    expect(compiled.projection.authorizedTargets.map((t) => t.assertionId)).toEqual(['r1', 'c1']);
+
+    // stateBefore and stateAfter are distinct snapshots
+    expect(compiled.stateBefore).not.toBe(compiled.stateAfter);
+  });
+
+  it('single-action scene: projection includes the one reveal', () => {
+    const ledger = makeLedger([
+      entry('e1', revealAction('r1', 0), 'scene_1', 'main'),
+    ]);
+    const assertions: Record<string, NarratorAssertion> = {
+      r1: makeAssertion('r1', true, 'reveal'),
+    };
+    const event = makeEvent({ id: 'scene_1', narratorProfileRef: 'narrator_1' });
+
+    const ctx = compileDiscourseBoundaries(
+      [event], ledger, assertions, {}, 'main',
+    );
+
+    const compiled = ctx['scene_1'];
+
+    // stateBefore empty, stateAfter has the reveal
+    expect(compiled.stateBefore.reveals).toEqual([]);
+    expect(compiled.stateAfter.reveals).toContain('r1');
+
+    // projection (from stateAfter) includes the reveal
+    expect(compiled.projection.plannedReveals).toContain('r1');
+    expect(compiled.projection.authorizedTargets).toHaveLength(1);
+    expect(compiled.projection.authorizedTargets[0].assertionId).toBe('r1');
+  });
+
+  it('no-ledger returns empty discourse contexts (no-disclosure mode)', () => {
+    const event = makeEvent({ id: 'scene_1', discourseCursor: -1, narratorProfileRef: 'narrator_1' });
+    const ctx = compileDiscourseBoundaries(
+      [event], null, {}, {}, 'main',
+    );
+    // No ledger means no discourse — compileDiscourseBoundaries returns empty map
+    expect(Object.keys(ctx)).toHaveLength(0);
+    expect(ctx['scene_1']).toBeUndefined();
+  });
+
+  it('hint target excluded from projection when ledger has hint alongside reveal', () => {
+    const ledger = makeLedger([
+      entry('e1', revealAction('r1', 0), 'scene_1', 'main'),
+      entry('e2', hintAction('h1', 'surface_only', 'hidden_target', 1), 'scene_1', 'main'),
+    ]);
+    const assertions: Record<string, NarratorAssertion> = {
+      r1: makeAssertion('r1', true, 'reveal'),
+    };
+    const event = makeEvent({ id: 'scene_1', narratorProfileRef: 'narrator_1' });
+
+    const ctx = compileDiscourseBoundaries(
+      [event], ledger, assertions, {}, 'main',
+    );
+
+    const compiled = ctx['scene_1'];
+    const proj = compiled.projection;
+
+    // Hint is visible in projection (surface only)
+    expect(proj.visibleHints).toHaveLength(1);
+    expect(proj.visibleHints[0].surfaceProposition).toBe('surface_only');
+
+    // Hint target is ABSENT from projection
+    const projStr = JSON.stringify(proj);
+    expect(projStr).not.toContain('hidden_target');
+
+    // Reveal still appears
+    expect(proj.plannedReveals).toContain('r1');
+    expect(proj.authorizedTargets).toHaveLength(1);
+    expect(proj.authorizedTargets[0].assertionId).toBe('r1');
+
+    // Hint does NOT appear in authorized targets
+    expect(proj.authorizedTargets.map((t) => t.assertionId)).not.toContain('h1');
+  });
+
+  it('sparse positions across scenes: projection includes actions from stateAfter', () => {
+    // Positions 0 and 5 (gap) — different scene IDs for valid sparse
+    const ledger = makeLedger([
+      entry('e1', revealAction('r1', 0), 'scene_1', 'main'),
+      entry('e2', claimAction('c1', 5), 'scene_2', 'main'),
+    ]);
+    const assertions: Record<string, NarratorAssertion> = {
+      r1: makeAssertion('r1', true, 'reveal'),
+      c1: makeAssertion('c1', false, 'claim'),
+    };
+    const profiles: Record<string, NarratorProfile> = {
+      narrator_1: createExplicitLedgerProfile(
+        'narrator_1', 'full', 'full', 'full_knowledge', 'reliable', 'sincere',
+      ),
+    };
+    const scene1 = makeEvent({ id: 'scene_1', narratorProfileRef: 'narrator_1' });
+    const scene2 = makeEvent({ id: 'scene_2', narratorProfileRef: 'narrator_1' });
+
+    const ctx = compileDiscourseBoundaries(
+      [scene1, scene2], ledger, assertions, profiles, 'main',
+    );
+
+    // scene_1 at position 0: stateBefore empty, stateAfter has r1 only
+    const compiled1 = ctx['scene_1'];
+    expect(compiled1.stateBefore.reveals).toEqual([]);
+    expect(compiled1.stateAfter.reveals).toContain('r1');
+    expect(compiled1.stateAfter.openClaims).toEqual([]);
+    expect(compiled1.projection.plannedReveals).toContain('r1');
+    expect(compiled1.projection.openClaims).toEqual([]);
+
+    // scene_2 at position 5: stateBefore includes r1 from scene_1,
+    // stateAfter includes both r1 and c1
+    const compiled2 = ctx['scene_2'];
+    expect(compiled2.stateBefore.reveals).toContain('r1');
+    expect(compiled2.stateAfter.reveals).toContain('r1');
+    expect(compiled2.stateAfter.openClaims).toContain('c1');
+    expect(compiled2.projection.plannedReveals).toContain('r1');
+    expect(compiled2.projection.openClaims).toContain('c1');
   });
 });

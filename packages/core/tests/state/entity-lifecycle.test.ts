@@ -563,3 +563,132 @@ describe('Entity lifecycle — story-boundaries integration', () => {
     expect(result.finalState.entities['hero']?.status).toBe('alive');
   });
 });
+
+// ============================================================================
+// Equivalence: compileStoryBoundaries vs ReplayEngine lifecycle
+// ============================================================================
+// Both paths must produce identical lifecycle transitions and errors
+// for entity lifecycle operations (introduce, retire, same-storyTime
+// conflict, retired-entity modification).
+// ============================================================================
+
+import { compileStoryBoundaries, emptyWorldState } from '../../src/state/story-boundaries.ts';
+import { applyInitialFacts } from '../../src/state/event-application.ts';
+
+describe('boundary/replay equivalence — lifecycle', () => {
+  function engineRun(events: NarrativeEvent[]) {
+    const state = emptyWorldState();
+    return new ReplayEngine({
+      entityDeclarationCatalog: mockDeclarationCatalog,
+      entityTypeCatalog: mockTypeCatalog,
+    }).replay(events);
+  }
+
+  function boundRun(events: NarrativeEvent[]) {
+    return compileStoryBoundaries(
+      events,
+      [],
+      new Map(),
+      undefined,
+      undefined,
+    );
+  }
+
+  it('produces identical lifecycle state after introduce/retire sequence', () => {
+    const events: NarrativeEvent[] = [
+      makeEvent(1, 1, {
+        id: 'E_intro',
+        postconditions: [
+          makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' }),
+        ],
+      }),
+      makeEvent(2, 2, {
+        id: 'E_retire',
+        postconditions: [
+          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
+        ],
+      }),
+    ];
+
+    const boundary = boundRun(events);
+    const engineState = engineRun(events);
+
+    expect(boundary.finalState.entities['hero']?.lifecycle).toBe('retired');
+    expect(engineState.entities['hero']?.lifecycle).toBe('retired');
+    expect(boundary.finalState.entities).toEqual(engineState.entities);
+  });
+
+  it('throws same error class for retired entity modification in both paths', () => {
+    const events: NarrativeEvent[] = [
+      makeEvent(1, 1, {
+        id: 'E_intro',
+        postconditions: [
+          makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' }),
+        ],
+      }),
+      makeEvent(2, 2, {
+        id: 'E_retire',
+        postconditions: [
+          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
+        ],
+      }),
+      makeEvent(3, 3, {
+        id: 'E_modify',
+        postconditions: [
+          makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' }),
+        ],
+      }),
+    ];
+
+    expect(() => boundRun(events)).toThrow();
+    expect(() => engineRun(events)).toThrow();
+  });
+
+  it('produces identical participant lifecycle check in both paths', () => {
+    const events: NarrativeEvent[] = [
+      makeEvent(1, 1, {
+        id: 'E_intro',
+        postconditions: [
+          makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' }),
+        ],
+        participants: { entities: ['hero'] },
+      }),
+      makeEvent(2, 2, {
+        id: 'E_retire',
+        postconditions: [
+          makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
+        ],
+      }),
+      makeEvent(3, 3, {
+        id: 'E_participate',
+        participants: { entities: ['hero'] },
+        postconditions: [
+          makeFact({ entityId: 'sidekick', attribute: 'status', value: 'present' }),
+        ],
+      }),
+    ];
+
+    // Retired entity from a prior event cannot participate — both paths reject
+    expect(() => boundRun(events)).toThrow();
+    expect(() => engineRun(events)).toThrow();
+  });
+
+  it('produces identical empty lifecycle for events without lifecycle effects', () => {
+    const events: NarrativeEvent[] = [
+      makeEvent(1, 1, {
+        id: 'E1',
+        postconditions: [
+          makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' }),
+        ],
+      }),
+    ];
+
+    const boundary = boundRun(events);
+    const engineState = engineRun(events);
+
+    // No lifecycle = default 'active' for introduced entities
+    expect(boundary.finalState.entities['hero']?.lifecycle ?? 'active').toBe('active');
+    expect(engineState.entities['hero']?.lifecycle ?? 'active').toBe('active');
+    expect(boundary.finalState).toEqual(engineState);
+  });
+});

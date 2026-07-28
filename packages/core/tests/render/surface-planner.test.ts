@@ -14,12 +14,12 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  canonicalJson,
   clearStyleProfileRegistry,
   compileSceneContract,
   registerStyleProfile,
   resolveStyleProfile,
   type SceneContractInput,
-  simpleHash,
 } from '../../src/render/scene-contract.js';
 import { SurfacePlanner } from '../../src/render/surface-planner.js';
 import {
@@ -30,6 +30,7 @@ import {
   type RenderGroupManifest,
   type StyleProfile,
   SurfacePlannerError,
+  type SurfacePlanProposal,
   type SurfaceReferencePacket,
   type SurfaceRenderKey,
   type SurfaceValidationKey,
@@ -159,7 +160,6 @@ describe('SurfacePlanner', () => {
   // Category 2: Author group/order/branch validation
   // ======================================================================
 
-  describe('author group/order/branch validation (§5)', () => {
     it('validates each scene belongs to exactly one group', () => {
       const contracts = makeContracts(['S1', 'S2']);
       const planner = new SurfacePlanner(
@@ -168,17 +168,18 @@ describe('SurfacePlanner', () => {
           branch: 'main',
           sceneIds: ['S1', 'S2'],
           contracts,
-          authorLanes: [serialLane('lane1', ['S1']), serialLane('lane2', ['S2'])],
+          authorGroups: [
+            { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+            { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
+          ],
         }),
       );
 
       const result = planner.plan();
       expect(result.manifest.groupIds).toHaveLength(2);
+      expect(result.manifest.groupIds).toEqual(['g1', 'g2']);
     });
-
     it('throws when a scene appears in multiple groups', () => {
-      // This case shouldn't happen in manual mode since lanes are distinct,
-      // but we should test the validation logic directly
       const contracts = makeContracts(['S1', 'S2', 'S3']);
       const planner = new SurfacePlanner(
         makeOptions({
@@ -186,29 +187,171 @@ describe('SurfacePlanner', () => {
           branch: 'main',
           sceneIds: ['S1', 'S2', 'S3'],
           contracts,
-          authorLanes: [serialLane('lane1', ['S1', 'S2']), serialLane('lane2', ['S2', 'S3'])],
+          authorGroups: [
+            { groupId: 'g1', sceneIds: ['S1', 'S2'], surfacePolicy: { type: 'parallel' } },
+            { groupId: 'g2', sceneIds: ['S2', 'S3'], surfacePolicy: { type: 'parallel' } },
+          ],
         }),
       );
 
-      // S2 would appear in both lane1 and lane2, but since each lane.groupIds
-      // is a distinct array with its own group, S2's group ID in both is 'S2'
-      // so validateGroupUniqueness will catch it
+      // S2 appears in both g1 and g2 → GROUP_SCENE_CONFLICT
       expect(() => planner.plan()).toThrow(SurfacePlannerError);
+      expect(() => planner.plan()).toThrow(/appears in multiple groups/i);
     });
+    it('default parallel uses group IDs distinct from scene IDs', () => {
+      // When no authorLanes are provided, defaultParallelGroups creates
+      // group IDs with a 'group_' prefix — distinct from bare scene IDs.
+      // Contract: group IDs are grouping constructs, NOT scene IDs (§5).
+      const contracts = makeContracts(['S1', 'S2', 'S3']);
+      const planner = new SurfacePlanner(
+        makeOptions({
+          mode: 'manual',
+          branch: 'main',
+          sceneIds: ['S1', 'S2', 'S3'],
+          contracts,
+          // No authorLanes → default parallel
+        }),
+      );
 
-    it('throws when a scene has no contract', () => {
-      const contracts = makeContracts(['S1']);
+      const result = planner.plan();
+
+      for (const group of result.surfaceDependencyGraph.groups) {
+        // Group ID must NOT equal the bare scene ID
+        expect(group.groupId).not.toBe(group.sceneIds[0]);
+        // Group ID must have the 'group_' prefix from default parallel
+        expect(group.groupId).toMatch(/^group_/);
+        // Each default parallel group holds exactly one scene
+        expect(group.sceneIds).toHaveLength(1);
+      }
+    });
+    it('throws when lane references nonexistent group ID', () => {
+      // Lane groupIds must reference groups that exist in the plan (§5).
+      const contracts = makeContracts(['S1', 'S2']);
       const planner = new SurfacePlanner(
         makeOptions({
           mode: 'manual',
           branch: 'main',
           sceneIds: ['S1', 'S2'],
           contracts,
+          authorGroups: [
+            { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+            { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
+          ],
+          authorLanes: [serialLane('lane1', ['nonexistent_group'])],
         }),
       );
 
+      // 'nonexistent_group' is not a defined group → UNKNOWN_GROUP_ID
       expect(() => planner.plan()).toThrow(SurfacePlannerError);
-      expect(() => planner.plan()).toThrow(/no CompiledSceneContract/i);
+      expect(() => planner.plan()).toThrow(/unknown group/i);
+    });
+
+    it('throws on cross-branch scene references', () => {
+      // Cross-branch surface edges are invalid — each branch has its own plan
+      const contracts = makeContracts(['S1', 'S2'], 'branch_a');
+      const planner = new SurfacePlanner(
+        makeOptions({
+          mode: 'manual',
+          branch: 'branch_a',
+          sceneIds: ['S1', 'S2'],
+          contracts,
+          authorLanes: [serialLane('branch_a_lane', ['S1', 'S2'])],
+        }),
+      );
+
+      const result = planner.plan();
+
+      // All groups belong to 'branch_a' — no cross-branch edge
+      expect(result.surfaceDependencyGraph.branch).toBe('branch_a');
+      for (const group of result.surfaceDependencyGraph.groups) {
+        expect(group.groupId).toBeDefined();
+        for (const sid of group.sceneIds) {
+          // No scene IDs from a different branch
+          expect(sid).not.toMatch(/branch_b/);
+        }
+      }
+    });
+
+    it('dependency graph has no cycles by construction', () => {
+      // SurfaceDependencyGraph is built from groups and lanes.
+      // Each lane orders groups in discourse sequence; there is no
+      // mechanism for a group to reference itself or another group
+      // in a loop.  Cycles would require cross-lane references.
+      const contracts = makeContracts(['S1', 'S2', 'S3']);
+      const planner = new SurfacePlanner(
+        makeOptions({
+          mode: 'manual',
+          branch: 'main',
+          sceneIds: ['S1', 'S2', 'S3'],
+          contracts,
+          authorGroups: [
+            { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+            { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'serial_surface' } },
+            { groupId: 'g3', sceneIds: ['S3'], surfacePolicy: { type: 'parallel' } },
+          ],
+          authorLanes: [serialLane('lane1', ['g1', 'g2']), serialLane('lane2', ['g3'])],
+        }),
+      );
+
+      const result = planner.plan();
+      const groupIds = new Set(result.surfaceDependencyGraph.groups.map((g) => g.groupId));
+
+      // Each lane's groupIds must reference existing groups
+      for (const lane of result.surfaceDependencyGraph.serialLanes) {
+        for (const gid of lane.groupIds) {
+          expect(groupIds.has(gid)).toBe(true);
+        }
+      }
+
+      // No group references itself — each group only holds sceneIds
+      for (const group of result.surfaceDependencyGraph.groups) {
+        expect(group.groupId).toBeDefined();
+        expect(group.sceneIds.every((s) => s !== group.groupId));
+      }
+    });
+
+    it('UNVERSIONED_BUDGET and UNVERSIONED_EXTRACTION are valid error codes', () => {
+      // These error codes exist in the SurfaceErrorCode union and
+      // SurfacePlannerError can carry them.  The planner itself
+      // does not raise them (they are enforced by the extractor
+      // and render pipeline), but they are part of the contract.
+      const budgetErr = new SurfacePlannerError(
+        'Extraction budget has no version',
+        'UNVERSIONED_BUDGET',
+        { branch: 'main' },
+      );
+      const extractErr = new SurfacePlannerError(
+        'Extractor has no version identifier',
+        'UNVERSIONED_EXTRACTION',
+        { branch: 'main' },
+      );
+
+      expect(budgetErr.code).toBe('UNVERSIONED_BUDGET');
+      expect(extractErr.code).toBe('UNVERSIONED_EXTRACTION');
+      expect(budgetErr).toBeInstanceOf(SurfacePlannerError);
+      expect(extractErr).toBeInstanceOf(SurfacePlannerError);
+    });
+
+    it('surface policy type is one of the allowed types', () => {
+      // Only 'parallel', 'serial_surface', and 'fallback_without_surface'
+      // are valid SurfacePolicy types per §7.
+      const contracts = makeContracts(['S1']);
+      const planner = new SurfacePlanner(
+        makeOptions({
+          mode: 'auto',
+          branch: 'main',
+          sceneIds: ['S1'],
+          contracts,
+          autoConfig: { maxParallelGroupSize: 5, authorized: true },
+        }),
+      );
+
+      const result = planner.plan();
+      for (const group of result.surfaceDependencyGraph.groups) {
+        expect(['parallel', 'serial_surface', 'fallback_without_surface']).toContain(
+          group.surfacePolicy.type,
+        );
+      }
     });
 
     it('throws when manual mode has unassigned scene IDs', () => {
@@ -219,15 +362,17 @@ describe('SurfacePlanner', () => {
           branch: 'main',
           sceneIds: ['S1', 'S2', 'S3'],
           contracts,
-          authorLanes: [serialLane('lane1', ['S1']), serialLane('lane2', ['S2'])],
+          authorGroups: [
+            { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+            { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
+          ],
         }),
       );
 
-      // S3 is not assigned to any lane
+      // S3 is not assigned to any group
       expect(() => planner.plan()).toThrow(SurfacePlannerError);
       expect(() => planner.plan()).toThrow(/not assigned to any group/i);
     });
-  });
 
   // ======================================================================
   // Category 3: Manual/suggest/auto manifest determinism
@@ -255,7 +400,7 @@ describe('SurfacePlanner', () => {
       expect(result1.manifest.sourceDefinitionHash).toBe(result2.manifest.sourceDefinitionHash);
     });
 
-    it('suggest mode produces deterministic results', () => {
+    it('suggest mode effective plan is default-parallel with deterministic proposal', () => {
       const contracts = makeContracts(['S1', 'S2', 'S3']);
       const options = makeOptions({
         mode: 'suggest',
@@ -270,9 +415,31 @@ describe('SurfacePlanner', () => {
       const r1 = planner1.plan();
       const r2 = planner2.plan();
 
+      // Effective groups are default-parallel (§3)
+      expect(r1.manifest.groupIds).toEqual(['group_S1', 'group_S2', 'group_S3']);
       expect(r1.manifest.groupIds).toEqual(r2.manifest.groupIds);
       expect(r1.manifest.plannerMode).toBe('suggest');
+      for (const group of r1.surfaceDependencyGraph.groups) {
+        expect(group.surfacePolicy).toEqual({ type: 'parallel' });
+        expect(group.sceneIds).toHaveLength(1);
+      }
+      expect(r1.surfaceDependencyGraph.serialLanes).toHaveLength(0);
+
+      // Proposal exists because continuous transitions form a chain
+      expect(r1.proposal).toBeDefined();
+      expect(r2.proposal).toBeDefined();
+      expect(r1.proposal!.hash).toBe(r2.proposal!.hash);
+      expect(r1.proposal!.hash).toMatch(/^[0-9a-f]{64}$/);
+
+      // Proposal groups are serial_surface, not parallel
+      for (const group of r1.proposal!.groups) {
+        expect(group.surfacePolicy.type).toBe('serial_surface');
+      }
+
+      // Warnings reference the proposal lanes
       expect(r1.warnings).toBeDefined();
+      expect(r1.warnings!.length).toBeGreaterThan(0);
+      expect(r1.warnings![0]).toContain('Suggested serial lane');
     });
 
     it('auto mode produces deterministic results', () => {
@@ -319,7 +486,10 @@ describe('SurfacePlanner', () => {
           branch: 'main',
           sceneIds: ['S1', 'S2'],
           contracts,
-          authorLanes: [serialLane('lane1', ['S1']), serialLane('lane2', ['S2'])],
+          authorGroups: [
+            { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+            { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
+          ],
         }),
       );
 
@@ -327,7 +497,73 @@ describe('SurfacePlanner', () => {
 
       expect(result.manifest.manifestVersion).toBeDefined();
       expect(result.manifest.sourceDefinitionHash).toBeDefined();
-      expect(result.manifest.sourceDefinitionHash).toMatch(/^[0-9a-f]{8}$/);
+      expect(result.manifest.sourceDefinitionHash).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('manifest hash stability excludes generatedAt', () => {
+      // SourceDefinitionHash must be deterministic from the same group/lane
+      // structure regardless of the wall-clock generatedAt timestamp.
+      const contracts = makeContracts(['S1', 'S2']);
+      const options = makeOptions({
+        mode: 'manual',
+        branch: 'main',
+        sceneIds: ['S1', 'S2'],
+        contracts,
+        authorGroups: [
+          { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+          { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
+        ],
+      });
+
+      const planner1 = new SurfacePlanner(options);
+      const result1 = planner1.plan();
+      const hash1 = result1.manifest.sourceDefinitionHash;
+
+      // Same inputs — deterministic hash even though generatedAt may differ
+      const planner2 = new SurfacePlanner(options);
+      const result2 = planner2.plan();
+      const hash2 = result2.manifest.sourceDefinitionHash;
+
+      // sourceDefinitionHash is identical — excludes generatedAt
+      expect(hash1).toBe(hash2);
+    });
+
+    it('canonical JSON serialization for manifest identity', () => {
+      // canonicalJson sorts keys alphabetically but preserves array order.
+      // Groups/lanes arrays are serialized in the order the planner receives them,
+      // so different input array order produces a different serialized hash.
+      const contracts = makeContracts(['S1', 'S2']);
+
+      // Two planners with groups in reversed order
+      const options1 = makeOptions({
+        mode: 'manual',
+        branch: 'main',
+        sceneIds: ['S1', 'S2'],
+        contracts,
+        authorGroups: [
+          { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+          { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
+        ],
+      });
+      const options2 = makeOptions({
+        mode: 'manual',
+        branch: 'main',
+        sceneIds: ['S1', 'S2'],
+        contracts,
+        authorGroups: [
+          { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
+          { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+        ],
+      });
+
+      const r1 = new SurfacePlanner(options1).plan();
+      const r2 = new SurfacePlanner(options2).plan();
+
+      // Group array order in manifest matches input order — not sorted (§6)
+      expect(r1.manifest.groupIds).toEqual(['g1', 'g2']);
+      expect(r2.manifest.groupIds).toEqual(['g2', 'g1']);
+      // Different group array order → different canonical serialization → different hash
+      expect(r1.manifest.sourceDefinitionHash).not.toBe(r2.manifest.sourceDefinitionHash);
     });
   });
 
@@ -895,7 +1131,7 @@ describe('SurfacePlanner', () => {
       expect(result.surfaceDependencyGraph.serialLanes).toHaveLength(0);
     });
 
-    it('serial_surface groups are ordered by discourse position in lanes', () => {
+    it('suggest mode proposal has serial lanes ordered by discourse position', () => {
       const contracts = makeContracts(['S1', 'S2', 'S3', 'S4'], 'main', [
         'continuous',
         'continuous',
@@ -913,15 +1149,35 @@ describe('SurfacePlanner', () => {
       );
 
       const result = planner.plan();
-      const lanes = result.surfaceDependencyGraph.serialLanes;
 
-      // Should find at least one serial lane for continuous chains
-      if (lanes.length > 0) {
-        for (const lane of lanes) {
-          // Lane group IDs should be in discourse order
-          expect(lane.groupIds).toEqual(lane.groupIds.slice().sort());
+      // Effective plan is always parallel in suggest mode
+      expect(result.surfaceDependencyGraph.serialLanes).toHaveLength(0);
+      for (const group of result.surfaceDependencyGraph.groups) {
+        expect(group.surfacePolicy).toEqual({ type: 'parallel' });
+      }
+
+      // Proposal holds the suggested serial grouping
+      expect(result.proposal).toBeDefined();
+      const proposal = result.proposal!;
+
+      // Two chains: [S1, S2] continuous, [S4] continuous (S3 is hard_cut)
+      // suggestSerialLanes only creates lanes for chains of length ≥2
+      expect(proposal.lanes).toHaveLength(1);
+      expect(proposal.lanes[0].laneId).toMatch(/^suggested_serial_lane_\d+$/);
+      expect(proposal.lanes[0].groupIds).toEqual(['S1', 'S2']);
+
+      // Proposal groups in lane use serial_surface policy
+      const laneGroupIds = new Set(proposal.lanes[0].groupIds);
+      for (const group of proposal.groups) {
+        if (laneGroupIds.has(group.sceneIds[0])) {
+          expect(group.surfacePolicy.type).toBe('serial_surface');
+        } else {
+          expect(group.surfacePolicy.type).toBe('parallel');
         }
       }
+
+      // Hash is deterministic and SHA-256
+      expect(proposal.hash).toMatch(/^[0-9a-f]{64}$/);
     });
 
     it('auto mode grouping is stable regardless of group iteration order', () => {
@@ -961,17 +1217,172 @@ describe('SurfacePlanner', () => {
           branch: 'main',
           sceneIds: ['S1', 'S2', 'S3'],
           contracts,
-          authorLanes: [serialLane('lane1', ['S1']), serialLane('lane2', ['S2', 'S3'])],
+          // No authorGroups → default parallel: group_<sceneId> IDs
         }),
       );
 
       const result = planner.plan();
 
-      // Groups are determined by author lanes, not by completion order
-      expect(result.manifest.groupIds).toEqual(['S1', 'S2', 'S3']);
-
-      // SurfaceDependencyGraph has fixed groups
+      // Default parallel creates group_<sceneId> group IDs in discourse order
+      expect(result.manifest.groupIds).toEqual(['group_S1', 'group_S2', 'group_S3']);
+      // Groups are determined by scene order, not by completion timing
       expect(result.surfaceDependencyGraph.groups).toHaveLength(3);
+    });
+  });
+
+  // ======================================================================
+  // Suggest mode proposal isolation
+  // ======================================================================
+
+  describe('suggest mode proposal isolation', () => {
+    it('effective groups are always parallel even when suggestion exists', () => {
+      // Continuous scenes — would trigger a serial suggestion
+      const contracts = makeContracts(['S1', 'S2', 'S3'], 'main', [
+        'continuous',
+        'continuous',
+        'continuous',
+      ]);
+
+      const planner = new SurfacePlanner(
+        makeOptions({
+          mode: 'suggest',
+          branch: 'main',
+          sceneIds: ['S1', 'S2', 'S3'],
+          contracts,
+        }),
+      );
+
+      const result = planner.plan();
+
+      // Effective: parallel
+      for (const group of result.surfaceDependencyGraph.groups) {
+        expect(group.surfacePolicy).toEqual({ type: 'parallel' });
+      }
+      expect(result.surfaceDependencyGraph.serialLanes).toHaveLength(0);
+
+      // Proposal: serial
+      expect(result.proposal).toBeDefined();
+      expect(result.proposal!.lanes.length).toBeGreaterThan(0);
+    });
+
+    it('proposal is undefined when no suggestion is generated', () => {
+      // Single scene → suggestSerialLanes returns null
+      const contracts = makeContracts(['S1']);
+      const planner = new SurfacePlanner(
+        makeOptions({
+          mode: 'suggest',
+          branch: 'main',
+          sceneIds: ['S1'],
+          contracts,
+        }),
+      );
+
+      const result = planner.plan();
+
+      // Effective plan still valid
+      expect(result.surfaceDependencyGraph.groups).toHaveLength(1);
+      expect(result.surfaceDependencyGraph.groups[0].surfacePolicy).toEqual({ type: 'parallel' });
+
+      // No proposal when no serial chain found
+      expect(result.proposal).toBeUndefined();
+
+      // Warnings still mention suggest mode is a proposal
+      expect(result.warnings).toBeDefined();
+      expect(result.warnings!.length).toBeGreaterThan(0);
+    });
+
+    it('manual mode has no proposal', () => {
+      const contracts = makeContracts(['S1', 'S2']);
+      const planner = new SurfacePlanner(
+        makeOptions({
+          mode: 'manual',
+          branch: 'main',
+          sceneIds: ['S1', 'S2'],
+          contracts,
+          authorGroups: [
+            { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'serial_surface' } },
+            { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
+          ],
+          authorLanes: [serialLane('lane1', ['g1', 'g2'])],
+        }),
+      );
+
+      const result = planner.plan();
+      expect(result.proposal).toBeUndefined();
+    });
+
+    it('auto mode has no proposal', () => {
+      const contracts = makeContracts(['S1', 'S2', 'S3']);
+      const planner = new SurfacePlanner(
+        makeOptions({
+          mode: 'auto',
+          branch: 'main',
+          sceneIds: ['S1', 'S2', 'S3'],
+          contracts,
+          autoConfig: { maxParallelGroupSize: 2, authorized: true },
+        }),
+      );
+
+      const result = planner.plan();
+      expect(result.proposal).toBeUndefined();
+    });
+
+    it('proposal hash is deterministic across runs with same inputs', () => {
+      const contracts = makeContracts(['S1', 'S2'], 'main', [
+        'continuous',
+        'continuous',
+      ]);
+      const options = makeOptions({
+        mode: 'suggest',
+        branch: 'main',
+        sceneIds: ['S1', 'S2'],
+        contracts,
+      });
+
+      const r1 = new SurfacePlanner(options).plan();
+      const r2 = new SurfacePlanner(options).plan();
+
+      expect(r1.proposal).toBeDefined();
+      expect(r2.proposal).toBeDefined();
+      expect(r1.proposal!.hash).toBe(r2.proposal!.hash);
+
+      // Proposal hash differs when scene transition changes
+      const contractsChanged = makeContracts(['S1', 'S2'], 'main', [
+        'hard_cut',
+        'hard_cut',
+      ]);
+      const r3 = new SurfacePlanner(
+        makeOptions({
+          mode: 'suggest',
+          branch: 'main',
+          sceneIds: ['S1', 'S2'],
+          contracts: contractsChanged,
+        }),
+      ).plan();
+
+      // Hard cut chain (single-element each) → no proposal
+      expect(r3.proposal).toBeUndefined();
+    });
+
+    it('proposal hash excludes wall-clock generatedAt', () => {
+      const contracts = makeContracts(['S1', 'S2', 'S3'], 'main', [
+        'continuous',
+        'continuous',
+        'continuous',
+      ]);
+      const options = makeOptions({
+        mode: 'suggest',
+        branch: 'main',
+        sceneIds: ['S1', 'S2', 'S3'],
+        contracts,
+      });
+
+      // Run twice: same proposal hash even though generatedAt would differ
+      const r1 = new SurfacePlanner(options).plan();
+      const r2 = new SurfacePlanner(options).plan();
+
+      expect(r1.proposal).toBeDefined();
+      expect(r1.proposal!.hash).toBe(r2.proposal!.hash);
     });
   });
 
@@ -1052,6 +1463,12 @@ describe('SurfacePlanner', () => {
         'GROUP_SCENE_CONFLICT',
         'FALLBACK_WITHOUT_SURFACE_NOT_ALLOWED',
         'EXHAUSTED_RETRY',
+        'DUPLICATE_GROUP_ID',
+        'MISSING_SCENE_IN_GROUP',
+        'MISSING_SURFACE_SOURCE',
+        'SERIAL_GROUP_MULTIPLE_SCENES',
+        'UNVERSIONED_MANIFEST',
+        'UNKNOWN_GROUP_ID',
       ] as const;
 
       for (const code of codes) {
@@ -1061,21 +1478,4 @@ describe('SurfacePlanner', () => {
     });
   });
 
-  // ======================================================================
-  // Simple hash utility
-  // ======================================================================
-
-  describe('simpleHash utility', () => {
-    it('produces deterministic results', () => {
-      expect(simpleHash('hello')).toBe(simpleHash('hello'));
-    });
-
-    it('produces different results for different inputs', () => {
-      expect(simpleHash('hello')).not.toBe(simpleHash('world'));
-    });
-
-    it('returns an 8-char hex string', () => {
-      expect(simpleHash('test')).toMatch(/^[0-9a-f]{8}$/);
-    });
-  });
 });

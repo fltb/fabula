@@ -153,7 +153,6 @@ function makeContext(): ContextPackage {
     activeThreads: [
       { id: 'thread_1', name: SENTINEL_THREAD, progress: 0, total: 1, description: 'A thread' },
     ],
-    previousSceneSummary: '',
     volumeSummary: '',
     markdown: '',
     activeRules: [
@@ -192,6 +191,26 @@ function makeJob(): RenderJob {
     },
     context: makeContext(),
     chapter: 1,
+    contract: {
+      sceneId: 'evt_express',
+      branch: { decisions: [] },
+      discoursePosition: 0,
+      worldStateHash: 'a00',
+      knowledgeStateHash: 'a00',
+      narratorProfileHash: 'a00',
+      plannedDiscourseHash: 'a00',
+      styleProfile: {
+        profileId: 'default',
+        resolutionPrecedence: { projectStyle: 'default' },
+      },
+      continuityPacket: { transition: 'continuous' },
+      promptContractHash: 'a00',
+    },
+    surfaceDependency: {
+      groupId: 'default',
+      policy: 'parallel' as const,
+      manifestHash: 'a00',
+    },
   };
 }
 

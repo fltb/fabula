@@ -130,33 +130,32 @@ describe('DiscourseValidator', () => {
       expect(discourseIssues[0].attribute).toBe('narratorProfileRef');
     });
 
-    it('should report error when context.discourseReplayError is set', () => {
+    it('does not revive removed discourse replay fallback errors post-render', () => {
       const event = makeEvent({ id: 'E1' });
-      const context = { discourseReplayError: 'Truth boundary violation in entry_reveal_death' };
-      const input = makeInput(event, null, context);
+      const input = makeInput(
+        event,
+        null,
+        { discourseReplayError: 'Truth boundary violation in entry_reveal_death' },
+      );
 
-      const issues = new DiscourseValidator().validatePost(input);
-      const discourseIssues = issues.filter((i) => i.validator === 'discourse');
-      expect(discourseIssues.length).toBeGreaterThanOrEqual(1);
-      expect(discourseIssues[0].message).toContain('Discourse replay failed');
-      expect(discourseIssues[0].message).toContain('Truth boundary violation');
-      expect(discourseIssues[0].severity).toBe('error');
-      expect(discourseIssues[0].attribute).toBe('discourse');
+      // Planned discourse failures are rejected during strict preflight, before
+      // a post-render validator exists; this legacy context field is ignored.
+      expect(new DiscourseValidator().validatePost(input)).toHaveLength(0);
     });
 
-    it('should report both errors when both conditions are violated', () => {
+    it('reports only narrator resolution when legacy replay error is also present', () => {
       const event = makeEvent({ id: 'E1', narratorProfileRef: 'narrator_missing' });
-      const context = {
+      const input = makeInput(event, null, {
         narratorProfile: undefined,
         discourseReplayError: 'Hint lifecycle violation',
-      };
-      const input = makeInput(event, null, context);
+      });
 
-      const issues = new DiscourseValidator().validatePost(input);
-      const discourseIssues = issues.filter((i) => i.validator === 'discourse');
-      expect(discourseIssues).toHaveLength(2);
-      const severities = discourseIssues.map((i) => i.severity);
-      expect(severities).toEqual(['error', 'error']);
+      const discourseIssues = new DiscourseValidator()
+        .validatePost(input)
+        .filter((issue) => issue.validator === 'discourse');
+      expect(discourseIssues).toHaveLength(1);
+      expect(discourseIssues[0]?.attribute).toBe('narratorProfileRef');
+      expect(discourseIssues[0]?.severity).toBe('error');
     });
   });
 

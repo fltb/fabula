@@ -87,3 +87,149 @@ describe('compileStoryBoundaries', () => {
     expect(result3.stateBeforeByEventId.get('late')?.entities.wife?.status).toBe('value');
   });
 });
+
+// ============================================================================
+// Equivalence: compileStoryBoundaries vs ReplayEngine
+// ============================================================================
+// Both code paths call applyNarrativeEvent as the sole event-effect
+// implementation. These tests verify they produce identical state across
+// all state dimensions for the same event sequence.
+// ============================================================================
+
+import { ReplayEngine } from '../../src/state/replay.js';
+
+describe('boundary/replay equivalence', () => {
+  function engineRun(events: NarrativeEvent[]) {
+    return new ReplayEngine().replay(events);
+  }
+
+  it('produces identical entity state for set/overwrite/unset sequence', () => {
+    const events: NarrativeEvent[] = [
+      event('E1', 1, [], [fact('alive')]),
+      event('E2', 2, [fact('alive')], [fact('dead')]),
+    ];
+
+    const boundary = compileStoryBoundaries(events, [], new Map());
+    const engineState = engineRun(events);
+
+    expect(boundary.finalState.entities).toEqual(engineState.entities);
+  })
+
+  it('produces identical thread state', () => {
+    const events: NarrativeEvent[] = [
+      {
+        ...event('E1', 1),
+        threadProgress: [
+          { thread: 'T1', advancement: 1, progressAfter: 1, progressTotal: 5 },
+        ],
+      },
+      {
+        ...event('E2', 2),
+        threadProgress: [
+          { thread: 'T1', advancement: 1, progressAfter: 2, progressTotal: 5 },
+        ],
+      },
+    ];
+    const boundary = compileStoryBoundaries(events, [], new Map());
+    const engineState = engineRun(events);
+
+    expect(boundary.finalState.threads).toEqual(engineState.threads);
+  })
+
+  it('produces identical relationship state', () => {
+    const events: NarrativeEvent[] = [
+      {
+        ...event('E1', 1),
+        participants: { entities: ['hero', 'villain'] },
+        relationshipEffects: [
+          {
+            participants: ['hero', 'villain'],
+            membershipAfter: [
+              { entityId: 'hero', role: 'protagonist' },
+              { entityId: 'villain', role: 'antagonist' },
+            ],
+            dimensionSet: [
+              { dimensionId: 'direction', value: 'hostile' },
+              { dimensionId: 'intensity', value: 5 },
+            ],
+            provenance: 'compat:RelationshipChange:set',
+          },
+        ],
+      },
+    ];
+    const boundary = compileStoryBoundaries(events, [], new Map());
+    const engineState = engineRun(events);
+
+    expect(boundary.finalState.relationships).toEqual(engineState.relationships);
+  });
+
+  it('produces identical rule state', () => {
+    const events: NarrativeEvent[] = [
+      {
+        ...event('E1', 1),
+        participants: { entities: ['world'] },
+        ruleEffects: [
+          { rule: 'gravity', effect: 'active', evidence: 'world.normal' },
+        ],
+      },
+      {
+        ...event('E2', 2),
+        participants: { entities: ['world'] },
+        ruleEffects: [
+          { rule: 'gravity', effect: 'suspended', evidence: 'world.reversed' },
+        ],
+      },
+    ];
+    const boundary = compileStoryBoundaries(events, [], new Map());
+    const engineState = engineRun(events);
+
+    expect(boundary.finalState.rules).toEqual(engineState.rules);
+  });
+
+  it('produces identical epistemic ledger and proposition catalog', () => {
+    // These dimensions remain empty for minimal events without
+    // explicit epistemic actions or catalog registrations.
+    const events: NarrativeEvent[] = [
+      event('E1', 1, [], [fact('active')]),
+      event('E2', 2, [fact('active')], [fact('resolved')]),
+    ];
+    const boundary = compileStoryBoundaries(events, [], new Map());
+    const engineState = engineRun(events);
+
+    expect(boundary.finalState.epistemicLedger).toEqual(engineState.epistemicLedger);
+    expect(boundary.finalState.propositionCatalog).toEqual(engineState.propositionCatalog);
+  });
+
+  it('throws ConfigError on duplicate write in both paths', () => {
+    const events: NarrativeEvent[] = [
+      {
+        ...event('E1', 1),
+        postconditions: [
+          { ...fact('alive'), attribute: 'status', value: 'alive' },
+          { ...fact('alive'), attribute: 'status', value: 'dead' },
+        ],
+      },
+    ];
+
+    expect(() => compileStoryBoundaries(events, [], new Map())).toThrow();
+    expect(() => new ReplayEngine().replay(events)).toThrow();
+  });
+
+  it('throws PreconditionMismatchError on operator mismatch in both paths', () => {
+    const events: NarrativeEvent[] = [
+      event('E1', 1, [], [fact('active')]),
+      { ...event('E2', 2), preconditions: [fact('active')] },
+    ];
+    const events2 = [events[1]!]; // No provider for precondition
+    // E2 needs 'active' but no event wrote it
+    expect(() => compileStoryBoundaries(events2, [], new Map())).toThrow();
+    expect(() => new ReplayEngine().replay(events2)).toThrow();
+  });
+
+  it('produces identical state for empty event sequences', () => {
+    const boundary = compileStoryBoundaries([], [], new Map());
+    const engineState = engineRun([]);
+
+    expect(boundary.finalState).toEqual(engineState);
+  });
+});

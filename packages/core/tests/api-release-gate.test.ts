@@ -190,4 +190,146 @@ describe('buildReleaseDiagnostic', () => {
     // Must NOT include raw provider error when validation errors exist
     expect(diag).not.toContain('raw provider failure');
   });
+  // ── Release / Response consistency ────────────────────────────────
+
+  it('reports blocked when prose is empty despite no errors', () => {
+    const result = makeResult({
+      prose: '',
+      validation: makeValidationResult({ passed: true }),
+      analysis: { blocks: [] },
+    });
+    const diag = buildReleaseDiagnostic(result);
+    expect(diag).toContain('empty prose');
+    // Empty prose always makes the result unreleased
+    expect(diag).not.toContain('released');
+  });
+
+  it('reports blocked when analysis is null', () => {
+    const result = makeResult({
+      analysis: null,
+      validation: makeValidationResult({ passed: true }),
+      prose: 'Some prose.',
+    });
+    const diag = buildReleaseDiagnostic(result);
+    expect(diag).toContain('missing analysis');
+    // Missing analysis blocks release
+    expect(diag).not.toContain('released');
+  });
+
+  it('reports blocked when validation fails with errors', () => {
+    const result = makeResult({
+      validation: makeValidationResult({
+        passed: false,
+        errors: [
+          {
+            validator: 'POVValidator',
+            severity: 'error',
+            event: 'evt_scene_001',
+            entity: 'narrator',
+            message: 'POV shift detected',
+            fixSuggestion: 'Maintain consistent POV.',
+            fixAction: 'change_value',
+            fixTarget: { file: 'scenes/evt_scene_001.yaml' },
+          },
+        ],
+      }),
+      prose: 'Some prose.',
+      analysis: { blocks: [] },
+    });
+    const diag = buildReleaseDiagnostic(result);
+    expect(diag).toContain('POV shift detected');
+    // Validation errors block release
+    expect(diag).not.toContain('released');
+  });
+
+  it('reports blocked when needsReview is true despite passing validation', () => {
+    const result = makeResult({
+      needsReview: true,
+      validation: makeValidationResult({ passed: true }),
+    });
+    const diag = buildReleaseDiagnostic(result);
+    expect(diag).toContain('needs review');
+    expect(diag).not.toContain('released');
+  });
+
+  it('diagnostic contains event ID and reason even when released fields pass', () => {
+    const result = makeResult({
+      validation: makeValidationResult({ passed: true }),
+      prose: 'valid prose',
+      analysis: { blocks: [] },
+    });
+    const diag = buildReleaseDiagnostic(result);
+    expect(diag).toContain('evt_scene_001');
+    // When all conditions pass, the diagnostic should indicate release readiness
+    // or at minimum include the event ID with a status message
+    expect(typeof diag).toBe('string');
+    expect(diag.length).toBeGreaterThan(0);
+  });
+
+  it('all released fields derive from ReleaseDecision in every path', () => {
+    // Verify that every result path has a consistent projection of fields
+    // needed for release decision
+    const successful: RenderSceneResult = makeResult({
+      validation: makeValidationResult({ passed: true }),
+    });
+    expect(successful.prose.trim().length).toBeGreaterThan(0);
+    expect(successful.analysis).not.toBeNull();
+    expect(successful.validation).not.toBeNull();
+    expect(successful.validation!.passed).toBe(true);
+    expect(successful.needsReview).toBe(false);
+
+    // Build the release decision fields
+    const released =
+      successful.prose.trim().length > 0 &&
+      successful.analysis !== null &&
+      successful.validation !== null &&
+      successful.validation.passed &&
+      !successful.needsReview;
+    expect(released).toBe(true);
+  });
+
+  it('blocked result fields never all pass the release check', () => {
+    const blocked: RenderSceneResult = makeResult({
+      analysis: null,
+      validation: makeValidationResult({ passed: false }),
+      needsReview: true,
+    });
+    const released =
+      blocked.prose.trim().length > 0 &&
+      blocked.analysis !== null &&
+      blocked.validation !== null &&
+      blocked.validation.passed &&
+      !blocked.needsReview;
+    expect(released).toBe(false);
+  });
+
+  it('warning-only result with needsReview=false is releasable', () => {
+    const result: RenderSceneResult = makeResult({
+      validation: makeValidationResult({
+        passed: true,
+        errors: [],
+        warnings: [
+          {
+            validator: 'PacingValidator',
+            severity: 'warning',
+            event: 'evt_scene_001',
+            entity: 'narrator',
+            message: 'pacing slightly uneven',
+            fixSuggestion: 'Adjust paragraph lengths.',
+            fixAction: 'manual',
+            fixTarget: { file: 'scenes/evt_scene_001.yaml' },
+          },
+        ],
+      }),
+    });
+    const released =
+      result.prose.trim().length > 0 &&
+      result.analysis !== null &&
+      result.validation !== null &&
+      result.validation.passed &&
+      !result.needsReview;
+    expect(released).toBe(true);
+    // Warning-only does not block release when passed is true
+    expect(result.validation.passed).toBe(true);
+  });
 });

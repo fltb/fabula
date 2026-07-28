@@ -46,6 +46,26 @@ function makeJob(id: string): RenderJob {
       worldFacts: [],
     },
     chapter: 1,
+    contract: {
+      sceneId: id,
+      branch: { decisions: [] },
+      discoursePosition: 0,
+      worldStateHash: 'a00',
+      knowledgeStateHash: 'a00',
+      narratorProfileHash: 'a00',
+      plannedDiscourseHash: 'a00',
+      styleProfile: {
+        profileId: 'default',
+        resolutionPrecedence: { projectStyle: 'default' },
+      },
+      continuityPacket: { transition: 'continuous' },
+      promptContractHash: 'a00',
+    },
+    surfaceDependency: {
+      groupId: 'default',
+      policy: 'parallel' as const,
+      manifestHash: 'a00',
+    },
   };
 }
 
@@ -388,14 +408,17 @@ describe('BatchRenderPipeline', () => {
 
     const renderer = new BatchRenderPipeline(pipeline);
     const result = await renderer.renderBatched(jobs, { batchSize: 5, windowSize: 2 });
-
-    // First batch failed → completedBatches = 1 (the batch finished processing, even though it failed)
+    // First batch (call 1) throws → failFast breaks the loop.
+    // Batch 1 was already submitted in the initial window (windowSize=2).
+    // In-flight batches are drained: results from batch 1 are collected.
     expect(result.completed).toBe(false);
-    expect(result.stats.completedBatches).toBe(1);
-    expect(result.stats.totalErrors).toBe(1);
     expect(result.stats.aborted).toBe(true);
-    expect(result.results).toHaveLength(0);
-    // With windowSize=2, both batches 0 and 1 are submitted initially before batch 0 fails
+    expect(result.stats.totalErrors).toBe(1);
+    // 1 from the catch block (batch 0) + 1 drained (batch 1)
+    expect(result.stats.completedBatches).toBe(2);
+    // Batch 1's results are collected via drain
+    expect(result.results).toHaveLength(5);
+    // With windowSize=2, both batches 0 and 1 are submitted initially
     expect(renderAll).toHaveBeenCalledTimes(2);
   });
 
@@ -502,6 +525,61 @@ describe('BatchRenderPipeline', () => {
     // batchSize=10 → 3 batches (10+10+5), windowSize=2
     expect(renderAll).toHaveBeenCalledTimes(3);
     expect(result.results).toHaveLength(25);
+    expect(result.completed).toBe(true);
+  });
+
+  // ── Result ordering ─────────────────────────────────────────────
+
+  it('returns results in input job order even when batches complete out of order', async () => {
+    // batch 0 is gated (simulates slow completion) while batch 1 resolves immediately
+    const { promise: gate0, resolve: openGate0 } = Promise.withResolvers<void>();
+    let callCount = 0;
+
+    const jobs = Array.from({ length: 9 }, (_, i) => makeJob(`E${i + 1}`));
+
+    const renderAll = vi.fn(async (batch: RenderJob[]) => {
+      const idx = callCount++;
+      const results = batch.map((j) => ({
+        eventId: j.event.id,
+        prose: `Scene ${j.event.id}`,
+        analysis: null,
+        llmPass1: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
+        llmPass2: null,
+        cacheHit: false,
+        errors: [],
+        renderStart: 0,
+        renderEnd: 1,
+        validation: null,
+        attempts: 1,
+        needsReview: false,
+      }));
+      if (idx === 0) {
+        // batch 0 (jobs 0-2, E1-E3) waits on gate
+        await gate0;
+      }
+      // batch 1 (jobs 3-5, E4-E6) resolves immediately, outrunning batch 0
+      return results;
+    });
+
+    const pipeline = { renderAll } as unknown as RenderPipeline;
+    const renderer = new BatchRenderPipeline(pipeline);
+
+    const resultPromise = renderer.renderBatched(jobs, { batchSize: 3, windowSize: 2 });
+
+    // Let microtasks flush: batch 0 awaits gate, batch 1 resolves full synchronously
+    await Promise.resolve();
+
+    // At this point batch 1 has already resolved via Promise.race in the main loop.
+    // Now open the gate so batch 0 finishes last.
+    openGate0();
+
+    const result = await resultPromise;
+
+    expect(result.results).toHaveLength(9);
+    // Results must follow input job order, not batch-completion order
+    for (let i = 0; i < 9; i++) {
+      expect(result.results[i]!.eventId).toBe(`E${i + 1}`);
+    }
     expect(result.completed).toBe(true);
   });
 });

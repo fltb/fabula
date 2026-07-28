@@ -40,7 +40,6 @@ function makeContext(overrides?: Partial<ContextPackage>): ContextPackage {
       restrictedEntities: [],
     } satisfies KnowledgeBoundary,
     activeThreads: [],
-    previousSceneSummary: '',
     volumeSummary: '',
     markdown: '',
     ...overrides,

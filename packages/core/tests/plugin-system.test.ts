@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompletionRequest, CompletionResponse, LLMProvider } from '../src/ai/types.js';
 import { Logger, MemoryLogTransport } from '../src/observability/logger.js';
-import type { PluginContext, PluginHooks, ProviderRegistry } from '../src/plugin/index.js';
+import type { PluginContext, PluginHooks, ProviderRegistry, BuildPromptInput, PromptDecoration } from '../src/plugin/index.js';
 import { PluginHooksManager, PluginLoader, ValidatorRegistry } from '../src/plugin/index.js';
 import { MemoryStorage } from '../src/storage/memory-storage.js';
 import type { PluginManifest } from '../src/types/index.js';
@@ -15,8 +15,8 @@ import type { PluginManifest } from '../src/types/index.js';
 interface ProviderRegistrySpy {
   providers: Record<string, LLMProvider>;
   register(name: string, provider: LLMProvider): void;
+  getProvider(name: string): LLMProvider | undefined;
 }
-
 function createTestContext(): PluginContext {
   return {
     projectDir: '/tmp/test-project',
@@ -32,9 +32,11 @@ function createProviderRegistrySpy(): ProviderRegistrySpy {
     register(name: string, provider: LLMProvider): void {
       providers[name] = provider;
     },
+    getProvider(name: string): LLMProvider | undefined {
+      return providers[name];
+    },
   };
 }
-
 function createDummyProvider(name: string): LLMProvider {
   return {
     name,
@@ -309,7 +311,7 @@ describe('Provider registration via PluginHooks', () => {
 describe('PluginHooksManager lifecycle', () => {
   let ctx: PluginContext;
   let validatorRegistry: ValidatorRegistry;
-  let providerRegistry: ReturnType<typeof createProviderRegistrySpy>;
+  let providerRegistry: ProviderRegistrySpy;
   let manager: PluginHooksManager;
 
   beforeEach(() => {
@@ -421,7 +423,7 @@ describe('PluginHooksManager lifecycle', () => {
 describe('beforeRender / afterRender hooks', () => {
   let ctx: PluginContext;
   let validatorRegistry: ValidatorRegistry;
-  let providerRegistry: ReturnType<typeof createProviderRegistrySpy>;
+  let providerRegistry: ProviderRegistrySpy;
   let manager: PluginHooksManager;
 
   beforeEach(() => {
@@ -502,7 +504,291 @@ describe('beforeRender / afterRender hooks', () => {
 });
 
 // ============================================================================
-// 7. End-to-end: Plugin integration
+// 7. Plugin Prompt Decoration Hooks
+// ============================================================================
+
+describe('Plugin prompt decoration hooks', () => {
+  let ctx: PluginContext;
+  let validatorRegistry: ValidatorRegistry;
+  let providerRegistry: ProviderRegistrySpy;
+  let manager: PluginHooksManager;
+
+  beforeEach(() => {
+    ctx = createTestContext();
+    validatorRegistry = new ValidatorRegistry();
+    providerRegistry = createProviderRegistrySpy();
+    manager = new PluginHooksManager(ctx, validatorRegistry, providerRegistry);
+  });
+
+  it('onBuildPass1Prompt returns decorations merged in plugin order', async () => {
+    const hook1: PluginHooks = {
+      name: 'plugin-a',
+      onBuildPass1Prompt: async () => [
+        { id: 'dec1', content: 'Decoration from plugin-a', cacheKey: 'a-dec1' },
+      ],
+    };
+    const hook2: PluginHooks = {
+      name: 'plugin-b',
+      onBuildPass1Prompt: async () => [
+        { id: 'dec2', content: 'Decoration from plugin-b', cacheKey: 'b-dec2' },
+      ],
+    };
+
+    manager.register(hook1);
+    manager.register(hook2);
+
+    const input: BuildPromptInput = {
+      phase: 'pass1',
+      eventId: 'evt-1',
+      chapter: 1,
+      attempt: 1,
+      contractHash: 'abc',
+      messages: [],
+    };
+
+    const decorations = await manager.runOnBuildPass1Prompt(input);
+    expect(decorations).toHaveLength(2);
+    expect(decorations[0].id).toBe('dec1');
+    expect(decorations[0].content).toBe('Decoration from plugin-a');
+    expect(decorations[1].id).toBe('dec2');
+    expect(decorations[1].content).toBe('Decoration from plugin-b');
+  });
+
+  it('onBuildPass2Prompt returns decorations merged in plugin order', async () => {
+    const hook: PluginHooks = {
+      name: 'plugin-c',
+      onBuildPass2Prompt: async () => [
+        { id: 'p2-dec', content: 'Pass 2 decoration', cacheKey: 'p2-key' },
+      ],
+    };
+
+    manager.register(hook);
+
+    const input: BuildPromptInput = {
+      phase: 'pass2',
+      eventId: 'evt-2',
+      chapter: 1,
+      attempt: 1,
+      pass2Attempt: 0,
+      contractHash: 'def',
+      messages: [],
+    };
+
+    const decorations = await manager.runOnBuildPass2Prompt(input);
+    expect(decorations).toHaveLength(1);
+    expect(decorations[0].id).toBe('p2-dec');
+    expect(decorations[0].content).toBe('Pass 2 decoration');
+  });
+
+  it('onBuildPass1Prompt throws on duplicate decoration id within same plugin', async () => {
+    const hook: PluginHooks = {
+      name: 'dup-plugin',
+      onBuildPass1Prompt: async () => [
+        { id: 'dup', content: 'first', cacheKey: 'k1' },
+        { id: 'dup', content: 'second', cacheKey: 'k2' },
+      ],
+    };
+
+    manager.register(hook);
+
+    const input: BuildPromptInput = {
+      phase: 'pass1',
+      eventId: 'evt',
+      chapter: 1,
+      attempt: 1,
+      contractHash: 'x',
+      messages: [],
+    };
+
+    await expect(manager.runOnBuildPass1Prompt(input)).rejects.toThrow('duplicate decoration id');
+  });
+
+  it('onBuildPass1Prompt throws on content exceeding size limit', async () => {
+    const oversized = 'x'.repeat(5000);
+    const hook: PluginHooks = {
+      name: 'big-plugin',
+      onBuildPass1Prompt: async () => [
+        { id: 'big', content: oversized, cacheKey: 'big-key' },
+      ],
+    };
+
+    manager.register(hook);
+
+    const input: BuildPromptInput = {
+      phase: 'pass1',
+      eventId: 'evt',
+      chapter: 1,
+      attempt: 1,
+      contractHash: 'x',
+      messages: [],
+    };
+
+    await expect(manager.runOnBuildPass1Prompt(input)).rejects.toThrow('exceeds');
+  });
+
+  it('onBuildPass1Prompt throws when too many decorations returned', async () => {
+    const manyDecs = Array.from({ length: 15 }, (_, i) => ({
+      id: `dec-${i}`,
+      content: `decoration ${i}`,
+      cacheKey: `key-${i}`,
+    }));
+    const hook: PluginHooks = {
+      name: 'many-plugin',
+      onBuildPass1Prompt: async () => manyDecs,
+    };
+
+    manager.register(hook);
+
+    const input: BuildPromptInput = {
+      phase: 'pass1',
+      eventId: 'evt',
+      chapter: 1,
+      attempt: 1,
+      contractHash: 'x',
+      messages: [],
+    };
+
+    await expect(manager.runOnBuildPass1Prompt(input)).rejects.toThrow('max');
+  });
+
+  it('onBuildPass1Prompt throws when hook does not return array', async () => {
+    const hook: PluginHooks = {
+      name: 'bad-plugin',
+      onBuildPass1Prompt: async () => 'not-an-array' as unknown as readonly PromptDecoration[],
+    };
+
+    manager.register(hook);
+
+    const input: BuildPromptInput = {
+      phase: 'pass1',
+      eventId: 'evt',
+      chapter: 1,
+      attempt: 1,
+      contractHash: 'x',
+      messages: [],
+    };
+
+    await expect(manager.runOnBuildPass1Prompt(input)).rejects.toThrow('did not return an array');
+  });
+
+  it('returns frozen readonly array from decoration hooks', async () => {
+    const hook: PluginHooks = {
+      name: 'frozen-plugin',
+      onBuildPass1Prompt: async () => [
+        { id: 'frozen', content: 'frozen decoration', cacheKey: 'frozen-key' },
+      ],
+    };
+
+    manager.register(hook);
+
+    const input: BuildPromptInput = {
+      phase: 'pass1',
+      eventId: 'evt',
+      chapter: 1,
+      attempt: 1,
+      contractHash: 'x',
+      messages: [],
+    };
+
+    const decorations = await manager.runOnBuildPass1Prompt(input);
+    expect(Object.isFrozen(decorations)).toBe(true);
+  });
+});
+
+// ============================================================================
+// 8. Provider Selection via Plugin-Registered Providers
+// ============================================================================
+
+describe('Provider selection via plugin-registered providers', () => {
+  let ctx: PluginContext;
+  let validatorRegistry: ValidatorRegistry;
+  let providerRegistry: ProviderRegistrySpy;
+  let manager: PluginHooksManager;
+
+  beforeEach(() => {
+    ctx = createTestContext();
+    validatorRegistry = new ValidatorRegistry();
+    providerRegistry = createProviderRegistrySpy();
+    manager = new PluginHooksManager(ctx, validatorRegistry, providerRegistry);
+  });
+
+  it('getProviderNames returns registered provider names', async () => {
+    const customProvider = createDummyProvider('custom-llm');
+    const hook: PluginHooks = {
+      name: 'test-provider',
+      registerProvider(registry: ProviderRegistry) {
+        registry.register('custom-llm', customProvider);
+      },
+    };
+
+    manager.register(hook);
+    await manager.initialize();
+
+    const names = manager.getProviderNames();
+    expect(names).toContain('custom-llm');
+  });
+
+  it('getProvider returns registered provider by name', async () => {
+    const customProvider = createDummyProvider('custom-llm');
+    const hook: PluginHooks = {
+      name: 'test-provider',
+      registerProvider(registry: ProviderRegistry) {
+        registry.register('custom-llm', customProvider);
+      },
+    };
+
+    manager.register(hook);
+    await manager.initialize();
+
+    const retrieved = manager.getProvider('custom-llm');
+    expect(retrieved).toBeDefined();
+    expect(retrieved).toBe(customProvider);
+  });
+
+  it('getProvider returns undefined for unknown provider', () => {
+    const retrieved = manager.getProvider('non-existent');
+    expect(retrieved).toBeUndefined();
+  });
+
+  it('getProviderNames returns empty when no providers registered', () => {
+    expect(manager.getProviderNames()).toEqual([]);
+  });
+
+  it('registerProvider through hooks manager also goes to injected registry', async () => {
+    const customProvider = createDummyProvider('shared-llm');
+    const hook: PluginHooks = {
+      name: 'shared-provider',
+      registerProvider(registry: ProviderRegistry) {
+        registry.register('shared-llm', customProvider);
+      },
+    };
+
+    manager.register(hook);
+    await manager.initialize();
+
+    // Should be available both via manager and the original spy registry
+    expect(manager.getProvider('shared-llm')).toBe(customProvider);
+    expect(providerRegistry.providers['shared-llm']).toBe(customProvider);
+  });
+
+  it('plugin identities returned for cache scoping', async () => {
+    const hook: PluginHooks = {
+      name: 'identity-plugin',
+      beforeRender: async () => {},
+      onBuildPass1Prompt: async () => [],
+    };
+
+    manager.register(hook);
+    const identities = manager.getPluginIdentities();
+    expect(identities).toHaveLength(1);
+    expect(identities[0].name).toBe('identity-plugin');
+    expect(identities[0].hooks).toContain('beforeRender');
+    expect(identities[0].hooks).toContain('onBuildPass1Prompt');
+  });
+ });
+
+// ============================================================================
+// 9. End-to-end: Plugin integration
 // ============================================================================
 
 describe('End-to-end plugin integration', () => {

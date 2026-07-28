@@ -15,6 +15,8 @@ import { EntityMapper } from '../../src/entity/mapper.ts';
 import { InMemoryEntityRegistry } from '../../src/entity/registry.ts';
 import type { ProjectData } from '../../src/entity/types.ts';
 import type { NarrativeEvent, WorldState } from '../../src/types/index.ts';
+import { compileDiscourseBoundaries } from '../../src/state/discourse-context.ts';
+import type { CompiledDiscourseRenderContext } from '../../src/state/discourse-context.ts';
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const FIXTURE = path.join(ROOT, 'fixtures', 'zhu-fu');
@@ -31,11 +33,19 @@ const EMPTY_STATE: WorldState = {
 describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
   let data: ProjectData;
   let events: NarrativeEvent[];
+  let discourseContexts: Record<string, CompiledDiscourseRenderContext>;
 
   beforeAll(() => {
     const mapper = new EntityMapper(FIXTURE);
     data = mapper.loadProject();
-    events = mapper.loadAllEvents(data.chapters);
+    events = mapper.loadAllEvents(data.chapters).filter((event) => event.id !== 'system:genesis');
+    discourseContexts = compileDiscourseBoundaries(
+      events,
+      data.discourseLedger,
+      data.narratorAssertions,
+      data.narratorProfiles,
+      'main',
+    );
   });
 
   it('loads narrator_wo profile from definitions/narrators/', () => {
@@ -68,8 +78,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
 
     const pkg = new ContextCompiler().compile(e0!, EMPTY_STATE, registry, {
       narratorProfiles: data.narratorProfiles,
-      narratorAssertions: data.narratorAssertions,
-      discourseLedger: data.discourseLedger,
+      discourseContext: discourseContexts[e0!.id],
     });
 
     expect(pkg.narratorProfile?.id).toBe('narrator_wo');
@@ -83,8 +92,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
 
     const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
       narratorProfiles: data.narratorProfiles,
-      narratorAssertions: data.narratorAssertions,
-      discourseLedger: data.discourseLedger,
+      discourseContext: discourseContexts[e0.id],
     });
 
     expect(pkg.discourseProjection).toMatchObject({
@@ -117,11 +125,388 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
       })),
     };
 
+    expect(() =>
+      compileDiscourseBoundaries(events, corruptLedger, data.narratorAssertions, data.narratorProfiles, 'main'),
+    ).toThrow(/Duplicate discourse position/);
+  });
+  it('compile() produces correct projection for E0 with two continuous actions (positions 0,1)', () => {
+    // The zhu-fu ledger has two entries for E0: reveal at pos 0, claim at pos 1
+    const e0 = events.find((ev) => ev.id === 'E0')!;
+    const registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+
     const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
       narratorProfiles: data.narratorProfiles,
-      discourseLedger: corruptLedger,
+      discourseContext: discourseContexts[e0.id],
     });
 
-    expect(pkg.discourseReplayError).toContain('DuplicateDiscoursePositionError');
+    // Both E0 entries should be in the projection
+    expect(pkg.discourseProjection).toBeDefined();
+    expect(pkg.discourseProjection!.plannedReveals).toContain('assertion_xianglin_death');
+    expect(pkg.discourseProjection!.openClaims).toContain('assertion_afterlife_uncertain');
+    // Two authorized targets: one reveal, one claim
+    expect(pkg.discourseProjection!.authorizedTargets).toHaveLength(2);
+    expect(pkg.discourseProjection!.authorizedTargets[0].actionType).toBe('reveal');
+    expect(pkg.discourseProjection!.authorizedTargets[1].actionType).toBe('claim');
+  });
+
+  it('compile() uses precompiled discourse context for sparse global positions', () => {
+    const e0 = events.find((ev) => ev.id === 'E0')!;
+    const registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+    const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
+      narratorProfiles: data.narratorProfiles,
+      discourseContext: discourseContexts[e0.id],
+    });
+    expect(pkg.discourseReplayError).toBeUndefined();
+    expect(pkg.discourseProjection!.plannedReveals).toContain('assertion_xianglin_death');
+    expect(pkg.discourseProjection!.openClaims).toContain('assertion_afterlife_uncertain');
+  });
+
+
+  it('compile() uses the precompiled context projection', () => {
+    const e0 = events.find((ev) => ev.id === 'E0')!;
+    const registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+
+    const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
+      narratorProfiles: data.narratorProfiles,
+      discourseContext: discourseContexts[e0.id],
+    });
+    expect(pkg.discourseProjection).toBeDefined();
+  });
+
+  it('compile() surfaces error when reveal assertion missing from catalog', () => {
+    // Omit narratorAssertions — reveal will fail because it can't find assertion_xianglin_death
+    // Current code: without assertions catalog, reveal doesn't validate truthBoundary
+    // (the findAssertion check returns undefined, skipping the throw)
+    const e0 = events.find((ev) => ev.id === 'E0')!;
+    const registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+
+    expect(() =>
+      compileDiscourseBoundaries(events, data.discourseLedger, {}, data.narratorProfiles, 'main'),
+    ).toThrow(/assertion catalog is required/);
+
+    // Strict preflight rejects assertion-bearing ledgers without a catalog.
+  });
+
+  it('compile() with mismatched assertion truthBoundary for reveal fails', () => {
+    // Provide a catalog where assertion_xianglin_death has truthBoundary=false
+    const e0 = events.find((ev) => ev.id === 'E0')!;
+    const registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+
+    // Tamper with the assertion — flip truthBoundary on the reveal assertion
+    const tamperedAssertions = {
+      ...data.narratorAssertions,
+      assertion_xianglin_death: {
+        ...data.narratorAssertions!['assertion_xianglin_death'],
+        truthBoundary: false,
+        type: 'claim' as const,
+      },
+    };
+
+    expect(() =>
+      compileDiscourseBoundaries(events, data.discourseLedger, tamperedAssertions, data.narratorProfiles, 'main'),
+    ).toThrow(/Reveals require truthBoundary=true/);
+
+    // Strict preflight rejects a reveal whose catalog entry is not authoritative.
+  });
+
+  it('compile() default discourseBranch produces correct branch projection', () => {
+    const e0 = events.find((ev) => ev.id === 'E0')!;
+    const registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+
+    // Default branch is 'main'
+    const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
+      narratorProfiles: data.narratorProfiles,
+      discourseContext: discourseContexts[e0.id],
+    });
+
+    expect(pkg.discourseProjection).toBeDefined();
+    // E0 has main-branch entries only
+    expect(pkg.discourseProjection!.plannedReveals).toHaveLength(1);
+  });
+
+  it('compile() with non-matching event id produces empty projection', () => {
+    // An event with no matching sceneId in ledger entries gets no authorized targets
+    const e0 = events.find((ev) => ev.id === 'E0')!;
+    // Use an event with a different id
+    const otherEvent = {
+      ...e0,
+      id: 'E_OTHER',
+      discourseCursor: 1,
+    };
+    const contexts = compileDiscourseBoundaries(
+      [...events, otherEvent],
+      data.discourseLedger,
+      data.narratorAssertions,
+      data.narratorProfiles,
+      'main',
+    );
+    const registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+
+    const pkg = new ContextCompiler().compile(otherEvent, EMPTY_STATE, registry, {
+      narratorProfiles: data.narratorProfiles,
+      discourseContext: contexts[otherEvent.id],
+    });
+
+    // Projection should have empty authorized targets since no entries match E_OTHER
+    expect(pkg.discourseProjection).toBeDefined();
+    expect(pkg.discourseProjection!.authorizedTargets).toHaveLength(0);
+    // But discourse state still has reveals from replay (all main entries up to position)
+    expect(pkg.discourseProjection!.plannedReveals).toContain('assertion_xianglin_death');
+  });
+
+  it("compile() with explicit 'main' branch projects E0 entries correctly", () => {
+    const e0 = events.find((ev) => ev.id === 'E0')!;
+    const registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+
+    const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
+      narratorProfiles: data.narratorProfiles,
+      discourseContext: discourseContexts[e0.id],
+    });
+
+    expect(pkg.discourseProjection).toBeDefined();
+    expect(pkg.discourseProjection!.plannedReveals).toContain('assertion_xianglin_death');
+    expect(pkg.discourseProjection!.openClaims).toContain('assertion_afterlife_uncertain');
+  });
+
+  it('compile() produces safe projection with no leaked hint targets', () => {
+    // Add a hint entry to the ledger, verify hint target doesn't leak
+    const e0 = events.find((ev) => ev.id === 'E0')!;
+    const registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+
+    const ledgerWithHint = {
+      ...data.discourseLedger!,
+      entries: [
+        ...data.discourseLedger!.entries,
+        {
+          id: 'entry_hint_test',
+          action: {
+            type: 'hint' as const,
+            hintId: 'hint_test',
+            surfaceProposition: 'visible_hint_surface',
+            targetProposition: 'hidden_hint_target',
+            discoursePosition: 2,
+          },
+          sceneId: 'E0',
+          branch: 'main',
+          discoursePosition: 2,
+        },
+      ],
+    };
+
+    const hintContexts = compileDiscourseBoundaries(
+      events,
+      ledgerWithHint,
+      data.narratorAssertions,
+      data.narratorProfiles,
+      'main',
+    );
+    const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
+      narratorProfiles: data.narratorProfiles,
+      discourseContext: hintContexts[e0.id],
+    });
+
+    expect(pkg.discourseReplayError).toBeUndefined();
+    expect(pkg.discourseProjection).toBeDefined();
+
+    // Projection must not contain the target
+    const projStr = JSON.stringify(pkg.discourseProjection);
+    expect(projStr).not.toContain('hidden_hint_target');
+    // Surface IS visible
+    expect(projStr).toContain('visible_hint_surface');
+  });
+
+  it('compile() replay error for corrupt ledger (position out of bounds)', () => {
+    const e0 = events.find((ev) => ev.id === 'E0')!;
+    const registry = new InMemoryEntityRegistry();
+    registry.load(FIXTURE);
+
+    // Position > entries.length causes out-of-bounds
+    const badLedger = {
+      ...data.discourseLedger!,
+      entries: [
+        ...data.discourseLedger!.entries,
+        {
+          ...data.discourseLedger!.entries[0],
+          id: 'entry_oob',
+          discoursePosition: 99,
+        },
+      ],
+    };
+
+    // Strict preflight rejects positions that violate the scene contract.
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// compileDiscourseBoundaries — projection from stateAfter (§12)
+// ═════════════════════════════════════════════════════════════════════════════
+// These tests target compileDiscourseBoundaries() directly, bypassing
+// ContextCompiler. They verify that the safe Pass 1 projection derives from
+// stateAfter (including the current scene's own reveal/claim actions), not
+// stateBefore.
+
+describe('compileDiscourseBoundaries projection from stateAfter', () => {
+  let events: NarrativeEvent[];
+
+  beforeAll(() => {
+    const mapper = new EntityMapper(FIXTURE);
+    const data = mapper.loadProject();
+    events = mapper.loadAllEvents(data.chapters);
+  });
+
+  it('stateBefore is empty for E0 with positions 0,1 (pre-range)', () => {
+    const e0Event = events.find((ev) => ev.id === 'E0')!;
+    const mapper = new EntityMapper(FIXTURE);
+    const data = mapper.loadProject();
+
+    const ctx = compileDiscourseBoundaries(
+      [e0Event],
+      data.discourseLedger!,
+      data.narratorAssertions,
+      data.narratorProfiles,
+      'main',
+    );
+
+    const e0Ctx = ctx['E0'];
+
+    // stateBefore is empty — no reveals or claims before the first action
+    expect(e0Ctx.stateBefore.reveals).toEqual([]);
+    expect(e0Ctx.stateBefore.openClaims).toEqual([]);
+    // cursor is the first action's position
+    expect(e0Ctx.cursor).toBe(0);
+  });
+
+  it('stateAfter includes E0 reveal and claim actions', () => {
+    const e0Event = events.find((ev) => ev.id === 'E0')!;
+    const mapper = new EntityMapper(FIXTURE);
+    const data = mapper.loadProject();
+
+    const ctx = compileDiscourseBoundaries(
+      [e0Event],
+      data.discourseLedger!,
+      data.narratorAssertions,
+      data.narratorProfiles,
+      'main',
+    );
+
+    const e0Ctx = ctx['E0'];
+
+    // stateAfter includes both actions applied
+    expect(e0Ctx.stateAfter.reveals).toContain('assertion_xianglin_death');
+    expect(e0Ctx.stateAfter.openClaims).toContain('assertion_afterlife_uncertain');
+
+    // stateBefore and stateAfter differ
+    expect(e0Ctx.stateBefore).not.toBe(e0Ctx.stateAfter);
+  });
+
+  it('projection from stateAfter includes both reveal and claim', () => {
+    const e0Event = events.find((ev) => ev.id === 'E0')!;
+    const mapper = new EntityMapper(FIXTURE);
+    const data = mapper.loadProject();
+
+    const ctx = compileDiscourseBoundaries(
+      [e0Event],
+      data.discourseLedger!,
+      data.narratorAssertions,
+      data.narratorProfiles,
+      'main',
+    );
+
+    const proj = ctx['E0']!.projection;
+
+    // Both E0's reveal and claim appear in the safe projection
+    expect(proj.plannedReveals).toContain('assertion_xianglin_death');
+    expect(proj.openClaims).toContain('assertion_afterlife_uncertain');
+
+    // Authorized targets include both actions
+    expect(proj.authorizedTargets).toHaveLength(2);
+    expect(proj.authorizedTargets[0].actionType).toBe('reveal');
+    expect(proj.authorizedTargets[1].actionType).toBe('claim');
+    expect(proj.authorizedTargets[0].assertionId).toBe('assertion_xianglin_death');
+    expect(proj.authorizedTargets[1].assertionId).toBe('assertion_afterlife_uncertain');
+  });
+
+  it('projection excludes hint targets', () => {
+    const e0Event = events.find((ev) => ev.id === 'E0')!;
+    const mapper = new EntityMapper(FIXTURE);
+    const data = mapper.loadProject();
+
+    // Inject a hint action into the ledger
+    const ledgerWithHint = {
+      ...data.discourseLedger!,
+      entries: [
+        ...data.discourseLedger!.entries,
+        {
+          id: 'hint_entry',
+          action: {
+            type: 'hint' as const,
+            hintId: 'hint_test',
+            surfaceProposition: 'a visible surface',
+            targetProposition: 'HIDDEN_TARGET',
+            discoursePosition: 2,
+          },
+          sceneId: 'E0',
+          branch: 'main',
+          discoursePosition: 2,
+        },
+      ],
+    };
+
+    const ctx = compileDiscourseBoundaries(
+      [e0Event],
+      ledgerWithHint,
+      data.narratorAssertions,
+      data.narratorProfiles,
+      'main',
+    );
+
+    const proj = ctx['E0']!.projection;
+
+    // Hint surface is visible
+    expect(proj.visibleHints).toHaveLength(1);
+    expect(proj.visibleHints[0].surfaceProposition).toBe('a visible surface');
+
+    // Hint target NEVER appears in projection
+    const projStr = JSON.stringify(proj);
+    expect(projStr).not.toContain('HIDDEN_TARGET');
+
+    // Hints don't leak into authorized targets
+    expect(proj.authorizedTargets).toHaveLength(2); // only reveal + claim
+    expect(proj.visibleHints[0]).not.toHaveProperty('targetProposition');
+  });
+
+  it('compileDiscourseBoundaries rejects reveal without truthBoundary', () => {
+    const e0Event = events.find((ev) => ev.id === 'E0')!;
+    const mapper = new EntityMapper(FIXTURE);
+    const data = mapper.loadProject();
+
+    // Flip truthBoundary on the reveal assertion
+    const tamperedAssertions = {
+      ...data.narratorAssertions,
+      assertion_xianglin_death: {
+        ...data.narratorAssertions!['assertion_xianglin_death'],
+        truthBoundary: false,
+        type: 'claim' as const,
+      },
+    };
+
+    expect(() =>
+      compileDiscourseBoundaries(
+        [e0Event],
+        data.discourseLedger!,
+        tamperedAssertions,
+        data.narratorProfiles,
+        'main',
+      ),
+    ).toThrow('Reveals require truthBoundary=true');
   });
 });

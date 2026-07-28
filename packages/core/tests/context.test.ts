@@ -305,7 +305,7 @@ describe('ContextAssembler', () => {
     const event = makeEvent();
     const state = makeState();
 
-    const pkg = assembler.assemble(event, state, registry, 'Previous scene summary...');
+    const pkg = assembler.assemble(event, state, registry);
 
     expect(pkg.eventId).toBe('E1');
     expect(pkg.systemContext).toBeDefined();
@@ -337,14 +337,13 @@ describe('ContextAssembler', () => {
     const event = makeEvent();
     const state = makeState();
 
-    const pkg = assembler.assemble(event, state, registry, 'Previous summary...');
+    const pkg = assembler.assemble(event, state, registry);
 
     expect(pkg.markdown).toContain('System Context');
     expect(pkg.markdown).toContain('Scene Specification');
     expect(pkg.markdown).toContain('Characters');
     expect(pkg.markdown).toContain('Relationships');
     expect(pkg.markdown).toContain('POV Knowledge Boundary');
-    expect(pkg.markdown).toContain('Previous Scene Summary');
   });
 });
 
@@ -381,11 +380,9 @@ describe('ContextCompiler', () => {
     const state = makeState();
 
     const pkg = compiler.compile(event, state, registry, {
-      previousSceneSummary: 'Custom summary',
       systemContext: { genre: 'noir', style: 'literary', narrativeRules: ['Rule 1'] },
     });
 
-    expect(pkg.previousSceneSummary).toBe('Custom summary');
     expect(pkg.systemContext.genre).toBe('noir');
   });
 

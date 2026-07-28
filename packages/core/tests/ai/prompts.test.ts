@@ -37,7 +37,6 @@ function minimalContext(): ContextPackage {
       knownFacts: [],
     },
     activeThreads: [],
-    previousSceneSummary: '',
     markdown: '',
   };
 }

@@ -1,0 +1,13 @@
+event: E1a
+narrativeOrder: 1
+title: "The Jungle"
+storyTime: day_1
+pov:
+  character: hero
+  type: third_person_limited
+sceneBrief: "The hunt begins in the jungle."
+preconditions:
+  - entity: hero
+    attribute: chose_hunt
+    value: true
+expectedPostconditions: []

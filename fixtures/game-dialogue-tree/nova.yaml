@@ -1,0 +1,5 @@
+project: game-dialogue-tree
+title: "Game Dialogue Tree"
+author: "Fixture Author"
+defaultModel: mock-pass2
+defaultLanguage: en

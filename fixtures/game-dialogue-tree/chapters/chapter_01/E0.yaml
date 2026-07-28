@@ -1,0 +1,27 @@
+event: E0
+narrativeOrder: 0
+title: "The Offer"
+storyTime: day_0
+pov:
+  character: narrator
+  type: omniscient
+sceneBrief: "The player receives an offer that changes the route."
+preconditions: []
+expectedPostconditions: []
+choices:
+  - id: accept_hunt
+    label: "Accept the hunt"
+    description: "Enter the jungle with a knife and three hours' head start."
+    targetEvent: E1a
+    effects:
+      - entity: hero
+        attribute: chose_hunt
+        value: true
+  - id: refuse_hunt
+    label: "Refuse the hunt"
+    description: "Remain in the chateau and seek another escape."
+    targetEvent: E1b
+    effects:
+      - entity: hero
+        attribute: chose_hunt
+        value: false

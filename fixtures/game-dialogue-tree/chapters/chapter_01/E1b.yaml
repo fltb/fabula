@@ -1,0 +1,13 @@
+event: E1b
+narrativeOrder: 1
+title: "The Chateau"
+storyTime: day_1
+pov:
+  character: hero
+  type: third_person_limited
+sceneBrief: "The hero rejects the hunt and searches the chateau."
+preconditions:
+  - entity: hero
+    attribute: chose_hunt
+    value: false
+expectedPostconditions: []

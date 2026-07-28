@@ -1,0 +1,12 @@
+info:
+  currentEra: beginning
+  politicalSituation: stable
+timeAnchors:
+  - id: day_0
+    day: 0
+    description: "Day 0"
+  - id: day_1
+    day: 1
+    description: "Day 1"
+threads: []
+worldFacts: []

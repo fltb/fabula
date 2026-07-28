@@ -1,0 +1,6 @@
+id: hero
+name: Hero
+type: person
+description: "The player character."
+initialState: {}
+traits: []

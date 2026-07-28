@@ -1,0 +1,6 @@
+id: narrator
+name: Narrator
+type: person
+description: "An omniscient narrator."
+initialState: {}
+traits: []

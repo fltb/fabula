@@ -1,0 +1,22 @@
+{
+  "prose": "Perhaps the locked rooms hid a second exit, or perhaps they hid the hunter's patience. The hero remained in the chateau and followed the corridor where the rain could not be heard.",
+  "analysis": {
+    "eventId": "E1b",
+    "analysis": {
+      "postconditions": { "covered": [], "dropped": [] },
+      "preconditions": { "violated": [] },
+      "pov": { "consistent": true, "leaks": [] },
+      "inventedDetails": [],
+      "quality": { "proseScore": 5, "maxScore": 5, "strengths": ["branch-aware suspense"], "weaknesses": [], "estimatedWordCount": 80 },
+      "threadProgressAchieved": [],
+      "foreshadowingDeployed": [],
+      "narrativeChecks": [],
+      "appearanceChecks": [],
+      "characterReferences": [{ "entityId": "hero", "namesUsed": ["hero"] }],
+      "tenseDetected": "past",
+      "conflictAnalysis": { "primaryType": "person_vs_self", "resolutionAchieved": false },
+      "ruleChecks": [],
+      "knowledgeChecks": []
+    }
+  }
+}

@@ -17,6 +17,8 @@ bench-data/
 docs/superpowers/
 
 .omp/
+# OMP session dumps (untracked; produced by sandbox)
+omp-session-*.html
 # Environment files
 .env
 .env.local

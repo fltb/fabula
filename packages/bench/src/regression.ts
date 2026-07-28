@@ -9,6 +9,7 @@ import {
   compileStoryBoundaries,
   EntityMapper,
   type Fact,
+  FsStorage,
   InMemoryEntityRegistry,
   type NarrativeEvent,
   type ProjectData,
@@ -360,13 +361,13 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
       return `L2 issues — errors: ${errors}, warnings: ${warnings}, infos: ${infos}`;
     },
   );
-
   // ── 7. Write validation report ──────────────────────────────────────
   let reportPath = '';
   await mark(
     'Write validation report',
     async () => {
-      reportPath = writeValidationReport(p, {
+      const storage = new FsStorage();
+      reportPath = writeValidationReport(storage, p, {
         projectName: fixtureName,
         generatedAt: new Date().toISOString(),
         l1Issues: collectedL1Issues,

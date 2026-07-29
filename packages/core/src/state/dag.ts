@@ -93,7 +93,6 @@ export function buildCausalEdges(
       writes.set(key, writers);
     }
   }
-
   for (const event of selectedEvents) {
     const consumerDay = eventDay(event, anchors);
     for (const precondition of event.preconditions) {

@@ -1,5 +1,6 @@
 import type { Storage } from '../storage/index.ts';
-import type { BranchPath, BranchSet, SceneMetadata } from '../types/index.js';
+import type { BranchPath, BranchSet } from '../types/index.js';
+import type { SceneMetadataV1 } from '../types/editorial.ts';
 
 // ────────────────────────────────────────────────────────────────────────────
 // AssemblyError — typed error for assembly failures
@@ -7,6 +8,7 @@ import type { BranchPath, BranchSet, SceneMetadata } from '../types/index.js';
 
 export const AssemblyErrorCode = {
   NO_SCENES: 'NO_SCENES',
+  MISSING_METADATA: 'MISSING_METADATA',
   MISSING_NARRATIVE_ORDER: 'MISSING_NARRATIVE_ORDER',
   MISSING_BRANCH_EXISTENCE: 'MISSING_BRANCH_EXISTENCE',
   INVALID_BRANCH_EXISTENCE: 'INVALID_BRANCH_EXISTENCE',
@@ -34,7 +36,7 @@ export class AssemblyError extends Error {
 
 export interface SceneEntry {
   prose: string;
-  metadata: SceneMetadata;
+  metadata: SceneMetadataV1;
   narrativeOrder: number;
   chapter: number;
   branchExistence: BranchSet;

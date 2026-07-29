@@ -8,6 +8,8 @@ import type {
 
 export interface PluginValidator {
   name: string;
+  /** Version used for validation/cache provenance. */
+  version?: string;
   /** Pre-render validation (required) */
   validate(ctx: ValidatorContext): ValidationResult;
   /** Optional: post-render validation (pass2 analysis consumer) */

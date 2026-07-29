@@ -25,6 +25,8 @@
 // ============================================================================
 
 import type { AcceptedSceneArtifact, ReleaseDecision } from '../types/render-surface.ts';
+import type { SceneRevisionEnvelopeV1 } from '../types/editorial.ts';
+import { sceneRevisionEnvelopeV1Schema } from '../schemas/editorial.ts';
 import type { Storage } from '../storage/index.ts';
 import type { RenderJob } from './render.ts';
 
@@ -272,60 +274,127 @@ export class SurfaceScheduler {
  */
 export class AcceptedArtifactResolver {
   private readonly storage: Storage;
-  private readonly responseDir: string;
+  private readonly headDir: string;
+  private readonly archiveDir: string;
 
-  constructor(storage: Storage, projectDir: string) {
+  constructor(storage: Storage, headDir: string, archiveDir: string) {
     this.storage = storage;
-    this.responseDir = [projectDir, '.nova', 'responses'].join('/');
+    this.headDir = headDir;
+    this.archiveDir = archiveDir;
   }
 
   /**
    * Resolve a single event's accepted artifact.
    *
+   * Resolution flow:
+   *  1. Read head pointer from `{headDir}/{eventId}.json` → `{ revisionId, proseHash }`
+   *  2. If head pointer has both revisionId and proseHash, load the full
+   *     SceneRevisionEnvelopeV1 from `{archiveDir}/{eventId}/{revisionId}.json`
+   *  3. Validate internal consistency: envelope scopeHash must match
+   *     releaseDecision.scopeHash; envelope proseHash must match head proseHash.
+   *  4. If requestedScopeHash is provided, validate envelope scopeHash matches it.
+   *  5. Validate sceneHash and editorialBasisHash are non-empty.
+   *
+   * Backward-compatible inline prose is NOT supported — the head pointer MUST
+   * contain revisionId + proseHash.  Legacy migration is handled by workspace
+   * inspection, not the scheduler.
+   *
    * @param eventId  The event/scene identifier.
+   * @param requestedScopeHash  If provided, the envelope's scopeHash must match.
    * @returns AcceptedSceneArtifact if found and accepted, or null if the
-   *          response file is missing, malformed, or not accepted.
+   *          response file is missing, malformed, scopes differ, or not accepted.
    */
-  resolve(eventId: string): AcceptedSceneArtifact | null {
-    const responsePath = [this.responseDir, `${eventId}.json`].join('/');
+  resolve(eventId: string, requestedScopeHash?: string): AcceptedSceneArtifact | null {
+    const headPath = [this.headDir, `${eventId}.json`].join('/');
+
+    let headRaw: string;
+    try {
+      const maybe = this.storage.readOptional(headPath);
+      if (maybe === null) return null;
+      headRaw = maybe;
+    } catch {
+      return null;
+    }
+
+    let head: Record<string, unknown>;
+    try {
+      head = JSON.parse(headRaw) as Record<string, unknown>;
+    } catch {
+      return null;
+    }
+
+    const revisionId = typeof head.revisionId === 'string' ? head.revisionId : null;
+    const proseHash = typeof head.proseHash === 'string' ? head.proseHash : null;
+
+    // Head pointer must contain both revisionId and proseHash
+    if (revisionId === null || proseHash === null) return null;
+
+    return this.resolveFromArchive(eventId, revisionId, proseHash, requestedScopeHash);
+  }
+
+  /**
+   * Resolve full artifact from archive envelope, validating consistency.
+   *
+   * Validates:
+   *  - releaseDecision is present and status is 'accepted'
+   *  - envelope scopeHash matches releaseDecision scopeHash (internal consistency)
+   *  - envelope proseHash matches the head pointer proseHash
+   *  - sceneHash and editorialBasisHash are non-empty
+   *  - if requestedScopeHash is provided, envelope scopeHash must match it
+   */
+  private resolveFromArchive(
+    eventId: string,
+    revisionId: string,
+    proseHash: string,
+    requestedScopeHash?: string,
+  ): AcceptedSceneArtifact | null {
+    const archivePath = [this.archiveDir, eventId, `${revisionId}.json`].join('/');
 
     let raw: string;
     try {
-      const maybe = this.storage.readOptional(responsePath);
+      const maybe = this.storage.readOptional(archivePath);
       if (maybe === null) return null;
       raw = maybe;
     } catch {
-      // Storage errors are treated as missing.
       return null;
     }
 
-    let parsed: Record<string, unknown>;
+    let envelope: SceneRevisionEnvelopeV1;
     try {
-      parsed = JSON.parse(raw) as Record<string, unknown>;
+      const parsed = sceneRevisionEnvelopeV1Schema.safeParse(JSON.parse(raw));
+      if (!parsed.success) return null;
+      envelope = parsed.data as SceneRevisionEnvelopeV1;
     } catch {
       return null;
     }
 
-    // Extract required fields.
-    const prose = parsed.prose;
-    if (typeof prose !== 'string') return null;
+    // Validate release decision status
+    if (typeof envelope.releaseDecision !== 'object' || envelope.releaseDecision === null) return null;
+    if (envelope.releaseDecision.status !== 'accepted') return null;
 
-    const releaseDecision = parsed.releaseDecision as
-      | ReleaseDecision
-      | undefined;
-    if (!releaseDecision || typeof releaseDecision !== 'object') return null;
-    if (releaseDecision.status !== 'accepted') return null;
+    // Mismatched scope → missing-source failure (internal consistency check)
+    if (envelope.scopeHash !== envelope.releaseDecision.scopeHash) return null;
 
-    const scopeHash =
-      typeof releaseDecision.scopeHash === 'string'
-        ? releaseDecision.scopeHash
-        : '';
+    // Verify proseHash matches head pointer
+    if (envelope.proseHash !== proseHash) return null;
+
+    // Verify required hashes are present
+    if (!envelope.sceneHash || typeof envelope.sceneHash !== 'string') return null;
+    if (!envelope.editorialBasisHash || typeof envelope.editorialBasisHash !== 'string') return null;
+
+    // If a requested scopeHash is provided, enforce exact match
+    if (requestedScopeHash !== undefined && envelope.scopeHash !== requestedScopeHash) return null;
 
     return {
-      eventId,
-      prose,
-      scopeHash,
-      releaseDecision,
+      eventId: envelope.eventId,
+      revisionId: envelope.revisionId,
+      prose: envelope.prose,
+      proseHash: envelope.proseHash,
+      sceneHash: envelope.sceneHash,
+      editorialBasisHash: envelope.editorialBasisHash,
+      scopeHash: envelope.scopeHash,
+      releaseDecision: envelope.releaseDecision,
+      createdAt: envelope.createdAt,
     };
   }
 
@@ -334,12 +403,13 @@ export class AcceptedArtifactResolver {
    * Only accepted artifacts are included in the result map.
    *
    * @param eventIds  Event/scene identifiers to resolve.
+   * @param requestedScopeHash  If provided, only accept artifacts whose scopeHash matches.
    * @returns Map of eventId → AcceptedSceneArtifact for accepted results.
    */
-  resolveAll(eventIds: readonly string[]): Map<string, AcceptedSceneArtifact> {
+  resolveAll(eventIds: readonly string[], requestedScopeHash?: string): Map<string, AcceptedSceneArtifact> {
     const results = new Map<string, AcceptedSceneArtifact>();
     for (const eventId of eventIds) {
-      const artifact = this.resolve(eventId);
+      const artifact = this.resolve(eventId, requestedScopeHash);
       if (artifact !== null) {
         results.set(eventId, artifact);
       }

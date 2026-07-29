@@ -24,7 +24,23 @@ export type EventMap = {
   'cache:miss': { eventId: string };
   'state:entity:changed': { entityId: string; attribute: string };
   'config:changed': { key: string };
+  /** Editorial pipeline lifecycle events */
+  'editorial:progress': EditorialProgressPayload;
 };
+
+/** Payload for editorial:progress events — inline type to avoid circular dep with types/editorial.ts */
+export interface EditorialProgressPayload {
+  version: 1;
+  operationId: string;
+  sequence: number;
+  timestamp: string;
+  kind: string;
+  eventId?: string;
+  phase?: string;
+  completedScenes?: number;
+  totalScenes?: number;
+  disposition?: string;
+}
 
 // Internal type erased to a single function signature for storage in a homogeneous Set.
 // Public API surfaces the correct per-event typing via generics.

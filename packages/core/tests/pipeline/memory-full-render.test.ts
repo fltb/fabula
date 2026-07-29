@@ -1,3 +1,5 @@
+import * as crypto from 'node:crypto';
+
 // ============================================================================
 // MemoryStorage full render — MemoryStorage-backed renderNovel contract test
 //
@@ -16,7 +18,7 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { renderNovel } from '../../src/api.ts';
+import { previewEditorialRun, renderNovel } from '../../src/api.ts';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
@@ -180,8 +182,12 @@ describe('MemoryStorage — renderNovel full contract', () => {
     );
 
     const result = await renderNovel({
+      version: 1,
       projectDir: PROJECT_DIR,
+      mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+      selector: { type: 'all' },
       model: 'mock-pass2',
+    }, {
       provider,
       storage,
     });
@@ -220,7 +226,7 @@ describe('MemoryStorage — renderNovel full contract', () => {
     const sceneMetaPath = `${PROJECT_DIR}/scenes/chapter-01/E1.yaml`;
     expect(storage.exists(sceneMetaPath)).toBe(true);
     const metaContent = storage.read(sceneMetaPath);
-    expect(metaContent).toContain('narrativeOrder: 1');
+    expect(metaContent).toContain('narrative_order: 1');
     expect(metaContent).toContain('E1');
 
     // Scene render request YAML
@@ -261,8 +267,12 @@ describe('MemoryStorage — renderNovel full contract', () => {
       new MockPass2Provider({ entries: { E1: coldEntry } }),
     );
     const coldResult = await renderNovel({
+      version: 1,
       projectDir: PROJECT_DIR,
+      mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+      selector: { type: 'all' },
       model: 'mock-pass2',
+    }, {
       provider: coldTracker.provider,
       storage,
     });
@@ -278,8 +288,12 @@ describe('MemoryStorage — renderNovel full contract', () => {
       new MockPass2Provider({ entries: { E1: warmEntry } }),
     );
     const warmResult = await renderNovel({
+      version: 1,
       projectDir: PROJECT_DIR,
+      mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+      selector: { type: 'all' },
       model: 'mock-pass2',
+    }, {
       provider: warmTracker.provider,
       storage,
     });
@@ -318,8 +332,12 @@ describe('MemoryStorage — renderNovel full contract', () => {
       new MockPass2Provider({ entries: { E1: entry } }),
     );
     const result = await renderNovel({
+      version: 1,
       projectDir: PROJECT_DIR,
+      mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+      selector: { type: 'all' },
       model: 'mock-pass2',
+    }, {
       provider,
       storage: storageA,
     });
@@ -353,45 +371,45 @@ describe('MemoryStorage — renderNovel full contract', () => {
 
   // ── Supplemental: dry-run ──────────────────────────────────────
 
-  it('dry-run renders prompt files without calling provider', async () => {
+  it('previewEditorialRun — compiles plan and assembles prompts without calling provider or writing files', async () => {
     const storage = new MemoryStorage();
     setupMinimalProject(storage);
 
-    // Dry-run should NOT invoke the provider
+    // Preview should NOT invoke the provider
     const entry = makeEntry('E1');
     const tracker = trackProvider(
       new MockPass2Provider({ entries: { E1: entry } }),
     );
 
-    const result = await renderNovel({
+    const result = await previewEditorialRun({
+      version: 1,
       projectDir: PROJECT_DIR,
+      selector: { type: 'all' },
       model: 'mock-pass2',
+    }, {
       provider: tracker.provider,
       storage,
-      dryRun: true,
     });
 
+    // Preview succeeded with no errors
     expect(result.errors).toHaveLength(0);
-    expect(result.results).toHaveLength(1);
-    // Dry run returns empty prose
-    const scene = result.results[0]!;
-    expect(scene.eventId).toBe('E1');
-    expect(scene.prose).toBe('');
+    expect(result.scenes).toHaveLength(1);
+    expect(result.prompts).toHaveLength(1);
+    expect(result.scenes[0].eventId).toBe('E1');
 
-    // Provider was never called (dry-run skips LLM)
+    // Provider was never called (preview skips LLM)
     expect(tracker.callCount()).toBe(0);
 
-    // Prompt file written to .nova/dry-runs/
-    const promptPath = `${PROJECT_DIR}/.nova/dry-runs/E1_prompt.md`;
-    expect(storage.exists(promptPath)).toBe(true);
-    const promptContent = storage.read(promptPath);
-    expect(promptContent.length).toBeGreaterThan(0);
-    expect(promptContent).toContain('E1');
+    // Prompt assembled in memory
+    expect(result.prompts[0].userPrompt.length).toBeGreaterThan(0);
+    expect(result.prompts[0].userPrompt).toContain('E1');
 
-    // No scene or response artifacts from dry run
+    // Preview writes nothing to storage
     expect(storage.exists(`${PROJECT_DIR}/scenes/chapter-01/E1.md`)).toBe(false);
     expect(storage.exists(`${PROJECT_DIR}/.nova/responses/E1.json`)).toBe(false);
     expect(storage.exists(`${PROJECT_DIR}/.nova/render-cache/E1/cache.meta.json`)).toBe(false);
     expect(storage.exists(`${PROJECT_DIR}/output/novel.md`)).toBe(false);
+    // No dry-run prompt file either (preview returns prompts in memory, no writes)
+    expect(storage.exists(`${PROJECT_DIR}/.nova/dry-runs/E1_prompt.md`)).toBe(false);
   });
 });

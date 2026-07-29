@@ -11,6 +11,10 @@ export interface AssembleGameDialogueTreeOptions {
   eventsById: ReadonlyMap<string, NarrativeEvent>;
   chapterByEventId: ReadonlyMap<string, number>;
   title?: string;
+  /** Configured responses directory — defaults to .nova/responses for backward compat. */
+  responsesDir?: string;
+  /** Prevalidated materialized scene bytes for transactional publication. */
+  sceneContents?: ReadonlyMap<string, string>;
 }
 
 export interface AssembleGameDialogueTreeResult {
@@ -48,12 +52,27 @@ function orderedEventIds(tree: CompiledGameDialogueTree): string[] {
 export function assembleGameDialogueTree(
   options: AssembleGameDialogueTreeOptions,
 ): AssembleGameDialogueTreeResult | null {
-  const { projectDir, storage, tree, eventsById, chapterByEventId, title } = options;
+  const {
+    projectDir,
+    storage,
+    tree,
+    eventsById,
+    chapterByEventId,
+    title,
+    responsesDir,
+    sceneContents,
+  } = options;
+  const responseBase = responsesDir ?? path.join(projectDir, '.nova', 'responses');
   const eventIds = orderedEventIds(tree);
-  const scenePaths = new Map<string, string>();
+  const resolvedScenes = new Map<string, string>();
 
   for (const eventId of eventIds) {
-    const responsePath = path.join(projectDir, '.nova', 'responses', `${eventId}.json`);
+    const provided = sceneContents?.get(eventId);
+    if (provided !== undefined) {
+      resolvedScenes.set(eventId, provided);
+      continue;
+    }
+    const responsePath = path.join(responseBase, `${eventId}.json`);
     if (!storage.exists(responsePath)) return null;
     try {
       const response = JSON.parse(storage.read(responsePath)) as { released?: unknown };
@@ -61,7 +80,6 @@ export function assembleGameDialogueTree(
     } catch {
       return null;
     }
-
     const chapter = chapterByEventId.get(eventId);
     if (chapter === undefined) {
       throw new ConfigError(`Missing chapter for game dialogue event '${eventId}'`, {
@@ -75,8 +93,9 @@ export function assembleGameDialogueTree(
       `chapter-${String(chapter).padStart(2, '0')}`,
       `${eventId}.md`,
     );
-    if (!storage.exists(scenePath)) return null;
-    scenePaths.set(eventId, scenePath);
+    const scene = storage.readOptional(scenePath);
+    if (scene === null) return null;
+    resolvedScenes.set(eventId, scene);
   }
 
   const sections = eventIds.map((eventId) => {
@@ -100,8 +119,7 @@ export function assembleGameDialogueTree(
     return [
       `<a id="${anchorFor(eventId)}"></a>`,
       `## ${event.title}`,
-      '',
-      storage.read(scenePaths.get(eventId)!).trim(),
+      resolvedScenes.get(eventId)!.trim(),
       choiceLinks,
     ]
       .filter((part) => part !== '')
@@ -110,7 +128,5 @@ export function assembleGameDialogueTree(
 
   const markdown = [`# ${title ?? 'Dialogue Tree'}`, '', ...sections, ''].join('\n\n');
   const outputPath = path.join(projectDir, 'output', 'dialogue-tree.md');
-  storage.mkdirp(path.dirname(outputPath));
-  storage.write(outputPath, markdown);
   return { outputPath, markdown };
 }

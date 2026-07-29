@@ -1,8 +1,10 @@
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import { NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/count.ts';
+import { sceneMetadataV1Schema } from '../schemas/editorial.ts';
 import { FsStorage, type Storage } from '../storage/index.ts';
-import type { BranchSet, SceneMetadata } from '../types/index.js';
-import { NARRATIVE_TEXT_COUNT_VERSION } from './count.ts';
+import type { BranchSet } from '../types/index.js';
+import type { SceneMetadataV1 } from '../types/editorial.ts';
 import type { SceneEntry } from './types.js';
 import { AssemblyError, AssemblyErrorCode } from './types.js';
 
@@ -70,60 +72,51 @@ export class SceneCollector {
           ? metadataBaseName.replace(/\.render\.json$/i, '')
           : metadataBaseName.replace(/\.yaml$/i, '');
 
-        // ── 1. Parse metadata ────────────────────────────────────
+        // ── 1. Parse and validate strict V1 metadata ─────────────
         const rawMetadata = st.read(metadataPath);
-        const metadataRaw = isJson
-          ? (JSON.parse(rawMetadata) as Record<string, unknown>)
-          : (parseYaml(rawMetadata) as Record<string, unknown>);
+        let metadataInput: unknown;
+        try {
+          metadataInput = isJson ? JSON.parse(rawMetadata) : parseYaml(rawMetadata);
+        } catch (error) {
+          throw new AssemblyError(
+            AssemblyErrorCode.MISSING_METADATA,
+            `Scene ${eventId} metadata cannot be parsed: ${(error as Error).message}`,
+          );
+        }
+        const parsedMetadata = sceneMetadataV1Schema.safeParse(metadataInput);
+        if (!parsedMetadata.success) {
+          const paths = parsedMetadata.error.issues.map((issue) => issue.path[0]);
+          const code = paths.includes('narrative_order')
+            ? AssemblyErrorCode.MISSING_NARRATIVE_ORDER
+            : paths.includes('branch_existence')
+              ? AssemblyErrorCode.MISSING_BRANCH_EXISTENCE
+              : paths.includes('text_count_version')
+                ? AssemblyErrorCode.UNKNOWN_COUNT_VERSION
+                : AssemblyErrorCode.MISSING_METADATA;
+          throw new AssemblyError(
+            code,
+            `Scene ${eventId} has invalid V1 metadata: ${parsedMetadata.error.message}`,
+          );
+        }
+        const metadata = parsedMetadata.data as SceneMetadataV1;
+        if (metadata.event !== eventId) {
+          throw new AssemblyError(
+            AssemblyErrorCode.MISSING_METADATA,
+            `Scene metadata event ${metadata.event} does not match file ${eventId}`,
+          );
+        }
 
         // ── 2. Validate text count version ───────────────────────
-        const countVersion = (metadataRaw.text_count_version ?? metadataRaw.textCountVersion) as
-          | number
-          | undefined;
-        if (countVersion === undefined) {
+        if (metadata.text_count_version !== NARRATIVE_TEXT_COUNT_VERSION) {
           throw new AssemblyError(
             AssemblyErrorCode.UNKNOWN_COUNT_VERSION,
-            `Scene ${eventId} is missing text count version, expected ${NARRATIVE_TEXT_COUNT_VERSION}`,
-          );
-        }
-        if (countVersion !== NARRATIVE_TEXT_COUNT_VERSION) {
-          throw new AssemblyError(
-            AssemblyErrorCode.UNKNOWN_COUNT_VERSION,
-            `Scene ${eventId} has unknown count version ${countVersion}, expected ${NARRATIVE_TEXT_COUNT_VERSION}`,
+            `Scene ${eventId} has unknown count version ${metadata.text_count_version}, expected ${NARRATIVE_TEXT_COUNT_VERSION}`,
           );
         }
 
-        // ── 3. Extract narrativeOrder ────────────────────────────
-        const narrativeOrder = (metadataRaw.narrativeOrder ?? metadataRaw.narrative_order) as
-          | number
-          | undefined;
-        if (
-          narrativeOrder === undefined ||
-          typeof narrativeOrder !== 'number' ||
-          !Number.isFinite(narrativeOrder)
-        ) {
-          throw new AssemblyError(
-            AssemblyErrorCode.MISSING_NARRATIVE_ORDER,
-            `Scene ${eventId} is missing or has invalid narrativeOrder`,
-          );
-        }
-
-        // ── 4. Extract and validate branchExistence ──────────────
-        const rawBranch = metadataRaw.branchExistence as Record<string, unknown> | undefined;
-        if (!rawBranch || typeof rawBranch !== 'object' || !rawBranch.type) {
-          throw new AssemblyError(
-            AssemblyErrorCode.MISSING_BRANCH_EXISTENCE,
-            `Scene ${eventId} is missing branchExistence`,
-          );
-        }
-        const branchType = String(rawBranch.type);
-        if (!['all', 'paths', 'condition', 'except'].includes(branchType)) {
-          throw new AssemblyError(
-            AssemblyErrorCode.INVALID_BRANCH_EXISTENCE,
-            `Scene ${eventId} has invalid branchExistence type "${branchType}"`,
-          );
-        }
-        const branchExistence = rawBranch as unknown as BranchSet;
+        // ── 3. Extract narrative order and branch existence ─────
+        const narrativeOrder = metadata.narrative_order;
+        const branchExistence = metadata.branch_existence as BranchSet;
 
         // ── 5. Require prose file ────────────────────────────────
         const prosePath = path.join(chapterDir, `${eventId}.md`);
@@ -141,8 +134,8 @@ export class SceneCollector {
           );
         }
 
-        // ── 6. Normalise metadata to SceneMetadata type ──────────
-        const sceneMetadata = this._normaliseMetadata(metadataRaw, eventId);
+        // ── 5. Preserve validated V1 metadata ────────────────────
+        const sceneMetadata = metadata;
 
         collected.set(eventId, {
           prose,
@@ -189,19 +182,4 @@ export class SceneCollector {
       .sort();
   }
 
-  private _normaliseMetadata(raw: Record<string, unknown>, fallbackEventId: string): SceneMetadata {
-    const editHistory = raw.editHistory as SceneMetadata['editHistory'] | undefined;
-
-    return {
-      event: (raw.event as string) ?? fallbackEventId,
-      proseSource: (raw.proseSource as SceneMetadata['proseSource']) ?? 'llm',
-      editHistory: editHistory ?? [],
-      ...(raw.modelUsed != null && { modelUsed: raw.modelUsed as string }),
-      ...(raw.renderedAt != null && {
-        renderedAt: raw.renderedAt as string,
-      }),
-      ...(raw.wordCount != null && { wordCount: raw.wordCount as number }),
-      ...(raw.quality != null && { quality: raw.quality as SceneMetadata['quality'] }),
-    };
-  }
 }

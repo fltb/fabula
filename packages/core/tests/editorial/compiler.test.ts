@@ -1,0 +1,1027 @@
+// ============================================================================
+// EditorialCompiler — pure preflight + identity + plan compilation tests
+//
+// Acceptance criteria:
+//   1. Two identical compiles deep‑equal / planHash equal
+//   2. Model/profile affects plan/request but not editorial basis
+//   3. Source/review/waiver/validator changes affect required identities
+//   4. Invalid selection is side‑effect free
+//
+// All tests are deterministic — no storage, no clock, no providers.
+// ============================================================================
+
+import { describe, expect, it } from 'vitest';
+import * as crypto from 'node:crypto';
+import type { ReviewComment, ReviewLineBasis } from '../../src/types/review.ts';
+import type {
+  EditorialError,
+  SceneSelector,
+} from '../../src/types/editorial.ts';
+import type { SceneCatalog } from '../../src/editorial/selector.ts';
+import { preflightSelector } from '../../src/editorial/selector.ts';
+import {
+  computeSceneSourceHash,
+  computeScopeHash,
+  computeEditorialBasisHash,
+  computeValidationIdentity,
+  computePlanHash,
+  computeSelectorHash,
+  canonicalJson,
+  type ValidationIdentityInput,
+  type PlanHashInput,
+  type CompiledSceneIdentity,
+} from '../../src/editorial/identity.ts';
+import {
+  compileEditorialRun,
+  preflightRevision,
+  compileBranchContracts,
+  compileReadSet,
+  type EditorialCompileInput,
+  type CompiledSceneInfo,
+} from '../../src/editorial/compiler.ts';
+import type { BranchPath } from '../../src/types/branch.ts';
+
+// ============================================================================
+// Deterministic helpers
+// ============================================================================
+
+function sha256Hex(): string {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+// ============================================================================
+// Shared test data
+// ============================================================================
+
+const CATALOG: SceneCatalog = {
+  events: Object.freeze([
+    { eventId: 'E001', narrativeOrder: 1, chapter: 1 },
+    { eventId: 'E002', narrativeOrder: 2, chapter: 1 },
+    { eventId: 'E003', narrativeOrder: 3, chapter: 2 },
+    { eventId: 'E004', narrativeOrder: 4, chapter: 2 },
+    { eventId: 'E005', narrativeOrder: 5, chapter: 3 },
+  ]),
+};
+
+const BRANCH_PATH: BranchPath = {
+  decisions: [
+    { atEventId: 'E001', choiceId: 'choice_a', narrativeOrder: 1 },
+  ],
+};
+
+const EVENT_CONTENTS: Record<string, string> = {
+  E001: 'id: E001\nevent: The Beginning\n',
+  E002: 'id: E002\nevent: The Middle\n',
+  E003: 'id: E003\nevent: Chapter Two Start\n',
+  E004: 'id: E004\nevent: Chapter Two End\n',
+  E005: 'id: E005\nevent: The End\n',
+};
+
+const SOURCE_DOCUMENTS: Record<string, string> = {
+  'definitions/characters/alice.yaml': 'name: Alice\nage: 30\n',
+  'definitions/locations/forest.yaml': 'name: Enchanted Forest\ndanger: moderate\n',
+};
+
+const SOURCE_HEAD_HASH = sha256Hex();
+
+const LATEST_REVISIONS: Record<string, { revisionId: string; proseHash: string } | null> = {
+  E001: { revisionId: 'rev-e001-v1', proseHash: sha256Hex() },
+  E002: { revisionId: 'rev-e002-v1', proseHash: sha256Hex() },
+  E003: null,
+  E004: null,
+  E005: null,
+};
+
+const VALIDATION_INPUT: ValidationIdentityInput = {
+  analysisContractHash: sha256Hex(),
+  builtInValidatorImplementationVersion: '1',
+  effectiveOverrides: {},
+  validators: [
+    { name: 'CausalityValidator', version: '1' },
+    { name: 'POVValidator', version: '1' },
+    { name: 'TimelineValidator', version: '1' },
+  ],
+  plugins: [],
+};
+
+const REVIEWS: ReviewComment[] = [
+  {
+    id: 'rev-001',
+    author: 'human',
+    actorId: 'user-1',
+    target: { type: 'novel', id: 'novel' },
+    severity: 'suggestion',
+    category: 'style',
+    content: 'Improve prose flow.',
+    status: 'open',
+    applications: [],
+    createdAt: '2026-07-28T00:00:00.000Z',
+  },
+  {
+    id: 'rev-002',
+    author: 'human',
+    actorId: 'user-1',
+    target: { type: 'scene', id: 'E001' },
+    severity: 'blocking',
+    category: 'plot_logic',
+    content: 'The beginning needs more tension.',
+    status: 'open',
+    applications: [],
+    createdAt: '2026-07-28T00:00:00.000Z',
+  },
+];
+
+const CHAPTER_BY_EVENT: Record<string, number> = {
+  E001: 1, E002: 1, E003: 2, E004: 2, E005: 3,
+};
+
+const REQUIRES_PROVIDER: Record<string, boolean> = {
+  E001: true, E002: true, E003: true, E004: true, E005: true,
+};
+
+function defaultCompileInput(
+  overrides?: Partial<EditorialCompileInput> & {
+    requestOverrides?: Partial<EditorialCompileInput['request']>;
+  },
+): EditorialCompileInput {
+  const request: EditorialCompileInput['request'] = {
+    version: 1,
+    projectDir: '/test-project',
+    selector: undefined,
+    revision: undefined,
+    model: undefined,
+    providerProfile: undefined,
+    branchPath: undefined,
+    discourseBranch: undefined,
+    waivers: undefined,
+    batch: undefined,
+    maxRounds: undefined,
+    ...overrides?.requestOverrides,
+  };
+
+  return {
+    request,
+    catalog: CATALOG,
+    eventContents: EVENT_CONTENTS,
+    sourceDocumentContents: SOURCE_DOCUMENTS,
+    sourceHeadHash: SOURCE_HEAD_HASH,
+    latestRevisions: LATEST_REVISIONS,
+    validation: VALIDATION_INPUT,
+    reviewComments: REVIEWS,
+    chapterByEventId: CHAPTER_BY_EVENT,
+    requiresProviderByEventId: REQUIRES_PROVIDER,
+    responsesDir: '/test-project/.nova/responses',
+    sourceHeadPath: '/test-project/.nova/work/source-head.json',
+    ...overrides,
+  };
+}
+
+// ============================================================================
+// Selector Preflight Tests
+// ============================================================================
+
+describe('preflightSelector', () => {
+  it('resolves "all" to every catalog entry in narrative order', () => {
+    const result = preflightSelector({ type: 'all' }, CATALOG);
+    expect(result.eventIds).toEqual(['E001', 'E002', 'E003', 'E004', 'E005']);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('resolves "undefined" selector to every catalog entry', () => {
+    const result = preflightSelector(undefined, CATALOG);
+    expect(result.eventIds).toEqual(['E001', 'E002', 'E003', 'E004', 'E005']);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('resolves "chapter" selector to events in that chapter', () => {
+    const result = preflightSelector({ type: 'chapter', chapter: 2 }, CATALOG);
+    expect(result.eventIds).toEqual(['E003', 'E004']);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('returns empty for chapter with no events', () => {
+    const result = preflightSelector({ type: 'chapter', chapter: 99 }, CATALOG);
+    expect(result.eventIds).toEqual([]);
+    expect(result.errors).toHaveLength(0); // empty chapter is not an error per se
+  });
+
+  it('resolves "events" selector to requested eventIds', () => {
+    const selector: SceneSelector = { type: 'events', eventIds: ['E003', 'E001', 'E005'] };
+    const result = preflightSelector(selector, CATALOG);
+    expect(result.eventIds).toEqual(['E001', 'E003', 'E005']);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('deduplicates duplicate eventIds in selector', () => {
+    const selector: SceneSelector = { type: 'events', eventIds: ['E001', 'E002', 'E001'] };
+    const result = preflightSelector(selector, CATALOG);
+    expect(result.eventIds).toEqual(['E001', 'E002']);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('reports SCENE_NOT_FOUND for unknown eventIds', () => {
+    const selector: SceneSelector = { type: 'events', eventIds: ['E001', 'E999'] };
+    const result = preflightSelector(selector, CATALOG);
+    expect(result.eventIds).toEqual(['E001']);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].code).toBe('SCENE_NOT_FOUND');
+    expect(result.errors[0].eventId).toBe('E999');
+  });
+
+  it('accumulates multiple errors without throwing', () => {
+    const selector: SceneSelector = { type: 'events', eventIds: ['E999', 'E888'] };
+    const result = preflightSelector(selector, CATALOG);
+    expect(result.eventIds).toEqual([]);
+    expect(result.errors).toHaveLength(2);
+  });
+
+  it('returns sorted eventIds by narrative order', () => {
+    const selector: SceneSelector = { type: 'events', eventIds: ['E005', 'E002', 'E004', 'E001', 'E003'] };
+    const result = preflightSelector(selector, CATALOG);
+    expect(result.eventIds).toEqual(['E001', 'E002', 'E003', 'E004', 'E005']);
+  });
+
+  it('is side‑effect free — repeated calls return identical frozen results', () => {
+    const a = preflightSelector({ type: 'all' }, CATALOG);
+    const b = preflightSelector({ type: 'all' }, CATALOG);
+    expect(Object.isFrozen(a.eventIds)).toBe(true);
+    expect(Object.isFrozen(a.errors)).toBe(true);
+    expect(a).toEqual(b);
+  });
+});
+
+// ============================================================================
+// Revision Preflight Tests
+// ============================================================================
+
+describe('preflightRevision', () => {
+  it('returns empty when no reviewIds given', () => {
+    const errors = preflightRevision(undefined, REVIEWS, ['E001', 'E002'], CHAPTER_BY_EVENT);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('returns empty for valid novel‑level review', () => {
+    const errors = preflightRevision(['rev-001'], REVIEWS, ['E001', 'E002'], CHAPTER_BY_EVENT);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('reports INVALID_REVIEW_SELECTION for a non-existent review', () => {
+    const errors = preflightRevision(['nonexistent'], REVIEWS, ['E001'], CHAPTER_BY_EVENT);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe('INVALID_REVIEW_SELECTION');
+    expect(errors[0].reviewId).toBe('nonexistent');
+  });
+
+  it('reports INVALID_REVIEW_SELECTION when review does not apply to selected events', () => {
+    const errors = preflightRevision(['rev-002'], REVIEWS, ['E005'], CHAPTER_BY_EVENT);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe('INVALID_REVIEW_SELECTION');
+  });
+
+  it('accepts scene‑level review when the event is selected', () => {
+    const errors = preflightRevision(['rev-002'], REVIEWS, ['E001'], CHAPTER_BY_EVENT);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('rejects a non-open explicit review', () => {
+    const closed = [{ ...REVIEWS[0], status: 'resolved' as const }];
+    const errors = preflightRevision(['rev-001'], closed, ['E001'], CHAPTER_BY_EVENT);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe('INVALID_REVIEW_SELECTION');
+  });
+
+  it('rejects an inline instruction for multiple selected scenes', () => {
+    const errors = preflightRevision(
+      undefined,
+      REVIEWS,
+      ['E001', 'E002'],
+      CHAPTER_BY_EVENT,
+      'Tighten both scenes',
+    );
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe('INVALID_REVIEW_SELECTION');
+  });
+});
+
+// ============================================================================
+// Identity Tests
+// ============================================================================
+
+describe('identity', () => {
+  describe('computeSceneSourceHash', () => {
+    it('produces a deterministic hex hash', () => {
+      const h1 = computeSceneSourceHash('E001', EVENT_CONTENTS.E001, SOURCE_DOCUMENTS);
+      const h2 = computeSceneSourceHash('E001', EVENT_CONTENTS.E001, SOURCE_DOCUMENTS);
+      expect(h1).toBe(h2);
+      expect(h1).toMatch(/^[a-f0-9]{64}$/);
+    });
+
+    it('changes when event content changes', () => {
+      const h1 = computeSceneSourceHash('E001', EVENT_CONTENTS.E001, SOURCE_DOCUMENTS);
+      const h2 = computeSceneSourceHash('E001', 'different content', SOURCE_DOCUMENTS);
+      expect(h1).not.toBe(h2);
+    });
+
+    it('changes when source documents change', () => {
+      const h1 = computeSceneSourceHash('E001', EVENT_CONTENTS.E001, SOURCE_DOCUMENTS);
+      const h2 = computeSceneSourceHash('E001', EVENT_CONTENTS.E001, {});
+      expect(h1).not.toBe(h2);
+    });
+  });
+
+  describe('computeScopeHash', () => {
+    it('produces deterministic hash', () => {
+      const h1 = computeScopeHash('E001', BRANCH_PATH);
+      const h2 = computeScopeHash('E001', BRANCH_PATH);
+      expect(h1).toBe(h2);
+    });
+
+    it('changes when branch path changes', () => {
+      const h1 = computeScopeHash('E001', BRANCH_PATH);
+      const h2 = computeScopeHash('E001', { decisions: [] });
+      expect(h1).not.toBe(h2);
+    });
+
+    it('is stable when branchPath is undefined', () => {
+      const h1 = computeScopeHash('E001', undefined);
+      const h2 = computeScopeHash('E001', undefined);
+      expect(h1).toBe(h2);
+    });
+  });
+
+  describe('computeEditorialBasisHash', () => {
+    it('is stable for identical inputs', () => {
+      const h1 = computeEditorialBasisHash('E001', BRANCH_PATH, 'hash1', 'rev1', 'prose1');
+      const h2 = computeEditorialBasisHash('E001', BRANCH_PATH, 'hash1', 'rev1', 'prose1');
+      expect(h1).toBe(h2);
+    });
+
+    it('changes when source head hash changes', () => {
+      const h1 = computeEditorialBasisHash('E001', BRANCH_PATH, 'old-hash', 'rev1', 'prose1');
+      const h2 = computeEditorialBasisHash('E001', BRANCH_PATH, 'new-hash', 'rev1', 'prose1');
+      expect(h1).not.toBe(h2);
+    });
+
+    it('is NOT affected by model or provider profile', () => {
+      const basis = computeEditorialBasisHash('E001', BRANCH_PATH, SOURCE_HEAD_HASH, 'rev1', 'prose1');
+      // This is the same call — the hash does NOT accept model or profile.
+      // Verify that the output is stable regardless of request-level model.
+      const basis2 = computeEditorialBasisHash('E001', BRANCH_PATH, SOURCE_HEAD_HASH, 'rev1', 'prose1');
+      expect(basis).toBe(basis2);
+    });
+  });
+
+  describe('computeValidationIdentity', () => {
+    it('produces a deterministic hash', () => {
+      expect(computeValidationIdentity(VALIDATION_INPUT)).toBe(
+        computeValidationIdentity(VALIDATION_INPUT),
+      );
+    });
+
+    it('changes when the analysis contract changes', () => {
+      const changed = {
+        ...VALIDATION_INPUT,
+        analysisContractHash: sha256Hex(),
+      };
+      expect(computeValidationIdentity(VALIDATION_INPUT)).not.toBe(
+        computeValidationIdentity(changed),
+      );
+    });
+
+    it('changes when a validator version changes', () => {
+      const changed = {
+        ...VALIDATION_INPUT,
+        validators: VALIDATION_INPUT.validators.map((validator) =>
+          validator.name === 'CausalityValidator'
+            ? { ...validator, version: '2' }
+            : validator,
+        ),
+      };
+      expect(computeValidationIdentity(VALIDATION_INPUT)).not.toBe(
+        computeValidationIdentity(changed),
+      );
+    });
+
+    it('changes when effective overrides change', () => {
+      const changed: ValidationIdentityInput = {
+        ...VALIDATION_INPUT,
+        effectiveOverrides: { POVValidator: 'off' },
+      };
+      expect(computeValidationIdentity(VALIDATION_INPUT)).not.toBe(
+        computeValidationIdentity(changed),
+      );
+    });
+
+    it('changes with plugin manifest, validator, or prompt-hook identity', () => {
+      const plugin = {
+        name: 'my-plugin',
+        version: '1.0.0',
+        validators: [{ name: 'CustomValidator', version: '1.0.0' }],
+        promptHookIdentity: sha256Hex(),
+      };
+      const base: ValidationIdentityInput = { ...VALIDATION_INPUT, plugins: [plugin] };
+      const changedVersion: ValidationIdentityInput = {
+        ...base,
+        plugins: [{ ...plugin, version: '2.0.0' }],
+      };
+      const changedValidator: ValidationIdentityInput = {
+        ...base,
+        plugins: [
+          {
+            ...plugin,
+            validators: [{ name: 'CustomValidator', version: '2.0.0' }],
+          },
+        ],
+      };
+      const changedHook: ValidationIdentityInput = {
+        ...base,
+        plugins: [{ ...plugin, promptHookIdentity: sha256Hex() }],
+      };
+
+      expect(computeValidationIdentity(base)).not.toBe(
+        computeValidationIdentity(changedVersion),
+      );
+      expect(computeValidationIdentity(base)).not.toBe(
+        computeValidationIdentity(changedValidator),
+      );
+      expect(computeValidationIdentity(base)).not.toBe(
+        computeValidationIdentity(changedHook),
+      );
+    });
+
+    it('is stable under validator and plugin ordering changes', () => {
+      const pluginA = {
+        name: 'a-plugin',
+        version: '1',
+        validators: [{ name: 'AValidator', version: '1' }],
+        promptHookIdentity: sha256Hex(),
+      };
+      const pluginB = {
+        name: 'b-plugin',
+        version: '1',
+        validators: [{ name: 'BValidator', version: '1' }],
+        promptHookIdentity: sha256Hex(),
+      };
+      const left: ValidationIdentityInput = {
+        ...VALIDATION_INPUT,
+        validators: [...VALIDATION_INPUT.validators],
+        plugins: [pluginA, pluginB],
+      };
+      const right: ValidationIdentityInput = {
+        ...VALIDATION_INPUT,
+        validators: [...VALIDATION_INPUT.validators].reverse(),
+        plugins: [pluginB, pluginA],
+      };
+      expect(computeValidationIdentity(left)).toBe(computeValidationIdentity(right));
+    });
+
+    it('changes when the built-in implementation version changes', () => {
+      const changed = {
+        ...VALIDATION_INPUT,
+        builtInValidatorImplementationVersion: '2',
+      };
+      expect(computeValidationIdentity(VALIDATION_INPUT)).not.toBe(
+        computeValidationIdentity(changed),
+      );
+    });
+  });
+
+  describe('computePlanHash', () => {
+    function makeIdentity(overrides?: Partial<CompiledSceneIdentity>): CompiledSceneIdentity {
+      return {
+        eventId: 'E001',
+        sourceHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa1',
+        scopeHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa2',
+        editorialBasisHash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa3',
+        validationIdentity: 'val-identity-1',
+        requiresProvider: true,
+        ...overrides,
+      };
+    }
+
+    function basePlanInput(overrides?: Partial<PlanHashInput>): PlanHashInput {
+      return {
+        selectedEventIds: ['E001'],
+        scenes: [makeIdentity()],
+        branchPath: undefined,
+        discourseBranch: undefined,
+        model: undefined,
+        providerProfile: undefined,
+        waiverHashes: [],
+        feedbackHashes: [],
+        batch: undefined,
+        maxRounds: undefined,
+        ...overrides,
+      };
+    }
+
+    it('produces deterministic plan hash', () => {
+      const h1 = computePlanHash(basePlanInput());
+      const h2 = computePlanHash(basePlanInput());
+      expect(h1).toBe(h2);
+    });
+
+    it('planHash changes when model changes', () => {
+      const h1 = computePlanHash(basePlanInput({ model: 'model-a' }));
+      const h2 = computePlanHash(basePlanInput({ model: 'model-b' }));
+      expect(h1).not.toBe(h2);
+    });
+
+    it('planHash changes when providerProfile changes', () => {
+      const h1 = computePlanHash(basePlanInput({ providerProfile: 'fast' }));
+      const h2 = computePlanHash(basePlanInput({ providerProfile: 'slow' }));
+      expect(h1).not.toBe(h2);
+    });
+
+    it('planHash changes when waivers change', () => {
+      const h1 = computePlanHash(basePlanInput({ waiverHashes: ['waiver-a'] }));
+      const h2 = computePlanHash(basePlanInput({ waiverHashes: ['waiver-b'] }));
+      expect(h1).not.toBe(h2);
+    });
+
+    it('planHash changes when feedback changes', () => {
+      const h1 = computePlanHash(basePlanInput({ feedbackHashes: ['feedback-001'] }));
+      const h2 = computePlanHash(basePlanInput({ feedbackHashes: ['feedback-002'] }));
+      expect(h1).not.toBe(h2);
+    });
+
+    it('planHash is stable for identical scenes in same order', () => {
+      const scenes = [
+        makeIdentity({ eventId: 'E001', sourceHash: sha256Hex() }),
+        makeIdentity({ eventId: 'E002', sourceHash: sha256Hex() }),
+      ];
+      const h1 = computePlanHash(basePlanInput({ selectedEventIds: ['E001', 'E002'], scenes }));
+      const h2 = computePlanHash(basePlanInput({ selectedEventIds: ['E001', 'E002'], scenes }));
+      expect(h1).toBe(h2);
+    });
+  });
+
+  describe('computeSelectorHash', () => {
+    it('produces stable hash for the same selector', () => {
+      expect(computeSelectorHash({ type: 'all' })).toBe(computeSelectorHash({ type: 'all' }));
+    });
+
+    it('produces different hashes for different selectors', () => {
+      expect(computeSelectorHash({ type: 'all' })).not.toBe(
+        computeSelectorHash({ type: 'chapter', chapter: 1 }),
+      );
+    });
+
+    it('is stable for undefined', () => {
+      expect(computeSelectorHash(undefined)).toBe(computeSelectorHash(undefined));
+    });
+  });
+
+  describe('canonicalJson', () => {
+    it('sorts object keys', () => {
+      expect(canonicalJson({ b: 1, a: 2 })).toBe('{"a":2,"b":1}');
+    });
+
+    it('omits undefined values', () => {
+      expect(canonicalJson({ a: 1, b: undefined })).toBe('{"a":1}');
+    });
+
+    it('serializes arrays preserving order', () => {
+      expect(canonicalJson([3, 1, 2])).toBe('[3,1,2]');
+    });
+
+    it('handles nested objects', () => {
+      expect(canonicalJson({ nested: { b: 1, a: 2 } })).toBe('{"nested":{"a":2,"b":1}}');
+    });
+
+    it('handles null', () => {
+      expect(canonicalJson(null)).toBe('null');
+    });
+  });
+});
+
+// ============================================================================
+// Branch Contracts Tests
+// ============================================================================
+
+describe('compileBranchContracts', () => {
+  it('produces story with narrative order map', () => {
+    const contracts = compileBranchContracts(CATALOG, BRANCH_PATH, 'main');
+    expect(contracts.story.eventIds).toEqual(['E001', 'E002', 'E003', 'E004', 'E005']);
+    expect(contracts.story.narrativeOrderMap.E001).toBe(1);
+    expect(contracts.story.narrativeOrderMap.E005).toBe(5);
+  });
+
+  it('preserves branch path and discourse branch', () => {
+    const contracts = compileBranchContracts(CATALOG, BRANCH_PATH, 'alt-timeline');
+    expect(contracts.discourse.branchPath).toEqual(BRANCH_PATH);
+    expect(contracts.discourse.discourseBranch).toBe('alt-timeline');
+  });
+
+  it('produces default surface contract', () => {
+    const contracts = compileBranchContracts(CATALOG, undefined, undefined);
+    expect(contracts.surface.groupIds).toEqual(['default']);
+    expect(contracts.surface.serialLanes).toEqual([]);
+  });
+
+  it('is deterministic', () => {
+    const a = compileBranchContracts(CATALOG, undefined, undefined);
+    const b = compileBranchContracts(CATALOG, undefined, undefined);
+    expect(a).toEqual(b);
+  });
+});
+
+// ============================================================================
+// Read Set Tests
+// ============================================================================
+
+describe('compileReadSet', () => {
+  it('includes source head and response files at configured paths', () => {
+    const readSet = compileReadSet(
+      '/proj/.nova/work/source-head.json',
+      '/proj/.nova/responses',
+      'source-hash',
+      ['E001', 'E002'],
+    );
+    expect(readSet).toHaveLength(3); // source head + 2 events
+    expect(readSet[0]).toEqual({
+      kind: 'file',
+      path: '/proj/.nova/work/source-head.json',
+      expectedHash: 'source-hash',
+    });
+    expect(readSet[1]).toEqual({
+      kind: 'file',
+      path: '/proj/.nova/responses/E001.json',
+      expectedHash: null,
+    });
+    expect(readSet[2]).toEqual({
+      kind: 'file',
+      path: '/proj/.nova/responses/E002.json',
+      expectedHash: null,
+    });
+  });
+
+  it('uses custom source head path', () => {
+    const readSet = compileReadSet(
+      '/custom/work/path/source-head.json',
+      '/proj/.nova/responses',
+      'hash',
+      ['E001'],
+    );
+    expect(readSet[0].path).toBe('/custom/work/path/source-head.json');
+  });
+
+  it('uses custom responses directory', () => {
+    const readSet = compileReadSet(
+      '/proj/.nova/work/source-head.json',
+      '/custom/path/responses',
+      'hash',
+      ['E001'],
+    );
+    expect(readSet).toHaveLength(2); // source head + 1 event
+    expect(readSet[1]).toEqual({
+      kind: 'file',
+      path: '/custom/path/responses/E001.json',
+      expectedHash: null,
+    });
+  });
+
+  it('is deterministic', () => {
+    const a = compileReadSet(
+      '/proj/.nova/work/source-head.json',
+      '/proj/.nova/responses',
+      'hash',
+      ['E001', 'E002'],
+    );
+    const b = compileReadSet(
+      '/proj/.nova/work/source-head.json',
+      '/proj/.nova/responses',
+      'hash',
+      ['E001', 'E002'],
+    );
+    expect(a).toEqual(b);
+  });
+});
+
+// ============================================================================
+// Compile Editorial Run — Main integration tests
+// ============================================================================
+
+describe('compileEditorialRun', () => {
+  // ── Acceptance 1: Two identical compiles deep‑equal / planHash equal ──────
+
+  it('produces identical output and planHash for identical inputs', () => {
+    const a = compileEditorialRun(defaultCompileInput());
+    const b = compileEditorialRun(defaultCompileInput());
+    expect(a.planHash).toBe(b.planHash);
+    expect(a).toEqual(b);
+  });
+
+  it('planHash is deterministic across multiple calls', () => {
+    const results = Array.from({ length: 5 }, () => compileEditorialRun(defaultCompileInput()));
+    const hashes = results.map((r) => r.planHash);
+    expect(new Set(hashes).size).toBe(1);
+  });
+
+  // ── Acceptance 2: Model/profile affects plan/request but not editorial basis ──
+
+  it('different model changes planHash but not editorial basis hashes', () => {
+    const inputA = defaultCompileInput({ requestOverrides: { model: 'model-a' } });
+    const inputB = defaultCompileInput({ requestOverrides: { model: 'model-b' } });
+
+    const outputA = compileEditorialRun(inputA);
+    const outputB = compileEditorialRun(inputB);
+
+    // Plan hashes differ
+    expect(outputA.planHash).not.toBe(outputB.planHash);
+
+    // But editorial basis hashes are the same (provider‑free)
+    for (let i = 0; i < outputA.scenes.length; i++) {
+      expect(outputA.scenes[i].editorialBasisHash).toBe(outputB.scenes[i].editorialBasisHash);
+    }
+  });
+
+  it('different providerProfile changes planHash but not editorial basis hashes', () => {
+    const inputA = defaultCompileInput({ requestOverrides: { providerProfile: 'fast' } });
+    const inputB = defaultCompileInput({ requestOverrides: { providerProfile: 'slow' } });
+
+    const outputA = compileEditorialRun(inputA);
+    const outputB = compileEditorialRun(inputB);
+
+    expect(outputA.planHash).not.toBe(outputB.planHash);
+    for (let i = 0; i < outputA.scenes.length; i++) {
+      expect(outputA.scenes[i].editorialBasisHash).toBe(outputB.scenes[i].editorialBasisHash);
+    }
+  });
+
+  // ── Acceptance 3: Source/review/waiver/validator changes affect identities ──
+
+  it('source changes affect sourceHash and editorialBasisHash', () => {
+    const base = defaultCompileInput();
+    const modified = defaultCompileInput({
+      sourceHeadHash: 'different-source-head',
+      eventContents: { ...EVENT_CONTENTS, E001: 'id: E001\nevent: Modified\n' },
+    });
+
+    const baseOutput = compileEditorialRun(base);
+    const modOutput = compileEditorialRun(modified);
+
+    const baseE001 = baseOutput.scenes.find((s) => s.eventId === 'E001')!;
+    const modE001 = modOutput.scenes.find((s) => s.eventId === 'E001')!;
+
+    expect(baseE001.sourceHash).not.toBe(modE001.sourceHash);
+    expect(baseE001.editorialBasisHash).not.toBe(modE001.editorialBasisHash);
+  });
+
+  it('revision basis changes affect editorialBasisHash', () => {
+    const baseRev: Record<string, { revisionId: string; proseHash: string } | null> = {
+      E001: { revisionId: 'old-rev', proseHash: sha256Hex() },
+    };
+    const newRev: Record<string, { revisionId: string; proseHash: string } | null> = {
+      E001: { revisionId: 'new-rev', proseHash: sha256Hex() },
+    };
+
+    const outputA = compileEditorialRun(defaultCompileInput({ latestRevisions: baseRev }));
+    const outputB = compileEditorialRun(defaultCompileInput({ latestRevisions: newRev }));
+
+    const sceneA = outputA.scenes.find((s) => s.eventId === 'E001')!;
+    const sceneB = outputB.scenes.find((s) => s.eventId === 'E001')!;
+    expect(sceneA.editorialBasisHash).not.toBe(sceneB.editorialBasisHash);
+  });
+
+  it('review waiver changes affect planHash', () => {
+    const inputA = defaultCompileInput({
+      requestOverrides: {
+        waivers: [{ gateId: 'gate-1', signedBy: 'admin', signedAt: '2026-07-28T00:00:00.000Z', reason: 'test' }],
+      },
+    });
+    const inputB = defaultCompileInput({ requestOverrides: { waivers: [] } });
+
+    expect(compileEditorialRun(inputA).planHash).not.toBe(compileEditorialRun(inputB).planHash);
+  });
+
+  it('waiver ordering does not affect planHash (sorted deterministically)', () => {
+    const waivers = [
+      { gateId: 'gate-1', signedBy: 'admin', signedAt: '2026-07-28T00:00:00.000Z', reason: 'first' },
+      { gateId: 'gate-2', signedBy: 'editor', signedAt: '2026-07-28T01:00:00.000Z', reason: 'second' },
+    ];
+    const inputA = defaultCompileInput({ requestOverrides: { waivers } });
+    const inputB = defaultCompileInput({ requestOverrides: { waivers: [...waivers].reverse() } });
+    expect(compileEditorialRun(inputA).planHash).toBe(compileEditorialRun(inputB).planHash);
+  });
+
+  it('review ID ordering does not affect planHash (sorted deterministically)', () => {
+    const inputA = defaultCompileInput({
+      requestOverrides: { revision: { reviewIds: ['rev-001', 'rev-002'] } },
+    });
+    const inputB = defaultCompileInput({
+      requestOverrides: { revision: { reviewIds: ['rev-002', 'rev-001'] } },
+    });
+    expect(compileEditorialRun(inputA).planHash).toBe(compileEditorialRun(inputB).planHash);
+  });
+
+  it('validator version changes affect validationIdentity', () => {
+    const inputA = defaultCompileInput({
+      validation: {
+        ...VALIDATION_INPUT,
+        validators: VALIDATION_INPUT.validators.map((validator) =>
+          validator.name === 'CausalityValidator'
+            ? { ...validator, version: '1.0.0' }
+            : validator,
+        ),
+      },
+    });
+    const inputB = defaultCompileInput({
+      validation: {
+        ...VALIDATION_INPUT,
+        validators: VALIDATION_INPUT.validators.map((validator) =>
+          validator.name === 'CausalityValidator'
+            ? { ...validator, version: '2.0.0' }
+            : validator,
+        ),
+      },
+    });
+
+    const outputA = compileEditorialRun(inputA);
+    const outputB = compileEditorialRun(inputB);
+
+    // Every scene's validation identity should differ
+    for (let i = 0; i < outputA.scenes.length; i++) {
+      expect(outputA.scenes[i].validationIdentity).not.toBe(outputB.scenes[i].validationIdentity);
+    }
+
+    // Entire plan hashes also differ because validationIdentity is baked into plan
+    expect(outputA.planHash).not.toBe(outputB.planHash);
+  });
+
+  it('severity overrides change validationIdentity', () => {
+    const inputA = defaultCompileInput();
+    const inputB = defaultCompileInput({
+      validation: { ...VALIDATION_INPUT, effectiveOverrides: { POVValidator: 'off' as const } },
+    });
+
+    const outputA = compileEditorialRun(inputA);
+    const outputB = compileEditorialRun(inputB);
+    expect(outputA.planSummary.validationIdentity).not.toBe(outputB.planSummary.validationIdentity);
+  });
+
+  // ── Acceptance 4: Invalid selection is side‑effect free ──────────────────
+
+  it('unknown event produces SCENE_NOT_FOUND errors but no thrown exception', () => {
+    const input = defaultCompileInput({
+      requestOverrides: {
+        selector: { type: 'events', eventIds: ['E001', 'E999'] } as SceneSelector,
+      },
+    });
+
+    const output = compileEditorialRun(input);
+
+    expect(output.selectorErrors).toHaveLength(1);
+    expect(output.selectorErrors[0].code).toBe('SCENE_NOT_FOUND');
+    expect(output.selectorErrors[0].eventId).toBe('E999');
+
+    // Only valid E001 survived; E999 is discarded with error
+    expect(output.selectedEventIds).toEqual(['E001']);
+    expect(output.scenes).toHaveLength(1);
+    expect(output.scenes[0].eventId).toBe('E001');
+  });
+
+  it('invalid revision review is reported in preflight errors', () => {
+    const input = defaultCompileInput({
+      requestOverrides: {
+        revision: { reviewIds: ['nonexistent-review'] },
+      },
+    });
+
+    const output = compileEditorialRun(input);
+
+    // The compile still succeeds — errors are embedded in the result.
+    expect(output.planHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(output.planSummary.scenes).toHaveLength(5);
+    // Invalid explicit feedback is reported atomically.
+    expect(output.selectorErrors).toHaveLength(1);
+    expect(output.selectorErrors[0].code).toBe('INVALID_REVIEW_SELECTION');
+  });
+  it('completely invalid selector (all unknown) still produces valid plan shape', () => {
+    const input = defaultCompileInput({
+      requestOverrides: {
+        selector: { type: 'events', eventIds: ['E999', 'E888'] } as SceneSelector,
+      },
+    });
+
+    const output = compileEditorialRun(input);
+
+    expect(output.selectorErrors).toHaveLength(2);
+    expect(output.selectorErrors[0].code).toBe('SCENE_NOT_FOUND');
+    expect(output.selectorErrors[0].eventId).toBe('E999');
+    expect(output.selectorErrors[1].code).toBe('SCENE_NOT_FOUND');
+    expect(output.selectorErrors[1].eventId).toBe('E888');
+    expect(output.selectedEventIds).toHaveLength(0);
+    expect(output.scenes).toHaveLength(0);
+    expect(output.jobs).toHaveLength(0);
+    expect(output.planHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  // ── Additional structural tests ──────────────────────────────────────────
+
+  it('builds correct jobs for scenes needing providers', () => {
+    const input = defaultCompileInput({
+      requiresProviderByEventId: { E001: true, E002: false, E003: true, E004: false, E005: true },
+    });
+    const output = compileEditorialRun(input);
+    const jobEventIds = output.jobs.map((j) => j.eventId);
+    expect(jobEventIds).toEqual(['E001', 'E003', 'E005']);
+  });
+
+  it('readSet uses configured sourceHeadPath and responsesDir', () => {
+    const output = compileEditorialRun(defaultCompileInput());
+    // 5 events → source head + 5 response files
+    expect(output.readSet).toHaveLength(6);
+    expect(output.readSet[0]).toEqual({
+      kind: 'file',
+      path: '/test-project/.nova/work/source-head.json',
+      expectedHash: SOURCE_HEAD_HASH,
+    });
+  });
+
+  it('uses configured responsesDir from compile input', () => {
+    const output = compileEditorialRun(defaultCompileInput({ responsesDir: '/custom/responses' }));
+    // 5 events → source head + 5 response files
+    expect(output.readSet).toHaveLength(6);
+    // First response file uses custom directory
+    expect(output.readSet[1]).toEqual({
+      kind: 'file',
+      path: '/custom/responses/E001.json',
+      expectedHash: null,
+    });
+  });
+
+  it('uses configured sourceHeadPath from compile input', () => {
+    const output = compileEditorialRun(defaultCompileInput({ sourceHeadPath: '/custom/source-head.json' }));
+    expect(output.readSet).toHaveLength(6);
+    expect(output.readSet[0]).toEqual({
+      kind: 'file',
+      path: '/custom/source-head.json',
+      expectedHash: SOURCE_HEAD_HASH,
+    });
+  });
+
+  it('invalid review selection blocks all scenes and produces zero jobs', () => {
+    const output = compileEditorialRun(
+      defaultCompileInput({
+        requestOverrides: { revision: { reviewIds: ['nonexistent-review'] } },
+      }),
+    );
+    // Preflight errors include exactly one atomic selection error.
+    expect(output.selectorErrors).toHaveLength(1);
+    expect(output.selectorErrors[0].code).toBe('INVALID_REVIEW_SELECTION');
+    // All 5 scenes are preflight_failed
+    expect(output.scenes).toHaveLength(5);
+    for (const scene of output.scenes) {
+      expect(scene.state).toBe('preflight_failed');
+    }
+    // Zero render jobs
+    expect(output.jobs).toHaveLength(0);
+    // readSet is still generated (source head + response files)
+    expect(output.readSet).toHaveLength(6);
+    // Zero prepared external changes (dry run)
+    expect(output.preparedExternalChanges).toHaveLength(0);
+  });
+
+
+  it('preparedExternalChanges is empty (dry‑run compile)', () => {
+    const output = compileEditorialRun(defaultCompileInput());
+    expect(output.preparedExternalChanges).toEqual([]);
+  });
+
+  it('planSummary conforms to EditorialPlanSummaryV1 shape with deterministic scene identities', () => {
+    const output = compileEditorialRun(defaultCompileInput());
+    expect(output.planSummary.version).toBe(1);
+    expect(output.planSummary.planHash).toBe(output.planHash);
+    expect(output.planSummary.selectedEventIds).toEqual(['E001', 'E002', 'E003', 'E004', 'E005']);
+    expect(output.planSummary.scenes).toHaveLength(5);
+    const expectedEventIds = ['E001', 'E002', 'E003', 'E004', 'E005'];
+    output.planSummary.scenes.forEach((s, i) => {
+      expect(s.eventId).toBe(expectedEventIds[i]);
+      expect(s.editorialBasisHash).toMatch(/^[a-f0-9]{64}$/);
+    });
+  });
+  it('batch config affects planHash', () => {
+    const noBatch = compileEditorialRun(defaultCompileInput());
+    const withBatch = compileEditorialRun(
+      defaultCompileInput({
+        requestOverrides: { batch: { batchSize: 3, windowSize: 2, failFast: true } },
+      }),
+    );
+    expect(noBatch.planHash).not.toBe(withBatch.planHash);
+  });
+
+  it('branch path affects scope hash and plan hash', () => {
+    const noBranch = compileEditorialRun(
+      defaultCompileInput({ requestOverrides: { branchPath: undefined } }),
+    );
+    const withBranch = compileEditorialRun(
+      defaultCompileInput({ requestOverrides: { branchPath: BRANCH_PATH } }),
+    );
+
+    for (let i = 0; i < noBranch.scenes.length; i++) {
+      expect(noBranch.scenes[i].scopeHash).not.toBe(withBranch.scenes[i].scopeHash);
+    }
+    expect(noBranch.planHash).not.toBe(withBranch.planHash);
+  });
+});

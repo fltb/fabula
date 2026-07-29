@@ -9,18 +9,18 @@
 // NEVER writes to the approved reference/data directory.
 // ============================================================================
 
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  AiSdkProvider,
   provenanceManifestSchema,
   renderNovel,
   responseReferenceSchema,
   sanitizeError,
 } from '../../core/dist/index.js';
-import { buildLiveSmokeRecord, collectReferenceIssueIdentities } from '../dist/index.js';
 import 'dotenv/config';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -31,6 +31,7 @@ const projectName = process.argv[2] || 'zhu-fu';
 const projectDir = join(rootDir, 'fixtures', projectName);
 const model = process.env.NOVALISTICALLY_AI_MODEL || 'deepseek-v4-flash';
 const apiKey = process.env.NOVALISTICALLY_AI_API_KEY;
+const baseUrl = process.env.NOVALISTICALLY_AI_BASE_URL;
 
 // Pass 2 seed is fixed at 42; Pass 1 is explicitly unseeded (null).
 const SEED = 42;
@@ -79,16 +80,21 @@ async function main() {
   console.log(`\nLive smoke for ${projectName} (model: ${model}, seed: ${SEED})`);
   console.log(`  Work dir:     ${workDir}`);
   console.log(`  Candidate dir: ${candidateDir}\n`);
+  const provider = new AiSdkProvider({ apiKey, baseURL: baseUrl, model });
 
   let result;
   try {
-    result = await renderNovel({
-      projectDir: workDir,
-      model,
-      apiKey,
-      eventId: 'all',
-      maxRounds: 1,
-    });
+    result = await renderNovel(
+      {
+        version: 1,
+        projectDir: workDir,
+        model,
+        selector: { type: 'all' },
+        mutation: { operationId: randomUUID(), actorId: 'smoke-runner' },
+        maxRounds: 1,
+      },
+      { provider },
+    );
   } catch (err) {
     // Write fatal-error.json even when renderNovel threw
     const fatal = { error: sanitizeError(err), generatedAt: new Date().toISOString() };

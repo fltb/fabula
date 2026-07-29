@@ -1,7 +1,6 @@
 // ============================================================================
 // Output Writer — write render results to PROJECT.md-compliant file layout
 // ============================================================================
-//
 // Each render sits in:
 //   scenes/chapter-NN/{eventId}.md                — prose
 //   scenes/chapter-NN/{eventId}.yaml               — metadata (prose_source, edit_history)
@@ -12,8 +11,13 @@
 //   .nova/derived/rules.yaml                       — rule evidence chain
 // ============================================================================
 
+import * as path from 'node:path';
+import YAML from 'yaml';
 import { countNarrativeText, NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/count.ts';
+import { ProjectTransactionCoordinator, resolveProjectPaths } from '../editorial/index.js';
+import { computeFileHash } from '../storage/hash.ts';
 import type { Storage } from '../storage/index.js';
+import type { StorageWrite, StorageTransaction } from '../storage/types.ts';
 import type { RenderJob, RenderSceneResult } from './render.js';
 import type { GameDialogueChoice } from '../types/index.ts';
 
@@ -38,7 +42,7 @@ function yamlScalar(value: string): string {
     : JSON.stringify(value);
 }
 
-function appendPlayerChoicesBlock(prose: string, choices: readonly GameDialogueChoice[]): string {
+export function appendPlayerChoicesBlock(prose: string, choices: readonly GameDialogueChoice[]): string {
   const lines = [
     '<!-- FABULA:PLAYER_CHOICES:v1 -->',
     '```yaml',
@@ -126,6 +130,7 @@ function collectAllReferenceFiles(jobs: RenderJob[], results: RenderSceneResult[
 
 /**
  * Write render outputs to PROJECT.md-compliant directory layout.
+ * Uses ProjectTransactionCoordinator for atomic commits with CAS writes.
  */
 function writeRenderOutputs(
   st: Storage,
@@ -133,46 +138,62 @@ function writeRenderOutputs(
   entries: OutputEntry[],
   derived: DerivedData,
 ): void {
-  const writes: Array<{ path: string; content: string }> = [];
+  const paths = resolveProjectPaths(projectDir);
+  const coordinator = new ProjectTransactionCoordinator(st, paths);
+
+  const writes: StorageWrite[] = [];
 
   for (const entry of entries) {
-    const sceneDir = [
+    const sceneDir = path.posix.join(
       projectDir,
       'scenes',
       `chapter-${String(entry.chapterNumber).padStart(2, '0')}`,
-    ].join('/');
-    writes.push(
-      { path: [sceneDir, `${entry.eventId}.md`].join('/'), content: entry.prose },
-      {
-        path: [sceneDir, `${entry.eventId}.yaml`].join('/'),
-        content: `${yamlify(entry.metadata)}\n`,
-      },
     );
+    const mdPath = path.posix.join(sceneDir, `${entry.eventId}.md`);
+    writes.push({
+      type: 'put',
+      path: mdPath,
+      content: entry.prose,
+      expectedHash: computeFileHash(st, mdPath),
+    });
+
+    const yamlPath = path.posix.join(sceneDir, `${entry.eventId}.yaml`);
+    writes.push({
+      type: 'put',
+      path: yamlPath,
+      content: YAML.stringify(entry.metadata, { lineWidth: 120 }) + '\n',
+      expectedHash: computeFileHash(st, yamlPath),
+    });
+
     if (entry.renderRequest) {
+      const reqPath = path.posix.join(sceneDir, `${entry.eventId}_render_request.yaml`);
       writes.push({
-        path: [sceneDir, `${entry.eventId}_render_request.yaml`].join('/'),
-        content: `${yamlify(entry.renderRequest)}\n`,
+        type: 'put',
+        path: reqPath,
+        content: YAML.stringify(entry.renderRequest, { lineWidth: 120 }) + '\n',
+        expectedHash: computeFileHash(st, reqPath),
       });
     }
   }
 
-  const derivedDir = [projectDir, '.nova', 'derived'].join('/');
-  writes.push(
-    {
-      path: [derivedDir, 'threads.yaml'].join('/'),
-      content: JSON.stringify(derived.threads, null, 2),
-    },
-    {
-      path: [derivedDir, 'foreshadowing.yaml'].join('/'),
-      content: JSON.stringify(derived.foreshadowing, null, 2),
-    },
-    {
-      path: [derivedDir, 'relationships.yaml'].join('/'),
-      content: JSON.stringify(derived.relationships, null, 2),
-    },
-    { path: [derivedDir, 'rules.yaml'].join('/'), content: JSON.stringify(derived.rules, null, 2) },
-  );
-  st.commitBatch(writes);
+  const derivedDir = path.posix.join(projectDir, '.nova', 'derived');
+  const derivedFiles = [
+    { name: 'threads.yaml', data: derived.threads },
+    { name: 'foreshadowing.yaml', data: derived.foreshadowing },
+    { name: 'relationships.yaml', data: derived.relationships },
+    { name: 'rules.yaml', data: derived.rules },
+  ] as const;
+  for (const df of derivedFiles) {
+    const dfPath = path.posix.join(derivedDir, df.name);
+    writes.push({
+      type: 'put',
+      path: dfPath,
+      content: YAML.stringify(df.data, { lineWidth: 120 }),
+      expectedHash: computeFileHash(st, dfPath),
+    });
+  }
+
+  coordinator.commit({ writes });
 }
 
 /**
@@ -202,8 +223,9 @@ export function buildAndWriteOutputs(
         ? appendPlayerChoicesBlock(r.prose, job.gameDialogue.choices)
         : r.prose,
       metadata: {
-        narrativeOrder: job.event.narrativeOrder,
+        schema_version: 1,
         event: job.event.id,
+        narrative_order: job.event.narrativeOrder,
         prose_source: r.cacheHit ? 'cache' : 'llm',
         word_count: countNarrativeText(r.prose, 'zh'),
         text_count_version: NARRATIVE_TEXT_COUNT_VERSION,
@@ -211,8 +233,8 @@ export function buildAndWriteOutputs(
         edit_history: r.cacheHit
           ? []
           : [{ action: 'llm_generated', timestamp: new Date().toISOString() }],
-        branchExistence: job.event.branchExistence ?? { type: 'all' },
-        ...(job.gameDialogue ? { playerChoices: job.gameDialogue.choices } : {}),
+        branch_existence: job.event.branchExistence ?? { type: 'all' },
+        ...(job.gameDialogue ? { player_choices: job.gameDialogue.choices } : {}),
       },
       renderRequest:
         r.requestRecords.length > 0
@@ -234,12 +256,3 @@ export function buildAndWriteOutputs(
   return { entries, derived };
 }
 
-/** Simple YAML-ish formatting for key-value objects. */
-function yamlify(obj: Record<string, unknown>): string {
-  const lines: string[] = [];
-  for (const [k, v] of Object.entries(obj)) {
-    const val = typeof v === 'string' ? v : JSON.stringify(v);
-    lines.push(`${k}: ${val}`);
-  }
-  return lines.join('\n');
-}

@@ -312,6 +312,26 @@ export interface ReleaseDecision {
   waiverId?: string;
 }
 
+
+// ─── RevisionContext — Editorial Revision Metadata ───────────────────────────
+
+/**
+ * RevisionContext — metadata for editorial revision of a scene.
+ * Carried by RenderJob to signal a revision pass that bypasses the
+ * draft cache and includes previous accepted prose + editorial instructions.
+ */
+export interface RevisionContext {
+  /** Base revision ID this revision builds upon. */
+  baseRevisionId: string;
+  /** Previous accepted prose text. */
+  baseProse: string;
+  /** Hash of the previous accepted prose. */
+  baseProseHash: string;
+  /** Ordered hashes of reviewer feedback entries. */
+  feedbackHashes: readonly string[];
+  /** Hash of the YAML-authored revision instruction. */
+  revisionInstructionHash: string;
+}
 /**
  * AcceptedSceneArtifact — scene prose that has (or has not) passed the
  * release gate.  Required by SurfaceReferenceExtractor; only artifacts
@@ -323,12 +343,22 @@ export interface ReleaseDecision {
 export interface AcceptedSceneArtifact {
   /** Unique scene or event identifier. */
   eventId: string;
+  /** Latest revision ID for this artifact. */
+  revisionId: string;
   /** Full prose text of the scene. */
   prose: string;
+  /** Hash of the prose content. */
+  proseHash: string;
+  /** Hash of the scene content (prose + proseHash + eventId). */
+  sceneHash: string;
+  /** Hash of the editorial basis used to generate this prose. */
+  editorialBasisHash: string;
   /** Hash of the render scope (branch, discourse selection, etc.). */
   scopeHash: string;
   /** Release gate decision.  Only `status: 'accepted'` is valid for extraction. */
   releaseDecision: ReleaseDecision;
+  /** ISO timestamp of when this artifact was created. */
+  createdAt: string;
 }
 
 /**

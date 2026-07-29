@@ -21,23 +21,22 @@ export type {
   ThreadStatusInput,
 } from './ai/index.ts';
 export { AiSdkProvider, LLMError, MockPass2Provider, MockProvider } from './ai/index.ts';
-// Assembler
-export type { AssembleOptions, AssembleResult } from './assembler/index.js';
-export {
-  assembleNovel,
-  countNarrativeText,
-  countWords,
-} from './assembler/index.js';
-export { assembleGameDialogueTree } from './assembler/game-dialogue-tree.ts';
 export type {
   AssembleGameDialogueTreeOptions,
   AssembleGameDialogueTreeResult,
 } from './assembler/game-dialogue-tree.ts';
-export { compileGameDialogueTree } from './branch/game-dialogue-tree.ts';
-export type { CompiledGameDialogueTree } from './branch/game-dialogue-tree.ts';
-export { branchPathsEqual } from './branch/path.ts';
+export { assembleGameDialogueTree } from './assembler/game-dialogue-tree.ts';
+// Assembler types only — release-aware assembly is in editorial
+export type { AssembleOptions, AssembleResult } from './assembler/index.js';
+export {
+  countNarrativeText,
+  countWords,
+} from './assembler/index.js';
 // Batch types only
 export type { BatchConfig, BatchProgressEvent, BatchResult, BatchStats } from './batch-renderer.js';
+export type { CompiledGameDialogueTree } from './branch/game-dialogue-tree.ts';
+export { compileGameDialogueTree } from './branch/game-dialogue-tree.ts';
+export { branchPathsEqual } from './branch/path.ts';
 export type { CacheDiagnostics, VerifyChainResult } from './cache/render-cache.js';
 // Cache
 export {
@@ -62,6 +61,72 @@ export {
   ContextCompiler,
   RelevanceEngine,
 } from './context/index.js';
+export {
+  adoptSceneProse,
+  applySourceChange,
+  assembleCanonicalNovel,
+  assembleCustomNovel,
+  getEditorialOperation,
+  getEditorialWorkspace,
+  getSceneRevision,
+  getSourceDocument,
+  getSourceRevision,
+  inspectScenes,
+  listEditorialOperations,
+  listSceneRevisions,
+  listSourceDocuments,
+  listSourceRevisions,
+  previewSourceChange,
+  reconcileSourceWorkingCopy,
+  rollbackSceneRevision,
+  setSceneLock,
+} from './editorial/facade.ts';
+export type {
+  BranchContracts,
+  CatalogEntry,
+  CompiledSceneIdentity,
+  CompiledSceneInfo,
+  CompiledSceneState,
+  EditorialCompileInput,
+  EditorialCompileJob,
+  EditorialCompileOutput,
+  OverlayDocument,
+  PlanHashInput,
+  PreviewResult,
+  ProjectPaths,
+  ProjectTransactionInput,
+  PromoteCandidateInput,
+  PublishOptions,
+  PublishScope,
+  RevisionPreflightError,
+  SceneCatalog,
+  ScopeEventData,
+  SelectorPreflightResult,
+  ValidationIdentityInput,
+  VerifiedHeadData,
+} from './editorial/index.js';
+// Editorial — workspace, transaction, store, compiler, and render orchestration
+export {
+  EditorialOperationError,
+  EditorialPublisher,
+  OperationStore,
+  OverlayStorage,
+  ProjectTransactionCoordinator,
+  PublicationError,
+  preflightSelector,
+  resolveProjectPaths,
+  SceneRevisionStore,
+  SourceRevisionStore,
+  SourceWorkspace,
+  stableJson,
+  toEditorialError,
+} from './editorial/index.js';
+export {
+  addReviewComment,
+  listReviewComments,
+  replaceReviewComment,
+  updateReviewComment,
+} from './editorial/review-facade.ts';
 export type { CompareOutcome, ProjectData } from './entity/index.js';
 // Entity
 export {
@@ -89,6 +154,7 @@ export {
   RateLimitError,
   ReferenceFormatError,
   RuleConstraintViolationError,
+  StorageConflictError,
   StorageError,
   sanitizeError,
   TimeoutError,
@@ -138,6 +204,34 @@ export {
   provenanceManifestSchema,
   responseReferenceSchema,
 } from './schemas/contracts.ts';
+// Editorial schemas
+export {
+  branchPathV1Schema,
+  branchSetV1Schema,
+  editorialErrorSchema,
+  editorialMutationContextSchema,
+  editorialOperationV1Schema,
+  editorialPreviewRequestV1Schema,
+  editorialProgressEventV1Schema,
+  editorialRenderRequestV1Schema,
+  editorialScopedRequestV1Schema,
+  renderGameDialogueTreeRequestV1Schema,
+  sceneMetadataV1Schema,
+  sceneRevisionEnvelopeV1Schema,
+  sceneSelectorSchema,
+  sourceChangePreviewV1Schema,
+  sourceChangeSetV1Schema,
+  sourceDocumentChangeSchema,
+  sourceHeadV1Schema,
+  sourceRevisionV1Schema,
+  transactionReadExpectationSchema,
+} from './schemas/editorial.js';
+export {
+  newReviewCommentSchema,
+  reviewApplicationV1Schema,
+  reviewCommentSchema,
+  reviewLedgerV1Schema,
+} from './schemas/review.ts';
 export type { AdjacencyList, StoryBoundaries } from './state/index.js';
 // State
 export {
@@ -158,6 +252,45 @@ export {
   SurfaceReferenceExtractor,
   VolumeSummaryCompiler,
 } from './summary/index.js';
+// Editorial types (re-exported from types/editorial.ts)
+export type {
+  AssembleRequestV1,
+  EditorialAssembleResult,
+  EditorialError,
+  EditorialErrorCode,
+  EditorialMutationContext,
+  EditorialOperationKind,
+  EditorialOperationStatus,
+  EditorialOperationV1,
+  EditorialPlanSummaryV1,
+  EditorialProgressEventV1,
+  EditorialRenderRequestV1,
+  EditorialRuntime,
+  EditorialScopedRequestV1,
+  EditorialWorkspaceSnapshotV1,
+  ProviderCallLedgerEntryV1,
+  ProviderFactory,
+  PublicationResult,
+  RenderGameDialogueTreeRequestV1,
+  RenderGameDialogueTreeResult,
+  RenderNovelResult,
+  RenderNovelSceneResult,
+  RevisionRequest,
+  SceneActionResult,
+  SceneDisposition,
+  SceneInspection,
+  SceneMetadataV1,
+  SceneProseInput,
+  SceneRevisionEnvelopeV1,
+  SceneRevisionSummary,
+  SceneSelector,
+  SourceChangePreviewV1,
+  SourceChangeResultV1,
+  SourceChangeSetV1,
+  SourceDocumentChange,
+  SourceDocumentKind,
+  SourceDocumentV1,
+} from './types/editorial.js';
 // Types
 export type * from './types/index.js';
 // Validator
@@ -194,22 +327,19 @@ export {
 
 export type {
   DiffResult,
-  RenderGameDialogueTreeOptions,
-  RenderGameDialogueTreeResult,
   ImpactAnalysisResult,
   ImpactLevel,
   ProjectStatusResult,
-  RenderNovelOptions,
-  RenderNovelResult,
 } from './api.js';
 // API — Orchestration functions (public API)
 export {
   analyzeProjectImpact,
-  renderGameDialogueTree,
   diffEvent,
   getProjectStatus,
   initializeProject,
   listEntities,
+  previewEditorialRun,
+  renderGameDialogueTree,
   renderNovel,
   showEntity,
   validateNovel,

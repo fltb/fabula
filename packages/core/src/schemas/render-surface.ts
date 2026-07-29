@@ -214,9 +214,14 @@ export const releaseDecisionSchema = z.object({
 export const acceptedSceneArtifactSchema = z
   .object({
     eventId: z.string(),
+    revisionId: z.string(),
     prose: z.string(),
+    proseHash: z.string(),
+    sceneHash: z.string(),
+    editorialBasisHash: z.string(),
     scopeHash: z.string(),
     releaseDecision: releaseDecisionSchema,
+    createdAt: z.string(),
   })
   .strict();
 

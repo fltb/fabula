@@ -42,6 +42,11 @@ export function evaluateReleaseDecision(
   interactionManager?: InteractionManager,
 ): ReleaseDecision {
   const reasons: string[] = [];
+  const providerFailure = candidate.errors.find((error) => error.includes('PROVIDER_REQUIRED'));
+  if (providerFailure) {
+    reasons.push(providerFailure);
+    return { status: 'blocked', scopeHash, validationIdentity, reasons };
+  }
 
   // Empty prose — always blocked
   if (!candidate.prose || candidate.prose.trim().length === 0) {

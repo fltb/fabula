@@ -35,17 +35,36 @@ function writeFile(dir: string, ...parts: string[]): void {
   fs.writeFileSync(fullPath, content, 'utf-8');
 }
 
-/** Minimal committed metadata contract required for every scene. */
-const committedMeta = (overrides: Record<string, unknown> = {}) =>
-  JSON.stringify({
+/** Minimal strict V1 committed metadata required for every scene. */
+const committedMeta = (overrides: Record<string, unknown> = {}) => {
+  const normalized = { ...overrides };
+  if ('narrativeOrder' in normalized) {
+    normalized.narrative_order = normalized.narrativeOrder;
+    delete normalized.narrativeOrder;
+  }
+  if ('branchExistence' in normalized) {
+    normalized.branch_existence = normalized.branchExistence;
+    delete normalized.branchExistence;
+  }
+  return JSON.stringify({
+    schema_version: 1,
     event: 'E1a',
-    proseSource: 'llm',
-    editHistory: [],
-    narrativeOrder: 1,
+    narrative_order: 1,
+    revision_id: '00000000-0000-4000-8000-000000000001',
+    prose_source: 'llm',
+    prose_hash: '0'.repeat(64),
+    scene_hash: '1'.repeat(64),
+    editorial_basis_hash: '2'.repeat(64),
+    scope_hash: '3'.repeat(64),
+    validation_identity: 'test',
+    rendered_at: '2026-07-28T00:00:00.000Z',
+    word_count: 1,
     text_count_version: 1,
-    branchExistence: { type: 'all' },
-    ...overrides,
+    edit_history: [],
+    branch_existence: { type: 'all' },
+    ...normalized,
   });
+};
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 

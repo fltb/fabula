@@ -77,6 +77,15 @@ export class PromptAssembler {
       gameDialogue?: {
         choices: readonly GameDialogueChoice[];
       };
+      /** Previous accepted prose from a prior render revision,
+       *  injected as ## Previous Accepted Prose (Non-authoritative).
+       *  Never passed to Pass 2. */
+      previousAcceptedProse?: string;
+      /** YAML-authored editorial revision instructions,
+       *  injected as ## Editorial Revision Instructions.
+       *  These are canonical YAML and take precedence over
+       *  non-authoritative context. */
+      editorialRevisionInstructions?: string;
     },
   ): AssembledPrompt {
     const parts: string[] = [
@@ -274,6 +283,24 @@ export class PromptAssembler {
         parts.push(dec.content);
         parts.push('');
       }
+    }
+
+    // ── Previous Accepted Prose (Non-authoritative) ──────────────
+    if (options?.previousAcceptedProse) {
+      parts.push('');
+      parts.push('## Previous Accepted Prose (Non-authoritative)');
+      parts.push('The following is the previous accepted prose from a prior revision. It is non-authoritative — the YAML scene definition, compiled scene contract, and narrative context package take precedence in case of conflict.');
+      parts.push('```');
+      parts.push(options.previousAcceptedProse);
+      parts.push('```');
+    }
+
+    // ── Editorial Revision Instructions ───────────────────────────
+    if (options?.editorialRevisionInstructions) {
+      parts.push('');
+      parts.push('## Editorial Revision Instructions');
+      parts.push('The following YAML-authored revision instructions are canonical and take precedence over non-authoritative context.');
+      parts.push(options.editorialRevisionInstructions);
     }
 
     if (options?.gameDialogue) {

@@ -1,10 +1,12 @@
 import { parse as parseYaml } from 'yaml';
 import { describe, expect, it } from 'vitest';
-import { renderGameDialogueTree, renderNovel } from '../../src/api.ts';
-import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import { executeEditorialRender, executeEditorialTreeRender } from '../../src/editorial/index.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
 import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
 import type { BranchPath } from '../../src/types/index.ts';
+import * as crypto from 'node:crypto';
+import type { EditorialRenderRequestV1, EditorialRuntime, RenderGameDialogueTreeRequestV1 } from '../../src/types/editorial.ts';
 
 const PROJECT_DIR = '/game-dialogue-render';
 const PROSE =
@@ -191,13 +193,19 @@ describe('renderGameDialogueTree()', () => {
     const storage = new MemoryStorage();
     setupProject(storage);
 
-    const result = await renderGameDialogueTree({
-      projectDir: PROJECT_DIR,
-      storage,
-      provider: provider(),
-      model: 'mock-pass2',
-      maxRounds: 1,
-    });
+    const result = await executeEditorialTreeRender(
+      {
+        version: 1,
+        projectDir: PROJECT_DIR,
+        mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+        model: 'mock-pass2',
+        maxRounds: 1,
+      },
+      {
+        storage,
+        provider: provider(),
+      },
+    );
 
     expect(result.errors).toEqual([]);
     expect(result.results.map((item) => item.eventId)).toEqual(['E0', 'E1a', 'E1b']);
@@ -219,9 +227,9 @@ playerChoices:
     };
     expect(response.prose).not.toContain('FABULA:PLAYER_CHOICES');
     const metadata = parseYaml(storage.read(`${PROJECT_DIR}/scenes/chapter-01/E0.yaml`)) as {
-      playerChoices: Array<{ id: string; targetEvent: string }>;
+      player_choices: Array<{ id: string; targetEvent: string }>;
     };
-    expect(metadata.playerChoices).toEqual([
+    expect(metadata.player_choices).toEqual([
       expect.objectContaining({ id: 'accept_hunt', targetEvent: 'E1a' }),
       expect.objectContaining({ id: 'refuse_hunt', targetEvent: 'E1b' }),
     ]);
@@ -239,13 +247,19 @@ playerChoices:
         .read(`${PROJECT_DIR}/chapters/chapter_01/E0.yaml`)
         .replace('Accept the hunt', 'Accept the dangerous hunt'),
     );
-    const warmed = await renderGameDialogueTree({
-      projectDir: PROJECT_DIR,
-      storage,
-      provider: provider(),
-      model: 'mock-pass2',
-      maxRounds: 1,
-    });
+    const warmed = await executeEditorialTreeRender(
+      {
+        version: 1,
+        projectDir: PROJECT_DIR,
+        mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+        model: 'mock-pass2',
+        maxRounds: 1,
+      },
+      {
+        storage,
+        provider: provider(),
+      },
+    );
 
     expect(warmed.results.find((item) => item.eventId === 'E0')!.cacheHit).toBe(false);
     expect(storage.read(`${PROJECT_DIR}/scenes/chapter-01/E0.md`)).toContain(
@@ -260,14 +274,20 @@ playerChoices:
     ] as const) {
       const storage = new MemoryStorage();
       setupProject(storage);
-      const rendered = await renderNovel({
-        projectDir: PROJECT_DIR,
-        storage,
-        provider: provider(),
-        model: 'mock-pass2',
-        branchPath,
-        maxRounds: 1,
-      });
+      const rendered = await executeEditorialRender(
+        {
+          version: 1,
+          projectDir: PROJECT_DIR,
+          mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+          model: 'mock-pass2',
+          branchPath,
+          maxRounds: 1,
+        },
+        {
+          storage,
+          provider: provider(),
+        },
+      );
       expect(rendered.errors).toEqual([]);
       expect(rendered.results.map((item) => item.eventId)).toEqual(expectedEventIds);
       const renderRequest = parseYaml(
@@ -289,21 +309,34 @@ playerChoices:
       providerCalls++;
       return complete(request);
     };
-    for (const branchPath of [
+    for (const selector of [
       undefined,
-      { decisions: [] },
-      { decisions: [{ atEventId: 'E0', choiceId: 'unknown', narrativeOrder: 0 }] },
-      { decisions: [{ atEventId: 'E1a', choiceId: 'late', narrativeOrder: 1 }] },
+      { type: 'events', eventIds: ['NONEXISTENT'] },
     ]) {
-      const invalid = await renderNovel({
-        projectDir: PROJECT_DIR,
-        storage,
-        provider: invalidProvider,
-        model: 'mock-pass2',
-        branchPath,
-      });
-      expect(invalid.results).toEqual([]);
-      expect(invalid.errors).toContain('Game dialogue rendering requires one complete, ordered leaf branchPath.');
+      const invalid = await executeEditorialRender(
+        {
+          version: 1,
+          projectDir: PROJECT_DIR,
+          mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+          selector,
+          model: 'mock-pass2',
+        },
+        {
+          storage,
+          provider: invalidProvider,
+        },
+      );
+      if (selector === undefined) {
+        // No branchPath on tree project — fails preflight with SCENE_NOT_IN_BRANCH
+        expect(invalid.results).toEqual([]);
+        expect(invalid.errors.length).toBeGreaterThan(0);
+        expect(invalid.editorialErrors.length).toBeGreaterThan(0);
+        expect(invalid.editorialErrors[0].code).toBe('SCENE_NOT_IN_BRANCH');
+      } else {
+        // Unknown event selector triggers preflight SCENE_NOT_FOUND
+        expect(invalid.results).toEqual([]);
+        expect(invalid.errors[0]).toContain('not part of the authored catalog');
+      }
     }
     expect(providerCalls).toBe(0);
     expect(storage.exists(`${PROJECT_DIR}/.nova/render-cache`)).toBe(false);

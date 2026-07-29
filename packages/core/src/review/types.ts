@@ -12,7 +12,6 @@ export interface CommentFilter {
   targetId?: string;
 }
 
-/** Shape returned by getSummary() */
 export interface StatusSummary {
   total: number;
   open: number;
@@ -20,4 +19,5 @@ export interface StatusSummary {
   addressed: number;
   resolved: number;
   wontfix: number;
+  superseded: number;
 }

@@ -35,6 +35,7 @@ import type { PluginHooksManager } from '../plugin/hooks-manager.ts';
 import type { BuildPromptInput, PromptDecoration } from '../plugin/types.ts';
 import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
 import type { Storage } from '../storage/index.ts';
+import type { TransactionReadExpectation } from '../storage/types.ts';
 import { type StyleProfile, StyleResolver, toStyleNotes } from '../style/index.ts';
 import type {
   AnalysisResult,
@@ -43,10 +44,13 @@ import type {
   EntityRegistry,
   GameDialogueChoice,
   NarrativeEvent,
+  ProviderFactory,
+  RevisionContext,
+  SurfaceReferencePacket,
+  ValidationIssue,
   ValidationResult,
   WorldState,
 } from '../types/index.ts';
-import type { SurfaceReferencePacket } from '../types/render-surface.ts';
 import { compareAnalysisBlocks } from '../util/compare-analysis.ts';
 import { ConcurrencyPool } from '../util/pool.ts';
 import type { AnalysisContract, ResultAggregator } from '../validator/aggregator.ts';
@@ -98,6 +102,28 @@ export interface RenderJob {
    * Non-authoritative prose excerpt + style packet from a prior render.
    * Per RENDER-SURFACE-1: YAML always wins over this packet.
    */
+
+  /**
+   * Revision context for editorial revision. When present, the draft
+   * cache is bypassed and a fresh Pass 1 is forced.
+   */
+  revisionContext?: RevisionContext;
+
+  /**
+   * YAML-authored editorial revision instructions.
+   * Injected into the Pass 1 prompt as ## Editorial Revision Instructions.
+   * Canonical YAML takes precedence over non-authoritative context.
+   */
+  editorialRevisionInstructions?: string;
+
+  /** Review IDs whose canonical feedback is applied to this scene. */
+  editorialReviewIds?: readonly string[];
+
+  /** Existing human or historical prose to evaluate without a Pass 1 call. */
+  proseCandidate?: string;
+
+  /** Authoritative inputs and output preimages captured before provider work. */
+  promotionReadSet?: readonly TransactionReadExpectation[];
   surfaceReferencePacket?: SurfaceReferencePacket;
 }
 export interface ProviderCallLedgerEntry {
@@ -156,10 +182,14 @@ export interface RenderSceneResult {
 }
 
 export interface RenderPipelineOptions {
-  provider: LLMProvider;
+  provider?: LLMProvider;
   model: string;
   cacheDir: string;
   storage: Storage;
+  /** Optional factory for lazy provider creation. Mutually exclusive with provider. */
+  providerFactory?: ProviderFactory;
+  /** Optional pipeline-level AbortSignal for cancellation. */
+  signal?: AbortSignal;
   concurrency?: number; // default 5
   maxTokens?: number; // default 10000
   skipCache?: boolean; // force re-render
@@ -190,6 +220,8 @@ export interface RenderPipelineOptions {
   styleProfile?: StyleProfile;
   /** Circuit breaker max rounds (default 3) */
   maxRounds?: number;
+  /** Stable provider profile identifier for lazy resolution */
+  providerProfile?: string;
 }
 
 export class RenderPipeline {
@@ -197,7 +229,10 @@ export class RenderPipeline {
   private readonly skipCache: boolean;
   private readonly maxTokens: number;
   private readonly model: string;
-  private readonly provider: LLMProvider;
+  private provider: LLMProvider | undefined;
+  private readonly providerFactory?: ProviderFactory;
+  private _resolvedProvider: LLMProvider | undefined;
+  private readonly pipelineSignal?: AbortSignal;
   private readonly cacheDir: string;
   private readonly storage: Storage;
   private readonly referenceExample?: string;
@@ -216,8 +251,16 @@ export class RenderPipeline {
   private readonly styleResolver: StyleResolver;
   private readonly language: string;
   private readonly pluginHooksManager?: PluginHooksManager;
+  private readonly providerProfile?: string;
   constructor(opts: RenderPipelineOptions) {
+    if (opts.provider && opts.providerFactory) {
+      throw new Error(
+        'PROVIDER_REQUIRED: Cannot provide both provider and providerFactory',
+      );
+    }
     this.provider = opts.provider;
+    this.providerFactory = opts.providerFactory;
+    this.pipelineSignal = opts.signal;
     this.model = opts.model;
     this.cacheDir = opts.cacheDir;
     this.storage = opts.storage;
@@ -239,18 +282,41 @@ export class RenderPipeline {
     this.language = opts.language ?? 'en';
     this.maxRounds = opts.maxRounds ?? 3;
     this.pluginHooksManager = opts.pluginHooksManager;
+    this.providerProfile = opts.providerProfile;
     this.pool = new ConcurrencyPool(opts.concurrency ?? 5);
   }
 
 
+
+  /**
+   * Resolve the LLM provider lazily. If a providerFactory is configured,
+   * it is called exactly once and the result is memoized. Throws
+   * PROVIDER_REQUIRED if no provider or factory is available.
+   */
+  private async resolveProvider(): Promise<LLMProvider> {
+    if (this._resolvedProvider) return this._resolvedProvider;
+    if (this.providerFactory) {
+      this._resolvedProvider = await this.providerFactory.create();
+      return this._resolvedProvider;
+    }
+    if (this.provider) return this.provider;
+    throw new Error(
+      'PROVIDER_REQUIRED: No provider or providerFactory configured',
+    );
+  }
   /**
    * Render a single scene job: cache lookup → Pass 1 → Pass 2 → write cache.
+   *
+   * @param job - The render job.
+   * @param signal - Optional per-call AbortSignal. Overrides the pipeline-level signal.
    */
-  async renderScene(job: RenderJob): Promise<RenderSceneResult> {
+  async renderScene(job: RenderJob, signal?: AbortSignal): Promise<RenderSceneResult> {
     const { event, stateBefore, context, chapter } = job;
     const eventId = event.id;
     const errors: string[] = [];
     const requestRecords: RenderRequestRecord[] = [];
+    // Effective signal: per-call overrides pipeline-level
+    const effectiveSignal = signal ?? this.pipelineSignal;
     // Compute canonical cache key from deterministic job inputs (logical + surface layers only).
     // All identity-determining fields flow through canonical JSON → SHA-256.
     const logicalKeyStr = buildLogicalKeyMaterial({
@@ -297,7 +363,11 @@ export class RenderPipeline {
     const renderStart = Date.now();
 
     // ── Cache check with layered diagnostics ──────────────────────
-    if (!this.skipCache && cacheKey) {
+    // Revisions and externally supplied prose never use the draft cache.
+    if (job.revisionContext || job.proseCandidate !== undefined) {
+      this.logger?.info('Fresh candidate path, bypassing cache', { eventId });
+      this.eventBus?.emit('cache:miss', { eventId });
+    } else if (!this.skipCache && cacheKey) {
       this.traceCollector?.record({
         phase: 'cache',
         state: 'start',
@@ -454,8 +524,37 @@ export class RenderPipeline {
     const styleNotes = this.styleProfile
       ? toStyleNotes(this.styleResolver.resolve({ project: this.styleProfile }).simple)
       : undefined;
+    // ── Check abort before entering retry loop ─────────────────────
+    if (effectiveSignal?.aborted) {
+      errors.push('Render cancelled before Pass 1');
+      this.logger?.info('Abort signal received, skipping render', { eventId });
+      this.traceCollector?.record({ phase: 'pipeline', state: 'end', spanId: eventId, eventId });
+      return {
+        eventId,
+        prose: '',
+        analysis: null,
+        llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        llmPass2: null,
+        cacheHit: false,
+        errors: [...errors],
+        renderStart,
+        renderEnd: Date.now(),
+        validation: null,
+        attempts: 0,
+        needsReview: true,
+        providerCalls: [],
+        promptHash: '',
+        requestRecords,
+      };
+    }
     while (breaker.attempt()) {
       attempts = breaker.state().totalAttempts;
+      // ── Check abort before each retry attempt ────────────────────
+      if (effectiveSignal?.aborted) {
+        errors.push('Render cancelled — abort signal received');
+        this.logger?.info('Abort signal during retry loop, stopping', { eventId });
+        break;
+      }
       this.traceCollector?.record({
         phase: 'circuit',
         state: 'start',
@@ -464,6 +563,14 @@ export class RenderPipeline {
         code: `round_${breaker.state().round}_attempt_${attempts}`,
       });
 
+      if (job.proseCandidate !== undefined) {
+        prose = job.proseCandidate;
+        if (prose.trim().length === 0) {
+          errors.push('Existing prose candidate is empty');
+          breaker.recordFailure('Existing prose candidate is empty');
+          break;
+        }
+      } else {
       // ── Collect plugin decorations for Pass 1 ───────────────────
       let pass1Decorations: readonly PromptDecoration[] = [];
       if (this.pluginHooksManager) {
@@ -513,6 +620,8 @@ export class RenderPipeline {
         surfaceReferencePacket: job.surfaceReferencePacket,
         decorations: pass1Decorations.length > 0 ? [...pass1Decorations] : undefined,
         gameDialogue: job.gameDialogue,
+        previousAcceptedProse: job.revisionContext?.baseProse,
+        editorialRevisionInstructions: job.editorialRevisionInstructions,
       });
       this.traceCollector?.record({
         phase: 'pass1',
@@ -528,9 +637,14 @@ export class RenderPipeline {
           temperature: 0.8,
           maxTokens: this.maxTokens,
           taskType: 'pass1',
+          signal: effectiveSignal,
         };
+        // ── Check abort before Pass 1 provider call ─────────────────
+        if (effectiveSignal?.aborted) {
+          throw new Error('ABORTED: Render cancelled before Pass 1 provider call');
+        }
         const pass1Hash = this.computeRequestHash(pass1Request);
-        const result1 = await this.provider.complete(pass1Request);
+        const result1 = await (await this.resolveProvider()).complete(pass1Request);
         prose = result1.content ?? '';
         llmPass1 = result1.usage ?? llmPass1;
         requestRecords.push({
@@ -559,6 +673,12 @@ export class RenderPipeline {
           continue;
         }
       } catch (err) {
+        const errStr = String(err);
+        if (errStr.includes('PROVIDER_REQUIRED')) {
+          errors.push(`PROVIDER_REQUIRED: ${sanitizeError(err)}`);
+          this.logger?.error('PROVIDER_REQUIRED — no provider available', { eventId, attempts });
+          break;
+        }
         const pass1Hash = this.computeRequestHash({
           messages: proseMessages,
           model: this.model,
@@ -573,7 +693,6 @@ export class RenderPipeline {
           messages: [...proseMessages],
         });
         // Detect timeout before recording — so we can normalize the failure reason
-        const errStr = String(err);
         const isTimeout = /timeout/i.test(errStr) || errStr.includes('timed out');
         providerCalls.push({
           phase: 'pass1',
@@ -621,6 +740,7 @@ export class RenderPipeline {
         completionTokens: llmPass1.completionTokens,
         totalTokens: llmPass1.totalTokens,
       });
+      }
 
       // ── Pass 2: Structured analysis (with retry-with-feedback) ────
       analysisRaw = null;
@@ -660,6 +780,12 @@ export class RenderPipeline {
         }
 
         for (let attempt2 = 0; attempt2 < 4 && !analysisObj; attempt2++) {
+          // ── Check abort before Pass 2 retry ──────────────────────
+          if (effectiveSignal?.aborted) {
+            errors.push('Render cancelled during Pass 2 retry');
+            this.logger?.info('Abort signal during Pass 2 retry', { eventId, attempts, attempt2 });
+            break;
+          }
           const analysisInput: RenderAnalysisInput = {
             event,
             prose,
@@ -688,9 +814,10 @@ export class RenderPipeline {
             seed: 42,
             taskType: 'pass2',
             responseFormat: { type: 'json_object' },
+            signal: effectiveSignal,
           };
           const pass2Hash = this.computeRequestHash(pass2Request);
-          const result2 = await this.provider.complete(pass2Request);
+          const result2 = await (await this.resolveProvider()).complete(pass2Request);
           analysisRaw = result2.content ?? null;
           llmPass2 = result2.usage ?? null;
           requestRecords.push({
@@ -743,7 +870,7 @@ export class RenderPipeline {
           analysis = analysisObj;
 
           // ── P5: Dev-only double-run verification ──────────────────
-          if (this.doubleRunVerification && lastAnalysisMessages) {
+          if (this.doubleRunVerification && effectiveSignal?.aborted !== true && lastAnalysisMessages) {
             let verifyHash = '';
             try {
               const verifyRequest: CompletionRequest = {
@@ -754,9 +881,10 @@ export class RenderPipeline {
                 seed: 42,
                 taskType: 'pass2',
                 responseFormat: { type: 'json_object' },
+                signal: effectiveSignal,
               };
               verifyHash = this.computeRequestHash(verifyRequest);
-              const result2b = await this.provider.complete(verifyRequest);
+              const result2b = await (await this.resolveProvider()).complete(verifyRequest);
               providerCalls.push({
                 phase: 'pass2_verify',
                 attempt: attempts,
@@ -796,7 +924,7 @@ export class RenderPipeline {
           } else if (pass2Rejection === 'validation') {
             errors.push('Pass 2 exhausted: schema validation failed after retry');
           } else {
-            errors.push('Pass 2 JSON parse/validation failed after retry');
+            errors.push('Pass 2 exhausted after retry');
           }
           this.logger?.warn(errors[errors.length - 1], {
             eventId,
@@ -905,7 +1033,7 @@ export class RenderPipeline {
 
       // Build structured repair guidance from validation errors
       const revResult = analyzeValidationErrors(renderValidation);
-      previousErrorMessages = renderValidation.errors.map((e) => e.message);
+      previousErrorMessages = renderValidation.errors.map((e: ValidationIssue) => e.message);
 
       // Use decideRepairStrategy for strategy selection based on error count
       const repairDecision = decideRepairStrategy(
@@ -928,6 +1056,7 @@ export class RenderPipeline {
         `Attempt ${attempts} failed validation (${renderValidation.errors.length} errors), ` +
           `round ${breaker.state().round}, strategy: ${breaker.state().escalatedStrategy}`,
       );
+      if (job.proseCandidate !== undefined) break;
     }
 
     const renderEnd = Date.now();
@@ -954,8 +1083,9 @@ export class RenderPipeline {
 
     // Save cache ONLY if validation passed (don't cache bad renders)
     // Cache only analysable, no-error candidates (warning-only ok)
-    const hasErrorIssues = renderValidation?.errors.some((e) => e.severity === 'error') ?? false;
-    const isCacheable = analysis !== null && !hasErrorIssues;
+    const hasErrorIssues = renderValidation?.errors.some((e: ValidationIssue) => e.severity === 'error') ?? false;
+    const isCacheable =
+      job.proseCandidate === undefined && analysis !== null && !hasErrorIssues;
     if (cacheKey && isCacheable) {
       const evidenceHash = computeEvidenceHash(
         event.id,
@@ -1052,9 +1182,12 @@ export class RenderPipeline {
   /**
    * Render multiple scenes in parallel using the concurrency pool.
    * Respects cache for already-rendered scenes.
+   *
+   * @param jobs - Render jobs to process.
+   * @param signal - Optional AbortSignal passed through to each renderScene call.
    */
-  async renderAll(jobs: RenderJob[]): Promise<RenderSceneResult[]> {
-    return this.pool.all(jobs, (job) => this.renderScene(job));
+  async renderAll(jobs: RenderJob[], signal?: AbortSignal): Promise<RenderSceneResult[]> {
+    return this.pool.all(jobs, (job) => this.renderScene(job, signal));
   }
 
   /**
@@ -1096,4 +1229,100 @@ export class RenderPipeline {
     const json = this.canonicalJson(projection);
     return crypto.createHash('sha256').update(json, 'utf-8').digest('hex');
   }
+}
+
+// ============================================================================
+// evaluateProseCandidate — Shared Pass2+Zod+aggregator+release function
+// ============================================================================
+// Used by RenderPipeline's Pass 2 retry loop and available as a module export
+// for external consumers (e.g. editorial service).
+//
+// Returns the parsed analysis (or null), rejection category, errors,
+// feedback errors for retry, and a release verdict.
+// ============================================================================
+
+export interface EvaluateProseCandidateInput {
+  prose: string;
+  event: NarrativeEvent;
+  stateBefore: WorldState;
+  context: ContextPackage;
+  analysisRaw: string | null;
+  chapter: number;
+  forceRelease?: boolean;
+  aggregator?: ResultAggregator;
+  validatorOverrides?: Record<string, 'off' | 'warning' | 'error'>;
+  entityRegistry?: EntityRegistry;
+  analysisContract?: AnalysisContract;
+}
+
+export interface EvaluateProseCandidateResult {
+  analysis: AnalysisResult | null;
+  pass2Rejection: Pass2RejectionCategory | null;
+  errors: string[];
+  feedbackErrors: string[];
+  release: boolean;
+}
+
+export function evaluateProseCandidate(
+  input: EvaluateProseCandidateInput,
+): EvaluateProseCandidateResult {
+  const errors: string[] = [];
+  let feedbackErrors: string[] = [];
+  let analysis: AnalysisResult | null = null;
+  let pass2Rejection: Pass2RejectionCategory | null = null;
+
+  const raw = input.analysisRaw;
+  if (!raw || raw.trim().length === 0) {
+    pass2Rejection = 'empty';
+    feedbackErrors = [
+      'Pass 2 returned empty content. Please provide a valid structured JSON analysis for the scene.',
+    ];
+  } else {
+    const schema =
+      input.analysisContract?.combinedSchema ??
+      input.aggregator?.getCombinedValidationSchema();
+    const parseResult = parseAnalysisJSONWithErrors(raw, schema);
+
+    if (parseResult.result) {
+      analysis = parseResult.result;
+      pass2Rejection = null;
+
+      // Run aggregator validation if available
+      if (input.aggregator) {
+        const validation = input.aggregator.validateRender(
+          input.prose,
+          input.event,
+          input.stateBefore,
+          analysis,
+          input.validatorOverrides,
+          input.entityRegistry,
+          input.chapter,
+          input.context,
+        );
+        if (!validation.passed) {
+          errors.push(...validation.errors.map((e: { message: string }) => e.message));
+        }
+      }
+    } else {
+      if (parseResult.parseError) {
+        pass2Rejection = 'parse';
+        feedbackErrors = [`JSON parse error: ${parseResult.parseError}`];
+      } else if (parseResult.zodErrors) {
+        pass2Rejection = 'validation';
+        feedbackErrors = parseResult.zodErrors.issues.map(
+          (i: { path: (string | number)[]; message: string }) =>
+            `Validation error at "${i.path.join('.')}": ${i.message}`,
+        );
+      }
+      errors.push(
+        pass2Rejection === 'parse'
+          ? 'Pass 2 analysis JSON parse failed'
+          : 'Pass 2 analysis validation failed',
+      );
+    }
+  }
+
+  const release = analysis !== null || input.forceRelease === true;
+
+  return { analysis, pass2Rejection, errors, feedbackErrors, release };
 }

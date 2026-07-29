@@ -14,6 +14,7 @@ export function getSummary(comments: ReviewComment[], _currentChapter: number): 
     addressed: 0,
     resolved: 0,
     wontfix: 0,
+    superseded: 0,
   };
   for (const c of comments) {
     byStatus[c.status]++;

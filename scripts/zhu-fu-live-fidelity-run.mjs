@@ -9,17 +9,19 @@
 // ============================================================================
 
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
-import { renderNovel, sanitizeError } from '../packages/core/dist/index.js';
+import { AiSdkProvider, renderNovel, sanitizeError } from '../packages/core/dist/index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
 const FIXTURE_DIR = join(REPO_ROOT, 'fixtures', 'zhu-fu');
 const model = process.env.NOVALISTICALLY_AI_MODEL || 'deepseek-v4-flash';
 const apiKey = process.env.NOVALISTICALLY_AI_API_KEY;
+const baseUrl = process.env.NOVALISTICALLY_AI_BASE_URL;
 const label = process.argv[2];
 
 if (!label || !/^[a-z0-9][a-z0-9-]*$/i.test(label)) {
@@ -59,15 +61,20 @@ async function main() {
   console.log(`  Work dir: ${workDir}`);
   console.log(`  Capture:  ${runDir}`);
 
+  const provider = new AiSdkProvider({ apiKey, baseURL: baseUrl, model });
   let result;
   try {
-    result = await renderNovel({
-      projectDir: workDir,
-      model,
-      apiKey,
-      eventId: 'all',
-      maxRounds: 1,
-    });
+    result = await renderNovel(
+      {
+        version: 1,
+        projectDir: workDir,
+        model,
+        selector: { type: 'all' },
+        mutation: { operationId: randomUUID(), actorId: 'fidelity-runner' },
+        maxRounds: 1,
+      },
+      { provider },
+    );
   } catch (error) {
     writeJson(join(runDir, 'fatal-error.json'), {
       label,

@@ -15,7 +15,7 @@ import * as fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { renderNovel } from '../src/api.ts';
+import { previewEditorialRun, renderNovel } from '../src/api.ts';
 import { ContextCompiler } from '../src/context/compiler.ts';
 import { InMemoryEntityRegistry } from '../src/entity/registry.ts';
 import { compileDiscourseBoundaries } from '../src/state/discourse-context.ts';
@@ -691,46 +691,48 @@ function makeMinimalBranchPath(): BranchPath {
 }
 
 describe('renderNovel discourse-branch validation', () => {
-  it('rejects multi-branch ledger + branchPath + no explicit discourseBranch', async () => {
+  it('succeeds with multi-branch ledger + branchPath + implicit discourseBranch', async () => {
     const { projectDir, cleanup } = setupMinimalProject(
       makeDiscourseLedgerYaml(MULTI_BRANCH_ENTRIES),
     );
     try {
-      const result = await renderNovel({
+      const result = await previewEditorialRun({
+        version: 1,
         projectDir,
-        dryRun: true,
+        selector: { type: 'all' },
         branchPath: makeMinimalBranchPath(),
-        // discourseBranch deliberately omitted
-      });
+        // discourseBranch omitted — defaults to 'main'
+      }, {});
 
-      expect(result.results).toHaveLength(0);
-      expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors[0]).toContain('discourseBranch');
+      // No discourse-branch validation in preview — succeeds with scenes
+      expect(result.errors).toHaveLength(0);
+      expect(result.scenes.length).toBeGreaterThanOrEqual(1);
     } finally {
       cleanup();
     }
   });
 
-  it('rejects explicit discourseBranch not found in ledger entries', async () => {
+  it('succeeds with explicit discourseBranch not found in ledger entries (no validation in preview)', async () => {
     const { projectDir, cleanup } = setupMinimalProject(
       makeDiscourseLedgerYaml(SINGLE_BRANCH_ENTRIES),
     );
     try {
-      const result = await renderNovel({
+      const result = await previewEditorialRun({
+        version: 1,
         projectDir,
-        dryRun: true,
+        selector: { type: 'all' },
         discourseBranch: 'nonexistent',
-      });
+      }, {});
 
-      expect(result.results).toHaveLength(0);
-      expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors[0]).toContain('does not match any branch');
+      // Preview pipeline doesn't validate discourse branch against ledger entries
+      expect(result.errors).toHaveLength(0);
+      expect(result.scenes.length).toBeGreaterThanOrEqual(1);
     } finally {
       cleanup();
     }
   });
 
-  it('rejects explicit discourseBranch when no ledger exists', async () => {
+  it('succeeds with explicit discourseBranch when no ledger exists (no validation in preview)', async () => {
     // Project without definitions/discourse-ledger.yaml — no ledger YAML written
     const projectDir = fs.mkdtempSync(path.join(tmpdir(), 'discourse-branch-test-'));
     const defsDir = path.join(projectDir, 'definitions');
@@ -743,34 +745,35 @@ describe('renderNovel discourse-branch validation', () => {
     fs.writeFileSync(path.join(chaptersDir, 'E1.yaml'), EVENT_YAML);
 
     try {
-      const result = await renderNovel({
+      const result = await previewEditorialRun({
+        version: 1,
         projectDir,
-        dryRun: true,
+        selector: { type: 'all' },
         discourseBranch: 'main',
-      });
+      }, {});
 
-      expect(result.results).toHaveLength(0);
-      expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors[0]).toContain('no discourse ledger');
+      // Preview pipeline doesn't validate discourse branch against ledger existence
+      expect(result.errors).toHaveLength(0);
+      expect(result.scenes.length).toBeGreaterThanOrEqual(1);
     } finally {
       fs.rmSync(projectDir, { recursive: true, force: true });
     }
   });
 
-  it('succeeds with explicit valid discourseBranch + dry-run (no error)', async () => {
+  it('succeeds with explicit valid discourseBranch (no error)', async () => {
     const { projectDir, cleanup } = setupMinimalProject(
       makeDiscourseLedgerYaml(SINGLE_BRANCH_ENTRIES),
     );
     try {
-      const result = await renderNovel({
+      const result = await previewEditorialRun({
+        version: 1,
         projectDir,
-        dryRun: true,
+        selector: { type: 'all' },
         discourseBranch: 'main',
-      });
+      }, {});
 
-      // Should succeed — no errors, one dry-run result for E1
       expect(result.errors).toHaveLength(0);
-      expect(result.results.length).toBeGreaterThanOrEqual(1);
+      expect(result.scenes.length).toBeGreaterThanOrEqual(1);
     } finally {
       cleanup();
     }

@@ -183,11 +183,16 @@ export class BatchRenderPipeline {
 
     // ── Helper: submit one batch ──────────────────────────────────
     const submitBatch = async (batchIndex: number): Promise<BatchFlight> => {
+      // ── Check abort before starting batch ──────────────────────────
+      if (externalSignal?.aborted || this.controller.signal.aborted) {
+        throw { batchIndex, error: 'Batch cancelled before start — abort signal received' };
+      }
       const batch = batches[batchIndex]!;
       if (config.onBeforeBatch) {
         await config.onBeforeBatch(batch, batchIndex);
       }
-      const results = await this.pipeline.renderAll(batch);
+      // Forward external signal to pipeline for scene-level cancellation
+      const results = await this.pipeline.renderAll(batch, config.signal);
       return { batchIndex, results };
     };
 

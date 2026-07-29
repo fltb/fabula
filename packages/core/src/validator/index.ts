@@ -67,29 +67,27 @@ import { ruleCheckSchema } from './world-rule.js';
  * Plugin validators add fields dynamically through `ResultAggregator.getCombinedValidationSchema()`.
  */
 export const analysisContentSchema = z.object({
-  postconditions: postconditionBlockSchema,
-  preconditions: preconditionBlockSchema,
-  pov: povBlockSchema,
-  inventedDetails: z.array(inventedDetailSchema),
-  quality: qualityBlockSchema,
-  threadProgressAchieved: threadProgressAchievedSchema,
-  foreshadowingDeployed: foreshadowingDeployedSchema,
-  narrativeChecks: z.array(narrativeCheckSchema),
-  appearanceChecks: z.array(appearanceCheckSchema),
-  characterReferences: z.array(characterReferenceSchema),
-  tenseDetected: tenseDetectedSchema,
-  conflictAnalysis: conflictAnalysisSchema,
-  ruleChecks: z.array(ruleCheckSchema),
-  knowledgeChecks: z.array(knowledgeCheckSchema),
-  checklistResults: z.array(checklistResultSchema).optional(),
-  // S6 Genette dimension blocks — optional: pre-existing reference analysis
-  // data (mock-pass2 fixtures) predates them, and each consumer validator
-  // no-ops gracefully when its block is absent.
-  durationDetected: durationDetectedSchema.optional(),
-  frequencyDetected: frequencyDetectedSchema.optional(),
-  voiceDetected: voiceDetectedSchema.optional(),
-  anachronyDetected: anachronyDetectedSchema.optional(),
-  focalizationDetected: focalizationDetectedSchema.optional(),
+  postconditions: z.lazy(() => postconditionBlockSchema),
+  preconditions: z.lazy(() => preconditionBlockSchema),
+  pov: z.lazy(() => povBlockSchema),
+  inventedDetails: z.array(z.lazy(() => inventedDetailSchema)),
+  quality: z.lazy(() => qualityBlockSchema),
+  threadProgressAchieved: z.lazy(() => threadProgressAchievedSchema),
+  foreshadowingDeployed: z.lazy(() => foreshadowingDeployedSchema),
+  narrativeChecks: z.array(z.lazy(() => narrativeCheckSchema)),
+  appearanceChecks: z.array(z.lazy(() => appearanceCheckSchema)),
+  characterReferences: z.array(z.lazy(() => characterReferenceSchema)),
+  tenseDetected: z.lazy(() => tenseDetectedSchema),
+  conflictAnalysis: z.lazy(() => conflictAnalysisSchema),
+  ruleChecks: z.array(z.lazy(() => ruleCheckSchema)),
+  knowledgeChecks: z.array(z.lazy(() => knowledgeCheckSchema)),
+  checklistResults: z.array(z.lazy(() => checklistResultSchema)).optional(),
+  // S6 Genette dimension blocks remain optional for older reference analyses.
+  durationDetected: z.lazy(() => durationDetectedSchema).optional(),
+  frequencyDetected: z.lazy(() => frequencyDetectedSchema).optional(),
+  voiceDetected: z.lazy(() => voiceDetectedSchema).optional(),
+  anachronyDetected: z.lazy(() => anachronyDetectedSchema).optional(),
+  focalizationDetected: z.lazy(() => focalizationDetectedSchema).optional(),
 });
 
 export type AnalysisContent = z.infer<typeof analysisContentSchema>;

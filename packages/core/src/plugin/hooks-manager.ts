@@ -58,6 +58,7 @@ export class PluginHooksManager {
   private readonly context: PluginContext;
   /** Internal provider map keyed by name, populated by ProviderRegistry.register */
   private readonly providers: Map<string, LLMProvider> = new Map();
+  private readonly validatorNamesByPlugin = new Map<string, string[]>();
 
   constructor(
     context: PluginContext,
@@ -111,9 +112,17 @@ export class PluginHooksManager {
       if (hook.onLoad) {
         await hook.onLoad(this.context);
       }
+      const validatorsBefore = new Set(this.validatorRegistry.validators.map((validator) => validator.name));
       if (hook.registerValidators) {
         hook.registerValidators(this.validatorRegistry);
       }
+      this.validatorNamesByPlugin.set(
+        hook.name,
+        this.validatorRegistry.validators
+          .map((validator) => validator.name)
+          .filter((name) => !validatorsBefore.has(name))
+          .sort(),
+      );
       if (hook.registerProvider) {
         hook.registerProvider(registry);
       }
@@ -254,12 +263,15 @@ export class PluginHooksManager {
    * Returns deterministic identities for all registered plugins.
    * Used to scope cache keys: plugin name + present hooks impact prompt identity.
    */
-  getPluginIdentities(): Array<{ name: string; hooks: string[] }> {
-    return this.hooks.map((h) => ({
-      name: h.name,
-      hooks: (Object.keys(h) as (keyof PluginHooks)[]).filter(
-        (k) => k !== 'name' && typeof h[k] === 'function',
-      ),
-    }));
+  getPluginIdentities(): Array<{ name: string; hooks: string[]; validators: string[] }> {
+    return this.hooks
+      .map((hook) => ({
+        name: hook.name,
+        hooks: (Object.keys(hook) as (keyof PluginHooks)[])
+          .filter((key) => key !== 'name' && typeof hook[key] === 'function')
+          .sort(),
+        validators: [...(this.validatorNamesByPlugin.get(hook.name) ?? [])],
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
   }
 }

@@ -398,3 +398,30 @@ export {
   validationGateStatusSchema,
   validationPolicySchema,
 } from './render-surface.js';
+// ——— EDITORIAL: Schema exports for the editorial pipeline ———
+export {
+  editorialErrorSchema,
+  editorialMutationContextSchema,
+  editorialOperationV1Schema,
+  editorialProgressEventV1Schema,
+  editorialRenderRequestV1Schema,
+  editorialScopedRequestV1Schema,
+  branchPathV1Schema,
+  branchSetV1Schema,
+  sceneRevisionEnvelopeV1Schema,
+  sceneMetadataV1Schema,
+  sceneSelectorSchema,
+  sourceChangePreviewV1Schema,
+  sourceChangeSetV1Schema,
+  sourceDocumentChangeSchema,
+  sourceHeadV1Schema,
+  sourceRevisionV1Schema,
+  transactionReadExpectationSchema,
+} from './editorial.js';
+// ——— REVIEW V1: Schema exports for the storage-backed review ledger ———
+export {
+  newReviewCommentSchema,
+  reviewApplicationV1Schema,
+  reviewCommentSchema,
+  reviewLedgerV1Schema,
+} from './review.js';

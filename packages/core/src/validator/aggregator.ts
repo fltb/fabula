@@ -135,6 +135,25 @@ export class ResultAggregator {
     return computeSha256Hex(canonicalJson({ validators: names }));
   }
 
+  /** Deterministic built-in and plugin validator identities for provenance. */
+  listValidatorIdentities(
+    builtInVersion: string,
+  ): Array<{ name: string; version: string }> {
+    return [
+      ...this.validators.map((validator) => ({
+        name: validator.name,
+        version: builtInVersion,
+      })),
+      ...this.pluginValidators.map((validator) => ({
+        name: validator.name,
+        version: validator.version ?? builtInVersion,
+      })),
+    ].sort(
+      (left, right) =>
+        left.name.localeCompare(right.name) || left.version.localeCompare(right.version),
+    );
+  }
+
   /**
    * Run all validators' validatePost/validateRender against rendered prose.
    * Optionally accepts parsed AnalysisResult from LLM Pass 2.

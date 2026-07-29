@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { liveSmokeRecordSchema, renderNovel } from '@novalistically/core';
@@ -885,16 +885,31 @@ describe('live smoke record schema (offline)', () => {
 
 describe('credential absence (offline)', () => {
   it('renderNovel returns errors without API key in env', async () => {
-    // Clear any API key inherited from the shell
-    const result = await renderNovel({
-      projectDir: resolve('fixtures/zhu-fu'),
-      apiKey: '',
-      baseUrl: 'http://localhost:99999',
-      model: 'test-model',
-    });
-    // Without a valid key, errors should be returned, not thrown
-    expect(Array.isArray(result.errors)).toBe(true);
-    expect(result.errors.length).toBeGreaterThan(0);
-    expect(result.errors[0]).toContain('No API key provided');
+    const previousApiKey = process.env.NOVALISTICALLY_AI_API_KEY;
+    delete process.env.NOVALISTICALLY_AI_API_KEY;
+    const projectDir = mkdtempSync(join(tmpdir(), 'nova-offline-provider-'));
+    cpSync(resolve(__dirname, '../../../fixtures/zhu-fu'), projectDir, { recursive: true });
+    try {
+      const result = await renderNovel(
+        {
+          version: 1,
+          projectDir,
+          model: 'test-model',
+          selector: { type: 'all' },
+          mutation: { operationId: randomUUID(), actorId: 'test' },
+        },
+        {},
+      );
+      expect(Array.isArray(result.errors)).toBe(true);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors[0]).toContain('No LLM provider available');
+    } finally {
+      if (previousApiKey === undefined) {
+        delete process.env.NOVALISTICALLY_AI_API_KEY;
+      } else {
+        process.env.NOVALISTICALLY_AI_API_KEY = previousApiKey;
+      }
+      rmSync(projectDir, { recursive: true, force: true });
+    }
   });
 });

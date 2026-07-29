@@ -90,7 +90,7 @@ export const provenanceManifestSchema = z
 export const responseReferenceSchema = z
   .object({
     prose: z.string().min(1),
-    analysis: analysisResultSchema,
+    analysis: z.lazy(() => analysisResultSchema),
     metadata: z
       .object({
         eventId: z.string().min(1),

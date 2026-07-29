@@ -106,19 +106,3 @@ export interface ThreadStatus {
   description: string;
 }
 
-// ——— Render System (§7.4.17) ———
-// Activated by PromptAssembler (context/prompt-assembler.ts)
-
-export interface RenderRequest {
-  event: string;
-  mode: 'draft' | 'revise' | 'retry';
-  revisionNotes?: string;
-  provider?: string;
-  model?: string;
-  temperature?: number;
-}
-
-export interface FinalPrompt {
-  systemPrompt: string;
-  userPrompt: string;
-}

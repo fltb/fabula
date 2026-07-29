@@ -9,13 +9,12 @@
 import { z } from 'zod';
 import type { AnalysisResult } from '../types/analysis.js';
 import { analysisContentSchema } from '../validator/index.js';
-import { checklistResultSchema } from './narrative-checklist.js';
 
 export { checklistResultSchema } from './narrative-checklist.js';
 
 export const analysisResultSchema = z.object({
   eventId: z.string(),
-  analysis: analysisContentSchema,
+  analysis: z.lazy(() => analysisContentSchema),
 });
 
 // ── Parser ──────────────────────────────────────────────────────────────────

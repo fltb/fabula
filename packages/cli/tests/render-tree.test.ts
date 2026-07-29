@@ -55,6 +55,9 @@ describe('built CLI game dialogue tree', () => {
       expect(selected.status, selected.stderr).toBe(0);
       expect(selected.stdout).toContain('E0:');
       expect(selected.stdout).toContain('E1a:');
+      // Branch path selects only branch-required events:
+      // --all with a selected leaf renders events on that branch
+      // (E0, E1a) and excludes siblings (E1b).
       expect(selected.stdout).not.toContain('E1b:');
 
       const invalidJson = spawnSync(

@@ -2,33 +2,63 @@
 // Novalistically CLI — Command-line interface
 // ============================================================================
 
+import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { runAll, runPerformanceBench, runRegressionBench } from '@novalistically/bench';
-import type { BranchPath, ReviewComment } from '@novalistically/core';
+import type {
+  BranchPath,
+  CommentFilter,
+  EditorialRenderRequestV1,
+  EditorialRuntime,
+  EditorialScopedRequestV1,
+  NewReviewComment,
+  RenderGameDialogueTreeRequestV1,
+  ReviewComment,
+  SceneProseInput,
+  SceneSelector,
+  SourceChangePreviewV1,
+  SourceDocumentV1,
+} from '@novalistically/core';
 import {
+  addReviewComment,
+  adoptSceneProse,
   analyzeProjectImpact,
+  applySourceChange,
+  assembleCanonicalNovel,
+  assembleCustomNovel,
   branchPathsEqual,
-  assembleNovel,
   buildCausalEdges,
-  clearEventCache,
+  compileGameDialogueTree,
   computeEvidenceHash,
   diffEvent,
-  compileGameDialogueTree,
   EntityMapper,
   exportDAGtoDOT,
   exportDAGtoMermaid,
   FsStorage,
+  getEditorialOperation,
   getProjectStatus,
+  getSourceDocument,
   initializeProject,
+  inspectScenes,
+  listEditorialOperations,
   listEntities,
+  listReviewComments,
+  listSceneRevisions,
+  listSourceDocuments,
   MockPass2Provider,
   migrateProjectFile,
-  ReviewManager,
-  renderNovel,
+  previewEditorialRun,
+  previewSourceChange,
+  reconcileSourceWorkingCopy,
   renderGameDialogueTree,
+  renderNovel,
+  replaceReviewComment,
+  rollbackSceneRevision,
+  setSceneLock,
   showEntity,
   TypedEventBus,
+  updateReviewComment,
   validateNovel,
   verifyEvidenceChain,
 } from '@novalistically/core';
@@ -83,6 +113,47 @@ function parseBranchPath(raw: string | undefined): BranchPath | undefined {
     }
   }
   return parsed as BranchPath;
+}
+function collectOption(value: string, previous: string[]): string[] {
+  return [...previous, value];
+}
+
+function resolveCliSelector(input: {
+  eventId?: string;
+  sceneIds?: readonly string[];
+  chapter?: string;
+  all?: boolean;
+}): SceneSelector {
+  const explicitSceneIds = input.sceneIds ?? [];
+  const scopedByChapterOrAll = input.chapter !== undefined || Boolean(input.all);
+  const eventIds = [
+    ...(!scopedByChapterOrAll && input.eventId ? [input.eventId] : []),
+    ...explicitSceneIds,
+  ];
+  const modes =
+    Number(eventIds.length > 0) + Number(input.chapter !== undefined) + Number(Boolean(input.all));
+  if (modes !== 1) {
+    throw new Error('Choose exactly one selector: [event]/--scene, --chapter, or --all');
+  }
+  if (input.all) return { type: 'all' };
+  if (input.chapter !== undefined) {
+    const chapter = Number(input.chapter);
+    if (!Number.isInteger(chapter) || chapter <= 0) {
+      throw new Error('--chapter must be a positive integer');
+    }
+    return { type: 'chapter', chapter };
+  }
+  return { type: 'events', eventIds: [...new Set(eventIds)] };
+}
+
+function computeProjectSourceHash(documents: readonly SourceDocumentV1[]): string {
+  const digest = crypto.createHash('sha256');
+  for (const document of [...documents].sort((left, right) =>
+    left.path.localeCompare(right.path),
+  )) {
+    digest.update(`${document.path}\0${document.contentHash}\0`);
+  }
+  return digest.digest('hex');
 }
 
 function requireCompleteGameLeaf(projectDir: string, branchPath: BranchPath | undefined): void {
@@ -144,7 +215,6 @@ program
 
     // Create .gitkeep in rejected_proposals
     fs.writeFileSync(path.join(projectDir, 'rejected_proposals', '.gitkeep'), '', 'utf-8');
-
 
     // Write nova.yaml
     const novaYaml = `project: ${name}
@@ -213,7 +283,11 @@ expectedPostconditions: []
 #         attribute: chose_hunt
 #         value: true
 `;
-    fs.writeFileSync(path.join(projectDir, 'chapters', 'chapter_01', 'E1.yaml'), eventFile, 'utf-8');
+    fs.writeFileSync(
+      path.join(projectDir, 'chapters', 'chapter_01', 'E1.yaml'),
+      eventFile,
+      'utf-8',
+    );
 
     // Write PROJECT_STATUS.md
     const statusMd = `# ${name} — Project Status
@@ -385,7 +459,8 @@ program
   .description('Assemble all committed scenes into output/novel.md')
   .option('--output <path>', 'Custom output path')
   .option('--branch-path <json>', 'Complete game-tree BranchPath JSON')
-  .action((options: { output?: string; branchPath?: string }) => {
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .action((options: { output?: string; branchPath?: string; actor?: string }) => {
     const projectDir = ensureProjectDir();
     let branchPath: BranchPath | undefined;
     try {
@@ -395,15 +470,19 @@ program
       console.error(`Invalid --branch-path: ${(error as Error).message}`);
       process.exit(1);
     }
-
-    const result = assembleNovel({
+    const request = {
+      version: 1 as const,
       projectDir,
-      outputPath: options.output,
-      branchPath,
-    });
-
-    console.log(`✅ Novel assembled: ${result.wordCount} words, ${result.sceneCount} scenes`);
-    console.log(`   Output: ${options.output ?? path.join(projectDir, 'output', 'novel.md')}`);
+      mutation: {
+        operationId: crypto.randomUUID(),
+        actorId: options.actor ?? 'local-cli',
+      },
+      ...(options.output ? { outputPath: options.output } : {}),
+      ...(branchPath ? { branchPath } : {}),
+    };
+    const result = options.output ? assembleCustomNovel(request) : assembleCanonicalNovel(request);
+    console.log(`Novel assembled: ${result.wordCount} words, ${result.sceneCount} scenes`);
+    console.log(`   Output: ${result.publication.outputPath}`);
   });
 
 // --- entity ---
@@ -424,7 +503,7 @@ entityCmd
 
       const filtered = events.filter((e) => {
         if (e.id === 'system:genesis') return false;
-        return e.status === options!.status;
+        return e.status === options?.status;
       });
 
       if (filtered.length === 0) {
@@ -467,6 +546,365 @@ entityCmd
   });
 
 // ============================================================================
+// scene — Inspect and manage scene revisions
+// ============================================================================
+
+const sceneCmd = program.command('scene').description('Inspect and manage scene revisions');
+
+sceneCmd
+  .command('list')
+  .description('List all scenes with inspection state')
+  .option(
+    '--status <status>',
+    'Filter by state: missing | current | stale | manual_change_untracked | legacy_unverified',
+  )
+  .option('--chapter <number>', 'Filter by chapter number')
+  .option('--json', 'Output as JSON')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .action(async (opts: { status?: string; chapter?: string; json?: boolean; actor?: string }) => {
+    const projectDir = ensureProjectDir();
+    const request: EditorialScopedRequestV1 & { selector?: SceneSelector } = {
+      version: 1,
+      projectDir,
+    };
+    if (opts.chapter) {
+      request.selector = { type: 'chapter', chapter: Number(opts.chapter) };
+    }
+
+    const scenes = await inspectScenes(request);
+    const filtered = opts.status ? scenes.filter((s) => s.state === opts.status) : scenes;
+
+    if (opts.json) {
+      console.log(JSON.stringify(filtered, null, 2));
+      return;
+    }
+
+    if (filtered.length === 0) {
+      console.log('No scenes found.');
+      return;
+    }
+
+    for (const s of filtered) {
+      const lockMark = s.locked ? '🔒' : ' ';
+      const stateMark = s.state === 'current' ? '✅' : s.state === 'missing' ? '❌' : '⚠️';
+      console.log(
+        `  ${stateMark}${lockMark} E${s.eventId} (ch ${s.chapter}): ${s.state}${s.revisionId ? ` rev=${s.revisionId.slice(0, 8)}` : ''} reviews=${s.openReviewCount}`,
+      );
+    }
+  });
+
+sceneCmd
+  .command('show <eventId>')
+  .description('Show detailed scene inspection for an event')
+  .option('--json', 'Output as JSON')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .action(async (eventId: string, opts: { json?: boolean; actor?: string }) => {
+    const projectDir = ensureProjectDir();
+    const request: EditorialScopedRequestV1 & { selector?: SceneSelector } = {
+      version: 1,
+      projectDir,
+      selector: { type: 'events', eventIds: [eventId] },
+    };
+
+    const scenes = await inspectScenes(request);
+    const scene = scenes.find((s) => s.eventId === eventId);
+    if (!scene) {
+      console.error(`Scene "${eventId}" not found.`);
+      process.exit(1);
+    }
+
+    if (opts.json) {
+      console.log(JSON.stringify(scene, null, 2));
+      return;
+    }
+
+    console.log(`\nEvent: ${scene.eventId}`);
+    console.log(`Chapter: ${scene.chapter}`);
+    console.log(`State: ${scene.state}`);
+    console.log(`Locked: ${scene.locked}`);
+    console.log(`Prose source: ${scene.proseSource ?? 'none'}`);
+    console.log(`Prose hash: ${scene.proseHash ?? 'none'}`);
+    console.log(`Open reviews: ${scene.openReviewCount}`);
+    console.log(`Revision: ${scene.revisionId ?? 'none'}`);
+    if (scene.latestCandidate) {
+      console.log(
+        `Latest candidate: ${scene.latestCandidate.revisionId} (${scene.latestCandidate.status})`,
+      );
+    }
+    if (scene.staleReasons.length > 0) {
+      console.log('Stale reasons:');
+      for (const r of scene.staleReasons) {
+        console.log(`  - [${r.code}] ${r.message}`);
+      }
+    }
+  });
+
+sceneCmd
+  .command('history <eventId>')
+  .description('Show revision history for a scene')
+  .option('--json', 'Output as JSON')
+  .action((eventId: string, opts: { json?: boolean }) => {
+    const projectDir = ensureProjectDir();
+    const revisions = listSceneRevisions({ projectDir, eventId });
+
+    if (opts.json) {
+      console.log(JSON.stringify(revisions, null, 2));
+      return;
+    }
+
+    if (revisions.length === 0) {
+      console.log(`No revisions found for "${eventId}".`);
+      return;
+    }
+
+    console.log(`\nRevision history for "${eventId}":`);
+    for (const r of revisions) {
+      const headMark = r.isHead ? ' ← HEAD' : '';
+      console.log(
+        `  ${r.revisionId.slice(0, 12)}  ${r.origin.padEnd(14)}  ${r.createdAt}  ${r.actorId}${headMark}`,
+      );
+    }
+  });
+
+sceneCmd
+  .command('adopt <eventId>')
+  .description('Evaluate and adopt replacement or working-copy prose')
+  .option('--file <path>', 'Read replacement prose from a file')
+  .option('--prose <text>', 'Use inline replacement prose')
+  .option('--lock', 'Lock the accepted human revision')
+  .option('--note <text>', 'Audit note for the adoption')
+  .option('--model <model>', 'LLM model to use for Pass 2')
+  .option('--provider <provider>', 'Provider: ai-sdk or mock-pass2')
+  .option('--reference-dir <path>', 'Approved mock reference directory')
+  .option('--branch-path <json>', 'Complete game-tree BranchPath JSON')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .option('--json', 'Output as JSON')
+  .action(
+    async (
+      eventId: string,
+      opts: {
+        file?: string;
+        prose?: string;
+        lock?: boolean;
+        note?: string;
+        model?: string;
+        provider?: string;
+        referenceDir?: string;
+        branchPath?: string;
+        actor?: string;
+        json?: boolean;
+      },
+    ) => {
+      const projectDir = ensureProjectDir();
+      if (opts.file && opts.prose) {
+        console.error('--file and --prose are mutually exclusive');
+        process.exit(1);
+      }
+      if (opts.provider === 'mock-pass2' && !opts.referenceDir) {
+        console.error('--provider mock-pass2 requires --reference-dir');
+        process.exit(1);
+      }
+      if (opts.provider && opts.provider !== 'ai-sdk' && opts.provider !== 'mock-pass2') {
+        console.error(`Unsupported provider: ${opts.provider}`);
+        process.exit(1);
+      }
+      let branchPath: BranchPath | undefined;
+      try {
+        branchPath = parseBranchPath(opts.branchPath);
+      } catch (error) {
+        console.error(`Invalid --branch-path: ${(error as Error).message}`);
+        process.exit(1);
+      }
+      const [current] = await inspectScenes({
+        version: 1,
+        projectDir,
+        selector: { type: 'events', eventIds: [eventId] },
+        ...(branchPath ? { branchPath } : {}),
+      });
+      if (!current) {
+        console.error(`Scene "${eventId}" not found.`);
+        process.exit(1);
+      }
+      let proseInput: SceneProseInput;
+      if (opts.file || opts.prose !== undefined) {
+        const prose = opts.file ? fs.readFileSync(opts.file, 'utf-8') : (opts.prose ?? '');
+        proseInput = {
+          type: 'replacement',
+          prose,
+          expectedRevisionId: current.revisionId,
+          expectedSceneHash: current.sceneHash,
+        };
+      } else {
+        if (current.sceneContent === null) {
+          console.error(`Scene "${eventId}" has no working copy.`);
+          process.exit(1);
+        }
+        proseInput = {
+          type: 'working_copy',
+          expectedSceneHash: crypto.createHash('sha256').update(current.sceneContent).digest('hex'),
+        };
+      }
+      const result = await adoptSceneProse(
+        {
+          version: 1,
+          projectDir,
+          mutation: {
+            operationId: crypto.randomUUID(),
+            actorId: opts.actor ?? 'local-cli',
+          },
+          eventId,
+          input: proseInput,
+          ...(opts.lock ? { lockAfter: true } : {}),
+          ...(opts.note ? { note: opts.note } : {}),
+          ...(opts.model ? { model: opts.model } : {}),
+          ...(branchPath ? { branchPath } : {}),
+        },
+        {
+          provider:
+            opts.provider === 'mock-pass2'
+              ? new MockPass2Provider({ referenceDir: opts.referenceDir })
+              : undefined,
+        },
+      );
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else if (result.released) {
+        console.log(
+          `✅ Scene "${eventId}" adopted ` + `(rev=${result.revisionId?.slice(0, 12) ?? 'none'})`,
+        );
+      } else {
+        console.error('❌ Scene adoption blocked:');
+        for (const error of result.editorialErrors) {
+          console.error(`  [${error.code}] ${error.message}`);
+        }
+      }
+      if (!result.released) process.exit(1);
+    },
+  );
+
+sceneCmd
+  .command('lock <eventId>')
+  .description('Lock a scene to prevent edits')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .option('--json', 'Output as JSON')
+  .action(async (eventId: string, opts: { actor?: string; json?: boolean }) => {
+    const projectDir = ensureProjectDir();
+    const actorId = opts.actor ?? 'local-cli';
+    const operationId = crypto.randomUUID();
+    const [current] = await inspectScenes({
+      version: 1,
+      projectDir,
+      selector: { type: 'events', eventIds: [eventId] },
+    });
+    if (!current?.sceneHash) {
+      console.error(`Scene "${eventId}" has no accepted head.`);
+      process.exit(1);
+    }
+
+    const result = await setSceneLock({
+      version: 1,
+      projectDir,
+      mutation: { operationId, actorId },
+      eventId,
+      locked: true,
+      expectedSceneHash: current.sceneHash,
+    });
+
+    if (opts.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    if (result.locked) {
+      console.log(`🔒 Scene "${eventId}" locked.`);
+    } else {
+      console.error(`❌ Failed to lock scene "${eventId}".`);
+      for (const e of result.editorialErrors) {
+        console.error(`  [${e.code}] ${e.message}`);
+      }
+      process.exit(1);
+    }
+  });
+
+sceneCmd
+  .command('unlock <eventId>')
+  .description('Unlock a scene to allow edits')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .option('--json', 'Output as JSON')
+  .action(async (eventId: string, opts: { actor?: string; json?: boolean }) => {
+    const projectDir = ensureProjectDir();
+    const actorId = opts.actor ?? 'local-cli';
+    const operationId = crypto.randomUUID();
+    const [current] = await inspectScenes({
+      version: 1,
+      projectDir,
+      selector: { type: 'events', eventIds: [eventId] },
+    });
+    if (!current?.sceneHash) {
+      console.error(`Scene "${eventId}" has no accepted head.`);
+      process.exit(1);
+    }
+
+    const result = await setSceneLock({
+      version: 1,
+      projectDir,
+      mutation: { operationId, actorId },
+      eventId,
+      locked: false,
+      expectedSceneHash: current.sceneHash,
+    });
+
+    if (opts.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    if (!result.locked) {
+      console.log(`🔓 Scene "${eventId}" unlocked.`);
+    } else {
+      console.error(`❌ Failed to unlock scene "${eventId}".`);
+      for (const e of result.editorialErrors) {
+        console.error(`  [${e.code}] ${e.message}`);
+      }
+      process.exit(1);
+    }
+  });
+
+sceneCmd
+  .command('rollback <eventId> <revisionId>')
+  .description('Roll back a scene to a previous revision')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .option('--json', 'Output as JSON')
+  .action(async (eventId: string, revisionId: string, opts: { actor?: string; json?: boolean }) => {
+    const projectDir = ensureProjectDir();
+    const actorId = opts.actor ?? 'local-cli';
+    const operationId = crypto.randomUUID();
+
+    const result = await rollbackSceneRevision({
+      version: 1,
+      projectDir,
+      mutation: { operationId, actorId },
+      eventId,
+      revisionId,
+    });
+
+    if (opts.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    if (result.released) {
+      console.log(`✅ Scene "${eventId}" rolled back to revision ${revisionId.slice(0, 12)}.`);
+    } else {
+      console.error(`❌ Rollback failed for "${eventId}":`);
+      for (const e of result.editorialErrors) {
+        console.error(`  [${e.code}] ${e.message}`);
+      }
+      process.exit(1);
+    }
+  });
+
+// ============================================================================
 // review — Manage review comments
 // ============================================================================
 
@@ -479,33 +917,42 @@ const severityMap: Record<string, ReviewComment['severity']> = {
 program
   .command('review')
   .description('Manage review comments for rendered scenes')
-  .argument('<action>', 'list | add | resolve | reopen | escalate')
+  .argument('<action>', 'list | add | replace | resolve | wontfix | reopen | escalate')
   .argument('[targetId]', 'Event ID or comment ID to target')
-  .argument('[message]', 'Comment text (for "add" action)')
+  .argument('[message]', 'Comment text (for add/replace actions)')
   .option(
     '--severity <severity>',
     'Severity for "add" action: info | warning | blocking',
     'warning',
   )
+  .option('--category <category>', 'Review category', 'style')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .option('--json', 'Output machine-readable JSON')
   .action(
     (
       action: string,
       targetId: string | undefined,
       message: string | undefined,
-      opts: { severity?: string },
+      opts: {
+        severity?: string;
+        category?: NewReviewComment['category'];
+        actor?: string;
+        json?: boolean;
+      },
     ) => {
       const projectDir = ensureProjectDir();
-      const mapper = new EntityMapper(projectDir);
-      const data = mapper.loadProject();
-      const events = mapper.loadAllEvents(data.chapters);
-
-      const manager = new ReviewManager();
-      manager.load(projectDir);
+      const actorId = opts.actor ?? 'local-cli';
+      const operationId = crypto.randomUUID();
 
       switch (action) {
         case 'list': {
-          const filter = targetId ? ({ targetId } as any) : undefined;
-          const comments = manager.getComments(filter);
+          const filter: CommentFilter = {};
+          if (targetId) filter.targetId = targetId;
+          const comments = listReviewComments({ projectDir, filter });
+          if (opts.json) {
+            console.log(JSON.stringify(comments, null, 2));
+            break;
+          }
           if (comments.length === 0) {
             console.log('No review comments found.');
             return;
@@ -526,24 +973,72 @@ program
             console.error('Usage: nova review add <eventId> "<message>"');
             process.exit(1);
           }
-          const event = events.find((e: { id: string }) => e.id === targetId);
-          if (!event) {
-            console.error(`Event "${targetId}" not found.`);
-            process.exit(1);
-          }
-          const comment: ReviewComment = {
-            id: `rev_${Date.now()}`,
-            author: 'human',
+          const input: NewReviewComment = {
             target: { type: 'scene', id: targetId },
             severity: severityMap[opts.severity || 'warning'] ?? 'suggestion',
-            category: 'style',
+            category: opts.category ?? 'style',
             content: message,
-            status: 'open',
-            createdAt: new Date().toISOString(),
           };
-          manager.addComment(comment);
-          manager.save(projectDir);
-          console.log(`Review comment added: ${comment.id}`);
+          const comment = addReviewComment({
+            projectDir,
+            input,
+            mutation: { operationId, actorId },
+          });
+          console.log(
+            opts.json
+              ? JSON.stringify(comment, null, 2)
+              : `Review comment added: ${comment.id} (op=${operationId})`,
+          );
+          break;
+        }
+
+        case 'replace': {
+          if (!targetId || !message) {
+            console.error('Usage: nova review replace <commentId> "<message>"');
+            process.exit(1);
+          }
+          const current = listReviewComments({ projectDir }).find(
+            (comment) => comment.id === targetId,
+          );
+          if (!current) {
+            console.error(`Review comment not found: ${targetId}`);
+            process.exit(1);
+          }
+          const replacement = replaceReviewComment({
+            projectDir,
+            commentId: targetId,
+            input: {
+              target: current.target,
+              severity: current.severity,
+              category: current.category,
+              content: message,
+            },
+            mutation: { operationId, actorId },
+          });
+          console.log(
+            opts.json
+              ? JSON.stringify(replacement, null, 2)
+              : `Review comment replaced: ${replacement.id} (op=${operationId})`,
+          );
+          break;
+        }
+
+        case 'wontfix': {
+          if (!targetId) {
+            console.error('Usage: nova review wontfix <commentId>');
+            process.exit(1);
+          }
+          const comment = updateReviewComment({
+            projectDir,
+            commentId: targetId,
+            action: 'wontfix',
+            mutation: { operationId, actorId },
+          });
+          console.log(
+            opts.json
+              ? JSON.stringify(comment, null, 2)
+              : `Comment marked wontfix: ${targetId} (op=${operationId})`,
+          );
           break;
         }
 
@@ -552,9 +1047,17 @@ program
             console.error('Usage: nova review resolve <commentId>');
             process.exit(1);
           }
-          manager.resolve(targetId);
-          manager.save(projectDir);
-          console.log(`Comment resolved: ${targetId}`);
+          const comment = updateReviewComment({
+            projectDir,
+            commentId: targetId,
+            action: 'resolve',
+            mutation: { operationId, actorId },
+          });
+          console.log(
+            opts.json
+              ? JSON.stringify(comment, null, 2)
+              : `Comment resolved: ${targetId} (op=${operationId})`,
+          );
           break;
         }
 
@@ -563,13 +1066,17 @@ program
             console.error('Usage: nova review reopen <commentId>');
             process.exit(1);
           }
-          manager.reopen(targetId);
-          manager.save(projectDir);
-
-          // Invalidate cache on reopen
-          const cacheDir = path.join(projectDir, '.nova', 'render-cache');
-          clearEventCache(cacheDir, targetId, new FsStorage());
-          console.log(`Comment reopened and cache invalidated: ${targetId}`);
+          const comment = updateReviewComment({
+            projectDir,
+            commentId: targetId,
+            action: 'reopen',
+            mutation: { operationId, actorId },
+          });
+          console.log(
+            opts.json
+              ? JSON.stringify(comment, null, 2)
+              : `Comment reopened: ${targetId} (op=${operationId})`,
+          );
           break;
         }
 
@@ -578,14 +1085,24 @@ program
             console.error('Usage: nova review escalate <commentId>');
             process.exit(1);
           }
-          manager.escalate(targetId);
-          manager.save(projectDir);
-          console.log(`Comment escalated: ${targetId}`);
+          const comment = updateReviewComment({
+            projectDir,
+            commentId: targetId,
+            action: 'escalate',
+            mutation: { operationId, actorId },
+          });
+          console.log(
+            opts.json
+              ? JSON.stringify(comment, null, 2)
+              : `Comment escalated: ${targetId} (op=${operationId})`,
+          );
           break;
         }
 
         default:
-          console.error(`Unknown action: "${action}". Use: list, add, resolve, reopen, escalate`);
+          console.error(
+            `Unknown action: "${action}". Use: list, add, replace, resolve, wontfix, reopen, escalate`,
+          );
           process.exit(1);
       }
     },
@@ -593,39 +1110,58 @@ program
 
 // --- render ---
 program
-  .command('render <event>')
-  .description('Render a scene (or all scenes with --all) via LLM')
-  .option('--dry-run', 'Compile context and save prompt without calling LLM')
-  .option('--all', 'Render all events in order')
+  .command('render [event]')
+  .description('Render one or more scenes, a chapter, or the full branch')
+  .option('--dry-run', 'Compile context without calling an LLM')
+  .option('--scene <event>', 'Add an event to the render selector', collectOption, [])
+  .option('--all', 'Render all branch-required events')
+  .option('--chapter <number>', 'Render a single chapter by number')
   .option('--model <model>', 'LLM model to use (overrides config)')
   .option('--provider <provider>', 'Provider: ai-sdk or mock-pass2')
   .option('--reference-dir <path>', 'Approved mock reference directory')
-  .option('--trace', 'Emit trace JSONL to .nova/traces/<job>.jsonl')
+  .option('--trace', 'Emit trace JSONL in the configured work directory')
   .option('--concurrency <number>', 'Max concurrent LLM calls')
   .option('--branch-path <json>', 'Complete game-tree BranchPath JSON')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .option('--json', 'Output the core DTO as JSON')
   .action(
     async (
-      eventId: string,
+      eventId: string | undefined,
       options: {
         dryRun?: boolean;
+        scene?: string[];
         all?: boolean;
+        chapter?: string;
         model?: string;
         provider?: string;
         referenceDir?: string;
         trace?: boolean;
         concurrency?: string;
         branchPath?: string;
+        actor?: string;
+        json?: boolean;
       },
     ) => {
       const projectDir = ensureProjectDir();
       let branchPath: BranchPath | undefined;
+      let selector: SceneSelector;
       try {
         branchPath = parseBranchPath(options.branchPath);
       } catch (error) {
         console.error(`Invalid --branch-path: ${(error as Error).message}`);
         process.exit(1);
       }
-
+      try {
+        selector = resolveCliSelector({
+          eventId,
+          sceneIds: options.scene,
+          chapter: options.chapter,
+          all: options.all,
+        });
+      } catch (error) {
+        console.error((error as Error).message);
+        process.exit(1);
+      }
       if (options.provider === 'mock-pass2' && !options.referenceDir) {
         console.error('--provider mock-pass2 requires --reference-dir');
         process.exit(1);
@@ -638,62 +1174,175 @@ program
         options.provider === 'mock-pass2'
           ? new MockPass2Provider({ referenceDir: options.referenceDir })
           : undefined;
-
-      // Live per-event progress on stderr (stdout is reserved for the final
-      // batch report — tests assert exact ✅/❌ counts there).
       const eventBus = new TypedEventBus();
       eventBus.on('pipeline:render:after', (data) => {
         const mark = data.success && data.errorCount === 0 ? '✓' : '·';
         console.error(`  ${mark} ${data.eventId}: ${data.wordCount} words, cache=${data.cacheHit}`);
       });
-
-      const result = await renderNovel({
+      const request: EditorialRenderRequestV1 = {
+        version: 1,
         projectDir,
-        model: options.model,
-        eventId: options.all ? undefined : eventId,
-        dryRun: options.dryRun,
-        trace: options.trace,
-        branchPath,
+        selector,
+        mutation: {
+          operationId: crypto.randomUUID(),
+          actorId: options.actor ?? 'local-cli',
+        },
+        ...(options.model ? { model: options.model } : {}),
+        ...(branchPath ? { branchPath } : {}),
+      };
+      const runtime: EditorialRuntime = {
         storage: new FsStorage(),
-        concurrency: options.concurrency ? Number(options.concurrency) : undefined,
         provider,
         eventBus,
-      });
-
-      if (result.errors.length > 0 && result.results.length === 0) {
-        console.error('Render errors:');
-        for (const err of result.errors) {
-          console.error(`  ❌ ${err}`);
+        trace: options.trace,
+        concurrency: options.concurrency ? Number(options.concurrency) : undefined,
+      };
+      if (options.dryRun) {
+        const { mutation: _, ...previewRequest } = request;
+        const preview = await previewEditorialRun(previewRequest, runtime);
+        if (options.json) {
+          console.log(JSON.stringify(preview, null, 2));
+        } else {
+          for (const scene of preview.scenes) {
+            console.log(`  · ${scene.eventId}: Dry-run (state: ${scene.state})`);
+          }
+          for (const error of preview.errors) {
+            console.error(`  ❌ ${error}`);
+          }
         }
+        if (preview.errors.length > 0 && preview.scenes.length === 0) {
+          process.exit(1);
+        }
+        return;
+      }
+      const result = await renderNovel(request, runtime);
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        for (const entry of result.results) {
+          console.log(
+            `  ${entry.released ? '✅' : '❌'} ${entry.eventId}: ` +
+              `${entry.wordCount} words, cache=${entry.cacheHit}`,
+          );
+          for (const error of entry.errors) {
+            console.log(`       Error: ${error}`);
+          }
+          for (const message of entry.validationIssueMessages) {
+            console.log(`       Validation: ${message}`);
+          }
+        }
+        if (result.results.length > 0) {
+          console.log('\nDone. Output written to scenes/');
+        }
+      }
+      for (const error of result.editorialErrors) {
+        console.error(
+          `  ❌ [${error.code}] ${error.eventId ? `${error.eventId}: ` : ''}${error.message}`,
+        );
+      }
+      if (result.results.some((entry) => !entry.released) || result.editorialErrors.length > 0) {
         process.exit(1);
       }
+    },
+  );
 
-      for (const resultEntry of result.results) {
-        const status = resultEntry.released ? '✅' : '❌';
-        if (options.dryRun) {
-          console.log(`  ${status} ${resultEntry.eventId}: Dry-run (saved to .nova/dry-runs/)`);
-        } else {
+program
+  .command('revise [event]')
+  .description('Revise accepted prose using open review feedback')
+  .option('--scene <event>', 'Add an event to the revision selector', collectOption, [])
+  .option('--all', 'Revise all branch-required events')
+  .option('--chapter <number>', 'Revise a single chapter by number')
+  .option('--review <id>', 'Apply a specific open review', collectOption, [])
+  .option('--instruction <text>', 'Inline instruction for a single scene')
+  .option('--model <model>', 'LLM model to use (overrides config)')
+  .option('--provider <provider>', 'Provider: ai-sdk or mock-pass2')
+  .option('--reference-dir <path>', 'Approved mock reference directory')
+  .option('--branch-path <json>', 'Complete game-tree BranchPath JSON')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .option('--json', 'Output the core DTO as JSON')
+  .action(
+    async (
+      eventId: string | undefined,
+      options: {
+        scene?: string[];
+        all?: boolean;
+        chapter?: string;
+        review?: string[];
+        instruction?: string;
+        model?: string;
+        provider?: string;
+        referenceDir?: string;
+        branchPath?: string;
+        actor?: string;
+        json?: boolean;
+      },
+    ) => {
+      const projectDir = ensureProjectDir();
+      let branchPath: BranchPath | undefined;
+      let selector: SceneSelector;
+      try {
+        branchPath = parseBranchPath(options.branchPath);
+      } catch (error) {
+        console.error(`Invalid --branch-path: ${(error as Error).message}`);
+        process.exit(1);
+      }
+      try {
+        selector = resolveCliSelector({
+          eventId,
+          sceneIds: options.scene,
+          chapter: options.chapter,
+          all: options.all,
+        });
+      } catch (error) {
+        console.error((error as Error).message);
+        process.exit(1);
+      }
+      if (options.provider === 'mock-pass2' && !options.referenceDir) {
+        console.error('--provider mock-pass2 requires --reference-dir');
+        process.exit(1);
+      }
+      if (options.provider && options.provider !== 'ai-sdk' && options.provider !== 'mock-pass2') {
+        console.error(`Unsupported provider: ${options.provider}`);
+        process.exit(1);
+      }
+      const result = await renderNovel(
+        {
+          version: 1,
+          projectDir,
+          selector,
+          revision: {
+            ...(options.review?.length ? { reviewIds: options.review } : {}),
+            ...(options.instruction ? { instruction: options.instruction } : {}),
+          },
+          mutation: {
+            operationId: crypto.randomUUID(),
+            actorId: options.actor ?? 'local-cli',
+          },
+          ...(options.model ? { model: options.model } : {}),
+          ...(branchPath ? { branchPath } : {}),
+        },
+        {
+          storage: new FsStorage(),
+          provider:
+            options.provider === 'mock-pass2'
+              ? new MockPass2Provider({ referenceDir: options.referenceDir })
+              : undefined,
+        },
+      );
+      if (options.json) {
+        console.log(JSON.stringify(result, null, 2));
+      } else {
+        for (const entry of result.results) {
           console.log(
-            `  ${status} ${resultEntry.eventId}: ${resultEntry.wordCount} words, cache=${resultEntry.cacheHit}`,
+            `  ${entry.released ? '✅' : '❌'} ${entry.eventId}: ` + `${entry.disposition}`,
           );
         }
-        for (const error of resultEntry.errors) console.log(`       Error: ${error}`);
-        for (const message of resultEntry.validationIssueMessages)
-          console.log(`       Validation: ${message}`);
       }
-
-      if (result.errors.length > 0) {
-        console.error('\nPipeline errors:');
-        for (const err of result.errors) {
-          console.error(`  ❌ ${err}`);
-        }
+      for (const error of result.editorialErrors) {
+        console.error(`  ❌ [${error.code}] ${error.message}`);
       }
-      if (!options.dryRun && result.results.some((entry) => !entry.released)) {
+      if (result.results.some((entry) => !entry.released) || result.editorialErrors.length > 0) {
         process.exit(1);
-      }
-
-      if (!options.dryRun && result.results.length > 0) {
-        console.log(`\nDone. Output written to scenes/`);
       }
     },
   );
@@ -706,6 +1355,7 @@ program
   .option('--reference-dir <path>', 'Approved mock reference directory')
   .option('--trace', 'Emit trace JSONL to .nova/traces/<job>.jsonl')
   .option('--concurrency <number>', 'Max concurrent LLM calls')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
   .action(
     async (options: {
       model?: string;
@@ -713,6 +1363,7 @@ program
       referenceDir?: string;
       trace?: boolean;
       concurrency?: string;
+      actor?: string;
     }) => {
       const projectDir = ensureProjectDir();
       if (options.provider === 'mock-pass2' && !options.referenceDir) {
@@ -733,15 +1384,24 @@ program
         console.error(`  ${mark} ${data.eventId}: ${data.wordCount} words, cache=${data.cacheHit}`);
       });
 
-      const result = await renderGameDialogueTree({
+      const operationId = crypto.randomUUID();
+      const actor = options.actor ?? 'local-cli';
+
+      const request: RenderGameDialogueTreeRequestV1 = {
+        version: 1,
         projectDir,
+        mutation: { operationId, actorId: actor },
         model: options.model,
-        trace: options.trace,
+      };
+      const runtime: EditorialRuntime = {
         storage: new FsStorage(),
-        concurrency: options.concurrency ? Number(options.concurrency) : undefined,
         provider,
         eventBus,
-      });
+        trace: options.trace,
+        concurrency: options.concurrency ? Number(options.concurrency) : undefined,
+      };
+
+      const result = await renderGameDialogueTree(request, runtime);
       for (const entry of result.results) {
         console.log(
           `  ${entry.released ? '✅' : '❌'} ${entry.eventId}: ${entry.wordCount} words, cache=${entry.cacheHit}`,
@@ -850,7 +1510,7 @@ traceCmd
     console.log(`\nTrace Stats (${files.length} files, ${totalEvents} events):`);
     console.log('━'.repeat(60));
     console.log('  Phase               Count    Avg(ms)   Min(ms)   Max(ms)');
-    console.log('  ' + '─'.repeat(56));
+    console.log(`  ${'─'.repeat(56)}`);
     const sortedPhases = Object.keys(phaseCounts).sort();
     for (const phase of sortedPhases) {
       const count = phaseCounts[phase];
@@ -903,7 +1563,7 @@ program
         .sort();
 
       console.log('\nImpact Analysis:');
-      console.log('  ' + '━'.repeat(50));
+      console.log(`  ${'━'.repeat(50)}`);
       if (redEvents.length > 0) {
         console.log(
           `  Red (causal chain broken): ${redEvents.length} event${redEvents.length !== 1 ? 's' : ''} (${redEvents.join(', ')})`,
@@ -988,7 +1648,7 @@ program
     }
 
     console.log('\nEvidence Chain Verification:');
-    console.log('  ' + '━'.repeat(50));
+    console.log(`  ${'━'.repeat(50)}`);
     console.log(`  Total cached:  ${result.totalCached}`);
     console.log(`  Valid:         ${result.valid}`);
     console.log(`  Stale:         ${result.stale}`);
@@ -1019,7 +1679,7 @@ program
     const projectDir = ensureProjectDir();
     const storage = new FsStorage();
 
-    const { events, stateManager } = initializeProject(projectDir, storage);
+    initializeProject(projectDir, storage);
   });
 
 // --- graph ---
@@ -1047,6 +1707,194 @@ program
         : exportDAGtoDOT(edges, eventProps);
 
     console.log(output);
+  });
+
+// ============================================================================
+// source — Manage project source documents
+// ============================================================================
+
+const sourceCmd = program.command('source').description('Manage project source documents');
+
+sourceCmd
+  .command('list')
+  .description('List all source documents')
+  .option('--json', 'Output as JSON')
+  .action(async (opts: { json?: boolean }) => {
+    const documents = await listSourceDocuments({ projectDir: ensureProjectDir() });
+    if (opts.json) {
+      console.log(JSON.stringify(documents, null, 2));
+      return;
+    }
+    for (const document of documents) {
+      console.log(`${document.path}  ${document.kind}  ${document.contentHash.slice(0, 12)}`);
+    }
+  });
+
+sourceCmd
+  .command('show <path>')
+  .description('Show a source document')
+  .option('--json', 'Output as JSON')
+  .action(async (documentPath: string, opts: { json?: boolean }) => {
+    const document = await getSourceDocument({
+      projectDir: ensureProjectDir(),
+      path: documentPath,
+    });
+    if (opts.json) {
+      console.log(JSON.stringify(document, null, 2));
+      return;
+    }
+    console.log(document.content);
+  });
+
+sourceCmd
+  .command('preview <path>')
+  .description('Preview replacing one source document with exact file bytes')
+  .requiredOption('--file <path>', 'Replacement YAML file')
+  .option('--json', 'Output preview result as JSON')
+  .action(async (documentPath: string, opts: { file: string; json?: boolean }) => {
+    const projectDir = ensureProjectDir();
+    const [document, documents] = await Promise.all([
+      getSourceDocument({ projectDir, path: documentPath }),
+      listSourceDocuments({ projectDir }),
+    ]);
+    const changeSet = {
+      version: 1 as const,
+      expectedProjectSourceHash: computeProjectSourceHash(documents),
+      changes: [
+        {
+          type: 'put' as const,
+          path: document.path,
+          expectedHash: document.contentHash,
+          content: fs.readFileSync(opts.file, 'utf-8'),
+        },
+      ],
+    };
+    const preview = await previewSourceChange({ projectDir, changeSet });
+    if (opts.json) {
+      console.log(JSON.stringify(preview, null, 2));
+      return;
+    }
+    console.log(`Preview token: ${preview.previewToken}`);
+    console.log(`Documents affected: ${preview.documents.length}`);
+    console.log(`Validation: ${preview.validation.valid ? 'valid' : 'invalid'}`);
+    for (const error of preview.validation.errors) {
+      console.log(`  ${error.path ?? 'project'}: ${error.message}`);
+    }
+    for (const changed of preview.documents) {
+      console.log(`  modified ${changed.path}`);
+    }
+  });
+
+sourceCmd
+  .command('apply <preview>')
+  .description('Apply a SourceChangePreviewV1 JSON file')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .option('--note <text>', 'Optional note for the change')
+  .option('--json', 'Output result as JSON')
+  .action(
+    async (
+      previewPath: string,
+      opts: {
+        actor?: string;
+        note?: string;
+        json?: boolean;
+      },
+    ) => {
+      const result = await applySourceChange({
+        projectDir: ensureProjectDir(),
+        preview: JSON.parse(fs.readFileSync(previewPath, 'utf-8')) as SourceChangePreviewV1,
+        mutation: {
+          operationId: crypto.randomUUID(),
+          actorId: opts.actor ?? 'local-cli',
+        },
+        ...(opts.note ? { note: opts.note } : {}),
+      });
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+      console.log(
+        `Source change applied: ${result.changedDocuments.length} document(s), ` +
+          `revision ${result.sourceRevisionId}`,
+      );
+    },
+  );
+
+sourceCmd
+  .command('reconcile')
+  .description('Version valid external source working-copy edits')
+  .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
+  .option('--json', 'Output result as JSON')
+  .action(async (opts: { actor?: string; json?: boolean }) => {
+    const result = await reconcileSourceWorkingCopy({
+      projectDir: ensureProjectDir(),
+      mutation: {
+        operationId: crypto.randomUUID(),
+        actorId: opts.actor ?? 'local-cli',
+      },
+    });
+    if (opts.json) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    console.log(
+      result
+        ? `Source reconciled: ${result.changedDocuments.length} change(s).`
+        : 'Source working copy is already tracked.',
+    );
+  });
+
+// ============================================================================
+// operation — Inspect editorial operations
+// ============================================================================
+
+const operationCmd = program.command('operation').description('Inspect editorial operations');
+
+operationCmd
+  .command('list')
+  .description('List all editorial operations')
+  .option('--limit <number>', 'Max operations to show', '20')
+  .option('--json', 'Output as JSON')
+  .action((opts: { limit?: string; json?: boolean }) => {
+    const operations = listEditorialOperations({
+      projectDir: ensureProjectDir(),
+    }).slice(0, opts.limit ? Number(opts.limit) : 20);
+    if (opts.json) {
+      console.log(JSON.stringify(operations, null, 2));
+      return;
+    }
+    for (const operation of operations) {
+      console.log(
+        `${operation.operationId}  ${operation.kind}  ${operation.status}  ${operation.startedAt}`,
+      );
+    }
+  });
+
+operationCmd
+  .command('show <operationId>')
+  .description('Show an editorial operation by ID')
+  .option('--json', 'Output as JSON')
+  .action((operationId: string, opts: { json?: boolean }) => {
+    const operation = getEditorialOperation({
+      projectDir: ensureProjectDir(),
+      operationId,
+    });
+    if (opts.json) {
+      console.log(JSON.stringify(operation, null, 2));
+      return;
+    }
+    console.log(`Operation: ${operation.operationId}`);
+    console.log(`Kind: ${operation.kind}`);
+    console.log(`Status: ${operation.status}`);
+    console.log(`Actor: ${operation.actorId}`);
+    console.log(`Started: ${operation.startedAt}`);
+    if (operation.completedAt) console.log(`Completed: ${operation.completedAt}`);
+    for (const error of operation.errors) {
+      console.log(`Error [${error.code}]: ${error.message}`);
+    }
+    if (operation.result) {
+      console.log(`Result: ${JSON.stringify(operation.result, null, 2)}`);
+    }
   });
 
 // --- bench ---

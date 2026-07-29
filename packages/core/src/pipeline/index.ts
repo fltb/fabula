@@ -19,9 +19,13 @@ export type {
   RenderPipelineOptions,
   RenderSceneResult,
 } from './render.ts';
-export { RenderPipeline } from './render.ts';
+export { RenderPipeline, evaluateProseCandidate } from './render.ts';
+export type {
+  EvaluateProseCandidateInput,
+  EvaluateProseCandidateResult,
+} from './render.ts';
+export type { ReleaseDecision } from '../types/render-surface.ts';
 export { evaluateReleaseDecision } from './release-decision.ts';
-export type {} from './release-decision.ts';
 export type {
   RepairDecision,
   RepairStrategy,

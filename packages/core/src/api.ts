@@ -17,13 +17,33 @@ import type { RelationshipRuntimeState } from './types/index.js';
 // pure-function-like API for CLIs, MCP servers, and external consumers.
 // They are the recommended entry point for most use cases.
 // ============================================================================
+import {
+  EditorialOperationError,
+  executeEditorialRender,
+  executeEditorialTreeRender,
+  previewEditorialRun as editorialPreviewRun,
+} from './editorial/index.ts';
+import {
+  editorialPreviewRequestV1Schema,
+  editorialRenderRequestV1Schema,
+  renderGameDialogueTreeRequestV1Schema,
+} from './schemas/editorial.ts';
+import type {
+  EditorialRenderRequestV1,
+  RenderGameDialogueTreeRequestV1,
+  RenderGameDialogueTreeResult,
+  RenderNovelResult,
+} from './types/editorial.ts';
+import type { EditorialRuntime } from './types/editorial.ts';
+import type { PreviewResult } from './editorial/index.ts';
+// ============================================================================
 import { computeSourceContentHash } from './cache/render-cache.ts';
 
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import type { LLMProvider } from './ai/types.ts';
 import { countNarrativeText } from './assembler/count.ts';
-import { assembleGameDialogueTree, assembleNovel } from './assembler/index.ts';
+import { assembleGameDialogueTree } from './assembler/index.ts';
 import { branchPathsEqual } from './branch/path.ts';
 import { compileGameDialogueTree } from './branch/game-dialogue-tree.ts';
 import type { CompiledGameDialogueTree } from './branch/game-dialogue-tree.ts';
@@ -72,10 +92,12 @@ import type {
   ISSSnapshot,
   NarrativeEvent,
   ReleaseDecision,
+  ValidationIssue,
   ValidationResult,
   WorldState,
 } from './types/index.ts';
 import { ResultAggregator } from './validator/aggregator.ts';
+
 
 // ============================================================================
 // Module-level cache for initializeProject — API-1 / API-5
@@ -131,73 +153,6 @@ function computeProjectHash(projectDir: string, storage: Storage): string {
 // ============================================================================
 // Type Definitions
 // ============================================================================
-
-export interface RenderNovelOptions {
-  projectDir: string;
-  model?: string;
-  apiKey?: string;
-  baseUrl?: string;
-  eventId?: string; // single event; omit or 'all' for all
-  dryRun?: boolean;
-  branchPath?: BranchPath;
-  /**
-   * Explicit discourse-ledger branch label for projection selection.
-   * When absent and branchPath is set against a multi-branch ledger,
-   * renderNovel fails with an actionable error.
-   */
-  discourseBranch?: string;
-  provider?: LLMProvider;
-  storage?: Storage;
-  /** Opt-in trace output to .nova/traces/<jobId>.jsonl */
-  trace?: boolean;
-  /** Optional batch config for sliding-window batch rendering. */
-  batch?: BatchConfig;
-  /** Circuit breaker max rounds (default 3, smoke=1) */
-  maxRounds?: number;
-  /** Max concurrent LLM calls (default from config) */
-  concurrency?: number;
-  /**
-   * Optional InteractionManager for approving waiver-eligible results.
-   * When provided, warning-level (C) validation failures can be waived;
-   * error-level (S/X) failures remain blocking.
-   */
-  interactionManager?: InteractionManager;
-  /** Optional event bus for live render-progress observation */
-  eventBus?: TypedEventBus;
-}
-
-export interface RenderNovelResult {
-  results: Array<{
-    eventId: string;
-    prose: string;
-    wordCount: number;
-    cacheHit: boolean;
-    errors: string[];
-    released: boolean;
-    validationErrors: number;
-    validationIssueMessages: string[];
-    analysis: AnalysisResult | null;
-    /** Provider call ledger — per-call record for live smoke auditing. */
-    providerCalls: ProviderCallLedgerEntry[];
-    /** Aggregate SHA-256 of ordered provider-call identities */
-    promptHash: string;
-    /** Pass2 rejection category when analysis is null (empty/parse/validation) */
-    pass2Rejection?: string;
-    /** Full release decision from evaluateReleaseDecision, null if unknown. */
-    releaseDecision: ReleaseDecision | null;
-  }>;
-  errors: string[];
-}
-
-export interface RenderGameDialogueTreeOptions
-  extends Omit<RenderNovelOptions, 'eventId' | 'branchPath' | 'discourseBranch'> {}
-
-export interface RenderGameDialogueTreeResult {
-  tree: CompiledGameDialogueTree;
-  results: RenderNovelResult['results'];
-  errors: string[];
-  outputPath?: string;
-}
 
 export interface ProjectStatusResult {
   events: Array<{
@@ -353,352 +308,6 @@ function findChapterForEvent(
   return 1;
 }
 
-/**
- * Shared render-job builder — produces deterministic RenderJob[] with
- * pre-compiled contracts and default parallel surface dependencies.
- * Used by both dry-run and full-render paths.
- */
-function buildRenderJobs(params: {
-  renderEvents: NarrativeEvent[];
-  data: ProjectData;
-  registry: InMemoryEntityRegistry;
-  boundaries: ReturnType<typeof compileStoryBoundaries>;
-  discourseContextByEventId: Record<string, CompiledDiscourseRenderContext>;
-  sysCtx: SystemContext;
-  branchPath?: BranchPath;
-  sourceContentHash: string;
-  model: string;
-}): RenderJob[] {
-  const {
-    renderEvents,
-    data,
-    registry,
-    boundaries,
-    discourseContextByEventId,
-    sysCtx,
-    branchPath,
-    sourceContentHash,
-    model,
-  } = params;
-  const jobs: RenderJob[] = [];
-  const disclosureCompiler = new LogicalDisclosureSummaryCompiler();
-
-  for (const ev of renderEvents) {
-    const discourseCtx = discourseContextByEventId[ev.id];
-    const chapterNum = findChapterForEvent(data, ev.id);
-    const beforeState = boundaries.stateBeforeByEventId.get(ev.id)!;
-    const emotionalBeat = ev.arcPosition
-      ? data.config?.ideaIR?.emotionalArc?.emotionalBeats.find(
-          (beat) => beat.position === ev.arcPosition,
-        )?.emotion
-      : undefined;
-    const compiler = new ContextCompiler();
-    const pkg = compiler.compile(ev, beforeState, registry, {
-      systemContext: sysCtx,
-      narratorProfiles: data.narratorProfiles,
-      discourseContext: discourseCtx,
-      emotionalBeat,
-    });
-
-    const worldStateHash = computeSha256Hex(canonicalJson(beforeState));
-    const knowledgeStateHash = computeSha256Hex(canonicalJson(beforeState.knowledge));
-    const narratorProfileHash = computeSha256Hex(canonicalJson(data.narratorProfiles));
-    const plannedDiscourseHash = discourseCtx
-      ? computeSha256Hex(discourseCtx.ledgerHash + '|' + discourseCtx.assertionCatalogHash)
-      : '';
-    const catalogHash =
-      data.narratorAssertions && Object.keys(data.narratorAssertions).length > 0
-        ? computeSha256Hex(canonicalJson(Object.keys(data.narratorAssertions).sort()))
-        : undefined;
-
-    const sceneTransition: SceneTransition =
-      ev.sceneType === 'linear' ? 'continuous'
-      : ev.sceneType === 'flashback' ? 'flashback'
-      : ev.sceneType === 'flashforward' ? 'time_jump'
-      : 'hard_cut';
-
-    const contract = compileSceneContract({
-      sceneId: ev.id,
-      branch: branchPath ?? { decisions: [] },
-      discoursePosition: discourseCtx?.cursor ?? 0,
-      worldStateHash,
-      knowledgeStateHash,
-      narratorProfileHash,
-      plannedDiscourseHash,
-      catalogHash,
-      styleHints: {
-        chapterStyle: String(chapterNum),
-        narratorPovStyle: ev.narratorProfileRef,
-      },
-      continuityDirectives: {
-        transition: sceneTransition,
-      },
-      promptProviderId: model,
-      promptProviderVersion: model,
-    });
-
-    let logicalDisclosureSummary: string | undefined;
-    if (discourseCtx) {
-      logicalDisclosureSummary = disclosureCompiler.compile(
-        discourseCtx.stateBefore,
-        contract,
-        discourseCtx.projection,
-      );
-    }
-
-    jobs.push({
-      event: ev,
-      stateBefore: beforeState,
-      context: pkg,
-      gameDialogue: ev.choices ? { choices: ev.choices } : undefined,
-      chapter: chapterNum,
-      contract,
-      sourceContentHash,
-      logicalDisclosureSummary,
-      surfaceDependency: {
-        groupId: ev.id,
-        policy: 'parallel' as const,
-        manifestHash: computeSha256Hex(canonicalJson({
-          eventId: ev.id,
-          contractHash: contract.promptContractHash,
-          policy: 'parallel',
-        })),
-      },
-    });
-  }
-
-  return jobs;
-}
-
-/**
- * Apply a SurfacePlanResult to jobs, wiring groupId, laneId,
- * predecessorEventId, and policy from the plan's dependency graph.
- */
-function applySurfacePlanToJobs(
-  jobs: RenderJob[],
-  plan: SurfacePlanResult,
-): void {
-  const { surfaceDependencyGraph } = plan;
-  const { groups, serialLanes } = surfaceDependencyGraph;
-
-  // Build sceneId -> group map
-  const sceneGroupMap = new Map<string, RenderGroup>();
-  for (const group of groups) {
-    for (const sceneId of group.sceneIds) {
-      sceneGroupMap.set(sceneId, group);
-    }
-  }
-
-  // Build predecessor chain from lane ordering
-  const groupPredecessors = new Map<string, string>(); // groupId -> predecessor groupId
-  const groupToLane = new Map<string, string>();       // groupId -> laneId
-
-  for (const lane of serialLanes) {
-    for (let i = 0; i < lane.groupIds.length; i++) {
-      groupToLane.set(lane.groupIds[i], lane.laneId);
-      if (i > 0) {
-        groupPredecessors.set(lane.groupIds[i], lane.groupIds[i - 1]);
-      }
-    }
-  }
-
-  // Apply to jobs
-  for (const job of jobs) {
-    const group = sceneGroupMap.get(job.event.id);
-    if (!group) continue;
-
-    const groupId = group.groupId;
-    const policy = group.surfacePolicy.type;
-    let predecessorEventId: string | undefined;
-
-    if (groupPredecessors.has(groupId)) {
-      const predGroupId = groupPredecessors.get(groupId)!;
-      const predGroup = groups.find((g) => g.groupId === predGroupId);
-      if (predGroup && predGroup.sceneIds.length > 0) {
-        predecessorEventId = predGroup.sceneIds[predGroup.sceneIds.length - 1];
-      }
-    }
-
-    job.surfaceDependency = {
-      groupId,
-      ...(groupToLane.has(groupId) ? { laneId: groupToLane.get(groupId) } : {}),
-      predecessorEventId,
-      policy: policy as 'parallel' | 'serial_surface' | 'fallback_without_surface',
-      manifestHash: plan.manifest.sourceDefinitionHash,
-    };
-  }
-}
-function compileConfiguredSurfacePlan(
-  data: ProjectData,
-  jobs: readonly RenderJob[],
-  branchPath?: BranchPath,
-): SurfacePlanResult | undefined {
-  const config = data.config?.renderSurface;
-  if (!config) return undefined;
-
-  const options: SurfacePlannerOptions = {
-    mode: config.mode ?? 'manual',
-    branch: branchPath ?? { decisions: [] },
-    sceneIds: jobs.map((job) => job.event.id),
-    contracts: jobs.map((job) => job.contract),
-    ...(config.groups
-      ? {
-          authorGroups: config.groups.map((group) => ({
-            groupId: group.groupId,
-            sceneIds: group.sceneIds,
-            surfacePolicy: { type: group.surfacePolicy },
-          })),
-        }
-      : {}),
-    ...(config.lanes
-      ? {
-          authorLanes: config.lanes.map((lane) => ({
-            laneId: lane.laneId,
-            groupIds: lane.groupIds,
-          })),
-        }
-      : {}),
-    ...(config.auto
-      ? {
-          autoConfig: {
-            authorized: config.auto.authorized,
-            maxParallelGroupSize: config.auto.maxParallelGroupSize,
-          },
-        }
-      : {}),
-  };
-  return new SurfacePlanner(options).plan();
-}
-
-/**
- * Materialize surface reference packets for wave jobs from accepted artifacts.
- * Returns blocked results for jobs whose serial predecessor is unavailable and
- * whose policy is not fallback_without_surface.
- */
-function materializeSurfacePackets(
-  jobs: RenderJob[],
-  waveEventIds: readonly string[],
-  acceptedByEventId: Map<string, AcceptedSceneArtifact>,
-  storage: Storage,
-  projectDir: string,
-  extractor: SurfaceReferenceExtractor,
-  scopeHash: string,
-  currentRunEventIds: ReadonlySet<string>,
-): { blocked: RenderSceneResult[] } {
-  const resolver = new AcceptedArtifactResolver(storage, projectDir);
-  const blocked: RenderSceneResult[] = [];
-  for (const job of jobs) {
-    if (!waveEventIds.includes(job.event.id)) continue;
-    const predId = job.surfaceDependency.predecessorEventId;
-    if (!predId) continue;
-
-    const policy = job.surfaceDependency.policy;
-
-    // Check current run's accepted artifacts first
-    const accepted = acceptedByEventId.get(predId);
-    if (accepted) {
-      job.surfaceReferencePacket = extractor.extract(accepted);
-      continue;
-    }
-
-    // A persisted source may satisfy a subset dependency only when it shares
-    // this render's branch/discourse scope. It then becomes a ready root.
-    const persisted = resolver.resolve(predId);
-    if (persisted && persisted.scopeHash === scopeHash) {
-      job.surfaceReferencePacket = extractor.extract(persisted);
-      if (!currentRunEventIds.has(predId)) {
-        job.surfaceDependency = { ...job.surfaceDependency, predecessorEventId: undefined };
-      }
-      continue;
-    }
-
-    // Missing source — explicit fallback can become a ready root without a packet.
-    if (policy === 'fallback_without_surface') {
-      if (!currentRunEventIds.has(predId)) {
-        job.surfaceDependency = { ...job.surfaceDependency, predecessorEventId: undefined };
-      }
-      continue;
-    }
-
-    const now = Date.now();
-    blocked.push({
-      eventId: job.event.id,
-      prose: '',
-      analysis: null,
-      llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-      llmPass2: null,
-      cacheHit: false,
-      errors: [
-        `MISSING_SURFACE_SOURCE: predecessor "${predId}" has no accepted artifact in this run or persisted storage`,
-      ],
-      promptHash: '',
-      renderStart: now,
-      renderEnd: now,
-      validation: {
-        passed: false,
-        errors: [{
-          validator: 'surface-scheduler',
-          severity: 'error' as const,
-          event: job.event.id,
-          entity: '',
-          message: `MISSING_SURFACE_SOURCE: ${predId}`,
-          fixSuggestion: 'Render the predecessor scene first or configure fallback_without_surface policy',
-          fixAction: 'manual' as const,
-          fixTarget: { file: '' },
-        }],
-        warnings: [],
-        infos: [],
-      },
-      providerCalls: [],
-      requestRecords: [],
-      attempts: 0,
-      needsReview: false,
-    });
-  }
-
-  return { blocked };
- }
-
-function writeSceneResponse(
-  storage: Storage,
-  responseDir: string,
-  result: RenderSceneResult,
-  decision: ReleaseDecision,
-): ReleaseDecision {
-  try {
-    storage.write(
-      path.join(responseDir, `${result.eventId}.json`),
-      JSON.stringify(
-        {
-          prose: result.prose,
-          timestamp: new Date().toISOString(),
-          cacheHit: result.cacheHit,
-          errors: result.errors,
-          analysis: result.analysis,
-          validation: result.validation,
-          needsReview: result.needsReview,
-          attempts: result.attempts,
-          promptHash: result.promptHash,
-          providerCalls: result.providerCalls,
-          requestRecords: result.requestRecords,
-          released: decision.status === 'accepted',
-          releaseDecision: decision,
-          ...(result.pass2Rejection !== undefined ? { pass2Rejection: result.pass2Rejection } : {}),
-        },
-        null,
-        2,
-      ),
-    );
-    return decision;
-  } catch (writeErr) {
-    return {
-      status: 'blocked',
-      scopeHash: decision.scopeHash,
-      validationIdentity: decision.validationIdentity,
-      reasons: [`response write failed: ${sanitizeError(writeErr)}`],
-    };
-  }
-}
 
 /**
  * Build a release-gate diagnostic message for a single scene result.
@@ -712,7 +321,7 @@ export function buildReleaseDiagnostic(result: RenderSceneResult): string {
   let reason: string;
 
   if (result.validation && result.validation.errors.length > 0) {
-    reason = result.validation.errors.map((issue) => issue.message).join(' | ');
+    reason = result.validation.errors.map((issue: ValidationIssue) => issue.message).join(' | ');
   } else if (result.errors.length > 0) {
     reason = result.errors.join(' | ');
   } else if (result.analysis === null) {
@@ -728,18 +337,6 @@ export function buildReleaseDiagnostic(result: RenderSceneResult): string {
   return `${result.eventId}: ${sanitizeError(reason)}`;
 }
 
-/**
- * Create an LLM provider using AiSdkProvider (Vercel AI SDK).
- * Reads apiKey and baseUrl from parameters or environment variables.
- */
-async function createProvider(
-  apiKey: string,
-  baseUrl: string | undefined,
-  model: string,
-): Promise<LLMProvider> {
-  const { AiSdkProvider } = await import('./ai/providers/ai-sdk.ts');
-  return new AiSdkProvider({ apiKey, baseURL: baseUrl, model });
-}
 
 // ============================================================================
 // Plugin initialization helper
@@ -804,812 +401,83 @@ async function initializePlugins(
 
   return { pluginHooksManager: hooksManager, validatorRegistry, conflictErrors: [] };
 }
+// ============================================================================
+// Internal helper — validate runtime combinations before delegation
+// ============================================================================
+
+/**
+ * Validate runtime configuration that cannot be expressed in schemas.
+ * Throws EditorialOperationError when mutually exclusive options are set.
+ * This is kept separate from the request schema to avoid leaking runtime
+ * objects (providers, signals) into serializable DTOs.
+ */
+function validateRuntime(runtime: EditorialRuntime): void {
+  if (runtime.provider && runtime.providerFactory) {
+    throw new EditorialOperationError(
+      'INVALID_OPERATION',
+      'Cannot provide both runtime.provider and runtime.providerFactory. Provide at most one.',
+    );
+  }
+}
 
 // ============================================================================
 // 1. renderNovel — Full LLM rendering pipeline
 // ============================================================================
 
 /**
- * Orchestrate the full render pipeline for one or all events.
+ * Orchestrate the full render pipeline via the editorial render service.
+ * The runtime is optional — when omitted a safe empty runtime (no storage,
+ * no provider, no signal) is used, which will fail at materialization if
+ * any provider or storage operation is needed.
  *
- * Internally: EntityMapper.loadProject → loadAllEvents → InMemoryEntityRegistry.load
- * → StateManager.commit (loop) → ContextCompiler.compile (per event) → create LLM provider
- * → RenderPipeline → buildAndWriteOutputs.
- *
- * For dryRun: compile context, save to `.nova/dry-runs/{eventId}_prompt.md`,
- * return with prose empty.
+ * Strict-validates the request against editorialRenderRequestV1Schema at
+ * runtime before delegation.
  */
-export async function renderNovel(opts: RenderNovelOptions): Promise<RenderNovelResult> {
-  const {
-    projectDir,
-    model,
-    apiKey,
-    baseUrl,
-    eventId,
-    dryRun,
-    provider: injectedProvider,
-    branchPath,
-    trace,
-    eventBus,
-  } = opts;
-  const errors: string[] = [];
-
-  const storage = opts.storage ?? new FsStorage();
-  // Observability: trace collector for this render session
-  const traceCollector = trace ? new TraceCollector(eventId ?? 'render-all') : undefined;
-  const eventLogger = new Logger(
-    trace ? undefined : new LevelFilterTransport(new JsonlLogTransport()),
-    { module: 'render' },
-  );
-
-  const { data, events, registry } = initializeProject(projectDir, storage);
-  const gameDialogueTree = compileGameDialogueTree(
-    [...data.chapters.values()].flatMap((chapter) => chapter.events),
-    new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day])),
-  );
-  if (
-    gameDialogueTree &&
-    (!branchPath ||
-      !gameDialogueTree.leafPaths.some((leafPath) => branchPathsEqual(leafPath, branchPath)))
-  ) {
-    return {
-      results: [],
-      errors: ['Game dialogue rendering requires one complete, ordered leaf branchPath.'],
-    };
-  }
-
-  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(
-    events,
-    registry,
-    data,
-  );
-
-  const anchors = new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day]));
-  const boundaries = compileStoryBoundaries(
-    authoredEvents,
-    initialFacts,
-    anchors,
-    branchPath,
-    initialThreads,
-  );
-  const renderEvents = (
-    !eventId || eventId === 'all'
-      ? authoredEvents
-      : authoredEvents.filter((event) => event.id === eventId)
-  ).filter((event) => event.source === 'event_file' && boundaries.stateBeforeByEventId.has(event.id));
-  if (renderEvents.length === 0) {
-    errors.push(`No events found to render${eventId ? ` for eventId "${eventId}"` : ''}`);
-    return { results: [], errors };
-  }
-
-  // DISCARD-1: Guard against silent discourse-branch mismatches before any
-  // prompt construction. Three cases:
-  //
-  //   1. Explicit discourseBranch is set but does not match any ledger entry
-  //      branch label — reject unknown/typo label.
-  //   2. Explicit discourseBranch is set but no discourse ledger exists
-  //      (definitions/discourse-ledger.yaml absent) — reject; a branch
-  //      label is meaningless without a ledger.
-  //   3. branchPath selects a non-main story branch, no explicit
-  //      discourseBranch is given, and the loaded ledger has non-main
-  //      entries — fail closed rather than silently projecting main.
-  if (opts.discourseBranch != null) {
-    if (!data.discourseLedger) {
-      errors.push(
-        'discourseBranch "' +
-          opts.discourseBranch +
-          '" was specified but no discourse ledger ' +
-          'exists (definitions/discourse-ledger.yaml is absent or optional). ' +
-          'Remove discourseBranch or add a ledger with matching entries.',
-      );
-      return { results: [], errors };
-    }
-    const branchExists = data.discourseLedger.entries.some(
-      (e) => e.branch === opts.discourseBranch,
-    );
-    if (!branchExists) {
-      errors.push(
-        'discourseBranch "' +
-          opts.discourseBranch +
-          '" does not match any branch label ' +
-          'in the discourse ledger. Valid labels: ' +
-          [...new Set(data.discourseLedger.entries.map((e) => e.branch))].join(', '),
-      );
-      return { results: [], errors };
-    }
-  } else if (branchPath && data.discourseLedger) {
-    const hasNonMainBranch = data.discourseLedger.entries.some((e) => e.branch !== 'main');
-    if (hasNonMainBranch) {
-      errors.push(
-        'Story branchPath is set but no explicit discourseBranch was provided, and ' +
-          'the discourse ledger contains non-main branches. Render would project the ' +
-          'default (main) discourse, which may be incorrect. Set discourseBranch to ' +
-          'specify the target discourse ledger branch, or omit branchPath to use main.',
-      );
-      return { results: [], errors };
-    }
-  }
-  // DISCOURSE-1: Compile strict discourse boundaries — validates ledger structure,
-  // assertion catalog, per-event cursor, and produces per-event compiled contexts.
-  // This runs BEFORE any provider/cache/plugin/prompt/dry-run work.
-  // ConfigErrors here cause early return with zero side effects.
-  //
-  // When no discourse ledger exists AND no explicit discourseBranch was provided,
-  // this is a legal no-disclosure mode: skip discourse compilation entirely.
-  // (The explicit discourseBranch-without-ledger case already errored above.)
-  let discourseContextByEventId: Record<string, CompiledDiscourseRenderContext> = {};
-  if (data.discourseLedger) {
-    const discourseBranch = opts.discourseBranch ?? 'main';
-    try {
-      discourseContextByEventId = compileDiscourseBoundaries(
-        renderEvents,
-        data.discourseLedger,
-        data.narratorAssertions,
-        data.narratorProfiles,
-        discourseBranch,
-      );
-    } catch (err) {
-      errors.push(`Discourse preflight failed: ${(err as Error).message}`);
-      return { results: [], errors };
-    }
-  }
-
-  const sysCtx: SystemContext = {
-    genre: data.config?.genre ?? 'literary',
-    style: 'literary',
-    narrativeRules: [],
-    thematicIntent: data.config?.ideaIR?.thematicIntent,
-    synopsis: data.config?.synopsis,
-  };
-  // Initialize plugins (after discourse preflight for strict ordering)
-  const { pluginHooksManager, validatorRegistry, conflictErrors } = await initializePlugins(
-    projectDir,
-    storage,
-    eventLogger,
-    data.config ?? undefined,
-  );
-  if (conflictErrors.length > 0) {
-    return { results: [], errors: conflictErrors };
-  }
-
-  // ── Dry run ───────────────────────────────────────────────────────
-  if (dryRun) {
-    const results: RenderNovelResult['results'] = [];
-    const dryRunDir = path.join(
-      projectDir,
-      data.config?.outputDir ?? DEFAULT_CONFIG.outputDir,
-      'dry-runs',
-    );
-    storage.mkdirp(dryRunDir);
-    const language = data.config?.defaultLanguage ?? 'en';
-
-    const dryScopeHash = computeSha256Hex(canonicalJson({
-      branch: branchPath ?? { decisions: [] },
-      discourse: opts.discourseBranch ?? 'main',
-    }));
-    const selectedEventIds = new Set(renderEvents.map((event) => event.id));
-    const eventFilePaths = [...data.chapters.values()]
-      .flatMap((chapter) => chapter.events)
-      .filter((eventFile) => selectedEventIds.has(eventFile.event))
-      .map((eventFile) => eventFile.filePath)
-      .filter((filePath): filePath is string => filePath !== undefined);
-    const sourceContentHash = computeSourceContentHash(
-      eventFilePaths,
-      path.join(projectDir, 'definitions'),
-      { branchDiscourseScopeHash: dryScopeHash },
-      projectDir,
-      storage,
-    );
-    const dryJobs = buildRenderJobs({
-      renderEvents,
-      data,
-      registry,
-      boundaries,
-      discourseContextByEventId,
-      sysCtx,
-      branchPath,
-      sourceContentHash,
-      model: model ?? data.config?.defaultModel ?? 'dry-run-model',
-    });
-    const drySurfacePlan = compileConfiguredSurfacePlan(data, dryJobs, branchPath);
-    if (drySurfacePlan) applySurfacePlanToJobs(dryJobs, drySurfacePlan);
-    const dryExtractor = new SurfaceReferenceExtractor(
-      data.config?.renderSurface?.extraction?.budget ?? 2000,
-    );
-    const { blocked: dryBlocked } = materializeSurfacePackets(
-      dryJobs,
-      dryJobs.map((job) => job.event.id),
-      new Map(),
-      storage,
-      projectDir,
-      dryExtractor,
-      dryScopeHash,
-      new Set(),
-    );
-    const dryBlockedByEventId = new Map(dryBlocked.map((result) => [result.eventId, result]));
-
-    for (const job of dryJobs) {
-      const ev = job.event;
-      const missingSource = dryBlockedByEventId.get(ev.id);
-      if (missingSource) {
-        results.push({
-          eventId: ev.id,
-          prose: '',
-          wordCount: 0,
-          cacheHit: false,
-          released: false,
-          validationErrors: missingSource.validation?.errors.length ?? 0,
-          validationIssueMessages: missingSource.errors,
-          errors: missingSource.errors,
-          analysis: null,
-          providerCalls: [],
-          promptHash: '',
-          releaseDecision: {
-            status: 'blocked',
-            scopeHash: dryScopeHash,
-            validationIdentity: 'dry-run',
-            reasons: [...missingSource.errors],
-          },
-        });
-        continue;
-      }
-      const assembler = new PromptAssembler();
-      const assembled = assembler.assemble(job.context, {
-        targetLengthWords: ev.styleGuidance?.targetWordCount ?? 400,
-        styleGuidance: ev.styleGuidance,
-        characterVoiceNotes:
-          ev.styleGuidance?.characterVoice &&
-          Object.keys(ev.styleGuidance.characterVoice).length > 0
-            ? Object.entries(ev.styleGuidance.characterVoice)
-                .map(([id, note]) => `${id}: ${note}`)
-                .join('; ')
-            : undefined,
-        language,
-        narrativeChecklistItems: ev.narrativeChecklist?.items,
-        sourceContextStyleNotes: ev.sourceContext?.entries
-          .filter((e) => e.classification === 'STYLE')
-          .map((e) => (e.styleNote ? `- "${e.excerpt}" (${e.styleNote})` : `- "${e.excerpt}"`))
-          .join('\n'),
-        logicalDisclosureSummary: job.logicalDisclosureSummary,
-        surfaceReferencePacket: job.surfaceReferencePacket,
-      });
-
-      const eventErrors: string[] = [];
-      const promptFile = path.join(dryRunDir, `${ev.id}_prompt.md`);
-      try {
-        storage.write(promptFile, assembled.userPrompt);
-      } catch (writeErr) {
-        eventErrors.push(
-          `Failed to write dry-run prompt to ${promptFile}: ${sanitizeError(writeErr)}`,
-        );
-      }
-
-      results.push({
-        eventId: ev.id,
-        prose: '',
-        wordCount: 0,
-        cacheHit: false,
-        released: false,
-        validationErrors: 0,
-        validationIssueMessages: [],
-        errors: eventErrors,
-        analysis: null,
-        providerCalls: [],
-        promptHash: '',
-        releaseDecision: null,
-      });
-    }
-
-    const dryShutdownErrors = pluginHooksManager ? await pluginHooksManager.shutdown() : [];
-    errors.push(...dryShutdownErrors);
-    return { results, errors };
-  }
-  // ── Full rendering ────────────────────────────────────────────────
-  const resolvedModel =
-    model ?? data.config?.defaultModel ?? process.env['NOVALISTICALLY_AI_MODEL'];
-  if (!resolvedModel) {
-    errors.push(
-      'No model configured. Set --model, nova.yaml "defaultModel", or the NOVALISTICALLY_AI_MODEL environment variable.',
-    );
-    const modelShutdownErrors = pluginHooksManager ? await pluginHooksManager.shutdown() : [];
-    errors.push(...modelShutdownErrors);
-    return { results: [], errors };
-  }
-  let provider: LLMProvider;
-  // Check for plugin-registered provider configured in nova.yaml
-  const configuredPluginProvider = data.config?.plugins?.provider;
-  // Guard: provider set but plugins not enabled or no hooks manager
-  if (configuredPluginProvider && !pluginHooksManager) {
-    errors.push(
-      `Plugin provider "${configuredPluginProvider}" is configured but plugins are not enabled or failed to initialize. ` +
-        'Set plugins.enabled: true in nova.yaml or remove plugins.provider to use the default provider.',
-    );
-    return { results: [], errors };
-  }
-  if (configuredPluginProvider && pluginHooksManager) {
-    const pluginProv = pluginHooksManager.getProvider(configuredPluginProvider);
-    if (!pluginProv) {
-      errors.push(
-        `Plugin provider "${configuredPluginProvider}" is not registered. ` +
-          `Available plugin providers: ${pluginHooksManager.getProviderNames().join(', ') || '(none)'}`,
-      );
-      const provShutdownErrors = await pluginHooksManager.shutdown();
-      errors.push(...provShutdownErrors);
-      return { results: [], errors };
-    }
-    provider = pluginProv;
-  } else
-  if (injectedProvider) {
-    provider = injectedProvider;
-  } else {
-    const resolvedApiKey = apiKey ?? process.env['NOVALISTICALLY_AI_API_KEY'] ?? '';
-    if (!resolvedApiKey) {
-      errors.push(
-        'No API key provided. Set NOVALISTICALLY_AI_API_KEY environment variable or pass apiKey option.',
-      );
-      const apiKeyShutdownErrors = pluginHooksManager ? await pluginHooksManager.shutdown() : [];
-      errors.push(...apiKeyShutdownErrors);
-      return { results: [], errors };
-    }
-    const resolvedBaseUrl = baseUrl ?? process.env['NOVALISTICALLY_AI_BASE_URL'] ?? undefined;
-    try {
-      provider = await createProvider(resolvedApiKey, resolvedBaseUrl, resolvedModel);
-    } catch (err) {
-      errors.push(`Failed to create LLM provider: ${(err as Error).message}`);
-      const createShutdownErrors = pluginHooksManager ? await pluginHooksManager.shutdown() : [];
-      errors.push(...createShutdownErrors);
-      return { results: [], errors };
-    }
-  }
-  const cacheDir = path.join(
-    projectDir,
-    data.config?.outputDir ?? DEFAULT_CONFIG.outputDir,
-    'render-cache',
-  );
-  const aggregator = new ResultAggregator(
-    undefined,
-    validatorRegistry?.validators,
-    undefined,
-    traceCollector,
-  );
-  const pipeline = new RenderPipeline({
-    provider,
-    model: resolvedModel,
-    cacheDir,
-    storage,
-    aggregator,
-    logger: eventLogger,
-    traceCollector,
-    eventBus,
-    maxRounds: opts.maxRounds,
-    concurrency: opts.concurrency,
-    language: data.config?.defaultLanguage ?? 'en',
-    pluginHooksManager,
-  });
-
-  // ── Compute source content hash from loaded event files + definitions ──
-  // This is injected into every RenderJob and forms the root of the logical
-  // cache key. A source read failure here is a hard render configuration
-  // failure — we abort before any provider/cache activity.
-  const sourceScopeHash = computeSha256Hex(canonicalJson({
-    branch: branchPath ?? { decisions: [] },
-    discourse: opts.discourseBranch ?? 'main',
-  }));
-  const selectedEventIds = new Set(renderEvents.map((event) => event.id));
-  const eventFilePaths = [...data.chapters.values()]
-    .flatMap((chapter) => chapter.events)
-    .filter((eventFile) => selectedEventIds.has(eventFile.event))
-    .map((eventFile) => eventFile.filePath)
-    .filter((filePath): filePath is string => filePath !== undefined);
-  const definitionsDir = path.join(projectDir, 'definitions');
-  const sourceContentHash = computeSourceContentHash(
-    eventFilePaths,
-    definitionsDir,
-    { branchDiscourseScopeHash: sourceScopeHash },
-    projectDir,
-    storage,
-  );
-  // ── Build shared render jobs with deterministic pre-prose contracts ──
-  const jobs = buildRenderJobs({
-    renderEvents,
-    data,
-    registry,
-    boundaries,
-    discourseContextByEventId,
-    sysCtx,
-    branchPath,
-    sourceContentHash,
-    model: resolvedModel,
-  });
-
-  // Record context compilation spans
-  for (const job of jobs) {
-    traceCollector?.record({
-      phase: 'context',
-      state: 'end',
-      spanId: job.event.id,
-      eventId: job.event.id,
-      durationMs: 0,
-    });
-  }
-
-  // ── Apply surface plan from config ──────────────────────────────────
-  if (data.config?.renderSurface) {
-    const contracts = jobs.map((j) => j.contract);
-    const renderSurfaceConfig = data.config.renderSurface;
-    const plannerMode = renderSurfaceConfig.mode ?? 'manual';
-    const plannerOptions: SurfacePlannerOptions = {
-      mode: plannerMode,
-      branch: branchPath ?? { decisions: [] },
-      sceneIds: renderEvents.map((e) => e.id),
-      contracts,
-      ...(renderSurfaceConfig.groups
-        ? {
-            authorGroups: renderSurfaceConfig.groups.map((g) => ({
-              groupId: g.groupId,
-              sceneIds: g.sceneIds,
-              surfacePolicy:
-                g.surfacePolicy === 'serial_surface'
-                  ? { type: 'serial_surface' as const }
-                  : g.surfacePolicy === 'fallback_without_surface'
-                    ? { type: 'fallback_without_surface' as const }
-                    : { type: 'parallel' as const },
-            })),
-          }
-        : {}),
-      ...(renderSurfaceConfig.lanes
-        ? {
-            authorLanes: renderSurfaceConfig.lanes.map((l) => ({
-              laneId: l.laneId,
-              groupIds: l.groupIds,
-            })),
-          }
-        : {}),
-      ...(renderSurfaceConfig.auto
-        ? {
-            autoConfig: {
-              authorized: renderSurfaceConfig.auto.authorized,
-              maxParallelGroupSize: renderSurfaceConfig.auto.maxParallelGroupSize,
-            },
-          }
-        : {}),
-    };
-
-    try {
-      const planner = new SurfacePlanner(plannerOptions);
-      const surfacePlan = planner.plan();
-
-      // Persist suggest proposal separately — effective plan remains parallel
-      if (plannerMode === 'suggest' && surfacePlan.proposal) {
-        const renderPlanDir = path.join(
-          projectDir,
-          data.config?.outputDir ?? DEFAULT_CONFIG.outputDir,
-          'render-plans',
-        );
-        storage.mkdirp(renderPlanDir);
-        const branchScope = opts.discourseBranch ?? 'main';
-        const suggestionPath = path.join(renderPlanDir, `${branchScope}.suggestion.json`);
-        try {
-          storage.write(suggestionPath, JSON.stringify(surfacePlan.proposal, null, 2));
-        } catch (writeErr) {
-          errors.push(`Failed to write surface suggestion: ${sanitizeError(writeErr)}`);
-        }
-      }
-
-      // Apply plan to jobs — wires groupId, laneId, predecessorEventId, policy
-      applySurfacePlanToJobs(jobs, surfacePlan);
-    } catch (err) {
-      errors.push(`Surface plan failed: ${(err as Error).message}`);
-      return { results: [], errors };
-    }
-  }
-
-  // ── Resolve subset predecessors before scheduling ───────────────────
-  const scopeHash = sourceScopeHash;
-  const validationIdentity = aggregator.getValidatorIdentity();
-  const extractor = new SurfaceReferenceExtractor(
-    data.config?.renderSurface?.extraction?.budget ?? 2000,
-  );
-  const responseDir = path.join(projectDir, '.nova', 'responses');
-  storage.mkdirp(responseDir);
-  const currentRunEventIds = new Set(jobs.map((job) => job.event.id));
-  const subsetDependentIds = jobs
-    .filter((job) => {
-      const predecessor = job.surfaceDependency.predecessorEventId;
-      return predecessor !== undefined && !currentRunEventIds.has(predecessor);
-    })
-    .map((job) => job.event.id);
-  const { blocked: preBlocked } = materializeSurfacePackets(
-    jobs,
-    subsetDependentIds,
-    new Map(),
-    storage,
-    projectDir,
-    extractor,
-    scopeHash,
-    currentRunEventIds,
-  );
-  const preBlockedIds = new Set(preBlocked.map((result) => result.eventId));
-  const schedulableJobs = jobs.filter((job) => !preBlockedIds.has(job.event.id));
-
-  // ── Wave-based scheduling via SurfaceScheduler ───────────────────────
-  const scheduler = new SurfaceScheduler();
-  const wavePlan = scheduler.buildWavePlan(schedulableJobs);
-  if (wavePlan.missingPredecessors.length > 0 || wavePlan.cycleParticipants.length > 0) {
-    const missing = wavePlan.missingPredecessors
-      .map((m) => `${m.eventId} -> ${m.predecessorEventId}`)
-      .join(', ');
-    const cycles = wavePlan.cycleParticipants.join(', ');
-    let msg = 'Surface dependency validation failed:';
-    if (wavePlan.missingPredecessors.length > 0) msg += ` missing predecessors: ${missing}`;
-    if (wavePlan.cycleParticipants.length > 0) msg += ` cycle participants: ${cycles}`;
-    errors.push(msg);
-    return { results: [], errors };
-  }
-
-  // ── Process waves sequentially, each with independent release gate ──
-  let results: RenderSceneResult[] = [...preBlocked];
-  const decisions = new Map<string, ReleaseDecision>();
-  const acceptedByEventId = new Map<string, AcceptedSceneArtifact>();
-  for (const result of preBlocked) {
-    const decision = writeSceneResponse(storage, responseDir, result, {
-      status: 'blocked',
-      scopeHash,
-      validationIdentity,
-      reasons: [...result.errors],
-    });
-    decisions.set(result.eventId, decision);
-  }
-
-  try {
-    for (const wave of wavePlan.waves) {
-      // ── Materialize surface packets from accepted current/persisted sources ──
-      const { blocked: waveBlocked } = materializeSurfacePackets(
-        schedulableJobs,
-        wave.eventIds,
-        acceptedByEventId,
-        storage,
-        projectDir,
-        extractor,
-        scopeHash,
-        currentRunEventIds,
-      );
-
-      // Collect blocked results immediately — they skip rendering
-      for (const br of waveBlocked) {
-        results.push(br);
-        const decision = writeSceneResponse(storage, responseDir, br, {
-          status: 'blocked',
-          scopeHash,
-          validationIdentity,
-          reasons: br.errors.length > 0 ? [...br.errors] : ['MISSING_SURFACE_SOURCE'],
-        });
-        decisions.set(br.eventId, decision);
-      }
-
-      // Filter to jobs that need actual rendering
-      const renderedIds = new Set(results.map((r) => r.eventId));
-      const waveJobs = schedulableJobs.filter(
-        (job) => wave.eventIds.includes(job.event.id) && !renderedIds.has(job.event.id),
-      );
-
-      if (waveJobs.length === 0) continue;
-
-      // ── Render this ready wave (batch confined per-wave) ──────────────
-      let waveResults: RenderSceneResult[];
-      try {
-        waveResults = opts.batch
-          ? (await new BatchRenderPipeline(pipeline).renderBatched(waveJobs, opts.batch)).results
-          : await pipeline.renderAll(waveJobs);
-      } catch (err) {
-        errors.push(`Wave ${wave.waveIndex} render failed: ${sanitizeError(err)}`);
-        continue;
-      }
-
-      // ── Release gate + write response per scene ─────────────────────
-      for (const r of waveResults) {
-        let decision = evaluateReleaseDecision(
-          r,
-          scopeHash,
-          validationIdentity,
-          opts.interactionManager,
-        );
-
-        decision = writeSceneResponse(storage, responseDir, r, decision);
-
-        decisions.set(r.eventId, decision);
-        results.push(r);
-
-        // Collect accepted for subsequent wave packet materialization
-        if (decision.status === 'accepted') {
-          acceptedByEventId.set(r.eventId, {
-            eventId: r.eventId,
-            prose: r.prose,
-            scopeHash,
-            releaseDecision: decision,
-          });
-        }
-      }
-    }
-
-    // Completion timing never changes the externally observed render-plan order.
-    const resultByEventId = new Map(results.map((result) => [result.eventId, result]));
-    results = jobs
-      .map((job) => resultByEventId.get(job.event.id))
-      .filter((result): result is RenderSceneResult => result !== undefined);
-
-    // ── Output — accepted only ──────────────────────────────────────
-    const accepted = results.filter((r) => decisions.get(r.eventId)?.status === 'accepted');
-    const blocked = results.filter((r) => decisions.get(r.eventId)?.status === 'blocked');
-
-    if (blocked.length > 0) {
-      const diagnostics = blocked.map(buildReleaseDiagnostic);
-      errors.push(`Release gate rejected (blocking): ${diagnostics.join('; ')}`);
-    }
-
-    if (accepted.length > 0) {
-      buildAndWriteOutputs(storage, projectDir, jobs, accepted);
-    }
-
-    // Assembly only when ALL required scenes are accepted
-    if (accepted.length === renderEvents.length && renderEvents.length === authoredEvents.length) {
-      const assembled = assembleNovel({
-        projectDir,
-        storage,
-        branchPath,
-        language: data.config?.defaultLanguage ?? 'en',
-      });
-      const sceneTextCount = accepted.reduce(
-        (total, r) => total + countNarrativeText(r.prose, data.config?.defaultLanguage ?? 'en'),
-        0,
-      );
-      if (assembled.wordCount !== sceneTextCount) {
-        throw new Error(
-          `Assembly text count mismatch: scenes=${sceneTextCount}, novel=${assembled.wordCount}`,
-        );
-      }
-    }
-  } catch (err) {
-    errors.push(sanitizeError(err));
-  }
-  // Record output spans (only for events that were rendered)
-  for (const result of results) {
-    traceCollector?.record({
-      phase: 'output',
-      state: 'end',
-      spanId: result.eventId,
-      eventId: result.eventId,
-      durationMs: result.renderEnd - result.renderStart,
-    });
-  }
-  // Write trace file (opt-in, errors must not affect release eligibility)
-  if (traceCollector) {
-    try {
-      traceCollector.write(storage, projectDir);
-    } catch {
-      // trace write errors silently ignored
-    }
-  }
-
-  // Map to return type — all release fields derive from ReleaseDecision
-  const mappedResults = results.map((r) => {
-    const d = decisions.get(r.eventId);
-    return {
-      eventId: r.eventId,
-      prose: r.prose,
-      wordCount: countNarrativeText(r.prose, data.config?.defaultLanguage ?? 'en'),
-      cacheHit: r.cacheHit,
-      errors: r.errors,
-      analysis: r.analysis,
-      released: d ? d.status === 'accepted' : false,
-      validationErrors: r.validation?.errors.length ?? 0,
-      validationIssueMessages: r.validation?.errors.map((issue) => issue.message) ?? [],
-      providerCalls: r.providerCalls,
-      promptHash: r.promptHash,
-      pass2Rejection: r.pass2Rejection,
-      releaseDecision: d ?? null,
-    };
-  });
-  const finalShutdownErrors = pluginHooksManager ? await pluginHooksManager.shutdown() : [];
-  errors.push(...finalShutdownErrors);
-  return { results: mappedResults, errors };
+export async function renderNovel(
+  request: EditorialRenderRequestV1,
+  runtime?: EditorialRuntime,
+): Promise<RenderNovelResult> {
+  const parsed = editorialRenderRequestV1Schema.parse(request);
+  const rt = runtime ?? {};
+  validateRuntime(rt);
+  return executeEditorialRender(parsed, rt);
 }
 
 /**
- * Render every authored game-tree node once using its representative complete
- * leaf path, then assemble a linked dialogue-tree document when all nodes pass
- * the release gate.
+ * Render every authored game-tree node once via the editorial render service.
+ * The runtime is optional with the same semantics as renderNovel.
+ *
+ * Strict-validates the request against renderGameDialogueTreeRequestV1Schema
+ * at runtime before delegation.
  */
 export async function renderGameDialogueTree(
-  opts: RenderGameDialogueTreeOptions,
+  request: RenderGameDialogueTreeRequestV1,
+  runtime?: EditorialRuntime,
 ): Promise<RenderGameDialogueTreeResult> {
-  const storage = opts.storage ?? new FsStorage();
-  const { data, events, registry } = initializeProject(opts.projectDir, storage);
-  const tree = compileGameDialogueTree(
-    [...data.chapters.values()].flatMap((chapter) => chapter.events),
-    new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day])),
-  );
-  if (!tree) {
-    throw new ConfigError('No event-local choices found; render-tree requires a game dialogue tree', {
-      phase: 'game_dialogue_tree',
-    });
-  }
-  if (data.config?.renderSurface) {
-    return {
-      tree,
-      results: [],
-      errors: ['render-tree does not support renderSurface scheduling.'],
-    };
-  }
-  if (data.discourseLedger?.entries.some((entry) => entry.branch !== 'main')) {
-    return {
-      tree,
-      results: [],
-      errors: ['render-tree requires a discourse ledger with only the main branch.'],
-    };
-  }
+  const parsed = renderGameDialogueTreeRequestV1Schema.parse(request);
+  const rt = runtime ?? {};
+  validateRuntime(rt);
+  return executeEditorialTreeRender(parsed, rt);
+}
 
-  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(events, registry, data);
-  const anchors = new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day]));
-  const stateBeforeByCommonEventId = new Map<string, string>();
-  for (const leafPath of tree.leafPaths) {
-    const boundaries = compileStoryBoundaries(
-      authoredEvents,
-      initialFacts,
-      anchors,
-      leafPath,
-      initialThreads,
-    );
-    for (const [eventId, stateBefore] of boundaries.stateBeforeByEventId) {
-      const serialized = canonicalJson(stateBefore);
-      const previous = stateBeforeByCommonEventId.get(eventId);
-      if (previous !== undefined && previous !== serialized) {
-        throw new ConfigError(
-          `Game dialogue event '${eventId}' has divergent stateBefore across descendant leaves`,
-          { eventId, phase: 'game_dialogue_tree' },
-        );
-      }
-      stateBeforeByCommonEventId.set(eventId, serialized);
-    }
-  }
-
-  const contentEvents = authoredEvents.filter((event) => event.source === 'event_file');
-  const results: RenderNovelResult['results'] = [];
-  const errors: string[] = [];
-  for (const event of contentEvents) {
-    const branchPath = tree.representativePathByEventId.get(event.id);
-    if (!branchPath) {
-      throw new ConfigError(`Missing representative path for game dialogue event '${event.id}'`, {
-        eventId: event.id,
-        phase: 'game_dialogue_tree',
-      });
-    }
-    const rendered = await renderNovel({
-      ...opts,
-      storage,
-      eventId: event.id,
-      branchPath,
-    });
-    results.push(...rendered.results);
-    errors.push(...rendered.errors.map((error) => `${event.id}: ${error}`));
-  }
-
-  let outputPath: string | undefined;
-  if (results.length === contentEvents.length && results.every((result) => result.released)) {
-    const assembled = assembleGameDialogueTree({
-      projectDir: opts.projectDir,
-      storage,
-      tree,
-      eventsById: new Map(contentEvents.map((event) => [event.id, event])),
-      chapterByEventId: new Map(
-        contentEvents.map((event) => [event.id, findChapterForEvent(data, event.id)]),
-      ),
-      title: data.config?.title,
-    });
-    outputPath = assembled?.outputPath;
-  }
-
-  return { tree, results, errors, outputPath };
+/**
+ * Preview an editorial render: compile the plan and assemble prompts
+ * without any LLM calls or storage writes.
+ *
+ * The preview request has no mutation context. The internal compiler receives
+ * the same read-only shape and performs no storage writes or provider calls.
+ *
+ * Strict-validates the request against editorialPreviewRequestV1Schema
+ * at runtime before delegation.
+ */
+export async function previewEditorialRun(
+  request: Omit<EditorialRenderRequestV1, 'mutation'>,
+  runtime?: EditorialRuntime,
+): Promise<PreviewResult> {
+  const parsed = editorialPreviewRequestV1Schema.parse(request);
+  const rt = runtime ?? {};
+  validateRuntime(rt);
+  return editorialPreviewRun(parsed, rt);
 }
 
 // ============================================================================

@@ -19,23 +19,6 @@ export interface ChapterMetadata {
 
 // ——— Scene Metadata ———
 
-export interface SceneMetadata {
-  event: string;
-  proseSource: 'llm' | 'human_edited' | 'human_locked';
-  modelUsed?: string;
-  renderedAt?: string;
-  wordCount?: number;
-  editHistory: Array<{
-    timestamp: string;
-    notes: string;
-  }>;
-  quality?: {
-    proseQuality?: number;
-    voiceAdherence?: number;
-    pacingScore?: number;
-    continuityScore?: number;
-  };
-}
 
 // ——— Project Config ———
 

@@ -34,7 +34,6 @@ export type {
 export type {
   ChapterMetadata,
   ProjectConfig,
-  SceneMetadata,
 } from './chapter.js';
 export type {
   CharacterDefinition,
@@ -44,11 +43,9 @@ export type {
 export type {
   CharacterSnapshot,
   ContextPackage,
-  FinalPrompt,
   KnowledgeBoundary,
   RelationshipContext,
   RelevanceScore,
-  RenderRequest,
   SceneSpecification,
   SystemContext,
   ThreadStatus,
@@ -259,8 +256,11 @@ export type {
   RelationshipTypeDefinition,
 } from './relationship.js';
 export type {
+  NewReviewComment,
   PatchChange,
+  ReviewApplicationV1,
   ReviewComment,
+  ReviewLedgerV1,
   ReviewPatch,
 } from './review.js';
 export type {
@@ -443,6 +443,7 @@ export type {
   LogicalRenderKey,
   PlannerMode,
   ReleaseDecision,
+  RevisionContext,
   RenderGroup,
   RenderGroupManifest,
   RenderSurfaceAutoConfig,
@@ -470,6 +471,8 @@ export type {
   ValidationGateStatus,
   ValidationPolicy,
 } from './render-surface.js';
+// ——— EDITORIAL: shared types (type-only re-export, never imported by pipeline modules) ———
+export type { ProviderFactory } from './editorial.js';
 // ——— SUMMARY: Volume Summary types ———
 export type {
   ChapterMeta,

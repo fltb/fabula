@@ -5,7 +5,9 @@
 // to keep the implementation simple and path-agnostic (absolute vs relative).
 // ============================================================================
 
-import type { DirEntry, Storage, StorageWrite } from './types.ts';
+import type { DirEntry, Storage, StorageTransaction, StorageWrite } from './types.ts';
+import { computeContentHash, computeDirectoryManifestHash } from './hash.ts';
+import { StorageConflictError } from '../errors.ts';
 
 export class MemoryStorage implements Storage {
   private files = new Map<string, string>();
@@ -57,23 +59,106 @@ export class MemoryStorage implements Storage {
     this.files.set(p, content);
   }
 
-  commitBatch(writes: readonly StorageWrite[]): void {
+  commitBatch(transaction: StorageTransaction): void {
+    // ── 1. Validate read expectations ─────────────────────────────────
+    for (const expectation of transaction.readSet) {
+      if (expectation.kind === 'file') {
+        this._checkFileExpectation(expectation);
+      } else if (expectation.kind === 'directory') {
+        this._checkDirectoryExpectation(expectation);
+      }
+    }
+
+    // ── 2. Validate write preimages ───────────────────────────────────
+    const seenPaths = new Set<string>();
+    for (const write of transaction.writes) {
+      if (seenPaths.has(write.path)) {
+        throw new Error(`Duplicate write path in transaction ${transaction.transactionId}: ${write.path}`);
+      }
+      seenPaths.add(write.path);
+
+      this._checkWritePreimage(write);
+    }
+
+    // ── 3. Apply all writes atomically ─────────────────────────────────
     const nextFiles = new Map(this.files);
     const nextDirs = new Set(this.dirs);
-    for (const write of writes) {
-      const normalized = this._norm(write.path);
-      const segments = normalized.split('/');
-      segments.pop();
-      let parent = '';
-      for (const segment of segments) {
-        if (!segment) continue;
-        parent = parent ? `${parent}/${segment}` : segment;
-        nextDirs.add(parent);
+
+    for (const write of transaction.writes) {
+      if (write.type === 'put') {
+        const normalized = this._norm(write.path);
+        const segments = normalized.split('/');
+        segments.pop();
+        let parent = '';
+        for (const segment of segments) {
+          if (!segment) continue;
+          parent = parent ? `${parent}/${segment}` : segment;
+          nextDirs.add(parent);
+        }
+        nextFiles.set(normalized, write.content!);
+      } else if (write.type === 'delete') {
+        const normalized = this._norm(write.path);
+        nextFiles.delete(normalized);
       }
-      nextFiles.set(normalized, write.content);
     }
+
     this.files = nextFiles;
     this.dirs = nextDirs;
+  }
+  /** Throw StorageConflictError if a file expectation is stale. */
+  private _checkFileExpectation(
+    expectation: { kind: 'file'; path: string; expectedHash: string | null },
+  ): void {
+    const p = this._norm(expectation.path);
+    const current = this.files.get(p) ?? null;
+    const currentHash = current !== null ? computeContentHash(current) : null;
+
+    if (currentHash !== expectation.expectedHash) {
+      throw new StorageConflictError(
+        `File expectation mismatch: ${expectation.path}`,
+        { path: expectation.path },
+      );
+    }
+  }
+
+  /** Throw StorageConflictError if a directory manifest is stale. */
+  private _checkDirectoryExpectation(
+    expectation: { kind: 'directory'; path: string; expectedManifestHash: string },
+  ): void {
+    const currentHash = computeDirectoryManifestHash(this, expectation.path);
+    if (currentHash !== expectation.expectedManifestHash) {
+      throw new StorageConflictError(
+        `Directory expectation mismatch: ${expectation.path}`,
+        { path: expectation.path },
+      );
+    }
+  }
+
+  /** Throw StorageConflictError if a write preimage doesn't match. */
+  private _checkWritePreimage(write: StorageWrite): void {
+    const p = this._norm(write.path);
+    const current = this.files.get(p) ?? null;
+    const currentHash = current !== null ? computeContentHash(current) : null;
+
+    if (write.expectedHash === null) {
+      // null expectedHash = create-only for put: file must not exist
+      if (write.type === 'put' && currentHash !== null) {
+        throw new StorageConflictError(
+          `Write preimage mismatch for ${write.path}: expected file absent but it exists`,
+          { path: write.path },
+        );
+      }
+      // delete with null expectedHash: no guard (delete-if-exists)
+      return;
+    }
+
+    // String hash: exact match required
+    if (currentHash !== write.expectedHash) {
+      throw new StorageConflictError(
+        `Write preimage mismatch for ${write.path}`,
+        { path: write.path },
+      );
+    }
   }
 
   mkdirp(dirPath: string): void {
@@ -145,7 +230,7 @@ export class MemoryStorage implements Storage {
 
   remove(filePath: string): void {
     const p = this._norm(filePath);
-    this.files.delete(p);
+    this.files.delete(p); // no-op if missing
   }
 
   removeAll(dirPath: string): void {
@@ -165,5 +250,21 @@ export class MemoryStorage implements Storage {
         this.dirs.delete(dirPathEntry);
       }
     }
+  }
+
+  resolvePath(filePath: string): string {
+    // POSIX‑style virtual resolution: normalize `/../` and `/./` segments.
+    const normalized = filePath.replace(/\/+/g, '/').replace(/\/$/, '') || '/';
+    const parts = normalized.split('/').filter(Boolean);
+    const resolved: string[] = [];
+    for (const part of parts) {
+      if (part === '.') continue;
+      if (part === '..') {
+        if (resolved.length > 0) resolved.pop();
+        continue;
+      }
+      resolved.push(part);
+    }
+    return '/' + resolved.join('/');
   }
 }

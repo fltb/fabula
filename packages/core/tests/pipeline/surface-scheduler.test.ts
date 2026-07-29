@@ -12,6 +12,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import * as crypto from 'node:crypto';
 import {
   AcceptedArtifactResolver,
   SurfaceScheduler,
@@ -89,7 +90,9 @@ function makeJobs(
   return spec.map((s) => makeJob(s.id, s.pred));
 }
 
-function makeAcceptedDecision(scopeHash: string = 'scope01'): ReleaseDecision {
+function makeAcceptedDecision(
+  scopeHash: string = crypto.createHash('sha256').update('scope01').digest('hex'),
+): ReleaseDecision {
   return { status: 'accepted', scopeHash, validationIdentity: 'vi01', reasons: [] };
 }
 
@@ -335,36 +338,115 @@ describe('SurfaceScheduler', () => {
 // ============================================================================
 
 describe('AcceptedArtifactResolver', () => {
-  function makeStorageWithResponse(
+  const HEAD_DIR = '/project/.nova/work/responses';
+  const ARCHIVE_DIR = '/project/.nova/work/revisions/scenes';
+
+  function seedAcceptedArtifact(
+    storage: MemoryStorage,
     eventId: string,
     prose: string,
     decision: ReleaseDecision,
-  ): MemoryStorage {
-    const storage = new MemoryStorage();
-    storage.mkdirp('/project/.nova/responses');
+    revisionId?: string,
+    proseHash?: string,
+    headDir?: string,
+    archiveDir?: string,
+  ): { revisionId: string; proseHash: string } {
+    const hd = headDir ?? HEAD_DIR;
+    const ad = archiveDir ?? ARCHIVE_DIR;
+    const rid = revisionId ?? crypto.randomUUID();
+    const ph = proseHash ?? crypto.createHash('sha256').update(prose).digest('hex');
+    const sceneHash = crypto.createHash('sha256').update(prose + ph + eventId).digest('hex');
+
+    // Head pointer
+    storage.mkdirp(hd);
+    storage.write(`${hd}/${eventId}.json`, JSON.stringify({ revisionId: rid, proseHash: ph }));
+
+    // Full archived envelope
+    const archiveEventDir = `${ad}/${eventId}`;
+    storage.mkdirp(archiveEventDir);
     storage.write(
-      `/project/.nova/responses/${eventId}.json`,
+      `${archiveEventDir}/${rid}.json`,
       JSON.stringify({
+        version: 1,
+        revisionId: rid,
+        parentRevisionId: null,
+        operationId: crypto.randomUUID(),
+        planHash: crypto.createHash('sha256').update('plan').digest('hex'),
+        actorId: 'test',
+        eventId,
+        origin: 'llm_draft',
         prose,
+        proseHash: ph,
+        sceneHash,
+        editorialBasisHash: crypto.createHash('sha256').update('basis').digest('hex'),
+        scopeHash: decision.scopeHash,
+        validationIdentity: decision.validationIdentity,
+        feedbackHash: null,
+        reviewIds: [],
+        analysis:
+          decision.status === 'accepted'
+            ? {
+                eventId,
+                analysis: {
+                  postconditions: { covered: [], dropped: [] },
+                  preconditions: { violated: [] },
+                  pov: { consistent: true, leaks: [] },
+                  inventedDetails: [],
+                  quality: {
+                    proseScore: 4,
+                    maxScore: 5,
+                    strengths: [],
+                    weaknesses: [],
+                    estimatedWordCount: 1,
+                  },
+                  threadProgressAchieved: [],
+                  foreshadowingDeployed: [],
+                  narrativeChecks: [],
+                  appearanceChecks: [],
+                  characterReferences: [],
+                  tenseDetected: 'past',
+                  conflictAnalysis: {
+                    primaryType: 'none',
+                    resolutionAchieved: true,
+                  },
+                  ruleChecks: [],
+                  knowledgeChecks: [],
+                },
+              }
+            : null,
+        validation:
+          decision.status === 'accepted'
+            ? { passed: true, errors: [], warnings: [], infos: [] }
+            : null,
         releaseDecision: decision,
+        released: decision.status === 'accepted',
         cacheHit: false,
         errors: [],
+        llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+        llmPass2: null,
+        attempts: 0,
         needsReview: false,
+        promptHash: crypto.createHash('sha256').update('prompt').digest('hex'),
+        providerCalls: [],
+        promotionReadSet: [],
+        requestRecords: [],
+        createdAt: new Date().toISOString(),
       }),
     );
-    return storage;
+
+    return { revisionId: rid, proseHash: ph };
   }
 
   // ── Accepted resolution ────────────────────────────────────────────
 
   describe('resolve()', () => {
     it('returns artifact for an accepted response', () => {
-      const storage = makeStorageWithResponse(
-        'S1',
-        'Once upon a time...',
-        makeAcceptedDecision('scope_s1'),
+      const storage = new MemoryStorage();
+      const decision = makeAcceptedDecision(
+        crypto.createHash('sha256').update('scope_s1').digest('hex'),
       );
-      const resolver = new AcceptedArtifactResolver(storage, '/project');
+      seedAcceptedArtifact(storage, 'S1', 'Once upon a time...', decision);
+      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
 
       const artifact = resolver.resolve('S1');
 
@@ -372,13 +454,13 @@ describe('AcceptedArtifactResolver', () => {
       expect(artifact!.eventId).toBe('S1');
       expect(artifact!.prose).toBe('Once upon a time...');
       expect(artifact!.releaseDecision.status).toBe('accepted');
-      expect(artifact!.scopeHash).toBe('scope_s1');
+      expect(artifact!.scopeHash).toBe(decision.scopeHash);
     });
 
-    it('returns null when response file does not exist', () => {
+    it('returns null when head pointer file does not exist', () => {
       const storage = new MemoryStorage();
-      storage.mkdirp('/project/.nova/responses');
-      const resolver = new AcceptedArtifactResolver(storage, '/project');
+      storage.mkdirp(HEAD_DIR);
+      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
 
       const artifact = resolver.resolve('NONEXISTENT');
 
@@ -386,12 +468,12 @@ describe('AcceptedArtifactResolver', () => {
     });
 
     it('returns null when release decision is not accepted', () => {
-      const storage = makeStorageWithResponse(
-        'S1',
-        'Some prose',
-        makeBlockedDecision(),
+      const storage = new MemoryStorage();
+      const decision = makeBlockedDecision(
+        crypto.createHash('sha256').update('scope01').digest('hex'),
       );
-      const resolver = new AcceptedArtifactResolver(storage, '/project');
+      seedAcceptedArtifact(storage, 'S1', 'Some prose', decision);
+      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
 
       const artifact = resolver.resolve('S1');
 
@@ -399,39 +481,43 @@ describe('AcceptedArtifactResolver', () => {
     });
 
     it('returns null when release decision is pending_waiver', () => {
+      const storage = new MemoryStorage();
       const pendingDecision: ReleaseDecision = {
         status: 'pending_waiver',
-        scopeHash: 'scope01',
+        scopeHash: crypto.createHash('sha256').update('scope01').digest('hex'),
         validationIdentity: 'vi01',
         reasons: ['warnings not waived'],
       };
-      const storage = makeStorageWithResponse('S1', 'Some prose', pendingDecision);
-      const resolver = new AcceptedArtifactResolver(storage, '/project');
+      seedAcceptedArtifact(storage, 'S1', 'Some prose', pendingDecision);
+      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
 
       const artifact = resolver.resolve('S1');
 
       expect(artifact).toBeNull();
     });
 
-    it('returns null for malformed JSON', () => {
+    it('returns null for malformed JSON in head pointer', () => {
       const storage = new MemoryStorage();
-      storage.mkdirp('/project/.nova/responses');
-      storage.write('/project/.nova/responses/S1.json', 'not-json-at-all');
-      const resolver = new AcceptedArtifactResolver(storage, '/project');
+      storage.mkdirp(HEAD_DIR);
+      storage.write(`${HEAD_DIR}/S1.json`, 'not-json-at-all');
+      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
 
       const artifact = resolver.resolve('S1');
 
       expect(artifact).toBeNull();
     });
 
-    it('returns null when prose field is missing', () => {
+    it('returns null when head pointer lacks revisionId/proseHash (no backward compat)', () => {
       const storage = new MemoryStorage();
-      storage.mkdirp('/project/.nova/responses');
-      storage.write(
-        '/project/.nova/responses/S1.json',
-        JSON.stringify({ releaseDecision: makeAcceptedDecision() }),
+      storage.mkdirp(HEAD_DIR);
+      const decision = makeAcceptedDecision(
+        crypto.createHash('sha256').update('scope01').digest('hex'),
       );
-      const resolver = new AcceptedArtifactResolver(storage, '/project');
+      storage.write(
+        `${HEAD_DIR}/S1.json`,
+        JSON.stringify({ prose: 'Inline prose without revision pointer', releaseDecision: decision }),
+      );
+      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
 
       const artifact = resolver.resolve('S1');
 
@@ -444,21 +530,20 @@ describe('AcceptedArtifactResolver', () => {
   describe('resolveAll()', () => {
     it('returns only accepted artifacts from a set', () => {
       const storage = new MemoryStorage();
-      storage.mkdirp('/project/.nova/responses');
+      const acceptedDecision = makeAcceptedDecision(
+        crypto.createHash('sha256').update('scope01').digest('hex'),
+      );
+      const blockedDecision = makeBlockedDecision(
+        crypto.createHash('sha256').update('scope02').digest('hex'),
+      );
 
       // S1 — accepted
-      storage.write(
-        '/project/.nova/responses/S1.json',
-        JSON.stringify({ prose: 'S1 prose', releaseDecision: makeAcceptedDecision('s1') }),
-      );
+      seedAcceptedArtifact(storage, 'S1', 'S1 prose', acceptedDecision);
       // S2 — blocked
-      storage.write(
-        '/project/.nova/responses/S2.json',
-        JSON.stringify({ prose: 'S2 prose', releaseDecision: makeBlockedDecision('s2') }),
-      );
-      // S3 — missing file, no write
+      seedAcceptedArtifact(storage, 'S2', 'S2 prose', blockedDecision);
+      // S3 — missing, no write
 
-      const resolver = new AcceptedArtifactResolver(storage, '/project');
+      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
       const results = resolver.resolveAll(['S1', 'S2', 'S3']);
 
       expect(results.size).toBe(1);
@@ -473,13 +558,12 @@ describe('AcceptedArtifactResolver', () => {
 
   it('works with any Storage backend (MemoryStorage)', () => {
     const storage = new MemoryStorage();
-    storage.mkdirp('/proj/.nova/responses');
-    storage.write(
-      '/proj/.nova/responses/E1.json',
-      JSON.stringify({ prose: 'E1 text', releaseDecision: makeAcceptedDecision() }),
-    );
+    const HEAD2 = '/proj/.nova/work/responses';
+    const ARCHIVE2 = '/proj/.nova/work/revisions/scenes';
+    const decision = makeAcceptedDecision();
+    seedAcceptedArtifact(storage, 'E1', 'E1 text', decision, undefined, undefined, HEAD2, ARCHIVE2);
 
-    const resolver = new AcceptedArtifactResolver(storage, '/proj');
+    const resolver = new AcceptedArtifactResolver(storage, HEAD2, ARCHIVE2);
     const artifact = resolver.resolve('E1');
 
     expect(artifact).not.toBeNull();

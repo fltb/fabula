@@ -1,0 +1,51 @@
+id: dream_of_red_chamber_ledger
+chapters:
+  - branch: main
+    chapter: 1
+    sceneIds:
+      - E01
+      - E02
+      - E03
+      - E04
+      - E05
+      - E06
+      - E07
+      - E08
+      - E09
+  - branch: main
+    chapter: 2
+    sceneIds:
+      - E10
+      - E11
+      - E12
+      - E13
+      - E14
+      - E15
+      - E16
+      - E17
+      - E18
+  - branch: main
+    chapter: 3
+    sceneIds:
+      - E19
+      - E20
+      - E21
+      - E22
+      - E23
+      - E24
+      - E25
+      - E26
+      - E27
+  - branch: main
+    chapter: 4
+    sceneIds:
+      - E28
+      - E29
+      - E30
+      - E31
+      - E32
+      - E33
+      - E34
+      - E35
+      - E36
+entries: []

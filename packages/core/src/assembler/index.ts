@@ -16,7 +16,6 @@ export type {
 } from './game-dialogue-tree.ts';
 export { assembleGameDialogueTree } from './game-dialogue-tree.ts';
 export { assembleNovel } from './novel.js';
-export { NarrativeSorter } from './sorter.js';
 export type {
   AssembleOptions,
   AssembleResult,

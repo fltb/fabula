@@ -118,6 +118,7 @@ export class ContextAssembler {
       volumeSummary,
       markdown: '',
       activeRules,
+      narrativeTechniques: [],
     };
 
     // Render to markdown

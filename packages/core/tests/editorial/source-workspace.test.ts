@@ -98,9 +98,19 @@ function seedRealisticProject(storage: MemoryStorage): SourceWorkspace {
   storage.write(`${p}/definitions/assertions/fact1.yaml`,
     'id: fact1\nnarrator: omni\nproposition: "alice is the protagonist"\npolarity: affirmative\ntype: authoritative_reveal\ntruthBoundary: true\nnarrationBoundary:\n  narratorId: omni\n');
 
-  // Discourse ledger — id is required
+  // Discourse ledger — mandatory reader-order source (no hash field in source)
   storage.write(`${p}/definitions/discourse-ledger.yaml`,
-    'id: default\nentries: []\nhash: fixture\n');
+    [
+      'id: default',
+      'chapters:',
+      '  - branch: main',
+      '    chapter: 1',
+      '    sceneIds:',
+      '      - E001',
+      '      - E002',
+      'entries: []',
+    ].join('\n'),
+  );
 
   // Chapter 01
   storage.mkdirp(`${p}/chapters/chapter_01`);

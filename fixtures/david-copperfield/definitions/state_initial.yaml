@@ -4,40 +4,40 @@ info:
 
 timeAnchors:
   - id: davids_birth
-    day: 0
+    at: day_0
     description: "David Copperfield is born at Blunderstone Rookery in Suffolk on a Friday at midnight. His father died six months before."
   - id: murdstone_marriage
-    day: 700
+    at: day_700
     description: "Mr Murdstone marries David's mother Clara. David's idyllic early life ends. Miss Murdstone arrives to manage the household."
   - id: yarmouth_visit
-    day: 730
+    at: day_730
     description: "David visits Yarmouth with Peggotty, staying with Mr Peggotty's boathouse family — Ham, Little Emily, and Mrs Gummidge."
   - id: mothers_death
-    day: 1100
+    at: day_1100
     description: "Clara Copperfield dies. David is recalled from Salem House for the funeral. The baby brother also dies."
   - id: london_work
-    day: 1200
+    at: day_1200
     description: "David is sent to London to work at Murdstone and Grinby's wine warehouse, lodging with the Micawber family."
   - id: flight_to_dover
-    day: 1350
+    at: day_1350
     description: "David runs away from London to Dover to seek his Aunt Betsey Trotwood. His half-guinea and box are stolen on the way."
   - id: canterbury_school
-    day: 1500
+    at: day_1500
     description: "Aunt Betsey sends David to Doctor Strong's school in Canterbury. He lodges with Mr Wickfield and meets Agnes Wickfield and Uriah Heep."
   - id: london_career
-    day: 2700
+    at: day_2700
     description: "David graduates school, chooses the profession of proctor in Doctors' Commons, and moves to London. He reconnects with Steerforth."
   - id: dora_meeting
-    day: 2850
+    at: day_2850
     description: "David meets and falls in love with Dora Spenlow at Mr Spenlow's house. He begins his obsessive courtship."
   - id: heep_exposure
-    day: 3300
+    at: day_3300
     description: "Mr Micawber exposes Uriah Heep's frauds against Mr Wickfield. Heep is defeated and imprisoned."
   - id: dora_death
-    day: 3400
+    at: day_3400
     description: "Dora dies after a long illness. David is devastated and goes abroad for three years."
   - id: return_to_england
-    day: 4500
+    at: day_4500
     description: "David returns to England, realizes his love for Agnes, and they marry. The final retrospect shows their happy life together."
 
 threads:

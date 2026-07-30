@@ -15,6 +15,12 @@ import type {
   ThreadRunId,
   WorldState,
 } from '../src/types/index.js';
+import type { StoryOrderIndex } from '../src/state/dag.js';
+import type { StoryValidationContext } from '../src/types/validator.js';
+import type {
+  SceneStoryCoordinate,
+  PointStoryCoordinate,
+} from '../src/types/entity.js';
 import {
   BranchMergeValidator,
   CausalityValidator,
@@ -92,6 +98,30 @@ function buildPreInput(
   };
 }
 
+/** Build a StoryValidationContext from a map of event ID to resolved coordinate */
+function makeStoryContext(
+  coords: Record<string, SceneStoryCoordinate>,
+  topologicalOrder: string[] = Object.keys(coords),
+): StoryValidationContext {
+  const ancestorsByEventId = new Map<string, Set<string>>();
+  // Compute transitive ancestors for each event based on topological order.
+  for (let i = 0; i < topologicalOrder.length; i++) {
+    const ancestors = new Set<string>();
+    for (let j = 0; j < i; j++) {
+      ancestors.add(topologicalOrder[j]);
+    }
+    ancestorsByEventId.set(topologicalOrder[i], ancestors);
+  }
+  return {
+    coordinatesByEventId: new Map(Object.entries(coords)),
+    order: {
+      initialRootId: 'system:initial',
+      topologicalOrder,
+      ancestorsByEventId,
+    },
+  };
+}
+
 /** Register a character entity in the registry */
 function registerCharacter(
   registry: EntityRegistry,
@@ -132,6 +162,13 @@ describe('TimelineValidator', () => {
     });
     const input = buildPreInput(currentEvent, {
       events: [prevEvent, currentEvent],
+      story: makeStoryContext(
+        {
+          'evt_prev': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
+          'evt_current': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 5 },
+        },
+        ['evt_prev', 'evt_current'],
+      ),
     });
 
     const issues = validator.validatePre(input);
@@ -156,6 +193,13 @@ describe('TimelineValidator', () => {
     });
     const input = buildPreInput(flashbackEvent, {
       events: [prevEvent, flashbackEvent],
+      story: makeStoryContext(
+        {
+          'evt_prev': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
+          'evt_flashback': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 3 },
+        },
+        ['evt_prev', 'evt_flashback'],
+      ),
     });
 
     const issues = validator.validatePre(input);
@@ -191,6 +235,13 @@ describe('TimelineValidator', () => {
     });
     const input = buildPreInput(currentEvent, {
       events: [prevEvent, currentEvent],
+      story: makeStoryContext(
+        {
+          'evt_prev': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 1 },
+          'evt_current': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 5 },
+        },
+        ['evt_prev', 'evt_current'],
+      ),
     });
 
     const issues = validator.validatePre(input);
@@ -1272,7 +1323,7 @@ describe('ResultAggregator', () => {
     const aggregator = new ResultAggregator();
 
     // Test 'off' override
-    const resultOff = aggregator.validate(event, state, registry, [event], 1, { timeline: 'off' });
+    const resultOff = aggregator.validate(event, state, registry, [event], 1, { overrides: { timeline: 'off' } });
     const timelineIssuesOff = [
       ...resultOff.warnings,
       ...resultOff.infos,
@@ -1282,7 +1333,7 @@ describe('ResultAggregator', () => {
 
     // Test 'error' override (upgrade warning to error)
     const resultError = aggregator.validate(event, state, registry, [event], 1, {
-      timeline: 'error',
+      overrides: { timeline: 'error' },
     });
     const timelineIssuesError = resultError.errors.filter((i) => i.validator === 'timeline');
     // The flashback w/o narrationTime produces a warning → upgraded to error
@@ -1293,7 +1344,7 @@ describe('ResultAggregator', () => {
     const aggregator = new ResultAggregator();
     const validators = aggregator.listValidators();
 
-    expect(validators).toHaveLength(26);
+    expect(validators).toHaveLength(28);
     expect(validators.map((v) => v.name)).toEqual([
       'timeline',
       'character_state',
@@ -1321,6 +1372,8 @@ describe('ResultAggregator', () => {
       'anachrony_consistency',
       'focalization_consistency',
       'discourse',
+      'checklist',
+      'narrative_technique',
     ]);
   });
 
@@ -1383,6 +1436,12 @@ describe('Validator Edge Cases', () => {
       });
       const input = buildPreInput(nextEvent, {
         events: [genesis, nextEvent],
+        story: makeStoryContext(
+          {
+            'evt_after_genesis': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 0 },
+          },
+          ['evt_after_genesis'],
+        ),
       });
 
       const issues = validator.validatePre(input);
@@ -1404,11 +1463,106 @@ describe('Validator Edge Cases', () => {
         storyTime: { type: 'relative', anchor: 'start', offset: { amount: 5, unit: 'day' } },
         sceneType: 'linear',
       });
-      const issues = validator.validatePre(
-        buildPreInput(currentEvent, { events: [prevEvent, currentEvent] }),
-      );
+      const input = buildPreInput(currentEvent, {
+        events: [prevEvent, currentEvent],
+        // Relative anchor 'start' is unknown → resolved as unlocated
+        story: makeStoryContext(
+          {
+            'evt_prev': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
+            'evt_current': { type: 'storyTime', kind: 'unlocated' },
+          },
+          ['evt_prev', 'evt_current'],
+        ),
+      });
+      const issues = validator.validatePre(input);
       expect(
         issues.filter((issue) => issue.message.includes('before previous event')),
+      ).toHaveLength(0);
+    });
+
+    it('skips chronology check when story context is missing', () => {
+      const prevEvent = makeEvent({
+        id: 'evt_prev',
+        narrativeOrder: 5,
+        storyTime: { type: 'absolute', value: 'day_10' },
+        sceneType: 'linear',
+      });
+      const currentEvent = makeEvent({
+        id: 'evt_current',
+        narrativeOrder: 10,
+        storyTime: { type: 'absolute', value: 'day_5' },
+        sceneType: 'linear',
+      });
+      // No story context → chronology check is skipped entirely
+      const input = buildPreInput(currentEvent, {
+        events: [prevEvent, currentEvent],
+      });
+      const issues = validator.validatePre(input);
+      // Without story context, no backward-time error should appear
+      expect(
+        issues.filter((i) => i.message.includes('before previous event')),
+      ).toHaveLength(0);
+      // The narrationTime and sceneType checks still run
+      expect(issues.filter((i) => i.message.includes('no narration_time'))).toHaveLength(0);
+    });
+
+    it('skips chronology check for unlocated scene even with story context', () => {
+      const prevEvent = makeEvent({
+        id: 'evt_prev',
+        narrativeOrder: 5,
+        storyTime: { type: 'absolute', value: 'day_10' },
+        sceneType: 'linear',
+      });
+      const currentEvent = makeEvent({
+        id: 'evt_current',
+        narrativeOrder: 10,
+        storyTime: { type: 'absolute', value: 'day_5' },
+        sceneType: 'linear',
+      });
+      // Current event is resolved as unlocated (e.g. indeterminate timestamp)
+      const input = buildPreInput(currentEvent, {
+        events: [prevEvent, currentEvent],
+        story: makeStoryContext(
+          {
+            'evt_prev': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
+            'evt_current': { type: 'storyTime', kind: 'unlocated' },
+          },
+          ['evt_prev', 'evt_current'],
+        ),
+      });
+      const issues = validator.validatePre(input);
+      expect(
+        issues.filter((i) => i.message.includes('before previous event')),
+      ).toHaveLength(0);
+    });
+
+    it('skips chronology check for cross-clock scenes', () => {
+      const prevEvent = makeEvent({
+        id: 'evt_prev',
+        narrativeOrder: 5,
+        storyTime: { type: 'absolute', value: 'chapter_1' },
+        sceneType: 'linear',
+      });
+      const currentEvent = makeEvent({
+        id: 'evt_current',
+        narrativeOrder: 10,
+        storyTime: { type: 'absolute', value: 'day_5' },
+        sceneType: 'linear',
+      });
+      // Different clocks (chapter vs story) → incomparable, skip chronology
+      const input = buildPreInput(currentEvent, {
+        events: [prevEvent, currentEvent],
+        story: makeStoryContext(
+          {
+            'evt_prev': { type: 'storyTime', kind: 'point', clock: 'chapter', scalar: 1 },
+            'evt_current': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 5 },
+          },
+          ['evt_prev', 'evt_current'],
+        ),
+      });
+      const issues = validator.validatePre(input);
+      expect(
+        issues.filter((i) => i.message.includes('before previous event')),
       ).toHaveLength(0);
     });
   });

@@ -8,6 +8,7 @@ import type {
   EntityRegistry,
   NarrativeEvent,
   NarratorProfile,
+  ResolvedNarrativeTechniqueContract,
   SystemContext,
   WorldState,
 } from '../types/index.js';
@@ -37,6 +38,8 @@ export class ContextCompiler {
       discourseContext?: CompiledDiscourseRenderContext;
       /** Emotional beat to annotate the compiled scene spec */
       emotionalBeat?: string;
+      /** Resolved narrative technique contracts to override onto the package. */
+      narrativeTechniques?: readonly ResolvedNarrativeTechniqueContract[];
     },
   ): ContextPackage {
     const pkg = this.assembler.assemble(
@@ -58,6 +61,10 @@ export class ContextCompiler {
     // DISCOURSE-1: use precompiled strict discourse context's safe projection for Pass 1.
     if (options?.discourseContext) {
       pkg.discourseProjection = options.discourseContext.projection;
+    }
+    // STEP-6: override resolved narrative technique contracts onto the package.
+    if (options?.narrativeTechniques) {
+      pkg.narrativeTechniques = options.narrativeTechniques;
     }
     return pkg;
   }

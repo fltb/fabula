@@ -9,15 +9,36 @@
 
 import { z } from 'zod';
 import type { EffectiveCoordinate, GraphReadResolution } from '../types/graph.js';
+import type { SceneStoryCoordinate, StoryCoordinate } from '../types/entity.js';
 
 // ——— Coordinates ———
 
-export const storyCoordinateSchema = z
+export const initialStoryCoordinateSchema = z
+  .object({ type: z.literal('storyTime'), kind: z.literal('initial') })
+  .strict();
+
+export const unlocatedStoryCoordinateSchema = z
+  .object({ type: z.literal('storyTime'), kind: z.literal('unlocated') })
+  .strict();
+
+export const pointStoryCoordinateSchema = z
   .object({
     type: z.literal('storyTime'),
-    value: z.string().min(1),
+    kind: z.literal('point'),
+    clock: z.enum(['story', 'calendar', 'chapter']),
+    scalar: z.number().finite(),
   })
   .strict();
+
+export const sceneStoryCoordinateSchema: z.ZodType<SceneStoryCoordinate> = z.union([
+  unlocatedStoryCoordinateSchema,
+  pointStoryCoordinateSchema,
+]);
+
+export const storyCoordinateSchema: z.ZodType<StoryCoordinate> = z.union([
+  initialStoryCoordinateSchema,
+  sceneStoryCoordinateSchema,
+]);
 
 export const discourseCoordinateSchema = z
   .object({
@@ -26,10 +47,10 @@ export const discourseCoordinateSchema = z
   })
   .strict();
 
-export const effectiveCoordinateSchema: z.ZodType<EffectiveCoordinate> = z.discriminatedUnion(
-  'type',
-  [storyCoordinateSchema, discourseCoordinateSchema],
-);
+export const effectiveCoordinateSchema: z.ZodType<EffectiveCoordinate> = z.union([
+  storyCoordinateSchema,
+  discourseCoordinateSchema,
+]) as z.ZodType<EffectiveCoordinate>;
 
 // ——— Edge Class ———
 
@@ -146,10 +167,24 @@ export const graphBoundaryReferenceSchema = z
 export const graphNarrativeEllipsisSchema = z
   .object({
     outputId: z.string().min(1),
-    storyTime: storyCoordinateSchema,
+    storyCoordinate: sceneStoryCoordinateSchema,
     requiredOutputHash: z.string().min(1),
   })
   .strict();
+
+// ——— DiscourseSceneSequenceEntry ———
+
+export const discourseSceneSequenceEntrySchema = z.object({
+  sceneId: z.string().min(1),
+  sequence: z.number().int(),
+  chapter: z.number().int(),
+  actionInterval: z
+    .object({
+      start: z.number(),
+      end: z.number(),
+    })
+    .optional(),
+});
 
 // ——— Graph Structures ———
 
@@ -161,7 +196,6 @@ export const storyGraphSchema = z
     reads: z.array(readRequirementSchema),
     resolutions: z.array(graphReadResolutionSchema),
     hash: z.string().min(1),
-    effectiveCoordinate: storyCoordinateSchema,
     ellipses: z.array(graphNarrativeEllipsisSchema).optional(),
   })
   .strict();
@@ -172,21 +206,8 @@ export const discourseGraphSchema = z
     edges: z.array(graphEdgeSchema),
     outputs: z.array(outputDescriptorSchema),
     hash: z.string().min(1),
-    effectiveCoordinate: discourseCoordinateSchema,
     boundaryReferences: z.array(graphBoundaryReferenceSchema).optional(),
-    sceneSequence: z.array(
-      z.object({
-        sceneId: z.string().min(1),
-        sequence: z.number().int(),
-        chapter: z.number().int(),
-        actionInterval: z
-          .object({
-            start: z.number(),
-            end: z.number(),
-          })
-          .optional(),
-      }),
-    ),
+    sceneSequence: z.array(discourseSceneSequenceEntrySchema),
   })
   .strict();
 
@@ -194,8 +215,7 @@ export const discourseGraphSchema = z
 
 export const graphCacheEntrySchema = z
   .object({
-    targetCoordinatePrefix: z.string().min(1),
-    sameCoordinateAncestors: z.array(z.string().min(1)),
+    branchScope: z.string().min(1),
     dependencyHashes: z.array(z.string().min(1)),
     outputHashes: z.array(z.string().min(1)),
     absenceHashes: z.array(z.string().min(1)),

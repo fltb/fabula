@@ -36,15 +36,17 @@ describe('MCP game dialogue tree handlers', () => {
       ]);
       expect(treeRender.dialogueTree).toContain('[Accept the hunt](#event-E1a)');
 
-      const dryRun = await mcpNovaRender(project, 'E1a', acceptPath);
+      const dryRun = await mcpNovaRender(project, 'E1a', acceptPath, 'accept_hunt');
       expect(dryRun.markdown).toContain('"eventId": "E1a"');
 
-      const assembled = mcpNovaAssemble(project, {
-        outputPath: join(project, 'output', 'selected.md'),
-        branchPath: acceptPath,
-      });
-      expect(assembled.sceneCount).toBe(2);
-      expect(existsSync(join(project, 'output', 'selected.md'))).toBe(true);
+      expect(() =>
+        mcpNovaAssemble(project, {
+          outputPath: join(project, 'output', 'selected.md'),
+          branchPath: acceptPath,
+          discourseBranch: 'accept_hunt',
+        }),
+      ).toThrow('Assembly scope mismatch');
+      expect(existsSync(join(project, 'output', 'selected.md'))).toBe(false);
 
       const server = createMCPServer(project);
       expect(server.tools).toHaveProperty('nova_render_tree');

@@ -65,9 +65,9 @@ import type { ProviderCallLedgerEntry, RenderJob, RenderSceneResult } from './pi
 import { PluginHooksManager, PluginLoader, ValidatorRegistry } from './plugin/index.js';
 import type { PluginContext, ProviderRegistry } from './plugin/types.js';
 import { StateManager } from './state/manager.ts';
-import { compileStoryBoundaries } from './state/story-boundaries.ts';
-import { compileDiscourseBoundaries } from './state/discourse-context.ts';
-import type { CompiledDiscourseRenderContext } from './state/discourse-context.ts';
+import { compileNarrativeRuntime } from './state/narrative-runtime.ts';
+import { resolveDiscourseBranch } from './state/discourse-sequence.ts';
+import type { CompiledNarrativeRuntime } from './state/narrative-runtime.ts';
 import { FsStorage } from './storage/fs-storage.ts';
 import type { Storage } from './storage/types.ts';
 import { canonicalJson, compileSceneContract, computeSha256Hex } from './render/scene-contract.ts';
@@ -506,7 +506,7 @@ export async function validateNovel(
   const { data, events, registry } = initializeProject(projectDir, resolvedStorage);
 
   // Compile story boundaries for per-event pre-state
-  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(
+  const { initialFacts, initialThreads } = buildInitialState(
     events,
     registry,
     data,
@@ -520,14 +520,24 @@ export async function validateNovel(
     data.config ?? undefined,
   );
 
-  const anchors = new Map((data.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day]));
-  const boundaries = compileStoryBoundaries(
-    authoredEvents,
+
+  const compiledDiscourseBranch = resolveDiscourseBranch({
+    selectedEventIds: new Set(events.map((ev) => ev.id)),
+    branchPath: { decisions: [] },
+    ledger: data.discourseLedger,
+  });
+  const runtime = compileNarrativeRuntime({
+    events,
     initialFacts,
-    anchors,
-    undefined,
+    timeAnchors: data.timeAnchors,
+    branchPath: undefined,
+    discourseBranch: compiledDiscourseBranch,
+    ledger: data.discourseLedger,
+    assertions: data.narratorAssertions,
+    narratorProfiles: data.narratorProfiles,
     initialThreads,
-  );
+  });
+  const boundaries = runtime.boundaries;
 
   // Run validators with per-event pre-state and plugin validators
   const aggregator = new ResultAggregator(undefined, validatorRegistry?.validators);
@@ -536,8 +546,10 @@ export async function validateNovel(
     events,
     boundaries.finalState,
     registry,
-    mergedOverrides,
-    boundaries.stateBeforeByEventId,
+    {
+      overrides: mergedOverrides,
+      stateBeforeByEventId: boundaries.stateBeforeByEventId,
+    },
   );
 
   // Add plugin conflict as synthetic validation failure if present
@@ -619,19 +631,29 @@ export function getProjectStatus(
   }
 
   // Compile story boundaries for per-event pre-state validation
-  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(
+  const { initialFacts, initialThreads } = buildInitialState(
     events,
     registry,
     data,
   );
-  const anchors = new Map((data.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day]));
-  const boundaries = compileStoryBoundaries(
-    authoredEvents,
+
+  const compiledDiscourseBranch = resolveDiscourseBranch({
+    selectedEventIds: new Set(events.map((ev) => ev.id)),
+    branchPath: { decisions: [] },
+    ledger: data.discourseLedger,
+  });
+  const runtime = compileNarrativeRuntime({
+    events,
     initialFacts,
-    anchors,
-    undefined,
+    timeAnchors: data.timeAnchors,
+    branchPath: undefined,
+    discourseBranch: compiledDiscourseBranch,
+    ledger: data.discourseLedger,
+    assertions: data.narratorAssertions,
+    narratorProfiles: data.narratorProfiles,
     initialThreads,
-  );
+  });
+  const boundaries = runtime.boundaries;
 
   // Use provided validation results or run validateAll
   if (!validationResults) {
@@ -641,8 +663,10 @@ export function getProjectStatus(
       events,
       boundaries.finalState,
       registry,
-      overrides,
-      boundaries.stateBeforeByEventId,
+      {
+        overrides,
+        stateBeforeByEventId: boundaries.stateBeforeByEventId,
+      },
     );
   }
 
@@ -722,7 +746,7 @@ export function getProjectStatus(
 /**
  * Show the world state before and after a specific event.
  *
- * Uses compileStoryBoundaries for DAG-ordered state with time anchors.
+ * Uses compileNarrativeRuntime for graph-driven state with time anchors.
  */
 export function diffEvent(projectDir: string, eventId: string, storage?: Storage): DiffResult | null {
   const resolvedStorage = storage ?? new FsStorage();
@@ -731,19 +755,28 @@ export function diffEvent(projectDir: string, eventId: string, storage?: Storage
   const targetEvent = events.find((e) => e.id === eventId);
   if (!targetEvent) return null;
 
-  const { initialFacts, authoredEvents, initialThreads } = buildInitialState(
+  const { initialFacts, initialThreads } = buildInitialState(
     events,
     registry,
     data,
   );
-  const anchors = new Map((data.timeAnchors ?? []).map((a) => [a.id, a.day]));
-  const boundaries = compileStoryBoundaries(
-    authoredEvents,
+  const compiledDiscourseBranch = resolveDiscourseBranch({
+    selectedEventIds: new Set(events.map((ev) => ev.id)),
+    branchPath: { decisions: [] },
+    ledger: data.discourseLedger,
+  });
+  const runtime = compileNarrativeRuntime({
+    events,
     initialFacts,
-    anchors,
-    undefined,
+    timeAnchors: data.timeAnchors,
+    branchPath: undefined,
+    discourseBranch: compiledDiscourseBranch,
+    ledger: data.discourseLedger,
+    assertions: data.narratorAssertions,
+    narratorProfiles: data.narratorProfiles,
     initialThreads,
-  );
+  });
+  const boundaries = runtime.boundaries;
 
   const orderedIds = boundaries.orderedEventIds;
   const targetIndex = orderedIds.indexOf(eventId);
@@ -759,11 +792,8 @@ export function diffEvent(projectDir: string, eventId: string, storage?: Storage
     facts: [],
   };
 
-  // After state: replay including the target event
-  const afterState =
-    targetIndex === orderedIds.length - 1
-      ? boundaries.finalState
-      : (boundaries.stateBeforeByEventId.get(orderedIds[targetIndex + 1]) ?? boundaries.finalState);
+  // After state: state including the target event from graph-driven boundaries
+  const afterState = boundaries.stateAfterByEventId.get(eventId) ?? boundaries.finalState;
 
   // Build human-readable diffs
   const before: Record<string, unknown> = {};
@@ -1013,8 +1043,8 @@ export function analyzeProjectImpact(oldPath: string, newPath: string): ImpactAn
     const dataChanged =
       oldEv.title !== newEv.title ||
       oldEv.sceneBrief !== newEv.sceneBrief ||
-      oldEv.storyTime !== newEv.storyTime ||
-      oldEv.narrationTime !== newEv.narrationTime ||
+      canonicalJson(oldEv.storyTime) !== canonicalJson(newEv.storyTime) ||
+      canonicalJson(oldEv.narrationTime) !== canonicalJson(newEv.narrationTime) ||
       oldEv.sceneType !== newEv.sceneType ||
       oldEv.discourseMode !== newEv.discourseMode ||
       oldEv.arcPosition !== newEv.arcPosition ||

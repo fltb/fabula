@@ -237,28 +237,21 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
     const otherEvent = {
       ...e0,
       id: 'E_OTHER',
-      discourseCursor: 1,
     };
-    const contexts = compileDiscourseBoundaries(
-      [...events, otherEvent],
-      data.discourseLedger,
-      data.narratorAssertions,
-      data.narratorProfiles,
-      'main',
-    );
     const registry = new InMemoryEntityRegistry();
     registry.load(FIXTURE);
 
-    const pkg = new ContextCompiler().compile(otherEvent, EMPTY_STATE, registry, {
-      narratorProfiles: data.narratorProfiles,
-      discourseContext: contexts[otherEvent.id],
-    });
-
-    // Projection should have empty authorized targets since no entries match E_OTHER
-    expect(pkg.discourseProjection).toBeDefined();
-    expect(pkg.discourseProjection!.authorizedTargets).toHaveLength(0);
-    // But discourse state still has reveals from replay (all main entries up to position)
-    expect(pkg.discourseProjection!.plannedReveals).toContain('assertion_xianglin_death');
+    // With mandatory contiguous ledger semantics, an event id unknown to the
+    // ledger chapters is a hard preflight failure, not a silent empty projection.
+    expect(() =>
+      compileDiscourseBoundaries(
+        [...events, otherEvent],
+        data.discourseLedger,
+        data.narratorAssertions,
+        data.narratorProfiles,
+        'main',
+      ),
+    ).toThrow(/omits reachable scene/);
   });
 
   it("compile() with explicit 'main' branch projects E0 entries correctly", () => {
@@ -329,7 +322,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
     const registry = new InMemoryEntityRegistry();
     registry.load(FIXTURE);
 
-    // Position > entries.length causes out-of-bounds
+    // Position 99 breaks the contiguous-from-0 invariant in discourse-sequence
     const badLedger = {
       ...data.discourseLedger!,
       entries: [
@@ -338,11 +331,18 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
           ...data.discourseLedger!.entries[0],
           id: 'entry_oob',
           discoursePosition: 99,
+          action: {
+            ...data.discourseLedger!.entries[0].action,
+            discoursePosition: 99,
+          },
         },
       ],
     };
 
     // Strict preflight rejects positions that violate the scene contract.
+    expect(() =>
+      compileDiscourseBoundaries(events, badLedger, data.narratorAssertions, data.narratorProfiles, 'main'),
+    ).toThrow(/non-continuous action positions/);
   });
 });
 
@@ -369,7 +369,7 @@ describe('compileDiscourseBoundaries projection from stateAfter', () => {
     const data = mapper.loadProject();
 
     const ctx = compileDiscourseBoundaries(
-      [e0Event],
+      events.filter((ev) => ev.id !== 'system:genesis'),
       data.discourseLedger!,
       data.narratorAssertions,
       data.narratorProfiles,
@@ -391,7 +391,7 @@ describe('compileDiscourseBoundaries projection from stateAfter', () => {
     const data = mapper.loadProject();
 
     const ctx = compileDiscourseBoundaries(
-      [e0Event],
+      events.filter((ev) => ev.id !== 'system:genesis'),
       data.discourseLedger!,
       data.narratorAssertions,
       data.narratorProfiles,
@@ -414,7 +414,7 @@ describe('compileDiscourseBoundaries projection from stateAfter', () => {
     const data = mapper.loadProject();
 
     const ctx = compileDiscourseBoundaries(
-      [e0Event],
+      events.filter((ev) => ev.id !== 'system:genesis'),
       data.discourseLedger!,
       data.narratorAssertions,
       data.narratorProfiles,
@@ -462,7 +462,7 @@ describe('compileDiscourseBoundaries projection from stateAfter', () => {
     };
 
     const ctx = compileDiscourseBoundaries(
-      [e0Event],
+      events.filter((ev) => ev.id !== 'system:genesis'),
       ledgerWithHint,
       data.narratorAssertions,
       data.narratorProfiles,
@@ -501,7 +501,7 @@ describe('compileDiscourseBoundaries projection from stateAfter', () => {
 
     expect(() =>
       compileDiscourseBoundaries(
-        [e0Event],
+        events.filter((ev) => ev.id !== 'system:genesis'),
         data.discourseLedger!,
         tamperedAssertions,
         data.narratorProfiles,

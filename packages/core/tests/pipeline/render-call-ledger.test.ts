@@ -108,6 +108,7 @@ function makeContext(eventId: string): ContextPackage {
     } satisfies KnowledgeBoundary,
     activeThreads: [],
     markdown: '',
+    narrativeTechniques: [],
   };
 }
 
@@ -123,6 +124,7 @@ function makeJob(id: string): RenderJob {
       facts: [],
     },
     context: makeContext(id),
+    graphHash: 'a00',
     chapter: 1,
     contract: {
       sceneId: id,

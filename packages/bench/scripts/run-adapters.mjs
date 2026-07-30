@@ -114,7 +114,7 @@ function buildChiNovelKEProject(raw) {
   // state_initial.yaml
   writeYAML(path.join(defsDir, 'state_initial.yaml'), {
     timeAnchors: [
-      { id: 'default_time', day: 0, description: 'Default time anchor for ChiNovelKE data' },
+      { id: 'default_time', at: 'day_0', description: 'Default time anchor for ChiNovelKE data' },
     ],
     threads: [],
     worldFacts: [],
@@ -160,7 +160,7 @@ function buildAgentSFTProject(chapters) {
 
   const defsDir = mkdir(projDir, 'definitions');
   writeYAML(path.join(defsDir, 'state_initial.yaml'), {
-    timeAnchors: [{ id: 'default_time', day: 0 }],
+    timeAnchors: [{ id: 'default_time', at: 'day_0' }],
     threads: [],
     worldFacts: [],
   });
@@ -272,8 +272,8 @@ function buildIN3KProject(batchPath) {
   // Create time anchors for the first novel's chapters
   const firstNovel = batch[0];
   const timeAnchors = firstNovel.chapters.map((ch, i) => ({
-    id: `chapter_${i}`,
-    day: i,
+    id: `in3k_ch_${i}`,
+    at: `day_${i}`,
     description: ch.title || `Chapter ${i}`,
   }));
   writeYAML(path.join(defsDir, 'state_initial.yaml'), {

@@ -42,6 +42,7 @@ function makeContext(overrides?: Partial<ContextPackage>): ContextPackage {
     activeThreads: [],
     volumeSummary: '',
     markdown: '',
+    narrativeTechniques: [],
     ...overrides,
   };
 }

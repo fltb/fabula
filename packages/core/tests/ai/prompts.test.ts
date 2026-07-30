@@ -38,6 +38,7 @@ function minimalContext(): ContextPackage {
     },
     activeThreads: [],
     markdown: '',
+    narrativeTechniques: [],
   };
 }
 

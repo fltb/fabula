@@ -122,7 +122,6 @@ narrativeChecklist:
     - dimension: "语言禁忌"
       description: "祝福期间不可说'死'——'老了'替代'死了'的仪式性语言规则"
       required: false
-discourseCursor: 2
 authorNotes:
   - "本场以《祝福》原文为唯一表述基准：优先保持 sourceContext 中原句的语序、关键词、对白与留白。"
   - "短工的冷淡问答、四叔的“谬种”与“我”的渐轻松必须并置；不要用概括性评语替代原句的冷漠。"

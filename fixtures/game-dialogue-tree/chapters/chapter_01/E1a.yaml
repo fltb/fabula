@@ -1,7 +1,7 @@
 event: E1a
 narrativeOrder: 1
 title: "The Jungle"
-storyTime: day_1
+storyTime: the_hunt
 pov:
   character: hero
   type: third_person_limited

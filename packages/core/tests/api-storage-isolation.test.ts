@@ -43,6 +43,20 @@ function setupMinimalProject(storage: MemoryStorage): void {
   // ── Definitions ────────────────────────────────────────────────
   storage.mkdirp(`${PROJECT_DIR}/definitions`);
 
+  // discourse-ledger.yaml (required — mandatory reader-order source)
+  storage.write(
+    `${PROJECT_DIR}/definitions/discourse-ledger.yaml`,
+    [
+      'id: test-ledger',
+      'chapters:',
+      '  - branch: main',
+      '    chapter: 1',
+      '    sceneIds:',
+      '      - E1',
+      'entries: []',
+    ].join('\n'),
+  );
+
   // state_initial.yaml (required — EntityMapper reads it via readYamlFile)
   storage.write(
     `${PROJECT_DIR}/definitions/state_initial.yaml`,

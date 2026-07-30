@@ -36,7 +36,14 @@ export interface Entity {
 
 // ——— Timestamp System (§7.4.16) ———
 
-export type StoryTimestamp = AbsoluteTimestamp | RelativeTimestamp | ChapterTimestamp;
+export type TimeUnit = 'minute' | 'hour' | 'day' | 'week' | 'month';
+
+export type AuthoredStoryTime =
+  | string
+  | {
+      type: 'indeterminate';
+      reason?: string;
+    };
 
 export interface AbsoluteTimestamp {
   type: 'absolute';
@@ -48,7 +55,7 @@ export interface RelativeTimestamp {
   anchor: string;
   offset: {
     amount: number;
-    unit: 'minute' | 'hour' | 'day' | 'week' | 'month';
+    unit: TimeUnit;
   };
 }
 
@@ -57,11 +64,53 @@ export interface ChapterTimestamp {
   chapter: number;
 }
 
+export interface StoryOffsetTimestamp {
+  type: 'offset';
+  amount: number;
+  unit: TimeUnit;
+}
+
+export interface IndeterminateTimestamp {
+  type: 'indeterminate';
+  mode: 'unspecified' | 'intentional';
+  reason?: string;
+}
+
+export type LocatableStoryTimestamp =
+  | AbsoluteTimestamp
+  | RelativeTimestamp
+  | ChapterTimestamp
+  | StoryOffsetTimestamp;
+
+/** Preserved authored expression; never use this to order graph nodes. */
+export type StoryTimestamp = LocatableStoryTimestamp | IndeterminateTimestamp;
+
 export interface TimeAnchor {
   id: string;
-  day: number;
+  at: LocatableStoryTimestamp;
   description?: string;
 }
+
+export interface InitialStoryCoordinate {
+  type: 'storyTime';
+  kind: 'initial';
+}
+
+export interface UnlocatedStoryCoordinate {
+  type: 'storyTime';
+  kind: 'unlocated';
+}
+
+export interface PointStoryCoordinate {
+  type: 'storyTime';
+  kind: 'point';
+  clock: 'story' | 'calendar' | 'chapter';
+  scalar: number;
+}
+
+export type SceneStoryCoordinate = UnlocatedStoryCoordinate | PointStoryCoordinate;
+export type StoryCoordinate = InitialStoryCoordinate | SceneStoryCoordinate;
+export type TemporalOrder = 'before' | 'equal' | 'after' | 'incomparable';
 
 // ——— Fact System (§7.4.7) ———
 

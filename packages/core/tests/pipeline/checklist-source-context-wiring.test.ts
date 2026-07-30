@@ -44,6 +44,7 @@ const VALID_ANALYSIS_JSON = JSON.stringify({
     conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
     ruleChecks: [],
     knowledgeChecks: [],
+    checklistResults: [],
   },
 });
 
@@ -102,6 +103,7 @@ function makeContext(): ContextPackage {
       restrictedEntities: [],
     } satisfies KnowledgeBoundary,
     markdown: '',
+    narrativeTechniques: [],
   };
 }
 
@@ -117,6 +119,7 @@ function makeJob(): RenderJob {
       facts: [],
     },
     context: makeContext(),
+    graphHash: 'a00',
     chapter: 1,
     contract: {
       sceneId: 'evt_checklist',

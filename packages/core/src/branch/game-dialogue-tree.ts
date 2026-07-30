@@ -1,9 +1,9 @@
 import { ConfigError } from '../errors.ts';
-import { factIdFrom, parseStoryTimestamp, resolveTimestampToDay } from '../entity/timestamp.ts';
+import { compareStoryCoordinates, factIdFrom } from '../entity/timestamp.ts';
+import type { TemporalContext } from '../entity/timestamp.ts';
 import type {
   BranchPath,
   BranchSet,
-  EventFile,
   Fact,
   GameDialogueChoice,
   NarrativeEvent,
@@ -18,7 +18,7 @@ export interface CompiledGameDialogueTree {
 }
 
 interface TreeNode {
-  event: EventFile;
+  event: NarrativeEvent;
   children: readonly TreeNode[];
 }
 
@@ -26,36 +26,11 @@ function transitionEventId(eventId: string, choiceId: string): string {
   return `system:branch-choice:${eventId}:${choiceId}`;
 }
 
-function validateStrictlyLater(
-  source: EventFile,
-  target: EventFile,
-  timeAnchors: Map<string, number>,
-): void {
-  let sourceDay: number;
-  let targetDay: number;
-  try {
-    sourceDay = resolveTimestampToDay(parseStoryTimestamp(source.storyTime), timeAnchors);
-    targetDay = resolveTimestampToDay(parseStoryTimestamp(target.storyTime), timeAnchors);
-  } catch {
-    throw new ConfigError(
-      `Choice target '${target.event}' must use a storyTime comparable to '${source.event}'`,
-      { eventId: source.event, phase: 'game_dialogue_tree' },
-    );
-  }
-  if (targetDay <= sourceDay) {
-    throw new ConfigError(
-      `Choice target '${target.event}' must have storyTime later than '${source.event}'`,
-      { eventId: source.event, phase: 'game_dialogue_tree' },
-    );
-  }
-}
-
 function makeTransitionEvent(
-  source: EventFile,
+  source: NarrativeEvent,
   choice: GameDialogueChoice,
   choiceScope: BranchSet,
 ): NarrativeEvent {
-  const storyTime = parseStoryTimestamp(source.storyTime);
   const postconditions: Fact[] = choice.effects.map((effect) => ({
     id: factIdFrom(effect.entity, effect.attribute),
     entityId: effect.entity,
@@ -65,17 +40,18 @@ function makeTransitionEvent(
     confidence: effect.confidence ?? 1,
     narrativeHint: effect.narrativeHint,
     validity: {
-      temporal: { start: storyTime, end: null },
+      temporal: { start: source.storyTime, end: null },
       branches: choiceScope,
     },
   }));
 
   return {
-    id: transitionEventId(source.event, choice.id),
-    event: transitionEventId(source.event, choice.id),
+    kind: 'event',
+    id: transitionEventId(source.id, choice.id),
+    event: transitionEventId(source.id, choice.id),
     narrativeOrder: source.narrativeOrder + 0.5,
     title: `Choice ${choice.id} after ${source.event}`,
-    storyTime,
+    storyTime: source.storyTime,
     sceneType: 'linear',
     pov: { character: 'system', type: 'omniscient' },
     sceneBrief: `Apply choice ${choice.id}`,
@@ -88,7 +64,7 @@ function makeTransitionEvent(
     source: 'branch_point',
     branchExistence: choiceScope,
     participants: { entities: [] },
-    causalPredecessors: [source.event],
+    causalPredecessors: [source.id],
   };
 }
 
@@ -97,20 +73,20 @@ function makeTransitionEvent(
  * scopes. A null result preserves the ordinary linear rendering path.
  */
 export function compileGameDialogueTree(
-  events: readonly EventFile[],
-  timeAnchors: Map<string, number> = new Map(),
+  events: readonly NarrativeEvent[],
+  temporalContext: TemporalContext,
 ): CompiledGameDialogueTree | null {
   if (!events.some((event) => event.choices !== undefined)) return null;
 
-  const eventById = new Map<string, EventFile>();
+  const eventById = new Map<string, NarrativeEvent>();
   for (const event of events) {
-    if (eventById.has(event.event)) {
-      throw new ConfigError(`Duplicate event id '${event.event}' in game dialogue tree`, {
-        eventId: event.event,
+    if (eventById.has(event.id)) {
+      throw new ConfigError(`Duplicate event id '${event.id}' in game dialogue tree`, {
+        eventId: event.id,
         phase: 'game_dialogue_tree',
       });
     }
-    eventById.set(event.event, event);
+    eventById.set(event.id, event);
   }
 
   const incomingByEventId = new Map<string, string>();
@@ -121,28 +97,42 @@ export function compileGameDialogueTree(
       const target = eventById.get(choice.targetEvent);
       if (!target) {
         throw new ConfigError(
-          `Choice '${choice.id}' in '${event.event}' targets missing event '${choice.targetEvent}'`,
-          { eventId: event.event, phase: 'game_dialogue_tree' },
+          `Choice '${choice.id}' in '${event.id}' targets missing event '${choice.targetEvent}'`,
+          { eventId: event.id, phase: 'game_dialogue_tree' },
         );
       }
-      if (target.event === event.event) {
-        throw new ConfigError(`Choice '${choice.id}' in '${event.event}' cannot target itself`, {
-          eventId: event.event,
+      if (target.id === event.id) {
+        throw new ConfigError(`Choice '${choice.id}' in '${event.id}' cannot target itself`, {
+          eventId: event.id,
           phase: 'game_dialogue_tree',
         });
       }
-      validateStrictlyLater(event, target, timeAnchors);
-      const existingParent = incomingByEventId.get(target.event);
+
+      // Reject only when target is provably earlier on the same clock.
+      // equal, unlocated, and cross-clock transitions are all permitted.
+      const sourceCoord = temporalContext.coordinatesByEventId.get(event.id);
+      const targetCoord = temporalContext.coordinatesByEventId.get(target.id);
+      if (sourceCoord && targetCoord) {
+        const order = compareStoryCoordinates(sourceCoord, targetCoord);
+        if (order === 'after') {
+          throw new ConfigError(
+            `Choice target '${target.id}' must not have storyTime earlier than '${event.id}'`,
+            { eventId: event.id, phase: 'game_dialogue_tree' },
+          );
+        }
+      }
+
+      const existingParent = incomingByEventId.get(target.id);
       if (existingParent) {
         throw new ConfigError(
-          `Event '${target.event}' has multiple incoming choices ('${existingParent}' and '${event.event}')`,
-          { eventId: target.event, phase: 'game_dialogue_tree' },
+          `Event '${target.id}' has multiple incoming choices ('${existingParent}' and '${event.id}')`,
+          { eventId: target.id, phase: 'game_dialogue_tree' },
         );
       }
-      incomingByEventId.set(target.event, event.event);
-      childIds.push(target.event);
+      incomingByEventId.set(target.id, event.id);
+      childIds.push(target.id);
     }
-    childIdsByEventId.set(event.event, childIds);
+    childIdsByEventId.set(event.id, childIds);
   }
 
   const visitState = new Map<string, 'visiting' | 'visited'>();
@@ -159,9 +149,9 @@ export function compileGameDialogueTree(
     for (const childId of childIdsByEventId.get(eventId) ?? []) validateAcyclic(childId);
     visitState.set(eventId, 'visited');
   };
-  for (const event of events) validateAcyclic(event.event);
+  for (const event of events) validateAcyclic(event.id);
 
-  const roots = events.filter((event) => !incomingByEventId.has(event.event));
+  const roots = events.filter((event) => !incomingByEventId.has(event.id));
   if (roots.length !== 1) {
     throw new ConfigError(`Game dialogue tree requires exactly one root; found ${roots.length}`, {
       phase: 'game_dialogue_tree',
@@ -176,18 +166,18 @@ export function compileGameDialogueTree(
       children: (childIdsByEventId.get(eventId) ?? []).map(buildNode),
     };
   };
-  const rootNode = buildNode(root.event);
+  const rootNode = buildNode(root.id);
 
   const reachable = new Set<string>();
   const markReachable = (node: TreeNode): void => {
-    reachable.add(node.event.event);
+    reachable.add(node.event.id);
     for (const child of node.children) markReachable(child);
   };
   markReachable(rootNode);
   if (reachable.size !== events.length) {
-    const unreachable = events.find((event) => !reachable.has(event.event))!;
-    throw new ConfigError(`Game dialogue event '${unreachable.event}' is unreachable from '${root.event}'`, {
-      eventId: unreachable.event,
+    const unreachable = events.find((event) => !reachable.has(event.id))!;
+    throw new ConfigError(`Game dialogue event '${unreachable.id}' is unreachable from '${root.id}'`, {
+      eventId: unreachable.id,
       phase: 'game_dialogue_tree',
     });
   }
@@ -198,8 +188,8 @@ export function compileGameDialogueTree(
   const visitLeaves = (node: TreeNode, path: BranchPath): BranchPath[] => {
     if (node.children.length === 0) {
       leafPaths.push(path);
-      descendantPathsByEventId.set(node.event.event, [path]);
-      representativePathByEventId.set(node.event.event, path);
+      descendantPathsByEventId.set(node.event.id, [path]);
+      representativePathByEventId.set(node.event.id, path);
       return [path];
     }
 
@@ -210,7 +200,7 @@ export function compileGameDialogueTree(
         decisions: [
           ...path.decisions,
           {
-            atEventId: node.event.event,
+            atEventId: node.event.id,
             choiceId: choice.id,
             narrativeOrder: node.event.narrativeOrder,
           },
@@ -218,8 +208,8 @@ export function compileGameDialogueTree(
       };
       descendantPaths.push(...visitLeaves(child, choicePath));
     }
-    descendantPathsByEventId.set(node.event.event, descendantPaths);
-    representativePathByEventId.set(node.event.event, descendantPaths[0]!);
+    descendantPathsByEventId.set(node.event.id, descendantPaths);
+    representativePathByEventId.set(node.event.id, descendantPaths[0]!);
     return descendantPaths;
   };
   visitLeaves(rootNode, { decisions: [] });
@@ -227,10 +217,10 @@ export function compileGameDialogueTree(
   const eventScopes = new Map<string, BranchSet>();
   for (const event of events) {
     eventScopes.set(
-      event.event,
-      event.event === root.event
+      event.id,
+      event.id === root.id
         ? { type: 'all' }
-        : { type: 'paths', paths: descendantPathsByEventId.get(event.event)! },
+        : { type: 'paths', paths: descendantPathsByEventId.get(event.id)! },
     );
   }
 
@@ -239,7 +229,7 @@ export function compileGameDialogueTree(
   const emitTransitions = (node: TreeNode): void => {
     const choices = node.event.choices;
     if (!choices) return;
-    choicesByEventId.set(node.event.event, choices);
+    choicesByEventId.set(node.event.id, choices);
     for (const choice of choices) {
       const targetScope = eventScopes.get(choice.targetEvent)!;
       transitionEvents.push(makeTransitionEvent(node.event, choice, targetScope));

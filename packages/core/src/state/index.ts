@@ -33,14 +33,14 @@ export {
   planSelection,
   validateSelectionAgainstEvents,
 } from './corpus-selection.ts';
-export type { AdjacencyList } from './dag.ts';
-export { buildCausalEdges, topologicalSort } from './dag.ts';
+export type { AdjacencyList, StoryOrderIndex } from './dag.ts';
+export { buildStoryOrderIndex, isProvenBefore } from './dag.ts';
 export { exportDAGtoDOT, exportDAGtoMermaid } from './dag-export.ts';
 export { EventStore } from './event-store.ts';
 export type { CompileNode, ExplicitEdgeDecl, RawEffect, RawRequirement } from './graph-compiler.ts';
 export { compileDiscourseGraph, compileGraph, compileStoryGraph } from './graph-compiler.ts';
-export type { CompiledNarrativeGraphs } from './graph-adapter.ts';
-export { compileNarrativeGraphs, storyGraphToEventAdjacency } from './graph-adapter.ts';
+export type { CompiledNarrativeGraphs, CompiledStoryRuntimeGraph } from './graph-adapter.ts';
+export { compileNarrativeGraphs, compileStoryRuntimeGraph, storyGraphToEventAdjacency } from './graph-adapter.ts';
 export {
   applyClaimTransaction,
   applyKnowledgeBoundary,
@@ -52,11 +52,20 @@ export {
 } from './knowledge-replay.ts';
 export { StateManager } from './manager.ts';
 export { ReplayEngine } from './replay.ts';
+export type { ReplayOptions } from './replay.ts';
 export { SnapshotEngine } from './snapshot.ts';
 export type { CompiledDiscourseRenderContext } from './discourse-context.ts';
 export { compileDiscourseBoundaries } from './discourse-context.ts';
+export type { DiscourseSceneSequenceEntry } from '../types/graph.js';
+export { compileDiscourseSceneSequence, resolveDiscourseBranch } from './discourse-sequence.ts';
 export type { PlannedDiscourseLedgerSource } from '../types/discourse.js';
 export { compilePlannedDiscourseLedger } from './discourse-ledger.ts';
 
 export type { StoryBoundaries } from './story-boundaries.ts';
-export { compileStoryBoundaries } from './story-boundaries.ts';
+export { compileStoryBoundaries, compileStoryBoundariesFromGraph } from './story-boundaries.ts';
+
+export type { CompiledNarrativeRuntime, CompileNarrativeRuntimeInput } from './narrative-runtime.ts';
+export { compileNarrativeRuntime } from './narrative-runtime.ts';
+
+export { resolveNarrativeTechniques } from './technique-resolver.ts';
+export type { NarrativeTechniqueKind, ResolvedNarrativeTechniqueContract } from '../types/narrative-techniques.ts';

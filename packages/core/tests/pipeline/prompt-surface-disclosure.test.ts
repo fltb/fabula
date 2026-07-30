@@ -47,6 +47,7 @@ const MINIMAL_CONTEXT: ContextPackage = {
   activeThreads: [],
   volumeSummary: '',
   markdown: '',
+  narrativeTechniques: [],
 };
 
 const MINIMAL_STYLE: StyleGuidance = {

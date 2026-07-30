@@ -119,7 +119,7 @@ function main() {
   // Write state_initial.yaml
   writeYAML(path.join(defsDir, 'state_initial.yaml'), {
     timeAnchors: [
-      { id: 'story_beginning', day: 0, description: 'Start of each 5-sentence CaTeRS story' },
+      { id: 'story_beginning', at: 'day_0', description: 'Start of each 5-sentence CaTeRS story' },
     ],
     threads: [
       {

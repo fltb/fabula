@@ -16,8 +16,8 @@ export const worldInitialStateSchema = z
       .array(
         z
           .object({
-            id: z.string(),
-            day: z.number(),
+            id: z.string().min(1),
+            at: z.string().min(1),
             description: z.string().optional(),
           })
           .strict(),

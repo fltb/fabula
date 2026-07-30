@@ -13,7 +13,13 @@ export type { CanonicalFactValue } from './fact-value.js';
 export { canonicalDeepEqual, canonicalizeFactValue, isCanonicalFactValue } from './fact-value.js';
 export { EntityMapper } from './mapper.js';
 export { InMemoryEntityRegistry } from './registry.js';
-export { compareTimestamp, parseStoryTimestamp, resolveTimestampToDay } from './timestamp.js';
+export {
+  compareStoryCoordinates,
+  INITIAL_STORY_ROOT_ID,
+  parseStoryTimestamp,
+  resolveTemporalContext,
+} from './timestamp.js';
+export type { TemporalContext } from './timestamp.js';
 export type { ProjectData } from './types.js';
 export {
   loadProjectConfig,

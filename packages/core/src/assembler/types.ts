@@ -14,7 +14,6 @@ export const AssemblyErrorCode = {
   INVALID_BRANCH_EXISTENCE: 'INVALID_BRANCH_EXISTENCE',
   MISSING_PROSE: 'MISSING_PROSE',
   EMPTY_PROSE: 'EMPTY_PROSE',
-  DUPLICATE_NARRATIVE_ORDER: 'DUPLICATE_NARRATIVE_ORDER',
   UNKNOWN_COUNT_VERSION: 'UNKNOWN_COUNT_VERSION',
 } as const;
 
@@ -66,6 +65,8 @@ export interface AssembleOptions {
   title?: string;
   /** Optional branch path for branch-filtered assembly */
   branchPath?: BranchPath;
+  /** Discourse branch for scene sequencing; defaults to "main" */
+  discourseBranch?: string;
   language?: string;
   /** Optional storage backend (defaults to FsStorage) */
   storage?: Storage;

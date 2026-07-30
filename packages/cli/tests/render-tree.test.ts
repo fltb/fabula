@@ -45,6 +45,8 @@ describe('built CLI game dialogue tree', () => {
           '--all',
           '--branch-path',
           acceptPath,
+          '--discourse-branch',
+          'accept_hunt',
           '--provider',
           'mock-pass2',
           '--reference-dir',
@@ -75,6 +77,8 @@ describe('built CLI game dialogue tree', () => {
           'assemble',
           '--branch-path',
           JSON.stringify({ decisions: [] }),
+          '--discourse-branch',
+          'accept_hunt',
         ],
         { cwd: project, encoding: 'utf8' },
       );

@@ -232,13 +232,27 @@ export {
   reviewCommentSchema,
   reviewLedgerV1Schema,
 } from './schemas/review.ts';
-export type { AdjacencyList, StoryBoundaries } from './state/index.js';
+export type {
+  AdjacencyList,
+  CompileNarrativeRuntimeInput,
+  CompiledNarrativeRuntime,
+  DiscourseSceneSequenceEntry,
+  ResolvedNarrativeTechniqueContract,
+  StoryBoundaries,
+  StoryOrderIndex,
+} from './state/index.js';
 // State
 export {
-  buildCausalEdges,
+  buildStoryOrderIndex,
+  compileDiscourseSceneSequence,
+  compileNarrativeRuntime,
+  isProvenBefore,
+  resolveDiscourseBranch,
   compileStoryBoundaries,
+  compileStoryBoundariesFromGraph,
   exportDAGtoDOT,
   exportDAGtoMermaid,
+  resolveNarrativeTechniques,
   ReplayEngine,
   StateManager,
 } from './state/index.js';
@@ -310,6 +324,7 @@ export {
   ForeshadowingValidator,
   FrequencyConsistencyValidator,
   KnowledgeValidator,
+  NarrativeTechniqueValidator,
   PacingValidator,
   POVValidator,
   PronounValidator,

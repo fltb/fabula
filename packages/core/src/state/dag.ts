@@ -1,180 +1,116 @@
-import { includesPath } from '../branch/index.js';
-import { resolveTimestampToDay } from '../entity/timestamp.js';
 import { DagCycleError, DagProviderError } from '../errors.js';
-import type { BranchPath } from '../types/branch.js';
-import type { Fact, NarrativeEvent } from '../types/index.js';
+import type { SceneStoryCoordinate } from '../types/entity.js';
 
-export type AdjacencyList = Map<string, string[]>;
+export type AdjacencyList = ReadonlyMap<string, readonly string[]>;
 
-export interface CausalGraphOptions {
-  anchors?: Map<string, number>;
-  branchPath?: BranchPath;
-  initialFacts?: readonly Fact[];
+export interface StoryOrderIndex {
+  initialRootId: string | null;
+  /** Ordinary event IDs only. */
+  topologicalOrder: readonly string[];
+  /** Transitive ordinary-event ancestors; may include the initial root. */
+  ancestorsByEventId: ReadonlyMap<string, ReadonlySet<string>>;
 }
 
-interface Write {
-  eventId: string;
-  day: number;
-}
-
-function factKey(fact: Fact): string {
-  return `${fact.entityId}\u0000${fact.attribute}\u0000${JSON.stringify(fact.value)}`;
-}
-
-function eventDay(event: NarrativeEvent, anchors: Map<string, number>): number {
-  return resolveTimestampToDay(event.storyTime, anchors);
-}
-
-/** Compiles deterministic causal dependencies for one concrete branch. */
-export function buildCausalEdges(
-  events: NarrativeEvent[],
-  options: CausalGraphOptions = {},
-): { edges: AdjacencyList; inDegree: Map<string, number> } {
-  const anchors = options.anchors ?? new Map<string, number>();
-  const selectedBranch = options.branchPath ?? { decisions: [] };
-  const selectedEvents = events.filter((event) =>
-    includesPath(event.branchExistence, selectedBranch),
-  );
-  const selectedEventIds = new Set(selectedEvents.map((event) => event.id));
-  const isFactSelected = (fact: Fact): boolean =>
-    includesPath(fact.validity.branches, selectedBranch);
-  const writes = new Map<string, Write[]>();
-  const initial = new Set(
-    (options.initialFacts ?? [])
-      .filter((fact) => fact.value !== undefined && isFactSelected(fact))
-      .map(factKey),
-  );
-  const edges: AdjacencyList = new Map();
-  const inDegree = new Map<string, number>();
-
-  for (const event of selectedEvents) {
-    if (edges.has(event.id)) {
-      throw new DagProviderError('Duplicate event ID', {
-        eventId: event.id,
-        phase: 'causal-compile',
-      });
-    }
-    edges.set(event.id, []);
-    inDegree.set(event.id, 0);
+/**
+ * Build a deterministic linear extension and transitive reachability index without
+ * mutating the authored/compiled graph. Derived temporal edges already encode every
+ * comparable temporal constraint; event IDs break ties only among genuinely unrelated nodes.
+ */
+export function buildStoryOrderIndex(
+  initialRootId: string | null,
+  eventIds: readonly string[],
+  adjacency: AdjacencyList,
+  _coordinatesByEventId: ReadonlyMap<string, SceneStoryCoordinate>,
+): StoryOrderIndex {
+  const ordinaryIds = new Set(eventIds);
+  if (ordinaryIds.size !== eventIds.length) {
+    throw new DagProviderError('Story order contains duplicate ordinary event IDs', {
+      phase: 'story-order',
+    });
+  }
+  if (initialRootId !== null && ordinaryIds.has(initialRootId)) {
+    throw new DagProviderError('Initial root must not be an ordinary event', {
+      eventId: initialRootId,
+      phase: 'story-order',
+    });
   }
 
-  const addEdge = (predecessorId: string, eventId: string): void => {
-    const successors = edges.get(predecessorId);
-    if (!successors) {
-      throw new DagProviderError(`Unknown predecessor '${predecessorId}' for event '${eventId}'`, {
-        eventId,
-        phase: 'causal-compile',
+  const nodeIds = new Set(eventIds);
+  if (initialRootId !== null) nodeIds.add(initialRootId);
+  const copied = new Map<string, string[]>();
+  for (const id of nodeIds) copied.set(id, []);
+  for (const [predecessor, dependents] of adjacency) {
+    if (!nodeIds.has(predecessor)) {
+      throw new DagProviderError(`Unknown predecessor '${predecessor}' in story graph`, {
+        eventId: predecessor,
+        phase: 'story-order',
       });
     }
-    if (successors.includes(eventId)) return;
-    successors.push(eventId);
-    inDegree.set(eventId, (inDegree.get(eventId) ?? 0) + 1);
+    const successors = copied.get(predecessor)!;
+    for (const dependent of dependents) {
+      if (!nodeIds.has(dependent)) {
+        throw new DagProviderError(`Unknown dependent '${dependent}' in story graph`, {
+          eventId: dependent,
+          phase: 'story-order',
+        });
+      }
+      if (!successors.includes(dependent)) successors.push(dependent);
+    }
+  }
+
+  const inDegree = new Map<string, number>([...nodeIds].map((id) => [id, 0]));
+  for (const dependents of copied.values()) {
+    for (const dependent of dependents) inDegree.set(dependent, (inDegree.get(dependent) ?? 0) + 1);
+  }
+
+  const ancestors = new Map<string, Set<string>>([...nodeIds].map((id) => [id, new Set()]));
+  const compareReady = (left: string, right: string): number => {
+    if (left === initialRootId) return -1;
+    if (right === initialRootId) return 1;
+    return left.localeCompare(right);
   };
-
-  for (const event of selectedEvents) {
-    for (const predecessorId of event.causalPredecessors ?? []) {
-      if (!selectedEventIds.has(predecessorId)) {
-        throw new DagProviderError(
-          `Predecessor '${predecessorId}' for event '${event.id}' is unknown or excluded by the selected branch`,
-          { eventId: event.id, phase: 'causal-compile' },
-        );
-      }
-      addEdge(predecessorId, event.id);
-    }
-  }
-
-  for (const event of selectedEvents) {
-    const day = eventDay(event, anchors);
-    for (const fact of event.postconditions) {
-      if (!isFactSelected(fact) || fact.value === undefined) continue;
-      const key = factKey(fact);
-      const writers = writes.get(key) ?? [];
-      writers.push({ eventId: event.id, day });
-      writes.set(key, writers);
-    }
-  }
-  for (const event of selectedEvents) {
-    const consumerDay = eventDay(event, anchors);
-    for (const precondition of event.preconditions) {
-      if (!isFactSelected(precondition) || precondition.value === undefined) continue;
-      const key = factKey(precondition);
-      const candidates = (writes.get(key) ?? []).filter((writer) => writer.day < consumerDay);
-      if (candidates.length === 0) {
-        if (initial.has(key)) continue;
-        throw new DagProviderError(
-          `No earlier provider for deterministic precondition in event ${event.id} at ${key}`,
-          { eventId: event.id, stateKey: key, phase: 'causal-compile' },
-        );
-      }
-      const newestDay = Math.max(...candidates.map((candidate) => candidate.day));
-      const newest = candidates.filter((candidate) => candidate.day === newestDay);
-      if (newest.length !== 1) {
-        throw new DagProviderError(
-          `Ambiguous latest provider for deterministic precondition in event ${event.id} at ${key}`,
-          { eventId: event.id, stateKey: key, phase: 'causal-compile' },
-        );
-      }
-      const provider = newest[0]!;
-      if (provider.eventId === event.id) {
-        throw new DagProviderError(
-          `Event ${event.id} cannot provide its own precondition at ${key}`,
-          { eventId: event.id, stateKey: key, phase: 'causal-compile' },
-        );
-      }
-      addEdge(provider.eventId, event.id);
-    }
-  }
-
-  return { edges, inDegree };
-}
-/** Kahn sort that leaves its input graph untouched and rejects cycles.
- *  When multiple events become ready simultaneously (in-degree 0),
- *  story-time day acts as deterministic tiebreaker, with event id as
- *  secondary key. This guarantees the output respects causal edges. */
-export function topologicalSort(
-  events: NarrativeEvent[],
-  edges: AdjacencyList,
-  inputInDegree: Map<string, number>,
-  anchors?: Map<string, number>,
-): string[] {
-  const inDegree = new Map(inputInDegree);
-  const eventById = new Map(events.map((event) => [event.id, event]));
-
-  // Deterministic priority: earliest story-time day first, event id as last resort
-  function compareByStory(a: string, b: string): number {
-    const ea = eventById.get(a)!;
-    const eb = eventById.get(b)!;
-    const dayA = anchors ? resolveTimestampToDay(ea.storyTime, anchors) : 0;
-    const dayB = anchors ? resolveTimestampToDay(eb.storyTime, anchors) : 0;
-    return dayA - dayB || a.localeCompare(b);
-  }
-
-  const ready = events
-    .filter((event) => inDegree.get(event.id) === 0)
-    .map((event) => event.id)
-    .sort(compareByStory);
-  const result: string[] = [];
+  const ready = [...nodeIds].filter((id) => inDegree.get(id) === 0).sort(compareReady);
+  const orderedAll: string[] = [];
 
   while (ready.length > 0) {
     const current = ready.shift()!;
-    result.push(current);
-    const newReady: string[] = [];
-    for (const neighbor of edges.get(current) ?? []) {
-      const remaining = (inDegree.get(neighbor) ?? 0) - 1;
-      inDegree.set(neighbor, remaining);
-      if (remaining === 0) newReady.push(neighbor);
-    }
-    if (newReady.length > 0) {
-      newReady.sort(compareByStory);
-      ready.push(...newReady);
+    orderedAll.push(current);
+    for (const dependent of copied.get(current) ?? []) {
+      const targetAncestors = ancestors.get(dependent)!;
+      for (const ancestor of ancestors.get(current)!) targetAncestors.add(ancestor);
+      targetAncestors.add(current);
+
+      const remaining = (inDegree.get(dependent) ?? 0) - 1;
+      inDegree.set(dependent, remaining);
+      if (remaining === 0) {
+        ready.push(dependent);
+        ready.sort(compareReady);
+      }
     }
   }
 
-  if (result.length !== events.length) {
-    const cycle = events.filter((event) => !result.includes(event.id)).map((event) => event.id);
-    throw new DagCycleError('Causal graph contains a cycle', { cycle, phase: 'causal-sort' });
+  if (orderedAll.length !== nodeIds.size) {
+    const cycle = [...nodeIds].filter((id) => !orderedAll.includes(id));
+    throw new DagCycleError('Story graph contains a cycle', { cycle, phase: 'story-order' });
   }
-  if (result.some((id) => !eventById.has(id)))
-    throw new DagProviderError('Causal graph contains an unknown event', { phase: 'causal-sort' });
-  return result;
+
+  return {
+    initialRootId,
+    topologicalOrder: orderedAll.filter((id) => ordinaryIds.has(id)),
+    ancestorsByEventId: new Map(
+      eventIds.map((id) => [id, ancestors.get(id) ?? new Set<string>()] as const),
+    ),
+  };
+}
+
+export function isProvenBefore(
+  predecessorId: string,
+  dependentId: string,
+  order: StoryOrderIndex,
+): boolean {
+  if (predecessorId === dependentId) return false;
+  if (order.initialRootId !== null && predecessorId === order.initialRootId) {
+    return order.ancestorsByEventId.has(dependentId);
+  }
+  return order.ancestorsByEventId.get(dependentId)?.has(predecessorId) ?? false;
 }

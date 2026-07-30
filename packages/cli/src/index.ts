@@ -156,6 +156,16 @@ function computeProjectSourceHash(documents: readonly SourceDocumentV1[]): strin
   return digest.digest('hex');
 }
 
+function resolveRoute(options: {
+  branchPath?: BranchPath;
+  discourseBranch?: string;
+}): { branchPath?: BranchPath; discourseBranch?: string } {
+  return {
+    ...(options.branchPath ? { branchPath: options.branchPath } : {}),
+    ...(options.discourseBranch ? { discourseBranch: options.discourseBranch } : {}),
+  };
+}
+
 function requireCompleteGameLeaf(projectDir: string, branchPath: BranchPath | undefined): void {
   const mapper = new EntityMapper(projectDir, new FsStorage());
   const data = mapper.loadProject();
@@ -247,7 +257,7 @@ info:
 
 time_anchors:
   - id: story_beginning
-    day: 0
+    at: day_0
     description: "Day 0 — Story begins"
 
 threads: []
@@ -459,8 +469,9 @@ program
   .description('Assemble all committed scenes into output/novel.md')
   .option('--output <path>', 'Custom output path')
   .option('--branch-path <json>', 'Complete game-tree BranchPath JSON')
+  .option('--discourse-branch <name>', 'Discourse branch name (default: main)')
   .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
-  .action((options: { output?: string; branchPath?: string; actor?: string }) => {
+  .action((options: { output?: string; branchPath?: string; discourseBranch?: string; actor?: string }) => {
     const projectDir = ensureProjectDir();
     let branchPath: BranchPath | undefined;
     try {
@@ -478,7 +489,7 @@ program
         actorId: options.actor ?? 'local-cli',
       },
       ...(options.output ? { outputPath: options.output } : {}),
-      ...(branchPath ? { branchPath } : {}),
+      ...resolveRoute({ branchPath, discourseBranch: options.discourseBranch }),
     };
     const result = options.output ? assembleCustomNovel(request) : assembleCanonicalNovel(request);
     console.log(`Novel assembled: ${result.wordCount} words, ${result.sceneCount} scenes`);
@@ -677,6 +688,7 @@ sceneCmd
   .option('--provider <provider>', 'Provider: ai-sdk or mock-pass2')
   .option('--reference-dir <path>', 'Approved mock reference directory')
   .option('--branch-path <json>', 'Complete game-tree BranchPath JSON')
+  .option('--discourse-branch <name>', 'Discourse branch name (default: main)')
   .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
   .option('--json', 'Output as JSON')
   .action(
@@ -691,6 +703,7 @@ sceneCmd
         provider?: string;
         referenceDir?: string;
         branchPath?: string;
+        discourseBranch?: string;
         actor?: string;
         json?: boolean;
       },
@@ -719,7 +732,7 @@ sceneCmd
         version: 1,
         projectDir,
         selector: { type: 'events', eventIds: [eventId] },
-        ...(branchPath ? { branchPath } : {}),
+        ...resolveRoute({ branchPath, discourseBranch: opts.discourseBranch }),
       });
       if (!current) {
         console.error(`Scene "${eventId}" not found.`);
@@ -757,7 +770,7 @@ sceneCmd
           ...(opts.lock ? { lockAfter: true } : {}),
           ...(opts.note ? { note: opts.note } : {}),
           ...(opts.model ? { model: opts.model } : {}),
-          ...(branchPath ? { branchPath } : {}),
+          ...resolveRoute({ branchPath, discourseBranch: opts.discourseBranch }),
         },
         {
           provider:
@@ -1122,6 +1135,7 @@ program
   .option('--trace', 'Emit trace JSONL in the configured work directory')
   .option('--concurrency <number>', 'Max concurrent LLM calls')
   .option('--branch-path <json>', 'Complete game-tree BranchPath JSON')
+  .option('--discourse-branch <name>', 'Discourse branch name (default: main)')
   .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
   .option('--json', 'Output the core DTO as JSON')
   .action(
@@ -1138,6 +1152,7 @@ program
         trace?: boolean;
         concurrency?: string;
         branchPath?: string;
+        discourseBranch?: string;
         actor?: string;
         json?: boolean;
       },
@@ -1188,7 +1203,7 @@ program
           actorId: options.actor ?? 'local-cli',
         },
         ...(options.model ? { model: options.model } : {}),
-        ...(branchPath ? { branchPath } : {}),
+        ...resolveRoute({ branchPath, discourseBranch: options.discourseBranch }),
       };
       const runtime: EditorialRuntime = {
         storage: new FsStorage(),
@@ -1258,6 +1273,7 @@ program
   .option('--provider <provider>', 'Provider: ai-sdk or mock-pass2')
   .option('--reference-dir <path>', 'Approved mock reference directory')
   .option('--branch-path <json>', 'Complete game-tree BranchPath JSON')
+  .option('--discourse-branch <name>', 'Discourse branch name (default: main)')
   .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
   .option('--json', 'Output the core DTO as JSON')
   .action(
@@ -1273,6 +1289,7 @@ program
         provider?: string;
         referenceDir?: string;
         branchPath?: string;
+        discourseBranch?: string;
         actor?: string;
         json?: boolean;
       },
@@ -1319,7 +1336,7 @@ program
             actorId: options.actor ?? 'local-cli',
           },
           ...(options.model ? { model: options.model } : {}),
-          ...(branchPath ? { branchPath } : {}),
+          ...resolveRoute({ branchPath, discourseBranch: options.discourseBranch }),
         },
         {
           storage: new FsStorage(),
@@ -1355,6 +1372,7 @@ program
   .option('--reference-dir <path>', 'Approved mock reference directory')
   .option('--trace', 'Emit trace JSONL to .nova/traces/<job>.jsonl')
   .option('--concurrency <number>', 'Max concurrent LLM calls')
+  .option('--discourse-branch <name>', 'Discourse branch name (default: main)')
   .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
   .action(
     async (options: {
@@ -1363,6 +1381,7 @@ program
       referenceDir?: string;
       trace?: boolean;
       concurrency?: string;
+      discourseBranch?: string;
       actor?: string;
     }) => {
       const projectDir = ensureProjectDir();
@@ -1955,6 +1974,9 @@ program
 export async function main(args: string[] = process.argv) {
   await program.parseAsync(args);
 }
+
+// Shared routing helper for CLI and MCP
+export { resolveRoute };
 
 // Allow running directly
 if (

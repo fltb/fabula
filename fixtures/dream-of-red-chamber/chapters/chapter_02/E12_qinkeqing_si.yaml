@@ -3,7 +3,7 @@ title: "秦可卿死封龙禁尉"
 narrativeOrder: 12
 sceneType: linear
 storyTime: xue_family_arrives + 210 days
-narrationTime: xue_family_arrives + 210
+narrationTime: xue_family_arrives + 210 days
 tense: past
 discourseMode: exposition
 arcPosition: rising

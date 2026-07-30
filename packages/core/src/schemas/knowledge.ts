@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { z } from 'zod';
+import { locatableStoryTimestampSchema, storyTimestampSchema } from './timestamp.js';
 
 // ─── Proposition Schemas ─────────────────────────────────────────────────────
 
@@ -131,18 +132,7 @@ export const claimEvidenceRecordSchema = z
     warrant: z.string().optional(),
     provider: z.string().optional(),
     provenance: z.array(z.string()).default([]),
-    acquiredAt: z.object({
-      type: z.enum(['absolute', 'relative', 'chapter']),
-      value: z.union([z.string(), z.number()]),
-      anchor: z.string().optional(),
-      chapter: z.number().optional(),
-      offset: z
-        .object({
-          amount: z.number(),
-          unit: z.enum(['minute', 'hour', 'day', 'week', 'month']),
-        })
-        .optional(),
-    }),
+    acquiredAt: storyTimestampSchema,
   })
   .strict();
 
@@ -170,18 +160,7 @@ export const epistemicLedgerSchema = z
           storyBoundary: z.string().optional(),
           inWorldSource: z.string().optional(),
           corpusProvenance: z.string().optional(),
-          timestamp: z.object({
-            type: z.enum(['absolute', 'relative', 'chapter']),
-            value: z.union([z.string(), z.number()]),
-            anchor: z.string().optional(),
-            chapter: z.number().optional(),
-            offset: z
-              .object({
-                amount: z.number(),
-                unit: z.enum(['minute', 'hour', 'day', 'week', 'month']),
-              })
-              .optional(),
-          }),
+          timestamp: storyTimestampSchema,
           eventId: z.string().min(1),
           warrantJustification: z.string().optional(),
         }),
@@ -207,18 +186,7 @@ export const commonGroundRecordSchema = z
   .object({
     propositionId: z.string().min(1),
     participants: z.array(z.string().min(1)),
-    establishedAt: z.object({
-      type: z.enum(['absolute', 'relative', 'chapter']),
-      value: z.union([z.string(), z.number()]),
-      anchor: z.string().optional(),
-      chapter: z.number().optional(),
-      offset: z
-        .object({
-          amount: z.number(),
-          unit: z.enum(['minute', 'hour', 'day', 'week', 'month']),
-        })
-        .optional(),
-    }),
+    establishedAt: storyTimestampSchema,
     establishedBy: z.string().min(1),
   })
   .strict();
@@ -229,18 +197,7 @@ export const narrativeKnowledgeBoundarySchema = z
   .object({
     focalizer: z.string().min(1),
     allowlistedClaims: z.array(z.string()).default([]),
-    boundaryTime: z.object({
-      type: z.enum(['absolute', 'relative', 'chapter']),
-      value: z.union([z.string(), z.number()]),
-      anchor: z.string().optional(),
-      chapter: z.number().optional(),
-      offset: z
-        .object({
-          amount: z.number(),
-          unit: z.enum(['minute', 'hour', 'day', 'week', 'month']),
-        })
-        .optional(),
-    }),
+    boundaryTime: locatableStoryTimestampSchema,
   })
   .strict();
 

@@ -23,6 +23,7 @@ import {
   projectDiscourseContext,
   replayDiscourseState,
 } from './discourse-replay.js';
+import { compileDiscourseSceneSequence } from './discourse-sequence.ts';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CompiledDiscourseRenderContext — immutable snapshot per event
@@ -414,112 +415,6 @@ function preflightSemanticRules(
   }
 }
 
-interface SceneActionInterval {
-  start: number;
-  end: number;
-}
-
-interface BranchSceneSequence {
-  sceneIds: readonly string[];
-  actionIntervals: ReadonlyMap<string, SceneActionInterval>;
-}
-
-function compileBranchSceneSequence(
-  events: readonly NarrativeEvent[],
-  ledger: PlannedDiscourseLedger,
-  branch: string,
-  branchEntries: readonly PlannedLedgerEntry[],
-): BranchSceneSequence {
-  const eventById = new Map(events.map((event) => [event.id, event]));
-  if (eventById.size !== events.length) {
-    throw new ConfigError(`Duplicate event IDs supplied for discourse branch "${branch}".`);
-  }
-
-  const chapterBlocks = ledger.chapters.filter((chapter) => chapter.branch === branch);
-  if (chapterBlocks.length === 0) {
-    throw new ConfigError(
-      `Discourse ledger "${ledger.id}" has no chapter sequence for branch "${branch}".`,
-    );
-  }
-
-  let previousChapter = 0;
-  const seenSceneIds = new Set<string>();
-  const sceneIds: string[] = [];
-  for (const chapterBlock of chapterBlocks) {
-    if (chapterBlock.chapter <= previousChapter) {
-      throw new ConfigError(
-        `Discourse ledger "${ledger.id}" has non-increasing chapter ${chapterBlock.chapter} ` +
-          `for branch "${branch}".`,
-      );
-    }
-    previousChapter = chapterBlock.chapter;
-    for (const sceneId of chapterBlock.sceneIds) {
-      if (!eventById.has(sceneId)) {
-        throw new ConfigError(
-          `Discourse ledger "${ledger.id}" chapter ${chapterBlock.chapter} references unknown scene "${sceneId}".`,
-        );
-      }
-      if (seenSceneIds.has(sceneId)) {
-        throw new ConfigError(
-          `Discourse ledger "${ledger.id}" lists scene "${sceneId}" more than once on branch "${branch}".`,
-        );
-      }
-      seenSceneIds.add(sceneId);
-      sceneIds.push(sceneId);
-    }
-  }
-
-  for (const eventId of eventById.keys()) {
-    if (!seenSceneIds.has(eventId)) {
-      throw new ConfigError(
-        `Discourse ledger "${ledger.id}" omits reachable scene "${eventId}" on branch "${branch}".`,
-      );
-    }
-  }
-
-  const sortedEntries = [...branchEntries].sort(
-    (left, right) => left.discoursePosition - right.discoursePosition,
-  );
-  for (const [index, entry] of sortedEntries.entries()) {
-    if (entry.discoursePosition !== index) {
-      throw new ConfigError(
-        `Discourse ledger "${ledger.id}" has gapped action position ${entry.discoursePosition} ` +
-          `on branch "${branch}"; positions must be contiguous from 0.`,
-      );
-    }
-  }
-
-  const entriesByScene = new Map<string, PlannedLedgerEntry[]>();
-  for (const entry of sortedEntries) {
-    const entries = entriesByScene.get(entry.sceneId) ?? [];
-    entries.push(entry);
-    entriesByScene.set(entry.sceneId, entries);
-  }
-
-  const actionIntervals = new Map<string, SceneActionInterval>();
-  for (const [sceneId, entries] of entriesByScene) {
-    actionIntervals.set(sceneId, {
-      start: entries[0]!.discoursePosition,
-      end: entries[entries.length - 1]!.discoursePosition,
-    });
-  }
-
-  let previousSceneIndex = -1;
-  for (const [sceneId, interval] of [...actionIntervals.entries()].sort(
-    (left, right) => left[1].start - right[1].start,
-  )) {
-    const sceneIndex = sceneIds.indexOf(sceneId);
-    if (sceneIndex <= previousSceneIndex) {
-      throw new ConfigError(
-        `Discourse ledger "${ledger.id}" action interval for scene "${sceneId}" begins at ${interval.start} ` +
-          `outside the declared scene sequence for branch "${branch}".`,
-      );
-    }
-    previousSceneIndex = sceneIndex;
-  }
-
-  return { sceneIds, actionIntervals };
-}
 /**
  * Performs strict preflight validation BEFORE any provider/cache/prompt:
  *   - assertion catalog completeness (no permissive fallback)
@@ -562,12 +457,14 @@ export function compileDiscourseBoundaries(
   preflightSceneContinuity(branchEntries, branch);
   preflightSemanticRules(branchEntries, assertions, narratorProfiles, branch);
 
-  const { sceneIds, actionIntervals } = compileBranchSceneSequence(
-    events,
-    ledger,
-    branch,
-    branchEntries,
-  );
+  const sceneSequence = compileDiscourseSceneSequence({ events, ledger, branch });
+  const sceneIds = sceneSequence.map((entry) => entry.sceneId);
+  const actionIntervals = new Map<string, { start: number; end: number }>();
+  for (const entry of sceneSequence) {
+    if (entry.actionInterval) {
+      actionIntervals.set(entry.sceneId, entry.actionInterval);
+    }
+  }
   const eventById = new Map(events.map((event) => [event.id, event]));
   const entriesByScene = new Map<string, PlannedLedgerEntry[]>();
   for (const entry of branchEntries) {

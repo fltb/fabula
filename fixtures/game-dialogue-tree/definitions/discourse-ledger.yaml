@@ -1,0 +1,13 @@
+id: game_dialogue_tree_ledger
+chapters:
+  - branch: accept_hunt
+    chapter: 1
+    sceneIds:
+      - E0
+      - E1a
+  - branch: refuse_hunt
+    chapter: 1
+    sceneIds:
+      - E0
+      - E1b
+entries: []

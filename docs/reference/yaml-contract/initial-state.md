@@ -12,9 +12,9 @@ The `state_initial.yaml` file at `definitions/state_initial.yaml` describes the 
 | `info` | `object` | **required** | — | Era and political context. Contains `currentEra` (string) and `politicalSituation` (string). |
 | `info.currentEra` | `string` | required | — | The current historical era, e.g. `"1920s post-imperial China"`. |
 | `info.politicalSituation` | `string` | required | — | Prose describing the political landscape. |
-| `timeAnchors` | `array` | optional | `[]` | Named temporal reference points. Each anchor has `id` (string), `day` (number), and optional `description` (string). |
-| `timeAnchors[].id` | `string` | required | — | Unique anchor identifier referenced by `storyTime` fields in events. |
-| `timeAnchors[].day` | `number` | required | — | Day offset from story-zero (day `0`). Negative for past, positive for future. |
+|| `timeAnchors` | `array` | optional | `[]` | Named temporal reference points. Each anchor has `id` (string), `at` (string), and optional `description` (string). |
+|| `timeAnchors[].id` | `string` | required | — | Unique anchor identifier referenced by `storyTime` fields in events. Convention: `snake_case` narrative labels (`new_year_eve`, `spring_ahmao_death`). Avoid identifiers matching authored time syntax (`day_N`, `chapter_N`). |
+|| `timeAnchors[].at` | `string` | required | — | Authored timestamp for the anchor. Use `day_<number>` format for day offsets from story-zero (e.g. `day_0`, `day_-1825`). Negative for past, positive for future. |
 | `timeAnchors[].description` | `string` | optional | — | Human-readable description of what happens on this day. |
 | `threads` | `array` | **required** | — | Initial narrative thread declarations. Each thread has `id`, `name`, `description`, `type`, `targetRevealChapter`, `initialProgress`. |
 | `threads[].id` | `string` | required | — | Thread identifier (e.g. `T1`, `T2`). Referenced by events' `threadProgress`. |
@@ -50,10 +50,10 @@ info:
 
 timeAnchors:
   - id: new_year_eve
-    day: 0
+    at: day_0
     description: "New Year's Eve — narrator meets Xianglin's Wife"
   - id: winter_five_years_ago
-    day: -1825
+    at: day_-1825
     description: "Early winter — Xianglin's Wife first arrives at Lu's house"
 
 threads:

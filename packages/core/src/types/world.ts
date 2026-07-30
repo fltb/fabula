@@ -80,7 +80,7 @@ export interface WorldInitialState {
     currentEra: string;
     politicalSituation: string;
   };
-  timeAnchors?: Array<{ id: string; day: number; description?: string }>;
+  timeAnchors?: Array<{ id: string; at: string; description?: string }>;
   threads: Array<{
     id: string;
     name: string;

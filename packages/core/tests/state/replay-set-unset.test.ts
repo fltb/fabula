@@ -4,9 +4,10 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { ConfigError, PreconditionMismatchError } from '../../src/errors.js';
+import { ConfigError } from '../../src/errors.js';
 import { ReplayEngine } from '../../src/state/replay.js';
 import type { Fact, NarrativeEvent } from '../../src/types/index.js';
+import type { AdjacencyList } from '../../src/state/dag.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 // Each event gets storyTime day_N so DAG builder can order and find providers.
@@ -150,7 +151,7 @@ describe('ReplayEngine hard errors', () => {
     expect(() => engine.replay(events)).toThrow(ConfigError);
   });
 
-  it('throws PreconditionMismatchError when precondition value does not match current state', () => {
+  it('throws ConfigError when precondition value does not match current state', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       // DAG provider: set magic=200
@@ -166,10 +167,10 @@ describe('ReplayEngine hard errors', () => {
         preconditions: [makeFact({ entityId: 'hero', attribute: 'magic', value: 200 })],
       }),
     ];
-    expect(() => engine.replay(events)).toThrow(PreconditionMismatchError);
+    expect(() => engine.replay(events)).toThrow(ConfigError);
   });
 
-  it('throws PreconditionMismatchError when precondition value mismatches (after overwrite)', () => {
+  it('throws ConfigError when precondition value mismatches (after overwrite)', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       // DAG provider: set status='dead'
@@ -185,7 +186,7 @@ describe('ReplayEngine hard errors', () => {
         preconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' })],
       }),
     ];
-    expect(() => engine.replay(events)).toThrow(PreconditionMismatchError);
+    expect(() => engine.replay(events)).toThrow(ConfigError);
   });
 });
 
@@ -215,8 +216,11 @@ describe('boundary/replay equivalence — state dimensions', () => {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'revived' })],
       }),
     ];
-    const anchors = new Map<string, number>();
-    const boundary = compileStoryBoundaries(events, [], anchors);
+    const adjacency: AdjacencyList = new Map([
+      ['E_1', ['E_2']],
+      ['E_2', ['E_3']],
+    ]);
+    const boundary = compileStoryBoundaries(events, [], adjacency);
     const engineState = engineRun(events);
 
     expect(boundary.finalState.entities).toEqual(engineState.entities);
@@ -231,8 +235,8 @@ describe('boundary/replay equivalence — state dimensions', () => {
         ],
       }),
     ];
-    const anchors = new Map<string, number>();
-    const boundary = compileStoryBoundaries(events, [], anchors);
+    const adjacency: AdjacencyList = new Map();
+    const boundary = compileStoryBoundaries(events, [], adjacency);
     const engineState = engineRun(events);
 
     // facts array captures every applied postcondition
@@ -251,7 +255,8 @@ describe('boundary/replay equivalence — state dimensions', () => {
       }),
     ];
 
-    expect(() => compileStoryBoundaries(events, [], new Map())).toThrow();
+    const adjacency: AdjacencyList = new Map();
+    expect(() => compileStoryBoundaries(events, [], adjacency)).toThrow();
     expect(() => new ReplayEngine().replay(events)).toThrow();
   });
 
@@ -265,7 +270,10 @@ describe('boundary/replay equivalence — state dimensions', () => {
       }),
     ];
 
-    expect(() => compileStoryBoundaries(events, [], new Map())).toThrow();
+    const adjacency: AdjacencyList = new Map([
+      ['E_1', ['E_2']],
+    ]);
+    expect(() => compileStoryBoundaries(events, [], adjacency)).toThrow();
     expect(() => new ReplayEngine().replay(events)).toThrow();
   });
 
@@ -274,7 +282,10 @@ describe('boundary/replay equivalence — state dimensions', () => {
       makeEvent(1, 1),
       makeEvent(2, 2),
     ];
-    const boundary = compileStoryBoundaries(events, [], new Map());
+    const adjacency: AdjacencyList = new Map([
+      ['E_1', ['E_2']],
+    ]);
+    const boundary = compileStoryBoundaries(events, [], adjacency);
     const engineState = engineRun(events);
 
     expect(boundary.finalState.threads).toEqual(engineState.threads);

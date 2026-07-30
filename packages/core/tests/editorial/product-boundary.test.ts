@@ -63,6 +63,34 @@ function setupMinimalProject(storage: MemoryStorage): void {
   storage.write('/test-project/nova.yaml', 'project: test-project\ntitle: Test Project\nauthor: Tester\n');
   storage.write('/test-project/definitions/state_initial.yaml', 'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n');
   storage.write('/test-project/chapters/chapter_01/_chapter.yaml', 'chapter: 1\ntitle: Chapter 1\nsummary: First chapter\nintent: Setup\nplannedScenes: 1\n');
+  // discourse-ledger.yaml (mandatory reader-order source)
+  storage.write('/test-project/definitions/discourse-ledger.yaml',
+    [
+      'id: test-project-ledger',
+      'chapters:',
+      '  - branch: main',
+      '    chapter: 1',
+      '    sceneIds:',
+      '      - E001',
+      'entries: []',
+    ].join('\n'),
+  );
+  // Minimal event file so ledger sceneId matches
+  storage.write('/test-project/chapters/chapter_01/E001.yaml',
+    [
+      'event: E001',
+      'formatVersion: 1',
+      'narrativeOrder: 1',
+      'title: "Minimal Event"',
+      'storyTime: "day 1"',
+      'sceneBrief: "Test"',
+      'pov:',
+      '  character: narrator',
+      '  type: third_person_limited',
+      'preconditions: []',
+      'expectedPostconditions: []',
+    ].join('\n'),
+  );
 }
 // ============================================================================
 

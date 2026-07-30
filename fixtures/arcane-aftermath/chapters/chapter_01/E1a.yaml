@@ -16,10 +16,6 @@ preconditions:
     attribute: status
     value: alive
     confidence: 1.0
-  - entity: world
-    attribute: day
-    value: 0
-    confidence: 1.0
 expectedPostconditions:
   - entity: seraphine
     attribute: has_detected_anomaly

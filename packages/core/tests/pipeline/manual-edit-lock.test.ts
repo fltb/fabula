@@ -37,6 +37,18 @@ function seedProject(storage: MemoryStorage): void {
     'id: alice\nname: "Alice"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n',
   );
   storage.write(
+    `${PROJECT}/definitions/discourse-ledger.yaml`,
+    [
+      'id: manual_edit_test_ledger',
+      'chapters:',
+      '  - branch: main',
+      '    chapter: 1',
+      '    sceneIds:',
+      '      - E001',
+      'entries: []',
+    ].join('\n'),
+  );
+  storage.write(
     `${PROJECT}/chapters/chapter_01/_chapter.yaml`,
     'chapter: 1\ntitle: "Opening"\nsummary: "Alice begins."\nintent: "Setup"\nplannedScenes: 1\n',
   );
@@ -70,6 +82,7 @@ function acceptedAnalysis(eventId = 'E001'): AnalysisResult {
       conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
       ruleChecks: [],
       knowledgeChecks: [],
+      checklistResults: [],
     },
   };
 }

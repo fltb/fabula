@@ -398,4 +398,31 @@ describe('ContextCompiler', () => {
     expect(parsed.eventId).toBe('E1');
     expect(typeof parsed.characterCount).toBe('number');
   });
+
+  it('should default narrativeTechniques to empty array', () => {
+    const event = makeEvent();
+    const state = makeState();
+
+    const pkg = compiler.compile(event, state, registry);
+
+    expect(Array.isArray(pkg.narrativeTechniques)).toBe(true);
+    expect(pkg.narrativeTechniques).toHaveLength(0);
+  });
+
+  it('should override narrativeTechniques when provided in options', () => {
+    const event = makeEvent();
+    const state = makeState();
+    const techniques = [
+      { kind: 'surfaceMode' as const, instruction: 'Maintain surface narration.', requiredEvidence: 'No direct POV access.' },
+      { kind: 'metanarrativeLevel' as const, instruction: 'Acknowledge the narrative frame.', requiredEvidence: 'Frame-breaking remark.' },
+    ];
+
+    const pkg = compiler.compile(event, state, registry, {
+      narrativeTechniques: techniques,
+    });
+
+    expect(pkg.narrativeTechniques).toHaveLength(2);
+    expect(pkg.narrativeTechniques[0].kind).toBe('surfaceMode');
+    expect(pkg.narrativeTechniques[1].kind).toBe('metanarrativeLevel');
+  });
 });

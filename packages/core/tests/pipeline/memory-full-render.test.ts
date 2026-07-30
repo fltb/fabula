@@ -66,6 +66,7 @@ function makeEntry(eventId: string): MockPass2Entry {
         conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
         ruleChecks: [],
         knowledgeChecks: [],
+        checklistResults: [],
       },
     },
   };
@@ -90,6 +91,20 @@ function setupMinimalProject(storage: MemoryStorage): void {
 
   // ── Definitions ────────────────────────────────────────────────
   storage.mkdirp(`${PROJECT_DIR}/definitions`);
+
+  // discourse-ledger.yaml (required — mandatory reader-order source)
+  storage.write(
+    `${PROJECT_DIR}/definitions/discourse-ledger.yaml`,
+    [
+      'id: test-ledger',
+      'chapters:',
+      '  - branch: main',
+      '    chapter: 1',
+      '    sceneIds:',
+      '      - E1',
+      'entries: []',
+    ].join('\n'),
+  );
 
   // state_initial.yaml (required — non-optional readYamlFile)
   storage.write(

@@ -82,6 +82,7 @@ function makeContext(eventId: string): ContextPackage {
     } satisfies KnowledgeBoundary,
     activeThreads: [],
     markdown: '',
+    narrativeTechniques: [],
   };
 }
 
@@ -97,6 +98,7 @@ function makeJob(id: string): RenderJob {
       facts: [],
     },
     context: makeContext(id),
+    graphHash: 'a00',
     chapter: 1,
     contract: {
       sceneId: id,
@@ -228,6 +230,7 @@ describe('dynamic schema path', () => {
         conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
         ruleChecks: [],
         knowledgeChecks: [],
+        checklistResults: [],
       },
     };
 
@@ -270,6 +273,7 @@ describe('dynamic schema path', () => {
         // conflictAnalysis is intentionally missing
         ruleChecks: [],
         knowledgeChecks: [],
+        checklistResults: [],
       },
     };
 
@@ -310,6 +314,7 @@ describe('dynamic schema path', () => {
         conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
         // ruleChecks is intentionally missing
         knowledgeChecks: [],
+        checklistResults: [],
       },
     };
 
@@ -349,6 +354,7 @@ describe('dynamic schema path', () => {
         tenseDetected: 'past',
         conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
         ruleChecks: [],
+        checklistResults: [],
         // knowledgeChecks is intentionally missing
       },
     };

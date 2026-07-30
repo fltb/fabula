@@ -31,6 +31,7 @@ import {
   replayDiscourseState,
 } from '../../src/state/discourse-replay.ts';
 import { compileDiscourseBoundaries } from '../../src/state/discourse-context.ts';
+import { compilePlannedDiscourseLedger } from '../../src/state/discourse-ledger.ts';
 import type {
   DisclosureAction,
   DiscourseContextProjection,
@@ -41,13 +42,11 @@ import type {
   NarratorAssertion,
   NarratorProfile,
   PlannedDiscourseLedger,
+  PlannedDiscourseLedgerSource,
   PlannedLedgerEntry,
   WithholdingPolicy,
 } from '../../src/types/discourse.ts';
 import type { NarrativeEvent } from '../../src/types/event.js';
-
-// ═════════════════════════════════════════════════════════════════════════════
-// Helpers
 // ═════════════════════════════════════════════════════════════════════════════
 
 function makeAssertion(
@@ -67,11 +66,19 @@ function makeAssertion(
 }
 
 function makeLedger(entries: PlannedLedgerEntry[]): PlannedDiscourseLedger {
-  return {
-    id: 'test_ledger',
-    entries,
-    hash: 'hash_test',
-  };
+  // Include a default chapter covering all scene IDs referenced in entries.
+  const sceneIds = [...new Set(entries.map((e) => e.sceneId))];
+  const chapters: PlannedDiscourseLedgerSource['chapters'] = [
+    { branch: 'main', chapter: 1, sceneIds: sceneIds.length > 0 ? sceneIds as [string, ...string[]] : ['default-scene'] as [string, ...string[]] },
+  ];
+  // Also add chapters for alternate branches seen in entries
+  for (const entry of entries) {
+    if (entry.branch !== 'main' && !chapters.find((c) => c.branch === entry.branch)) {
+      const branchSceneIds = [...new Set(entries.filter((e) => e.branch === entry.branch).map((e) => e.sceneId))];
+      chapters.push({ branch: entry.branch, chapter: 1, sceneIds: branchSceneIds as [string, ...string[]] });
+    }
+  }
+  return compilePlannedDiscourseLedger({ id: 'test_ledger', chapters, entries });
 }
 
 function entry(
@@ -1493,14 +1500,23 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
     expect(compiled.projection.authorizedTargets[0].assertionId).toBe('r1');
   });
 
-  it('no-ledger returns empty discourse contexts (no-disclosure mode)', () => {
-    const event = makeEvent({ id: 'scene_1', discourseCursor: -1, narratorProfileRef: 'narrator_1' });
+  it('no-action scene derives cursor from scene sequence position', () => {
+    const event = makeEvent({ id: 'scene_1', narratorProfileRef: 'narrator_1' });
+    const ledger = compilePlannedDiscourseLedger({
+      id: 'no-action',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['scene_1'] }],
+      entries: [],
+    });
     const ctx = compileDiscourseBoundaries(
-      [event], null, {}, {}, 'main',
+      [event], ledger, {}, {}, 'main',
     );
-    // No ledger means no discourse — compileDiscourseBoundaries returns empty map
-    expect(Object.keys(ctx)).toHaveLength(0);
-    expect(ctx['scene_1']).toBeUndefined();
+    // Scene has no entries — cursor defaults to -1 (no action interval)
+    expect(ctx['scene_1']).toBeDefined();
+    expect(ctx['scene_1']!.cursor).toBe(-1);
+    expect(ctx['scene_1']!.currentActionIds).toEqual([]);
+    // Initial discourse state starts at position 0
+    expect(ctx['scene_1']!.stateBefore.position).toBe(0);
+    expect(ctx['scene_1']!.stateAfter.position).toBe(0);
   });
 
   it('hint target excluded from projection when ledger has hint alongside reveal', () => {
@@ -1538,10 +1554,10 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
   });
 
   it('sparse positions across scenes: projection includes actions from stateAfter', () => {
-    // Positions 0 and 5 (gap) — different scene IDs for valid sparse
+    // Positions 0 and 1 — different scene IDs for cross-scene state accumulation
     const ledger = makeLedger([
       entry('e1', revealAction('r1', 0), 'scene_1', 'main'),
-      entry('e2', claimAction('c1', 5), 'scene_2', 'main'),
+      entry('e2', claimAction('c1', 1), 'scene_2', 'main'),
     ]);
     const assertions: Record<string, NarratorAssertion> = {
       r1: makeAssertion('r1', true, 'reveal'),
@@ -1567,7 +1583,7 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
     expect(compiled1.projection.plannedReveals).toContain('r1');
     expect(compiled1.projection.openClaims).toEqual([]);
 
-    // scene_2 at position 5: stateBefore includes r1 from scene_1,
+    // scene_2 at position 1: stateBefore includes r1 from scene_1,
     // stateAfter includes both r1 and c1
     const compiled2 = ctx['scene_2'];
     expect(compiled2.stateBefore.reveals).toContain('r1');

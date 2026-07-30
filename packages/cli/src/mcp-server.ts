@@ -44,6 +44,7 @@ import {
   type ValidationIssue,
   validateNovel,
 } from '@novalistically/core';
+import { resolveRoute } from './index.ts';
 // ============================================================================
 // Object-input types for MCP tools
 // Each carries operationId/actorId where applicable; inputs thread through
@@ -118,6 +119,7 @@ export interface MCPBatchRenderInput {
   model?: string;
   profile?: string;
   branchPath?: BranchPath;
+  discourseBranch?: string;
   batchSize?: number;
   windowSize?: number;
 }
@@ -129,6 +131,7 @@ export interface MCPBatchReviseInput {
   model?: string;
   profile?: string;
   branchPath?: BranchPath;
+  discourseBranch?: string;
   instruction?: string;
 }
 
@@ -162,6 +165,7 @@ export interface MCPSceneAdoptInput {
   model?: string;
   profile?: string;
   branchPath?: BranchPath;
+  discourseBranch?: string;
 }
 
 export interface MCPSceneSetLockInput {
@@ -317,13 +321,18 @@ export function mcpNovaThreadStatus(projectPath: string, threadId?: string) {
 }
 
 // ─── Render (dry-run) — PRESERVED name ──────────────────────────────────────
-export async function mcpNovaRender(projectPath: string, eventId: string, branchPath?: BranchPath) {
+export async function mcpNovaRender(
+  projectPath: string,
+  eventId: string,
+  branchPath?: BranchPath,
+  discourseBranch?: string,
+) {
   const result = await previewEditorialRun(
     {
       version: 1,
       projectDir: projectPath,
       selector: { type: 'events', eventIds: [eventId] },
-      branchPath,
+      ...resolveRoute({ branchPath, discourseBranch }),
     },
     {},
   );
@@ -342,7 +351,7 @@ export async function mcpNovaRender(projectPath: string, eventId: string, branch
 export async function mcpNovaRenderScene(
   projectPath: string,
   eventId: string,
-  options?: { model?: string; branchPath?: BranchPath },
+  options?: { model?: string; branchPath?: BranchPath; discourseBranch?: string },
   provider?: LLMProvider,
 ) {
   const result = await renderNovel(
@@ -352,7 +361,7 @@ export async function mcpNovaRenderScene(
       selector: { type: 'events', eventIds: [eventId] },
       mutation: { operationId: crypto.randomUUID(), actorId: 'mcp' },
       model: options?.model,
-      branchPath: options?.branchPath,
+      ...resolveRoute({ branchPath: options?.branchPath, discourseBranch: options?.discourseBranch }),
     },
     { provider },
   );
@@ -374,7 +383,7 @@ export async function mcpNovaRenderScene(
 // No direct fs reads: dialogue tree content comes from the core render result.
 export async function mcpNovaRenderTree(
   projectPath: string,
-  options?: { model?: string },
+  options?: { model?: string; discourseBranch?: string },
   provider?: LLMProvider,
 ) {
   const result = await renderGameDialogueTree(
@@ -401,7 +410,7 @@ export async function mcpNovaRenderTree(
 // Thin wrapper; no direct EntityMapper or compileGameDialogueTree calls.
 export function mcpNovaAssemble(
   projectPath: string,
-  options?: { outputPath?: string; branchPath?: BranchPath },
+  options?: { outputPath?: string; branchPath?: BranchPath; discourseBranch?: string },
 ): EditorialAssembleResult {
   const request = {
     version: 1 as const,
@@ -411,7 +420,7 @@ export function mcpNovaAssemble(
       actorId: 'local-mcp',
     },
     ...(options?.outputPath ? { outputPath: options.outputPath } : {}),
-    ...(options?.branchPath ? { branchPath: options.branchPath } : {}),
+    ...resolveRoute({ branchPath: options?.branchPath, discourseBranch: options?.discourseBranch }),
   };
   return options?.outputPath ? assembleCustomNovel(request) : assembleCanonicalNovel(request);
 }
@@ -647,11 +656,14 @@ export function createMCPServer(projectPath: string): {
       nova_iss: () => mcpNovaIss(projectPath),
       nova_read_state: (entityId?: string) => mcpNovaReadState(projectPath, entityId),
       nova_thread_status: (threadId?: string) => mcpNovaThreadStatus(projectPath, threadId),
-      nova_render: (eventId: string, branchPath?: BranchPath) =>
-        mcpNovaRender(projectPath, eventId, branchPath),
-      nova_render_scene: (eventId: string, options?: { model?: string; branchPath?: BranchPath }) =>
-        mcpNovaRenderScene(projectPath, eventId, options),
-      nova_render_tree: (options?: { model?: string }) => mcpNovaRenderTree(projectPath, options),
+      nova_render: (eventId: string, branchPath?: BranchPath, discourseBranch?: string) =>
+        mcpNovaRender(projectPath, eventId, branchPath, discourseBranch),
+      nova_render_scene: (
+        eventId: string,
+        options?: { model?: string; branchPath?: BranchPath; discourseBranch?: string },
+      ) => mcpNovaRenderScene(projectPath, eventId, options),
+      nova_render_tree: (options?: { model?: string; discourseBranch?: string }) =>
+        mcpNovaRenderTree(projectPath, options),
       nova_render_batch: (input: MCPBatchRenderInput) =>
         renderNovel({
           version: 1,
@@ -660,11 +672,12 @@ export function createMCPServer(projectPath: string): {
           mutation: { operationId: input.operationId, actorId: input.actorId },
           model: input.model,
           providerProfile: input.profile,
-          branchPath: input.branchPath,
+          ...resolveRoute({ branchPath: input.branchPath, discourseBranch: input.discourseBranch }),
           batch: { batchSize: input.batchSize, windowSize: input.windowSize, failFast: true },
         }),
-      nova_assemble: (options?: { outputPath?: string; branchPath?: BranchPath }) =>
-        mcpNovaAssemble(projectPath, options),
+      nova_assemble: (
+        options?: { outputPath?: string; branchPath?: BranchPath; discourseBranch?: string },
+      ) => mcpNovaAssemble(projectPath, options),
 
       // Review tools (backward-compatible)
       nova_review_list: (
@@ -740,7 +753,7 @@ export function createMCPServer(projectPath: string): {
           mutation: { operationId: input.operationId, actorId: input.actorId },
           model: input.model,
           providerProfile: input.profile,
-          branchPath: input.branchPath,
+          ...resolveRoute({ branchPath: input.branchPath, discourseBranch: input.discourseBranch }),
           batch: { batchSize: input.batchSize, windowSize: input.windowSize, failFast: true },
         }),
       nova_revise: (input: MCPBatchReviseInput) =>
@@ -754,7 +767,7 @@ export function createMCPServer(projectPath: string): {
           },
           model: input.model,
           providerProfile: input.profile,
-          branchPath: input.branchPath,
+          ...resolveRoute({ branchPath: input.branchPath, discourseBranch: input.discourseBranch }),
           revision: input.instruction ? { instruction: input.instruction } : undefined,
         }),
       nova_batch_revise: (input: MCPBatchReviseInput) =>
@@ -765,7 +778,7 @@ export function createMCPServer(projectPath: string): {
           mutation: { operationId: input.operationId, actorId: input.actorId },
           model: input.model,
           providerProfile: input.profile,
-          branchPath: input.branchPath,
+          ...resolveRoute({ branchPath: input.branchPath, discourseBranch: input.discourseBranch }),
           revision: input.instruction ? { instruction: input.instruction } : undefined,
         }),
       nova_scene_list: (input: MCPSceneListInput) =>
@@ -792,7 +805,7 @@ export function createMCPServer(projectPath: string): {
           lockAfter: input.lockAfter,
           model: input.model,
           providerProfile: input.profile,
-          branchPath: input.branchPath,
+          ...resolveRoute({ branchPath: input.branchPath, discourseBranch: input.discourseBranch }),
         }),
       nova_scene_set_lock: (input: MCPSceneSetLockInput) =>
         setSceneLock({

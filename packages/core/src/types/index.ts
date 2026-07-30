@@ -73,6 +73,7 @@ export type {
 } from './duration.js';
 export type {
   AbsoluteTimestamp,
+  AuthoredStoryTime,
   ChapterTimestamp,
   Entity,
   EntityId,
@@ -83,9 +84,19 @@ export type {
   Fact,
   FactId,
   FactValidity,
+  IndeterminateTimestamp,
+  InitialStoryCoordinate,
+  LocatableStoryTimestamp,
+  PointStoryCoordinate,
   RelativeTimestamp,
+  SceneStoryCoordinate,
+  StoryCoordinate,
+  StoryOffsetTimestamp,
   StoryTimestamp,
+  TemporalOrder,
   TimeAnchor,
+  TimeUnit,
+  UnlocatedStoryCoordinate,
 } from './entity.js';
 export type {
   AttributeDefinition,
@@ -117,6 +128,7 @@ export type {
   CrossClockEdgeError,
   DiscourseCoordinate,
   DiscourseGraph,
+  DiscourseSceneSequenceEntry,
   DuplicateBranchProviderError,
   DuplicateDiscoursePositionError,
   DynamicLifecycleError,
@@ -136,8 +148,8 @@ export type {
   GraphNarrativeEllipsis,
   GraphProviderOutput,
   GraphReadResolution,
-  IncomparableTimeError,
   InitialRootMisuseError,
+  InvalidSameCoordinateOrderError,
   MergeInputError,
   MissingOutputError,
   NoOutputEdgeError,
@@ -152,11 +164,10 @@ export type {
   SelfPredecessorError,
   SemanticOutputDependencyError,
   StaleProviderSelectionError,
-  StoryCoordinate,
   StoryGraph,
   UnknownPredecessorError,
   UnknownReadIdError,
-  UnorderedSameTimeConflictError,
+  UnorderedStoryConflictError,
 } from './graph.js';
 export type {
   GreyLine,
@@ -221,8 +232,13 @@ export type {
   IrresolvableIndeterminacy,
   MetanarrativeLevel,
   Multiplicity,
+  NarrativeTechniqueKind,
+  ResolvedNarrativeTechniqueContract,
   SurfaceMode,
   VoiceDissonance,
+} from './narrative-techniques.js';
+export {
+  NARRATIVE_TECHNIQUE_KINDS,
 } from './narrative-techniques.js';
 export type {
   NarrativeChecklist,
@@ -328,8 +344,10 @@ export type {
   AnalysisBlockRequirement,
   PostRenderInput,
   PreRenderInput,
+  StoryValidationContext,
   ValidationIssue,
   ValidationResult,
+  ValidationRunOptions,
   Validator,
   ValidatorContext,
 } from './validator.js';

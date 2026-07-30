@@ -4,35 +4,35 @@ info:
 
 timeAnchors:
   - id: night_0
-    day: 0
+    at: day_0
     description: "Night — The yacht is underway on the Caribbean, bound for Rio. Rainsford and Whitney converse on deck. Rainsford falls overboard after hearing three gunshots."
     significance: "Opening scene. Establishes Rainsford's hunter worldview and the story's central moral question."
   - id: day_1_afternoon
-    day: 1
+    at: day_1
     description: "Late afternoon — Rainsford wakes on the rocky shore of Ship-Trap Island after a deep sleep. He is hungry but rested."
     significance: "Rainsford first encounters the island's deadly environment."
   - id: day_1_evening
-    day: 1
+    at: day_1
     description: "Evening — Rainsford arrives at Zaroff's château. Ivan greets him with a revolver. Zaroff welcomes him warmly and hosts a grand dinner."
     significance: "First meeting with Zaroff and Ivan. The château's opulence and Zaroff's hospitality are established before the reveal."
   - id: day_2_morning
-    day: 2
+    at: day_2
     description: "Morning — Rainsford is served breakfast. Zaroff does not appear until luncheon. Rainsford has spent a sleepless night in the tower bedroom."
     significance: "Rainsford's first full day on the island. He attempts to leave and formally refuses to hunt."
   - id: day_2_evening
-    day: 2
+    at: day_2
     description: "Dusk — The hunt begins. Rainsford is given three hours' head start with a hunting knife, food, and moccasins. Zaroff will follow after dusk."
     significance: "Central conflict begins. Rainsford becomes the prey."
   - id: day_3_dawn
-    day: 3
+    at: day_3
     description: "Dawn — Rainsford, having spent the night in a tree, watches Zaroff track him. Zaroff finds him but deliberately leaves, toying with him."
     significance: "Rainsford realizes Zaroff is playing with him. The Malay man-catcher is set and wounds Zaroff."
   - id: day_3_dusk
-    day: 3
+    at: day_3
     description: "Dusk — Rainsford reaches Death Swamp, digs a Burmese tiger pit, and kills one of Zaroff's best hounds. The hunt intensifies."
     significance: "Rainsford scores against Zaroff. The balance shifts slightly."
   - id: day_3_night
-    day: 3
+    at: day_3
     description: "Night — At daybreak Rainsford, pursued by hounds, leaps from the sea cliffs and swims around the island to infiltrate Zaroff's château. The final confrontation occurs in Zaroff's bedroom."
     significance: "Climax and resolution. Rainsford kills Zaroff and sleeps in his bed."
 

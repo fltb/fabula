@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { z } from 'zod';
+import { authoredStoryTimeSchema } from './timestamp.js';
 import { anachronySchema, voiceProfileSchema } from './discourse.js';
 import { durationProfileSchema } from './duration.js';
 import { frequencyProfileSchema } from './frequency.js';
@@ -36,8 +37,17 @@ export const eventFileSchema = z
     formatVersion: z.number().default(1),
     narrativeOrder: z.number(),
     title: z.string(),
-    storyTime: z.string(),
-    narrationTime: z.string().optional(),
+    storyTime: authoredStoryTimeSchema.optional(),
+    narrationTime: authoredStoryTimeSchema.optional(),
+    causalPredecessors: z
+      .array(z.string().refine((id) => id.trim().length > 0, 'causalPredecessors must be nonblank'))
+      .min(1)
+      .optional()
+      .superRefine((value, ctx) => {
+        if (value && new Set(value).size !== value.length) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'causalPredecessors must be unique' });
+        }
+      }),
     sceneType: z.enum(['linear', 'flashback', 'flashforward', 'dream', 'parallel']).optional(),
     discourseMode: z
       .enum(['action', 'dialogue', 'description', 'exposition', 'reflection', 'transition'])

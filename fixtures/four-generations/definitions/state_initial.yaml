@@ -4,37 +4,37 @@ info:
 
 timeAnchors:
   - id: lugouqiao_incident
-    day: 0
+    at: day_0
     description: "一九三七年七月七日卢沟桥事变爆发。祁家正在筹划祁老人的七十五岁生日，北平城内开始人心浮动。"
   - id: fall_of_beiping
-    day: 22
+    at: day_22
     description: "七月二十九日，北平沦陷。小羊圈胡同的人们第一次听到敌人的炮声，感到惶惑与苦闷。祁瑞全决定出走，奔赴国难。"
   - id: qian_moyin_arrested
-    day: 45
+    at: day_45
     description: "冠晓荷向日本人告密，钱默吟被日本宪兵逮捕，钱家遭受搜查。这是小羊圈胡同第一次直面日本人的残暴。"
   - id: mid_autumn_festival
-    day: 60
+    at: day_60
     description: "中秋前后，北平之秋依旧美丽，但人心已非。钱孟石在父亲被捕、弟弟殉国的双重打击下病逝，钱太太在送殡途中触棺身亡。钱家彻底破碎。"
   - id: qian_moyin_returned
-    day: 75
+    at: day_75
     description: "钱默吟被日本宪兵释放，身受重伤，面目全非。他被金三爷背回家中，开始了漫长的康复。瑞宣日夜照看，从钱先生身上看到不屈的精神。"
   - id: celebration_baoding
-    day: 90
+    at: day_90
     description: "保定陷落，日伪强迫学生游行庆祝。瑞宣因拒绝参加而陷入苦闷，瑞丰却积极领队。北平市民第一次公开向敌人屈服。"
   - id: celebration_nanjing
-    day: 150
+    at: day_150
     description: "南京陷落消息传来，瑞宣痛哭。日伪大肆庆祝，汉奸们弹冠相庆。大赤包就任妓女检查所所长，瑞丰当上教育局庶务科科长，汉奸势力抬头。"
   - id: fall_of_shanghai
-    day: 120
+    at: day_120
     description: "上海失守，北平人的最后希望受挫。孙七剃头时失手扔了剃刀，小崔与程长顺激烈争辩。北平的冬天更加寒冷。"
   - id: spring_of_next_year
-    day: 270
+    at: day_270
     description: "一九三八年春，战争进入相持阶段。钱默吟伤愈后秘密从事抗日宣传，瑞宣在迷茫中找到方向，决定暗中帮助抗日工作。"
   - id: famine_winter
-    day: 500
+    at: day_500
     description: "战争持续，北平物资极度匮乏，饥荒来临。祁家面临断粮危机，小羊圈胡同的底层市民在饥饿与寒冷中挣扎求生。"
   - id: end_of_novel
-    day: 730
+    at: day_730
     description: "约两年后，瑞全秘密潜回北平执行任务。瑞宣终于与弟弟重逢，并在老三元启发下决心投入地下抗日工作。祁家四世同堂在战火中艰难延续。"
 
 threads:

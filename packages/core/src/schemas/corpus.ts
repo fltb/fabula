@@ -22,18 +22,10 @@ import { postconditionSchema, preconditionSchema } from './primitives.js';
 import { relationshipTransactionSchema } from './relationship.js';
 import { ruleTransactionSchema } from './rule.js';
 import { threadTransactionSchema } from './thread.js';
+import { storyTimestampSchema } from './timestamp.js';
 
 // ─── Reusable sub-schemas ────────────────────────────────────────────────
 
-const storyTimestampSchema = z.union([
-  z
-    .object({ type: z.literal('absolute'), year: z.number(), month: z.number(), day: z.number() })
-    .strict(),
-  z
-    .object({ type: z.literal('relative'), offsetFrom: z.string(), offsetDays: z.number().int() })
-    .strict(),
-  z.object({ type: z.literal('chapter'), chapter: z.number().int().nonnegative() }).strict(),
-]);
 
 const branchPathSchema = z
   .object({
@@ -118,7 +110,7 @@ export const narrativeEllipsisSchema = z
     kind: z.literal('ellipsis'),
     id: z.string().min(1, 'Ellipsis identity is required'),
     branchScope: branchPathSchema,
-    storyTime: storyTimestampSchema,
+    storyTime: storyTimestampSchema.default({ type: 'indeterminate', mode: 'unspecified' }),
     /** Source-grounded diagnostic only — NEVER creates claim/provider. */
     summary: z
       .string()

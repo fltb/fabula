@@ -205,12 +205,27 @@ export class PromptAssembler {
       parts.push(options.logicalDisclosureSummary);
     }
 
+    // ── Narrative Technique Contracts (Pass 1 only) ──────────────────
+    if (context.narrativeTechniques.length > 0) {
+      parts.push('');
+      parts.push('## Narrative Technique Contracts');
+      parts.push(
+        'The following narrative technique contracts are active for this scene. ' +
+          'Their presence means mandatory activation — the prose MUST satisfy the required evidence.',
+      );
+      for (const contract of context.narrativeTechniques) {
+        parts.push(`- ${contract.kind}`);
+        parts.push(`  - Instruction: ${contract.instruction}`);
+        parts.push(`  - Required evidence: ${contract.requiredEvidence}`);
+      }
+    }
+
     parts.push(
       '',
       '## Narrative Context Package',
       '```json',
       JSON.stringify(
-        (({ markdown: _omitted, ...contextForPrompt }) => contextForPrompt)(context),
+        (({ markdown: _omitted, narrativeTechniques: _nt, ...contextForPrompt }) => contextForPrompt)(context),
         null,
         2,
       ),

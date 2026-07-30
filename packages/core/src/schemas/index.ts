@@ -114,6 +114,19 @@ export {
   narrativeEventSchema as corpusNarrativeEventSchema,
   narrativeNodeSchema as corpusNarrativeNodeSchema,
 } from './corpus.js';
+// ——— Shared authored timestamp schemas ———
+export {
+  absoluteTimestampSchema,
+  authoredIndeterminateTimestampSchema,
+  authoredStoryTimeSchema,
+  chapterTimestampSchema,
+  indeterminateTimestampSchema,
+  locatableStoryTimestampSchema,
+  relativeTimestampSchema,
+  storyOffsetTimestampSchema,
+  storyTimestampSchema,
+  timeUnitSchema,
+} from './timestamp.js';
 // ——— GRAPH-1: Typed Causal Graph Schemas ———
 export {
   discourseCoordinateSchema,
@@ -135,6 +148,10 @@ export {
   readPhaseSchema,
   readRequirementSchema,
   storyCoordinateSchema,
+  initialStoryCoordinateSchema,
+  pointStoryCoordinateSchema,
+  sceneStoryCoordinateSchema,
+  unlocatedStoryCoordinateSchema,
   storyGraphSchema,
 } from './graph.js';
 // ——— STATE-4 Knowledge/Belief Schemas ———

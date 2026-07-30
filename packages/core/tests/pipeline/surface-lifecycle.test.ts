@@ -14,6 +14,7 @@ import { renderNovel, previewEditorialRun } from '../../src/api.ts';
 import { MockPass2Provider, type MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import { canonicalJson, computeSha256Hex } from '../../src/render/scene-contract.ts';
+import { sha256Canonical } from '../../src/cache/render-cache.ts';
 import { AcceptedArtifactResolver } from '../../src/pipeline/surface-scheduler.ts';
 import type { RenderNovelResult } from '../../src/api.ts';
 import type { ReleaseDecision } from '../../src/types/index.ts';
@@ -52,6 +53,7 @@ function makeEntry(eventId: string, prose?: string): MockPass2Entry {
         conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
         ruleChecks: [],
         knowledgeChecks: [],
+        checklistResults: [],
       },
     },
   };
@@ -94,6 +96,21 @@ function setupProject(
       '  - { id: day_1, day: 1, description: "Day 1" }',
       'threads: []',
       'worldFacts: []',
+    ].join('\n'),
+  );
+
+  // ── Discourse ledger ───────────────────────────────────────────
+  const sceneIdsYaml = eventIds.map((id: string) => `      - ${id}`).join('\n');
+  storage.write(
+    `${PROJECT_DIR}/definitions/discourse-ledger.yaml`,
+    [
+      'id: test_ledger',
+      'chapters:',
+      '  - branch: main',
+      '    chapter: 1',
+      '    sceneIds:',
+      sceneIdsYaml,
+      'entries: []',
     ].join('\n'),
   );
 
@@ -364,8 +381,13 @@ describe('Surface Lifecycle — serial dependency scheduling', () => {
   it('subset render accepts a persisted predecessor with matching scope', async () => {
     const storage = new MemoryStorage();
     setupProject(storage, ['E1', 'E2'], serialLaneYaml(['E1', 'E2']));
+    const ledgerHash = sha256Canonical({
+      id: 'test_ledger',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1', 'E2'] }],
+      entries: [],
+    });
     const scopeHash = computeSha256Hex(
-      canonicalJson({ branch: { decisions: [] }, discourse: 'main' }),
+      canonicalJson({ branch: { decisions: [] }, discourse: 'main', ledgerHash }),
     );
     const prose = 'Accepted predecessor prose.';
     const revisionId = '00000000-0000-4000-8000-0000000000e1';

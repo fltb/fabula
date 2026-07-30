@@ -5,6 +5,7 @@
 import type { DiscourseContextProjection, NarratorProfile } from './discourse.js';
 import type { EntityId } from './entity.js';
 import type { ThematicIntent } from './idea-ir.js';
+import type { ResolvedNarrativeTechniqueContract } from './narrative-techniques.js';
 import type { RuleDefinition } from './rule.js';
 import type { RelationshipState } from './world.js';
 
@@ -43,6 +44,11 @@ export interface ContextPackage {
   narratorProfile?: NarratorProfile;
   /** Pass 1-safe disclosure state derived from the planned discourse ledger. */
   discourseProjection?: DiscourseContextProjection;
+  /**
+   * Resolved narrative technique contracts for this event.
+   * Empty when no direct contracts are authored or none resolve.
+   */
+  narrativeTechniques: readonly ResolvedNarrativeTechniqueContract[];
 }
 
 export interface SystemContext {

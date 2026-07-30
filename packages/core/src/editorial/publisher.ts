@@ -31,6 +31,7 @@ import type {
   SceneRevisionEnvelopeV1,
 } from '../types/editorial.ts';
 import type { GameDialogueChoice } from '../types/game-dialogue.ts';
+import type { DiscourseSceneSequenceEntry } from '../types/graph.ts';
 import { PublicationError } from './errors.ts';
 import type { ProjectPaths } from './paths.ts';
 import { type ProjectTransactionCoordinator, stableJson } from './transaction.ts';
@@ -258,35 +259,94 @@ export function envelopeToVerifiedHead(
 // ============================================================================
 
 /**
- * Build the full novel markdown document from verified head revisions.
+ * Build the full novel markdown document from verified head revisions,
+ * ordered by the mandatory discourse branch scene sequence.
  *
- * @param verifiedHeads     Map of eventId → verified head data (already sorted).
- * @param chapterMetadata   Map of chapter number → { title }.
- * @param novelTitle        The novel's title.
- * @param choicesByEventId  Optional map of eventId → game dialogue choices
- *                          for appending player-choice blocks.
- * @returns The novel markdown string, with chapter headings and scene prose.
+ * Every candidate must appear exactly once in sceneSequence.
+ * The scene sequence entry's chapter determines the heading, matching
+ * the candidate's chapterNumber.
+ *
+ * @throws PublicationError on missing, duplicate, or off-sequence candiates.
  */
 export function buildNovelDocument(
   candidates: readonly PromoteCandidateInput[],
   chapterMetadata: ReadonlyMap<number, { title: string }>,
   novelTitle: string,
+  sceneSequence: readonly DiscourseSceneSequenceEntry[],
 ): string {
   const parts: string[] = [`# ${novelTitle}`];
-  const sorted = [...candidates].sort(
-    (left, right) =>
-      left.event.narrativeOrder - right.event.narrativeOrder ||
-      left.eventId.localeCompare(right.eventId),
-  );
+
+  // Index candidates by eventId
+  const byId = new Map<string, PromoteCandidateInput>();
+  for (const c of candidates) {
+    if (byId.has(c.eventId)) {
+      throw new PublicationError('Duplicate candidate', [
+        {
+          code: 'REVISION_STALE',
+          message: `Duplicate candidate for event "${c.eventId}" in buildNovelDocument`,
+          eventId: c.eventId,
+        },
+      ]);
+    }
+    byId.set(c.eventId, c);
+  }
+
+  // Walk scene sequence and verify every candidate is covered
   let currentChapter: number | null = null;
-  for (const candidate of sorted) {
-    if (candidate.chapterNumber !== currentChapter) {
-      currentChapter = candidate.chapterNumber;
+  const seen = new Set<string>();
+  for (const entry of sceneSequence) {
+    const candidate = byId.get(entry.sceneId);
+    if (!candidate) {
+      throw new PublicationError('Candidate not found for scene sequence entry', [
+        {
+          code: 'PUBLICATION_INCOMPLETE',
+          message: `Scene sequence entry "${entry.sceneId}" has no matching candidate in buildNovelDocument`,
+          eventId: entry.sceneId,
+        },
+      ]);
+    }
+    if (seen.has(entry.sceneId)) {
+      throw new PublicationError('Duplicate scene in sequence', [
+        {
+          code: 'REVISION_STALE',
+          message: `Scene "${entry.sceneId}" appears more than once in the scene sequence`,
+          eventId: entry.sceneId,
+        },
+      ]);
+    }
+    seen.add(entry.sceneId);
+
+    if (entry.chapter !== candidate.chapterNumber) {
+      throw new PublicationError('Chapter mismatch in scene sequence', [
+        {
+          code: 'REVISION_STALE',
+          message: `Scene "${entry.sceneId}" has chapter ${entry.chapter} in sequence but candidate has chapter ${candidate.chapterNumber}`,
+          eventId: entry.sceneId,
+        },
+      ]);
+    }
+
+    if (entry.chapter !== currentChapter) {
+      currentChapter = entry.chapter;
       const title = chapterMetadata.get(currentChapter)?.title ?? `Chapter ${currentChapter}`;
       parts.push('', `## ${title}`, '');
     }
     parts.push(candidate.scene.prose.trimEnd(), '');
   }
+
+  // Every candidate must appear in the sequence
+  for (const candidate of candidates) {
+    if (!seen.has(candidate.eventId)) {
+      throw new PublicationError('Candidate not in scene sequence', [
+        {
+          code: 'PUBLICATION_INCOMPLETE',
+          message: `Candidate "${candidate.eventId}" is not covered by the scene sequence`,
+          eventId: candidate.eventId,
+        },
+      ]);
+    }
+  }
+
   return `${parts.join('\n').trimEnd()}\n`;
 }
 

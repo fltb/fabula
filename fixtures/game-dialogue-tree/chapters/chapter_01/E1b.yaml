@@ -1,7 +1,7 @@
 event: E1b
 narrativeOrder: 1
 title: "The Chateau"
-storyTime: day_1
+storyTime: the_hunt
 pov:
   character: hero
   type: third_person_limited

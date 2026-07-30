@@ -145,7 +145,8 @@
           "severity": "minor"
         }
       ],
-      "knowledgeChecks": []
+      "knowledgeChecks": [],
+      "checklistResults": []
     }
   },
   "metadata": {

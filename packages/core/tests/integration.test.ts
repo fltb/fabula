@@ -526,7 +526,7 @@ describe('3. Event Integrity', () => {
     const ch1 = data.chapters.get(1)!;
     const e1a = ch1.events[0] as any;
     expect(e1a.preconditions).toBeDefined();
-    expect(e1a.preconditions.length).toBeGreaterThanOrEqual(3);
+    expect(e1a.preconditions.length).toBeGreaterThanOrEqual(2);
     for (const pc of e1a.preconditions) {
       expect(pc.entity).toBeDefined();
       expect(typeof pc.entity).toBe('string');

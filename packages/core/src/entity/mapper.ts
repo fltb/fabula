@@ -36,7 +36,7 @@ import type {
   WorldInitialState,
 } from '../types/index.js';
 import { convertRelationshipChange } from '../types/relationship.js';
-import { factIdFrom, parseStoryTimestamp } from './timestamp.js';
+import { factIdFrom, parseStoryTimestamp, resolveTemporalContext } from './timestamp.js';
 import type { ProjectData } from './types.js';
 import { loadProjectConfig, readYamlFile, readYamlFilesInDir } from './yaml-loader.js';
 
@@ -133,11 +133,16 @@ export class EntityMapper {
     }) as WorldInitialState | null;
 
     const timeAnchors: TimeAnchor[] =
-      worldInitialState?.timeAnchors?.map((a) => ({
-        id: a.id,
-        day: a.day,
-        description: a.description,
-      })) ?? [];
+      worldInitialState?.timeAnchors?.map((anchor) => {
+        const at = parseStoryTimestamp(anchor.at);
+        if (at.type === 'indeterminate') {
+          throw new ConfigError(`Time anchor '${anchor.id}' must have a locatable timestamp`, {
+            path: `anchor:${anchor.id}.at`,
+            phase: 'timestamp',
+          });
+        }
+        return { id: anchor.id, at, description: anchor.description };
+      }) ?? [];
 
     // Load chapters
     const chapters = new Map<number, { metadata: ChapterMetadata | null; events: EventFile[] }>();
@@ -196,6 +201,9 @@ export class EntityMapper {
 
   /** Map EventFile to NarrativeEvent (internal type) */
   mapToNarrativeEvent(eventFile: EventFile): NarrativeEvent {
+    const storyTime = parseStoryTimestamp(eventFile.storyTime);
+    const narrationTime =
+      eventFile.narrationTime === undefined ? undefined : parseStoryTimestamp(eventFile.narrationTime);
     const preconditions: Fact[] = (eventFile.preconditions ?? []).map((pc) => ({
       id: factIdFrom(pc.entity, pc.attribute),
       entityId: pc.entity,
@@ -205,10 +213,7 @@ export class EntityMapper {
       confidence: 1.0,
       narrativeHint: pc.narrativeHint,
       validity: {
-        temporal: {
-          start: parseStoryTimestamp(eventFile.storyTime),
-          end: null,
-        },
+        temporal: { start: storyTime, end: null },
         branches: { type: 'all' as const },
       },
     }));
@@ -221,15 +226,10 @@ export class EntityMapper {
       confidence: pc.confidence ?? 1.0,
       narrativeHint: pc.narrativeHint,
       validity: {
-        temporal: {
-          start: parseStoryTimestamp(eventFile.storyTime),
-          end: null,
-        },
+        temporal: { start: storyTime, end: null },
         branches: { type: 'all' as const },
       },
     }));
-
-    const storyTime = parseStoryTimestamp(eventFile.storyTime);
 
     // Extract participant entities from preconditions and relationship effects
     const participantSet = new Set<string>();
@@ -242,14 +242,13 @@ export class EntityMapper {
     if (eventFile.pov?.character) participantSet.add(eventFile.pov.character);
 
     return {
+      kind: 'event',
       id: eventFile.event,
       event: eventFile.event,
       narrativeOrder: eventFile.narrativeOrder,
       title: eventFile.title,
       storyTime,
-      narrationTime: eventFile.narrationTime
-        ? parseStoryTimestamp(eventFile.narrationTime)
-        : undefined,
+      narrationTime,
       sceneType: eventFile.sceneType ?? 'linear',
       discourseMode: eventFile.discourseMode,
       arcPosition: eventFile.arcPosition,
@@ -287,6 +286,7 @@ export class EntityMapper {
       })),
       styleGuidance: eventFile.styleGuidance,
       source: 'event_file',
+      causalPredecessors: eventFile.causalPredecessors,
       branchExistence: { type: 'all' },
       participants: {
         entities: [...participantSet],
@@ -325,10 +325,16 @@ export class EntityMapper {
   ): NarrativeEvent[] {
     const projectData = this.loadProject();
     const eventFiles = [...chapters.values()].flatMap((chapter) => chapter.events);
-    const gameDialogueTree = compileGameDialogueTree(
-      eventFiles,
-      new Map(projectData.timeAnchors.map((anchor) => [anchor.id, anchor.day])),
-    );
+
+    // Step 1: Map all EventFile to NarrativeEvent (parses storyTime once,
+    // shared with Fact validity via mapToNarrativeEvent).
+    const authoredEvents = eventFiles.map((eventFile) => this.mapToNarrativeEvent(eventFile));
+
+    // Step 2: Resolve TemporalContext from mapped events + project time anchors.
+    const temporalContext = resolveTemporalContext(authoredEvents, projectData.timeAnchors);
+
+    // Step 3: Compile game dialogue tree using NarrativeEvent[] + TemporalContext.
+    const gameDialogueTree = compileGameDialogueTree(authoredEvents, temporalContext);
 
     const allEvents: NarrativeEvent[] = [];
 
@@ -338,7 +344,6 @@ export class EntityMapper {
       allEvents.push(genesisEvent);
     }
 
-    const authoredEvents = eventFiles.map((eventFile) => this.mapToNarrativeEvent(eventFile));
     if (gameDialogueTree) {
       const authoredEventById = new Map(authoredEvents.map((event) => [event.id, event]));
       for (const event of authoredEvents) {
@@ -355,6 +360,7 @@ export class EntityMapper {
         }
       }
 
+      // Inject causal predecessors with deduplication
       for (const [eventId, choices] of gameDialogueTree.choicesByEventId) {
         for (const choice of choices) {
           const target = authoredEventById.get(choice.targetEvent);
@@ -364,9 +370,10 @@ export class EntityMapper {
               phase: 'game_dialogue_tree',
             });
           }
-          (target.causalPredecessors ??= []).push(
-            `system:branch-choice:${eventId}:${choice.id}`,
-          );
+          const transitionId = `system:branch-choice:${eventId}:${choice.id}`;
+          if (!target.causalPredecessors?.includes(transitionId)) {
+            (target.causalPredecessors ??= []).push(transitionId);
+          }
         }
       }
       allEvents.push(...authoredEvents, ...gameDialogueTree.transitionEvents);
@@ -398,6 +405,7 @@ export class EntityMapper {
     }));
 
     return {
+      kind: 'event',
       id: 'system:genesis',
       event: 'system:genesis',
       narrativeOrder: 0,

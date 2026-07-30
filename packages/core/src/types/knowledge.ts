@@ -3,7 +3,7 @@
 // Knowledge = subject's attitude toward immutable proposition
 // ============================================================================
 
-import type { EntityId, FactId, StoryTimestamp } from './entity.js';
+import type { EntityId, FactId, LocatableStoryTimestamp, StoryTimestamp } from './entity.js';
 
 // ─── Proposition ─────────────────────────────────────────────────────────────
 
@@ -220,7 +220,7 @@ export interface NarrativeKnowledgeBoundary {
   focalizer: EntityId;
   /** Allowlisted claim keys (`${subject}:${propositionId}`) accessible to the focalizer */
   allowlistedClaims: string[];
-  boundaryTime: StoryTimestamp;
+  boundaryTime: LocatableStoryTimestamp;
 }
 
 // ─── Evaluation ──────────────────────────────────────────────────────────────

@@ -16,7 +16,8 @@
       "tenseDetected": "past",
       "conflictAnalysis": { "primaryType": "person_vs_self", "resolutionAchieved": false },
       "ruleChecks": [],
-      "knowledgeChecks": []
+      "knowledgeChecks": [],
+      "checklistResults": []
     }
   }
 }

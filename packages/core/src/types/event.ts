@@ -5,7 +5,7 @@
 import type { BranchSet } from './branch.js';
 import type { Anachrony, VoiceProfile } from './discourse.js';
 import type { DurationProfile } from './duration.js';
-import type { EntityId, Fact, StoryTimestamp } from './entity.js';
+import type { AuthoredStoryTime, EntityId, Fact, StoryTimestamp } from './entity.js';
 import type { FrequencyProfile } from './frequency.js';
 import type { GameDialogueChoice } from './game-dialogue.js';
 import type { GreyLine } from './grey-line.js';
@@ -58,6 +58,7 @@ import type {
 // ——— Narrative Event (§7.4.1) ———
 
 export interface NarrativeEvent {
+  kind: 'event';
   id: string;
   event: string;
   narrativeOrder: number;
@@ -236,10 +237,12 @@ export interface EventFile {
   narrativeOrder: number;
   /** Human-readable title */
   title: string;
-  /** Story timestamp (references a time anchor) */
-  storyTime: string;
-  /** Narration timestamp (when the story is being told) */
-  narrationTime?: string;
+  /** Story timestamp authored for this scene; omission means unlocated. */
+  storyTime?: AuthoredStoryTime;
+  /** Narration timestamp (when the story is being told). */
+  narrationTime?: AuthoredStoryTime;
+  /** Authored causal predecessors for scenes without comparable story time. */
+  causalPredecessors?: string[];
   /** Scene type */
   sceneType?: 'linear' | 'flashback' | 'flashforward' | 'dream' | 'parallel';
   /** Discourse mode */

@@ -40,6 +40,7 @@ function makeEntry(eventId: string): MockPass2Entry {
         conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
         ruleChecks: [],
         knowledgeChecks: [],
+        checklistResults: [],
       },
     },
   };
@@ -99,6 +100,30 @@ function setupProject(storage: MemoryStorage): void {
       'description: The protagonist.',
       'initialState: {}',
       'traits: []',
+    ].join('\n'),
+  );
+  storage.write(
+    `${PROJECT_DIR}/definitions/discourse-ledger.yaml`,
+    [
+      'id: game_dialogue_render_test_ledger',
+      'chapters:',
+      '  - branch: main',
+      '    chapter: 1',
+      '    sceneIds:',
+      '      - E0',
+      '      - E1a',
+      '      - E1b',
+      '  - branch: accept_hunt',
+      '    chapter: 1',
+      '    sceneIds:',
+      '      - E0',
+      '      - E1a',
+      '  - branch: refuse_hunt',
+      '    chapter: 1',
+      '    sceneIds:',
+      '      - E0',
+      '      - E1b',
+      'entries: []',
     ].join('\n'),
   );
   storage.write(
@@ -281,6 +306,7 @@ playerChoices:
           mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
           model: 'mock-pass2',
           branchPath,
+          discourseBranch: expectedChoice === 'true' ? 'accept_hunt' : 'refuse_hunt',
           maxRounds: 1,
         },
         {

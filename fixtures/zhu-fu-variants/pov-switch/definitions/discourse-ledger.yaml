@@ -1,0 +1,13 @@
+id: zhu_fu_main_ledger
+chapters:
+  - branch: main
+    chapter: 1
+    sceneIds:
+      - E0
+      - E1
+      - E2
+      - E3
+      - E4
+      - E5
+      - E6
+entries: []

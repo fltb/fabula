@@ -43,6 +43,7 @@ export function makeAnalysisResult(
       conflictAnalysis: { primaryType: '', resolutionAchieved: false },
       ruleChecks: [],
       knowledgeChecks: [],
+      checklistResults: [],
       ...overrides,
     },
   };

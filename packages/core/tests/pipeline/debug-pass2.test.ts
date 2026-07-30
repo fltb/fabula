@@ -39,6 +39,7 @@ const VALID_ANALYSIS_JSON = JSON.stringify({
     conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
     ruleChecks: [],
     knowledgeChecks: [],
+    checklistResults: [],
   },
 });
 
@@ -89,6 +90,7 @@ function makeContext(eventId: string): ContextPackage {
     },
     activeThreads: [],
     markdown: '',
+    narrativeTechniques: [],
   };
 }
 
@@ -104,6 +106,7 @@ function makeJob(id: string): RenderJob {
       facts: [],
     },
     context: makeContext(id),
+    graphHash: 'a00',
     chapter: 1,
     contract: {
       sceneId: id,

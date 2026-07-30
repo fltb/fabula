@@ -1,6 +1,7 @@
 import { createEmptyBranchPath, includesPath } from '../branch/index.js';
 import { canonicalizeFactValue } from '../entity/fact-value.js';
 import { ConfigError, PreconditionMismatchError } from '../errors.js';
+import { canonicalJson } from '../render/scene-contract.ts';
 import type {
   BranchPath,
   EntityDeclarationCatalog,
@@ -12,6 +13,7 @@ import type {
   RelationshipChange,
   RelationshipRuntimeState,
   RelationshipTransaction,
+  SceneStoryCoordinate,
   ThreadTransaction,
   WorldState,
 } from '../types/index.js';
@@ -41,7 +43,8 @@ export interface EventApplicationOptions {
   branchPath?: BranchPath;
   entityDeclarationCatalog?: EntityDeclarationCatalog;
   entityTypeCatalog?: EntityTypeCatalog;
-  lifecycleChangesByStoryTime?: Map<string, Set<string>>;
+  lifecycleChangesByCoordinate?: Map<string, Set<string>>;
+  storyCoordinate?: SceneStoryCoordinate;
   phase?: string;
 }
 
@@ -127,19 +130,20 @@ function validateLifecycle(
     );
   }
 
-  if (!event.storyTime) return;
-  const changes = options.lifecycleChangesByStoryTime;
+  const coordinate = options.storyCoordinate;
+  if (!coordinate || coordinate.kind !== 'point') return;
+  const changes = options.lifecycleChangesByCoordinate;
   if (!changes) return;
-  const storyTimeKey = JSON.stringify(event.storyTime);
-  const changedEntities = changes.get(storyTimeKey) ?? new Set<string>();
+  const coordinateKey = canonicalJson(coordinate);
+  const changedEntities = changes.get(coordinateKey) ?? new Set<string>();
   if (changedEntities.has(fact.entityId)) {
     throw new ConfigError(
-      `Same storyTime lifecycle conflict: multiple events at ${storyTimeKey} modify lifecycle of ${fact.entityId}`,
+      `Same coordinate lifecycle conflict: multiple events at ${coordinateKey} modify lifecycle of ${fact.entityId}`,
       { path: fact.entityId, eventId: event.id, phase },
     );
   }
   changedEntities.add(fact.entityId);
-  changes.set(storyTimeKey, changedEntities);
+  changes.set(coordinateKey, changedEntities);
 }
 
 function applyPostconditions(

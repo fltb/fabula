@@ -5,22 +5,20 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { ConfigError } from '../src/errors.js';
 import {
-  compareTimestamp,
+  compareStoryCoordinates,
   EntityMapper,
   InMemoryEntityRegistry,
+  INITIAL_STORY_ROOT_ID,
   parseStoryTimestamp,
-  resolveTimestampToDay,
+  resolveTemporalContext,
 } from '../src/entity/index.js';
 import type {
-  BranchSet,
-  CharacterDefinition,
   Entity,
   EventFile,
-  Fact,
-  StoryTimestamp,
+  StoryCoordinate,
   TimeAnchor,
-  WorldInitialState,
 } from '../src/types/index.js';
 
 // ─── Fixture path ───────────────────────────────────────────────────────────−
@@ -183,8 +181,7 @@ describe('EntityMapper.loadAllEvents()', () => {
       ],
     };
 
-    const anchors = new Map<string, number>([['arcane_s1_end', 0]]);
-    const ne = mapper.mapToNarrativeEvent(inlineEvent, 1, anchors);
+    const ne = mapper.mapToNarrativeEvent(inlineEvent);
 
     expect(ne.event).toBe('E1a');
     expect(ne.narrativeOrder).toBe(1);
@@ -207,7 +204,6 @@ describe('EntityMapper.loadAllEvents()', () => {
 
   it('events should be sorted by narrativeOrder', () => {
     // Create synthetic chapters with inline EventFile objects that have storyTime
-    const anchors = new Map<string, number>([['arcane_s1_end', 0]]);
     const chapters = new Map<number, { metadata: null; events: EventFile[] }>();
 
     chapters.set(1, {
@@ -255,8 +251,7 @@ describe('EntityMapper.loadAllEvents()', () => {
       preconditions: [],
       expectedPostconditions: [],
     };
-    const anchors = new Map<string, number>([['arcane_s1_end', 0]]);
-    const ne = mapper.mapToNarrativeEvent(inlineEvent, 1, anchors);
+    const ne = mapper.mapToNarrativeEvent(inlineEvent);
 
     expect(ne.storyTime).toEqual({
       type: 'relative',
@@ -272,7 +267,6 @@ describe('EntityMapper.loadAllEvents()', () => {
 
 describe('EntityMapper.mapToNarrativeEvent()', () => {
   const mapper = new EntityMapper(FIXTURE_PATH);
-  const anchors = new Map<string, number>([['arcane_s1_end', 0]]);
 
   it('should map preconditions to Fact objects', () => {
     const eventFile: EventFile = {
@@ -289,7 +283,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       expectedPostconditions: [],
     };
 
-    const ne = mapper.mapToNarrativeEvent(eventFile, 1, anchors);
+    const ne = mapper.mapToNarrativeEvent(eventFile);
 
     expect(ne.preconditions).toHaveLength(2);
     expect(ne.preconditions[0]).toMatchObject({
@@ -321,7 +315,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       ],
     };
 
-    const ne = mapper.mapToNarrativeEvent(eventFile, 1, anchors);
+    const ne = mapper.mapToNarrativeEvent(eventFile);
 
     expect(ne.postconditions).toHaveLength(1);
     expect(ne.postconditions[0]).toMatchObject({
@@ -355,7 +349,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       ],
     };
 
-    const ne = mapper.mapToNarrativeEvent(eventFile, 1, anchors);
+    const ne = mapper.mapToNarrativeEvent(eventFile);
 
     expect(ne.participants.entities).toContain('camille');
     expect(ne.participants.entities).toContain('seraphine');
@@ -374,7 +368,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       expectedPostconditions: [],
     };
 
-    const ne = mapper.mapToNarrativeEvent(eventFile, 1, anchors);
+    const ne = mapper.mapToNarrativeEvent(eventFile);
 
     expect(ne.participants.entities).toContain('gear');
   });
@@ -391,7 +385,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       expectedPostconditions: [],
     };
 
-    const ne = mapper.mapToNarrativeEvent(eventFile, 1, anchors);
+    const ne = mapper.mapToNarrativeEvent(eventFile);
 
     expect(ne.branchExistence).toEqual({ type: 'all' });
   });
@@ -473,7 +467,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       styleGuidance: { tone: 'suspenseful', scenePacing: 'deliberate' },
     };
 
-    const ne = mapper.mapToNarrativeEvent(eventFile, 1, anchors);
+    const ne = mapper.mapToNarrativeEvent(eventFile);
 
     expect(ne.threadProgress).toHaveLength(1);
     expect(ne.threadProgress[0].thread).toBe('T1');
@@ -786,6 +780,32 @@ describe('InMemoryEntityRegistry', () => {
 // ============================================================================
 
 describe('parseStoryTimestamp()', () => {
+  // ── Authored AST preservation ─────────────────────────────────────────
+
+  it('omitted storyTime yields indeterminate/unspecified', () => {
+    const result = parseStoryTimestamp(undefined);
+    expect(result).toEqual({ type: 'indeterminate', mode: 'unspecified' });
+  });
+
+  it('explicit indeterminate preserves the reason', () => {
+    const result = parseStoryTimestamp({
+      type: 'indeterminate',
+      reason: 'chronology deliberately unknowable',
+    });
+    expect(result).toEqual({
+      type: 'indeterminate',
+      mode: 'intentional',
+      reason: 'chronology deliberately unknowable',
+    });
+  });
+
+  it('explicit indeterminate without reason has no reason field', () => {
+    const result = parseStoryTimestamp({ type: 'indeterminate' });
+    expect(result).toEqual({ type: 'indeterminate', mode: 'intentional' });
+  });
+
+  // ── Locatable timestamp patterns ──────────────────────────────────────
+
   it('should parse relative timestamps like "arcane_s1_end + 3 weeks"', () => {
     const result = parseStoryTimestamp('arcane_s1_end + 3 weeks');
     expect(result).toEqual({
@@ -835,9 +855,37 @@ describe('parseStoryTimestamp()', () => {
     expect(result).toEqual({ type: 'chapter', chapter: 3 });
   });
 
-  it('should parse absolute timestamps like "day_42"', () => {
+  it('should parse day_N absolute timestamps', () => {
     const result = parseStoryTimestamp('day_42');
     expect(result).toEqual({ type: 'absolute', value: 'day_42' });
+  });
+
+  it('should parse bare offset timestamps like "1day" or "12 hours"', () => {
+    expect(parseStoryTimestamp('1day')).toEqual({
+      type: 'offset',
+      amount: 1,
+      unit: 'day',
+    });
+    expect(parseStoryTimestamp('12 hours')).toEqual({
+      type: 'offset',
+      amount: 12,
+      unit: 'hour',
+    });
+    expect(parseStoryTimestamp('-3 days')).toEqual({
+      type: 'offset',
+      amount: -3,
+      unit: 'day',
+    });
+    expect(parseStoryTimestamp('0.5 day')).toEqual({
+      type: 'offset',
+      amount: 0.5,
+      unit: 'day',
+    });
+  });
+
+  it('should parse strict ISO 8601 timestamps as absolute', () => {
+    const result = parseStoryTimestamp('2024-12-01');
+    expect(result).toEqual({ type: 'absolute', value: '2024-12-01' });
   });
 
   it('should fallback to absolute for unrecognised formats', () => {
@@ -845,159 +893,429 @@ describe('parseStoryTimestamp()', () => {
     expect(result).toEqual({ type: 'absolute', value: 'some_custom_reference' });
   });
 
-  it('should handle empty or whitespace-only strings as absolute fallback', () => {
-    const result = parseStoryTimestamp('');
-    // The function returns { type: 'absolute', value: raw } for unmatched patterns
-    // where raw is the input string. With empty string, value should be ''.
-    expect(result.type).toBe('absolute');
-    expect(typeof result.value).toBe('string');
+  // ── Error paths ───────────────────────────────────────────────────────
+
+  it('rejects empty or whitespace-only strings with ConfigError', () => {
+    expect(() => parseStoryTimestamp('')).toThrow(ConfigError);
+    expect(() => parseStoryTimestamp('   ')).toThrow(ConfigError);
   });
 });
 
 // ============================================================================
-// 6. resolveTimestampToDay() & compareTimestamp()
+// 6. resolveTemporalContext() & compareStoryCoordinates()
 // ============================================================================
 
-describe('resolveTimestampToDay()', () => {
-  const anchors = new Map<string, number>([
-    ['arcane_s1_end', 0],
-    ['seraphine_recruitment', -120],
-    ['vi_and_jinx_departure', -21],
-  ]);
+describe('resolveTemporalContext()', () => {
+  // ── Indeterminate resolution ──────────────────────────────────────────
 
-  it('should resolve absolute "day_N" timestamps', () => {
-    expect(resolveTimestampToDay({ type: 'absolute', value: 'day_0' }, anchors)).toBe(0);
-    expect(resolveTimestampToDay({ type: 'absolute', value: 'day_42' }, anchors)).toBe(42);
-    expect(resolveTimestampToDay({ type: 'absolute', value: 'day_100' }, anchors)).toBe(100);
+  it('omitted storyTime resolves to unlocated', () => {
+    const events = [{ id: 'E1', storyTime: parseStoryTimestamp(undefined), narrationTime: undefined }];
+    const ctx = resolveTemporalContext(events, []);
+    expect(ctx.coordinatesByEventId.get('E1')).toEqual({
+      type: 'storyTime',
+      kind: 'unlocated',
+    });
   });
 
-  it('rejects unknown absolute timestamps', () => {
-    expect(() => resolveTimestampToDay({ type: 'absolute', value: 'foo' }, anchors)).toThrow(
-      'Unknown absolute time anchor',
+  it('explicit indeterminate resolves to unlocated', () => {
+    const events = [
+      {
+        id: 'E1',
+        storyTime: parseStoryTimestamp({ type: 'indeterminate', reason: 'unknowable' }),
+        narrationTime: undefined,
+      },
+    ];
+    const ctx = resolveTemporalContext(events, []);
+    expect(ctx.coordinatesByEventId.get('E1')).toEqual({
+      type: 'storyTime',
+      kind: 'unlocated',
+    });
+    // AST reason is preserved on the event, not the coordinate
+    expect(events[0].storyTime).toEqual({
+      type: 'indeterminate',
+      mode: 'intentional',
+      reason: 'unknowable',
+    });
+  });
+
+  // ── Locatable resolution ──────────────────────────────────────────────
+
+  it('day_N resolves to story clock with millisecond scalar', () => {
+    const events = [{ id: 'E1', storyTime: parseStoryTimestamp('day_0'), narrationTime: undefined }];
+    const ctx = resolveTemporalContext(events, []);
+    expect(ctx.coordinatesByEventId.get('E1')).toEqual({
+      type: 'storyTime',
+      kind: 'point',
+      clock: 'story',
+      scalar: 0,
+    });
+  });
+
+  it('day_42 resolves to story clock scalar 42 * DAY_MS', () => {
+    const events = [{ id: 'E1', storyTime: parseStoryTimestamp('day_42'), narrationTime: undefined }];
+    const ctx = resolveTemporalContext(events, []);
+    const coord = ctx.coordinatesByEventId.get('E1') as PointStoryCoordinate;
+    expect(coord.kind).toBe('point');
+    expect(coord.clock).toBe('story');
+    expect(coord.scalar).toBe(42 * 86_400_000);
+  });
+
+  it('bare duration offset resolves to story clock', () => {
+    const events = [{ id: 'E1', storyTime: parseStoryTimestamp('3 days'), narrationTime: undefined }];
+    const ctx = resolveTemporalContext(events, []);
+    const coord = ctx.coordinatesByEventId.get('E1') as PointStoryCoordinate;
+    expect(coord.clock).toBe('story');
+    expect(coord.scalar).toBe(3 * 86_400_000);
+  });
+
+  it('strict ISO resolves to calendar clock', () => {
+    const events = [
+      { id: 'E1', storyTime: parseStoryTimestamp('2024-12-01'), narrationTime: undefined },
+    ];
+    const ctx = resolveTemporalContext(events, []);
+    const coord = ctx.coordinatesByEventId.get('E1') as PointStoryCoordinate;
+    expect(coord.clock).toBe('calendar');
+    expect(coord.scalar).toBe(Date.UTC(2024, 11, 1)); // Dec 1 UTC midnight
+  });
+
+  it('chapter resolves to chapter clock with ordinal scalar', () => {
+    const events = [
+      { id: 'E1', storyTime: parseStoryTimestamp('chapter_5'), narrationTime: undefined },
+    ];
+    const ctx = resolveTemporalContext(events, []);
+    expect(ctx.coordinatesByEventId.get('E1')).toEqual({
+      type: 'storyTime',
+      kind: 'point',
+      clock: 'chapter',
+      scalar: 5,
+    });
+  });
+
+  it('relative offset from an anchor resolves correctly', () => {
+    const anchors: TimeAnchor[] = [
+      { id: 'season_start', at: { type: 'absolute', value: 'day_0' } },
+    ];
+    const events = [
+      {
+        id: 'E1',
+        storyTime: parseStoryTimestamp('season_start + 3 weeks'),
+        narrationTime: undefined,
+      },
+    ];
+    const ctx = resolveTemporalContext(events, anchors);
+    const coord = ctx.coordinatesByEventId.get('E1') as PointStoryCoordinate;
+    expect(coord.clock).toBe('story');
+    expect(coord.scalar).toBe(3 * 7 * 86_400_000);
+    expect(ctx.coordinatesByAnchorId.get('season_start')).toEqual({
+      type: 'storyTime',
+      kind: 'point',
+      clock: 'story',
+      scalar: 0,
+    });
+  });
+
+  it('event-relative reference resolves from that event story coordinate', () => {
+    const events = [
+      { id: 'E1', storyTime: parseStoryTimestamp('day_10'), narrationTime: undefined },
+      {
+        id: 'E2',
+        storyTime: parseStoryTimestamp('E1 + 5 days'),
+        narrationTime: undefined,
+      },
+    ];
+    const ctx = resolveTemporalContext(events, []);
+    const e1 = ctx.coordinatesByEventId.get('E1') as PointStoryCoordinate;
+    const e2 = ctx.coordinatesByEventId.get('E2') as PointStoryCoordinate;
+    expect(e1.scalar).toBe(10 * 86_400_000);
+    expect(e2.scalar).toBe(15 * 86_400_000);
+  });
+
+  it('negative day number resolves to negative scalar', () => {
+    const events = [
+      { id: 'E1', storyTime: parseStoryTimestamp('day_-5'), narrationTime: undefined },
+    ];
+    const ctx = resolveTemporalContext(events, []);
+    const coord = ctx.coordinatesByEventId.get('E1') as PointStoryCoordinate;
+    expect(coord.scalar).toBe(-5 * 86_400_000);
+  });
+
+  // ── Identifier preflight ──────────────────────────────────────────────
+
+  it('rejects duplicate event IDs', () => {
+    const events = [
+      { id: 'E1', storyTime: parseStoryTimestamp('day_1'), narrationTime: undefined },
+      { id: 'E1', storyTime: parseStoryTimestamp('day_2'), narrationTime: undefined },
+    ];
+    expect(() => resolveTemporalContext(events, [])).toThrow(ConfigError);
+    expect(() => resolveTemporalContext(events, [])).toThrow("Duplicate event id 'E1'");
+  });
+
+  it('rejects duplicate anchor IDs', () => {
+    const anchors: TimeAnchor[] = [
+      { id: 'dup', at: { type: 'absolute', value: 'day_0' } },
+      { id: 'dup', at: { type: 'absolute', value: 'day_5' } },
+    ];
+    expect(() => resolveTemporalContext([], anchors)).toThrow(ConfigError);
+    expect(() => resolveTemporalContext([], anchors)).toThrow("Duplicate time anchor id 'dup'");
+  });
+
+  it('rejects event id colliding with a time anchor', () => {
+    const anchors: TimeAnchor[] = [
+      { id: 'collision', at: { type: 'absolute', value: 'day_0' } },
+    ];
+    const events = [
+      { id: 'collision', storyTime: parseStoryTimestamp('day_1'), narrationTime: undefined },
+    ];
+    expect(() => resolveTemporalContext(events, anchors)).toThrow(ConfigError);
+    expect(() => resolveTemporalContext(events, anchors)).toThrow(
+      /Event id 'collision' collides with a time anchor/,
     );
-    expect(() => resolveTimestampToDay({ type: 'absolute', value: '' }, anchors)).toThrow(
-      'Unknown absolute time anchor',
+  });
+
+  it('rejects anchor id that looks like a bare duration', () => {
+    const anchors: TimeAnchor[] = [
+      { id: '3days', at: { type: 'absolute', value: 'day_0' } },
+    ];
+    expect(() => resolveTemporalContext([], anchors)).toThrow(ConfigError);
+  });
+
+  it('rejects reserved system:initial event id', () => {
+    const events = [
+      {
+        id: INITIAL_STORY_ROOT_ID,
+        storyTime: parseStoryTimestamp('day_0'),
+        narrationTime: undefined,
+      },
+    ];
+    expect(() => resolveTemporalContext(events, [])).toThrow(ConfigError);
+    expect(() => resolveTemporalContext(events, [])).toThrow(
+      /Event id 'system:initial' is reserved/,
     );
   });
 
-  it('should resolve relative timestamps', () => {
-    const ts: StoryTimestamp = {
-      type: 'relative',
-      anchor: 'arcane_s1_end',
-      offset: { amount: 3, unit: 'week' },
-    };
-    // anchor 0 + 3 * 7 = 21
-    expect(resolveTimestampToDay(ts, anchors)).toBe(21);
+  // ── Error paths: unknown / malformed / cyclic ─────────────────────────
+
+  it('unknown anchor reference throws ConfigError with exact path', () => {
+    const events = [
+      {
+        id: 'E1',
+        storyTime: parseStoryTimestamp('ghost + 3 days'),
+        narrationTime: undefined,
+      },
+    ];
+    expect(() => resolveTemporalContext(events, [])).toThrow(ConfigError);
+    expect(() => resolveTemporalContext(events, [])).toThrow(
+      /Unknown story-time reference 'ghost' at event:E1.storyTime/,
+    );
   });
 
-  it('should resolve relative timestamps from negative anchors', () => {
-    const ts: StoryTimestamp = {
-      type: 'relative',
-      anchor: 'seraphine_recruitment',
-      offset: { amount: 30, unit: 'day' },
-    };
-    // -120 + 30 = -90
-    expect(resolveTimestampToDay(ts, anchors)).toBe(-90);
+  it('unknown event reference throws ConfigError with exact path', () => {
+    const events = [
+      { id: 'E1', storyTime: parseStoryTimestamp('day_1'), narrationTime: undefined },
+      {
+        id: 'E2',
+        storyTime: parseStoryTimestamp('E1 + 1 day'),
+        narrationTime: undefined,
+      },
+      {
+        id: 'E3',
+        storyTime: parseStoryTimestamp('E99 + 2 days'),
+        narrationTime: undefined,
+      },
+    ];
+    expect(() => resolveTemporalContext(events, [])).toThrow(ConfigError);
+    expect(() => resolveTemporalContext(events, [])).toThrow(
+      /Unknown story-time reference 'E99' at event:E3.storyTime/,
+    );
   });
 
-  it('rejects unknown relative anchors', () => {
-    const ts: StoryTimestamp = {
-      type: 'relative',
-      anchor: 'unknown_anchor',
-      offset: { amount: 5, unit: 'day' },
-    };
-    expect(() => resolveTimestampToDay(ts, anchors)).toThrow('Unknown relative time anchor');
+  it('cyclic event reference throws ConfigError with cycle detail', () => {
+    const events = [
+      {
+        id: 'E1',
+        storyTime: parseStoryTimestamp('E2 + 1 day'),
+        narrationTime: undefined,
+      },
+      {
+        id: 'E2',
+        storyTime: parseStoryTimestamp('E1 + 1 day'),
+        narrationTime: undefined,
+      },
+    ];
+    expect(() => resolveTemporalContext(events, [])).toThrow(ConfigError);
+    expect(() => resolveTemporalContext(events, [])).toThrow(/cyclic story-time reference/i);
   });
 
-  it('should resolve chapter timestamps to chapter number', () => {
-    expect(resolveTimestampToDay({ type: 'chapter', chapter: 1 }, anchors)).toBe(1);
-    expect(resolveTimestampToDay({ type: 'chapter', chapter: 10 }, anchors)).toBe(10);
+  it('cyclic anchor reference throws ConfigError with cycle detail', () => {
+    const anchors: TimeAnchor[] = [
+      { id: 'A', at: { type: 'absolute', value: 'B' } },
+      { id: 'B', at: { type: 'absolute', value: 'A' } },
+    ];
+    expect(() => resolveTemporalContext([], anchors)).toThrow(ConfigError);
+    expect(() => resolveTemporalContext([], anchors)).toThrow(/cyclic story-time reference/i);
   });
 
-  it('should resolve minute and hour units as fractions', () => {
-    const minute: StoryTimestamp = {
-      type: 'relative',
-      anchor: 'arcane_s1_end',
-      offset: { amount: 30, unit: 'minute' },
-    };
-    expect(resolveTimestampToDay(minute, anchors)).toBeCloseTo(30 / 1440, 10);
+  it('relative from chapter base throws ConfigError', () => {
+    const events = [
+      {
+        id: 'Ch',
+        storyTime: parseStoryTimestamp('chapter_1'),
+        narrationTime: undefined,
+      },
+      {
+        id: 'E1',
+        storyTime: parseStoryTimestamp('Ch + 3 days'),
+        narrationTime: undefined,
+      },
+    ];
+    expect(() => resolveTemporalContext(events, [])).toThrow(ConfigError);
+    expect(() => resolveTemporalContext(events, [])).toThrow(
+      /requires a story or calendar point base/,
+    );
+  });
 
-    const hour: StoryTimestamp = {
-      type: 'relative',
-      anchor: 'arcane_s1_end',
-      offset: { amount: 6, unit: 'hour' },
-    };
-    expect(resolveTimestampToDay(hour, anchors)).toBeCloseTo(6 / 24, 10);
+  it('relative from unlocated base throws ConfigError', () => {
+    const events = [
+      {
+        id: 'E1',
+        storyTime: parseStoryTimestamp(undefined),
+        narrationTime: undefined,
+      },
+      {
+        id: 'E2',
+        storyTime: parseStoryTimestamp('E1 + 1 day'),
+        narrationTime: undefined,
+      },
+    ];
+    expect(() => resolveTemporalContext(events, [])).toThrow(ConfigError);
+    expect(() => resolveTemporalContext(events, [])).toThrow(
+      /requires a story or calendar point base/,
+    );
+  });
+
+  // ── Narration time resolution ─────────────────────────────────────────
+
+  it('resolves narrationTime separately from storyTime', () => {
+    const events = [
+      {
+        id: 'E1',
+        storyTime: parseStoryTimestamp('day_10'),
+        narrationTime: parseStoryTimestamp('day_100'),
+      },
+    ];
+    const ctx = resolveTemporalContext(events, []);
+    const storyCoord = ctx.coordinatesByEventId.get('E1') as PointStoryCoordinate;
+    const narrationCoord = ctx.narrationCoordinatesByEventId.get('E1') as PointStoryCoordinate;
+    expect(storyCoord.scalar).toBe(10 * 86_400_000);
+    expect(narrationCoord.scalar).toBe(100 * 86_400_000);
+  });
+
+  it('missing narrationTime does not create a narration coordinate entry', () => {
+    const events = [
+      { id: 'E1', storyTime: parseStoryTimestamp('day_1'), narrationTime: undefined },
+    ];
+    const ctx = resolveTemporalContext(events, []);
+    expect(ctx.narrationCoordinatesByEventId.has('E1')).toBe(false);
   });
 });
 
-describe('compareTimestamp()', () => {
-  const anchors = new Map<string, number>([
-    ['anchor_a', 10],
-    ['anchor_b', 100],
-  ]);
+// ============================================================================
+// 6b. compareStoryCoordinates()
+// ============================================================================
 
-  it('should correctly order absolute timestamps', () => {
-    const day5: StoryTimestamp = { type: 'absolute', value: 'day_5' };
-    const day10: StoryTimestamp = { type: 'absolute', value: 'day_10' };
-    expect(compareTimestamp(day5, day10, anchors)).toBeLessThan(0);
-    expect(compareTimestamp(day10, day5, anchors)).toBeGreaterThan(0);
-    expect(compareTimestamp(day5, day5, anchors)).toBe(0);
+describe('compareStoryCoordinates()', () => {
+  const initial: StoryCoordinate = { type: 'storyTime', kind: 'initial' };
+  const unlocated: StoryCoordinate = { type: 'storyTime', kind: 'unlocated' };
+  const pointA: StoryCoordinate = {
+    type: 'storyTime',
+    kind: 'point',
+    clock: 'story',
+    scalar: 100,
+  };
+  const pointB: StoryCoordinate = {
+    type: 'storyTime',
+    kind: 'point',
+    clock: 'story',
+    scalar: 200,
+  };
+  const calendarPoint: StoryCoordinate = {
+    type: 'storyTime',
+    kind: 'point',
+    clock: 'calendar',
+    scalar: 100,
+  };
+  const chapterPoint: StoryCoordinate = {
+    type: 'storyTime',
+    kind: 'point',
+    clock: 'chapter',
+    scalar: 5,
+  };
+
+  it('initial is before every non-initial coordinate', () => {
+    expect(compareStoryCoordinates(initial, unlocated)).toBe('before');
+    expect(compareStoryCoordinates(initial, pointA)).toBe('before');
   });
 
-  it('should correctly order relative timestamps', () => {
-    const early: StoryTimestamp = {
-      type: 'relative',
-      anchor: 'anchor_a',
-      offset: { amount: 1, unit: 'day' },
-    }; // 11
-    const late: StoryTimestamp = {
-      type: 'relative',
-      anchor: 'anchor_a',
-      offset: { amount: 10, unit: 'day' },
-    }; // 20
-    expect(compareTimestamp(early, late, anchors)).toBeLessThan(0);
-    expect(compareTimestamp(late, early, anchors)).toBeGreaterThan(0);
+  it('non-initial after initial', () => {
+    expect(compareStoryCoordinates(unlocated, initial)).toBe('after');
+    expect(compareStoryCoordinates(pointA, initial)).toBe('after');
   });
 
-  it('should correctly order chapter timestamps', () => {
-    const ch1: StoryTimestamp = { type: 'chapter', chapter: 1 };
-    const ch5: StoryTimestamp = { type: 'chapter', chapter: 5 };
-    expect(compareTimestamp(ch1, ch5, anchors)).toBeLessThan(0);
-    expect(compareTimestamp(ch5, ch1, anchors)).toBeGreaterThan(0);
+  it('initial equals initial', () => {
+    expect(compareStoryCoordinates(initial, initial)).toBe('equal');
   });
 
-  it('should correctly order absolute, relative, and chapter timestamps', () => {
-    const day2: StoryTimestamp = { type: 'absolute', value: 'day_2' }; // 2
-    const rel: StoryTimestamp = {
-      type: 'relative',
-      anchor: 'anchor_a',
-      offset: { amount: 1, unit: 'day' },
-    }; // 11
-    const ch3: StoryTimestamp = { type: 'chapter', chapter: 3 }; // 3
-
-    expect(compareTimestamp(day2, rel, anchors)).toBeLessThan(0); // day_2 < anchor_a+1
-    expect(compareTimestamp(ch3, rel, anchors)).toBeLessThan(0); // chapter_3 < anchor_a+1
-    expect(compareTimestamp(day2, ch3, anchors)).toBeLessThan(0); // day_2 < chapter_3
-
-    // All relative to each other
-    const allEvents = [rel, ch3, day2].sort((a, b) => compareTimestamp(a, b, anchors));
-    expect(allEvents[0]).toEqual(day2); // day_2 = 2
-    expect(allEvents[1]).toEqual(ch3); // chapter_3 = 3
-    expect(allEvents[2]).toEqual(rel); // anchor_a+1 = 11
+  it('unlocated is incomparable with non-initial coordinates', () => {
+    expect(compareStoryCoordinates(unlocated, unlocated)).toBe('incomparable');
+    expect(compareStoryCoordinates(unlocated, pointA)).toBe('incomparable');
+    expect(compareStoryCoordinates(pointA, unlocated)).toBe('incomparable');
+    expect(compareStoryCoordinates(unlocated, calendarPoint)).toBe('incomparable');
   });
 
-  it('should return 0 for timestamps that resolve to the same day', () => {
-    const day10: StoryTimestamp = { type: 'absolute', value: 'day_10' };
-    const ch10: StoryTimestamp = { type: 'chapter', chapter: 10 };
-    const rel10: StoryTimestamp = {
-      type: 'relative',
-      anchor: 'anchor_a',
-      offset: { amount: 0, unit: 'day' },
-    }; // anchor_a = 10
-    expect(compareTimestamp(day10, ch10, anchors)).toBe(0);
-    expect(compareTimestamp(day10, rel10, anchors)).toBe(0);
-    expect(compareTimestamp(ch10, rel10, anchors)).toBe(0);
+  it('same clock points compare by scalar', () => {
+    expect(compareStoryCoordinates(pointA, pointB)).toBe('before');
+    expect(compareStoryCoordinates(pointB, pointA)).toBe('after');
+    expect(compareStoryCoordinates(pointA, pointA)).toBe('equal');
+  });
+
+  it('different clock points are incomparable', () => {
+    expect(compareStoryCoordinates(pointA, calendarPoint)).toBe('incomparable');
+    expect(compareStoryCoordinates(pointA, chapterPoint)).toBe('incomparable');
+  });
+
+  it('correctly orders day versus earlier-day resolution', () => {
+    const day5: StoryCoordinate = {
+      type: 'storyTime',
+      kind: 'point',
+      clock: 'story',
+      scalar: 5 * 86_400_000,
+    };
+    const day10: StoryCoordinate = {
+      type: 'storyTime',
+      kind: 'point',
+      clock: 'story',
+      scalar: 10 * 86_400_000,
+    };
+    expect(compareStoryCoordinates(day5, day10)).toBe('before');
+    expect(compareStoryCoordinates(day10, day5)).toBe('after');
+    expect(compareStoryCoordinates(day5, day5)).toBe('equal');
+  });
+
+  it('handles fractionally different scalars correctly', () => {
+    // 5.5 days < 10 days (lexicographic bug guard)
+    const later: StoryCoordinate = {
+      type: 'storyTime',
+      kind: 'point',
+      clock: 'story',
+      scalar: 10 * 86_400_000,
+    };
+    const earlier: StoryCoordinate = {
+      type: 'storyTime',
+      kind: 'point',
+      clock: 'story',
+      scalar: 5.5 * 86_400_000,
+    };
+    expect(compareStoryCoordinates(earlier, later)).toBe('before');
   });
 });
 
@@ -1024,7 +1342,7 @@ describe('EntityMapper — edge cases', () => {
       expectedPostconditions: [],
     };
 
-    const ne = mapper.mapToNarrativeEvent(eventFile, 1, new Map());
+    const ne = mapper.mapToNarrativeEvent(eventFile);
     expect(ne.preconditions).toEqual([]);
     expect(ne.postconditions).toEqual([]);
     expect(ne.threadProgress).toEqual([]);

@@ -705,6 +705,7 @@ describe('zhu-fu-variants / alias validator issue emission', () => {
         conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
         ruleChecks: [],
         knowledgeChecks: [],
+        checklistResults: [],
         // The alias validator consumes characterReferences — this is the actual test payload
         characterReferences: [{ entityId: 'xianglins_wife', namesUsed: ['祥林家的'] }],
       },
@@ -798,6 +799,7 @@ describe('zhu-fu-variants / pronoun validator issue emission', () => {
         conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
         ruleChecks: [],
         knowledgeChecks: [],
+        checklistResults: [],
       },
     };
 

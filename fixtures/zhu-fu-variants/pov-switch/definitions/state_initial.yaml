@@ -4,25 +4,25 @@ info:
 
 timeAnchors:
   - id: new_year_eve
-    day: 0
+    at: day_0
     description: "除夕 — 叙述者'我'在鲁镇过年，遇见祥林嫂，当晚她死去，次日清晨祝福仪式开始。"
   - id: winter_five_years_ago
-    day: -1825
+    at: day_-1825
     description: "初冬 — 祥林嫂第一次到鲁四老爷家做帮工，由卫老婆子介绍。约五年前。"
   - id: spring_after_escape
-    day: -1700
+    at: day_-1700
     description: "开春 — 祥林嫂在河边淘米时被婆婆带人绑架，卖到贺家坳嫁给贺老六。"
   - id: first_winter_hejiaao
-    day: -1550
+    at: day_-1550
     description: "冬 — 祥林嫂在贺家坳生下阿毛，母子平安。按卫老婆子说法，她'交了好运'。"
   - id: spring_ahmao_death
-    day: -1000
+    at: day_-1000
     description: "春末 — 贺老六因伤寒复发死去；阿毛在门口剥豆时被狼叼走，在山坳里发现时五脏已被吃空。约此后不久。"
   - id: autumn_return
-    day: -540
+    at: day_-540
     description: "秋季 — 贺老六的大伯收屋赶人，祥林嫂无处可去，由卫老婆子再次带到鲁四老爷家。约一年半前。"
   - id: winter_solstice
-    day: -120
+    at: day_-120
     description: "冬至 — 祥林嫂捐了门槛后在冬至祭祀时伸手拿杯筷，被四婶喝止：'你放着罢，祥林嫂！'精神彻底崩溃。"
 
 threads:

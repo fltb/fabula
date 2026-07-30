@@ -165,6 +165,7 @@ function makeContext(): ContextPackage {
         logicalConsequences: [],
       } satisfies RuleDefinition,
     ],
+    narrativeTechniques: [],
     narratorProfile: {
       type: 'omniscient',
       id: 'narrator_v1',
@@ -190,6 +191,7 @@ function makeJob(): RenderJob {
       facts: [],
     },
     context: makeContext(),
+    graphHash: 'a00',
     chapter: 1,
     contract: {
       sceneId: 'evt_express',
@@ -242,6 +244,7 @@ function buildPipeline(): { pipeline: RenderPipeline; provider: MockProvider } {
       conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
       ruleChecks: [],
       knowledgeChecks: [],
+      checklistResults: [],
       durationDetected: 'scene',
       frequencyDetected: 'singulative',
       voiceDetected: { level: 'extradiegetic', relation: 'heterodiegetic' },

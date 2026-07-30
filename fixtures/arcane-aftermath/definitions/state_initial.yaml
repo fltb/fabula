@@ -4,16 +4,16 @@ info:
 
 timeAnchors:
   - id: arcane_s1_end
-    day: 0
+    at: day_0
     description: "The conclusion of the battle at the Piltover bridge. Jinx's rocket struck the council chamber."
   - id: vi_and_jinx_departure
-    day: -21
+    at: day_-21
     description: "Vi departs Piltover following Jinx's trail. Caitlyn remains in Piltover, reassigned to internal affairs."
   - id: seraphine_recruitment
-    day: -120
+    at: day_-120
     description: "Camille formally recruited Seraphine as a hextech-empathic consultant."
   - id: hextech_crystal_inventory
-    day: -7
+    at: day_-7
     description: "The Piltover Council conducted a classified inventory of remaining hextech crystals."
 
 threads:

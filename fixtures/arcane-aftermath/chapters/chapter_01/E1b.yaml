@@ -20,10 +20,6 @@ preconditions:
     attribute: condition
     value: healthy
     confidence: 1.0
-  - entity: world
-    attribute: has_crystal_inventory
-    value: true
-    confidence: 1.0
 expectedPostconditions:
   - entity: camille
     attribute: has_accepted_case

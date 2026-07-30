@@ -8,17 +8,13 @@
 // GraphReadResolution, GraphBoundaryReference, GraphNarrativeEllipsis)
 // are GRAPH-1 specific and distinct from same-name types in integration.ts.
 // ============================================================================
+import type { SceneStoryCoordinate, StoryCoordinate } from './entity.js';
 
 // ——— Edge Classes & Coordinates ———
 
 /** The four edge classes. NEVER mixed between graphs. */
 export type EdgeClass = 'author_origin' | 'provider' | 'same_coordinate_order' | 'internal';
 
-/** Story coordinate — storyTime domain. */
-export interface StoryCoordinate {
-  type: 'storyTime';
-  value: string;
-}
 
 /** Discourse coordinate — discoursePosition domain. */
 export interface DiscourseCoordinate {
@@ -145,17 +141,16 @@ export interface GraphBoundaryReference {
 /** Only StoryGraph predecessor/dependent. Summary NEVER selected. */
 export interface GraphNarrativeEllipsis {
   outputId: string;
-  storyTime: StoryCoordinate;
+  storyCoordinate: SceneStoryCoordinate;
   requiredOutputHash: string;
 }
 
 // ——— Graph Structures (§1) ———
 
 /**
- * StoryGraph carries effectiveCoordinate = storyTime.
- * Outputs include: entity/relationship/knowledge/story-thread/rule writes,
- * materialized defaults, merge writes, information acts, rule evaluations.
- * Includes reads and resolutions for provider tracking.
+ * StoryGraph is a graph-wide structure: only nodes and outputs have coordinates.
+ * Outputs include entity/relationship/knowledge/story-thread/rule writes,
+ * materialized defaults, merge writes, information acts, and rule evaluations.
  */
 export interface StoryGraph {
   type: 'story';
@@ -164,36 +159,36 @@ export interface StoryGraph {
   reads: ReadRequirement[];
   resolutions: GraphReadResolution[];
   hash: string;
-  effectiveCoordinate: StoryCoordinate;
   ellipses?: GraphNarrativeEllipsis[];
 }
 
 /**
- * DiscourseGraph carries effectiveCoordinate = DiscoursePosition.
- * Outputs include: planned disclosure/narrator assertion/hint/withhold/
- * discourse-thread/DiscourseBridge acts.
- * CAN have boundaryReferences from StorySnapshot.
+ * DiscourseGraph is a graph-wide structure: only nodes and outputs have coordinates.
+ * It can have boundary references from StorySnapshot.
  */
 export interface DiscourseGraph {
   type: 'discourse';
   edges: GraphEdge[];
   outputs: OutputDescriptor[];
   hash: string;
-  effectiveCoordinate: DiscourseCoordinate;
   boundaryReferences?: GraphBoundaryReference[];
-  sceneSequence: Array<{
-    sceneId: string;
-    sequence: number;
-    chapter: number;
-    actionInterval?: { start: number; end: number };
-  }>;
+  sceneSequence: readonly DiscourseSceneSequenceEntry[];
+}
+
+// ——— DiscourseSceneSequenceEntry ———
+
+/** A single scene in the branch's reader-order scene sequence. */
+export interface DiscourseSceneSequenceEntry {
+  sceneId: string;
+  sequence: number;
+  chapter: number;
+  actionInterval?: { start: number; end: number };
 }
 
 // ——— Cache Entry (§25) ———
 
 export interface GraphCacheEntry {
-  targetCoordinatePrefix: string;
-  sameCoordinateAncestors: string[];
+  branchScope: string;
   dependencyHashes: string[];
   outputHashes: string[];
   absenceHashes: string[];
@@ -442,29 +437,24 @@ export class FutureTimeError extends GraphCompileError {
   }
 }
 
-// — 13. IncomparableTime —
-export class IncomparableTimeError extends GraphCompileError {
-  constructor(
-    nodeId: string,
-    a: EffectiveCoordinate,
-    b: EffectiveCoordinate,
-    context?: Partial<GraphErrorContext>,
-  ) {
+// — 13. InvalidSameCoordinateOrder —
+export class InvalidSameCoordinateOrderError extends GraphCompileError {
+  constructor(predecessor: string, dependent: string, context?: Partial<GraphErrorContext>) {
     super(
-      'INCOMPARABLE_TIME',
-      `Incomparable time between nodes: "${nodeId}" at ${JSON.stringify(a)} vs ${JSON.stringify(b)}`,
+      'INVALID_SAME_COORDINATE_ORDER',
+      `same_coordinate_order edge "${predecessor}" → "${dependent}" requires equal point coordinates`,
       {
-        code: 'INCOMPARABLE_TIME',
-        nodeId,
-        detail: `a: ${JSON.stringify(a)}, b: ${JSON.stringify(b)}`,
+        code: 'INVALID_SAME_COORDINATE_ORDER',
+        nodeId: dependent,
+        detail: `predecessor: ${predecessor}`,
         ...context,
       },
     );
   }
 }
 
-// — 14. UnorderedSameTimeConflict —
-export class UnorderedSameTimeConflictError extends GraphCompileError {
+// — 14. UnorderedStoryConflict —
+export class UnorderedStoryConflictError extends GraphCompileError {
   constructor(
     nodeId: string,
     coordinate: EffectiveCoordinate,
@@ -472,10 +462,10 @@ export class UnorderedSameTimeConflictError extends GraphCompileError {
     context?: Partial<GraphErrorContext>,
   ) {
     super(
-      'UNORDERED_SAME_TIME_CONFLICT',
-      `Unordered same-time conflict: "${nodeId}" and "${conflictingNode}" share ${JSON.stringify(coordinate)}`,
+      'UNORDERED_STORY_CONFLICT',
+      `Unordered story conflict: "${nodeId}" and "${conflictingNode}" overlap at ${JSON.stringify(coordinate)}`,
       {
-        code: 'UNORDERED_SAME_TIME_CONFLICT',
+        code: 'UNORDERED_STORY_CONFLICT',
         coordinate,
         nodeId,
         detail: `conflicting node: ${conflictingNode}`,

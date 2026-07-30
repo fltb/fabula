@@ -1,0 +1,18 @@
+id: most_dangerous_game_ledger
+chapters:
+  - branch: main
+    chapter: 1
+    sceneIds:
+      - E0
+      - E1
+      - E2
+  - branch: main
+    chapter: 2
+    sceneIds:
+      - E3
+      - E4
+  - branch: main
+    chapter: 3
+    sceneIds:
+      - E5
+entries: []

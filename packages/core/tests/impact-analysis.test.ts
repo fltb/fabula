@@ -34,6 +34,21 @@ worldFacts: []
     join(dir, 'chapters', 'chapter_01', '_chapter.yaml'),
     'chapter: 1\ntitle: "Chapter 1"\nsummary: "Test"\nintent: "Test intent"\nplannedScenes: 5\n',
   );
+  // discourse-ledger.yaml (mandatory reader-order source)
+  writeFileSync(
+    join(dir, 'definitions', 'discourse-ledger.yaml'),
+    [
+      'id: impact-ledger',
+      'chapters:',
+      '  - branch: main',
+      '    chapter: 1',
+      '    sceneIds:',
+      '      - E0',
+      '      - E1',
+      '      - E2',
+      'entries: []',
+    ].join('\n'),
+  );
   return dir;
 }
 

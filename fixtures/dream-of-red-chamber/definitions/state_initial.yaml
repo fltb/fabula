@@ -3,28 +3,28 @@ info:
   politicalSituation: 清朝乾隆盛世，表面上国泰民安，实则官场腐败、贫富悬殊。贾府作为百年世家，依靠祖荫和裙带关系维持着表面的荣华富贵。宗法制度、科举仕途、门第观念是社会的底层运行逻辑。
 timeAnchors:
 - id: stone_myth
-  day: -2000
+  at: day_-2000
   description: 顽石被女娲遗弃于大荒山无稽崖青埂峰，后经一僧一道携入红尘，历尽悲欢。通灵宝玉随神瑛侍者（宝玉前身）与绛珠仙草（黛玉前身）下凡历劫——僧道论石、太虚对联发生于此时。
 - id: lin_daiyu_enters_jiafu
-  day: 0
+  at: day_0
   description: 林黛玉初入荣国府，拜见贾母、见宝玉。红楼梦故事正式展开。
 - id: xue_family_arrives
-  day: 60
+  at: day_60
   description: 薛姨妈携薛蟠、薛宝钗进京投奔贾府，住在梨香院。
 - id: jia_yuanchun_visited
-  day: 365
+  at: day_365
   description: 贾元春封贤德妃，省亲大观园。大观园始建并启用。
 - id: sisters_move_into_garden
-  day: 400
+  at: day_400
   description: 元春命家中姊妹入住大观园，宝玉、黛玉、宝钗、探春、李纨等各择院落居住。
 - id: chaojian_daguanyuan
-  day: 800
+  at: day_800
   description: 王夫人抄检大观园，晴雯被逐、司棋被撵，大观园由盛转衰。
 - id: daiyu_dies
-  day: 1000
+  at: day_1000
   description: 林黛玉在宝玉与宝钗大婚之夜泪尽而亡。
 - id: jiafu_raided
-  day: 1100
+  at: day_1100
   description: 贾府被朝廷查抄，宁国府首当其冲，家道彻底败落。
 threads:
 - id: T1

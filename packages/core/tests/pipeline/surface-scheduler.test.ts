@@ -59,6 +59,7 @@ function makeJob(
       rules: [],
       worldFacts: [],
     },
+    graphHash: 'a00',
     chapter: 1,
     contract: {
       sceneId: id,

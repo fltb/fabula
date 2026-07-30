@@ -1,5 +1,15 @@
 id: zhu_fu_main_ledger
-hash: v1
+chapters:
+  - branch: main
+    chapter: 1
+    sceneIds:
+      - E0
+      - E1
+      - E2
+      - E3
+      - E4
+      - E5
+      - E6
 entries:
   - id: entry_reveal_death
     action:

@@ -11,9 +11,10 @@
 // ============================================================================
 
 import type { EventStore } from '../state/event-store.js';
+import type { StoryOrderIndex } from '../state/dag.js';
 import type { AnalysisResult } from './analysis.js';
 import type { ContextPackage } from './context.js';
-import type { EntityId, EntityRegistry } from './entity.js';
+import type { EntityId, EntityRegistry, SceneStoryCoordinate } from './entity.js';
 import type { NarrativeEvent } from './event.js';
 import type { EpistemicLedger } from './knowledge.js';
 import type { ThreadRuntimeState } from './thread.js';
@@ -37,6 +38,35 @@ export interface AnalysisBlockRequirement {
   instruction: string;
 }
 
+// ——— Story Validation Context (optional, supplied by compiled graph) ———
+
+/**
+ * Resolved story coordinates and order for selected events, provided by the
+ * compiled story graph. When absent, validators that depend on story chronology
+ * skip coordinate-based checks rather than re-compiling the graph themselves.
+ */
+export interface StoryValidationContext {
+  /** Event ID to resolved story coordinate map for selected ordinary events. */
+  coordinatesByEventId: ReadonlyMap<string, SceneStoryCoordinate>;
+  /** Proven-before order index for selected events. */
+  order: StoryOrderIndex;
+}
+
+// ——— Validation Run Options ———
+
+/**
+ * Options for aggregator validate/validateAll calls. Each field is optional;
+ * default behaviour matches the legacy positional API.
+ */
+export interface ValidationRunOptions {
+  /** Per-validator severity overrides. */
+  overrides?: Record<string, 'off' | 'warning' | 'error'>;
+  /** Pre-computed state before each event (validateAll). */
+  stateBeforeByEventId?: ReadonlyMap<string, WorldState>;
+  /** Story context from compiled graph (timeline/plot validators). */
+  story?: StoryValidationContext;
+}
+
 // ——— Pre-Render Input (new) ———
 
 export interface PreRenderInput {
@@ -49,6 +79,8 @@ export interface PreRenderInput {
   queryState: (entityId: EntityId, attribute: string) => unknown;
   getKnowledge: (characterId: EntityId) => EpistemicLedger;
   getThreadProgress: (threadId: string) => ThreadRuntimeState | null;
+  /** Story context from compiled graph. Optional — when absent, chronology checks are skipped. */
+  story?: StoryValidationContext;
 }
 
 // ——— Post-Render Input (new) ———

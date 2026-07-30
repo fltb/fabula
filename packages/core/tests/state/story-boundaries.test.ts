@@ -45,10 +45,16 @@ describe('compileStoryBoundaries', () => {
   it('creates state-before snapshots in causal order without a genesis event', () => {
     const e2 = event('E2', 2, [fact('arrived')], [fact('departed')]);
     const e1 = event('E1', 1, [fact('alive')], [fact('arrived')]);
-    const result = compileStoryBoundaries([e2, e1], [fact('alive')], new Map());
+    // E1 must be proven-before E2 so that E2's stateBefore includes E1's updates.
+    // Explicit causal edge (comparable coordinates: day 1 < day 2) provides the path.
+    const result = compileStoryBoundaries([e2, e1], [fact('alive')], new Map([['E1', ['E2']]]));
     expect(result.orderedEventIds).toEqual(['E1', 'E2']);
     expect(result.stateBeforeByEventId.get('E1')?.entities.wife.status).toBe('alive');
+    // E1 is proven-before E2 via the explicit edge; its update is included in E2's stateBefore
     expect(result.stateBeforeByEventId.get('E2')?.entities.wife.status).toBe('arrived');
+    // Each stateAfter = stateBefore + its own event's effects
+    expect(result.stateAfterByEventId.get('E1')?.entities.wife.status).toBe('arrived');
+    expect(result.stateAfterByEventId.get('E2')?.entities.wife.status).toBe('departed');
     expect(result.finalState.entities.wife.status).toBe('departed');
   });
 
@@ -73,18 +79,23 @@ describe('compileStoryBoundaries', () => {
     const early = event('early', 1, [], [fact('value')]);
     const late = event('late', 3, [fact('value')], []);
     const indep = event('indep', 2);
-    // Kahn: ready = [early (day 1), indep (day 2)] → pick early (earlier day)
-    // After early, late becomes ready.
-    // Ready set = [indep (day 2), late (day 3)] → pick indep (earlier day)
-    // Then late (day 3)
-    const result3 = compileStoryBoundaries([early, late, indep], [], new Map());
+    // early writes value, late reads it: explicit causal edge provides the proven-before path.
+    // Kahn: ready = [early, indep] (both in-degree 0).
+    // localeCompare tiebreak: "early" < "indep" → process early first.
+    // After early, late in-degree becomes 0.
+    // Ready = [indep, late] → process indep then late.
+    const result3 = compileStoryBoundaries([early, late, indep], [], new Map([['early', ['late']]]));
     expect(result3.orderedEventIds).toEqual(['early', 'indep', 'late']);
-    // Verify causal state is correct:
+    // Proven-before semantics: only true ancestors are visible in stateBefore.
     expect(result3.stateBeforeByEventId.get('early')?.entities.wife?.status).toBeUndefined();
-    // indep runs after early so it sees early's effects
-    expect(result3.stateBeforeByEventId.get('indep')?.entities.wife?.status).toBe('value');
-    // late also runs after early
+    // indep is unrelated to early (no causal path) → early's effects do NOT leak into indep's stateBefore
+    expect(result3.stateBeforeByEventId.get('indep')?.entities.wife?.status).toBeUndefined();
+    // late has explicit edge from early → early's state is visible in late's stateBefore
     expect(result3.stateBeforeByEventId.get('late')?.entities.wife?.status).toBe('value');
+    // Each stateAfter = stateBefore + its own event's effects
+    expect(result3.stateAfterByEventId.get('early')?.entities.wife?.status).toBe('value');
+    expect(result3.stateAfterByEventId.get('indep')?.entities.wife?.status).toBeUndefined();
+    expect(result3.stateAfterByEventId.get('late')?.entities.wife?.status).toBe('value');
   });
 });
 
@@ -109,9 +120,15 @@ describe('boundary/replay equivalence', () => {
       event('E2', 2, [fact('alive')], [fact('dead')]),
     ];
 
-    const boundary = compileStoryBoundaries(events, [], new Map());
+    const boundary = compileStoryBoundaries(events, [], new Map([['E1', ['E2']]]));
     const engineState = engineRun(events);
 
+    // Explicit edge E1→E2 makes E1's effects visible to E2
+    expect(boundary.stateBeforeByEventId.get('E1')?.entities.wife?.status).toBeUndefined();
+    expect(boundary.stateBeforeByEventId.get('E2')?.entities.wife?.status).toBe('alive');
+    // No unrelated nodes leak into stateBefore
+    expect(boundary.stateAfterByEventId.get('E1')?.entities.wife?.status).toBe('alive');
+    expect(boundary.stateAfterByEventId.get('E2')?.entities.wife?.status).toBe('dead');
     expect(boundary.finalState.entities).toEqual(engineState.entities);
   })
 
@@ -193,9 +210,15 @@ describe('boundary/replay equivalence', () => {
       event('E1', 1, [], [fact('active')]),
       event('E2', 2, [fact('active')], [fact('resolved')]),
     ];
-    const boundary = compileStoryBoundaries(events, [], new Map());
+    const boundary = compileStoryBoundaries(events, [], new Map([['E1', ['E2']]]));
     const engineState = engineRun(events);
 
+    // Explicit edge E1→E2 makes E1's effects visible to E2
+    expect(boundary.stateBeforeByEventId.get('E1')?.entities.wife?.status).toBeUndefined();
+    expect(boundary.stateBeforeByEventId.get('E2')?.entities.wife?.status).toBe('active');
+    // Unrelated nodes remain absent from stateBefore
+    expect(boundary.stateAfterByEventId.get('E1')?.entities.wife?.status).toBe('active');
+    expect(boundary.stateAfterByEventId.get('E2')?.entities.wife?.status).toBe('resolved');
     expect(boundary.finalState.epistemicLedger).toEqual(engineState.epistemicLedger);
     expect(boundary.finalState.propositionCatalog).toEqual(engineState.propositionCatalog);
   });

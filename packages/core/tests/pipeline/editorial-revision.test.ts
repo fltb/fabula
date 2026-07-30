@@ -67,6 +67,7 @@ const SAMPLE_PASS2 = JSON.stringify({
     conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
     ruleChecks: [],
     knowledgeChecks: [],
+    checklistResults: [],
     durationDetected: 'scene',
     frequencyDetected: 'singulative',
     voiceDetected: { level: 'extradiegetic', relation: 'heterodiegetic' },
@@ -132,6 +133,7 @@ function makeContext(): ContextPackage {
     volumeSummary: '',
     markdown: '',
     activeRules: [],
+    narrativeTechniques: [],
   };
 }
 
@@ -140,6 +142,7 @@ function makeJob(overrides?: Partial<RenderJob>): RenderJob {
     event: makeEvent(),
     stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
     context: makeContext(),
+    graphHash: 'a00',
     chapter: 1,
     contract: BASE_CONTRACT,
     surfaceDependency: {

@@ -386,6 +386,15 @@ export interface WithholdingPolicy {
   active: boolean;
 }
 
+/** One authored disclosure action in the mandatory branch ledger. */
+export interface PlannedLedgerEntry {
+  id: string;
+  sceneId: string;
+  branch: string;
+  discoursePosition: DiscoursePosition;
+  action: DisclosureAction;
+}
+
 // ─── PlannedDiscourseLedger (§3) — Canonical truth ──────────────────────────
 
 /**

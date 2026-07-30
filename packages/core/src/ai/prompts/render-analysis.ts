@@ -149,6 +149,7 @@ export function buildAnalysisPrompt(input: RenderAnalysisInput): Message[] {
         })),
         relationshipEffects: input.event.relationshipEffects,
         ruleEffects: input.event.ruleEffects,
+        narrativeTechniques: input.context.narrativeTechniques,
       },
       null,
       2,

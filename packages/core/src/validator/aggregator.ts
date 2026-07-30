@@ -22,6 +22,7 @@ import type {
   PreRenderInput,
   ValidationIssue,
   ValidationResult,
+  ValidationRunOptions,
   Validator,
   WorldState,
 } from '../types/index.js';
@@ -42,6 +43,7 @@ import { FocalizationConsistencyValidator } from './focalization-consistency.js'
 import { ForeshadowingValidator } from './foreshadowing.js';
 import { FrequencyConsistencyValidator } from './frequency-consistency.js';
 import { KnowledgeValidator } from './knowledge.js';
+import { NarrativeTechniqueValidator } from './narrative-technique.js';
 import { PacingValidator } from './pacing.js';
 import { POVValidator } from './pov.js';
 import { PronounValidator } from './pronoun.js';
@@ -113,6 +115,7 @@ export class ResultAggregator {
       new FocalizationConsistencyValidator(),
       new DiscourseValidator(),
       new ChecklistValidator(),
+      new NarrativeTechniqueValidator(),
     ];
     this.pluginValidators = pluginValidators ?? [];
   }
@@ -287,8 +290,9 @@ export class ResultAggregator {
     registry: EntityRegistry,
     events: NarrativeEvent[],
     chapter: number,
-    overrides?: Record<string, 'off' | 'warning' | 'error'>,
+    options: ValidationRunOptions = {},
   ): ValidationResult {
+    const { overrides, story } = options;
     const allIssues: ValidationIssue[] = [];
 
     for (const validator of this.validators) {
@@ -318,6 +322,7 @@ export class ResultAggregator {
           getKnowledge: (_characterId: EntityId) =>
             state.epistemicLedger ?? { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
           getThreadProgress: (threadId: string) => state.threads[threadId] ?? null,
+          story,
         };
         const issues = validator.validatePre(input);
         for (const issue of issues) {
@@ -406,9 +411,9 @@ export class ResultAggregator {
     events: NarrativeEvent[],
     state: WorldState,
     registry: EntityRegistry,
-    overrides?: Record<string, 'off' | 'warning' | 'error'>,
-    stateBeforeByEventId?: Map<string, WorldState>,
+    options: ValidationRunOptions = {},
   ): Map<string, ValidationResult> {
+    const { overrides, stateBeforeByEventId, story } = options;
     const results = new Map<string, ValidationResult>();
 
     for (const event of events) {
@@ -416,7 +421,10 @@ export class ResultAggregator {
 
       const chapter = Math.max(1, Math.ceil(event.narrativeOrder / 3));
       const eventState = stateBeforeByEventId?.get(event.id) ?? state;
-      const result = this.validate(event, eventState, registry, events, chapter, overrides);
+      const result = this.validate(event, eventState, registry, events, chapter, {
+        overrides,
+        story,
+      });
       results.set(event.id, result);
     }
 

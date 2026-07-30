@@ -19,6 +19,7 @@ import { previewEditorialRun, renderNovel } from '../src/api.ts';
 import { ContextCompiler } from '../src/context/compiler.ts';
 import { InMemoryEntityRegistry } from '../src/entity/registry.ts';
 import { compileDiscourseBoundaries } from '../src/state/discourse-context.ts';
+import { compilePlannedDiscourseLedger } from '../src/state/discourse-ledger.ts';
 import { areProjectionsIdentical } from '../src/state/discourse-replay.ts';
 import type { CompiledDiscourseRenderContext } from '../src/state/discourse-context.ts';
 import type { BranchPath } from '../src/types/branch.ts';
@@ -27,6 +28,7 @@ import type {
   NarratorAssertion,
   NarratorProfile,
   PlannedDiscourseLedger,
+  PlannedDiscourseLedgerSource,
   PlannedLedgerEntry,
 } from '../src/types/discourse.ts';
 import type {
@@ -173,21 +175,24 @@ const ASSERTIONS: Record<string, NarratorAssertion> = {
 };
 
 /** Multi-branch ledger: main reveals 'main-secret', alternate reveals 'alt-secret'. */
-const MULTI_BRANCH_LEDGER: PlannedDiscourseLedger = {
+const MULTI_BRANCH_LEDGER: PlannedDiscourseLedger = compilePlannedDiscourseLedger({
   id: 'test-multi',
-  hash: 'hash-multi',
+  chapters: [
+    { branch: 'main', chapter: 1, sceneIds: ['E1'] },
+    { branch: 'alternate', chapter: 1, sceneIds: ['E1'] },
+  ],
   entries: [
     makeLedgerEntry('main-e1', 'reveal', 'main-secret', 'E1', 'main', 0),
-    makeLedgerEntry('alt-e1', 'reveal', 'alt-secret', 'E1', 'alternate', 1),
+    makeLedgerEntry('alt-e1', 'reveal', 'alt-secret', 'E1', 'alternate', 0),
   ],
-};
+});
 
 /** Single-branch ledger (main only). */
-const SINGLE_BRANCH_LEDGER: PlannedDiscourseLedger = {
+const SINGLE_BRANCH_LEDGER: PlannedDiscourseLedger = compilePlannedDiscourseLedger({
   id: 'test-single',
-  hash: 'hash-single',
+  chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
   entries: [makeLedgerEntry('only-e1', 'reveal', 'main-secret', 'E1', 'main', 0)],
-};
+});
 // ═════════════════════════════════════════════════════════════════════════════
 // 1. Compiler-level: branch selection produces correct projection via
 //    compileDiscourseBoundaries preflight + ContextConsumer.
@@ -205,7 +210,7 @@ describe('ContextCompiler strict discourse branch selection', () => {
     expect(ctx).toBeDefined();
     expect(ctx.currentActionIds).toContain('main-e1');
     expect(ctx.cursor).toBe(0);
-    expect(ctx.ledgerHash).toBe('hash-multi');
+    expect(ctx.ledgerHash).toBeTruthy();
     expect(ctx.assertionCatalogHash).toBeTruthy();
 
     const pkg = compiler.compile(event, state, registry, {
@@ -247,11 +252,21 @@ describe('ContextCompiler strict discourse branch selection', () => {
     expect(auth.map((a) => a.assertionId)).toContain('main-secret');
   });
 
-  it('produces empty contexts when ledger is null (no-disclosure mode)', () => {
-    const eventWithCursor = makeEvent({ id: 'E1', discourseCursor: -1, narratorProfileRef: 'test-narrator' });
-    const result = compileDiscourseBoundaries([eventWithCursor], null, {}, {}, 'main');
-    // No ledger means no discourse: compileDiscourseBoundaries returns empty map
-    expect(Object.keys(result)).toHaveLength(0);
+  it('no-action scene derives cursor from scene sequence', () => {
+    const event = makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' });
+    const ledger = compilePlannedDiscourseLedger({
+      id: 'no-action',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
+      entries: [],
+    });
+    const result = compileDiscourseBoundaries([event], ledger, {}, { 'test-narrator': TEST_NARRATOR_PROFILE }, 'main');
+    // Scene in chapters but no ledger entries — cursor derives from scene sequence
+    expect(result['E1']).toBeDefined();
+    expect(result['E1']!.cursor).toBe(-1);
+    expect(result['E1']!.currentActionIds).toEqual([]);
+    // Initial discourse state starts at position 0
+    expect(result['E1']!.stateBefore.position).toBe(0);
+    expect(result['E1']!.stateAfter.position).toBe(0);
   });
 
   it('produces no discourse projection when no compiled discourse context', () => {
@@ -271,11 +286,11 @@ describe('compileDiscourseBoundaries strict preflight', () => {
   
 
   it('rejects reveal referencing unknown assertion', () => {
-    const badLedger: PlannedDiscourseLedger = {
+    const badLedger: PlannedDiscourseLedger = compilePlannedDiscourseLedger({
       id: 'bad-reveal',
-      hash: 'bad-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [makeLedgerEntry('bad-e1', 'reveal', 'nonexistent', 'E1', 'main', 0)],
-    };
+    });
     // Provide a different assertion so the catalog is non-empty
     const existingAssertion: NarratorAssertion = {
       id: 'some-other',
@@ -301,11 +316,11 @@ describe('compileDiscourseBoundaries strict preflight', () => {
       truthBoundary: false,
       narrationBoundary: { narratorId: 'test-narrator' },
     };
-    const badLedger: PlannedDiscourseLedger = {
+    const badLedger: PlannedDiscourseLedger = compilePlannedDiscourseLedger({
       id: 'bad-reveal-type',
-      hash: 'bad-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [makeLedgerEntry('bad-e1', 'reveal', 'non-auth', 'E1', 'main', 0)],
-    };
+    });
     expect(() =>
       compileDiscourseBoundaries([event], badLedger, { 'non-auth': nonAuthAssertion }, {}, 'main'),
     ).toThrow('truthBoundary=false');
@@ -321,20 +336,20 @@ describe('compileDiscourseBoundaries strict preflight', () => {
       truthBoundary: true,
       narrationBoundary: { narratorId: 'test-narrator' },
     };
-    const badLedger: PlannedDiscourseLedger = {
+    const badLedger: PlannedDiscourseLedger = compilePlannedDiscourseLedger({
       id: 'bad-claim',
-      hash: 'bad-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [makeLedgerEntry('bad-e1', 'claim', 'auth-reveal', 'E1', 'main', 0)],
-    };
+    });
     expect(() =>
       compileDiscourseBoundaries([event], badLedger, { 'auth-reveal': authAssertion }, {}, 'main'),
     ).toThrow('authoritative');
   });
 
   it('rejects unknown sceneId in ledger entry', () => {
-    const unknownSceneLedger: PlannedDiscourseLedger = {
+    const unknownSceneLedger: PlannedDiscourseLedger = compilePlannedDiscourseLedger({
       id: 'bad-scene',
-      hash: 'bad-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [
         {
           id: 'unknown-scene',
@@ -344,16 +359,16 @@ describe('compileDiscourseBoundaries strict preflight', () => {
           discoursePosition: 0,
         },
       ],
-    };
+    });
     expect(() =>
       compileDiscourseBoundaries([event], unknownSceneLedger, ASSERTIONS, {}, 'main'),
     ).toThrow('which does not match any event ID');
   });
 
   it('rejects action/entry position mismatch', () => {
-    const mismatchLedger: PlannedDiscourseLedger = {
+    const mismatchLedger: PlannedDiscourseLedger = compilePlannedDiscourseLedger({
       id: 'pos-mismatch',
-      hash: 'mismatch-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [
         {
           id: 'bad-pos',
@@ -363,75 +378,81 @@ describe('compileDiscourseBoundaries strict preflight', () => {
           discoursePosition: 0,
         },
       ],
-    };
+    });
     expect(() =>
       compileDiscourseBoundaries([event], mismatchLedger, ASSERTIONS, {}, 'main'),
     ).toThrow('different from entry.discoursePosition');
   });
 
-  it('rejects event with no ledger actions and no explicit discourseCursor', () => {
+  it('no-action scene derives cursor from scene sequence position', () => {
     const eventNoCursor = makeEvent({ id: 'E2', source: 'event_file' });
     
-    const emptySceneLedger: PlannedDiscourseLedger = {
+    const emptySceneLedger = compilePlannedDiscourseLedger({
       id: 'empty-scene',
-      hash: 'empty-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1', 'E2'] }],
       entries: [
         makeLedgerEntry('e1', 'reveal', 'main-secret', 'E1', 'main', 0),
       ],
-    };
-    expect(() =>
-      compileDiscourseBoundaries([eventNoCursor, makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' })], emptySceneLedger, ASSERTIONS, {}, 'main'),
-    ).toThrow('no ledger entries and no discourseCursor field');
+    });
+    const ctx = compileDiscourseBoundaries([eventNoCursor, makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' })], emptySceneLedger, ASSERTIONS, { 'test-narrator': TEST_NARRATOR_PROFILE }, 'main');
+    // E2 has no ledger entries but is in chapters — cursor derives from previous scene's action
+    expect(ctx['E2']).toBeDefined();
+    expect(ctx['E2']!.cursor).toBe(0);
+    expect(ctx['E2']!.currentActionIds).toEqual([]);
   });
 
-  it('rejects discourseCursor less than -1', () => {
-    const eventBadCursor = makeEvent({ id: 'E2', discourseCursor: -2, source: 'event_file' });
-    const emptySceneLedger: PlannedDiscourseLedger = {
-      id: 'empty-scene',
-      hash: 'empty-hash',
+  it('rejects non-increasing chapter numbers in ledger', () => {
+    const eventBadChapter = makeEvent({ id: 'E2', source: 'event_file' });
+    const badChapterLedger = compilePlannedDiscourseLedger({
+      id: 'bad-chapters',
+      chapters: [
+        { branch: 'main', chapter: 2, sceneIds: ['E1'] },
+        { branch: 'main', chapter: 1, sceneIds: ['E2'] },
+      ],
       entries: [
         makeLedgerEntry('e1', 'reveal', 'main-secret', 'E1', 'main', 0),
       ],
-    };
+    });
     
     expect(() =>
-      compileDiscourseBoundaries([eventBadCursor, makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' })], emptySceneLedger, ASSERTIONS, {}, 'main'),
-    ).toThrow('invalid discourseCursor');
+      compileDiscourseBoundaries([eventBadChapter, makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' })], badChapterLedger, ASSERTIONS, {}, 'main'),
+    ).toThrow('non-increasing chapter');
   });
 
-  it('accepts discourseCursor -1 for scene with no ledger actions', () => {
-    const eventMinusOne = makeEvent({ id: 'E2', discourseCursor: -1, source: 'event_file' });
-    const singleSceneLedger: PlannedDiscourseLedger = {
+  it('no-action scene after entry scene derives cursor from prior action position', () => {
+    const eventMinusOne = makeEvent({ id: 'E2', source: 'event_file' });
+    const singleSceneLedger = compilePlannedDiscourseLedger({
       id: 'single-scene',
-      hash: 'single-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1', 'E2'] }],
       entries: [
         makeLedgerEntry('e1', 'reveal', 'main-secret', 'E1', 'main', 0),
       ],
-    };
+    });
     
     const ctx = compileDiscourseBoundaries([eventMinusOne, makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' })], singleSceneLedger, ASSERTIONS, { 'test-narrator': TEST_NARRATOR_PROFILE }, 'main');
+    // E2 has no entries — cursor derives from E1's action interval end
     expect(ctx['E2']).toBeDefined();
-    expect(ctx['E2']!.cursor).toBe(-1);
+    expect(ctx['E2']!.cursor).toBe(0);
     expect(ctx['E2']!.currentActionIds).toEqual([]);
   });
 
   it('accepts sparse positions across different scenes', () => {
     const e1Event = makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' });
-    const e2Event = makeEvent({ id: 'E2', discourseCursor: 0, source: 'event_file' });
-    const e3Event = makeEvent({ id: 'E3', discourseCursor: 2, source: 'event_file' });
+    const e2Event = makeEvent({ id: 'E2', source: 'event_file' });
+    const e3Event = makeEvent({ id: 'E3', source: 'event_file' });
     
-    const sparseLedger: PlannedDiscourseLedger = {
+    const sparseLedger = compilePlannedDiscourseLedger({
       id: 'sparse',
-      hash: 'sparse-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1', 'E2', 'E3'] }],
       entries: [
         makeLedgerEntry('e1', 'reveal', 'main-secret', 'E1', 'main', 0),
-        makeLedgerEntry('e3', 'reveal', 'alt-secret', 'E3', 'main', 2),
+        makeLedgerEntry('e3', 'reveal', 'alt-secret', 'E3', 'main', 1),
       ],
-    };
+    });
     const ctx = compileDiscourseBoundaries([e1Event, e2Event, e3Event], sparseLedger, ASSERTIONS, { 'test-narrator': TEST_NARRATOR_PROFILE }, 'main');
     // E1 has actions at position 0
-    // E2 has no actions but cursor 0
-    // E3 has actions at position 2
+    // E2 has no actions — cursor from E1's action interval end
+    // E3 has actions at position 1
     expect(Object.keys(ctx)).toHaveLength(3);
     expect(ctx['E1']!.currentActionIds).toEqual(['e1']);
     expect(ctx['E2']!.currentActionIds).toEqual([]);
@@ -441,14 +462,14 @@ describe('compileDiscourseBoundaries strict preflight', () => {
   it('accepts continuous range for single scene with multiple actions', () => {
     const e1Event = makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' });
     
-    const continuousLedger: PlannedDiscourseLedger = {
+    const continuousLedger = compilePlannedDiscourseLedger({
       id: 'continuous',
-      hash: 'cont-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [
         makeLedgerEntry('e1a', 'reveal', 'main-secret', 'E1', 'main', 0),
         makeLedgerEntry('e1b', 'reveal', 'alt-secret', 'E1', 'main', 1),
       ],
-    };
+    });
     const ctx = compileDiscourseBoundaries([e1Event], continuousLedger, ASSERTIONS, { 'test-narrator': TEST_NARRATOR_PROFILE }, 'main');
     expect(ctx['E1']!.currentActionIds).toEqual(['e1a', 'e1b']);
     expect(ctx['E1']!.cursor).toBe(0); // firstPos = 0
@@ -466,14 +487,14 @@ describe('compileDiscourseBoundaries strict preflight', () => {
     };
     const e1Event = makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' });
     
-    const ledger: PlannedDiscourseLedger = {
+    const ledger = compilePlannedDiscourseLedger({
       id: 'retraction-test',
-      hash: 'retract-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [
         makeLedgerEntry('c1', 'claim', 'some-claim', 'E1', 'main', 0),
         makeLedgerEntry('r1', 'retraction', 'some-claim', 'E1', 'main', 1),
       ],
-    };
+    });
     const ctx = compileDiscourseBoundaries([e1Event], ledger, { 'some-claim': claimAssertion }, {}, 'main');
     expect(ctx['E1']!.currentActionIds).toEqual(['c1', 'r1']);
   });
@@ -481,13 +502,13 @@ describe('compileDiscourseBoundaries strict preflight', () => {
   it('rejects retraction without prior active claim or reveal', () => {
     const e1Event = makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' });
     
-    const ledger: PlannedDiscourseLedger = {
+    const ledger = compilePlannedDiscourseLedger({
       id: 'bad-retract',
-      hash: 'bad-retract-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [
         makeLedgerEntry('r1', 'retraction', 'main-secret', 'E1', 'main', 0),
       ],
-    };
+    });
     expect(() =>
       compileDiscourseBoundaries([e1Event], ledger, ASSERTIONS, {}, 'main'),
     ).toThrow('not been revealed or claimed');
@@ -496,9 +517,9 @@ describe('compileDiscourseBoundaries strict preflight', () => {
   it('rejects correction with non-existent new assertion', () => {
     const e1Event = makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' });
     
-    const ledger: PlannedDiscourseLedger = {
+    const ledger = compilePlannedDiscourseLedger({
       id: 'bad-correction',
-      hash: 'bad-corr-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [
         makeLedgerEntry('c1', 'claim', 'test-claim', 'E1', 'main', 0),
         {
@@ -514,7 +535,7 @@ describe('compileDiscourseBoundaries strict preflight', () => {
           discoursePosition: 1,
         },
       ],
-    };
+    });
     expect(() =>
       compileDiscourseBoundaries([e1Event], ledger, ASSERTIONS, {}, 'main'),
     ).toThrow('does not exist in the assertion catalog');
@@ -525,28 +546,28 @@ describe('compileDiscourseBoundaries strict preflight', () => {
     // Duplicate assertion IDs are caught as unknown during preflight
     const e1Event = makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' });
     
-    const dupLedger: PlannedDiscourseLedger = {
+    const dupLedger = compilePlannedDiscourseLedger({
       id: 'dup-assert',
-      hash: 'dup-assert-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [
         makeLedgerEntry('e1a', 'reveal', 'main-secret', 'E1', 'main', 0),
         makeLedgerEntry('e1b', 'reveal', 'main-secret', 'E1', 'main', 1),
       ],
-    };
+    });
     // Both actions reference the same assertion "main-secret" — this is not an error
     const ctx = compileDiscourseBoundaries([e1Event], dupLedger, ASSERTIONS, { 'test-narrator': TEST_NARRATOR_PROFILE }, 'main');
     expect(ctx['E1']).toBeDefined();
   });
 
   it('rejects duplicate discourse positions on same branch', () => {
-    const dupLedger: PlannedDiscourseLedger = {
+    const dupLedger = compilePlannedDiscourseLedger({
       id: 'dup-pos',
-      hash: 'dup-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [
         makeLedgerEntry('e1a', 'reveal', 'main-secret', 'E1', 'main', 0),
         makeLedgerEntry('e1b', 'reveal', 'main-secret', 'E1', 'main', 0),
       ],
-    };
+    });
     expect(() =>
       compileDiscourseBoundaries([event], dupLedger, ASSERTIONS, {}, 'main'),
     ).toThrow('Duplicate discourse position');
@@ -597,7 +618,33 @@ const CHAPTER_YAML = [
   'plannedScenes: 1',
 ].join('\n');
 function makeDiscourseLedgerYaml(entries: string): string {
-  return ['id: test-ledger', 'hash: test-hash', 'entries:', entries].join('\n');
+  return [
+    'id: test-ledger',
+    'chapters:',
+    '  - branch: main',
+    '    chapter: 1',
+    '    sceneIds:',
+    '      - E1',
+    'entries:',
+    entries,
+  ].join('\n');
+}
+
+function makeDiscourseLedgerYamlMultiBranch(entries: string): string {
+  return [
+    'id: test-ledger',
+    'chapters:',
+    '  - branch: main',
+    '    chapter: 1',
+    '    sceneIds:',
+    '      - E1',
+    '  - branch: alternate',
+    '    chapter: 1',
+    '    sceneIds:',
+    '      - E1',
+    'entries:',
+    entries,
+  ].join('\n');
 }
 const MULTI_BRANCH_ENTRIES = [
   '  - id: main-e1',
@@ -614,8 +661,8 @@ const MULTI_BRANCH_ENTRIES = [
   '    action:',
   '      type: reveal',
   '      assertionId: alt-secret',
-  '      discoursePosition: 1',
-  '    discoursePosition: 1',
+  '      discoursePosition: 0',
+  '    discoursePosition: 0',
 ].join('\n');
 const SINGLE_BRANCH_ENTRIES = [
   '  - id: only-e1',
@@ -691,9 +738,9 @@ function makeMinimalBranchPath(): BranchPath {
 }
 
 describe('renderNovel discourse-branch validation', () => {
-  it('succeeds with multi-branch ledger + branchPath + implicit discourseBranch', async () => {
+  it('succeeds with multi-branch ledger + branchPath + explicit discourseBranch', async () => {
     const { projectDir, cleanup } = setupMinimalProject(
-      makeDiscourseLedgerYaml(MULTI_BRANCH_ENTRIES),
+      makeDiscourseLedgerYamlMultiBranch(MULTI_BRANCH_ENTRIES),
     );
     try {
       const result = await previewEditorialRun({
@@ -701,7 +748,7 @@ describe('renderNovel discourse-branch validation', () => {
         projectDir,
         selector: { type: 'all' },
         branchPath: makeMinimalBranchPath(),
-        // discourseBranch omitted — defaults to 'main'
+        discourseBranch: 'main',
       }, {});
 
       // No discourse-branch validation in preview — succeeds with scenes
@@ -712,28 +759,24 @@ describe('renderNovel discourse-branch validation', () => {
     }
   });
 
-  it('succeeds with explicit discourseBranch not found in ledger entries (no validation in preview)', async () => {
+  it('rejects explicit discourseBranch not found in ledger chapters (strict preflight)', async () => {
     const { projectDir, cleanup } = setupMinimalProject(
       makeDiscourseLedgerYaml(SINGLE_BRANCH_ENTRIES),
     );
     try {
-      const result = await previewEditorialRun({
+      await expect(previewEditorialRun({
         version: 1,
         projectDir,
         selector: { type: 'all' },
         discourseBranch: 'nonexistent',
-      }, {});
-
-      // Preview pipeline doesn't validate discourse branch against ledger entries
-      expect(result.errors).toHaveLength(0);
-      expect(result.scenes.length).toBeGreaterThanOrEqual(1);
+      }, {})).rejects.toThrow();
     } finally {
       cleanup();
     }
   });
 
-  it('succeeds with explicit discourseBranch when no ledger exists (no validation in preview)', async () => {
-    // Project without definitions/discourse-ledger.yaml — no ledger YAML written
+  it('rejects explicit discourseBranch when no ledger exists (strict preflight)', async () => {
+    // Project without definitions/discourse-ledger.yaml — must fail preflight
     const projectDir = fs.mkdtempSync(path.join(tmpdir(), 'discourse-branch-test-'));
     const defsDir = path.join(projectDir, 'definitions');
     const chaptersDir = path.join(projectDir, 'chapters', 'chapter_1');
@@ -745,16 +788,12 @@ describe('renderNovel discourse-branch validation', () => {
     fs.writeFileSync(path.join(chaptersDir, 'E1.yaml'), EVENT_YAML);
 
     try {
-      const result = await previewEditorialRun({
+      await expect(previewEditorialRun({
         version: 1,
         projectDir,
         selector: { type: 'all' },
         discourseBranch: 'main',
-      }, {});
-
-      // Preview pipeline doesn't validate discourse branch against ledger existence
-      expect(result.errors).toHaveLength(0);
-      expect(result.scenes.length).toBeGreaterThanOrEqual(1);
+      }, {})).rejects.toThrow();
     } finally {
       fs.rmSync(projectDir, { recursive: true, force: true });
     }
@@ -821,11 +860,11 @@ describe('shared post-merge projection identity', () => {
     const event = makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' });
 
     // Use a ledger with a claim action so proposition text appears in accessibleClaims
-    const claimLibLedger: PlannedDiscourseLedger = {
+    const claimLibLedger = compilePlannedDiscourseLedger({
       id: 'claim-lib',
-      hash: 'claim-lib-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
       entries: [makeLedgerEntry('c1', 'claim', 'test-claim', 'E1', 'main', 0)],
-    };
+    });
 
     // Different proposition text for the same assertion
     const assertionsA: Record<string, NarratorAssertion> = {
@@ -869,21 +908,20 @@ describe('shared post-merge projection identity', () => {
     // stateAfter has the scene's reveals applied
   });
 
-  it('projection stateBefore equal to stateAfter for -1 cursor scenes', () => {
-    const eventWithMinusOne = makeEvent({ id: 'E2', discourseCursor: -1, source: 'event_file' });
-    const ledger: PlannedDiscourseLedger = {
+  it('projection stateBefore equal to stateAfter for no-action scenes', () => {
+    const eventNoAction = makeEvent({ id: 'E2', source: 'event_file' });
+    const ledger = compilePlannedDiscourseLedger({
       id: 'other-scene',
-      hash: 'other-hash',
+      chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1', 'E2'] }],
       entries: [
         makeLedgerEntry('e1', 'reveal', 'main-secret', 'E1', 'main', 0),
       ],
-    };
+    });
     
-    const ctx = compileDiscourseBoundaries([eventWithMinusOne, makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' })], ledger, ASSERTIONS, { 'test-narrator': TEST_NARRATOR_PROFILE }, 'main');
+    const ctx = compileDiscourseBoundaries([eventNoAction, makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' })], ledger, ASSERTIONS, { 'test-narrator': TEST_NARRATOR_PROFILE }, 'main');
 
     const compiled = ctx['E2']!;
-    // For -1 cursor, stateBefore === stateAfter (no actions applied)
-    expect(compiled.cursor).toBe(-1);
+    // E2 has no actions — stateBefore === stateAfter (no actions applied)
     expect(compiled.stateBefore.position).toBe(compiled.stateAfter.position);
   });
 });

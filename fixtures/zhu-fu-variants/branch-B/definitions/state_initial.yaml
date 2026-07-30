@@ -4,25 +4,25 @@ info:
 
 timeAnchors:
   - id: new_year_eve
-    day: 0
+    at: day_0
     description: "除夕 — 叙述者'我'在鲁镇过年。在分支B中，祥林嫂远在贺家坳，不在鲁镇——'我'不会在河边遇见她。祝福仪式照常举行，但没有人会在除夕冻死街头。"
   - id: winter_five_years_ago
-    day: -1825
+    at: day_-1825
     description: "初冬 — 祥林嫂第一次到鲁四老爷家做帮工，由卫老婆子介绍。约五年前。"
   - id: spring_after_escape
-    day: -1700
+    at: day_-1700
     description: "开春 — 祥林嫂在河边淘米时被婆婆带人绑架，卖到贺家坳嫁给贺老六。"
   - id: first_winter_hejiaao
-    day: -1550
+    at: day_-1550
     description: "冬 — 祥林嫂在贺家坳生下阿毛，母子平安。按卫老婆子说法，她'交了好运'。"
   - id: spring_he_laoliu_recovery
-    day: -1000
+    at: day_-1000
     description: "春末 — 分支B：贺老六伤寒严重但最终康复，祥林嫂日夜照顾他活了过来。阿毛安然无恙——没有遇到狼。大伯未能收房。祥林嫂第一次被命运放过。"
   - id: branch_b_quiet_years
-    day: -600
+    at: day_-600
     description: "数年后 — 分支B的平静岁月：阿毛长成少年，祥林嫂又生一女（春丫头）。一家人在贺家坳过着贫困但完整的生活。祥林嫂没有再回鲁镇，没有遭遇柳妈的地狱恐吓，没有捐门槛。"
   - id: branch_b_old_age
-    day: -100
+    at: day_-100
     description: "晚年 — 分支B：贺老六在多年前已老死家中。祥林嫂也已年迈，在自家床上安详离世，儿孙绕膝。她活到了一个底层妇女能活到的岁数。"
 
 threads:

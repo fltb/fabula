@@ -55,6 +55,19 @@ function seedProject(storage: MemoryStorage): void {
     `${PROJECT}/chapters/chapter_01/E001.yaml`,
     'event: E001\nformatVersion: 1\nnarrativeOrder: 1\ntitle: "Opening"\nstoryTime: "day 1"\nsceneBrief: "Alice begins."\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n',
   );
+  // discourse-ledger.yaml (mandatory reader-order source)
+  storage.write(
+    `${PROJECT}/definitions/discourse-ledger.yaml`,
+    [
+      'id: workspace-ledger',
+      'chapters:',
+      '  - branch: main',
+      '    chapter: 1',
+      '    sceneIds:',
+      '      - E001',
+      'entries: []',
+    ].join('\n'),
+  );
 }
 
 function projectHash(documents: readonly SourceDocumentV1[]): string {
@@ -125,6 +138,7 @@ function seedAcceptedScene(storage: MemoryStorage): SceneRevisionEnvelopeV1 {
         conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
         ruleChecks: [],
         knowledgeChecks: [],
+        checklistResults: [],
       },
     },
     validation: { passed: true, errors: [], warnings: [], infos: [] },

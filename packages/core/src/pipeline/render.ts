@@ -85,6 +85,12 @@ export interface RenderJob {
   };
 
   /**
+   * Canonical graph hash from sha256Canonical({story, discourse}).
+   * Produced by compiled narrative graphs for identity caching.
+   */
+  graphHash: string;
+
+  /**
    * Canonical source-content hash computed from sorted event file paths +
    * definition bytes under project-relative paths, and branch/discourse scope.
    * Injected by API before RenderPipeline cache use.
@@ -322,7 +328,7 @@ export class RenderPipeline {
         ? sha256Canonical(job.logicalDisclosureSummary)
         : undefined,
       catalogVersionHashes: { default: job.contract.catalogHash ?? '' },
-      graphHash: '',
+      graphHash: job.graphHash,
       styleProfileHash: sha256Canonical(job.contract.styleProfile),
       promptProviderId: this.model,
       promptProviderVersion: this.model,

@@ -10,6 +10,7 @@ import type {
   GraphProviderOutput,
   GraphReadResolution,
   OutputDescriptor,
+  ReadPhase,
   ReadRequirement,
   StoryGraph,
 } from '../types/graph.js';
@@ -25,9 +26,9 @@ import {
   EdgeOriginCycleError,
   EllipsisSummaryError,
   FutureTimeError,
-  type GraphCompileError,
-  IncomparableTimeError,
+  GraphCompileError,
   InitialRootMisuseError,
+  InvalidSameCoordinateOrderError,
   MergeInputError,
   MissingOutputError,
   NoOutputEdgeError,
@@ -38,14 +39,26 @@ import {
   StaleProviderSelectionError,
   UnknownPredecessorError,
   UnknownReadIdError,
-  UnorderedSameTimeConflictError,
+  UnorderedStoryConflictError,
 } from '../types/graph.js';
+import { DagCycleError, DagProviderError } from '../errors.js';
+import type { SceneStoryCoordinate, StoryCoordinate } from '../types/index.js';
+import { compareStoryCoordinates } from '../entity/timestamp.js';
+import { sha256Canonical } from '../cache/render-cache.js';
+import {
+  type AdjacencyList,
+  type StoryOrderIndex,
+  buildStoryOrderIndex,
+  isProvenBefore,
+} from './dag.js';
 // Novalistically — Graph Compiler (GRAPH-1)
 // Compiled graph layer over deterministic replay effects.
 // FIXED compiler order (§23):
 // 1. normalize outputs → 2. reads → 3. filter branch → 4. resolve declarations
-// → 5. validate coordinate/order → 6. infer providers/absence
-// → 7. commutativity → 8. branch/closure/cycle validation → 9. hash/replay
+// → 5. validate coordinate/order → 6. derive temporal edges
+// → 7. pre-provider StoryOrderIndex → 8. infer providers/absence
+// → 9. rebuild final StoryOrderIndex → 10. commutativity
+// → 11. branch/closure/cycle validation → 12. hash/replay
 // ============================================================================
 
 // ============================================================================
@@ -106,6 +119,8 @@ interface CompileState {
   storyGraphs: StoryGraph[];
   discourseGraphs: DiscourseGraph[];
   cache: GraphCacheEntry[];
+  /** Final StoryOrderIndex after provider edges, used for commutativity. */
+  finalOrder?: StoryOrderIndex;
 }
 function emptyState(nodes: CompileNode[]): CompileState {
   return {
@@ -121,15 +136,6 @@ function emptyState(nodes: CompileNode[]): CompileState {
   };
 }
 
-function simpleHash(input: string): string {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    const char = input.charCodeAt(i);
-    hash = ((hash << 5) - hash + char) | 0;
-  }
-  return `h${Math.abs(hash).toString(16).padStart(8, '0')}`;
-}
-
 // ============================================================================
 // Stage 1: Normalize outputs
 // ============================================================================
@@ -143,7 +149,7 @@ function normalizeOutputs(state: CompileState, nodes: CompileNode[]): void {
         value: effect.isUnset ? { type: 'unset' } : { type: 'set', data: effect.value },
         branchScope: node.branchScope,
         effectiveCoordinate: node.coordinate,
-        provenanceHash: simpleHash(
+        provenanceHash: sha256Canonical(
           `${effect.effectId}:${effect.canonicalKey}:${JSON.stringify(effect.value)}:${node.branchScope}`,
         ),
       };
@@ -185,12 +191,27 @@ function filterBranch(
   branchFilter?: string,
 ): CompileNode[] {
   if (!branchFilter) return nodes;
-  return nodes.filter((n) => {
+  const selected = nodes.filter((n) => {
     if (n.branchScope === branchFilter) return true;
     // Branch scope MUST be subset of predecessor/dependent applicability (§21)
     // initialState carries empty branchScope — include it
     return n.branchScope === '' && n.isInitialRoot;
   });
+
+  // Shrink compile state so excluded branches cannot affect resolutions/hashes
+  const selectedIds = new Set(selected.map((n) => n.id));
+  const selectedOutputIds = new Set<string>();
+  const selectedReadIds = new Set<string>();
+  for (const node of selected) {
+    for (const eff of node.effects) selectedOutputIds.add(eff.effectId);
+    for (const req of node.requirements) selectedReadIds.add(req.requirementId);
+  }
+
+  state.nodeById = new Map(selected.map((n) => [n.id, n]));
+  state.outputs = state.outputs.filter((o) => selectedOutputIds.has(o.outputId));
+  state.reads = state.reads.filter((r) => selectedReadIds.has(r.readId));
+
+  return selected;
 }
 
 // ============================================================================
@@ -243,30 +264,37 @@ function resolveDeclarations(state: CompileState, nodes: CompileNode[]): void {
 // Stage 5: Validate coordinate/order (§16–17)
 // ============================================================================
 
+/**
+ * Compare two effective coordinates.
+ * For storyTime coordinates, delegates to compareStoryCoordinates (resolved
+ * coordinate model). For discoursePosition, uses numeric comparison.
+ * Returns -1 if a < b, 0 if equal, 1 if a > b, null if incomparable.
+ */
 function compareCoordinates(a: EffectiveCoordinate, b: EffectiveCoordinate): number | null {
-  if (a.type !== b.type) return null; // cross-clock — incomparable
-
-  if (a.type === 'storyTime' && b.type === 'storyTime') {
-    // Simple string comparison of storyTime values
-    if (a.value < b.value) return -1;
-    if (a.value > b.value) return 1;
-    return 0;
-  }
-
   if (a.type === 'discoursePosition' && b.type === 'discoursePosition') {
     if (a.value < b.value) return -1;
     if (a.value > b.value) return 1;
     return 0;
   }
 
-  return null;
+  if (a.type === 'storyTime' && b.type === 'storyTime') {
+    const order = compareStoryCoordinates(a, b);
+    switch (order) {
+      case 'before': return -1;
+      case 'equal': return 0;
+      case 'after': return 1;
+      case 'incomparable': return null;
+    }
+  }
+
+  return null; // cross-domain
 }
 
 function validateCoordinateOrder(state: CompileState, nodes: CompileNode[]): void {
+  // Check duplicate discourse position (§16)
   const discoursePositions = new Map<number, string>();
 
   for (const node of nodes) {
-    // Check duplicate discourse position (§16)
     if (node.coordinate.type === 'discoursePosition') {
       const existing = discoursePositions.get(node.coordinate.value);
       if (existing) {
@@ -279,87 +307,326 @@ function validateCoordinateOrder(state: CompileState, nodes: CompileNode[]): voi
     }
   }
 
-  // Validate edges for coordinate ordering
+  // Validate every explicit edge for coordinate ordering
   for (const edge of state.edges) {
     const preNode = state.nodeById.get(edge.predecessor);
     const depNode = state.nodeById.get(edge.dependent);
     if (!preNode || !depNode) continue;
 
-    // Cross-clock edges fail (§2, §16)
+    // Cross-domain edges (story ↔ discourse) are always invalid
     if (preNode.coordinate.type !== depNode.coordinate.type) {
       state.errors.push(new CrossClockEdgeError(edge.predecessor, edge.dependent));
       continue;
     }
 
-    const cmp = compareCoordinates(preNode.coordinate, depNode.coordinate);
+    if (preNode.coordinate.type === 'storyTime' && depNode.coordinate.type === 'storyTime') {
+      const preCoord = preNode.coordinate;
+      const depCoord = depNode.coordinate;
+      const order = compareStoryCoordinates(preCoord, depCoord);
 
-    // Future time (§16)
-    if (cmp !== null && cmp > 0) {
-      state.errors.push(
-        new FutureTimeError(depNode.coordinate, edge.dependent, preNode.coordinate),
-      );
-      continue;
+      // same_coordinate_order: only valid for equal point coordinates
+      if (edge.edgeClass === 'same_coordinate_order') {
+        if (order !== 'equal' || preCoord.kind === 'initial') {
+          state.errors.push(
+            new InvalidSameCoordinateOrderError(
+              edge.predecessor,
+              edge.dependent,
+              {
+                code: 'INVALID_SAME_COORDINATE_ORDER',
+                nodeId: edge.dependent,
+                detail: `predecessor coordinate: ${JSON.stringify(preCoord)}, dependent coordinate: ${JSON.stringify(depCoord)}`,
+              },
+            ),
+          );
+        }
+        continue;
+      }
+
+      // For author_origin, internal, and provider edges:
+      // - cross-clock (incomparable) is allowed — provides causal DAG for unlocated scenes
+      // - unlocated vs anything is 'incomparable' — allowed
+      // - equal coordinates are allowed
+      // - only same-clock point predecessors that are strictly later than dependent fail
+      if (order === 'incomparable') continue;
+      if (order === 'equal') continue;
+      if (order === 'after') {
+        state.errors.push(new FutureTimeError(depCoord, edge.dependent, preCoord));
+        continue;
+      }
+      // order === 'before' — correct direction, OK
     }
 
-    // Incomparable time (§16)
-    if (cmp === null) {
-      state.errors.push(
-        new IncomparableTimeError(edge.dependent, preNode.coordinate, depNode.coordinate),
-      );
-      continue;
-    }
-
-    // Same coordinate requires order edge or commutativity
-    if (cmp === 0 && edge.edgeClass !== 'same_coordinate_order') {
-      // This will be checked in commutativity stage — flag if no ordering edge
+    if (
+      preNode.coordinate.type === 'discoursePosition' &&
+      depNode.coordinate.type === 'discoursePosition'
+    ) {
+      if (preNode.coordinate.value > depNode.coordinate.value) {
+        state.errors.push(
+          new FutureTimeError(depNode.coordinate, edge.dependent, preNode.coordinate),
+        );
+      }
     }
   }
 }
 
 // ============================================================================
-// Stage 6: Infer providers/absence (§12–14)
+// Stage 6: Derive temporal internal edges
 // ============================================================================
 
-/** Select the MAXIMAL write for a given canonicalKey and branch scope. */
+/**
+ * Add derived internal edges between adjacent same-clock scalar buckets.
+ * Only storyTime point coordinates generate temporal edges; unlocated,
+ * initial, and discourse nodes are excluded. Bipartite edges connect every
+ * node in bucket N to every node in bucket N+1 of the same clock, using
+ * causalGroupId = "temporal:<clock>:<fromScalar>:<toScalar>".
+ * Transitivity guarantees that any earlier point reaches any later one.
+ */
+function deriveTemporalEdges(state: CompileState, nodes: CompileNode[]): void {
+  const storyNodes = nodes.filter(
+    (n): n is CompileNode & { coordinate: StoryCoordinate } =>
+      n.coordinate.type === 'storyTime',
+  );
+
+  // Group point nodes by clock
+  const byClock = new Map<string, { nodeId: string; scalar: number }[]>();
+  for (const node of storyNodes) {
+    if (node.coordinate.kind !== 'point') continue;
+    const entries = byClock.get(node.coordinate.clock);
+    if (entries) {
+      entries.push({ nodeId: node.id, scalar: node.coordinate.scalar });
+    } else {
+      byClock.set(node.coordinate.clock, [
+        { nodeId: node.id, scalar: node.coordinate.scalar },
+      ]);
+    }
+  }
+
+  // Build equal-scalar buckets and add bipartite edges between adjacent buckets
+  for (const [clock, entries] of byClock) {
+    entries.sort((a, b) => a.scalar - b.scalar);
+
+    // Group into equal-scalar buckets
+    const buckets: { scalar: number; nodeIds: string[] }[] = [];
+    for (const entry of entries) {
+      const last = buckets[buckets.length - 1];
+      if (last && last.scalar === entry.scalar) {
+        last.nodeIds.push(entry.nodeId);
+      } else {
+        buckets.push({ scalar: entry.scalar, nodeIds: [entry.nodeId] });
+      }
+    }
+
+    // Add complete bipartite edges between adjacent buckets
+    for (let i = 0; i < buckets.length - 1; i++) {
+      const fromBucket = buckets[i];
+      const toBucket = buckets[i + 1];
+      const causalGroupId = `temporal:${clock}:${fromBucket.scalar}:${toBucket.scalar}`;
+      for (const fromId of fromBucket.nodeIds) {
+        for (const toId of toBucket.nodeIds) {
+          state.edges.push({
+            predecessor: fromId,
+            dependent: toId,
+            edgeClass: 'internal',
+            causalGroupId,
+          });
+        }
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Internal: build StoryOrderIndex from current edges
+// ============================================================================
+
+/**
+ * Build a StoryOrderIndex from the current edge set and selected nodes.
+ * Validates that every edge endpoint is a known node; unknown endpoints
+ * surface DagProviderError through the shared ordering path instead of
+ * being silently dropped.
+ */
+function buildOrderFromEdges(
+  state: CompileState,
+  nodes: CompileNode[],
+  initialRootId: string | null,
+): StoryOrderIndex {
+  const ordinaryNodes = nodes.filter((node) => node.id !== initialRootId);
+  const nodeIds = ordinaryNodes.map((node) => node.id);
+  const nodeIdSet = new Set(nodeIds);
+  if (initialRootId !== null) nodeIdSet.add(initialRootId);
+
+  // First pass: validate every edge endpoint against the known node set.
+  // Empty-string endpoints are no-op markers ("no predecessor") and are
+  // silently skipped — they do not create real edges.
+  for (const edge of state.edges) {
+    if (edge.predecessor !== '' && !nodeIdSet.has(edge.predecessor)) {
+      state.errors.push(
+        new UnknownPredecessorError(
+          edge.dependent,
+          edge.predecessor,
+          { detail: `unknown predecessor '${edge.predecessor}' referenced by edge in story graph` },
+        ),
+      );
+    }
+    if (edge.dependent !== '' && !nodeIdSet.has(edge.dependent)) {
+      state.errors.push(
+        new UnknownPredecessorError(
+          edge.predecessor,
+          edge.dependent,
+          { detail: `unknown dependent '${edge.dependent}' referenced by edge in story graph` },
+        ),
+      );
+    }
+  }
+
+  // Build adjacency — only include edges between known non-empty nodes
+  const adj = new Map<string, string[]>();
+  for (const id of nodeIdSet) adj.set(id, []);
+
+  for (const edge of state.edges) {
+    if (edge.predecessor !== '' && edge.dependent !== '' &&
+        nodeIdSet.has(edge.predecessor) && nodeIdSet.has(edge.dependent)) {
+      adj.get(edge.predecessor)!.push(edge.dependent);
+    }
+  }
+
+  // Build coordinate map for story nodes only
+  const coordinatesByEventId = new Map<string, SceneStoryCoordinate>();
+  for (const node of ordinaryNodes) {
+    if (node.coordinate.type === 'storyTime' && node.coordinate.kind !== 'initial') {
+      coordinatesByEventId.set(node.id, node.coordinate);
+    }
+  }
+
+  try {
+    return buildStoryOrderIndex(initialRootId, nodeIds, adj, coordinatesByEventId);
+  } catch (e: unknown) {
+    if (e instanceof DagCycleError) {
+      const cycle = e.context?.cycle as string[] | undefined;
+      state.errors.push(new EdgeOriginCycleError(cycle ?? [], { detail: e.message }));
+    } else if (e instanceof DagProviderError) {
+      const eventId = (e.context?.eventId as string | undefined) ?? 'unknown';
+      state.errors.push(new UnknownPredecessorError(eventId, eventId, { detail: e.message }));
+    } else {
+      throw e;
+    }
+    // Return fallback empty order so compilation can continue gathering errors
+    return {
+      initialRootId,
+      topologicalOrder: [],
+      ancestorsByEventId: new Map(),
+    };
+  }
+}
+
+// ============================================================================
+// Stage 7 (was 6): Infer providers/absence (§12–14)
+// ============================================================================
+
+/**
+ * Select the MAXIMAL write for a given canonicalKey, branchScope, and read
+ * timing rules. Uses the pre-provider StoryOrderIndex and isProvenBefore for
+ * visibility: only outputs whose owning node is proven-before (or is the same
+ * as) the consumer are eligible. Among eligible outputs, the maximal one
+ * (no other eligible output's node is proven-before it) is returned.
+ * Returns null when no eligible output exists, or when multiple incomparable
+ * maximal candidates are found (caller emits DuplicateBranchProviderError).
+ */
 function findMaximalProvider(
   canonicalKey: string,
   branchScope: string,
   outputs: OutputDescriptor[],
-  readCoordinate?: EffectiveCoordinate,
+  owningNode: CompileNode,
+  readPhase: ReadPhase,
+  outputToNode: ReadonlyMap<string, CompileNode>,
+  preProviderOrder: StoryOrderIndex,
 ): OutputDescriptor | null {
-  const compatible = outputs.filter((o) => {
+  // Filter compatible outputs by key and branch
+  const candidates = outputs.filter((o) => {
     if (o.canonicalKey !== canonicalKey) return false;
-    // Branch compatibility: branch scope must be compatible
     if (o.branchScope !== branchScope && o.branchScope !== '') return false;
-    // Coordinate must be earlier-or-same-and-ordered
-    if (readCoordinate) {
-      const cmp = compareCoordinates(o.effectiveCoordinate, readCoordinate);
-      if (cmp === null || cmp > 0) return false;
-    }
     return true;
   });
 
-  if (compatible.length === 0) return null;
+  if (candidates.length === 0) return null;
 
-  // Select MAXIMAL (latest) by coordinate
-  compatible.sort((a, b) => {
-    const cmp = compareCoordinates(a.effectiveCoordinate, b.effectiveCoordinate);
-    if (cmp !== null && cmp !== 0) return cmp;
-    // Same coordinate — by output insertion order (last wins)
-    return outputs.indexOf(a) - outputs.indexOf(b);
+  // Filter by visibility via pre-provider order
+  const visible = candidates.filter((o) => {
+    const outputNode = outputToNode.get(o.outputId);
+    if (!outputNode) return false;
+    // stateAfter: own output is visible without needing an edge
+    if (readPhase === 'stateAfter' && outputNode.id === owningNode.id) return true;
+    // All other cases: requires isProvenBefore
+    return isProvenBefore(outputNode.id, owningNode.id, preProviderOrder);
   });
 
-  return compatible[compatible.length - 1];
+  if (visible.length === 0) return null;
+
+  // Find maximal candidates (no other visible candidate is proven-before this one)
+  // Since isProvenBefore is a strict partial order, at least one maximal exists
+  // when visible is non-empty.
+  const maximal: OutputDescriptor[] = [];
+  for (const candidate of visible) {
+    const candidateNode = outputToNode.get(candidate.outputId)!;
+    let dominated = false;
+    for (const other of visible) {
+      if (other === candidate) continue;
+      const otherNode = outputToNode.get(other.outputId)!;
+      // Candidate is dominated if it is proven-before (earlier than) another
+      // visible candidate — the later (maximal) provider should win.
+      if (isProvenBefore(candidateNode.id, otherNode.id, preProviderOrder)) {
+        dominated = true;
+        break;
+      }
+    }
+    if (!dominated) maximal.push(candidate);
+  }
+
+  if (maximal.length === 0) return null; // should not happen
+  if (maximal.length > 1) return null; // incomparable maximal candidates → ambiguity
+
+  return maximal[0];
 }
 
 function inferProviders(state: CompileState, nodes: CompileNode[]): void {
+  // Build output → owning node and read → owning node maps
+  const outputToNode = new Map<string, CompileNode>();
+  const readToNode = new Map<string, CompileNode>();
+  for (const node of nodes) {
+    for (const eff of node.effects) outputToNode.set(eff.effectId, node);
+    for (const req of node.requirements) readToNode.set(req.requirementId, node);
+  }
+
+  // Build pre-provider StoryOrderIndex from authored + derived temporal edges
+  // This excludes provider edges, preventing self-bootstrapping.
+  // Extract the initial root node ID so that isProvenBefore works correctly
+  // for initial state visibility.
+  const initialRootNode = nodes.find((n) => n.isInitialRoot);
+  const initialRootId = initialRootNode?.id ?? null;
+  const preProviderOrder = buildOrderFromEdges(state, nodes, initialRootId);
+
   for (const read of state.reads) {
     const resolutionKey = `${read.readId}:${read.branchScope}`;
 
     // Check if already resolved via explicit provider_selection
     if (state.resolutions.has(resolutionKey)) continue;
 
-    const provider = findMaximalProvider(read.canonicalKey, read.branchScope, state.outputs);
+    // Identify the owning CompileNode for this read
+    const owningNode = readToNode.get(read.readId);
+    if (!owningNode) {
+      state.errors.push(new UnknownReadIdError(read.readId));
+      continue;
+    }
+
+    const provider = findMaximalProvider(
+      read.canonicalKey,
+      read.branchScope,
+      state.outputs,
+      owningNode,
+      read.phase,
+      outputToNode,
+      preProviderOrder,
+    );
 
     if (provider) {
       // Verify output satisfies read predicate (§12)
@@ -394,92 +661,111 @@ function inferProviders(state: CompileState, nodes: CompileNode[]): void {
       };
       state.resolutions.set(resolutionKey, resolved);
 
-      // Record provider edge
-      const outputNode = nodes.find((n) =>
-        state.outputs.some(
-          (o) =>
-            o.outputId === provider.outputId &&
-            n.effects.some((e) => e.effectId === provider.outputId),
-        ),
-      );
-      if (outputNode) {
+      // Record provider edge: provider node → reader node.
+      // Skip self-edge when owning node reads its own stateAfter output.
+      const providerNode = outputToNode.get(provider.outputId);
+      if (providerNode && providerNode.id !== owningNode.id) {
         state.edges.push({
-          predecessor: outputNode.id,
-          dependent: read.readId,
+          predecessor: providerNode.id,
+          dependent: owningNode.id,
           edgeClass: 'provider',
         });
       }
     } else {
-      // AbsenceWitness — no matching write (§12, §21)
-      const witness: GraphAbsenceWitness = {
-        type: 'absence',
-        readId: read.readId,
-        canonicalKey: read.canonicalKey,
-        reason: `No compatible write for "${read.canonicalKey}" in branch "${read.branchScope}"`,
-      };
-      state.resolutions.set(resolutionKey, witness);
+      // Distinguish provider ambiguity from genuine absence.
+      // Ambiguity: compatible outputs exist at incomparable maximal candidates
+      // — findMaximalProvider returns null when maximal.length > 1.
+      const hasCompatibleOutput = state.outputs.some((o) => {
+        if (o.canonicalKey !== read.canonicalKey) return false;
+        if (o.branchScope !== read.branchScope && o.branchScope !== '') return false;
+        const outputNode = outputToNode.get(o.outputId);
+        if (!outputNode) return false;
+        if (read.phase === 'stateAfter' && outputNode.id === owningNode.id) return true;
+        return isProvenBefore(outputNode.id, owningNode.id, preProviderOrder);
+      });
+
+      if (hasCompatibleOutput) {
+        // Genuine provider ambiguity at the maximal position
+        state.errors.push(
+          new DuplicateBranchProviderError(
+            read.readId,
+            read.branchScope,
+            `coordinate ${JSON.stringify(owningNode.coordinate)}`,
+            `multiple incomparable maximal providers for "${read.canonicalKey}"`,
+          ),
+        );
+      } else {
+        // AbsenceWitness — no matching write (§12, §21)
+        const witness: GraphAbsenceWitness = {
+          type: 'absence',
+          readId: read.readId,
+          canonicalKey: read.canonicalKey,
+          reason: `No compatible write for "${read.canonicalKey}" in branch "${read.branchScope}"`,
+        };
+        state.resolutions.set(resolutionKey, witness);
+      }
     }
   }
+
+  // Rebuild final StoryOrderIndex including provider edges
+  state.finalOrder = buildOrderFromEdges(state, nodes, initialRootId);
 }
 
 // ============================================================================
-// Stage 7: Commutativity (§17)
+// Stage 10 (was 7): Commutativity (§17)
 // ============================================================================
 
+/**
+ * Validate commutativity using the final StoryOrderIndex.
+ * Every unordered node pair (neither is proven-before the other) with
+ * overlapping read/write effect keys is a conflict.
+ *
+ * Required external type: UnorderedStoryConflictError (code UNORDERED_STORY_CONFLICT).
+ * Currently uses GraphCompileError with the target code.
+ */
 function validateCommutativity(state: CompileState, nodes: CompileNode[]): void {
-  // Group nodes by same coordinate
-  const groups = new Map<string, CompileNode[]>();
+  const order = state.finalOrder;
+  if (!order) return; // no story nodes in this compilation
 
-  for (const node of nodes) {
-    const key = JSON.stringify(node.coordinate);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push(node);
-  }
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i];
+      const b = nodes[j];
 
-  for (const [, group] of groups) {
-    if (group.length <= 1) continue;
+      // Check if ordered in the final order (either direction)
+      if (isProvenBefore(a.id, b.id, order)) continue;
+      if (isProvenBefore(b.id, a.id, order)) continue;
 
-    // Check that same-coordinate nodes are ordered OR commutative
-    const ordered = new Set<string>();
-    for (const edge of state.edges) {
-      if (edge.edgeClass === 'same_coordinate_order') {
-        ordered.add(`${edge.predecessor}:${edge.dependent}`);
-      }
-    }
+      // Unordered pair — check overlapping effect keys
+      const aWriteKeys = new Set(a.effects.map((e) => e.canonicalKey));
+      const bWriteKeys = new Set(b.effects.map((e) => e.canonicalKey));
+      const aReadKeys = new Set(a.requirements.map((r) => r.canonicalKey));
+      const bReadKeys = new Set(b.requirements.map((r) => r.canonicalKey));
 
-    for (let i = 0; i < group.length; i++) {
-      for (let j = i + 1; j < group.length; j++) {
-        const a = group[i];
-        const b = group[j];
+      // Conflict if one writes what the other reads or writes
+      const overlap =
+        [...aWriteKeys].some((k) => bWriteKeys.has(k) || bReadKeys.has(k)) ||
+        [...bWriteKeys].some((k) => aReadKeys.has(k));
 
-        // Check if explicitly ordered in either direction
-        const aBeforeB = ordered.has(`${a.id}:${b.id}`);
-        const bBeforeA = ordered.has(`${b.id}:${a.id}`);
-
-        if (aBeforeB || bBeforeA) continue; // explicitly ordered — OK
-
-        // Check for commutativity: non-overlapping read/write sets
-        const aKeys = new Set(a.effects.map((e) => e.canonicalKey));
-        const bKeys = new Set(b.effects.map((e) => e.canonicalKey));
-
-        const aReadKeys = new Set(a.requirements.map((r) => r.canonicalKey));
-        const bReadKeys = new Set(b.requirements.map((r) => r.canonicalKey));
-
-        // Conflict if one writes what the other reads or writes
-        const overlap =
-          [...aKeys].some((k) => bKeys.has(k) || bReadKeys.has(k)) ||
-          [...bKeys].some((k) => aReadKeys.has(k));
-
-        if (overlap) {
-          state.errors.push(new UnorderedSameTimeConflictError(a.id, a.coordinate, b.id));
-        }
+      if (overlap) {
+        state.errors.push(
+          new UnorderedStoryConflictError(
+            a.id,
+            a.coordinate,
+            b.id,
+            {
+              code: 'UNORDERED_STORY_CONFLICT',
+              detail: `overlapping read/write keys at ${JSON.stringify(a.coordinate)} / ${JSON.stringify(b.coordinate)}`,
+            },
+          ),
+        );
       }
     }
   }
 }
 
 // ============================================================================
-// Stage 8: Branch/closure/cycle validation (§20–21)
+// Stage 11 (was 8): Branch/closure/cycle validation (§20–21)
 // ============================================================================
 
 function validateBranches(state: CompileState, nodes: CompileNode[]): void {
@@ -490,21 +776,10 @@ function validateBranches(state: CompileState, nodes: CompileNode[]): void {
       state.errors.push(new BranchCoverageError(read.branchScope, read.readId));
     }
   }
-
-  // Check for duplicate branch providers
-  const providerByBranch = new Map<string, Set<string>>();
-  for (const [key, res] of state.resolutions) {
-    if (res.type !== 'output') continue;
-    const [, branch] = key.split(':');
-    if (!providerByBranch.has(branch)) providerByBranch.set(branch, new Set());
-    const set = providerByBranch.get(branch)!;
-    if (set.has(res.outputId)) {
-      state.errors.push(
-        new DuplicateBranchProviderError(res.outputId, branch, res.outputId, res.outputId),
-      );
-    }
-    set.add(res.outputId);
-  }
+  // Provider reuse across different reads of the same output is legal (§14).
+  // DuplicateBranchProviderError fires only during provider resolution when
+  // a single read has multiple incomparable maximal providers — detected by
+  // findMaximalProvider returning null while compatible outputs exist.
 }
 
 function detectCycles(state: CompileState): void {
@@ -550,30 +825,81 @@ function detectCycles(state: CompileState): void {
 }
 
 // ============================================================================
-// Stage 9: Hash/replay
+// Stage 12 (was 9): Hash/replay
 // ============================================================================
 
 function computeGraphHash(state: CompileState, nodes: CompileNode[]): string {
-  const input =
-    state.edges.map((e) => `${e.predecessor}:${e.dependent}:${e.edgeClass}`).join('|') +
-    '|' +
-    state.outputs.map((o) => o.provenanceHash).join('|') +
-    '|' +
-    [...state.resolutions.values()]
-      .map((r) => (r.type === 'output' ? r.provenanceHash : `${r.readId}:absent`))
-      .join('|');
-  return simpleHash(input);
+  // Sort edges deterministically for hash stability
+  const sortedEdges = [...state.edges].sort((a, b) => {
+    if (a.predecessor !== b.predecessor) return a.predecessor < b.predecessor ? -1 : 1;
+    if (a.dependent !== b.dependent) return a.dependent < b.dependent ? -1 : 1;
+    if (a.edgeClass !== b.edgeClass) return a.edgeClass < b.edgeClass ? -1 : 1;
+    if ((a.causalGroupId ?? '') !== (b.causalGroupId ?? ''))
+      return (a.causalGroupId ?? '') < (b.causalGroupId ?? '') ? -1 : 1;
+    return 0;
+  });
+
+  const sortedResolutions = [...state.resolutions.entries()].sort(([a], [b]) =>
+    a < b ? -1 : a > b ? 1 : 0,
+  );
+
+  // Include node coordinate hashes so coordinate-only changes invalidate cache
+  const sortedNodes = [...nodes]
+    .filter((n) => n.coordinate.type === 'storyTime')
+    .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
+  return sha256Canonical({
+    nodes: sortedNodes.map((n) => ({
+      id: n.id,
+      coordinate: n.coordinate,
+    })),
+    edges: sortedEdges.map((e) => ({
+      predecessor: e.predecessor,
+      dependent: e.dependent,
+      edgeClass: e.edgeClass,
+      causalGroupId: e.causalGroupId,
+    })),
+    outputs: [...state.outputs]
+      .sort((a, b) => (a.outputId < b.outputId ? -1 : a.outputId > b.outputId ? 1 : 0))
+      .map((o) => ({ outputId: o.outputId, provenanceHash: o.provenanceHash })),
+    resolutions: sortedResolutions.map(([, r]) =>
+      r.type === 'output'
+        ? { type: 'output', provenanceHash: r.provenanceHash }
+        : { type: 'absence', readId: r.readId },
+    ),
+  });
 }
 
-function buildCacheEntry(state: CompileState, coordinatePrefix: string): GraphCacheEntry {
+/**
+ * Build a cache entry from compiled state.
+ * Uses branchScope as the sole scope identifier (no targetCoordinatePrefix/
+ * sameCoordinateAncestors). All hash arrays are deterministically sorted to
+ * ensure stable cache keys across builds.
+ */
+function buildCacheEntry(state: CompileState, branchScope: string): GraphCacheEntry {
+  // Deterministic sort for edges
+  const sortedEdges = [...state.edges].sort((a, b) => {
+    if (a.predecessor !== b.predecessor) return a.predecessor < b.predecessor ? -1 : 1;
+    if (a.dependent !== b.dependent) return a.dependent < b.dependent ? -1 : 1;
+    if (a.edgeClass !== b.edgeClass) return a.edgeClass < b.edgeClass ? -1 : 1;
+    if ((a.causalGroupId ?? '') !== (b.causalGroupId ?? ''))
+      return (a.causalGroupId ?? '') < (b.causalGroupId ?? '') ? -1 : 1;
+    return 0;
+  });
+
+  // Deterministic sort for outputs
+  const sortedOutputs = [...state.outputs].sort((a, b) =>
+    a.outputId < b.outputId ? -1 : a.outputId > b.outputId ? 1 : 0,
+  );
+
   return {
-    targetCoordinatePrefix: coordinatePrefix,
-    sameCoordinateAncestors: [],
-    dependencyHashes: state.edges.map((e) => simpleHash(JSON.stringify(e))),
-    outputHashes: state.outputs.map((o) => o.provenanceHash),
+    branchScope,
+    dependencyHashes: sortedEdges.map((e) => sha256Canonical(e)),
+    outputHashes: sortedOutputs.map((o) => o.provenanceHash),
     absenceHashes: [...state.resolutions.values()]
       .filter((r): r is GraphAbsenceWitness => r.type === 'absence')
-      .map((a) => simpleHash(`${a.readId}:${a.canonicalKey}`)),
+      .map((a) => sha256Canonical(`${a.readId}:${a.canonicalKey}`))
+      .sort(),
     timestamp: Date.now(),
   };
 }
@@ -584,7 +910,7 @@ function buildCacheEntry(state: CompileState, coordinatePrefix: string): GraphCa
 
 /**
  * Compile raw nodes into typed StoryGraph and DiscourseGraph structures.
- * Follows the FIXED 9-stage compiler order.
+ * Follows the FIXED 12-stage compiler order.
  *
  * @param nodes  Raw compile nodes representing effects/events/actions
  * @param options  Compiler options (branch filter, etc.)
@@ -611,82 +937,85 @@ export function compileGraph(
   // ── Stage 5: Validate coordinate/order ──────────────────────────────────
   validateCoordinateOrder(state, branchNodes);
 
-  // ── Stage 6: Infer providers/absence ────────────────────────────────────
+  // ── Stage 6: Derive temporal internal edges ─────────────────────────────
+  deriveTemporalEdges(state, branchNodes);
+
+  // ── Stage 7 (was 6): Infer providers/absence ────────────────────────────
+  // (builds pre-provider StoryOrderIndex internally, then final order)
   inferProviders(state, branchNodes);
 
-  // ── Stage 7: Commutativity ──────────────────────────────────────────────
+  // ── Stage 8 (was 7): Commutativity ──────────────────────────────────────
   validateCommutativity(state, branchNodes);
 
-  // ── Stage 8: Branch/closure/cycle validation ───────────────────────────
+  // ── Stage 9 (was 8): Branch/closure/cycle validation ───────────────────
   validateBranches(state, branchNodes);
   detectCycles(state);
 
-  // ── Stage 9: Hash/replay ────────────────────────────────────────────────
+  // ── Stage 10 (was 9): Hash ──────────────────────────────────────────────
   const hash = computeGraphHash(state, branchNodes);
 
-  // Collect output IDs from branch nodes
-  const branchOutputIds = new Set<string>();
-  for (const node of branchNodes) {
-    for (const eff of node.effects) {
-      branchOutputIds.add(eff.effectId);
-    }
-  }
   // Partition nodes into story vs discourse graphs
   const storyNodes = branchNodes.filter((n) => n.coordinate.type === 'storyTime');
   const discourseNodes = branchNodes.filter((n) => n.coordinate.type === 'discoursePosition');
 
   if (storyNodes.length > 0) {
-    const storyOutputs = state.outputs.filter(
-      (o) => o.effectiveCoordinate.type === 'storyTime' && branchOutputIds.has(o.outputId),
+    const storyNodeIds = new Set(storyNodes.map((node) => node.id));
+    const storyOutputIds = new Set(
+      storyNodes.flatMap((node) => node.effects.map((effect) => effect.effectId)),
     );
-    const storyReads = state.reads.filter((r) =>
-      storyNodes.some((n) => n.requirements.some((req) => req.requirementId === r.readId)),
+    const storyReadIds = new Set(
+      storyNodes.flatMap((node) => node.requirements.map((requirement) => requirement.requirementId)),
     );
+    const storyOutputs = state.outputs.filter((output) => storyOutputIds.has(output.outputId));
+    const storyReads = state.reads.filter((read) => storyReadIds.has(read.readId));
 
     const storyGraph: StoryGraph = {
       type: 'story',
-      edges: state.edges.filter((e) =>
-        storyNodes.some((n) => n.id === e.predecessor || n.id === e.dependent),
+      edges: state.edges.filter(
+        (edge) => storyNodeIds.has(edge.predecessor) && storyNodeIds.has(edge.dependent),
       ),
       outputs: storyOutputs,
       reads: storyReads,
-      resolutions: [...state.resolutions.values()],
-      hash: simpleHash(`story:${hash}`),
-      effectiveCoordinate: {
-        type: 'storyTime',
-        value: storyNodes[0].coordinate.type === 'storyTime' ? storyNodes[0].coordinate.value : '',
-      },
+      resolutions: [...state.resolutions.entries()]
+        .filter(([key, resolution]) => {
+          const read = storyReads.find(
+            (candidate) => key === `${candidate.readId}:${candidate.branchScope}`,
+          );
+          return (
+            read !== undefined &&
+            (resolution.type === 'absence' || storyOutputIds.has(resolution.outputId))
+          );
+        })
+        .map(([, resolution]) => resolution),
+      hash: sha256Canonical(`story:${hash}`),
     };
     state.storyGraphs.push(storyGraph);
   }
 
   if (discourseNodes.length > 0) {
-    const discourseOutputs = state.outputs.filter(
-      (o) => o.effectiveCoordinate.type === 'discoursePosition' && branchOutputIds.has(o.outputId),
+    const discourseNodeIds = new Set(discourseNodes.map((node) => node.id));
+    const discourseOutputIds = new Set(
+      discourseNodes.flatMap((node) => node.effects.map((effect) => effect.effectId)),
+    );
+    const discourseOutputs = state.outputs.filter((output) =>
+      discourseOutputIds.has(output.outputId),
     );
 
     const discourseGraph: DiscourseGraph = {
       type: 'discourse',
-      edges: state.edges.filter((e) =>
-        discourseNodes.some((n) => n.id === e.predecessor || n.id === e.dependent),
+      edges: state.edges.filter(
+        (edge) => discourseNodeIds.has(edge.predecessor) && discourseNodeIds.has(edge.dependent),
       ),
       outputs: discourseOutputs,
-      hash: simpleHash(`discourse:${hash}`),
-      effectiveCoordinate: {
-        type: 'discoursePosition',
-        value:
-          discourseNodes[0].coordinate.type === 'discoursePosition'
-            ? discourseNodes[0].coordinate.value
-            : 0,
-      },
+      hash: sha256Canonical(`discourse:${hash}`),
       sceneSequence: [],
     };
     state.discourseGraphs.push(discourseGraph);
   }
 
   // Build cache entries
-  const coordinatePrefix = options.branchPath ?? 'root';
-  state.cache.push(buildCacheEntry(state, coordinatePrefix));
+  const branchScope = options.branchPath ?? 'root';
+  state.cache.push(buildCacheEntry(state, branchScope));
 
   return {
     storyGraphs: state.storyGraphs,

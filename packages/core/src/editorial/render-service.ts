@@ -31,7 +31,7 @@ import { includesPath } from '../branch/set.ts';
 import { computeSourceContentHash } from '../cache/render-cache.ts';
 import { ContextCompiler } from '../context/compiler.ts';
 import { PromptAssembler } from '../context/prompt-assembler.ts';
-import { loadProjectConfig, type ProjectData } from '../entity/index.js';
+import { loadProjectConfig, resolveTemporalContext, type ProjectData } from '../entity/index.js';
 import { EntityMapper } from '../entity/mapper.ts';
 import { InMemoryEntityRegistry } from '../entity/registry.ts';
 import { ConfigError, sanitizeError } from '../errors.ts';
@@ -59,9 +59,10 @@ import {
   sceneRevisionEnvelopeV1Schema,
 } from '../schemas/editorial.ts';
 import type { CompiledDiscourseRenderContext } from '../state/discourse-context.ts';
-import { compileDiscourseBoundaries } from '../state/discourse-context.ts';
 import type { StoryBoundaries } from '../state/index.ts';
-import { compileStoryBoundaries } from '../state/story-boundaries.ts';
+import { compileDiscourseSceneSequence, resolveDiscourseBranch } from '../state/discourse-sequence.ts';
+import type { CompiledNarrativeRuntime } from '../state/narrative-runtime.ts';
+import { compileNarrativeRuntime } from '../state/narrative-runtime.ts';
 import { FsStorage } from '../storage/fs-storage.ts';
 import {
   computeContentHash,
@@ -782,67 +783,27 @@ function buildRenderJobs(
   request: Omit<EditorialRenderRequestV1, 'mutation'>,
   sourceContentHash: string,
   model: string,
+  runtime: CompiledNarrativeRuntime,
 ): RenderJob[] {
   const jobs: RenderJob[] = [];
   const branchPath = request.branchPath;
   const data = init.data;
 
-  // Discourse context (if ledger exists)
-  const renderEvents = init.events.filter(
-    (ev) => ev.source === 'event_file' && plan.selectedEventIds.includes(ev.id),
-  );
-  const anchors = new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day]));
-  const initialFacts: Fact[] = [
-    ...init.events
-      .filter((ev) => ev.id === 'system:genesis')
-      .flatMap((ev) => ev.postconditions ?? []),
-    ...init.registry.getAll().flatMap((entity) =>
-      Object.entries(entity.state ?? {}).map(
-        ([attribute, value]) =>
-          ({
-            id: `${entity.id}.${attribute}`,
-            entityId: entity.id,
-            attribute,
-            value,
-            validity: {
-              temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
-              branches: { type: 'all' as const },
-            },
-          }) as Fact,
-      ),
-    ),
-  ];
-  // Compile game dialogue events for state boundaries so choice effects
-  // are available and events on unreachable branches are excluded.
-  let eventsForBoundaries = init.events;
-  if (branchPath) {
-    const eventFiles = [...data.chapters.values()].flatMap(
-      (ch: { events: EventFile[] }) => ch.events,
-    );
-    const tree = compileGameDialogueTree(eventFiles, anchors);
-    if (tree && tree.transitionEvents.length > 0) {
-      eventsForBoundaries = init.events.map((ev) => {
-        const scope = tree.eventScopes.get(ev.id);
-        if (scope) return { ...ev, branchExistence: scope };
-        return ev;
-      });
-      eventsForBoundaries = [...eventsForBoundaries, ...tree.transitionEvents];
-    }
-  }
-  const boundaries = compileStoryBoundaries(
-    eventsForBoundaries,
-    initialFacts,
-    anchors,
-    branchPath,
-    [],
+  // Use pre-compiled context from the single narrative runtime.
+  const boundaries = runtime.boundaries;
+  const discourseContextByEventId = runtime.discourseContextsByEventId;
+  const techniquesByEventId = runtime.graphs.techniquesByEventId;
+
+  // Canonical graph hash from both sub-graphs for render cache identity.
+  const graphHash = computeSha256Hex(
+    canonicalJson({
+      story: runtime.graphs.storyGraph.hash,
+      discourse: runtime.graphs.discourseGraph.hash,
+    }),
   );
 
-  const discourseContextByEventId = compileDiscourseBoundaries(
-    init.events.filter((event) => event.source === 'event_file'),
-    data.discourseLedger,
-    data.narratorAssertions,
-    data.narratorProfiles,
-    request.discourseBranch ?? 'main',
+  const renderEvents = init.events.filter(
+    (ev) => ev.source === 'event_file' && plan.selectedEventIds.includes(ev.id),
   );
 
   const sysCtx: SystemContext = {
@@ -870,12 +831,14 @@ function buildRenderJobs(
         )?.emotion
       : undefined;
 
+    const narrativeTechniques = techniquesByEventId.get(ev.id) ?? [];
     const compiler = new ContextCompiler();
     const pkg = compiler.compile(ev, beforeState, init.registry, {
       systemContext: sysCtx,
       narratorProfiles: data.narratorProfiles,
       discourseContext: discourseCtx,
       emotionalBeat,
+      narrativeTechniques,
     });
 
     const worldStateHash = computeSha256Hex(canonicalJson(beforeState));
@@ -933,6 +896,7 @@ function buildRenderJobs(
       gameDialogue: ev.choices ? { choices: ev.choices } : undefined,
       chapter: chapterNum,
       contract,
+      graphHash,
       sourceContentHash,
       logicalDisclosureSummary,
       surfaceDependency: {
@@ -948,6 +912,14 @@ function buildRenderJobs(
       },
     });
   }
+
+  // Order jobs by discourse scene sequence for deterministic planning/input order.
+  // Surface execution order is independently governed by SurfaceScheduler.buildWavePlan.
+  const sceneOrder = new Map<string, number>();
+  for (const entry of runtime.graphs.discourseGraph.sceneSequence) {
+    sceneOrder.set(entry.sceneId, entry.sequence);
+  }
+  jobs.sort((a, b) => (sceneOrder.get(a.event.id) ?? 999) - (sceneOrder.get(b.event.id) ?? 999));
 
   return jobs;
 }
@@ -1275,6 +1247,7 @@ function buildBoundariesAndJobs(
   jobs: RenderJob[];
   boundaries: StoryBoundaries;
   discourseContextByEventId: Record<string, CompiledDiscourseRenderContext>;
+  runtime: CompiledNarrativeRuntime;
   scopeHash: string;
 } {
   const branchPath = request.branchPath;
@@ -1282,9 +1255,6 @@ function buildBoundariesAndJobs(
     (ev) => ev.source === 'event_file' && plan.selectedEventIds.includes(ev.id),
   );
 
-  const anchors = new Map(
-    init.data.timeAnchors.map((anchor: { id: string; day: number }) => [anchor.id, anchor.day]),
-  );
   const initialFacts: Fact[] = [
     ...init.events
       .filter((ev) => ev.id === 'system:genesis')
@@ -1306,22 +1276,15 @@ function buildBoundariesAndJobs(
     ),
   ];
 
-  // Compile game dialogue transition events so choice effects are available
-  // as postconditions in the causal graph when a branch path is provided.
-  // Also override authored event branchExistence with game tree scopes so
-  // events on unreachable branches are excluded from the causal graph.
-  let eventsForBoundaries = init.events;
-  // Always compile game dialogue tree so choice effects are available
-  // as postconditions in the causal graph even without a branch path.
-  const eventFiles = [...init.data.chapters.values()].flatMap(
-    (ch: { events: EventFile[] }) => ch.events,
-  );
-  const gdTree = compileGameDialogueTree(eventFiles, anchors);
+  // Compile game dialogue transition events so choice effects are available.
+  // Override authored event branchExistence with game tree scopes so events
+  // on unreachable branches are excluded from the graph compilation.
+  let eventsForRuntime = init.events;
+  const temporalContext = resolveTemporalContext(init.events, init.data.timeAnchors);
+  const gdTree = compileGameDialogueTree(init.events, temporalContext);
   if (gdTree && gdTree.transitionEvents.length > 0) {
     if (branchPath) {
-      // Override authored event branchExistence with game tree scopes so
-      // events on unreachable branches are excluded from the causal graph.
-      eventsForBoundaries = init.events.map((ev) => {
+      eventsForRuntime = init.events.map((ev) => {
         const scope = gdTree.eventScopes.get(ev.id);
         if (scope) {
           return { ...ev, branchExistence: scope };
@@ -1329,35 +1292,55 @@ function buildBoundariesAndJobs(
         return ev;
       });
     }
-    // Always include transition events for precondition resolution
-    eventsForBoundaries = [...eventsForBoundaries, ...gdTree.transitionEvents];
+    eventsForRuntime = [...eventsForRuntime, ...gdTree.transitionEvents];
   }
-  const boundaries = compileStoryBoundaries(
-    eventsForBoundaries,
-    initialFacts,
-    anchors,
-    branchPath,
-    [],
-  );
 
-  const discourseContextByEventId = compileDiscourseBoundaries(
-    init.events.filter((event) => event.source === 'event_file'),
-    init.data.discourseLedger,
-    init.data.narratorAssertions,
-    init.data.narratorProfiles,
-    request.discourseBranch ?? 'main',
-  );
+  // Resolve the discourse branch: prefer explicit request override, otherwise
+  // resolve uniquely from the ledger by matching against reachable event IDs.
+  // Missing or ambiguous routes throw ConfigError before any provider call.
+  const discourseBranch =
+    request.discourseBranch ??
+    resolveDiscourseBranch({
+      selectedEventIds: new Set(
+        (branchPath != null
+          ? eventsForRuntime.filter((ev) => includesPath(ev.branchExistence, branchPath))
+          : eventsForRuntime
+        ).map((ev) => ev.id),
+      ),
+      branchPath: branchPath ?? { decisions: [] },
+      ledger: init.data.discourseLedger,
+    });
+
+  // Single production runtime: graphs → state boundaries → discourse contexts.
+  const runtime = compileNarrativeRuntime({
+    events: eventsForRuntime,
+    initialFacts,
+    timeAnchors: init.data.timeAnchors,
+    branchPath,
+    discourseBranch,
+    ledger: init.data.discourseLedger,
+    assertions: init.data.narratorAssertions,
+    narratorProfiles: init.data.narratorProfiles,
+    initialThreads: [],
+  });
+
+  const boundaries = runtime.boundaries;
+  const discourseContextByEventId: Record<string, CompiledDiscourseRenderContext> = {};
+  for (const [eventId, ctx] of Object.entries(runtime.discourseContextsByEventId)) {
+    discourseContextByEventId[eventId] = ctx;
+  }
 
   const scopeHash = computeSha256Hex(
     canonicalJson({
       branch: branchPath ?? { decisions: [] },
-      discourse: request.discourseBranch ?? 'main',
+      discourse: discourseBranch,
+      ledgerHash: init.data.discourseLedger.hash,
     }),
   );
 
-  const jobs = buildRenderJobs(plan, init, request, sourceContentHash, model);
+  const jobs = buildRenderJobs(plan, init, request, sourceContentHash, model, runtime);
 
-  return { jobs, boundaries, discourseContextByEventId, scopeHash };
+  return { jobs, boundaries, discourseContextByEventId, scopeHash, runtime };
 }
 
 // ============================================================================
@@ -2037,13 +2020,8 @@ export async function executeEditorialRender(
 
   // ── Check game dialogue tree requires branchPath ────────────────────
   if (!request.branchPath) {
-    const eventFiles = [...init.data.chapters.values()].flatMap(
-      (ch: { events: EventFile[] }) => ch.events,
-    );
-    const anchors = new Map(
-      init.data.timeAnchors.map((anchor: { id: string; day: number }) => [anchor.id, anchor.day]),
-    );
-    const gdTree = compileGameDialogueTree(eventFiles, anchors);
+    const temporalContext = resolveTemporalContext(init.events, init.data.timeAnchors);
+    const gdTree = compileGameDialogueTree(init.events, temporalContext);
     if (gdTree && gdTree.transitionEvents.length > 0) {
       return buildFailedResult(
         request.mutation.operationId ?? crypto.randomUUID(),
@@ -2172,10 +2150,25 @@ export async function executeEditorialRender(
     return buildCancelledResult(operationId, plan.planSummary);
   }
 
+  // Resolve discourse branch — explicit override or unique ledger match.
+  const discourseBranch =
+    request.discourseBranch ??
+    resolveDiscourseBranch({
+      selectedEventIds: new Set(
+        (request.branchPath != null
+          ? init.events.filter((ev) => includesPath(ev.branchExistence, request.branchPath!))
+          : init.events
+        ).map((ev) => ev.id),
+      ),
+      branchPath: request.branchPath ?? { decisions: [] },
+      ledger: init.data.discourseLedger,
+    });
+
   const scopeHash = computeSha256Hex(
     canonicalJson({
       branch: request.branchPath ?? { decisions: [] },
-      discourse: request.discourseBranch ?? 'main',
+      discourse: discourseBranch,
+      ledgerHash: init.data.discourseLedger.hash,
     }),
   );
   const selectedEventIds = new Set(plan.selectedEventIds);
@@ -2193,7 +2186,7 @@ export async function executeEditorialRender(
     storage,
   );
   const resolvedModel = request.model ?? init.data.config?.defaultModel ?? 'default';
-  const { jobs, boundaries } = buildBoundariesAndJobs(
+  const { jobs, boundaries, runtime: compiledRuntime } = buildBoundariesAndJobs(
     init,
     plan,
     request,
@@ -2961,9 +2954,21 @@ export async function executeEditorialRender(
       operationId,
     });
   }
+  const sceneSeq = compiledRuntime.graphs.discourseGraph.sceneSequence;
   const novelContent = hasCompleteScope
-    ? buildNovelDocument(publishCandidates, chapterMetadata, init.data.config?.title ?? 'Untitled')
+    ? buildNovelDocument(publishCandidates, chapterMetadata, init.data.config?.title ?? 'Untitled', sceneSeq)
     : null;
+  // The operation lease updates publication.json while rendering. Re-read its
+  // authoritative preimage immediately before the final publication CAS.
+  const publicationRawAtPublish = storage.readOptional(paths.publicationPath);
+  const previousManifestAtPublish = loadOrCreatePublication(storage, paths.publicationPath);
+  const publicationReadSetAtPublish = dedupeReadSet([
+    ...publicationReadSet.filter(
+      (expectation) =>
+        expectation.kind !== 'file' || expectation.path !== paths.publicationPath,
+    ),
+    fileExpectation(storage, paths.publicationPath),
+  ]);
   let publication: PublicationResult;
   try {
     publication = new EditorialPublisher(coordinator, paths).publish({
@@ -2975,15 +2980,13 @@ export async function executeEditorialRender(
         mutationContext: request.mutation,
       },
       candidates: publishCandidates,
-      previousManifest: previousManifestBeforeExecution,
+      previousManifest: previousManifestAtPublish,
       previousManifestHash:
-        publicationRawBeforeExecution === null
-          ? null
-          : computeContentHash(publicationRawBeforeExecution),
+        publicationRawAtPublish === null ? null : computeContentHash(publicationRawAtPublish),
       novelContent,
       novelHash: novelContent === null ? null : computeContentHash(novelContent),
       reasons: editorialErrors,
-      readSet: publicationReadSet,
+      readSet: publicationReadSetAtPublish,
     });
   } catch (error) {
     const publicationErrors =
@@ -3220,12 +3223,72 @@ export async function previewEditorialRun(
 
   // Build all jobs once (not inside the loop — the per-iteration rebuild in
   // the previous version produced N copies of each prompt for N compile jobs).
+  // Resolve discourse branch — explicit override or unique ledger match.
+  const discourseBranch =
+    request.discourseBranch ??
+    resolveDiscourseBranch({
+      selectedEventIds: new Set(
+        (request.branchPath != null
+          ? init.events.filter((ev) => includesPath(ev.branchExistence, request.branchPath!))
+          : init.events
+        ).map((ev) => ev.id),
+      ),
+      branchPath: request.branchPath ?? { decisions: [] },
+      ledger: init.data.discourseLedger,
+    });
+
   const scopeHash = computeSha256Hex(
     canonicalJson({
       branch: request.branchPath ?? { decisions: [] },
-      discourse: request.discourseBranch ?? 'main',
+      discourse: discourseBranch,
+      ledgerHash: init.data.discourseLedger.hash,
     }),
   );
+  // Build single production runtime for the preview branch.
+  const previewInitialFacts: Fact[] = [
+    ...init.events
+      .filter((ev) => ev.id === 'system:genesis')
+      .flatMap((ev) => ev.postconditions ?? []),
+    ...init.registry.getAll().flatMap((entity) =>
+      Object.entries(entity.state ?? {}).map(
+        ([attribute, value]) =>
+          ({
+            id: `${entity.id}.${attribute}`,
+            entityId: entity.id,
+            attribute,
+            value,
+            validity: {
+              temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
+              branches: { type: 'all' as const },
+            },
+          }) as Fact,
+      ),
+    ),
+  ];
+  // Prepare events with game dialogue tree scopes for preview.
+  let previewEvents = init.events;
+  const previewTemporalContext = resolveTemporalContext(init.events, init.data.timeAnchors);
+  const previewGdTree = compileGameDialogueTree(init.events, previewTemporalContext);
+  if (previewGdTree && previewGdTree.transitionEvents.length > 0 && request.branchPath) {
+    previewEvents = init.events.map((ev) => {
+      const scope = previewGdTree.eventScopes.get(ev.id);
+      if (scope) return { ...ev, branchExistence: scope };
+      return ev;
+    });
+    previewEvents = [...previewEvents, ...previewGdTree.transitionEvents];
+  }
+  const previewRuntime = compileNarrativeRuntime({
+    events: previewEvents,
+    initialFacts: previewInitialFacts,
+    timeAnchors: init.data.timeAnchors,
+    branchPath: request.branchPath,
+    discourseBranch,
+    ledger: init.data.discourseLedger,
+    assertions: init.data.narratorAssertions,
+    narratorProfiles: init.data.narratorProfiles,
+    initialThreads: [],
+  });
+
   const allEventFilePaths = [...init.data.chapters.values()]
     .flatMap((chapter) => chapter.events)
     .filter((ef: EventFile) => plan.selectedEventIds.includes(ef.event))
@@ -3243,6 +3306,7 @@ export async function previewEditorialRun(
       storage,
     ),
     resolvedModel,
+    previewRuntime,
   );
 
   for (const compileJob of plan.jobs) {
@@ -3335,11 +3399,8 @@ export async function executeEditorialTreeRender(
   const contentEvents = events.filter((event) => event.source === 'event_file');
 
   // Compile game dialogue tree
-  const anchors = new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day]));
-  const tree = compileGameDialogueTree(
-    [...data.chapters.values()].flatMap((chapter) => chapter.events),
-    anchors,
-  );
+  const temporalContext = resolveTemporalContext(events, data.timeAnchors);
+  const tree = compileGameDialogueTree(events, temporalContext);
 
   if (!tree) {
     return {
@@ -3376,7 +3437,7 @@ export async function executeEditorialTreeRender(
     };
   }
 
-  // Guard: no renderSurface, main-branch discourse only
+  // Guard: no renderSurface
   if (data.config?.renderSurface) {
     return {
       operationId,
@@ -3397,25 +3458,6 @@ export async function executeEditorialTreeRender(
     };
   }
 
-  if (data.discourseLedger.entries.some((entry: { branch: string }) => entry.branch !== 'main')) {
-    return {
-      operationId,
-      tree: {
-        eventScopes: Object.fromEntries(tree.eventScopes),
-        representativePathByEventId: Object.fromEntries(tree.representativePathByEventId),
-        choicesByEventId: Object.fromEntries(
-          Array.from(tree.choicesByEventId).map(([k, v]) => [k, [...v]]),
-        ),
-      },
-      results: [],
-      errors: ['render-tree requires a discourse ledger with only the main branch.'],
-      editorialErrors: [
-        { code: 'INVALID_OPERATION', message: 'Non-main discourse branch in tree render' },
-      ],
-      outputPath: undefined,
-      publication: { status: 'stale', outputPath: paths.novelPath, novelHash: null, reasons: [] },
-    };
-  }
 
   // Claim operation
   const requestHash = computeSha256Hex(
@@ -3520,7 +3562,35 @@ export async function executeEditorialTreeRender(
       operationStore,
       treeLeaseAbortController,
       async () => {
-        for (const ev of contentEvents) {
+        // ── Pre-compute leaf-route discourse branches for dedup ────────
+        // Enumerate leaf paths and resolve their discourse branch.
+        // Shared events (e.g. E0) that appear under multiple branches with
+        // the same discourse context are deduplicated.
+        const leafRouteDedup = new Map<string, BranchPath>();
+        for (const leafPath of tree.leafPaths) {
+          const routeEventIds = contentEvents
+            .filter((event) =>
+              includesPath(tree.eventScopes.get(event.id) ?? event.branchExistence, leafPath),
+            )
+            .map((event) => event.id);
+          const discourseBranch = resolveDiscourseBranch({
+            selectedEventIds: new Set(routeEventIds),
+            branchPath: leafPath,
+            ledger: data.discourseLedger,
+          });
+          for (const eventId of routeEventIds) {
+            const key = `${eventId}\x00${discourseBranch}`;
+            if (!leafRouteDedup.has(key)) {
+              leafRouteDedup.set(key, leafPath);
+            }
+          }
+        }
+
+        for (const [dedupKey, branchPath] of leafRouteDedup) {
+          const nullIdx = dedupKey.indexOf('\x00');
+          const eventId = dedupKey.slice(0, nullIdx);
+          const discourseBranch = dedupKey.slice(nullIdx + 1);
+
           if (treeLeaseAbortController.signal.aborted) {
             if (signal?.aborted) treeAborted = true;
             return;
@@ -3528,15 +3598,15 @@ export async function executeEditorialTreeRender(
 
           operationStore.heartbeat(operationId, request.mutation.actorId);
 
-          const branchPath = tree.representativePathByEventId.get(ev.id);
-          if (!branchPath) {
-            errors.push(`Missing representative path for game dialogue event '${ev.id}'`);
+          const ev = contentEvents.find(e => e.id === eventId);
+          if (!ev) {
+            errors.push(`Event '${eventId}' not found for dedup key '${dedupKey}'`);
             _hasFailure = true;
             continue;
           }
 
           try {
-            // ── 1. Build scene request (no sub-operationId) ──────────────────
+            // ── 1. Build scene request with explicit discourse branch ─────────
             const sceneRequest: EditorialRenderRequestV1 = {
               version: 1,
               projectDir: request.projectDir,
@@ -3545,6 +3615,7 @@ export async function executeEditorialTreeRender(
               model: request.model,
               providerProfile: request.providerProfile,
               branchPath,
+              discourseBranch,  // explicit — avoids re-resolution in buildBoundariesAndJobs
               waivers: request.waivers,
               maxRounds: request.maxRounds,
             };
@@ -3588,10 +3659,12 @@ export async function executeEditorialTreeRender(
               .map((ef: EventFile) => ef.filePath)
               .filter((fp: string | undefined): fp is string => fp !== undefined);
             const definitionsDir = path.join(request.projectDir, 'definitions');
+            // Use pre-computed discourse branch (no re-resolution needed).
             const scopeHash = computeSha256Hex(
               canonicalJson({
                 branch: branchPath ?? { decisions: [] },
-                discourse: 'main',
+                discourse: discourseBranch,
+                ledgerHash: init.data.discourseLedger.hash,
               }),
             );
             const sourceContentHash = computeSourceContentHash(
@@ -3944,6 +4017,7 @@ export async function executeEditorialTreeRender(
         canonicalJson({
           branch: { decisions: [] },
           discourse: 'main',
+          ledgerHash: data.discourseLedger.hash,
         }),
       ),
       scopeEventIds: scopeEvents.map((event) => event.eventId),

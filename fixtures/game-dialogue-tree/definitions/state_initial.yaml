@@ -2,11 +2,11 @@ info:
   currentEra: beginning
   politicalSituation: stable
 timeAnchors:
-  - id: day_0
-    day: 0
+  - id: the_offer
+    at: day_0
     description: "Day 0"
-  - id: day_1
-    day: 1
+  - id: the_hunt
+    at: day_1
     description: "Day 1"
 threads: []
 worldFacts: []

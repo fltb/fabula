@@ -38,7 +38,6 @@ import {
   EdgeOriginCycleError,
   EllipsisSummaryError,
   FutureTimeError,
-  IncomparableTimeError,
   InitialRootMisuseError,
   MergeInputError,
   MissingOutputError,
@@ -50,7 +49,7 @@ import {
   StaleProviderSelectionError,
   UnknownPredecessorError,
   UnknownReadIdError,
-  UnorderedSameTimeConflictError,
+  UnorderedStoryConflictError,
 } from '../../src/types/graph.ts';
 
 // ============================================================================
@@ -77,9 +76,17 @@ function storyNode(
   explicitEdges?: CompileNode['explicitEdges'],
   isInitialRoot?: boolean,
 ): CompileNode {
+  // Resolve string story value to proper StoryCoordinate
+  const coordinate = isInitialRoot
+    ? { type: 'storyTime' as const, kind: 'initial' as const }
+    : storyValue === 'initial'
+      ? { type: 'storyTime' as const, kind: 'initial' as const }
+      : storyValue === 'unlocated'
+        ? { type: 'storyTime' as const, kind: 'unlocated' as const }
+        : { type: 'storyTime' as const, kind: 'point' as const, clock: 'story' as const, scalar: parseInt(storyValue.replace(/^day_/, ''), 10) };
   return {
     id,
-    coordinate: { type: 'storyTime', value: storyValue },
+    coordinate,
     effects,
     requirements,
     branchScope,
@@ -140,7 +147,9 @@ describe('GraphCompiler', () => {
       expect(result.storyGraphs[0].outputs[0].canonicalKey).toBe('entity:char/hero/name');
       expect(result.storyGraphs[0].outputs[0].effectiveCoordinate).toEqual({
         type: 'storyTime',
-        value: 'day_1',
+        kind: 'point',
+        clock: 'story',
+        scalar: 1,
       });
       expect(result.storyGraphs[0].hash).toBeTruthy();
     });
@@ -158,10 +167,6 @@ describe('GraphCompiler', () => {
       expect(result.discourseGraphs).toHaveLength(1);
       expect(result.discourseGraphs[0].type).toBe('discourse');
       expect(result.discourseGraphs[0].outputs).toHaveLength(2);
-      expect(result.discourseGraphs[0].effectiveCoordinate).toEqual({
-        type: 'discoursePosition',
-        value: 1,
-      });
     });
 
     it('separates story and discourse into distinct graphs', () => {
@@ -606,7 +611,7 @@ describe('GraphCompiler', () => {
         ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.errors.filter((e) => e instanceof UnorderedSameTimeConflictError)).toHaveLength(
+      expect(result.errors.filter((e) => e instanceof UnorderedStoryConflictError)).toHaveLength(
         0,
       );
     });
@@ -621,7 +626,7 @@ describe('GraphCompiler', () => {
         ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.errors.filter((e) => e instanceof UnorderedSameTimeConflictError)).toHaveLength(
+      expect(result.errors.filter((e) => e instanceof UnorderedStoryConflictError)).toHaveLength(
         1,
       );
     });
@@ -641,7 +646,7 @@ describe('GraphCompiler', () => {
         ),
       ];
       const result = compileGraph(nodes);
-      expect(result.errors.filter((e) => e instanceof UnorderedSameTimeConflictError)).toHaveLength(
+      expect(result.errors.filter((e) => e instanceof UnorderedStoryConflictError)).toHaveLength(
         0,
       );
     });
@@ -749,6 +754,381 @@ describe('GraphCompiler', () => {
     });
   });
 
+  // ─── Step-4 regression: branch/coordinate/provider semantics ───────────
+  describe('Step 4 — bounded compiler repairs', () => {
+    it('excluded-branch outputs do not leak into selected branch (branch leak)', () => {
+      const nodes: CompileNode[] = [
+        storyNode(
+          'main_out',
+          'day_1',
+          [{ effectId: 'm1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }],
+          [],
+          'main',
+        ),
+        storyNode(
+          'branch_out',
+          'day_1',
+          [{ effectId: 'b1', canonicalKey: 'entity:char/hero/name', value: 'Branch Value' }],
+          [],
+          'alternate',
+        ),
+        storyNode(
+          'reader',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:char/hero/name',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+          'main',
+        ),
+      ];
+      const result = compileGraph(nodes, { branchPath: 'main' });
+      const resolutions = result.storyGraphs[0].resolutions;
+      const outputRes = resolutions.find(
+        (r): r is GraphProviderOutput => r.type === 'output',
+      );
+      expect(outputRes).toBeDefined();
+      // Must resolve to 'main' branch output, not 'alternate'
+      expect(outputRes!.outputId).toBe('m1');
+    });
+
+    it('future coordinate output produces AbsenceWitness for earlier read (future absence)', () => {
+      const nodes: CompileNode[] = [
+        storyNode(
+          'future_writer',
+          'day_5',
+          [{ effectId: 'f1', canonicalKey: 'entity:char/hero/fate', value: 'sealed' }],
+          [],
+          'main',
+        ),
+        storyNode(
+          'early_reader',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:char/hero/fate',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+          'main',
+        ),
+      ];
+      const result = compileGraph(nodes);
+      const absences = result.storyGraphs[0].resolutions.filter(
+        (r): r is GraphAbsenceWitness => r.type === 'absence',
+      );
+      expect(absences).toHaveLength(1);
+      expect(absences[0].readId).toBe('r1');
+      expect(absences[0].canonicalKey).toBe('entity:char/hero/fate');
+    });
+
+    it('day_10 compares greater than day_2 (numeric ordering)', () => {
+      const nodes: CompileNode[] = [
+        storyNode('early', 'day_2', [
+          { effectId: 'o1', canonicalKey: 'entity:test/key', value: 'early' },
+        ]),
+        storyNode('late', 'day_10', [
+          { effectId: 'o2', canonicalKey: 'entity:test/key', value: 'late' },
+        ]),
+        storyNode(
+          'reader',
+          'day_11',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:test/key',
+              predicate: { type: 'equals', value: 'late' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+        ),
+      ];
+      const result = compileGraph(nodes);
+      expect(result.errors).toHaveLength(0);
+      const resolutions = result.storyGraphs[0].resolutions;
+      const outputRes = resolutions.find(
+        (r): r is GraphProviderOutput => r.type === 'output',
+      );
+      expect(outputRes).toBeDefined();
+      // day_10 must be selected (not day_2), proving numeric comparison
+      expect(outputRes!.outputId).toBe('o2');
+    });
+
+    it('initial root provides state for any story day', () => {
+      const nodes: CompileNode[] = [
+        storyNode(
+          'root',
+          'initial',
+          [{ effectId: 'init', canonicalKey: 'entity:world/created', value: true }],
+          [],
+          '',
+          undefined,
+          true,
+        ),
+        storyNode(
+          'evt',
+          'day_5',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:world/created',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+          'main',
+        ),
+      ];
+      const result = compileGraph(nodes);
+      expect(result.errors).toHaveLength(0);
+      const resolutions = result.storyGraphs[0].resolutions;
+      const outputRes = resolutions.find(
+        (r): r is GraphProviderOutput => r.type === 'output',
+      );
+      expect(outputRes).toBeDefined();
+      expect(outputRes!.outputId).toBe('init');
+    });
+
+    it('provider edges connect provider-node to reader-node (not readId)', () => {
+      const nodes: CompileNode[] = [
+        storyNode('provider', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:test/val', value: 'data' },
+        ]),
+        storyNode(
+          'reader',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:test/val',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+        ),
+      ];
+      const result = compileGraph(nodes);
+      const providerEdges = result.storyGraphs[0].edges.filter(
+        (e) => e.edgeClass === 'provider',
+      );
+      expect(providerEdges).toHaveLength(1);
+      expect(providerEdges[0].predecessor).toBe('provider');
+      expect(providerEdges[0].dependent).toBe('reader');
+    });
+
+    it('one output satisfies multiple reads without DuplicateBranchProviderError', () => {
+      const nodes: CompileNode[] = [
+        storyNode('src', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:test/key', value: 'shared' },
+        ]),
+        storyNode(
+          'reader_a',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:test/key',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+        ),
+        storyNode(
+          'reader_b',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'r2',
+              canonicalKey: 'entity:test/key',
+              predicate: { type: 'equals', value: 'shared' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+        ),
+      ];
+      const result = compileGraph(nodes);
+      // No DuplicateBranchProviderError for legal reuse
+      expect(
+        result.errors.filter((e) => e instanceof DuplicateBranchProviderError),
+      ).toHaveLength(0);
+      // Both reads resolve
+      const outputResolutions = result.storyGraphs[0].resolutions.filter(
+        (r): r is GraphProviderOutput => r.type === 'output',
+      );
+      expect(outputResolutions).toHaveLength(2);
+      expect(outputResolutions.every((r) => r.outputId === 'o1')).toBe(true);
+    });
+
+    it('DuplicateBranchProviderError fires for truly ambiguous same-coordinate providers', () => {
+      const nodes: CompileNode[] = [
+        storyNode('evt_a', 'day_1', [
+          { effectId: 'oa', canonicalKey: 'entity:test/key', value: 'value_a' },
+        ]),
+        storyNode('evt_b', 'day_1', [
+          { effectId: 'ob', canonicalKey: 'entity:test/key', value: 'value_b' },
+        ]),
+        storyNode(
+          'evt_c',
+          'day_2',
+          [],
+          [
+            {
+              requirementId: 'r1',
+              canonicalKey: 'entity:test/key',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+        ),
+      ];
+      const result = compileGraph(nodes);
+      expect(
+        result.errors.filter((e) => e instanceof DuplicateBranchProviderError),
+      ).toHaveLength(1);
+    });
+
+    it('graph edges in StoryGraph require both endpoints in story domain', () => {
+      const nodes: CompileNode[] = [
+        storyNode('story_evt', 'day_1', [
+          { effectId: 'so1', canonicalKey: 'entity:test/story', value: 'story_val' },
+        ]),
+        discourseNode('disc_evt', 1, [
+          { effectId: 'do1', canonicalKey: 'entity:test/disc', value: 'disc_val' },
+        ]),
+      ];
+      const result = compileGraph(nodes);
+      // Story graph should NOT contain edges from discourse node
+      const storyEdges = result.storyGraphs[0].edges;
+      expect(storyEdges.every((e) => e.predecessor !== 'disc_evt' && e.dependent !== 'disc_evt'))
+        .toBe(true);
+      // Discourse graph should NOT contain edges from story node
+      const discEdges = result.discourseGraphs[0].edges;
+      expect(discEdges.every((e) => e.predecessor !== 'story_evt' && e.dependent !== 'story_evt'))
+        .toBe(true);
+    });
+
+    it('unlocated node reachable via explicit authored predecessor edge (DAG ordering)', () => {
+      const nodes: CompileNode[] = [
+        storyNode('unlocated_a', 'unlocated', [
+          { effectId: 'o_a', canonicalKey: 'entity:test/key', value: 'from_a' },
+        ]),
+        storyNode(
+          'unlocated_b',
+          'unlocated',
+          [],
+          [
+            {
+              requirementId: 'r_b',
+              canonicalKey: 'entity:test/key',
+              predicate: { type: 'equals', value: 'from_a' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+          'main',
+          [{ predecessor: 'unlocated_a', dependent: 'unlocated_b', edgeClass: 'author_origin' }],
+        ),
+      ];
+      const result = compileGraph(nodes);
+      expect(result.errors).toHaveLength(0);
+      const resolutions = result.storyGraphs[0].resolutions;
+      const outputRes = resolutions.find(
+        (r): r is GraphProviderOutput => r.type === 'output',
+      );
+      expect(outputRes).toBeDefined();
+      expect(outputRes!.outputId).toBe('o_a');
+    });
+
+    it('cross-clock explicit edge creates ordering without temporal comparison', () => {
+      const nodes: CompileNode[] = [
+        storyNode('calendar_evt', 'day_1', [
+          { effectId: 'o_cal', canonicalKey: 'entity:test/key', value: 'calendar_val' },
+        ]),
+        storyNode(
+          'story_evt',
+          'day_5',
+          [],
+          [
+            {
+              requirementId: 'r_story',
+              canonicalKey: 'entity:test/key',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+          'main',
+          [{ predecessor: 'calendar_evt', dependent: 'story_evt', edgeClass: 'author_origin' }],
+        ),
+      ];
+      // Both are story-clock points, so day_1 → day_5 works via temporal AND explicit edge
+      const result = compileGraph(nodes);
+      expect(result.errors).toHaveLength(0);
+      const resolutions = result.storyGraphs[0].resolutions;
+      const outputRes = resolutions.find(
+        (r): r is GraphProviderOutput => r.type === 'output',
+      );
+      expect(outputRes).toBeDefined();
+      expect(outputRes!.outputId).toBe('o_cal');
+    });
+
+    it('no arbitrary provider tie-break for incomparable maximal candidates', () => {
+      const nodes: CompileNode[] = [
+        storyNode('unlocated_a', 'unlocated', [
+          { effectId: 'o_a', canonicalKey: 'entity:test/key', value: 'value_a' },
+        ]),
+        storyNode('unlocated_b', 'unlocated', [
+          { effectId: 'o_b', canonicalKey: 'entity:test/key', value: 'value_b' },
+        ]),
+        storyNode(
+          'unlocated_reader',
+          'unlocated',
+          [],
+          [
+            {
+              requirementId: 'r_read',
+              canonicalKey: 'entity:test/key',
+              predicate: { type: 'exists' },
+              phase: 'stateBefore',
+              origin: 'precondition',
+            },
+          ],
+          'main',
+          [
+            { predecessor: 'unlocated_a', dependent: 'unlocated_reader', edgeClass: 'author_origin' },
+            { predecessor: 'unlocated_b', dependent: 'unlocated_reader', edgeClass: 'author_origin' },
+          ],
+        ),
+      ];
+      const result = compileGraph(nodes);
+      // Two incomparable unlocated providers for the same key → DuplicateBranchProviderError
+      expect(
+        result.errors.filter((e) => e instanceof DuplicateBranchProviderError),
+      ).toHaveLength(1);
+    });
+  });
+
   // ─── Category 11: ellipsis provenance/selection closure ───────────────────
   describe('11. ellipsis provenance/selection closure', () => {
     it('story graph outputs include ellipsis event effects', () => {
@@ -770,7 +1150,7 @@ describe('GraphCompiler', () => {
       const result = compileGraph(nodes);
       const output = result.storyGraphs[0].outputs[0];
       expect(output.provenanceHash).toBeTruthy();
-      expect(output.effectiveCoordinate).toEqual({ type: 'storyTime', value: 'day_1' });
+      expect(output.effectiveCoordinate).toEqual({ type: 'storyTime', kind: 'point', clock: 'story', scalar: 1 });
     });
   });
 
@@ -821,7 +1201,7 @@ describe('GraphCompiler', () => {
       const result = compileGraph(nodes);
       expect(result.cache).toHaveLength(1);
       const entry = result.cache[0];
-      expect(entry.targetCoordinatePrefix).toBe('root');
+      expect(entry.branchScope).toBe('root');
       expect(entry.dependencyHashes).toBeInstanceOf(Array);
       expect(entry.outputHashes).toHaveLength(1);
       expect(entry.absenceHashes).toBeInstanceOf(Array);
@@ -855,7 +1235,7 @@ describe('GraphCompiler', () => {
         ),
       ];
       const result = compileGraph(nodes, { branchPath: 'main' });
-      expect(result.cache[0].targetCoordinatePrefix).toBe('main');
+      expect(result.cache[0].branchScope).toBe('main');
     });
 
     it('produces consistent results from same inputs', () => {

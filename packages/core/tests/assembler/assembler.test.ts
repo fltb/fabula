@@ -9,7 +9,6 @@ import {
   countWords,
   filterScenesByBranchPath,
   loadChapterMetadata,
-  NarrativeSorter,
   ProseConcatenator,
   SceneCollector,
   type SceneEntry,
@@ -214,66 +213,6 @@ describe('SceneCollector', () => {
   });
 });
 
-describe('NarrativeSorter', () => {
-  const allBranch: BranchSet = { type: 'all' };
-  const mkEntry = (prose: string, order: number, ch: number): SceneEntry => ({
-    prose,
-    metadata: {} as any,
-    narrativeOrder: order,
-    chapter: ch,
-    branchExistence: allBranch,
-  });
-
-  it('sorts scenes by narrativeOrder ascending', () => {
-    const map = new Map<string, SceneEntry>([
-      ['E3', mkEntry('Third', 3, 2)],
-      ['E1', mkEntry('First', 1, 1)],
-      ['E2', mkEntry('Second', 2, 1)],
-    ]);
-
-    const sorter = new NarrativeSorter();
-    const sorted = sorter.sortByOrder(map);
-
-    expect(sorted.map((s) => s.narrativeOrder)).toEqual([1, 2, 3]);
-    expect(sorted.map((s) => s.prose)).toEqual(['First', 'Second', 'Third']);
-  });
-
-  it('preserves chapter grouping', () => {
-    const map = new Map<string, SceneEntry>([
-      ['E2', mkEntry('Ch2-scene', 10, 2)],
-      ['E1', mkEntry('Ch1-scene', 5, 1)],
-    ]);
-
-    const sorter = new NarrativeSorter();
-    const sorted = sorter.sortByOrder(map);
-
-    expect(sorted[0].chapter).toBe(1);
-    expect(sorted[1].chapter).toBe(2);
-  });
-
-  it('propagates branchExistence to sorted scenes', () => {
-    const paths: BranchSet = {
-      type: 'paths',
-      paths: [
-        {
-          decisions: [{ atEventId: 'E', choiceId: 'a', narrativeOrder: 1 }],
-        },
-      ],
-    };
-    const map = new Map<string, SceneEntry>([
-      [
-        'E1',
-        { prose: 'A', metadata: {} as any, narrativeOrder: 1, chapter: 1, branchExistence: paths },
-      ],
-    ]);
-
-    const sorter = new NarrativeSorter();
-    const sorted = sorter.sortByOrder(map);
-
-    expect(sorted[0].branchExistence).toEqual(paths);
-  });
-});
-
 describe('ProseConcatenator', () => {
   const allBranch: BranchSet = { type: 'all' };
 
@@ -302,74 +241,40 @@ describe('ProseConcatenator', () => {
       },
     ];
 
-    const chapterMetadata = new Map<number, any>([
-      [
-        1,
-        {
-          chapter: 1,
-          title: 'The Beginning',
-          summary: 'Start of story.',
-          intent: '',
-          plannedScenes: 2,
-        },
-      ],
-      [
-        2,
-        {
-          chapter: 2,
-          title: 'The Middle',
-          summary: 'Rising action.',
-          intent: '',
-          plannedScenes: 1,
-        },
-      ],
-    ]);
+    const concatenator = new ProseConcatenator();
+    const markdown = concatenator.concatenate(sorted);
 
-    const concat = new ProseConcatenator();
-    const md = concat.concatenate(sorted, chapterMetadata, 'Test Novel');
-
-    expect(md).toContain('# Test Novel');
-    expect(md).toContain('## Chapter 1: The Beginning');
-    expect(md).toContain('> Start of story.');
-    expect(md).toContain('First scene.');
-    expect(md).toContain('---');
-    expect(md).toContain('Second scene.');
-    expect(md).toContain('## Chapter 2: The Middle');
-    expect(md).toContain('> Rising action.');
-    expect(md).toContain('Third scene.');
+    expect(markdown).toContain('## Chapter 1');
+    expect(markdown).toContain('First scene.');
+    expect(markdown).toContain('Second scene.');
+    expect(markdown).toContain('---');
+    expect(markdown).toContain('## Chapter 2');
+    expect(markdown).toContain('Third scene.');
   });
 
-  it('handles single scene without separator at end', () => {
+  it('includes chapter summary when provided', () => {
     const sorted: SortedScene[] = [
       {
-        eventId: 'E1',
-        prose: 'Only scene.',
+        eventId: 'E1a',
+        prose: 'Scene text.',
         narrativeOrder: 1,
         chapter: 1,
         branchExistence: allBranch,
       },
     ];
+    const meta = new Map<number, { title: string; summary: string }>();
+    meta.set(1, { title: 'Chapter One', summary: 'This is chapter one.' });
 
-    const concat = new ProseConcatenator();
-    const md = concat.concatenate(sorted, undefined, 'Title');
+    const concatenator = new ProseConcatenator();
+    const markdown = concatenator.concatenate(sorted, meta);
 
-    expect(md).toContain('# Title');
-    expect(md).toContain('## Chapter 1');
-    expect(md).toContain('Only scene.');
-    expect(md).not.toContain('---');
-    expect(md.endsWith('\n')).toBe(true);
+    expect(markdown).toContain('## Chapter 1: Chapter One');
+    expect(markdown).toContain('> This is chapter one.');
   });
 
-  it('returns empty string for empty input without title', () => {
-    const concat = new ProseConcatenator();
-    expect(concat.concatenate([])).toBe('');
-  });
-
-  it('returns placeholder for empty input with title', () => {
-    const concat = new ProseConcatenator();
-    const md = concat.concatenate([], undefined, 'Empty Book');
-    expect(md).toContain('# Empty Book');
-    expect(md).toContain('No scenes have been committed yet.');
+  it('handles empty scene list', () => {
+    const concatenator = new ProseConcatenator();
+    expect(concatenator.concatenate([])).toBe('');
   });
 });
 
@@ -392,60 +297,90 @@ describe('loadChapterMetadata', () => {
       '_chapter.yaml',
       JSON.stringify({
         chapter: 1,
-        title: 'First Chapter',
-        summary: 'Summary of chapter one.',
-        intent: 'Set up the world.',
-        planned_scenes: 3,
+        title: 'The Beginning',
+        summary: 'How it all started.',
+        intent: 'Introduce the world.',
+        plannedScenes: 2,
       }),
     );
 
-    const meta = loadChapterMetadata(projectDir);
-    expect(meta.size).toBe(1);
-    expect(meta.get(1)!.title).toBe('First Chapter');
-    expect(meta.get(1)!.summary).toBe('Summary of chapter one.');
+    const result = loadChapterMetadata(projectDir);
+    expect(result.size).toBe(1);
+    const meta = result.get(1)!;
+    expect(meta.title).toBe('The Beginning');
+    expect(meta.summary).toBe('How it all started.');
   });
 
-  it('returns empty map when chapters directory is missing', () => {
-    fs.rmSync(path.join(projectDir, 'chapters'), { recursive: true, force: true });
-    const meta = loadChapterMetadata(projectDir);
-    expect(meta.size).toBe(0);
+  it('returns empty map for missing chapters directory', () => {
+    const noChapters = createTempProject();
+    const result = loadChapterMetadata(noChapters);
+    expect(result.size).toBe(0);
+    fs.rmSync(noChapters, { recursive: true, force: true });
+  });
+
+  it('skips malformed _chapter.yaml files without throwing', () => {
+    writeFile(projectDir, 'chapters', 'chapter_01', '_chapter.yaml', 'not: valid: yaml: [');
+    const result = loadChapterMetadata(projectDir);
+    expect(result.size).toBe(0);
   });
 });
 
 describe('filterScenesByBranchPath', () => {
-  const laneA: BranchPath = { decisions: [{ atEventId: 'E2', choiceId: 'a', narrativeOrder: 2 }] };
-  const laneB: BranchPath = { decisions: [{ atEventId: 'E2', choiceId: 'b', narrativeOrder: 2 }] };
-  const scenes: SortedScene[] = [
-    { eventId: 'E1', prose: '', narrativeOrder: 1, chapter: 1, branchExistence: { type: 'all' } },
-    {
-      eventId: 'E2a',
-      prose: '',
-      narrativeOrder: 2,
-      chapter: 1,
-      branchExistence: { type: 'paths', paths: [laneA] },
-    },
-    {
-      eventId: 'E2b',
-      prose: '',
-      narrativeOrder: 3,
-      chapter: 1,
-      branchExistence: { type: 'paths', paths: [laneB] },
-    },
-  ];
+  const allBranch: BranchSet = { type: 'all' };
 
-  it('includes only linear scenes for an empty path', () => {
-    expect(filterScenesByBranchPath(scenes).map((scene) => scene.eventId)).toEqual(['E1']);
+  it('returns all scenes for "all" branch existence', () => {
+    const scenes: SortedScene[] = [
+      { eventId: 'E1', prose: '', narrativeOrder: 1, chapter: 1, branchExistence: allBranch },
+    ];
+
+    const result = filterScenesByBranchPath(scenes, { decisions: [] });
+    expect(result).toHaveLength(1);
   });
 
-  it('includes exactly the selected lane without leakage', () => {
-    expect(filterScenesByBranchPath(scenes, laneA).map((scene) => scene.eventId)).toEqual([
-      'E1',
-      'E2a',
-    ]);
-    expect(filterScenesByBranchPath(scenes, laneB).map((scene) => scene.eventId)).toEqual([
-      'E1',
-      'E2b',
-    ]);
+  it('filters scenes by branch path', () => {
+    const pathA: BranchSet = {
+      type: 'paths',
+      paths: [
+        {
+          decisions: [{ atEventId: 'E1', choiceId: 'a', narrativeOrder: 1 }],
+        },
+      ],
+    };
+    const pathB: BranchSet = {
+      type: 'paths',
+      paths: [
+        {
+          decisions: [{ atEventId: 'E1', choiceId: 'b', narrativeOrder: 1 }],
+        },
+      ],
+    };
+
+    const scenes: SortedScene[] = [
+      { eventId: 'E1a', prose: '', narrativeOrder: 1, chapter: 1, branchExistence: pathA },
+      { eventId: 'E1b', prose: '', narrativeOrder: 1, chapter: 1, branchExistence: pathB },
+    ];
+
+    const result = filterScenesByBranchPath(scenes, {
+      decisions: [{ atEventId: 'E1', choiceId: 'a', narrativeOrder: 1 }],
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].eventId).toBe('E1a');
+  });
+
+  it('excludes scene with unrecognized branch existence type', () => {
+    const scenes: SortedScene[] = [
+      {
+        eventId: 'E1',
+        prose: '',
+        narrativeOrder: 1,
+        chapter: 1,
+        branchExistence: { type: 'invalid' } as unknown as BranchSet,
+      },
+    ];
+
+    // Unrecognized type is not included in any path (includesPath returns false)
+    const result = filterScenesByBranchPath(scenes, { decisions: [] });
+    expect(result).toHaveLength(0);
   });
 });
 
@@ -459,11 +394,11 @@ describe('assembleNovel', () => {
     writeFile(
       projectDir,
       'nova.yaml',
-      JSON.stringify({
-        project: 'test',
-        title: 'Test Novel',
-        author: 'Tester',
-      }),
+      [
+        'project: test',
+        'title: Test Novel',
+        'author: Tester',
+      ].join('\n'),
     );
 
     // Chapter metadata
@@ -477,7 +412,7 @@ describe('assembleNovel', () => {
         title: 'The Beginning',
         summary: 'How it all started.',
         intent: 'Introduce the world.',
-        planned_scenes: 2,
+        plannedScenes: 2,
       }),
     );
     writeFile(
@@ -490,7 +425,7 @@ describe('assembleNovel', () => {
         title: 'The Middle',
         summary: 'Things get complicated.',
         intent: 'Raise the stakes.',
-        planned_scenes: 1,
+        plannedScenes: 1,
       }),
     );
 
@@ -551,6 +486,97 @@ describe('assembleNovel', () => {
       'E2a.md',
       'The battle had begun. There was no turning back now.',
     );
+
+    // ── Mandatory definitions directory ──────────────────────────
+    writeFile(
+      projectDir,
+      'definitions',
+      'discourse-ledger.yaml',
+      [
+        'id: test-novel',
+        'chapters:',
+        '  - branch: main',
+        '    chapter: 1',
+        '    sceneIds:',
+        '      - E1a',
+        '      - E1b',
+        '  - branch: main',
+        '    chapter: 2',
+        '    sceneIds:',
+        '      - E2a',
+        'entries: []',
+      ].join('\n'),
+    );
+    writeFile(
+      projectDir,
+      'definitions',
+      'state_initial.yaml',
+      [
+        'info:',
+        '  currentEra: "contemporary"',
+        '  politicalSituation: "stable"',
+        'timeAnchors:',
+        '  - { id: day_1, day: 1, description: "Day 1" }',
+        'threads: []',
+        'worldFacts: []',
+      ].join('\n'),
+    );
+
+    // ── Event source files (required by EntityMapper) ───────────
+    writeFile(
+      projectDir,
+      'chapters',
+      'chapter_01',
+      'E1a.yaml',
+      [
+        'event: E1a',
+        'narrativeOrder: 1',
+        'title: "First Event"',
+        'storyTime: day_1',
+        'pov:',
+        '  character: narrator',
+        '  type: first_person',
+        'sceneBrief: "The hero wakes up."',
+        'preconditions: []',
+        'expectedPostconditions: []',
+      ].join('\n'),
+    );
+    writeFile(
+      projectDir,
+      'chapters',
+      'chapter_01',
+      'E1b.yaml',
+      [
+        'event: E1b',
+        'narrativeOrder: 2',
+        'title: "Second Event"',
+        'storyTime: day_1',
+        'pov:',
+        '  character: narrator',
+        '  type: first_person',
+        'sceneBrief: "The mentor arrives."',
+        'preconditions: []',
+        'expectedPostconditions: []',
+      ].join('\n'),
+    );
+    writeFile(
+      projectDir,
+      'chapters',
+      'chapter_02',
+      'E2a.yaml',
+      [
+        'event: E2a',
+        'narrativeOrder: 3',
+        'title: "Third Event"',
+        'storyTime: day_1',
+        'pov:',
+        '  character: narrator',
+        '  type: first_person',
+        'sceneBrief: "The battle begins."',
+        'preconditions: []',
+        'expectedPostconditions: []',
+      ].join('\n'),
+    );
   });
 
   afterEach(() => {
@@ -610,25 +636,74 @@ describe('assembleNovel', () => {
     fs.rmSync(emptyDir, { recursive: true, force: true });
   });
 
-  it('throws DUPLICATE_NARRATIVE_ORDER for duplicate orders', () => {
+  it('throws when discourse-ledger.yaml is missing (fails before write)', () => {
+    const noLedgerDir = createTempProject();
+    // Set up chapter metadata and scenes (same as beforeEach)
     writeFile(
-      projectDir,
-      'scenes',
-      'chapter-02',
-      'E2a.yaml',
-      committedMeta({
-        event: 'E2a',
-        narrativeOrder: 1, // Same as E1a
-        branchExistence: { type: 'all' },
+      noLedgerDir,
+      'nova.yaml',
+      [
+        'project: test',
+        'title: Missing Ledger',
+        'author: Tester',
+      ].join('\n'),
+    );
+    writeFile(
+      noLedgerDir,
+      'chapters',
+      'chapter_01',
+      '_chapter.yaml',
+      JSON.stringify({
+        chapter: 1,
+        title: 'The Beginning',
+        summary: 'How it all started.',
+        intent: 'Introduce the world.',
+        plannedScenes: 1,
       }),
     );
+    writeFile(
+      noLedgerDir,
+      'chapters',
+      'chapter_01',
+      'E1.yaml',
+      [
+        'event: E1',
+        'narrativeOrder: 1',
+        'title: "Only Event"',
+        'storyTime: day_1',
+        'pov:',
+        '  character: narrator',
+        '  type: first_person',
+        'sceneBrief: "A test scene."',
+        'preconditions: []',
+        'expectedPostconditions: []',
+      ].join('\n'),
+    );
+    writeFile(
+      noLedgerDir,
+      'scenes',
+      'chapter-01',
+      'E1.yaml',
+      committedMeta({ event: 'E1', narrativeOrder: 1 }),
+    );
+    writeFile(
+      noLedgerDir,
+      'scenes',
+      'chapter-01',
+      'E1.md',
+      'Scene prose.',
+    );
 
-    expect(() => assembleNovel({ projectDir })).toThrow(AssemblyError);
+    // No definitions/discourse-ledger.yaml — must fail before write
+    expect(() => assembleNovel({ projectDir: noLedgerDir })).toThrow(AssemblyError);
     try {
-      assembleNovel({ projectDir });
+      assembleNovel({ projectDir: noLedgerDir });
     } catch (e: any) {
-      expect(e.code).toBe(AssemblyErrorCode.DUPLICATE_NARRATIVE_ORDER);
+      expect(e.message).toContain('discourse scene sequence');
     }
+    // Verify no output file was written
+    expect(fs.existsSync(path.join(noLedgerDir, 'output', 'novel.md'))).toBe(false);
+    fs.rmSync(noLedgerDir, { recursive: true, force: true });
   });
 
   it('includes all scenes in result.scenes array', () => {

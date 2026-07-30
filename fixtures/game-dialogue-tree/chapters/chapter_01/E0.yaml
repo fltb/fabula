@@ -1,7 +1,7 @@
 event: E0
 narrativeOrder: 0
 title: "The Offer"
-storyTime: day_0
+storyTime: the_offer
 pov:
   character: narrator
   type: omniscient

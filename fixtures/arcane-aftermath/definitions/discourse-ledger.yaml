@@ -1,0 +1,8 @@
+id: arcane-aftermath-discourse
+chapters:
+  - branch: main
+    chapter: 1
+    sceneIds:
+      - E1a
+      - E1b
+entries: []

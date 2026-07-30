@@ -181,6 +181,12 @@ export interface DiscourseGraph {
   hash: string;
   effectiveCoordinate: DiscourseCoordinate;
   boundaryReferences?: GraphBoundaryReference[];
+  sceneSequence: Array<{
+    sceneId: string;
+    sequence: number;
+    chapter: number;
+    actionInterval?: { start: number; end: number };
+  }>;
 }
 
 // ——— Cache Entry (§25) ———

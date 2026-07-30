@@ -7,7 +7,16 @@ import { anachronySchema, voiceProfileSchema } from './discourse.js';
 import { durationProfileSchema } from './duration.js';
 import { frequencyProfileSchema } from './frequency.js';
 import { greyLineSchema } from './grey-line.js';
-import { modernNovelConfigSchema } from './modern-novel.js';
+import {
+  absentApparatusSchema,
+  causalDiscontinuitySchema,
+  causalMultiplicitySchema,
+  irresolvableIndeterminacySchema,
+  metanarrativeLevelSchema,
+  multiplicitySchema,
+  surfaceModeSchema,
+  voiceDissonanceSchema,
+} from './narrative-techniques.js';
 import { narrativeChecklistSchema } from './narrative-checklist.js';
 import { gameDialogueChoicesSchema } from './game-dialogue.js';
 import {
@@ -84,13 +93,13 @@ export const eventFileSchema = z
           .optional(),
       })
       .optional(),
-    discourseCursor: z
-      .number()
-      .int()
-      .refine((v) => v === -1 || v >= 0, {
-        message: 'discourseCursor must be -1 or a nonnegative integer',
-      })
-      .optional(),
-    modernNovel: modernNovelConfigSchema.optional(),
+    causalDiscontinuity: causalDiscontinuitySchema.optional(),
+    surfaceMode: surfaceModeSchema.optional(),
+    causalMultiplicity: causalMultiplicitySchema.optional(),
+    irresolvableIndeterminacy: irresolvableIndeterminacySchema.optional(),
+    absentApparatus: absentApparatusSchema.optional(),
+    voiceDissonance: voiceDissonanceSchema.optional(),
+    multiplicity: multiplicitySchema.optional(),
+    metanarrativeLevel: metanarrativeLevelSchema.optional(),
   })
   .strict();

@@ -28,7 +28,7 @@ import {
   locationDefinitionSchema,
   narratorAssertionSchema,
   narratorProfileSchema,
-  plannedDiscourseLedgerSchema,
+  plannedDiscourseLedgerSourceSchema,
   projectConfigSchema,
   relationshipDefinitionSchema,
   ruleDefinitionSchema,
@@ -125,7 +125,7 @@ const SOURCE_PATH_REGISTRY: readonly RegistryEntry[] = [
   {
     kind: 'discourse_ledger',
     pattern: 'definitions/discourse-ledger.yaml',
-    schema: plannedDiscourseLedgerSchema as unknown as ZodType<unknown>,
+    schema: plannedDiscourseLedgerSourceSchema as unknown as ZodType<unknown>,
   },
   {
     kind: 'chapter',

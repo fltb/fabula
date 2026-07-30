@@ -213,19 +213,17 @@ export type {
   MergeConflictReport,
   SceneQuality,
 } from './merge.js';
-// ——— S3: Modern Novel Structural Types ———
+// ——— Narrative Technique Contracts ———
 export type {
   AbsentApparatus,
-  AntiCausalEdgeConfig,
-  CausalOverloadConfig,
-  ChapterOrderContested,
+  CausalDiscontinuity,
+  CausalMultiplicity,
   IrresolvableIndeterminacy,
   MetanarrativeLevel,
-  ModernNovelConfig,
   Multiplicity,
-  SurfaceModeConfig,
+  SurfaceMode,
   VoiceDissonance,
-} from './modern-novel.js';
+} from './narrative-techniques.js';
 export type {
   NarrativeChecklist,
   NarrativeChecklistItem,
@@ -397,6 +395,7 @@ export type {
   NarratorTruthCapability,
   OmniscientProfile,
   PlannedDiscourseLedger,
+  PlannedDiscourseLedgerSource,
   PlannedLedgerEntry,
   RetractionAction,
   RetrospectiveEntityProfile,

@@ -36,16 +36,10 @@
 
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
-import { CacheCorruptionError, StorageError } from '../errors.ts';
+import { CacheCorruptionError } from '../errors.ts';
 import { logger } from '../observability/logger.ts';
 import type { Storage } from '../storage/index.js';
 import type { Fact } from '../types/entity.js';
-import type {
-  LogicalRenderKey,
-  SurfaceRenderKey,
-  SurfaceValidationKey,
-  AttemptKey,
-} from '../types/render-surface.js';
 
 // ─── Canonical JSON Serialization ────────────────────────────────────────────
 
@@ -59,15 +53,13 @@ export function canonicalJson(value: unknown): string {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
-    return '[' + value.map((v) => canonicalJson(v)).join(',') + ']';
+    return `[${value.map((v) => canonicalJson(v)).join(',')}]`;
   }
   const obj = value as Record<string, unknown>;
   const keys = Object.keys(obj)
     .filter((k) => obj[k] !== undefined)
     .sort();
-  return (
-    '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalJson(obj[k])).join(',') + '}'
-  );
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
 }
 
 /**
@@ -283,12 +275,10 @@ export function computeEvidenceHash(
   const hash = crypto.createHash('sha256');
   hash.update(eventId);
   for (const id of factIds) {
-    hash.update('|' + id);
+    hash.update(`|${id}`);
   }
   return hash.digest('hex');
 }
-
-
 
 // ─── Cache Read / Write ──────────────────────────────────────────────────────
 
@@ -364,10 +354,7 @@ export function getCachedRender(
 
     // Evidence hash check for v2
     if (currentEvidenceHash !== undefined && meta.evidenceHash !== undefined) {
-      if (
-        typeof meta.evidenceHash !== 'string' ||
-        meta.evidenceHash !== currentEvidenceHash
-      ) {
+      if (typeof meta.evidenceHash !== 'string' || meta.evidenceHash !== currentEvidenceHash) {
         diagnostics?.push({
           eventId,
           diagnosis: 'stale',

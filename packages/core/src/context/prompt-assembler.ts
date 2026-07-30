@@ -4,9 +4,9 @@
 
 import { readFileSync } from 'node:fs';
 import type { Message } from '../ai/types.ts';
+import type { PromptDecoration } from '../plugin/types.ts';
 import type { ContextPackage, GameDialogueChoice, StyleGuidance } from '../types/index.ts';
 import type { SurfaceReferencePacket } from '../types/render-surface.ts';
-import type { PromptDecoration } from '../plugin/types.ts';
 
 export interface AssembledPrompt {
   systemPrompt: string;
@@ -204,6 +204,7 @@ export class PromptAssembler {
       parts.push('## Planned Disclosure Context');
       parts.push(options.logicalDisclosureSummary);
     }
+
     parts.push(
       '',
       '## Narrative Context Package',
@@ -237,14 +238,17 @@ export class PromptAssembler {
       );
     }
 
-
     // ── Surface Reference (Non-authoritative) ─────────────────────
     if (options?.surfaceReferencePacket) {
       const pkt = options.surfaceReferencePacket;
       parts.push('');
       parts.push('## Surface Reference (Non-authoritative)');
-      parts.push('The following excerpt and metrics are from a prior render pass and are non-authoritative.');
-      parts.push('In case of conflict, the YAML scene definition, compiled scene contract, and narrative context package take precedence.');
+      parts.push(
+        'The following excerpt and metrics are from a prior render pass and are non-authoritative.',
+      );
+      parts.push(
+        'In case of conflict, the YAML scene definition, compiled scene contract, and narrative context package take precedence.',
+      );
       parts.push('');
       parts.push('### Excerpt');
       parts.push('```');
@@ -289,7 +293,9 @@ export class PromptAssembler {
     if (options?.previousAcceptedProse) {
       parts.push('');
       parts.push('## Previous Accepted Prose (Non-authoritative)');
-      parts.push('The following is the previous accepted prose from a prior revision. It is non-authoritative — the YAML scene definition, compiled scene contract, and narrative context package take precedence in case of conflict.');
+      parts.push(
+        'The following is the previous accepted prose from a prior revision. It is non-authoritative — the YAML scene definition, compiled scene contract, and narrative context package take precedence in case of conflict.',
+      );
       parts.push('```');
       parts.push(options.previousAcceptedProse);
       parts.push('```');
@@ -299,7 +305,9 @@ export class PromptAssembler {
     if (options?.editorialRevisionInstructions) {
       parts.push('');
       parts.push('## Editorial Revision Instructions');
-      parts.push('The following YAML-authored revision instructions are canonical and take precedence over non-authoritative context.');
+      parts.push(
+        'The following YAML-authored revision instructions are canonical and take precedence over non-authoritative context.',
+      );
       parts.push(options.editorialRevisionInstructions);
     }
 

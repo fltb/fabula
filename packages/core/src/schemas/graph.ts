@@ -174,6 +174,19 @@ export const discourseGraphSchema = z
     hash: z.string().min(1),
     effectiveCoordinate: discourseCoordinateSchema,
     boundaryReferences: z.array(graphBoundaryReferenceSchema).optional(),
+    sceneSequence: z.array(
+      z.object({
+        sceneId: z.string().min(1),
+        sequence: z.number().int(),
+        chapter: z.number().int(),
+        actionInterval: z
+          .object({
+            start: z.number(),
+            end: z.number(),
+          })
+          .optional(),
+      }),
+    ),
   })
   .strict();
 

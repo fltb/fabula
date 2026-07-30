@@ -837,20 +837,13 @@ function buildRenderJobs(
     [],
   );
 
-  let discourseContextByEventId: Record<string, CompiledDiscourseRenderContext> = {};
-  if (data.discourseLedger) {
-    try {
-      discourseContextByEventId = compileDiscourseBoundaries(
-        renderEvents,
-        data.discourseLedger,
-        data.narratorAssertions,
-        data.narratorProfiles,
-        request.discourseBranch ?? 'main',
-      );
-    } catch {
-      discourseContextByEventId = {};
-    }
-  }
+  const discourseContextByEventId = compileDiscourseBoundaries(
+    init.events.filter((event) => event.source === 'event_file'),
+    data.discourseLedger,
+    data.narratorAssertions,
+    data.narratorProfiles,
+    request.discourseBranch ?? 'main',
+  );
 
   const sysCtx: SystemContext = {
     genre: data.config?.genre ?? 'literary',
@@ -1347,20 +1340,13 @@ function buildBoundariesAndJobs(
     [],
   );
 
-  let discourseContextByEventId: Record<string, CompiledDiscourseRenderContext> = {};
-  if (init.data.discourseLedger) {
-    try {
-      discourseContextByEventId = compileDiscourseBoundaries(
-        renderEvents,
-        init.data.discourseLedger,
-        init.data.narratorAssertions,
-        init.data.narratorProfiles,
-        request.discourseBranch ?? 'main',
-      );
-    } catch {
-      discourseContextByEventId = {};
-    }
-  }
+  const discourseContextByEventId = compileDiscourseBoundaries(
+    init.events.filter((event) => event.source === 'event_file'),
+    init.data.discourseLedger,
+    init.data.narratorAssertions,
+    init.data.narratorProfiles,
+    request.discourseBranch ?? 'main',
+  );
 
   const scopeHash = computeSha256Hex(
     canonicalJson({
@@ -3411,7 +3397,7 @@ export async function executeEditorialTreeRender(
     };
   }
 
-  if (data.discourseLedger?.entries.some((entry: { branch: string }) => entry.branch !== 'main')) {
+  if (data.discourseLedger.entries.some((entry: { branch: string }) => entry.branch !== 'main')) {
     return {
       operationId,
       tree: {

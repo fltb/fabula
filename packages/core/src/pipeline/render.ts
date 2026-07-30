@@ -20,14 +20,14 @@ import {
   buildLogicalKeyMaterial,
   buildSurfaceKeyMaterial,
   buildValidationKeyMaterial,
+  type CacheDiagnostics,
   computeEvidenceHash,
   getCachedRender,
   setCachedRender,
-  CacheDiagnostics,
   sha256Canonical,
 } from '../cache/render-cache.ts';
 import { PromptAssembler } from '../context/prompt-assembler.ts';
-import { CacheCorruptionError, sanitizeError } from '../errors.ts';
+import { sanitizeError } from '../errors.ts';
 import type { TypedEventBus } from '../event-bus.ts';
 import type { Logger } from '../observability/logger.ts';
 import type { TraceCollector } from '../observability/trace.ts';
@@ -148,7 +148,6 @@ export interface RenderRequestRecord {
   responseContent?: string | null;
 }
 
-
 /** Categorises why Pass 2 analysis is null after all retries exhaust.
  *  - 'empty': provider returned null or empty content
  *  - 'parse': content was not valid JSON
@@ -254,9 +253,7 @@ export class RenderPipeline {
   private readonly providerProfile?: string;
   constructor(opts: RenderPipelineOptions) {
     if (opts.provider && opts.providerFactory) {
-      throw new Error(
-        'PROVIDER_REQUIRED: Cannot provide both provider and providerFactory',
-      );
+      throw new Error('PROVIDER_REQUIRED: Cannot provide both provider and providerFactory');
     }
     this.provider = opts.provider;
     this.providerFactory = opts.providerFactory;
@@ -286,8 +283,6 @@ export class RenderPipeline {
     this.pool = new ConcurrencyPool(opts.concurrency ?? 5);
   }
 
-
-
   /**
    * Resolve the LLM provider lazily. If a providerFactory is configured,
    * it is called exactly once and the result is memoized. Throws
@@ -300,9 +295,7 @@ export class RenderPipeline {
       return this._resolvedProvider;
     }
     if (this.provider) return this.provider;
-    throw new Error(
-      'PROVIDER_REQUIRED: No provider or providerFactory configured',
-    );
+    throw new Error('PROVIDER_REQUIRED: No provider or providerFactory configured');
   }
   /**
    * Render a single scene job: cache lookup → Pass 1 → Pass 2 → write cache.
@@ -487,7 +480,9 @@ export class RenderPipeline {
       if (cacheDiagnostics.length > 0) {
         this.logger?.info('Cache diagnostics', {
           eventId,
-          diagnostics: cacheDiagnostics.map((d) => d.diagnosis + (d.detail ? ': ' + d.detail : '')).join('; '),
+          diagnostics: cacheDiagnostics
+            .map((d) => `${d.diagnosis}${d.detail ? `: ${d.detail}` : ''}`)
+            .join('; '),
         });
       }
     }
@@ -571,175 +566,175 @@ export class RenderPipeline {
           break;
         }
       } else {
-      // ── Collect plugin decorations for Pass 1 ───────────────────
-      let pass1Decorations: readonly PromptDecoration[] = [];
-      if (this.pluginHooksManager) {
-        const buildInput: BuildPromptInput = {
-          phase: 'pass1',
-          eventId: event.id,
-          chapter,
-          attempt: attempts,
-          contractHash: job.contract.promptContractHash,
-          messages: [],
-        };
-        try {
-          pass1Decorations = await this.pluginHooksManager.runOnBuildPass1Prompt(buildInput);
-        } catch (err) {
-          errors.push(`Pass 1 decoration hook failed: ${sanitizeError(err)}`);
-          // Hard failure — break out of retry loop
-          breaker.recordFailure('Pass 1 decoration hook failed');
-          break;
+        // ── Collect plugin decorations for Pass 1 ───────────────────
+        let pass1Decorations: readonly PromptDecoration[] = [];
+        if (this.pluginHooksManager) {
+          const buildInput: BuildPromptInput = {
+            phase: 'pass1',
+            eventId: event.id,
+            chapter,
+            attempt: attempts,
+            contractHash: job.contract.promptContractHash,
+            messages: [],
+          };
+          try {
+            pass1Decorations = await this.pluginHooksManager.runOnBuildPass1Prompt(buildInput);
+          } catch (err) {
+            errors.push(`Pass 1 decoration hook failed: ${sanitizeError(err)}`);
+            // Hard failure — break out of retry loop
+            breaker.recordFailure('Pass 1 decoration hook failed');
+            break;
+          }
         }
-      }
 
-      // ── Pass 1: Pure prose (with retry guidance on retry) ────────
-      const assembler = new PromptAssembler();
-      const assembled = assembler.assemble(context, {
-        targetLengthWords: this.targetLengthWords,
-        styleGuidance: job.event.styleGuidance,
-        characterVoiceNotes:
-          job.event.styleGuidance?.characterVoice &&
-          Object.keys(job.event.styleGuidance.characterVoice).length > 0
-            ? Object.entries(job.event.styleGuidance.characterVoice)
-                .map(([id, note]) => `${id}: ${note}`)
-                .join('; ')
-            : undefined,
-        language: this.language,
-        referenceExample: this.referenceExample,
-        retryGuidance:
-          attempts > 1 && previousErrorMessages.length > 0
-            ? previousErrorMessages.join('\n')
-            : undefined,
-        profileStyleNotes: styleNotes,
-        narrativeChecklistItems: job.event.narrativeChecklist?.items,
-        sourceContextStyleNotes: job.event.sourceContext?.entries
-          .filter((e) => e.classification === 'STYLE')
-          .map((e) => (e.styleNote ? `- "${e.excerpt}" (${e.styleNote})` : `- "${e.excerpt}"`))
-          .join('\n'),
-        logicalDisclosureSummary: job.logicalDisclosureSummary,
-        surfaceReferencePacket: job.surfaceReferencePacket,
-        decorations: pass1Decorations.length > 0 ? [...pass1Decorations] : undefined,
-        gameDialogue: job.gameDialogue,
-        previousAcceptedProse: job.revisionContext?.baseProse,
-        editorialRevisionInstructions: job.editorialRevisionInstructions,
-      });
-      this.traceCollector?.record({
-        phase: 'pass1',
-        state: 'start',
-        spanId: `${eventId}:pass1`,
-        eventId,
-      });
-      const proseMessages = assembled.messages;
-      try {
-        const pass1Request: CompletionRequest = {
-          messages: proseMessages,
-          model: this.model,
-          temperature: 0.8,
-          maxTokens: this.maxTokens,
-          taskType: 'pass1',
-          signal: effectiveSignal,
-        };
-        // ── Check abort before Pass 1 provider call ─────────────────
-        if (effectiveSignal?.aborted) {
-          throw new Error('ABORTED: Render cancelled before Pass 1 provider call');
-        }
-        const pass1Hash = this.computeRequestHash(pass1Request);
-        const result1 = await (await this.resolveProvider()).complete(pass1Request);
-        prose = result1.content ?? '';
-        llmPass1 = result1.usage ?? llmPass1;
-        requestRecords.push({
-          phase: 'pass1',
-          attempt: attempts,
-          requestHash: pass1Hash,
-          messages: [...proseMessages],
-          responseContent: result1.content ?? null,
+        // ── Pass 1: Pure prose (with retry guidance on retry) ────────
+        const assembler = new PromptAssembler();
+        const assembled = assembler.assemble(context, {
+          targetLengthWords: this.targetLengthWords,
+          styleGuidance: job.event.styleGuidance,
+          characterVoiceNotes:
+            job.event.styleGuidance?.characterVoice &&
+            Object.keys(job.event.styleGuidance.characterVoice).length > 0
+              ? Object.entries(job.event.styleGuidance.characterVoice)
+                  .map(([id, note]) => `${id}: ${note}`)
+                  .join('; ')
+              : undefined,
+          language: this.language,
+          referenceExample: this.referenceExample,
+          retryGuidance:
+            attempts > 1 && previousErrorMessages.length > 0
+              ? previousErrorMessages.join('\n')
+              : undefined,
+          profileStyleNotes: styleNotes,
+          narrativeChecklistItems: job.event.narrativeChecklist?.items,
+          sourceContextStyleNotes: job.event.sourceContext?.entries
+            .filter((e) => e.classification === 'STYLE')
+            .map((e) => (e.styleNote ? `- "${e.excerpt}" (${e.styleNote})` : `- "${e.excerpt}"`))
+            .join('\n'),
+          logicalDisclosureSummary: job.logicalDisclosureSummary,
+          surfaceReferencePacket: job.surfaceReferencePacket,
+          decorations: pass1Decorations.length > 0 ? [...pass1Decorations] : undefined,
+          gameDialogue: job.gameDialogue,
+          previousAcceptedProse: job.revisionContext?.baseProse,
+          editorialRevisionInstructions: job.editorialRevisionInstructions,
         });
-        providerCalls.push({
+        this.traceCollector?.record({
           phase: 'pass1',
-          attempt: attempts,
-          outcome: 'success',
-          requestHash: pass1Hash,
-          model: this.model,
-          seed: null,
+          state: 'start',
+          spanId: `${eventId}:pass1`,
+          eventId,
         });
-        if (!prose || prose.trim().length === 0) {
-          errors.push(`Pass 1 attempt ${attempts} returned empty prose`);
-          this.logger?.warn('Pass 1 returned empty prose', { eventId, attempts });
-          previousErrorMessages = [`Pass 1 attempt ${attempts} returned empty prose`];
-          breaker.recordFailure('Pass 1 returned empty prose');
+        const proseMessages = assembled.messages;
+        try {
+          const pass1Request: CompletionRequest = {
+            messages: proseMessages,
+            model: this.model,
+            temperature: 0.8,
+            maxTokens: this.maxTokens,
+            taskType: 'pass1',
+            signal: effectiveSignal,
+          };
+          // ── Check abort before Pass 1 provider call ─────────────────
+          if (effectiveSignal?.aborted) {
+            throw new Error('ABORTED: Render cancelled before Pass 1 provider call');
+          }
+          const pass1Hash = this.computeRequestHash(pass1Request);
+          const result1 = await (await this.resolveProvider()).complete(pass1Request);
+          prose = result1.content ?? '';
+          llmPass1 = result1.usage ?? llmPass1;
+          requestRecords.push({
+            phase: 'pass1',
+            attempt: attempts,
+            requestHash: pass1Hash,
+            messages: [...proseMessages],
+            responseContent: result1.content ?? null,
+          });
+          providerCalls.push({
+            phase: 'pass1',
+            attempt: attempts,
+            outcome: 'success',
+            requestHash: pass1Hash,
+            model: this.model,
+            seed: null,
+          });
+          if (!prose || prose.trim().length === 0) {
+            errors.push(`Pass 1 attempt ${attempts} returned empty prose`);
+            this.logger?.warn('Pass 1 returned empty prose', { eventId, attempts });
+            previousErrorMessages = [`Pass 1 attempt ${attempts} returned empty prose`];
+            breaker.recordFailure('Pass 1 returned empty prose');
+            if (breaker.state().consecutiveFailures >= 2) {
+              breaker.escalate();
+            }
+            continue;
+          }
+        } catch (err) {
+          const errStr = String(err);
+          if (errStr.includes('PROVIDER_REQUIRED')) {
+            errors.push(`PROVIDER_REQUIRED: ${sanitizeError(err)}`);
+            this.logger?.error('PROVIDER_REQUIRED — no provider available', { eventId, attempts });
+            break;
+          }
+          const pass1Hash = this.computeRequestHash({
+            messages: proseMessages,
+            model: this.model,
+            temperature: 0.8,
+            maxTokens: this.maxTokens,
+            taskType: 'pass1',
+          });
+          requestRecords.push({
+            phase: 'pass1',
+            attempt: attempts,
+            requestHash: pass1Hash,
+            messages: [...proseMessages],
+          });
+          // Detect timeout before recording — so we can normalize the failure reason
+          const isTimeout = /timeout/i.test(errStr) || errStr.includes('timed out');
+          providerCalls.push({
+            phase: 'pass1',
+            attempt: attempts,
+            outcome: 'failure',
+            failureReason: isTimeout ? `timeout — ${sanitizeError(err)}` : sanitizeError(err),
+            requestHash: pass1Hash,
+            model: this.model,
+            seed: null,
+          });
+          // Timeout — only retry with a material mutation
+          if (isTimeout) {
+            errors.push(
+              `Pass 1 attempt ${attempts} timed out — only retrying with material mutation`,
+            );
+            this.logger?.warn('Pass 1 timeout', { eventId, attempts });
+            // A timeout without prior material mutation (different model/routing/deadline)
+            // is NOT retryable. Let circuit breaker handle it.
+            breaker.recordFailure('Pass 1 timeout — no material mutation');
+            if (breaker.state().consecutiveFailures >= 2) {
+              breaker.escalate();
+            }
+            continue;
+          }
+          // All other provider exceptions are hard failures, NOT retried with '(empty)'.
+          errors.push(`Pass 1 attempt ${attempts} failed: ${sanitizeError(err)}`);
+          this.logger?.error(sanitizeError(err), { eventId, attempts, phase: 'pass1' });
+          breaker.recordFailure('Pass 1 provider error');
           if (breaker.state().consecutiveFailures >= 2) {
             breaker.escalate();
           }
           continue;
         }
-      } catch (err) {
-        const errStr = String(err);
-        if (errStr.includes('PROVIDER_REQUIRED')) {
-          errors.push(`PROVIDER_REQUIRED: ${sanitizeError(err)}`);
-          this.logger?.error('PROVIDER_REQUIRED — no provider available', { eventId, attempts });
-          break;
-        }
-        const pass1Hash = this.computeRequestHash({
-          messages: proseMessages,
-          model: this.model,
-          temperature: 0.8,
-          maxTokens: this.maxTokens,
-          taskType: 'pass1',
-        });
-        requestRecords.push({
+        this.traceCollector?.record({
           phase: 'pass1',
-          attempt: attempts,
-          requestHash: pass1Hash,
-          messages: [...proseMessages],
+          state: 'end',
+          spanId: `${eventId}:pass1`,
+          eventId,
+          durationMs: Date.now() - renderStart,
         });
-        // Detect timeout before recording — so we can normalize the failure reason
-        const isTimeout = /timeout/i.test(errStr) || errStr.includes('timed out');
-        providerCalls.push({
-          phase: 'pass1',
-          attempt: attempts,
-          outcome: 'failure',
-          failureReason: isTimeout
-            ? `timeout — ${sanitizeError(err)}`
-            : sanitizeError(err),
-          requestHash: pass1Hash,
-          model: this.model,
-          seed: null,
+        this.logger?.info('Pass 1 completed', {
+          eventId,
+          attempts,
+          promptTokens: llmPass1.promptTokens,
+          completionTokens: llmPass1.completionTokens,
+          totalTokens: llmPass1.totalTokens,
         });
-        // Timeout — only retry with a material mutation
-        if (isTimeout) {
-          errors.push(`Pass 1 attempt ${attempts} timed out — only retrying with material mutation`);
-          this.logger?.warn('Pass 1 timeout', { eventId, attempts });
-          // A timeout without prior material mutation (different model/routing/deadline)
-          // is NOT retryable. Let circuit breaker handle it.
-          breaker.recordFailure('Pass 1 timeout — no material mutation');
-          if (breaker.state().consecutiveFailures >= 2) {
-            breaker.escalate();
-          }
-          continue;
-        }
-        // All other provider exceptions are hard failures, NOT retried with '(empty)'.
-        errors.push(`Pass 1 attempt ${attempts} failed: ${sanitizeError(err)}`);
-        this.logger?.error(sanitizeError(err), { eventId, attempts, phase: 'pass1' });
-        breaker.recordFailure('Pass 1 provider error');
-        if (breaker.state().consecutiveFailures >= 2) {
-          breaker.escalate();
-        }
-        continue;
-      }
-      this.traceCollector?.record({
-        phase: 'pass1',
-        state: 'end',
-        spanId: `${eventId}:pass1`,
-        eventId,
-        durationMs: Date.now() - renderStart,
-      });
-      this.logger?.info('Pass 1 completed', {
-        eventId,
-        attempts,
-        promptTokens: llmPass1.promptTokens,
-        completionTokens: llmPass1.completionTokens,
-        totalTokens: llmPass1.totalTokens,
-      });
       }
 
       // ── Pass 2: Structured analysis (with retry-with-feedback) ────
@@ -839,7 +834,8 @@ export class RenderPipeline {
           if (analysisRaw) {
             const parseResult = parseAnalysisJSONWithErrors(
               analysisRaw,
-              this.analysisContract?.combinedSchema ?? this.aggregator?.getCombinedValidationSchema(),
+              this.analysisContract?.combinedSchema ??
+                this.aggregator?.getCombinedValidationSchema(),
             );
             if (parseResult.result) {
               analysisObj = parseResult.result;
@@ -851,18 +847,23 @@ export class RenderPipeline {
             // Must be set before parseError/zodErrors are potentially consumed for feedback.
             if (parseResult.parseError) {
               pass2Rejection = 'parse';
-              feedbackErrors = [`JSON parse error (sub-attempt ${attempt2 + 1}): ${parseResult.parseError}`];
+              feedbackErrors = [
+                `JSON parse error (sub-attempt ${attempt2 + 1}): ${parseResult.parseError}`,
+              ];
             } else if (parseResult.zodErrors) {
               pass2Rejection = 'validation';
               feedbackErrors = parseResult.zodErrors.issues.map(
-                (i) => `Validation error (sub-attempt ${attempt2 + 1}) at "${i.path.join('.')}": ${i.message}`,
+                (i) =>
+                  `Validation error (sub-attempt ${attempt2 + 1}) at "${i.path.join('.')}": ${i.message}`,
               );
             }
           } else {
             pass2Rejection = 'empty';
             // Empty content retry must still mutate the request identity
             // by providing structured feedback — never a blind retry.
-            feedbackErrors = [`Pass 2 sub-attempt ${attempt2 + 1} returned empty. Please provide a valid structured JSON analysis for the scene.`];
+            feedbackErrors = [
+              `Pass 2 sub-attempt ${attempt2 + 1} returned empty. Please provide a valid structured JSON analysis for the scene.`,
+            ];
           }
         }
 
@@ -870,7 +871,11 @@ export class RenderPipeline {
           analysis = analysisObj;
 
           // ── P5: Dev-only double-run verification ──────────────────
-          if (this.doubleRunVerification && effectiveSignal?.aborted !== true && lastAnalysisMessages) {
+          if (
+            this.doubleRunVerification &&
+            effectiveSignal?.aborted !== true &&
+            lastAnalysisMessages
+          ) {
             let verifyHash = '';
             try {
               const verifyRequest: CompletionRequest = {
@@ -1083,9 +1088,9 @@ export class RenderPipeline {
 
     // Save cache ONLY if validation passed (don't cache bad renders)
     // Cache only analysable, no-error candidates (warning-only ok)
-    const hasErrorIssues = renderValidation?.errors.some((e: ValidationIssue) => e.severity === 'error') ?? false;
-    const isCacheable =
-      job.proseCandidate === undefined && analysis !== null && !hasErrorIssues;
+    const hasErrorIssues =
+      renderValidation?.errors.some((e: ValidationIssue) => e.severity === 'error') ?? false;
+    const isCacheable = job.proseCandidate === undefined && analysis !== null && !hasErrorIssues;
     if (cacheKey && isCacheable) {
       const evidenceHash = computeEvidenceHash(
         event.id,
@@ -1103,9 +1108,8 @@ export class RenderPipeline {
         validatorPolicyVersion: '1',
       });
 
-      const attemptGuidance = previousErrorMessages.length > 0
-        ? sha256Canonical(previousErrorMessages)
-        : undefined;
+      const attemptGuidance =
+        previousErrorMessages.length > 0 ? sha256Canonical(previousErrorMessages) : undefined;
       const attemptKeyStr = buildAttemptKeyMaterial({
         validationKeyString: validationKeyStr,
         attemptNumber: attempts,
@@ -1178,7 +1182,6 @@ export class RenderPipeline {
     };
   }
 
-
   /**
    * Render multiple scenes in parallel using the concurrency pool.
    * Respects cache for already-rendered scenes.
@@ -1200,15 +1203,13 @@ export class RenderPipeline {
       return JSON.stringify(value);
     }
     if (Array.isArray(value)) {
-      return '[' + value.map((v) => this.canonicalJson(v)).join(',') + ']';
+      return `[${value.map((v) => this.canonicalJson(v)).join(',')}]`;
     }
     const obj = value as Record<string, unknown>;
     const keys = Object.keys(obj)
       .filter((k) => obj[k] !== undefined)
       .sort();
-    return (
-      '{' + keys.map((k) => JSON.stringify(k) + ':' + this.canonicalJson(obj[k])).join(',') + '}'
-    );
+    return `{${keys.map((k) => `${JSON.stringify(k)}:${this.canonicalJson(obj[k])}`).join(',')}}`;
   }
   /**
    * Compute the SHA-256 request hash for a provider call.
@@ -1279,8 +1280,7 @@ export function evaluateProseCandidate(
     ];
   } else {
     const schema =
-      input.analysisContract?.combinedSchema ??
-      input.aggregator?.getCombinedValidationSchema();
+      input.analysisContract?.combinedSchema ?? input.aggregator?.getCombinedValidationSchema();
     const parseResult = parseAnalysisJSONWithErrors(raw, schema);
 
     if (parseResult.result) {

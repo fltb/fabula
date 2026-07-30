@@ -35,6 +35,7 @@ import { CharacterStateValidator } from './character-state.js';
 import { ConflictValidator } from './conflict.js';
 import { DiscourseValidator } from './discourse.js';
 import { DiscourseBalanceValidator } from './discourse-balance.js';
+import { ChecklistValidator } from './checklist.js';
 import { DurationConsistencyValidator } from './duration-consistency.js';
 import { FactualDetailValidator } from './factual-detail.js';
 import { FocalizationConsistencyValidator } from './focalization-consistency.js';
@@ -111,6 +112,7 @@ export class ResultAggregator {
       new AnachronyConsistencyValidator(),
       new FocalizationConsistencyValidator(),
       new DiscourseValidator(),
+      new ChecklistValidator(),
     ];
     this.pluginValidators = pluginValidators ?? [];
   }

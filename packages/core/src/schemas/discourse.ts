@@ -296,23 +296,36 @@ export const withholdingPolicySchema = z
   })
   .strict();
 
-// ─── PlannedDiscourseLedger (§3) ────────────────────────────────────────────
+// ─── PlannedDiscourseLedger (§3) — Source-only schema ──────────────────────
 
 export const plannedLedgerEntrySchema = z
   .object({
-    id: z.string(),
+    id: z.string().trim().min(1),
     action: disclosureActionSchema,
-    sceneId: z.string(),
-    branch: z.string(),
+    sceneId: z.string().trim().min(1),
+    branch: z.string().trim().min(1),
     discoursePosition: discoursePositionSchema,
   })
   .strict();
 
-export const plannedDiscourseLedgerSchema = z
+export const ledgerChapterSchema = z
   .object({
-    id: z.string(),
+    branch: z.string().trim().min(1),
+    chapter: z.number().int().positive(),
+    sceneIds: z.array(z.string().trim().min(1)).nonempty(),
+  })
+  .strict();
+
+/**
+ * Schema for the authored planned-discourse-ledger source.
+ * Hash is NOT authored — it is derived at runtime by the compiler.
+ * Chapters must be nonempty; entries may be empty.
+ */
+export const plannedDiscourseLedgerSourceSchema = z
+  .object({
+    id: z.string().min(1).trim(),
+    chapters: z.array(ledgerChapterSchema).nonempty(),
     entries: z.array(plannedLedgerEntrySchema),
-    hash: z.string(),
   })
   .strict();
 

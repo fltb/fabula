@@ -94,21 +94,18 @@ function computeCatalogHash(assertions: Record<string, NarratorAssertion>): stri
   return simpleHash(ids.join(',') + '|' + ids.length);
 }
 
-/** Build state at-or-before cursor, handling -1 sentinel. */
+/** Build state at-or-before cursor, handling the -1 pre-disclosure sentinel. */
 function buildStateAtCursor(
   cursor: number,
-  ledger: PlannedDiscourseLedger | null,
+  ledger: PlannedDiscourseLedger,
   branch: string,
   assertions: Record<string, NarratorAssertion>,
 ): DiscourseState {
   if (cursor < -1) {
-    throw new ConfigError(`Invalid discourseCursor ${cursor}: must be -1 or nonnegative`);
+    throw new ConfigError(`Invalid derived discourse cursor ${cursor}: must be -1 or nonnegative`);
   }
-  if (cursor === -1) {
-    return makeEmptyState(branch, assertions, ledger?.hash ?? '');
-  }
-  if (cursor === 0 || !ledger) {
-    return makeEmptyState(branch, assertions, ledger?.hash ?? '');
+  if (cursor <= 0) {
+    return makeEmptyState(branch, assertions, ledger.hash);
   }
   return replayDiscourseState(ledger, cursor - 1, branch, assertions);
 }
@@ -416,6 +413,113 @@ function preflightSemanticRules(
     }
   }
 }
+
+interface SceneActionInterval {
+  start: number;
+  end: number;
+}
+
+interface BranchSceneSequence {
+  sceneIds: readonly string[];
+  actionIntervals: ReadonlyMap<string, SceneActionInterval>;
+}
+
+function compileBranchSceneSequence(
+  events: readonly NarrativeEvent[],
+  ledger: PlannedDiscourseLedger,
+  branch: string,
+  branchEntries: readonly PlannedLedgerEntry[],
+): BranchSceneSequence {
+  const eventById = new Map(events.map((event) => [event.id, event]));
+  if (eventById.size !== events.length) {
+    throw new ConfigError(`Duplicate event IDs supplied for discourse branch "${branch}".`);
+  }
+
+  const chapterBlocks = ledger.chapters.filter((chapter) => chapter.branch === branch);
+  if (chapterBlocks.length === 0) {
+    throw new ConfigError(
+      `Discourse ledger "${ledger.id}" has no chapter sequence for branch "${branch}".`,
+    );
+  }
+
+  let previousChapter = 0;
+  const seenSceneIds = new Set<string>();
+  const sceneIds: string[] = [];
+  for (const chapterBlock of chapterBlocks) {
+    if (chapterBlock.chapter <= previousChapter) {
+      throw new ConfigError(
+        `Discourse ledger "${ledger.id}" has non-increasing chapter ${chapterBlock.chapter} ` +
+          `for branch "${branch}".`,
+      );
+    }
+    previousChapter = chapterBlock.chapter;
+    for (const sceneId of chapterBlock.sceneIds) {
+      if (!eventById.has(sceneId)) {
+        throw new ConfigError(
+          `Discourse ledger "${ledger.id}" chapter ${chapterBlock.chapter} references unknown scene "${sceneId}".`,
+        );
+      }
+      if (seenSceneIds.has(sceneId)) {
+        throw new ConfigError(
+          `Discourse ledger "${ledger.id}" lists scene "${sceneId}" more than once on branch "${branch}".`,
+        );
+      }
+      seenSceneIds.add(sceneId);
+      sceneIds.push(sceneId);
+    }
+  }
+
+  for (const eventId of eventById.keys()) {
+    if (!seenSceneIds.has(eventId)) {
+      throw new ConfigError(
+        `Discourse ledger "${ledger.id}" omits reachable scene "${eventId}" on branch "${branch}".`,
+      );
+    }
+  }
+
+  const sortedEntries = [...branchEntries].sort(
+    (left, right) => left.discoursePosition - right.discoursePosition,
+  );
+  for (const [index, entry] of sortedEntries.entries()) {
+    if (entry.discoursePosition !== index) {
+      throw new ConfigError(
+        `Discourse ledger "${ledger.id}" has gapped action position ${entry.discoursePosition} ` +
+          `on branch "${branch}"; positions must be contiguous from 0.`,
+      );
+    }
+  }
+
+  const entriesByScene = new Map<string, PlannedLedgerEntry[]>();
+  for (const entry of sortedEntries) {
+    const entries = entriesByScene.get(entry.sceneId) ?? [];
+    entries.push(entry);
+    entriesByScene.set(entry.sceneId, entries);
+  }
+
+  const actionIntervals = new Map<string, SceneActionInterval>();
+  for (const [sceneId, entries] of entriesByScene) {
+    actionIntervals.set(sceneId, {
+      start: entries[0]!.discoursePosition,
+      end: entries[entries.length - 1]!.discoursePosition,
+    });
+  }
+
+  let previousSceneIndex = -1;
+  for (const [sceneId, interval] of [...actionIntervals.entries()].sort(
+    (left, right) => left[1].start - right[1].start,
+  )) {
+    const sceneIndex = sceneIds.indexOf(sceneId);
+    if (sceneIndex <= previousSceneIndex) {
+      throw new ConfigError(
+        `Discourse ledger "${ledger.id}" action interval for scene "${sceneId}" begins at ${interval.start} ` +
+          `outside the declared scene sequence for branch "${branch}".`,
+      );
+    }
+    previousSceneIndex = sceneIndex;
+  }
+
+  return { sceneIds, actionIntervals };
+}
 /**
  * Performs strict preflight validation BEFORE any provider/cache/prompt:
  *   - assertion catalog completeness (no permissive fallback)
@@ -434,108 +538,78 @@ function preflightSemanticRules(
  * Returns a deterministic, immutable Record<eventId, CompiledDiscourseRenderContext>
  * for valid branches. Throws ConfigError synchronously for malformed planned data.
  *
- * @param events  - All events in the project (used for sceneId matching and cursor defaults).
- * @param ledger  - PlannedDiscourseLedger from project definitions (null when not configured).
+ * @param events  - All reachable authored events in the selected branch.
+ * @param ledger  - Runtime-compiled mandatory disclosure ledger.
  * @param assertions - Assertion catalog loaded from definitions/assertions/.
  * @param narratorProfiles - Narrator profiles from definitions/narrators/.
- * @param branch  - Branch scope to compile for.
+ * @param branch  - Reader-order branch scope to compile for.
  * @returns Record keyed by event id with fully pre-compiled discourse contexts.
  */
 export function compileDiscourseBoundaries(
   events: NarrativeEvent[],
-  ledger: PlannedDiscourseLedger | null,
+  ledger: PlannedDiscourseLedger,
   assertions: Record<string, NarratorAssertion>,
   narratorProfiles: Record<string, NarratorProfile>,
   branch: string,
 ): Record<string, CompiledDiscourseRenderContext> {
-  // ─── No ledger: no discourse to compile (no-disclosure mode) ────────────────
-  if (!ledger) {
-    return {};
-  }
-  const eventIds = new Set(events.map((e) => e.id));
+  const eventIds = new Set(events.map((event) => event.id));
   const assertionCatalogHash = computeCatalogHash(assertions);
   const contexts: Record<string, CompiledDiscourseRenderContext> = {};
-  // ─── Has ledger: strict preflight ──────────────────────────────────────────
 
-  // 1. Assertion catalog completeness
   preflightAssertionCatalog(ledger, assertions);
-
-  // 2. Branch-local structural validation
-  const branchEntries = ledger.entries.filter((e) => e.branch === branch);
+  const branchEntries = ledger.entries.filter((entry) => entry.branch === branch);
   preflightBranchEntries(branchEntries, eventIds, branch);
-
-  // 3. Per-scene action continuity
   preflightSceneContinuity(branchEntries, branch);
-
-  // 4. Semantic rule preflight (cumulative — single linear pass)
   preflightSemanticRules(branchEntries, assertions, narratorProfiles, branch);
 
-  // ─── Build per-event CompiledDiscourseRenderContext ─────────────────────────
-
-  // Group entries by sceneId for fast lookup
-  const byScene = new Map<string, PlannedLedgerEntry[]>();
+  const { sceneIds, actionIntervals } = compileBranchSceneSequence(
+    events,
+    ledger,
+    branch,
+    branchEntries,
+  );
+  const eventById = new Map(events.map((event) => [event.id, event]));
+  const entriesByScene = new Map<string, PlannedLedgerEntry[]>();
   for (const entry of branchEntries) {
-    const list = byScene.get(entry.sceneId) ?? [];
-    list.push(entry);
-    byScene.set(entry.sceneId, list);
+    const entries = entriesByScene.get(entry.sceneId) ?? [];
+    entries.push(entry);
+    entriesByScene.set(entry.sceneId, entries);
   }
 
-
-  for (const event of events) {
-    const sceneEntries = byScene.get(event.id);
+  let latestActionPosition = -1;
+  for (const sceneId of sceneIds) {
+    const event = eventById.get(sceneId)!;
+    const sceneEntries = entriesByScene.get(sceneId);
+    const interval = actionIntervals.get(sceneId);
     let stateBefore: DiscourseState;
     let stateAfter: DiscourseState;
     let cursor: number;
     let currentActionIds: string[];
 
-    if (sceneEntries && sceneEntries.length > 0) {
-      // Scene has ledger actions
-      const positions = sceneEntries.map((e) => e.discoursePosition).sort((a, b) => a - b);
-      const firstPos = positions[0];
-      const lastPos = positions[positions.length - 1];
-
-      // stateBefore = replay to just before first action
-      stateBefore = buildStateAtCursor(firstPos, ledger, branch, assertions);
-
-      // stateAfter = replay including all scene's actions
-      stateAfter = replayDiscourseState(ledger, lastPos, branch, assertions);
-
-      cursor = firstPos;
-      currentActionIds = sceneEntries.map((e) => e.id);
-    } else if (event.discourseCursor !== undefined) {
-      // No ledger actions — must have explicit cursor
-      cursor = event.discourseCursor;
-      if (cursor < -1) {
-        throw new ConfigError(
-          `Event "${event.id}" has invalid discourseCursor ${cursor}. Must be -1 or nonnegative.`,
-        );
-      }
-      currentActionIds = [];
-
-      stateBefore = buildStateAtCursor(cursor, ledger, branch, assertions);
-      stateAfter = cloneDiscourseState(stateBefore);
+    if (sceneEntries && interval) {
+      stateBefore = buildStateAtCursor(interval.start, ledger, branch, assertions);
+      stateAfter = replayDiscourseState(ledger, interval.end, branch, assertions);
+      cursor = interval.start;
+      currentActionIds = [...sceneEntries]
+        .sort((left, right) => left.discoursePosition - right.discoursePosition)
+        .map((entry) => entry.id);
+      latestActionPosition = interval.end;
     } else {
-      throw new ConfigError(
-        `Event "${event.id}" (branch "${branch}") has no ledger entries ` +
-        `and no discourseCursor field. Scenes without ledger actions must declare ` +
-        `discourseCursor in the event YAML (or entries must be added to the ledger).`,
-      );
+      cursor = latestActionPosition;
+      currentActionIds = [];
+      stateBefore =
+        cursor === -1
+          ? makeEmptyState(branch, assertions, ledger.hash)
+          : replayDiscourseState(ledger, cursor, branch, assertions);
+      stateAfter = cloneDiscourseState(stateBefore);
     }
 
-    // Authorized assertions from this event's reveal/claim actions
     const authorizedAssertions: string[] = [];
-    if (sceneEntries) {
-      for (const e of sceneEntries) {
-        if (e.action.type === 'reveal' || e.action.type === 'claim') {
-          authorizedAssertions.push(e.action.assertionId);
-        }
+    for (const entry of sceneEntries ?? []) {
+      if (entry.action.type === 'reveal' || entry.action.type === 'claim') {
+        authorizedAssertions.push(entry.action.assertionId);
       }
     }
-    // Safe projection — projectDiscourseContext already strips hint targets.
-    // Derive from stateAfter so this scene's own authorized reveal/claim actions
-    // are included in the Pass 1 safe projection (per the plan: "Pass 1 safe
-    // projection includes this scene's authorized reveal/claim actions and
-    // therefore derives from stateAfter").
     const projection = projectDiscourseContext(
       stateAfter,
       narratorProfiles[event.narratorProfileRef ?? ''],

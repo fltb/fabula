@@ -8,13 +8,14 @@ import {
   locationDefinitionSchema,
   narratorAssertionSchema,
   narratorProfileSchema,
-  plannedDiscourseLedgerSchema,
+  plannedDiscourseLedgerSourceSchema,
   projectConfigSchema,
   relationshipDefinitionSchema,
   ruleDefinitionSchema,
   worldInitialStateSchema,
 } from '../schemas/index.js';
 import { compileGameDialogueTree } from '../branch/game-dialogue-tree.ts';
+import { compilePlannedDiscourseLedger } from '../state/discourse-ledger.ts';
 import { ConfigError } from '../errors.ts';
 import { FsStorage, type Storage } from '../storage/index.ts';
 import type {
@@ -28,7 +29,7 @@ import type {
   NarrativeEvent,
   NarratorAssertion,
   NarratorProfile,
-  PlannedDiscourseLedger,
+  PlannedDiscourseLedgerSource,
   RelationshipDefinition,
   RuleDefinition,
   TimeAnchor,
@@ -101,13 +102,13 @@ export class EntityMapper {
       this.narratorProfiles[np.id] = np;
     }
 
-    // DISCOURSE-1: Load the planned discourse ledger (optional single file)
-    const discourseLedger = readYamlFile({
+    // The disclosure ledger is the mandatory reader-order source.
+    const discourseLedgerSource = readYamlFile({
       filePath: path.join(defsDir, 'discourse-ledger.yaml'),
-      schema: plannedDiscourseLedgerSchema,
+      schema: plannedDiscourseLedgerSourceSchema,
       storage: this.storage,
-      optional: true,
-    }) as PlannedDiscourseLedger | null;
+    }) as PlannedDiscourseLedgerSource;
+    const discourseLedger = compilePlannedDiscourseLedger(discourseLedgerSource);
 
     // DISCOURSE-1: Load narrator assertions (optional directory)
     const narratorAssertionFiles = readYamlFilesInDir(
@@ -303,10 +304,18 @@ export class EntityMapper {
       anachrony: eventFile.anachrony,
       focalization: eventFile.focalization,
       narratorProfileRef: eventFile.narratorProfileRef,
+      // Graph-resolved narrative technique contracts
+      causalDiscontinuity: eventFile.causalDiscontinuity,
+      surfaceMode: eventFile.surfaceMode,
+      causalMultiplicity: eventFile.causalMultiplicity,
+      irresolvableIndeterminacy: eventFile.irresolvableIndeterminacy,
+      absentApparatus: eventFile.absentApparatus,
+      voiceDissonance: eventFile.voiceDissonance,
+      multiplicity: eventFile.multiplicity,
+      metanarrativeLevel: eventFile.metanarrativeLevel,
       // Entity introduction + free-form author pass-through
       introduces: eventFile.introduces,
       authorNotes: eventFile.authorNotes,
-      discourseCursor: eventFile.discourseCursor,
     };
   }
 

@@ -404,6 +404,46 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       storyTime: 'day_5',
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'A full featured event',
+      causalDiscontinuity: {
+        predecessor: 'E0',
+        dependent: 'full_event',
+        instruction: 'Keep the causal discontinuity visible.',
+        requiredEvidence: 'The consequence remains unaccounted for.',
+      },
+      surfaceMode: {
+        instruction: 'Describe only external action.',
+        requiredEvidence: 'Camille closes the door.',
+      },
+      causalMultiplicity: {
+        minimumOutgoingEdges: 3,
+        instruction: 'Retain each consequence.',
+        requiredEvidence: 'Three consequences diverge.',
+      },
+      irresolvableIndeterminacy: {
+        assertionIds: ['assertion:unknown'],
+        instruction: 'Keep the assertion unresolved.',
+        requiredEvidence: 'No account settles the claim.',
+      },
+      absentApparatus: {
+        readId: 'read:absent_witness',
+        instruction: 'Let absence remain active.',
+        requiredEvidence: 'The witness never arrives.',
+      },
+      voiceDissonance: {
+        assertionId: 'assertion:catastrophe',
+        storyOutputId: 'output:catastrophe',
+        instruction: 'Keep the voices dissonant.',
+        requiredEvidence: 'The narrator calls the disaster delightful.',
+      },
+      multiplicity: {
+        assertionIds: ['assertion:account_a', 'assertion:account_b'],
+        instruction: 'Preserve both accounts.',
+        requiredEvidence: 'Both accounts remain possible.',
+      },
+      metanarrativeLevel: {
+        instruction: 'Make narration visibly constructed.',
+        requiredEvidence: 'The narrator revises this sentence.',
+      },
       preconditions: [{ entity: 'camille', attribute: 'status', value: 'alive' }],
       expectedPostconditions: [{ entity: 'world', attribute: 'crisis', value: 'escalated' }],
       threadProgress: [
@@ -445,6 +485,14 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
     expect(ne.ruleEffects).toHaveLength(1);
     expect(ne.ruleEffects[0].rule).toBe('hextech_crystal_scarcity');
     expect(ne.styleGuidance).toEqual({ tone: 'suspenseful', scenePacing: 'deliberate' });
+    expect(ne.causalDiscontinuity).toEqual(eventFile.causalDiscontinuity);
+    expect(ne.surfaceMode).toEqual(eventFile.surfaceMode);
+    expect(ne.causalMultiplicity).toEqual(eventFile.causalMultiplicity);
+    expect(ne.irresolvableIndeterminacy).toEqual(eventFile.irresolvableIndeterminacy);
+    expect(ne.absentApparatus).toEqual(eventFile.absentApparatus);
+    expect(ne.voiceDissonance).toEqual(eventFile.voiceDissonance);
+    expect(ne.multiplicity).toEqual(eventFile.multiplicity);
+    expect(ne.metanarrativeLevel).toEqual(eventFile.metanarrativeLevel);
   });
 });
 

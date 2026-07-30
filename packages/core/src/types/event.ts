@@ -9,7 +9,16 @@ import type { EntityId, Fact, StoryTimestamp } from './entity.js';
 import type { FrequencyProfile } from './frequency.js';
 import type { GameDialogueChoice } from './game-dialogue.js';
 import type { GreyLine } from './grey-line.js';
-import type { ModernNovelConfig } from './modern-novel.js';
+import type {
+  AbsentApparatus,
+  CausalDiscontinuity,
+  CausalMultiplicity,
+  IrresolvableIndeterminacy,
+  MetanarrativeLevel,
+  Multiplicity,
+  SurfaceMode,
+  VoiceDissonance,
+} from './narrative-techniques.js';
 import type { NarrativeChecklist } from './narrative-checklist.js';
 import type {
   DimensionScope,
@@ -119,8 +128,15 @@ export interface NarrativeEvent {
     variation?: 'fixed' | 'variable' | 'multiple';
     characterSequence?: { character: string; scope: string }[];
   };
-  /** Modern novel structural fields — A-class validators + B-class effects (S3) */
-  modernNovel?: ModernNovelConfig;
+  /** Graph-resolved narrative technique contracts. */
+  causalDiscontinuity?: CausalDiscontinuity;
+  surfaceMode?: SurfaceMode;
+  causalMultiplicity?: CausalMultiplicity;
+  irresolvableIndeterminacy?: IrresolvableIndeterminacy;
+  absentApparatus?: AbsentApparatus;
+  voiceDissonance?: VoiceDissonance;
+  multiplicity?: Multiplicity;
+  metanarrativeLevel?: MetanarrativeLevel;
   /** Entities introduced by this event (forwarded from EventFile) */
   introduces?: Array<{
     type: 'character' | 'location' | 'item' | 'concept';
@@ -129,9 +145,6 @@ export interface NarrativeEvent {
   }>;
   /** Free-form author notes passed verbatim to the Pass 1 prompt (pure pass-through) */
   authorNotes?: string[];
-  /** Planned discourse cursor: -1 = no discourse actions; nonnegative = position visible at scene start.
-   *  Required for scenes with NO ledger actions; scenes owning ledger actions derive cursor from those entries. */
-  discourseCursor?: number;
 }
 
 export interface ThreadProgressEntry {
@@ -343,11 +356,15 @@ export interface EventFile {
     variation?: 'fixed' | 'variable' | 'multiple';
     characterSequence?: { character: string; scope: string }[];
   };
-  /** Modern novel structural fields — A-class validators + B-class effects (S3) */
-  modernNovel?: ModernNovelConfig;
+  /** Graph-resolved narrative technique contracts. */
+  causalDiscontinuity?: CausalDiscontinuity;
+  surfaceMode?: SurfaceMode;
+  causalMultiplicity?: CausalMultiplicity;
+  irresolvableIndeterminacy?: IrresolvableIndeterminacy;
+  absentApparatus?: AbsentApparatus;
+  voiceDissonance?: VoiceDissonance;
+  multiplicity?: Multiplicity;
+  metanarrativeLevel?: MetanarrativeLevel;
   /** Free-form author notes passed verbatim to the Pass 1 prompt (pure pass-through) */
   authorNotes?: string[];
-  /** Planned discourse cursor: -1 = no discourse actions; nonnegative = position visible at scene start.
-   *  Required for scenes with NO ledger actions; scenes owning ledger actions derive cursor from those entries. */
-  discourseCursor?: number;
 }

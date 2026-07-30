@@ -389,29 +389,37 @@ export interface WithholdingPolicy {
 // ─── PlannedDiscourseLedger (§3) — Canonical truth ──────────────────────────
 
 /**
- * The canonical planned disclosure ledger. YAML/corpus source-verified
- * contract is the ONLY reader/narrator/disclosure truth (§3). All scene
- * contracts determined before any prose generation.
+ * The source contract for a planned disclosure ledger.
+ * Hash is NOT authored — it is derived at runtime by the compiler.
  */
-export interface PlannedDiscourseLedger {
+export interface PlannedDiscourseLedgerSource {
+  /** Unique ledger identifier (nonblank). */
   id: string;
-  /** Ordered entries by discourse position. */
+  /**
+   * Ordered chapters by branch. Each chapter groups a nonempty set of
+   * scene ids. At least one chapter is required.
+   */
+  chapters: Array<{
+    /** Branch this chapter belongs to. */
+    branch: string;
+    /** Chapter number (positive integer). */
+    chapter: number;
+    /** Nonempty sequence of scene IDs in narrative order. */
+    sceneIds: [string, ...string[]];
+  }>;
+  /** Ordered disclosure entries by discourse position. May be empty. */
   entries: PlannedLedgerEntry[];
-  /** Hash of the full ledger for cache/validation. */
-  hash: string;
 }
 
-export interface PlannedLedgerEntry {
-  /** Entry ID. */
-  id: string;
-  /** The planned action. */
-  action: DisclosureAction;
-  /** Associated scene ID. */
-  sceneId: string;
-  /** Branch this entry belongs to. */
-  branch: string;
-  /** Discourse position (index into the ledger). */
-  discoursePosition: DiscoursePosition;
+/**
+ * The compiled planned disclosure ledger with runtime SHA-256 hash.
+ * YAML/corpus source-verified contract is the ONLY reader/narrator/disclosure
+ * truth (§3). All scene contracts determined before any prose generation.
+ * Hash is derived at runtime from canonical JSON of the source object.
+ */
+export interface PlannedDiscourseLedger extends PlannedDiscourseLedgerSource {
+  /** SHA-256 hex digest of the canonical serialization of the source. */
+  hash: string;
 }
 
 // ─── DiscourseState (§1) — NOT part of WorldState ──────────────────────────

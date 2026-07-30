@@ -679,6 +679,7 @@ export function compileGraph(
             ? discourseNodes[0].coordinate.value
             : 0,
       },
+      sceneSequence: [],
     };
     state.discourseGraphs.push(discourseGraph);
   }

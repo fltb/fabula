@@ -32,8 +32,8 @@ export interface ProjectData {
   timeAnchors: TimeAnchor[];
   /** Narrator profiles from definitions/narrators/ (S6c), indexed by id. */
   narratorProfiles: Record<string, NarratorProfile>;
-  /** Planned discourse ledger from definitions/discourse-ledger.yaml (DISCOURSE-1), null when absent. */
-  discourseLedger: PlannedDiscourseLedger | null;
+  /** Mandatory runtime-compiled disclosure ledger from definitions/discourse-ledger.yaml. */
+  discourseLedger: PlannedDiscourseLedger;
   /** Narrator assertions from definitions/assertions/ (DISCOURSE-1), indexed by id. */
   narratorAssertions: Record<string, NarratorAssertion>;
 }

@@ -53,7 +53,7 @@ function makeEvent(
     event: `event_${narrativeOrder}`,
     narrativeOrder,
     title: `Event ${narrativeOrder}`,
-    storyTime: makeTimestamp(),
+    storyTime: { type: 'absolute', value: `day_${narrativeOrder}` },
     sceneType: 'linear',
     pov: { character: 'camille', type: 'third_person_limited' },
     sceneBrief: `Scene brief for event ${narrativeOrder}`,
@@ -63,7 +63,8 @@ function makeEvent(
     foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
-    source: 'genesis',
+    kind: 'event',
+    source: 'event_file',
     branchExistence: { type: 'all' },
     participants: { entities: [] },
     ...overrides,
@@ -774,7 +775,9 @@ describe('ReplayEngine', () => {
         }),
       ];
 
-      expect(() => engine.replay(events)).toThrow('No earlier provider');
+      // Precondition validation happens at replay time — the event sets
+      // age=25 but then checks precondition age=24 before allowing the event
+      expect(() => engine.replay(events)).toThrow('Precondition eq fails');
     });
 
     it('should handle branch filtering — skip events not on current path', () => {
@@ -815,7 +818,7 @@ describe('ReplayEngine', () => {
         pathBEvent,
       ];
 
-      const state = engine.replay(events, branchPath);
+      const state = engine.replay(events, { branchPath });
 
       expect(state.entities.camille.name).toBe('Camille');
       expect(state.entities.camille.path).toBe('A');
@@ -864,7 +867,7 @@ describe('ReplayEngine', () => {
         }),
       ];
 
-      const state = engine.replay(events, branchPath);
+      const state = engine.replay(events, { branchPath });
 
       // Only the fact scoped to 'path_a' should be applied
       expect(state.entities.camille.location).toBe('village');
@@ -944,7 +947,7 @@ describe('ReplayEngine', () => {
       const stateWithoutBranch = engine.getStateAt(events, 3);
       expect(stateWithoutBranch.entities.camille.fate).toBeUndefined();
 
-      const stateWithBranch = engine.getStateAt(events, 3, branchPath);
+      const stateWithBranch = engine.getStateAt(events, 3, { branchPath });
       expect(stateWithBranch.entities.camille.fate).toBe('hero');
     });
   });
@@ -1101,7 +1104,7 @@ describe('StateManager', () => {
         }),
       );
 
-      const state = manager.getCurrentState(branchPath);
+      const state = manager.getCurrentState({ branchPath });
       expect(state.entities.camille.path).toBe('A');
     });
   });

@@ -37,6 +37,7 @@ function makeEvent(
   overrides: Partial<NarrativeEvent> = {},
 ): NarrativeEvent {
   return {
+    kind: 'event',
     id: `E_${narrativeOrder}`,
     event: `E_${narrativeOrder}`,
     narrativeOrder,
@@ -49,6 +50,7 @@ function makeEvent(
     preconditions: [],
     postconditions: [],
     threadProgress: [],
+    foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
     source: 'event_file',
@@ -585,10 +587,23 @@ describe('boundary/replay equivalence — lifecycle', () => {
   }
 
   function boundRun(events: NarrativeEvent[]) {
+    const adjacency = new Map<string, string[]>();
+    for (const evt of events) {
+      if (evt.causalPredecessors && evt.causalPredecessors.length > 0) {
+        for (const pred of evt.causalPredecessors) {
+          const deps = adjacency.get(pred);
+          if (deps) {
+            deps.push(evt.id);
+          } else {
+            adjacency.set(pred, [evt.id]);
+          }
+        }
+      }
+    }
     return compileStoryBoundaries(
       events,
       [],
-      new Map(),
+      adjacency,
       undefined,
       undefined,
     );
@@ -604,6 +619,7 @@ describe('boundary/replay equivalence — lifecycle', () => {
       }),
       makeEvent(2, 2, {
         id: 'E_retire',
+        causalPredecessors: ['E_intro'],
         postconditions: [
           makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
         ],
@@ -628,12 +644,14 @@ describe('boundary/replay equivalence — lifecycle', () => {
       }),
       makeEvent(2, 2, {
         id: 'E_retire',
+        causalPredecessors: ['E_intro'],
         postconditions: [
           makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
         ],
       }),
       makeEvent(3, 3, {
         id: 'E_modify',
+        causalPredecessors: ['E_retire'],
         postconditions: [
           makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' }),
         ],
@@ -655,12 +673,14 @@ describe('boundary/replay equivalence — lifecycle', () => {
       }),
       makeEvent(2, 2, {
         id: 'E_retire',
+        causalPredecessors: ['E_intro'],
         postconditions: [
           makeFact({ entityId: 'hero', attribute: 'lifecycle', value: 'retired' }),
         ],
       }),
       makeEvent(3, 3, {
         id: 'E_participate',
+        causalPredecessors: ['E_retire'],
         participants: { entities: ['hero'] },
         postconditions: [
           makeFact({ entityId: 'sidekick', attribute: 'status', value: 'present' }),

@@ -31,7 +31,7 @@ import { MemoryStorage } from '../src/storage/memory-storage.ts';
 
 // Types
 import type { DiscourseSceneSequenceEntry } from '../src/types/graph.ts';
-import type { Fact, NarrativeEvent } from '../src/types/index.ts';
+import type { Fact, NarrativeEvent, TimeAnchor } from '../src/types/index.ts';
 import type { PlannedDiscourseLedger } from '../src/types/discourse.ts';
 import type { MockPass2Entry } from '../src/ai/providers/mock-pass2.ts';
 import type { PromoteCandidateInput } from '../src/editorial/index.js';
@@ -168,10 +168,10 @@ describe('graph-render-assembly ordering', () => {
       const runtime = compileNarrativeRuntime({
         events: [makeE1(), makeE2()],
         initialFacts: [],
-        timeAnchors: new Map([
-          ['day_1', 1],
-          ['day_2', 2],
-        ]),
+        timeAnchors: [
+          { id: 'day_1', at: { type: 'absolute', value: 'day_1' } },
+          { id: 'day_2', at: { type: 'absolute', value: 'day_2' } },
+        ],
         branchPath: { decisions: [] },
         discourseBranch: 'main',
         ledger: makeOrderedLedger('invariant-test', 'main', ['E2', 'E1']),
@@ -205,10 +205,10 @@ describe('graph-render-assembly ordering', () => {
       const runtime = compileNarrativeRuntime({
         events: [makeE1(), makeE2()],
         initialFacts: [],
-        timeAnchors: new Map([
-          ['day_1', 1],
-          ['day_2', 2],
-        ]),
+        timeAnchors: [
+          { id: 'day_1', at: { type: 'absolute', value: 'day_1' } },
+          { id: 'day_2', at: { type: 'absolute', value: 'day_2' } },
+        ],
         branchPath: { decisions: [] },
         discourseBranch: 'main',
         ledger: makeOrderedLedger('technique-test', 'main', ['E2', 'E1']),
@@ -232,10 +232,10 @@ describe('graph-render-assembly ordering', () => {
     it('deterministic graph hash survives across compilations', () => {
       const events = [makeE1(), makeE2()];
       const ledger = makeOrderedLedger('hash-test', 'main', ['E2', 'E1']);
-      const anchors = new Map([
-        ['day_1', 1],
-        ['day_2', 2],
-      ]);
+      const anchors: TimeAnchor[] = [
+        { id: 'day_1', at: { type: 'absolute', value: 'day_1' } },
+        { id: 'day_2', at: { type: 'absolute', value: 'day_2' } },
+      ];
 
       const opts = {
         events,
@@ -264,7 +264,10 @@ describe('graph-render-assembly ordering', () => {
       const opts = {
         events,
         initialFacts: [],
-        timeAnchors: new Map([['day_1', 1], ['day_2', 2]]),
+        timeAnchors: [
+          { id: 'day_1', at: { type: 'absolute', value: 'day_1' } },
+          { id: 'day_2', at: { type: 'absolute', value: 'day_2' } },
+        ],
         branchPath: { decisions: [] } as const,
         ledger,
         assertions: {},
@@ -451,8 +454,8 @@ describe('graph-render-assembly ordering', () => {
           '  currentEra: "contemporary"',
           '  politicalSituation: "stable"',
           'timeAnchors:',
-          '  - { id: day_1, day: 1, description: "Day 1" }',
-          '  - { id: day_2, day: 2, description: "Day 2" }',
+          '  - { id: day_1, at: day_1, description: "Day 1" }',
+          '  - { id: day_2, at: day_2, description: "Day 2" }',
           'threads: []',
           'worldFacts: []',
         ].join('\n'),

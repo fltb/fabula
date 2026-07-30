@@ -92,7 +92,17 @@ export interface RawEffect {
 export interface RawRequirement {
   requirementId: string;
   canonicalKey: string;
-  predicate: { type: 'exists' } | { type: 'absent' } | { type: 'equals'; value: unknown };
+  predicate:
+    | { type: 'exists' }
+    | { type: 'absent' }
+    | { type: 'equals'; value: unknown }
+    | { type: 'neq'; value: unknown }
+    | { type: 'gt'; value: unknown }
+    | { type: 'gte'; value: unknown }
+    | { type: 'lt'; value: unknown }
+    | { type: 'lte'; value: unknown }
+    | { type: 'contains'; value: unknown }
+    | { type: 'not_contains'; value: unknown };
   phase: 'stateBefore' | 'stateAfter';
   origin: 'precondition' | 'source' | 'rule' | 'scope' | 'lifecycle' | 'merge';
 }
@@ -169,8 +179,17 @@ function extractReads(state: CompileState, nodes: CompileNode[]): void {
         readId: raw.requirementId,
         canonicalKey: raw.canonicalKey,
         predicate:
-          raw.predicate.type === 'equals'
-            ? { type: 'equals', value: raw.predicate.value }
+          // value-bearing predicates flow through to ReadRequirement;
+          // non-value types (exists/absent) pass through as-is.
+          raw.predicate.type === 'equals' ||
+          raw.predicate.type === 'neq' ||
+          raw.predicate.type === 'gt' ||
+          raw.predicate.type === 'gte' ||
+          raw.predicate.type === 'lt' ||
+          raw.predicate.type === 'lte' ||
+          raw.predicate.type === 'contains' ||
+          raw.predicate.type === 'not_contains'
+            ? { type: raw.predicate.type, value: raw.predicate.value }
             : raw.predicate,
         phase: raw.phase,
         branchScope: node.branchScope,
@@ -639,6 +658,22 @@ function inferProviders(state: CompileState, nodes: CompileNode[]): void {
         predicateSatisfied =
           provider.value.type === 'set' &&
           JSON.stringify(provider.value.data) === JSON.stringify(read.predicate.value);
+      } else if (
+        read.predicate.type === 'neq' ||
+        read.predicate.type === 'gt' ||
+        read.predicate.type === 'gte' ||
+        read.predicate.type === 'lt' ||
+        read.predicate.type === 'lte' ||
+        read.predicate.type === 'contains'
+      ) {
+        // Non-equality operators: compile-time only checks that the key
+        // is visible (has a set provider).  Full operator enforcement is
+        // delegated to applyNarrativeEvent at runtime.
+        predicateSatisfied = provider.value.type === 'set';
+      } else if (read.predicate.type === 'not_contains') {
+        // not_contains is satisfied at runtime when the key is absent OR
+        // when present but not containing the value — accept either state.
+        predicateSatisfied = true;
       }
 
       if (!predicateSatisfied) {

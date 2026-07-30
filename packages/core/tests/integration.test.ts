@@ -237,6 +237,7 @@ describe('1. Full Pipeline', () => {
       narrativeOrder: 2,
       title: 'Camille Takes the Case',
       storyTime: { type: 'absolute', value: 'day_0' },
+      causalPredecessors: ['E1a'],
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'Camille takes the missing-crystals case.',
       postconditions: [
@@ -618,6 +619,7 @@ describe('4. State Transitions', () => {
     const e1b = makeEvent({
       id: 'E1b',
       narrativeOrder: 2,
+      causalPredecessors: ['E1a'],
       threadProgress: [
         { thread: 'T1', advancement: 'b', progressAfter: 30, progressTotal: 100 },
         { thread: 'T2', advancement: 'c', progressAfter: 15, progressTotal: 100 },
@@ -688,6 +690,7 @@ describe('4. State Transitions', () => {
     const e1b = makeEvent({
       id: 'E1b',
       narrativeOrder: 2,
+      causalPredecessors: ['E1a'],
       postconditions: [
         {
           id: 'c.accepted',

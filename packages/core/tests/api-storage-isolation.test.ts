@@ -65,7 +65,7 @@ function setupMinimalProject(storage: MemoryStorage): void {
       '  currentEra: "contemporary"',
       '  politicalSituation: "stable"',
       'timeAnchors:',
-      '  - { id: day_1, day: 1, description: "Day 1" }',
+      '  - { id: day_1, at: day_1, description: "Day 1" }',
       'threads: []',
       'worldFacts: []',
     ].join('\n'),

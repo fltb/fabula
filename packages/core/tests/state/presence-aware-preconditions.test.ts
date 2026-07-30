@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { compareFact } from '../../src/entity/compare.js';
-import { PreconditionMismatchError } from '../../src/errors.js';
+import { ConfigError, PreconditionMismatchError } from '../../src/errors.js';
 import { preconditionSchema } from '../../src/schemas/primitives.js';
 import { ReplayEngine } from '../../src/state/replay.js';
 import type { Fact, NarrativeEvent } from '../../src/types/index.js';
@@ -206,7 +206,7 @@ describe('Replay precondition evaluation', () => {
     expect(() => engine.replay(events)).not.toThrow();
   });
 
-  it('not_exists precondition: throws when attribute is present', () => {
+  it('not_exists precondition: fails at compile time when attribute is present', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
@@ -223,12 +223,15 @@ describe('Replay precondition evaluation', () => {
         ],
       }),
     ];
-    expect(() => engine.replay(events)).toThrow(PreconditionMismatchError);
+    // The graph compiler deterministically detects that a set provider
+    // contradicts not_exists → compile-first ConfigError, not runtime error.
+    expect(() => engine.replay(events)).toThrow(ConfigError);
   });
 
-  // For operator-based preconditions, the DAG builder requires a prior event
-  // providing the SAME value. So we set the desired value in an earlier event,
-  // then check it with the operator.
+  // Operator-based preconditions: the graph compiler resolves the key via
+  // provider visibility without asserting exact value equality for non-eq
+  // operators. The tests set a value in an earlier event, then check it with
+  // the operator — runtime enforcement is delegated to applyNarrativeEvent.
   it('eq precondition: matches present value', () => {
     const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [

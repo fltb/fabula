@@ -74,10 +74,18 @@ function requirementFromFact(fact: Fact, requirementId: string): RawRequirement 
     };
   }
   if (fact.value === undefined) return null;
+
+  // Predicate type mapping: the Fact operator name (minus 'eq'→'equals')
+  // is used as the predicate discriminant so compilation resolves the key
+  // without falsely asserting equality.  Runtime enforcement of the actual
+  // operator semantics is delegated to applyNarrativeEvent.
+  const predicateType =
+    operator === 'eq' ? 'equals' : operator;
+
   return {
     requirementId,
     canonicalKey: factKey(fact),
-    predicate: { type: 'equals', value: fact.value },
+    predicate: { type: predicateType, value: fact.value } as RawRequirement['predicate'],
     phase: 'stateBefore',
     origin: 'precondition',
   };

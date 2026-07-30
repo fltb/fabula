@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { DagProviderError } from '../../src/errors.ts';
-import { buildCausalEdges, topologicalSort } from '../../src/state/dag.ts';
+import { PreconditionMismatchError } from '../../src/errors.ts';
+import { compileStoryRuntimeGraph } from '../../src/state/graph-adapter.ts';
+import { ReplayEngine } from '../../src/state/index.ts';
 import type { NarrativeEvent } from '../../src/types/index.ts';
 
 const laneA = { decisions: [{ atEventId: 'E1', choiceId: 'a', narrativeOrder: 1 }] };
@@ -11,6 +12,7 @@ function event(
   branchExistence: NarrativeEvent['branchExistence'],
 ): NarrativeEvent {
   return {
+    kind: 'event',
     id,
     event: id,
     narrativeOrder: order,
@@ -39,22 +41,24 @@ describe('minimal branch diamond', () => {
       event('E2b', 2, { type: 'paths', paths: [laneB] }),
       event('E3', 3, { type: 'all' }),
     ];
-    const graphA = buildCausalEdges(events, { branchPath: laneA });
-    const graphB = buildCausalEdges(events, { branchPath: laneB });
-    expect(
-      topologicalSort(
-        events.filter((item) => graphA.inDegree.has(item.id)),
-        graphA.edges,
-        graphA.inDegree,
-      ),
-    ).toEqual(['E1', 'E2a', 'E3']);
-    expect(
-      topologicalSort(
-        events.filter((item) => graphB.inDegree.has(item.id)),
-        graphB.edges,
-        graphB.inDegree,
-      ),
-    ).toEqual(['E1', 'E2b', 'E3']);
+
+    const compiledA = compileStoryRuntimeGraph({
+      events,
+      initialFacts: [],
+      initialThreads: [],
+      timeAnchors: [],
+      branchPath: laneA,
+    });
+    expect(compiledA.order.topologicalOrder).toEqual(['E1', 'E2a', 'E3']);
+
+    const compiledB = compileStoryRuntimeGraph({
+      events,
+      initialFacts: [],
+      initialThreads: [],
+      timeAnchors: [],
+      branchPath: laneB,
+    });
+    expect(compiledB.order.topologicalOrder).toEqual(['E1', 'E2b', 'E3']);
   });
 
   it('rejects a scoped provider when compiling the other lane', () => {
@@ -73,8 +77,15 @@ describe('minimal branch diamond', () => {
     ];
     const reader = event('E3', 3, { type: 'all' });
     reader.preconditions = [{ ...writer.postconditions[0], id: 'hero.key.required' }];
+    // E3 requires hero.key = 'a', which only E2a provides on laneA.
+    // Compiling with laneB succeeds (absence witness recorded), but
+    // replay fails because the precondition can never be satisfied.
+    const engine = new ReplayEngine();
     expect(() =>
-      buildCausalEdges([event('E1', 1, { type: 'all' }), writer, reader], { branchPath: laneB }),
-    ).toThrow(DagProviderError);
+      engine.replay(
+        [event('E1', 1, { type: 'all' }), writer, reader],
+        { branchPath: laneB },
+      ),
+    ).toThrow(PreconditionMismatchError);
   });
 });

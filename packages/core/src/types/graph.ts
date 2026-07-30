@@ -59,12 +59,21 @@ export type ReadOrigin = 'precondition' | 'source' | 'rule' | 'scope' | 'lifecyc
  * - exists: the key must be present
  * - absent: the key must be absent
  * - equals: the value must equal a specific value
+ * - neq/gt/gte/lt/lte/contains/not_contains: compile-time existence check
+ *   (full operator semantics enforced at runtime by applyNarrativeEvent)
  * - matches: the value must match a pattern
  */
 export type PresencePredicate =
   | { type: 'exists' }
   | { type: 'absent' }
   | { type: 'equals'; value: unknown }
+  | { type: 'neq'; value: unknown }
+  | { type: 'gt'; value: unknown }
+  | { type: 'gte'; value: unknown }
+  | { type: 'lt'; value: unknown }
+  | { type: 'lte'; value: unknown }
+  | { type: 'contains'; value: unknown }
+  | { type: 'not_contains'; value: unknown }
   | { type: 'matches'; pattern: string };
 
 /**

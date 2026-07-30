@@ -2,7 +2,8 @@ event: E1b
 title: "Camille Takes the Case"
 narrativeOrder: 2
 sceneType: linear
-storyTime: day_0 + 1 hour
+storyTime: 1 hour
+causalPredecessors: [E1a]
 pov:
   character: camille
   type: third_person_limited

@@ -2,7 +2,7 @@ event: E1
 title: "死讯——谬种"
 narrativeOrder: 2
 sceneType: linear
-storyTime: new_year_eve
+storyTime: new_year_eve + 1 hour
 tense: past
 discourseMode: exposition
 arcPosition: opening

@@ -23,6 +23,7 @@ function event(
   postconditions: Fact[] = [],
 ): NarrativeEvent {
   return {
+    kind: 'event',
     id,
     event: id,
     narrativeOrder,

@@ -22,6 +22,7 @@ function event(
   postconditions: Fact[] = [],
 ): NarrativeEvent {
   return {
+    kind: 'event',
     id,
     event: id,
     narrativeOrder: Number(id.replace(/\D/g, '') || 0),

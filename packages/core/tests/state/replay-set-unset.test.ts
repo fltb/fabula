@@ -32,18 +32,24 @@ function makeEvent(
   overrides: Partial<NarrativeEvent> = {},
 ): NarrativeEvent {
   return {
+    kind: 'event',
     id: `E_${narrativeOrder}`,
+    event: `event_${narrativeOrder}`,
     narrativeOrder,
     title: 'Test',
     storyTime: { type: 'absolute' as const, value: `day_${daySuffix}` },
+    sceneType: 'linear' as const,
     pov: { character: 'narrator' as const, type: 'first_person' as const },
     sceneBrief: 'Test scene',
-    branchExistence: { type: 'all' as const },
     preconditions: [],
     postconditions: [],
     threadProgress: [],
+    foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
+    source: 'event_file' as const,
+    branchExistence: { type: 'all' as const },
+    participants: { entities: [] },
     ...overrides,
   };
 }

@@ -6,8 +6,8 @@ import * as os from 'node:os';
 import type { NarrativeEvent, RelationshipTransaction, WorldState } from '@novalistically/core';
 import {
   BranchMergeValidator,
-  buildCausalEdges,
   CausalityValidator,
+  compileStoryRuntimeGraph,
   CharacterStateValidator,
   ContextCompiler,
   calculateISS,
@@ -117,6 +117,7 @@ function makeSyntheticEvent(): NarrativeEvent {
   const thread = THREADS[idx % THREADS.length];
 
   return {
+    kind: 'event',
     id: `E${idx}`,
     event: `E${idx}`,
     narrativeOrder: idx,
@@ -193,6 +194,7 @@ function makeSyntheticEvent(): NarrativeEvent {
 
 function makeGenesisEvent(): NarrativeEvent {
   return {
+    kind: 'event',
     id: 'system:genesis',
     event: 'system:genesis',
     narrativeOrder: 0,
@@ -475,16 +477,22 @@ export function runOfflineCorePathBench(): PerfResults {
     });
   }
 
-  // 2. dag — buildCausalEdges
+  // 2. compile — compileStoryRuntimeGraph
   {
     const samples = collectSamples(() => {
-      buildCausalEdges(events);
+      compileStoryRuntimeGraph({
+        events,
+        initialFacts: [],
+        initialThreads: [],
+        timeAnchors: [],
+        branchPath: { decisions: [] },
+      });
     }, ITERATIONS);
-    allSamples['dag'] = samples;
+    allSamples['compile'] = samples;
     const sorted = [...samples].sort((a, b) => a - b);
     const meanMs = calcMean(samples);
     stages.push({
-      name: 'dag',
+      name: 'compile',
       medianMs: calcMedian(sorted),
       meanMs,
       p95Ms: calcP95(sorted),

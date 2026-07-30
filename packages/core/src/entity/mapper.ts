@@ -26,6 +26,7 @@ import type {
   FactionDefinition,
   ItemDefinition,
   LocationDefinition,
+  NarrativeEllipsisFile,
   NarrativeEvent,
   NarratorAssertion,
   NarratorProfile,
@@ -35,6 +36,7 @@ import type {
   TimeAnchor,
   WorldInitialState,
 } from '../types/index.js';
+import type { NarrativeEllipsis } from '../types/corpus.js';
 import { convertRelationshipChange } from '../types/relationship.js';
 import { factIdFrom, parseStoryTimestamp, resolveTemporalContext } from './timestamp.js';
 import type { ProjectData } from './types.js';
@@ -427,4 +429,72 @@ export class EntityMapper {
       status: 'draft',
     };
   }
+}
+
+// ============================================================================
+// Corpus mapping — NarrativeEllipsisFile → NarrativeEllipsis
+// No casting of wire objects to runtime types; proper structural mapping with
+// shared fact parsing (same AST as EventFile preconditions/postconditions).
+// Omitted storyTime → { type: 'indeterminate', mode: 'unspecified' }.
+// ============================================================================
+
+/**
+ * Map a NarrativeEllipsisFile (wire/YAML format) to a runtime NarrativeEllipsis.
+ *
+ * Shares fact-parsing AST with mapToNarrativeEvent: wire-format preconditions
+ * and postconditions (entity/attribute/value) are parsed into runtime Fact
+ * objects using the same factIdFrom pattern. Omitted storyTime defaults to
+ * unspecified indeterminate. Transaction arrays pass through as-is (they
+ * already use the runtime-compatible types).
+ *
+ * @param file - Wire-format NarrativeEllipsisFile from YAML
+ * @returns Runtime NarrativeEllipsis ready for replay / causal graph
+ */
+export function mapToNarrativeEllipsis(file: NarrativeEllipsisFile): NarrativeEllipsis {
+  const storyTime = file.storyTime
+    ? parseStoryTimestamp(file.storyTime)
+    : { type: 'indeterminate' as const, mode: 'unspecified' as const };
+
+  const preconditions: Fact[] = (file.preconditions ?? []).map((pc) => ({
+    id: factIdFrom(pc.entity, pc.attribute),
+    entityId: pc.entity,
+    attribute: pc.attribute,
+    value: pc.value,
+    operator: pc.operator,
+    confidence: 1.0,
+    narrativeHint: pc.narrativeHint,
+    validity: {
+      temporal: { start: storyTime, end: null },
+      branches: { type: 'all' as const },
+    },
+  }));
+
+  const postconditions: Fact[] = (file.postconditions ?? []).map((pc) => ({
+    id: factIdFrom(pc.entity, pc.attribute),
+    entityId: pc.entity,
+    attribute: pc.attribute,
+    value: pc.value,
+    operation: pc.operation,
+    confidence: 1.0,
+    narrativeHint: pc.narrativeHint,
+    validity: {
+      temporal: { start: storyTime, end: null },
+      branches: { type: 'all' as const },
+    },
+  }));
+
+  return {
+    kind: 'ellipsis',
+    id: file.id,
+    branchScope: file.branchScope ?? { decisions: [] },
+    storyTime,
+    summary: file.summary,
+    preconditions,
+    postconditions,
+    relationshipEffects: file.relationshipEffects ?? [],
+    knowledgeTransactions: file.knowledgeTransactions ?? [],
+    threadProgress: file.threadProgress ?? [],
+    ruleEffects: file.ruleEffects ?? [],
+    provenance: file.provenance,
+  };
 }

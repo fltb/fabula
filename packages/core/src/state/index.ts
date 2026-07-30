@@ -14,7 +14,7 @@ export {
   validateCorpusIntegrity,
 } from './corpus-gate.ts';
 // ——— CORPUS-4: Mixed Causal Replay + Boundary Oracles ———
-export type { DiscourseOracle, StoryBoundaryOracle } from './corpus-replay.ts';
+export type { CorpusReplayOptions, DiscourseOracle, StoryBoundaryOracle } from './corpus-replay.ts';
 export {
   buildMixedNodeOrder,
   computeStateBefore,

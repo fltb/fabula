@@ -55,6 +55,7 @@ export type {
 export type {
   EllipsisProvenance,
   NarrativeEllipsis as CorpusEllipsis,
+  NarrativeEllipsisFile,
   NarrativeNode as CorpusNode,
 } from './corpus.js';
 export type {

@@ -8,6 +8,7 @@ import * as path from 'node:path';
 import {
   type AnalysisResult,
   compileStoryBoundaries,
+  compileStoryRuntimeGraph,
   EntityMapper,
   type EntityRegistry,
   type Fact,
@@ -674,7 +675,7 @@ function runValidators(
   stateBeforeByEventId?: Map<string, WorldState>,
 ): ValidationIssue[] {
   const aggregator = new ResultAggregator();
-  const results = aggregator.validateAll(events, state, registry, undefined, stateBeforeByEventId);
+  const results = aggregator.validateAll(events, state, registry, { stateBeforeByEventId });
 
   const allIssues: ValidationIssue[] = [];
   for (const result of results.values()) {
@@ -1102,14 +1103,10 @@ function runBranchVariant(dir: string): { eventsLoaded: number; issues: Validati
   const projectData = mapper.loadProject();
   const registry = new InMemoryEntityRegistry();
   registry.load(dir);
-  const events = mapper.loadAllEvents(projectData.chapters);
-
-  // Build time anchors from project data so story timestamps resolve correctly
-  const anchors = new Map(projectData.timeAnchors.map((a) => [a.id, a.day]));
+  const allEvents = mapper.loadAllEvents(projectData.chapters);
 
   // Separate genesis event from authored events
-  const genesis = events.find((e) => e.id === 'system:genesis');
-  const authoredEvents = events.filter((e) => e.id !== 'system:genesis');
+  const genesis = allEvents.find((e) => e.id === 'system:genesis');
 
   // Initial facts = genesis postconditions + registry entity state
   const initialFacts: Fact[] = [
@@ -1128,19 +1125,27 @@ function runBranchVariant(dir: string): { eventsLoaded: number; issues: Validati
     ),
   ];
 
-  // Compile story boundaries with causal ordering and state snapshots
-  const boundaries = compileStoryBoundaries(authoredEvents, initialFacts, anchors);
-
-  // Only validate events that survived causal filtering
-  const selectedEvents = authoredEvents.filter((e) => boundaries.stateBeforeByEventId.has(e.id));
+  // Compile canonical runtime graph + boundaries with causal ordering and state snapshots
+  const compiled = compileStoryRuntimeGraph({
+    events: allEvents,
+    initialFacts,
+    initialThreads: [],
+    timeAnchors: projectData.timeAnchors,
+    branchPath: { decisions: [] },
+  });
+  const boundaries = compileStoryBoundaries(
+    [...compiled.selectedEvents],
+    compiled.initialFacts,
+    compiled.storyAdjacency,
+  );
 
   const issues = runValidators(
-    selectedEvents,
+    [...compiled.selectedEvents],
     boundaries.finalState,
     registry,
     boundaries.stateBeforeByEventId,
   );
-  return { eventsLoaded: selectedEvents.length, issues };
+  return { eventsLoaded: compiled.selectedEvents.length, issues };
 }
 
 // ─── Injection variants runner ─────────────────────────────────────────────

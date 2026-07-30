@@ -11,7 +11,7 @@ export {
 } from './default-catalog.js';
 export type { CanonicalFactValue } from './fact-value.js';
 export { canonicalDeepEqual, canonicalizeFactValue, isCanonicalFactValue } from './fact-value.js';
-export { EntityMapper } from './mapper.js';
+export { EntityMapper, mapToNarrativeEllipsis } from './mapper.js';
 export { InMemoryEntityRegistry } from './registry.js';
 export {
   compareStoryCoordinates,

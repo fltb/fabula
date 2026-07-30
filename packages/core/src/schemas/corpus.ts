@@ -16,7 +16,7 @@
 // ============================================================================
 
 import { z } from 'zod';
-import type { NarrativeNode as CorpusNode, NarrativeEllipsis } from '../types/corpus.js';
+import type { NarrativeNode as CorpusNode, NarrativeEllipsis, NarrativeEllipsisFile } from '../types/corpus.js';
 import type { NarrativeEvent } from '../types/event.js';
 import { postconditionSchema, preconditionSchema } from './primitives.js';
 import { relationshipTransactionSchema } from './relationship.js';
@@ -163,6 +163,65 @@ export const narrativeNodeSchema = z
     'NarrativeNode — discriminated union of NarrativeEvent (kind="event") and NarrativeEllipsis (kind="ellipsis"). Mutual exclusion of fields enforced per branch schema.',
   );
 
+// ─── NarrativeEllipsisFile — Zod schema for YAML-on-disk wire format ────
+// Shares the same Fact precondition/postcondition wire format as EventFile
+// (entity/attribute/value fields parsed into runtime Fact objects by the mapper).
+// Omitted storyTime defaults to { type: 'indeterminate', mode: 'unspecified' }.
+// Transaction arrays use the same runtime-compatible schemas as the
+// NarrativeEllipsis runtime type.
+
+export const narrativeEllipsisFileSchema = z
+  .object({
+    id: z.string().min(1, 'EllipsisFile identity is required'),
+    branchScope: branchPathSchema.optional(),
+    storyTime: z
+      .union([
+        z.string(),
+        z.object({ type: z.literal('indeterminate'), reason: z.string().optional() }),
+      ])
+      .optional()
+      .describe(
+        'Authored story time; omitted maps to { type: "indeterminate", mode: "unspecified" } at runtime.',
+      ),
+    summary: z
+      .string()
+      .optional()
+      .describe(
+        'Raw textual summary for source review/diagnostics only. NEVER enters logical prompt.',
+      ),
+    preconditions: z
+      .array(preconditionSchema)
+      .optional()
+      .default([])
+      .describe('Preconditions that must hold for this ellipsis to be valid.'),
+    postconditions: z
+      .array(postconditionSchema)
+      .optional()
+      .default([])
+      .describe('Postconditions: Entity attribute writes resulting from this ellipsis.'),
+    relationshipEffects: z
+      .array(relationshipTransactionSchema)
+      .optional()
+      .default([]),
+    knowledgeTransactions: z
+      .array(informationActSchema)
+      .optional()
+      .default([]),
+    threadProgress: z
+      .array(threadTransactionSchema)
+      .optional()
+      .default([]),
+    ruleEffects: z
+      .array(ruleTransactionSchema)
+      .optional()
+      .default([]),
+    provenance: ellipsisProvenanceSchema,
+  })
+  .strict(
+    'NarrativeEllipsisFile schema does not accept unknown fields — POV, cast, sceneBrief, etc. are forbidden',
+  )
+  .describe('NarrativeEllipsisFile — wire format for YAML-on-disk ellipsis definitions.');
+
 // ─── Helper: type guards ─────────────────────────────────────────────────
 
 export function isNarrativeEllipsis(node: unknown): node is NarrativeEllipsis {
@@ -175,4 +234,8 @@ export function isNarrativeEvent(node: unknown): node is NarrativeEvent {
 
 export function isNarrativeNode(node: unknown): node is CorpusNode {
   return narrativeNodeSchema.safeParse(node).success;
+}
+
+export function isNarrativeEllipsisFile(data: unknown): data is NarrativeEllipsisFile {
+  return narrativeEllipsisFileSchema.safeParse(data).success;
 }

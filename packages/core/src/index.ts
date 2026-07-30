@@ -127,7 +127,7 @@ export {
   replaceReviewComment,
   updateReviewComment,
 } from './editorial/review-facade.ts';
-export type { CompareOutcome, ProjectData } from './entity/index.js';
+export type { CompareOutcome, ProjectData, TemporalContext } from './entity/index.js';
 // Entity
 export {
   compareFact,
@@ -136,6 +136,7 @@ export {
   loadProjectConfig,
   migrateProjectFile,
   readYamlFile,
+  resolveTemporalContext,
 } from './entity/index.js';
 export type { ErrorContext } from './errors.js';
 // Stable, safe operational errors
@@ -236,6 +237,7 @@ export type {
   AdjacencyList,
   CompileNarrativeRuntimeInput,
   CompiledNarrativeRuntime,
+  CompiledStoryRuntimeGraph,
   DiscourseSceneSequenceEntry,
   ResolvedNarrativeTechniqueContract,
   StoryBoundaries,
@@ -250,6 +252,7 @@ export {
   resolveDiscourseBranch,
   compileStoryBoundaries,
   compileStoryBoundariesFromGraph,
+  compileStoryRuntimeGraph,
   exportDAGtoDOT,
   exportDAGtoMermaid,
   resolveNarrativeTechniques,

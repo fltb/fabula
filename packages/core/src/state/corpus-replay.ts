@@ -2,11 +2,27 @@
 // Novalistically — CORPUS-4: Mixed Causal Replay + Boundary Oracles
 // Mixed-node ordering, stateBefore computation, and oracle creation
 // for reproducible corpus replay validation.
+//
+// Runtime separation: buildMixedNodeOrder delegates to buildStoryOrderIndex
+// with resolved runtime coordinates (no source-byte tie-breaking).
+// computeStateBefore replays real event effects with baseline.
 // ============================================================================
 
 import { PreconditionMismatchError } from '../errors.ts';
-import type { NarrativeNodeAnchor, SourceManifest } from './corpus-index.ts';
-import type { AdjacencyList } from './dag.ts';
+import type { BranchPath } from '../types/branch.ts';
+import type {
+  Fact,
+  NarrativeEvent,
+  SceneStoryCoordinate,
+  ThreadId,
+  ThreadLifecycle,
+  ThreadRunId,
+  WorldState,
+} from '../types/index.js';
+import type { AdjacencyList, StoryOrderIndex } from './dag.ts';
+import { buildStoryOrderIndex, isProvenBefore } from './dag.ts';
+import { applyInitialFacts, applyNarrativeEvent } from './event-application.ts';
+import { emptyWorldState } from './story-boundaries.ts';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Types
@@ -24,7 +40,7 @@ export interface StoryBoundaryOracle {
   /** SHA-256 hash of the source material */
   sourceHash: string;
   /**
-   * Verified state before the event (entityId → attribute → value).
+   * Verified state before the event (entityId -> attribute -> value).
    * Every fact that must hold for correct rendering.
    */
   stateBefore: Record<string, Record<string, unknown>>;
@@ -52,124 +68,65 @@ export interface DiscourseOracle {
   plannedSceneBrief: string;
 }
 
+/**
+ * Consolidated options for corpus runtime stateBefore computation.
+ * Bundles the causal graph, resolved runtime coordinates, baseline facts,
+ * branch scope, and optional initial thread declarations.
+ */
+export interface CorpusReplayOptions {
+  /** Initial facts applied as baseline before any event replay */
+  initialFacts: readonly Fact[];
+  /** Active branch path for scope filtering */
+  branchPath: BranchPath;
+  /** Initial thread declarations applied during baseline */
+  initialThreads?: readonly { id: string }[];
+  /** Event ID to resolved scene story coordinate map (runtime coordinates) */
+  coordinatesByEventId: ReadonlyMap<string, SceneStoryCoordinate>;
+  /** Causal adjacency list encoding all node relationships (events + ellipses) */
+  adjacency: AdjacencyList;
+  /** Optional initial root ID for story order index (e.g. 'system:genesis') */
+  initialRootId?: string | null;
+}
+
 // ═════════════════════════════════════════════════════════════════════════════
 // Mixed Node Ordering
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
- * Build a deterministic mixed-node topological order from narrative nodes
- * (scene events and ellipses) using GRAPH-1 typed causal edges, with
- * storyTime as a secondary tiebreaker.
+ * Build StoryOrderIndex from corpus runtime node IDs and resolved coordinates.
  *
- * The order MUST include all reachable nodes respecting:
- * - Causal dependencies (preconditions → node → postconditions)
- * - Story time chronology (earlier storyTime first)
- * - Stable sorting for nodes with identical storyTime
+ * Delegates entirely to buildStoryOrderIndex — no source-byte tie-breaking,
+ * no local Kahn's algorithm. The coordinate map enables deterministic event-ID
+ * tie-breaking among genuinely unordered nodes; derived temporal edges already
+ * encode every comparable temporal constraint.
  *
- * Ellipsis nodes are ordered alongside scene nodes — they participate
- * in the same causal graph.
+ * Ellipsis node IDs participate in the same causal graph as event node IDs.
+ * The returned StoryOrderIndex covers all supplied nodeIds plus the optional
+ * initial root.
  *
  * This order is used for stateBefore computation but NEVER for discourse
- * ordering (which uses narrativeOrder). discourse ordering is handled
- * separately by DiscoursePlanner/Assembler.
+ * ordering (which uses narrativeOrder).
  *
- * @param nodes - Narrative node anchors (scenes + ellipses)
- * @param dag - GRAPH-1 adjacency list mapping node IDs to their dependents
- * @returns Ordered list of node IDs in deterministic topological order
- * @throws {PreconditionMismatchError} if the graph contains a cycle
+ * @param nodeIds - All node IDs (both events and ellipses) to order
+ * @param adjacency - GRAPH-1 adjacency list mapping node ID -> its dependents
+ * @param coordinatesByEventId - Resolved runtime coordinates keyed by node ID
+ * @param initialRootId - Optional initial root for the order index
+ * @returns StoryOrderIndex with topological order and transitive ancestors
+ * @throws {DagProviderError} if a predecessor is unknown
+ * @throws {DagCycleError} if the graph contains a cycle
  */
-export function buildMixedNodeOrder(nodes: NarrativeNodeAnchor[], dag: AdjacencyList): string[] {
-  const nodeMap = new Map(nodes.map((n) => [n.nodeId, n]));
-  const inDegree = new Map<string, number>();
-  const graph = new Map<string, string[]>();
-
-  // Build full graph from the adjacency list — dag maps nodeId → its dependents.
-  // Also compute in-degree for each node.
-  for (const node of nodes) {
-    if (!inDegree.has(node.nodeId)) {
-      inDegree.set(node.nodeId, 0);
-    }
-    if (!graph.has(node.nodeId)) {
-      graph.set(node.nodeId, []);
-    }
-  }
-
-  // dag maps node → nodes that depend on it (edge: node → dependent)
-  // So for edges, the source node is the key, the targets are dependents.
-  // We need to reverse: a node's dependencies = edges pointing TO it.
-  // But adjacency list in dag is parent → child (source → dependent).
-  // For topological ordering, we need children's in-degree to count parents.
-  // dag[source] = [dependent1, dependent2] means dependent1 has source as precondition.
-  for (const [source, dependents] of dag) {
-    if (!graph.has(source)) {
-      // Source may be from a different context — add it as an anchor-only entry
-      // when it's referenced. This handles nodes outside the current scope
-      // that are referenced by the DAG.
-      graph.set(source, []);
-    }
-    for (const dependent of dependents) {
-      if (!graph.has(dependent)) {
-        graph.set(dependent, []);
-      }
-      // Increment in-degree: dependent depends on source
-      inDegree.set(dependent, (inDegree.get(dependent) ?? 0) + 1);
-    }
-  }
-
-  // Kahn's algorithm with storyTime tiebreakers
-  const queue: string[] = [];
-  for (const [nodeId, deg] of inDegree) {
-    if (deg === 0) {
-      queue.push(nodeId);
-    }
-  }
-
-  // Sort initial queue by storyTime (nodes without storyTime go last)
-  queue.sort((a, b) => {
-    const nodeA = nodeMap.get(a);
-    const nodeB = nodeMap.get(b);
-    const ta = nodeA?.sourceRange.startByte ?? Number.MAX_SAFE_INTEGER;
-    const tb = nodeB?.sourceRange.startByte ?? Number.MAX_SAFE_INTEGER;
-    if (ta !== tb) return ta - tb;
-    return a.localeCompare(b);
-  });
-
-  const ordered: string[] = [];
-
-  while (queue.length > 0) {
-    const current = queue.shift()!;
-    ordered.push(current);
-
-    // Process dependents of current
-    const dependents = graph.get(current) ?? [];
-    for (const dependent of dependents) {
-      const newDegree = (inDegree.get(dependent) ?? 1) - 1;
-      inDegree.set(dependent, newDegree);
-      if (newDegree === 0) {
-        queue.push(dependent);
-        // Re-sort: maintain storyTime ordering within each wave
-        // (partial sort since queue is small per wave)
-        queue.sort((a, b) => {
-          const nodeA = nodeMap.get(a);
-          const nodeB = nodeMap.get(b);
-          const ta = nodeA?.sourceRange.startByte ?? Number.MAX_SAFE_INTEGER;
-          const tb = nodeB?.sourceRange.startByte ?? Number.MAX_SAFE_INTEGER;
-          if (ta !== tb) return ta - tb;
-          return a.localeCompare(b);
-        });
-      }
-    }
-  }
-
-  // Detect cycles: if not all nodes were ordered, there's a cycle
-  if (ordered.length < nodes.length) {
-    const missing = nodes.filter((n) => !ordered.includes(n.nodeId)).map((n) => n.nodeId);
-    throw new PreconditionMismatchError(
-      `Cycle detected in mixed-node causal graph: ${missing.length} unreachable nodes: ${missing.join(', ')}`,
-    );
-  }
-
-  return ordered;
+export function buildMixedNodeOrder(
+  nodeIds: readonly string[],
+  adjacency: AdjacencyList,
+  coordinatesByEventId: ReadonlyMap<string, SceneStoryCoordinate>,
+  initialRootId?: string | null,
+): StoryOrderIndex {
+  return buildStoryOrderIndex(
+    initialRootId ?? null,
+    nodeIds,
+    adjacency,
+    coordinatesByEventId,
+  );
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -177,94 +134,96 @@ export function buildMixedNodeOrder(nodes: NarrativeNodeAnchor[], dag: Adjacency
 // ═════════════════════════════════════════════════════════════════════════════
 
 /**
- * Compute the state before a target event from the mixed-node causal graph.
+ * Compute the real WorldState before a target event using proven-before replay.
  *
- * Walks the ordered node list up to (but not including) the target event,
- * collecting preconditions and postconditions from each node into a unified
- * state map. Excludes the target event itself and any nodes that causally
- * depend on it (future effects).
+ * Builds canonical order from CorpusReplayOptions.adjacency and
+ * .coordinatesByEventId, applies baseline initial facts, then replays every
+ * event proven-before the target in topological order. Returns a clone of the
+ * accumulated state at that point — no placeholders, no symbolic values.
  *
- * The returned state is a snapshot of entity attributes that must hold
- * for the target event to render correctly.
+ * Ellipsis nodes are ordering constraints in the causal graph but have no
+ * runtime effects applied here; only NarrativeEvent objects from the events
+ * array are replayed. This matches the corpus runtime contract where ellipsis
+ * effects are encoded as causal edges, not as WorldState mutations.
  *
- * @param eventId - The target event ID
- * @param nodes - All narrative node anchors in the work index
- * @param manifest - Source manifest for hash/language context
- * @returns Entity → attribute → value map representing the pre-state
+ * @param eventId - Target event ID to compute state before
+ * @param events - NarrativeEvent objects available for replay
+ * @param options - CorpusReplayOptions with adjacency, coordinates, baseline
+ * @returns WorldState snapshot before the target event
+ * @throws {PreconditionMismatchError} if the target is not found in the event list or causal graph
+ * @throws {DagProviderError} if a predecessor is unknown in the causal graph
+ * @throws {DagCycleError} if the causal graph contains a cycle
  */
 export function computeStateBefore(
   eventId: string,
-  nodes: NarrativeNodeAnchor[],
-  manifest: SourceManifest,
-): Record<string, Record<string, unknown>> {
-  // Build a quick lookup map
-  const nodeMap = new Map(nodes.map((n) => [n.nodeId, n]));
+  events: readonly NarrativeEvent[],
+  options: CorpusReplayOptions,
+): WorldState {
+  const eventsById = new Map<string, NarrativeEvent>();
+  for (const event of events) {
+    eventsById.set(event.id, event);
+  }
 
-  const targetNode = nodeMap.get(eventId);
-  if (!targetNode) {
+  // Determine all node IDs: adjacency keys include all causal participants
+  const allNodeIds = new Set<string>();
+  for (const [source, dependents] of options.adjacency) {
+    allNodeIds.add(source);
+    for (const dep of dependents) allNodeIds.add(dep);
+  }
+  // Also include event IDs that may not be adjacency keys (e.g. root with no incoming)
+  for (const event of events) allNodeIds.add(event.id);
+
+  if (!allNodeIds.has(eventId) && !eventsById.has(eventId)) {
     throw new PreconditionMismatchError(
-      `Target event "${eventId}" not found in the node index for work "${manifest.workId}"`,
+      `Target event "${eventId}" not found in the event list or causal graph`,
+      { eventId, phase: 'corpus-replay' },
     );
   }
 
-  // Collect pre-state from all nodes that appear before the target
-  // in story time and are not causally dependent on the target.
-  // Heuristic: we walk all nodes with storyTime < target's storyTime,
-  // and collect their postconditions as the base state.
-  const stateBefore: Record<string, Record<string, unknown>> = {};
+  // Build canonical story order from the full node set with resolved coordinates
+  const order = buildMixedNodeOrder(
+    [...allNodeIds],
+    options.adjacency,
+    options.coordinatesByEventId,
+    options.initialRootId,
+  );
 
-  for (const node of nodes) {
-    if (node.nodeId === eventId) continue;
+  // Initialize state with baseline
+  const state = emptyWorldState();
+  const lifecycleChangesByCoordinate = new Map<string, Set<string>>();
+  applyInitialFacts(state, options.initialFacts, { branchPath: options.branchPath });
 
-    // Skip nodes that depend on the target (postconditions that reference target)
-    if (node.preconditions.includes(eventId)) continue;
-    // Skip nodes that only constellate from this event
-    if (node.postconditions.includes(eventId)) continue;
-
-    // Apply preconditions — these are facts that must be true
-    // We record them as state entries
-    for (const precond of node.preconditions) {
-      const parts = precond.split(':');
-      if (parts.length >= 2) {
-        const entityId = parts[0];
-        const attr = parts[1];
-        if (!stateBefore[entityId]) {
-          stateBefore[entityId] = {};
-        }
-        // Mark as required but unknown value
-        stateBefore[entityId][attr] = stateBefore[entityId][attr] ?? Symbol('required');
-      }
-    }
-
-    // Apply postconditions — these are facts established by prior nodes
-    // that become part of the state before our target
-    for (const postcond of node.postconditions) {
-      const parts = postcond.split(':');
-      if (parts.length >= 2) {
-        const entityId = parts[0];
-        const attr = parts[1];
-        if (!stateBefore[entityId]) {
-          stateBefore[entityId] = {};
-        }
-        stateBefore[entityId][attr] = `established_by_${node.nodeId}`;
-      }
-    }
+  // Apply thread baseline
+  for (const thread of options.initialThreads ?? []) {
+    state.threads[thread.id] = {
+      threadId: thread.id as ThreadId,
+      status: 'planned' as ThreadLifecycle,
+      currentRunId: `init-${thread.id}` as ThreadRunId,
+      phase: '',
+      bindings: {},
+      goalStates: {},
+      milestoneStates: {},
+      semanticStateHash: '',
+    };
   }
 
-  // Clean up any Symbol placeholders — they were merely required, not established
-  for (const [entityId, attrs] of Object.entries(stateBefore)) {
-    for (const [attr, value] of Object.entries(attrs)) {
-      if (typeof value === 'symbol') {
-        delete stateBefore[entityId][attr];
-      }
-      // Remove empty entity entries
-      if (Object.keys(stateBefore[entityId]).length === 0) {
-        delete stateBefore[entityId];
-      }
-    }
+  // Replay all events proven-before the target in topological order
+  for (const candidateId of order.topologicalOrder) {
+    if (candidateId === eventId) break;
+    if (!isProvenBefore(candidateId, eventId, order)) continue;
+
+    const candidateEvent = eventsById.get(candidateId);
+    if (!candidateEvent) continue; // skip ellipsis or non-event nodes
+
+    applyNarrativeEvent(state, candidateEvent, {
+      branchPath: options.branchPath,
+      lifecycleChangesByCoordinate,
+      storyCoordinate: options.coordinatesByEventId.get(candidateId),
+      phase: 'corpus-replay',
+    });
   }
 
-  return stateBefore;
+  return state;
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -281,7 +240,7 @@ const ORACLE_SCHEMA_VERSION = '1.0.0';
  * field is empty (pending human annotation).
  *
  * @param eventId - Event ID this oracle applies to
- * @param stateBefore - Computed pre-event state
+ * @param stateBefore - Computed pre-event state (WorldState.entities or flat map)
  * @param sourceHash - SHA-256 hash of the source material
  * @returns A new StoryBoundaryOracle in 'pending' status
  */
@@ -312,14 +271,13 @@ export function createBoundaryOracle(
  * @param node - Narrative node anchor containing scene metadata
  * @returns A new DiscourseOracle for the event
  */
-export function createDiscourseOracle(eventId: string, node: NarrativeNodeAnchor): DiscourseOracle {
-  // Derive narrator and POV from node context
-  // In practice, the NarrativeEvent's pov field and sceneBrief are the source;
-  // since NarrativeNodeAnchor only has structural metadata, use the nodeId
-  // convention and source context to infer defaults.
+export function createDiscourseOracle(eventId: string, node: {
+  type: 'scene' | 'ellipsis';
+  chapterId: string;
+}): DiscourseOracle {
   const narrator = node.type === 'ellipsis' ? 'ellipsis_narrator' : 'omniscient';
   const pov = node.type === 'ellipsis' ? 'none' : 'protagonist';
-  const brief = `${node.type === 'ellipsis' ? 'Ellipsis' : 'Scene'} at ${node.chapterId}:${node.sourceRange.startByte}`;
+  const brief = `${node.type === 'ellipsis' ? 'Ellipsis' : 'Scene'} at ${node.chapterId}`;
 
   return {
     eventId,

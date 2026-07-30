@@ -28,8 +28,9 @@ import {
   assembleCanonicalNovel,
   assembleCustomNovel,
   branchPathsEqual,
-  buildCausalEdges,
   compileGameDialogueTree,
+  compileStoryRuntimeGraph,
+  resolveTemporalContext,
   computeEvidenceHash,
   diffEvent,
   EntityMapper,
@@ -169,10 +170,10 @@ function resolveRoute(options: {
 function requireCompleteGameLeaf(projectDir: string, branchPath: BranchPath | undefined): void {
   const mapper = new EntityMapper(projectDir, new FsStorage());
   const data = mapper.loadProject();
-  const tree = compileGameDialogueTree(
-    [...data.chapters.values()].flatMap((chapter) => chapter.events),
-    new Map(data.timeAnchors.map((anchor) => [anchor.id, anchor.day])),
-  );
+  const eventFiles = [...data.chapters.values()].flatMap((chapter) => chapter.events);
+  const events = eventFiles.map((ef) => mapper.mapToNarrativeEvent(ef));
+  const temporalContext = resolveTemporalContext(events, data.timeAnchors);
+  const tree = compileGameDialogueTree(events, temporalContext);
   if (
     tree &&
     (!branchPath || !tree.leafPaths.some((leafPath) => branchPathsEqual(leafPath, branchPath)))
@@ -1711,19 +1712,28 @@ program
 
     const mapper = new EntityMapper(projectDir);
     const data = mapper.loadProject();
-    const events = mapper.loadAllEvents(data.chapters);
-    const { edges } = buildCausalEdges(events);
+    const allEvents = mapper.loadAllEvents(data.chapters);
+    const genesis = allEvents.find((e) => e.id === 'system:genesis');
+    const compiled = compileStoryRuntimeGraph({
+      events: allEvents,
+      initialFacts: genesis?.postconditions ?? [],
+      initialThreads: [],
+      timeAnchors: data.timeAnchors,
+      branchPath: { decisions: [] },
+    });
 
-    const eventProps = events.map((e: { id: string; title: string; sceneType: string }) => ({
-      eventId: e.id,
-      title: e.title,
-      sceneType: e.sceneType,
-    }));
+    const eventProps = compiled.selectedEvents.map(
+      (e: { id: string; title: string; sceneType: string }) => ({
+        eventId: e.id,
+        title: e.title,
+        sceneType: e.sceneType,
+      }),
+    );
 
     const output =
       options.format === 'mermaid'
-        ? exportDAGtoMermaid(edges, eventProps)
-        : exportDAGtoDOT(edges, eventProps);
+        ? exportDAGtoMermaid(compiled.storyAdjacency, eventProps)
+        : exportDAGtoDOT(compiled.storyAdjacency, eventProps);
 
     console.log(output);
   });

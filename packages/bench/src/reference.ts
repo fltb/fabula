@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   type AnalysisResult,
   compileStoryBoundaries,
+  compileStoryRuntimeGraph,
   EntityMapper,
   expectedOutcomeManifestSchema,
   type Fact,
@@ -689,11 +690,18 @@ export function collectReferenceIssueIdentities(
   const genesis = allEvents.find((e) => e.id === 'system:genesis');
   const narrativeEvents = allEvents.filter((e) => e.id !== 'system:genesis');
 
-  // ── 2. Compile story boundaries ─────────────────────────────────
+  // ── 2. Compile canonical runtime graph + boundaries ─────────────
+  const compiled = compileStoryRuntimeGraph({
+    events: allEvents,
+    initialFacts: initialFactsFor(registry, genesis),
+    initialThreads: [],
+    timeAnchors: projectData.timeAnchors ?? [],
+    branchPath: { decisions: [] },
+  });
   const boundaries = compileStoryBoundaries(
-    narrativeEvents,
-    initialFactsFor(registry, genesis),
-    new Map((projectData.timeAnchors ?? []).map((a) => [a.id, a.day])),
+    [...compiled.selectedEvents],
+    compiled.initialFacts,
+    compiled.storyAdjacency,
   );
 
   const stateBeforeByEventId = boundaries.stateBeforeByEventId;

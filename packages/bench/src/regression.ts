@@ -7,6 +7,7 @@ import * as path from 'node:path';
 import {
   ContextCompiler,
   compileStoryBoundaries,
+  compileStoryRuntimeGraph,
   EntityMapper,
   type Fact,
   FsStorage,
@@ -88,19 +89,23 @@ export function validateFixtureIssues(fixturePath?: string): ValidationIssue[] {
   const initialThreads = (projectData.worldInitialState?.threads ?? []).map((t) => ({
     id: t.id,
   }));
-  const boundaries = compileStoryBoundaries(
-    narrativeEvents,
-    initialFactsFor(registry, genesis),
-    new Map((projectData.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day])),
-    undefined,
+  const compiled = compileStoryRuntimeGraph({
+    events: allEvents,
+    initialFacts: initialFactsFor(registry, genesis),
     initialThreads,
+    timeAnchors: projectData.timeAnchors ?? [],
+    branchPath: { decisions: [] },
+  });
+  const boundaries = compileStoryBoundaries(
+    [...compiled.selectedEvents],
+    compiled.initialFacts,
+    compiled.storyAdjacency,
   );
   const results = new ResultAggregator().validateAll(
     narrativeEvents,
     boundaries.finalState,
     registry,
-    undefined,
-    boundaries.stateBeforeByEventId,
+    { stateBeforeByEventId: boundaries.stateBeforeByEventId },
   );
   return [...results.values()].flatMap((result) => [
     ...result.errors,
@@ -198,16 +203,21 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
   await mark(
     'Build DAG',
     async () => {
-      const narrativeEvents = allEvents.filter((event) => event.id !== 'system:genesis');
       const genesis = allEvents.find((event) => event.id === 'system:genesis');
+      const initialThreads = (projectData.worldInitialState?.threads ?? []).map((t) => ({
+        id: t.id,
+      }));
+      const compiled = compileStoryRuntimeGraph({
+        events: allEvents,
+        initialFacts: initialFactsFor(registry, genesis),
+        initialThreads,
+        timeAnchors: projectData.timeAnchors ?? [],
+        branchPath: { decisions: [] },
+      });
       boundaries = compileStoryBoundaries(
-        narrativeEvents,
-        initialFactsFor(registry, genesis),
-        new Map((projectData.timeAnchors ?? []).map((anchor) => [anchor.id, anchor.day])),
-        undefined,
-        (projectData.worldInitialState?.threads ?? []).map((t) => ({
-          id: t.id,
-        })),
+        [...compiled.selectedEvents],
+        compiled.initialFacts,
+        compiled.storyAdjacency,
       );
       stateBeforeByEventId = boundaries.stateBeforeByEventId;
     },
@@ -238,8 +248,7 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
         narrativeEvents,
         state,
         registry,
-        undefined,
-        stateBeforeByEventId,
+        { stateBeforeByEventId },
       );
       if (results.size === 0 && narrativeEvents.length > 0) {
         throw new Error('Aggregator returned empty results');

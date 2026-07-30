@@ -11,6 +11,7 @@ import {
   narrativeEventSchema,
   narrativeNodeSchema,
 } from '../../src/schemas/corpus.ts';
+import { mapToNarrativeEllipsis } from '../../src/entity/mapper.ts';
 
 // ─── Fixture Helpers ──────────────────────────────────────────────────────
 
@@ -87,10 +88,13 @@ describe('Binding 2 — Essential ellipsis fields', () => {
     expect(result.success).toBe(false);
   });
 
-  it('requires storyTime', () => {
+  it('accepts omitted storyTime — defaults to unspecified indeterminate', () => {
     const input = validEllipsisInput({ storyTime: undefined });
     const result = narrativeEllipsisSchema.safeParse(input);
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.storyTime).toEqual({ type: 'indeterminate', mode: 'unspecified' });
+    }
   });
 
   it('accepts optional summary', () => {
@@ -359,7 +363,7 @@ describe('Binding 7 — Atomic provenance required', () => {
 describe('Binding 8 — Single storyTime enforced', () => {
   it('accepts exactly one storyTime (absolute)', () => {
     const input = validEllipsisInput({
-      storyTime: { type: 'absolute', year: 1847, month: 6, day: 1 },
+      storyTime: { type: 'absolute', value: '1847-06-01' },
     });
     expect(narrativeEllipsisSchema.safeParse(input).success).toBe(true);
   });
@@ -445,5 +449,36 @@ describe('Ellipsis successful parse', () => {
     if (result.success) {
       expect(result.data.summary).toBeUndefined();
     }
+  });
+});
+
+// ─── Mapper integration: Indeterminate AST sharing ─────────────────────
+
+describe('Mapper — Indeterminate AST with fact validity', () => {
+  it('shares indeterminate storyTime with precondition/postcondition validity when storyTime omitted', () => {
+    const result = mapToNarrativeEllipsis({
+      id: 'ellipsis_mapper_test',
+      provenance: { sourceHash: 'abc', sourceRange: { start: 0, end: 10 } },
+      preconditions: [{ entity: 'hero', attribute: 'location' }],
+      postconditions: [{ entity: 'hero', attribute: 'location', value: 'village' }],
+    });
+
+    expect(result.storyTime).toEqual({ type: 'indeterminate', mode: 'unspecified' });
+
+    // Both pre/post validity temporal start share the same indeterminate object
+    expect(result.preconditions[0].validity.temporal.start).toBe(result.storyTime);
+    expect(result.postconditions[0].validity.temporal.start).toBe(result.storyTime);
+  });
+
+  it('preserves deterministic storyTime as fact validity start when provided', () => {
+    const result = mapToNarrativeEllipsis({
+      id: 'ellipsis_mapper_det',
+      storyTime: 'chapter_3' as const,
+      provenance: { sourceHash: 'def', sourceRange: { start: 5, end: 20 } },
+      preconditions: [{ entity: 'hero', attribute: 'location' }],
+    });
+
+    expect(result.storyTime).toEqual({ type: 'chapter', chapter: 3 });
+    expect(result.preconditions[0].validity.temporal.start).toBe(result.storyTime);
   });
 });

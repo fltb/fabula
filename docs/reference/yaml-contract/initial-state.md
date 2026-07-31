@@ -12,10 +12,10 @@ The `state_initial.yaml` file at `definitions/state_initial.yaml` describes the 
 | `info` | `object` | **required** | — | Era and political context. Contains `currentEra` (string) and `politicalSituation` (string). |
 | `info.currentEra` | `string` | required | — | The current historical era, e.g. `"1920s post-imperial China"`. |
 | `info.politicalSituation` | `string` | required | — | Prose describing the political landscape. |
-|| `timeAnchors` | `array` | optional | `[]` | Named temporal reference points. Each anchor has `id` (string), `at` (string), and optional `description` (string). |
-|| `timeAnchors[].id` | `string` | required | — | Unique anchor identifier referenced by `storyTime` fields in events. Convention: `snake_case` narrative labels (`new_year_eve`, `spring_ahmao_death`). Avoid identifiers matching authored time syntax (`day_N`, `chapter_N`). |
-|| `timeAnchors[].at` | `string` | required | — | Authored timestamp for the anchor. Use `day_<number>` format for day offsets from story-zero (e.g. `day_0`, `day_-1825`). Negative for past, positive for future. |
-| `timeAnchors[].description` | `string` | optional | — | Human-readable description of what happens on this day. |
+| `timeAnchors` | `array` | optional | `[]` | Named temporal reference points. Each anchor has `id` (string), locatable `at`, and optional `description` (string). |
+| `timeAnchors[].id` | `string` | required | — | Unique anchor identifier referenced by event timestamps. Convention: `snake_case` narrative labels (`new_year_eve`, `spring_ahmao_death`). Avoid identifiers matching authored time syntax (`day_N`, `chapter_N`). |
+| `timeAnchors[].at` | `AuthoredLocatableStoryTime` | required | — | A locatable authored timestamp: a legacy nonblank string, `{ at: string }`, `{ after: { ref, amount, unit } }`, `{ offset: { amount, unit } }`, or `{ chapter: number }`. Intentional indeterminacy is not valid for an anchor. |
+| `timeAnchors[].description` | `string` | optional | — | Human-readable description of the temporal reference point. |
 | `threads` | `array` | **required** | — | Initial narrative thread declarations. Each thread has `id`, `name`, `description`, `type`, `targetRevealChapter`, `initialProgress`. |
 | `threads[].id` | `string` | required | — | Thread identifier (e.g. `T1`, `T2`). Referenced by events' `threadProgress`. |
 | `threads[].name` | `string` | required | — | Human-readable thread name. |
@@ -40,6 +40,30 @@ The `state_initial.yaml` file at `definitions/state_initial.yaml` describes the 
 - `threads[].id` must be unique within the array.
 - `timeAnchors[].id` must be unique within the array.
 
+## Anchor timestamps
+
+Anchors accept the locatable subset of the event timestamp language. Compact strings remain supported; structured forms make the clock and reference explicit. A `day_<number>` label is not required, but its existing numeric story-clock meaning is preserved. Anchor and event IDs are references resolved by the temporal context, never lexical sort keys.
+
+```yaml
+timeAnchors:
+  - id: story_origin
+    at:
+      offset:
+        amount: 0
+        unit: day
+  - id: recruitment
+    at:
+      after:
+        ref: story_origin
+        amount: 120
+        unit: day
+  - id: chapter_four
+    at:
+      chapter: 4
+```
+
+`at` and `after.ref` must be nonblank after trimming. `after.amount` is finite and nonnegative; `offset.amount` is finite and may be signed; `chapter` is a finite nonnegative integer; and `unit` is one of `minute`, `hour`, `day`, `week`, or `month`. Objects are strict and mutually exclusive: unknown or mixed keys, arrays, nested `at` objects, and `{ type: indeterminate }` fail validation. Quote ISO values, numeric-looking labels, and other YAML-coercible tokens.
+
 ## Valid Example
 
 ```yaml
@@ -50,10 +74,16 @@ info:
 
 timeAnchors:
   - id: new_year_eve
-    at: day_0
+    at:
+      offset:
+        amount: 0
+        unit: day
     description: "New Year's Eve — narrator meets Xianglin's Wife"
   - id: winter_five_years_ago
-    at: day_-1825
+    at:
+      offset:
+        amount: -1825
+        unit: day
     description: "Early winter — Xianglin's Wife first arrives at Lu's house"
 
 threads:

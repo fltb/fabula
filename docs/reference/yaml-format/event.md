@@ -16,7 +16,7 @@
 | `event` | `string` | 事件标识符，例如 `"E0"`、`"E1"` |
 | `narrativeOrder` | `number` | 在故事中的位置（从 1 开始） |
 | `title` | `string` | 人类可读的标题 |
-| `storyTime` | `string` | 引用时间锚点的故事时间戳（例如 `new_year_eve`、`day_5`） |
+| `storyTime` | `AuthoredStoryTime`（可选） | 场景的故事时间；可省略，或显式声明时间不可确定 |
 | `sceneType` | `enum` | `linear`、`flashback`、`flashforward`、`dream` 或 `parallel` |
 | `pov` | `{ character, type }` | 视角角色 ID 和视角类型（`first_person`、`third_person_limited`、`omniscient`） |
 | `sceneBrief` | `string` | 描述场景中发生事件的散文概要 |
@@ -59,13 +59,51 @@ snake_case key 以及外部 `branches.yaml` / `branches/branch_points.yaml` 都�
 | `resolutionType` | `string`（可选） | 冲突解决方式（例如 `negative_resolution`） |
 | `emotionalValence` | `string`（可选） | 场景的情感基调 |
 | `targetAudience` | `string`（可选） | 影响散文风格的目标受众（例如 `adult_literary`） |
-| `narrationTime` | `string`（可选） | 故事被讲述的时间（用于非线性时间线） |
+| `narrationTime` | `AuthoredStoryTime`（可选） | 故事被讲述的时间；与 `storyTime` 使用同一时间语言和引用命名空间，不引入独立叙述时钟 |
+
+### 时间戳写法
+
+`storyTime` 与 `narrationTime` 都接受相同的 `AuthoredStoryTime` 联合。现有紧凑字符串完全兼容；结构化写法建议用于新 YAML。省略 `storyTime` 表示未定位的场景；也可以显式写出有意不可确定的时间。场景不需要规范的 `day_<number>` 标签。
+
+```yaml
+# Existing compact syntax remains valid.
+storyTime: "arrival + 90 minutes"
+
+# Delegate one nonblank string to the compact grammar.
+narrationTime:
+  at: "2024-12-01T09:00:00Z"
+
+# Reference an event ID or named time anchor.
+storyTime:
+  after:
+    ref: arrival
+    amount: 90
+    unit: minute
+
+# Signed story-clock offset.
+storyTime:
+  offset:
+    amount: -3
+    unit: month
+
+# Chapter clock.
+storyTime:
+  chapter: 4
+
+# Deliberately unlocatable scene.
+storyTime:
+  type: indeterminate
+  reason: "Chronology is deliberately unknowable"
+```
+
+结构化对象必须只采用一种形式：`at`、`after`、`offset`、`chapter` 或 `type: indeterminate`。`at` 与 `after.ref` 去除首尾空白后必须非空；`after.amount` 为有限非负数，`offset.amount` 为有限有符号数，`chapter` 为有限非负整数，`unit` 仅为 `minute`、`hour`、`day`、`week` 或 `month`。`at` 只能是字符串，不能嵌套时间对象；未知键、混合形式、数组和空白 `reason` 均无效。建议引用 ISO 时间、数值形式标签或其他可能被 YAML 强制转换的值。
+
+`narrationTime` 仅复用现有时间解析和 event/anchor 引用命名空间；它不改变故事坐标、因果重放或叙述时间语义。
 
 ### 阶段一严格合同
 
 - 所有 production YAML 只经严格 Zod compiler 加载；未知键、语法错误、缺必需文件均以带文件/YAML 路径的 `ConfigError` 失败，绝不静默跳过。
 - `Fact` 必须采用三种互斥形式之一：提供 `value`（set，默认）、`operation: unset`（删除属性），或 `narrativeHint`（仅 Pass 2）。所有 10 种运算符（`eq`、`neq`、`gt`、`gte`、`lt`、`lte`、`contains`、`not_contains`、`exists`、`not_exists`）均受支持；`eq` 为默认值。各运算符详见下方前件运算符表。
-- `linear` 与 `flashback` 事件必须写出 `storyTime` 和 `narrationTime`。其他 scene type 不是阶段一 author-facing capability。
 - 项目键使用 camelCase；例如 `defaultModel`、`defaultLanguage`、`snapshotInterval`、`defaultSceneTextTarget`。旧 snake_case 不再兼容。
 
 

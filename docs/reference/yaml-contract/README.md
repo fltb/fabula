@@ -1,14 +1,13 @@
 # YAML Contract Reference
 
 **Status:** Frozen — Wave 4+5 normalized runtime contracts  
-**Policy:** All YAML contracts in this directory define the author-facing YAML surface for the Novalistically compiler. The compiler reads these YAML files and produces normalized IR (internal representation). No field, enum value, or structure in these contracts may be changed without a version bump.
+**Policy:** All YAML contracts in this directory define the author-facing YAML surface for the Novalistically compiler. The compiler reads these YAML files and produces normalized IR (internal representation). Changes are classified by compatibility; this timestamp extension adds no new YAML version discriminator.
 
 ## Version Policy
 
-- Each contract schema has an implicit `schemaVersion` field.
-- Version bumps are minor (compatible addition) or major (breaking change).
-- The compiler validates every input YAML against the **current** schema version.
-- Migrations are documented in `docs/migrations/`.
+- Structured authored timestamps are a minor-compatible accepted-form extension: existing compact strings remain valid.
+- This extension does not require a new `schemaVersion` field or a migration file.
+- A breaking validation change requires a documented compatibility decision and migration guidance when applicable.
 
 ## Contract Index
 

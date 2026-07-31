@@ -72,14 +72,14 @@ P4 — 补充（开发链、历史 QA）
 
 | 维度 | Novel Studio | Novalistically |
 |---|---|---|
-| 摘要生成 | LLM Summarizer agent | 确定性 SummaryCompiler（WorldState diff） |
+| 摘要生成 | LLM Summarizer agent | 确定性编译（`LogicalDisclosureSummaryCompiler` 已接入管线；`VolumeSummaryCompiler` 仅为已导出的独立工具） |
 | 摘要层级 | L0（每章）+ L1（每 ~100 章） | 仅 per-scene（可扩展 L1） |
 | 上下文编译 | Packet Compiler（P0-P4） | ContextCompiler（5 层优先级） |
 | 信息源 | PostgreSQL Canon Store | Event Sourcing + YAML |
 | 叙事模型 | 线性章节流 | DAG 因果边 + runtime/API branch primitives；authoring YAML 目前未接入 story branch |
 | 渲染方式 | 串行（人审批→下一章） | 批量并行（滑动窗口） |
 | 缓存 | 无 | 哈希链全依赖缓存 |
-| 验证 | 单 QA agent（LLM） | 18 Validator + Pass 2 分析 |
+| 验证 | 单 QA agent（LLM） | 28 个内建 Validator + Pass 2 分析 |
 
 ### 代表：Novelcrafter（商业工具）
 
@@ -140,7 +140,7 @@ Composer agent 按相关性从 truth files 中检索内容，只拉取当前章�
 |---|---|---|---|---|---|
 | 扔散文原文 | Sudowrite | 文件系统读 prose | ⚠️ 有噪声但完整 | ❌ 有竞态 | ❌ 全链失效 |
 | LLM 生成摘要 | Novel Studio | Summarizer agent | ⚠️ LLM 质量波动 | ✅ 不依赖渲染 | ⚠️ 摘要变则缓存变 |
-| 确定性编译摘要 | Novalistically | WorldState diff | ✅ 100% 确定 | ✅ 预编译 | ✅ 与缓存正交 |
+| 确定性编译摘要 | Novalistically | 确定性编译（discourse 披露摘要已接入；L0 场景聚合未接线） | ✅ 100% 确定 | ✅ 预编译 | ✅ 与缓存正交 |
 | 纯结构化状态 | Novel-OS | State JSON | ✅ 确定 | ✅ | ✅ |
 | 人写摘要 | Novelcrafter | 用户输入 | ⚠️ 靠用户维护 | ✅ | ✅ |
 | 手动上下文 | NovelAI | 用户维护的 lore | ❌ 靠用户维护 | ✅ | ✅ |
@@ -166,12 +166,12 @@ Composer agent 按相关性从 truth files 中检索内容，只拉取当前章�
 
 ### ① DAG 因果边驱动的 State Replay
 
-所有对标系统都是**线性写作流**（Novel Studio：逐章串行 → canonize；Novel-OS：5 agent 串行；Sudowrite：人→AI 交替）。Novalistically 通过 `buildCausalEdges()`（postcondition↔precondition 匹配）构建事件 DAG，`ReplayEngine` 按拓扑排序重放。这使以下结构成为可能：
+所有对标系统都是**线性写作流**（Novel Studio：逐章串行 → canonize；Novel-OS：5 agent 串行；Sudowrite：人→AI 交替）。Novalistically 通过 `compileStoryRuntimeGraph()`（`state/graph-adapter.ts`，postcondition↔precondition 匹配 + 分支选择 + 时间上下文解析）构建故事图，`compileStoryBoundaries()` 解析每事件状态边界，`ReplayEngine` 按因果序重放。这使以下结构成为可能：
 
 ```
 闪回：E6 的 storyTime 在 E4 之前，但 causal edges 正确追溯因果前驱
-并行线：E3a（camille 线）和 E3b（seraphine 线）共存于同一 DAG
-多前驱：E4 的 causalPredecessors = [E2, E3]（DAG 自然支持）
+并行线：E3a（camille 线）和 E3b（seraphine 线）共存于同一故事图
+多前驱：E4 的 causalPredecessors = [E2, E3]（图自然支持）
 ```
 
 ### ② EventFile-local authoring-level game dialogue tree
@@ -185,21 +185,21 @@ branch-scoped synthetic transition；selected route replay 因而使用 canonica
 
 ### ③ 批量并行渲染 + 哈希链缓存
 
-- `ConcurrencyPool` 5 路并行渲染
+- `ConcurrencyPool` 5 路并行渲染（默认 concurrency 5）
 - `BatchRenderPipeline` 滑动窗口
-- `computeCacheKeys()` SHA256 哈希链，缓存依赖全自动追踪
-- `CircuitBreaker` 自动重试 + 熔断
+- 缓存 key：`renderScene` 用 `buildLogicalKeyMaterial()` / `buildSurfaceKeyMaterial()` 计算两层 key 串，再以 `sha256Canonical({ logical, surface })` 作为实际存储查找 key；`buildValidationKeyMaterial()` / `buildAttemptKeyMaterial()` 在 Pass 2 阶段计算，只作为元数据随 `setCachedRender()` 写入。`computeFlatCacheKey()` 没有生产调用方（仅单测覆盖）
+- `createCircuitBreaker()` 自动重试 + 熔断
 
 所有对标系统都是串行（Novel Studio / Sudowrite / Novel-OS）。**目前没有其他叙事系统在场景间维持因果一致性的同时做批量并行渲染。**
 
 ### ④ 两轮渲染 + 确定性 Validator 体系
 
-- Pass 1（temp 0.8）：prose
-- Pass 2（temp 0.3, seed 42）：12-block 结构化 analysis JSON
+- Pass 1（temp 0.8，seed null）：prose
+- Pass 2（temp 0.3, seed 42）：动态 JSON 模板——内建聚合 schema `analysisContentSchema`（`validator/index.ts`）共 20 个块（14 必选 + 6 可选：`checklistResults` + 5 个 Genette 维度块），提示中仅包含有活跃验证器消费者的块
 - Zod schema 校验 Pass 2 输出 → 验证失败时带错误反馈重试
-- 18 个独立 Validator，每个消费特定 analysis block
+- 28 个内建 Validator（`ResultAggregator` 默认注册列表）；其中大多数通过 `getAnalysisRequirements()` 消费特定 analysis block，但 `BranchMergeValidator` 与 `ReachabilityValidator` 返回空需求、`DiscourseValidator` 不声明任何 analysis 需求——并非每个验证器都消费 Pass 2 块
 - `compareFact()` 统一确定性比较入口
-- Dev-only 双重运行验证（两次 Pass 2 比较 JSON）
+- 双重运行验证：`RenderPipelineOptions.doubleRunVerification`（默认 `false`），开启后对同一场景跑两次 Pass 2 并逐块比较 JSON。它不是 dev 环境默认，公共 `renderNovel` 路径未启用，需直接构造 `RenderPipeline` 时显式开启
 
 对标系统的验证层深度不可比：Novel Studio 是单个 QA agent（一次 LLM 调用）、Novel-OS 是 ContinuityEngine（确定性）+ Guardian（LLM）、Sudowrite 没有独立验证层。
 
@@ -209,7 +209,7 @@ branch-scoped synthetic transition；selected route replay 因而使用 canonica
 
 ### ⑥ 确定性 SummaryCompiler（vs LLM Summarizer）
 
-Novel Studio 的 Summarizer 是 LLM 调用（有成本、有质量波动、需等 L0 质量稳定后才上 L1）。Novalistically 的 `SummaryCompiler.compileAll()` 从 WorldState diff **确定性编译**——不调 LLM、0 token 成本、100% 可测试、并行渲染前一次跑完。
+Novel Studio 的 Summarizer 是 LLM 调用（有成本、有质量波动、需等 L0 质量稳定后才上 L1）。Novalistically 的 `LogicalDisclosureSummaryCompiler`（`summary/logical-compiler.ts`，从 planned DiscourseState / scene contract / narrator projection 编译 hash-pinned 摘要）**确定性编译**——不调 LLM、0 token 成本、100% 可测试；它由 `editorial/render-service.ts` 在渲染前构造，摘要经 `logicalDisclosureSummary` 注入 Pass 1 提示并计入缓存身份。`VolumeSummaryCompiler`（`summary/volume-summary.ts`，确定性 L0 场景摘要聚合）已从 barrel 导出为独立工具，但**没有生产调用方**（仅单测覆盖），尚未接入任何渲染路径。
 
 ---
 
@@ -219,39 +219,35 @@ Novel Studio 的 Summarizer 是 LLM 调用（有成本、有质量波动、需�
 
 **Novel Studio 有**：每章 Blueprint → 用户审批 → Write → QA → pass/block → 用户确认 → Canonize。每章 2-3 个人工介入点。
 
-**Novalistically 的状态**：`RenderSceneResult.needsReview` 字段已在类型中，`CircuitBreaker` 可标记 `BLOCKED` 状态、`human_arbitration` 占位符已在 plugin resolver 中——但**未接通**到实际的通知用户→等待响应的通道。Pipeline 是全自动的，render 完直接写文件。
-
-**这不是设计缺陷，是未完成的接口。** 原始设计（PROJECT.md §六-B）明确了"Circuit Breaker + BLOCKED → 等人工裁决"的机制，但 api.ts 未实现。
+**Novalistically 的状态**：已接通。`renderNovel` 的发布决策走 `evaluateReleaseDecision()`（`pipeline/release-decision.ts`）+ `InteractionManager`（`pipeline/interaction-gate.ts`）：`RenderSceneResult.needsReview=true`（重试耗尽）的结果默认 blocked，`warning` 级发现可通过 `recordWaiver()` 预先记录豁免后被接受，`error` 级（S/X 失败）始终需要审批、不可豁免。这是同步 waiver 通道——调用方在 render 前声明豁免，而不是异步“通知用户→等待响应”。
 
 ### ② 项目级风格档案（Style Profile）
 
 **Novel Studio 有**：`ProjectTemplate` 包含 `style_profile`，每章 packet 作为 P0 硬约束携带。
 
-**Novalistically 有**：`NarrativeEvent.styleGuidance`（tone、characterVoice、atmosphere、scenePacing 等）per-scene。没有项目级全局风格定义。
-
-**影响**：100 场景时需要在每个 YAML 文件里写风格参数。应该有一个全局 fallback + per-scene override 的机制。
+**Novalistically 有**：`NarrativeEvent.styleGuidance`（tone、characterVoice、atmosphere、scenePacing 等）per-scene，经 `PromptAssembler` 注入 Pass 1 prompt。**接线现状**：`nova.yaml` 的 `styleProfile` 字段虽被 `projectConfigSchema`（`schemas/project.ts`）接受，但公共 `renderNovel` 路径（`editorial/render-service.ts`）从不把该配置传给 `RenderPipeline`——场景合同的风格由 `compileSceneContract()` 从默认注册表（`DEFAULT_PROJECT_STYLE`）+ chapter/narrator 字符串提示解析，缓存 key 中的 `styleProfileHash` 哈希的正是这个默认解析结果。`RenderPipeline` 有直接的 `styleProfile` 选项（`StyleResolver`，`packages/core/src/style/`，project/chapter/narrator/scene 优先级 + `DEFAULT_STYLE_PROFILE` 回退），但仅直接构造管线时可用。**当前生效的只有 per-event `styleGuidance` 与直接管线选项，项目级 YAML 档案尚未接通。**
 
 ### ③ 变更影响分析
 
 **Novel Studio 计划做**：Green/Yellow/Red 影响等级。用户修改 Canon Store 条目时自动评估"哪些已写/将写的章节受影响"。
 
-**Novalistically 无**：改 YAML → 缓存静默失效 → 下次渲染自动重跑。作者得不到"这次改动影响了 X 个场景"的报告。
+**Novalistically 的现状**：改 YAML → 分层缓存 key 失效 → 下次渲染自动重跑。缓存层已提供 staleness 诊断 API（`verifyEvidenceChain()`，按事件返回 valid/stale/missing/corrupt + 原因），但尚未接入 CLI 或面向作者的影响报告——"这次改动影响了 X 个场景"仍需开发者自行调用该 API 得出。
 
 ### ④ 多层级摘要（L0 + L1）
 
 **Novel Studio 有**：L0 per-chapter + L1 per-volume（~100 章）。P2 的 "recent context" 是 "last 3 chapter summaries + current volume summary"。
 
-**Novalistically 有**：仅 per-scene summary（计划中的 Summarizer 组件）。更高层抽象未规划。
+**Novalistically 有**：唯一接入的摘要路径是 `LogicalDisclosureSummaryCompiler` 的 hash-pinned 披露摘要（`editorial/render-service.ts` 在渲染前编译，经 `logicalDisclosureSummary` 注入 Pass 1）。`VolumeSummaryCompiler`（确定性 L0 场景摘要聚合）已导出但无生产调用；`ContextCompiler` 虽有 `volumeSummary` 选项，公共路径从未传入生成值。更高层抽象未规划。
 
-**何时成为问题**：500+ 场景时，因果链可能跨越几十个事件。没有 L1 抽象则 `previousSummaries` 列表会很长。
+**何时成为问题**：500+ 场景时，因果链可能跨越几十个事件。没有 L1 抽象，也没有任何 `previousSummaries` 累积结构（源码中不存在该符号），跨场景摘要只能靠现有披露摘要逐场拼接。
 
 ### ⑤ 多模型路由
 
 **Novel Studio 有**：Planner → GPT-4o-mini（便宜），Writer → DeepSeek（强），QA → DeepSeek，Chat → GPT-4o-mini。
 
-**Novalistically 有**：所有任务走同一个 `provider.complete()`。不能按任务需求路由模型。
+**Novalistically 有**：`AiSdkProviderOptions.routing` 已支持按任务路由模型——`default` / `pass1` / `pass2` / `summary` 四个槽位；`RenderPipeline` 在 provider 请求上带 `taskType: 'pass1' | 'pass2'`，provider 按 `request.taskType` 选择模型（`packages/core/tests/multi-model.test.ts` 覆盖该行为）。注入配置了 `routing` 的 `AiSdkProvider` 后，Pass 1 / Pass 2 / summary 即可使用不同模型。
 
-**影响**：不能把消耗 token 多的任务（如 Pass 1 写作）放便宜模型，把需要精确度的任务（如 Pass 2 分析）放强模型。
+**影响**：**声明式项目级路由仍缺失**——`nova.yaml` 无法声明路由，`render-service.ts` 构造 provider 时只传单一 `model`；跨 provider 路由（如 Pass 1 用 A 厂商、Pass 2 用 B 厂商）也不存在。这些是“尚未接入声明式配置”，不是“无法按任务路由”。
 
 ### ⑥ Agent 独立配置体系（Agent-as-Configurable-Unit）
 
@@ -275,22 +271,22 @@ prompts/ 目录:
   prose-only.ts        — 散文模式（辅助）
   thread-status.ts     — 线程状态（辅助）
 
-没有 agent 概念：
-  - 没有 formal 的 Agent 类型或接口
-  - 没有 Agent 注册表
-  - 没有 per-agent 输出 contract（Pass 2 有一个共享的 Zod schema，但不属于某个 Agent）
-  - 没有 per-agent token budget 或 model 配置
-  - Orchestrator/Pipeline 直接 import 这些文件
+Agent API 脚手架已存在，但管线未消费：
+  - `packages/core/src/agent/types.ts` 定义并导出了 `Agent<I, O>` 接口、`AgentPacket`（system + user prompt，可选输出 schema）与 `AgentConfig`（model、temperature、maxTokens、seed）
+  - `packages/core/src/agent/registry.ts` 实现并导出了 `AgentRegistry`（按 `AgentRole`：pass1/pass2/summary/review 注册与查询）
+  - `packages/core/tests/agent.test.ts` 覆盖全部角色
+  - **真实缺口是集成**：生产 `RenderPipeline` 不查询 `AgentRegistry`、不使用 `Agent` 接口——Pass 1/Pass 2 提示构建与 provider 调用仍是管线直接 import 的硬编码函数
+  - 没有 per-agent 输出 contract 集成（Pass 2 的聚合 Zod schema 由验证器 schema 聚合而来，见 `validator/index.ts`）
 ```
 
-当前代码里提示词是静态 import 的硬编码函数调用（`buildSceneRenderPrompt(input)` → `Message[]`），不可配置、不可替换。
+当前代码里提示词主体是静态 import 的硬编码函数调用（`buildSceneRenderPrompt(input)` → `Message[]`），但已有插件扩展口：`PluginHooksManager` 的 `onBuildPass1Prompt` / `onBuildPass2Prompt` 钩子返回 `PromptDecoration[]`，以非权威方式注入 prompt（插件名排序合并，每个 decoration 计入缓存身份）。
 
 **影响**：
 
-1. **插件支持受限**：如果一个用户想"换掉 Pass 1 的写作 prompt，但保持 Pass 2 分析不变"——当前做不到。所有 prompt 是编译时 import 的
-2. **测试困难**：不能 inject mock Agent 来做集成测试——因为根本没有 Agent 接口，只有直接函数调用
-3. **多模型路由无法落地**：没有 Agent 这个概念，就没办法按"当前在写散文" vs "当前在做分析"路由到不同 model/provider
-4. **扩展能力受限**：想加一个新的 Worker（比如 Planner 或 Summarizer），不是加一个类注册，而是改 import 链
+1. **插件可扩展，但不可替换内核**：插件可以追加 prompt 装饰段，但不能替换 Pass 1/Pass 2 的 prompt 构建函数本身
+2. **测试需要 mock provider**：集成测试通过 mock `LLMProvider` 注入，而不是替换 Agent（`Agent` 接口存在但管线未使用）
+3. **多模型路由由 provider 层提供**：按任务路由已通过 `AiSdkProvider.routing` + `request.taskType` 实现（见 ⑤）；`AgentRegistry` 的 role 路由键与 `TaskType` 并行，但管线不经过 registry 路由
+4. **扩展能力受限**：想加一个新的 Worker（比如 Planner 或 Summarizer），不是向 `AgentRegistry` 注册一个类，而是改管线的 import 链
 
 **这不是设计缺陷**——管线在当前阶段够用。但它是一个架构级的差异——Novel Studio 把"Agent"作为一等公民，Novalistically 把"Prompt"作为一等公民。当系统规模增长时，这个差异会影响可扩展性。
 
@@ -308,24 +304,23 @@ prompts/ 目录:
 - 耗时、缓存命中状态
 - QA 决策和证据来源
 
-**Novalistically 的现状**：**零 trace。** 整个核心代码里只有零散的 `console.log` / `console.warn`（assembler 有 7 处、plugin loader 有 4 处、replay 有 1 处）。没有任何结构化 trace，没有 span 树，没有 timing，没有层级上下文。
+**Novalistically 的现状**：**trace 只是内存中的不完整插桩**——`runtime.trace` 开启时 `render-service.ts` 会构造 `TraceCollector`（`observability/trace.ts`）并传给 `RenderPipeline`，由管线记录 pipeline / cache / pass1 / pass2 / validator / circuit 各阶段的 span 起止与耗时（`durationMs`）；`ResultAggregator` 也支持在构造时接收 collector 记录每个 validator 的 span。但**没有任何生产调用执行 `TraceCollector.write()` 或读取 `snapshot()`**——不会产出 `{projectDir}/.nova/traces/{jobId}.jsonl` 文件；`context` / `output` 两个声明阶段没有任何记录点；且 `render-service.ts` 构造的 `ResultAggregator` 未传入 collector，per-validator span 实际不会记录。
 
-开发者目前无法回答以下基本问题：
-- "这个场景为什么渲染了这些角色？" → RelevanceEngine 的 8 维评分没有暴露
-- "缓存为什么没命中？" → 没有 cache key 追溯
+仍无法回答的问题：
+- "这个场景为什么渲染了这些角色？" → RelevanceEngine 的 8 维评分没有暴露到 trace
+- "缓存为什么没命中？" → 没有 cache key 层级的追溯
 - "Pass 2 分析中哪些字段用了、哪些没用？" → 没有 analysis 消费追踪
-- "管线瓶颈在哪？" → 每步耗时没有记录
-- "这个 bug 是哪步引入的？" → 没有事件链
+- "每次调用花了多少 token？" → trace 记录耗时但不记录 token 用量
 
 **影响**：
 
-1. **调试成本极高**：遇到 bug 只能加临时 log 重跑。每次重跑也是 LLM 调用——既慢又贵
-2. **回归测试不可靠**：没有一个"这是上一次管线的 trace"的基线。改了一个模块后，你不知道它改变了什么行为
-3. **性能分析靠猜**：不知道 Pass 1 / Pass 2 / RelevanceEngine / Validator 各占总时间的比例
-4. **成本分析无依据**：不知道每个场景、每条故事线、每个角色的 token 消耗分布
-5. **用户无法 debug**：最终用户（小说作者）碰到渲染结果不符合预期时，没有任何办法知道"为什么 LLM 写成了这样"
+1. **阶段耗时仅限内存**：pipeline/pass1/pass2/validator/circuit 等 span 含 `durationMs`，但当前没有任何公开路径取回 `snapshot()`——需要调用方自行构造并读取 collector
+2. **回归对比不可用**：无 JSONL 落盘，跨运行 diff 需先实现 `TraceCollector.write()` 的生产调用
+3. **成本分析仍无依据**：token 消耗分布不在 trace 中，需要 provider 账本补充
+4. **角色选择不可解释**：RelevanceEngine 的评分未入 trace，“为什么选了这些角色”仍要靠代码推演
+5. **用户无法 debug**：最终用户（小说作者）碰到渲染结果不符合预期时，trace 是开发者工具，未暴露给最终用户
 
-**这不是一个"等以后再做"的功能**——它是基础设施层的第一性问题。没有 trace 的系统，在管线复杂度增长到当前规模后，**调试时间会超过实现时间**。
+trace 目前只覆盖内存中的部分 span（context/output 阶段无记录、无落盘），不含 token 计量与决策理由——落盘、完整阶段与 token 计量都是缺口。
 
 ---
 

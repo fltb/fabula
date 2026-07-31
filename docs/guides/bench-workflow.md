@@ -1,69 +1,90 @@
 # 基准测试工作流
 
-> ~400 字 — 基准测试系统的工作方式：参考数据生成和验证运行。
+> ~500 字 — 基准测试系统的工作方式：live-smoke 候选集与已批准参考数据。
 
-基准测试套件（`packages/bench/`）分两个阶段运行，以将依赖于 LLM 的生成与确定性验证分离开来。
+基准测试套件（`packages/bench/`）分两条路径：**live smoke**（真实 LLM 运行，产出候选集）与**确定性基准**（无 LLM，针对已批准参考数据运行）。
 
-## 第一阶段：生成参考数据
+## 路径一：Live Smoke — 生成候选集（需要凭据）
 
 ```
-node packages/bench/scripts/generate-reference.mjs [project-name]
+NOVALISTICALLY_AI_API_KEY=... NOVALISTICALLY_AI_MODEL=... npm run smoke:stage1:live
+# 或直接：node packages/bench/scripts/generate-reference.mjs [project-name]
 ```
 
 默认项目为 `zhu-fu`。该脚本会：
 
-1. 从 `fixtures/{project}/` 加载 YAML 测试夹具
-2. 通过增量 `ReplayEngine` 重放构建每个事件的世界状态
-3. 使用 `AiSdkProvider` 运行完整 `RenderPipeline`（Pass 1 散文 + Pass 2 分析 JSON）
-4. 将结果保存到 `fixtures/{project}/reference/data/{eventId}.json` — 每个文件包含 `{ prose, analysis, _metadata }`
-5. 将验证报告写入 `fixtures/{project}/output/validation.md`
+1. 把夹具复制到临时目录（排除 `.nova`/`scenes`/`output`，确保任何开发者缓存都无法命中）
+2. 通过公共 API `renderNovel()` + `AiSdkProvider` 渲染全部事件（Pass 1 散文 + Pass 2 分析 JSON；Pass 1 seed 为 null，Pass 2 seed 固定 42）
 
-参考数据作为第二阶段的确定性输入。**每个项目在影响分析输出的代码更改后生成一次。**
+> ⚠️ **该命令当前不可运行**（2026-07-31 现状）：`generate-reference.mjs` 调用了 `buildLiveSmokeRecord()`（`packages/bench/src/live-smoke.ts`）与 `collectReferenceIssueIdentities()`（`packages/bench/src/reference.ts`），但从未导入这两个 helper——任何非空渲染都会在 LLM 调用之后抛 `ReferenceError`。在补上导入之前，`npm run smoke:stage1:live` 无法产出候选集。
 
-### 何时重新生成
+修复后脚本的预期产物（写到 `fixtures/{project}/.nova/smoke-candidates/{timestamp}/`）：
+- `smoke-record.json` — 账本记录（`reviewStatus: candidate`；成功要求 E0–E6 全部存在、已释放、无错误）
+- `{eventId}.json` — 每个事件的候选响应（`reviewStatus: candidate`）
+- `observed-outcomes.json`、`candidate-provenance.json`
+
+**失败语义（按当前实现）**：`fatal-error.json` 只在三条路径写入——`renderNovel` 抛出、返回零结果、候选 schema 校验失败；其余失败路径（账本构建失败、provenance 校验失败、`smokeOutput.success === false`）只清理临时目录并以非零码退出，**不写** `fatal-error.json`，且候选事件 JSON 可能在后续步骤失败前已落盘。因此“失败必写 fatal-error.json、绝不留下残缺候选集”是目标语义，当前实现并不保证。
+
+**Live smoke 产出的是候选集（candidates），不是已批准参考。** 脚本绝不写入 `reference/data/` 目录。候选集经人工审核（`reference/review.json` 中 `decision: approved`）后才成为参考；`verify-stage1-acceptance.mjs` 负责校验 review 记录与 `live-smoke-record.json`（要求 cache.hits=0、事件恰好为 E0–E6、pass2 seed=42 等）。
+
+### 何时重新生成 live smoke
 
 - 在修改任何 Pass 2 提示模板（`render-analysis.ts`）之后
 - 在修改验证器的 `getAnalysisRequirements()` 之后
 - 在添加新的 AnalysisResult 块之后
-- 在修改 `EntityMapper`、`ReplayEngine` 或 `ContextCompiler` 之后
+- 在修改 `EntityMapper`、`compileStoryBoundaries()` 或 `compileStoryRuntimeGraph()` 之后
 
-## 第二阶段：运行基准测试
+## 已批准参考集
+
+`fixtures/{project}/reference/` 存放已批准参考数据：
+
+- `data/E0.json … E6.json` — 每个事件 `{ prose, analysis, metadata }`（`reviewStatus: approved`）
+- `provenance.json` — 来源记录（generated / source_quotation）
+- `expected-outcomes.json` — 期望验证 issue 身份清单（版本化 allowlist）
+- `review.json` — 人工审核记录（decision: approved）
+
+`loadApprovedReferences()`（`packages/bench/src/reference.ts`）做封闭加载：校验文件集、schema、metadata 完整性、provenance、outcome manifest、review 决策与哈希。
+
+## 路径二：确定性基准（无 LLM）
 
 ```
 npx vitest run packages/bench/tests/bench.test.ts
 ```
 
-基准测试套件（`packages/bench/tests/bench.test.ts`）运行时不进行 LLM 调用：
+`runRegressionBench()`（`packages/bench/src/regression.ts`）按八个阶段运行：
 
 ### L1 — 预渲染验证（无需 LLM）
 
 - 从测试夹具加载 YAML 定义和事件
-- 通过 `buildCausalEdges()` + `topologicalSort()` 构建 DAG 因果边
-- 通过 `ReplayEngine` 重放世界状态
-- 通过 `ResultAggregator.validateAll()` 运行全部 18 个验证器（仅结构性检查）
-- 检查：实体加载、事件加载、DAG 构建、状态重放、上下文编译
+- 通过 `compileStoryRuntimeGraph()` 构建故事图；`compileStoryBoundaries()` 在 “Build DAG” 阶段按拓扑序重放每个事件并解析状态边界（`stateBeforeByEventId` / `finalState`）——**规范重放发生在这里**，`runRegressionBench()` 并不构造 `ReplayEngine`
+- 后续 “Replay state” 阶段只消费 `compileStoryBoundaries()` 的产物（`boundaries.finalState` 与 `stateBeforeByEventId`），不执行新的重放
+- 通过 `ResultAggregator.validateAll()` 运行全部 28 个内建验证器（仅结构性检查）
 
-### L2 — 后渲染验证（基于参考数据）
+### L2 — 后渲染验证（基于已批准参考）
 
-- 从 `fixtures/{project}/reference/data/` 加载参考数据 `{prose, analysis}`
+- 用 `loadApprovedReferences()` 加载 `fixtures/{project}/reference/` 参考数据
 - 使用存储的分析运行 `ResultAggregator.validateRender()`
-- 检查语义正确性：节奏、时态一致性、外貌匹配、规则合规等
+- 将实际验证 issue 身份与 `expected-outcomes.json` 清单逐项比较（缺失或意外即失败）
+- 计算 N-CED / S-CED 等一致性指标（`packages/bench/src/consistency.ts`）
 
-### 性能和变体测试
+### 其他测试与基准
 
-- `runPerformanceBench()` 测量 N=10、100、1000 事件下的加载/验证吞吐量
-- `runVariantBench()` 测试分支变体、错误注入和极端破坏场景
+- `reference.test.ts` — 参考集封闭加载 + live-smoke-record schema 校验
+- `consistency.test.ts` — N-CED/S-CED/Spearman ρ 等指标
+- `live-smoke-record.test.ts` — `buildLiveSmokeRecord()` 单元测试
+- `runVariantBench()` — 分支变体、错误注入、极端破坏场景（含 pipeline F1）
+- `runPerformanceBench()` — N=10/100/1000 事件下的加载/验证吞吐量
 
 ## 输出
 
 | 内容 | 位置 |
 |------|------|
 | 基准测试报告（JSON + MD） | `output/bench/{timestamp}.json` + `.md` |
-| 核心验证报告 | `fixtures/{project}/output/validation.md` |
+| 验证报告 | `fixtures/{project}/output/validation.md` |
 
-## 为什么分两个阶段？
+## 为什么分两条路径？
 
-- **速度**：第二阶段运行时间 <1 秒，而第一阶段需要 30-60 秒（LLM 调用）
-- **确定性**：相同的参考数据 = 相同的结果，不受 LLM 随机性影响
-- **CI 兼容性**：第二阶段可以在 CI 中运行，无需 API 密钥
-- **迭代开发**：开发过程中，在编辑验证器逻辑时反复运行第二阶段，仅在提示模板变更时重新生成参考数据
+- **速度**：确定性基准无 LLM 调用（秒级），live smoke 需要 30-60 秒
+- **确定性**：已批准参考数据固定 → 结果可复现；live smoke 候选集只为人工审核提供真实 LLM 证据
+- **CI 兼容性**：确定性基准可以在 CI 中运行，无需 API 密钥
+- **迭代开发**：开发过程中反复运行确定性基准，仅在提示模板/分析需求变更时重新生成 live smoke 候选集

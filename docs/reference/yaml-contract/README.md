@@ -1,12 +1,12 @@
 # YAML Contract Reference
 
-**Status:** Frozen — Wave 4+5 normalized runtime contracts  
-**Policy:** All YAML contracts in this directory define the author-facing YAML surface for the Novalistically compiler. The compiler reads these YAML files and produces normalized IR (internal representation). Changes are classified by compatibility; this timestamp extension adds no new YAML version discriminator.
+**Status:** Frozen — Wave 4+5 normalized runtime contracts
+**Policy:** This directory contains the YAML wire contracts of the Novalistically compiler, divided into two groups: author-facing contracts (`initial-state`, `relationship`, `knowledge`, `thread`, `rule`, `causal-deps`, `discourse`, `ellipsis-bridge`) describe YAML files authors write under `definitions/`; internal reference documents (`entity`) describe compiler-produced serialization shapes that are **not** accepted project YAML. The compiler reads the author-facing YAML files and produces normalized IR (internal representation). Changes are classified by compatibility; the structured-timestamp extension adds no new YAML version discriminator.
 
 ## Version Policy
 
 - Structured authored timestamps are a minor-compatible accepted-form extension: existing compact strings remain valid.
-- This extension does not require a new `schemaVersion` field or a migration file.
+- This extension does not require a new `schemaVersion` field or a migration file. **No authored definition file in this directory exposes a `schemaVersion` field** — the only YAML carrying one is the project config `nova.yaml` (`projectConfigSchema`), where it defaults to `1` and is auto-migrated by `loadProjectConfig()`.
 - A breaking validation change requires a documented compatibility decision and migration guidance when applicable.
 
 ## Contract Index
@@ -14,15 +14,14 @@
 | #  | Document | YAML Contract | Source Schema File | Fixture Sources |
 |----|----------|---------------|-------------------|-----------------|
 | 1  | [initial-state.md](./initial-state.md) | `worldInitialState` — world facts, threads, time anchors | `state-initial.ts` | `zhu-fu/definitions/state_initial.yaml`, `arcane-aftermath/definitions/state_initial.yaml` |
-| 2  | [entity.md](./entity.md) | Entity type/declaration/introduction/lifecycle | `entity-catalog.ts` | `zhu-fu/definitions/characters/*.yaml` |
+| 2  | [entity.md](./entity.md) | Internal `EntityTypeCatalog` / `EntityDeclarationCatalog` serialization (compiler-produced — not author YAML) | `entity-catalog.ts` | Built-in `default-catalog.ts`; author input: `definitions/{characters,locations,items,factions,rules}/` |
 | 3  | [relationship.md](./relationship.md) | n-ary relationship type/epoch/membership/dimension | `relationship.ts` | `zhu-fu/definitions/relationships/*.yaml`, `arcane-aftermath/definitions/relationships/*.yaml` |
 | 4  | [knowledge.md](./knowledge.md) | Proposition/claim/information act | `knowledge.ts` | `zhu-fu/definitions/state_initial.yaml` (worldFacts) |
 | 5  | [thread.md](./thread.md) | Thread type/run/goal/milestone | `thread.ts` | `zhu-fu/definitions/state_initial.yaml` (threads) |
 | 6  | [rule.md](./rule.md) | Rule specification/constraint/exception | `rule.ts` (in-line schema), `primitives.ts` | `zhu-fu/definitions/rules/*.yaml`, `arcane-aftermath/definitions/rules/*.yaml`, `most-dangerous-game/definitions/rules/*.yaml` |
 | 7  | [causal-deps.md](./causal-deps.md) | Typed causal dependencies (read resolution, graph edges) | `graph.ts`, `integration.ts` | `fixtures/*/chapters/*/*.yaml` (precondition/postcondition chains) |
-| 8  | [discourse.md](./discourse.md) | Discourse scene contract/acts | `discourse.ts` | `discourse.ts` (schema examples) |
+| 8  | [discourse.md](./discourse.md) | Discourse scene contract/acts | `discourse.ts` | `zhu-fu/definitions/discourse-ledger.yaml`, `zhu-fu/definitions/narrators/*.yaml`, `zhu-fu/definitions/assertions/*.yaml` |
 | 9  | [ellipsis-bridge.md](./ellipsis-bridge.md) | NarrativeEllipsis + DiscourseBridge | `graph.ts`, `integration.ts` | `graph.ts`, `integration.ts` (schema defs) |
-| 10 | [initial-state.md](./initial-state.md) | See row 1 | — | — |
 
 ## Migration Policy
 1. **Adding a new optional field** — minor bump. The compiler accepts YAMLs with or without it.
@@ -37,8 +36,8 @@ Each contract document in this directory (excluding this index) contains a `## F
 
 ## Compiler Guarantees
 
-- **Strict Zod validation** — every input YAML passes through its schema's `.parse()` with `.strict()` mode active. Unknown keys cause immediate `ConfigError`.
-- **No silent fallback** — unknown fields, placeholder values (`changed`, `resolved`, `updated`, etc.), and stringly-typed alternatives are all rejected with diagnostic error messages containing the YAML file path and JSON pointer to the offending node.
+- **Strict Zod validation** — input YAML passes through its schema's `safeParse()` at `readYamlFile` (`entity/yaml-loader.ts`); the first reported issue becomes a `ConfigError`. Top-level `*.strict()` schemas reject unknown keys, but strictness is not universal: `ruleDefinitionSchema.logicalConsequences` entries and several `entity-catalog.ts` nested objects (`immutableMetadata`, `provenance`, `lifecyclePolicy`, `referenceCapabilities`, `typedInvariants`) are ordinary `z.object` values whose unknown keys are stripped, not rejected. Scope-dependent strictness must be checked per schema.
+- **No silent fallback** — placeholder values (`changed`, `resolved`, `updated`, etc.) are rejected **only** in event precondition/postcondition `value` fields (the `PLACEHOLDER_PATTERN` refinement in `schemas/primitives.ts`); other stringly-typed fields (e.g. location `initialState`) accept such strings. Unknown fields and placeholder values surface as `ConfigError`s whose messages contain the YAML file path and a dot-path to the offending node.
 - **Normalized IR** — the compiler irons YAML input into the normalized runtime type. Internal fields (`provider`, `output`, `read`, `hash`, `tombstone`) are NEVER required from the author; they are produced by the compiler.
 
 ## File Layout
@@ -47,28 +46,41 @@ For a project `my-story/`, the compiler discovers YAML files under:
 
 ```
 my-story/
+  nova.yaml                 → ProjectConfig (only file with a schemaVersion; auto-migrated)
   definitions/
-    characters/     → Entity declarations (character, location, item, concept)
-    relationships/  → Relationship definitions
-    rules/          → Rule definitions
-    state_initial.yaml  → WorldInitialState
+    characters/             → CharacterDefinition (yaml-format/character.md)
+    locations/              → LocationDefinition (yaml-format/location.md)
+    items/                  → ItemDefinition (yaml-format/item.md)
+    factions/               → FactionDefinition (yaml-format/faction.md)
+    relationships/          → RelationshipDefinition
+    rules/                  → RuleDefinition (yaml-format/rule.md)
+    narrators/              → NarratorProfile (S6c)
+    assertions/             → NarratorAssertion (DISCOURSE-1, optional directory)
+    discourse-ledger.yaml   → PlannedDiscourseLedgerSource (mandatory; hash is compiler-derived)
+    state_initial.yaml      → WorldInitialState
   chapters/
     chapter_NN/
       _chapter.yaml
-      E*.yaml       → Event files (contain preconditions, postconditions, threadProgress, etc.)
+      E*.yaml       → Event files (contain preconditions, postconditions, threadProgress, ruleEffects, etc.)
   scenes/
     chapter-NN/
-      E*.yaml       → Scene presentation / discourse files
+      E*.md                → rendered scene prose (compiler output, not authored input)
+      E*.yaml              → scene metadata (prose_source, edit_history, …)
+      E*_render_request.yaml → context package sent to the LLM
+  .nova/
+    derived/               → compiler-produced: threads.yaml, foreshadowing.yaml,
+                             relationships.yaml, rules.yaml
+    responses/             → persisted provider responses
 ```
 
 ## Source-Map Diagnostics
 
-Every validation error includes:
+`readYamlFile` (the single strict YAML boundary in `entity/yaml-loader.ts`) reports the first validation failure as a `ConfigError` (code `CONFIG_INVALID`):
 
 ```
-ConfigError at fixtures/zhu-fu/definitions/rules/widow_purity.yaml:12:8
-  path: /logicalConsequences/0/check/filter
-  message: Invalid filter expression — expected entity.field operator value
+ConfigError (CONFIG_INVALID)
+  message: YAML schema validation failed at logicalConsequences.0.check.type: Invalid enum value. Expected 'state_invariant' | 'transition_constraint' | 'progression', received 'invalid'
+  path:    fixtures/zhu-fu/definitions/rules/widow_purity.yaml:logicalConsequences.0.check.type
 ```
 
-The `path` component is a YAML JSON pointer. The file path is project-relative.
+The `path` component is the Zod issue path joined with `.` (a dot-path into the parsed document, e.g. `threads.0.name`, `timeAnchors.0.at`). The file path is preserved as supplied by the caller — `readYamlFile` places the caller's `filePath` verbatim into `ConfigError.context.path` without relativizing it, so an absolute project path yields absolute diagnostic paths. There is no line/column component; `YAML parsing failed` is reported separately when the file is not parseable YAML.

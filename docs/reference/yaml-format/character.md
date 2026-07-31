@@ -1,7 +1,7 @@
 # 角色 YAML 格式
 
-**源类型：** `packages/core/src/types/character.ts` (CharacterDefinition)  
-**Schema：** 通过 `EntityMapper` 中的 YAML 加载内联定义
+**源类型：** `packages/core/src/types/character.ts` (CharacterDefinition)
+**Schema：** `packages/core/src/schemas/character.ts` (characterDefinitionSchema)
 
 角色被定义为 `definitions/characters/` 目录下的 YAML 文件。每个文件定义一个 `CharacterDefinition`——故事角色的完整规范，包括其特质、外貌、声音、别名和初始世界状态。
 
@@ -29,9 +29,9 @@
 
 ## 角色状态的流动方式
 
-1. **YAML → EntityRegistry** — `EntityMapper.loadDefinitions()` 读取所有角色 YAML 文件，并将每个角色注册为 `kind: 'character'` 的 `Entity`。`initialState` 值成为注册表中实体的初始属性。
+1. **YAML → EntityRegistry** — `EntityMapper.loadProject()` 读取 `definitions/characters/` 下的所有角色 YAML 文件，通过 `characterDefinitionSchema.strict()` 验证；`InMemoryEntityRegistry.load()` 将每个角色注册为 `kind: 'character'` 的 `Entity`。注册的 `Entity` 携带顶层 `name`（显示名）与 `definitionFile`（`definitions/characters/<id>.yaml`）。`buildCharacterState()` 只把 `aliases`、`gender`、`appearance`、`age`、`profession`、`traits` 六个定义级字段提升进实体状态，`initialState` 再覆盖叠加。**Wire-only 字段：** `archetype`、`role`、`voiceNotes`（以及 `faction`、`backstory`、`knownSecrets`）不会被提升——快照从 `state['voice_notes']`、`state['archetype']` 读取，`RelevanceEngine` 从 `state['role']` 读取，若希望这些信息进入快照或相关性评分，需在 `initialState` 中提供对应键（`voice_notes` 为 snake_case）。
 
-2. **EntityRegistry → CharacterSnapshot** — 在上下文编译期间，`ContextCompiler` 将相关实体转换为 `CharacterSnapshot` 对象。每个快照包含角色的当前属性（位置、状态、情感状态）、特质、声音注释和关系上下文。
+2. **EntityRegistry → CharacterSnapshot** — 在上下文编译期间，`ContextCompiler.compile()`（委托 `ContextAssembler`，`context/assembler.ts`）将相关实体转换为 `CharacterSnapshot` 对象：POV 角色总是第一个，随后是按相关性分数（≥ 0.2）选取的角色。每个快照包含 `id`、`name`、`currentState`、`traits`、`voiceNotes`、`archetype`、`appearance`。
 
 3. **CharacterSnapshot → ContextPackage → LLM 提示** — `ContextPackage` 将所有角色快照捆绑在一起，并赋予优先级加权的相关性分数。`PromptAssembler` 将其渲染到 Pass 1 散文提示中，为 LLM 提供完整的角色上下文。
 

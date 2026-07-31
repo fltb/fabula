@@ -1,6 +1,6 @@
 # 物品 YAML 格式
 
-**源类型：** `packages/core/src/types/location.ts` (ItemDefinition)  
+**源类型：** `packages/core/src/types/location.ts` (ItemDefinition)
 **Schema：** `packages/core/src/schemas/item.ts` (itemDefinitionSchema)
 
 物品定义为 `definitions/items/` 目录下的 YAML 文件。每个文件定义一个 `ItemDefinition`——故事中一个物品的完整规范，包括其叙述描述、归属关系和可随时间演变的物理状态。
@@ -70,14 +70,14 @@ notableFeatures:                  # 错误：item 没有 notableFeatures 字段
 
 编译器将 `ItemDefinition` 映射为内部 `Entity` 对象：
 - `id` 直接映射为实体 ID。
-- `name` 存储为 `immutableMetadata.name`。
-- `kind` 从 YAML 中的字符串转换为实体类型引用（`typeRef: { typeId: 'item', schemaVersion: 1 }`）。
+- `name` 映射为运行时 `Entity` 的顶层 `name` 字段；`definitionFile` 为 `definitions/items/<id>.yaml`。
+- `typeRef` 由定义目录决定，与 YAML 无关：`InMemoryEntityRegistry.load()` 无条件设置 `kind: 'item'` 与 `typeRef: { typeId: 'item', schemaVersion: 1 }`，从不读取 `item.kind`；YAML 中必需的 `kind` 子类型标签（如 `ritual_item`）目前只保留在原始定义里，不会体现在运行时 `Entity` 上。
 - `initialState` 展开——每个键值对变为实体的初始运行时属性。
 - 验证通过 `itemDefinitionSchema.strict()` 执行，拒绝未知键。
 
 ## 生命周期
 
-- **引入：** 通过事件的 `introduces` 后置条件数组引入新物品。编译器在状态重放期间读取 `introduces` 条目，创建实体声明并在 `EntityRegistry` 中注册。
+- **引入：** `introduces` 是 EventFile 的独立字段（每项 `{ type, id, initialState }`），不是 `expectedPostconditions` 数组。注册时机依赖入口路径：`api.initializeProject()` 在 replay 前一次性注册所有 introductions（`name` = id、`definitionFile` = `definitions/introduces/<id>.yaml`）；`renderNovel()` 的 `loadProjectData()` 只调用 `InMemoryEntityRegistry.load()`，不注册 introductions。
 - **状态变更：** 物品的 `condition`、`ownership`、`quantity`、`location` 通过事件 `expectedPostconditions` 中的后置条件进行修改。例如，`condition: destroyed` 表示物品被摧毁；`ownership` 变更表示物品易手。
-- **退休：** 物品在摧毁或消耗时退休（例如 `condition: destroyed` 或 `quantity: 0`）。实体类型目录允许 `active ↔ inactive` 和 `active → retired` 的双向转换。
+- **退休：** `condition: destroyed` 或 `quantity: 0` 都不会改变物品的生命周期——`validateLifecycle()` 只处理属性恰好为 `lifecycle` 的后置条件，condition/quantity 只是普通状态键。需要显式写 `lifecycle: retired` 后置条件来描述真正退休。实体类型目录允许 `active ↔ inactive` 双向转换，以及 `active → retired`、`inactive → retired` 单向转换；`retired` 是终态——没有离开 `retired` 的转换。
 - **参考策略：** 物品实体默认参考资格为 `live`（仅当前存在的实体可被引用）。

@@ -1,6 +1,6 @@
 # 阵营 YAML 格式
 
-**源类型：** `packages/core/src/types/character.ts` (FactionDefinition)  
+**源类型：** `packages/core/src/types/character.ts` (FactionDefinition)
 **Schema：** `packages/core/src/schemas/faction.ts` (factionDefinitionSchema)
 
 阵营定义为 `definitions/factions/` 目录下的 YAML 文件。每个文件定义一个 `FactionDefinition`——故事中一个阵营或团体的完整规范，包括其叙述描述和初始成员信息。
@@ -31,7 +31,7 @@
 
 3. **WorldState 持久化** — 当 `StateManager` 重放事件时，`WorldState.entities` 中阵营的属性通过后置条件解析进行更新。后置条件可以修改 `membership` 等运行时属性。
 
-4. **角色关联** — `CharacterDefinition` 中的 `faction` 字段建立角色到阵营的初始绑定。运行时通过关系事务和阵营 `membership` 属性的后置条件变更管理成员资格变化。
+4. **角色关联** — `CharacterDefinition` 中的 `faction` 字段**不**建立任何运行时绑定：`buildCharacterState()` 不会把它拷贝进实体状态，mapper 也没有消费者读取它。成员资格目前只能来自阵营自己的 `initialState` / 后置条件数据（`membership` 属性）；`applyRelationshipTransaction()` 独立更新 `WorldState.relationships`，不会同步阵营实体的 `membership`——两者是分离的模型。
 
 ## 示例
 
@@ -59,7 +59,7 @@ description: "鲁镇的大户人家"
 membership: fourth_master_lu   # 错误：membership 应通过 initialState 设置，而非顶级字段
 initialState:
   status: active
-  leader: fourth_master_lu      # 错误：缺少 goals、alignment 等预期字段（仅为示意）
+  leader: fourth_master_lu      # 允许：initialState 是自由键值 Record，自定义键不会被拒绝
 ```
 
 **预期错误：** Zod schema 验证失败：未知键 `membership` 被 `strict()` 模式拒绝。`membership` 应作为 `initialState` 中的条目传入。
@@ -68,14 +68,14 @@ initialState:
 
 编译器将 `FactionDefinition` 映射为内部 `Entity` 对象：
 - `id` 直接映射为实体 ID。
-- `name` 存储为 `immutableMetadata.name`。
-- `kind` 从 YAML 中的字符串转换为实体类型引用（`typeRef: { typeId: 'faction', schemaVersion: 1 }`）。
+- `name` 映射为运行时 `Entity` 的顶层 `name` 字段；`definitionFile` 为 `definitions/factions/<id>.yaml`。
+- `typeRef` 由定义目录决定，与 YAML 无关：`InMemoryEntityRegistry.load()` 无条件设置 `kind: 'faction'` 与 `typeRef: { typeId: 'faction', schemaVersion: 1 }`，从不读取 `fac.kind`；YAML 中必需的 `kind` 子类型标签目前只保留在原始定义里，不会体现在运行时 `Entity` 上。
 - `initialState` 展开——每个键值对变为实体的初始运行时属性。
 - 验证通过 `factionDefinitionSchema.strict()` 执行，拒绝未知键。
 
 ## 生命周期
 
-- **引入：** 通过事件的 `introduces` 后置条件数组引入新阵营。编译器在状态重放期间读取 `introduces` 条目，创建实体声明并在 `EntityRegistry` 中注册。
+- **引入：** 阵营只能通过 `definitions/factions/` 下的定义文件引入。事件的 `introduces` 数组仅支持 `character`、`location`、`item`、`concept` 四种类型，**不包含** `faction`。
 - **成员资格变更：** 阵营 `membership` 通过事件 `expectedPostconditions` 中的后置条件进行修改。`RelationshipTransaction`（关系事务）机制也可用于管理阵营内角色关系的二元体现。
-- **退休：** 阵营在其解散时退休（例如 `status: dissolved`）。实体类型目录允许 `active ↔ inactive` 和 `active → retired` 的双向转换。
+- **退休：** `validateLifecycle()` 只在后置条件属性恰好是 `lifecycle` 时识别状态转换；`status: dissolved` 只是普通实体属性，不会产生派生转换。需要显式写 `lifecycle: retired` 后置条件；`status: dissolved` 只能作为独立的领域状态呈现。实体类型目录允许 `active ↔ inactive` 双向转换，以及 `active → retired`、`inactive → retired` 单向转换；`retired` 是终态——没有离开 `retired` 的转换。
 - **参考策略：** 阵营实体默认参考资格为 `live`（仅当前存在的实体可被引用）。

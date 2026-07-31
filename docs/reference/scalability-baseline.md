@@ -2,10 +2,10 @@
 
 | # | Task | File | LOC |
 |---|------|------|-----|
-| 1 | New Validator (`CountingValidator`) | `packages/core/src/validator/counting.ts` | 41 |
-| 2 | New Provider (`NoOpProvider`) | `packages/core/src/ai/providers/noop.ts` | 28 |
+| 1 | New Validator (`CountingValidator`) | `packages/core/src/validator/counting.ts` | 39 |
+| 2 | New Provider (`NoOpProvider`) | `packages/core/src/ai/providers/noop.ts` | 24 |
 | 3 | New Definition Type (`MoodDefinition`) | `packages/core/src/schemas/mood.ts` | 31 |
-|   | **Total** | **3 new files, 0 existing modified** | **100** |
+|   | **Total** | **3 new files, 0 existing modified** | **94** |
 
 ## Files Modified
 

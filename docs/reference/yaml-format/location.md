@@ -1,6 +1,6 @@
 # 地点 YAML 格式
 
-**源类型：** `packages/core/src/types/location.ts` (LocationDefinition)  
+**源类型：** `packages/core/src/types/location.ts` (LocationDefinition)
 **Schema：** `packages/core/src/schemas/location.ts` (locationDefinitionSchema)
 
 地点定义为 `definitions/locations/` 目录下的 YAML 文件。每个文件定义一个 `LocationDefinition`——故事中一个位置的完整规范，包括其叙述描述、容器层次和可运行时演变的初始世界状态。
@@ -12,10 +12,10 @@
 | `id` | `string` | 唯一标识符（例如 `luchen_town`、`fourth_master_lu_house`） |
 | `name` | `string` | 故事语言中的显示名称（例如 `鲁镇`、`鲁四老爷家`） |
 | `kind` | `string` | 位置类型标签（例如 `town`、`residence`、`religious_site`、`wilderness`） |
-| `parent` | `string`（可选） | 父级位置 ID，用于构建嵌套的位置层次结构（例如 `fourth_master_lu_house` 的父级是 `luchen_town`） |
+| `parent` | `string`（可选） | 父级位置 ID（例如 `fourth_master_lu_house` 的父级是 `luchen_town`）；schema 接受该字段，但目前没有源码消费它（见下文「规范化 IR」） |
 | `description` | `string` | 位置的完整散文描述（可多行） |
-| `initialState` | `Record<string, unknown>` | 起始世界状态键值对——直接流入 `EntityRegistry`，决定该位置在故事中的初始属性 |
-| `notableFeatures` | `string[]`（可选） | 该位置值得注意的特征列表（供 LLM 参考，不直接进入 WorldState 属性） |
+| `initialState` | `Record<string, unknown>` | 起始世界状态键值对——经 `InMemoryEntityRegistry` 成为该位置在故事中的初始属性 |
+| `notableFeatures` | `string[]`（可选） | 该位置值得注意的特征列表；仅保留在 `ProjectData.locations` 上，不投影进注册表 `state` 或任何上下文 |
 
 ### 运行时属性
 
@@ -29,13 +29,13 @@
 
 ## 地点的流动方式
 
-1. **YAML → EntityRegistry** — `EntityMapper.loadProject()` 读取 `definitions/locations/` 下的所有 YAML 文件，并通过 `locationDefinitionSchema`（Zod）验证每个文件。每个位置被注册为 `kind: 'location'` 的 `Entity`。`initialState` 值成为注册表中实体的初始属性。
+1. **YAML → EntityRegistry** — `EntityMapper.loadProject()` 读取 `definitions/locations/` 下的所有 YAML 文件，并通过 `locationDefinitionSchema`（Zod）验证每个文件，返回解析后的 `LocationDefinition` 对象；`InMemoryEntityRegistry.load()` 再把这些定义注册为 `kind: 'location'` 的 `Entity`（`typeRef: { typeId: 'location', schemaVersion: 1 }`），`initialState` 的值成为注册表中实体的初始 `state`。
 
-2. **EntityRegistry → WorldState** — 在状态初始化期间，通过 `InMemoryEntityRegistry.load()` 将位置投影到 `WorldState.entities` 中。含有 `parent` 字段的位置建立容器层次结构。
+2. **EntityRegistry → WorldState** — 在编译期，`buildInitialState()`（`packages/core/src/api.ts`）把每个注册实体的 `state` 键值对转成初始事实（`entityId.attribute`），`applyInitialFacts()`（`packages/core/src/state/event-application.ts`）在事件重放前将这些基线写入 `WorldState.entities`。
 
-3. **WorldState 持久化** — 当 `StateManager` 重放事件时，`WorldState.entities` 中位置的属性通过后置条件解析进行更新。后置条件可以修改 `access`、`containment`、`time_period` 等运行时属性。
+3. **WorldState 持久化** — 当 `StateManager` 重放事件时，`WorldState.entities` 中位置的属性通过后置条件解析进行更新。后置条件可以修改 `access`、`containment`、`time_period` 等可写属性。
 
-4. **上下文使用** — `ContextCompiler` 将相关位置实体纳入上下文包，为 LLM 提供空间意识。
+4. **上下文使用** — `ContextPackage` 没有位置投影；上下文编译器只投影角色快照与活动规则。位置的 `initialState` 属性可经其他路径被引用，但 `parent`、`notableFeatures` 等字段不进入任何上下文包。
 
 ## 示例（来自 zhu-fu 测试夹具: luchen_town.yaml）
 
@@ -66,21 +66,28 @@ initialState: "active"        # 错误：initialState 必须是对象（Record�
 notableFeatures: "single"     # 错误：notableFeatures 必须是数组，而非字符串
 ```
 
-**预期错误：** Zod schema 验证失败：`initialState` 应为 `object`，收到 `string`；`id` 应为 `string`，收到 `number`；`notableFeatures` 应为 `array`，收到 `string`。
+**预期错误：** `readYamlFile`（`entity/yaml-loader.ts`）只报告第一个验证失败（`parsed.error.issues[0]`），而 `locationDefinitionSchema` 按 `id` 在前求值，因此该输入在 `id` 处即被拒绝，`initialState` 与 `notableFeatures` 的问题不会出现在加载器错误中：
+
+```
+ConfigError (CONFIG_INVALID)
+  message: YAML schema validation failed at id: Expected string, received number
+  path:    definitions/locations/<id>.yaml:id
+```
+
+（若要观察另外两个字段的诊断，需要把 `id` 修正为字符串后单独输入。）
 
 ## 规范化 IR
 
-编译器将 `LocationDefinition` 映射为内部 `Entity` 对象：
+`InMemoryEntityRegistry.load()` 将 `LocationDefinition` 映射为内部 `Entity` 对象：
 - `id` 直接映射为实体 ID。
-- `name` 存储为 `immutableMetadata.name`。
-- `kind` 从 YAML 中的字符串转换为实体类型引用（`typeRef: { typeId: 'location', schemaVersion: 1 }`）。
-- `initialState` 展开——每个键值对变为实体的初始运行时属性。
-- `parent` 保留为结构引用，用于位置层次遍历。
-- `notableFeatures` 保留在定义中供 LLM 上下文使用，不直接写入 WorldState。
+- `name` 存储为运行时 `Entity.name`；`definitionFile` 固定为 `definitions/locations/<id>.yaml`（运行时 `Entity` 没有 `immutableMetadata` 字段——那是内部 `EntityDeclaration` 目录的形状）。
+- `kind` 并未取自 YAML 字符串——注册器硬编码 `kind: 'location'`，类型引用为 `typeRef: { typeId: 'location', schemaVersion: 1 }`（`makeTypeRef`）。
+- `initialState` 展开——每个键值对经 `canonicalizeFactValue` 归一化后变为实体的初始 `state`。
+- `parent` 与 `notableFeatures` 仅保留在 `ProjectData.locations`（解析后的定义对象）上；目前没有任何源码消费它们——不做层次遍历，也不投影进注册表 `state` 或任何提示上下文。
 - 验证通过 `locationDefinitionSchema.strict()` 执行，拒绝未知键。
 
 ## 生命周期
 
-- **引入：** 通过事件的 `introduces` 后置条件数组引入新位置。编译器在状态重放期间读取 `introduces` 条目，创建实体声明并在 `EntityRegistry` 中注册。
-- **停用：** 位置可通过运行时属性的后置条件更改标记为 `inactive` 或 `retired`。实体类型目录允许 `active ↔ inactive` 和 `active → retired` 的双向转换。退休通常发生在位置被永久关闭或摧毁时（例如 `status: destroyed`）。
-- **参考策略：** 位置实体默认参考资格为 `live`（仅当前存在的实体可被引用）。
+- **引入：** 通过事件的 `introduces` 数组引入新位置（`introduceEntrySchema`：`type: location` + `id` + `initialState`）。当前实现是基线注册而非事件时引入：`initializeProject()`（`api.ts`）在重放开始前就把每个 introduction 注册进 `EntityRegistry`（`kind: location`，`definitionFile: definitions/introduces/<id>.yaml`），`buildInitialState()` 随后把注册表 `state` 键值对折叠进基线 `initialFacts`，因此这些位置从初始基线起就存在于 `WorldState.entities`；`applyNarrativeEvent`/`applyPostconditions` 从不消费 `event.introduces`。
+- **停用：** 位置的运行时生命周期通过写 `lifecycle` 属性（`active`/`inactive`/`retired`）的后置条件改变；`validateLifecycle` 按类型目录的 `lifecyclePolicy.allowedTransitions` 校验转换。location 种类的允许转换恰好是 `active ↔ inactive`、`active → retired`、`inactive → retired`——`retired` 是终态，不可恢复。退休通常发生在位置被永久关闭或摧毁时（例如 `status: destroyed`）。
+- **参考策略：** `default-catalog.ts` 为 location 种类声明 `referenceCapabilities.defaultEligibility: 'live'`，但这只是目录元数据，没有任何运行时代码消费它：`validateParticipants` 只拒绝已退休（`retired`）的参与者并允许缺席参与者，后置条件还可以自动创建未知实体。不要把该字段描述为强制的“仅可引用现有实体”契约。

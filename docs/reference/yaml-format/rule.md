@@ -1,9 +1,9 @@
 # 规则 YAML 格式
 
-**源类型：** `packages/core/src/types/rule.ts` (RuleDefinition, LogicalConsequence)  
-**Schema：** 通过 `EntityMapper` 中的 YAML 加载内联定义
+**源类型：** `packages/core/src/types/rule.ts` (RuleDefinition, LogicalConsequence, RuleEffectEntry, RuleTransaction)
+**Schema：** `packages/core/src/schemas/rule.ts` — `ruleDefinitionSchema`（作者 YAML 加载）、`ruleEffectEntrySchema`；`packages/core/src/schemas/primitives.ts` — `logicalConsequenceSchema`、`ruleEffectSchema`（事件级 `ruleEffects`）
 
-规则定义了世界的治理原则——从自然法则和社会规范到道德原则和法律法规。它们以 YAML 文件形式存放在 `definitions/rules/` 目录中，由 `WorldRuleValidator`（渲染后，消费 Pass 2 `ruleChecks`）执行，并通过事件的 `RuleEffectEntry` 进行追踪。
+规则定义了世界的治理原则——从自然法则和社会规范到道德原则和法律法规。它们以 YAML 文件形式存放在 `definitions/rules/` 目录中，由 `EntityMapper.loadProject()` 通过 `ruleDefinitionSchema`（严格模式）验证并加载。
 
 ## RuleDefinition 字段
 
@@ -16,8 +16,8 @@
 | `statement` | `string` | 规则在世界中含义的散文描述 |
 | `ruleClass` | `enum`（可选） | `natural_law`、`social_norm`、`moral_principle`、`game_rule`、`legal_code` |
 | `logicalConsequences` | `LogicalConsequence[]` | 规则的可机器检查的逻辑推论 |
-| `exceptions` | `{ condition, note }[]`（可选） | 规则不适用的条件 |
-| `evidenceChain` | `RuleEffectEntry[]` | 规则被强化、削弱或无效化的历史证据 |
+| `exceptions` | `{ condition, note }[]`（可选） | 规则不适用的条件；`condition` 与 `note` 均为必填字符串 |
+| `evidenceChain` | `RuleEffectEntry[]` | 规则被强化、削弱或无效化的历史证据（`rule`、`effect`、`evidence`，均为必填） |
 
 ### LogicalConsequence
 
@@ -28,25 +28,35 @@
 - `severity`：`error` 或 `warning`
 - 可选：`unlessEvent`、`direction`、`tolerance`
 
-## 规则效果
+## 事件级规则效果（ruleEffects）
 
-事件携带 `ruleEffects: RuleEffectEntry[]`，`effect` 值包括：
+事件 YAML 的 `ruleEffects` 数组（`ruleEffectSchema`）接受遗留的 `RuleEffectEntry` 形式，每个条目包含 `rule`（规则 ID）、`effect` 和 `evidence`（散文证据）：
+
 - **`reinforce`** — 规则被叙事中的事件所支持
 - **`weaken`** — 事件挑战或削弱了规则
 - **`introduce_exception`** — 建立了规则的新例外情况
 - **`nullify`** — 规则被裁定为不适用
 
-这些由 `applyRuleEffect()`（状态引擎中）追踪，并用于构建 `.nova/derived/rules.yaml` 中的证据链。
+重放时，`applyEventRuleEffects`（`packages/core/src/state/event-application.ts`）通过 `convertLegacyRuleEffect`（`packages/core/src/state/rule-replay.ts`）把每个遗留条目转换为一条 `RuleTransaction`，再由 `applyRuleTransaction` 应用到 `WorldState.rules`（`Record<ruleId, RuleRuntimeState>`）：
+
+| 遗留 effect | 转换后的操作 |
+|---|---|
+| `reinforce` | `enable` |
+| `weaken` | `suspend` |
+| `introduce_exception` | `add_exception`（新建 `effect: exempt` 的异常） |
+| `nullify` | `set_effectiveness`（`newEffectiveness: nullified`） |
+
+`RuleTransaction` 的完整操作集合为 `enable`、`suspend`、`revoke`、`amend`、`replace`、`set_effectiveness`、`add_exception`、`remove_exception`。渲染管线（`pipeline/output.ts`）从已渲染事件收集规则效果，写入 `.nova/derived/rules.yaml` 作为证据链产物。
 
 ## 规则的流动方式
 
-1. **YAML → EntityRegistry** — 规则以 `kind: 'rule'` 加载到注册表中，`initialState` 存储规则陈述、类别和逻辑推论。
+1. **YAML → EntityRegistry** — `EntityMapper.loadProject()` 读取 `definitions/rules/` 下的所有 YAML 文件，通过 `ruleDefinitionSchema` 验证。每个规则被注册为 `kind: 'rule'` 的 `Entity`；`buildRuleState` 只把 `category` 和 `type` 两个字段提升进实体 `state`（`statement`、`logicalConsequences` 等保留在 `RuleDefinition` 上，供验证器与作者参考，不进入注册表状态）。
 
-2. **EntityRegistry → WorldState.rules** — 在状态初始化期间，规则被投影到 `WorldState.rules` 中，后者追踪每条规则的激活状态和累积的证据链。
+2. **EntityRegistry → WorldState.rules** — `WorldState.rules` 是 `Record<ruleId, RuleRuntimeState>`。每个规则在首次被事件 `ruleEffects` 触及时，由 `applyRuleTransaction` 惰性创建运行时状态（`activation: 'dormant'`，`effectiveness: 'full'`），此后通过事务推进 `activation`（`dormant`/`enabled`/`suspended`/`revoked`）与 `effectiveness`（`full`/`limited`/`nullified`）。
 
-3. **WorldState.rules → ContextPackage.activeRules** — `ContextCompiler` 选择与当前场景相关的激活规则，并将其包含在上下文包中，使 LLM 提示可获得规则意识（作为 `activeRules` 传递给 Pass 2 分析提示）。
+3. **WorldState.rules → ContextPackage.activeRules** — `ContextAssembler._buildActiveRules` 选择 `activation === 'enabled'` 且 `effectiveness !== 'nullified'` 的规则，组装成 `RuleDefinition[]` 放入 `ContextPackage.activeRules`，经 `PromptAssembler` 渲染进 Pass 1 散文提示（“Prose must not contradict these rules”）。注意：`_buildActiveRules` 只从注册表实体 `state` 重建规则对象，而 `buildRuleState` 仅提升 `category` 和 `type`，因此 `name` 回退为规则 ID、`statement` 为空字符串、`logicalConsequences` 与 `evidenceChain` 为空数组——作者在 YAML 中编写的规则陈述与推论**不会**进入上下文包或 LLM 提示；Pass 2 的 `WorldRuleValidator` 同样只消费 `ruleChecks` 块与事件级 `ruleEffects`，不读取这些作者字段。
 
-4. **Pass 2 → WorldRuleValidator** — LLM 在其自己的散文中分析规则合规性，在 `ruleChecks` 块中报告违规行为。`WorldRuleValidator.validatePost()` 消费此信息，标记违反规则的情况，并附带证据引用。
+4. **Pass 2 → WorldRuleValidator** — LLM 在 Pass 2 分析中以 `ruleChecks` 块报告规则合规性（`ruleCheckSchema`：`ruleId`、`violated`、`evidence`、`severity: minor|major`）。`WorldRuleValidator.validatePost()`（`packages/core/src/validator/world-rule.ts`）消费该块，对 `violated: true` 的条目生成验证问题；`validatePre()` 则确定性检查事件 `ruleEffects` 对已启用规则的 `nullify` 以及不可变属性（如 `rule` 种类的 `category`/`type`）的写违反。
 
 ## 示例（来自 zhu-fu 测试夹具: widow_purity.yaml）
 

@@ -10,7 +10,10 @@ timeAnchors:
     at: day_-21
     description: "Vi departs Piltover following Jinx's trail. Caitlyn remains in Piltover, reassigned to internal affairs."
   - id: seraphine_recruitment
-    at: day_-120
+    at:
+      offset:
+        amount: -120
+        unit: day
     description: "Camille formally recruited Seraphine as a hextech-empathic consultant."
   - id: hextech_crystal_inventory
     at: day_-7

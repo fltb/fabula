@@ -38,8 +38,15 @@ export interface Entity {
 
 export type TimeUnit = 'minute' | 'hour' | 'day' | 'week' | 'month';
 
-export type AuthoredStoryTime =
+export type AuthoredLocatableStoryTime =
   | string
+  | { at: string }
+  | { after: { ref: string; amount: number; unit: TimeUnit } }
+  | { offset: { amount: number; unit: TimeUnit } }
+  | { chapter: number };
+
+export type AuthoredStoryTime =
+  | AuthoredLocatableStoryTime
   | {
       type: 'indeterminate';
       reason?: string;

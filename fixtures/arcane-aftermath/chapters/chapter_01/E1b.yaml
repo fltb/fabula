@@ -2,7 +2,10 @@ event: E1b
 title: "Camille Takes the Case"
 narrativeOrder: 2
 sceneType: linear
-storyTime: 1 hour
+storyTime:
+  offset:
+    amount: 1
+    unit: hour
 causalPredecessors: [E1a]
 pov:
   character: camille

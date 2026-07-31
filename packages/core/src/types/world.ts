@@ -2,7 +2,12 @@
 // Novalistically — World State, Knowledge, Relationship & State Transition Types
 // ============================================================================
 
-import type { EntityId, Fact, FactId } from './entity.js';
+import type {
+  AuthoredLocatableStoryTime,
+  EntityId,
+  Fact,
+  FactId,
+} from './entity.js';
 import type { NarrativeEvent } from './event.js';
 import type { EpistemicLedger, PropositionCatalog } from './knowledge.js';
 import type {
@@ -80,7 +85,7 @@ export interface WorldInitialState {
     currentEra: string;
     politicalSituation: string;
   };
-  timeAnchors?: Array<{ id: string; at: string; description?: string }>;
+  timeAnchors?: Array<{ id: string; at: AuthoredLocatableStoryTime; description?: string }>;
   threads: Array<{
     id: string;
     name: string;

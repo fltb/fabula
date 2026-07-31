@@ -120,6 +120,7 @@ export {
 export {
   absoluteTimestampSchema,
   authoredIndeterminateTimestampSchema,
+  authoredLocatableStoryTimeSchema,
   authoredStoryTimeSchema,
   chapterTimestampSchema,
   indeterminateTimestampSchema,

@@ -74,6 +74,7 @@ export type {
 } from './duration.js';
 export type {
   AbsoluteTimestamp,
+  AuthoredLocatableStoryTime,
   AuthoredStoryTime,
   ChapterTimestamp,
   Entity,

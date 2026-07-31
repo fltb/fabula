@@ -1,4 +1,5 @@
 import { ConfigError } from '../errors.js';
+import { authoredStoryTimeSchema } from '../schemas/timestamp.js';
 import type {
   AuthoredStoryTime,
   LocatableStoryTimestamp,
@@ -39,10 +40,37 @@ export interface TemporalContext {
 /** Parse the preserved authored expression without resolving anchors or event references. */
 export function parseStoryTimestamp(raw: AuthoredStoryTime | undefined): StoryTimestamp {
   if (raw === undefined) return { type: 'indeterminate', mode: 'unspecified' };
-  if (typeof raw !== 'string') {
-    return { type: 'indeterminate', mode: 'intentional', reason: raw.reason };
+  if (typeof raw === 'string') return parseAuthoredStringTimestamp(raw);
+
+  const parsed = authoredStoryTimeSchema.safeParse(raw);
+  if (!parsed.success) {
+    throw configError('Invalid authored story timestamp', 'timestamp', parsed.error.issues[0]?.message);
   }
 
+  const authored = parsed.data;
+  if (typeof authored === 'string') return parseAuthoredStringTimestamp(authored);
+  if ('type' in authored) {
+    return {
+      type: 'indeterminate',
+      mode: 'intentional',
+      ...(authored.reason === undefined ? {} : { reason: authored.reason }),
+    };
+  }
+  if ('at' in authored) return parseAuthoredStringTimestamp(authored.at);
+  if ('after' in authored) {
+    return {
+      type: 'relative',
+      anchor: authored.after.ref.trim(),
+      offset: { amount: authored.after.amount, unit: authored.after.unit },
+    };
+  }
+  if ('offset' in authored) {
+    return { type: 'offset', amount: authored.offset.amount, unit: authored.offset.unit };
+  }
+  return { type: 'chapter', chapter: authored.chapter };
+}
+
+function parseAuthoredStringTimestamp(raw: string): StoryTimestamp {
   const value = raw.trim();
   if (!value) throw new ConfigError('Story timestamp must be nonblank', { phase: 'timestamp' });
 

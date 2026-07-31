@@ -15,6 +15,7 @@ import {
   resolveTemporalContext,
 } from '../src/entity/index.js';
 import type {
+  AuthoredStoryTime,
   Entity,
   EventFile,
   StoryCoordinate,
@@ -121,6 +122,26 @@ describe('EntityMapper.loadProject()', () => {
     expect(data.timeAnchors.length).toBeGreaterThanOrEqual(3);
     const anchorIds = data.timeAnchors.map((a) => a.id);
     expect(anchorIds).toContain('arcane_s1_end');
+  });
+
+  it('normalizes structured fixture canaries without changing their coordinates', () => {
+    const seraphineRecruitment = data.timeAnchors.find((anchor) => anchor.id === 'seraphine_recruitment');
+    expect(seraphineRecruitment?.at).toEqual({ type: 'offset', amount: -120, unit: 'day' });
+
+    const e1b = data.chapters.get(1)?.events.find((event) => event.event === 'E1b');
+    expect(e1b?.storyTime).toEqual({ offset: { amount: 1, unit: 'hour' } });
+    const mappedE1b = mapper.mapToNarrativeEvent(e1b!);
+    expect(mappedE1b.storyTime).toEqual({ type: 'offset', amount: 1, unit: 'hour' });
+
+    const temporalContext = resolveTemporalContext([mappedE1b], data.timeAnchors);
+    expect(temporalContext.coordinatesByAnchorId.get('seraphine_recruitment')).toMatchObject({
+      clock: 'story',
+      scalar: -120 * 86_400_000,
+    });
+    expect(temporalContext.coordinatesByEventId.get('E1b')).toMatchObject({
+      clock: 'story',
+      scalar: 3_600_000,
+    });
   });
 });
 
@@ -804,6 +825,17 @@ describe('parseStoryTimestamp()', () => {
     expect(result).toEqual({ type: 'indeterminate', mode: 'intentional' });
   });
 
+  it('parses structured authored forms equivalently to legacy strings', () => {
+    expect(parseStoryTimestamp({ at: 'day_3' })).toEqual(parseStoryTimestamp('day_3'));
+    expect(
+      parseStoryTimestamp({ after: { ref: 'origin', amount: 3, unit: 'week' } }),
+    ).toEqual(parseStoryTimestamp('origin + 3 weeks'));
+    expect(parseStoryTimestamp({ offset: { amount: -1, unit: 'day' } })).toEqual(
+      parseStoryTimestamp('-1 day'),
+    );
+    expect(parseStoryTimestamp({ chapter: 4 })).toEqual(parseStoryTimestamp('chapter_4'));
+  });
+
   // ── Locatable timestamp patterns ──────────────────────────────────────
 
   it('should parse relative timestamps like "arcane_s1_end + 3 weeks"', () => {
@@ -898,6 +930,36 @@ describe('parseStoryTimestamp()', () => {
   it('rejects empty or whitespace-only strings with ConfigError', () => {
     expect(() => parseStoryTimestamp('')).toThrow(ConfigError);
     expect(() => parseStoryTimestamp('   ')).toThrow(ConfigError);
+  });
+
+  it('rejects malformed structured authored timestamps with ConfigError at timestamp phase', () => {
+    const malformed = [
+      { at: ' ' },
+      { at: { offset: { amount: 1, unit: 'day' } } },
+      { after: { ref: ' ', amount: 1, unit: 'day' } },
+      { after: { ref: 'origin', amount: -1, unit: 'day' } },
+      { after: { ref: 'origin', amount: Infinity, unit: 'day' } },
+      { after: { ref: 'origin', amount: 1, unit: 'fortnight' } },
+      { offset: { amount: Infinity, unit: 'day' } },
+      { after: { ref: 'origin', amount: 1, unit: 'day', extra: true } },
+      { offset: { amount: 1, unit: 'day', extra: true } },
+      { chapter: -1 },
+      { chapter: 1.5 },
+      { at: 'day_3', chapter: 3 },
+      { chapter: 3, extra: true },
+      [],
+      { type: 'indeterminate', reason: ' ' },
+    ];
+
+    for (const raw of malformed) {
+      try {
+        parseStoryTimestamp(raw as unknown as AuthoredStoryTime);
+        throw new Error('expected ConfigError');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ConfigError);
+        expect((error as ConfigError).context.phase).toBe('timestamp');
+      }
+    }
   });
 });
 

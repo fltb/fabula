@@ -3,15 +3,51 @@ import type { LocatableStoryTimestamp, StoryTimestamp } from '../types/entity.js
 
 export const timeUnitSchema = z.enum(['minute', 'hour', 'day', 'week', 'month']);
 
+const nonblankAuthoredStringSchema = z.string().refine((value) => value.trim().length > 0, {
+  message: 'Timestamp must be nonblank',
+});
+
 export const authoredIndeterminateTimestampSchema = z
   .object({
     type: z.literal('indeterminate'),
-    reason: z.string().min(1).optional(),
+    reason: nonblankAuthoredStringSchema.optional(),
   })
   .strict();
 
+const authoredAtTimestampSchema = z.object({ at: nonblankAuthoredStringSchema }).strict();
+
+const authoredAfterTimestampSchema = z
+  .object({
+    after: z
+      .object({
+        ref: nonblankAuthoredStringSchema,
+        amount: z.number().finite().nonnegative(),
+        unit: timeUnitSchema,
+      })
+      .strict(),
+  })
+  .strict();
+
+const authoredOffsetTimestampSchema = z
+  .object({
+    offset: z.object({ amount: z.number().finite(), unit: timeUnitSchema }).strict(),
+  })
+  .strict();
+
+const authoredChapterTimestampSchema = z
+  .object({ chapter: z.number().finite().int().nonnegative() })
+  .strict();
+
+export const authoredLocatableStoryTimeSchema = z.union([
+  nonblankAuthoredStringSchema,
+  authoredAtTimestampSchema,
+  authoredAfterTimestampSchema,
+  authoredOffsetTimestampSchema,
+  authoredChapterTimestampSchema,
+]);
+
 export const authoredStoryTimeSchema = z.union([
-  z.string().min(1),
+  authoredLocatableStoryTimeSchema,
   authoredIndeterminateTimestampSchema,
 ]);
 

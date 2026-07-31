@@ -22,7 +22,7 @@ import { postconditionSchema, preconditionSchema } from './primitives.js';
 import { relationshipTransactionSchema } from './relationship.js';
 import { ruleTransactionSchema } from './rule.js';
 import { threadTransactionSchema } from './thread.js';
-import { storyTimestampSchema } from './timestamp.js';
+import { authoredStoryTimeSchema, storyTimestampSchema } from './timestamp.js';
 
 // ─── Reusable sub-schemas ────────────────────────────────────────────────
 
@@ -174,11 +174,7 @@ export const narrativeEllipsisFileSchema = z
   .object({
     id: z.string().min(1, 'EllipsisFile identity is required'),
     branchScope: branchPathSchema.optional(),
-    storyTime: z
-      .union([
-        z.string(),
-        z.object({ type: z.literal('indeterminate'), reason: z.string().optional() }),
-      ])
+    storyTime: authoredStoryTimeSchema
       .optional()
       .describe(
         'Authored story time; omitted maps to { type: "indeterminate", mode: "unspecified" } at runtime.',

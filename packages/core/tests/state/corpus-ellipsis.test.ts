@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import {
   ellipsisProvenanceSchema,
+  narrativeEllipsisFileSchema,
   narrativeEllipsisSchema,
   narrativeEventSchema,
   narrativeNodeSchema,
@@ -480,6 +481,67 @@ describe('Mapper — Indeterminate AST with fact validity', () => {
 
     expect(result.storyTime).toEqual({ type: 'chapter', chapter: 3 });
     expect(result.preconditions[0].validity.temporal.start).toBe(result.storyTime);
+  });
+});
+
+describe('Ellipsis wire timestamps', () => {
+  it('accepts every shared authored form and shares the normalized AST with fact validity', () => {
+    const examples = [
+      {
+        authored: { at: 'day_3' },
+        expected: { type: 'absolute', value: 'day_3' },
+      },
+      {
+        authored: { after: { ref: 'origin', amount: 3, unit: 'week' } },
+        expected: { type: 'relative', anchor: 'origin', offset: { amount: 3, unit: 'week' } },
+      },
+      {
+        authored: { offset: { amount: -1, unit: 'day' } },
+        expected: { type: 'offset', amount: -1, unit: 'day' },
+      },
+      {
+        authored: { chapter: 4 },
+        expected: { type: 'chapter', chapter: 4 },
+      },
+      {
+        authored: { type: 'indeterminate', reason: 'intentionally unknown' },
+        expected: { type: 'indeterminate', mode: 'intentional', reason: 'intentionally unknown' },
+      },
+    ];
+
+    for (const { authored, expected } of examples) {
+      const result = narrativeEllipsisFileSchema.safeParse({
+        id: 'structured_ellipsis',
+        storyTime: authored,
+        preconditions: [{ entity: 'hero', attribute: 'location', value: 'gate' }],
+        provenance: { sourceHash: 'abc', sourceRange: { start: 0, end: 1 } },
+      });
+
+      expect(result.success).toBe(true);
+      if (!result.success) continue;
+      const mapped = mapToNarrativeEllipsis(result.data);
+      expect(mapped.storyTime).toEqual(expected);
+      expect(mapped.preconditions[0].validity.temporal.start).toBe(mapped.storyTime);
+    }
+  });
+
+  it('rejects malformed shared authored forms', () => {
+    for (const storyTime of [
+      { at: { nested: 'day_3' } },
+      { after: { ref: 'origin', amount: -1, unit: 'day' } },
+      { offset: { amount: 1, unit: 'days' } },
+      { chapter: 2.5 },
+      { after: { ref: 'origin', amount: 1, unit: 'day', extra: true } },
+      { offset: { amount: 1, unit: 'day', extra: true } },
+    ]) {
+      expect(
+        narrativeEllipsisFileSchema.safeParse({
+          id: 'malformed_ellipsis',
+          storyTime,
+          provenance: { sourceHash: 'abc', sourceRange: { start: 0, end: 1 } },
+        }).success,
+      ).toBe(false);
+    }
   });
 });
 

@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { z } from 'zod';
+import { authoredLocatableStoryTimeSchema } from './timestamp.js';
 import { structuralFunctionSchema } from './story-ir.js';
 export const worldInitialStateSchema = z
   .object({
@@ -17,7 +18,7 @@ export const worldInitialStateSchema = z
         z
           .object({
             id: z.string().min(1),
-            at: z.string().min(1),
+            at: authoredLocatableStoryTimeSchema,
             description: z.string().optional(),
           })
           .strict(),

@@ -199,8 +199,10 @@ expectedPostconditions:
 
 ### 进阶字段（S1/S4/S6 叙事契约）
 
-以下字段全部可选；除 `narratorProfileRef` 与 `authorNotes` 外均为 strict object。schema 位于
-`packages/core/src/schemas/{narrative-checklist,source-context,duration,frequency,discourse,narrative-techniques,grey-line}.ts`。
+以下字段全部可选。`greyLines`、`narrativeChecklist`、`sourceContext`、`duration`、`frequency`、
+`anachrony`、`voice` 与下方 8 个叙事技巧字段的 schema 均为 strict object；`focalization`（与
+`cast` 一样）在 `eventFileSchema` 内内联定义、未加 `.strict()`，其内部未知键会被静默剥离。
+schema 位于 `packages/core/src/schemas/{narrative-checklist,source-context,duration,frequency,discourse,narrative-techniques,grey-line}.ts`。
 
 | 字段 | 类型 | 描述 |
 |---|---|---|
@@ -214,18 +216,18 @@ expectedPostconditions:
 | `narratorProfileRef` | `string`（可选） | 引用项目 discourse 配置中定义的 NarratorProfile（S6c） |
 | `focalization` | `object`（可选） | Genette 聚焦（S6c）：`{ type: "zero" \| "internal" \| "external", variation?: "fixed" \| "variable" \| "multiple", characterSequence?: [{ character, scope }] }` |
 
-图解析的叙事技巧契约（graph-resolved narrative technique contracts，全部可选且 strict，均为非空字符串字段）：
+图解析的叙事技巧契约（graph-resolved narrative technique contracts，全部可选且 strict）：
 
 | 字段 | 类型 | 描述 |
 |---|---|---|
-| `causalDiscontinuity` | `object`（可选） | `{ predecessor, dependent, instruction, requiredEvidence }` |
-| `surfaceMode` | `object`（可选） | `{ instruction, requiredEvidence }` |
-| `causalMultiplicity` | `object`（可选） | `{ minimumOutgoingEdges, instruction, requiredEvidence }`；`minimumOutgoingEdges` 为 ≥ 2 的整数 |
-| `irresolvableIndeterminacy` | `object`（可选） | `{ assertionIds, instruction, requiredEvidence }`；`assertionIds` 非空且去重 |
-| `absentApparatus` | `object`（可选） | `{ readId, instruction, requiredEvidence }` |
-| `voiceDissonance` | `object`（可选） | `{ assertionId, storyOutputId, instruction, requiredEvidence }` |
-| `multiplicity` | `object`（可选） | `{ assertionIds, instruction, requiredEvidence }`；`assertionIds` 至少 2 项且去重 |
-| `metanarrativeLevel` | `object`（可选） | `{ instruction, requiredEvidence }` |
+| `causalDiscontinuity` | `object`（可选） | strict；`{ predecessor: string, dependent: string, instruction: string, requiredEvidence: string }`（均非空） |
+| `surfaceMode` | `object`（可选） | strict；`{ instruction: string, requiredEvidence: string }`（均非空） |
+| `causalMultiplicity` | `object`（可选） | strict；`{ minimumOutgoingEdges: number（整数 ≥ 2）, instruction: string, requiredEvidence: string }` |
+| `irresolvableIndeterminacy` | `object`（可选） | strict；`{ assertionIds: string[]（≥ 1 项、去重、均非空）, instruction: string, requiredEvidence: string }` |
+| `absentApparatus` | `object`（可选） | strict；`{ readId: string, instruction: string, requiredEvidence: string }`（均非空） |
+| `voiceDissonance` | `object`（可选） | strict；`{ assertionId: string, storyOutputId: string, instruction: string, requiredEvidence: string }`（均非空） |
+| `multiplicity` | `object`（可选） | strict；`{ assertionIds: string[]（≥ 2 项、去重、均非空）, instruction: string, requiredEvidence: string }` |
+| `metanarrativeLevel` | `object`（可选） | strict；`{ instruction: string, requiredEvidence: string }`（均非空） |
 | `authorNotes` | `string[]`（可选） | 自由形式作者注记，原样透传给 Pass 1 prompt（纯 pass-through） |
 
 ## 示例（来自 zhu-fu 测试夹具: E5_threshold_rejection.yaml）

@@ -120,6 +120,8 @@ function parseNamedExports(source, filePath) {
     // ── export type * from '...'  (type barrel re-export) ──
     // We don't collect individual names from these — the manifest uses
     // typeBarrels to declare them. We just note existence.
+    // However, individual declared types that are re-exported through a
+    // barrel are verified via resolveTypeFromBarrel() in the main loop.
     if (/^export\s+type\s*\*\s*from/.test(trimmed)) {
       // tracked via typeBarrels, skip
       i++;
@@ -204,9 +206,19 @@ function parseNamedExports(source, filePath) {
 function resolveStarExports(relPath, baseDir) {
   const targetPath = join(baseDir, relPath);
   let content;
+  let resolved;
   try {
     // resolve extension: try .ts, .js, .mjs, then exact
-    let resolved = targetPath;
+    resolved = targetPath;
+    if (!existsSync(resolved)) {
+      // if import used .js but source is .ts, try swapping extension
+      if (relPath.endsWith('.js')) {
+        const tsPath = targetPath.replace(/\.js$/, '.ts');
+        if (existsSync(tsPath)) {
+          resolved = tsPath;
+        }
+      }
+    }
     if (!existsSync(resolved)) {
       for (const ext of ['.ts', '.js', '.mjs', '']) {
         const candidate = targetPath + ext;
@@ -230,6 +242,20 @@ function resolveStarExports(relPath, baseDir) {
     return { values: new Set(), types: new Set() };
   }
   return parseNamedExports(content, resolved);
+}
+
+/**
+ * Check whether a type name is exported from any of the given typeBarrel files.
+ */
+function resolveTypeFromBarrel(name, barrelPaths) {
+  for (const relPath of barrelPaths) {
+    const abs = join(root, relPath);
+    if (!existsSync(abs)) continue;
+    const source = readFileSync(abs, 'utf-8');
+    const { types } = parseNamedExports(source, abs);
+    if (types.has(name)) return true;
+  }
+  return false;
 }
 
 /**
@@ -298,6 +324,7 @@ function main() {
     // Check value exports
     const manifestValues = new Set(cfg.values || []);
     const manifestTypes = new Set(cfg.types || []);
+    const barrels = cfg.typeBarrels || [];
 
     // 1. Declared values that exist in source
     for (const name of manifestValues) {
@@ -307,8 +334,9 @@ function main() {
     }
 
     // 2. Declared types that exist in source
+    //    (with fallback to typeBarrel resolution)
     for (const name of manifestTypes) {
-      if (!actualTypes.has(name)) {
+      if (!actualTypes.has(name) && !resolveTypeFromBarrel(name, barrels)) {
         allOk = err(`${pkgName}: declared type "${name}" not found in entry source`);
       }
     }
@@ -332,7 +360,6 @@ function main() {
     }
 
     // 5. Check typeBarrels exist and are type-only
-    const barrels = cfg.typeBarrels || [];
     for (const barrel of barrels) {
       const barrelErr = checkTypeBarrel(barrel);
       if (barrelErr) {

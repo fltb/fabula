@@ -482,3 +482,47 @@ describe('Mapper — Indeterminate AST with fact validity', () => {
     expect(result.preconditions[0].validity.temporal.start).toBe(result.storyTime);
   });
 });
+
+// ─── Mapper defaults: omitted wire fields ───────────────────────────────
+
+describe('Mapper — Omitted corpus wire defaults', () => {
+  it('defaults all omitted optional fields to empty/null in mapper', () => {
+    const result = mapToNarrativeEllipsis({
+      id: 'ellipsis_defaults_test',
+      provenance: { sourceHash: 'abc', sourceRange: { start: 0, end: 10 } },
+    });
+
+    expect(result.storyTime).toEqual({ type: 'indeterminate', mode: 'unspecified' });
+    expect(result.branchScope).toEqual({ decisions: [] });
+    expect(result.preconditions).toEqual([]);
+    expect(result.postconditions).toEqual([]);
+    expect(result.relationshipEffects).toEqual([]);
+    expect(result.knowledgeTransactions).toEqual([]);
+    expect(result.threadProgress).toEqual([]);
+    expect(result.ruleEffects).toEqual([]);
+  });
+
+  it('preserves explicit empty arrays over undefined', () => {
+    const result = mapToNarrativeEllipsis({
+      id: 'ellipsis_empty_arrays',
+      provenance: { sourceHash: 'def', sourceRange: { start: 5, end: 20 } },
+      branchScope: { decisions: [] },
+      storyTime: 'chapter_2' as const,
+      preconditions: [],
+      postconditions: [],
+      relationshipEffects: [],
+      knowledgeTransactions: [],
+      threadProgress: [],
+      ruleEffects: [],
+    });
+
+    expect(result.storyTime).toEqual({ type: 'chapter', chapter: 2 });
+    expect(result.branchScope).toEqual({ decisions: [] });
+    expect(result.preconditions).toEqual([]);
+    expect(result.postconditions).toEqual([]);
+    expect(result.relationshipEffects).toEqual([]);
+    expect(result.knowledgeTransactions).toEqual([]);
+    expect(result.threadProgress).toEqual([]);
+    expect(result.ruleEffects).toEqual([]);
+  });
+});

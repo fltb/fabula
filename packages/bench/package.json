@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "bench": "vitest run",
+    "bench": "vitest run --root ../.. packages/bench/tests",
     "build": "tsc --emitDeclarationOnly && node build.mjs",
     "build:types": "tsc --emitDeclarationOnly",
     "build:js": "node build.mjs",

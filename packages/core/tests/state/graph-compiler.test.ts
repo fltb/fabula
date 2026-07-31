@@ -1252,6 +1252,29 @@ describe('GraphCompiler', () => {
       expect(result1.storyGraphs[0].hash).toBe(result2.storyGraphs[0].hash);
       expect(result1.cache[0].outputHashes).toEqual(result2.cache[0].outputHashes);
     });
+
+    it('coordinate-only change invalidates cache hash', () => {
+      const baseEffect = [{ effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' }];
+      const result1 = compileGraph([storyNode('evt1', 'day_1', baseEffect)]);
+      const result2 = compileGraph([storyNode('evt1', 'day_2', baseEffect)]);
+      expect(result1.storyGraphs[0].hash).not.toBe(result2.storyGraphs[0].hash);
+    });
+
+    it('input permutation produces stable hash', () => {
+      const nodes: CompileNode[] = [
+        storyNode('evt_a', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' },
+        ]),
+        storyNode('evt_b', 'day_2', [
+          { effectId: 'o2', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' },
+        ]),
+      ];
+      const reversed = [...nodes].reverse();
+      const result1 = compileGraph(nodes);
+      const result2 = compileGraph(reversed);
+      expect(result1.storyGraphs[0].hash).toBe(result2.storyGraphs[0].hash);
+      expect(result1.cache[0].outputHashes).toEqual(result2.cache[0].outputHashes);
+    });
   });
 
   // ─── Additional typed error coverage ──────────────────────────────────────

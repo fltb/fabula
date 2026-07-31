@@ -88,4 +88,100 @@ describe('built CLI game dialogue tree', () => {
       rmSync(project, { recursive: true, force: true });
     }
   });
+
+  it('renders a single scene loaded at its event anchor', () => {
+    const project = mkdtempSync(join(tmpdir(), 'nova-game-scene-'));
+    try {
+      cpSync(fixture, project, { recursive: true });
+      // Game-dialogue rendering without a branch path is rejected outright.
+      const rejected = spawnSync(
+        process.execPath,
+        [
+          join(root, 'packages/cli/dist/index.js'),
+          'render',
+          'E1a',
+          '--provider',
+          'mock-pass2',
+          '--reference-dir',
+          join(project, 'reference/data'),
+        ],
+        { cwd: project, encoding: 'utf8' },
+      );
+      expect(rejected.status, rejected.stderr).toBe(1);
+      expect(rejected.stderr).toContain('requires a branchPath');
+
+      // Render the complete branch scope first so the single-scene render
+      // can publish with every branch-required head verified.
+      const scope = spawnSync(
+        process.execPath,
+        [
+          join(root, 'packages/cli/dist/index.js'),
+          'render',
+          '--all',
+          '--branch-path',
+          acceptPath,
+          '--discourse-branch',
+          'accept_hunt',
+          '--provider',
+          'mock-pass2',
+          '--reference-dir',
+          join(project, 'reference/data'),
+        ],
+        { cwd: project, encoding: 'utf8' },
+      );
+      expect(scope.status, scope.stderr).toBe(0);
+
+      const result = spawnSync(
+        process.execPath,
+        [
+          join(root, 'packages/cli/dist/index.js'),
+          'render',
+          'E1a',
+          '--branch-path',
+          acceptPath,
+          '--discourse-branch',
+          'accept_hunt',
+          '--provider',
+          'mock-pass2',
+          '--reference-dir',
+          join(project, 'reference/data'),
+        ],
+        { cwd: project, encoding: 'utf8' },
+      );
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stdout).toContain('E1a:');
+      // Single-scene render at anchor does not load sibling events
+      expect(result.stdout).not.toContain('E1b:');
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects render at non-existent event anchor', () => {
+    const project = mkdtempSync(join(tmpdir(), 'nova-game-scene-'));
+    try {
+      cpSync(fixture, project, { recursive: true });
+      const result = spawnSync(
+        process.execPath,
+        [
+          join(root, 'packages/cli/dist/index.js'),
+          'render',
+          'NONEXISTENT',
+          '--branch-path',
+          acceptPath,
+          '--discourse-branch',
+          'accept_hunt',
+          '--provider',
+          'mock-pass2',
+          '--reference-dir',
+          join(project, 'reference/data'),
+        ],
+        { cwd: project, encoding: 'utf8' },
+      );
+      expect(result.status, result.stderr).toBe(1);
+      expect(result.stderr).toContain('not part of the authored catalog');
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
 });

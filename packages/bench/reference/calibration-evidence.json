@@ -1,0 +1,11 @@
+{
+  "kind": "calibration-evidence",
+  "recordedAt": "2026-07-31T18:31:15.000Z",
+  "status": "pending",
+  "summary": "No human calibration evidence exists in this repository. There are no two independently identified human annotation sets committed anywhere: fixtures/zhu-fu/reference is explicitly mock/generated (review.json note: 'Reference data is mock (for test determinism)', README: 'This reference data is entirely mock/generated. No prose is a source quotation. No human review evidence, live attestation, or provider credentials are included.'), and no human annotation, adjudication, or gold-standard artifacts are committed under packages/bench/reference or any fixture. This artifact honestly records that status so the calibration report fails closed (calibrated: false). It must be replaced by genuine evidence: at least two independent, identified human raters with per-field ratings, a human adjudication record with verdicts, and (optionally) a gold field set — all recorded through the same report path. Synthetic records are deliberately excluded from this artifact so that no computed metric can be mistaken for empirical evidence.",
+  "raters": [],
+  "adjudication": null,
+  "ratings": [],
+  "adjudications": [],
+  "gold": null
+}

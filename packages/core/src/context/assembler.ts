@@ -130,6 +130,7 @@ export class ContextAssembler {
   private _buildSceneSpec(event: NarrativeEvent): SceneSpecification {
     return {
       goal: event.sceneBrief,
+      beats: event.beats,
       povType: event.pov.type,
       povCharacter: event.pov.character,
       conflict: event.styleGuidance?.scenePacing ?? 'TBD',
@@ -310,6 +311,12 @@ export class ContextAssembler {
     lines.push(`- POV: ${pkg.sceneSpec.povType} from ${pkg.sceneSpec.povCharacter}`);
     lines.push(`- Conflict: ${pkg.sceneSpec.conflict}`);
     lines.push(`- Expected Outcome: ${pkg.sceneSpec.expectedOutcome}`);
+    if (pkg.sceneSpec.beats.length > 0) {
+      lines.push('- Beats:');
+      pkg.sceneSpec.beats.forEach((beat, index) => {
+        lines.push(`  ${index + 1}. ${beat}`);
+      });
+    }
     lines.push('');
 
     // Character Snapshots

@@ -148,7 +148,7 @@ export const assertionTypeSchema = z.enum([
 
 export const assertionPolaritySchema = z.enum(['affirmative', 'negative']);
 
-export const truthBoundarySchema = z.boolean();
+export const narratorAssertionStatusSchema = z.enum(['asserted', 'unknown', 'contested']);
 
 export const narrationBoundarySchema = z
   .object({
@@ -179,11 +179,22 @@ export const narratorAssertionSchema = z
     proposition: z.string(),
     polarity: assertionPolaritySchema,
     type: assertionTypeSchema,
-    truthBoundary: truthBoundarySchema,
+    status: narratorAssertionStatusSchema,
     narrationBoundary: narrationBoundarySchema,
     evidence: assertionEvidenceSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((assertion, ctx) => {
+    if (assertion.type === 'authoritative_reveal' && assertion.status !== 'asserted') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['status'],
+        message:
+          `authoritative_reveal assertion "${assertion.id}" must have status "asserted" — ` +
+          'unknown/contested assertions may only be claim/conjecture/implication.',
+      });
+    }
+  });
 
 // ─── Disclosure Actions (§4) ────────────────────────────────────────────────
 
@@ -469,6 +480,9 @@ export const validationKeySchema = z
     proseHash: z.string(),
     analysisSchema: z.string(),
     model: z.string(),
+    provider: z.string(),
+    analysisPromptHash: z.string(),
+    samplingConfigHash: z.string(),
     validatorPolicy: z.string(),
     referencePolicy: z.string(),
   })

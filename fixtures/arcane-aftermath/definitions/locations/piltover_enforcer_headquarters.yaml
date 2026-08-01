@@ -7,14 +7,8 @@ initialState:
   securityLevel: high
   currentTension: moderate
   activeInvestigations:
-    - name: "Hextech Weapons Smuggling"
-      status: active
-      leadInspector: camille
-      priority: high
-    - name: "Council Security Review"
-      status: pending
-      leadInspector: tbd
-      priority: medium
+    "Hextech Weapons Smuggling": "status=active; leadInspector=camille; priority=high"
+    "Council Security Review": "status=pending; leadInspector=tbd; priority=medium"
   personnelPresent:
     - camille
     - seraphine

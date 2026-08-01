@@ -11,7 +11,7 @@ import type {
   ValidationIssue,
   Validator,
 } from '../types/index.js';
-import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
+import { makeIssue } from './base.js';
 import { resolveDeferredFacts } from './deferred-resolver.js';
 
 export class BranchMergeValidator implements Validator {

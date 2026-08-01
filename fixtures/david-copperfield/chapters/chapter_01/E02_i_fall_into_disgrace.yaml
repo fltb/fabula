@@ -13,6 +13,13 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "Mr Murdstone marries David's gentle mother Clara, and the happy Blunderstone childhood ends. Murdstone's stern sister Jane arrives to run the household with cold efficiency. David struggles under the new regime of 'firmness' — the Murdstones' favourite word for their system of harsh discipline. When David falls behind in his lessons under Mr Murdstone's brutal teaching methods, he is beaten. In desperation, David bites Mr Murdstone's hand and is sent away to Salem House school as punishment. Before he leaves, Peggotty takes David to Yarmouth to visit her brother's boathouse family, giving him a last taste of happiness before his ordeal."
+beats:
+  - "Mr Murdstone marries David's gentle mother Clara, and the happy Blunderstone childhood ends."
+  - "Murdstone's stern sister Jane arrives to run the household with cold efficiency."
+  - "David struggles under the new regime of 'firmness' — the Murdstones' favourite word for their system of harsh discipline."
+  - "When David falls behind in his lessons under Mr Murdstone's brutal teaching methods, he is beaten."
+  - "In desperation, David bites Mr Murdstone's hand and is sent away to Salem House school as punishment."
+  - "Before he leaves, Peggotty takes David to Yarmouth to visit her brother's boathouse family, giving him a last taste of happiness before his ordeal."
 preconditions:
   - entity: clara_copperfield
     attribute: status
@@ -67,10 +74,16 @@ introduces:
     id: yarmouth
     initialState:
       status: active
+      season: summer_holiday
+      atmosphere: warm_fishing_community
+      notable_feature: converted_boat_house
   - type: location
     id: salem_house
     initialState:
       status: active
+      season: term_time
+      atmosphere: harsh_disciplinarian
+      notable_feature: high_wall_broken_bottles
   - type: character
     id: murdstone
     initialState:
@@ -78,6 +91,7 @@ introduces:
       status: stepfather
       condition: married_to_clara
       emotionalState: cold_authoritarian
+      relationship_clara: suitor
   - type: character
     id: emily
     initialState:
@@ -85,6 +99,7 @@ introduces:
       status: child
       condition: orphaned_niece_of_dan
       emotionalState: bright_lively
+      engagement_ham: betrothed
   - type: character
     id: dan_peggotty
     initialState:
@@ -99,6 +114,7 @@ introduces:
       status: nephew_of_dan
       condition: young_fisherman
       emotionalState: kind_sturdy
+      engagement_emily: betrothed
 styleGuidance:
   tone: "sombre, tense, with pockets of warmth in the Yarmouth interlude"
   targetWordCount: 800

@@ -70,6 +70,9 @@ export class DurationConsistencyValidator implements Validator {
           'Update the prose to match the declared duration, or change the duration declaration.',
           'edit_file',
           'duration',
+          undefined,
+          undefined,
+          'interpretive_assessment',
         ),
       );
     }

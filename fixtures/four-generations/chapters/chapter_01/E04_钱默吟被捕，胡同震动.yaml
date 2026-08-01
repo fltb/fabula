@@ -13,6 +13,13 @@ pov:
   character: omniscient
   type: omniscient
 sceneBrief: 日本宪兵来到小羊圈胡同，直扑钱家。白巡长拉着钱默吟走出来，钱先生口中流着血，光着头，左脚拖着布鞋，右脚光着。钱大少爷孟石扑过来，被白巡长一拳打倒——白巡长急中生智，假装他是大烟鬼，免得也被抓走。钱太太被推出来，直到这时才知道二儿子仲石已经死了。钱默吟被押走时，回头看了一眼院中盛开的秋葵。瑞宣在护国寺街口亲眼看见钱先生被捕，心中如刀割。
+beats:
+  - "日本宪兵来到小羊圈胡同，直扑钱家。"
+  - "白巡长拉着钱默吟走出来，钱先生口中流着血，光着头，左脚拖着布鞋，右脚光着。"
+  - "钱大少爷孟石扑过来，被白巡长一拳打倒——白巡长急中生智，假装他是大烟鬼，免得也被抓走。"
+  - "钱太太被推出来，直到这时才知道二儿子仲石已经死了。"
+  - "钱默吟被押走时，回头看了一眼院中盛开的秋葵。"
+  - "瑞宣在护国寺街口亲眼看见钱先生被捕，心中如刀割。"
 preconditions:
 - entity: qian_moyin
   attribute: location
@@ -69,6 +76,7 @@ introduces:
     status: arrested
     condition: injured
     emotionalState: defiant
+    political_stance: apolitical_turned_resistance
 - type: character
   id: li_siye
   initialState:

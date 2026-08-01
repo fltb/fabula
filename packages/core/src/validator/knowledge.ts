@@ -36,7 +36,10 @@ export class KnowledgeValidator implements Validator {
     // check if they could have learned this at this point in time
     for (const pc of event.postconditions) {
       if (pc.entityId !== povChar) continue;
-      if (getAttributeSemanticRole('character', pc.attribute) !== 'knowledge') continue;
+      if (
+        getAttributeSemanticRole(input.entityTypeCatalog, 'character', pc.attribute) !== 'knowledge'
+      )
+        continue;
 
       // Check if the character already has a settled claim for this proposition
       const claimKey = `${povChar}:${pc.id}`;
@@ -64,7 +67,10 @@ export class KnowledgeValidator implements Validator {
     // established in a later event, flag impossible foreknowledge.
     for (const pc of event.postconditions) {
       if (pc.entityId !== povChar) continue;
-      if (getAttributeSemanticRole('character', pc.attribute) !== 'knowledge') continue;
+      if (
+        getAttributeSemanticRole(input.entityTypeCatalog, 'character', pc.attribute) !== 'knowledge'
+      )
+        continue;
 
       if (pc.value !== undefined) {
         const factEvents = events.filter(
@@ -104,6 +110,7 @@ export class KnowledgeValidator implements Validator {
       z.array(knowledgeCheckSchema).safeParse(input.analysis.analysis.knowledgeChecks).data ?? [];
     for (const check of knowledgeChecks) {
       if (check.matchLevel === 'contradicted') {
+        const checkIndex = knowledgeChecks.indexOf(check);
         issues.push(
           makeIssue(
             'knowledge',
@@ -114,6 +121,12 @@ export class KnowledgeValidator implements Validator {
             `${check.evidence}`,
             'edit_file',
             'knowledge',
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            checkIndex >= 0
+              ? { field: 'knowledgeChecks', analysisPointer: `/knowledgeChecks/${checkIndex}` }
+              : { field: 'knowledgeChecks' },
           ),
         );
       }

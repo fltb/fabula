@@ -2,7 +2,8 @@ import * as path from 'node:path';
 import YAML from 'yaml';
 import { z } from 'zod';
 import { canonicalAssemble, customAssemble } from '../assembler/release-assembly.ts';
-import { EntityMapper, loadProjectConfig } from '../entity/index.ts';
+import { loadProjectConfig } from '../entity/index.ts';
+import { loadCanonicalProject } from '../entity/project-runtime.ts';
 import { appendPlayerChoicesBlock } from '../pipeline/output.ts';
 import {
   editorialMutationContextSchema,
@@ -233,11 +234,9 @@ function authoredChoices(
   projectDir: string,
   eventId: string,
 ): readonly GameDialogueChoice[] {
-  const data = new EntityMapper(projectDir, storage).loadProject();
-  for (const chapter of data.chapters.values()) {
-    const event = chapter.events.find((candidate) => candidate.event === eventId);
-    if (event) return event.choices ?? [];
-  }
+  const ir = loadCanonicalProject(projectDir, storage);
+  const event = ir.authoredEvents.find((candidate) => candidate.event === eventId);
+  if (event) return event.choices ?? [];
   throw new EditorialOperationError('SCENE_NOT_FOUND', `Authored scene ${eventId} was not found`, {
     eventId,
   });

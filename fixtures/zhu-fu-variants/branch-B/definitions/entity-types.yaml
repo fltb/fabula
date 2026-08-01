@@ -1,0 +1,382 @@
+types:
+  character:
+    typeId: character
+    kind: character
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      age:
+        attributeId: age
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      aliases:
+        attributeId: aliases
+        valueType: string_list
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      appearance:
+        attributeId: appearance
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: appearance
+      attitude_toward_xianglins_wife:
+        attributeId: attitude_toward_xianglins_wife
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      cause_of_death:
+        attributeId: cause_of_death
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      condition:
+        attributeId: condition
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      death_location:
+        attributeId: death_location
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      emotionalState:
+        attributeId: emotionalState
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: emotional
+      financial_state:
+        attributeId: financial_state
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      gender:
+        attributeId: gender
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      has_ah_mao:
+        attributeId: has_ah_mao
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      has_second_child:
+        attributeId: has_second_child
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      health:
+        attributeId: health
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knowledge:
+        attributeId: knowledge
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knowledge_of_branch_B:
+        attributeId: knowledge_of_branch_B
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knowledge_of_xianglins_wife:
+        attributeId: knowledge_of_xianglins_wife
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      location:
+        attributeId: location
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: location
+      marital_status:
+        attributeId: marital_status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      moral_state:
+        attributeId: moral_state
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      motivation:
+        attributeId: motivation
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      profession:
+        attributeId: profession
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      purpose:
+        attributeId: purpose
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      relationship_to_lu_zhen:
+        attributeId: relationship_to_lu_zhen
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      role_in_kidnapping:
+        attributeId: role_in_kidnapping
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      social_status:
+        attributeId: social_status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      spiritual_state:
+        attributeId: spiritual_state
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+      time_of_death:
+        attributeId: time_of_death
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      traits:
+        attributeId: traits
+        valueType: string_list
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      work_capability:
+        attributeId: work_capability
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  concept:
+    typeId: concept
+    kind: concept
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      description:
+        attributeId: description
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      value:
+        attributeId: value
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: identity
+    typedInvariants: []
+  location:
+    typeId: location
+    kind: location
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      atmosphere:
+        attributeId: atmosphere
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      cost:
+        attributeId: cost
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      household_state:
+        attributeId: household_state
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      population:
+        attributeId: population
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      ritual_purity:
+        attributeId: ritual_purity
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      season:
+        attributeId: season
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      social_mood:
+        attributeId: social_mood
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+      threshold_available:
+        attributeId: threshold_available
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      wildlife_risk:
+        attributeId: wildlife_risk
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  rule:
+    typeId: rule
+    kind: rule
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      category:
+        attributeId: category
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      type:
+        attributeId: type
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: identity
+    typedInvariants: []

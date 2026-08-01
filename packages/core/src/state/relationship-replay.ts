@@ -6,7 +6,6 @@
 import { ConfigError } from '../errors.js';
 import type {
   DimensionScope,
-  DimensionState,
   EpochLifecycle,
   EpochRuntimeState,
   RelationshipId,

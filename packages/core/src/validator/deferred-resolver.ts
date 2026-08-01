@@ -24,6 +24,14 @@ export function resolveDeferredFacts(
 
   if (!analysis) return issues;
 
+  // Deferred facts resolve ONLY against a produced verification payload.
+  // abstained/ambiguous observations carry no match level to consume and must
+  // not be coerced into one — the aggregator preflight reports their
+  // uncertainty instead.
+  const observations = analysis.observations ?? {};
+  const observation = observations['narrativeChecks'];
+  if (!observation || observation.disposition !== 'produced') return issues;
+
   // Only resolve when narrativeChecks are present in the Pass 2 analysis
   const raw = (analysis.analysis as Record<string, unknown>).narrativeChecks;
   if (!raw) return issues;
@@ -44,9 +52,12 @@ export function resolveDeferredFacts(
     if (outcome !== 'deferred') continue;
 
     // Look for a matching narrativeCheck from Pass 2
-    const match = narrativeChecks.find(
-      (nc) => nc.entityId === pc.entityId && nc.attribute === pc.attribute,
-    );
+    let matchIndex = -1;
+    const match = narrativeChecks.find((nc, index) => {
+      const isMatch = nc.entityId === pc.entityId && nc.attribute === pc.attribute;
+      if (isMatch) matchIndex = index;
+      return isMatch;
+    });
 
     if (match?.matchLevel === 'contradicted') {
       issues.push(
@@ -59,6 +70,13 @@ export function resolveDeferredFacts(
           'Ensure the prose respects this precondition or adjust the precondition.',
           'manual',
           pc.attribute,
+          undefined,
+          undefined,
+          'evidence_mismatch',
+          {
+            field: 'narrativeChecks',
+            analysisPointer: `/narrativeChecks/${matchIndex}`,
+          },
         ),
       );
     } else if (!match || match.matchLevel === 'absent') {
@@ -72,6 +90,10 @@ export function resolveDeferredFacts(
           'Ensure the prose establishes this state or adjust the precondition.',
           'manual',
           pc.attribute,
+          undefined,
+          undefined,
+          'evidence_mismatch',
+          { field: 'narrativeChecks' },
         ),
       );
     }

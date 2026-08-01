@@ -16,12 +16,9 @@ initialState:
   condition: healthy
   emotionalState: determined
   inventory:
-    - item: "hextech_rapier"
-      description: "A concealed blade built into her right forearm mechanism"
-    - item: "ferros_signet_ring"
-      description: "A gold ring bearing the Ferros clan crest, contains a hidden compartment for microfilament wire"
-    - item: "enforcer_credentials"
-      description: "Full clearance badge for Piltover Enforcer Headquarters"
+    hextech_rapier: "A concealed blade built into her right forearm mechanism"
+    ferros_signet_ring: "A gold ring bearing the Ferros clan crest, contains a hidden compartment for microfilament wire"
+    enforcer_credentials: "Full clearance badge for Piltover Enforcer Headquarters"
 voiceNotes: "Cold, measured, and precise. Speaks with the clipped efficiency of someone who values every word. Rarely raises her voice, but her tone carries an implicit threat. Calculated pauses and deliberate eye contact are her tools of intimidation."
 backstory: "Born into the powerful Ferros merchant clan, Camille was trained from childhood to be the family's enforcer and protector of their interests. Following a near-fatal incident during a Zaunite raid on a Ferros shipping warehouse, she underwent extensive hextech augmentation that saved her life but cost her much of her humanity. She has served as Piltover's chief intelligence officer for over a decade, operating in the gray spaces between law and oligarchic necessity. She is fiercely loyal to Piltover's order, but her definition of 'order' has become increasingly pragmatic over the years."
 knownSecrets:

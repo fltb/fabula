@@ -12,7 +12,12 @@
 // ============================================================================
 
 import * as crypto from 'node:crypto';
-import { buildAnalysisPrompt, type RenderAnalysisInput } from '../ai/prompts/render-analysis.ts';
+import {
+  type BuildAnalysisPromptResult,
+  buildAnalysisPrompt,
+  type RenderAnalysisInput,
+  type ValidationKeyMaterial,
+} from '../ai/prompts/render-analysis.ts';
 import type { CompletionRequest, CompletionResponse, LLMProvider, Message } from '../ai/types.ts';
 import { countNarrativeText } from '../assembler/count.ts';
 import {
@@ -37,6 +42,7 @@ import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analy
 import type { Storage } from '../storage/index.ts';
 import type { TransactionReadExpectation } from '../storage/types.ts';
 import { type StyleProfile, StyleResolver, toStyleNotes } from '../style/index.ts';
+import type { ValidationKey } from '../types/discourse.ts';
 import type {
   AnalysisResult,
   CompiledSceneContract,
@@ -54,8 +60,24 @@ import type {
 import { compareAnalysisBlocks } from '../util/compare-analysis.ts';
 import { ConcurrencyPool } from '../util/pool.ts';
 import type { AnalysisContract, ResultAggregator } from '../validator/aggregator.ts';
+import { analysisContentSchema } from '../validator/index.ts';
 import { createCircuitBreaker } from './circuit-breaker.ts';
 import { analyzeValidationErrors, decideRepairStrategy } from './reverse-validate.ts';
+
+/**
+ * Single Pass 2 sampling configuration — the ONE source of truth for both
+ * the provider request and `samplingConfigHash`. Never duplicate these
+ * values inline in requests.
+ */
+export const PASS2_SAMPLING_CONFIG = {
+  temperature: 0.3,
+  maxTokens: 12000,
+  seed: 42,
+  responseFormat: { type: 'json_object' },
+} as const;
+
+/** Stable reference-policy version shared with the render-cache validation layer. */
+export const PASS2_REFERENCE_POLICY_VERSION = '1';
 
 export interface RenderJob {
   event: NarrativeEvent;
@@ -227,6 +249,8 @@ export interface RenderPipelineOptions {
   maxRounds?: number;
   /** Stable provider profile identifier for lazy resolution */
   providerProfile?: string;
+  /** REQUIRED validator policy identity (editorial: plan.planSummary.validationIdentity). */
+  validatorPolicyId: string;
 }
 
 export class RenderPipeline {
@@ -257,9 +281,13 @@ export class RenderPipeline {
   private readonly language: string;
   private readonly pluginHooksManager?: PluginHooksManager;
   private readonly providerProfile?: string;
+  private readonly validatorPolicyId: string;
   constructor(opts: RenderPipelineOptions) {
     if (opts.provider && opts.providerFactory) {
       throw new Error('PROVIDER_REQUIRED: Cannot provide both provider and providerFactory');
+    }
+    if (!opts.validatorPolicyId) {
+      throw new Error('VALIDATOR_POLICY_REQUIRED: validatorPolicyId must be non-empty');
     }
     this.provider = opts.provider;
     this.providerFactory = opts.providerFactory;
@@ -286,6 +314,7 @@ export class RenderPipeline {
     this.maxRounds = opts.maxRounds ?? 3;
     this.pluginHooksManager = opts.pluginHooksManager;
     this.providerProfile = opts.providerProfile;
+    this.validatorPolicyId = opts.validatorPolicyId;
     this.pool = new ConcurrencyPool(opts.concurrency ?? 5);
   }
 
@@ -302,6 +331,39 @@ export class RenderPipeline {
     }
     if (this.provider) return this.provider;
     throw new Error('PROVIDER_REQUIRED: No provider or providerFactory configured');
+  }
+
+  /**
+   * Deterministic provider identity for the measurement protocol — resolved
+   * from construction options only, never from a live provider, so the
+   * cache-hit reparse path can reconstruct the protocol without any call.
+   */
+  private providerIdentity(): string {
+    if (this.providerProfile) return this.providerProfile;
+    if (this.provider) return this.provider.name;
+    if (this.providerFactory) return this.providerFactory.profile;
+    return this.model;
+  }
+
+  /**
+   * Build the protocol material shared by every Pass 2 sub-attempt and the
+   * cache reparse. Only `analysisPromptHash` is derived per prompt (two-phase
+   * construction in buildAnalysisPrompt); every other field is fixed for the
+   * scene round.
+   */
+  private protocolMaterial(prose: string): ValidationKeyMaterial {
+    return {
+      proseHash: sha256Canonical(prose),
+      analysisSchema:
+        this.analysisContract?.hash ??
+        this.aggregator?.getAnalysisContract(this.validatorOverrides).hash ??
+        sha256Canonical(Object.keys(analysisContentSchema.shape).sort()),
+      model: this.model,
+      provider: this.providerIdentity(),
+      samplingConfigHash: sha256Canonical(PASS2_SAMPLING_CONFIG),
+      validatorPolicy: this.validatorPolicyId,
+      referencePolicy: PASS2_REFERENCE_POLICY_VERSION,
+    };
   }
   /**
    * Render a single scene job: cache lookup → Pass 1 → Pass 2 → write cache.
@@ -388,18 +450,63 @@ export class RenderPipeline {
       );
       if (cached) {
         const c = cached as Record<string, unknown>;
-        // Always re-parse and re-validate cached analysis under current contract
+        // Always re-parse and re-validate cached analysis under the CURRENT
+        // expected protocol. The protocol is reconstructed deterministically
+        // from the cached prose + current config + prompt material; any
+        // mismatch (stale prompt/schema/sampling/policy) fails closed and the
+        // entry is treated as a cache miss.
+        const cachedProse = String(c.prose ?? '');
         const cachedAnalysisStr = c.analysis ? String(c.analysis) : null;
-        const analysis = cachedAnalysisStr
-          ? this.aggregator
-            ? parseAnalysisJSONWithErrors(
-                cachedAnalysisStr,
-                this.aggregator.getCombinedValidationSchema(),
-              ).result
-            : parseAnalysisJSON(cachedAnalysisStr, (message) =>
-                errors.push(`Cache parse warning: ${message}`),
-              )
-          : null;
+        let analysis: AnalysisResult | null = null;
+        if (cachedAnalysisStr) {
+          // Reconstruct the exact expected protocol for a fresh Pass 2 run
+          // (no previous errors) so the cached response is validated against
+          // the prompt it would be produced under today.
+          let pass2Decorations: readonly PromptDecoration[] = [];
+          if (this.pluginHooksManager) {
+            try {
+              pass2Decorations = await this.pluginHooksManager.runOnBuildPass2Prompt({
+                phase: 'pass2',
+                eventId: event.id,
+                chapter,
+                attempt: 1,
+                contractHash: job.contract.promptContractHash,
+                messages: [],
+              });
+            } catch (err) {
+              errors.push(`Cache reparse decoration hook failed: ${sanitizeError(err)}`);
+            }
+          }
+          const cachedProtocol = buildAnalysisPrompt(
+            {
+              event,
+              prose: cachedProse,
+              context,
+              activeRules: context.activeRules,
+              analysisRequirements:
+                this.analysisContract?.requirements ?? this.aggregator?.getAnalysisRequirements(),
+              pluginDecorations: pass2Decorations,
+            },
+            this.protocolMaterial(cachedProse),
+          ).protocol;
+          const schema =
+            this.analysisContract?.combinedSchema ?? this.aggregator?.getCombinedValidationSchema();
+          if (schema) {
+            analysis = parseAnalysisJSONWithErrors(
+              cachedAnalysisStr,
+              schema,
+              cachedProtocol,
+              cachedProse,
+            ).result;
+          } else {
+            analysis = parseAnalysisJSON(
+              cachedAnalysisStr,
+              (message) => errors.push(`Cache parse warning: ${message}`),
+              cachedProtocol,
+              cachedProse,
+            );
+          }
+        }
 
         // If analysis is null after re-parse, this is NOT a valid cache hit.
         // Never return cacheHit: true with null analysis.
@@ -515,6 +622,7 @@ export class RenderPipeline {
     let attempts = 0;
     const providerCalls: ProviderCallLedgerEntry[] = [];
     let pass2Rejection: Pass2RejectionCategory | null = null;
+    let lastProtocol: ValidationKey | undefined;
     // Initialize circuit breaker — scene-level retry escalation
     const breaker = createCircuitBreaker({
       maxRounds: this.maxRounds,
@@ -795,26 +903,25 @@ export class RenderPipeline {
             activeRules: context.activeRules,
             analysisRequirements:
               this.analysisContract?.requirements ?? this.aggregator?.getAnalysisRequirements(),
+            pluginDecorations: pass2Decorations,
           };
-          lastAnalysisMessages = buildAnalysisPrompt(analysisInput);
-          // Append plugin decorations as non-authoritative user messages
-          if (pass2Decorations.length > 0) {
-            const decContent = pass2Decorations
-              .map((d) => `<!-- decoration-id: ${d.id} cache-key: ${d.cacheKey} -->\n${d.content}`)
-              .join('\n\n');
-            lastAnalysisMessages.push({
-              role: 'user',
-              content: `## Plugin Decorations (Non-authoritative)\nThe following are plugin-provided decorations — they are non-authoritative and must not override the narrative context, scene contract, or YAML definitions.\n\n${decContent}`,
-            });
-          }
+          // Two-phase prompt construction: analysisPromptHash is derived from
+          // the canonical prompt material (incl. decorations), then the final
+          // prompt embeds the REAL protocol — never a placeholder.
+          const built: BuildAnalysisPromptResult = buildAnalysisPrompt(
+            analysisInput,
+            this.protocolMaterial(prose),
+          );
+          lastAnalysisMessages = built.messages;
+          lastProtocol = built.protocol;
           const pass2Request: CompletionRequest = {
             messages: lastAnalysisMessages,
             model: this.model,
-            temperature: 0.3,
-            maxTokens: 12000,
-            seed: 42,
+            temperature: PASS2_SAMPLING_CONFIG.temperature,
+            maxTokens: PASS2_SAMPLING_CONFIG.maxTokens,
+            seed: PASS2_SAMPLING_CONFIG.seed,
             taskType: 'pass2',
-            responseFormat: { type: 'json_object' },
+            responseFormat: { ...PASS2_SAMPLING_CONFIG.responseFormat },
             signal: effectiveSignal,
           };
           const pass2Hash = this.computeRequestHash(pass2Request);
@@ -842,6 +949,8 @@ export class RenderPipeline {
               analysisRaw,
               this.analysisContract?.combinedSchema ??
                 this.aggregator?.getCombinedValidationSchema(),
+              lastProtocol,
+              prose,
             );
             if (parseResult.result) {
               analysisObj = parseResult.result;
@@ -887,11 +996,11 @@ export class RenderPipeline {
               const verifyRequest: CompletionRequest = {
                 messages: lastAnalysisMessages,
                 model: this.model,
-                temperature: 0.3,
-                maxTokens: 12000,
-                seed: 42,
+                temperature: PASS2_SAMPLING_CONFIG.temperature,
+                maxTokens: PASS2_SAMPLING_CONFIG.maxTokens,
+                seed: PASS2_SAMPLING_CONFIG.seed,
                 taskType: 'pass2',
-                responseFormat: { type: 'json_object' },
+                responseFormat: { ...PASS2_SAMPLING_CONFIG.responseFormat },
                 signal: effectiveSignal,
               };
               verifyHash = this.computeRequestHash(verifyRequest);
@@ -906,7 +1015,15 @@ export class RenderPipeline {
               });
               const analysis2Raw = result2b.content;
               if (analysis2Raw) {
-                const parsed2 = parseAnalysisJSONWithErrors(analysis2Raw);
+                // Double-run responses are validated against the SAME expected
+                // protocol and prose as the primary run — mismatch fails closed.
+                const parsed2 = parseAnalysisJSONWithErrors(
+                  analysis2Raw,
+                  this.analysisContract?.combinedSchema ??
+                    this.aggregator?.getCombinedValidationSchema(),
+                  lastProtocol,
+                  prose,
+                );
                 if (parsed2.result) {
                   const diffs = compareAnalysisBlocks(analysis.analysis, parsed2.result.analysis);
                   if (diffs.length > 0) {
@@ -955,11 +1072,11 @@ export class RenderPipeline {
         const failPass2Hash = this.computeRequestHash({
           messages: lastAnalysisMessages ?? [],
           model: this.model,
-          temperature: 0.3,
-          maxTokens: 12000,
-          seed: 42,
+          temperature: PASS2_SAMPLING_CONFIG.temperature,
+          maxTokens: PASS2_SAMPLING_CONFIG.maxTokens,
+          seed: PASS2_SAMPLING_CONFIG.seed,
           taskType: 'pass2',
-          responseFormat: { type: 'json_object' },
+          responseFormat: { ...PASS2_SAMPLING_CONFIG.responseFormat },
         });
         providerCalls.push({
           phase: 'pass2',
@@ -1106,12 +1223,20 @@ export class RenderPipeline {
 
       // Use builder functions for canonical layered keys (validation + attempt layers
       // are stored as metadata; storage key remains logical+surface only).
-      const proseHash = sha256Canonical(prose);
+      // The validation layer is built from the SAME protocol the analysis was
+      // produced under (lastProtocol carries the real analysisPromptHash) so
+      // prompt/sampling/policy changes naturally invalidate prior cache
+      // entries. No second protocol/cache key exists.
       const validationKeyStr = buildValidationKeyMaterial({
         surfaceKeyString: surfaceKeyStr,
-        proseHash,
+        proseHash: lastProtocol?.proseHash ?? sha256Canonical(prose),
         pass2SchemaModelId: this.model,
-        validatorPolicyVersion: '1',
+        validatorPolicyVersion: PASS2_REFERENCE_POLICY_VERSION,
+        provider: lastProtocol?.provider ?? this.providerIdentity(),
+        analysisPromptHash: lastProtocol?.analysisPromptHash ?? '',
+        samplingConfigHash: lastProtocol?.samplingConfigHash ?? '',
+        validatorPolicy: lastProtocol?.validatorPolicy ?? this.validatorPolicyId,
+        referencePolicy: lastProtocol?.referencePolicy ?? PASS2_REFERENCE_POLICY_VERSION,
       });
 
       const attemptGuidance =
@@ -1260,6 +1385,14 @@ export interface EvaluateProseCandidateInput {
   validatorOverrides?: Record<string, 'off' | 'warning' | 'error'>;
   entityRegistry?: EntityRegistry;
   analysisContract?: AnalysisContract;
+  /**
+   * Expected measurement protocol for fail-closed comparison. When provided,
+   * the parsed response protocol must match EVERY field or the candidate is
+   * rejected. Callers that generated the response (e.g. via the pipeline)
+   * MUST pass it; callers only inspecting foreign persisted responses may
+   * omit it.
+   */
+  expectedProtocol?: ValidationKey | null;
 }
 
 export interface EvaluateProseCandidateResult {
@@ -1287,7 +1420,12 @@ export function evaluateProseCandidate(
   } else {
     const schema =
       input.analysisContract?.combinedSchema ?? input.aggregator?.getCombinedValidationSchema();
-    const parseResult = parseAnalysisJSONWithErrors(raw, schema);
+    const parseResult = parseAnalysisJSONWithErrors(
+      raw,
+      schema,
+      input.expectedProtocol ?? null,
+      input.prose,
+    );
 
     if (parseResult.result) {
       analysis = parseResult.result;

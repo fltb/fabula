@@ -119,8 +119,30 @@ const MIN_ANALYSIS_CONTENT = {
   }>,
 };
 
-function makeAnalysis(eventId: string) {
-  return { eventId, analysis: { ...MIN_ANALYSIS_CONTENT } };
+function makeAnalysis(eventId: string, prose: string) {
+  const content = { ...MIN_ANALYSIS_CONTENT };
+  // Every active analysis field carries exactly one produced observation with
+  // an exact prose quote, per the current AnalysisResult contract.
+  const quote = prose.trim().slice(0, 24) || prose;
+  const observations: Record<string, unknown> = {};
+  for (const field of Object.keys(content)) {
+    observations[field] = { disposition: 'produced', evidence: [quote] };
+  }
+  return {
+    eventId,
+    protocol: {
+      proseHash: sha256hex(prose),
+      analysisSchema: 'stage1-v1',
+      model: 'deepseek-v4-flash',
+      provider: 'ai-sdk',
+      analysisPromptHash: H64_A,
+      samplingConfigHash: H64_B,
+      validatorPolicy: 'stage1-policy-v1',
+      referencePolicy: 'stage1-ref-v1',
+    },
+    observations,
+    analysis: content,
+  };
 }
 
 function makeMetadata(
@@ -168,9 +190,10 @@ const BASIC_LEDGER = [
 const BASIC_PROMPT_HASH = computePromptHash(BASIC_LEDGER);
 
 function makeEventBody(eventId: string, overrides: Record<string, unknown> = {}) {
+  const prose = `Generated mock prose for ${eventId}.`;
   return {
-    prose: `Generated mock prose for ${eventId}.`,
-    analysis: makeAnalysis(eventId),
+    prose,
+    analysis: makeAnalysis(eventId, prose),
     metadata: makeMetadata(eventId, BASIC_PROMPT_HASH, overrides),
   };
 }
@@ -889,6 +912,7 @@ describe('credential absence (offline)', () => {
     delete process.env.NOVALISTICALLY_AI_API_KEY;
     const projectDir = mkdtempSync(join(tmpdir(), 'nova-offline-provider-'));
     cpSync(resolve(__dirname, '../../../fixtures/zhu-fu'), projectDir, { recursive: true });
+    rmSync(join(projectDir, '.nova'), { recursive: true, force: true });
     try {
       const result = await renderNovel(
         {

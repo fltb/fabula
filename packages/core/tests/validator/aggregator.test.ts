@@ -24,6 +24,7 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'rainsford', type: 'third_person_limited' },
     sceneBrief: 'Test',
+    beats: ['Test'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],

@@ -19,11 +19,16 @@ import {
 import { durationProfileSchema, durationTypeSchema } from './duration.js';
 import {
   attributeDefinitionSchema,
+  attributeDefinitionSourceSchema,
+  attributeValueTypeSchema,
   entityDeclarationCatalogSchema,
   entityDeclarationSchema,
+  entityIntroductionSchema,
   entityRuntimeStateSchema,
   entityTypeCatalogSchema,
+  entityTypeCatalogSourceSchema,
   entityTypeDefinitionSchema,
+  entityTypeDefinitionSourceSchema,
   entityTypeRefSchema,
   requiredAtSchema,
   writePolicySchema,
@@ -31,6 +36,11 @@ import {
 import { eventFileSchema } from './event.js';
 import { factionDefinitionSchema } from './faction.js';
 import { frequencyProfileSchema, frequencyTypeSchema } from './frequency.js';
+import {
+  gameDialogueChoiceSchema,
+  gameDialogueChoicesSchema,
+  gameDialogueEffectSchema,
+} from './game-dialogue.js';
 import { greyLineNodeSchema, greyLineSchema } from './grey-line.js';
 import {
   emotionalArcDefinitionSchema,
@@ -41,6 +51,11 @@ import {
 import { itemDefinitionSchema } from './item.js';
 import { locationDefinitionSchema } from './location.js';
 import {
+  checklistResultSchema,
+  narrativeChecklistItemSchema,
+  narrativeChecklistSchema,
+} from './narrative-checklist.js';
+import {
   absentApparatusSchema,
   causalDiscontinuitySchema,
   causalMultiplicitySchema,
@@ -50,20 +65,9 @@ import {
   surfaceModeSchema,
   voiceDissonanceSchema,
 } from './narrative-techniques.js';
-import {
-  checklistResultSchema,
-  narrativeChecklistItemSchema,
-  narrativeChecklistSchema,
-} from './narrative-checklist.js';
 import { projectConfigSchema } from './project.js';
 import {
-  dimensionUnsetSchema,
-  dimensionWriteSchema,
-  identityTransitionCarryEntrySchema,
-  membershipSchema,
   relationshipDefinitionSchema,
-  relationshipIdentityTransitionGroupSchema,
-  relationshipRoleDefinitionSchema,
   relationshipTransactionSchema,
   relationshipTypeDefinitionSchema,
 } from './relationship.js';
@@ -84,7 +88,6 @@ import {
   ruleExceptionEffectSchema,
   ruleExceptionIdSchema,
   ruleExceptionSchema,
-  ruleExceptionStatusSchema,
   ruleIdSchema,
   rulePredicateSchema,
   ruleRuntimeStateSchema,
@@ -97,12 +100,14 @@ import {
 import { sourceContextEntrySchema, sourceContextSchema } from './source-context.js';
 import { worldInitialStateSchema } from './state-initial.js';
 import { actantModelSchema, storyArchetypeSchema, structuralFunctionSchema } from './story-ir.js';
-import {
-  gameDialogueChoiceSchema,
-  gameDialogueChoicesSchema,
-  gameDialogueEffectSchema,
-} from './game-dialogue.js';
 
+// ── Re-export all per-entity schemas ─────────────────────────────────────────
+export {
+  analysisAlternativeSchema,
+  analysisObservationSchema,
+  analysisResultSchema,
+  buildAnalysisResultSchema,
+} from './analysis.js';
 // ——— CORPUS-1: NarrativeEllipsis & NarrativeNode Schemas ———
 export {
   ellipsisProvenanceSchema,
@@ -116,20 +121,6 @@ export {
   narrativeEventSchema as corpusNarrativeEventSchema,
   narrativeNodeSchema as corpusNarrativeNodeSchema,
 } from './corpus.js';
-// ——— Shared authored timestamp schemas ———
-export {
-  absoluteTimestampSchema,
-  authoredIndeterminateTimestampSchema,
-  authoredLocatableStoryTimeSchema,
-  authoredStoryTimeSchema,
-  chapterTimestampSchema,
-  indeterminateTimestampSchema,
-  locatableStoryTimestampSchema,
-  relativeTimestampSchema,
-  storyOffsetTimestampSchema,
-  storyTimestampSchema,
-  timeUnitSchema,
-} from './timestamp.js';
 // ——— GRAPH-1: Typed Causal Graph Schemas ———
 export {
   discourseCoordinateSchema,
@@ -144,18 +135,18 @@ export {
   graphProviderOutputSchema,
   graphReadResolutionSchema,
   graphSchema,
+  initialStoryCoordinateSchema,
   outputDescriptorSchema,
   outputValueSchema,
+  pointStoryCoordinateSchema,
   presencePredicateSchema,
   readOriginSchema,
   readPhaseSchema,
   readRequirementSchema,
-  storyCoordinateSchema,
-  initialStoryCoordinateSchema,
-  pointStoryCoordinateSchema,
   sceneStoryCoordinateSchema,
-  unlocatedStoryCoordinateSchema,
+  storyCoordinateSchema,
   storyGraphSchema,
+  unlocatedStoryCoordinateSchema,
 } from './graph.js';
 // ——— STATE-4 Knowledge/Belief Schemas ———
 export {
@@ -203,7 +194,20 @@ export {
   threadTypeDefinitionSchema,
   timeDomainSchema,
 } from './thread.js';
-// ── Re-export all per-entity schemas ─────────────────────────────────────────
+// ——— Shared authored timestamp schemas ———
+export {
+  absoluteTimestampSchema,
+  authoredIndeterminateTimestampSchema,
+  authoredLocatableStoryTimeSchema,
+  authoredStoryTimeSchema,
+  chapterTimestampSchema,
+  indeterminateTimestampSchema,
+  locatableStoryTimestampSchema,
+  relativeTimestampSchema,
+  storyOffsetTimestampSchema,
+  storyTimestampSchema,
+  timeUnitSchema,
+} from './timestamp.js';
 export {
   absentApparatusSchema,
   actantModelSchema,
@@ -212,6 +216,8 @@ export {
   anachronyScopeSchema,
   anachronyTypeSchema,
   attributeDefinitionSchema,
+  attributeDefinitionSourceSchema,
+  attributeValueTypeSchema,
   causalDiscontinuitySchema,
   causalMultiplicitySchema,
   chapterMetadataSchema,
@@ -224,17 +230,20 @@ export {
   emotionalBeatSchema,
   entityDeclarationCatalogSchema,
   entityDeclarationSchema,
+  entityIntroductionSchema,
   entityRuntimeStateSchema,
   entityTypeCatalogSchema,
+  entityTypeCatalogSourceSchema,
   entityTypeDefinitionSchema,
+  entityTypeDefinitionSourceSchema,
   entityTypeRefSchema,
-  gameDialogueChoiceSchema,
-  gameDialogueChoicesSchema,
-  gameDialogueEffectSchema,
   eventFileSchema,
   factionDefinitionSchema,
   frequencyProfileSchema,
   frequencyTypeSchema,
+  gameDialogueChoiceSchema,
+  gameDialogueChoicesSchema,
+  gameDialogueEffectSchema,
   greyLineNodeSchema,
   greyLineSchema,
   ideaIRSchema,
@@ -323,6 +332,7 @@ export {
   hintSchema,
   hintStateSchema,
   initialExposureContractSchema,
+  ledgerChapterSchema,
   modelReaderProfileIdSchema,
   modelReaderProfileSchema,
   narrationBoundarySchema,
@@ -330,6 +340,7 @@ export {
   narratorAccessSchema,
   narratorAssertionCapabilitySchema,
   narratorAssertionSchema,
+  narratorAssertionStatusSchema,
   narratorFidelitySchema,
   narratorProfileBaseSchema,
   narratorProfileSchema,
@@ -337,18 +348,36 @@ export {
   narratorSinceritySchema,
   narratorTruthCapabilitySchema,
   omniscientProfileSchema,
-  ledgerChapterSchema,
   plannedDiscourseLedgerSourceSchema,
   plannedLedgerEntrySchema,
   retractionActionSchema,
   retrospectiveEntityProfileSchema,
   revealActionSchema,
-  truthBoundarySchema,
   validationKeySchema,
   withholdEndActionSchema,
   withholdingPolicySchema,
   withholdStartActionSchema,
 } from './discourse.js';
+// ——— EDITORIAL: Schema exports for the editorial pipeline ———
+export {
+  branchPathV1Schema,
+  branchSetV1Schema,
+  editorialErrorSchema,
+  editorialMutationContextSchema,
+  editorialOperationV1Schema,
+  editorialProgressEventV1Schema,
+  editorialRenderRequestV1Schema,
+  editorialScopedRequestV1Schema,
+  sceneMetadataV1Schema,
+  sceneRevisionEnvelopeV1Schema,
+  sceneSelectorSchema,
+  sourceChangePreviewV1Schema,
+  sourceChangeSetV1Schema,
+  sourceDocumentChangeSchema,
+  sourceHeadV1Schema,
+  sourceRevisionV1Schema,
+  transactionReadExpectationSchema,
+} from './editorial.js';
 // ——— INTEGRATION-1: Cross-domain resolution, Merge & dual coverage ———
 export {
   absenceBasisSchema,
@@ -415,26 +444,6 @@ export {
   validationGateStatusSchema,
   validationPolicySchema,
 } from './render-surface.js';
-// ——— EDITORIAL: Schema exports for the editorial pipeline ———
-export {
-  editorialErrorSchema,
-  editorialMutationContextSchema,
-  editorialOperationV1Schema,
-  editorialProgressEventV1Schema,
-  editorialRenderRequestV1Schema,
-  editorialScopedRequestV1Schema,
-  branchPathV1Schema,
-  branchSetV1Schema,
-  sceneRevisionEnvelopeV1Schema,
-  sceneMetadataV1Schema,
-  sceneSelectorSchema,
-  sourceChangePreviewV1Schema,
-  sourceChangeSetV1Schema,
-  sourceDocumentChangeSchema,
-  sourceHeadV1Schema,
-  sourceRevisionV1Schema,
-  transactionReadExpectationSchema,
-} from './editorial.js';
 // ——— REVIEW V1: Schema exports for the storage-backed review ledger ———
 export {
   newReviewCommentSchema,

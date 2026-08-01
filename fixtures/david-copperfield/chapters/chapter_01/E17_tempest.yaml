@@ -22,6 +22,16 @@ sceneBrief: David travels to Yarmouth as the emigrant ship is about to sail with
   seducer — die together in the same sea. David witnesses the entire catastrophe.
   The chapter is the novel's most powerful and devastating scene, a climax of both
   the Emily-Steerforth tragedy and the tempest motif that has run through the book.
+beats:
+  - "David travels to Yarmouth as the emigrant ship is about to sail with the Micawbers and Peggotty family."
+  - "A terrible storm — the worst in living memory — rages along the coast."
+  - "A ship is wrecked off Yarmouth beach, and a man is seen clinging to the rigging."
+  - "Ham Peggotty, despite desperate pleas from the crowd, insists on attempting a rescue — he ties a rope around himself and swims into the surf."
+  - "The wreck breaks apart and both Ham and the man are engulfed."
+  - "Ham drowns; the body washed ashore later is revealed to be Steerforth."
+  - "The two men — innocent victim and guilty seducer — die together in the same sea."
+  - "David witnesses the entire catastrophe."
+  - "The chapter is the novel's most powerful and devastating scene, a climax of both the Emily-Steerforth tragedy and the tempest motif that has run through the book."
 preconditions:
 - entity: ham
   attribute: location

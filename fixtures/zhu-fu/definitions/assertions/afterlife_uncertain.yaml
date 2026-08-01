@@ -3,6 +3,6 @@ narrator: narrator_wo
 proposition: "灵魂和地狱是否存在——'也许有罢……说不清'"
 polarity: affirmative
 type: claim
-truthBoundary: false
+status: unknown
 narrationBoundary:
   narratorId: narrator_wo

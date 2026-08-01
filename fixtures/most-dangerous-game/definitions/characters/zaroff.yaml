@@ -15,12 +15,9 @@ initialState:
   condition: well
   emotionalState: amiable
   inventory:
-    - item: "pistol"
-      description: "A small-caliber automatic pistol for the hunt"
-    - item: "hunting_rifle"
-      description: "A high-powered rifle for general use"
-    - item: "gold_cigarette_case"
-      description: "Contains long black perfumed cigarettes with silver tips"
+    pistol: "A small-caliber automatic pistol for the hunt"
+    hunting_rifle: "A high-powered rifle for general use"
+    gold_cigarette_case: "Contains long black perfumed cigarettes with silver tips"
 voiceNotes: "Formal, precise, and cultivated. Uses italicized foreign terms and philosophical asides. Speaks with a slight accent that gives his words added precision. His tone is urbane and cosmopolitan, but a predatory undercurrent lurks beneath the politeness."
 backstory: "A Cossack aristocrat who commanded a division of cavalry under the Tsar. After the Russian Revolution, he emigrated to America, having invested heavily in American securities. He inherited a fortune and bought Ship-Trap Island, building a palatial château. After exhausting every animal species on earth, he invented a new quarry — man. He has killed every man who has been hunted on his island."
 knownSecrets:

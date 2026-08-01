@@ -82,8 +82,9 @@ export function sampleAnnotationIssues(
       if (stratum.validator && issue.validator !== stratum.validator) continue;
       if (stratum.severity && issue.severity !== stratum.severity) continue;
       const key = stratum.name;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key)!.push(issue);
+      const group = groups.get(key);
+      if (group) group.push(issue);
+      else groups.set(key, [issue]);
       break; // assign to first matching stratum
     }
   }

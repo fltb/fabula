@@ -5,7 +5,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompletionRequest, CompletionResponse, LLMProvider } from '../src/ai/types.js';
 import { Logger, MemoryLogTransport } from '../src/observability/logger.js';
-import type { PluginContext, PluginHooks, ProviderRegistry, BuildPromptInput, PromptDecoration } from '../src/plugin/index.js';
+import type {
+  BuildPromptInput,
+  PluginContext,
+  PluginHooks,
+  PromptDecoration,
+  ProviderRegistry,
+} from '../src/plugin/index.js';
 import { PluginHooksManager, PluginLoader, ValidatorRegistry } from '../src/plugin/index.js';
 import { MemoryStorage } from '../src/storage/memory-storage.js';
 import type { PluginManifest } from '../src/types/index.js';
@@ -607,9 +613,7 @@ describe('Plugin prompt decoration hooks', () => {
     const oversized = 'x'.repeat(5000);
     const hook: PluginHooks = {
       name: 'big-plugin',
-      onBuildPass1Prompt: async () => [
-        { id: 'big', content: oversized, cacheKey: 'big-key' },
-      ],
+      onBuildPass1Prompt: async () => [{ id: 'big', content: oversized, cacheKey: 'big-key' }],
     };
 
     manager.register(hook);
@@ -785,7 +789,7 @@ describe('Provider selection via plugin-registered providers', () => {
     expect(identities[0].hooks).toContain('beforeRender');
     expect(identities[0].hooks).toContain('onBuildPass1Prompt');
   });
- });
+});
 
 // ============================================================================
 // 9. End-to-end: Plugin integration

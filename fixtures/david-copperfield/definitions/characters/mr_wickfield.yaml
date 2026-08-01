@@ -1,0 +1,23 @@
+id: mr_wickfield
+name: "Mr Wickfield"
+type: supporting_character
+archetype: grief_stricken_solicitor
+role: supporting
+description: "Agnes Wickfield's father, a widowed solicitor of Canterbury in whose house David lodges while at Doctor Strong's school. A man of real ability and probity, he is nevertheless broken by his wife's death and her memory; he drinks, neglects his affairs, and falls increasingly under the power of his clerk Uriah Heep, who exploits his guilt and his grief to defraud him and seize control of the firm. His salvation comes through Micawber's exposure of Heep, after which he recovers his sobriety and his affairs, and lives to see Agnes happily married to David."
+appearance: "A handsome, dignified gentleman of middle age, with a grave and melancholy countenance, prematurely grey. He is always neatly dressed in black, with an air of faded gentility."
+aliases:
+  - "Mr Wickfield"
+  - "Wickfield"
+gender: male
+age: "Middle-aged"
+profession: "Solicitor"
+traits:
+  - able
+  - honourable
+  - grief_stricken
+  - alcoholic
+  - trusting
+  - vulnerable
+  - loving_father
+voiceNotes: "Grave, courteous, and self-reproachful — he speaks of his dead wife with a tenderness that unmans him, and of his own weakness with a painful candour. His speech is that of a gentleman, but drink loosens his dignity."
+backstory: "Widower and solicitor of Canterbury; father of Agnes Wickfield. He takes David as a lodger. Grief and drink make him easy prey for Uriah Heep, who becomes his partner and defrauds him. He is rescued by Micawber's exposure of Heep, recovers, and lives to see his daughter married to David Copperfield."

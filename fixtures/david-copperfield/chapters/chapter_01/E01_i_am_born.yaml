@@ -13,6 +13,12 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "David Copperfield is born at Blunderstone Rookery in Suffolk on a Friday at midnight, a posthumous child whose father died six months before. His mother Clara is sitting by the fire, anxious and tearful, when the formidable Miss Betsey Trotwood arrives unexpectedly, demanding to see the baby. Miss Betsey had wanted a girl and when she learns the child is a boy, she leaves in disappointment, declaring it 'as plain as plain can be there's no improvement.' Despite this, David's early life is happy, spent with his gentle mother and the devoted servant Peggotty — running in the garden, reading to Peggotty from the Crocodile Book, and sleeping in the warm nursery. The chapter establishes the key relationships and the narrative voice: David looking back on his infancy with a mixture of affectionate memory and wry humour."
+beats:
+  - "David Copperfield is born at Blunderstone Rookery in Suffolk on a Friday at midnight, a posthumous child whose father died six months before."
+  - "His mother Clara is sitting by the fire, anxious and tearful, when the formidable Miss Betsey Trotwood arrives unexpectedly, demanding to see the baby."
+  - "Miss Betsey had wanted a girl and when she learns the child is a boy, she leaves in disappointment, declaring it 'as plain as plain can be there's no improvement.'"
+  - "Despite this, David's early life is happy, spent with his gentle mother and the devoted servant Peggotty — running in the garden, reading to Peggotty from the Crocodile Book, and sleeping in the warm nursery."
+  - "The chapter establishes the key relationships and the narrative voice: David looking back on his infancy with a mixture of affectionate memory and wry humour."
 preconditions: []
 expectedPostconditions:
   - entity: david_copperfield
@@ -66,6 +72,9 @@ introduces:
     id: blunderstone
     initialState:
       status: active
+      season: perpetual_childhood_memory
+      atmosphere: warm_domestic
+      social_standing: gentry_household
   - type: character
     id: david_copperfield
     initialState:
@@ -73,6 +82,8 @@ introduces:
       status: newborn
       condition: infant
       emotionalState: unaware
+      social_status: gentry_child
+      undisciplined_heart: true
   - type: character
     id: clara_copperfield
     initialState:
@@ -80,6 +91,8 @@ introduces:
       status: mother
       condition: widowed_recently
       emotionalState: anxious_tender
+      social_status: widow
+      relationship_murdstone: single
   - type: character
     id: peggotty
     initialState:
@@ -87,6 +100,7 @@ introduces:
       status: servant
       condition: devoted
       emotionalState: loyal_affectionate
+      relationship_david: nurse_and_protector
   - type: character
     id: betsey_trotwood
     initialState:
@@ -94,6 +108,7 @@ introduces:
       status: visitor_departed
       condition: disappointed
       emotionalState: frustrated_but_intrigued
+      financial: comfortable
 styleGuidance:
   tone: "wry, affectionate, gently humorous"
   targetWordCount: 800

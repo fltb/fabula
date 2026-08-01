@@ -24,6 +24,7 @@ function minimalContext(): ContextPackage {
     },
     sceneSpec: {
       goal: 'Introduce the protagonist in her daily routine',
+      beats: ['Introduce the protagonist in her daily routine'],
       povType: 'third-person limited',
       povCharacter: 'protagonist_001',
       conflict: 'Internal dissatisfaction',

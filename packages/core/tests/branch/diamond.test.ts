@@ -1,8 +1,15 @@
 import { describe, expect, it } from 'vitest';
+import { compileEntityTypeCatalog } from '../../src/entity/entity-catalog-compiler.ts';
 import { PreconditionMismatchError } from '../../src/errors.ts';
 import { compileStoryRuntimeGraph } from '../../src/state/graph-adapter.ts';
 import { ReplayEngine } from '../../src/state/index.ts';
-import type { NarrativeEvent } from '../../src/types/index.ts';
+import type {
+  EntityCatalogContext,
+  EntityTypeCatalog,
+  EntityTypeDefinitionSource,
+  Fact,
+  NarrativeEvent,
+} from '../../src/types/index.ts';
 
 const laneA = { decisions: [{ atEventId: 'E1', choiceId: 'a', narrativeOrder: 1 }] };
 const laneB = { decisions: [{ atEventId: 'E1', choiceId: 'b', narrativeOrder: 1 }] };
@@ -21,6 +28,7 @@ function event(
     sceneType: 'linear',
     pov: { character: 'narrator', type: 'first_person' },
     sceneBrief: id,
+    beats: [id],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
@@ -32,6 +40,70 @@ function event(
     participants: { entities: [] },
   };
 }
+
+// ─── Synthetic catalog + activation (current contract) ────────────────────
+// Explicit synthetic catalog: hero is initial-introduced and activated by
+// baseline initial facts so replay reaches the branch-scoped precondition
+// mismatch instead of failing ontology (unknown declaration) first.
+
+const CHARACTER_SOURCE: EntityTypeDefinitionSource = {
+  typeId: 'character',
+  kind: 'character',
+  attributes: {
+    lifecycle: {
+      attributeId: 'lifecycle',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'lifecycle_managed',
+      allowedLifecycleStates: ['active', 'inactive', 'retired'],
+      unsetAllowed: false,
+    },
+    key: {
+      attributeId: 'key',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: false,
+    },
+  },
+  lifecyclePolicy: { allowedTransitions: [] },
+  referenceCapabilities: { defaultEligibility: 'live' },
+  typedInvariants: [],
+};
+
+const TYPE_CATALOG: EntityTypeCatalog = compileEntityTypeCatalog({
+  types: { character: CHARACTER_SOURCE },
+});
+
+const CATALOG_CONTEXT: EntityCatalogContext = {
+  entityDeclarationCatalog: {
+    version: 1,
+    declarations: {
+      hero: {
+        entityId: 'hero',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
+        immutableMetadata: { name: 'Hero', definitionFile: 'hero.yaml' },
+        introduction: { type: 'initial' },
+      },
+    },
+  },
+  entityTypeCatalog: TYPE_CATALOG,
+};
+
+/** Baseline activation: hero is live from day_0 with lifecycle 'active'. */
+const ACTIVATION_FACTS: Fact[] = [
+  {
+    id: 'hero.activation',
+    entityId: 'hero',
+    attribute: 'lifecycle',
+    value: 'active',
+    confidence: 1,
+    validity: {
+      temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+      branches: { type: 'all' },
+    },
+  },
+];
 
 describe('minimal branch diamond', () => {
   it('keeps trunk and only the selected lane in the causal render set', () => {
@@ -80,12 +152,12 @@ describe('minimal branch diamond', () => {
     // E3 requires hero.key = 'a', which only E2a provides on laneA.
     // Compiling with laneB succeeds (absence witness recorded), but
     // replay fails because the precondition can never be satisfied.
-    const engine = new ReplayEngine();
+    const engine = new ReplayEngine(CATALOG_CONTEXT);
     expect(() =>
-      engine.replay(
-        [event('E1', 1, { type: 'all' }), writer, reader],
-        { branchPath: laneB },
-      ),
+      engine.replay([event('E1', 1, { type: 'all' }), writer, reader], {
+        branchPath: laneB,
+        initialFacts: ACTIVATION_FACTS,
+      }),
     ).toThrow(PreconditionMismatchError);
   });
 });

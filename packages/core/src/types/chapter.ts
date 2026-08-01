@@ -19,14 +19,12 @@ export interface ChapterMetadata {
 
 // ——— Scene Metadata ———
 
-
 // ——— Project Config ———
 
 export interface ProjectConfig {
   project: string;
   title: string;
   author: string;
-  schemaVersion?: number;
   defaultModel?: string;
   defaultLanguage?: string;
   genre?: string;

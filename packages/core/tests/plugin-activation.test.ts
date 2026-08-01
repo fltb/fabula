@@ -18,11 +18,13 @@ import { MockPass2Provider } from '../src/ai/providers/mock-pass2.ts';
 import { initializeProject, validateNovel } from '../src/api.js';
 // ——— Context ———
 import { ContextCompiler } from '../src/context/index.js';
+import { compileEntityTypeCatalog } from '../src/entity/entity-catalog-compiler.js';
 import { InMemoryEntityRegistry } from '../src/entity/index.js';
+// ——— State / relationship replay ———
+import { ConfigError } from '../src/errors.js';
 // ——— Logger ———
 import { Logger } from '../src/observability/logger.ts';
 import type { RenderJob } from '../src/pipeline/render.ts';
-import type { CompiledSceneContract } from '../src/types/index.ts';
 // ——— Pipeline ———
 import { RenderPipeline } from '../src/pipeline/render.ts';
 // ——— Plugin system ———
@@ -38,20 +40,28 @@ import type {
   PluginManifest,
   ProviderRegistry,
 } from '../src/plugin/types.js';
+import { applyNarrativeEvent } from '../src/state/event-application.js';
+import { applyRelationshipTransaction } from '../src/state/relationship-replay.js';
+import { emptyWorldState } from '../src/state/story-boundaries.js';
 // ——— Storage ———
 import { FsStorage } from '../src/storage/fs-storage.ts';
 import { MemoryStorage } from '../src/storage/memory-storage.ts';
-import type { EntityRegistry, SystemContext } from '../src/types/index.ts';
+import type {
+  CompiledSceneContract,
+  EntityCatalogContext,
+  EntityRegistry,
+  EntityTypeDefinitionSource,
+  EpochId,
+  NarrativeEvent,
+  RelationshipId,
+  RelationshipRuntimeState,
+  RelationshipTransaction,
+  SystemContext,
+} from '../src/types/index.ts';
+import { convertRelationshipChange } from '../src/types/relationship.js';
 // ——— Validation ———
 import { ResultAggregator } from '../src/validator/aggregator.ts';
 import { makeAnalysisResult } from './fixtures/mock-pass2-helpers.ts';
-// ——— State / relationship replay ———
-import { ConfigError } from '../src/errors.js';
-import { applyRelationshipTransaction } from '../src/state/relationship-replay.js';
-import { convertRelationshipChange } from '../src/types/relationship.js';
-import { emptyWorldState } from '../src/state/story-boundaries.js';
-import { applyNarrativeEvent } from '../src/state/event-application.js';
-import type { EpochId, NarrativeEvent, RelationshipId, RelationshipRuntimeState, RelationshipTransaction } from '../src/types/index.ts';
 
 // ——— Fixture paths ———
 const ROOT = path.resolve(__dirname, '..', '..', '..');
@@ -98,6 +108,7 @@ function makeRelEvent(
     sceneType: 'linear',
     pov: { character: 'narrator' as unknown as never, type: 'omniscient' },
     sceneBrief: 'test event',
+    beats: ['test event'],
     branchExistence: { type: 'all' },
     preconditions: [],
     postconditions: [],
@@ -109,6 +120,63 @@ function makeRelEvent(
     participants: { entities: [] },
   };
 }
+
+// ============================================================================
+// Synthetic entity catalog for the relationship replay tests — alice & bob
+// are the story entities whose relationship epochs these tests drive. The
+// events carry no entity fact writes, so the declarations only need to match
+// the participants' identity; activation stays initial-introduced.
+// ============================================================================
+
+const REL_LIFECYCLE_TRANSITIONS: Array<
+  ['active' | 'inactive' | 'retired', 'active' | 'inactive' | 'retired']
+> = [
+  ['active', 'inactive'],
+  ['active', 'retired'],
+  ['inactive', 'active'],
+  ['inactive', 'retired'],
+];
+
+const REL_CHARACTER_SOURCE: EntityTypeDefinitionSource = {
+  typeId: 'character',
+  kind: 'character',
+  attributes: {
+    lifecycle: {
+      attributeId: 'lifecycle',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'lifecycle_managed',
+      allowedLifecycleStates: ['active', 'inactive', 'retired'],
+      unsetAllowed: false,
+    },
+  },
+  lifecyclePolicy: { allowedTransitions: REL_LIFECYCLE_TRANSITIONS },
+  referenceCapabilities: { defaultEligibility: 'live' },
+  typedInvariants: [],
+};
+
+const REL_CATALOG_CONTEXT: EntityCatalogContext = {
+  entityDeclarationCatalog: {
+    declarations: {
+      alice: {
+        entityId: 'alice',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
+        immutableMetadata: { name: 'Alice', definitionFile: 'alice.yaml' },
+        introduction: { type: 'initial' },
+      },
+      bob: {
+        entityId: 'bob',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
+        immutableMetadata: { name: 'Bob', definitionFile: 'bob.yaml' },
+        introduction: { type: 'initial' },
+      },
+    },
+    version: 1,
+  },
+  entityTypeCatalog: compileEntityTypeCatalog({
+    types: { character: REL_CHARACTER_SOURCE },
+  }),
+};
 
 // ============================================================================
 // 1. Real plugin-check fixture — valence-guard validation
@@ -222,6 +290,7 @@ describe('plugin activation — render with hooks', () => {
       maxRetries: 1,
       aggregator,
       pluginHooksManager: hooksManager,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     const sysCtx: SystemContext = {
@@ -240,13 +309,14 @@ describe('plugin activation — render with hooks', () => {
         sceneType: 'linear',
         pov: { character: 'narrator', type: 'first_person' },
         sceneBrief: 'A test scene for plugin hook verification.',
+        beats: ['A test scene for plugin hook verification.'],
         preconditions: [],
         postconditions: [],
         threadProgress: [],
         foreshadowing: [],
         relationshipEffects: [],
         ruleEffects: [],
-        source: 'genesis',
+        source: 'event_file',
         branchExistence: { type: 'all' as const },
         participants: { entities: ['narrator'] },
         styleGuidance: undefined,
@@ -269,13 +339,14 @@ describe('plugin activation — render with hooks', () => {
           sceneType: 'linear',
           pov: { character: 'narrator', type: 'first_person' },
           sceneBrief: 'A test scene for plugin hook verification.',
+          beats: ['A test scene for plugin hook verification.'],
           preconditions: [],
           postconditions: [],
           threadProgress: [],
           foreshadowing: [],
           relationshipEffects: [],
           ruleEffects: [],
-          source: 'genesis',
+          source: 'event_file',
           branchExistence: { type: 'all' as const },
           participants: { entities: ['narrator'] },
           styleGuidance: undefined,
@@ -344,6 +415,7 @@ describe('plugin activation — render with hooks', () => {
       maxRetries: 1,
       aggregator: new ResultAggregator(),
       pluginHooksManager: hooksManager,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     const resultB = await badPipeline.renderScene(job);
@@ -477,30 +549,45 @@ describe('plugin activation — legacy relationship re-establishment', () => {
     const state = emptyWorldState();
 
     const e1 = makeRelEvent('E1', 0, [
-      { participants: ['alice', 'bob'] as [string, string], effect: 'establish', direction: 'friendship', newState: { type: 'friend', intensity: 50 } },
+      {
+        participants: ['alice', 'bob'] as [string, string],
+        effect: 'establish',
+        direction: 'friendship',
+        newState: { type: 'friend', intensity: 50 },
+      },
     ]);
     const e2 = makeRelEvent('E2', 1, [
-      { participants: ['alice', 'bob'] as [string, string], effect: 'dissolve', direction: 'falling_out', newState: { type: 'enemy', intensity: 80 } },
+      {
+        participants: ['alice', 'bob'] as [string, string],
+        effect: 'dissolve',
+        direction: 'falling_out',
+        newState: { type: 'enemy', intensity: 80 },
+      },
     ]);
     const e3 = makeRelEvent('E3', 2, [
-      { participants: ['alice', 'bob'] as [string, string], effect: 'reinforce', direction: 'reconciliation', newState: { type: 'ally', intensity: 40 } },
+      {
+        participants: ['alice', 'bob'] as [string, string],
+        effect: 'reinforce',
+        direction: 'reconciliation',
+        newState: { type: 'ally', intensity: 40 },
+      },
     ]);
 
     // Step 1: establish — no error, one epoch created via legacy conversion
-    applyNarrativeEvent(state, e1);
+    applyNarrativeEvent(state, e1, { catalogs: REL_CATALOG_CONTEXT });
     const rel = state.relationships.rel_alice_bob;
     expect(rel).toBeDefined();
     expect(Object.keys(rel.epochs)).toHaveLength(1);
     expect(rel.activeEpochId).toBeDefined();
 
     // Step 2: dissolve — epoch marked dissolved, activeEpochId cleared
-    applyNarrativeEvent(state, e2);
+    applyNarrativeEvent(state, e2, { catalogs: REL_CATALOG_CONTEXT });
     expect(rel.activeEpochId).toBeUndefined();
     expect(rel.epochs.epoch_alice_bob_1.lifecycle).toBe('dissolved');
 
     // Step 3: re-establish (legacy reinforce after dissolve) — must NOT throw
     // and must create a NEW epoch via routeLegacyReestablishment.
-    applyNarrativeEvent(state, e3);
+    applyNarrativeEvent(state, e3, { catalogs: REL_CATALOG_CONTEXT });
     expect(Object.keys(rel.epochs)).toHaveLength(2);
     expect(rel.activeEpochId).toBeDefined();
     // The dissolved epoch must remain dissolved
@@ -587,9 +674,9 @@ describe('plugin activation — legacy relationship re-establishment', () => {
       provenance: 'author:manual',
     };
 
-    expect(() =>
-      applyRelationshipTransaction(relationships, explicitReActivate),
-    ).toThrow(ConfigError);
+    expect(() => applyRelationshipTransaction(relationships, explicitReActivate)).toThrow(
+      ConfigError,
+    );
   });
 
   it('creates deterministic collision-free epoch when existing epochs are sparse', () => {
@@ -599,20 +686,56 @@ describe('plugin activation — legacy relationship re-establishment', () => {
     const state = emptyWorldState();
 
     // Step 1-2: establish → dissolve → create epochs _1 (dissolved)
-    applyNarrativeEvent(state, makeRelEvent('E1', 0, [
-      { participants: ['alice', 'bob'] as [string, string], effect: 'establish', direction: 'friendship', newState: { type: 'friend', intensity: 50 } },
-    ]));
-    applyNarrativeEvent(state, makeRelEvent('E2', 1, [
-      { participants: ['alice', 'bob'] as [string, string], effect: 'dissolve', direction: 'falling_out', newState: { type: 'enemy', intensity: 80 } },
-    ]));
+    applyNarrativeEvent(
+      state,
+      makeRelEvent('E1', 0, [
+        {
+          participants: ['alice', 'bob'] as [string, string],
+          effect: 'establish',
+          direction: 'friendship',
+          newState: { type: 'friend', intensity: 50 },
+        },
+      ]),
+      { catalogs: REL_CATALOG_CONTEXT },
+    );
+    applyNarrativeEvent(
+      state,
+      makeRelEvent('E2', 1, [
+        {
+          participants: ['alice', 'bob'] as [string, string],
+          effect: 'dissolve',
+          direction: 'falling_out',
+          newState: { type: 'enemy', intensity: 80 },
+        },
+      ]),
+      { catalogs: REL_CATALOG_CONTEXT },
+    );
 
     // Step 3-4: reinforce → dissolve → create epochs _1, _2 (both dissolved)
-    applyNarrativeEvent(state, makeRelEvent('E3', 2, [
-      { participants: ['alice', 'bob'] as [string, string], effect: 'reinforce', direction: 'reconciliation', newState: { type: 'ally', intensity: 40 } },
-    ]));
-    applyNarrativeEvent(state, makeRelEvent('E4', 3, [
-      { participants: ['alice', 'bob'] as [string, string], effect: 'dissolve', direction: 'break', newState: { type: 'enemy', intensity: 90 } },
-    ]));
+    applyNarrativeEvent(
+      state,
+      makeRelEvent('E3', 2, [
+        {
+          participants: ['alice', 'bob'] as [string, string],
+          effect: 'reinforce',
+          direction: 'reconciliation',
+          newState: { type: 'ally', intensity: 40 },
+        },
+      ]),
+      { catalogs: REL_CATALOG_CONTEXT },
+    );
+    applyNarrativeEvent(
+      state,
+      makeRelEvent('E4', 3, [
+        {
+          participants: ['alice', 'bob'] as [string, string],
+          effect: 'dissolve',
+          direction: 'break',
+          newState: { type: 'enemy', intensity: 90 },
+        },
+      ]),
+      { catalogs: REL_CATALOG_CONTEXT },
+    );
 
     const rel = state.relationships.rel_alice_bob!;
     expect(Object.keys(rel.epochs)).toHaveLength(2);
@@ -646,9 +769,18 @@ describe('plugin activation — legacy relationship re-establishment', () => {
     // Step 6: Legacy reinforce — routes through routeLegacyReestablishment.
     // OLD (count-based): 3 + 1 = 4 → COLLISION with epoch _4
     // NEW (max-based): max suffix 4 + 1 = 5 → unique epoch _5
-    applyNarrativeEvent(state, makeRelEvent('E6', 4, [
-      { participants: ['alice', 'bob'] as [string, string], effect: 'reinforce', direction: 'second_chance', newState: { type: 'ally', intensity: 60 } },
-    ]));
+    applyNarrativeEvent(
+      state,
+      makeRelEvent('E6', 4, [
+        {
+          participants: ['alice', 'bob'] as [string, string],
+          effect: 'reinforce',
+          direction: 'second_chance',
+          newState: { type: 'ally', intensity: 60 },
+        },
+      ]),
+      { catalogs: REL_CATALOG_CONTEXT },
+    );
 
     expect(Object.keys(rel.epochs)).toHaveLength(4);
     // epoch _5 must exist and be active

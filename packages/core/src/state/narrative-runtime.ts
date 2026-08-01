@@ -1,5 +1,6 @@
-import { createEmptyBranchPath, includesPath } from '../branch/index.js';
+import { createEmptyBranchPath } from '../branch/index.js';
 import type { BranchPath } from '../types/branch.js';
+import type { EntityCatalogContext } from '../types/entity-catalog.js';
 import type {
   Fact,
   NarrativeEvent,
@@ -8,12 +9,12 @@ import type {
   PlannedDiscourseLedger,
   TimeAnchor,
 } from '../types/index.js';
-import { compileNarrativeGraphs } from './graph-adapter.ts';
-import type { CompiledNarrativeGraphs } from './graph-adapter.ts';
-import { compileDiscourseBoundaries } from './discourse-context.ts';
 import type { CompiledDiscourseRenderContext } from './discourse-context.ts';
-import { compileStoryBoundariesFromGraph } from './story-boundaries.ts';
+import { compileDiscourseBoundaries } from './discourse-context.ts';
+import type { CompiledNarrativeGraphs } from './graph-adapter.ts';
+import { compileNarrativeGraphs } from './graph-adapter.ts';
 import type { StoryBoundaries } from './story-boundaries.ts';
+import { compileStoryBoundariesFromGraph } from './story-boundaries.ts';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CompiledNarrativeRuntime — single compiled artifact from graphs → state
@@ -23,9 +24,7 @@ import type { StoryBoundaries } from './story-boundaries.ts';
 export interface CompiledNarrativeRuntime {
   readonly graphs: CompiledNarrativeGraphs;
   readonly boundaries: StoryBoundaries;
-  readonly discourseContextsByEventId: Readonly<
-    Record<string, CompiledDiscourseRenderContext>
-  >;
+  readonly discourseContextsByEventId: Readonly<Record<string, CompiledDiscourseRenderContext>>;
 }
 
 export interface CompileNarrativeRuntimeInput {
@@ -37,6 +36,8 @@ export interface CompileNarrativeRuntimeInput {
   readonly ledger: PlannedDiscourseLedger;
   readonly assertions: Readonly<Record<string, NarratorAssertion>>;
   readonly narratorProfiles: Readonly<Record<string, NarratorProfile>>;
+  /** The one shared catalog pair; required, no optional fallback. */
+  readonly catalogs: EntityCatalogContext;
   readonly initialThreads?: readonly { id: string }[];
 }
 
@@ -69,16 +70,15 @@ export function compileNarrativeRuntime(
   });
 
   // Step 2 — compute graph-driven story state boundaries
-  // Reuse the same branch filter compileNarrativeGraphs applies internally.
-  const selectedEvents = input.events.filter((event) =>
-    includesPath(event.branchExistence, branchPath),
-  );
+  // Reuse the branch-filtered events compileNarrativeGraphs already selected.
+  const selectedEvents = graphs.selectedEvents;
   const boundaries = compileStoryBoundariesFromGraph(
     selectedEvents,
     input.initialFacts,
     graphs.storyAdjacency,
+    input.catalogs,
     branchPath,
-    input.initialThreads as Array<{ id: string }> | undefined,
+    input.initialThreads,
   );
 
   // Step 3 — compile discourse render contexts

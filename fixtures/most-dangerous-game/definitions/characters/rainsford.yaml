@@ -13,14 +13,10 @@ initialState:
   condition: well
   emotionalState: aloof
   inventory:
-    - item: "pipe"
-      description: "A favourite brier pipe"
-    - item: "lighter"
-      description: "Pocket lighter for his pipe"
-    - item: "hunting_kit"
-      description: "Small kit with basic hunting tools"
-    - item: "knife"
-      description: "A small hunting knife"
+    pipe: "A favourite brier pipe"
+    lighter: "Pocket lighter for his pipe"
+    hunting_kit: "Small kit with basic hunting tools"
+    knife: "A small hunting knife"
 voiceNotes: "Short, clipped sentences. Dismissive of animal suffering and sentimentality. Speaks with the authority of an expert hunter. Later in the story, his speech becomes terse, breathless, and edged with terror."
 backstory: "Served in World War I. Later became a famous author of hunting books, including one on hunting snow leopards in Tibet that Zaroff has read. Has hunted on every continent and considers himself a realist about the natural order."
 knownSecrets: []

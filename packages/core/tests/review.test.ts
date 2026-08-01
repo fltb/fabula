@@ -7,20 +7,16 @@
 // ============================================================================
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import { ReviewManager } from '../src/review/index.js';
-import { MemoryStorage } from '../src/storage/memory-storage.js';
+import { EditorialOperationError } from '../src/editorial/errors.js';
 import {
-  resolveProjectPaths,
-  ProjectTransactionCoordinator,
   type ProjectPaths,
+  ProjectTransactionCoordinator,
+  resolveProjectPaths,
 } from '../src/editorial/index.js';
 import { ConfigError, StorageConflictError } from '../src/errors.js';
-import { EditorialOperationError } from '../src/editorial/errors.js';
-import type {
-  NewReviewComment,
-  ReviewApplicationV1,
-  ReviewLedgerV1,
-} from '../src/types/index.js';
+import { ReviewManager } from '../src/review/index.js';
+import { MemoryStorage } from '../src/storage/memory-storage.js';
+import type { NewReviewComment, ReviewApplicationV1, ReviewLedgerV1 } from '../src/types/index.js';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -71,9 +67,9 @@ describe('ReviewManager', () => {
         otherStorage,
         resolveProjectPaths('/other'),
       );
-      expect(
-        () => new ReviewManager(storage, otherCoordinator, paths.reviewLedgerPath),
-      ).toThrow(ConfigError);
+      expect(() => new ReviewManager(storage, otherCoordinator, paths.reviewLedgerPath)).toThrow(
+        ConfigError,
+      );
     });
 
     it('readLedger returns empty ledger when no file exists', () => {
@@ -191,11 +187,21 @@ describe('ReviewManager', () => {
   describe('getComments filters', () => {
     beforeEach(() => {
       manager.addReviewComment(
-        { target: { type: 'scene', id: 'E1' }, severity: 'blocking', category: 'style', content: 'c1' },
+        {
+          target: { type: 'scene', id: 'E1' },
+          severity: 'blocking',
+          category: 'style',
+          content: 'c1',
+        },
         'actor',
       );
       manager.addReviewComment(
-        { target: { type: 'scene', id: 'E2' }, severity: 'suggestion', category: 'pacing', content: 'c2' },
+        {
+          target: { type: 'scene', id: 'E2' },
+          severity: 'suggestion',
+          category: 'pacing',
+          content: 'c2',
+        },
         'actor',
       );
       manager.addReviewComment(
@@ -250,23 +256,48 @@ describe('ReviewManager', () => {
   describe('getApplicableOpenComments', () => {
     beforeEach(() => {
       manager.addReviewComment(
-        { target: { type: 'novel', id: 'novel' }, severity: 'nit', category: 'style', content: 'novel-global' },
+        {
+          target: { type: 'novel', id: 'novel' },
+          severity: 'nit',
+          category: 'style',
+          content: 'novel-global',
+        },
         'a',
       );
       manager.addReviewComment(
-        { target: { type: 'chapter', id: 'chapter:2' }, severity: 'nit', category: 'style', content: 'chapter-2' },
+        {
+          target: { type: 'chapter', id: 'chapter:2' },
+          severity: 'nit',
+          category: 'style',
+          content: 'chapter-2',
+        },
         'a',
       );
       manager.addReviewComment(
-        { target: { type: 'chapter', id: 'chapter:5' }, severity: 'nit', category: 'style', content: 'chapter-5' },
+        {
+          target: { type: 'chapter', id: 'chapter:5' },
+          severity: 'nit',
+          category: 'style',
+          content: 'chapter-5',
+        },
         'a',
       );
       manager.addReviewComment(
-        { target: { type: 'scene', id: 'E1' }, severity: 'nit', category: 'style', content: 'scene-E1' },
+        {
+          target: { type: 'scene', id: 'E1' },
+          severity: 'nit',
+          category: 'style',
+          content: 'scene-E1',
+        },
         'a',
       );
       manager.addReviewComment(
-        { target: { type: 'scene', id: 'E2' }, severity: 'nit', category: 'style', content: 'scene-E2' },
+        {
+          target: { type: 'scene', id: 'E2' },
+          severity: 'nit',
+          category: 'style',
+          content: 'scene-E2',
+        },
         'a',
       );
     });
@@ -321,13 +352,23 @@ describe('ReviewManager', () => {
   describe('replaceReviewComment', () => {
     it('creates replacement with supersedesId and marks original as superseded', () => {
       const original = manager.addReviewComment(
-        { target: { type: 'scene', id: 'E1' }, severity: 'blocking', category: 'plot_logic', content: 'original' },
+        {
+          target: { type: 'scene', id: 'E1' },
+          severity: 'blocking',
+          category: 'plot_logic',
+          content: 'original',
+        },
         'a',
       );
 
       const replacement = manager.replaceReviewComment(
         original.id,
-        { target: { type: 'scene', id: 'E1' }, severity: 'suggestion', category: 'style', content: 'replacement' },
+        {
+          target: { type: 'scene', id: 'E1' },
+          severity: 'suggestion',
+          category: 'style',
+          content: 'replacement',
+        },
         'b',
       );
 
@@ -340,13 +381,23 @@ describe('ReviewManager', () => {
 
     it('does not mutate the original comment content or target', () => {
       const original = manager.addReviewComment(
-        { target: { type: 'scene', id: 'E1' }, severity: 'blocking', category: 'plot_logic', content: 'original text' },
+        {
+          target: { type: 'scene', id: 'E1' },
+          severity: 'blocking',
+          category: 'plot_logic',
+          content: 'original text',
+        },
         'a',
       );
 
       manager.replaceReviewComment(
         original.id,
-        { target: { type: 'scene', id: 'E2' }, severity: 'suggestion', category: 'style', content: 'new text' },
+        {
+          target: { type: 'scene', id: 'E2' },
+          severity: 'suggestion',
+          category: 'style',
+          content: 'new text',
+        },
         'b',
       );
 
@@ -365,17 +416,17 @@ describe('ReviewManager', () => {
     });
 
     it('throws EditorialOperationError when the original is not found', () => {
-      expect(() =>
-        manager.replaceReviewComment('nonexistent', newComment(), 'a'),
-      ).toThrow(EditorialOperationError);
+      expect(() => manager.replaceReviewComment('nonexistent', newComment(), 'a')).toThrow(
+        EditorialOperationError,
+      );
     });
 
     it('throws EditorialOperationError when the original is already superseded', () => {
       const c1 = manager.addReviewComment(newComment(), 'a');
       manager.replaceReviewComment(c1.id, newComment(), 'b');
-      expect(() =>
-        manager.replaceReviewComment(c1.id, newComment(), 'c'),
-      ).toThrow(EditorialOperationError);
+      expect(() => manager.replaceReviewComment(c1.id, newComment(), 'c')).toThrow(
+        EditorialOperationError,
+      );
     });
 
     describe('line bounds on replacement', () => {
@@ -395,9 +446,9 @@ describe('ReviewManager', () => {
           category: 'style',
           content: 'out of bounds',
         };
-        expect(() =>
-          manager.replaceReviewComment(original.id, badInput, 'a', {}, 50),
-        ).toThrow(EditorialOperationError);
+        expect(() => manager.replaceReviewComment(original.id, badInput, 'a', {}, 50)).toThrow(
+          EditorialOperationError,
+        );
       });
     });
   });
@@ -448,16 +499,16 @@ describe('ReviewManager', () => {
     });
 
     it('throws EditorialOperationError when comment is not found', () => {
-      expect(() =>
-        manager.updateReviewComment('nonexistent', 'resolve', 'a'),
-      ).toThrow(EditorialOperationError);
+      expect(() => manager.updateReviewComment('nonexistent', 'resolve', 'a')).toThrow(
+        EditorialOperationError,
+      );
     });
 
     it('throws EditorialOperationError when comment is superseded', () => {
       manager.replaceReviewComment(commentId, newComment(), 'b');
-      expect(() =>
-        manager.updateReviewComment(commentId, 'resolve', 'a'),
-      ).toThrow(EditorialOperationError);
+      expect(() => manager.updateReviewComment(commentId, 'resolve', 'a')).toThrow(
+        EditorialOperationError,
+      );
     });
   });
 
@@ -697,11 +748,21 @@ describe('ReviewManager', () => {
   describe('applyComments', () => {
     it('adds application to comments and marks specified IDs as addressed', () => {
       const c1 = manager.addReviewComment(
-        { target: { type: 'scene', id: 'E1' }, severity: 'blocking', category: 'plot_logic', content: 'fix plot' },
+        {
+          target: { type: 'scene', id: 'E1' },
+          severity: 'blocking',
+          category: 'plot_logic',
+          content: 'fix plot',
+        },
         'a',
       );
       const c2 = manager.addReviewComment(
-        { target: { type: 'scene', id: 'E2' }, severity: 'suggestion', category: 'style', content: 'tweak' },
+        {
+          target: { type: 'scene', id: 'E2' },
+          severity: 'suggestion',
+          category: 'style',
+          content: 'tweak',
+        },
         'a',
       );
       const app = makeApplication('E1');
@@ -777,7 +838,12 @@ describe('ReviewManager', () => {
   describe('getSummary', () => {
     it('reports correct counts across statuses', () => {
       const blocking = manager.addReviewComment(
-        { target: { type: 'scene', id: 'E1' }, severity: 'blocking', category: 'plot_logic', content: 'b1' },
+        {
+          target: { type: 'scene', id: 'E1' },
+          severity: 'blocking',
+          category: 'plot_logic',
+          content: 'b1',
+        },
         'a',
       );
       const nit = manager.addReviewComment(

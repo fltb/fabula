@@ -5,24 +5,24 @@
 // No live LLM, filesystem, or network access.
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
 import * as crypto from 'node:crypto';
-import { computeContentHash } from '../../src/storage/hash.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import { StorageConflictError } from '../../src/errors.ts';
+import { describe, expect, it } from 'vitest';
 import {
   OperationStore,
-  resolveProjectPaths,
   ProjectTransactionCoordinator,
+  resolveProjectPaths,
   stableJson,
 } from '../../src/editorial/index.ts';
+import type { ProjectPaths } from '../../src/editorial/paths.ts';
+import { StorageConflictError } from '../../src/errors.ts';
+import { computeContentHash } from '../../src/storage/hash.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type {
   Clock,
   EditorialError,
   EditorialOperationKind,
   EditorialOperationV1,
 } from '../../src/types/editorial.ts';
-import type { ProjectPaths } from '../../src/editorial/paths.ts';
 
 // ─── Fake Clock ────────────────────────────────────────────────────────────
 
@@ -148,7 +148,12 @@ describe('OperationStore', () => {
       store.succeed(opId, TEST_ACTOR, null);
 
       expect(() =>
-        store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() }),
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: TEST_ACTOR,
+          requestHash: sha256Hex(),
+        }),
       ).toThrow(/completed or interrupted with a different request/);
     });
 
@@ -161,14 +166,24 @@ describe('OperationStore', () => {
 
       // Expire lease then register with different hash — triggers recovery + creation
       clock.advance(31 * 60 * 1000);
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
 
       // Now operation is running with different hash. Succeed it.
       store.succeed(opId, TEST_ACTOR, null);
 
       // Try to register with original hash — should fail because terminal has different hash
       expect(() =>
-        store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs1 }),
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: TEST_ACTOR,
+          requestHash: rhs1,
+        }),
       ).toThrow(/completed or interrupted with a different request/);
     });
 
@@ -180,7 +195,12 @@ describe('OperationStore', () => {
       store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
 
       expect(() =>
-        store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs }),
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: TEST_ACTOR,
+          requestHash: rhs,
+        }),
       ).toThrow(/already running/);
     });
 
@@ -192,7 +212,12 @@ describe('OperationStore', () => {
       store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs1 });
 
       expect(() =>
-        store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() }),
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: TEST_ACTOR,
+          requestHash: sha256Hex(),
+        }),
       ).toThrow(/running with a different request/);
     });
 
@@ -220,9 +245,7 @@ describe('OperationStore', () => {
       const conflictDir = storage.resolvePath(paths.conflictsDir);
       const conflicts = storage.listFiles(conflictDir);
       expect(conflicts.length).toBeGreaterThan(0);
-      const conflictContent = JSON.parse(
-        storage.read(conflictDir + '/' + conflicts[0]),
-      );
+      const conflictContent = JSON.parse(storage.read(conflictDir + '/' + conflicts[0]));
       expect(conflictContent.operationId).toBe(opId);
       expect(conflictContent.previousStatus).toBe('running');
     });
@@ -231,7 +254,12 @@ describe('OperationStore', () => {
       const { store, clock } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       clock.advance(31 * 60 * 1000);
 
       const rhs2 = sha256Hex();
@@ -255,7 +283,12 @@ describe('OperationStore', () => {
       storage.mkdirp(paths.operationsDir);
       storage.write(dir + '/' + opId + '.json', 'not valid json');
 
-      const result = store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      const result = store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: rhs,
+      });
 
       expect(result.status).toBe('running');
       expect(result.operationId).toBe(opId);
@@ -286,7 +319,6 @@ describe('OperationStore', () => {
 
       expect(result.status).toBe('succeeded');
     });
-
 
     it('rejects different hash on interrupted operation', () => {
       const { storage } = makeStore();
@@ -333,16 +365,19 @@ describe('OperationStore', () => {
 
       // Set up publication manifest referencing a missing operation
       storage.mkdirp(paths.workDir);
-      storage.write(paths.publicationPath, stableJson({
-        version: 1,
-        status: 'current',
-        branch_scope_hash: 'test-scope',
-        novel_hash: null,
-        revision_ids: {},
-        last_assembled_at: null,
-        active_operation_id: opId,
-        reasons: [],
-      }));
+      storage.write(
+        paths.publicationPath,
+        stableJson({
+          version: 1,
+          status: 'current',
+          branch_scope_hash: 'test-scope',
+          novel_hash: null,
+          revision_ids: {},
+          last_assembled_at: null,
+          active_operation_id: opId,
+          reasons: [],
+        }),
+      );
 
       // Register with same operationId — should recover the stale reference
       const result = store.register({
@@ -375,16 +410,19 @@ describe('OperationStore', () => {
 
       // Set up publication manifest referencing the operation
       storage.mkdirp(paths.workDir);
-      storage.write(paths.publicationPath, stableJson({
-        version: 1,
-        status: 'current',
-        branch_scope_hash: 'test-scope',
-        novel_hash: null,
-        revision_ids: {},
-        last_assembled_at: null,
-        active_operation_id: opId,
-        reasons: [],
-      }));
+      storage.write(
+        paths.publicationPath,
+        stableJson({
+          version: 1,
+          status: 'current',
+          branch_scope_hash: 'test-scope',
+          novel_hash: null,
+          revision_ids: {},
+          last_assembled_at: null,
+          active_operation_id: opId,
+          reasons: [],
+        }),
+      );
 
       // Write a malformed operation file
       const dir = storage.resolvePath(paths.operationsDir);
@@ -408,12 +446,17 @@ describe('OperationStore', () => {
     });
   });
 
-describe('get', () => {
+  describe('get', () => {
     it('returns a parsed operation by ID', () => {
       const { store } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'revise', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'revise',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
 
       const loaded = store.get(opId);
       expect(loaded.operationId).toBe(opId);
@@ -452,11 +495,21 @@ describe('get', () => {
       clock.advance(5000);
 
       const idB = uuid();
-      store.register({ operationId: idB, kind: 'revise', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: idB,
+        kind: 'revise',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       clock.advance(2000);
 
       const idC = uuid();
-      store.register({ operationId: idC, kind: 'render_tree', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: idC,
+        kind: 'render_tree',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
 
       const ops = store.list();
       expect(ops).toHaveLength(3);
@@ -469,7 +522,12 @@ describe('get', () => {
       const { store, storage } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
 
       const paths = makePaths();
       const dir = storage.resolvePath(paths.operationsDir);
@@ -488,7 +546,12 @@ describe('get', () => {
       storage.mkdirp(paths.operationsDir);
       storage.write(dir + '/bad.json', '{bad json}');
 
-      store.register({ operationId: uuid(), kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: uuid(),
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
 
       expect(store.list()).toHaveLength(1);
     });
@@ -499,7 +562,12 @@ describe('get', () => {
       const { store, clock } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       clock.advance(5 * 60 * 1000);
 
       const result = store.heartbeat(opId, TEST_ACTOR);
@@ -513,7 +581,12 @@ describe('get', () => {
       const { store } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: 'worker-a',
+        requestHash: sha256Hex(),
+      });
 
       expect(() => store.heartbeat(opId, 'worker-b')).toThrow(/does not own/);
     });
@@ -522,7 +595,12 @@ describe('get', () => {
       const { store } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       store.succeed(opId, TEST_ACTOR, null);
 
       expect(() => store.heartbeat(opId, TEST_ACTOR)).toThrow(/Cannot heartbeat terminal/);
@@ -532,11 +610,21 @@ describe('get', () => {
       const { store, clock } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: 'worker-a',
+        requestHash: sha256Hex(),
+      });
       clock.advance(31 * 60 * 1000);
 
       // Recover + create new with worker-b
-      store.register({ operationId: opId, kind: 'render', actorId: 'worker-b', requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: 'worker-b',
+        requestHash: sha256Hex(),
+      });
 
       // worker-a no longer owns the running operation
       expect(() => store.heartbeat(opId, 'worker-a')).toThrow(/does not own/);
@@ -564,7 +652,12 @@ describe('get', () => {
       // Another worker recovers the operation directly (simulating concurrent recovery)
       const altCoordinator = new ProjectTransactionCoordinator(storage, paths);
       const altStore = new OperationStore(altCoordinator, paths, clock);
-      altStore.register({ operationId: opId, kind: 'render', actorId: 'worker-b', requestHash: rhs });
+      altStore.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: 'worker-b',
+        requestHash: rhs,
+      });
 
       // Now try to register again with the stale content hash — CAS should fail
       // because the file content changed when worker-b recovered it.
@@ -625,7 +718,9 @@ describe('get', () => {
         leaseExpiresAt: '2026-07-28T00:30:00.000Z',
         completedAt: '2026-07-28T01:00:00.000Z',
         result: null,
-        errors: [{ code: 'OPERATION_INTERRUPTED' as const, message: 'Lease expired', operationId: opId }],
+        errors: [
+          { code: 'OPERATION_INTERRUPTED' as const, message: 'Lease expired', operationId: opId },
+        ],
       };
       storage.write(dir + '/' + opId + '.json', stableJson(interruptedOp));
 
@@ -642,7 +737,12 @@ describe('get', () => {
       const { store } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
 
       expect(() => store.promote(opId, TEST_ACTOR)).toThrow(/Cannot promote/);
     });
@@ -651,7 +751,12 @@ describe('get', () => {
       const { store } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       store.succeed(opId, TEST_ACTOR, null);
 
       expect(() => store.promote(opId, TEST_ACTOR)).toThrow(/Cannot promote/);
@@ -664,7 +769,12 @@ describe('get', () => {
         const { store } = makeStore();
         const opId = uuid();
 
-        store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: TEST_ACTOR,
+          requestHash: sha256Hex(),
+        });
         const result = store.succeed(opId, TEST_ACTOR, null);
 
         expect(result.status).toBe('succeeded');
@@ -677,12 +787,22 @@ describe('get', () => {
         const { store, clock } = makeStore();
 
         const id1 = uuid();
-        store.register({ operationId: id1, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+        store.register({
+          operationId: id1,
+          kind: 'render',
+          actorId: TEST_ACTOR,
+          requestHash: sha256Hex(),
+        });
         clock.advance(1000);
         store.succeed(id1, TEST_ACTOR, null);
 
         const id2 = uuid();
-        store.register({ operationId: id2, kind: 'revise', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+        store.register({
+          operationId: id2,
+          kind: 'revise',
+          actorId: TEST_ACTOR,
+          requestHash: sha256Hex(),
+        });
         clock.advance(1000);
         store.succeed(id2, TEST_ACTOR, null);
 
@@ -696,7 +816,12 @@ describe('get', () => {
         const { store } = makeStore();
         const opId = uuid();
 
-        store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: TEST_ACTOR,
+          requestHash: sha256Hex(),
+        });
 
         const errors: EditorialError[] = [
           { code: 'PROVIDER_REQUIRED', message: 'LLM provider not configured' },
@@ -715,7 +840,12 @@ describe('get', () => {
         const { store } = makeStore();
         const opId = uuid();
 
-        store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: TEST_ACTOR,
+          requestHash: sha256Hex(),
+        });
         const result = store.cancel(opId, TEST_ACTOR);
 
         expect(result.status).toBe('cancelled');
@@ -729,7 +859,12 @@ describe('get', () => {
         const { store } = makeStore();
         const opId = uuid();
 
-        store.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: sha256Hex() });
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: 'worker-a',
+          requestHash: sha256Hex(),
+        });
 
         expect(() => store.succeed(opId, 'worker-b', null)).toThrow(/does not own/);
       });
@@ -738,7 +873,12 @@ describe('get', () => {
         const { store } = makeStore();
         const opId = uuid();
 
-        store.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: sha256Hex() });
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: 'worker-a',
+          requestHash: sha256Hex(),
+        });
 
         expect(() => store.fail(opId, 'worker-b', [])).toThrow(/does not own/);
       });
@@ -747,46 +887,70 @@ describe('get', () => {
         const { store } = makeStore();
         const opId = uuid();
 
-        store.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: sha256Hex() });
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: 'worker-a',
+          requestHash: sha256Hex(),
+        });
 
         expect(() => store.cancel(opId, 'worker-b')).toThrow(/does not own/);
       });
 
-    it('is idempotent when succeeding an already-succeeded operation', () => {
-      const { store } = makeStore();
-      const opId = uuid();
+      it('is idempotent when succeeding an already-succeeded operation', () => {
+        const { store } = makeStore();
+        const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
-      const first = store.succeed(opId, TEST_ACTOR, null);
-      const second = store.succeed(opId, TEST_ACTOR, null);
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: TEST_ACTOR,
+          requestHash: sha256Hex(),
+        });
+        const first = store.succeed(opId, TEST_ACTOR, null);
+        const second = store.succeed(opId, TEST_ACTOR, null);
 
-      expect(second.status).toBe('succeeded');
-      expect(second.lastSequence).toBe(first.lastSequence);
-    });
+        expect(second.status).toBe('succeeded');
+        expect(second.lastSequence).toBe(first.lastSequence);
+      });
 
-    it('is idempotent when failing an already-failed operation', () => {
-      const { store } = makeStore();
-      const opId = uuid();
+      it('is idempotent when failing an already-failed operation', () => {
+        const { store } = makeStore();
+        const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
-      const first = store.fail(opId, TEST_ACTOR, [{ code: 'PROVIDER_REQUIRED', message: 'no provider' }]);
-      const second = store.fail(opId, TEST_ACTOR, [{ code: 'PROVIDER_REQUIRED', message: 'no provider' }]);
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: TEST_ACTOR,
+          requestHash: sha256Hex(),
+        });
+        const first = store.fail(opId, TEST_ACTOR, [
+          { code: 'PROVIDER_REQUIRED', message: 'no provider' },
+        ]);
+        const second = store.fail(opId, TEST_ACTOR, [
+          { code: 'PROVIDER_REQUIRED', message: 'no provider' },
+        ]);
 
-      expect(second.status).toBe('failed');
-      expect(second.lastSequence).toBe(first.lastSequence);
-    });
+        expect(second.status).toBe('failed');
+        expect(second.lastSequence).toBe(first.lastSequence);
+      });
 
-    it('is idempotent when cancelling an already-cancelled operation', () => {
-      const { store } = makeStore();
-      const opId = uuid();
+      it('is idempotent when cancelling an already-cancelled operation', () => {
+        const { store } = makeStore();
+        const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
-      const first = store.cancel(opId, TEST_ACTOR);
-      const second = store.cancel(opId, TEST_ACTOR);
+        store.register({
+          operationId: opId,
+          kind: 'render',
+          actorId: TEST_ACTOR,
+          requestHash: sha256Hex(),
+        });
+        const first = store.cancel(opId, TEST_ACTOR);
+        const second = store.cancel(opId, TEST_ACTOR);
 
-      expect(second.status).toBe('cancelled');
-      expect(second.lastSequence).toBe(first.lastSequence);
-    });
+        expect(second.status).toBe('cancelled');
+        expect(second.lastSequence).toBe(first.lastSequence);
+      });
     });
 
     it('terminal transition clears active_operation_id from publication manifest', () => {
@@ -814,7 +978,12 @@ describe('get', () => {
       const opId = uuid();
       const paths = makePaths();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
 
       // Manifest should have active_operation_id
       let pub = JSON.parse(storage.read(paths.publicationPath));
@@ -830,7 +999,12 @@ describe('get', () => {
       const opId = uuid();
       const paths = makePaths();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
 
       let pub = JSON.parse(storage.read(paths.publicationPath));
       expect(pub.active_operation_id).toBe(opId);
@@ -846,7 +1020,12 @@ describe('get', () => {
       const { store } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       store.checkpointSequence(opId, TEST_ACTOR, 5);
 
       const op = store.get(opId);
@@ -857,7 +1036,12 @@ describe('get', () => {
       const { store } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       store.checkpointSequence(opId, TEST_ACTOR, 5);
 
       expect(() => store.checkpointSequence(opId, TEST_ACTOR, 5)).toThrow(/not greater than/);
@@ -868,7 +1052,12 @@ describe('get', () => {
       const { store } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: 'worker-a',
+        requestHash: sha256Hex(),
+      });
 
       expect(() => store.checkpointSequence(opId, 'worker-b', 1)).toThrow(/does not own/);
     });
@@ -877,10 +1066,17 @@ describe('get', () => {
       const { store } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       store.succeed(opId, TEST_ACTOR, null);
 
-      expect(() => store.checkpointSequence(opId, TEST_ACTOR, 1)).toThrow(/Cannot checkpoint terminal/);
+      expect(() => store.checkpointSequence(opId, TEST_ACTOR, 1)).toThrow(
+        /Cannot checkpoint terminal/,
+      );
     });
 
     it('rejects on interrupted operation', () => {
@@ -910,7 +1106,9 @@ describe('get', () => {
       const coordinator = new ProjectTransactionCoordinator(storage, paths);
       const store = new OperationStore(coordinator, paths, new FakeClock(BASE_TIME));
 
-      expect(() => store.checkpointSequence(opId, TEST_ACTOR, 1)).toThrow(/Cannot checkpoint interrupted/);
+      expect(() => store.checkpointSequence(opId, TEST_ACTOR, 1)).toThrow(
+        /Cannot checkpoint interrupted/,
+      );
     });
   });
 
@@ -1034,15 +1232,18 @@ describe('get', () => {
       const revId = uuid();
       const pubDir = storage.resolvePath(paths.workDir);
       storage.mkdirp(pubDir);
-      storage.write(paths.publicationPath, stableJson({
-        version: 1,
-        status: 'current',
-        branch_scope_hash: 'test-branch-hash',
-        novel_hash: novelHash,
-        revision_ids: { 'ch1': revId },
-        last_assembled_at: '2026-07-28T00:15:00.000Z',
-        reasons: [],
-      }));
+      storage.write(
+        paths.publicationPath,
+        stableJson({
+          version: 1,
+          status: 'current',
+          branch_scope_hash: 'test-branch-hash',
+          novel_hash: novelHash,
+          revision_ids: { ch1: revId },
+          last_assembled_at: '2026-07-28T00:15:00.000Z',
+          reasons: [],
+        }),
+      );
 
       store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
       clock.advance(31 * 60 * 1000);
@@ -1054,10 +1255,12 @@ describe('get', () => {
       const pub = JSON.parse(storage.read(paths.publicationPath));
       expect(pub.status).toBe('stale');
       expect(pub.novel_hash).toBe(novelHash);
-      expect(pub.revision_ids).toEqual({ 'ch1': revId });
+      expect(pub.revision_ids).toEqual({ ch1: revId });
       expect(pub.last_assembled_at).toBe('2026-07-28T00:15:00.000Z');
       expect(pub.active_operation_id).toBe(opId);
-      expect(pub.reasons.some((r: { code: string }) => r.code === 'OPERATION_INTERRUPTED')).toBe(true);
+      expect(pub.reasons.some((r: { code: string }) => r.code === 'OPERATION_INTERRUPTED')).toBe(
+        true,
+      );
     });
   });
 
@@ -1089,7 +1292,12 @@ describe('get', () => {
       const { store } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       store.succeed(opId, TEST_ACTOR, null);
 
       const loaded = store.get(opId);
@@ -1102,7 +1310,12 @@ describe('get', () => {
       const { store } = makeStore();
       const opId = uuid();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      store.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       store.fail(opId, TEST_ACTOR, [{ code: 'PROVIDER_REQUIRED', message: 'no provider' }]);
 
       const loaded = store.get(opId);

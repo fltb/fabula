@@ -115,46 +115,6 @@ function lexicographicTieBreak(a: string, b: string): number {
 }
 
 /**
- * Categorize a candidate event by coverage strata.
- * Uses the candidate's position within the work (beginning/middle/end)
- * and thread/major-change flags from the candidate index metadata.
- */
-function categorizeCandidate(
-  candidate: CandidateEventIndex,
-  totalCandidates: number,
-  candidateIndex: number,
-): Set<CoverageStrata> {
-  const categories = new Set<CoverageStrata>();
-
-  // Position-based strata
-  const position = candidateIndex / totalCandidates;
-  if (position < 0.33) {
-    categories.add('beginning');
-  } else if (position < 0.67) {
-    categories.add('middle');
-  } else {
-    categories.add('end');
-  }
-
-  // main_thread and sub_thread inferred from narrativeCoverage
-  // (In practice, thread membership would be resolved from the WorkIndex;
-  //  here we use a heuristic based on coverage breadth.)
-  if (candidate.narrativeCoverage.length >= 3) {
-    categories.add('main_thread');
-  }
-  if (candidate.narrativeCoverage.length >= 1 && candidate.narrativeCoverage.length < 3) {
-    categories.add('sub_thread');
-  }
-
-  // major_change inferred from pre/postcondition presence
-  if (candidate.eligibility === 'eligible') {
-    categories.add('major_change');
-  }
-
-  return categories;
-}
-
-/**
  * Create a frozen selection plan from a list of candidate events.
  *
  * The selection algorithm:
@@ -303,9 +263,6 @@ export function getCoverageCategories(candidates: CandidateEventIndex[]): string
   const beginning = candidates.slice(0, firstThird);
   const middle = candidates.slice(firstThird, secondThird);
   const end = candidates.slice(secondThird);
-
-  // Collect entity IDs per region to check coverage breadth
-  const allEntities = candidates.map((c) => c.narrativeCoverage.length);
 
   // beginning coverage
   if (beginning.some((c) => c.eligibility === 'eligible')) {

@@ -1,0 +1,21 @@
+id: jip
+name: "Jip"
+type: pet
+archetype: pampered_lapdog
+role: supporting
+description: "Dora Spenlow's little dog, as pretty, pampered, and useless as his mistress. Jip is fiercely jealous of David, barking at him through the courtship, and accompanies Dora into her married life, growing old and blind beside her. He is a symbol of Dora herself — small, spoiled, incapable of serious life — and his blindness in Dora's final illness mirrors her own fading. He dies with her."
+appearance: "A tiny spaniel with bright eyes and a silky coat, given to jealous barking and being carried everywhere by Dora. In old age he is blind and feeble."
+aliases:
+  - "Jip"
+  - "Jip the dog"
+gender: male
+age: "From puppyhood to old age across the novel"
+profession: "Lapdog"
+traits:
+  - jealous
+  - pampered
+  - devoted
+  - spoiled
+  - faithful
+voiceNotes: "Jip does not speak; his voice is a bark — jealous and sharp in youth, querulous and thin in old age."
+backstory: "Dora's dog from her girlhood at Norwood. He barks at David whenever he visits, and his jealousy is a running joke in the courtship. In the married household he grows old and blind, and his decline keeps pace with Dora's fatal illness."

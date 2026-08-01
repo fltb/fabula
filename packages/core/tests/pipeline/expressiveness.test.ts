@@ -24,6 +24,7 @@ import type {
   SystemContext,
 } from '../../src/types/index.ts';
 import { ResultAggregator } from '../../src/validator/aggregator.ts';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 // ============================================================================
 // Sentinel constants — each authored field gets an unmistakable unique value
@@ -65,13 +66,14 @@ function makeEvent(): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'entity_1', type: 'third_person_limited' },
     sceneBrief: SENTINEL_SCENE_BRIEF,
+    beats: [SENTINEL_SCENE_BRIEF],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
     foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
-    source: 'genesis',
+    source: 'event_file',
     branchExistence: { type: 'all' as const },
     participants: { entities: ['entity_1'] },
     styleGuidance: {
@@ -127,6 +129,7 @@ function makeContext(): ContextPackage {
     } satisfies SystemContext,
     sceneSpec: {
       goal: SENTINEL_SCENE_BRIEF,
+      beats: [SENTINEL_SCENE_BRIEF],
       povType: 'third_person',
       povCharacter: 'entity_1',
       conflict: SENTINEL_PACING,
@@ -221,36 +224,39 @@ function makeJob(): RenderJob {
  */
 function buildPipeline(): { pipeline: RenderPipeline; provider: MockProvider } {
   // Must provide two responses: first for Pass 1 prose, second Pass 2 analysis
+  const PASS_2_PAYLOAD: Record<string, unknown> = {
+    postconditions: { covered: [], dropped: [] },
+    preconditions: { violated: [] },
+    pov: { consistent: true, leaks: [] },
+    inventedDetails: [],
+    quality: {
+      proseScore: 80,
+      maxScore: 100,
+      strengths: [],
+      weaknesses: [],
+      estimatedWordCount: 300,
+    },
+    threadProgressAchieved: [],
+    foreshadowingDeployed: [],
+    narrativeChecks: [],
+    appearanceChecks: [],
+    characterReferences: [],
+    tenseDetected: 'past',
+    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+    ruleChecks: [],
+    knowledgeChecks: [],
+    checklistResults: [],
+    durationDetected: 'scene',
+    frequencyDetected: 'singulative',
+    voiceDetected: { level: 'extradiegetic', relation: 'heterodiegetic' },
+    anachronyDetected: 'none',
+    focalizationDetected: 'zero',
+  };
   const PASS_2_ANALYSIS = JSON.stringify({
     eventId: 'evt_express',
-    analysis: {
-      postconditions: { covered: [], dropped: [] },
-      preconditions: { violated: [] },
-      pov: { consistent: true, leaks: [] },
-      inventedDetails: [],
-      quality: {
-        proseScore: 80,
-        maxScore: 100,
-        strengths: [],
-        weaknesses: [],
-        estimatedWordCount: 300,
-      },
-      threadProgressAchieved: [],
-      foreshadowingDeployed: [],
-      narrativeChecks: [],
-      appearanceChecks: [],
-      characterReferences: [],
-      tenseDetected: 'past',
-      conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-      ruleChecks: [],
-      knowledgeChecks: [],
-      checklistResults: [],
-      durationDetected: 'scene',
-      frequencyDetected: 'singulative',
-      voiceDetected: { level: 'extradiegetic', relation: 'heterodiegetic' },
-      anachronyDetected: 'none',
-      focalizationDetected: 'zero',
-    },
+    protocol: makeProtocol('Test prose for expressiveness test.'),
+    observations: makeObservations(PASS_2_PAYLOAD, 'Test prose for expressiveness test.'),
+    analysis: PASS_2_PAYLOAD,
   });
 
   const provider = new MockProvider({
@@ -264,6 +270,7 @@ function buildPipeline(): { pipeline: RenderPipeline; provider: MockProvider } {
     skipCache: true,
     maxRetries: 1,
     styleProfile: { voice: SENTINEL_STYLE_PROFILE_VOICE },
+    validatorPolicyId: 'test-policy-v1',
   });
   return { pipeline, provider };
 }

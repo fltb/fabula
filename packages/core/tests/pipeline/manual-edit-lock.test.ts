@@ -16,6 +16,7 @@ import {
   SceneRevisionStore,
   setSceneLock,
 } from '../../src/index.ts';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 const PROJECT = '/manual-edit-project';
 
@@ -26,11 +27,53 @@ function hash(value: string): string {
 function seedProject(storage: MemoryStorage): void {
   storage.write(
     `${PROJECT}/nova.yaml`,
-    'project: manual-edit\nschemaVersion: 1\ntitle: "Manual Edit"\nauthor: "Tester"\n',
+    'project: manual-edit\ntitle: "Manual Edit"\nauthor: "Tester"\n',
   );
   storage.write(
     `${PROJECT}/definitions/state_initial.yaml`,
     'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n',
+  );
+  // Required authored entity type catalog — the canonical kernel compiles it
+  // (EntityMapper.loadProject reads definitions/entity-types.yaml via
+  // readYamlFile, which throws on a missing file), and editorial renders
+  // execute through that kernel. The lifecycle and traits attributes are
+  // declared because the baseline activation writes alice.lifecycle=active
+  // and her authored initialState writes alice.traits=[] — ontology preflight
+  // rejects writes to undeclared attributes.
+  storage.write(
+    `${PROJECT}/definitions/entity-types.yaml`,
+    [
+      'types:',
+      '  character:',
+      '    typeId: character',
+      '    kind: character',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates:',
+      '          - active',
+      '          - inactive',
+      '          - retired',
+      '        unsetAllowed: false',
+      '      traits:',
+      '        attributeId: traits',
+      '        valueType: string_list',
+      '        requiredAt: never',
+      '        writePolicy: mutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+    ].join('\n'),
   );
   storage.write(
     `${PROJECT}/definitions/characters/alice.yaml`,
@@ -54,42 +97,45 @@ function seedProject(storage: MemoryStorage): void {
   );
   storage.write(
     `${PROJECT}/chapters/chapter_01/E001.yaml`,
-    'event: E001\nformatVersion: 1\nnarrativeOrder: 1\ntitle: "Opening"\nstoryTime: "day 1"\nsceneBrief: "Alice begins."\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n',
+    'event: E001\nnarrativeOrder: 1\ntitle: "Opening"\nstoryTime: "day 1"\nsceneBrief: "Alice begins."\nbeats:\n  - "Alice begins."\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n',
   );
 }
 
-function acceptedAnalysis(eventId = 'E001'): AnalysisResult {
-  return {
-    eventId,
-    analysis: {
-      postconditions: { covered: [], dropped: [] },
-      preconditions: { violated: [] },
-      pov: { consistent: true, leaks: [] },
-      inventedDetails: [],
-      quality: {
-        proseScore: 8,
-        maxScore: 10,
-        strengths: ['clear'],
-        weaknesses: [],
-        estimatedWordCount: 80,
-      },
-      threadProgressAchieved: [],
-      foreshadowingDeployed: [],
-      narrativeChecks: [],
-      appearanceChecks: [],
-      characterReferences: [],
-      tenseDetected: 'past',
-      conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-      ruleChecks: [],
-      knowledgeChecks: [],
-      checklistResults: [],
+function acceptedAnalysis(prose: string): AnalysisResult {
+  const payload: Record<string, unknown> = {
+    postconditions: { covered: [], dropped: [] },
+    preconditions: { violated: [] },
+    pov: { consistent: true, leaks: [] },
+    inventedDetails: [],
+    quality: {
+      proseScore: 8,
+      maxScore: 10,
+      strengths: ['clear'],
+      weaknesses: [],
+      estimatedWordCount: 80,
     },
+    threadProgressAchieved: [],
+    foreshadowingDeployed: [],
+    narrativeChecks: [],
+    appearanceChecks: [],
+    characterReferences: [],
+    tenseDetected: 'past',
+    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+    ruleChecks: [],
+    knowledgeChecks: [],
+    checklistResults: [],
+  };
+  return {
+    eventId: 'E001',
+    protocol: makeProtocol(prose),
+    observations: makeObservations(payload, prose),
+    analysis: payload,
   };
 }
 
 function runtime(
   storage: MemoryStorage,
-  analysis: AnalysisResult = acceptedAnalysis(),
+  analysis: AnalysisResult = acceptedAnalysis('unused-pass1'),
 ): EditorialRuntime {
   return {
     storage,
@@ -124,7 +170,7 @@ function seedAcceptedHead(
     validationIdentity: 'validator-v1',
     feedbackHash: null,
     reviewIds: [],
-    analysis: acceptedAnalysis(),
+    analysis: acceptedAnalysis(prose),
     validation: { passed: true, errors: [], warnings: [], infos: [] },
     releaseDecision: {
       status: 'accepted',
@@ -197,7 +243,10 @@ describe('public scene editorial actions', () => {
       mutation: { operationId, actorId: 'editor' },
       model: 'mock-pass2',
     };
-    const result = await adoptSceneProse(request, runtime(storage));
+    const result = await adoptSceneProse(
+      request,
+      runtime(storage, acceptedAnalysis('Human replacement prose.')),
+    );
 
     expect(result.promoted).toBe(true);
     expect(result.revisionId).not.toBeNull();
@@ -266,7 +315,7 @@ describe('public scene editorial actions', () => {
         mutation: { operationId: crypto.randomUUID(), actorId: 'editor' },
         model: 'mock-pass2',
       },
-      runtime(storage),
+      runtime(storage, acceptedAnalysis('Externally edited working copy.')),
     );
     expect(adopted.promoted).toBe(true);
     expect((await inspection(storage)).prose).toBe(edited);
@@ -407,7 +456,7 @@ describe('public scene editorial actions', () => {
         mutation: { operationId: crypto.randomUUID(), actorId: 'editor' },
         model: 'mock-pass2',
       },
-      runtime(storage),
+      runtime(storage, acceptedAnalysis('New accepted prose.')),
     );
     const rollback = await rollbackSceneRevision(
       {
@@ -418,7 +467,7 @@ describe('public scene editorial actions', () => {
         mutation: { operationId: crypto.randomUUID(), actorId: 'editor' },
         model: 'mock-pass2',
       },
-      runtime(storage),
+      runtime(storage, acceptedAnalysis('Historical prose.')),
     );
     expect(rollback.promoted).toBe(true);
     expect(rollback.revisionId).not.toBeNull();

@@ -109,7 +109,12 @@ function issueTableRows(issues: ValidationIssue[], startIndex = 1): string[] {
   return issues.map((iss, i) => {
     const n = startIndex + i;
     const attr = iss.attribute ?? '';
-    return `| ${n} | ${iss.validator} | ${severityIcon(iss.severity)} ${iss.severity} | ${iss.event} | ${iss.entity} | ${trunc(attr, 40)} | ${trunc(iss.message)} |`;
+    const ref = iss.observationRef
+      ? iss.observationRef.analysisPointer
+        ? `${iss.observationRef.field} ${iss.observationRef.analysisPointer}`
+        : iss.observationRef.field
+      : '';
+    return `| ${n} | ${iss.validator} | ${severityIcon(iss.severity)} ${iss.severity} | ${iss.kind} | ${iss.event} | ${iss.entity} | ${trunc(attr, 40)} | ${trunc(ref, 48)} | ${trunc(iss.message)} |`;
   });
 }
 
@@ -156,12 +161,15 @@ export class ReportWriter {
     );
     lines.push('');
 
-    // L1 Issues
     if (r.l1Issues.length > 0) {
       lines.push('## L1 Issues (Pre-Render Validation)');
       lines.push('');
-      lines.push('| # | Validator | Severity | Event | Entity | Attribute | Message |');
-      lines.push('|---|-----------|----------|-------|--------|-----------|---------|');
+      lines.push(
+        '| # | Validator | Severity | Kind | Event | Entity | Attribute | Observation | Message |',
+      );
+      lines.push(
+        '|---|-----------|----------|------|-------|--------|-----------|-------------|---------|',
+      );
       lines.push(
         ...issueTableRows(
           r.l1Issues.sort((a, b) => {
@@ -176,12 +184,15 @@ export class ReportWriter {
       lines.push('');
     }
 
-    // L2 Issues
     if (r.l2Issues.length > 0) {
       lines.push('## L2 Issues (Post-Render Validation with Pass 2)');
       lines.push('');
-      lines.push('| # | Validator | Severity | Event | Entity | Attribute | Message |');
-      lines.push('|---|-----------|----------|-------|--------|-----------|---------|');
+      lines.push(
+        '| # | Validator | Severity | Kind | Event | Entity | Attribute | Observation | Message |',
+      );
+      lines.push(
+        '|---|-----------|----------|------|-------|--------|-----------|-------------|---------|',
+      );
       lines.push(
         ...issueTableRows(
           r.l2Issues.sort((a, b) => {

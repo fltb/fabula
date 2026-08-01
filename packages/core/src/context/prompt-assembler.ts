@@ -225,7 +225,8 @@ export class PromptAssembler {
       '## Narrative Context Package',
       '```json',
       JSON.stringify(
-        (({ markdown: _omitted, narrativeTechniques: _nt, ...contextForPrompt }) => contextForPrompt)(context),
+        (({ markdown: _omitted, narrativeTechniques: _nt, ...contextForPrompt }) =>
+          contextForPrompt)(context),
         null,
         2,
       ),

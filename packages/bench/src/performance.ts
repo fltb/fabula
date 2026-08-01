@@ -3,14 +3,25 @@
 // ============================================================================
 
 import * as os from 'node:os';
-import type { NarrativeEvent, RelationshipTransaction, WorldState } from '@novalistically/core';
+import type {
+  AttributeDefinition,
+  EntityCatalogContext,
+  EntityDeclaration,
+  EntityDeclarationCatalog,
+  EntityKind,
+  EntityTypeCatalog,
+  EntityTypeDefinition,
+  Fact,
+  NarrativeEvent,
+  RelationshipTransaction,
+} from '@novalistically/core';
 import {
   BranchMergeValidator,
   CausalityValidator,
-  compileStoryRuntimeGraph,
   CharacterStateValidator,
   ContextCompiler,
   calculateISS,
+  compileStoryRuntimeGraph,
   computeEvidenceHash,
   FactualDetailValidator,
   ForeshadowingValidator,
@@ -27,6 +38,7 @@ import {
   VoiceDriftDetector,
   WorldRuleValidator,
 } from '@novalistically/core';
+import { z } from 'zod';
 import { makePreInput } from './context-helper.js';
 
 export interface PerfMeasurement {
@@ -126,12 +138,13 @@ function makeSyntheticEvent(): NarrativeEvent {
     sceneType: idx % 5 === 0 ? 'flashback' : 'linear',
     pov: { character: char1, type: 'third_person_limited' as const },
     sceneBrief: `Scene ${idx}: ${char1} encounters ${char2} at ${loc}.`,
+    beats: [`${char1} encounters ${char2} at ${loc}.`],
     preconditions: [],
     postconditions: [
       {
         id: `${char1}.state`,
         entityId: char1,
-        attribute: `state_after_E${idx}`,
+        attribute: 'state',
         value: `advanced_${idx}`,
         validity: {
           temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
@@ -141,7 +154,7 @@ function makeSyntheticEvent(): NarrativeEvent {
       {
         id: `${char2}.state`,
         entityId: char2,
-        attribute: `state_after_E${idx}`,
+        attribute: 'state',
         value: `noticed_${idx}`,
         validity: {
           temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
@@ -192,40 +205,6 @@ function makeSyntheticEvent(): NarrativeEvent {
   };
 }
 
-function makeGenesisEvent(): NarrativeEvent {
-  return {
-    kind: 'event',
-    id: 'system:genesis',
-    event: 'system:genesis',
-    narrativeOrder: 0,
-    title: 'World Genesis',
-    storyTime: { type: 'absolute', value: 'day_0' },
-    sceneType: 'linear',
-    pov: { character: 'system', type: 'omniscient' },
-    sceneBrief: 'Initial world state.',
-    preconditions: [],
-    postconditions: [
-      {
-        id: 'world.init',
-        entityId: 'world',
-        attribute: 'status',
-        value: 'active',
-        validity: {
-          temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
-          branches: { type: 'all' as const },
-        },
-      },
-    ],
-    threadProgress: [],
-    foreshadowing: [],
-    relationshipEffects: [],
-    ruleEffects: [],
-    source: 'genesis',
-    branchExistence: { type: 'all' },
-    participants: { entities: [] },
-  };
-}
-
 function makeSyntheticEntities(registry: InMemoryEntityRegistry): void {
   for (const char of CHARACTERS) {
     registry.register({
@@ -254,6 +233,141 @@ function makeSyntheticEntities(registry: InMemoryEntityRegistry): void {
     });
   }
 }
+
+// ─── Synthetic Catalog Context — the one shared catalog pair ───────────────
+//
+// This benchmark is explicitly synthetic and lower-level: it never loads a
+// project through the kernel. Instead every synthetic entity and attribute is
+// declared up front so replay's write gate (validateCatalogWrite) accepts the
+// corpus, and the same context object is threaded to ReplayEngine /
+// ResultAggregator / story-boundary compilation.
+
+function syntheticAttribute(attributeId: string, valueSchema: z.ZodTypeAny): AttributeDefinition {
+  return {
+    attributeId,
+    valueSchema,
+    requiredAt: 'never',
+    writePolicy: 'mutable',
+    unsetAllowed: true,
+  };
+}
+
+const characterType: EntityTypeDefinition = {
+  typeRef: { typeId: 'character', schemaVersion: 1 },
+  kind: 'character',
+  attributes: {
+    status: syntheticAttribute('status', z.string()),
+    state: syntheticAttribute('state', z.string()),
+  },
+  lifecyclePolicy: {
+    allowedTransitions: [
+      ['active', 'inactive'],
+      ['active', 'retired'],
+      ['inactive', 'active'],
+      ['inactive', 'retired'],
+    ],
+  },
+  referenceCapabilities: { defaultEligibility: 'live' },
+  typedInvariants: [],
+};
+
+const locationType: EntityTypeDefinition = {
+  typeRef: { typeId: 'location', schemaVersion: 1 },
+  kind: 'location',
+  attributes: {
+    explored: syntheticAttribute('explored', z.boolean()),
+  },
+  lifecyclePolicy: {
+    allowedTransitions: [
+      ['active', 'inactive'],
+      ['active', 'retired'],
+      ['inactive', 'active'],
+      ['inactive', 'retired'],
+    ],
+  },
+  referenceCapabilities: { defaultEligibility: 'live' },
+  typedInvariants: [],
+};
+
+const syntheticEntityTypeCatalog: EntityTypeCatalog = {
+  types: {
+    character: characterType,
+    location: locationType,
+  },
+  version: 1,
+};
+
+function syntheticDeclaration(
+  entityId: string,
+  kind: EntityKind,
+  name: string,
+  definitionFile: string,
+): EntityDeclaration {
+  return {
+    entityId,
+    typeRef: { typeId: kind, schemaVersion: 1 },
+    immutableMetadata: { name, definitionFile },
+    introduction: { type: 'initial' },
+  };
+}
+
+const syntheticEntityDeclarationCatalog: EntityDeclarationCatalog = {
+  declarations: Object.fromEntries([
+    ...CHARACTERS.map((char) => [
+      char,
+      syntheticDeclaration(
+        char,
+        'character',
+        char.charAt(0).toUpperCase() + char.slice(1),
+        `definitions/characters/${char}.yaml`,
+      ),
+    ]),
+    ...LOCATIONS.map((loc) => [
+      loc,
+      syntheticDeclaration(
+        loc,
+        'location',
+        loc.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
+        `definitions/locations/${loc}.yaml`,
+      ),
+    ]),
+  ]),
+  version: 1,
+};
+
+/** The one shared catalog pair for every synthetic replay in this file. */
+const syntheticCatalogContext: EntityCatalogContext = {
+  entityDeclarationCatalog: syntheticEntityDeclarationCatalog,
+  entityTypeCatalog: syntheticEntityTypeCatalog,
+};
+
+/**
+ * Initial activation facts for every declared synthetic entity. The write gate
+ * requires initial-activated entities to be live (activated via initial facts)
+ * before any event write or participant reference.
+ */
+const syntheticInitialFacts: Fact[] = [
+  ...CHARACTERS.map((char) => ({
+    id: `init:${char}`,
+    entityId: char,
+    attribute: 'status',
+    value: 'alive',
+    validity: {
+      temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
+      branches: { type: 'all' as const },
+    },
+  })),
+  ...LOCATIONS.map((loc) => ({
+    id: `init:${loc}`,
+    entityId: loc,
+    attribute: 'explored',
+    value: false,
+    validity: {
+      temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
+      branches: { type: 'all' as const },
+    },
+  })),
+];
 
 // ─── Manual timing helper ──────────────────────────────────────────────────
 
@@ -284,8 +398,8 @@ export async function runPerformanceBench(): Promise<PerfResults> {
     const n = parseInt(scale, 10);
     eventCounter = 0;
 
-    // Build synthetic events
-    const events: NarrativeEvent[] = [makeGenesisEvent()];
+    // Build synthetic events (no genesis event — the corpus is ordinary events)
+    const events: NarrativeEvent[] = [];
     for (let i = 0; i < n; i++) {
       events.push(makeSyntheticEvent());
     }
@@ -294,9 +408,9 @@ export async function runPerformanceBench(): Promise<PerfResults> {
     const registry = new InMemoryEntityRegistry();
     makeSyntheticEntities(registry);
 
-    // Build state via replay
-    const replay = new ReplayEngine();
-    const state = replay.replay(events);
+    // Build state via replay over the shared synthetic catalog
+    const replay = new ReplayEngine(syntheticCatalogContext);
+    const state = replay.replay(events, { initialFacts: syntheticInitialFacts });
 
     // Instantiate all validators once
     const timelineVal = new TimelineValidator();
@@ -310,11 +424,16 @@ export async function runPerformanceBench(): Promise<PerfResults> {
     const voiceVal = new VoiceDriftDetector();
     const branchVal = new BranchMergeValidator();
     const reachVal = new ReachabilityValidator();
-    const aggregator = new ResultAggregator();
+    const aggregator = new ResultAggregator(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      syntheticCatalogContext.entityTypeCatalog,
+    );
     const compiler = new ContextCompiler();
 
-    const narrativeEvents = events.filter((e) => e.id !== 'system:genesis');
-    const lastEvent = narrativeEvents[narrativeEvents.length - 1];
+    const lastEvent = events[events.length - 1];
 
     // Number of timing iterations per scale
     const iters = n >= 1000 ? 3 : n >= 100 ? 5 : 10;
@@ -322,7 +441,7 @@ export async function runPerformanceBench(): Promise<PerfResults> {
     // a. Run all validators
     {
       const r = timeIt(() => {
-        for (const event of narrativeEvents) {
+        for (const event of events) {
           const input = makePreInput(event, state, registry, events);
           timelineVal.validatePre(input);
           charStateVal.validatePre(input);
@@ -368,10 +487,10 @@ export async function runPerformanceBench(): Promise<PerfResults> {
       raw[name] = r;
     }
 
-    // d. Replay state from genesis
+    // d. Replay state over the synthetic corpus
     {
       const r = timeIt(() => {
-        replay.replay(events);
+        replay.replay(events, { initialFacts: syntheticInitialFacts });
       }, iters);
       const name = `Replay state (N=${scale})`;
       measurements.push({ name, ...r, scale });
@@ -438,12 +557,11 @@ export function runOfflineCorePathBench(): PerfResults {
   const N = 100;
   eventCounter = 0;
 
-  // ── Build synthetic corpus ──────────────────────────────────────────────
-  const events: NarrativeEvent[] = [makeGenesisEvent()];
+  // ── Build synthetic corpus (no genesis event) ──────────────────────────
+  const events: NarrativeEvent[] = [];
   for (let i = 0; i < N; i++) {
     events.push(makeSyntheticEvent());
   }
-  const narrativeEvents = events.filter((e) => e.id !== 'system:genesis');
   const registry = new InMemoryEntityRegistry();
   makeSyntheticEntities(registry);
 
@@ -460,11 +578,12 @@ export function runOfflineCorePathBench(): PerfResults {
   {
     const samples = collectSamples(() => {
       eventCounter = 0;
-      const e: NarrativeEvent[] = [makeGenesisEvent()];
+      const e: NarrativeEvent[] = [];
       for (let i = 0; i < N; i++) e.push(makeSyntheticEvent());
       const r = new InMemoryEntityRegistry();
       makeSyntheticEntities(r);
     }, ITERATIONS);
+
     allSamples['load'] = samples;
     const sorted = [...samples].sort((a, b) => a - b);
     const meanMs = calcMean(samples);
@@ -482,7 +601,7 @@ export function runOfflineCorePathBench(): PerfResults {
     const samples = collectSamples(() => {
       compileStoryRuntimeGraph({
         events,
-        initialFacts: [],
+        initialFacts: syntheticInitialFacts,
         initialThreads: [],
         timeAnchors: [],
         branchPath: { decisions: [] },
@@ -501,10 +620,10 @@ export function runOfflineCorePathBench(): PerfResults {
   }
 
   // 3. replay — ReplayEngine.replay
-  const replay = new ReplayEngine();
+  const replay = new ReplayEngine(syntheticCatalogContext);
   {
     const samples = collectSamples(() => {
-      replay.replay(events);
+      replay.replay(events, { initialFacts: syntheticInitialFacts });
     }, ITERATIONS);
     allSamples['replay'] = samples;
     const sorted = [...samples].sort((a, b) => a - b);
@@ -520,10 +639,10 @@ export function runOfflineCorePathBench(): PerfResults {
 
   // 4. context — compile context for each event
   const compiler = new ContextCompiler();
-  const state = replay.replay(events);
+  const state = replay.replay(events, { initialFacts: syntheticInitialFacts });
   {
     const samples = collectSamples(() => {
-      for (const event of narrativeEvents) {
+      for (const event of events) {
         compiler.compile(event, state, registry);
       }
     }, ITERATIONS);
@@ -540,7 +659,13 @@ export function runOfflineCorePathBench(): PerfResults {
   }
 
   // 5. validate — ResultAggregator.validateAll (pre-render only)
-  const aggregator = new ResultAggregator();
+  const aggregator = new ResultAggregator(
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    syntheticCatalogContext.entityTypeCatalog,
+  );
   {
     const samples = collectSamples(() => {
       aggregator.validateAll(events, state, registry);
@@ -625,7 +750,7 @@ export function runOfflineCorePathBench(): PerfResults {
 export function runCacheBench(): { coldRun: CacheStats; warmRun: CacheStats; speedup: number } {
   const N = 100;
   eventCounter = 0;
-  const events: NarrativeEvent[] = [makeGenesisEvent()];
+  const events: NarrativeEvent[] = [];
   for (let i = 0; i < N; i++) events.push(makeSyntheticEvent());
 
   const storage = new MemoryStorage();
@@ -722,13 +847,19 @@ export function runPoolEfficiencyBench(): PoolEfficiencyResult[] {
   const ITERATIONS = 5;
   eventCounter = 0;
 
-  const events: NarrativeEvent[] = [makeGenesisEvent()];
+  const events: NarrativeEvent[] = [];
   for (let i = 0; i < N; i++) events.push(makeSyntheticEvent());
-  const narrativeEvents = events.filter((e) => e.id !== 'system:genesis');
   const registry = new InMemoryEntityRegistry();
   makeSyntheticEntities(registry);
-  const replayEngine = new ReplayEngine();
-  const state = replayEngine.replay(events);
+  const replayEngine = new ReplayEngine(syntheticCatalogContext);
+  const state = replayEngine.replay(events, { initialFacts: syntheticInitialFacts });
+  const aggregator = new ResultAggregator(
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    syntheticCatalogContext.entityTypeCatalog,
+  );
 
   const poolSizes = [1, 2, 5, 10];
   const results: PoolEfficiencyResult[] = [];
@@ -743,15 +874,11 @@ export function runPoolEfficiencyBench(): PoolEfficiencyResult[] {
 
       // Validate events in batches of poolSize
       const batches: NarrativeEvent[][] = [];
-      for (let i = 0; i < narrativeEvents.length; i += poolSize) {
-        batches.push(narrativeEvents.slice(i, i + poolSize));
+      for (let i = 0; i < events.length; i += poolSize) {
+        batches.push(events.slice(i, i + poolSize));
       }
       for (const batch of batches) {
-        // Validate each event in the batch.
-        for (const event of batch) {
-          const aggregator = new ResultAggregator();
-          aggregator.validate(event, state, registry, events, Math.ceil(event.narrativeOrder / 3));
-        }
+        aggregator.validateAll(batch, state, registry);
       }
 
       const elapsed = performance.now() - start;

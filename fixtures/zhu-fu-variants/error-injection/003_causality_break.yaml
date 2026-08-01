@@ -1,6 +1,6 @@
 injected:
   - entityId: "E3"
-    attribute: "postconditions"
+    attribute: "preconditions"
     expectedValidator: "causality"
     expectedSeverity: "error"
-    description: "E3's postcondition says xianglins_wife.location = he_family_hollow, but E4's precondition expects xianglins_wife.location = fourth_master_lu_house — the causal chain is broken"
+    description: "E3 receives a deterministic location precondition whose value has no provider in the canonical story boundary."

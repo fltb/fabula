@@ -13,6 +13,17 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "A retrospective chapter in which David pauses to survey the passing of time. He and Dora are now married, living in their small cottage with Jip the dog. Their marriage is loving but troubled: Dora is utterly incapable of managing a household, and David's efforts to 'form her mind' only make her miserable. She remains a 'child-wife,' playing with Jip and avoiding responsibilities. As time passes, Dora's health begins to decline. She becomes paler and weaker. Jip grows old and blind. The chapter is tinged with sadness and foreboding. David works hard at his writing, achieving success, but the happiness at home is fading. The retrospect closes with Dora's quiet, gentle illness deepening and the shadow of loss approaching."
+beats:
+  - "A retrospective chapter in which David pauses to survey the passing of time."
+  - "He and Dora are now married, living in their small cottage with Jip the dog."
+  - "Their marriage is loving but troubled: Dora is utterly incapable of managing a household, and David's efforts to 'form her mind' only make her miserable."
+  - "She remains a 'child-wife,' playing with Jip and avoiding responsibilities."
+  - "As time passes, Dora's health begins to decline."
+  - "She becomes paler and weaker."
+  - "Jip grows old and blind."
+  - "The chapter is tinged with sadness and foreboding."
+  - "David works hard at his writing, achieving success, but the happiness at home is fading."
+  - "The retrospect closes with Dora's quiet, gentle illness deepening and the shadow of loss approaching."
 preconditions:
   - entity: david_copperfield
     attribute: status
@@ -63,7 +74,14 @@ foreshadowing:
     hint: "Dora's innocent request that Agnes take her place — the child-wife's surprising wisdom in seeing what David cannot — points toward the eventual resolution of David's romantic story."
     targetRevealChapter: 60
     thread: T1
-introduces: []
+introduces:
+  - type: character
+    id: jip
+    initialState:
+      location: london
+      status: alive
+      condition: doras_beloved_pet
+      emotionalState: faithful
 styleGuidance:
   tone: "elegiac, tender, suffused with quiet sorrow — the retrospect slows time to a near halt, every scene steeped in the awareness of approaching loss"
   targetWordCount: 800

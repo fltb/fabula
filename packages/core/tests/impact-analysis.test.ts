@@ -27,6 +27,58 @@ threads: []
 worldFacts: []
 `,
   );
+  // entity-types.yaml (required — EntityMapper.loadProject reads it via
+  // readYamlFile). Strict versionless catalog covering exactly the types and
+  // attributes the generated events reference: narrator.location/knowledge,
+  // hero.location/status.
+  writeFileSync(
+    join(dir, 'definitions', 'entity-types.yaml'),
+    [
+      'types:',
+      '  narrator:',
+      '    typeId: narrator',
+      '    kind: character',
+      '    attributes:',
+      '      location:',
+      '        attributeId: location',
+      '        valueType: string',
+      '        requiredAt: never',
+      '        writePolicy: mutable',
+      '        unsetAllowed: true',
+      '      knowledge:',
+      '        attributeId: knowledge',
+      '        valueType: string',
+      '        requiredAt: never',
+      '        writePolicy: mutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions: []',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+      '  hero:',
+      '    typeId: hero',
+      '    kind: character',
+      '    attributes:',
+      '      location:',
+      '        attributeId: location',
+      '        valueType: string',
+      '        requiredAt: never',
+      '        writePolicy: mutable',
+      '        unsetAllowed: true',
+      '      status:',
+      '        attributeId: status',
+      '        valueType: string',
+      '        requiredAt: never',
+      '        writePolicy: mutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions: []',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+    ].join('\n'),
+  );
   // chapters
   mkdirSync(join(dir, 'chapters', 'chapter_01'), { recursive: true });
   // _chapter.yaml
@@ -74,6 +126,8 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "Original brief"
+beats:
+  - "Original brief"
 preconditions:
   - entity: narrator
     attribute: location
@@ -95,6 +149,8 @@ pov:
   character: hero
   type: third_person_limited
 sceneBrief: "First event"
+beats:
+  - "First event"
 preconditions:
   - entity: narrator
     attribute: knowledge
@@ -116,6 +172,8 @@ pov:
   character: hero
   type: third_person_limited
 sceneBrief: "Second event"
+beats:
+  - "Second event"
 preconditions:
   - entity: hero
     attribute: location

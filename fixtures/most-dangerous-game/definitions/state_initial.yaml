@@ -75,3 +75,6 @@ worldFacts:
   - id: zaroff_three_day_rule
     value: "Zaroff's hunt follows strict rules: three-hour head start, small-caliber pistol only, three days to survive. If the quarry wins, Zaroff's sloop takes them to the mainland."
     description: "The rules of the game as explained by Zaroff"
+  - id: time
+    value: "night_0"
+    description: "The story clock of Ship-Trap Island; advances from night_0 through day_3_night as the hunt unfolds."

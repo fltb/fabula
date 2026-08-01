@@ -41,7 +41,11 @@ export class AliasValidator implements Validator {
       const validNames = new Set<string>();
 
       // Derive the aliases attribute ID from catalog (semanticRole: 'identity')
-      const identityAttrs = getAttributesBySemanticRole('character', 'identity');
+      const identityAttrs = getAttributesBySemanticRole(
+        input.entityTypeCatalog,
+        'character',
+        'identity',
+      );
       const aliasAttrId = identityAttrs.find((a) => a === 'aliases') ?? 'aliases';
 
       // The entity ID itself is always valid
@@ -93,6 +97,7 @@ export class AliasValidator implements Validator {
         }
 
         if (!matched) {
+          const refIndex = charRefs.indexOf(ref);
           issues.push(
             makeIssue(
               this.name,
@@ -105,6 +110,13 @@ export class AliasValidator implements Validator {
               aliasAttrId,
               undefined,
               usedName,
+              'evidence_mismatch',
+              refIndex >= 0
+                ? {
+                    field: 'characterReferences',
+                    analysisPointer: `/characterReferences/${refIndex}`,
+                  }
+                : { field: 'characterReferences' },
             ),
           );
         }

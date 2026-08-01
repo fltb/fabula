@@ -283,9 +283,7 @@ export class BatchRenderPipeline {
     inFlight.clear();
 
     if (remainingEntries.length > 0) {
-      const settled = await Promise.allSettled(
-        remainingEntries.map(([_, p]) => p),
-      );
+      const settled = await Promise.allSettled(remainingEntries.map(([_, p]) => p));
 
       for (let i = 0; i < remainingEntries.length; i++) {
         const [batchIndex] = remainingEntries[i];

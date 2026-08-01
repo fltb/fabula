@@ -52,17 +52,16 @@ export class AiSdkProvider implements LLMProvider {
   constructor(options: AiSdkProviderOptions = {}) {
     this.options = options;
     const baseURL =
-      options.baseURL ?? process.env['NOVALISTICALLY_AI_BASE_URL'] ?? 'https://opencode.ai/zen/v1';
+      options.baseURL ?? process.env.NOVALISTICALLY_AI_BASE_URL ?? 'https://opencode.ai/zen/v1';
 
-    const apiKey = options.apiKey ?? process.env['NOVALISTICALLY_AI_API_KEY'] ?? '';
+    const apiKey = options.apiKey ?? process.env.NOVALISTICALLY_AI_API_KEY ?? '';
     if (!apiKey) {
       throw new Error(
         'API key not provided. Set NOVALISTICALLY_AI_API_KEY environment variable or pass apiKey option.',
       );
     }
 
-    this.modelId =
-      options.model ?? process.env['NOVALISTICALLY_AI_MODEL'] ?? 'deepseek-v4-flash-free';
+    this.modelId = options.model ?? process.env.NOVALISTICALLY_AI_MODEL ?? 'deepseek-v4-flash-free';
 
     // ── Create client ───────────────────────────────────────────────────
     this.client = createOpenAICompatible({

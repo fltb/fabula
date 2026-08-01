@@ -13,6 +13,13 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "Unable to endure his miserable life any longer, David resolves to run away. He sets out from London on foot, heading for Dover to find his only known relative, Aunt Betsey Trotwood. His journey is arduous: his box and half-guinea are stolen, he is robbed by a young man with a donkey-cart, he sells his waistcoat for food, and he sleeps in the open air. After six days of walking, hungry and ragged, he arrives in Dover and finds Miss Betsey's cottage. He presents himself to her, and after some initial shock and cross-examination, Miss Betsey decides to take him in. She writes to the Murdstones, confronts them, and declares she will be David's guardian from now on, renaming him 'Trotwood Copperfield.'"
+beats:
+  - "Unable to endure his miserable life any longer, David resolves to run away."
+  - "He sets out from London on foot, heading for Dover to find his only known relative, Aunt Betsey Trotwood."
+  - "His journey is arduous: his box and half-guinea are stolen, he is robbed by a young man with a donkey-cart, he sells his waistcoat for food, and he sleeps in the open air."
+  - "After six days of walking, hungry and ragged, he arrives in Dover and finds Miss Betsey's cottage."
+  - "He presents himself to her, and after some initial shock and cross-examination, Miss Betsey decides to take him in."
+  - "She writes to the Murdstones, confronts them, and declares she will be David's guardian from now on, renaming him 'Trotwood Copperfield.'"
 preconditions:
   - entity: david_copperfield
     attribute: location
@@ -79,6 +86,9 @@ introduces:
     id: dover
     initialState:
       status: active
+      season: summer_day
+      atmosphere: seaside_tranquility
+      notable_feature: white_cliffs_cottage
   - type: character
     id: mr_dick
     initialState:
@@ -86,13 +96,6 @@ introduces:
       status: dependent_of_betsey
       condition: harmless_eccentric
       emotionalState: gentle_muddled
-  - type: character
-    id: betsey_trotwood
-    initialState:
-      location: dover
-      status: guardian_of_david
-      condition: protector_established
-      emotionalState: fierce_tender
 styleGuidance:
   tone: "desperate journey giving way to warmth and relief — the prose rises from the dust of the road into the light of Miss Betsey's cottage"
   targetWordCount: 800

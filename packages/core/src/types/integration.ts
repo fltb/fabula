@@ -7,8 +7,9 @@
 import type { BranchPath } from './branch.js';
 import type { EntityId } from './entity.js';
 import type { NarrativeEvent } from './event.js';
-import type { MembershipId, RelationshipId, EpochId as RelEpochId } from './relationship.js';
-import type { RuleEpochId, RuleExceptionId, RuleId, RuleSpecificationId } from './rule.js';
+import type { EvaluationResult } from './knowledge.js';
+import type { RelationshipId } from './relationship.js';
+import type { RuleEpochId, RuleExceptionId, RuleSpecificationId } from './rule.js';
 import type { ThreadId } from './thread.js';
 import type { WorldState } from './world.js';
 
@@ -57,8 +58,8 @@ export interface BoundaryReference {
   branch: BranchPath;
   /** Proposition IDs projected into discourse */
   propositions: string[];
-  /** Verified truth values for the projected propositions */
-  truthValues: Record<string, boolean>;
+  /** Deterministic evaluation results for the projected propositions. */
+  evaluations: Record<string, EvaluationResult>;
 }
 
 // ─── MergePolicy — exactly 3 values ──────────────────────────────────────────

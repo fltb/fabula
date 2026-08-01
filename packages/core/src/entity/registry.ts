@@ -1,4 +1,5 @@
-import type { CharacterDefinition, FactionDefinition } from '../types/character.js';
+import { ConfigError } from '../errors.ts';
+import type { CharacterDefinition } from '../types/character.js';
 import type {
   Entity,
   EntityId,
@@ -6,12 +7,9 @@ import type {
   EntityRegistry,
   EntityTypeRef,
 } from '../types/index.js';
-import type { ItemDefinition, LocationDefinition } from '../types/location.js';
 import type { RuleDefinition } from '../types/rule.js';
-import type { Storage } from '../storage/types.ts';
-import { defaultEntityTypeCatalog } from './default-catalog.js';
 import { canonicalizeFactValue } from './fact-value.js';
-import { EntityMapper } from './mapper.js';
+import type { ProjectData } from './types.js';
 
 // ============================================================================
 // InMemoryEntityRegistry — stores and resolves entities in memory
@@ -77,10 +75,17 @@ function buildGenericState(
 export class InMemoryEntityRegistry implements EntityRegistry {
   private entities: Map<EntityId, Entity> = new Map();
 
-  load(projectPath: string, storage?: Storage): void {
-    const mapper = new EntityMapper(projectPath, storage);
-    const data = mapper.loadProject();
-
+  /**
+   * Load entities from already-loaded ProjectData (never loads the project
+   * itself — the canonical kernel owns the single loadProject call).
+   *
+   * `deferredIntroductionIds` are entities whose activation is authored as an
+   * event `introduces` boundary. Definition-backed ids are registered from
+   * their definitions; definition-less ids are NOT registered here — the
+   * canonical kernel registers them from their authored introduction data.
+   * No placeholder entity and no fabricated definition path is ever created.
+   */
+  load(data: ProjectData, deferredIntroductionIds: readonly string[] = []): void {
     // Load characters
     for (const char of data.characters) {
       this.entities.set(char.id, {
@@ -133,22 +138,27 @@ export class InMemoryEntityRegistry implements EntityRegistry {
       });
     }
 
-    // Load rules as entities
+    // Load rules as entities with deterministic ids (ruleId is required by
+    // the current contract — never a random fallback).
     for (const rule of data.rules) {
-      // Some fixture YAML files use a snake_case 'rule' field as fallback ruleId
-      const ruleId = rule.ruleId ?? `rule_${Math.random()}`;
-      this.entities.set(ruleId, {
-        id: ruleId,
+      if (!rule.ruleId) {
+        throw new ConfigError(`Rule definition "${rule.name}" is missing the required ruleId`, {
+          path: `definitions/rules/${rule.name}.yaml`,
+          phase: 'registry',
+        });
+      }
+      this.entities.set(rule.ruleId, {
+        id: rule.ruleId,
         kind: 'rule',
         name: rule.name,
-        definitionFile: `definitions/rules/${ruleId.split('.').pop() ?? ruleId}.yaml`,
+        definitionFile: `definitions/rules/${rule.ruleId.split('.').pop() ?? rule.ruleId}.yaml`,
         lifecycle: 'active',
         typeRef: makeTypeRef('rule'),
         state: buildRuleState(rule),
       });
     }
 
-    // Load from world initial state facts
+    // Load from world initial state facts (state_initial concepts)
     if (data.worldInitialState) {
       for (const wf of data.worldInitialState.worldFacts ?? []) {
         this.entities.set(wf.id, {
@@ -165,6 +175,12 @@ export class InMemoryEntityRegistry implements EntityRegistry {
         });
       }
     }
+
+    // Deferred introduction ids are intentionally not registered here.
+    // Definition-less entities get their authored kind/state from the
+    // canonical kernel, which owns the introduction data. A registry alone
+    // must never fabricate entities or definition paths for them.
+    void deferredIntroductionIds;
   }
 
   resolve(id: EntityId): Entity | null {

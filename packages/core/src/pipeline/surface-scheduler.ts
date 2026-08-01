@@ -24,10 +24,10 @@
 //     by group ID, story time, or filename.
 // ============================================================================
 
-import type { AcceptedSceneArtifact, ReleaseDecision } from '../types/render-surface.ts';
-import type { SceneRevisionEnvelopeV1 } from '../types/editorial.ts';
 import { sceneRevisionEnvelopeV1Schema } from '../schemas/editorial.ts';
 import type { Storage } from '../storage/index.ts';
+import type { SceneRevisionEnvelopeV1 } from '../types/editorial.ts';
+import type { AcceptedSceneArtifact } from '../types/render-surface.ts';
 import type { RenderJob } from './render.ts';
 
 // ============================================================================
@@ -125,15 +125,8 @@ export class SurfaceScheduler {
     const missingSet = new Set(missingPredecessors.map((e) => e.eventId));
 
     // ── Phase 2: Cycle detection (predecessor-chain DFS) ─────────────
-    const cycleParticipants = this.detectCycleParticipants(
-      jobs,
-      byId,
-      missingSet,
-    );
-    const excludedSet = new Set([
-      ...missingSet,
-      ...cycleParticipants,
-    ]);
+    const cycleParticipants = this.detectCycleParticipants(jobs, byId, missingSet);
+    const excludedSet = new Set([...missingSet, ...cycleParticipants]);
 
     // ── Phase 3: Topological wave assignment (Kahn's algorithm) ──────
     const waves = this.assignWaves(jobs, byId, excludedSet);
@@ -234,9 +227,7 @@ export class SurfaceScheduler {
     }
 
     const waves: ScheduledWave[] = [];
-    let queue = [...inDegree.keys()]
-      .filter((id) => inDegree.get(id) === 0)
-      .sort();
+    let queue = [...inDegree.keys()].filter((id) => inDegree.get(id) === 0).sort();
 
     while (queue.length > 0) {
       const wave: ScheduledWave = {
@@ -369,7 +360,8 @@ export class AcceptedArtifactResolver {
     }
 
     // Validate release decision status
-    if (typeof envelope.releaseDecision !== 'object' || envelope.releaseDecision === null) return null;
+    if (typeof envelope.releaseDecision !== 'object' || envelope.releaseDecision === null)
+      return null;
     if (envelope.releaseDecision.status !== 'accepted') return null;
 
     // Mismatched scope → missing-source failure (internal consistency check)
@@ -380,7 +372,8 @@ export class AcceptedArtifactResolver {
 
     // Verify required hashes are present
     if (!envelope.sceneHash || typeof envelope.sceneHash !== 'string') return null;
-    if (!envelope.editorialBasisHash || typeof envelope.editorialBasisHash !== 'string') return null;
+    if (!envelope.editorialBasisHash || typeof envelope.editorialBasisHash !== 'string')
+      return null;
 
     // If a requested scopeHash is provided, enforce exact match
     if (requestedScopeHash !== undefined && envelope.scopeHash !== requestedScopeHash) return null;
@@ -406,7 +399,10 @@ export class AcceptedArtifactResolver {
    * @param requestedScopeHash  If provided, only accept artifacts whose scopeHash matches.
    * @returns Map of eventId → AcceptedSceneArtifact for accepted results.
    */
-  resolveAll(eventIds: readonly string[], requestedScopeHash?: string): Map<string, AcceptedSceneArtifact> {
+  resolveAll(
+    eventIds: readonly string[],
+    requestedScopeHash?: string,
+  ): Map<string, AcceptedSceneArtifact> {
     const results = new Map<string, AcceptedSceneArtifact>();
     for (const eventId of eventIds) {
       const artifact = this.resolve(eventId, requestedScopeHash);

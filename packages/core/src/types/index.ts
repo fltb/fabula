@@ -6,10 +6,12 @@
 // ============================================================================
 
 export type {
+  AnalysisAlternative,
+  AnalysisDisposition,
+  AnalysisObservation,
   AnalysisResult,
   AppearanceCheck,
   CharacterReference,
-  ChecklistResult,
   ConflictAnalysis,
   InventedDetail,
   MatchLevel,
@@ -27,10 +29,6 @@ export type {
   BranchSet,
   Condition,
 } from './branch.js';
-export type {
-  GameDialogueChoice,
-  GameDialogueEffect,
-} from './game-dialogue.js';
 export type {
   ChapterMetadata,
   ProjectConfig,
@@ -102,10 +100,16 @@ export type {
 } from './entity.js';
 export type {
   AttributeDefinition,
+  AttributeDefinitionSource,
+  AttributeValueType,
+  EntityCatalogContext,
   EntityDeclaration,
   EntityDeclarationCatalog,
+  EntityIntroductionSource,
   EntityTypeCatalog,
+  EntityTypeCatalogSource,
   EntityTypeDefinition,
+  EntityTypeDefinitionSource,
   RequiredAt,
   WritePolicy,
 } from './entity-catalog.js';
@@ -121,6 +125,10 @@ export type {
   FrequencyProfile,
   FrequencyType,
 } from './frequency.js';
+export type {
+  GameDialogueChoice,
+  GameDialogueEffect,
+} from './game-dialogue.js';
 // ——— GRAPH-1: Typed Causal Graph Types ———
 export type {
   AmbiguousOutputError,
@@ -226,6 +234,11 @@ export type {
   MergeConflictReport,
   SceneQuality,
 } from './merge.js';
+export type {
+  ChecklistResult,
+  NarrativeChecklist,
+  NarrativeChecklistItem,
+} from './narrative-checklist.js';
 // ——— Narrative Technique Contracts ———
 export type {
   AbsentApparatus,
@@ -239,13 +252,7 @@ export type {
   SurfaceMode,
   VoiceDissonance,
 } from './narrative-techniques.js';
-export {
-  NARRATIVE_TECHNIQUE_KINDS,
-} from './narrative-techniques.js';
-export type {
-  NarrativeChecklist,
-  NarrativeChecklistItem,
-} from './narrative-checklist.js';
+export { NARRATIVE_TECHNIQUE_KINDS } from './narrative-techniques.js';
 export type {
   ArbitrationStrategy,
   PluginManifest,
@@ -344,10 +351,12 @@ export type {
 } from './thread.js';
 export type {
   AnalysisBlockRequirement,
+  ObservationRef,
   PostRenderInput,
   PreRenderInput,
   StoryValidationContext,
   ValidationIssue,
+  ValidationIssueKind,
   ValidationResult,
   ValidationRunOptions,
   Validator,
@@ -407,6 +416,7 @@ export type {
   NarratorAccess,
   NarratorAssertion,
   NarratorAssertionCapability,
+  NarratorAssertionStatus,
   NarratorFidelity,
   NarratorProfile,
   NarratorProfileBase,
@@ -422,12 +432,13 @@ export type {
   RevealAction,
   SparseCorpusMode,
   SparseRunDeclaration,
-  TruthBoundary,
   ValidationKey,
   WithholdEndAction,
   WithholdingPolicy,
   WithholdStartAction,
 } from './discourse.js';
+// ——— EDITORIAL: shared types (type-only re-export, never imported by pipeline modules) ———
+export type { ProviderFactory } from './editorial.js';
 // ——— INTEGRATION-1: Cross-domain resolution, Merge & dual coverage ———
 export type {
   AbsenceBasis,
@@ -462,7 +473,6 @@ export type {
   LogicalRenderKey,
   PlannerMode,
   ReleaseDecision,
-  RevisionContext,
   RenderGroup,
   RenderGroupManifest,
   RenderSurfaceAutoConfig,
@@ -470,6 +480,7 @@ export type {
   RenderSurfaceExtraction,
   RenderSurfaceGroup,
   RenderSurfaceLane,
+  RevisionContext,
   SceneTransition,
   SerialLane,
   StyleMetrics,
@@ -477,9 +488,9 @@ export type {
   StyleResolutionPath,
   SurfaceDependencyGraph,
   SurfaceErrorCode,
-  SurfacePlanProposal,
   SurfacePlannerError,
   SurfacePlannerOptions,
+  SurfacePlanProposal,
   SurfacePlanResult,
   SurfacePolicy,
   SurfaceReferencePacket,
@@ -490,8 +501,6 @@ export type {
   ValidationGateStatus,
   ValidationPolicy,
 } from './render-surface.js';
-// ——— EDITORIAL: shared types (type-only re-export, never imported by pipeline modules) ———
-export type { ProviderFactory } from './editorial.js';
 // ——— SUMMARY: Volume Summary types ———
 export type {
   ChapterMeta,

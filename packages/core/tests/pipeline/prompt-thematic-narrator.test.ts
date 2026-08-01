@@ -26,6 +26,7 @@ function makeContext(overrides?: Partial<ContextPackage>): ContextPackage {
     } satisfies SystemContext,
     sceneSpec: {
       goal: 'Advance plot',
+      beats: ['Advance plot'],
       povType: 'third_person',
       povCharacter: 'narrator',
       conflict: 'none',

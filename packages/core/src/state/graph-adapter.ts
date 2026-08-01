@@ -1,7 +1,9 @@
 import { branchPathToString, includesPath } from '../branch/index.ts';
 import { sha256Canonical } from '../cache/render-cache.ts';
-import { resolveTemporalContext, INITIAL_STORY_ROOT_ID } from '../entity/timestamp.ts';
+import type { TemporalContext } from '../entity/timestamp.ts';
+import { INITIAL_STORY_ROOT_ID, resolveTemporalContext } from '../entity/timestamp.ts';
 import { ConfigError } from '../errors.ts';
+import type { DiscourseGraph, ReadRequirement, StoryGraph } from '../types/graph.ts';
 import type {
   BranchPath,
   Fact,
@@ -10,14 +12,17 @@ import type {
   PlannedDiscourseLedger,
   TimeAnchor,
 } from '../types/index.ts';
-import type { DiscourseGraph, ReadRequirement, StoryGraph } from '../types/graph.ts';
-import { compileDiscourseSceneSequence } from './discourse-sequence.ts';
-import { compileGraph, type CompileNode, type RawEffect, type RawRequirement } from './graph-compiler.ts';
-import { resolveNarrativeTechniques } from './technique-resolver.ts';
 import type { ResolvedNarrativeTechniqueContract } from '../types/narrative-techniques.ts';
 import type { AdjacencyList, StoryOrderIndex } from './dag.ts';
 import { buildStoryOrderIndex } from './dag.ts';
-import type { TemporalContext } from '../entity/timestamp.ts';
+import { compileDiscourseSceneSequence } from './discourse-sequence.ts';
+import {
+  type CompileNode,
+  compileGraph,
+  type RawEffect,
+  type RawRequirement,
+} from './graph-compiler.ts';
+import { resolveNarrativeTechniques } from './technique-resolver.ts';
 
 // Re-export the canonical initial root ID for replay consumers.
 export { INITIAL_STORY_ROOT_ID };
@@ -26,6 +31,9 @@ export interface CompiledNarrativeGraphs {
   storyGraph: StoryGraph;
   discourseGraph: DiscourseGraph;
   storyAdjacency: AdjacencyList;
+  /** Branch-filtered events — the canonical event set both story
+   *  boundaries and discourse contexts compile from. */
+  selectedEvents: readonly NarrativeEvent[];
   techniquesByEventId: ReadonlyMap<string, readonly ResolvedNarrativeTechniqueContract[]>;
 }
 
@@ -79,8 +87,7 @@ function requirementFromFact(fact: Fact, requirementId: string): RawRequirement 
   // is used as the predicate discriminant so compilation resolves the key
   // without falsely asserting equality.  Runtime enforcement of the actual
   // operator semantics is delegated to applyNarrativeEvent.
-  const predicateType =
-    operator === 'eq' ? 'equals' : operator;
+  const predicateType = operator === 'eq' ? 'equals' : operator;
 
   return {
     requirementId,
@@ -94,8 +101,8 @@ function requirementFromFact(fact: Fact, requirementId: string): RawRequirement 
 /**
  * Resolve temporal context on all events, project selected coordinates after
  * resolution, then build story graph nodes with a normalized initial root
- * rather than a synthetic scene time. Merges system:genesis postconditions
- * into the root without replaying genesis as an ordinary event.
+ * rather than a synthetic scene time. Initial facts are applied to the root
+ * directly as state inputs, not replayed as authored events.
  */
 export function compileStoryRuntimeGraph(input: {
   events: readonly NarrativeEvent[];
@@ -110,17 +117,11 @@ export function compileStoryRuntimeGraph(input: {
   //    anchor target for selected events.
   const temporalContext = resolveTemporalContext(input.events, input.timeAnchors);
 
-  // 2. Filter selected events by branch, excluding genesis — its
-  //    postconditions are merged into the initial root instead.
+  // 2. Filter selected events by branch.
   const selectedEvents: NarrativeEvent[] = [];
-  const removedGenesisIds = new Set<string>();
   for (const event of input.events) {
     if (!includesPath(event.branchExistence, input.branchPath)) continue;
-    if (event.source === 'genesis') {
-      removedGenesisIds.add(event.id);
-    } else {
-      selectedEvents.push(event);
-    }
+    selectedEvents.push(event);
   }
   const selectedScope = branchPathToString(input.branchPath);
 
@@ -128,28 +129,19 @@ export function compileStoryRuntimeGraph(input: {
   const seenThreadIds = new Set<string>();
   for (const thread of input.initialThreads) {
     if (seenThreadIds.has(thread.id)) {
-      throw new ConfigError(
-        `Duplicate initial thread ID "${thread.id}"`,
-        { phase: 'narrative-graphs' },
-      );
+      throw new ConfigError(`Duplicate initial thread ID "${thread.id}"`, {
+        phase: 'narrative-graphs',
+      });
     }
     seenThreadIds.add(thread.id);
   }
 
-  // 4. Normalize selected initial facts + genesis postconditions onto root.
+  // 4. Normalize selected initial facts onto the root.
   const allInitialFactEntries: Array<{ fact: Fact; index: number }> = [];
   let factIndex = 0;
   for (const fact of input.initialFacts) {
     if (includesPath(fact.validity.branches, input.branchPath)) {
       allInitialFactEntries.push({ fact, index: factIndex++ });
-    }
-  }
-  const genesisEvent = input.events.find((e) => e.source === 'genesis');
-  if (genesisEvent) {
-    for (const fact of genesisEvent.postconditions) {
-      if (includesPath(fact.validity.branches, input.branchPath)) {
-        allInitialFactEntries.push({ fact, index: factIndex++ });
-      }
     }
   }
 
@@ -204,31 +196,28 @@ export function compileStoryRuntimeGraph(input: {
     ...selectedEvents.map((event): CompileNode => {
       const coordinate = temporalContext.coordinatesByEventId.get(event.id);
       if (!coordinate) {
-        throw new ConfigError(
-          `Event "${event.id}" has no resolved story coordinate`,
-          { phase: 'narrative-graphs', eventId: event.id },
-        );
+        throw new ConfigError(`Event "${event.id}" has no resolved story coordinate`, {
+          phase: 'narrative-graphs',
+          eventId: event.id,
+        });
       }
 
-      // Build explicit edges from authored causalPredecessors, excluding
-      // any that reference the genesis (removed) event.
+      // Build explicit edges from authored causalPredecessors.
       const explicitEdges: CompileNode['explicitEdges'] = event.causalPredecessors
-        ? event.causalPredecessors
-            .filter((pred) => !removedGenesisIds.has(pred))
-            .map((predecessor) => {
-              if (!selectedEvents.some((candidate) => candidate.id === predecessor)) {
-                throw new ConfigError(
-                  `Event "${event.id}" causalPredecessor "${predecessor}" is not a reachable ` +
-                    `event on branch "${selectedScope}".`,
-                  { phase: 'narrative-graphs', eventId: event.id },
-                );
-              }
-              return {
-                predecessor,
-                dependent: event.id,
-                edgeClass: 'author_origin' as const,
-              };
-            })
+        ? event.causalPredecessors.map((predecessor) => {
+            if (!selectedEvents.some((candidate) => candidate.id === predecessor)) {
+              throw new ConfigError(
+                `Event "${event.id}" causalPredecessor "${predecessor}" is not a reachable ` +
+                  `event on branch "${selectedScope}".`,
+                { phase: 'narrative-graphs', eventId: event.id },
+              );
+            }
+            return {
+              predecessor,
+              dependent: event.id,
+              edgeClass: 'author_origin' as const,
+            };
+          })
         : undefined;
 
       const effects: RawEffect[] = [];
@@ -302,7 +291,10 @@ export function compileStoryRuntimeGraph(input: {
   };
 
   // 7. Build event-to-event adjacency including all edge classes.
-  const storyAdjacency = storyGraphToEventAdjacency(storyGraph, selectedEvents.map((e) => e.id));
+  const storyAdjacency = storyGraphToEventAdjacency(
+    storyGraph,
+    selectedEvents.map((e) => e.id),
+  );
 
   // 8. Build StoryOrderIndex for the selected events.
   const order = buildStoryOrderIndex(
@@ -445,10 +437,9 @@ export function compileNarrativeGraphs(input: {
     if (resolution.type === 'absence') {
       const read = readMap.get(resolution.readId);
       if (!read) {
-        throw new ConfigError(
-          `Absence resolution references unknown read "${resolution.readId}"`,
-          { phase: 'narrative-graphs' },
-        );
+        throw new ConfigError(`Absence resolution references unknown read "${resolution.readId}"`, {
+          phase: 'narrative-graphs',
+        });
       }
 
       // Legal: predicate is 'absent' (not_exists operator)
@@ -468,11 +459,11 @@ export function compileNarrativeGraphs(input: {
       );
     }
   }
-
   return {
     storyGraph,
     discourseGraph,
     storyAdjacency,
+    selectedEvents,
     techniquesByEventId,
   };
 }
@@ -487,10 +478,7 @@ export function storyGraphToEventAdjacency(
   for (const edge of storyGraph.edges) {
     // Include all event-to-event edge classes: author_origin, provider,
     // same_coordinate_order, and internal (derived temporal edges).
-    if (
-      !selectedIds.has(edge.predecessor) ||
-      !selectedIds.has(edge.dependent)
-    ) {
+    if (!selectedIds.has(edge.predecessor) || !selectedIds.has(edge.dependent)) {
       continue;
     }
     const successors = adjacency.get(edge.predecessor)!;

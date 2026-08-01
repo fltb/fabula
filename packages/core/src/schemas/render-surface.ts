@@ -28,10 +28,8 @@ import type {
   StyleMetrics,
   StyleProfile,
   SurfaceDependencyGraph,
-  SurfacePlannerOptions,
   SurfacePlanResult,
   SurfaceReferencePacket,
-  SurfaceValidationKey,
   ValidationGate,
   ValidationGateGraph,
 } from '../types/render-surface.js';
@@ -200,7 +198,6 @@ export const renderGroupManifestSchema = z
 
 export const renderGroupManifestSchemaZ: z.ZodType<RenderGroupManifest> = renderGroupManifestSchema;
 
-
 // ─── ReleaseDecision (§9) ─────────────────────────────────────────────────
 
 export const releaseDecisionSchema = z.object({
@@ -287,8 +284,9 @@ export const surfacePlanProposalSchema = z
     hash: z.string(),
   })
   .strict();
-export const surfacePlanProposalSchemaZ: z.ZodType<import('../types/render-surface.js').SurfacePlanProposal> =
-  surfacePlanProposalSchema;
+export const surfacePlanProposalSchemaZ: z.ZodType<
+  import('../types/render-surface.js').SurfacePlanProposal
+> = surfacePlanProposalSchema;
 
 export const surfacePlanResultSchema = z
   .object({
@@ -301,7 +299,6 @@ export const surfacePlanResultSchema = z
   .strict();
 
 export const surfacePlanResultSchemaZ: z.ZodType<SurfacePlanResult> = surfacePlanResultSchema;
-
 
 // ─── Project-level RenderSurface Config ────────────────────────────────────
 

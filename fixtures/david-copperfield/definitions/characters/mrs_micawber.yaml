@@ -19,10 +19,5 @@ traits:
   - rhetorical
   - loving
   - impractical
-initialState:
-  location: london
-  status: alive
-  condition: wife_in_reduced_circumstances
-  emotionalState: hopeful_despair
 voiceNotes: "Given to elaborate, formal declarations of her intents and sentiments, especially the refrain that she 'never will desert Mr Micawber.' She speaks of her family (the Kinolsons) with a reverence not shared by her listeners. She is both absurd and genuinely noble in her devotion."
 backstory: "Married Wilkins Micawber against her family's wishes. The Kinolsen family (her people, of Devonshire) have cut her off. She has borne Mr Micawber many children and manages their households through an unending series of financial crises with an invincible faith that something will turn up. She emigrates to Australia with Mr Micawber and their children."

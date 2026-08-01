@@ -323,8 +323,9 @@ export function toMarkdown(results: BenchResults): string {
   const byName = new Map<string, BenchMeasurement[]>();
   for (const m of results.performance) {
     const baseName = m.name.replace(/ \(N=\d+\)$/, '');
-    if (!byName.has(baseName)) byName.set(baseName, []);
-    byName.get(baseName)!.push(m);
+    const measurements = byName.get(baseName);
+    if (measurements) measurements.push(m);
+    else byName.set(baseName, [m]);
   }
   lines.push('| Stage | N=10 | N=100 | N=1000 |');
   lines.push('|-------|------|-------|--------|');

@@ -15,7 +15,6 @@ import type { SceneStoryCoordinate, StoryCoordinate } from './entity.js';
 /** The four edge classes. NEVER mixed between graphs. */
 export type EdgeClass = 'author_origin' | 'provider' | 'same_coordinate_order' | 'internal';
 
-
 /** Discourse coordinate — discoursePosition domain. */
 export interface DiscourseCoordinate {
   type: 'discoursePosition';

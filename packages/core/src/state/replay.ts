@@ -5,8 +5,7 @@
 import { createEmptyBranchPath } from '../branch/index.js';
 import type {
   BranchPath,
-  EntityDeclarationCatalog,
-  EntityTypeCatalog,
+  EntityCatalogContext,
   Fact,
   NarrativeEvent,
   ThreadId,
@@ -15,9 +14,9 @@ import type {
   TimeAnchor,
   WorldState,
 } from '../types/index.js';
+import { applyInitialFacts, applyNarrativeEvent } from './event-application.ts';
 import type { CompiledStoryRuntimeGraph } from './graph-adapter.ts';
 import { compileStoryRuntimeGraph } from './graph-adapter.ts';
-import { applyInitialFacts, applyNarrativeEvent } from './event-application.ts';
 import { emptyWorldState } from './story-boundaries.ts';
 
 export interface ReplayOptions {
@@ -28,15 +27,10 @@ export interface ReplayOptions {
 }
 
 export class ReplayEngine {
-  private entityDeclarationCatalog?: EntityDeclarationCatalog;
-  private entityTypeCatalog?: EntityTypeCatalog;
+  private readonly catalogs: EntityCatalogContext;
 
-  constructor(catalogs?: {
-    entityDeclarationCatalog?: EntityDeclarationCatalog;
-    entityTypeCatalog?: EntityTypeCatalog;
-  }) {
-    this.entityDeclarationCatalog = catalogs?.entityDeclarationCatalog;
-    this.entityTypeCatalog = catalogs?.entityTypeCatalog;
+  constructor(catalogContext: EntityCatalogContext) {
+    this.catalogs = catalogContext;
   }
 
   /** Replay all events in canonical causal order, including baseline. */
@@ -54,11 +48,7 @@ export class ReplayEngine {
   }
 
   /** Get state after the first `position` causally ordered events (0 = baseline). */
-  getStateAt(
-    events: NarrativeEvent[],
-    position: number,
-    options: ReplayOptions = {},
-  ): WorldState {
+  getStateAt(events: NarrativeEvent[], position: number, options: ReplayOptions = {}): WorldState {
     const branchPath = options.branchPath ?? createEmptyBranchPath();
     const compiled = compileStoryRuntimeGraph({
       events,
@@ -72,7 +62,10 @@ export class ReplayEngine {
     const lifecycleChangesByCoordinate = new Map<string, Set<string>>();
 
     // Apply baseline
-    applyInitialFacts(state, compiled.initialFacts, { branchPath });
+    applyInitialFacts(state, compiled.initialFacts, {
+      branchPath,
+      catalogs: this.catalogs,
+    });
     for (const thread of compiled.initialThreads) {
       state.threads[thread.id] = {
         threadId: thread.id as ThreadId,
@@ -90,9 +83,8 @@ export class ReplayEngine {
     const eventsById = new Map(compiled.selectedEvents.map((e) => [e.id, e]));
     for (const eventId of compiled.order.topologicalOrder.slice(0, position)) {
       applyNarrativeEvent(state, eventsById.get(eventId)!, {
+        catalogs: this.catalogs,
         branchPath,
-        entityDeclarationCatalog: this.entityDeclarationCatalog,
-        entityTypeCatalog: this.entityTypeCatalog,
         lifecycleChangesByCoordinate,
         storyCoordinate: compiled.temporalContext.coordinatesByEventId.get(eventId),
         phase: 'replay',
@@ -111,7 +103,10 @@ export class ReplayEngine {
     const lifecycleChangesByCoordinate = new Map<string, Set<string>>();
 
     // Apply baseline
-    applyInitialFacts(state, compiled.initialFacts, { branchPath });
+    applyInitialFacts(state, compiled.initialFacts, {
+      branchPath,
+      catalogs: this.catalogs,
+    });
     for (const thread of compiled.initialThreads) {
       state.threads[thread.id] = {
         threadId: thread.id as ThreadId,
@@ -129,9 +124,8 @@ export class ReplayEngine {
     const eventsById = new Map(compiled.selectedEvents.map((e) => [e.id, e]));
     for (const eventId of compiled.order.topologicalOrder) {
       applyNarrativeEvent(state, eventsById.get(eventId)!, {
+        catalogs: this.catalogs,
         branchPath,
-        entityDeclarationCatalog: this.entityDeclarationCatalog,
-        entityTypeCatalog: this.entityTypeCatalog,
         lifecycleChangesByCoordinate,
         storyCoordinate: compiled.temporalContext.coordinatesByEventId.get(eventId),
         phase: 'replay',

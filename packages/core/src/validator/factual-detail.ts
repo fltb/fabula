@@ -38,6 +38,7 @@ export class FactualDetailValidator implements Validator {
     for (const detail of details) {
       if (detail.severity !== 'major') continue;
 
+      const detailIndex = details.indexOf(detail);
       issues.push(
         makeIssue(
           this.name,
@@ -47,6 +48,13 @@ export class FactualDetailValidator implements Validator {
           `Major invented detail: "${detail.detail}" — not specified in event definitions.`,
           'Add this detail to event preconditions/postconditions, or mark it intentional.',
           'manual',
+          undefined,
+          undefined,
+          undefined,
+          'evidence_mismatch',
+          detailIndex >= 0
+            ? { field: 'inventedDetails', analysisPointer: `/inventedDetails/${detailIndex}` }
+            : { field: 'inventedDetails' },
         ),
       );
     }

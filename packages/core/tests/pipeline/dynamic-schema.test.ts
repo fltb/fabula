@@ -11,24 +11,26 @@
 // produce rejection.
 // ============================================================================
 
-import { z } from 'zod';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
-import { RenderPipeline } from '../../src/pipeline/render.ts';
+import { type RenderJob, RenderPipeline } from '../../src/pipeline/render.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type {
-  AnalysisResult,
   ContextPackage,
   KnowledgeBoundary,
   NarrativeEvent,
-  RenderJob,
   SceneSpecification,
   SystemContext,
   WorldState,
 } from '../../src/types/index.ts';
 import { ResultAggregator } from '../../src/validator/aggregator.ts';
-import { makeAnalysisResult } from '../fixtures/mock-pass2-helpers.ts';
+import {
+  makeAnalysisResult,
+  makeObservations,
+  makeProtocol,
+} from '../fixtures/mock-pass2-helpers.ts';
 
 // ============================================================================
 // Test fixtures
@@ -44,13 +46,14 @@ function makeEvent(id: string): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'entity_1', type: 'third_person_limited' },
     sceneBrief: 'A test scene.',
+    beats: ['A test scene.'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
     foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
-    source: 'genesis',
+    source: 'event_file',
     branchExistence: { type: 'all' as const },
     participants: { entities: ['entity_1'] },
     styleGuidance: undefined,
@@ -67,6 +70,7 @@ function makeContext(eventId: string): ContextPackage {
     } satisfies SystemContext,
     sceneSpec: {
       goal: 'Advance plot',
+      beats: ['Advance plot'],
       povType: 'third_person',
       povCharacter: 'narrator',
       conflict: 'none',
@@ -137,6 +141,7 @@ function buildPipeline(entry: MockPass2Entry, maxRetries = 1): RenderPipeline {
     skipCache: true,
     maxRetries,
     aggregator,
+    validatorPolicyId: 'test-policy-v1',
   });
 }
 
@@ -150,7 +155,10 @@ describe('dynamic schema path', () => {
     const pipeline = buildPipeline(entry, 1);
     const result = await pipeline.renderScene(makeJob('test'));
 
-    expect(result.analysis).not.toBeNull();
+    expect(
+      result.analysis,
+      `${result.errors.join('\n')}\n${JSON.stringify(result.requestRecords.at(-1))}`,
+    ).not.toBeNull();
     const a = result.analysis!.analysis;
 
     // 1. postconditions
@@ -205,41 +213,53 @@ describe('dynamic schema path', () => {
     expect(result.needsReview).toBe(false);
   });
 
-  it('rejects analysis missing a required block (tenseDetected)', async () => {
-    // Build analysis with all 14 blocks except tenseDetected
-    const missingBlock: AnalysisResult = {
-      eventId: 'test',
+  /**
+   * Build a MockPass2Entry whose analysis omits `missingField` from the
+   * canonical payload while still carrying a `produced` observation for it.
+   * Under the current contract a produced observation without its canonical
+   * payload is a pairing violation, so the dynamic-schema path rejects it
+   * exactly like the old "required block missing" rule did.
+   */
+  function makeEntryMissingBlock(missingField: string, prose: string): MockPass2Entry {
+    const content: Record<string, unknown> = {
+      postconditions: { covered: [], dropped: [] },
+      preconditions: { violated: [] },
+      pov: { consistent: true, leaks: [] },
+      inventedDetails: [],
+      quality: {
+        proseScore: 3,
+        maxScore: 5,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 50,
+      },
+      threadProgressAchieved: [],
+      foreshadowingDeployed: [],
+      narrativeChecks: [],
+      appearanceChecks: [],
+      characterReferences: [],
+      tenseDetected: 'past',
+      conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+      ruleChecks: [],
+      knowledgeChecks: [],
+      checklistResults: [],
+    };
+    delete content[missingField];
+    const observations = makeObservations(content, prose);
+    observations[missingField] = { disposition: 'produced', evidence: [prose.trim().slice(0, 24)] };
+    return {
+      prose,
       analysis: {
-        postconditions: { covered: [], dropped: [] },
-        preconditions: { violated: [] },
-        pov: { consistent: true, leaks: [] },
-        inventedDetails: [],
-        quality: {
-          proseScore: 3,
-          maxScore: 5,
-          strengths: [],
-          weaknesses: [],
-          estimatedWordCount: 50,
-        },
-        threadProgressAchieved: [],
-        foreshadowingDeployed: [],
-        narrativeChecks: [],
-        appearanceChecks: [],
-        characterReferences: [],
-        // tenseDetected is intentionally missing
-        conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-        ruleChecks: [],
-        knowledgeChecks: [],
-        checklistResults: [],
+        eventId: 'test',
+        protocol: makeProtocol(prose),
+        observations,
+        analysis: content,
       },
     };
+  }
 
-    const entry: MockPass2Entry = {
-      prose: 'Test prose for missing block scenario.',
-      analysis: missingBlock,
-    };
-
-    // Use 0 retries so the first failure is terminal
+  it('rejects analysis missing a required block (tenseDetected)', async () => {
+    const entry = makeEntryMissingBlock('tenseDetected', 'Test prose for missing block scenario.');
     const pipeline = buildPipeline(entry, 0);
     const result = await pipeline.renderScene(makeJob('test'));
 
@@ -250,125 +270,41 @@ describe('dynamic schema path', () => {
   });
 
   it('rejects analysis missing a required block (conflictAnalysis)', async () => {
-    const missingBlock: AnalysisResult = {
-      eventId: 'test',
-      analysis: {
-        postconditions: { covered: [], dropped: [] },
-        preconditions: { violated: [] },
-        pov: { consistent: true, leaks: [] },
-        inventedDetails: [],
-        quality: {
-          proseScore: 3,
-          maxScore: 5,
-          strengths: [],
-          weaknesses: [],
-          estimatedWordCount: 50,
-        },
-        threadProgressAchieved: [],
-        foreshadowingDeployed: [],
-        narrativeChecks: [],
-        appearanceChecks: [],
-        characterReferences: [],
-        tenseDetected: 'past',
-        // conflictAnalysis is intentionally missing
-        ruleChecks: [],
-        knowledgeChecks: [],
-        checklistResults: [],
-      },
-    };
-
-    const entry: MockPass2Entry = {
-      prose: 'Test prose for missing conflictAnalysis.',
-      analysis: missingBlock,
-    };
-
+    const entry = makeEntryMissingBlock(
+      'conflictAnalysis',
+      'Test prose for missing conflictAnalysis.',
+    );
     const pipeline = buildPipeline(entry, 0);
     const result = await pipeline.renderScene(makeJob('test'));
 
     expect(result.analysis).toBeNull();
     expect(result.pass2Rejection).toBe('validation');
+    expect(result.errors.some((e) => e.includes('schema validation'))).toBe(true);
     expect(result.needsReview).toBe(true);
   });
 
   it('rejects analysis missing a required block (ruleChecks)', async () => {
-    const missingBlock: AnalysisResult = {
-      eventId: 'test',
-      analysis: {
-        postconditions: { covered: [], dropped: [] },
-        preconditions: { violated: [] },
-        pov: { consistent: true, leaks: [] },
-        inventedDetails: [],
-        quality: {
-          proseScore: 3,
-          maxScore: 5,
-          strengths: [],
-          weaknesses: [],
-          estimatedWordCount: 50,
-        },
-        threadProgressAchieved: [],
-        foreshadowingDeployed: [],
-        narrativeChecks: [],
-        appearanceChecks: [],
-        characterReferences: [],
-        tenseDetected: 'past',
-        conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-        // ruleChecks is intentionally missing
-        knowledgeChecks: [],
-        checklistResults: [],
-      },
-    };
-
-    const entry: MockPass2Entry = {
-      prose: 'Test prose for missing ruleChecks.',
-      analysis: missingBlock,
-    };
-
+    const entry = makeEntryMissingBlock('ruleChecks', 'Test prose for missing ruleChecks.');
     const pipeline = buildPipeline(entry, 0);
     const result = await pipeline.renderScene(makeJob('test'));
 
     expect(result.analysis).toBeNull();
     expect(result.pass2Rejection).toBe('validation');
+    expect(result.errors.some((e) => e.includes('schema validation'))).toBe(true);
     expect(result.needsReview).toBe(true);
   });
 
   it('rejects analysis missing a required block (knowledgeChecks)', async () => {
-    const missingBlock: AnalysisResult = {
-      eventId: 'test',
-      analysis: {
-        postconditions: { covered: [], dropped: [] },
-        preconditions: { violated: [] },
-        pov: { consistent: true, leaks: [] },
-        inventedDetails: [],
-        quality: {
-          proseScore: 3,
-          maxScore: 5,
-          strengths: [],
-          weaknesses: [],
-          estimatedWordCount: 50,
-        },
-        threadProgressAchieved: [],
-        foreshadowingDeployed: [],
-        narrativeChecks: [],
-        appearanceChecks: [],
-        characterReferences: [],
-        tenseDetected: 'past',
-        conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-        ruleChecks: [],
-        checklistResults: [],
-        // knowledgeChecks is intentionally missing
-      },
-    };
-
-    const entry: MockPass2Entry = {
-      prose: 'Test prose for missing knowledgeChecks.',
-      analysis: missingBlock,
-    };
-
+    const entry = makeEntryMissingBlock(
+      'knowledgeChecks',
+      'Test prose for missing knowledgeChecks.',
+    );
     const pipeline = buildPipeline(entry, 0);
     const result = await pipeline.renderScene(makeJob('test'));
 
     expect(result.analysis).toBeNull();
     expect(result.pass2Rejection).toBe('validation');
+    expect(result.errors.some((e) => e.includes('schema validation'))).toBe(true);
     expect(result.needsReview).toBe(true);
   });
 
@@ -585,6 +521,7 @@ describe('analysis contract', () => {
       skipCache: true,
       maxRetries: 1,
       aggregator,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     const job = makeJob('test');
@@ -599,7 +536,7 @@ describe('analysis contract', () => {
     ];
 
     const result = await pipeline.renderScene(job);
-    expect(result.analysis).not.toBeNull();
+    expect(result.analysis, result.errors.join('\n')).not.toBeNull();
     // The prompt render-analysis.ts includes Active World Rules section when
     // input.activeRules is non-empty — the mock won't surface it in output,
     // but the pipeline should not crash and analysis should be valid.
@@ -622,10 +559,11 @@ describe('analysis contract', () => {
       aggregator,
       // Pass the pre-computed analysis contract
       analysisContract: contract,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     const result = await pipeline.renderScene(makeJob('test'));
-    expect(result.analysis).not.toBeNull();
+    expect(result.analysis, result.errors.join('\n')).not.toBeNull();
     expect(result.analysis!.eventId).toBe('test');
   });
 

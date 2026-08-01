@@ -290,7 +290,6 @@ export interface RenderGroupManifest {
 
 export type PlannerMode = 'manual' | 'suggest' | 'auto';
 
-
 // ─── ReleaseDecision (§9) ──────────────────────────────────────────────────
 
 /**
@@ -311,7 +310,6 @@ export interface ReleaseDecision {
   reasons: string[];
   waiverId?: string;
 }
-
 
 // ─── RevisionContext — Editorial Revision Metadata ───────────────────────────
 
@@ -591,7 +589,7 @@ export interface RenderSurfaceExtraction {
 export interface RenderSurfaceAutoConfig {
   authorized: boolean;
   maxParallelGroupSize: number;
- }
+}
 
 export interface AutoGroupConfig {
   /** Maximum parallel group size before splitting. */
@@ -623,7 +621,6 @@ export interface SurfacePlanProposal {
   /** Deterministic SHA-256 hash of the proposal (excludes generatedAt). */
   hash: string;
 }
-
 
 export interface SurfacePlanResult {
   /** Generated manifest. */

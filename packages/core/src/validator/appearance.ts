@@ -40,8 +40,8 @@ export class AppearanceValidator implements Validator {
     // for the same entity with different values, that's a contradiction
     const appearanceFacts = event.postconditions.filter(
       (pc) =>
-        getAttributeSemanticRole('character', pc.attribute) === 'appearance' &&
-        pc.value !== undefined,
+        getAttributeSemanticRole(input.entityTypeCatalog, 'character', pc.attribute) ===
+          'appearance' && pc.value !== undefined,
     );
     if (appearanceFacts.length > 1) {
       const values = [...new Set(appearanceFacts.map((f) => f.value))];
@@ -55,7 +55,8 @@ export class AppearanceValidator implements Validator {
             `Contradictory appearance values within same event: [${values.join(', ')}]`,
             'Remove the contradictory postcondition or resolve the contradiction.',
             'edit_file',
-            getAttributesBySemanticRole('character', 'appearance')[0] ?? 'appearance',
+            getAttributesBySemanticRole(input.entityTypeCatalog, 'character', 'appearance')[0] ??
+              'appearance',
           ),
         );
       }
@@ -81,6 +82,7 @@ export class AppearanceValidator implements Validator {
       // Verify the entity exists
       const entityState = worldState.entities[entityId];
       if (!entityState) {
+        const checkIndex = appChecks.indexOf(check);
         issues.push(
           makeIssue(
             this.name,
@@ -93,13 +95,17 @@ export class AppearanceValidator implements Validator {
             'character',
             undefined,
             entityId,
+            'evidence_mismatch',
+            checkIndex >= 0
+              ? { field: 'appearanceChecks', analysisPointer: `/appearanceChecks/${checkIndex}` }
+              : { field: 'appearanceChecks' },
           ),
         );
         continue;
       }
-
       // Check for absent or contradicted appearance details
       if (matchLevel === 'absent') {
+        const checkIndex = appChecks.indexOf(check);
         issues.push(
           makeIssue(
             this.name,
@@ -112,9 +118,14 @@ export class AppearanceValidator implements Validator {
             undefined,
             undefined,
             check.declared,
+            'evidence_mismatch',
+            checkIndex >= 0
+              ? { field: 'appearanceChecks', analysisPointer: `/appearanceChecks/${checkIndex}` }
+              : { field: 'appearanceChecks' },
           ),
         );
       } else if (matchLevel === 'contradicted') {
+        const checkIndex = appChecks.indexOf(check);
         issues.push(
           makeIssue(
             this.name,
@@ -127,6 +138,10 @@ export class AppearanceValidator implements Validator {
             undefined,
             undefined,
             { declared: check.declared, prose: check.evidence },
+            'evidence_mismatch',
+            checkIndex >= 0
+              ? { field: 'appearanceChecks', analysisPointer: `/appearanceChecks/${checkIndex}` }
+              : { field: 'appearanceChecks' },
           ),
         );
       }

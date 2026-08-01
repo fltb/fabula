@@ -6,16 +6,12 @@
 
 import { RuleConstraintViolationError } from '../errors.js';
 import type {
-  RuleActivation,
   RuleConstraint,
   RuleEffectEntry,
-  RuleEffectiveness,
   RuleEpochId,
   RuleEvaluationRecord,
-  RuleException,
   RuleId,
   RuleRuntimeState,
-  RuleSpecificationId,
   RuleTransaction,
 } from '../types/index.js';
 
@@ -137,7 +133,7 @@ export function evaluateConstraints(
  *   introduce_exception → add_exception
  *   nullify    → set_effectiveness:nullified
  */
-export function convertLegacyRuleEffect(entry: RuleEffectEntry, nodeId: string): RuleTransaction {
+export function convertLegacyRuleEffect(entry: RuleEffectEntry, _nodeId: string): RuleTransaction {
   const base = {
     type: 'rule_transaction' as const,
     ruleId: entry.rule,
@@ -315,10 +311,9 @@ function evaluateConstraint(
 
 function evaluatePredicate(
   predicate: { version: string; type: string; expression: string; operators?: string[] },
-  stateBefore?: Record<string, unknown>,
-  stateAfter?: Record<string, unknown>,
+  _stateBefore?: Record<string, unknown>,
+  _stateAfter?: Record<string, unknown>,
 ): boolean {
-  // Simple predicate evaluation: check for selector expressions
   // Format: "entityId.attribute operator value" or "state.invariant condition"
   if (predicate.type === 'simple') {
     // Simple selectors: check if a value exists or matches in state

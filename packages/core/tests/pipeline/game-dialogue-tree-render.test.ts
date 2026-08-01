@@ -1,12 +1,17 @@
-import { parse as parseYaml } from 'yaml';
+import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { parse as parseYaml } from 'yaml';
+import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
+import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
 import { executeEditorialRender, executeEditorialTreeRender } from '../../src/editorial/index.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
-import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
+import type {
+  EditorialRenderRequestV1,
+  EditorialRuntime,
+  RenderGameDialogueTreeRequestV1,
+} from '../../src/types/editorial.ts';
 import type { BranchPath } from '../../src/types/index.ts';
-import * as crypto from 'node:crypto';
-import type { EditorialRenderRequestV1, EditorialRuntime, RenderGameDialogueTreeRequestV1 } from '../../src/types/editorial.ts';
+import { makeCustomEntry, makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 const PROJECT_DIR = '/game-dialogue-render';
 const PROSE =
@@ -14,36 +19,38 @@ const PROSE =
   'The hero listened to the offer without moving, perhaps measuring the distance to every door and the certainty in the strangers voice. ' +
   'Outside, rain began to tick against the glass, patient as a clock.';
 
+const ANALYSIS_PAYLOAD: Record<string, unknown> = {
+  postconditions: { covered: [], dropped: [] },
+  preconditions: { violated: [] },
+  pov: { consistent: true, leaks: [] },
+  inventedDetails: [],
+  quality: {
+    proseScore: 5,
+    maxScore: 5,
+    strengths: ['concrete scene work'],
+    weaknesses: [],
+    estimatedWordCount: 80,
+  },
+  threadProgressAchieved: [],
+  foreshadowingDeployed: [],
+  narrativeChecks: [],
+  appearanceChecks: [],
+  characterReferences: [],
+  tenseDetected: 'past',
+  conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+  ruleChecks: [],
+  knowledgeChecks: [],
+  checklistResults: [],
+};
+
 function makeEntry(eventId: string): MockPass2Entry {
-  return {
-    prose: `${eventId}: ${PROSE}`,
-    analysis: {
-      eventId,
-      analysis: {
-        postconditions: { covered: [], dropped: [] },
-        preconditions: { violated: [] },
-        pov: { consistent: true, leaks: [] },
-        inventedDetails: [],
-        quality: {
-          proseScore: 5,
-          maxScore: 5,
-          strengths: ['concrete scene work'],
-          weaknesses: [],
-          estimatedWordCount: 80,
-        },
-        threadProgressAchieved: [],
-        foreshadowingDeployed: [],
-        narrativeChecks: [],
-        appearanceChecks: [],
-        characterReferences: [],
-        tenseDetected: 'past',
-        conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-        ruleChecks: [],
-        knowledgeChecks: [],
-        checklistResults: [],
-      },
-    },
-  };
+  const prose = `${eventId}: ${PROSE}`;
+  return makeCustomEntry(eventId, prose, {
+    eventId,
+    protocol: makeProtocol(prose),
+    observations: makeObservations(ANALYSIS_PAYLOAD, prose),
+    analysis: ANALYSIS_PAYLOAD,
+  });
 }
 
 function provider(): MockPass2Provider {
@@ -78,6 +85,51 @@ function setupProject(storage: MemoryStorage): void {
       '  - { id: day_1, at: day_1, description: "Day 1" }',
       'threads: []',
       'worldFacts: []',
+    ].join('\n'),
+  );
+  storage.write(
+    `${PROJECT_DIR}/definitions/entity-types.yaml`,
+    [
+      'types:',
+      '  character:',
+      '    typeId: character',
+      '    kind: character',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates:',
+      '          - active',
+      '          - inactive',
+      '          - retired',
+      '        unsetAllowed: false',
+      '      chose_hunt:',
+      '        attributeId: chose_hunt',
+      '        valueType: boolean',
+      '        requiredAt: never',
+      '        writePolicy: mutable',
+      '        unsetAllowed: true',
+      '      traits:',
+      '        attributeId: traits',
+      '        valueType: string_list',
+      '        requiredAt: never',
+      '        writePolicy: immutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - - active',
+      '          - inactive',
+      '        - - active',
+      '          - retired',
+      '        - - inactive',
+      '          - active',
+      '        - - inactive',
+      '          - retired',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
     ].join('\n'),
   );
   storage.write(
@@ -147,6 +199,8 @@ function setupProject(storage: MemoryStorage): void {
       '  character: narrator',
       '  type: omniscient',
       'sceneBrief: The player receives an offer.',
+      'beats:',
+      '  - "The player receives an offer."',
       'preconditions: []',
       'expectedPostconditions: []',
       'choices:',
@@ -179,6 +233,8 @@ function setupProject(storage: MemoryStorage): void {
       '  character: hero',
       '  type: third_person_limited',
       'sceneBrief: The hunt begins.',
+      'beats:',
+      '  - "The hunt begins."',
       'preconditions:',
       '  - entity: hero',
       '    attribute: chose_hunt',
@@ -197,6 +253,8 @@ function setupProject(storage: MemoryStorage): void {
       '  character: hero',
       '  type: third_person_limited',
       'sceneBrief: The hero refuses.',
+      'beats:',
+      '  - "The hero refuses."',
       'preconditions:',
       '  - entity: hero',
       '    attribute: chose_hunt',
@@ -317,9 +375,7 @@ playerChoices:
       expect(rendered.errors).toEqual([]);
       expect(rendered.results.map((item) => item.eventId)).toEqual(expectedEventIds);
       const renderRequest = parseYaml(
-        storage.read(
-          `${PROJECT_DIR}/scenes/chapter-01/${expectedEventIds[1]}_render_request.yaml`,
-        ),
+        storage.read(`${PROJECT_DIR}/scenes/chapter-01/${expectedEventIds[1]}_render_request.yaml`),
       ) as { requests: Array<{ messages: Array<{ content: string }> }> };
       expect(renderRequest.requests[0]!.messages[1]!.content).toContain(
         `"chose_hunt": ${expectedChoice}`,
@@ -335,10 +391,7 @@ playerChoices:
       providerCalls++;
       return complete(request);
     };
-    for (const selector of [
-      undefined,
-      { type: 'events', eventIds: ['NONEXISTENT'] },
-    ]) {
+    for (const selector of [undefined, { type: 'events', eventIds: ['NONEXISTENT'] }]) {
       const invalid = await executeEditorialRender(
         {
           version: 1,

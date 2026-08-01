@@ -13,6 +13,12 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "David is invited to Mr Spenlow's house in Norwood and meets Mr Spenlow's daughter Dora — 'the bewitching little Dora' — and falls instantly, hopelessly in love. Dora is small, pretty, golden-curled, and utterly charming with her little dog Jip and her coquettish ways. David becomes obsessed, wandering around Norwood, writing passionate letters, and living in a dream of love. Meanwhile, he visits Agnes in Canterbury and writes to her about his passion; she listens with her usual gentle sympathy, though her own feelings are concealed. The chapter contrasts David's childish infatuation with Dora ('my bad angel' — his undisciplined heart) and his deep, unacknowledged reliance on Agnes ('my good angel')."
+beats:
+  - "David is invited to Mr Spenlow's house in Norwood and meets Mr Spenlow's daughter Dora — 'the bewitching little Dora' — and falls instantly, hopelessly in love."
+  - "Dora is small, pretty, golden-curled, and utterly charming with her little dog Jip and her coquettish ways."
+  - "David becomes obsessed, wandering around Norwood, writing passionate letters, and living in a dream of love."
+  - "Meanwhile, he visits Agnes in Canterbury and writes to her about his passion; she listens with her usual gentle sympathy, though her own feelings are concealed."
+  - "The chapter contrasts David's childish infatuation with Dora ('my bad angel' — his undisciplined heart) and his deep, unacknowledged reliance on Agnes ('my good angel')."
 preconditions:
   - entity: david_copperfield
     attribute: location
@@ -83,6 +89,13 @@ introduces:
     id: norwood
     initialState:
       status: active
+  - type: character
+    id: mr_spenlow
+    initialState:
+      location: norwood
+      status: proctor_of_doctors_commons
+      condition: doting_widower_father
+      emotionalState: complacent_proud
 styleGuidance:
   tone: "ecstatic, feverish, self-mocking — adult David looking back on his youthful folly with affectionate derision"
   targetWordCount: 800

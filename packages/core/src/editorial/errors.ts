@@ -1,4 +1,4 @@
-import { NovalisticallyError, type ErrorContext } from '../errors.ts';
+import { type ErrorContext, NovalisticallyError } from '../errors.ts';
 import type { EditorialError, EditorialErrorCode } from '../types/editorial.ts';
 
 export class EditorialOperationError extends NovalisticallyError {

@@ -16,10 +16,5 @@ traits:
 - frivolous
 - spoiled
 - naive
-initialState:
-  location: loc_guanjia
-  status: alive
-  condition: unmarried
-  emotionalState: carefree
 backstory: 冠家最受宠的小女儿。
 knownSecrets: []

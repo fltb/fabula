@@ -28,7 +28,7 @@ export class VoiceConsistencyValidator implements Validator {
   name = 'voice_consistency';
   category = 'narrative_style' as const;
 
-  validatePre(input: PreRenderInput): ValidationIssue[] {
+  validatePre(_input: PreRenderInput): ValidationIssue[] {
     // No pre-check needed for this dimension
     return [];
   }
@@ -55,6 +55,9 @@ export class VoiceConsistencyValidator implements Validator {
           'Update the prose to match the declared voice, or change the voice declaration.',
           'edit_file',
           'voice.level',
+          undefined,
+          undefined,
+          'interpretive_assessment',
         ),
       );
     }
@@ -71,6 +74,9 @@ export class VoiceConsistencyValidator implements Validator {
           'Update the prose to match the declared voice, or change the voice declaration.',
           'edit_file',
           'voice.relation',
+          undefined,
+          undefined,
+          'interpretive_assessment',
         ),
       );
     }

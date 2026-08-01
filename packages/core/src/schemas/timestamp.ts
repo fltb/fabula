@@ -59,9 +59,7 @@ export const relativeTimestampSchema = z
   .object({
     type: z.literal('relative'),
     anchor: z.string().min(1),
-    offset: z
-      .object({ amount: z.number().finite().nonnegative(), unit: timeUnitSchema })
-      .strict(),
+    offset: z.object({ amount: z.number().finite().nonnegative(), unit: timeUnitSchema }).strict(),
   })
   .strict();
 

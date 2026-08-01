@@ -3,21 +3,149 @@
   "analysis": {
     "eventId": "E1b",
     "analysis": {
-      "postconditions": { "covered": [], "dropped": [] },
-      "preconditions": { "violated": [] },
-      "pov": { "consistent": true, "leaks": [] },
+      "postconditions": {
+        "covered": [],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
       "inventedDetails": [],
-      "quality": { "proseScore": 5, "maxScore": 5, "strengths": ["branch-aware suspense"], "weaknesses": [], "estimatedWordCount": 80 },
+      "quality": {
+        "proseScore": 5,
+        "maxScore": 5,
+        "strengths": [
+          "branch-aware suspense"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 80
+      },
       "threadProgressAchieved": [],
       "foreshadowingDeployed": [],
       "narrativeChecks": [],
       "appearanceChecks": [],
-      "characterReferences": [{ "entityId": "hero", "namesUsed": ["hero"] }],
+      "characterReferences": [
+        {
+          "entityId": "hero",
+          "namesUsed": [
+            "hero"
+          ]
+        }
+      ],
       "tenseDetected": "past",
-      "conflictAnalysis": { "primaryType": "person_vs_self", "resolutionAchieved": false },
+      "conflictAnalysis": {
+        "primaryType": "person_vs_self",
+        "resolutionAchieved": false
+      },
       "ruleChecks": [],
       "knowledgeChecks": [],
       "checklistResults": []
+    },
+    "protocol": {
+      "proseHash": "b9b84cae9896b65f9b8f440cdf451992061af1261f61ee17a3bebf5d345d6850",
+      "analysisSchema": "mock-analysis-contract",
+      "model": "mock-stage1",
+      "provider": "mock-pass2",
+      "analysisPromptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "samplingConfigHash": "mock-sampling-config",
+      "validatorPolicy": "mock-validator-policy",
+      "referencePolicy": "mock-reference-policy"
+    },
+    "observations": {
+      "postconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "preconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "pov": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "inventedDetails": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "quality": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "threadProgressAchieved": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "foreshadowingDeployed": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "narrativeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "appearanceChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "characterReferences": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "tenseDetected": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "conflictAnalysis": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "ruleChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "knowledgeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      },
+      "checklistResults": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the locked rooms"
+        ]
+      }
     }
   }
 }

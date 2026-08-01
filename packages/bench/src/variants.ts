@@ -6,18 +6,14 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
+  type AnalysisObservation,
   type AnalysisResult,
-  compileStoryBoundaries,
-  compileStoryRuntimeGraph,
-  EntityMapper,
   type EntityRegistry,
-  type Fact,
-  InMemoryEntityRegistry,
+  type EntityTypeCatalog,
+  FsStorage,
+  initializeProject,
   type NarrativeEvent,
   ResultAggregator,
-  type ThreadId,
-  type ThreadRunId,
-  type ThreadRuntimeState,
   type ValidationIssue,
   type WorldState,
 } from '@novalistically/core';
@@ -162,6 +158,17 @@ function makeBaselineAnalysisContent(): Record<string, unknown> {
   };
 }
 
+/** Mark every active analysis field as produced with mock evidence. */
+function makeProducedObservations(
+  content: Record<string, unknown>,
+): Record<string, AnalysisObservation> {
+  const observations: Record<string, AnalysisObservation> = {};
+  for (const field of Object.keys(content)) {
+    observations[field] = { disposition: 'produced', evidence: ['(mock evidence)'] };
+  }
+  return observations;
+}
+
 // ─── Mutation Engine ────────────────────────────────────────────────────────
 
 /**
@@ -173,21 +180,6 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
   const applied: string[] = [];
 
   for (const inj of injections) {
-    // Handle system:genesis specially (it might not be in normal events array)
-    if (inj.entityId === 'system:genesis') {
-      if (inj.attribute === 'event') {
-        // Remove genesis event entirely
-        const idx = events.findIndex((e) => e.id === 'system:genesis');
-        if (idx >= 0) {
-          events.splice(idx, 1);
-          applied.push('Removed system:genesis from events array');
-        } else {
-          applied.push('system:genesis not found (already removed)');
-        }
-      }
-      continue;
-    }
-
     const event = events.find((e) => e.id === inj.entityId);
     if (!event) {
       applied.push(`Event ${inj.entityId} not found in cloned array — skipping`);
@@ -295,9 +287,8 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
             }
           }
         } else if (inj.expectedValidator === 'character_state') {
-          // Add a postcondition that contradicts character state
-          // e.g., setting xianglins_wife.status = dead when later
-          // events expect alive
+          // Add a postcondition that contradicts character state:
+          // set xianglins_wife.status = dead on this event.
           event.postconditions.push({
             id: `injected_dead_${nextInjId()}`,
             entityId: 'xianglins_wife',
@@ -305,19 +296,25 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
             value: 'dead',
             validity: makeFactValidity(),
           });
-          // Add a conflicting precondition to this same event so the
-          // CharacterStateValidator fires when checking preconditions.
-          // The state already has status=dead from this event's postcondition
-          // (applied during buildStateFromEvents), so the precondition check
-          // will detect the dead-status contradiction.
-          event.preconditions.push({
+          // Add a conflicting alive precondition to the NEXT event (in
+          // narrative order). Incremental replay validates each event against
+          // pre-event state, so the precondition is only checked after this
+          // event's dead postcondition has been applied — that is when
+          // CharacterStateValidator detects the dead-status contradiction.
+          const nextEvents = [...events]
+            .filter((e) => e.narrativeOrder > event.narrativeOrder)
+            .sort((a, b) => a.narrativeOrder - b.narrativeOrder);
+          const aliveCheckTarget = nextEvents[0] ?? event;
+          aliveCheckTarget.preconditions.push({
             id: `injected_alive_check_${nextInjId()}`,
             entityId: 'xianglins_wife',
             attribute: 'status',
             value: 'alive',
             validity: makeFactValidity(),
           });
-          applied.push('Added dead status postcondition + alive precondition to same event');
+          applied.push(
+            `Added dead status postcondition to ${event.id} + alive precondition to ${aliveCheckTarget.id}`,
+          );
         } else if (inj.expectedValidator === 'world_rule') {
           // Add a postcondition that violates a world rule
           event.postconditions.push({
@@ -387,21 +384,22 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
       // ── narratorKnowledge / knowledge ───────────────────────────────
       case 'narratorKnowledge':
       case 'narrator_knowledge': {
-        // Add postcondition with 'knows' attribute about future events.
-        // KnowledgeValidator.validatePre checks postconditions for temporal
-        // consistency — it looks for matching postconditions in future events.
+        // Add postcondition with the catalog's knowledge attribute about future
+        // events. KnowledgeValidator.validatePre checks postconditions for
+        // temporal consistency — it looks for matching postconditions in
+        // future events (the semanticRole 'knowledge' lookup is catalog-driven).
         const futureFactValue = 'kidnapped_by_he_laoliu';
         event.postconditions.push({
           id: `future_knowledge_${nextInjId()}`,
           entityId: 'narrator',
-          attribute: 'knows',
+          attribute: 'knowledge',
           value: futureFactValue,
           validity: makeFactValidity(),
         });
-        applied.push('Added future knowledge postcondition (knows attribute)');
+        applied.push('Added future knowledge postcondition (knowledge attribute)');
 
-        // Also add a matching knows postcondition to the nearest future event
-        // so KnowledgeValidator detects the temporal inconsistency:
+        // Also add a matching knowledge postcondition to the nearest future
+        // event so KnowledgeValidator detects the temporal inconsistency:
         // the current event knows something before the future event establishes it.
         const futureEvents = events
           .filter((e) => e.narrativeOrder > event.narrativeOrder)
@@ -411,11 +409,11 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
           nearestFuture.postconditions.push({
             id: `establish_knowledge_${nextInjId()}`,
             entityId: 'narrator',
-            attribute: 'knows',
+            attribute: 'knowledge',
             value: futureFactValue,
             validity: makeFactValidity(),
           });
-          applied.push(`Added matching knows to future event ${nearestFuture.id}`);
+          applied.push(`Added matching knowledge to future event ${nearestFuture.id}`);
         }
         break;
       }
@@ -498,7 +496,9 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
       case 'sceneType':
       case 'sceneTypeInvalid':
       case 'scene_type_invalid': {
-        (event as any).sceneType = 'notarealtype';
+        // Negative benchmark: bypass the valid NarrativeEvent union to inject malformed input.
+        const malformedEvent = event as unknown as Record<string, unknown>;
+        malformedEvent.sceneType = 'notarealtype';
         applied.push('Set sceneType to "notarealtype"');
         break;
       }
@@ -512,8 +512,10 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
           value: 'beijing',
           validity: makeFactValidity(),
         });
-        // Also add dead-status postcondition + conflicting precondition
-        // on the SAME event so the CharacterStateValidator fires
+        // Also add dead-status postcondition, plus a conflicting alive
+        // precondition on the NEXT event (in narrative order) so incremental
+        // replay validates it against the dead state this event establishes —
+        // that is when CharacterStateValidator fires.
         event.postconditions.push({
           id: `injected_dead_loc_${nextInjId()}`,
           entityId: 'xianglins_wife',
@@ -521,14 +523,20 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
           value: 'dead',
           validity: makeFactValidity(),
         });
-        event.preconditions.push({
+        const nextEvents = [...events]
+          .filter((e) => e.narrativeOrder > event.narrativeOrder)
+          .sort((a, b) => a.narrativeOrder - b.narrativeOrder);
+        const aliveCheckTarget = nextEvents[0] ?? event;
+        aliveCheckTarget.preconditions.push({
           id: `injected_alive_check_loc_${nextInjId()}`,
           entityId: 'xianglins_wife',
           attribute: 'status',
           value: 'alive',
           validity: makeFactValidity(),
         });
-        applied.push('Added location=beijing postcondition + dead status injection');
+        applied.push(
+          `Added location=beijing + dead status postconditions to ${event.id}, alive precondition to ${aliveCheckTarget.id}`,
+        );
         break;
       }
 
@@ -552,9 +560,7 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
         // Set ALL events to 'climax' — no narrative arc structure.
         // PacingValidator flags climax events outside the 60-85% window.
         for (const e of events) {
-          if (e.id !== 'system:genesis') {
-            e.arcPosition = 'climax';
-          }
+          e.arcPosition = 'climax';
         }
         applied.push('Set all events to arcPosition="climax"');
         break;
@@ -565,9 +571,7 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
       case 'discourse_mode': {
         // Set ALL events to same discourse mode
         for (const e of events) {
-          if (e.id !== 'system:genesis') {
-            e.discourseMode = 'description';
-          }
+          e.discourseMode = 'description';
         }
         applied.push('Set all events to discourseMode="description"');
         break;
@@ -576,7 +580,9 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
       // ── branchExistence ────────────────────────────────────────────
       case 'branchExistence':
       case 'branch_existence': {
-        (event as any).branchExistence = {
+        // Negative benchmark: bypass the valid branch union to exercise schema/validator failure.
+        const malformedEvent = event as unknown as Record<string, unknown>;
+        malformedEvent.branchExistence = {
           type: 'paths',
           paths: [['A'], ['B']],
         };
@@ -584,7 +590,11 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
         // BranchMergeValidator.validatePre sees incoming branches
         for (const e of events) {
           if (e.narrativeOrder < event.narrativeOrder && e.branchExistence.type === 'all') {
-            (e as any).branchExistence = { type: 'paths', paths: [['A'], ['B']] };
+            const malformedPredecessor = e as unknown as Record<string, unknown>;
+            malformedPredecessor.branchExistence = {
+              type: 'paths',
+              paths: [['A'], ['B']],
+            };
           }
         }
         // Add unsatisfiable precondition — compareFact will yield mismatch
@@ -661,20 +671,24 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
 
   return applied;
 }
-
-// ─── Validator Runner ──────────────────────────────────────────────────────
-
-/**
- * Run all pre-render validators against the given events + state.
- * State must have been replayed from the (possibly mutated) events.
- */
 function runValidators(
   events: NarrativeEvent[],
   state: WorldState,
   registry: EntityRegistry,
   stateBeforeByEventId?: Map<string, WorldState>,
+  entityTypeCatalog?: EntityTypeCatalog,
 ): ValidationIssue[] {
-  const aggregator = new ResultAggregator();
+  // Current validator contract: catalog-driven semantic checks (knowledge,
+  // character_state lifecycle, appearance, pronoun narrative attributes)
+  // receive the project's compiled entity type catalog explicitly. Without
+  // it those checks are skipped by design (no default catalog fallback).
+  const aggregator = new ResultAggregator(
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    entityTypeCatalog,
+  );
   const results = aggregator.validateAll(events, state, registry, { stateBeforeByEventId });
 
   const allIssues: ValidationIssue[] = [];
@@ -684,22 +698,59 @@ function runValidators(
   return allIssues;
 }
 
+/**
+ * Clone only the canonical boundaries explicitly corrupted by a synthetic
+ * state-contradiction case. This mutates benchmark input data, not story
+ * replay: every untouched boundary remains the initializeProject() result.
+ */
+function buildSyntheticStateBoundaries(
+  base: Map<string, WorldState>,
+  events: readonly NarrativeEvent[],
+): Map<string, WorldState> {
+  const boundaries = new Map(base);
+  for (const event of events) {
+    const injectsDeadState = event.preconditions.some(
+      (fact) =>
+        fact.id.startsWith('injected_alive_check_') ||
+        fact.id.startsWith('injected_alive_check_loc_'),
+    );
+    if (!injectsDeadState) continue;
+
+    const baseState = base.get(event.id);
+    if (!baseState) continue;
+    const state = structuredClone(baseState);
+    const entity = state.entities['xianglins_wife'] ?? {};
+    entity['status'] = 'dead';
+    state.entities['xianglins_wife'] = entity;
+    boundaries.set(event.id, state);
+  }
+  return boundaries;
+}
+
 // ─── Injection File Processor ──────────────────────────────────────────────
 
 /**
- * Process a single injection file: load the YAML, create mutated events,
- * replay state incrementally per-event, run validators, and return results.
- *
- * State is built incrementally: each event is validated against the state
- * accumulated from all previous events (but NOT its own effects). This
- * ensures validators see pre-event state — critical for nullify detection,
- * circular dependency detection, and self-referencing precondition detection.
+ * Process one synthetic mutation file against the canonical base project's
+ * compiled boundaries. Mutation cases exercise validator sensitivity only;
+ * they never implement or replay a second story-state protocol.
  */
 function processInjectionFile(
   filePath: string,
   baseEvents: NarrativeEvent[],
   registry: EntityRegistry,
+  baseFinalState: WorldState,
+  baseStateBeforeByEventId: Map<string, WorldState>,
+  entityTypeCatalog?: EntityTypeCatalog,
 ): VariantIssueResult[] {
+  // One aggregator per file, carrying the project catalog for the current
+  // catalog-driven validator contract (no default catalog fallback).
+  const fileAggregator = new ResultAggregator(
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    entityTypeCatalog,
+  );
   const raw = YAML.parse(fs.readFileSync(filePath, 'utf-8'));
   const injections: InjectedEntry[] = raw?.injected ?? [];
   if (injections.length === 0) return [];
@@ -709,38 +760,16 @@ function processInjectionFile(
   // Deep-clone events and apply all injections for this file simultaneously
   const mutated = cloneEvents(baseEvents);
   const appliedDesc = applyInjections(mutated, injections);
-  // Build state incrementally: validate each event against pre-event state,
-  // then apply its effects for subsequent events.
-  const allIssues: ValidationIssue[] = [];
-  const incrementalState = makeEmptyState();
-
-  // Sort by narrative order for deterministic incremental replay
-  const sorted = [...mutated].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
-
-  // Seed initial state from genesis postconditions + registry entity state,
-  // matching production renderNovel's initialFacts construction.
-  const genesisEvent = sorted.find((e) => e.id === 'system:genesis');
-  if (genesisEvent) {
-    applyEventToState(genesisEvent, incrementalState);
-  }
-  // Apply registry entity state on top (overwrites genesis for same keys,
-  // matching compileStoryBoundaries behavior).
-  applyRegistryState(incrementalState, registry);
-
-  for (const event of sorted) {
-    if (event.id === 'system:genesis') {
-      continue;
-    }
-
-    // Validate event against current (pre-event) state
-    const eventAggregator = new ResultAggregator();
-    const chapter = Math.max(1, Math.ceil(event.narrativeOrder / 3));
-    const result = eventAggregator.validate(event, incrementalState, registry, sorted, chapter);
-    allIssues.push(...result.errors, ...result.warnings, ...result.infos);
-
-    // Apply event's effects to state for subsequent events
-    applyEventToState(event, incrementalState);
-  }
+  // Synthetic mutations are evaluated against the canonical base project's
+  // state boundaries. Project replay remains owned by initializeProject().
+  const stateBeforeByEventId = buildSyntheticStateBoundaries(baseStateBeforeByEventId, mutated);
+  const allIssues = runValidators(
+    mutated,
+    baseFinalState,
+    registry,
+    stateBeforeByEventId,
+    entityTypeCatalog,
+  );
 
   // For each injection entry, check if the expected validator matched
   const results: VariantIssueResult[] = injections.map((inj) => {
@@ -754,32 +783,33 @@ function processInjectionFile(
     if (inj.mockAnalysis || inj.mockProse) {
       const targetEvent = mutated.find((e) => e.id === inj.entityId);
       if (targetEvent) {
-        const renderAggregator = new ResultAggregator();
+        const mergedAnalysis: Record<string, unknown> = {
+          ...makeBaselineAnalysisContent(),
+          ...(inj.mockAnalysis as Record<string, unknown>),
+        };
         const mockAnalysis: AnalysisResult | undefined = inj.mockAnalysis
           ? {
               eventId: targetEvent.id,
-              analysis: {
-                ...makeBaselineAnalysisContent(),
-                ...(inj.mockAnalysis as Record<string, unknown>),
+              // Mock protocol pins the measurement configuration; bench mocks
+              // never round-trip through zod, so stable placeholders suffice.
+              protocol: {
+                proseHash: '',
+                analysisSchema: 'mock-variant',
+                model: 'mock',
+                provider: 'mock',
+                analysisPromptHash: 'mock-variant-prompt',
+                samplingConfigHash: 'mock-variant-sampling',
+                validatorPolicy: 'default',
+                referencePolicy: 'none',
               },
+              observations: makeProducedObservations(mergedAnalysis),
+              analysis: mergedAnalysis,
             }
           : undefined;
 
-        // Build pre-event state for post-render validation: stop at the target event.
-        // Must include registry entity state (same as pre-render path) so validators
-        // like AliasValidator and PronounValidator can access declaration fields.
-        const postRenderState = makeEmptyState();
-        if (genesisEvent) {
-          applyEventToState(genesisEvent, postRenderState);
-        }
-        applyRegistryState(postRenderState, registry);
-        for (const e of sorted) {
-          if (e.id === 'system:genesis') continue;
-          if (e.narrativeOrder >= targetEvent.narrativeOrder) break;
-          applyEventToState(e, postRenderState);
-        }
+        const postRenderState = stateBeforeByEventId.get(targetEvent.id) ?? baseFinalState;
 
-        const postResult = renderAggregator.validateRender(
+        const postResult = fileAggregator.validateRender(
           inj.mockProse ?? '',
           targetEvent,
           postRenderState,
@@ -838,22 +868,27 @@ export async function runVariantBench(): Promise<VariantResults> {
 
   const startTime = Date.now();
 
-  // ── Load base fixture data (shared entities across all tests) ──────
-  const mapper = new EntityMapper(baseFixturePath);
-  const projectData = mapper.loadProject();
-  const registry = new InMemoryEntityRegistry();
-  registry.load(baseFixturePath);
-  const baseEvents = mapper.loadAllEvents(projectData.chapters);
+  // ── Load base fixture through the canonical kernel ──────────────────
+  const storage = new FsStorage();
+  const {
+    events: baseEvents,
+    registry,
+    entityTypes,
+    runtime,
+  } = initializeProject(baseFixturePath, storage);
 
   // ── Branch variants ─────────────────────────────────────────────────
-  const branchA = runBranchVariant(path.join(root, 'branch-A'));
-  const branchB = runBranchVariant(path.join(root, 'branch-B'));
+  const branchA = runBranchVariant(path.join(root, 'branch-A'), storage);
+  const branchB = runBranchVariant(path.join(root, 'branch-B'), storage);
 
   // ── Error-injection variants ────────────────────────────────────────
   const errorInjectionResults = runInjectionVariants(
     path.join(root, 'error-injection'),
     baseEvents,
     registry,
+    runtime.boundaries.finalState,
+    runtime.boundaries.stateBeforeByEventId,
+    entityTypes,
   );
 
   // ── Extreme-damage variants ─────────────────────────────────────────
@@ -861,6 +896,9 @@ export async function runVariantBench(): Promise<VariantResults> {
     path.join(root, 'extreme-damage'),
     baseEvents,
     registry,
+    runtime.boundaries.finalState,
+    runtime.boundaries.stateBeforeByEventId,
+    entityTypes,
   );
 
   // ── Compute Pipeline F1 ─────────────────────────────────────────────
@@ -918,249 +956,45 @@ export async function runVariantBench(): Promise<VariantResults> {
   };
 }
 
-/**
- * Create a fresh empty WorldState with no accumulated facts.
- */
-function makeEmptyState(): WorldState {
-  return {
-    entities: {},
-    relationships: {},
-    knowledge: {},
-    threads: {},
-    rules: {},
-    facts: [],
-  };
-}
-
-/**
- * Apply a single event's effects to the world state (postconditions,
- * thread progress, relationship effects, knowledge, rule evidence).
- * Separated from buildStateFromEvents so incremental replay can use it.
- */
-function applyEventToState(event: NarrativeEvent, state: WorldState): void {
-  // Apply postconditions to entities
-  for (const fact of event.postconditions) {
-    if (fact.value === undefined) continue;
-    if (!state.entities[fact.entityId]) {
-      state.entities[fact.entityId] = {};
-    }
-    state.facts.push(fact);
-    state.entities[fact.entityId][fact.attribute] = fact.value;
-  }
-
-  // Update thread progress
-  for (const tp of event.threadProgress) {
-    state.threads[tp.thread] = {
-      threadId: tp.thread as ThreadId,
-      status: 'active',
-      currentRunId: `bench-${tp.thread}` as ThreadRunId,
-      phase: '',
-      bindings: {},
-      goalStates: {},
-      milestoneStates: {},
-      semanticStateHash: '',
-    };
-  }
-
-  // Update relationship state (STATE-2)
-  const rels = state.relationships as unknown as Record<string, Record<string, unknown>>;
-  for (const re of event.relationshipEffects) {
-    const relId = re.relationshipId as unknown as string;
-    if (!rels[relId]) {
-      rels[relId] = {
-        relationshipId: relId,
-        typeId: 'default',
-        epochs: {},
-        activeEpochId: undefined,
-      };
-    }
-    const relState = rels[relId];
-    const epochs = relState.epochs as Record<string, Record<string, unknown>>;
-    const epochId = re.epochId ?? 'epoch_1';
-    if (!epochs[epochId]) {
-      epochs[epochId] = {
-        epochId,
-        lifecycle: 'active',
-        memberships: {},
-        dimensions: {},
-      };
-    }
-    const epoch = epochs[epochId];
-    const memberships = epoch.memberships as Record<
-      string,
-      { membershipId: string; entityId: string; role?: string }
-    >;
-    for (const m of re.membershipAfter) {
-      memberships[m.membershipId] = m;
-    }
-    if (re.dimensionSet) {
-      const dimensions = epoch.dimensions as Record<
-        string,
-        { value: unknown; scope: string; lastUpdatedEffectId: string }
-      >;
-      for (const d of re.dimensionSet) {
-        const key = `${d.scope}::${d.dimensionId}`;
-        dimensions[key] = { value: d.value, scope: d.scope, lastUpdatedEffectId: re.effectId };
-      }
-    }
-    if (re.lifecycleAfter) {
-      epoch.lifecycle = re.lifecycleAfter;
-      if (re.lifecycleAfter === 'active') {
-        relState.activeEpochId = epochId;
-      } else if (re.lifecycleAfter === 'dissolved') {
-        if (relState.activeEpochId === epochId) {
-          relState.activeEpochId = undefined;
-        }
-      }
-    }
-  }
-
-  // Update knowledge (from postconditions with attribute "knows" or "knowledge")
-  for (const fact of event.postconditions) {
-    if (fact.attribute === 'knows' || fact.attribute === 'knowledge') {
-      if (!state.knowledge[fact.entityId]) {
-        state.knowledge[fact.entityId] = { knownFacts: [] };
-      }
-      state.knowledge[fact.entityId].knownFacts.push(fact.id);
-    }
-  }
-
-  // Update rule evidence (STATE-6: use RuleRuntimeState)
-  for (const re of event.ruleEffects) {
-    if (!state.rules[re.rule]) {
-      state.rules[re.rule] = {
-        ruleId: re.rule,
-        currentEpoch: `${re.rule}-epoch-default`,
-        specificationId: `${re.rule}-spec`,
-        activation: 'dormant',
-        effectiveness: 'full',
-        scopeBindings: {},
-        exceptions: [],
-      };
-    }
-    switch (re.effect) {
-      case 'reinforce':
-        state.rules[re.rule].activation = 'enabled';
-        state.rules[re.rule].effectiveness = 'full';
-        break;
-      case 'weaken':
-        state.rules[re.rule].activation = 'suspended';
-        break;
-      case 'nullify':
-        state.rules[re.rule].activation = 'dormant';
-        state.rules[re.rule].effectiveness = 'nullified';
-        break;
-      case 'introduce_exception':
-        state.rules[re.rule].exceptions.push({
-          exceptionId: `${re.rule}-exc-${state.rules[re.rule].exceptions.length}`,
-          status: 'active',
-          constraintIds: [],
-          scopeBindings: {},
-          effect: { type: 'exempt' },
-        });
-        break;
-    }
-  }
-}
-
-/**
- * Seed registry entity state into a world state, matching production
- * renderNovel's initialFacts construction where all entity.state fields
- * become available as initial facts. This ensures character declaration
- * fields (aliases, gender, appearance, age, profession) are accessible to
- * pre-render and post-render validators.
- *
- * Registry state is applied AFTER genesis postconditions so it overwrites
- * any duplicate keys, the same order as compileStoryBoundaries does.
- */
-function applyRegistryState(state: WorldState, registry: EntityRegistry): void {
-  for (const entity of registry.getAll()) {
-    if (!state.entities[entity.id]) {
-      state.entities[entity.id] = {};
-    }
-    for (const [attr, value] of Object.entries(entity.state)) {
-      if (value !== undefined) {
-        state.entities[entity.id][attr] = value;
-        state.facts.push({
-          id: `${entity.id}.${attr}`,
-          entityId: entity.id,
-          attribute: attr,
-          value,
-          validity: {
-            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
-            branches: { type: 'all' },
-          },
-        });
-      }
-    }
-  }
-}
-
 // ─── Branch variant runner ──────────────────────────────────────────────────
 
-function runBranchVariant(dir: string): { eventsLoaded: number; issues: ValidationIssue[] } {
-  const mapper = new EntityMapper(dir);
-  const projectData = mapper.loadProject();
-  const registry = new InMemoryEntityRegistry();
-  registry.load(dir);
-  const allEvents = mapper.loadAllEvents(projectData.chapters);
-
-  // Separate genesis event from authored events
-  const genesis = allEvents.find((e) => e.id === 'system:genesis');
-
-  // Initial facts = genesis postconditions + registry entity state
-  const initialFacts: Fact[] = [
-    ...(genesis?.postconditions ?? []),
-    ...registry.getAll().flatMap((entity) =>
-      Object.entries(entity.state).map(([attribute, value]) => ({
-        id: `${entity.id}.${attribute}`,
-        entityId: entity.id,
-        attribute,
-        value,
-        validity: {
-          temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
-          branches: { type: 'all' as const },
-        },
-      })),
-    ),
-  ];
-
-  // Compile canonical runtime graph + boundaries with causal ordering and state snapshots
-  const compiled = compileStoryRuntimeGraph({
-    events: allEvents,
-    initialFacts,
-    initialThreads: [],
-    timeAnchors: projectData.timeAnchors,
-    branchPath: { decisions: [] },
-  });
-  const boundaries = compileStoryBoundaries(
-    [...compiled.selectedEvents],
-    compiled.initialFacts,
-    compiled.storyAdjacency,
-  );
-
+function runBranchVariant(
+  dir: string,
+  storage: FsStorage,
+): { eventsLoaded: number; issues: ValidationIssue[] } {
+  const { events, registry, runtime, entityTypes } = initializeProject(dir, storage);
   const issues = runValidators(
-    [...compiled.selectedEvents],
-    boundaries.finalState,
+    events,
+    runtime.boundaries.finalState,
     registry,
-    boundaries.stateBeforeByEventId,
+    runtime.boundaries.stateBeforeByEventId,
+    entityTypes,
   );
-  return { eventsLoaded: compiled.selectedEvents.length, issues };
+  return { eventsLoaded: events.length, issues };
 }
 
 // ─── Injection variants runner ─────────────────────────────────────────────
-
 function runInjectionVariants(
   dir: string,
   baseEvents: NarrativeEvent[],
   registry: EntityRegistry,
+  baseFinalState: WorldState,
+  baseStateBeforeByEventId: Map<string, WorldState>,
+  entityTypeCatalog?: EntityTypeCatalog,
 ): VariantIssueResult[] {
   const files = fs.readdirSync(dir).filter((f) => f.endsWith('.yaml'));
   const allResults: VariantIssueResult[] = [];
 
   for (const file of files) {
     const filePath = path.join(dir, file);
-    const results = processInjectionFile(filePath, baseEvents, registry);
+    const results = processInjectionFile(
+      filePath,
+      baseEvents,
+      registry,
+      baseFinalState,
+      baseStateBeforeByEventId,
+      entityTypeCatalog,
+    );
     allResults.push(...results);
   }
 

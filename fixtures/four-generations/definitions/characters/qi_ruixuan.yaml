@@ -19,12 +19,6 @@ traits:
 - indecisive
 - kind
 - dutiful
-initialState:
-  location: loc_qijia
-  status: alive
-  condition: teaching
-  emotionalState: anxious_and_conflicted
-  political_stance: patriotic_but_passive
 backstory: 师范大学毕业，在学校教书认真负责。他认识钱默吟，敬佩钱先生的诗才与为人。他想要为国家做点事，却总被家庭责任拖住。他的矛盾是那一代沦陷区知识分子的共同命运。
 knownSecrets:
 - 协助钱默吟从事抗日宣传

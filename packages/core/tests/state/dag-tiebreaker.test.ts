@@ -32,6 +32,7 @@ function event(
     sceneType: 'linear',
     pov: { character: 'narrator', type: 'first_person' },
     sceneBrief: id,
+    beats: [id],
     preconditions,
     postconditions,
     threadProgress: [],

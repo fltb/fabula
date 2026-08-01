@@ -7,6 +7,24 @@ pov:
   character: rainsford
   type: third_person_limited
 sceneBrief: "Rainsford's foot sinks into the treacherous ooze of Death Swamp — quicksand that sucks at him like a living thing. He wrenches it free and, inspired by the soft earth, begins to dig. He has dug foxholes under fire in France, but this is different — this is a pit to kill. He digs until it is above his shoulders, cuts hard saplings and sharpens them to fine points like fangs, and plants them in the pit floor. He covers the mouth with a carpet of weeds and branches. Crouching behind a lightning-charred stump, he waits. Zaroff approaches with unusual swiftness. The pit cover gives way — but it is not Zaroff who falls in. It is Lazarus, Zaroff's finest hound, impaled on the stakes. Zaroff calls out his congratulations, then announces he will return with the whole pack. At daybreak, Rainsford is awakened by the baying of hounds — the whole pack is on his trail. Fleeing through the jungle, he remembers a native trick from Uganda: bending a springy sapling, lashing his hunting knife to it with wild grapevine, blade pointing down the trail. He releases the tension and runs. The baying grows closer, then stops abruptly. Rainsford climbs a tree and looks back. General Zaroff still stands — but Ivan lies dead, the knife having found his heart. Rainsford is now unarmed, and the hounds pick up the cry again."
+beats:
+  - "Rainsford's foot sinks into the treacherous ooze of Death Swamp — quicksand that sucks at him like a living thing."
+  - "He wrenches it free and, inspired by the soft earth, begins to dig."
+  - "He has dug foxholes under fire in France, but this is different — this is a pit to kill."
+  - "He digs until it is above his shoulders, cuts hard saplings and sharpens them to fine points like fangs, and plants them in the pit floor."
+  - "He covers the mouth with a carpet of weeds and branches."
+  - "Crouching behind a lightning-charred stump, he waits."
+  - "Zaroff approaches with unusual swiftness."
+  - "The pit cover gives way — but it is not Zaroff who falls in."
+  - "It is Lazarus, Zaroff's finest hound, impaled on the stakes."
+  - "Zaroff calls out his congratulations, then announces he will return with the whole pack."
+  - "At daybreak, Rainsford is awakened by the baying of hounds — the whole pack is on his trail."
+  - "Fleeing through the jungle, he remembers a native trick from Uganda: bending a springy sapling, lashing his hunting knife to it with wild grapevine, blade pointing down the trail."
+  - "He releases the tension and runs."
+  - "The baying grows closer, then stops abruptly."
+  - "Rainsford climbs a tree and looks back."
+  - "General Zaroff still stands — but Ivan lies dead, the knife having found his heart."
+  - "Rainsford is now unarmed, and the hounds pick up the cry again."
 preconditions:
   - entity: rainsford
     attribute: location
@@ -16,12 +34,12 @@ preconditions:
     attribute: status
     value: alive
     confidence: 1.0
-  - entity: world
-    attribute: zaroff_hunt_active
+  - entity: zaroff_hunt_3day
+    attribute: active
     value: true
     confidence: 1.0
-  - entity: world
-    attribute: time
+  - entity: time
+    attribute: value
     value: day_3_dusk
     confidence: 1.0
 expectedPostconditions:
@@ -53,7 +71,7 @@ expectedPostconditions:
     attribute: cause_of_death
     value: ugandan_knife_trap
     confidence: 1.0
-  - entity: world
+  - entity: death_swamp
     attribute: lazarus_killed_in_pit
     value: true
     confidence: 1.0
@@ -77,9 +95,9 @@ relationshipEffects:
       - ivan
     effect: dissolve
     direction: master_loses_servant
-newState:
-  type: loss
-  intensity: 0.8
+    newState:
+      type: loss
+      intensity: 0.8
 ruleEffects:
   - rule: zaroff_hunt_3day
     effect: reinforce
@@ -87,6 +105,5 @@ ruleEffects:
   - rule: no_other_weapon
     effect: reinforce
     evidence: "Rainsford uses only his hunting knife to dig the pit and set the Ugandan trap — no firearms."
-styleGuidance: "Frantic desperation. The swamp should feel like a living thing trying to swallow Rainsford. The pit-building is primal, methodical. The hound's death scream is a victory that tastes like ash. The knife trap should feel like throwing the last card in a losing hand — the moment Ivan dies is a split-second triumph swallowed by the continuing baying of the hounds. End with Rainsford unarmed and pursued."
-narrativeContent:
-  opening: "The ground turned soft and treacherous beneath Rainsford's moccasins, and he knew he had reached the place Zaroff had warned him about. Death Swamp. His foot plunged into ooze that sucked at him like a living thing, and he wrenched it free with a violence born of pure panic. But the softness of the earth gave him an idea.\n\nHe dug with his bare hands, with the knife, with a desperation that transcended thought. The pit grew deeper — above his shoulders — and he climbed out to cut saplings, sharpening their ends into points like fangs, planting them in the dark floor below. Then he wove a carpet of weeds and branches and drew it over the mouth like a shroud.\n\nHe crouched behind a lightning-charred stump and waited. The perfume of incense reached him before the man did.\n\nBut when the pit cover gave way, it was not Zaroff who screamed."
+styleGuidance:
+  tone: "Frantic desperation. The swamp should feel like a living thing trying to swallow Rainsford. The pit-building is primal, methodical. The hound's death scream is a victory that tastes like ash. The knife trap should feel like throwing the last card in a losing hand — the moment Ivan dies is a split-second triumph swallowed by the continuing baying of the hounds. End with Rainsford unarmed and pursued."

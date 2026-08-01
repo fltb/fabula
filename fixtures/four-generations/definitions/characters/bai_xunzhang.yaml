@@ -15,11 +15,6 @@ traits:
 - cautious
 - helpful
 - conflicted
-initialState:
-  location: loc_beiping
-  status: alive
-  condition: working
-  emotionalState: reluctant_duty
 backstory: 当了多年巡警，知道怎么做人。
 knownSecrets:
 - 帮祁家隐瞒瑞全出走

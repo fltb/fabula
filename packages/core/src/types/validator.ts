@@ -10,11 +10,12 @@
 //   then old methods and types are deleted.
 // ============================================================================
 
-import type { EventStore } from '../state/event-store.js';
 import type { StoryOrderIndex } from '../state/dag.js';
+import type { EventStore } from '../state/event-store.js';
 import type { AnalysisResult } from './analysis.js';
 import type { ContextPackage } from './context.js';
 import type { EntityId, EntityRegistry, SceneStoryCoordinate } from './entity.js';
+import type { EntityTypeCatalog } from './entity-catalog.js';
 import type { NarrativeEvent } from './event.js';
 import type { EpistemicLedger } from './knowledge.js';
 import type { ThreadRuntimeState } from './thread.js';
@@ -81,6 +82,11 @@ export interface PreRenderInput {
   getThreadProgress: (threadId: string) => ThreadRuntimeState | null;
   /** Story context from compiled graph. Optional — when absent, chronology checks are skipped. */
   story?: StoryValidationContext;
+  /**
+   * The project's compiled entity type catalog for semanticRole/writePolicy
+   * lookups. No default catalog fallback — absent means checks are skipped.
+   */
+  entityTypeCatalog?: EntityTypeCatalog;
 }
 
 // ——— Post-Render Input (new) ———
@@ -92,6 +98,8 @@ export interface PostRenderInput {
   analysis: AnalysisResult | null;
   chapter: number;
   entityRegistry?: EntityRegistry;
+  /** Project compiled entity type catalog for semanticRole/writePolicy lookups. */
+  entityTypeCatalog?: EntityTypeCatalog;
   /** Discourse-layer context package (S6c/DISCOURSE-1), when available. */
   context?: ContextPackage;
 }
@@ -114,9 +122,42 @@ export interface ValidatorContext {
 
 // ——— Validation Issue ———
 
+/**
+ * Kinds of validation findings. Severity remains independent (`error|warning|info`).
+ *
+ * - `compiler_invariant`: deterministic checks against authored source / compiled
+ *   world state. Never carries an `observationRef`.
+ * - `evidence_mismatch`: a produced Pass 2 verification payload (narrativeChecks,
+ *   knowledgeChecks, appearanceChecks, ruleChecks, checklistResults, pre/postcondition
+ *   blocks, …) contradicts or fails to cover the authored contract.
+ * - `interpretive_assessment`: a finding derived from an assessment/quality payload
+ *   (quality, pov, conflict, tense/voice/anachrony/duration/frequency/focalization
+ *   detection) — an interpretive measurement, not a verified fact.
+ * - `analysis_uncertainty`: the required Pass 2 field was `abstained` or `ambiguous`;
+ *   produced by the aggregator preflight, default severity `warning`.
+ */
+export type ValidationIssueKind =
+  | 'compiler_invariant'
+  | 'evidence_mismatch'
+  | 'interpretive_assessment'
+  | 'analysis_uncertainty';
+
+/**
+ * Minimal reference from a finding to its measurement — never a copy of the
+ * observation payload. `field` is the top-level analysis field key in
+ * `AnalysisResult.observations`; `analysisPointer` is an RFC 6901 pointer into
+ * `AnalysisResult.analysis` pointing at the atomic payload actually consumed.
+ */
+export interface ObservationRef {
+  field: string;
+  /** RFC 6901 JSON pointer into AnalysisResult.analysis (e.g. `/narrativeChecks/2`) */
+  analysisPointer?: string;
+}
+
 export interface ValidationIssue {
   validator: string;
   severity: 'error' | 'warning' | 'info';
+  kind: ValidationIssueKind;
   event: string;
   entity: string;
   attribute?: string;
@@ -137,6 +178,8 @@ export interface ValidationIssue {
     field?: string;
     value?: unknown;
   };
+  /** Optional reference to the Pass 2 observation this finding consumes. */
+  observationRef?: ObservationRef;
 }
 
 // ——— Validator ———

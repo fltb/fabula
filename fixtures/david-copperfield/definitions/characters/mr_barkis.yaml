@@ -1,0 +1,22 @@
+id: mr_barkis
+name: "Mr Barkis"
+type: supporting_character
+archetype: taciturn_carrier
+role: supporting
+description: "The carrier between Blunderstone and Yarmouth, a dour, secretive man who courts Peggotty through young David with the immortal message 'Barkis is willin'. His courtship is conducted in silence and parcels — he leaves oranges and a wooden egg-cup as tokens. He marries Peggotty, makes a modest fortune by careful savings, and dies years later at Yarmouth, leaving Peggotty a comfortable widow. His dying request to David — 'Barkis is willin' — closes his story with characteristic economy."
+appearance: "A gruff, weather-beaten man in a low-crowned hat, driving his grey horse and cart along the Yarmouth road. He has a way of shutting one eye and speaking in short, grudging sentences."
+aliases:
+  - "Barkis"
+  - "Mr Barkis"
+gender: male
+age: "Middle-aged"
+profession: "Carrier"
+traits:
+  - taciturn
+  - secretive
+  - thrifty
+  - loyal
+  - dour
+  - patient
+voiceNotes: "Short, grudging, and oracular — he speaks in fragments and pregnant silences. His great declaration of love, delivered through David, is the three words 'Barkis is willin', and he never elaborates."
+backstory: "Carrier on the Yarmouth road. He falls in love with Peggotty, courts her through David, and marries her after Clara Copperfield's death. He saves money quietly and prospers; on his deathbed at Yarmouth he is attended by David and Peggotty, and leaves his savings to her."

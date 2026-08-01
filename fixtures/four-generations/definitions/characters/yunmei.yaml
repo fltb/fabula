@@ -18,10 +18,5 @@ traits:
 - loyal
 - kind
 - shrewd
-initialState:
-  location: loc_qijia
-  status: alive
-  condition: healthy
-  emotionalState: worried_but_steadfast
 backstory: 娘家是普通北平市民，嫁到祁家后一心一意操持家务。她知道自己嫁了个有学问的丈夫，虽然两人之间有一层薄纱，但她用"尽责"来保障自己的地位。
 knownSecrets: []

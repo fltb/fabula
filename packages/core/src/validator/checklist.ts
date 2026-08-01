@@ -32,21 +32,14 @@ export class ChecklistValidator implements Validator {
       | { items: Array<{ dimension: string; description: string; required: boolean }> }
       | undefined;
     if (!checklist?.items?.length) return issues;
-
-    // Parse the checklistResults from the analysis
-    const rawChecklistResults = (analysis as unknown as Record<string, unknown>).checklistResults;
+    // Parse the checklistResults from the analysis payload
+    const rawChecklistResults = (analysis.analysis as Record<string, unknown>).checklistResults;
     const checklistResults =
       z.array(checklistResultSchema).safeParse(rawChecklistResults).data ?? [];
-
     // For each required item, find a matching coverage result
     for (const item of checklist.items) {
       if (!item.required) continue;
-
-      const result = checklistResults.find(
-        (r: { dimension: string; covered: boolean; evidence?: string }) =>
-          r.dimension === item.dimension,
-      );
-
+      const result = checklistResults.find((r) => r.dimension === item.dimension);
       if (!result) {
         // Required item was not evaluated by Pass 2
         issues.push(
@@ -59,11 +52,16 @@ export class ChecklistValidator implements Validator {
             `Ensure Pass 2 produces a checklistResult for dimension "${item.dimension}" with covered: true.`,
             'change_value',
             'narrativeChecklist',
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            { field: 'checklistResults' },
           ),
         );
       } else if (!result.covered) {
         // Required item was evaluated but marked as not covered
         const evidence = result.evidence ? ` (evidence: "${result.evidence}")` : '';
+        const resultIndex = checklistResults.indexOf(result);
         issues.push(
           makeIssue(
             this.name,
@@ -74,11 +72,16 @@ export class ChecklistValidator implements Validator {
             `Revise the prose to cover dimension "${item.dimension}".`,
             'change_value',
             'narrativeChecklist',
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            resultIndex >= 0
+              ? { field: 'checklistResults', analysisPointer: `/checklistResults/${resultIndex}` }
+              : { field: 'checklistResults' },
           ),
         );
       }
     }
-
     return issues;
   }
 

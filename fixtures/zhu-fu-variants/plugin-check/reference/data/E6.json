@@ -147,6 +147,108 @@
       ],
       "knowledgeChecks": [],
       "checklistResults": []
+    },
+    "protocol": {
+      "proseHash": "d1c937d670df1721f9c7335cb8070e5a641e33e029e31afee0c61bdca3fe5332",
+      "analysisSchema": "mock-analysis-contract",
+      "model": "mock-stage1",
+      "provider": "mock-pass2",
+      "analysisPromptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "samplingConfigHash": "mock-sampling-config",
+      "validatorPolicy": "mock-validator-policy",
+      "referencePolicy": "mock-reference-policy"
+    },
+    "observations": {
+      "postconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "preconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "pov": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "inventedDetails": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "quality": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "threadProgressAchieved": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "foreshadowingDeployed": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "narrativeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "appearanceChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "characterReferences": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "tenseDetected": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "conflictAnalysis": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "ruleChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "knowledgeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      },
+      "checklistResults": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂变成那样之后，四婶终于忍不住了。她当着我的"
+        ]
+      }
     }
   },
   "metadata": {

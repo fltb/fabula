@@ -64,6 +64,108 @@
       "ruleChecks": [],
       "knowledgeChecks": [],
       "checklistResults": []
+    },
+    "protocol": {
+      "proseHash": "4058c0323f1270f418d497866aadd536edadf60bb1d87ae33f4713ddb2370949",
+      "analysisSchema": "mock-analysis-contract",
+      "model": "mock-stage1",
+      "provider": "mock-pass2",
+      "analysisPromptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "samplingConfigHash": "mock-sampling-config",
+      "validatorPolicy": "mock-validator-policy",
+      "referencePolicy": "mock-reference-policy"
+    },
+    "observations": {
+      "postconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "preconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "pov": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "inventedDetails": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "quality": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "threadProgressAchieved": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "foreshadowingDeployed": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "narrativeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "appearanceChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "characterReferences": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "tenseDetected": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "conflictAnalysis": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "ruleChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "knowledgeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      },
+      "checklistResults": {
+        "disposition": "produced",
+        "evidence": [
+          "晚饭摆在桌上，四叔陪着我也只是默默地吃。忽然间，"
+        ]
+      }
     }
   },
   "metadata": {

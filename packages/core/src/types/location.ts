@@ -10,7 +10,7 @@ export interface LocationDefinition {
   kind: string;
   parent?: string;
   description: string;
-  initialState: Record<string, unknown>;
+  initialState?: Record<string, unknown>;
   notableFeatures?: string[];
 }
 
@@ -21,5 +21,5 @@ export interface ItemDefinition {
   name: string;
   kind: string;
   description: string;
-  initialState: Record<string, unknown>;
+  initialState?: Record<string, unknown>;
 }

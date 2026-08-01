@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { CacheDiagnostics } from '../src/cache/render-cache.ts';
 import {
   buildAttemptKeyMaterial,
   buildLogicalKeyMaterial,
@@ -13,7 +14,6 @@ import {
   setCachedRender,
   sha256Canonical,
 } from '../src/cache/render-cache.ts';
-import type { CacheDiagnostics } from '../src/cache/render-cache.ts';
 import { MemoryStorage } from '../src/storage/memory-storage.ts';
 
 const cacheDir = '/project/.nova/render-cache';
@@ -85,12 +85,17 @@ describe('layered cache key computation', () => {
     expect(changed).not.toBe(key1);
   });
 
-  it('buildValidationKeyMaterial includes prose hash + Pass 2 schema', () => {
+  it('buildValidationKeyMaterial includes prose hash + Pass 2 schema + protocol dims', () => {
     const input = {
       surfaceKeyString: 'surface-key-abc',
       proseHash: 'prose-hash-xyz',
       pass2SchemaModelId: 'gpt-4',
       validatorPolicyVersion: '1.0',
+      provider: 'provider-a',
+      analysisPromptHash: 'prompt-hash-1',
+      samplingConfigHash: 'sampling-hash-1',
+      validatorPolicy: 'policy-1',
+      referencePolicy: 'ref-1',
     };
     const key1 = buildValidationKeyMaterial(input);
     expect(key1).toMatch(/^[a-f0-9]{64}$/);
@@ -98,6 +103,10 @@ describe('layered cache key computation', () => {
     // Different prose hash -> different key
     const changed = buildValidationKeyMaterial({ ...input, proseHash: 'different-prose' });
     expect(changed).not.toBe(key1);
+
+    // Different prompt/sampling protocol -> different key
+    const changedPrompt = buildValidationKeyMaterial({ ...input, analysisPromptHash: 'prompt-2' });
+    expect(changedPrompt).not.toBe(key1);
   });
 
   it('buildAttemptKeyMaterial mutates with attempt number and feedback', () => {
@@ -136,7 +145,6 @@ describe('layered cache key computation', () => {
     const flat3 = computeFlatCacheKey({ ...layers, attempt: 'e'.repeat(64) });
     expect(flat3).not.toBe(flat1);
   });
-
 });
 
 // ─── Format v2 Cache Read/Write ──────────────────────────────────────────────
@@ -162,7 +170,9 @@ describe('v2 cache with layered keys', () => {
     const newFlatKey = 'new-flat-key';
     setCachedRender(cacheDir, eventId, oldFlatKey, renderData, storage);
 
-    expect(getCachedRender(cacheDir, eventId, newFlatKey, storage, undefined, diagnostics)).toBeNull();
+    expect(
+      getCachedRender(cacheDir, eventId, newFlatKey, storage, undefined, diagnostics),
+    ).toBeNull();
     expect(diagnostics.some((d) => d.diagnosis === 'stale')).toBe(true);
   });
 
@@ -194,11 +204,21 @@ describe('v2 cache with layered keys', () => {
       validationKeyStr: 'vkey',
       attemptKeyStr: 'akey',
     };
-    setCachedRender(cacheDir, eventId, flatKey, { prose: 'text without analysis' }, storage, undefined, layeredKeys);
+    setCachedRender(
+      cacheDir,
+      eventId,
+      flatKey,
+      { prose: 'text without analysis' },
+      storage,
+      undefined,
+      layeredKeys,
+    );
 
     const result = getCachedRender(cacheDir, eventId, flatKey, storage, undefined, diagnostics);
     expect(result).toBeNull();
-    expect(diagnostics.some((d) => d.diagnosis === 'stale' && d.detail?.includes('analysis'))).toBe(true);
+    expect(diagnostics.some((d) => d.diagnosis === 'stale' && d.detail?.includes('analysis'))).toBe(
+      true,
+    );
   });
 
   it('evidence hash mismatch returns null as stale miss', () => {
@@ -207,12 +227,12 @@ describe('v2 cache with layered keys', () => {
     const flatKey = 'evidence-test-key';
     setCachedRender(cacheDir, eventId, flatKey, renderData, storage, 'stored-hash');
 
-    expect(getCachedRender(cacheDir, eventId, flatKey, storage, 'current-hash', diagnostics)).toBeNull();
+    expect(
+      getCachedRender(cacheDir, eventId, flatKey, storage, 'current-hash', diagnostics),
+    ).toBeNull();
     expect(diagnostics.some((d) => d.diagnosis === 'stale')).toBe(true);
   });
 });
-
-
 
 // ─── v2 Source Identity — computeSourceContentHash ────────────────────────────
 
@@ -391,12 +411,19 @@ describe('v2 source content hash', () => {
       attemptKeyStr: 'akey',
     };
     setCachedRender(
-      cacheDir, eventId, flatKey, { prose: 'no analysis', chunks: [] },
-      storage, undefined, layeredKeys,
+      cacheDir,
+      eventId,
+      flatKey,
+      { prose: 'no analysis', chunks: [] },
+      storage,
+      undefined,
+      layeredKeys,
     );
     const result2 = getCachedRender(cacheDir, eventId, flatKey, storage, undefined, diagnostics);
     expect(result2).toBeNull();
-    expect(diagnostics.some((d) => d.diagnosis === 'stale' && d.detail?.includes('analysis'))).toBe(true);
+    expect(diagnostics.some((d) => d.diagnosis === 'stale' && d.detail?.includes('analysis'))).toBe(
+      true,
+    );
   });
 });
 

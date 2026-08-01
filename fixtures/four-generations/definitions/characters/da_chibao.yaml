@@ -18,11 +18,6 @@ traits:
 - ambitious
 - vulgar
 - shrewd
-initialState:
-  location: loc_guanjia
-  status: alive
-  condition: idle_but_ambitious
-  emotionalState: impatient_for_power
 backstory: 娘家有钱，嫁给了风流倜傥的冠晓荷。她管得住丈夫，却管不住他想娶小老婆的心。当汉奸是她人生最大的"事业"。
 knownSecrets:
 - 利用妓女检查所敛财

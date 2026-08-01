@@ -9,6 +9,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AnalysisResult } from '../../types/analysis.ts';
+import { extractExpectedProtocol } from '../prompts/render-analysis.ts';
 import type { CompletionRequest, CompletionResponse, LLMProvider, Message } from '../types.ts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -68,9 +69,7 @@ export class MockPass2Provider implements LLMProvider {
       throw new Error(`MockPass2Provider: reference directory does not exist: ${refDir}`);
     }
 
-    const files = fs
-      .readdirSync(refDir)
-      .filter((file) => file.endsWith('.json') && file !== 'system:genesis.json');
+    const files = fs.readdirSync(refDir).filter((file) => file.endsWith('.json'));
     for (const file of files) {
       const filePath = path.join(refDir, file);
       const data = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as MockPass2Entry;
@@ -121,7 +120,18 @@ export class MockPass2Provider implements LLMProvider {
       );
     }
 
-    const content = isPass2 ? JSON.stringify(entry.analysis) : entry.prose;
+    let content: string;
+    if (isPass2) {
+      // A compliant model echoes the REAL protocol from the prompt. Extract it
+      // and substitute it into the canned entry so fail-closed protocol
+      // comparison succeeds under whatever protocol is currently active.
+      const echoed = extractExpectedProtocol(request.messages);
+      content = echoed
+        ? JSON.stringify({ ...entry.analysis, protocol: echoed })
+        : JSON.stringify(entry.analysis);
+    } else {
+      content = entry.prose;
+    }
 
     // Estimate tokens (rough: 4 chars per token)
     const estimatedTokens = Math.ceil(content.length / 4);

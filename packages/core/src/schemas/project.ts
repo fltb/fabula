@@ -3,7 +3,6 @@
 // ============================================================================
 
 import { z } from 'zod';
-import type { StyleProfile } from '../style/default-profile.ts';
 import { ideaIRSchema } from './idea-ir.js';
 import { renderSurfaceConfigSchema } from './render-surface.js';
 
@@ -38,7 +37,6 @@ export const projectConfigSchema = z
     outputDir: z.string().optional(),
     defaultSceneTextTarget: z.number().int().positive().optional(),
     cacheEnabled: z.boolean().optional(),
-    schemaVersion: z.number().default(1),
     styleProfile: z
       .object({
         voice: z.string().optional(),

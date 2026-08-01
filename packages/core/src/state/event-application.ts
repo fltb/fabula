@@ -4,9 +4,8 @@ import { ConfigError, PreconditionMismatchError } from '../errors.js';
 import { canonicalJson } from '../render/scene-contract.ts';
 import type {
   BranchPath,
-  EntityDeclarationCatalog,
+  EntityCatalogContext,
   EntityRuntimeState,
-  EntityTypeCatalog,
   EpochId,
   Fact,
   NarrativeEvent,
@@ -30,50 +29,402 @@ import {
   isLegacyThreadProgress,
 } from './thread-replay.js';
 
-const LIFECYCLE_STATES: Record<string, true> = { active: true, inactive: true, retired: true };
+/** Synthetic event prefix for entity activation transitions. */
+export const INTRODUCTION_EVENT_PREFIX = 'system:introduction:';
 
-const DEFAULT_LIFECYCLE_TRANSITIONS: Array<[EntityRuntimeState, EntityRuntimeState]> = [
-  ['active', 'inactive'],
-  ['active', 'retired'],
-  ['inactive', 'active'],
-  ['inactive', 'retired'],
-];
+/** Parse `system:introduction:<targetEventId>:<entityId>`; null for any other event id. */
+export function parseIntroductionTransition(
+  eventId: string,
+): { targetEventId: string; entityId: string } | null {
+  if (!eventId.startsWith(INTRODUCTION_EVENT_PREFIX)) return null;
+  const rest = eventId.slice(INTRODUCTION_EVENT_PREFIX.length);
+  const separator = rest.lastIndexOf(':');
+  if (separator <= 0 || separator === rest.length - 1) return null;
+  return { targetEventId: rest.slice(0, separator), entityId: rest.slice(separator + 1) };
+}
 
 export interface EventApplicationOptions {
+  /** The one shared catalog pair; required, no optional fallback. */
+  catalogs: EntityCatalogContext;
   branchPath?: BranchPath;
-  entityDeclarationCatalog?: EntityDeclarationCatalog;
-  entityTypeCatalog?: EntityTypeCatalog;
   lifecycleChangesByCoordinate?: Map<string, Set<string>>;
   storyCoordinate?: SceneStoryCoordinate;
   phase?: string;
 }
 
 export interface InitialFactApplicationOptions {
+  /** The one shared catalog pair; required, no optional fallback. */
+  catalogs: EntityCatalogContext;
   branchPath?: BranchPath;
 }
 
-function preconditionMatches(operator: NonNullable<Fact['operator']>, stateValue: unknown, factValue: unknown): boolean {
+/** Diagnostic context for catalog write validation; never part of rule messages. */
+export interface CatalogWritePhaseContext {
+  phase: string;
+  eventId?: string;
+  storyCoordinate?: SceneStoryCoordinate;
+  lifecycleChangesByCoordinate?: Map<string, Set<string>>;
+}
+
+function writeError(
+  _policy: string,
+  message: string,
+  phaseContext: CatalogWritePhaseContext,
+  path: string,
+): ConfigError {
+  return new ConfigError(message, {
+    path,
+    eventId: phaseContext.eventId,
+    phase: phaseContext.phase,
+  });
+}
+
+/**
+ * The single write-policy rule engine. Source preflight and every replay path
+ * call this function, so one rule set applies everywhere. It is pure: it never
+ * mutates state or catalogs and throws ConfigError on the first violation.
+ *
+ * Rule messages are source-neutral: they name the violated policy and the
+ * `entity.attribute` target. The phase context only changes the diagnostic
+ * context attached to the error.
+ *
+ * Enforced policies: unknown declaration/type/attribute, value schema, typed
+ * reference kind/type, initial-vs-event activation source, live write timing,
+ * introduction transition identity, immutable / write_once / mutable /
+ * lifecycle_managed, allowed lifecycle states and transitions, same-coordinate
+ * lifecycle conflicts, and unset allowed/existing. `typedInvariants` stay
+ * unexecuted (always empty in the current contract).
+ */
+export function validateCatalogWrite(
+  state: WorldState,
+  fact: Fact,
+  phaseContext: CatalogWritePhaseContext,
+  catalogs: EntityCatalogContext,
+): void {
+  const { entityDeclarationCatalog, entityTypeCatalog } = catalogs;
+  const target = `${fact.entityId}.${fact.attribute}`;
+
+  const declaration = entityDeclarationCatalog.declarations[fact.entityId];
+  if (!declaration) {
+    throw writeError(
+      'unknown_declaration',
+      `Unknown entity declaration "${fact.entityId}"`,
+      phaseContext,
+      target,
+    );
+  }
+
+  const typeDefinition = entityTypeCatalog.types[declaration.typeRef.typeId];
+  if (!typeDefinition) {
+    throw writeError(
+      'unknown_type',
+      `Unknown entity type "${declaration.typeRef.typeId}" for declaration "${fact.entityId}"`,
+      phaseContext,
+      target,
+    );
+  }
+
+  const attributeDefinition = typeDefinition.attributes[fact.attribute];
+  if (!attributeDefinition) {
+    throw writeError(
+      'unknown_attribute',
+      `Write to unknown attribute "${target}"`,
+      phaseContext,
+      target,
+    );
+  }
+
+  // ——— Activation source + live write timing ———
+  const isLive = fact.entityId in state.entities;
+  const isIntroductionWrite =
+    phaseContext.phase === 'initial' ||
+    (phaseContext.eventId !== undefined &&
+      phaseContext.eventId.startsWith(INTRODUCTION_EVENT_PREFIX));
+
+  if (phaseContext.phase === 'initial') {
+    if (declaration.introduction.type !== 'initial') {
+      throw writeError(
+        'initial_vs_event_activation',
+        `Initial fact cannot activate event-introduced entity "${fact.entityId}" (introduced by event "${declaration.introduction.eventId}")`,
+        phaseContext,
+        target,
+      );
+    }
+  } else if (!isLive) {
+    if (declaration.introduction.type === 'event') {
+      const expectedEventId = `${INTRODUCTION_EVENT_PREFIX}${declaration.introduction.eventId}:${fact.entityId}`;
+      if (phaseContext.eventId !== expectedEventId) {
+        const actor = phaseContext.eventId ?? 'initial facts';
+        throw writeError(
+          'introduction_transition_identity',
+          `Write to "${target}" before activation: entity "${fact.entityId}" is introduced by event "${declaration.introduction.eventId}" and can only be activated by introduction transition "${expectedEventId}", not "${actor}"`,
+          phaseContext,
+          target,
+        );
+      }
+    } else {
+      throw writeError(
+        'live_write_timing',
+        `Write to "${target}" before activation: entity "${fact.entityId}" is initial-activated and must be activated by initial facts`,
+        phaseContext,
+        target,
+      );
+    }
+  }
+
+  // Narrative-hint facts carry no state write; declaration/attribute/timing
+  // checks above already cover their references.
+  if (fact.value === undefined && fact.operation !== 'unset') return;
+
+  if (fact.operation === 'unset') {
+    if (fact.attribute === 'lifecycle') {
+      throw writeError(
+        'lifecycle_unset',
+        `Cannot unset lifecycle attribute "${target}"`,
+        phaseContext,
+        target,
+      );
+    }
+    if (!attributeDefinition.unsetAllowed) {
+      throw writeError(
+        'unset_not_allowed',
+        `Unset is not allowed for attribute "${target}"`,
+        phaseContext,
+        target,
+      );
+    }
+    if (!isLive || !(fact.attribute in state.entities[fact.entityId])) {
+      throw writeError(
+        'unset_absent',
+        `Cannot unset absent attribute "${target}"`,
+        phaseContext,
+        target,
+      );
+    }
+    return;
+  }
+
+  if (fact.value === undefined) return;
+
+  // ——— Value schema ———
+  const parsed = attributeDefinition.valueSchema.safeParse(fact.value);
+  if (!parsed.success) {
+    const detail = parsed.error.issues.map((issue) => issue.message).join('; ');
+    throw writeError(
+      'value_schema',
+      `Value for "${target}" violates value schema${detail ? `: ${detail}` : ''}`,
+      phaseContext,
+      target,
+    );
+  }
+
+  // ——— Typed reference kind/type ———
+  if (attributeDefinition.typedReferenceConstraint) {
+    const constraint = attributeDefinition.typedReferenceConstraint;
+    if (typeof fact.value !== 'string') {
+      throw writeError(
+        'typed_reference_format',
+        `Reference value for "${target}" must be an entity id string`,
+        phaseContext,
+        target,
+      );
+    }
+    const refDeclaration = entityDeclarationCatalog.declarations[fact.value];
+    if (!refDeclaration) {
+      throw writeError(
+        'typed_reference_undeclared',
+        `Reference "${fact.value}" for "${target}" is not a declared entity`,
+        phaseContext,
+        target,
+      );
+    }
+    const refType = entityTypeCatalog.types[refDeclaration.typeRef.typeId];
+    if (!refType || refType.kind !== constraint.targetKind) {
+      throw writeError(
+        'typed_reference_kind',
+        `Reference "${fact.value}" for "${target}" must target kind "${constraint.targetKind}" (declared kind: ${refType?.kind ?? 'unknown'})`,
+        phaseContext,
+        target,
+      );
+    }
+    if (
+      constraint.targetTypeId !== undefined &&
+      refDeclaration.typeRef.typeId !== constraint.targetTypeId
+    ) {
+      throw writeError(
+        'typed_reference_type',
+        `Reference "${fact.value}" for "${target}" must target type "${constraint.targetTypeId}" (declared type: "${refDeclaration.typeRef.typeId}")`,
+        phaseContext,
+        target,
+      );
+    }
+  }
+
+  const currentEntity = state.entities[fact.entityId];
+  const attributePresent = isLive && fact.attribute in currentEntity;
+
+  if (isLive && currentEntity.lifecycle === 'retired' && fact.attribute !== 'lifecycle') {
+    throw writeError(
+      'lifecycle_retired',
+      `Cannot modify retired entity "${fact.entityId}" (write to "${target}")`,
+      phaseContext,
+      target,
+    );
+  }
+
+  // ——— Write policy ———
+  switch (attributeDefinition.writePolicy) {
+    case 'immutable':
+      if (!isIntroductionWrite) {
+        throw writeError('immutable', `Attribute "${target}" is immutable`, phaseContext, target);
+      }
+      break;
+    case 'write_once':
+      if (attributePresent) {
+        throw writeError(
+          'write_once',
+          `Attribute "${target}" is write-once and has already been written`,
+          phaseContext,
+          target,
+        );
+      }
+      break;
+    case 'mutable':
+      break;
+    case 'lifecycle_managed': {
+      if (fact.attribute !== 'lifecycle') {
+        throw writeError(
+          'lifecycle_managed',
+          `Attribute "${target}" is lifecycle-managed but is not the lifecycle attribute`,
+          phaseContext,
+          target,
+        );
+      }
+      if (typeof fact.value !== 'string') {
+        throw writeError(
+          'lifecycle_state',
+          `Lifecycle value for "${target}" must be a string state`,
+          phaseContext,
+          target,
+        );
+      }
+      if (
+        attributeDefinition.allowedLifecycleStates !== undefined &&
+        !attributeDefinition.allowedLifecycleStates.includes(fact.value as EntityRuntimeState)
+      ) {
+        throw writeError(
+          'lifecycle_state',
+          `Invalid lifecycle state "${fact.value}" for "${target}"`,
+          phaseContext,
+          target,
+        );
+      }
+      if (!isIntroductionWrite && isLive) {
+        const current = currentEntity.lifecycle as EntityRuntimeState | undefined;
+        const next = fact.value as EntityRuntimeState;
+        if (
+          current !== undefined &&
+          !typeDefinition.lifecyclePolicy.allowedTransitions.some(
+            ([from, to]) => from === current && to === next,
+          )
+        ) {
+          throw writeError(
+            'lifecycle_transition',
+            `Invalid lifecycle transition ${current} → ${next} for "${target}"`,
+            phaseContext,
+            target,
+          );
+        }
+        const coordinate = phaseContext.storyCoordinate;
+        const changes = phaseContext.lifecycleChangesByCoordinate;
+        if (coordinate && coordinate.kind === 'point' && changes) {
+          const coordinateKey = canonicalJson(coordinate);
+          const changedEntities = changes.get(coordinateKey) ?? new Set<string>();
+          if (changedEntities.has(fact.entityId)) {
+            throw writeError(
+              'lifecycle_coordinate_conflict',
+              `Same coordinate lifecycle conflict: multiple events at ${coordinateKey} modify lifecycle of "${fact.entityId}"`,
+              phaseContext,
+              target,
+            );
+          }
+          changedEntities.add(fact.entityId);
+          changes.set(coordinateKey, changedEntities);
+        }
+      }
+      break;
+    }
+  }
+}
+
+/**
+ * Enforce requiredAt (introduction/activation) attributes after an entity's
+ * introduction writes complete: every declared attribute with a non-`never`
+ * requiredAt must be present in the live state at that point.
+ */
+export function validateIntroductionRequirements(
+  state: WorldState,
+  entityId: string,
+  phaseContext: CatalogWritePhaseContext,
+  catalogs: EntityCatalogContext,
+): void {
+  const declaration = catalogs.entityDeclarationCatalog.declarations[entityId];
+  if (!declaration) return;
+  const typeDefinition = catalogs.entityTypeCatalog.types[declaration.typeRef.typeId];
+  if (!typeDefinition) return;
+
+  const entity = state.entities[entityId];
+  for (const [attributeId, attributeDefinition] of Object.entries(typeDefinition.attributes)) {
+    if (attributeDefinition.requiredAt === 'never') continue;
+    if (!entity || !(attributeId in entity)) {
+      throw writeError(
+        'required_at',
+        `Required attribute "${entityId}.${attributeId}" (requiredAt: ${attributeDefinition.requiredAt}) missing after activation`,
+        phaseContext,
+        `${entityId}.${attributeId}`,
+      );
+    }
+  }
+}
+
+function preconditionMatches(
+  operator: NonNullable<Fact['operator']>,
+  stateValue: unknown,
+  factValue: unknown,
+): boolean {
   switch (operator) {
     case 'eq':
       return stateValue === factValue;
     case 'neq':
       return stateValue !== undefined && stateValue !== factValue;
     case 'gt':
-      return typeof stateValue === 'number' && typeof factValue === 'number' && stateValue > factValue;
+      return (
+        typeof stateValue === 'number' && typeof factValue === 'number' && stateValue > factValue
+      );
     case 'gte':
-      return typeof stateValue === 'number' && typeof factValue === 'number' && stateValue >= factValue;
+      return (
+        typeof stateValue === 'number' && typeof factValue === 'number' && stateValue >= factValue
+      );
     case 'lt':
-      return typeof stateValue === 'number' && typeof factValue === 'number' && stateValue < factValue;
+      return (
+        typeof stateValue === 'number' && typeof factValue === 'number' && stateValue < factValue
+      );
     case 'lte':
-      return typeof stateValue === 'number' && typeof factValue === 'number' && stateValue <= factValue;
+      return (
+        typeof stateValue === 'number' && typeof factValue === 'number' && stateValue <= factValue
+      );
     case 'contains':
       return (
-        (typeof stateValue === 'string' && typeof factValue === 'string' && stateValue.includes(factValue)) ||
+        (typeof stateValue === 'string' &&
+          typeof factValue === 'string' &&
+          stateValue.includes(factValue)) ||
         (Array.isArray(stateValue) && stateValue.some((value) => value === factValue))
       );
     case 'not_contains':
       return (
-        (typeof stateValue === 'string' && typeof factValue === 'string' && !stateValue.includes(factValue)) ||
+        (typeof stateValue === 'string' &&
+          typeof factValue === 'string' &&
+          !stateValue.includes(factValue)) ||
         (Array.isArray(stateValue) && !stateValue.some((value) => value === factValue)) ||
         stateValue === undefined
       );
@@ -84,9 +435,37 @@ function preconditionMatches(operator: NonNullable<Fact['operator']>, stateValue
   }
 }
 
-function validatePreconditions(state: WorldState, event: NarrativeEvent, branchPath: BranchPath, phase: string): void {
+function validatePreconditions(
+  state: WorldState,
+  event: NarrativeEvent,
+  branchPath: BranchPath,
+  phase: string,
+  catalogs: EntityCatalogContext,
+): void {
   for (const fact of event.preconditions) {
     if (!includesPath(fact.validity.branches, branchPath)) continue;
+
+    const declaration = catalogs.entityDeclarationCatalog.declarations[fact.entityId];
+    if (!declaration) {
+      throw new ConfigError(`Unknown entity declaration "${fact.entityId}"`, {
+        eventId: event.id,
+        stateKey: `${fact.entityId}.${fact.attribute}`,
+        phase,
+      });
+    }
+
+    // Live read timing: any precondition reference to a not-yet-live entity is
+    // a pre-activation reference (declarations always pre-exist compilation).
+    if (!(fact.entityId in state.entities)) {
+      throw new ConfigError(
+        `Live read before activation: precondition references entity "${fact.entityId}" which is not yet live`,
+        {
+          eventId: event.id,
+          stateKey: `${fact.entityId}.${fact.attribute}`,
+          phase,
+        },
+      );
+    }
 
     const stateValue = state.entities[fact.entityId]?.[fact.attribute];
     const operator = fact.operator ?? 'eq';
@@ -99,51 +478,6 @@ function validatePreconditions(state: WorldState, event: NarrativeEvent, branchP
       );
     }
   }
-}
-
-function validateLifecycle(
-  state: WorldState,
-  event: NarrativeEvent,
-  fact: Fact,
-  options: EventApplicationOptions,
-): void {
-  const phase = options.phase ?? 'replay';
-  const rawValue = fact.value === undefined ? undefined : String(fact.value);
-  if (fact.attribute !== 'lifecycle' || rawValue === undefined || fact.operation === 'unset' || !LIFECYCLE_STATES[rawValue]) {
-    return;
-  }
-
-  const currentLifecycle =
-    (state.entities[fact.entityId]?.lifecycle as EntityRuntimeState | undefined) ?? 'active';
-  const newLifecycle = rawValue as EntityRuntimeState;
-  let allowedTransitions = DEFAULT_LIFECYCLE_TRANSITIONS;
-  const declaration = options.entityDeclarationCatalog?.declarations[fact.entityId];
-  const typeDefinition = declaration
-    ? options.entityTypeCatalog?.types[declaration.typeRef.typeId]
-    : undefined;
-  if (typeDefinition) allowedTransitions = typeDefinition.lifecyclePolicy.allowedTransitions;
-
-  if (!allowedTransitions.some(([from, to]) => from === currentLifecycle && to === newLifecycle)) {
-    throw new ConfigError(
-      `Invalid lifecycle transition: ${currentLifecycle} → ${newLifecycle} for entity ${fact.entityId}`,
-      { path: fact.entityId, eventId: event.id, phase },
-    );
-  }
-
-  const coordinate = options.storyCoordinate;
-  if (!coordinate || coordinate.kind !== 'point') return;
-  const changes = options.lifecycleChangesByCoordinate;
-  if (!changes) return;
-  const coordinateKey = canonicalJson(coordinate);
-  const changedEntities = changes.get(coordinateKey) ?? new Set<string>();
-  if (changedEntities.has(fact.entityId)) {
-    throw new ConfigError(
-      `Same coordinate lifecycle conflict: multiple events at ${coordinateKey} modify lifecycle of ${fact.entityId}`,
-      { path: fact.entityId, eventId: event.id, phase },
-    );
-  }
-  changedEntities.add(fact.entityId);
-  changes.set(coordinateKey, changedEntities);
 }
 
 function applyPostconditions(
@@ -159,39 +493,31 @@ function applyPostconditions(
   for (const fact of event.postconditions) {
     if (!includesPath(fact.validity.branches, branchPath)) continue;
 
-    if (fact.value === undefined && fact.narrativeHint !== undefined && fact.operation !== 'unset') {
+    validateCatalogWrite(
+      state,
+      fact,
+      {
+        phase,
+        eventId: event.id,
+        storyCoordinate: options.storyCoordinate,
+        lifecycleChangesByCoordinate: options.lifecycleChangesByCoordinate,
+      },
+      options.catalogs,
+    );
+
+    if (
+      fact.value === undefined &&
+      fact.narrativeHint !== undefined &&
+      fact.operation !== 'unset'
+    ) {
       state.facts.push(fact);
       continue;
     }
 
-    if (!state.entities[fact.entityId]) {
-      if (
-        options.entityDeclarationCatalog &&
-        !options.entityDeclarationCatalog.declarations[fact.entityId]
-      ) {
-        throw new ConfigError(`Unknown entity ${fact.entityId}: not found in declaration catalog`, {
-          path: fact.entityId,
-          eventId: event.id,
-          phase,
-        });
-      }
-      state.entities[fact.entityId] = { lifecycle: 'active' };
+    if (!(fact.entityId in state.entities)) {
+      // Approved introduction write: activation happens exactly here.
+      state.entities[fact.entityId] = {};
       introducedThisEvent.add(fact.entityId);
-    }
-
-    if (state.entities[fact.entityId]?.lifecycle === 'retired' && fact.attribute !== 'lifecycle') {
-      throw new ConfigError(`Cannot modify retired entity ${fact.entityId}`, {
-        path: fact.entityId,
-        eventId: event.id,
-        phase,
-      });
-    }
-    if (fact.attribute === 'lifecycle' && fact.operation === 'unset') {
-      throw new ConfigError(`Cannot unset lifecycle on ${fact.entityId}`, {
-        path: fact.entityId,
-        eventId: event.id,
-        phase,
-      });
     }
 
     const key = `${fact.entityId}::${fact.attribute}`;
@@ -202,16 +528,8 @@ function applyPostconditions(
       );
     }
     writtenKeys.add(key);
-    validateLifecycle(state, event, fact, options);
 
     if (fact.operation === 'unset') {
-      if (!(fact.attribute in state.entities[fact.entityId])) {
-        throw new ConfigError(`Cannot unset absent attribute ${fact.entityId}.${fact.attribute}`, {
-          path: fact.entityId,
-          eventId: event.id,
-          phase,
-        });
-      }
       delete state.entities[fact.entityId][fact.attribute];
       state.facts.push(fact);
     } else if (fact.value !== undefined) {
@@ -230,6 +548,12 @@ function validateParticipants(
   phase: string,
 ): void {
   for (const entityId of event.participants?.entities ?? []) {
+    if (!(entityId in state.entities) && !introducedThisEvent.has(entityId)) {
+      throw new ConfigError(
+        `Entity "${entityId}" is not live; cannot participate in event ${event.id} (live reference before activation)`,
+        { path: entityId, eventId: event.id, phase },
+      );
+    }
     if (state.entities[entityId]?.lifecycle === 'retired' && !introducedThisEvent.has(entityId)) {
       throw new ConfigError(`Retired entity ${entityId} cannot participate in event ${event.id}`, {
         path: entityId,
@@ -271,7 +595,9 @@ function applyTransactions(state: WorldState, event: NarrativeEvent): void {
 
   for (const effect of event.ruleEffects) {
     if (isLegacyRuleEffect(effect)) {
-      applyRuleTransaction(state.rules, convertLegacyRuleEffect(effect, event.id), { nodeId: event.id });
+      applyRuleTransaction(state.rules, convertLegacyRuleEffect(effect, event.id), {
+        nodeId: event.id,
+      });
     } else {
       applyRuleTransaction(state.rules, effect as never, { nodeId: event.id });
     }
@@ -321,37 +647,66 @@ function routeLegacyReestablishment(
 export function applyNarrativeEvent(
   state: WorldState,
   event: NarrativeEvent,
-  options: EventApplicationOptions = {},
+  options: EventApplicationOptions,
 ): void {
   const branchPath = options.branchPath ?? createEmptyBranchPath();
   const phase = options.phase ?? 'replay';
   if (!includesPath(event.branchExistence, branchPath)) return;
 
-  validatePreconditions(state, event, branchPath, phase);
+  // Introduction transition identity: a transition may only activate an entity
+  // that is not already live — activation happens exactly once.
+  const introductionTarget = parseIntroductionTransition(event.id);
+  if (introductionTarget && introductionTarget.entityId in state.entities) {
+    throw new ConfigError(
+      `Duplicate activation: entity "${introductionTarget.entityId}" is already live before introduction transition "${event.id}"`,
+      { eventId: event.id, path: introductionTarget.entityId, phase },
+    );
+  }
+
+  validatePreconditions(state, event, branchPath, phase, options.catalogs);
   const introducedThisEvent = applyPostconditions(state, event, branchPath, options);
   validateParticipants(state, event, introducedThisEvent, phase);
   applyTransactions(state, event);
+
+  // Required fields are checked after introduction writes complete.
+  if (introductionTarget) {
+    validateIntroductionRequirements(
+      state,
+      introductionTarget.entityId,
+      { phase, eventId: event.id },
+      options.catalogs,
+    );
+  }
 }
 
-/** Apply deterministic genesis facts before authored event replay. */
+/** Apply deterministic initial facts before authored event replay. */
 export function applyInitialFacts(
   state: WorldState,
   facts: readonly Fact[],
-  options: InitialFactApplicationOptions = {},
+  options: InitialFactApplicationOptions,
 ): void {
   const branchPath = options.branchPath ?? createEmptyBranchPath();
+  const activated = new Set<string>();
   for (const fact of facts) {
     if (!includesPath(fact.validity.branches, branchPath)) continue;
     if (fact.operation === 'unset') {
       throw new ConfigError(
         `Initial fact ${fact.id} has operation 'unset'; initial state must be deterministic sets`,
-        { path: fact.entityId },
+        { path: fact.entityId, phase: 'initial' },
       );
     }
     if (fact.value === undefined) continue;
-    const entity = state.entities[fact.entityId] ?? { lifecycle: 'active' };
+    const wasLive = fact.entityId in state.entities;
+    validateCatalogWrite(state, fact, { phase: 'initial' }, options.catalogs);
+    const entity = state.entities[fact.entityId] ?? {};
     entity[fact.attribute] = canonicalizeFactValue(fact.value);
     state.entities[fact.entityId] = entity;
     state.facts.push(fact);
+    if (!wasLive) activated.add(fact.entityId);
+  }
+
+  // Required fields are checked after introduction writes complete.
+  for (const entityId of activated) {
+    validateIntroductionRequirements(state, entityId, { phase: 'initial' }, options.catalogs);
   }
 }

@@ -13,6 +13,12 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "David begins his new life at Doctor Strong's school in Canterbury, a grave and learned institution that suits the Cathedral town. He lodges with Mr Wickfield, a kind but melancholy widower, and meets his daughter Agnes — a wise, serene girl of about his age who already manages the household for her father. David also meets Uriah Heep for the first time, the 'umble clerk who works in Mr Wickfield's office, whose cold, clammy handshake and fawning manner immediately make David uneasy. David thrives at the school under Doctor Strong's benevolent instruction, and Agnes becomes his quiet confidante. The chapter introduces the two figures who will play pivotal roles in David's future: his good angel (Agnes) and his eventual nemesis (Heep)."
+beats:
+  - "David begins his new life at Doctor Strong's school in Canterbury, a grave and learned institution that suits the Cathedral town."
+  - "He lodges with Mr Wickfield, a kind but melancholy widower, and meets his daughter Agnes — a wise, serene girl of about his age who already manages the household for her father."
+  - "David also meets Uriah Heep for the first time, the 'umble clerk who works in Mr Wickfield's office, whose cold, clammy handshake and fawning manner immediately make David uneasy."
+  - "David thrives at the school under Doctor Strong's benevolent instruction, and Agnes becomes his quiet confidante."
+  - "The chapter introduces the two figures who will play pivotal roles in David's future: his good angel (Agnes) and his eventual nemesis (Heep)."
 preconditions:
   - entity: david_copperfield
     attribute: location
@@ -80,6 +86,9 @@ introduces:
     id: canterbury
     initialState:
       status: active
+      season: perpetual_schooldays
+      atmosphere: scholarly_antiquity
+      notable_feature: cathedral_precincts
   - type: character
     id: agnes_wickfield
     initialState:

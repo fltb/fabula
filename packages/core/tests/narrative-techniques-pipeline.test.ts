@@ -18,12 +18,12 @@ import { describe, expect, it } from 'vitest';
 import { EntityMapper } from '../src/entity/mapper.ts';
 import { eventFileSchema } from '../src/schemas/event.ts';
 import { MemoryStorage } from '../src/storage/memory-storage.ts';
-import { NARRATIVE_TECHNIQUE_KINDS } from '../src/types/narrative-techniques.ts';
-import type { ResolvedNarrativeTechniqueContract } from '../src/types/narrative-techniques.ts';
 import type { ContextPackage } from '../src/types/context.ts';
-import { narrativeCheckSchema } from '../src/validator/schemas.ts';
-import { analysisContentSchema } from '../src/validator/index.ts';
 import type { EventFile } from '../src/types/event.ts';
+import type { ResolvedNarrativeTechniqueContract } from '../src/types/narrative-techniques.ts';
+import { NARRATIVE_TECHNIQUE_KINDS } from '../src/types/narrative-techniques.ts';
+import { analysisContentSchema } from '../src/validator/index.ts';
+import { narrativeCheckSchema } from '../src/validator/schemas.ts';
 
 function makeTechniqueEvent(): Record<string, unknown> {
   return {
@@ -33,6 +33,7 @@ function makeTechniqueEvent(): Record<string, unknown> {
     storyTime: 'day_1',
     pov: { character: 'narrator', type: 'omniscient' },
     sceneBrief: 'A scene with every direct narrative technique contract.',
+    beats: ['A scene with every direct narrative technique contract.'],
     preconditions: [],
     expectedPostconditions: [],
     causalDiscontinuity: {
@@ -203,6 +204,7 @@ describe('narrative technique event contracts', () => {
         storyTime: 'day_1',
         pov: { character: 'narrator', type: 'omniscient' },
         sceneBrief: 'A scene with technique contracts.',
+        beats: ['A scene with technique contracts.'],
         preconditions: [],
         expectedPostconditions: [],
       },
@@ -241,6 +243,7 @@ describe('narrative technique event contracts', () => {
         storyTime: 'day_1',
         pov: { character: 'narrator', type: 'omniscient' },
         sceneBrief: 'No technique contracts.',
+        beats: ['No technique contracts.'],
         preconditions: [],
         expectedPostconditions: [],
       },
@@ -264,7 +267,9 @@ describe('narrative technique event contracts', () => {
     ['causalOverload', { enabled: true }],
     ['chapterOrder', { orderContested: true }],
   ])('rejects legacy key %s', (key, value) => {
-    expect(eventFileSchema.safeParse({ ...makeTechniqueEvent(), [key]: value }).success).toBe(false);
+    expect(eventFileSchema.safeParse({ ...makeTechniqueEvent(), [key]: value }).success).toBe(
+      false,
+    );
   });
 
   it.each([

@@ -7,9 +7,14 @@
 
 /** Fixed order for resolved narrative technique contracts. */
 export const NARRATIVE_TECHNIQUE_KINDS = [
-  'causalDiscontinuity', 'surfaceMode', 'causalMultiplicity',
-  'irresolvableIndeterminacy', 'absentApparatus', 'voiceDissonance',
-  'multiplicity', 'metanarrativeLevel',
+  'causalDiscontinuity',
+  'surfaceMode',
+  'causalMultiplicity',
+  'irresolvableIndeterminacy',
+  'absentApparatus',
+  'voiceDissonance',
+  'multiplicity',
+  'metanarrativeLevel',
 ] as const;
 
 /** A narrative technique kind from the fixed set. */

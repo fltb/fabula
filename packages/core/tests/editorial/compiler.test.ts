@@ -10,36 +10,33 @@
 // All tests are deterministic — no storage, no clock, no providers.
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
 import * as crypto from 'node:crypto';
-import type { ReviewComment, ReviewLineBasis } from '../../src/types/review.ts';
-import type {
-  EditorialError,
-  SceneSelector,
-} from '../../src/types/editorial.ts';
-import type { SceneCatalog } from '../../src/editorial/selector.ts';
-import { preflightSelector } from '../../src/editorial/selector.ts';
+import { describe, expect, it } from 'vitest';
 import {
-  computeSceneSourceHash,
-  computeScopeHash,
-  computeEditorialBasisHash,
-  computeValidationIdentity,
-  computePlanHash,
-  computeSelectorHash,
-  canonicalJson,
-  type ValidationIdentityInput,
-  type PlanHashInput,
-  type CompiledSceneIdentity,
-} from '../../src/editorial/identity.ts';
-import {
-  compileEditorialRun,
-  preflightRevision,
+  type CompiledSceneInfo,
   compileBranchContracts,
+  compileEditorialRun,
   compileReadSet,
   type EditorialCompileInput,
-  type CompiledSceneInfo,
+  preflightRevision,
 } from '../../src/editorial/compiler.ts';
+import {
+  type CompiledSceneIdentity,
+  canonicalJson,
+  computeEditorialBasisHash,
+  computePlanHash,
+  computeSceneSourceHash,
+  computeScopeHash,
+  computeSelectorHash,
+  computeValidationIdentity,
+  type PlanHashInput,
+  type ValidationIdentityInput,
+} from '../../src/editorial/identity.ts';
+import type { SceneCatalog } from '../../src/editorial/selector.ts';
+import { preflightSelector } from '../../src/editorial/selector.ts';
 import type { BranchPath } from '../../src/types/branch.ts';
+import type { EditorialError, SceneSelector } from '../../src/types/editorial.ts';
+import type { ReviewComment, ReviewLineBasis } from '../../src/types/review.ts';
 
 // ============================================================================
 // Deterministic helpers
@@ -64,9 +61,7 @@ const CATALOG: SceneCatalog = {
 };
 
 const BRANCH_PATH: BranchPath = {
-  decisions: [
-    { atEventId: 'E001', choiceId: 'choice_a', narrativeOrder: 1 },
-  ],
+  decisions: [{ atEventId: 'E001', choiceId: 'choice_a', narrativeOrder: 1 }],
 };
 
 const EVENT_CONTENTS: Record<string, string> = {
@@ -132,11 +127,19 @@ const REVIEWS: ReviewComment[] = [
 ];
 
 const CHAPTER_BY_EVENT: Record<string, number> = {
-  E001: 1, E002: 1, E003: 2, E004: 2, E005: 3,
+  E001: 1,
+  E002: 1,
+  E003: 2,
+  E004: 2,
+  E005: 3,
 };
 
 const REQUIRES_PROVIDER: Record<string, boolean> = {
-  E001: true, E002: true, E003: true, E004: true, E005: true,
+  E001: true,
+  E002: true,
+  E003: true,
+  E004: true,
+  E005: true,
 };
 
 function defaultCompileInput(
@@ -236,7 +239,10 @@ describe('preflightSelector', () => {
   });
 
   it('returns sorted eventIds by narrative order', () => {
-    const selector: SceneSelector = { type: 'events', eventIds: ['E005', 'E002', 'E004', 'E001', 'E003'] };
+    const selector: SceneSelector = {
+      type: 'events',
+      eventIds: ['E005', 'E002', 'E004', 'E001', 'E003'],
+    };
     const result = preflightSelector(selector, CATALOG);
     expect(result.eventIds).toEqual(['E001', 'E002', 'E003', 'E004', 'E005']);
   });
@@ -363,10 +369,22 @@ describe('identity', () => {
     });
 
     it('is NOT affected by model or provider profile', () => {
-      const basis = computeEditorialBasisHash('E001', BRANCH_PATH, SOURCE_HEAD_HASH, 'rev1', 'prose1');
+      const basis = computeEditorialBasisHash(
+        'E001',
+        BRANCH_PATH,
+        SOURCE_HEAD_HASH,
+        'rev1',
+        'prose1',
+      );
       // This is the same call — the hash does NOT accept model or profile.
       // Verify that the output is stable regardless of request-level model.
-      const basis2 = computeEditorialBasisHash('E001', BRANCH_PATH, SOURCE_HEAD_HASH, 'rev1', 'prose1');
+      const basis2 = computeEditorialBasisHash(
+        'E001',
+        BRANCH_PATH,
+        SOURCE_HEAD_HASH,
+        'rev1',
+        'prose1',
+      );
       expect(basis).toBe(basis2);
     });
   });
@@ -392,9 +410,7 @@ describe('identity', () => {
       const changed = {
         ...VALIDATION_INPUT,
         validators: VALIDATION_INPUT.validators.map((validator) =>
-          validator.name === 'CausalityValidator'
-            ? { ...validator, version: '2' }
-            : validator,
+          validator.name === 'CausalityValidator' ? { ...validator, version: '2' } : validator,
         ),
       };
       expect(computeValidationIdentity(VALIDATION_INPUT)).not.toBe(
@@ -438,15 +454,9 @@ describe('identity', () => {
         plugins: [{ ...plugin, promptHookIdentity: sha256Hex() }],
       };
 
-      expect(computeValidationIdentity(base)).not.toBe(
-        computeValidationIdentity(changedVersion),
-      );
-      expect(computeValidationIdentity(base)).not.toBe(
-        computeValidationIdentity(changedValidator),
-      );
-      expect(computeValidationIdentity(base)).not.toBe(
-        computeValidationIdentity(changedHook),
-      );
+      expect(computeValidationIdentity(base)).not.toBe(computeValidationIdentity(changedVersion));
+      expect(computeValidationIdentity(base)).not.toBe(computeValidationIdentity(changedValidator));
+      expect(computeValidationIdentity(base)).not.toBe(computeValidationIdentity(changedHook));
     });
 
     it('is stable under validator and plugin ordering changes', () => {
@@ -682,18 +692,14 @@ describe('compileReadSet', () => {
   });
 
   it('is deterministic', () => {
-    const a = compileReadSet(
-      '/proj/.nova/work/source-head.json',
-      '/proj/.nova/responses',
-      'hash',
-      ['E001', 'E002'],
-    );
-    const b = compileReadSet(
-      '/proj/.nova/work/source-head.json',
-      '/proj/.nova/responses',
-      'hash',
-      ['E001', 'E002'],
-    );
+    const a = compileReadSet('/proj/.nova/work/source-head.json', '/proj/.nova/responses', 'hash', [
+      'E001',
+      'E002',
+    ]);
+    const b = compileReadSet('/proj/.nova/work/source-head.json', '/proj/.nova/responses', 'hash', [
+      'E001',
+      'E002',
+    ]);
     expect(a).toEqual(b);
   });
 });
@@ -787,7 +793,14 @@ describe('compileEditorialRun', () => {
   it('review waiver changes affect planHash', () => {
     const inputA = defaultCompileInput({
       requestOverrides: {
-        waivers: [{ gateId: 'gate-1', signedBy: 'admin', signedAt: '2026-07-28T00:00:00.000Z', reason: 'test' }],
+        waivers: [
+          {
+            gateId: 'gate-1',
+            signedBy: 'admin',
+            signedAt: '2026-07-28T00:00:00.000Z',
+            reason: 'test',
+          },
+        ],
       },
     });
     const inputB = defaultCompileInput({ requestOverrides: { waivers: [] } });
@@ -797,8 +810,18 @@ describe('compileEditorialRun', () => {
 
   it('waiver ordering does not affect planHash (sorted deterministically)', () => {
     const waivers = [
-      { gateId: 'gate-1', signedBy: 'admin', signedAt: '2026-07-28T00:00:00.000Z', reason: 'first' },
-      { gateId: 'gate-2', signedBy: 'editor', signedAt: '2026-07-28T01:00:00.000Z', reason: 'second' },
+      {
+        gateId: 'gate-1',
+        signedBy: 'admin',
+        signedAt: '2026-07-28T00:00:00.000Z',
+        reason: 'first',
+      },
+      {
+        gateId: 'gate-2',
+        signedBy: 'editor',
+        signedAt: '2026-07-28T01:00:00.000Z',
+        reason: 'second',
+      },
     ];
     const inputA = defaultCompileInput({ requestOverrides: { waivers } });
     const inputB = defaultCompileInput({ requestOverrides: { waivers: [...waivers].reverse() } });
@@ -820,9 +843,7 @@ describe('compileEditorialRun', () => {
       validation: {
         ...VALIDATION_INPUT,
         validators: VALIDATION_INPUT.validators.map((validator) =>
-          validator.name === 'CausalityValidator'
-            ? { ...validator, version: '1.0.0' }
-            : validator,
+          validator.name === 'CausalityValidator' ? { ...validator, version: '1.0.0' } : validator,
         ),
       },
     });
@@ -830,9 +851,7 @@ describe('compileEditorialRun', () => {
       validation: {
         ...VALIDATION_INPUT,
         validators: VALIDATION_INPUT.validators.map((validator) =>
-          validator.name === 'CausalityValidator'
-            ? { ...validator, version: '2.0.0' }
-            : validator,
+          validator.name === 'CausalityValidator' ? { ...validator, version: '2.0.0' } : validator,
         ),
       },
     });
@@ -952,7 +971,9 @@ describe('compileEditorialRun', () => {
   });
 
   it('uses configured sourceHeadPath from compile input', () => {
-    const output = compileEditorialRun(defaultCompileInput({ sourceHeadPath: '/custom/source-head.json' }));
+    const output = compileEditorialRun(
+      defaultCompileInput({ sourceHeadPath: '/custom/source-head.json' }),
+    );
     expect(output.readSet).toHaveLength(6);
     expect(output.readSet[0]).toEqual({
       kind: 'file',
@@ -982,7 +1003,6 @@ describe('compileEditorialRun', () => {
     // Zero prepared external changes (dry run)
     expect(output.preparedExternalChanges).toHaveLength(0);
   });
-
 
   it('preparedExternalChanges is empty (dry‑run compile)', () => {
     const output = compileEditorialRun(defaultCompileInput());

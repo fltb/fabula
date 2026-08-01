@@ -7,13 +7,9 @@
 // ============================================================================
 
 import { ConfigError } from '../errors.ts';
-import type { NarrativeEvent } from '../types/event.js';
-import type {
-  DiscourseGraph,
-  GraphReadResolution,
-  StoryGraph,
-} from '../types/graph.js';
 import type { NarratorAssertion } from '../types/discourse.js';
+import type { NarrativeEvent } from '../types/event.js';
+import type { DiscourseGraph, StoryGraph } from '../types/graph.js';
 import type { ResolvedNarrativeTechniqueContract } from '../types/narrative-techniques.js';
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -45,9 +41,7 @@ function hasCausalPath(
  * Build forward adjacency from StoryGraph edges — only author_origin and
  * provider edges, mapping predecessor → list of dependents.
  */
-function buildCausalAdjacency(
-  storyGraph: StoryGraph,
-): Map<string, string[]> {
+function buildCausalAdjacency(storyGraph: StoryGraph): Map<string, string[]> {
   const adj = new Map<string, string[]>();
   for (const edge of storyGraph.edges) {
     if (edge.edgeClass === 'author_origin' || edge.edgeClass === 'provider') {
@@ -66,9 +60,7 @@ function buildCausalAdjacency(
  * Extract all assertion IDs referenced by disclosure actions in the
  * selected DiscourseGraph outputs.
  */
-function collectDiscourseAssertionIds(
-  discourseGraph: DiscourseGraph,
-): Set<string> {
+function collectDiscourseAssertionIds(discourseGraph: DiscourseGraph): Set<string> {
   const ids = new Set<string>();
   for (const output of discourseGraph.outputs) {
     if (output.value.type !== 'set') continue;
@@ -85,9 +77,7 @@ function collectDiscourseAssertionIds(
  * Collect the set of read IDs that resolved to GraphAbsenceWitness in the
  * story graph.
  */
-function collectAbsenceReadIds(
-  storyGraph: StoryGraph,
-): Set<string> {
+function collectAbsenceReadIds(storyGraph: StoryGraph): Set<string> {
   const ids = new Set<string>();
   for (const res of storyGraph.resolutions) {
     if (res.type === 'absence') {
@@ -100,9 +90,7 @@ function collectAbsenceReadIds(
 /**
  * Build the set of all story graph output IDs.
  */
-function collectStoryOutputIds(
-  storyGraph: StoryGraph,
-): Set<string> {
+function collectStoryOutputIds(storyGraph: StoryGraph): Set<string> {
   const ids = new Set<string>();
   for (const output of storyGraph.outputs) {
     ids.add(output.outputId);
@@ -149,8 +137,7 @@ export function resolveNarrativeTechniques(input: {
 
     // ── causalDiscontinuity ──────────────────────────────────────────────
     if (event.causalDiscontinuity) {
-      const { predecessor, dependent, instruction, requiredEvidence } =
-        event.causalDiscontinuity;
+      const { predecessor, dependent, instruction, requiredEvidence } = event.causalDiscontinuity;
 
       // Dependent MUST be the owning event
       if (dependent !== eid) {
@@ -190,13 +177,10 @@ export function resolveNarrativeTechniques(input: {
 
     // ── causalMultiplicity ───────────────────────────────────────────────
     if (event.causalMultiplicity) {
-      const { minimumOutgoingEdges, instruction, requiredEvidence } =
-        event.causalMultiplicity;
+      const { minimumOutgoingEdges, instruction, requiredEvidence } = event.causalMultiplicity;
 
       const outgoingDependents = causalAdj.get(eid);
-      const uniqueCount = outgoingDependents
-        ? new Set(outgoingDependents).size
-        : 0;
+      const uniqueCount = outgoingDependents ? new Set(outgoingDependents).size : 0;
 
       if (uniqueCount < minimumOutgoingEdges) {
         throw new ConfigError(
@@ -211,8 +195,7 @@ export function resolveNarrativeTechniques(input: {
 
     // ── irresolvableIndeterminacy ────────────────────────────────────────
     if (event.irresolvableIndeterminacy) {
-      const { assertionIds, instruction, requiredEvidence } =
-        event.irresolvableIndeterminacy;
+      const { assertionIds, instruction, requiredEvidence } = event.irresolvableIndeterminacy;
 
       for (const aid of assertionIds) {
         if (!(aid in input.assertions)) {
@@ -254,13 +237,11 @@ export function resolveNarrativeTechniques(input: {
 
     // ── voiceDissonance ──────────────────────────────────────────────────
     if (event.voiceDissonance) {
-      const { assertionId, storyOutputId, instruction, requiredEvidence } =
-        event.voiceDissonance;
+      const { assertionId, storyOutputId, instruction, requiredEvidence } = event.voiceDissonance;
 
       if (!(assertionId in input.assertions)) {
         throw new ConfigError(
-          `voiceDissonance: assertion "${assertionId}" not found in ` +
-            `runtime assertion catalog`,
+          `voiceDissonance: assertion "${assertionId}" not found in ` + `runtime assertion catalog`,
           { phase: 'technique-resolution', eventId: eid },
         );
       }

@@ -21,11 +21,5 @@ traits:
   - kind
   - vulnerable
   - repentant
-initialState:
-  location: yarmouth
-  status: alive
-  condition: fishermen_ward
-  emotionalState: happy_dreamy
-  engagement_ham: betrothed
 voiceNotes: "Her speech is warm, affectionate, and tinged with the dialect of the Yarmouth fishermen. She has a way of casting her eyes down when embarrassed. When David first meets her, she chatters merrily. Later, after her ruin, she is subdued and speaks little."
 backstory: "Orphaned daughter of Mr Peggotty's brother and his wife. She is raised in the Yarmouth boathouse and grows up with Ham (her cousin by blood and later her fiancé). From childhood she dreams of becoming a lady. When David brings Steerforth to Yarmouth, Steerforth charms the entire family. He seduces Emily and persuades her to elope with him. He takes her abroad (to France and Italy) and abandons her when he tires of her. Mr Peggotty searches for her for months, finally finding her in London. She is partially redeemed by her genuine repentance and by the family's forgiveness. She eventually emigrates to Australia with Mr Peggotty, finding a new life."

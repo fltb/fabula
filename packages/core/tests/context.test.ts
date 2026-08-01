@@ -40,6 +40,7 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'alice', type: 'third_person_limited' },
     sceneBrief: 'Alice enters the room.',
+    beats: ['Alice enters the room.'],
     preconditions: [
       {
         id: 'alice.location',
@@ -413,8 +414,16 @@ describe('ContextCompiler', () => {
     const event = makeEvent();
     const state = makeState();
     const techniques = [
-      { kind: 'surfaceMode' as const, instruction: 'Maintain surface narration.', requiredEvidence: 'No direct POV access.' },
-      { kind: 'metanarrativeLevel' as const, instruction: 'Acknowledge the narrative frame.', requiredEvidence: 'Frame-breaking remark.' },
+      {
+        kind: 'surfaceMode' as const,
+        instruction: 'Maintain surface narration.',
+        requiredEvidence: 'No direct POV access.',
+      },
+      {
+        kind: 'metanarrativeLevel' as const,
+        instruction: 'Acknowledge the narrative frame.',
+        requiredEvidence: 'Frame-breaking remark.',
+      },
     ];
 
     const pkg = compiler.compile(event, state, registry, {

@@ -16,13 +16,13 @@
 // ============================================================================
 
 import { z } from 'zod';
-import { NARRATIVE_TECHNIQUE_KINDS } from '../types/narrative-techniques.js';
 import type {
   PostRenderInput,
   ResolvedNarrativeTechniqueContract,
   ValidationIssue,
   Validator,
 } from '../types/index.js';
+import { NARRATIVE_TECHNIQUE_KINDS } from '../types/narrative-techniques.js';
 import { makeIssue } from './base.js';
 import { narrativeCheckSchema } from './schemas.js';
 
@@ -92,8 +92,8 @@ export class NarrativeTechniqueValidator implements Validator {
     // ── 2. Pass 2 analysis check ─────────────────────────────────────
     if (!analysis) return issues;
 
-    // Parse narrativeChecks from the analysis
-    const rawChecks = (analysis as unknown as Record<string, unknown>).narrativeChecks;
+    // Parse narrativeChecks from the analysis payload
+    const rawChecks = (analysis.analysis as Record<string, unknown>).narrativeChecks;
     const allChecks = z.array(narrativeCheckSchema).safeParse(rawChecks).data ?? [];
 
     for (const contract of resolvedContracts) {
@@ -116,6 +116,10 @@ export class NarrativeTechniqueValidator implements Validator {
             `Ensure Pass 2 produces a narrativeCheck with entityId="${eventId}" and attribute="${kind}"`,
             'change_value',
             kind,
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            { field: 'narrativeChecks' },
           ),
         );
         continue;
@@ -132,12 +136,24 @@ export class NarrativeTechniqueValidator implements Validator {
             `Ensure Pass 2 produces exactly one narrativeCheck with entityId="${eventId}" and attribute="${kind}"`,
             'change_value',
             kind,
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            {
+              field: 'narrativeChecks',
+              analysisPointer: `/narrativeChecks/${allChecks.findIndex((c) => c.entityId === eventId && c.attribute === kind)}`,
+            },
           ),
         );
         continue;
       }
 
       const check = matchingChecks[0];
+      const checkIndex = allChecks.indexOf(check);
+      const checkRef =
+        checkIndex >= 0
+          ? { field: 'narrativeChecks', analysisPointer: `/narrativeChecks/${checkIndex}` }
+          : { field: 'narrativeChecks' };
 
       // Validate matchLevel
       if (check.matchLevel === 'absent') {
@@ -151,6 +167,10 @@ export class NarrativeTechniqueValidator implements Validator {
             `Revise the prose to satisfy the "${kind}" required evidence: ${contract.requiredEvidence}`,
             'change_value',
             kind,
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            checkRef,
           ),
         );
       } else if (check.matchLevel === 'contradicted') {
@@ -164,10 +184,13 @@ export class NarrativeTechniqueValidator implements Validator {
             `Revise the prose to satisfy the "${kind}" required evidence: ${contract.requiredEvidence}`,
             'change_value',
             kind,
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            checkRef,
           ),
         );
       }
-      // exact and similar pass silently
     }
 
     return issues;

@@ -136,13 +136,13 @@ export function computeDisattenuatedRho(
   reliabilityA: number,
   reliabilityB: number,
 ): { value: number | null; applicable: boolean; reason?: string } {
-  if (observedRho < -1 || observedRho > 1 || isNaN(observedRho)) {
+  if (observedRho < -1 || observedRho > 1 || Number.isNaN(observedRho)) {
     return { value: null, applicable: false, reason: 'observedRho out of range [-1, 1] or NaN' };
   }
-  if (reliabilityA <= 0 || reliabilityA > 1 || isNaN(reliabilityA)) {
+  if (reliabilityA <= 0 || reliabilityA > 1 || Number.isNaN(reliabilityA)) {
     return { value: null, applicable: false, reason: 'reliabilityA must be in (0, 1]' };
   }
-  if (reliabilityB <= 0 || reliabilityB > 1 || isNaN(reliabilityB)) {
+  if (reliabilityB <= 0 || reliabilityB > 1 || Number.isNaN(reliabilityB)) {
     return { value: null, applicable: false, reason: 'reliabilityB must be in (0, 1]' };
   }
   const corrected = observedRho / Math.sqrt(reliabilityA * reliabilityB);
@@ -159,7 +159,8 @@ export function computeWordCountByLanguage(prose: string, language: 'zh' | 'en')
     let count = 0;
     let inLatin = false;
     for (const ch of s) {
-      const cp = ch.codePointAt(0)!;
+      const cp = ch.codePointAt(0);
+      if (cp === undefined) continue;
       const isCJK =
         (cp >= 0x4e00 && cp <= 0x9fff) ||
         (cp >= 0x3400 && cp <= 0x4dbf) ||

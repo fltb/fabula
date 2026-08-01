@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { eventFileSchema } from '../../src/schemas/event.ts';
 import { compileGameDialogueTree } from '../../src/branch/game-dialogue-tree.ts';
-import { EntityMapper } from '../../src/entity/mapper.ts';
-import { ConfigError } from '../../src/errors.ts';
+import { loadCanonicalProject } from '../../src/entity/project-runtime.ts';
 import { parseStoryTimestamp, resolveTemporalContext } from '../../src/entity/timestamp.ts';
+import { ConfigError } from '../../src/errors.ts';
+import { eventFileSchema } from '../../src/schemas/event.ts';
 import { compileStoryRuntimeGraph } from '../../src/state/graph-adapter.ts';
 import { ReplayEngine } from '../../src/state/replay.ts';
 import { compileStoryBoundaries } from '../../src/state/story-boundaries.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import type { Fact, TimeAnchor } from '../../src/types/entity.ts';
 import type {
   BranchPath,
   BranchSet,
@@ -15,8 +16,6 @@ import type {
   NarrativeEvent,
   TemporalContext,
 } from '../../src/types/index.ts';
-import type { TimeAnchor } from '../../src/types/entity.ts';
-import type { Fact } from '../../src/types/entity.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -30,6 +29,7 @@ function eventWithChoices(choices: unknown[]): unknown {
     storyTime: 'day_0',
     pov: { character: 'narrator', type: 'omniscient' },
     sceneBrief: 'The player receives an offer.',
+    beats: ['The player receives an offer.'],
     preconditions: [],
     expectedPostconditions: [],
     choices,
@@ -71,6 +71,7 @@ function makeEvent(
     sceneType: 'linear',
     pov: { character: pov.character, type: pov.type },
     sceneBrief,
+    beats: [sceneBrief],
     preconditions: (options?.preconditions ?? []).map(mapFact),
     postconditions: [],
     choices: options?.choices,
@@ -137,28 +138,12 @@ function gameTreeEvents(): NarrativeEvent[] {
     makeEvent('E0', 0, 'The offer', 'day_0', ROOT_POV, 'The player receives an offer.', {
       choices: CHOOSE_HUNT,
     }),
-    makeEvent(
-      'E1a',
-      1,
-      'The jungle',
-      'day_1',
-      BRANCH_POV,
-      'The hunt begins.',
-      {
-        preconditions: [{ entity: 'hero', attribute: 'chose_hunt', value: true }],
-      },
-    ),
-    makeEvent(
-      'E1b',
-      1,
-      'The chateau',
-      'day_1',
-      BRANCH_POV,
-      'The hero refuses.',
-      {
-        preconditions: [{ entity: 'hero', attribute: 'chose_hunt', value: false }],
-      },
-    ),
+    makeEvent('E1a', 1, 'The jungle', 'day_1', BRANCH_POV, 'The hunt begins.', {
+      preconditions: [{ entity: 'hero', attribute: 'chose_hunt', value: true }],
+    }),
+    makeEvent('E1b', 1, 'The chateau', 'day_1', BRANCH_POV, 'The hero refuses.', {
+      preconditions: [{ entity: 'hero', attribute: 'chose_hunt', value: false }],
+    }),
   ];
 }
 
@@ -189,6 +174,73 @@ function setupGameDialogueProject(storage: MemoryStorage): void {
       '  - { id: day_1, at: "day 1", description: "Day 1" }',
       'threads: []',
       'worldFacts: []',
+    ].join('\n'),
+  );
+  storage.write(
+    `${PROJECT_DIR}/definitions/entity-types.yaml`,
+    [
+      'types:',
+      '  character:',
+      '    typeId: character',
+      '    kind: character',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates:',
+      '          - active',
+      '          - inactive',
+      '          - retired',
+      '        unsetAllowed: false',
+      '      chose_hunt:',
+      '        attributeId: chose_hunt',
+      '        valueType: boolean',
+      '        requiredAt: never',
+      '        writePolicy: mutable',
+      '        unsetAllowed: true',
+      '      traits:',
+      '        attributeId: traits',
+      '        valueType: string_list',
+      '        requiredAt: never',
+      '        writePolicy: immutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - - active',
+      '          - inactive',
+      '        - - active',
+      '          - retired',
+      '        - - inactive',
+      '          - active',
+      '        - - inactive',
+      '          - retired',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+    ].join('\n'),
+  );
+  storage.write(
+    `${PROJECT_DIR}/definitions/characters/hero.yaml`,
+    [
+      'id: hero',
+      'name: "Hero"',
+      'type: character',
+      'description: "The protagonist who chooses whether to hunt."',
+      'traits: []',
+      'initialState: {}',
+    ].join('\n'),
+  );
+  storage.write(
+    `${PROJECT_DIR}/definitions/characters/narrator.yaml`,
+    [
+      'id: narrator',
+      'name: "Narrator"',
+      'type: character',
+      'description: "The omniscient narrator who presents the offer."',
+      'traits: []',
+      'initialState: {}',
     ].join('\n'),
   );
   storage.write(
@@ -230,6 +282,8 @@ function setupGameDialogueProject(storage: MemoryStorage): void {
       '  character: narrator',
       '  type: omniscient',
       'sceneBrief: The player receives an offer.',
+      'beats:',
+      '  - "The player receives an offer."',
       'preconditions: []',
       'expectedPostconditions: []',
       'choices:',
@@ -262,6 +316,8 @@ function setupGameDialogueProject(storage: MemoryStorage): void {
       '  character: hero',
       '  type: third_person_limited',
       'sceneBrief: The hunt begins.',
+      'beats:',
+      '  - "The hunt begins."',
       'preconditions:',
       '  - entity: hero',
       '    attribute: chose_hunt',
@@ -280,6 +336,8 @@ function setupGameDialogueProject(storage: MemoryStorage): void {
       '  character: hero',
       '  type: third_person_limited',
       'sceneBrief: The hero refuses.',
+      'beats:',
+      '  - "The hero refuses."',
       'preconditions:',
       '  - entity: hero',
       '    attribute: chose_hunt',
@@ -304,6 +362,7 @@ function event(
     sceneType: 'linear',
     pov: { character: 'narrator', type: 'omniscient' },
     sceneBrief: id,
+    beats: [id],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
@@ -430,15 +489,31 @@ describe('compileGameDialogueTree()', () => {
     const events = gameTreeEvents();
     // Re-define events with story_beginning as the anchor reference
     const contextEvents: NarrativeEvent[] = [
-      makeEvent('E0', 0, 'The offer', 'story_beginning', ROOT_POV, 'The player receives an offer.', {
-        choices: CHOOSE_HUNT,
-      }),
+      makeEvent(
+        'E0',
+        0,
+        'The offer',
+        'story_beginning',
+        ROOT_POV,
+        'The player receives an offer.',
+        {
+          choices: CHOOSE_HUNT,
+        },
+      ),
       makeEvent('E1a', 1, 'The jungle', 'story_beginning + 1 day', BRANCH_POV, 'The hunt begins.', {
         preconditions: [{ entity: 'hero', attribute: 'chose_hunt', value: true }],
       }),
-      makeEvent('E1b', 1, 'The chateau', 'story_beginning + 1 day', BRANCH_POV, 'The hero refuses.', {
-        preconditions: [{ entity: 'hero', attribute: 'chose_hunt', value: false }],
-      }),
+      makeEvent(
+        'E1b',
+        1,
+        'The chateau',
+        'story_beginning + 1 day',
+        BRANCH_POV,
+        'The hero refuses.',
+        {
+          preconditions: [{ entity: 'hero', attribute: 'chose_hunt', value: false }],
+        },
+      ),
     ];
     const temporalContext = resolveContext(contextEvents, [
       { id: 'story_beginning', at: 'day 0', description: 'Beginning' },
@@ -466,10 +541,7 @@ describe('compileGameDialogueTree()', () => {
         const events = gameTreeEvents();
         events[0] = {
           ...events[0],
-          choices: [
-            { ...events[0]!.choices![0]!, targetEvent: 'E0' },
-            events[0]!.choices![1]!,
-          ],
+          choices: [{ ...events[0]!.choices![0]!, targetEvent: 'E0' }, events[0]!.choices![1]!],
         };
         return events;
       },
@@ -612,9 +684,10 @@ describe('game dialogue replay integration', () => {
   it('maps scopes and replays each selected transition before its target', () => {
     const storage = new MemoryStorage();
     setupGameDialogueProject(storage);
-    const mapper = new EntityMapper(PROJECT_DIR, storage);
-    const data = mapper.loadProject();
-    const events = mapper.loadAllEvents(data.chapters);
+    const ir = loadCanonicalProject(PROJECT_DIR, storage);
+    // Runtime events: authored events + branch-choice transitions composed by
+    // the canonical kernel (no genesis event exists in the current contract).
+    const events = ir.runtimeEvents;
     const target = events.find((item) => item.id === 'E1a')!;
     const transition = events.find((item) => item.id === 'system:branch-choice:E0:accept_hunt')!;
 
@@ -626,33 +699,36 @@ describe('game dialogue replay integration', () => {
     expect(target.causalPredecessors).toEqual(['system:branch-choice:E0:accept_hunt']);
     expect(transition.branchExistence).toEqual({ type: 'paths', paths: [acceptPath] });
 
-    const replayEvents = events.filter((item) => item.id !== 'system:genesis');
-
     // Build story graph to obtain adjacency, then compile boundaries from it
     const compiled = compileStoryRuntimeGraph({
       events,
-      initialFacts: [],
-      initialThreads: [],
-      timeAnchors: data.timeAnchors,
+      initialFacts: ir.initialFacts,
+      initialThreads: ir.initialThreads,
+      timeAnchors: ir.data.timeAnchors,
       branchPath: acceptPath,
     });
     const boundaries = compileStoryBoundaries(
-      replayEvents,
-      [],
+      events,
+      ir.initialFacts,
       compiled.storyAdjacency,
+      ir.catalogContext,
       acceptPath,
     );
-    const replayed = new ReplayEngine().replay(events, {
+    const replayed = new ReplayEngine(ir.catalogContext).replay(events, {
       branchPath: acceptPath,
-      timeAnchors: data.timeAnchors,
+      timeAnchors: ir.data.timeAnchors,
+      initialFacts: ir.initialFacts,
+      initialThreads: ir.initialThreads,
     });
 
     expect(boundaries.stateBeforeByEventId.get('E1a')!.entities.hero!.chose_hunt).toBe(true);
     expect(replayed).toEqual(boundaries.finalState);
     expect(
-      new ReplayEngine().replay(events, {
+      new ReplayEngine(ir.catalogContext).replay(events, {
         branchPath: refusePath,
-        timeAnchors: data.timeAnchors,
+        timeAnchors: ir.data.timeAnchors,
+        initialFacts: ir.initialFacts,
+        initialThreads: ir.initialThreads,
       }).entities.hero!.chose_hunt,
     ).toBe(false);
   });

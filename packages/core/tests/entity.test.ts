@@ -5,15 +5,15 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ConfigError } from '../src/errors.js';
 import {
   compareStoryCoordinates,
   EntityMapper,
-  InMemoryEntityRegistry,
   INITIAL_STORY_ROOT_ID,
+  InMemoryEntityRegistry,
   parseStoryTimestamp,
   resolveTemporalContext,
 } from '../src/entity/index.js';
+import { ConfigError } from '../src/errors.js';
 import type {
   AuthoredStoryTime,
   Entity,
@@ -125,7 +125,9 @@ describe('EntityMapper.loadProject()', () => {
   });
 
   it('normalizes structured fixture canaries without changing their coordinates', () => {
-    const seraphineRecruitment = data.timeAnchors.find((anchor) => anchor.id === 'seraphine_recruitment');
+    const seraphineRecruitment = data.timeAnchors.find(
+      (anchor) => anchor.id === 'seraphine_recruitment',
+    );
     expect(seraphineRecruitment?.at).toEqual({ type: 'offset', amount: -120, unit: 'day' });
 
     const e1b = data.chapters.get(1)?.events.find((event) => event.event === 'E1b');
@@ -153,19 +155,20 @@ describe('EntityMapper.loadAllEvents()', () => {
   const mapper = new EntityMapper(FIXTURE_PATH);
   const projectData = mapper.loadProject();
 
-  it('should include genesis event (system:genesis) from state_initial.yaml', () => {
-    // Use an empty chapters map to isolate genesis-only behavior
-    // (fixture event files lack storyTime field, causing parse errors)
-    const emptyChapters = new Map();
-    const events = mapper.loadAllEvents(emptyChapters);
-    const genesis = events.find((e) => e.event === 'system:genesis');
-    expect(genesis).toBeDefined();
-    expect(genesis!.narrativeOrder).toBe(0);
-    expect(genesis!.title).toBe('World Genesis');
-    expect(genesis!.source).toBe('genesis');
-    expect(genesis!.storyTime).toEqual({ type: 'absolute', value: 'day_0' });
-    // Note: postconditions are populated from the flat worldFacts in the fixture.
-    expect(Array.isArray(genesis!.postconditions)).toBe(true);
+  it('returns only authored events — initial facts are separate state inputs', () => {
+    // No genesis event is synthesized from state_initial.yaml: the loader
+    // returns only event-file events, and baseline facts stay in
+    // worldInitialState.worldFacts as state inputs.
+    const emptyChapters = new Map<number, { metadata: null; events: EventFile[] }>();
+    const events = mapper.loadAllEvents({ ...projectData, chapters: emptyChapters });
+    expect(events).toHaveLength(0);
+
+    const allEvents = mapper.loadAllEvents(projectData);
+    expect(allEvents.some((e) => e.event === 'system:genesis')).toBe(false);
+    expect(allEvents.map((e) => e.id).sort()).toEqual(['E1a', 'E1b']);
+
+    const initialFacts = projectData.worldInitialState?.worldFacts ?? [];
+    expect(initialFacts.length).toBeGreaterThan(0);
   });
 
   it('should map EventFile to NarrativeEvent correctly (with proper storyTime)', () => {
@@ -176,6 +179,7 @@ describe('EntityMapper.loadAllEvents()', () => {
       storyTime: 'arcane_s1_end + 3 weeks',
       pov: { character: 'seraphine', type: 'third_person_limited' },
       sceneBrief: 'Seraphine detects an anomalous emotional signal.',
+      beats: ['Seraphine detects an anomalous emotional signal.'],
       preconditions: [{ entity: 'seraphine', attribute: 'status', value: 'alive' }],
       expectedPostconditions: [
         { entity: 'seraphine', attribute: 'has_detected_anomaly', value: true },
@@ -237,6 +241,7 @@ describe('EntityMapper.loadAllEvents()', () => {
           storyTime: 'arcane_s1_end + 3 weeks',
           pov: { character: 'camille', type: 'third_person_limited' },
           sceneBrief: 'Camille accepts the investigation.',
+          beats: ['Camille accepts the investigation.'],
           preconditions: [],
           expectedPostconditions: [],
         },
@@ -247,18 +252,18 @@ describe('EntityMapper.loadAllEvents()', () => {
           storyTime: 'arcane_s1_end + 3 weeks',
           pov: { character: 'seraphine', type: 'third_person_limited' },
           sceneBrief: 'Seraphine detects the signal.',
+          beats: ['Seraphine detects the signal.'],
           preconditions: [],
           expectedPostconditions: [],
         },
       ],
     });
 
-    const events = mapper.loadAllEvents(chapters);
-    // Genesis (order 0) + E1a (order 1) + E1b (order 2)
-    expect(events).toHaveLength(3);
-    expect(events[0].narrativeOrder).toBe(0); // genesis
-    expect(events[1].narrativeOrder).toBe(1); // E1a
-    expect(events[2].narrativeOrder).toBe(2); // E1b
+    const events = mapper.loadAllEvents({ ...projectData, chapters });
+    // Authored events only (no genesis synthesized): E1a (order 1) + E1b (order 2)
+    expect(events).toHaveLength(2);
+    expect(events[0].narrativeOrder).toBe(1); // E1a
+    expect(events[1].narrativeOrder).toBe(2); // E1b
   });
 
   it('should parse storyTime strings when present in EventFile', () => {
@@ -269,6 +274,7 @@ describe('EntityMapper.loadAllEvents()', () => {
       storyTime: 'arcane_s1_end + 3 weeks',
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'A test event',
+      beats: ['A test event'],
       preconditions: [],
       expectedPostconditions: [],
     };
@@ -297,6 +303,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       storyTime: 'arcane_s1_end + 1 day',
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'test',
+      beats: ['test'],
       preconditions: [
         { entity: 'camille', attribute: 'location', value: 'piltover_enforcer_headquarters' },
         { entity: 'seraphine', attribute: 'status', value: 'alive' },
@@ -330,6 +337,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       storyTime: 'chapter_1',
       pov: { character: 'seraphine', type: 'first_person' },
       sceneBrief: 'test',
+      beats: ['test'],
       preconditions: [],
       expectedPostconditions: [
         { entity: 'seraphine', attribute: 'has_detected_anomaly', value: true, confidence: 0.95 },
@@ -356,6 +364,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       storyTime: 'day_10',
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'test',
+      beats: ['test'],
       preconditions: [
         { entity: 'camille', attribute: 'location', value: 'piltover_enforcer_headquarters' },
       ],
@@ -385,6 +394,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       storyTime: 'chapter_2',
       pov: { character: 'gear', type: 'first_person' },
       sceneBrief: 'test',
+      beats: ['test'],
       preconditions: [],
       expectedPostconditions: [],
     };
@@ -402,6 +412,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       storyTime: 'day_0',
       pov: { character: 'camille', type: 'omniscient' },
       sceneBrief: 'test',
+      beats: ['test'],
       preconditions: [],
       expectedPostconditions: [],
     };
@@ -419,6 +430,7 @@ describe('EntityMapper.mapToNarrativeEvent()', () => {
       storyTime: 'day_5',
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'A full featured event',
+      beats: ['A full featured event'],
       causalDiscontinuity: {
         predecessor: 'E0',
         dependent: 'full_event',
@@ -827,9 +839,9 @@ describe('parseStoryTimestamp()', () => {
 
   it('parses structured authored forms equivalently to legacy strings', () => {
     expect(parseStoryTimestamp({ at: 'day_3' })).toEqual(parseStoryTimestamp('day_3'));
-    expect(
-      parseStoryTimestamp({ after: { ref: 'origin', amount: 3, unit: 'week' } }),
-    ).toEqual(parseStoryTimestamp('origin + 3 weeks'));
+    expect(parseStoryTimestamp({ after: { ref: 'origin', amount: 3, unit: 'week' } })).toEqual(
+      parseStoryTimestamp('origin + 3 weeks'),
+    );
     expect(parseStoryTimestamp({ offset: { amount: -1, unit: 'day' } })).toEqual(
       parseStoryTimestamp('-1 day'),
     );
@@ -971,7 +983,9 @@ describe('resolveTemporalContext()', () => {
   // ── Indeterminate resolution ──────────────────────────────────────────
 
   it('omitted storyTime resolves to unlocated', () => {
-    const events = [{ id: 'E1', storyTime: parseStoryTimestamp(undefined), narrationTime: undefined }];
+    const events = [
+      { id: 'E1', storyTime: parseStoryTimestamp(undefined), narrationTime: undefined },
+    ];
     const ctx = resolveTemporalContext(events, []);
     expect(ctx.coordinatesByEventId.get('E1')).toEqual({
       type: 'storyTime',
@@ -1003,7 +1017,9 @@ describe('resolveTemporalContext()', () => {
   // ── Locatable resolution ──────────────────────────────────────────────
 
   it('day_N resolves to story clock with millisecond scalar', () => {
-    const events = [{ id: 'E1', storyTime: parseStoryTimestamp('day_0'), narrationTime: undefined }];
+    const events = [
+      { id: 'E1', storyTime: parseStoryTimestamp('day_0'), narrationTime: undefined },
+    ];
     const ctx = resolveTemporalContext(events, []);
     expect(ctx.coordinatesByEventId.get('E1')).toEqual({
       type: 'storyTime',
@@ -1014,7 +1030,9 @@ describe('resolveTemporalContext()', () => {
   });
 
   it('day_42 resolves to story clock scalar 42 * DAY_MS', () => {
-    const events = [{ id: 'E1', storyTime: parseStoryTimestamp('day_42'), narrationTime: undefined }];
+    const events = [
+      { id: 'E1', storyTime: parseStoryTimestamp('day_42'), narrationTime: undefined },
+    ];
     const ctx = resolveTemporalContext(events, []);
     const coord = ctx.coordinatesByEventId.get('E1') as PointStoryCoordinate;
     expect(coord.kind).toBe('point');
@@ -1023,7 +1041,9 @@ describe('resolveTemporalContext()', () => {
   });
 
   it('bare duration offset resolves to story clock', () => {
-    const events = [{ id: 'E1', storyTime: parseStoryTimestamp('3 days'), narrationTime: undefined }];
+    const events = [
+      { id: 'E1', storyTime: parseStoryTimestamp('3 days'), narrationTime: undefined },
+    ];
     const ctx = resolveTemporalContext(events, []);
     const coord = ctx.coordinatesByEventId.get('E1') as PointStoryCoordinate;
     expect(coord.clock).toBe('story');
@@ -1122,9 +1142,7 @@ describe('resolveTemporalContext()', () => {
   });
 
   it('rejects event id colliding with a time anchor', () => {
-    const anchors: TimeAnchor[] = [
-      { id: 'collision', at: { type: 'absolute', value: 'day_0' } },
-    ];
+    const anchors: TimeAnchor[] = [{ id: 'collision', at: { type: 'absolute', value: 'day_0' } }];
     const events = [
       { id: 'collision', storyTime: parseStoryTimestamp('day_1'), narrationTime: undefined },
     ];
@@ -1135,9 +1153,7 @@ describe('resolveTemporalContext()', () => {
   });
 
   it('rejects anchor id that looks like a bare duration', () => {
-    const anchors: TimeAnchor[] = [
-      { id: '3days', at: { type: 'absolute', value: 'day_0' } },
-    ];
+    const anchors: TimeAnchor[] = [{ id: '3days', at: { type: 'absolute', value: 'day_0' } }];
     expect(() => resolveTemporalContext([], anchors)).toThrow(ConfigError);
   });
 
@@ -1400,6 +1416,7 @@ describe('EntityMapper — edge cases', () => {
       storyTime: 'day_0',
       pov: { character: 'system', type: 'omniscient' },
       sceneBrief: 'No preconditions or postconditions',
+      beats: ['No preconditions or postconditions'],
       preconditions: [],
       expectedPostconditions: [],
     };
@@ -1424,9 +1441,11 @@ describe('EntityMapper — edge cases', () => {
 });
 
 describe('InMemoryEntityRegistry — edge cases', () => {
-  it('propagates a missing project ConfigError', () => {
+  it('loads entities from already-loaded ProjectData (no project re-read)', () => {
     const registry = new InMemoryEntityRegistry();
-    expect(() => registry.load('/nonexistent')).toThrow('Required YAML file is missing');
+    const data = new EntityMapper(FIXTURE_PATH).loadProject();
+    expect(() => registry.load(data)).not.toThrow();
+    expect(registry.getAll().length).toBeGreaterThan(0);
   });
 
   it('resolveRefs() should handle empty array', () => {

@@ -1,0 +1,22 @@
+id: miss_mowcher
+name: "Miss Mowcher"
+type: supporting_character
+archetype: sharp_witted_dwarf
+role: supporting
+description: "A dwarf hairdresser and chiropodist of Yarmouth, a tiny, busy woman with a tongue that cuts through the pretensions of everyone she meets. She dresses Littimer's hair and knows the Steerforth household's secrets. David first mistakes her sharpness for malice, but she proves a loyal friend: it is Miss Mowcher who, having discovered Steerforth's betrayal of Emily, helps expose the servant Littimer's part in the affair and brings him to justice."
+appearance: "A tiny woman, scarcely three feet high, with a large head, bright sharp eyes, and a prodigious quantity of hair of her own which she dresses elaborately. She is always in motion, wheeling about on a stool to reach her clients."
+aliases:
+  - "Miss Mowcher"
+  - "Mowcher"
+gender: female
+age: "Middle-aged"
+profession: "Hairdresser and chiropodist"
+traits:
+  - sharp_witted
+  - garrulous
+  - shrewd
+  - loyal
+  - candid
+  - observant
+voiceNotes: "Rapid, satirical, and inexhaustible — she talks in a torrent of jokes and home truths, mocking her own diminutive size before anyone else can, and cutting through affectation with devastating directness."
+backstory: "A Yarmouth hairdresser who attends Littimer and knows the Steerforth household. David at first suspects her of complicity in Emily's ruin, but she is innocent and loyal: she later helps David and Mr Peggotty, and her evidence against Littimer brings the treacherous servant to justice."

@@ -1,0 +1,9 @@
+id: garrison_commander_son
+name: 守备之子
+type: minor
+role: minor
+description: 长安城守备之子，与金哥已有婚约。两家争聘打官司时，守备迫于长安节度使云光之命退婚。他性情刚烈，闻金哥自缢殉情的消息后也投河殉情——一对底层年轻人的纯真爱情被凤姐弄权断送。
+gender: 男
+traits:
+  - 刚烈
+  - 痴情

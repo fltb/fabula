@@ -225,7 +225,7 @@ function bridgeChiNovelKE(rawPath, outputPath) {
         if (!entry.is_valid_character) continue;
         const canonical = entry.correct_name || entry.name;
         const info = charInfo[canonical] || charInfo[entry.name] || {};
-        const id = sanitizeId(novelId + '_' + canonical);
+        const id = sanitizeId(`${novelId}_${canonical}`);
 
         allCharacters.push({
           id,
@@ -263,10 +263,10 @@ function bridgeChiNovelKE(rawPath, outputPath) {
     if (annotations.location_hierarchy?.entries) {
       for (const entry of annotations.location_hierarchy.entries) {
         allLocations.push({
-          id: sanitizeId(novelId + '_' + entry.name),
+          id: sanitizeId(`${novelId}_${entry.name}`),
           name: entry.name,
           parent_id: entry.correct_parent
-            ? sanitizeId(novelId + '_' + entry.correct_parent)
+            ? sanitizeId(`${novelId}_${entry.correct_parent}`)
             : undefined,
           description: `${entry.name} — ${entry.tier}级别地点`,
           era:

@@ -17,6 +17,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 const FIXTURE_PATH = path.resolve(__dirname, '../../../fixtures/arcane-aftermath');
 
+import { z } from 'zod';
 import { assembleNovel, countWords } from '../src/assembler/index.js';
 import { ContextCompiler } from '../src/context/index.js';
 import type { ProjectData } from '../src/entity/index.js';
@@ -24,6 +25,8 @@ import { EntityMapper, InMemoryEntityRegistry } from '../src/entity/index.js';
 import { calculateISS, detectAntiPatterns } from '../src/iss/index.js';
 import { ReplayEngine, StateManager } from '../src/state/index.js';
 import type {
+  EntityCatalogContext,
+  Fact,
   GoalLifecycle,
   MilestoneLifecycle,
   NarrativeEvent,
@@ -48,6 +51,7 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'system', type: 'omniscient' },
     sceneBrief: 'Test event for integration test',
+    beats: ['Test event for integration test'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
@@ -60,6 +64,111 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
     ...overrides,
   };
 }
+
+/**
+ * Explicit catalog context for replay-backed tests: declares the fixture
+ * characters (initial activation) with the attributes the synthetic events
+ * write. The real kernel builds the equivalent context via loadCanonicalProject.
+ */
+const TEST_CATALOG_CONTEXT: EntityCatalogContext = {
+  entityDeclarationCatalog: {
+    version: 1,
+    declarations: {
+      seraphine: {
+        entityId: 'seraphine',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
+        immutableMetadata: {
+          name: 'Seraphine',
+          definitionFile: 'definitions/characters/seraphine.yaml',
+        },
+        introduction: { type: 'initial' },
+      },
+      camille: {
+        entityId: 'camille',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
+        immutableMetadata: {
+          name: 'Camille',
+          definitionFile: 'definitions/characters/camille.yaml',
+        },
+        introduction: { type: 'initial' },
+      },
+    },
+  },
+  entityTypeCatalog: {
+    version: 1,
+    types: {
+      character: {
+        typeRef: { typeId: 'character', schemaVersion: 1 },
+        kind: 'character',
+        attributes: {
+          lifecycle: {
+            attributeId: 'lifecycle',
+            valueSchema: z.string(),
+            requiredAt: 'never',
+            writePolicy: 'lifecycle_managed',
+            allowedLifecycleStates: ['active', 'inactive', 'retired'],
+            unsetAllowed: false,
+          },
+          detected_anomaly: {
+            attributeId: 'detected_anomaly',
+            valueSchema: z.boolean(),
+            requiredAt: 'never',
+            writePolicy: 'mutable',
+            unsetAllowed: true,
+          },
+          case_status: {
+            attributeId: 'case_status',
+            valueSchema: z.string(),
+            requiredAt: 'never',
+            writePolicy: 'mutable',
+            unsetAllowed: true,
+          },
+        },
+        lifecyclePolicy: {
+          allowedTransitions: [
+            ['active', 'inactive'],
+            ['active', 'retired'],
+            ['inactive', 'active'],
+            ['inactive', 'retired'],
+          ],
+        },
+        referenceCapabilities: { defaultEligibility: 'live' },
+        typedInvariants: [],
+      },
+    },
+  },
+};
+
+/**
+ * Baseline activation facts for the synthetic replay paths: seraphine and
+ * camille are declared initial-activated, and a declaration alone does not
+ * activate — the replay baseline must carry their lifecycle facts.
+ */
+const BASELINE_INITIAL_FACTS: Fact[] = [
+  {
+    id: 'seraphine.lifecycle',
+    entityId: 'seraphine',
+    attribute: 'lifecycle',
+    value: 'active',
+    validity: {
+      temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+      branches: { type: 'all' },
+    },
+  },
+  {
+    id: 'camille.lifecycle',
+    entityId: 'camille',
+    attribute: 'lifecycle',
+    value: 'active',
+    validity: {
+      temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+      branches: { type: 'all' },
+    },
+  },
+];
+
+/** Replay options carrying the baseline activation facts. */
+const BASELINE_REPLAY_OPTIONS = { initialFacts: BASELINE_INITIAL_FACTS };
 
 // ─── 1. Full pipeline: load → validate → state → assemble ─────────────────────
 
@@ -131,9 +240,10 @@ describe('1. Full Pipeline', () => {
     expect(evt.narrativeOrder).toBe(1);
   });
 
-  it('1b. InMemoryEntityRegistry.load() loads all fixture entities', () => {
+  it('1b. InMemoryEntityRegistry.load() loads all fixture entities from ProjectData', () => {
     const registry = new InMemoryEntityRegistry();
-    expect(() => registry.load(FIXTURE_PATH)).not.toThrow();
+    const data = new EntityMapper(FIXTURE_PATH).loadProject();
+    expect(() => registry.load(data)).not.toThrow();
 
     // All entities load correctly now that fixture YAMLs use camelCase
     const all = registry.getAll();
@@ -154,20 +264,18 @@ describe('1. Full Pipeline', () => {
     expect(rules.length).toBeGreaterThanOrEqual(1);
   });
 
-  it('1c. loadAllEvents creates genesis + loaded chapter events', () => {
-    const events = mapper.loadAllEvents(projectData.chapters);
-    // genesis + 2 loaded events (E1a and E1b)
-    expect(events).toHaveLength(3);
+  it('1c. loadAllEvents returns authored events only; initial facts load separately', () => {
+    const events = mapper.loadAllEvents(projectData);
+    // 2 loaded events (E1a and E1b) — no synthesized genesis event
+    expect(events).toHaveLength(2);
 
     const ids = events.map((e) => e.id);
-    expect(ids).toContain('system:genesis');
     expect(ids).toContain('E1a');
     expect(ids).toContain('E1b');
+    expect(ids).not.toContain('system:genesis');
 
-    // Genesis event
-    const genesis = events.find((e) => e.id === 'system:genesis')!;
-    expect(genesis.narrativeOrder).toBe(0);
-    expect(genesis.source).toBe('genesis');
+    // Initial facts are state inputs from state_initial.yaml, not events.
+    expect(projectData.worldInitialState?.worldFacts.length).toBeGreaterThan(0);
 
     // E1a event — fixture now uses camelCase so narrativeOrder is defined
     const e1a = events.find((e) => e.id === 'E1a')!;
@@ -179,29 +287,13 @@ describe('1. Full Pipeline', () => {
 
   it('1d. StateManager commits events and produces world state', () => {
     const snapDir = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-snap-'));
-    const sm = new StateManager(snapDir);
-
-    const genesis = makeEvent({
-      id: 'system:genesis',
-      event: 'system:genesis',
-      narrativeOrder: 0,
-      title: 'World Genesis',
-      storyTime: { type: 'absolute', value: 'day_0' },
-      source: 'genesis',
-      postconditions: [
-        {
-          id: 'world.council_disarray',
-          entityId: 'world',
-          attribute: 'council_status',
-          value: 'in_disarray',
-          confidence: 1.0,
-          validity: {
-            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
-            branches: { type: 'all' },
-          },
-        },
-      ],
-    });
+    const sm = new StateManager(
+      snapDir,
+      TEST_CATALOG_CONTEXT,
+      20,
+      undefined,
+      BASELINE_REPLAY_OPTIONS,
+    );
 
     const e1a = makeEvent({
       id: 'E1a',
@@ -212,6 +304,7 @@ describe('1. Full Pipeline', () => {
       sceneType: 'linear',
       pov: { character: 'seraphine', type: 'third_person_limited' },
       sceneBrief: 'Seraphine detects an anomalous emotional frequency.',
+      beats: ['Seraphine detects an anomalous emotional frequency.'],
       postconditions: [
         {
           id: 'seraphine.detected_anomaly',
@@ -240,6 +333,7 @@ describe('1. Full Pipeline', () => {
       causalPredecessors: ['E1a'],
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'Camille takes the missing-crystals case.',
+      beats: ['Camille takes the missing-crystals case.'],
       postconditions: [
         {
           id: 'camille.accepted_case',
@@ -260,13 +354,12 @@ describe('1. Full Pipeline', () => {
       participants: { entities: ['camille'] },
     });
 
-    sm.commit(genesis);
     sm.commit(e1a);
     sm.commit(e1b);
 
     // Store
-    expect(sm.eventStore.count).toBe(3);
-    expect(sm.eventStore.getAll().map((e) => e.id)).toEqual(['system:genesis', 'E1a', 'E1b']);
+    expect(sm.eventStore.count).toBe(2);
+    expect(sm.eventStore.getAll().map((e) => e.id)).toEqual(['E1a', 'E1b']);
 
     // Duplicate narrative order throws
     expect(() => sm.commit(e1a)).toThrow(/already exists/);
@@ -300,9 +393,15 @@ describe('1. Full Pipeline', () => {
     sm.saveToDisk(snapDir);
     expect(fs.existsSync(path.join(snapDir, 'event_log.jsonl'))).toBe(true);
 
-    const sm2 = new StateManager(fs.mkdtempSync(path.join(tmpdir(), 'novalistically-snap-')));
+    const sm2 = new StateManager(
+      fs.mkdtempSync(path.join(tmpdir(), 'novalistically-snap-')),
+      TEST_CATALOG_CONTEXT,
+      20,
+      undefined,
+      BASELINE_REPLAY_OPTIONS,
+    );
     sm2.loadFromDisk(snapDir);
-    expect(sm2.eventStore.count).toBe(3);
+    expect(sm2.eventStore.count).toBe(2);
 
     fs.rmSync(snapDir, { recursive: true, force: true });
     fs.rmSync((sm2 as any).snapshotEngine.snapshotsDir, { recursive: true, force: true });
@@ -310,14 +409,20 @@ describe('1. Full Pipeline', () => {
 
   it('1e. ResultAggregator runs validators with no errors', () => {
     const snapDir = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-snap-'));
-    const sm = new StateManager(snapDir);
+    const sm = new StateManager(
+      snapDir,
+      TEST_CATALOG_CONTEXT,
+      20,
+      undefined,
+      BASELINE_REPLAY_OPTIONS,
+    );
 
-    const genesis = makeEvent({ id: 'system:genesis', narrativeOrder: 0, source: 'genesis' });
     const evt1 = makeEvent({
       id: 'E1a',
       narrativeOrder: 1,
       pov: { character: 'seraphine', type: 'third_person_limited' },
       sceneBrief: 'Seraphine detects the signal.',
+      beats: ['Seraphine detects the signal.'],
       participants: { entities: ['seraphine'] },
       postconditions: [
         {
@@ -338,6 +443,7 @@ describe('1. Full Pipeline', () => {
       narrativeOrder: 2,
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'Camille takes the case.',
+      beats: ['Camille takes the case.'],
       participants: { entities: ['camille'] },
       postconditions: [
         {
@@ -354,7 +460,6 @@ describe('1. Full Pipeline', () => {
       ],
     });
 
-    sm.commit(genesis);
     sm.commit(evt1);
     sm.commit(evt2);
 
@@ -412,6 +517,7 @@ describe('1. Full Pipeline', () => {
       narrativeOrder: 1,
       pov: { character: 'seraphine', type: 'third_person_limited' },
       sceneBrief: 'Seraphine detects the signal.',
+      beats: ['Seraphine detects the signal.'],
       participants: { entities: ['seraphine'] },
     });
     const events = [event];
@@ -549,7 +655,7 @@ describe('4. State Transitions', () => {
 
   beforeAll(() => {
     snapDir = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-snap-'));
-    sm = new StateManager(snapDir);
+    sm = new StateManager(snapDir, TEST_CATALOG_CONTEXT, 20, undefined, BASELINE_REPLAY_OPTIONS);
   });
 
   afterAll(() => {
@@ -608,9 +714,15 @@ describe('4. State Transitions', () => {
 
   it('4c. Thread T1, T2, T3 have progress after events', () => {
     const snapDir2 = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-snap-'));
-    const sm2 = new StateManager(snapDir2);
+    const sm2 = new StateManager(
+      snapDir2,
+      TEST_CATALOG_CONTEXT,
+      20,
+      undefined,
+      BASELINE_REPLAY_OPTIONS,
+    );
 
-    const genesis = makeEvent({ id: 'genesis', narrativeOrder: 0, source: 'genesis' });
+    const opening = makeEvent({ id: 'E0', narrativeOrder: 0 });
     const e1a = makeEvent({
       id: 'E1a',
       narrativeOrder: 1,
@@ -627,7 +739,7 @@ describe('4. State Transitions', () => {
       ],
     });
 
-    sm2.commit(genesis);
+    sm2.commit(opening);
     sm2.commit(e1a);
     sm2.commit(e1b);
 
@@ -667,8 +779,7 @@ describe('4. State Transitions', () => {
   });
 
   it('4d. ReplayEngine reconstucts state at specific narrative orders', () => {
-    const replay = new ReplayEngine();
-    const genesis = makeEvent({ id: 'sys:g', narrativeOrder: 0, source: 'genesis' });
+    const replay = new ReplayEngine(TEST_CATALOG_CONTEXT);
     const e1a = makeEvent({
       id: 'E1a',
       narrativeOrder: 1,
@@ -706,26 +817,30 @@ describe('4. State Transitions', () => {
       ],
       threadProgress: [{ thread: 'T1', advancement: 'b', progressAfter: 30, progressTotal: 100 }],
     });
-    const allEvents = [genesis, e1a, e1b];
+    const allEvents = [e1a, e1b];
 
-    // At order 0: no entity state
-    expect(replay.getStateAt(allEvents, 0).entities['seraphine']).toBeUndefined();
+    // At order 0: only the baseline activation facts — no event-derived state
+    expect(
+      replay.getStateAt(allEvents, 0, BASELINE_REPLAY_OPTIONS).entities['seraphine']?.[
+        'detected_anomaly'
+      ],
+    ).toBeUndefined();
 
     // At order 1: seraphine detected anomaly
-    const at1 = replay.getStateAt(allEvents, 1);
+    const at1 = replay.getStateAt(allEvents, 1, BASELINE_REPLAY_OPTIONS);
     expect(at1.entities['seraphine']?.['detected_anomaly']).toBe(true);
     expect(at1.threads['T1']).toBeDefined();
     expect(at1.threads['T1'].status).toBe('active');
 
     // At order 2: camille accepted case
-    const at2 = replay.getStateAt(allEvents, 2);
+    const at2 = replay.getStateAt(allEvents, 2, BASELINE_REPLAY_OPTIONS);
     expect(at2.entities['camille']?.['case_status']).toBe('accepted');
     expect(at2.threads['T1']).toBeDefined();
     expect(at2.threads['T1'].status).toBe('active');
 
     // Optimized path with snapshot
-    const snap = replay.getStateAt(allEvents, 0);
-    const at1opt = replay.getStateAt(allEvents, 1);
+    const snap = replay.getStateAt(allEvents, 0, BASELINE_REPLAY_OPTIONS);
+    const at1opt = replay.getStateAt(allEvents, 1, BASELINE_REPLAY_OPTIONS);
     expect(at1opt.entities['seraphine']?.['detected_anomaly']).toBe(true);
   });
 });
@@ -792,7 +907,7 @@ describe('5. ISS Calculation', () => {
 
   it('5a. Overall ISS score is calculable (not NaN)', () => {
     const events: NarrativeEvent[] = [
-      makeEvent({ id: 'system:genesis', narrativeOrder: 0, source: 'genesis' }),
+      makeEvent({ id: 'E0', narrativeOrder: 0 }),
       makeEvent({
         id: 'E1a',
         narrativeOrder: 1,
@@ -901,10 +1016,7 @@ describe('5. ISS Calculation', () => {
     const iss = calculateISS({
       projectDir: FIXTURE_PATH,
       entityRegistry: registry,
-      events: [
-        makeEvent({ narrativeOrder: 0, source: 'genesis' }),
-        makeEvent({ narrativeOrder: 1 }),
-      ],
+      events: [makeEvent({ id: 'E0', narrativeOrder: 0 }), makeEvent({ narrativeOrder: 1 })],
       threads: [{ id: 'T1', name: 'Test' }],
       rules: [],
     });
@@ -922,10 +1034,7 @@ describe('5. ISS Calculation', () => {
     const iss = calculateISS({
       projectDir: FIXTURE_PATH,
       entityRegistry: registry,
-      events: [
-        makeEvent({ narrativeOrder: 0, source: 'genesis' }),
-        makeEvent({ narrativeOrder: 1 }),
-      ],
+      events: [makeEvent({ id: 'E0', narrativeOrder: 0 }), makeEvent({ narrativeOrder: 1 })],
       threads: [{ id: 'T1', name: 'Test' }],
       rules: [],
     });
@@ -943,7 +1052,7 @@ describe('5. ISS Calculation', () => {
 
   it('5d. detectAntiPatterns finds anti-patterns in fixture data', () => {
     const events: NarrativeEvent[] = [
-      makeEvent({ id: 'sys:g', narrativeOrder: 0, source: 'genesis' }),
+      makeEvent({ id: 'E0', narrativeOrder: 0 }),
       makeEvent({
         id: 'E1a',
         narrativeOrder: 1,
@@ -1068,6 +1177,7 @@ describe('7. Context Compilation', () => {
       title: 'Seraphine Detects the Anomalous Signal',
       sceneType: 'linear',
       sceneBrief: 'Seraphine detects an anomalous emotional frequency.',
+      beats: ['Seraphine detects an anomalous emotional frequency.'],
       pov: { character: 'seraphine', type: 'third_person_limited' },
       storyTime: { type: 'absolute', value: 'day_0' },
       preconditions: [
@@ -1151,6 +1261,7 @@ describe('7. Context Compilation', () => {
       id: 'test:ctx',
       narrativeOrder: 1,
       sceneBrief: 'A test scene.',
+      beats: ['A test scene.'],
       pov: { character: 'camille', type: 'third_person_limited' },
       participants: { entities: ['camille'] },
     });
@@ -1180,6 +1291,7 @@ describe('7. Context Compilation', () => {
       id: 'E1a',
       narrativeOrder: 1,
       sceneBrief: 'Test.',
+      beats: ['Test.'],
       pov: { character: 'seraphine', type: 'third_person_limited' },
     });
     const state: WorldState = {
@@ -1280,30 +1392,19 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
     });
 
     // 3. STATE
-    const sm = new StateManager(snapDir);
-    const genesis = makeEvent({
-      id: 'system:genesis',
-      narrativeOrder: 0,
-      source: 'genesis',
-      postconditions: [
-        {
-          id: 'world.init',
-          entityId: 'world',
-          attribute: 'status',
-          value: 'post_arcane_s1',
-          confidence: 1.0,
-          validity: {
-            temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
-            branches: { type: 'all' },
-          },
-        },
-      ],
-    });
+    const sm = new StateManager(
+      snapDir,
+      TEST_CATALOG_CONTEXT,
+      20,
+      undefined,
+      BASELINE_REPLAY_OPTIONS,
+    );
     const e1a = makeEvent({
       id: 'E1a',
       narrativeOrder: 1,
       pov: { character: 'seraphine', type: 'third_person_limited' },
       sceneBrief: 'Seraphine detects signal.',
+      beats: ['Seraphine detects signal.'],
       participants: { entities: ['seraphine'] },
       postconditions: [
         {
@@ -1324,6 +1425,7 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
       narrativeOrder: 2,
       pov: { character: 'camille', type: 'third_person_limited' },
       sceneBrief: 'Camille takes case.',
+      beats: ['Camille takes case.'],
       participants: { entities: ['camille'] },
       postconditions: [
         {
@@ -1339,10 +1441,9 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
         },
       ],
     });
-    sm.commit(genesis);
     sm.commit(e1a);
     sm.commit(e1b);
-    expect(sm.eventStore.count).toBe(3);
+    expect(sm.eventStore.count).toBe(2);
 
     // 4. VALIDATE
     const aggregator = new ResultAggregator();

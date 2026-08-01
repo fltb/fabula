@@ -3,11 +3,6 @@ name: "鲁四老爷家"
 kind: residence
 parent: luchen_town
 description: "鲁四老爷的宅第是鲁镇的大户人家。书房是核心空间之一：壁上挂着朱拓的'寿'字，挂着'事理通达心气和平'的对联，案头摆着《康熙字典》、《近思录集注》和《四书衬》。书房是'我'暂住的地方，也是他逃避祥林嫂追问后的避难所。堂屋是祝福祭祀的核心——杀鸡、宰鹅、摆福礼，四婶在这里喝止祥林嫂。厨房是祥林嫂的主要劳动空间——她在这里淘米、洗菜、做活，也是柳妈告诉她地狱故事的地方。"
-initialState:
-  status: occupied
-  household_state: new_year_preparation
-  ritual_purity: high
-  atmosphere: busy_ritualistic
 notableFeatures:
   - "书房——壁上挂'事理通达心气和平'对联，案头有未完全的理学书，是'我'的避难所"
   - "堂屋——祝福祭祀场所，祥林嫂被禁止触碰杯筷和烛台的地方"

@@ -14,7 +14,7 @@ import type {
   ValidationIssue,
   Validator,
 } from '../types/index.js';
-import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
+import { makeIssue } from './base.js';
 
 export const tenseDetectedSchema = z.enum(['past', 'present', 'mixed']);
 export type TenseDetected = z.infer<typeof tenseDetectedSchema>;
@@ -32,7 +32,7 @@ export class TenseConsistencyValidator implements Validator {
     // event-level field, not in entity attribute catalog
     if (event.tense) {
       const earlierEvents = events.filter(
-        (e) => e.narrativeOrder < event.narrativeOrder && e.id !== 'system:genesis' && e.tense,
+        (e) => e.narrativeOrder < event.narrativeOrder && e.tense,
       );
       if (earlierEvents.length > 0) {
         const earlierTenses = new Set(earlierEvents.map((e) => e.tense));
@@ -79,6 +79,9 @@ export class TenseConsistencyValidator implements Validator {
             'Review the prose to ensure consistent tense throughout this scene.',
             'edit_file',
             'tense',
+            undefined,
+            undefined,
+            'interpretive_assessment',
           ),
         );
       } else if (tenseDetected !== event.tense) {
@@ -92,6 +95,9 @@ export class TenseConsistencyValidator implements Validator {
             'Update the prose to match the declared tense, or change the tense declaration.',
             'edit_file',
             'tense',
+            undefined,
+            undefined,
+            'interpretive_assessment',
           ),
         );
       }

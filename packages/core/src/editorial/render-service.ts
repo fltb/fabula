@@ -26,14 +26,17 @@ import type { LLMProvider } from '../ai/types.ts';
 import { assembleGameDialogueTree } from '../assembler/game-dialogue-tree.ts';
 import { BatchRenderPipeline } from '../batch-renderer.ts';
 import type { CompiledGameDialogueTree } from '../branch/game-dialogue-tree.ts';
-import { compileGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import { includesPath } from '../branch/set.ts';
 import { computeSourceContentHash } from '../cache/render-cache.ts';
 import { ContextCompiler } from '../context/compiler.ts';
 import { PromptAssembler } from '../context/prompt-assembler.ts';
-import { loadProjectConfig, resolveTemporalContext, type ProjectData } from '../entity/index.js';
-import { EntityMapper } from '../entity/mapper.ts';
-import { InMemoryEntityRegistry } from '../entity/registry.ts';
+import { loadProjectConfig, type ProjectData } from '../entity/index.js';
+import {
+  type CanonicalProjectIR,
+  compileCanonicalRuntime,
+  loadCanonicalProject,
+} from '../entity/project-runtime.ts';
+import type { InMemoryEntityRegistry } from '../entity/registry.ts';
 import { ConfigError, sanitizeError } from '../errors.ts';
 import type { TypedEventBus } from '../event-bus.ts';
 import { JsonlLogTransport, LevelFilterTransport, Logger } from '../observability/logger.ts';
@@ -59,10 +62,9 @@ import {
   sceneRevisionEnvelopeV1Schema,
 } from '../schemas/editorial.ts';
 import type { CompiledDiscourseRenderContext } from '../state/discourse-context.ts';
+import { resolveDiscourseBranch } from '../state/discourse-sequence.ts';
 import type { StoryBoundaries } from '../state/index.ts';
-import { compileDiscourseSceneSequence, resolveDiscourseBranch } from '../state/discourse-sequence.ts';
 import type { CompiledNarrativeRuntime } from '../state/narrative-runtime.ts';
-import { compileNarrativeRuntime } from '../state/narrative-runtime.ts';
 import { FsStorage } from '../storage/fs-storage.ts';
 import {
   computeContentHash,
@@ -96,7 +98,12 @@ import type {
   SceneRevisionEnvelopeV1,
   SceneRevisionOrigin,
 } from '../types/editorial.ts';
-import type { EventFile, Fact, NarrativeEvent, ReleaseDecision } from '../types/index.ts';
+import type {
+  EntityTypeCatalog,
+  EventFile,
+  NarrativeEvent,
+  ReleaseDecision,
+} from '../types/index.ts';
 import type {
   AcceptedSceneArtifact,
   RenderGroup,
@@ -386,56 +393,25 @@ function expectedFileHash(
 // Provider resolution
 // ============================================================================
 
-async function _resolveProvider(
-  runtime: EditorialRuntime,
-  model: string | undefined,
-  projectDir: string,
-  storage: Storage,
-  _eventBus: TypedEventBus | undefined,
-): Promise<LLMProvider | null> {
-  if (runtime.provider) return runtime.provider;
-  if (runtime.providerFactory) return runtime.providerFactory.create();
-
-  // Lazy config: check project config for model/apiKey/baseUrl
-  const _novaRaw = storage.readOptional(path.join(projectDir, 'nova.yaml'));
-  let resolvedModel = model;
-  const apiKey = process.env.NOVALISTICALLY_AI_API_KEY ?? '';
-  const baseUrl: string | undefined = process.env.NOVALISTICALLY_AI_BASE_URL ?? undefined;
-
-  // Try to read config for defaults
-  if (!resolvedModel) {
-    resolvedModel = process.env.NOVALISTICALLY_AI_MODEL ?? undefined;
-  }
-
-  if (!resolvedModel) return null;
-  if (!apiKey) return null;
-
-  try {
-    return new AiSdkProvider({
-      apiKey,
-      baseURL: baseUrl,
-      model: resolvedModel,
-    });
-  } catch {
-    return null;
-  }
-}
-
 // ============================================================================
-// Full project data loader (from initializeProject pattern)
+// Editorial project projection — one canonical IR load per request, plus the
+// editorial-only source contents / accepted-revision / catalog metadata.
 // ============================================================================
 
 interface ProjectInitialization {
   data: ProjectData;
   events: NarrativeEvent[];
   registry: InMemoryEntityRegistry;
-  mapper: EntityMapper;
   sourceHeadHash: string | null;
   latestRevisions: Record<string, { revisionId: string; proseHash: string } | null>;
   eventContents: Record<string, string>;
   sourceDocumentContents: Record<string, string>;
   catalog: SceneCatalog;
   chapterByEventId: Record<string, number>;
+  /** Compiled entity type catalog — validator policy identity input. */
+  entityTypes: EntityTypeCatalog;
+  /** Compiled game dialogue tree (null when the project has no choices). */
+  gameDialogueTree: CompiledGameDialogueTree | null;
 }
 
 function readAcceptedHeadEnvelope(
@@ -487,28 +463,19 @@ function readAcceptedHeadEnvelope(
 }
 
 function loadProjectData(
+  ir: CanonicalProjectIR,
   storage: Storage,
   projectDir: string,
-  _branchPath: BranchPath | undefined,
   paths: ProjectPaths,
 ): ProjectInitialization {
-  const mapper = new EntityMapper(projectDir, storage);
-  const data = mapper.loadProject();
-  const registry = new InMemoryEntityRegistry();
-  registry.load(projectDir, storage);
+  const data = ir.data;
+  const events = [...ir.authoredEvents];
+  const registry = ir.registry;
+  const chapterByEventId: Record<string, number> = { ...ir.chapterByEventId };
 
-  // Load all event files and map to NarrativeEvent
-  const allEventFiles = [...data.chapters.values()].flatMap(
-    (ch: { events: EventFile[] }) => ch.events,
-  );
-  const events: NarrativeEvent[] = allEventFiles.map((ef: EventFile) =>
-    mapper.mapToNarrativeEvent(ef),
-  );
-
-  // Event contents for compiler
+  // Event contents for compiler (editorial-only)
   const eventContents: Record<string, string> = {};
-  const chapterByEventId: Record<string, number> = {};
-  for (const [chapterNum, chapterData] of data.chapters) {
+  for (const chapterData of data.chapters.values()) {
     for (const ef of chapterData.events) {
       if (ef.filePath) {
         try {
@@ -517,7 +484,6 @@ function loadProjectData(
           eventContents[ef.event] = '';
         }
       }
-      chapterByEventId[ef.event] = chapterNum;
     }
   }
 
@@ -607,13 +573,14 @@ function loadProjectData(
     data,
     events,
     registry,
-    mapper,
     sourceHeadHash,
     latestRevisions,
     eventContents,
     sourceDocumentContents,
     catalog,
     chapterByEventId,
+    entityTypes: ir.entityTypes,
+    gameDialogueTree: ir.gameDialogueTree,
   };
 }
 
@@ -656,6 +623,7 @@ async function createValidationRuntime(
   data: ProjectData,
   projectDir: string,
   storage: Storage,
+  entityTypes: EntityTypeCatalog,
 ): Promise<ValidationRuntime> {
   const overrides = { ...(data.config?.validatorOverrides ?? {}) };
   const validatorRegistry = new ValidatorRegistry();
@@ -695,7 +663,13 @@ async function createValidationRuntime(
     await pluginHooksManager.initialize();
   }
 
-  const aggregator = new ResultAggregator(undefined, validatorRegistry.validators);
+  const aggregator = new ResultAggregator(
+    undefined,
+    validatorRegistry.validators,
+    undefined,
+    undefined,
+    entityTypes,
+  );
   const analysisContract = aggregator.getAnalysisContract(overrides);
   const registeredValidators = new Map(
     validatorRegistry.validators.map((validator) => [validator.name, validator]),
@@ -1233,7 +1207,9 @@ function buildRevisionEnvelope(
 // ============================================================================
 
 // ============================================================================
-// Build renders jobs — helper subset for full-branch rendering
+// Build renders jobs — helper subset for full-branch rendering.
+// The caller compiles the canonical runtime for the resolved route exactly
+// once (compileCanonicalRuntime); this helper only derives jobs + boundaries.
 // ============================================================================
 
 function buildBoundariesAndJobs(
@@ -1242,7 +1218,8 @@ function buildBoundariesAndJobs(
   request: Omit<EditorialRenderRequestV1, 'mutation'>,
   sourceContentHash: string,
   model: string,
-  _storage: Storage,
+  runtime: CompiledNarrativeRuntime,
+  discourseBranch: string,
 ): {
   jobs: RenderJob[];
   boundaries: StoryBoundaries;
@@ -1251,79 +1228,6 @@ function buildBoundariesAndJobs(
   scopeHash: string;
 } {
   const branchPath = request.branchPath;
-  const renderEvents = init.events.filter(
-    (ev) => ev.source === 'event_file' && plan.selectedEventIds.includes(ev.id),
-  );
-
-  const initialFacts: Fact[] = [
-    ...init.events
-      .filter((ev) => ev.id === 'system:genesis')
-      .flatMap((ev) => ev.postconditions ?? []),
-    ...init.registry.getAll().flatMap((entity) =>
-      Object.entries(entity.state ?? {}).map(
-        ([attribute, value]) =>
-          ({
-            id: `${entity.id}.${attribute}`,
-            entityId: entity.id,
-            attribute,
-            value,
-            validity: {
-              temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
-              branches: { type: 'all' as const },
-            },
-          }) as Fact,
-      ),
-    ),
-  ];
-
-  // Compile game dialogue transition events so choice effects are available.
-  // Override authored event branchExistence with game tree scopes so events
-  // on unreachable branches are excluded from the graph compilation.
-  let eventsForRuntime = init.events;
-  const temporalContext = resolveTemporalContext(init.events, init.data.timeAnchors);
-  const gdTree = compileGameDialogueTree(init.events, temporalContext);
-  if (gdTree && gdTree.transitionEvents.length > 0) {
-    if (branchPath) {
-      eventsForRuntime = init.events.map((ev) => {
-        const scope = gdTree.eventScopes.get(ev.id);
-        if (scope) {
-          return { ...ev, branchExistence: scope };
-        }
-        return ev;
-      });
-    }
-    eventsForRuntime = [...eventsForRuntime, ...gdTree.transitionEvents];
-  }
-
-  // Resolve the discourse branch: prefer explicit request override, otherwise
-  // resolve uniquely from the ledger by matching against reachable event IDs.
-  // Missing or ambiguous routes throw ConfigError before any provider call.
-  const discourseBranch =
-    request.discourseBranch ??
-    resolveDiscourseBranch({
-      selectedEventIds: new Set(
-        (branchPath != null
-          ? eventsForRuntime.filter((ev) => includesPath(ev.branchExistence, branchPath))
-          : eventsForRuntime
-        ).map((ev) => ev.id),
-      ),
-      branchPath: branchPath ?? { decisions: [] },
-      ledger: init.data.discourseLedger,
-    });
-
-  // Single production runtime: graphs → state boundaries → discourse contexts.
-  const runtime = compileNarrativeRuntime({
-    events: eventsForRuntime,
-    initialFacts,
-    timeAnchors: init.data.timeAnchors,
-    branchPath,
-    discourseBranch,
-    ledger: init.data.discourseLedger,
-    assertions: init.data.narratorAssertions,
-    narratorProfiles: init.data.narratorProfiles,
-    initialThreads: [],
-  });
-
   const boundaries = runtime.boundaries;
   const discourseContextByEventId: Record<string, CompiledDiscourseRenderContext> = {};
   for (const [eventId, ctx] of Object.entries(runtime.discourseContextsByEventId)) {
@@ -1887,8 +1791,16 @@ export async function executeEditorialRender(
   }
 
   // ── 1. COMPILE ──────────────────────────────────────────────────────
-  const init = loadProjectData(storage, request.projectDir, request.branchPath, paths);
-  const validationRuntime = await createValidationRuntime(init.data, request.projectDir, storage);
+  // One canonical IR load per request; the editorial projection is branch-
+  // independent and shared by materialize + preview paths.
+  const ir = loadCanonicalProject(request.projectDir, storage);
+  const init = loadProjectData(ir, storage, request.projectDir, paths);
+  const validationRuntime = await createValidationRuntime(
+    init.data,
+    request.projectDir,
+    storage,
+    init.entityTypes,
+  );
   const reviewComments = loadReviewComments(storage, coordinator, paths);
   const requiresProviderByEventId = computeRequiresProviderByEventId(
     init.events,
@@ -1963,9 +1875,6 @@ export async function executeEditorialRender(
         init.chapterByEventId,
       )
     : [];
-  const _zeroProviderEventIds = new Set(
-    eventRevisionStates.filter((ers) => ers.state !== 'will_revise').map((ers) => ers.eventId),
-  );
   // Capture zero-provider editorial errors for reporting
   const revisionPreflightErrors: EditorialError[] = [];
   for (const ers of eventRevisionStates) {
@@ -2020,8 +1929,7 @@ export async function executeEditorialRender(
 
   // ── Check game dialogue tree requires branchPath ────────────────────
   if (!request.branchPath) {
-    const temporalContext = resolveTemporalContext(init.events, init.data.timeAnchors);
-    const gdTree = compileGameDialogueTree(init.events, temporalContext);
+    const gdTree = init.gameDialogueTree;
     if (gdTree && gdTree.transitionEvents.length > 0) {
       return buildFailedResult(
         request.mutation.operationId ?? crypto.randomUUID(),
@@ -2186,13 +2094,18 @@ export async function executeEditorialRender(
     storage,
   );
   const resolvedModel = request.model ?? init.data.config?.defaultModel ?? 'default';
-  const { jobs, boundaries, runtime: compiledRuntime } = buildBoundariesAndJobs(
+  const compiledRuntime = compileCanonicalRuntime(ir, {
+    branchPath: request.branchPath,
+    discourseBranch,
+  });
+  const { jobs, boundaries } = buildBoundariesAndJobs(
     init,
     plan,
     request,
     sourceContentHash,
     resolvedModel,
-    storage,
+    compiledRuntime,
+    discourseBranch,
   );
   if (renderLockedEventIds.size > 0) {
     const unlockedJobs = jobs.filter((job) => !renderLockedEventIds.has(job.event.id));
@@ -2274,7 +2187,6 @@ export async function executeEditorialRender(
         left.narrativeOrder - right.narrativeOrder || left.id.localeCompare(right.id),
     )
     .map((event) => event.id);
-  const publicationRawBeforeExecution = storage.readOptional(paths.publicationPath);
   const previousManifestBeforeExecution = loadOrCreatePublication(storage, paths.publicationPath);
   const publicationReadSet = capturePublicationReadSet(
     storage,
@@ -2425,6 +2337,7 @@ export async function executeEditorialRender(
     maxRounds: request.maxRounds,
     concurrency: runtime.concurrency,
     signal: operationSignal,
+    validatorPolicyId: plan.planSummary.validationIdentity,
   });
 
   // ── Process waves ───────────────────────────────────────────────────
@@ -2956,7 +2869,12 @@ export async function executeEditorialRender(
   }
   const sceneSeq = compiledRuntime.graphs.discourseGraph.sceneSequence;
   const novelContent = hasCompleteScope
-    ? buildNovelDocument(publishCandidates, chapterMetadata, init.data.config?.title ?? 'Untitled', sceneSeq)
+    ? buildNovelDocument(
+        publishCandidates,
+        chapterMetadata,
+        init.data.config?.title ?? 'Untitled',
+        sceneSeq,
+      )
     : null;
   // The operation lease updates publication.json while rendering. Re-read its
   // authoritative preimage immediately before the final publication CAS.
@@ -2964,8 +2882,7 @@ export async function executeEditorialRender(
   const previousManifestAtPublish = loadOrCreatePublication(storage, paths.publicationPath);
   const publicationReadSetAtPublish = dedupeReadSet([
     ...publicationReadSet.filter(
-      (expectation) =>
-        expectation.kind !== 'file' || expectation.path !== paths.publicationPath,
+      (expectation) => expectation.kind !== 'file' || expectation.path !== paths.publicationPath,
     ),
     fileExpectation(storage, paths.publicationPath),
   ]);
@@ -3178,8 +3095,16 @@ export async function previewEditorialRun(
   const paths = resolveProjectPaths(request.projectDir, projectConfig?.outputDir);
   const coordinator = new ProjectTransactionCoordinator(storage, paths);
 
-  const init = loadProjectData(storage, request.projectDir, request.branchPath, paths);
-  const validationRuntime = await createValidationRuntime(init.data, request.projectDir, storage);
+  // One canonical IR load per request; preview shares the exact kernel path
+  // (loadCanonicalProject + compileCanonicalRuntime) with full rendering.
+  const ir = loadCanonicalProject(request.projectDir, storage);
+  const init = loadProjectData(ir, storage, request.projectDir, paths);
+  const validationRuntime = await createValidationRuntime(
+    init.data,
+    request.projectDir,
+    storage,
+    init.entityTypes,
+  );
   const reviewComments = loadReviewComments(storage, coordinator, paths);
   const requiresProviderByEventId = computeRequiresProviderByEventId(
     init.events,
@@ -3244,49 +3169,10 @@ export async function previewEditorialRun(
       ledgerHash: init.data.discourseLedger.hash,
     }),
   );
-  // Build single production runtime for the preview branch.
-  const previewInitialFacts: Fact[] = [
-    ...init.events
-      .filter((ev) => ev.id === 'system:genesis')
-      .flatMap((ev) => ev.postconditions ?? []),
-    ...init.registry.getAll().flatMap((entity) =>
-      Object.entries(entity.state ?? {}).map(
-        ([attribute, value]) =>
-          ({
-            id: `${entity.id}.${attribute}`,
-            entityId: entity.id,
-            attribute,
-            value,
-            validity: {
-              temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
-              branches: { type: 'all' as const },
-            },
-          }) as Fact,
-      ),
-    ),
-  ];
-  // Prepare events with game dialogue tree scopes for preview.
-  let previewEvents = init.events;
-  const previewTemporalContext = resolveTemporalContext(init.events, init.data.timeAnchors);
-  const previewGdTree = compileGameDialogueTree(init.events, previewTemporalContext);
-  if (previewGdTree && previewGdTree.transitionEvents.length > 0 && request.branchPath) {
-    previewEvents = init.events.map((ev) => {
-      const scope = previewGdTree.eventScopes.get(ev.id);
-      if (scope) return { ...ev, branchExistence: scope };
-      return ev;
-    });
-    previewEvents = [...previewEvents, ...previewGdTree.transitionEvents];
-  }
-  const previewRuntime = compileNarrativeRuntime({
-    events: previewEvents,
-    initialFacts: previewInitialFacts,
-    timeAnchors: init.data.timeAnchors,
+  // Build the single canonical runtime for the preview branch/discourse route.
+  const previewRuntime = compileCanonicalRuntime(ir, {
     branchPath: request.branchPath,
     discourseBranch,
-    ledger: init.data.discourseLedger,
-    assertions: init.data.narratorAssertions,
-    narratorProfiles: init.data.narratorProfiles,
-    initialThreads: [],
   });
 
   const allEventFilePaths = [...init.data.chapters.values()]
@@ -3387,20 +3273,22 @@ export async function executeEditorialTreeRender(
       publication: { status: 'stale', outputPath: paths.novelPath, novelHash: null, reasons: [] },
     };
   }
-  // Load project
-  const mapper = new EntityMapper(request.projectDir, storage);
-  const data = mapper.loadProject();
-  const validationRuntime = await createValidationRuntime(data, request.projectDir, storage);
-  const registry = new InMemoryEntityRegistry();
-  registry.load(request.projectDir, storage);
-  const events = [...data.chapters.values()]
-    .flatMap((ch: { events: EventFile[] }) => ch.events)
-    .map((ef: EventFile) => mapper.mapToNarrativeEvent(ef));
-  const contentEvents = events.filter((event) => event.source === 'event_file');
+  // Load project — one canonical IR load for the whole tree; every game
+  // leaf below only compiles its own branch/discourse route.
+  const ir = loadCanonicalProject(request.projectDir, storage);
+  const data = ir.data;
+  const init = loadProjectData(ir, storage, request.projectDir, paths);
+  const validationRuntime = await createValidationRuntime(
+    data,
+    request.projectDir,
+    storage,
+    ir.entityTypes,
+  );
+  const contentEvents = init.events.filter((event) => event.source === 'event_file');
 
-  // Compile game dialogue tree
-  const temporalContext = resolveTemporalContext(events, data.timeAnchors);
-  const tree = compileGameDialogueTree(events, temporalContext);
+  // Compiled game dialogue tree from the canonical kernel (null when the
+  // project has no event-local choices).
+  const tree = ir.gameDialogueTree;
 
   if (!tree) {
     return {
@@ -3458,14 +3346,12 @@ export async function executeEditorialTreeRender(
     };
   }
 
-
   // Claim operation
   const requestHash = computeSha256Hex(
     canonicalJson({ ...request, mutation: { operationId, actorId: request.mutation.actorId } }),
   );
-  let _operation: EditorialOperationV1;
   try {
-    _operation = operationStore.register({
+    operationStore.register({
       operationId,
       kind: 'render_tree',
       actorId: request.mutation.actorId,
@@ -3503,7 +3389,6 @@ export async function executeEditorialTreeRender(
     ? new TraceCollector(`tree-render-${operationId}`)
     : undefined;
 
-  // Capture publication read set before any provider calls
   const scopeEventIds = contentEvents
     .filter((ev) => tree.representativePathByEventId.has(ev.id))
     .sort(
@@ -3511,15 +3396,9 @@ export async function executeEditorialTreeRender(
         left.narrativeOrder - right.narrativeOrder || left.id.localeCompare(right.id),
     )
     .map((ev) => ev.id);
-  const treeChapterByEventId: Record<string, number> = {};
-  for (const [chNum, ch] of data.chapters) {
-    for (const ef of ch.events) {
-      treeChapterByEventId[ef.event] = chNum;
-    }
-  }
   const treeScopeInit = {
     data,
-    chapterByEventId: treeChapterByEventId,
+    chapterByEventId: init.chapterByEventId,
   };
   const publicationRawBeforeExecution = storage.readOptional(paths.publicationPath);
   const previousManifestBeforeExecution = loadOrCreatePublication(storage, paths.publicationPath);
@@ -3541,7 +3420,6 @@ export async function executeEditorialTreeRender(
 
   const allResults: RenderNovelSceneResult[] = [];
   const errors: string[] = [];
-  let _hasFailure = false;
 
   // ── Execute event processing within operation lease ─────────────────
   let treeAborted = false;
@@ -3598,10 +3476,9 @@ export async function executeEditorialTreeRender(
 
           operationStore.heartbeat(operationId, request.mutation.actorId);
 
-          const ev = contentEvents.find(e => e.id === eventId);
+          const ev = contentEvents.find((e) => e.id === eventId);
           if (!ev) {
             errors.push(`Event '${eventId}' not found for dedup key '${dedupKey}'`);
-            _hasFailure = true;
             continue;
           }
 
@@ -3615,13 +3492,12 @@ export async function executeEditorialTreeRender(
               model: request.model,
               providerProfile: request.providerProfile,
               branchPath,
-              discourseBranch,  // explicit — avoids re-resolution in buildBoundariesAndJobs
+              discourseBranch, // explicit — avoids re-resolution in buildBoundariesAndJobs
               waivers: request.waivers,
               maxRounds: request.maxRounds,
             };
 
-            // ── 2. Load project data for this branch ─────────────────────────
-            const init = loadProjectData(storage, request.projectDir, branchPath, paths);
+            // ── 2. Compile this leaf's route only (project already loaded) ───
             const reviewComments = loadReviewComments(storage, coordinator, paths);
             const requiresProviderByEventId = computeRequiresProviderByEventId(
               init.events,
@@ -3644,7 +3520,6 @@ export async function executeEditorialTreeRender(
               for (const se of plan.selectorErrors) {
                 errors.push(`${ev.id}: ${se.message}`);
               }
-              _hasFailure = true;
               continue;
             }
 
@@ -3674,13 +3549,18 @@ export async function executeEditorialTreeRender(
               request.projectDir,
               storage,
             );
+            const leafRuntime = compileCanonicalRuntime(ir, {
+              branchPath,
+              discourseBranch,
+            });
             const { jobs } = buildBoundariesAndJobs(
               init,
               plan,
               sceneRequest,
               sourceContentHash,
               resolvedModel,
-              storage,
+              leafRuntime,
+              discourseBranch,
             );
 
             if (jobs.length === 0) {
@@ -3745,6 +3625,7 @@ export async function executeEditorialTreeRender(
               maxRounds: request.maxRounds,
               concurrency: runtime.concurrency,
               signal: treeLeaseAbortController.signal,
+              validatorPolicyId: plan.planSummary.validationIdentity,
             });
 
             const waveResults = await pipeline.renderAll(jobs);
@@ -3856,19 +3737,16 @@ export async function executeEditorialTreeRender(
 
               if (decision.status !== 'accepted') {
                 errors.push(`${r.eventId}: ${(decision.reasons ?? r.errors).join(', ')}`);
-                _hasFailure = true;
               }
             }
           } catch (err) {
             errors.push(`${ev.id}: ${sanitizeError(err)}`);
-            _hasFailure = true;
           }
         }
       },
     );
   } catch (err) {
     errors.push(`Tree render lease error: ${sanitizeError(err)}`);
-    _hasFailure = true;
   }
 
   // ── Lease ended — heartbeat stopped, handle abort ──────────────────
@@ -3972,7 +3850,7 @@ export async function executeEditorialTreeRender(
         disposition === 'candidate_promoted' ? acceptedPromotedEnvs.get(eventId) : undefined,
       readSet: job?.promotionReadSet,
       eventId,
-      chapterNumber: treeChapterByEventId[eventId] ?? 1,
+      chapterNumber: init.chapterByEventId[eventId] ?? 1,
       head,
       event,
       scene: {
@@ -3991,11 +3869,7 @@ export async function executeEditorialTreeRender(
         storage,
         tree,
         eventsById: new Map(contentEvents.map((event) => [event.id, event])),
-        chapterByEventId: new Map(
-          Array.from(data.chapters.entries()).flatMap(([chapter, definition]) =>
-            definition.events.map((event: EventFile) => [event.event, chapter] as [string, number]),
-          ),
-        ),
+        chapterByEventId: new Map(Object.entries(init.chapterByEventId)),
         responsesDir: paths.responsesDir,
         sceneContents: new Map(
           publishCandidates.map((candidate) => [candidate.eventId, candidate.scene.prose]),

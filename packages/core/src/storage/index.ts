@@ -3,12 +3,12 @@
 // ============================================================================
 
 export { FsStorage } from './fs-storage.ts';
-export { MemoryStorage } from './memory-storage.ts';
 export {
   computeContentHash,
   computeDirectoryManifestHash,
   computeFileHash,
 } from './hash.ts';
+export { MemoryStorage } from './memory-storage.ts';
 export type {
   DirEntry,
   LockV1,

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { AnalysisResult, NarrativeEvent, PostRenderInput } from '../../src/types/index.js';
 import { ChecklistValidator } from '../../src/validator/checklist.js';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
+
+const PROSE = 'Some prose about the scene.';
 
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
@@ -11,13 +14,14 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
     sceneType: 'linear' as const,
     pov: { character: 'char_hero', type: 'third_person_limited' as const },
     sceneBrief: 'A test scene.',
+    beats: ['A test scene.'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
     foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
-    source: 'genesis' as const,
+    source: 'event_file' as const,
     branchExistence: { type: 'all' as const },
     participants: { entities: [] },
     ...overrides,
@@ -35,43 +39,47 @@ function makeInput(event: NarrativeEvent, analysis: AnalysisResult | null): Post
       rules: {},
       facts: [],
     },
-    prose: 'Some prose about the scene.',
+    prose: PROSE,
     analysis,
     chapter: 1,
   };
 }
 
-function makeAnalysis(overrides: Partial<AnalysisResult> = {}): AnalysisResult {
+function makeAnalysis(overrides: Record<string, unknown> = {}): AnalysisResult {
+  const payload: Record<string, unknown> = {
+    postconditions: { covered: [], dropped: [] },
+    preconditions: { violated: [] },
+    pov: { consistent: true, leaks: [] },
+    inventedDetails: [],
+    quality: {
+      proseScore: 8,
+      maxScore: 10,
+      strengths: [],
+      weaknesses: [],
+      estimatedWordCount: 300,
+    },
+    threadProgressAchieved: [],
+    foreshadowingDeployed: [],
+    narrativeChecks: [],
+    appearanceChecks: [],
+    characterReferences: [],
+    tenseDetected: 'past' as const,
+    conflictAnalysis: {
+      present: false,
+      type: 'none',
+      intensity: 0,
+      parties: [],
+    },
+    ruleChecks: [],
+    knowledgeChecks: [],
+    checklistResults: [],
+    ...overrides,
+  };
   return {
     eventId: 'E1',
-    analysis: {
-      postconditions: { covered: [], dropped: [] },
-      preconditions: { violated: [] },
-      pov: { consistent: true, leaks: [] },
-      inventedDetails: [],
-      quality: {
-        proseScore: 8,
-        maxScore: 10,
-        strengths: [],
-        weaknesses: [],
-        estimatedWordCount: 300,
-      },
-      threadProgressAchieved: [],
-      foreshadowingDeployed: [],
-      narrativeChecks: [],
-      appearanceChecks: [],
-      characterReferences: [],
-      tenseDetected: 'past' as const,
-      conflictAnalysis: {
-        present: false,
-        type: 'none',
-        intensity: 0,
-        parties: [],
-      },
-      ruleChecks: [],
-      knowledgeChecks: [],
-    },
-    ...overrides,
+    protocol: makeProtocol(PROSE),
+    observations: makeObservations(payload, PROSE),
+    analysis: payload,
   };
 }
 

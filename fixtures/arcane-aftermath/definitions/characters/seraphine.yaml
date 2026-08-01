@@ -17,12 +17,9 @@ initialState:
   condition: healthy
   emotionalState: cautious
   inventory:
-    - item: "hextech_headpiece"
-      description: "The floating resonance amplifier that helps her control her empathic reception"
-    - item: "personal_journal"
-      description: "A leather-bound book of song lyrics and half-written melodies — her private thoughts"
-    - item: "piltover_consultant_badge"
-      description: "Temporary clearance badge for Enforcer HQ, expires in 45 days"
+    hextech_headpiece: "The floating resonance amplifier that helps her control her empathic reception"
+    personal_journal: "A leather-bound book of song lyrics and half-written melodies — her private thoughts"
+    piltover_consultant_badge: "Temporary clearance badge for Enforcer HQ, expires in 45 days"
 voiceNotes: "Soft-spoken and warm, with a musical quality to her voice that makes even casual conversation sound melodic. She speaks carefully, choosing words that won't offend, but there is a tremor of anxiety beneath the surface. When discussing music, her voice brightens and becomes more animated. Under pressure, she becomes quieter, her words more measured."
 backstory: "Born to Zaunite parents who fled the undercity's toxicity for Piltover's cleaner air, Seraphine grew up between two worlds — never fully accepted by the Piltovans who saw her family's origins as taint, and disconnected from the Zaunite culture her parents mourned. Her natural empathic abilities were amplified catastrophically when she came into contact with a hextech crystal resonance field during a tour of a Ferros laboratory. Suddenly, she could hear the emotional frequencies of everyone around her — the hopes, fears, griefs, and joys of an entire city crashing into her mind at once. She learned to channel this cacophony into music, becoming a beloved performer whose songs resonated with both Piltover and Zaun. But the voices never stopped. When Camille Ferros recognized the strategic value of a hextech empathic listener, Seraphine was 'recruited' — given a choice between serving Piltover's intelligence apparatus or being labeled a hextech anomaly and 'studied' indefinitely. She chose service."
 knownSecrets:

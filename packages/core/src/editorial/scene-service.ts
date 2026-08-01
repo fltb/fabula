@@ -2,10 +2,7 @@ import * as path from 'node:path';
 import YAML from 'yaml';
 import { sceneMetadataV1Schema } from '../schemas/editorial.ts';
 import type { Storage } from '../storage/types.ts';
-import type {
-  SceneRevisionEnvelopeV1,
-  SceneRevisionSummary,
-} from '../types/editorial.ts';
+import type { SceneRevisionEnvelopeV1, SceneRevisionSummary } from '../types/editorial.ts';
 import type { ProjectPaths } from './paths.ts';
 import { SceneRevisionStore } from './scene-store.ts';
 import { ProjectTransactionCoordinator } from './transaction.ts';
@@ -18,10 +15,7 @@ export class SceneService {
     private readonly storage: Storage,
     paths: ProjectPaths,
   ) {
-    this.store = new SceneRevisionStore(
-      new ProjectTransactionCoordinator(storage, paths),
-      paths,
-    );
+    this.store = new SceneRevisionStore(new ProjectTransactionCoordinator(storage, paths), paths);
     this.paths = paths;
   }
 
@@ -52,11 +46,7 @@ export class SceneService {
     if (!this.storage.exists(this.paths.scenesDir)) return null;
     for (const chapter of this.storage.list(this.paths.scenesDir)) {
       if (!chapter.isDirectory()) continue;
-      const metadataPath = path.join(
-        this.paths.scenesDir,
-        chapter.name,
-        `${eventId}.yaml`,
-      );
+      const metadataPath = path.join(this.paths.scenesDir, chapter.name, `${eventId}.yaml`);
       const raw = this.storage.readOptional(metadataPath);
       if (raw === null) continue;
       try {

@@ -68,6 +68,9 @@ export class FrequencyConsistencyValidator implements Validator {
           'Update the prose to match the declared frequency, or change the frequency declaration.',
           'edit_file',
           'frequency',
+          undefined,
+          undefined,
+          'interpretive_assessment',
         ),
       );
     }

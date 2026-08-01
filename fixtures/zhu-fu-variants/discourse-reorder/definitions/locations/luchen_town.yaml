@@ -2,11 +2,6 @@ id: luchen_town
 name: "鲁镇"
 kind: town
 description: "鲁镇是浙江的一个水乡小镇，有河，有桥，有瓦房和石板路。年终时全镇都在准备'祝福'——杀鸡、宰鹅、买猪肉，女人们的手臂在水里浸得通红。空气中弥漫着幽微的火药香（爆竹）。镇东头是河边，祥林嫂被绑架的地方；镇西头有土地庙。鲁镇是一个封闭的传统社会——每个人互相认识，消息通过卫老婆子这样的中间人流通，社会等级分明。镇上的'看客'文化是故事的重要背景：人们对祥林嫂的悲剧从同情到厌烦再到嘲弄，最终遗忘。"
-initialState:
-  status: active
-  season: deep_winter
-  atmosphere: new_year_preparation
-  social_mood: festive_busy
 notableFeatures:
   - "镇东头的河边——祥林嫂淘米被绑架处，也是她沦为乞丐后与'我'相遇处"
   - "镇西头的土地庙——祥林嫂捐门槛的地方"

@@ -5,23 +5,20 @@
 // No live LLM, filesystem, or network access.
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
 import * as crypto from 'node:crypto';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import { computeContentHash } from '../../src/storage/hash.ts';
-import type { Storage } from '../../src/storage/types.ts';
+import { describe, expect, it } from 'vitest';
+import type { ProjectPaths } from '../../src/editorial/paths.ts';
+import { resolveProjectPaths } from '../../src/editorial/paths.ts';
+import { QueryService } from '../../src/editorial/query-service.ts';
+import { ProjectTransactionCoordinator, stableJson } from '../../src/editorial/transaction.ts';
 import {
   EditorialWorkspace,
   getEditorialWorkspace,
   type LegacySceneInspection,
 } from '../../src/editorial/workspace.ts';
-import { QueryService } from '../../src/editorial/query-service.ts';
-import { resolveProjectPaths } from '../../src/editorial/paths.ts';
-import type { ProjectPaths } from '../../src/editorial/paths.ts';
-import {
-  ProjectTransactionCoordinator,
-  stableJson,
-} from '../../src/editorial/transaction.ts';
+import { computeContentHash } from '../../src/storage/hash.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import type { Storage } from '../../src/storage/types.ts';
 import type {
   EditorialOperationV1,
   PublicationManifestV1,
@@ -30,6 +27,7 @@ import type {
   SourceRevisionV1,
 } from '../../src/types/editorial.ts';
 import type { ReviewComment } from '../../src/types/review.ts';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -52,6 +50,28 @@ function seedFullProject(storage: MemoryStorage, outputDir: string = '.nova'): v
   const revisionOperationId = uuid();
   const scopeHash = sha256Hex();
   const basisHash = sha256Hex();
+  const analysisPayload: Record<string, unknown> = {
+    postconditions: { covered: [], dropped: [] },
+    preconditions: { violated: [] },
+    pov: { consistent: true, leaks: [] },
+    inventedDetails: [],
+    quality: {
+      proseScore: 8,
+      maxScore: 10,
+      strengths: ['clear'],
+      weaknesses: [],
+      estimatedWordCount: 8,
+    },
+    threadProgressAchieved: [],
+    foreshadowingDeployed: [],
+    narrativeChecks: [],
+    appearanceChecks: [],
+    characterReferences: [],
+    tenseDetected: 'past',
+    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+    ruleChecks: [],
+    knowledgeChecks: [],
+  };
   const sceneEnvelope = {
     version: 1,
     revisionId,
@@ -71,28 +91,9 @@ function seedFullProject(storage: MemoryStorage, outputDir: string = '.nova'): v
     reviewIds: [],
     analysis: {
       eventId: 'E001',
-      analysis: {
-        postconditions: { covered: [], dropped: [] },
-        preconditions: { violated: [] },
-        pov: { consistent: true, leaks: [] },
-        inventedDetails: [],
-        quality: {
-          proseScore: 8,
-          maxScore: 10,
-          strengths: ['clear'],
-          weaknesses: [],
-          estimatedWordCount: 8,
-        },
-        threadProgressAchieved: [],
-        foreshadowingDeployed: [],
-        narrativeChecks: [],
-        appearanceChecks: [],
-        characterReferences: [],
-        tenseDetected: 'past',
-        conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-        ruleChecks: [],
-        knowledgeChecks: [],
-      },
+      protocol: makeProtocol(prose),
+      observations: makeObservations(analysisPayload, prose),
+      analysis: analysisPayload,
     },
     validation: { passed: true, errors: [], warnings: [], infos: [] },
     releaseDecision: {
@@ -121,87 +122,105 @@ function seedFullProject(storage: MemoryStorage, outputDir: string = '.nova'): v
   storage.write(`${PROJECT}/chapters/chapter_01/E001.yaml`, 'event: E001\n');
   storage.write(`${PROJECT}/chapters/chapter_01/E002.yaml`, 'event: E002\n');
   storage.write(`${PROJECT}/scenes/chapter-01/E001.md`, prose);
-  storage.write(`${PROJECT}/scenes/chapter-01/E001.yaml`,
-    `schema_version: 1\nevent: E001\nnarrative_order: 1\nrevision_id: ${revisionId}\nprose_source: llm\nprose_hash: ${proseHash}\nscene_hash: ${proseHash}\neditorial_basis_hash: ${basisHash}\nscope_hash: ${scopeHash}\nvalidation_identity: test-vi\nrendered_at: \"2026-07-28T00:00:00.000Z\"\nword_count: 8\ntext_count_version: 1\nedit_history: []\nbranch_existence:\n  type: all\n`);
+  storage.write(
+    `${PROJECT}/scenes/chapter-01/E001.yaml`,
+    `schema_version: 1\nevent: E001\nnarrative_order: 1\nrevision_id: ${revisionId}\nprose_source: llm\nprose_hash: ${proseHash}\nscene_hash: ${proseHash}\neditorial_basis_hash: ${basisHash}\nscope_hash: ${scopeHash}\nvalidation_identity: test-vi\nrendered_at: "2026-07-28T00:00:00.000Z"\nword_count: 8\ntext_count_version: 1\nedit_history: []\nbranch_existence:\n  type: all\n`,
+  );
   storage.write(`${PROJECT}/scenes/chapter-01/E002.md`, '# Scene Two\n');
   storage.write(paths.responsesDir + '/E001.json', stableJson(sceneEnvelope));
-  storage.write(
-    `${paths.sceneRevisionsDir}/E001/${revisionId}.json`,
-    stableJson(sceneEnvelope),
-  );
+  storage.write(`${paths.sceneRevisionsDir}/E001/${revisionId}.json`, stableJson(sceneEnvelope));
 
   const sourceRevisionId = uuid();
   const sourceOperationId = uuid();
   const projectHash = sha256Hex();
-  storage.write(paths.sourceHeadPath, stableJson({
-    version: 1,
-    revisionId: sourceRevisionId,
-    projectSourceHash: projectHash,
-    documents: { 'nova.yaml': computeContentHash('title: "Test Novel"\n') },
-  } as SourceHeadV1));
-  storage.write(paths.sourceRevisionsDir + '/' + sourceRevisionId + '.json', stableJson({
-    version: 1,
-    revisionId: sourceRevisionId,
-    parentRevisionId: null,
-    operationId: sourceOperationId,
-    actorId: 'test-actor',
-    origin: 'api_edit',
-    projectBeforeHash: sha256Hex(),
-    projectAfterHash: projectHash,
-    changeSetHash: sha256Hex(),
-    documents: [{
-      path: 'nova.yaml',
-      beforeHash: null,
-      afterHash: computeContentHash('title: "Test Novel"\n'),
-      beforeContent: null,
-      afterContent: 'title: "Test Novel"\n',
-    }],
-    affectedEventIds: [],
-    createdAt: '2026-07-28T00:00:00.000Z',
-  } as SourceRevisionV1));
+  storage.write(
+    paths.sourceHeadPath,
+    stableJson({
+      version: 1,
+      revisionId: sourceRevisionId,
+      projectSourceHash: projectHash,
+      documents: { 'nova.yaml': computeContentHash('title: "Test Novel"\n') },
+    } as SourceHeadV1),
+  );
+  storage.write(
+    paths.sourceRevisionsDir + '/' + sourceRevisionId + '.json',
+    stableJson({
+      version: 1,
+      revisionId: sourceRevisionId,
+      parentRevisionId: null,
+      operationId: sourceOperationId,
+      actorId: 'test-actor',
+      origin: 'api_edit',
+      projectBeforeHash: sha256Hex(),
+      projectAfterHash: projectHash,
+      changeSetHash: sha256Hex(),
+      documents: [
+        {
+          path: 'nova.yaml',
+          beforeHash: null,
+          afterHash: computeContentHash('title: "Test Novel"\n'),
+          beforeContent: null,
+          afterContent: 'title: "Test Novel"\n',
+        },
+      ],
+      affectedEventIds: [],
+      createdAt: '2026-07-28T00:00:00.000Z',
+    } as SourceRevisionV1),
+  );
 
   const operationId = uuid();
-  storage.write(paths.operationsDir + '/' + operationId + '.json', stableJson({
-    version: 1,
-    operationId,
-    kind: 'render',
-    actorId: 'test-actor',
-    requestHash: sha256Hex(),
-    status: 'succeeded',
-    startedAt: '2026-07-28T00:00:00.000Z',
-    heartbeatAt: '2026-07-28T00:05:00.000Z',
-    leaseExpiresAt: '2026-07-28T00:30:00.000Z',
-    lastSequence: 1,
-    completedAt: '2026-07-28T00:10:00.000Z',
-    result: null,
-    errors: [],
-  } as EditorialOperationV1));
+  storage.write(
+    paths.operationsDir + '/' + operationId + '.json',
+    stableJson({
+      version: 1,
+      operationId,
+      kind: 'render',
+      actorId: 'test-actor',
+      requestHash: sha256Hex(),
+      status: 'succeeded',
+      startedAt: '2026-07-28T00:00:00.000Z',
+      heartbeatAt: '2026-07-28T00:05:00.000Z',
+      leaseExpiresAt: '2026-07-28T00:30:00.000Z',
+      lastSequence: 1,
+      completedAt: '2026-07-28T00:10:00.000Z',
+      result: null,
+      errors: [],
+    } as EditorialOperationV1),
+  );
 
-  storage.write(paths.reviewLedgerPath, stableJson({
-    version: 1,
-    comments: [{
-      id: `rev_${uuid()}`,
-      author: 'human',
-      actorId: 'reviewer-1',
-      target: { type: 'scene', id: 'E001' },
-      severity: 'suggestion',
-      category: 'style',
-      content: 'Consider making the opening more dramatic.',
-      status: 'open',
-      applications: [],
-      createdAt: '2026-07-28T00:15:00.000Z',
-    }] as ReviewComment[],
-    patches: [],
-  }));
-  storage.write(paths.publicationPath, stableJson({
-    version: 1,
-    status: 'current',
-    branch_scope_hash: scopeHash,
-    novel_hash: sha256Hex(),
-    revision_ids: { E001: revisionId },
-    last_assembled_at: '2026-07-28T00:10:00.000Z',
-    reasons: [],
-  } as PublicationManifestV1));
+  storage.write(
+    paths.reviewLedgerPath,
+    stableJson({
+      version: 1,
+      comments: [
+        {
+          id: `rev_${uuid()}`,
+          author: 'human',
+          actorId: 'reviewer-1',
+          target: { type: 'scene', id: 'E001' },
+          severity: 'suggestion',
+          category: 'style',
+          content: 'Consider making the opening more dramatic.',
+          status: 'open',
+          applications: [],
+          createdAt: '2026-07-28T00:15:00.000Z',
+        },
+      ] as ReviewComment[],
+      patches: [],
+    }),
+  );
+  storage.write(
+    paths.publicationPath,
+    stableJson({
+      version: 1,
+      status: 'current',
+      branch_scope_hash: scopeHash,
+      novel_hash: sha256Hex(),
+      revision_ids: { E001: revisionId },
+      last_assembled_at: '2026-07-28T00:10:00.000Z',
+      reasons: [],
+    } as PublicationManifestV1),
+  );
 }
 
 /** Assert that a value survives JSON round-trip. */
@@ -342,10 +361,7 @@ describe('EditorialWorkspace — query facade', () => {
     it('shows manual_change_untracked after direct prose editing', () => {
       const storage = new MemoryStorage();
       seedFullProject(storage);
-      storage.write(
-        `${PROJECT}/scenes/chapter-01/E001.md`,
-        '# Scene One\n\nExternally edited.\n',
-      );
+      storage.write(`${PROJECT}/scenes/chapter-01/E001.md`, '# Scene One\n\nExternally edited.\n');
 
       const ws = getEditorialWorkspace(PROJECT, '.nova', storage);
       const scene = ws.inspectScene('E001');
@@ -479,41 +495,48 @@ describe('EditorialWorkspace — query facade', () => {
     it('detects migratable scene when prose and choices match', () => {
       const storage = new MemoryStorage();
 
-      storage.write(`${PROJECT}/scenes/chapter-01/E001.yaml`,
-        'schema_version: 1\nevent: "E001"\nnarrative_order: 1\nprose_source: "llm"\n');
+      storage.write(
+        `${PROJECT}/scenes/chapter-01/E001.yaml`,
+        'schema_version: 1\nevent: "E001"\nnarrative_order: 1\nprose_source: "llm"\n',
+      );
       storage.write(`${PROJECT}/scenes/chapter-01/E001.md`, '# Scene One\n\nContent.\n');
-      storage.write(`${PROJECT}/chapters/chapter_01/E001.yaml`,
-        'id: "E001"\nchoices:\n  - id: "c1"\n    label: "Go left"\n    description: "Left path"\n');
-      storage.write(`${PROJECT}/.nova/responses/E001.json`, stableJson({
-        version: 1,
-        eventId: 'E001',
-        revisionId: uuid(),
-        prose: '# Scene One\n\nContent.\n',
-        playerChoices: [{ id: 'c1', label: 'Go left', description: 'Left path' }],
-        releaseDecision: { status: 'accepted', scopeHash: sha256Hex(), validationIdentity: 'vi' },
-        released: true,
-        origin: 'llm_draft',
-        proseHash: computeContentHash('# Scene One\n\nContent.\n'),
-        sceneHash: sha256Hex(),
-        editorialBasisHash: sha256Hex(),
-        scopeHash: sha256Hex(),
-        validationIdentity: 'vi',
-        analysis: null,
-        validation: null,
-        cacheHit: false,
-        errors: [],
-        feedbackHash: null,
-        reviewIds: [],
-        llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-        llmPass2: null,
-        attempts: 1,
-        needsReview: false,
-        promptHash: sha256Hex(),
-        providerCalls: [],
-        promotionReadSet: [],
-        requestRecords: [],
-        createdAt: '2026-07-28T00:00:00.000Z',
-      }));
+      storage.write(
+        `${PROJECT}/chapters/chapter_01/E001.yaml`,
+        'id: "E001"\nchoices:\n  - id: "c1"\n    label: "Go left"\n    description: "Left path"\n',
+      );
+      storage.write(
+        `${PROJECT}/.nova/responses/E001.json`,
+        stableJson({
+          version: 1,
+          eventId: 'E001',
+          revisionId: uuid(),
+          prose: '# Scene One\n\nContent.\n',
+          playerChoices: [{ id: 'c1', label: 'Go left', description: 'Left path' }],
+          releaseDecision: { status: 'accepted', scopeHash: sha256Hex(), validationIdentity: 'vi' },
+          released: true,
+          origin: 'llm_draft',
+          proseHash: computeContentHash('# Scene One\n\nContent.\n'),
+          sceneHash: sha256Hex(),
+          editorialBasisHash: sha256Hex(),
+          scopeHash: sha256Hex(),
+          validationIdentity: 'vi',
+          analysis: null,
+          validation: null,
+          cacheHit: false,
+          errors: [],
+          feedbackHash: null,
+          reviewIds: [],
+          llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+          llmPass2: null,
+          attempts: 1,
+          needsReview: false,
+          promptHash: sha256Hex(),
+          providerCalls: [],
+          promotionReadSet: [],
+          requestRecords: [],
+          createdAt: '2026-07-28T00:00:00.000Z',
+        }),
+      );
 
       const ws = getEditorialWorkspace(PROJECT, '.nova', storage);
       const result = ws.inspectLegacyScene('E001');

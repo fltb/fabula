@@ -141,7 +141,7 @@ export class RelevanceEngine {
     let score = 0;
     const participants = event.participants.entities;
 
-    for (const [relKey, relData] of Object.entries(state.relationships ?? {})) {
+    for (const relData of Object.values(state.relationships ?? {})) {
       // Guard: skip old-format (pre STATE-2) relationships that lack epochs
       if (!relData || typeof relData !== 'object' || !('epochs' in relData)) continue;
 

@@ -76,6 +76,9 @@ export class AnachronyConsistencyValidator implements Validator {
           'Update the prose to match the declared anachrony, or change the anachrony declaration.',
           'edit_file',
           'anachrony',
+          undefined,
+          undefined,
+          'interpretive_assessment',
         ),
       );
     }

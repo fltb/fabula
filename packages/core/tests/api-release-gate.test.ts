@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import { buildReleaseDiagnostic } from '../src/api.ts';
 import type { RenderSceneResult } from '../src/pipeline/render.ts';
 import type { ValidationResult } from '../src/types/index.js';
+import { makeProtocol } from './fixtures/mock-pass2-helpers.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -28,7 +29,12 @@ function makeResult(overrides: Partial<RenderSceneResult> = {}): RenderSceneResu
   return {
     eventId: 'evt_scene_001',
     prose: 'Some rendered prose.',
-    analysis: { blocks: [] },
+    analysis: {
+      eventId: 'evt_scene_001',
+      protocol: makeProtocol('Some rendered prose.'),
+      observations: {},
+      analysis: {},
+    },
     llmPass1: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
     llmPass2: { promptTokens: 5, completionTokens: 8, totalTokens: 13 },
     cacheHit: false,

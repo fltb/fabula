@@ -46,10 +46,15 @@ export interface EntityTypeDefinition {
 
 // ——— Entity Declaration ———
 
+/** Live-state activation source of a declared entity. */
+export type EntityIntroductionSource = { type: 'initial' } | { type: 'event'; eventId: string };
+
 export interface EntityDeclaration {
   entityId: EntityId;
   typeRef: EntityTypeRef;
   immutableMetadata: { name: string; definitionFile: string };
+  /** Live-state activation source; every declaration exists before story compile. */
+  introduction: EntityIntroductionSource;
   provenance?: { source: string; hash: string };
 }
 
@@ -65,4 +70,40 @@ export interface EntityDeclarationCatalog {
   /** Static key-value mapping — use Record */
   declarations: Record<EntityId, EntityDeclaration>;
   version: number;
+}
+
+/**
+ * The one shared catalog pair threaded through every write path (source
+ * preflight, replay, story-boundary compilation). No optional fallback:
+ * callers construct it from compiled catalogs and pass the same object.
+ */
+export interface EntityCatalogContext {
+  entityDeclarationCatalog: EntityDeclarationCatalog;
+  entityTypeCatalog: EntityTypeCatalog;
+}
+
+// ——— Author-facing Catalog Source (versionless) ———
+//
+// The strict, versionless YAML contract for definitions/entity-types.yaml.
+// Source only expresses the currently compilable structure: no recursive DSL,
+// unions, nullables, `any` escape hatches, or version-negotiation fields.
+// The runtime EntityTypeRef.schemaVersion / catalog version never appear here.
+
+export type AttributeValueType = 'string' | 'number' | 'boolean' | 'string_list' | 'string_map';
+
+/** Author-facing attribute declaration; `valueType` replaces runtime `valueSchema`. */
+export interface AttributeDefinitionSource extends Omit<AttributeDefinition, 'valueSchema'> {
+  valueType: AttributeValueType;
+}
+
+/** Author-facing entity type declaration; `typeId` replaces `typeRef` (no schemaVersion). */
+export interface EntityTypeDefinitionSource
+  extends Omit<EntityTypeDefinition, 'typeRef' | 'attributes'> {
+  typeId: string;
+  attributes: Record<string, AttributeDefinitionSource>;
+}
+
+/** Author-facing entity types file shape; no `version` field. */
+export interface EntityTypeCatalogSource {
+  types: Record<string, EntityTypeDefinitionSource>;
 }

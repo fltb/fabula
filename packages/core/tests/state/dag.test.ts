@@ -1,18 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { DagCycleError, DagProviderError } from '../../src/errors.ts';
-import {
-  buildStoryOrderIndex,
-  isProvenBefore,
-} from '../../src/state/dag.ts';
 import type { AdjacencyList } from '../../src/state/dag.ts';
+import { buildStoryOrderIndex, isProvenBefore } from '../../src/state/dag.ts';
 import type { SceneStoryCoordinate } from '../../src/types/index.ts';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
-function coord(
-  clock: 'story' | 'calendar' | 'chapter',
-  scalar: number,
-): SceneStoryCoordinate {
+function coord(clock: 'story' | 'calendar' | 'chapter', scalar: number): SceneStoryCoordinate {
   return { type: 'storyTime', kind: 'point', clock, scalar };
 }
 
@@ -142,9 +136,9 @@ describe('buildStoryOrderIndex()', () => {
       ['A', []],
       ['B', []],
     ]);
-    expect(() =>
-      buildStoryOrderIndex(null, ['A', 'A', 'B'], adj, noCoords),
-    ).toThrow(DagProviderError);
+    expect(() => buildStoryOrderIndex(null, ['A', 'A', 'B'], adj, noCoords)).toThrow(
+      DagProviderError,
+    );
   });
 
   it('rejects initial root in ordinary event set', () => {
@@ -152,9 +146,9 @@ describe('buildStoryOrderIndex()', () => {
       ['root', ['A']],
       ['A', []],
     ]);
-    expect(() =>
-      buildStoryOrderIndex('root', ['root', 'A'], adj, noCoords),
-    ).toThrow(DagProviderError);
+    expect(() => buildStoryOrderIndex('root', ['root', 'A'], adj, noCoords)).toThrow(
+      DagProviderError,
+    );
   });
 
   it('rejects unknown predecessor in adjacency', () => {
@@ -162,18 +156,12 @@ describe('buildStoryOrderIndex()', () => {
       ['ghost', ['A']],
       ['A', []],
     ]);
-    expect(() =>
-      buildStoryOrderIndex(null, ['A'], adj, noCoords),
-    ).toThrow(DagProviderError);
+    expect(() => buildStoryOrderIndex(null, ['A'], adj, noCoords)).toThrow(DagProviderError);
   });
 
   it('rejects unknown dependent in adjacency', () => {
-    const adj: AdjacencyList = new Map([
-      ['A', ['ghost']],
-    ]);
-    expect(() =>
-      buildStoryOrderIndex(null, ['A'], adj, noCoords),
-    ).toThrow(DagProviderError);
+    const adj: AdjacencyList = new Map([['A', ['ghost']]]);
+    expect(() => buildStoryOrderIndex(null, ['A'], adj, noCoords)).toThrow(DagProviderError);
   });
 
   it('rejects cycles with DagCycleError', () => {
@@ -182,9 +170,7 @@ describe('buildStoryOrderIndex()', () => {
       ['A', ['B']],
       ['B', ['A']],
     ]);
-    expect(() =>
-      buildStoryOrderIndex(null, ['A', 'B'], adj, noCoords),
-    ).toThrow(DagCycleError);
+    expect(() => buildStoryOrderIndex(null, ['A', 'B'], adj, noCoords)).toThrow(DagCycleError);
   });
 
   it('does not mutate the input adjacency', () => {

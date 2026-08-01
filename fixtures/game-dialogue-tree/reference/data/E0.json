@@ -3,21 +3,149 @@
   "analysis": {
     "eventId": "E0",
     "analysis": {
-      "postconditions": { "covered": [], "dropped": [] },
-      "preconditions": { "violated": [] },
-      "pov": { "consistent": true, "leaks": [] },
+      "postconditions": {
+        "covered": [],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
       "inventedDetails": [],
-      "quality": { "proseScore": 5, "maxScore": 5, "strengths": ["clear decision beat"], "weaknesses": [], "estimatedWordCount": 80 },
+      "quality": {
+        "proseScore": 5,
+        "maxScore": 5,
+        "strengths": [
+          "clear decision beat"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 80
+      },
       "threadProgressAchieved": [],
       "foreshadowingDeployed": [],
       "narrativeChecks": [],
       "appearanceChecks": [],
-      "characterReferences": [{ "entityId": "hero", "namesUsed": ["hero"] }],
+      "characterReferences": [
+        {
+          "entityId": "hero",
+          "namesUsed": [
+            "hero"
+          ]
+        }
+      ],
       "tenseDetected": "past",
-      "conflictAnalysis": { "primaryType": "person_vs_self", "resolutionAchieved": false },
+      "conflictAnalysis": {
+        "primaryType": "person_vs_self",
+        "resolutionAchieved": false
+      },
       "ruleChecks": [],
       "knowledgeChecks": [],
       "checklistResults": []
+    },
+    "protocol": {
+      "proseHash": "5fa7b264279eb700a3929ae916c4adc1a8254aed7245c297e064397ca8b24816",
+      "analysisSchema": "mock-analysis-contract",
+      "model": "mock-stage1",
+      "provider": "mock-pass2",
+      "analysisPromptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "samplingConfigHash": "mock-sampling-config",
+      "validatorPolicy": "mock-validator-policy",
+      "referencePolicy": "mock-reference-policy"
+    },
+    "observations": {
+      "postconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "preconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "pov": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "inventedDetails": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "quality": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "threadProgressAchieved": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "foreshadowingDeployed": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "narrativeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "appearanceChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "characterReferences": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "tenseDetected": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "conflictAnalysis": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "ruleChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "knowledgeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      },
+      "checklistResults": {
+        "disposition": "produced",
+        "evidence": [
+          "At dawn the stranger lai"
+        ]
+      }
     }
   }
 }

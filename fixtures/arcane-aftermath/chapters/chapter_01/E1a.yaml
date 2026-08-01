@@ -7,6 +7,12 @@ pov:
   character: seraphine
   type: third_person_limited
 sceneBrief: "The narrative opens in Seraphine's temporary workspace on the third floor of the Enforcer Headquarters. She is attempting to meditate — a futile exercise in a building full of anxious minds — when she feels it: a pulse of emotional energy so dissonant and strange that it cuts through the ambient noise like a razor. It is not anger, not fear, not grief — it is something she has never encountered before. A frequency that feels like broken glass wrapped in silk. She tries to pinpoint its origin, but it fades as quickly as it appeared, leaving only a headache and an overwhelming sense of wrongness."
+beats:
+  - "The narrative opens in Seraphine's temporary workspace on the third floor of the Enforcer Headquarters."
+  - "She is attempting to meditate — a futile exercise in a building full of anxious minds — when she feels it: a pulse of emotional energy so dissonant and strange that it cuts through the ambient noise like a razor."
+  - "It is not anger, not fear, not grief — it is something she has never encountered before."
+  - "A frequency that feels like broken glass wrapped in silk."
+  - "She tries to pinpoint its origin, but it fades as quickly as it appeared, leaving only a headache and an overwhelming sense of wrongness."
 preconditions:
   - entity: seraphine
     attribute: location

@@ -18,10 +18,11 @@ import * as crypto from 'node:crypto';
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { previewEditorialRun, renderNovel } from '../../src/api.ts';
-import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
+import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import { previewEditorialRun, renderNovel } from '../../src/api.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import { makeCustomEntry, makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -37,39 +38,44 @@ const SAMPLE_PROSE =
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 /**
- * Build a minimal MockPass2Entry with all required analysis fields.
- * Callers override quality to get a clean pass from the QualityValidator.
+ * Build a minimal MockPass2Entry carrying the full current AnalysisResult
+ * contract (eventId + protocol + observations + analysis payload) via the
+ * shared fixture helpers, with prose that matches the entry the provider
+ * returns. Callers override quality to get a clean pass from the
+ * QualityValidator.
  */
+const ANALYSIS_PAYLOAD: Record<string, unknown> = {
+  postconditions: { covered: [], dropped: [] },
+  preconditions: { violated: [] },
+  pov: { consistent: true, leaks: [] },
+  inventedDetails: [],
+  quality: {
+    proseScore: 4,
+    maxScore: 5,
+    strengths: ['clear prose'],
+    weaknesses: ['slightly dry'],
+    estimatedWordCount: 80,
+  },
+  threadProgressAchieved: [],
+  foreshadowingDeployed: [],
+  narrativeChecks: [],
+  appearanceChecks: [],
+  characterReferences: [],
+  tenseDetected: 'past',
+  conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+  ruleChecks: [],
+  knowledgeChecks: [],
+  checklistResults: [],
+};
+
 function makeEntry(eventId: string): MockPass2Entry {
-  return {
-    prose: `Test prose for event ${eventId}. ${SAMPLE_PROSE}`,
-    analysis: {
-      eventId,
-      analysis: {
-        postconditions: { covered: [], dropped: [] },
-        preconditions: { violated: [] },
-        pov: { consistent: true, leaks: [] },
-        inventedDetails: [],
-        quality: {
-          proseScore: 4,
-          maxScore: 5,
-          strengths: ['clear prose'],
-          weaknesses: ['slightly dry'],
-          estimatedWordCount: 80,
-        },
-        threadProgressAchieved: [],
-        foreshadowingDeployed: [],
-        narrativeChecks: [],
-        appearanceChecks: [],
-        characterReferences: [],
-        tenseDetected: 'past',
-        conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-        ruleChecks: [],
-        knowledgeChecks: [],
-        checklistResults: [],
-      },
-    },
-  };
+  const prose = `Test prose for event ${eventId}. ${SAMPLE_PROSE}`;
+  return makeCustomEntry(eventId, prose, {
+    eventId,
+    protocol: makeProtocol(prose),
+    observations: makeObservations(ANALYSIS_PAYLOAD, prose),
+    analysis: ANALYSIS_PAYLOAD,
+  });
 }
 
 /**
@@ -106,6 +112,43 @@ function setupMinimalProject(storage: MemoryStorage): void {
     ].join('\n'),
   );
 
+  // entity-types.yaml (required — EntityMapper reads it via readYamlFile; the
+  // runtime kernel compiles it into the EntityTypeCatalog that write-policy
+  // validation checks, so the fixture must declare the character kind and the
+  // lifecycle attribute the baseline activation writes)
+  storage.write(
+    `${PROJECT_DIR}/definitions/entity-types.yaml`,
+    [
+      'types:',
+      '  character:',
+      '    typeId: character',
+      '    kind: character',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates: [active, inactive, retired]',
+      '        unsetAllowed: false',
+      '        semanticRole: lifecycle',
+      '      traits:',
+      '        attributeId: traits',
+      '        valueType: string_list',
+      '        requiredAt: never',
+      '        writePolicy: immutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+    ].join('\n'),
+  );
   // state_initial.yaml (required — non-optional readYamlFile)
   storage.write(
     `${PROJECT_DIR}/definitions/state_initial.yaml`,
@@ -158,6 +201,8 @@ function setupMinimalProject(storage: MemoryStorage): void {
       '  character: narrator',
       '  type: first_person',
       'sceneBrief: "A test scene."',
+      'beats:',
+      '  - "A test scene."',
       'preconditions: []',
       'expectedPostconditions: []',
     ].join('\n'),
@@ -170,9 +215,10 @@ describe('MemoryStorage — renderNovel full contract', () => {
   // * Static wrapper tracks calls to a MockPass2Provider for assertion.
   //   The test uses this wrapper so we can observe callCount without
   //   modifying the provider itself.
-  function trackProvider(
-    inner: MockPass2Provider,
-  ): { provider: MockPass2Provider; callCount: () => number } {
+  function trackProvider(inner: MockPass2Provider): {
+    provider: MockPass2Provider;
+    callCount: () => number;
+  } {
     let count = 0;
     const originalComplete = inner.complete.bind(inner);
     inner.complete = async (req) => {
@@ -196,16 +242,19 @@ describe('MemoryStorage — renderNovel full contract', () => {
       new MockPass2Provider({ entries: { E1: entry } }),
     );
 
-    const result = await renderNovel({
-      version: 1,
-      projectDir: PROJECT_DIR,
-      mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
-      selector: { type: 'all' },
-      model: 'mock-pass2',
-    }, {
-      provider,
-      storage,
-    });
+    const result = await renderNovel(
+      {
+        version: 1,
+        projectDir: PROJECT_DIR,
+        mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+        selector: { type: 'all' },
+        model: 'mock-pass2',
+      },
+      {
+        provider,
+        storage,
+      },
+    );
 
     // renderNovel succeeded with no errors
     expect(result.errors).toHaveLength(0);
@@ -278,19 +327,20 @@ describe('MemoryStorage — renderNovel full contract', () => {
 
     // Cold render — populate cache, outputs
     const coldEntry = makeEntry('E1');
-    const coldTracker = trackProvider(
-      new MockPass2Provider({ entries: { E1: coldEntry } }),
+    const coldTracker = trackProvider(new MockPass2Provider({ entries: { E1: coldEntry } }));
+    const coldResult = await renderNovel(
+      {
+        version: 1,
+        projectDir: PROJECT_DIR,
+        mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+        selector: { type: 'all' },
+        model: 'mock-pass2',
+      },
+      {
+        provider: coldTracker.provider,
+        storage,
+      },
     );
-    const coldResult = await renderNovel({
-      version: 1,
-      projectDir: PROJECT_DIR,
-      mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
-      selector: { type: 'all' },
-      model: 'mock-pass2',
-    }, {
-      provider: coldTracker.provider,
-      storage,
-    });
     expect(coldResult.errors).toHaveLength(0);
     expect(coldResult.results).toHaveLength(1);
     expect(coldResult.results[0]!.released).toBe(true);
@@ -299,19 +349,20 @@ describe('MemoryStorage — renderNovel full contract', () => {
 
     // Warm render — same storage, fresh provider that should never be invoked
     const warmEntry = makeEntry('E1');
-    const warmTracker = trackProvider(
-      new MockPass2Provider({ entries: { E1: warmEntry } }),
+    const warmTracker = trackProvider(new MockPass2Provider({ entries: { E1: warmEntry } }));
+    const warmResult = await renderNovel(
+      {
+        version: 1,
+        projectDir: PROJECT_DIR,
+        mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+        selector: { type: 'all' },
+        model: 'mock-pass2',
+      },
+      {
+        provider: warmTracker.provider,
+        storage,
+      },
     );
-    const warmResult = await renderNovel({
-      version: 1,
-      projectDir: PROJECT_DIR,
-      mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
-      selector: { type: 'all' },
-      model: 'mock-pass2',
-    }, {
-      provider: warmTracker.provider,
-      storage,
-    });
 
     expect(warmResult.errors).toHaveLength(0);
     expect(warmResult.results).toHaveLength(1);
@@ -343,19 +394,20 @@ describe('MemoryStorage — renderNovel full contract', () => {
     setupMinimalProject(storageA);
 
     const entry = makeEntry('E1');
-    const { provider } = trackProvider(
-      new MockPass2Provider({ entries: { E1: entry } }),
+    const { provider } = trackProvider(new MockPass2Provider({ entries: { E1: entry } }));
+    const result = await renderNovel(
+      {
+        version: 1,
+        projectDir: PROJECT_DIR,
+        mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+        selector: { type: 'all' },
+        model: 'mock-pass2',
+      },
+      {
+        provider,
+        storage: storageA,
+      },
     );
-    const result = await renderNovel({
-      version: 1,
-      projectDir: PROJECT_DIR,
-      mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
-      selector: { type: 'all' },
-      model: 'mock-pass2',
-    }, {
-      provider,
-      storage: storageA,
-    });
     expect(result.errors).toHaveLength(0);
 
     // Storage A has all project data and outputs
@@ -392,19 +444,20 @@ describe('MemoryStorage — renderNovel full contract', () => {
 
     // Preview should NOT invoke the provider
     const entry = makeEntry('E1');
-    const tracker = trackProvider(
-      new MockPass2Provider({ entries: { E1: entry } }),
-    );
+    const tracker = trackProvider(new MockPass2Provider({ entries: { E1: entry } }));
 
-    const result = await previewEditorialRun({
-      version: 1,
-      projectDir: PROJECT_DIR,
-      selector: { type: 'all' },
-      model: 'mock-pass2',
-    }, {
-      provider: tracker.provider,
-      storage,
-    });
+    const result = await previewEditorialRun(
+      {
+        version: 1,
+        projectDir: PROJECT_DIR,
+        selector: { type: 'all' },
+        model: 'mock-pass2',
+      },
+      {
+        provider: tracker.provider,
+        storage,
+      },
+    );
 
     // Preview succeeded with no errors
     expect(result.errors).toHaveLength(0);

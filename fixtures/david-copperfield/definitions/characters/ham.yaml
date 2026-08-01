@@ -19,11 +19,5 @@ traits:
   - hardworking
   - forgiving
   - self_sacrificing
-initialState:
-  location: yarmouth
-  status: alive
-  condition: fisherman_in_uncle's_household
-  emotionalState: happy_contented
-  engagement_emily: betrothed
 voiceNotes: "Speaks with the Yarmouth dialect — simple, unpretentious, and warm. He is not articulate, but his few words come from a genuine, good heart. When deeply moved, he shows a surprising dignity and sorrow."
 backstory: "Orphaned son of Mr Peggotty's brother. Raised in the Yarmouth boathouse alongside Emily and Mrs Gummidge. He grows up to be a skilled boat-builder and fisherman. He is engaged to Emily, whom he has loved since childhood. When Steerforth seduces and elopes with Emily, Ham is devastated but does not seek revenge. He is last seen during the great storm off Yarmouth, when he insists on attempting to rescue a man from a wrecked ship, not knowing it is Steerforth being rescued. Both men drown — Steerforth on the wreck, Ham in the surf. They are buried in the same churchyard."

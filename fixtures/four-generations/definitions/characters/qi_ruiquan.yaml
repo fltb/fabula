@@ -17,12 +17,6 @@ traits:
 - patriotic
 - decisive
 - independent
-initialState:
-  location: loc_qijia
-  status: alive
-  condition: student
-  emotionalState: determined_to_fight
-  political_stance: resistance
 backstory: 在北平上大学，七七事变后不顾家人反对，悄然离开北平奔赴抗日战场。
 knownSecrets:
 - 秘密加入抗日组织

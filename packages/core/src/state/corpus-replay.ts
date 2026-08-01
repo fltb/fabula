@@ -11,6 +11,7 @@
 import { PreconditionMismatchError } from '../errors.ts';
 import type { BranchPath } from '../types/branch.ts';
 import type {
+  EntityCatalogContext,
   Fact,
   NarrativeEvent,
   SceneStoryCoordinate,
@@ -74,6 +75,8 @@ export interface DiscourseOracle {
  * branch scope, and optional initial thread declarations.
  */
 export interface CorpusReplayOptions {
+  /** Shared compiled catalogs; required, no optional fallback. */
+  catalogs: EntityCatalogContext;
   /** Initial facts applied as baseline before any event replay */
   initialFacts: readonly Fact[];
   /** Active branch path for scope filtering */
@@ -84,7 +87,7 @@ export interface CorpusReplayOptions {
   coordinatesByEventId: ReadonlyMap<string, SceneStoryCoordinate>;
   /** Causal adjacency list encoding all node relationships (events + ellipses) */
   adjacency: AdjacencyList;
-  /** Optional initial root ID for story order index (e.g. 'system:genesis') */
+  /** Optional initial root ID for story order index */
   initialRootId?: string | null;
 }
 
@@ -121,12 +124,7 @@ export function buildMixedNodeOrder(
   coordinatesByEventId: ReadonlyMap<string, SceneStoryCoordinate>,
   initialRootId?: string | null,
 ): StoryOrderIndex {
-  return buildStoryOrderIndex(
-    initialRootId ?? null,
-    nodeIds,
-    adjacency,
-    coordinatesByEventId,
-  );
+  return buildStoryOrderIndex(initialRootId ?? null, nodeIds, adjacency, coordinatesByEventId);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -191,7 +189,10 @@ export function computeStateBefore(
   // Initialize state with baseline
   const state = emptyWorldState();
   const lifecycleChangesByCoordinate = new Map<string, Set<string>>();
-  applyInitialFacts(state, options.initialFacts, { branchPath: options.branchPath });
+  applyInitialFacts(state, options.initialFacts, {
+    branchPath: options.branchPath,
+    catalogs: options.catalogs,
+  });
 
   // Apply thread baseline
   for (const thread of options.initialThreads ?? []) {
@@ -216,6 +217,7 @@ export function computeStateBefore(
     if (!candidateEvent) continue; // skip ellipsis or non-event nodes
 
     applyNarrativeEvent(state, candidateEvent, {
+      catalogs: options.catalogs,
       branchPath: options.branchPath,
       lifecycleChangesByCoordinate,
       storyCoordinate: options.coordinatesByEventId.get(candidateId),
@@ -271,10 +273,13 @@ export function createBoundaryOracle(
  * @param node - Narrative node anchor containing scene metadata
  * @returns A new DiscourseOracle for the event
  */
-export function createDiscourseOracle(eventId: string, node: {
-  type: 'scene' | 'ellipsis';
-  chapterId: string;
-}): DiscourseOracle {
+export function createDiscourseOracle(
+  eventId: string,
+  node: {
+    type: 'scene' | 'ellipsis';
+    chapterId: string;
+  },
+): DiscourseOracle {
   const narrator = node.type === 'ellipsis' ? 'ellipsis_narrator' : 'omniscient';
   const pov = node.type === 'ellipsis' ? 'none' : 'protagonist';
   const brief = `${node.type === 'ellipsis' ? 'Ellipsis' : 'Scene'} at ${node.chapterId}`;

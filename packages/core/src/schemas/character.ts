@@ -13,7 +13,7 @@ export const characterDefinitionSchema = z
     faction: z.string().optional(),
     role: z.enum(['minor', 'supporting', 'antagonist', 'background']).optional(),
     description: z.string(),
-    initialState: z.record(z.string(), z.unknown()),
+    initialState: z.record(z.string(), z.unknown()).optional(),
     traits: z.array(z.string()),
     voiceNotes: z.string().optional(),
     backstory: z.string().optional(),

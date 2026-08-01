@@ -2,5 +2,3 @@ id: loc_qianjia
 name: 钱家（一号院）
 description: 钱默吟家的宅院。院中种着许多花草——秋葵、鸡冠花、菊花等，都不栽在盆里而种在地上。屋内有许多书籍和字画。钱家败落后，花草也渐渐枯萎。
 kind: residence
-initialState:
-  status: active

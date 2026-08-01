@@ -11,6 +11,11 @@ pov:
   character: camille
   type: third_person_limited
 sceneBrief: "In her fourth-floor office, Camille receives an official briefing from the interim Enforcer Commander regarding the missing hextech crystals. The situation is more dire than she anticipated: three crystals unaccounted for, evidence of Ferros clan shipping manifest tampering, and pressure from the surviving council members to resolve the matter quietly and quickly. Camille accepts the assignment with her characteristic cold efficiency, but as she reviews the evidence, she notices inconsistencies that suggest a cover-up within the Enforcer Corps itself. The scene establishes Camille's investigative approach, her complicated relationship with her family's legacy, and the first hints of corruption within Piltover's institutions."
+beats:
+  - "In her fourth-floor office, Camille receives an official briefing from the interim Enforcer Commander regarding the missing hextech crystals."
+  - "The situation is more dire than she anticipated: three crystals unaccounted for, evidence of Ferros clan shipping manifest tampering, and pressure from the surviving council members to resolve the matter quietly and quickly."
+  - "Camille accepts the assignment with her characteristic cold efficiency, but as she reviews the evidence, she notices inconsistencies that suggest a cover-up within the Enforcer Corps itself."
+  - "The scene establishes Camille's investigative approach, her complicated relationship with her family's legacy, and the first hints of corruption within Piltover's institutions."
 preconditions:
   - entity: camille
     attribute: location
@@ -29,7 +34,7 @@ expectedPostconditions:
     attribute: has_accepted_case
     value: true
     confidence: 1.0
-  - entity: world
+  - entity: piltover_enforcer_headquarters
     attribute: hextech_crystal_investigation_active
     value: true
     confidence: 1.0

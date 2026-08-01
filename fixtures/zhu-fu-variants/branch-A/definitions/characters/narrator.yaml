@@ -31,11 +31,11 @@ traits:
   - observant
   - outsider_in_hometown
 initialState:
-  location: fourth_master_lu_house
+  location: luchen_town
   status: alive
   condition: well
+  emotionalState: honest_but_conflicted
   purpose: new_year_visit
-  emotionalState: restless_uneasy
   knowledge_of_xianglins_wife: none_yet
   moral_state: untested
 voiceNotes: >

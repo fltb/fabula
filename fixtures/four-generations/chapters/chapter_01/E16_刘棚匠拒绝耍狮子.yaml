@@ -13,6 +13,15 @@ pov:
   character: omniscient
   type: omniscient
 sceneBrief: 新民会为了庆祝保定陷落，要组织游行大会，想找会耍狮子的棚匠们参加。冠晓荷来约六号的刘棚匠去耍狮子。刘师傅是耍狮子的名手，但他一口回绝："我的老家在保定，祖坟在保定！我不能庆祝保定陷落！就是爸爸来叫我，我也不去给日本人耍狮子！"冠晓荷碰了一鼻子灰。刘师傅后来和瑞宣倾诉：他真想走，可是没钱没路费。要是南京偷偷派人来招兵，他一定去。
+beats:
+  - "新民会为了庆祝保定陷落，要组织游行大会，想找会耍狮子的棚匠们参加。"
+  - "冠晓荷来约六号的刘棚匠去耍狮子。"
+  - "刘师傅是耍狮子的名手，但他一口回绝：\"我的老家在保定，祖坟在保定！"
+  - "我不能庆祝保定陷落！"
+  - "就是爸爸来叫我，我也不去给日本人耍狮子！"
+  - "\"冠晓荷碰了一鼻子灰。"
+  - "刘师傅后来和瑞宣倾诉：他真想走，可是没钱没路费。"
+  - "要是南京偷偷派人来招兵，他一定去。"
 preconditions:
 - entity: guan_xiaohe
   attribute: location
@@ -45,6 +54,14 @@ threadProgress:
   advancement: 冠晓荷四处碰壁——刘师傅的拒绝让他看到并非人人都像他一样没有廉耻。
   progressAfter: 30
   progressTotal: 100
+introduces:
+- type: character
+  id: liu_shifu
+  initialState:
+    location: loc_xiaoyangquan
+    status: alive
+    condition: lion_dance_master
+    emotionalState: patriotic
 styleGuidance:
   tone: 刚烈、正气、令人敬佩
   targetWordCount: 1200

@@ -12,15 +12,12 @@ conflictType: person_vs_self
 pov:
   character: narrator
   type: first_person
-sceneBrief: 'After Dora''s death and the Yarmouth catastrophe, David is left alone
-  with his ''undisciplined heart.'' He decides to go abroad and leaves England for
-  three years, travelling through Europe in a state of profound grief and numbness.
-  He visits France, Switzerland, Italy — the landscapes blurring past him as he tries
-  to outrun his sorrow. The chapter reflects on the slow, painful process of healing:
-  the shock of loss that comes ''not quickly, but little by little, and grain by grain.''
-  David finds some solace in the beauty of the Alps and in his writing. But the true
-  change is within: he is learning to discipline his heart and to recognise what he
-  has always needed.'
+sceneBrief: "After Dora's death and the Yarmouth catastrophe, David is left alone with his 'undisciplined heart.' He decides to go abroad and leaves England for three years, travelling through Europe in a state of profound grief and numbness. He visits France, Switzerland, Italy — the landscapes blurring past him as he tries to outrun his sorrow. The chapter reflects on the slow, painful process of healing: the shock of loss that comes 'not quickly, but little by little, and grain by grain.'"
+beats:
+  - "After Dora's death and the Yarmouth catastrophe, David is left alone with his 'undisciplined heart.'"
+  - "He decides to go abroad and leaves England for three years, travelling through Europe in a state of profound grief and numbness."
+  - "He visits France, Switzerland, Italy — the landscapes blurring past him as he tries to outrun his sorrow."
+  - "The chapter reflects on the slow, painful process of healing: the shock of loss that comes 'not quickly, but little by little, and grain by grain.'"
 preconditions:
 - entity: david_copperfield
   attribute: status
@@ -43,7 +40,7 @@ expectedPostconditions:
   confidence: 1.0
 - entity: david_copperfield
   attribute: undisciplined_heart
-  value: partial_discipline
+  value: false
   confidence: 0.9
 threadProgress:
 - thread: T1

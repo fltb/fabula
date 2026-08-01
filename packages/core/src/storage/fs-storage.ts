@@ -78,7 +78,10 @@ export class FsStorage implements Storage {
       const entries: StorageJournalEntry[] = [];
       for (let i = 0; i < transaction.writes.length; i++) {
         const write = transaction.writes[i];
-        const tempPath = write.type === 'put' ? `${write.path}.tmp-${process.pid}-${transaction.transactionId}-${i}` : null;
+        const tempPath =
+          write.type === 'put'
+            ? `${write.path}.tmp-${process.pid}-${transaction.transactionId}-${i}`
+            : null;
         const backupPath = `${write.path}.bak-${process.pid}-${transaction.transactionId}-${i}`;
         const existed = fs.existsSync(write.path);
 
@@ -229,12 +232,14 @@ export class FsStorage implements Storage {
   private _recoverJournal(transaction: StorageTransaction): void {
     let journal: StorageJournalV1;
     try {
-      journal = JSON.parse(
-        fs.readFileSync(transaction.journalPath, 'utf-8'),
-      ) as StorageJournalV1;
+      journal = JSON.parse(fs.readFileSync(transaction.journalPath, 'utf-8')) as StorageJournalV1;
     } catch {
       // Corrupt journal — delete and let the new transaction proceed
-      try { fs.unlinkSync(transaction.journalPath); } catch { /* ignore */ }
+      try {
+        fs.unlinkSync(transaction.journalPath);
+      } catch {
+        /* ignore */
+      }
       return;
     }
 
@@ -278,7 +283,11 @@ export class FsStorage implements Storage {
     }
 
     // Remove the journal so the new transaction can start fresh
-    try { fs.unlinkSync(transaction.journalPath); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(transaction.journalPath);
+    } catch {
+      /* ignore */
+    }
   }
 
   // ── Rollback ───────────────────────────────────────────────────────────────
@@ -292,9 +301,7 @@ export class FsStorage implements Storage {
 
     let journal: StorageJournalV1;
     try {
-      journal = JSON.parse(
-        fs.readFileSync(transaction.journalPath, 'utf-8'),
-      ) as StorageJournalV1;
+      journal = JSON.parse(fs.readFileSync(transaction.journalPath, 'utf-8')) as StorageJournalV1;
     } catch {
       return;
     }
@@ -320,34 +327,40 @@ export class FsStorage implements Storage {
     }
 
     // Remove journal
-    try { fs.unlinkSync(transaction.journalPath); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(transaction.journalPath);
+    } catch {
+      /* ignore */
+    }
   }
 
   // ── Preimage and read-set checks ──────────────────────────────────────────
 
-  private _checkFileExpectation(
-    expectation: { kind: 'file'; path: string; expectedHash: string | null },
-  ): void {
+  private _checkFileExpectation(expectation: {
+    kind: 'file';
+    path: string;
+    expectedHash: string | null;
+  }): void {
     const current = this.readOptional(expectation.path);
     const currentHash = current !== null ? computeContentHash(current) : null;
 
     if (currentHash !== expectation.expectedHash) {
-      throw new StorageConflictError(
-        `Read expectation mismatch: ${expectation.path}`,
-        { path: expectation.path },
-      );
+      throw new StorageConflictError(`Read expectation mismatch: ${expectation.path}`, {
+        path: expectation.path,
+      });
     }
   }
 
-  private _checkDirectoryExpectation(
-    expectation: { kind: 'directory'; path: string; expectedManifestHash: string },
-  ): void {
+  private _checkDirectoryExpectation(expectation: {
+    kind: 'directory';
+    path: string;
+    expectedManifestHash: string;
+  }): void {
     const currentHash = computeDirectoryManifestHash(this, expectation.path);
     if (currentHash !== expectation.expectedManifestHash) {
-      throw new StorageConflictError(
-        `Directory read expectation mismatch: ${expectation.path}`,
-        { path: expectation.path },
-      );
+      throw new StorageConflictError(`Directory read expectation mismatch: ${expectation.path}`, {
+        path: expectation.path,
+      });
     }
   }
 
@@ -361,7 +374,12 @@ export class FsStorage implements Storage {
         this._writeConflictEvidence(
           transaction,
           'write_preimage_mismatch',
-          JSON.stringify({ path: write.path, expected: null, actual: currentHash, reason: 'file exists but expectedHash is null' }),
+          JSON.stringify({
+            path: write.path,
+            expected: null,
+            actual: currentHash,
+            reason: 'file exists but expectedHash is null',
+          }),
         );
         throw new StorageConflictError(
           `Write preimage mismatch for ${write.path}: expected file absent but it exists`,
@@ -379,10 +397,10 @@ export class FsStorage implements Storage {
         'write_preimage_mismatch',
         JSON.stringify({ path: write.path, expected: write.expectedHash, actual: currentHash }),
       );
-      throw new StorageConflictError(
-        `Write preimage mismatch for ${write.path}`,
-        { path: write.path, transactionId: transaction.transactionId },
-      );
+      throw new StorageConflictError(`Write preimage mismatch for ${write.path}`, {
+        path: write.path,
+        transactionId: transaction.transactionId,
+      });
     }
   }
 
@@ -401,7 +419,16 @@ export class FsStorage implements Storage {
       );
       fs.writeFileSync(
         filePath,
-        JSON.stringify({ kind, transactionId: transaction.transactionId, detail, timestamp: new Date().toISOString() }, null, 2) + '\n',
+        JSON.stringify(
+          {
+            kind,
+            transactionId: transaction.transactionId,
+            detail,
+            timestamp: new Date().toISOString(),
+          },
+          null,
+          2,
+        ) + '\n',
         'utf-8',
       );
     } catch {

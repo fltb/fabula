@@ -2,7 +2,7 @@
 // Novalistically — Entity, Timestamp & Fact Types
 // ============================================================================
 
-import type { Storage } from '../storage/types.ts';
+import type { ProjectData } from '../entity/types.js';
 import type { BranchSet } from './branch.js';
 
 // ——— IDs ———
@@ -174,7 +174,13 @@ export interface FactValidity {
 // ——— Entity Registry (§7.4.14) ———
 
 export interface EntityRegistry {
-  load: (projectPath: string, storage?: Storage) => void;
+  /**
+   * Load entities from already-loaded ProjectData (never loads the project
+   * itself — the canonical kernel owns the single loadProject call).
+   * `deferredIntroductionIds` are entities whose activation is authored as an
+   * event `introduces` boundary.
+   */
+  load: (data: ProjectData, deferredIntroductionIds?: readonly string[]) => void;
   resolve: (id: EntityId) => Entity | null;
   findByKind: (kind: EntityKind) => Entity[];
   findByAttribute: (attribute: string, value: unknown) => Entity[];

@@ -34,6 +34,7 @@ export function detectAntiPatterns(options: {
         issues.push({
           validator: 'iss-anti-pattern',
           severity: 'warning',
+          kind: 'compiler_invariant',
           event: '',
           entity: char.id,
           attribute: 'traits',
@@ -69,6 +70,7 @@ export function detectAntiPatterns(options: {
         issues.push({
           validator: 'iss-anti-pattern',
           severity: 'warning',
+          kind: 'compiler_invariant',
           event: eventId,
           entity: '',
           message:
@@ -106,6 +108,7 @@ export function detectAntiPatterns(options: {
       issues.push({
         validator: 'iss-anti-pattern',
         severity: 'warning',
+        kind: 'compiler_invariant',
         event: '',
         entity: '',
         message:
@@ -125,6 +128,7 @@ export function detectAntiPatterns(options: {
       issues.push({
         validator: 'iss-anti-pattern',
         severity: 'warning',
+        kind: 'compiler_invariant',
         event: event.id,
         entity: '',
         message:

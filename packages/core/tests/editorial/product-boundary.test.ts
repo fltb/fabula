@@ -10,23 +10,8 @@
 //   6. Preview twice → deep-equal, zero storage writes, zero provider calls
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
 import * as crypto from 'node:crypto';
-import {
-  EditorialOperationError,
-  MemoryStorage,
-  OperationStore,
-  ProjectTransactionCoordinator,
-  TypedEventBus,
-  editorialMutationContextSchema,
-  editorialPreviewRequestV1Schema,
-  editorialProgressEventV1Schema,
-  editorialRenderRequestV1Schema,
-  previewEditorialRun,
-  renderNovel,
-  resolveProjectPaths,
-} from '../../src/index.ts';
-import type { LLMProvider } from '../../src/index.ts';
+import { describe, expect, it } from 'vitest';
 import type {
   Clock,
   EditorialError,
@@ -34,8 +19,23 @@ import type {
   EditorialProgressEventV1,
   EditorialRenderRequestV1,
   EditorialRuntime,
+  LLMProvider,
   ProjectPaths,
   RenderNovelResult,
+} from '../../src/index.ts';
+import {
+  EditorialOperationError,
+  editorialMutationContextSchema,
+  editorialPreviewRequestV1Schema,
+  editorialProgressEventV1Schema,
+  editorialRenderRequestV1Schema,
+  MemoryStorage,
+  OperationStore,
+  ProjectTransactionCoordinator,
+  previewEditorialRun,
+  renderNovel,
+  resolveProjectPaths,
+  TypedEventBus,
 } from '../../src/index.ts';
 
 // ============================================================================
@@ -60,11 +60,67 @@ function setupMinimalProject(storage: MemoryStorage): void {
   storage.mkdirp('/test-project/definitions');
   storage.mkdirp('/test-project/chapters/chapter_01');
   storage.mkdirp('/test-project/.nova/work/responses');
-  storage.write('/test-project/nova.yaml', 'project: test-project\ntitle: Test Project\nauthor: Tester\n');
-  storage.write('/test-project/definitions/state_initial.yaml', 'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n');
-  storage.write('/test-project/chapters/chapter_01/_chapter.yaml', 'chapter: 1\ntitle: Chapter 1\nsummary: First chapter\nintent: Setup\nplannedScenes: 1\n');
+  storage.write(
+    '/test-project/nova.yaml',
+    'project: test-project\ntitle: Test Project\nauthor: Tester\n',
+  );
+  storage.write(
+    '/test-project/definitions/state_initial.yaml',
+    'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n',
+  );
+  storage.write(
+    '/test-project/definitions/entity-types.yaml',
+    [
+      'types:',
+      '  character:',
+      '    typeId: character',
+      '    kind: character',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates: [active, inactive, retired]',
+      '        unsetAllowed: false',
+      '        semanticRole: lifecycle',
+      '      traits:',
+      '        attributeId: traits',
+      '        valueType: string_list',
+      '        requiredAt: never',
+      '        writePolicy: immutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+    ].join('\n'),
+  );
+  // POV participant — declared so the baseline activation makes it live
+  // before the event replay (validateParticipants requires live participants).
+  storage.write(
+    '/test-project/definitions/characters/narrator.yaml',
+    [
+      'id: narrator',
+      'name: Narrator',
+      'type: person',
+      'description: "The story narrator"',
+      'initialState: {}',
+      'traits: []',
+    ].join('\n'),
+  );
+  storage.write(
+    '/test-project/chapters/chapter_01/_chapter.yaml',
+    'chapter: 1\ntitle: Chapter 1\nsummary: First chapter\nintent: Setup\nplannedScenes: 1\n',
+  );
   // discourse-ledger.yaml (mandatory reader-order source)
-  storage.write('/test-project/definitions/discourse-ledger.yaml',
+  storage.write(
+    '/test-project/definitions/discourse-ledger.yaml',
     [
       'id: test-project-ledger',
       'chapters:',
@@ -76,14 +132,16 @@ function setupMinimalProject(storage: MemoryStorage): void {
     ].join('\n'),
   );
   // Minimal event file so ledger sceneId matches
-  storage.write('/test-project/chapters/chapter_01/E001.yaml',
+  storage.write(
+    '/test-project/chapters/chapter_01/E001.yaml',
     [
       'event: E001',
-      'formatVersion: 1',
       'narrativeOrder: 1',
       'title: "Minimal Event"',
       'storyTime: "day 1"',
       'sceneBrief: "Test"',
+      'beats:',
+      '  - "Test"',
       'pov:',
       '  character: narrator',
       '  type: third_person_limited',
@@ -126,7 +184,6 @@ function makePreviewRequest(): Omit<EditorialRenderRequestV1, 'mutation'> {
   };
 }
 
-
 describe('Editorial product-boundary', () => {
   // ── Flow 1: Same operation request terminal-idempotent, zero provider ──
   // When no model/config provides an LLM and no events need provider,
@@ -143,7 +200,7 @@ describe('Editorial product-boundary', () => {
     expect(result.editorialErrors).toEqual([]);
     expect(result.errors).toEqual([]);
   });
-  
+
   it('same request is idempotent after terminal completion', async () => {
     const storage = new MemoryStorage();
     setupMinimalProject(storage);
@@ -231,12 +288,14 @@ describe('Editorial product-boundary', () => {
       providerProfile: 'fast',
       branchPath: { decisions: [{ atEventId: 'E001', choiceId: 'a', narrativeOrder: 1 }] },
       discourseBranch: 'main',
-      waivers: [{
-        gateId: 'gate-1',
-        signedBy: 'reviewer',
-        signedAt: '2026-07-28T00:00:00.000Z',
-        reason: 'Allow minor continuity issues',
-      }],
+      waivers: [
+        {
+          gateId: 'gate-1',
+          signedBy: 'reviewer',
+          signedAt: '2026-07-28T00:00:00.000Z',
+          reason: 'Allow minor continuity issues',
+        },
+      ],
       maxRounds: 3,
     };
 
@@ -361,7 +420,15 @@ describe('Editorial product-boundary', () => {
 
   // ── Runtime validation: simultaneous provider + providerFactory ────────
   it('rejects simultaneous runtime.provider and runtime.providerFactory with INVALID_OPERATION', async () => {
-    const mockProvider = { name: 'mock', complete: async () => ({ id: '', model: '', content: '', usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } }) } satisfies LLMProvider;
+    const mockProvider = {
+      name: 'mock',
+      complete: async () => ({
+        id: '',
+        model: '',
+        content: '',
+        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      }),
+    } satisfies LLMProvider;
     const mockFactory = { create: async () => mockProvider };
 
     const request: EditorialRenderRequestV1 = {
@@ -457,7 +524,12 @@ describe('Editorial product-boundary', () => {
 
     storage.mkdirp(paths.operationsDir);
 
-    store.register({ operationId: opId, kind: 'render', actorId: 'test-actor', requestHash: 'a'.repeat(64) });
+    store.register({
+      operationId: opId,
+      kind: 'render',
+      actorId: 'test-actor',
+      requestHash: 'a'.repeat(64),
+    });
     store.cancel(opId, 'test-actor');
 
     const op = store.get(opId);
@@ -476,10 +548,15 @@ describe('Editorial product-boundary', () => {
 
     storage.mkdirp(paths.operationsDir);
 
-    store.register({ operationId: opId, kind: 'render', actorId: 'test-actor', requestHash: 'a'.repeat(64) });
+    store.register({
+      operationId: opId,
+      kind: 'render',
+      actorId: 'test-actor',
+      requestHash: 'a'.repeat(64),
+    });
     store.succeed(opId, 'test-actor', null);
 
     // Late heartbeat must throw — terminal status prevents overwrite
     expect(() => store.heartbeat(opId, 'test-actor')).toThrow(EditorialOperationError);
   });
- });
+});

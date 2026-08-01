@@ -13,14 +13,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { PromptAssembler } from '../../src/context/prompt-assembler.ts';
-import type {
-  ContextPackage,
-  StyleGuidance,
-} from '../../src/types/index.ts';
-import type {
-  SurfaceReferencePacket,
-  StyleMetrics,
-} from '../../src/types/render-surface.ts';
+import type { ContextPackage, StyleGuidance } from '../../src/types/index.ts';
+import type { StyleMetrics, SurfaceReferencePacket } from '../../src/types/render-surface.ts';
 
 // ============================================================================
 // Helpers — minimal compliant instances
@@ -35,6 +29,7 @@ const MINIMAL_CONTEXT: ContextPackage = {
   },
   sceneSpec: {
     goal: 'Advance the plot.',
+    beats: ['Advance the plot.'],
     povType: 'third_person_limited',
     povCharacter: 'Eleanor',
     conflict: 'Internal',
@@ -79,7 +74,6 @@ const MOCK_SURFACE_PACKET: SurfaceReferencePacket = {
   accepted: true,
   extractorVersion: 'v1.0',
 };
-
 
 // ============================================================================
 // Tests
@@ -213,9 +207,7 @@ describe('PromptAssembler — disclosure & surface sections', () => {
       });
 
       // The ContextPackage JSON block exists
-      const contextBlockMatch = result.userPrompt.match(
-        /```json\n([\s\S]*?)```/,
-      );
+      const contextBlockMatch = result.userPrompt.match(/```json\n([\s\S]*?)```/);
       expect(contextBlockMatch).not.toBeNull();
 
       // Parse the JSON to verify it has no disclosure or surface fields
@@ -232,9 +224,7 @@ describe('PromptAssembler — disclosure & surface sections', () => {
         surfaceReferencePacket: MOCK_SURFACE_PACKET,
       });
 
-      const contextBlockMatch = result.userPrompt.match(
-        /```json\n([\s\S]*?)```/,
-      );
+      const contextBlockMatch = result.userPrompt.match(/```json\n([\s\S]*?)```/);
       expect(contextBlockMatch).not.toBeNull();
       const contextJson = JSON.parse(contextBlockMatch![1]);
 
@@ -334,9 +324,7 @@ describe('PromptAssembler — disclosure & surface sections', () => {
       });
 
       // The ContextPackage JSON in Pass 2 must NOT contain surface data
-      const contextBlockMatch = pass2Prompt.userPrompt.match(
-        /```json\n([\s\S]*?)```/,
-      );
+      const contextBlockMatch = pass2Prompt.userPrompt.match(/```json\n([\s\S]*?)```/);
       expect(contextBlockMatch).not.toBeNull();
       const contextJson = JSON.parse(contextBlockMatch![1]);
 
@@ -358,7 +346,10 @@ describe('PromptAssembler — disclosure & surface sections', () => {
 
       // The surface section comes AFTER the ContextPackage JSON
       // (it's not part of it)
-      const jsonBlockEnd = result.userPrompt.indexOf('```', result.userPrompt.indexOf('```json') + 7);
+      const jsonBlockEnd = result.userPrompt.indexOf(
+        '```',
+        result.userPrompt.indexOf('```json') + 7,
+      );
       const surfaceSectionIndex = result.userPrompt.indexOf('## Surface Reference');
 
       if (jsonBlockEnd >= 0 && surfaceSectionIndex >= 0) {

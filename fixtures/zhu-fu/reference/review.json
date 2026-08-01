@@ -4,8 +4,8 @@
   "reviewedAt": "2026-07-21T09:00:55.798Z",
   "decision": "approved",
   "notes": "C-standard. Reference data is mock (for test determinism); real evidence at smoke-candidates/2026-07-21T03-52-20-334Z (7/7, 15 calls, 0 failures).",
-  "responsesSha256": "8ddbe701c9d465df0fa5dce1153d31469f0ea2de68f443954cf28d041c4472aa",
+  "responsesSha256": "a2c0c471a8495cbe382243a464d6f50d50f5ef27bc572f18aed867e2dc48292e",
   "generationRecordSha256": "70db61a8bb550317d6af85850a77ec2198dd828e7d4fe2c4c32e3695c1769779",
   "provenanceSha256": "bd5f8c3a0bb28cb13dbcba88a32cb3999c69af65a21da8b70c38f18377c6b6e6",
-  "expectedOutcomesSha256": "d726e83559fff2bc4afa769005199ee4bcbc16d6c3636151d09a2083a7b968eb"
+  "expectedOutcomesSha256": "35eed173c8a32c4b4fe8f965d29427ddcc3ebbb796660defe14b52083d3b903a"
 }

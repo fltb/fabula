@@ -7,12 +7,8 @@
 
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { compileGameDialogueTree } from '../branch/game-dialogue-tree.ts';
-import { resolveTemporalContext } from '../entity/index.js';
 import { includesPath } from '../branch/set.ts';
 import { EditorialOperationError, PublicationError } from '../editorial/errors.ts';
-import type { PlannedDiscourseLedger } from '../types/discourse.ts';
-import type { NarrativeEvent } from '../types/event.ts';
 import { OperationStore } from '../editorial/operation-store.ts';
 import { type ProjectPaths, resolveProjectPaths } from '../editorial/paths.ts';
 import {
@@ -25,14 +21,15 @@ import {
 import { SceneRevisionStore } from '../editorial/scene-store.ts';
 import { ProjectTransactionCoordinator, stableJson } from '../editorial/transaction.ts';
 import { loadProjectConfig } from '../entity/index.ts';
-import { EntityMapper } from '../entity/mapper.ts';
+import type { CanonicalProjectIR } from '../entity/project-runtime.ts';
+import { compileCanonicalRuntime, loadCanonicalProject } from '../entity/project-runtime.ts';
+import { canonicalJson, computeSha256Hex } from '../render/scene-contract.ts';
 import {
   editorialOperationV1Schema,
   publicationManifestV1Schema,
   sceneMetadataV1Schema,
 } from '../schemas/editorial.ts';
-import { compileDiscourseSceneSequence, resolveDiscourseBranch } from '../state/discourse-sequence.ts';
-import { canonicalJson, computeSha256Hex } from '../render/scene-contract.ts';
+import { resolveDiscourseBranch } from '../state/discourse-sequence.ts';
 import { computeContentHash } from '../storage/hash.ts';
 import type { Storage, TransactionReadExpectation } from '../storage/types.ts';
 import type { BranchPath, BranchSet } from '../types/branch.ts';
@@ -111,17 +108,11 @@ function authoredRequiredEvents(
 ): {
   events: Map<string, number>;
   errors: EditorialError[];
-  /** All mapped NarrativeEvent objects (for scene sequence compilation). */
-  narrativeEvents: readonly NarrativeEvent[];
-  /** Project discourse ledger (for scene sequence compilation). */
-  discourseLedger: PlannedDiscourseLedger;
+  /** Canonical project IR — authored events, compiled game tree, ledger. */
+  ir: CanonicalProjectIR;
 } {
-  const mapper = new EntityMapper(projectDir, storage);
-  const data = mapper.loadProject();
-  const eventFiles = [...data.chapters.values()].flatMap((chapter) => chapter.events);
-  const events: NarrativeEvent[] = eventFiles.map((event) => mapper.mapToNarrativeEvent(event));
-  const temporalContext = resolveTemporalContext(events, data.timeAnchors);
-  const tree = compileGameDialogueTree(events, temporalContext);
+  const ir = loadCanonicalProject(projectDir, storage);
+  const tree = ir.gameDialogueTree;
   if (tree && tree.choicesByEventId.size > 0 && !branchPath) {
     return {
       events: new Map(),
@@ -131,18 +122,17 @@ function authoredRequiredEvents(
           message: 'A complete branch path is required to assemble a game-dialogue project',
         },
       ],
-      narrativeEvents: [],
-      discourseLedger: data.discourseLedger,
+      ir,
     };
   }
   const required = new Map<string, number>();
-  for (const event of events) {
+  for (const event of ir.authoredEvents) {
     if (event.source !== 'event_file') continue;
     const scope = tree?.eventScopes.get(event.id) ?? event.branchExistence;
     const included = branchPath ? includesPath(scope, branchPath) : scope.type === 'all';
     if (included) required.set(event.id, event.narrativeOrder);
   }
-  return { events: required, errors: [], narrativeEvents: events, discourseLedger: data.discourseLedger };
+  return { events: required, errors: [], ir };
 }
 
 /**
@@ -456,7 +446,7 @@ export function canonicalAssemble(
     resolveDiscourseBranch({
       selectedEventIds: new Set(required.events.keys()),
       branchPath: request.branchPath ?? { decisions: [] },
-      ledger: required.discourseLedger,
+      ledger: required.ir.data.discourseLedger,
     });
 
   // ── 1b. Verify scope hash matches manifest (fail closed on ledger/discourse change) ─
@@ -464,13 +454,14 @@ export function canonicalAssemble(
     canonicalJson({
       branch: request.branchPath ?? { decisions: [] },
       discourse: branch,
-      ledgerHash: required.discourseLedger.hash,
+      ledgerHash: required.ir.data.discourseLedger.hash,
     }),
   );
   if (manifest.branch_scope_hash && manifest.branch_scope_hash !== computedScopeHash) {
     const err: EditorialError = {
       code: 'PUBLICATION_INCOMPLETE',
-      message: `Scope hash mismatch — ledger/discourse branch changed since last publication. ` +
+      message:
+        `Scope hash mismatch — ledger/discourse branch changed since last publication. ` +
         `Expected "${computedScopeHash}" but manifest has "${manifest.branch_scope_hash}". ` +
         `Run "render" to produce scenes compatible with the current scope.`,
     };
@@ -484,7 +475,7 @@ export function canonicalAssemble(
       projectDir: request.projectDir,
       branchPath: request.branchPath,
       discourseBranch: branch,
-      ledgerHash: required.discourseLedger.hash,
+      ledgerHash: required.ir.data.discourseLedger.hash,
     }),
   );
 
@@ -503,12 +494,15 @@ export function canonicalAssemble(
   // current preimage.
   manifestRaw = storage.readOptional(paths.publicationPath);
   if (manifestRaw === null) {
-    throw new PublicationError('Assembly operation did not materialize its active publication manifest', [
-      {
-        code: 'PUBLICATION_INCOMPLETE',
-        message: 'Missing active publication manifest after assembly operation registration',
-      },
-    ]);
+    throw new PublicationError(
+      'Assembly operation did not materialize its active publication manifest',
+      [
+        {
+          code: 'PUBLICATION_INCOMPLETE',
+          message: 'Missing active publication manifest after assembly operation registration',
+        },
+      ],
+    );
   }
   manifest = publicationManifestV1Schema.parse(JSON.parse(manifestRaw)) as PublicationManifestV1;
   const { scenes: validatedScenes, errors: validationErrors } = validateManifestHeads(
@@ -553,15 +547,19 @@ export function canonicalAssemble(
     chapterTitleMap.set(ch, { title: meta.title || `Chapter ${ch}` });
   }
 
-  // ── 6b. Compile discourse scene sequence ───────────────────────
-  const sceneSequence = compileDiscourseSceneSequence({
-    events: required.narrativeEvents,
-    ledger: required.discourseLedger,
-    branch,
-  });
+  // ── 6b. Compile discourse scene sequence from the canonical runtime ──
+  const sceneSequence = compileCanonicalRuntime(required.ir, {
+    branchPath: request.branchPath,
+    discourseBranch: branch,
+  }).graphs.discourseGraph.sceneSequence;
 
   // ── 7. Build novel document ────────────────────────────────────
-  const novelContent = buildNovelDocument(candidates, chapterTitleMap, request.title ?? 'Untitled', sceneSequence);
+  const novelContent = buildNovelDocument(
+    candidates,
+    chapterTitleMap,
+    request.title ?? 'Untitled',
+    sceneSequence,
+  );
   const novelHash = computeContentHash(novelContent);
 
   // ── 8. Check for direct edit on canonical novel ────────────────
@@ -678,7 +676,7 @@ export function customAssemble(
     resolveDiscourseBranch({
       selectedEventIds: new Set(required.events.keys()),
       branchPath: request.branchPath ?? { decisions: [] },
-      ledger: required.discourseLedger,
+      ledger: required.ir.data.discourseLedger,
     });
 
   // ── 1b. Verify scope hash matches manifest (fail closed on ledger/discourse change) ─
@@ -686,14 +684,15 @@ export function customAssemble(
     canonicalJson({
       branch: request.branchPath ?? { decisions: [] },
       discourse: branch,
-      ledgerHash: required.discourseLedger.hash,
+      ledgerHash: required.ir.data.discourseLedger.hash,
     }),
   );
   if (manifest.branch_scope_hash && manifest.branch_scope_hash !== computedScopeHash) {
     throw new PublicationError('Assembly scope mismatch', [
       {
         code: 'PUBLICATION_INCOMPLETE',
-        message: `Scope hash mismatch — ledger/discourse branch changed since last publication. ` +
+        message:
+          `Scope hash mismatch — ledger/discourse branch changed since last publication. ` +
           `Expected "${computedScopeHash}" but manifest has "${manifest.branch_scope_hash}". ` +
           `Run "render" to produce scenes compatible with the current scope.`,
       },
@@ -707,7 +706,7 @@ export function customAssemble(
       projectDir: request.projectDir,
       branchPath: request.branchPath,
       discourseBranch: branch,
-      ledgerHash: required.discourseLedger.hash,
+      ledgerHash: required.ir.data.discourseLedger.hash,
       outputPath: request.outputPath,
       title: request.title,
     }),
@@ -784,12 +783,16 @@ export function customAssemble(
       title: metadata.title || `Chapter ${chapter}`,
     });
   }
-  const sceneSequence = compileDiscourseSceneSequence({
-    events: required.narrativeEvents,
-    ledger: required.discourseLedger,
-    branch,
-  });
-  const novelContent = buildNovelDocument(candidates, chapterTitleMap, request.title ?? 'Untitled', sceneSequence);
+  const sceneSequence = compileCanonicalRuntime(required.ir, {
+    branchPath: request.branchPath,
+    discourseBranch: branch,
+  }).graphs.discourseGraph.sceneSequence;
+  const novelContent = buildNovelDocument(
+    candidates,
+    chapterTitleMap,
+    request.title ?? 'Untitled',
+    sceneSequence,
+  );
   const resolvedOutputPath = request.outputPath ?? path.join(paths.outputDir, 'custom-novel.md');
   if (
     resolvedOutputPath === paths.novelPath ||

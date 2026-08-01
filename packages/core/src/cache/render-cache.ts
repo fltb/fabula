@@ -221,13 +221,21 @@ export function buildSurfaceKeyMaterial(input: {
 }
 
 /**
- * Build the SurfaceValidationKey string from surface key + prose/validation inputs.
+ * Build the SurfaceValidationKey string from surface key + prose/validation
+ * inputs. The Pass 2 measurement protocol (provider, prompt hash, sampling
+ * hash, validator/reference policy) is folded in so ANY protocol change
+ * invalidates the validation layer — one protocol, one cache identity.
  */
 export function buildValidationKeyMaterial(input: {
   surfaceKeyString: string;
   proseHash: string;
   pass2SchemaModelId: string;
   validatorPolicyVersion: string;
+  provider: string;
+  analysisPromptHash: string;
+  samplingConfigHash: string;
+  validatorPolicy: string;
+  referencePolicy: string;
 }): string {
   return sha256Canonical(input);
 }

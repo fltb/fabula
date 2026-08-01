@@ -17,6 +17,8 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
+import { compileDiscourseBoundaries } from '../../src/state/discourse-context.ts';
+import { compilePlannedDiscourseLedger } from '../../src/state/discourse-ledger.ts';
 import {
   advanceHintState,
   areProjectionsIdentical,
@@ -30,8 +32,6 @@ import {
   projectDiscourseContext,
   replayDiscourseState,
 } from '../../src/state/discourse-replay.ts';
-import { compileDiscourseBoundaries } from '../../src/state/discourse-context.ts';
-import { compilePlannedDiscourseLedger } from '../../src/state/discourse-ledger.ts';
 import type {
   DisclosureAction,
   DiscourseContextProjection,
@@ -47,11 +47,12 @@ import type {
   WithholdingPolicy,
 } from '../../src/types/discourse.ts';
 import type { NarrativeEvent } from '../../src/types/event.js';
+
 // ═════════════════════════════════════════════════════════════════════════════
 
 function makeAssertion(
   id: string,
-  truthBoundary: boolean,
+  status: NarratorAssertion['status'],
   type: NarratorAssertion['type'] = 'claim',
 ): NarratorAssertion {
   return {
@@ -60,7 +61,7 @@ function makeAssertion(
     proposition: `prop_${id}`,
     polarity: 'affirmative',
     type,
-    truthBoundary,
+    status,
     narrationBoundary: { narratorId: 'narrator_1' },
   };
 }
@@ -69,13 +70,26 @@ function makeLedger(entries: PlannedLedgerEntry[]): PlannedDiscourseLedger {
   // Include a default chapter covering all scene IDs referenced in entries.
   const sceneIds = [...new Set(entries.map((e) => e.sceneId))];
   const chapters: PlannedDiscourseLedgerSource['chapters'] = [
-    { branch: 'main', chapter: 1, sceneIds: sceneIds.length > 0 ? sceneIds as [string, ...string[]] : ['default-scene'] as [string, ...string[]] },
+    {
+      branch: 'main',
+      chapter: 1,
+      sceneIds:
+        sceneIds.length > 0
+          ? (sceneIds as [string, ...string[]])
+          : (['default-scene'] as [string, ...string[]]),
+    },
   ];
   // Also add chapters for alternate branches seen in entries
   for (const entry of entries) {
     if (entry.branch !== 'main' && !chapters.find((c) => c.branch === entry.branch)) {
-      const branchSceneIds = [...new Set(entries.filter((e) => e.branch === entry.branch).map((e) => e.sceneId))];
-      chapters.push({ branch: entry.branch, chapter: 1, sceneIds: branchSceneIds as [string, ...string[]] });
+      const branchSceneIds = [
+        ...new Set(entries.filter((e) => e.branch === entry.branch).map((e) => e.sceneId)),
+      ];
+      chapters.push({
+        branch: entry.branch,
+        chapter: 1,
+        sceneIds: branchSceneIds as [string, ...string[]],
+      });
     }
   }
   return compilePlannedDiscourseLedger({ id: 'test_ledger', chapters, entries });
@@ -236,9 +250,7 @@ describe('DiscourseState replay by position', () => {
   });
 
   it('position 0 returns empty state when actions start at higher positions', () => {
-    const ledger = makeLedger([
-      entry('e1', revealAction('r1', 1), 'scene_1', 'main'),
-    ]);
+    const ledger = makeLedger([entry('e1', revealAction('r1', 1), 'scene_1', 'main')]);
     const state = replayDiscourseState(ledger, 0, 'main');
     expect(state.position).toBe(0);
     expect(state.reveals).toEqual([]);
@@ -432,53 +444,38 @@ describe('hint state lifecycle (6 states)', () => {
 // 4. Claim vs reveal truth-boundary enforcement (§5)
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe('claim vs reveal truth-boundary enforcement (§5)', () => {
-  it('canReveal returns true for truthBoundary=true assertion', () => {
-    const assertion = makeAssertion('a1', true, 'authoritative_reveal');
+describe('claim vs reveal status enforcement (§5)', () => {
+  it('canReveal returns true for status=asserted assertion', () => {
+    const assertion = makeAssertion('a1', 'asserted', 'authoritative_reveal');
     expect(canReveal(assertion)).toBe(true);
   });
 
-  it('canReveal returns false for truthBoundary=false assertion', () => {
-    const assertion = makeAssertion('a2', false, 'claim');
+  it('canReveal returns false for status=unknown assertion', () => {
+    const assertion = makeAssertion('a2', 'unknown', 'claim');
     expect(canReveal(assertion)).toBe(false);
   });
 
-  it('reveal action succeeds for truthBoundary=true', () => {
+  it('reveal action succeeds for status=asserted', () => {
     const ledger = makeLedger([entry('e1', revealAction('a1', 1), 'scene_1', 'main')]);
     const state = replayDiscourseState(ledger, 1, 'main');
     expect(state.reveals).toContain('a1');
   });
 
-  it('rejects a loaded assertion without a truth boundary', () => {
-    const assertion = makeAssertion('a2', false, 'claim');
-    const ledger = makeLedger([entry('e1', revealAction('a2', 1), 'scene_1', 'main')]);
-
-    expect(() => replayDiscourseState(ledger, 1, 'main', { a2: assertion })).toThrow(
-      'Reveal requires truthBoundary=true',
-    );
-  });
-
-  it('claim action succeeds regardless of truthBoundary', () => {
-    const ledger = makeLedger([entry('e1', claimAction('a2', 1), 'scene_1', 'main')]);
-    const state = replayDiscourseState(ledger, 1, 'main');
-    expect(state.openClaims).toContain('a2');
-  });
-
-  it('reveal action with truthBoundary=false assertion fails when catalog supplied (§5)', () => {
+  it('reveal action with status=unknown assertion fails when catalog supplied (§5)', () => {
     const ledger = makeLedger([entry('e1', revealAction('a_false', 1), 'scene_1', 'main')]);
     expect(() =>
       replayDiscourseState(ledger, 1, 'main', {
-        a_false: makeAssertion('a_false', false, 'claim'),
+        a_false: makeAssertion('a_false', 'unknown', 'claim'),
       }),
-    ).toThrow('Reveal requires truthBoundary=true');
+    ).toThrow('Reveal requires status=asserted');
   });
 
-  it('claim action with truthBoundary=true assertion succeeds as claim (not reveal)', () => {
+  it('claim action with status=asserted assertion succeeds as claim (not reveal)', () => {
     const ledger = makeLedger([entry('e1', claimAction('true_a', 1), 'scene_1', 'main')]);
     const state = replayDiscourseState(ledger, 1, 'main', {
-      true_a: makeAssertion('true_a', true, 'authoritative_reveal'),
+      true_a: makeAssertion('true_a', 'asserted', 'authoritative_reveal'),
     });
-    // Claim always adds to openClaims regardless of assertion truthBoundary
+    // Claim always adds to openClaims regardless of assertion status
     expect(state.openClaims).toContain('true_a');
     // It does NOT become a reveal
     expect(state.reveals).not.toContain('true_a');
@@ -490,7 +487,7 @@ describe('claim vs reveal truth-boundary enforcement (§5)', () => {
       entry('e2', revealAction('same_id', 2), 'scene_1', 'main'),
     ]);
     const state = replayDiscourseState(ledger, 2, 'main', {
-      same_id: makeAssertion('same_id', true, 'authoritative_reveal'),
+      same_id: makeAssertion('same_id', 'asserted', 'authoritative_reveal'),
     });
     expect(state.reveals).toContain('same_id');
     expect(state.openClaims).not.toContain('same_id');
@@ -663,7 +660,7 @@ describe('Pass 1 projection filtering (§12)', () => {
 
   it('includes open claims as accessible claims when authorized and narrator-visible', () => {
     const state = makeStateWithAssertions([], ['c1'], [], [], {
-      c1: makeAssertion('c1', false, 'claim'),
+      c1: makeAssertion('c1', 'unknown', 'claim'),
     });
     const profile = createExplicitLedgerProfile(
       'narrator_1',
@@ -681,7 +678,7 @@ describe('Pass 1 projection filtering (§12)', () => {
   it('excludes a claim outside a focalizer-only narrator boundary', () => {
     const state = makeStateWithAssertions([], ['c1'], [], [], {
       c1: {
-        ...makeAssertion('c1', false, 'claim'),
+        ...makeAssertion('c1', 'unknown', 'claim'),
         narrationBoundary: { narratorId: 'narrator_1', focalizerId: 'alice' },
       },
     });
@@ -702,7 +699,7 @@ describe('Pass 1 projection filtering (§12)', () => {
   it('treats limited access as focalizer-bound until a narrower scope exists', () => {
     const state = makeStateWithAssertions([], ['c1'], [], [], {
       c1: {
-        ...makeAssertion('c1', false, 'claim'),
+        ...makeAssertion('c1', 'unknown', 'claim'),
         narrationBoundary: { narratorId: 'narrator_1', focalizerId: 'alice' },
       },
     });
@@ -723,7 +720,7 @@ describe('Pass 1 projection filtering (§12)', () => {
 
   it('excludes non-authorized assertions from accessible claims', () => {
     const state = makeStateWithAssertions([], ['c1'], [], [], {
-      c1: makeAssertion('c1', false, 'claim'),
+      c1: makeAssertion('c1', 'unknown', 'claim'),
     });
     const projection = projectDiscourseContext(state, undefined, undefined, []); // empty authorized list
     expect(projection.accessibleClaims).toHaveLength(0);
@@ -767,7 +764,7 @@ describe('Pass 1 projection filtering (§12)', () => {
     // targetProposition is NEVER exposed in projection
     expect(JSON.stringify(projection)).not.toContain('deep_target');
     // The type of visibleHints does not include targetProposition
-    expect(Object.prototype.hasOwnProperty.call(hint, 'targetProposition')).toBe(false);
+    expect(Object.hasOwn(hint, 'targetProposition')).toBe(false);
   });
 
   it('hints do not appear in authorizedTargets', () => {
@@ -1057,9 +1054,7 @@ describe('shared post-merge scene identical-projection check (§14)', () => {
     const proj: DiscourseContextProjection = {
       plannedReveals: ['r1', 'r2'],
       openClaims: ['c1'],
-      visibleHints: [
-        { hintId: 'h1', surfaceProposition: 's1', state: 'contract_fulfilled' },
-      ],
+      visibleHints: [{ hintId: 'h1', surfaceProposition: 's1', state: 'contract_fulfilled' }],
       accessibleClaims: [
         { assertionId: 'c1', narrator: 'n1', type: 'claim', surface: 'prop_text' },
       ],
@@ -1177,6 +1172,9 @@ describe('ValidationKey independence (§18)', () => {
       proseHash: 'abc123',
       analysisSchema: 'pass2_schema_v1',
       model: 'gpt4',
+      provider: 'provider_a',
+      analysisPromptHash: 'prompt_hash_v1',
+      samplingConfigHash: 'sampling_v1',
       validatorPolicy: 'strict',
       referencePolicy: 'reference_v1',
     };
@@ -1207,6 +1205,9 @@ describe('ValidationKey independence (§18)', () => {
       proseHash: 'hash_a',
       analysisSchema: 'schema_v1',
       model: 'gpt4',
+      provider: 'provider_a',
+      analysisPromptHash: 'prompt_v1',
+      samplingConfigHash: 'sampling_v1',
       validatorPolicy: 'strict',
       referencePolicy: 'ref_v1',
     };
@@ -1214,6 +1215,9 @@ describe('ValidationKey independence (§18)', () => {
       proseHash: 'hash_b',
       analysisSchema: 'schema_v1',
       model: 'gpt4',
+      provider: 'provider_a',
+      analysisPromptHash: 'prompt_v1',
+      samplingConfigHash: 'sampling_v1',
       validatorPolicy: 'strict',
       referencePolicy: 'ref_v1',
     };
@@ -1276,9 +1280,7 @@ describe('§19 — strict preflight: invalid catalog scenarios', () => {
     // STRICT PREFLIGHT: retraction must reference an earlier, still-active
     // claim or reveal on the same concrete branch. Should fail preflight.
     // Current code permissively records the retraction.
-    const ledger = makeLedger([
-      entry('e1', retractionAction('ghost', 1), 'scene_1', 'main'),
-    ]);
+    const ledger = makeLedger([entry('e1', retractionAction('ghost', 1), 'scene_1', 'main')]);
     const state = replayDiscourseState(ledger, 1, 'main');
     expect(state.retractions).toHaveLength(1);
     expect(state.retractions[0].assertionId).toBe('ghost');
@@ -1314,20 +1316,18 @@ describe('§19 — strict preflight: invalid catalog scenarios', () => {
     // STRICT PREFLIGHT: duplicate assertion IDs should be a catalog error,
     // not last-write-wins via object property overwrite.
     const dupAssertions: Record<string, NarratorAssertion> = {
-      a1: makeAssertion('a1', true, 'authoritative_reveal'),
+      a1: makeAssertion('a1', 'asserted', 'authoritative_reveal'),
     };
     // Overwrite a1 with different assertion (same id, different props)
-    dupAssertions.a1 = makeAssertion('a1', false, 'claim');
+    dupAssertions.a1 = makeAssertion('a1', 'unknown', 'claim');
     // Last write wins with plain object
-    expect(dupAssertions.a1.truthBoundary).toBe(false);
+    expect(dupAssertions.a1.status).toBe('unknown');
   });
 
   it('entry referencing unknown scene produces no authorized targets', () => {
     // When an entry's sceneId doesn't match the event being compiled,
     // the compiler filters it out — no authorized targets for this scene
-    const ledger = makeLedger([
-      entry('e1', revealAction('r1', 1), 'scene_other', 'main'),
-    ]);
+    const ledger = makeLedger([entry('e1', revealAction('r1', 1), 'scene_other', 'main')]);
     const state = replayDiscourseState(ledger, 1, 'main');
     // Entry still replays into discourse state since replayDiscourseState
     // doesn't filter by sceneId — that's the compiler's job
@@ -1389,13 +1389,18 @@ describe('§19 — strict preflight: invalid catalog scenarios', () => {
       entry('e2', revealAction('r2', 2), 'scene_A', 'main'), // gap: position 1 missing
     ]);
     const assertions: Record<string, NarratorAssertion> = {
-      r1: makeAssertion('r1', true, 'reveal'),
-      r2: makeAssertion('r2', true, 'reveal'),
+      r1: makeAssertion('r1', 'asserted', 'reveal'),
+      r2: makeAssertion('r2', 'asserted', 'reveal'),
     };
     const eventA = makeEvent({ id: 'scene_A', narratorProfileRef: 'narrator_1' });
     const profiles: Record<string, NarratorProfile> = {
       narrator_1: createExplicitLedgerProfile(
-        'narrator_1', 'full', 'full', 'full_knowledge', 'reliable', 'sincere',
+        'narrator_1',
+        'full',
+        'full',
+        'full_knowledge',
+        'reliable',
+        'sincere',
       ),
     };
     expect(() =>
@@ -1413,6 +1418,7 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'test-char', type: 'third_person_limited' },
     sceneBrief: 'Test scene for compiled discourse boundary projection.',
+    beats: ['Test scene for compiled discourse boundary projection.'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
@@ -1441,19 +1447,22 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
       entry('e2', claimAction('c1', 1), 'scene_1', 'main'),
     ]);
     const assertions: Record<string, NarratorAssertion> = {
-      r1: makeAssertion('r1', true, 'reveal'),
-      c1: makeAssertion('c1', false, 'claim'),
+      r1: makeAssertion('r1', 'asserted', 'reveal'),
+      c1: makeAssertion('c1', 'unknown', 'claim'),
     };
     const profiles: Record<string, NarratorProfile> = {
       narrator_1: createExplicitLedgerProfile(
-        'narrator_1', 'full', 'full', 'full_knowledge', 'reliable', 'sincere',
+        'narrator_1',
+        'full',
+        'full',
+        'full_knowledge',
+        'reliable',
+        'sincere',
       ),
     };
     const event = makeEvent({ id: 'scene_1', narratorProfileRef: 'narrator_1' });
 
-    const ctx = compileDiscourseBoundaries(
-      [event], ledger, assertions, profiles, 'main',
-    );
+    const ctx = compileDiscourseBoundaries([event], ledger, assertions, profiles, 'main');
 
     const compiled = ctx['scene_1'];
 
@@ -1476,17 +1485,13 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
   });
 
   it('single-action scene: projection includes the one reveal', () => {
-    const ledger = makeLedger([
-      entry('e1', revealAction('r1', 0), 'scene_1', 'main'),
-    ]);
+    const ledger = makeLedger([entry('e1', revealAction('r1', 0), 'scene_1', 'main')]);
     const assertions: Record<string, NarratorAssertion> = {
-      r1: makeAssertion('r1', true, 'reveal'),
+      r1: makeAssertion('r1', 'asserted', 'reveal'),
     };
     const event = makeEvent({ id: 'scene_1', narratorProfileRef: 'narrator_1' });
 
-    const ctx = compileDiscourseBoundaries(
-      [event], ledger, assertions, {}, 'main',
-    );
+    const ctx = compileDiscourseBoundaries([event], ledger, assertions, {}, 'main');
 
     const compiled = ctx['scene_1'];
 
@@ -1507,9 +1512,7 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
       chapters: [{ branch: 'main', chapter: 1, sceneIds: ['scene_1'] }],
       entries: [],
     });
-    const ctx = compileDiscourseBoundaries(
-      [event], ledger, {}, {}, 'main',
-    );
+    const ctx = compileDiscourseBoundaries([event], ledger, {}, {}, 'main');
     // Scene has no entries — cursor defaults to -1 (no action interval)
     expect(ctx['scene_1']).toBeDefined();
     expect(ctx['scene_1']!.cursor).toBe(-1);
@@ -1525,13 +1528,11 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
       entry('e2', hintAction('h1', 'surface_only', 'hidden_target', 1), 'scene_1', 'main'),
     ]);
     const assertions: Record<string, NarratorAssertion> = {
-      r1: makeAssertion('r1', true, 'reveal'),
+      r1: makeAssertion('r1', 'asserted', 'reveal'),
     };
     const event = makeEvent({ id: 'scene_1', narratorProfileRef: 'narrator_1' });
 
-    const ctx = compileDiscourseBoundaries(
-      [event], ledger, assertions, {}, 'main',
-    );
+    const ctx = compileDiscourseBoundaries([event], ledger, assertions, {}, 'main');
 
     const compiled = ctx['scene_1'];
     const proj = compiled.projection;
@@ -1560,20 +1561,23 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
       entry('e2', claimAction('c1', 1), 'scene_2', 'main'),
     ]);
     const assertions: Record<string, NarratorAssertion> = {
-      r1: makeAssertion('r1', true, 'reveal'),
-      c1: makeAssertion('c1', false, 'claim'),
+      r1: makeAssertion('r1', 'asserted', 'reveal'),
+      c1: makeAssertion('c1', 'unknown', 'claim'),
     };
     const profiles: Record<string, NarratorProfile> = {
       narrator_1: createExplicitLedgerProfile(
-        'narrator_1', 'full', 'full', 'full_knowledge', 'reliable', 'sincere',
+        'narrator_1',
+        'full',
+        'full',
+        'full_knowledge',
+        'reliable',
+        'sincere',
       ),
     };
     const scene1 = makeEvent({ id: 'scene_1', narratorProfileRef: 'narrator_1' });
     const scene2 = makeEvent({ id: 'scene_2', narratorProfileRef: 'narrator_1' });
 
-    const ctx = compileDiscourseBoundaries(
-      [scene1, scene2], ledger, assertions, profiles, 'main',
-    );
+    const ctx = compileDiscourseBoundaries([scene1, scene2], ledger, assertions, profiles, 'main');
 
     // scene_1 at position 0: stateBefore empty, stateAfter has r1 only
     const compiled1 = ctx['scene_1'];

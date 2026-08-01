@@ -83,7 +83,12 @@ function storyNode(
       ? { type: 'storyTime' as const, kind: 'initial' as const }
       : storyValue === 'unlocated'
         ? { type: 'storyTime' as const, kind: 'unlocated' as const }
-        : { type: 'storyTime' as const, kind: 'point' as const, clock: 'story' as const, scalar: parseInt(storyValue.replace(/^day_/, ''), 10) };
+        : {
+            type: 'storyTime' as const,
+            kind: 'point' as const,
+            clock: 'story' as const,
+            scalar: parseInt(storyValue.replace(/^day_/, ''), 10),
+          };
   return {
     id,
     coordinate,
@@ -611,9 +616,7 @@ describe('GraphCompiler', () => {
         ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.errors.filter((e) => e instanceof UnorderedStoryConflictError)).toHaveLength(
-        0,
-      );
+      expect(result.errors.filter((e) => e instanceof UnorderedStoryConflictError)).toHaveLength(0);
     });
 
     it('detects unordered conflicting same-time operations', () => {
@@ -626,9 +629,7 @@ describe('GraphCompiler', () => {
         ]),
       ];
       const result = compileGraph(nodes);
-      expect(result.errors.filter((e) => e instanceof UnorderedStoryConflictError)).toHaveLength(
-        1,
-      );
+      expect(result.errors.filter((e) => e instanceof UnorderedStoryConflictError)).toHaveLength(1);
     });
 
     it('allows ordered same-time operations with same_coordinate_order edge', () => {
@@ -646,9 +647,7 @@ describe('GraphCompiler', () => {
         ),
       ];
       const result = compileGraph(nodes);
-      expect(result.errors.filter((e) => e instanceof UnorderedStoryConflictError)).toHaveLength(
-        0,
-      );
+      expect(result.errors.filter((e) => e instanceof UnorderedStoryConflictError)).toHaveLength(0);
     });
   });
 
@@ -790,9 +789,7 @@ describe('GraphCompiler', () => {
       ];
       const result = compileGraph(nodes, { branchPath: 'main' });
       const resolutions = result.storyGraphs[0].resolutions;
-      const outputRes = resolutions.find(
-        (r): r is GraphProviderOutput => r.type === 'output',
-      );
+      const outputRes = resolutions.find((r): r is GraphProviderOutput => r.type === 'output');
       expect(outputRes).toBeDefined();
       // Must resolve to 'main' branch output, not 'alternate'
       expect(outputRes!.outputId).toBe('m1');
@@ -858,9 +855,7 @@ describe('GraphCompiler', () => {
       const result = compileGraph(nodes);
       expect(result.errors).toHaveLength(0);
       const resolutions = result.storyGraphs[0].resolutions;
-      const outputRes = resolutions.find(
-        (r): r is GraphProviderOutput => r.type === 'output',
-      );
+      const outputRes = resolutions.find((r): r is GraphProviderOutput => r.type === 'output');
       expect(outputRes).toBeDefined();
       // day_10 must be selected (not day_2), proving numeric comparison
       expect(outputRes!.outputId).toBe('o2');
@@ -896,9 +891,7 @@ describe('GraphCompiler', () => {
       const result = compileGraph(nodes);
       expect(result.errors).toHaveLength(0);
       const resolutions = result.storyGraphs[0].resolutions;
-      const outputRes = resolutions.find(
-        (r): r is GraphProviderOutput => r.type === 'output',
-      );
+      const outputRes = resolutions.find((r): r is GraphProviderOutput => r.type === 'output');
       expect(outputRes).toBeDefined();
       expect(outputRes!.outputId).toBe('init');
     });
@@ -924,9 +917,7 @@ describe('GraphCompiler', () => {
         ),
       ];
       const result = compileGraph(nodes);
-      const providerEdges = result.storyGraphs[0].edges.filter(
-        (e) => e.edgeClass === 'provider',
-      );
+      const providerEdges = result.storyGraphs[0].edges.filter((e) => e.edgeClass === 'provider');
       expect(providerEdges).toHaveLength(1);
       expect(providerEdges[0].predecessor).toBe('provider');
       expect(providerEdges[0].dependent).toBe('reader');
@@ -968,9 +959,9 @@ describe('GraphCompiler', () => {
       ];
       const result = compileGraph(nodes);
       // No DuplicateBranchProviderError for legal reuse
-      expect(
-        result.errors.filter((e) => e instanceof DuplicateBranchProviderError),
-      ).toHaveLength(0);
+      expect(result.errors.filter((e) => e instanceof DuplicateBranchProviderError)).toHaveLength(
+        0,
+      );
       // Both reads resolve
       const outputResolutions = result.storyGraphs[0].resolutions.filter(
         (r): r is GraphProviderOutput => r.type === 'output',
@@ -1003,9 +994,9 @@ describe('GraphCompiler', () => {
         ),
       ];
       const result = compileGraph(nodes);
-      expect(
-        result.errors.filter((e) => e instanceof DuplicateBranchProviderError),
-      ).toHaveLength(1);
+      expect(result.errors.filter((e) => e instanceof DuplicateBranchProviderError)).toHaveLength(
+        1,
+      );
     });
 
     it('graph edges in StoryGraph require both endpoints in story domain', () => {
@@ -1020,12 +1011,14 @@ describe('GraphCompiler', () => {
       const result = compileGraph(nodes);
       // Story graph should NOT contain edges from discourse node
       const storyEdges = result.storyGraphs[0].edges;
-      expect(storyEdges.every((e) => e.predecessor !== 'disc_evt' && e.dependent !== 'disc_evt'))
-        .toBe(true);
+      expect(
+        storyEdges.every((e) => e.predecessor !== 'disc_evt' && e.dependent !== 'disc_evt'),
+      ).toBe(true);
       // Discourse graph should NOT contain edges from story node
       const discEdges = result.discourseGraphs[0].edges;
-      expect(discEdges.every((e) => e.predecessor !== 'story_evt' && e.dependent !== 'story_evt'))
-        .toBe(true);
+      expect(
+        discEdges.every((e) => e.predecessor !== 'story_evt' && e.dependent !== 'story_evt'),
+      ).toBe(true);
     });
 
     it('unlocated node reachable via explicit authored predecessor edge (DAG ordering)', () => {
@@ -1053,9 +1046,7 @@ describe('GraphCompiler', () => {
       const result = compileGraph(nodes);
       expect(result.errors).toHaveLength(0);
       const resolutions = result.storyGraphs[0].resolutions;
-      const outputRes = resolutions.find(
-        (r): r is GraphProviderOutput => r.type === 'output',
-      );
+      const outputRes = resolutions.find((r): r is GraphProviderOutput => r.type === 'output');
       expect(outputRes).toBeDefined();
       expect(outputRes!.outputId).toBe('o_a');
     });
@@ -1086,9 +1077,7 @@ describe('GraphCompiler', () => {
       const result = compileGraph(nodes);
       expect(result.errors).toHaveLength(0);
       const resolutions = result.storyGraphs[0].resolutions;
-      const outputRes = resolutions.find(
-        (r): r is GraphProviderOutput => r.type === 'output',
-      );
+      const outputRes = resolutions.find((r): r is GraphProviderOutput => r.type === 'output');
       expect(outputRes).toBeDefined();
       expect(outputRes!.outputId).toBe('o_cal');
     });
@@ -1116,16 +1105,24 @@ describe('GraphCompiler', () => {
           ],
           'main',
           [
-            { predecessor: 'unlocated_a', dependent: 'unlocated_reader', edgeClass: 'author_origin' },
-            { predecessor: 'unlocated_b', dependent: 'unlocated_reader', edgeClass: 'author_origin' },
+            {
+              predecessor: 'unlocated_a',
+              dependent: 'unlocated_reader',
+              edgeClass: 'author_origin',
+            },
+            {
+              predecessor: 'unlocated_b',
+              dependent: 'unlocated_reader',
+              edgeClass: 'author_origin',
+            },
           ],
         ),
       ];
       const result = compileGraph(nodes);
       // Two incomparable unlocated providers for the same key → DuplicateBranchProviderError
-      expect(
-        result.errors.filter((e) => e instanceof DuplicateBranchProviderError),
-      ).toHaveLength(1);
+      expect(result.errors.filter((e) => e instanceof DuplicateBranchProviderError)).toHaveLength(
+        1,
+      );
     });
   });
 
@@ -1150,7 +1147,12 @@ describe('GraphCompiler', () => {
       const result = compileGraph(nodes);
       const output = result.storyGraphs[0].outputs[0];
       expect(output.provenanceHash).toBeTruthy();
-      expect(output.effectiveCoordinate).toEqual({ type: 'storyTime', kind: 'point', clock: 'story', scalar: 1 });
+      expect(output.effectiveCoordinate).toEqual({
+        type: 'storyTime',
+        kind: 'point',
+        clock: 'story',
+        scalar: 1,
+      });
     });
   });
 

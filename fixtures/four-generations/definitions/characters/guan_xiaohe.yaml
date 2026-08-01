@@ -17,11 +17,6 @@ traits:
 - gluttonous
 - lecherous
 - cowardly
-initialState:
-  location: loc_guanjia
-  status: alive
-  condition: idle
-  emotionalState: ambitious_to_collaborate
 backstory: 祖上阔过，做过几任小官。一生最擅长的就是蝇营狗苟、趋炎附势。
 knownSecrets:
 - 告密导致钱默吟被捕

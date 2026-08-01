@@ -134,7 +134,6 @@ export {
   EntityMapper,
   InMemoryEntityRegistry,
   loadProjectConfig,
-  migrateProjectFile,
   readYamlFile,
   resolveTemporalContext,
 } from './entity/index.js';
@@ -165,11 +164,6 @@ export type { EventMap } from './event-bus.ts';
 // Event bus
 export { TypedEventBus } from './event-bus.ts';
 export { calculateISS } from './iss/index.js';
-export type { MigrationFn } from './migration/index.js';
-export {
-  CURRENT_SCHEMA_VERSION,
-  migrateToLatest,
-} from './migration/index.js';
 // Observability types only
 export type { LogContext, LogEntry, LogLevel, LogTransport } from './observability/logger.ts';
 export type {
@@ -198,7 +192,11 @@ export { writeValidationReport } from './reporter/index.js';
 // Review
 export { ReviewManager } from './review/index.js';
 export type { CommentFilter, StatusSummary } from './review/types.js';
-export { analysisResultSchema } from './schemas/analysis.js';
+export {
+  analysisObservationSchema,
+  analysisResultSchema,
+  buildAnalysisResultSchema,
+} from './schemas/analysis.js';
 export {
   expectedOutcomeManifestSchema,
   liveSmokeRecordSchema,
@@ -235,9 +233,9 @@ export {
 } from './schemas/review.ts';
 export type {
   AdjacencyList,
-  CompileNarrativeRuntimeInput,
   CompiledNarrativeRuntime,
   CompiledStoryRuntimeGraph,
+  CompileNarrativeRuntimeInput,
   DiscourseSceneSequenceEntry,
   ResolvedNarrativeTechniqueContract,
   StoryBoundaries,
@@ -248,15 +246,15 @@ export {
   buildStoryOrderIndex,
   compileDiscourseSceneSequence,
   compileNarrativeRuntime,
-  isProvenBefore,
-  resolveDiscourseBranch,
   compileStoryBoundaries,
   compileStoryBoundariesFromGraph,
   compileStoryRuntimeGraph,
   exportDAGtoDOT,
   exportDAGtoMermaid,
-  resolveNarrativeTechniques,
+  isProvenBefore,
   ReplayEngine,
+  resolveDiscourseBranch,
+  resolveNarrativeTechniques,
   StateManager,
 } from './state/index.js';
 export type { DirEntry, Storage, StorageWrite } from './storage/index.ts';

@@ -1,6 +1,6 @@
-import { ConfigError } from '../errors.ts';
-import { compareStoryCoordinates, factIdFrom } from '../entity/timestamp.ts';
 import type { TemporalContext } from '../entity/timestamp.ts';
+import { compareStoryCoordinates, factIdFrom } from '../entity/timestamp.ts';
+import { ConfigError } from '../errors.ts';
 import type {
   BranchPath,
   BranchSet,
@@ -55,6 +55,7 @@ function makeTransitionEvent(
     sceneType: 'linear',
     pov: { character: 'system', type: 'omniscient' },
     sceneBrief: `Apply choice ${choice.id}`,
+    beats: [`Apply choice ${choice.id}.`],
     preconditions: [],
     postconditions,
     threadProgress: [],
@@ -176,10 +177,13 @@ export function compileGameDialogueTree(
   markReachable(rootNode);
   if (reachable.size !== events.length) {
     const unreachable = events.find((event) => !reachable.has(event.id))!;
-    throw new ConfigError(`Game dialogue event '${unreachable.id}' is unreachable from '${root.id}'`, {
-      eventId: unreachable.id,
-      phase: 'game_dialogue_tree',
-    });
+    throw new ConfigError(
+      `Game dialogue event '${unreachable.id}' is unreachable from '${root.id}'`,
+      {
+        eventId: unreachable.id,
+        phase: 'game_dialogue_tree',
+      },
+    );
   }
 
   const leafPaths: BranchPath[] = [];

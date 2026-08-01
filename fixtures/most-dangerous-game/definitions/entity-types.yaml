@@ -1,0 +1,435 @@
+types:
+  character:
+    typeId: character
+    kind: character
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      cause_of_death:
+        attributeId: cause_of_death
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      chose_hunt:
+        attributeId: chose_hunt
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      condition:
+        attributeId: condition
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      emotionalState:
+        attributeId: emotionalState
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: emotional
+      found_hunting_trail:
+        attributeId: found_hunting_trail
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      heard_gunshots:
+        attributeId: heard_gunshots
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      hunt_commenced:
+        attributeId: hunt_commenced
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knife_lost_to_trap:
+        attributeId: knife_lost_to_trap
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_island_inhabited:
+        attributeId: knows_island_inhabited
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_ivan_deaf_mute:
+        attributeId: knows_ivan_deaf_mute
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_rainsford_identity:
+        attributeId: knows_rainsford_identity
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_ship_trap_island:
+        attributeId: knows_ship_trap_island
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_zaroff_hunts_men:
+        attributeId: knows_zaroff_hunts_men
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_zaroff_toying_with_him:
+        attributeId: knows_zaroff_toying_with_him
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_zaroff_tracking:
+        attributeId: knows_zaroff_tracking
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      location:
+        attributeId: location
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: location
+      lost_best_hound:
+        attributeId: lost_best_hound
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      met_ivan:
+        attributeId: met_ivan
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      met_zaroff:
+        attributeId: met_zaroff
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      inventory:
+        attributeId: inventory
+        valueType: string_map
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+      traits:
+        attributeId: traits
+        valueType: string_list
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      true_nature_revealed:
+        attributeId: true_nature_revealed
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      won_fight:
+        attributeId: won_fight
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  concept:
+    typeId: concept
+    kind: concept
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      description:
+        attributeId: description
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      value:
+        attributeId: value
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: identity
+    typedInvariants: []
+  location:
+    typeId: location
+    kind: location
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      bloodstains_identified:
+        attributeId: bloodstains_identified
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      cartridge_found:
+        attributeId: cartridge_found
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      controlledBy:
+        attributeId: controlledBy
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      crewMood:
+        attributeId: crewMood
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      destination:
+        attributeId: destination
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      hazard:
+        attributeId: hazard
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      hazards:
+        attributeId: hazards
+        valueType: string_list
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      height:
+        attributeId: height
+        valueType: number
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knownTrails:
+        attributeId: knownTrails
+        valueType: string_list
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      lazarus_killed_in_pit:
+        attributeId: lazarus_killed_in_pit
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      lightsOn:
+        attributeId: lightsOn
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      man_catcher_constructed:
+        attributeId: man_catcher_constructed
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      occupants:
+        attributeId: occupants
+        valueType: string_list
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      prisoners:
+        attributeId: prisoners
+        valueType: string_list
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      rainsford_on_board:
+        attributeId: rainsford_on_board
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      guardDogCount:
+        attributeId: guardDogCount
+        valueType: number
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      guardDogDescription:
+        attributeId: guardDogDescription
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      securityLevel:
+        attributeId: securityLevel
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+      tide:
+        attributeId: tide
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      timeOfDay:
+        attributeId: timeOfDay
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      type:
+        attributeId: type
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      view:
+        attributeId: view
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      weather:
+        attributeId: weather
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  rule:
+    typeId: rule
+    kind: rule
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      category:
+        attributeId: category
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      type:
+        attributeId: type
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      active:
+        attributeId: active
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: identity
+    typedInvariants: []

@@ -1,6 +1,7 @@
 import type {
   ChapterMetadata,
   CharacterDefinition,
+  EntityTypeCatalogSource,
   EventFile,
   FactionDefinition,
   ItemDefinition,
@@ -14,7 +15,6 @@ import type {
   TimeAnchor,
   WorldInitialState,
 } from '../types/index.js';
-
 // ============================================================================
 // ProjectData — aggregate of all project file data
 // ============================================================================
@@ -36,4 +36,10 @@ export interface ProjectData {
   discourseLedger: PlannedDiscourseLedger;
   /** Narrator assertions from definitions/assertions/ (DISCOURSE-1), indexed by id. */
   narratorAssertions: Record<string, NarratorAssertion>;
+  /**
+   * Author-facing entity type catalog source from definitions/entity-types.yaml.
+   * Serialized source only — never a live Zod object. Compiled fresh per call
+   * via compileEntityTypeCatalog (internal entity module).
+   */
+  entityTypeCatalogSource: EntityTypeCatalogSource;
 }

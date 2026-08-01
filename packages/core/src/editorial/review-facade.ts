@@ -2,6 +2,13 @@ import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import { z } from 'zod';
 import { loadProjectConfig } from '../entity/index.ts';
+import { ReviewManager } from '../review/manager.ts';
+import type { CommentFilter } from '../review/types.ts';
+import {
+  editorialMutationContextSchema,
+  editorialOperationV1Schema,
+} from '../schemas/editorial.ts';
+import { newReviewCommentSchema, reviewLedgerV1Schema } from '../schemas/review.ts';
 import { FsStorage } from '../storage/fs-storage.ts';
 import { computeContentHash } from '../storage/hash.ts';
 import type { Storage, StorageWrite } from '../storage/types.ts';
@@ -11,47 +18,42 @@ import type {
   EditorialOperationV1,
   EditorialRuntime,
 } from '../types/editorial.ts';
-import type {
-  NewReviewComment,
-  ReviewComment,
-  ReviewLedgerV1,
-} from '../types/review.ts';
-import type { CommentFilter } from '../review/types.ts';
-import { ReviewManager } from '../review/manager.ts';
-import {
-  editorialMutationContextSchema,
-  editorialOperationV1Schema,
-} from '../schemas/editorial.ts';
-import {
-  newReviewCommentSchema,
-  reviewLedgerV1Schema,
-} from '../schemas/review.ts';
+import type { NewReviewComment, ReviewComment, ReviewLedgerV1 } from '../types/review.ts';
 import { EditorialOperationError } from './errors.ts';
 import { canonicalJson } from './identity.ts';
-import { resolveProjectPaths, type ProjectPaths } from './paths.ts';
+import { type ProjectPaths, resolveProjectPaths } from './paths.ts';
 import { ProjectTransactionCoordinator, stableJson } from './transaction.ts';
 import { getEditorialWorkspace as createWorkspace } from './workspace.ts';
 
-const hashSchema = z.string().regex(/^[a-f0-9]{64}$/).nullable();
+const hashSchema = z
+  .string()
+  .regex(/^[a-f0-9]{64}$/)
+  .nullable();
 const reviewMutationBase = {
   projectDir: z.string().trim().min(1),
   mutation: editorialMutationContextSchema,
   expectedLedgerHash: hashSchema.optional(),
 };
-const addReviewRequestSchema = z.object({
-  ...reviewMutationBase,
-  input: newReviewCommentSchema,
-}).strict();
-const replaceReviewRequestSchema = z.object({
-  ...reviewMutationBase,
-  commentId: z.string().trim().min(1),
-  input: newReviewCommentSchema,
-}).strict();
-const updateReviewRequestSchema = z.object({
-  ...reviewMutationBase,
-  commentId: z.string().trim().min(1),
-  action: z.enum(['resolve', 'wontfix', 'reopen', 'escalate']),
-}).strict();
+const addReviewRequestSchema = z
+  .object({
+    ...reviewMutationBase,
+    input: newReviewCommentSchema,
+  })
+  .strict();
+const replaceReviewRequestSchema = z
+  .object({
+    ...reviewMutationBase,
+    commentId: z.string().trim().min(1),
+    input: newReviewCommentSchema,
+  })
+  .strict();
+const updateReviewRequestSchema = z
+  .object({
+    ...reviewMutationBase,
+    commentId: z.string().trim().min(1),
+    action: z.enum(['resolve', 'wontfix', 'reopen', 'escalate']),
+  })
+  .strict();
 
 interface ReviewContext {
   storage: Storage;
@@ -60,10 +62,7 @@ interface ReviewContext {
   manager: ReviewManager;
 }
 
-function reviewContext(
-  projectDir: string,
-  runtime?: EditorialRuntime,
-): ReviewContext {
+function reviewContext(projectDir: string, runtime?: EditorialRuntime): ReviewContext {
   const storage = runtime?.storage ?? new FsStorage();
   const config = loadProjectConfig(path.join(projectDir, 'nova.yaml'), storage);
   const paths = resolveProjectPaths(projectDir, config?.outputDir);
@@ -88,11 +87,7 @@ function validateLineTarget(
     context.storage,
   );
   const scene = workspace.inspectScene(input.target.id);
-  if (
-    scene.revisionId === null ||
-    scene.proseHash === null ||
-    scene.sceneContent === null
-  ) {
+  if (scene.revisionId === null || scene.proseHash === null || scene.sceneContent === null) {
     throw new EditorialOperationError(
       'SCENE_NOT_FOUND',
       `Line review target ${input.target.id} has no accepted scene`,
@@ -124,15 +119,10 @@ function existingMutationResult(
   operationId: string,
   requestHash: string,
 ): ReviewComment | null {
-  const operationPath = path.join(
-    context.paths.operationsDir,
-    `${operationId}.json`,
-  );
+  const operationPath = path.join(context.paths.operationsDir, `${operationId}.json`);
   const raw = context.storage.readOptional(operationPath);
   if (raw === null) return null;
-  const operation = editorialOperationV1Schema.parse(
-    JSON.parse(raw),
-  ) as EditorialOperationV1;
+  const operation = editorialOperationV1Schema.parse(JSON.parse(raw)) as EditorialOperationV1;
   if (
     operation.requestHash === requestHash &&
     operation.status === 'succeeded' &&
@@ -174,10 +164,7 @@ function commitReviewMutation(
     result,
     errors: [],
   };
-  const operationPath = path.join(
-    context.paths.operationsDir,
-    `${mutation.operationId}.json`,
-  );
+  const operationPath = path.join(context.paths.operationsDir, `${mutation.operationId}.json`);
   const writes: StorageWrite[] = [
     {
       type: 'put',
@@ -225,9 +212,7 @@ export function listReviewComments(
   request: { projectDir: string; filter?: CommentFilter },
   runtime?: EditorialRuntime,
 ): ReviewComment[] {
-  return reviewContext(request.projectDir, runtime).manager.getComments(
-    request.filter,
-  );
+  return reviewContext(request.projectDir, runtime).manager.getComments(request.filter);
 }
 
 export function addReviewComment(
@@ -241,17 +226,15 @@ export function addReviewComment(
 ): ReviewComment {
   const parsed = addReviewRequestSchema.parse(request);
   const context = reviewContext(parsed.projectDir, runtime);
-  const requestHash = computeContentHash(canonicalJson({
-    kind: 'add_review',
-    projectDir: parsed.projectDir,
-    input: parsed.input,
-    expectedLedgerHash: parsed.expectedLedgerHash ?? null,
-  }));
-  const existing = existingMutationResult(
-    context,
-    parsed.mutation.operationId,
-    requestHash,
+  const requestHash = computeContentHash(
+    canonicalJson({
+      kind: 'add_review',
+      projectDir: parsed.projectDir,
+      input: parsed.input,
+      expectedLedgerHash: parsed.expectedLedgerHash ?? null,
+    }),
   );
+  const existing = existingMutationResult(context, parsed.mutation.operationId, requestHash);
   if (existing) return existing;
   validateLineTarget(context, parsed.projectDir, parsed.input);
   const snapshot = context.manager.readLedger();
@@ -298,18 +281,16 @@ export function replaceReviewComment(
 ): ReviewComment {
   const parsed = replaceReviewRequestSchema.parse(request);
   const context = reviewContext(parsed.projectDir, runtime);
-  const requestHash = computeContentHash(canonicalJson({
-    kind: 'replace_review',
-    projectDir: parsed.projectDir,
-    commentId: parsed.commentId,
-    input: parsed.input,
-    expectedLedgerHash: parsed.expectedLedgerHash ?? null,
-  }));
-  const existing = existingMutationResult(
-    context,
-    parsed.mutation.operationId,
-    requestHash,
+  const requestHash = computeContentHash(
+    canonicalJson({
+      kind: 'replace_review',
+      projectDir: parsed.projectDir,
+      commentId: parsed.commentId,
+      input: parsed.input,
+      expectedLedgerHash: parsed.expectedLedgerHash ?? null,
+    }),
   );
+  const existing = existingMutationResult(context, parsed.mutation.operationId, requestHash);
   if (existing) return existing;
   validateLineTarget(context, parsed.projectDir, parsed.input);
   const snapshot = context.manager.readLedger();
@@ -318,9 +299,7 @@ export function replaceReviewComment(
     snapshot.contentHash,
     context.paths.reviewLedgerPath,
   );
-  const index = snapshot.ledger.comments.findIndex(
-    (comment) => comment.id === parsed.commentId,
-  );
+  const index = snapshot.ledger.comments.findIndex((comment) => comment.id === parsed.commentId);
   if (index < 0) {
     throw new EditorialOperationError(
       'REVIEW_NOT_FOUND',
@@ -379,18 +358,16 @@ export function updateReviewComment(
 ): ReviewComment {
   const parsed = updateReviewRequestSchema.parse(request);
   const context = reviewContext(parsed.projectDir, runtime);
-  const requestHash = computeContentHash(canonicalJson({
-    kind: 'update_review',
-    projectDir: parsed.projectDir,
-    commentId: parsed.commentId,
-    action: parsed.action,
-    expectedLedgerHash: parsed.expectedLedgerHash ?? null,
-  }));
-  const existing = existingMutationResult(
-    context,
-    parsed.mutation.operationId,
-    requestHash,
+  const requestHash = computeContentHash(
+    canonicalJson({
+      kind: 'update_review',
+      projectDir: parsed.projectDir,
+      commentId: parsed.commentId,
+      action: parsed.action,
+      expectedLedgerHash: parsed.expectedLedgerHash ?? null,
+    }),
   );
+  const existing = existingMutationResult(context, parsed.mutation.operationId, requestHash);
   if (existing) return existing;
   const snapshot = context.manager.readLedger();
   assertExpectedLedgerHash(
@@ -398,9 +375,7 @@ export function updateReviewComment(
     snapshot.contentHash,
     context.paths.reviewLedgerPath,
   );
-  const index = snapshot.ledger.comments.findIndex(
-    (comment) => comment.id === parsed.commentId,
-  );
+  const index = snapshot.ledger.comments.findIndex((comment) => comment.id === parsed.commentId);
   if (index < 0) {
     throw new EditorialOperationError(
       'REVIEW_NOT_FOUND',

@@ -1,6 +1,6 @@
 import type { Storage } from '../storage/index.ts';
-import type { BranchPath, BranchSet } from '../types/index.js';
 import type { SceneMetadataV1 } from '../types/editorial.ts';
+import type { BranchPath, BranchSet } from '../types/index.js';
 
 // ────────────────────────────────────────────────────────────────────────────
 // AssemblyError — typed error for assembly failures

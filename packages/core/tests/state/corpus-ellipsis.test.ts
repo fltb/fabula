@@ -5,6 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
+import { mapToNarrativeEllipsis } from '../../src/entity/mapper.ts';
 import {
   ellipsisProvenanceSchema,
   narrativeEllipsisFileSchema,
@@ -12,7 +13,6 @@ import {
   narrativeEventSchema,
   narrativeNodeSchema,
 } from '../../src/schemas/corpus.ts';
-import { mapToNarrativeEllipsis } from '../../src/entity/mapper.ts';
 
 // ─── Fixture Helpers ──────────────────────────────────────────────────────
 

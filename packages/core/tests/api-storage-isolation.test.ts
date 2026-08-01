@@ -4,8 +4,8 @@
 // Proves that:
 //   1. Two separate MemoryStorage instances at the same project path each
 //      produce fresh mutable runtime objects (registry, StateManager, state).
-//   2. Stable source data (ProjectData, events) are structurally equivalent
-//      across instances but never share object identity.
+//   2. Stable source data (ProjectData, authored events, runtimeEvents) are
+//      structurally equivalent across instances but never share object identity.
 //   3. The WeakMap-based projectCache isolates source data by Storage
 //      instance: the first backend's cache entry is invisible to the second.
 //   4. Writing project files to the second backend does not affect the first.
@@ -54,6 +54,44 @@ function setupMinimalProject(storage: MemoryStorage): void {
       '    sceneIds:',
       '      - E1',
       'entries: []',
+    ].join('\n'),
+  );
+
+  // entity-types.yaml (required — EntityMapper reads it via readYamlFile; the
+  // runtime kernel compiles it into the EntityTypeCatalog that write-policy
+  // validation checks, so the fixture must declare the character kind and the
+  // lifecycle attribute the baseline activation writes)
+  storage.write(
+    `${PROJECT_DIR}/definitions/entity-types.yaml`,
+    [
+      'types:',
+      '  character:',
+      '    typeId: character',
+      '    kind: character',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates: [active, inactive, retired]',
+      '        unsetAllowed: false',
+      '        semanticRole: lifecycle',
+      '      traits:',
+      '        attributeId: traits',
+      '        valueType: string_list',
+      '        requiredAt: never',
+      '        writePolicy: immutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
     ].join('\n'),
   );
 
@@ -109,6 +147,8 @@ function setupMinimalProject(storage: MemoryStorage): void {
       '  character: narrator',
       '  type: first_person',
       'sceneBrief: "A test scene."',
+      'beats:',
+      '  - "A test scene."',
       'preconditions: []',
       'expectedPostconditions: []',
     ].join('\n'),
@@ -138,6 +178,14 @@ describe('MemoryStorage — initializeProject storage isolation', () => {
     expect(resultA.state.entities).not.toBe(resultB.state.entities);
     expect(resultA.state.relationships).not.toBe(resultB.state.relationships);
     expect(resultA.state.knowledge).not.toBe(resultB.state.knowledge);
+    // Mapper, catalogs, runtime inputs, and compiled runtime are fresh per call
+    expect(resultA.mapper).not.toBe(resultB.mapper);
+    expect(resultA.runtimeEvents).not.toBe(resultB.runtimeEvents);
+    expect(resultA.runtimeEvents).toHaveLength(resultB.runtimeEvents.length);
+    expect(resultA.entityTypes).not.toBe(resultB.entityTypes);
+    expect(resultA.entityDeclarations).not.toBe(resultB.entityDeclarations);
+    expect(resultA.initialFacts).not.toBe(resultB.initialFacts);
+    expect(resultA.runtime).not.toBe(resultB.runtime);
 
     // ── Source data is structurally equivalent but cloned ────────────
     // Same project files → same source data.
@@ -180,13 +228,12 @@ describe('MemoryStorage — initializeProject storage isolation', () => {
     );
 
     const resultB = initializeProject(PROJECT_DIR, storageB);
-    // EntityMapper always prepends the synthetic genesis event from
-    // definitions/state_initial.yaml to authored chapter events.
-    expect(resultB.events).toHaveLength(2);
-    expect(resultB.events.map((event) => event.id)).toEqual([
-      'system:genesis',
-      'E1',
-    ]);
+    // events are the authored chapter events only; synthetic transitions
+    // (if any) live in runtimeEvents, never in the authored projection.
+    expect(resultB.events).toHaveLength(1);
+    expect(resultB.events.map((event) => event.id)).toEqual(['E1']);
+    expect(resultB.runtimeEvents.map((event) => event.id)).toEqual(['E1']);
+    expect(resultB.runtime.boundaries.orderedEventIds).toContain('E1');
     const authoredEvent = resultB.events.find((event) => event.id === 'E1');
     expect(authoredEvent?.id).toBe('E1');
   });
@@ -209,26 +256,22 @@ describe('MemoryStorage — initializeProject storage isolation', () => {
     // But each caller gets a separate structuredClone.
     expect(first.data).not.toBe(second.data);
     expect(first.events).not.toBe(second.events);
-    // Structural equivalence includes synthetic genesis plus authored E1.
-    expect(first.events).toHaveLength(2);
-    expect(second.events).toHaveLength(2);
-    expect(first.events.map((event) => event.id)).toEqual([
-      'system:genesis',
-      'E1',
-    ]);
-    expect(second.events.map((event) => event.id)).toEqual([
-      'system:genesis',
-      'E1',
-    ]);
+    // Structural equivalence: authored events only; synthetic transitions
+    // live in runtimeEvents (both calls compile the same route).
+    expect(first.events).toHaveLength(1);
+    expect(second.events).toHaveLength(1);
+    expect(first.events.map((event) => event.id)).toEqual(['E1']);
+    expect(second.events.map((event) => event.id)).toEqual(['E1']);
+    expect(first.runtimeEvents).not.toBe(second.runtimeEvents);
+    expect(first.runtimeEvents.map((event) => event.id)).toEqual(['E1']);
+    expect(second.runtimeEvents.map((event) => event.id)).toEqual(['E1']);
     const firstAuthoredEvent = first.events.find((event) => event.id === 'E1');
     const secondAuthoredEvent = second.events.find((event) => event.id === 'E1');
     expect(firstAuthoredEvent?.id).toBe(secondAuthoredEvent?.id);
 
     // ── Registry content is equivalent across calls ──────────────────
     // registry.load reads from storage, so both should have the same entities.
-    expect(first.registry.resolve('narrator')).not.toBe(
-      second.registry.resolve('narrator'),
-    );
+    expect(first.registry.resolve('narrator')).not.toBe(second.registry.resolve('narrator'));
     expect(first.registry.resolve('narrator')?.name).toBe(
       second.registry.resolve('narrator')?.name,
     );
@@ -259,6 +302,7 @@ describe('MemoryStorage — initializeProject storage isolation', () => {
     expect(second.data.config?.title).toBe('Modified Novel Title');
     expect(second.data).not.toBe(first.data);
     expect(second.events).not.toBe(first.events);
+    expect(second.runtimeEvents).not.toBe(first.runtimeEvents);
 
     // Fresh runtime objects still
     expect(second.registry).not.toBe(first.registry);

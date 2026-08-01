@@ -6,7 +6,8 @@ import { EntityMapper, readYamlFile } from '../../src/entity/index.ts';
 import { ConfigError } from '../../src/errors.ts';
 import { eventFileSchema } from '../../src/schemas/event.ts';
 import { worldInitialStateSchema } from '../../src/schemas/state-initial.ts';
-const event = `event: E1\nnarrativeOrder: 1\ntitle: Test\nstoryTime: day_1\npov:\n  character: narrator\n  type: first_person\nsceneBrief: test\npreconditions: []\nexpectedPostconditions: []\n`;
+
+const event = `event: E1\nnarrativeOrder: 1\ntitle: Test\nstoryTime: day_1\npov:\n  character: narrator\n  type: first_person\nsceneBrief: test\nbeats:\n  - test\npreconditions: []\nexpectedPostconditions: []\n`;
 const structuredEvent = `event: E2
 narrativeOrder: 2
 title: Structured timestamp
@@ -23,6 +24,8 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: test
+beats:
+  - test
 preconditions:
   - entity: hero
     attribute: location

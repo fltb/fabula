@@ -21,10 +21,5 @@ traits:
   - manipulative
   - grasping
   - cold
-initialState:
-  location: canterbury
-  status: alive
-  condition: clerk_at_wickfield_office
-  emotionalState: resentful_ambitious
 voiceNotes: "His speech is a masterpiece of ironic humility — endless professions of his 'umbleness' that are actually expressions of resentment and self-justification. He writhes and wriggles as he speaks, with much hand-wringing and bowing. His catchphrase: 'I am a very umble person.' He calls David 'Master Copperfield' or 'Mister Copperfield' with a sneer barely concealed."
 backstory: "Son of a sexton's widow, raised in the charity school where he learned his 'umbleness as a survival strategy. He is placed as a clerk with Mr Wickfield and gradually gains power over his employer. He systematically defrauds Wickfield, forging documents and manipulating the accounts. He attempts to force Agnes into marriage as part of his plan to take over the firm. He is exposed by Mr Micawber in a spectacular confrontation and ultimately imprisoned, though with the possibility of eventual release if he reforms."

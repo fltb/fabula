@@ -2,6 +2,7 @@
 // PluginHooksManager — Register and invoke plugin lifecycle hooks
 // ============================================================================
 
+import type { LLMProvider } from '../ai/types.ts';
 import type {
   BuildPromptInput,
   PluginContext,
@@ -10,22 +11,15 @@ import type {
   ProviderRegistry,
 } from './types.ts';
 import type { ValidatorRegistry } from './validator-registry.ts';
-import type { LLMProvider } from '../ai/types.ts';
 
 // ——— Decoration Validation ———
 
 const MAX_DECORATION_CONTENT_BYTES = 4096;
 const MAX_DECORATIONS_PER_PLUGIN = 10;
 
-function validateDecoration(
-  pluginName: string,
-  dec: PromptDecoration,
-  seenIds: Set<string>,
-): void {
+function validateDecoration(pluginName: string, dec: PromptDecoration, seenIds: Set<string>): void {
   if (seenIds.has(dec.id)) {
-    throw new Error(
-      `Plugin "${pluginName}" produced duplicate decoration id "${dec.id}"`,
-    );
+    throw new Error(`Plugin "${pluginName}" produced duplicate decoration id "${dec.id}"`);
   }
   seenIds.add(dec.id);
 
@@ -112,7 +106,9 @@ export class PluginHooksManager {
       if (hook.onLoad) {
         await hook.onLoad(this.context);
       }
-      const validatorsBefore = new Set(this.validatorRegistry.validators.map((validator) => validator.name));
+      const validatorsBefore = new Set(
+        this.validatorRegistry.validators.map((validator) => validator.name),
+      );
       if (hook.registerValidators) {
         hook.registerValidators(this.validatorRegistry);
       }
@@ -219,9 +215,7 @@ export class PluginHooksManager {
       const result = await fn(input);
 
       if (!Array.isArray(result)) {
-        throw new Error(
-          `Plugin "${hook.name}" ${hookName} did not return an array`,
-        );
+        throw new Error(`Plugin "${hook.name}" ${hookName} did not return an array`);
       }
 
       if (result.length > MAX_DECORATIONS_PER_PLUGIN) {

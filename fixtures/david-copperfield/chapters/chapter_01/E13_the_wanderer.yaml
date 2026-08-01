@@ -13,6 +13,13 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "David and his aunt have a serious conversation about recent events — the flight of Emily, the collapse of Miss Betsey's fortune, and the strange behaviour of Mr Wickfield's affairs. Mr Peggotty arrives in London, having searched for Emily across France and Italy without success. He is worn and weary but determined. David learns that Martha Endell, the disgraced Yarmouth girl, may know where Emily is hiding. With Mr Peggotty's consent, David and Martha go to find Emily at a house near the Thames where she has taken refuge after being abandoned by Steerforth. The chapter shows Mr Peggotty's extraordinary forgiveness — he welcomes Emily back not with reproach but with open arms."
+beats:
+  - "David and his aunt have a serious conversation about recent events — the flight of Emily, the collapse of Miss Betsey's fortune, and the strange behaviour of Mr Wickfield's affairs."
+  - "Mr Peggotty arrives in London, having searched for Emily across France and Italy without success."
+  - "He is worn and weary but determined."
+  - "David learns that Martha Endell, the disgraced Yarmouth girl, may know where Emily is hiding."
+  - "With Mr Peggotty's consent, David and Martha go to find Emily at a house near the Thames where she has taken refuge after being abandoned by Steerforth."
+  - "The chapter shows Mr Peggotty's extraordinary forgiveness — he welcomes Emily back not with reproach but with open arms."
 preconditions:
   - entity: emily
     attribute: status
@@ -64,13 +71,6 @@ foreshadowing:
     targetRevealChapter: 40
     thread: T4
 introduces:
-  - type: character
-    id: martha_endell
-    initialState:
-      location: london
-      status: outcast
-      condition: disgraced_but_hopeful
-      emotionalState: remorseful_determined
   - type: location
     id: thames_refuge
     initialState:

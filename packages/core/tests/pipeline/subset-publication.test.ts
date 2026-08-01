@@ -11,27 +11,31 @@
 // Uses MemoryStorage for deterministic, no-network tests.
 // ============================================================================
 
-import { describe, expect, it, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import YAML from 'yaml';
+import type { ProjectPaths } from '../../src/editorial/paths.ts';
+import { resolveProjectPaths } from '../../src/editorial/paths.ts';
+import type {
+  PromoteCandidateInput,
+  PublishOptions,
+  PublishScope,
+  ScopeEventData,
+  VerifiedHeadData,
+} from '../../src/editorial/publisher.ts';
+import {
+  buildSceneMetadataV1,
+  collectDerivedData,
+  EditorialPublisher,
+} from '../../src/editorial/publisher.ts';
+import { ProjectTransactionCoordinator } from '../../src/editorial/transaction.ts';
+import type { DerivedData } from '../../src/pipeline/output.ts';
 import { computeContentHash } from '../../src/storage/hash.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import { ProjectTransactionCoordinator } from '../../src/editorial/transaction.ts';
-import { EditorialPublisher, collectDerivedData, buildSceneMetadataV1 } from '../../src/editorial/publisher.ts';
-import { resolveProjectPaths } from '../../src/editorial/paths.ts';
-import type { ProjectPaths } from '../../src/editorial/paths.ts';
 import type {
   EditorialMutationContext,
   PublicationManifestV1,
   SceneRevisionEnvelopeV1,
 } from '../../src/types/editorial.ts';
-import type {
-  VerifiedHeadData,
-  ScopeEventData,
-  PromoteCandidateInput,
-  PublishOptions,
-  PublishScope,
-} from '../../src/editorial/publisher.ts';
-import type { DerivedData } from '../../src/pipeline/output.ts';
-import YAML from 'yaml';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -57,7 +61,10 @@ function storedFileHash(storage: MemoryStorage, filePath: string): string | null
 }
 
 /** Read and parse a stored JSON manifest. */
-function readManifest(storage: MemoryStorage, filePath: string): {
+function readManifest(
+  storage: MemoryStorage,
+  filePath: string,
+): {
   manifest: PublicationManifestV1;
   hash: string;
 } {
@@ -80,15 +87,22 @@ function makeHeadData(
     prose: overrides.prose ?? `Prose for ${overrides.eventId}`,
     proseHash: overrides.proseHash ?? computeContentHash(`Prose for ${overrides.eventId}`),
     sceneHash: overrides.sceneHash ?? computeContentHash(`Prose for ${overrides.eventId}`),
-    editorialBasisHash: overrides.editorialBasisHash ?? computeContentHash('basis-' + overrides.eventId),
+    editorialBasisHash:
+      overrides.editorialBasisHash ?? computeContentHash('basis-' + overrides.eventId),
     scopeHash: overrides.scopeHash ?? branchScopeHash,
-    validationIdentity: overrides.validationIdentity ?? computeContentHash('validation-' + overrides.eventId),
+    validationIdentity:
+      overrides.validationIdentity ?? computeContentHash('validation-' + overrides.eventId),
     proseSource: overrides.proseSource ?? 'llm',
     modelUsed: overrides.modelUsed,
     renderedAt: overrides.renderedAt ?? new Date().toISOString(),
     wordCount: overrides.wordCount ?? 100,
     editHistory: overrides.editHistory ?? [
-      { action: 'llm_generated', actor_id: actorId, operation_id: operationId, timestamp: new Date().toISOString() },
+      {
+        action: 'llm_generated',
+        actor_id: actorId,
+        operation_id: operationId,
+        timestamp: new Date().toISOString(),
+      },
     ],
     playerChoices: overrides.playerChoices,
     branchExistence: overrides.branchExistence ?? { type: 'all' },
@@ -102,9 +116,7 @@ function makeScopeEventData(eventId: string): ScopeEventData {
     threadProgress: [
       { thread: 'main-plot', advancement: 'started', progressAfter: 1, progressTotal: 10 },
     ],
-    foreshadowing: [
-      { hint: 'Something will happen', targetRevealChapter: 3 },
-    ],
+    foreshadowing: [{ hint: 'Something will happen', targetRevealChapter: 3 }],
     relationshipEffects: [],
     ruleEffects: [],
   };
@@ -224,12 +236,13 @@ function publishWithReadSet(
           path: entry,
           expectedHash: storedFileHash(storage, entry),
         }
-      : entry
+      : entry,
   );
   const candidates = options.candidates.map((candidate) => {
-    const sceneDir = `${paths.scenesDir}/chapter-${String(
-      candidate.chapterNumber,
-    ).padStart(2, '0')}`;
+    const sceneDir = `${paths.scenesDir}/chapter-${String(candidate.chapterNumber).padStart(
+      2,
+      '0',
+    )}`;
     const candidateReadSet = [
       ...(candidate.readSet ?? []),
       `${sceneDir}/${candidate.eventId}.md`,
@@ -237,9 +250,7 @@ function publishWithReadSet(
       ...(candidate.scene.renderRequest
         ? [`${sceneDir}/${candidate.eventId}_render_request.yaml`]
         : []),
-      ...(candidate.latestEnvelope
-        ? [`${paths.responsesDir}/${candidate.eventId}.json`]
-        : []),
+      ...(candidate.latestEnvelope ? [`${paths.responsesDir}/${candidate.eventId}.json`] : []),
     ].map((entry) =>
       typeof entry === 'string'
         ? {
@@ -247,7 +258,7 @@ function publishWithReadSet(
             path: entry,
             expectedHash: storedFileHash(storage, entry),
           }
-        : entry
+        : entry,
     );
     return { ...candidate, readSet: candidateReadSet };
   });
@@ -289,10 +300,7 @@ describe('EditorialPublisher — subset publication', () => {
     const manifest1 = makeInitialManifest();
     const result1 = publishWithReadSet(publisher, storage, paths, {
       scope,
-      candidates: [
-        makeCandidate('E1', 'rev-1', 1),
-        makeCandidate('E2', 'rev-2', 1),
-      ],
+      candidates: [makeCandidate('E1', 'rev-1', 1), makeCandidate('E2', 'rev-2', 1)],
       previousManifest: manifest1,
       previousManifestHash: null, // first publish — no stored manifest
       novelContent: '# Novel\n\nE1 prose\n\nE2 prose',
@@ -302,7 +310,10 @@ describe('EditorialPublisher — subset publication', () => {
     expect(result1.novelHash).not.toBeNull();
 
     // Verify derived files exist for both E1 and E2
-    const threadsYaml1 = readParsedYaml(storage, `${paths.derivedDir}/threads.yaml`) as Record<string, unknown>;
+    const threadsYaml1 = readParsedYaml(storage, `${paths.derivedDir}/threads.yaml`) as Record<
+      string,
+      unknown
+    >;
     expect(threadsYaml1).toHaveProperty('main-plot');
 
     // Second promotion: only E3 (new scene), E1's head must persist
@@ -331,7 +342,10 @@ describe('EditorialPublisher — subset publication', () => {
     expect(published.revision_ids).toHaveProperty('E3', 'rev-3');
 
     // Derived data should include thread entries from all three
-    const threadsYaml = readParsedYaml(storage, `${paths.derivedDir}/threads.yaml`) as Record<string, unknown>;
+    const threadsYaml = readParsedYaml(storage, `${paths.derivedDir}/threads.yaml`) as Record<
+      string,
+      unknown
+    >;
     expect(threadsYaml).toHaveProperty('main-plot');
   });
 
@@ -354,12 +368,18 @@ describe('EditorialPublisher — subset publication', () => {
     expect(result1.status).toBe('current');
 
     // Read the manifest from storage
-    const { manifest: manifestOnDisk, hash: manifestHash } = readManifest(storage, paths.publicationPath);
+    const { manifest: manifestOnDisk, hash: manifestHash } = readManifest(
+      storage,
+      paths.publicationPath,
+    );
 
     // Simulate a concurrent write to a scene file
     storage.write(
       `${PROJECT_DIR}/scenes/chapter-01/E1.yaml`,
-      YAML.stringify({ schema_version: 1, event: 'E1', narrative_order: 1, revision_id: 'rev-1b' }, { lineWidth: 120 }) + '\n',
+      YAML.stringify(
+        { schema_version: 1, event: 'E1', narrative_order: 1, revision_id: 'rev-1b' },
+        { lineWidth: 120 },
+      ) + '\n',
     );
 
     // Publish again — manifest hasn't changed so readSet passes.
@@ -395,13 +415,18 @@ describe('EditorialPublisher — subset publication', () => {
     });
 
     // Read the manifest from storage
-    const { manifest: manifestOnDisk, hash: manifestHash } = readManifest(storage, paths.publicationPath);
+    const { manifest: manifestOnDisk, hash: manifestHash } = readManifest(
+      storage,
+      paths.publicationPath,
+    );
 
     // Build a "blocked" manifest — reasons but same head
     const blockedManifest: PublicationManifestV1 = {
       ...manifestOnDisk,
       status: 'stale',
-      reasons: [{ code: 'REVISION_BLOCKED', message: 'Latest candidate was blocked by release gate' }],
+      reasons: [
+        { code: 'REVISION_BLOCKED', message: 'Latest candidate was blocked by release gate' },
+      ],
     };
 
     // Blocked manifest keeps rev-1 (no new head)
@@ -411,7 +436,9 @@ describe('EditorialPublisher — subset publication', () => {
     // previousManifestHash is the ORIGINAL stored hash (not the modified in-memory version).
     const result = publishWithReadSet(publisher, storage, paths, {
       scope,
-      candidates: [makeCandidate('E1', 'rev-2', 1, { sceneHash: computeContentHash('scene-rev2') })],
+      candidates: [
+        makeCandidate('E1', 'rev-2', 1, { sceneHash: computeContentHash('scene-rev2') }),
+      ],
       previousManifest: blockedManifest,
       previousManifestHash: manifestHash,
       novelContent: '# Novel\n\nE1 prose v2',
@@ -442,7 +469,10 @@ describe('EditorialPublisher — subset publication', () => {
     });
 
     // Read the manifest from storage for hash
-    const { manifest: manifestOnDisk, hash: manifestHash } = readManifest(storage, paths.publicationPath);
+    const { manifest: manifestOnDisk, hash: manifestHash } = readManifest(
+      storage,
+      paths.publicationPath,
+    );
 
     // Directly modify the novel output (simulating user edit)
     const editedNovel = '# Novel\n\nE1 prose (user edited)\n';
@@ -530,7 +560,9 @@ describe('EditorialPublisher — subset publication', () => {
       {
         eventId: 'E1',
         narrativeOrder: 1,
-        threadProgress: [{ thread: 'plot-a', advancement: 'started', progressAfter: 1, progressTotal: 5 }],
+        threadProgress: [
+          { thread: 'plot-a', advancement: 'started', progressAfter: 1, progressTotal: 5 },
+        ],
         foreshadowing: [],
         relationshipEffects: [],
         ruleEffects: [],
@@ -538,7 +570,9 @@ describe('EditorialPublisher — subset publication', () => {
       {
         eventId: 'E2',
         narrativeOrder: 2,
-        threadProgress: [{ thread: 'plot-b', advancement: 'started', progressAfter: 1, progressTotal: 3 }],
+        threadProgress: [
+          { thread: 'plot-b', advancement: 'started', progressAfter: 1, progressTotal: 3 },
+        ],
         foreshadowing: [],
         relationshipEffects: [],
         ruleEffects: [],

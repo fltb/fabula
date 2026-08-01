@@ -2,6 +2,8 @@
 // Novalistically — Branch System
 // ============================================================================
 
+export type { CompiledGameDialogueTree } from './game-dialogue-tree.ts';
+export { compileGameDialogueTree } from './game-dialogue-tree.ts';
 export {
   branchPathsEqual,
   branchPathToString,
@@ -9,5 +11,3 @@ export {
   isLinearNarrative,
 } from './path.ts';
 export { createBranchPoint, evaluateCondition, getAvailableChoices, includesPath } from './set.ts';
-export { compileGameDialogueTree } from './game-dialogue-tree.ts';
-export type { CompiledGameDialogueTree } from './game-dialogue-tree.ts';

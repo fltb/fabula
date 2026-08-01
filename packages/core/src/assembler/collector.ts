@@ -3,8 +3,8 @@ import { parse as parseYaml } from 'yaml';
 import { NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/count.ts';
 import { sceneMetadataV1Schema } from '../schemas/editorial.ts';
 import { FsStorage, type Storage } from '../storage/index.ts';
-import type { BranchSet } from '../types/index.js';
 import type { SceneMetadataV1 } from '../types/editorial.ts';
+import type { BranchSet } from '../types/index.js';
 import type { SceneEntry } from './types.js';
 import { AssemblyError, AssemblyErrorCode } from './types.js';
 
@@ -181,5 +181,4 @@ export class SceneCollector {
       .map((e) => path.join(dir, e.name))
       .sort();
   }
-
 }

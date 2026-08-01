@@ -17,10 +17,6 @@ traits:
   - well_connected
   - talkative
   - complicit
-initialState:
-  location: weijia_shan
-  status: alive
-  condition: well
 voiceNotes: "说话圆滑、世故，善于用'可是……'、'这实在……'之类的过渡语为自己开脱。她既是祥林嫂的邻居，又是婆婆的同谋，却能两面都说得通。她对四婶描述婆婆绑架行动的经过时，语气近乎欣赏：'他的婆婆倒是精明强干的女人呵，很有打算……你看，这多么好打算？'"
 backstory: "卫老婆子是卫家山的居民，与祥林嫂的婆婆家和祥林嫂本人都有来往。她多次来往于卫家山和鲁镇之间，熟悉两家的情况，利用熟人网络充当劳动力中介。她不是故意害人——只是在这个系统中，像她这样的中间人靠人情和灵活生存。她从未反思过自己在祥林嫂悲剧中的同谋角色。"
 knownSecrets:

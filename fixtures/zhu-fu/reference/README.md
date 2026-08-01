@@ -14,7 +14,7 @@ The approved reference set enforces the Stage 1 deterministic loading contract:
 - Each issue identity is `validator + eventId + category + entityId? + attribute? + severity`. Matching is identity-based, not positional or message-based.
 - Provenance manifest (`provenance.json`) records every prose artifact as **`generated`** or **`source_quotation`** with the required fields for each kind.
 - `generated` entries require `runHash`; `source_quotation` entries require `edition`, `url`, `rights`, `sourceHash`, and an `overlap` range.
-- **This reference data is entirely mock/generated.** No prose is a source quotation. No human review evidence, live attestation, or provider credentials are included. The `expected-outcomes.json` allowlist is empty — actual validation runs will be compared by the benchmark runner against this manifest.
+- **This reference data is entirely mock/generated.** No prose is a source quotation. No human review evidence, live attestation, or provider credentials are included. The `expected-outcomes.json` allowlist carries the approved mock issue identities — actual validation runs will be compared by the benchmark runner against this manifest.
 
 ## Approval Boundary
 

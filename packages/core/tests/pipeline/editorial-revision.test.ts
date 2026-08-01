@@ -25,55 +25,63 @@ import { describe, expect, it, vi } from 'vitest';
 import { MockProvider } from '../../src/ai/providers/mock.ts';
 import { RenderPipeline } from '../../src/pipeline/render.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 // Mock schemas/index to break a pre-existing circular dependency
 // between schemas/editorial.ts ← schemas/analysis.ts → validator/index.ts
 // before the pipeline module loads.
 vi.mock('../../src/schemas/index.ts', () => ({}));
 
+import type { CompletionRequest } from '../../src/ai/types.ts';
 // Type-only imports for fixture helpers (no runtime loading)
 import type {
+  CompiledSceneContract,
   ContextPackage,
   NarrativeEvent,
+  ProviderFactory,
   RenderJob,
   RevisionContext,
-  ProviderFactory,
-  CompiledSceneContract,
 } from '../../src/types/index.ts';
-import type { CompletionRequest } from '../../src/ai/types.ts';
 
 // ─── Test helpers ─────────────────────────────────────────────────────────────
 
+const SAMPLE_PASS2_PAYLOAD: Record<string, unknown> = {
+  postconditions: { covered: [], dropped: [] },
+  preconditions: { violated: [] },
+  pov: { consistent: true, leaks: [] },
+  inventedDetails: [],
+  quality: {
+    proseScore: 80,
+    maxScore: 100,
+    strengths: ['clear'],
+    weaknesses: [],
+    estimatedWordCount: 150,
+  },
+  threadProgressAchieved: [],
+  foreshadowingDeployed: [],
+  narrativeChecks: [],
+  appearanceChecks: [],
+  characterReferences: [],
+  tenseDetected: 'past',
+  conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+  ruleChecks: [],
+  knowledgeChecks: [],
+  checklistResults: [],
+  durationDetected: 'scene',
+  frequencyDetected: 'singulative',
+  voiceDetected: { level: 'extradiegetic', relation: 'heterodiegetic' },
+  anachronyDetected: 'none',
+  focalizationDetected: 'zero',
+};
+
+// Evidence must be an exact substring of every prose variant in this file
+// ('prose' is present in all of them). Protocol is replaced by MockProvider's
+// echo; the canned protocol only serves direct evaluateProseCandidate calls.
 const SAMPLE_PASS2 = JSON.stringify({
   eventId: 'evt_revision',
-  analysis: {
-    postconditions: { covered: [], dropped: [] },
-    preconditions: { violated: [] },
-    pov: { consistent: true, leaks: [] },
-    inventedDetails: [],
-    quality: {
-      proseScore: 80,
-      maxScore: 100,
-      strengths: ['clear'],
-      weaknesses: [],
-      estimatedWordCount: 150,
-    },
-    threadProgressAchieved: [],
-    foreshadowingDeployed: [],
-    narrativeChecks: [],
-    appearanceChecks: [],
-    characterReferences: [],
-    tenseDetected: 'past',
-    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-    ruleChecks: [],
-    knowledgeChecks: [],
-    checklistResults: [],
-    durationDetected: 'scene',
-    frequencyDetected: 'singulative',
-    voiceDetected: { level: 'extradiegetic', relation: 'heterodiegetic' },
-    anachronyDetected: 'none',
-    focalizationDetected: 'zero',
-  },
+  protocol: makeProtocol('prose'),
+  observations: makeObservations(SAMPLE_PASS2_PAYLOAD, 'prose'),
+  analysis: SAMPLE_PASS2_PAYLOAD,
 });
 
 const BASE_CONTRACT: CompiledSceneContract = {
@@ -98,13 +106,14 @@ function makeEvent(): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'entity_1', type: 'third_person_limited' },
     sceneBrief: 'Test scene',
+    beats: ['Test scene'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
     foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
-    source: 'genesis',
+    source: 'event_file',
     branchExistence: { type: 'all' as const },
     participants: { entities: ['entity_1'] },
     styleGuidance: {},
@@ -122,6 +131,7 @@ function makeContext(): ContextPackage {
     },
     sceneSpec: {
       goal: 'Test goal',
+      beats: ['Test goal'],
       povType: 'third_person',
       povCharacter: 'entity_1',
     },
@@ -140,7 +150,14 @@ function makeContext(): ContextPackage {
 function makeJob(overrides?: Partial<RenderJob>): RenderJob {
   return {
     event: makeEvent(),
-    stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+    stateBefore: {
+      entities: {},
+      relationships: {},
+      knowledge: {},
+      threads: {},
+      rules: {},
+      facts: [],
+    },
     context: makeContext(),
     graphHash: 'a00',
     chapter: 1,
@@ -179,6 +196,7 @@ describe('RenderPipeline — provider exclusivity', () => {
           model: 'test-model',
           cacheDir: '/tmp/test-cache',
           storage: new MemoryStorage(),
+          validatorPolicyId: 'test-policy-v1',
         }),
     ).toThrow('PROVIDER_REQUIRED');
   });
@@ -194,6 +212,7 @@ describe('RenderPipeline — provider exclusivity', () => {
       model: 'test-model',
       cacheDir: '/tmp/test-cache',
       storage: new MemoryStorage(),
+      validatorPolicyId: 'test-policy-v1',
     });
     expect(pipeline).toBeInstanceOf(mod.RenderPipeline);
   });
@@ -212,6 +231,7 @@ describe('RenderPipeline — provider exclusivity', () => {
       model: 'test-model',
       cacheDir: '/tmp/test-cache',
       storage: new MemoryStorage(),
+      validatorPolicyId: 'test-policy-v1',
     });
     expect(pipeline).toBeInstanceOf(mod.RenderPipeline);
   });
@@ -233,9 +253,11 @@ describe('RenderPipeline — lazy provider creation', () => {
     const populatePipeline = new mod.RenderPipeline({
       provider: populateProvider,
       model: 'test-model',
+      providerProfile: 'test-profile',
       cacheDir: '/tmp/test-cache',
       storage,
       skipCache: false,
+      validatorPolicyId: 'test-policy-v1',
     });
     await populatePipeline.renderScene(makeJob());
 
@@ -249,9 +271,11 @@ describe('RenderPipeline — lazy provider creation', () => {
     const cachedPipeline = new mod.RenderPipeline({
       providerFactory: factory,
       model: 'test-model',
+      providerProfile: 'test-profile',
       cacheDir: '/tmp/test-cache',
       storage,
       skipCache: false,
+      validatorPolicyId: 'test-policy-v1',
     });
     const result = await cachedPipeline.renderScene(makeJob());
 
@@ -287,6 +311,7 @@ describe('RenderPipeline — lazy provider creation', () => {
       cacheDir: '/tmp/test-cache',
       storage: new MemoryStorage(),
       skipCache: true,
+      validatorPolicyId: 'test-policy-v1',
     });
     const result = await pipeline.renderScene(makeJob());
 
@@ -316,6 +341,7 @@ describe('RenderPipeline — PROVIDER_REQUIRED', () => {
       cacheDir: '/tmp/test-cache',
       storage: new MemoryStorage(),
       skipCache: true,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     // Pipeline catches PROVIDER_REQUIRED internally and returns a result with errors.
@@ -333,6 +359,7 @@ describe('RenderPipeline — PROVIDER_REQUIRED', () => {
       model: 'test-model',
       cacheDir: '/tmp/test-cache',
       storage: new MemoryStorage(),
+      validatorPolicyId: 'test-policy-v1',
     });
     expect(pipeline).toBeInstanceOf(mod.RenderPipeline);
   });
@@ -357,6 +384,7 @@ describe('RenderPipeline — revision context', () => {
       cacheDir: '/tmp/test-cache',
       storage,
       skipCache: false,
+      validatorPolicyId: 'test-policy-v1',
     });
     await populatePipeline.renderScene(makeJob());
 
@@ -368,6 +396,7 @@ describe('RenderPipeline — revision context', () => {
       cacheDir: '/tmp/test-cache',
       storage,
       skipCache: false,
+      validatorPolicyId: 'test-policy-v1',
     });
     const revContext: RevisionContext = {
       baseRevisionId: 'rev_001',
@@ -417,6 +446,7 @@ describe('RenderPipeline — revision context', () => {
       cacheDir: '/tmp/test-cache',
       storage,
       skipCache: true,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     await pipeline.renderScene(
@@ -449,11 +479,10 @@ describe('RenderPipeline — revision context', () => {
       cacheDir: '/tmp/manual-candidate-cache',
       storage,
       skipCache: false,
+      validatorPolicyId: 'test-policy-v1',
     });
 
-    const result = await pipeline.renderScene(
-      makeJob({ proseCandidate: 'Human-authored prose.' }),
-    );
+    const result = await pipeline.renderScene(makeJob({ proseCandidate: 'Human-authored prose.' }));
 
     expect(result.prose).toBe('Human-authored prose.');
     expect(result.llmPass1).toEqual({
@@ -494,6 +523,7 @@ describe('RenderPipeline — AbortSignal propagation', () => {
       storage: new MemoryStorage(),
       skipCache: true,
       signal: controller.signal,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     await pipeline.renderScene(makeJob()).catch(() => {});
@@ -528,6 +558,7 @@ describe('RenderPipeline — AbortSignal propagation', () => {
       storage: new MemoryStorage(),
       skipCache: true,
       signal: controller.signal,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     await pipeline.renderScene(makeJob()).catch(() => {});
@@ -563,6 +594,7 @@ describe('RenderPipeline — AbortSignal propagation', () => {
       storage: new MemoryStorage(),
       skipCache: true,
       signal: pipelineController.signal,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     await pipeline.renderScene(makeJob(), perCallController.signal).catch(() => {});
@@ -584,7 +616,14 @@ describe('evaluateProseCandidate', () => {
     const result = mod.evaluateProseCandidate({
       prose: 'Test prose.',
       event: makeEvent(),
-      stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      stateBefore: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       context: makeContext(),
       analysisRaw: SAMPLE_PASS2,
       chapter: 1,
@@ -604,7 +643,14 @@ describe('evaluateProseCandidate', () => {
     const result = mod.evaluateProseCandidate({
       prose: 'Test prose.',
       event: makeEvent(),
-      stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      stateBefore: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       context: makeContext(),
       analysisRaw: null,
       chapter: 1,
@@ -622,7 +668,14 @@ describe('evaluateProseCandidate', () => {
     const result = mod.evaluateProseCandidate({
       prose: 'Test prose.',
       event: makeEvent(),
-      stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      stateBefore: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       context: makeContext(),
       analysisRaw: '',
       chapter: 1,
@@ -639,7 +692,14 @@ describe('evaluateProseCandidate', () => {
     const result = mod.evaluateProseCandidate({
       prose: 'Test prose.',
       event: makeEvent(),
-      stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      stateBefore: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       context: makeContext(),
       analysisRaw: 'not-json',
       chapter: 1,
@@ -658,7 +718,14 @@ describe('evaluateProseCandidate', () => {
     const result = mod.evaluateProseCandidate({
       prose: 'Test prose.',
       event: makeEvent(),
-      stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      stateBefore: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       context: makeContext(),
       analysisRaw: badJson,
       chapter: 1,
@@ -675,7 +742,14 @@ describe('evaluateProseCandidate', () => {
     const result = mod.evaluateProseCandidate({
       prose: 'Test prose.',
       event: makeEvent(),
-      stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      stateBefore: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       context: makeContext(),
       analysisRaw: null,
       chapter: 1,
@@ -692,7 +766,14 @@ describe('evaluateProseCandidate', () => {
     const result = mod.evaluateProseCandidate({
       prose: 'Test prose.',
       event: makeEvent(),
-      stateBefore: { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] },
+      stateBefore: {
+        entities: {},
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      },
       context: makeContext(),
       analysisRaw: null,
       chapter: 1,
@@ -716,15 +797,15 @@ describe('BatchRenderPipeline — signal propagation', () => {
     const capturedSignals: Array<AbortSignal | undefined> = [];
 
     const capturingPipeline = {
-      renderAll: vi.fn().mockImplementation(
-        (_jobs: RenderJob[], signal?: AbortSignal) => {
-          capturedSignals.push(signal);
-          return Promise.resolve([] as never[]);
-        },
-      ),
+      renderAll: vi.fn().mockImplementation((_jobs: RenderJob[], signal?: AbortSignal) => {
+        capturedSignals.push(signal);
+        return Promise.resolve([] as never[]);
+      }),
     };
 
-    const batch = new BatchRenderPipeline(capturingPipeline as unknown as import('../../src/pipeline/render.ts').RenderPipeline);
+    const batch = new BatchRenderPipeline(
+      capturingPipeline as unknown as import('../../src/pipeline/render.ts').RenderPipeline,
+    );
     await batch.renderBatched([makeJob(), makeJob()], {
       batchSize: 1,
       windowSize: 1,
@@ -754,18 +835,22 @@ describe('RenderPipeline — mixed cache hit/miss lazy creation', () => {
     const populatePipeline = new mod.RenderPipeline({
       provider: populateProvider,
       model: 'test-model',
+      providerProfile: 'test-profile',
       cacheDir: '/tmp/test-cache',
       storage,
       skipCache: false,
+      validatorPolicyId: 'test-policy-v1',
     });
     await populatePipeline.renderScene(makeJob());
 
     // Fresh pipeline with NO provider or factory — cache should still hit
     const cachedPipeline = new mod.RenderPipeline({
       model: 'test-model',
+      providerProfile: 'test-profile',
       cacheDir: '/tmp/test-cache',
       storage,
       skipCache: false,
+      validatorPolicyId: 'test-policy-v1',
     });
     const result = await cachedPipeline.renderScene(makeJob());
 
@@ -784,9 +869,11 @@ describe('RenderPipeline — mixed cache hit/miss lazy creation', () => {
     const populatePipeline = new mod.RenderPipeline({
       provider: populateProvider,
       model: 'test-model',
+      providerProfile: 'test-profile',
       cacheDir: '/tmp/test-cache',
       storage,
       skipCache: false,
+      validatorPolicyId: 'test-policy-v1',
     });
     await populatePipeline.renderScene(makeJob({ event: { ...makeEvent(), id: 'evt_cached' } }));
 
@@ -807,23 +894,31 @@ describe('RenderPipeline — mixed cache hit/miss lazy creation', () => {
     const pipeline = new mod.RenderPipeline({
       providerFactory: factory,
       model: 'test-model',
+      providerProfile: 'test-profile',
       cacheDir: '/tmp/test-cache',
       storage,
       skipCache: false,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     // Render cache hit
-    const hitResult = await pipeline.renderScene(makeJob({ event: { ...makeEvent(), id: 'evt_cached' } }));
+    const hitResult = await pipeline.renderScene(
+      makeJob({ event: { ...makeEvent(), id: 'evt_cached' } }),
+    );
     expect(hitResult.cacheHit).toBe(true);
     expect(factoryCreate).not.toHaveBeenCalled();
 
     // Render cache miss — triggers factory creation
-    const missResult = await pipeline.renderScene(makeJob({ event: { ...makeEvent(), id: 'evt_miss' } }));
+    const missResult = await pipeline.renderScene(
+      makeJob({ event: { ...makeEvent(), id: 'evt_miss' } }),
+    );
     expect(missResult.cacheHit).toBe(false);
     expect(factoryCreate).toHaveBeenCalledTimes(1);
 
     // Another cache hit — still no additional factory call
-    const hit2Result = await pipeline.renderScene(makeJob({ event: { ...makeEvent(), id: 'evt_cached' } }));
+    const hit2Result = await pipeline.renderScene(
+      makeJob({ event: { ...makeEvent(), id: 'evt_cached' } }),
+    );
     expect(hit2Result.cacheHit).toBe(true);
     expect(factoryCreate).toHaveBeenCalledTimes(1);
   });
@@ -843,6 +938,7 @@ describe('RenderPipeline — PROVIDER_REQUIRED non-retryable', () => {
       cacheDir: '/tmp/test-cache',
       storage: new MemoryStorage(),
       skipCache: true,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     const result = await pipeline.renderScene(makeJob());
@@ -883,6 +979,7 @@ describe('RenderPipeline — signal in each provider phase', () => {
       skipCache: true,
       signal: controller.signal,
       doubleRunVerification: true,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     await pipeline.renderScene(makeJob()).catch(() => {});
@@ -894,7 +991,8 @@ describe('RenderPipeline — signal in each provider phase', () => {
     }
     // Verify at least one pass1, one pass2, and one verify request
     const verifySignals = capturedSignals.filter((_, i) => {
-      const phase = i < capturedSignals.length - 1 && capturedSignals.length > 2 ? 'mixed' : 'unknown';
+      const phase =
+        i < capturedSignals.length - 1 && capturedSignals.length > 2 ? 'mixed' : 'unknown';
       return true; // All must carry the signal — fine-grained check below
     });
     expect(capturedSignals.length).toBeGreaterThanOrEqual(3); // pass1 + pass2 + verify
@@ -922,6 +1020,7 @@ describe('RenderPipeline — no calls after abort', () => {
       storage: new MemoryStorage(),
       skipCache: true,
       signal: controller.signal,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     const result = await pipeline.renderScene(makeJob());
@@ -930,7 +1029,9 @@ describe('RenderPipeline — no calls after abort', () => {
     expect(result.providerCalls.length).toBe(0);
     expect(provider.calls.length).toBe(0);
     expect(result.needsReview).toBe(true);
-    expect(result.errors.some((e: string) => e.includes('cancelled') || e.includes('abort'))).toBe(true);
+    expect(result.errors.some((e: string) => e.includes('cancelled') || e.includes('abort'))).toBe(
+      true,
+    );
   });
 
   it('stops rendering mid-retry when abort signal fires', async () => {
@@ -959,6 +1060,7 @@ describe('RenderPipeline — no calls after abort', () => {
       storage: new MemoryStorage(),
       skipCache: true,
       signal: controller.signal,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     const result = await pipeline.renderScene(makeJob());
@@ -985,25 +1087,22 @@ describe('BatchRenderPipeline — stops scheduling after abort', () => {
     let renderCallCount = 0;
 
     const capturingPipeline = {
-      renderAll: vi.fn().mockImplementation(
-        async (_jobs: RenderJob[], signal?: AbortSignal) => {
-          renderCallCount++;
-          // Abort after first batch
-          controller.abort();
-          return Promise.resolve([] as never[]);
-        },
-      ),
+      renderAll: vi.fn().mockImplementation(async (_jobs: RenderJob[], signal?: AbortSignal) => {
+        renderCallCount++;
+        // Abort after first batch
+        controller.abort();
+        return Promise.resolve([] as never[]);
+      }),
     };
 
-    const batch = new BatchRenderPipeline(capturingPipeline as unknown as import('../../src/pipeline/render.ts').RenderPipeline);
-    const result = await batch.renderBatched(
-      [makeJob(), makeJob(), makeJob(), makeJob()],
-      {
-        batchSize: 1,
-        windowSize: 2,
-        signal: controller.signal,
-      },
+    const batch = new BatchRenderPipeline(
+      capturingPipeline as unknown as import('../../src/pipeline/render.ts').RenderPipeline,
     );
+    const result = await batch.renderBatched([makeJob(), makeJob(), makeJob(), makeJob()], {
+      batchSize: 1,
+      windowSize: 2,
+      signal: controller.signal,
+    });
 
     // Only the first batch should have been submitted; abort stops scheduling
     expect(renderCallCount).toBe(1);

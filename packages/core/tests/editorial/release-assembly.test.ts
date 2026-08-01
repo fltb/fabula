@@ -10,17 +10,51 @@ import {
   renderNovel,
   resolveProjectPaths,
 } from '../../src/index.ts';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 const PROJECT = '/release-assembly-project';
 
 function seedProject(storage: MemoryStorage): void {
   storage.write(
     `${PROJECT}/nova.yaml`,
-    'project: release-assembly\nschemaVersion: 1\ntitle: "Release Assembly"\nauthor: "Tester"\ndefaultModel: mock-pass2\n',
+    'project: release-assembly\ntitle: "Release Assembly"\nauthor: "Tester"\ndefaultModel: mock-pass2\n',
   );
   storage.write(
     `${PROJECT}/definitions/state_initial.yaml`,
     'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n',
+  );
+  storage.write(
+    `${PROJECT}/definitions/entity-types.yaml`,
+    [
+      'types:',
+      '  character:',
+      '    typeId: character',
+      '    kind: character',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates: [active, inactive, retired]',
+      '        unsetAllowed: false',
+      '        semanticRole: lifecycle',
+      '      traits:',
+      '        attributeId: traits',
+      '        valueType: string_list',
+      '        requiredAt: never',
+      '        writePolicy: mutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+    ].join('\n'),
   );
   storage.write(
     `${PROJECT}/definitions/characters/alice.yaml`,
@@ -32,7 +66,7 @@ function seedProject(storage: MemoryStorage): void {
   );
   storage.write(
     `${PROJECT}/chapters/chapter_01/E001.yaml`,
-    'event: E001\nformatVersion: 1\nnarrativeOrder: 1\ntitle: "Opening"\nstoryTime: "day 1"\nsceneBrief: "Alice begins."\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n',
+    'event: E001\nnarrativeOrder: 1\ntitle: "Opening"\nintroduces:\n  - type: character\n    id: alice\n    initialState: {}\nstoryTime: "day 1"\nsceneBrief: "Alice begins."\nbeats:\n  - "Alice begins."\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n',
   );
 
   // Mandatory discourse ledger (DISCOURSE-2)
@@ -51,31 +85,35 @@ function seedProject(storage: MemoryStorage): void {
 }
 
 function analysis(): AnalysisResult {
+  const payload: Record<string, unknown> = {
+    postconditions: { covered: [], dropped: [] },
+    preconditions: { violated: [] },
+    pov: { consistent: true, leaks: [] },
+    inventedDetails: [],
+    quality: {
+      proseScore: 8,
+      maxScore: 10,
+      strengths: ['clear'],
+      weaknesses: [],
+      estimatedWordCount: 80,
+    },
+    threadProgressAchieved: [],
+    foreshadowingDeployed: [],
+    narrativeChecks: [],
+    appearanceChecks: [],
+    characterReferences: [],
+    tenseDetected: 'past',
+    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+    ruleChecks: [],
+    knowledgeChecks: [],
+    checklistResults: [],
+  };
+  const prose = 'Alice entered quietly and closed the door behind her.';
   return {
     eventId: 'E001',
-    analysis: {
-      postconditions: { covered: [], dropped: [] },
-      preconditions: { violated: [] },
-      pov: { consistent: true, leaks: [] },
-      inventedDetails: [],
-      quality: {
-        proseScore: 8,
-        maxScore: 10,
-        strengths: ['clear'],
-        weaknesses: [],
-        estimatedWordCount: 80,
-      },
-      threadProgressAchieved: [],
-      foreshadowingDeployed: [],
-      narrativeChecks: [],
-      appearanceChecks: [],
-      characterReferences: [],
-      tenseDetected: 'past',
-      conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-      ruleChecks: [],
-      knowledgeChecks: [],
-      checklistResults: [],
-    },
+    protocol: makeProtocol(prose),
+    observations: makeObservations(payload, prose),
+    analysis: payload,
   };
 }
 

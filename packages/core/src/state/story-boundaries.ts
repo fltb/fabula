@@ -5,6 +5,7 @@
 import { createEmptyBranchPath } from '../branch/index.js';
 import type { BranchPath } from '../types/branch.js';
 import type {
+  EntityCatalogContext,
   Fact,
   NarrativeEvent,
   SceneStoryCoordinate,
@@ -32,7 +33,7 @@ export interface StoryBoundaries {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** The common genesis state for replay and render-boundary compilation. */
+/** The common empty state for replay and render-boundary compilation. */
 export function emptyWorldState(): WorldState {
   return {
     entities: {},
@@ -55,10 +56,11 @@ function applyBaseline(
   initialFacts: readonly Fact[],
   initialThreads: readonly { id: string }[],
   branchPath: BranchPath,
+  catalogs: EntityCatalogContext,
 ): Map<string, Set<string>> {
   const lifecycleChangesByCoordinate = new Map<string, Set<string>>();
 
-  applyInitialFacts(state, initialFacts, { branchPath });
+  applyInitialFacts(state, initialFacts, { branchPath, catalogs });
   for (const thread of initialThreads) {
     state.threads[thread.id] = {
       threadId: thread.id as ThreadId,
@@ -92,11 +94,12 @@ function applyBaseline(
  * @param initialThreads - Baseline thread declarations.
  */
 export function compileStoryBoundaries(
-  events: NarrativeEvent[],
+  events: readonly NarrativeEvent[],
   initialFacts: readonly Fact[],
   storyAdjacency: AdjacencyList,
+  catalogs: EntityCatalogContext,
   branchPath?: BranchPath,
-  initialThreads?: Array<{ id: string }>,
+  initialThreads?: readonly { id: string }[],
   coordinatesByEventId?: ReadonlyMap<string, SceneStoryCoordinate>,
 ): StoryBoundaries {
   const selectedBranch = branchPath ?? createEmptyBranchPath();
@@ -118,13 +121,14 @@ export function compileStoryBoundaries(
   for (const targetId of order.topologicalOrder) {
     const event = eventsById.get(targetId)!;
     const state = emptyWorldState();
-    const lifecycleGuard = applyBaseline(state, initialFacts, threadList, selectedBranch);
+    const lifecycleGuard = applyBaseline(state, initialFacts, threadList, selectedBranch, catalogs);
 
     // Replay all events that are proven-before this target, in topological order
     for (const candidateId of order.topologicalOrder) {
       if (candidateId === targetId) break;
       if (isProvenBefore(candidateId, targetId, order)) {
         applyNarrativeEvent(state, eventsById.get(candidateId)!, {
+          catalogs,
           branchPath: selectedBranch,
           lifecycleChangesByCoordinate: lifecycleGuard,
           storyCoordinate: coordinatesByEventId?.get(candidateId),
@@ -136,6 +140,7 @@ export function compileStoryBoundaries(
     stateBeforeByEventId.set(targetId, copyState(state));
 
     applyNarrativeEvent(state, event, {
+      catalogs,
       branchPath: selectedBranch,
       lifecycleChangesByCoordinate: lifecycleGuard,
       storyCoordinate: coordinatesByEventId?.get(event.id),
@@ -145,11 +150,18 @@ export function compileStoryBoundaries(
     stateAfterByEventId.set(targetId, copyState(state));
   }
 
-  // Final state: replay all ordinary events after baseline
   const finalState = emptyWorldState();
-  const finalLifecycleGuard = applyBaseline(finalState, initialFacts, threadList, selectedBranch);
+  // Final state: replay all ordinary events after baseline
+  const finalLifecycleGuard = applyBaseline(
+    finalState,
+    initialFacts,
+    threadList,
+    selectedBranch,
+    catalogs,
+  );
   for (const eventId of order.topologicalOrder) {
     applyNarrativeEvent(finalState, eventsById.get(eventId)!, {
+      catalogs,
       branchPath: selectedBranch,
       lifecycleChangesByCoordinate: finalLifecycleGuard,
       storyCoordinate: coordinatesByEventId?.get(eventId),
@@ -172,12 +184,21 @@ export function compileStoryBoundaries(
  * compileStoryRuntimeGraph / storyGraphToEventAdjacency.
  */
 export function compileStoryBoundariesFromGraph(
-  events: NarrativeEvent[],
+  events: readonly NarrativeEvent[],
   initialFacts: readonly Fact[],
   storyAdjacency: AdjacencyList,
+  catalogs: EntityCatalogContext,
   branchPath?: BranchPath,
-  initialThreads?: Array<{ id: string }>,
+  initialThreads?: readonly { id: string }[],
   coordinatesByEventId?: ReadonlyMap<string, SceneStoryCoordinate>,
 ): StoryBoundaries {
-  return compileStoryBoundaries(events, initialFacts, storyAdjacency, branchPath, initialThreads, coordinatesByEventId);
+  return compileStoryBoundaries(
+    events,
+    initialFacts,
+    storyAdjacency,
+    catalogs,
+    branchPath,
+    initialThreads,
+    coordinatesByEventId,
+  );
 }

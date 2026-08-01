@@ -15,6 +15,7 @@ import {
   type SceneContractInput,
 } from '../../src/render/scene-contract.js';
 import type { CompiledSceneContract, StyleProfile } from '../../src/types/render-surface.js';
+
 const BASE_INPUT: SceneContractInput = {
   sceneId: 'S1',
   branch: 'main',

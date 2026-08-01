@@ -29,11 +29,8 @@ import {
   assembleCustomNovel,
   branchPathsEqual,
   compileGameDialogueTree,
-  compileStoryRuntimeGraph,
-  resolveTemporalContext,
   computeEvidenceHash,
   diffEvent,
-  EntityMapper,
   exportDAGtoDOT,
   exportDAGtoMermaid,
   FsStorage,
@@ -48,13 +45,13 @@ import {
   listSceneRevisions,
   listSourceDocuments,
   MockPass2Provider,
-  migrateProjectFile,
   previewEditorialRun,
   previewSourceChange,
   reconcileSourceWorkingCopy,
   renderGameDialogueTree,
   renderNovel,
   replaceReviewComment,
+  resolveTemporalContext,
   rollbackSceneRevision,
   setSceneLock,
   showEntity,
@@ -157,27 +154,38 @@ function computeProjectSourceHash(documents: readonly SourceDocumentV1[]): strin
   return digest.digest('hex');
 }
 
-function resolveRoute(options: {
+function resolveRoute(options: { branchPath?: BranchPath; discourseBranch?: string }): {
   branchPath?: BranchPath;
   discourseBranch?: string;
-}): { branchPath?: BranchPath; discourseBranch?: string } {
+} {
   return {
     ...(options.branchPath ? { branchPath: options.branchPath } : {}),
     ...(options.discourseBranch ? { discourseBranch: options.discourseBranch } : {}),
   };
 }
 
-function requireCompleteGameLeaf(projectDir: string, branchPath: BranchPath | undefined): void {
-  const mapper = new EntityMapper(projectDir, new FsStorage());
-  const data = mapper.loadProject();
-  const eventFiles = [...data.chapters.values()].flatMap((chapter) => chapter.events);
-  const events = eventFiles.map((ef) => mapper.mapToNarrativeEvent(ef));
-  const temporalContext = resolveTemporalContext(events, data.timeAnchors);
-  const tree = compileGameDialogueTree(events, temporalContext);
-  if (
-    tree &&
-    (!branchPath || !tree.leafPaths.some((leafPath) => branchPathsEqual(leafPath, branchPath)))
-  ) {
+function requireCompleteGameLeaf(
+  projectDir: string,
+  branchPath: BranchPath | undefined,
+  discourseBranch: string | undefined,
+): void {
+  // Assemble requires an explicit complete leaf route. The no-path rule is
+  // scoped to this pre-check; shared runtime callers keep their no-route
+  // behavior.
+  if (!branchPath) {
+    throw new Error('Game dialogue assembly requires one complete, ordered leaf --branch-path');
+  }
+  // Compile the canonical runtime against the SELECTED route — never the
+  // implicit default branch — so a project whose dialogue ledger has no
+  // "main" chapter sequence still reaches the leaf-completeness check.
+  const project = initializeProject(
+    projectDir,
+    new FsStorage(),
+    resolveRoute({ branchPath, discourseBranch }),
+  );
+  const temporalContext = resolveTemporalContext(project.events, project.data.timeAnchors);
+  const tree = compileGameDialogueTree(project.events, temporalContext);
+  if (tree && !tree.leafPaths.some((leafPath) => branchPathsEqual(leafPath, branchPath))) {
     throw new Error('Game dialogue assembly requires one complete, ordered leaf --branch-path');
   }
 }
@@ -231,19 +239,19 @@ program
     const novaYaml = `project: ${name}
 title: "${name}"
 author: "Author"
-default_model: claude-sonnet-4-20250514
-default_language: zh
-snapshot_interval: 20
-validator_overrides: {}
+defaultModel: claude-sonnet-4-20250514
+defaultLanguage: zh
+snapshotInterval: 20
+validatorOverrides: {}
   # Override validator behavior per-validator
   # Format: { validator_name: 'off' | 'warning' | 'error' }
   # Example: { factual_detail: 'warning', voice_drift: 'off' }
-circuit_breaker:
-  max_retries: 3
+circuitBreaker:
+  maxRetries: 3
   # Maximum render retries before marking scene as needs_review
-review_expiry:
+reviewExpiry:
   enabled: false
-  auto_resolve_days: 30
+  autoResolveDays: 30
   # Auto-resolve unresolved reviews after N days
 `;
     fs.writeFileSync(path.join(projectDir, 'nova.yaml'), novaYaml, 'utf-8');
@@ -271,6 +279,322 @@ world_facts: []
       'utf-8',
     );
 
+    // Write entity type catalog template (versionless source contract).
+    // Declares the six supported kinds with lifecycle + common attributes;
+    // extend attributes per kind before writing to them in story facts.
+    const entityTypesYaml = `# definitions/entity-types.yaml
+# Entity type catalog — strict, versionless source contract (no version fields).
+# Every entity kind the story writes to must be declared here with explicit
+# attribute policies; undeclared attributes fail validation on write.
+types:
+  character:
+    typeId: character
+    kind: character
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      name:
+        attributeId: name
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      age:
+        attributeId: age
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      gender:
+        attributeId: gender
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      appearance:
+        attributeId: appearance
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: appearance
+      emotionalState:
+        attributeId: emotionalState
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: emotional
+      location:
+        attributeId: location
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: location
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+      traits:
+        attributeId: traits
+        valueType: string_list
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  location:
+    typeId: location
+    kind: location
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      name:
+        attributeId: name
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      description:
+        attributeId: description
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  item:
+    typeId: item
+    kind: item
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      name:
+        attributeId: name
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      description:
+        attributeId: description
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  faction:
+    typeId: faction
+    kind: faction
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      name:
+        attributeId: name
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      description:
+        attributeId: description
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  concept:
+    typeId: concept
+    kind: concept
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      description:
+        attributeId: description
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      value:
+        attributeId: value
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: identity
+    typedInvariants: []
+  rule:
+    typeId: rule
+    kind: rule
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      name:
+        attributeId: name
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      category:
+        attributeId: category
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: identity
+    typedInvariants: []
+`;
+    fs.writeFileSync(
+      path.join(projectDir, 'definitions', 'entity-types.yaml'),
+      entityTypesYaml,
+      'utf-8',
+    );
+
     // Write an initial event with the event-local choice contract as comments.
     const eventFile = `# chapters/chapter_01/E1.yaml
 event: E1
@@ -281,8 +605,10 @@ pov:
   character: narrator
   type: omniscient
 sceneBrief: "Describe this continuous dramatic unit."
+beats:
+  - "Describe the first action or turn of this scene."
+  - "Describe the second action or turn of this scene."
 preconditions: []
-expectedPostconditions: []
 
 # choices:
 #   - id: accept_hunt
@@ -396,16 +722,38 @@ program
   });
 
 function printValidationResult(result: {
-  errors: Array<{ message: string; validator?: string }>;
-  warnings: Array<{ message: string; validator?: string }>;
-  infos: Array<{ message: string }>;
+  errors: Array<{
+    message: string;
+    validator?: string;
+    kind?: string;
+    observationRef?: { field?: string; analysisPointer?: string };
+  }>;
+  warnings: Array<{
+    message: string;
+    validator?: string;
+    kind?: string;
+    observationRef?: { field?: string; analysisPointer?: string };
+  }>;
+  infos: Array<{ message: string; kind?: string }>;
   passed: boolean;
 }) {
   for (const err of result.errors) {
-    console.log(`  ❌ ERROR${err.validator ? ` [${err.validator}]` : ''}: ${err.message}`);
+    const kind = err.kind ? ` (${err.kind})` : '';
+    const ref = err.observationRef
+      ? ` [${err.observationRef.field}${err.observationRef.analysisPointer ? ` ${err.observationRef.analysisPointer}` : ''}]`
+      : '';
+    console.log(
+      `  ❌ ERROR${err.validator ? ` [${err.validator}]` : ''}${kind}${ref}: ${err.message}`,
+    );
   }
   for (const warn of result.warnings) {
-    console.log(`  ⚠️  WARNING: ${warn.message}`);
+    const kind = warn.kind ? ` (${warn.kind})` : '';
+    const ref = warn.observationRef
+      ? ` [${warn.observationRef.field}${warn.observationRef.analysisPointer ? ` ${warn.observationRef.analysisPointer}` : ''}]`
+      : '';
+    console.log(
+      `  ⚠️  WARNING${warn.validator ? ` [${warn.validator}]` : ''}${kind}${ref}: ${warn.message}`,
+    );
   }
   for (const info of result.infos) {
     console.log(`  ℹ️  ${info.message}`);
@@ -440,30 +788,6 @@ program
     }
   });
 
-// --- migrate ---
-program
-  .command('migrate')
-  .description('Migrate project config to the latest schema version')
-  .action(() => {
-    const projectDir = ensureProjectDir();
-    const yamlPath = path.join(projectDir, 'nova.yaml');
-
-    try {
-      const prevVersion = migrateProjectFile(yamlPath, new FsStorage());
-      if (prevVersion >= 1) {
-        console.log('Project is already at latest schema version (1).');
-      } else {
-        console.log(`Migration complete. Schema version updated from ${prevVersion} to 1.`);
-      }
-    } catch (err) {
-      if (err instanceof Error && err.message.includes('newer than supported')) {
-        console.error(`Error: ${err.message}`);
-        process.exit(1);
-      }
-      throw err;
-    }
-  });
-
 // --- assemble ---
 program
   .command('assemble')
@@ -472,30 +796,39 @@ program
   .option('--branch-path <json>', 'Complete game-tree BranchPath JSON')
   .option('--discourse-branch <name>', 'Discourse branch name (default: main)')
   .option('--actor <actor>', 'Actor ID for the operation', 'local-cli')
-  .action((options: { output?: string; branchPath?: string; discourseBranch?: string; actor?: string }) => {
-    const projectDir = ensureProjectDir();
-    let branchPath: BranchPath | undefined;
-    try {
-      branchPath = parseBranchPath(options.branchPath);
-      requireCompleteGameLeaf(projectDir, branchPath);
-    } catch (error) {
-      console.error(`Invalid --branch-path: ${(error as Error).message}`);
-      process.exit(1);
-    }
-    const request = {
-      version: 1 as const,
-      projectDir,
-      mutation: {
-        operationId: crypto.randomUUID(),
-        actorId: options.actor ?? 'local-cli',
-      },
-      ...(options.output ? { outputPath: options.output } : {}),
-      ...resolveRoute({ branchPath, discourseBranch: options.discourseBranch }),
-    };
-    const result = options.output ? assembleCustomNovel(request) : assembleCanonicalNovel(request);
-    console.log(`Novel assembled: ${result.wordCount} words, ${result.sceneCount} scenes`);
-    console.log(`   Output: ${result.publication.outputPath}`);
-  });
+  .action(
+    (options: {
+      output?: string;
+      branchPath?: string;
+      discourseBranch?: string;
+      actor?: string;
+    }) => {
+      const projectDir = ensureProjectDir();
+      let branchPath: BranchPath | undefined;
+      try {
+        branchPath = parseBranchPath(options.branchPath);
+        requireCompleteGameLeaf(projectDir, branchPath, options.discourseBranch);
+      } catch (error) {
+        console.error(`Invalid --branch-path: ${(error as Error).message}`);
+        process.exit(1);
+      }
+      const request = {
+        version: 1 as const,
+        projectDir,
+        mutation: {
+          operationId: crypto.randomUUID(),
+          actorId: options.actor ?? 'local-cli',
+        },
+        ...(options.output ? { outputPath: options.output } : {}),
+        ...resolveRoute({ branchPath, discourseBranch: options.discourseBranch }),
+      };
+      const result = options.output
+        ? assembleCustomNovel(request)
+        : assembleCanonicalNovel(request);
+      console.log(`Novel assembled: ${result.wordCount} words, ${result.sceneCount} scenes`);
+      console.log(`   Output: ${result.publication.outputPath}`);
+    },
+  );
 
 // --- entity ---
 const entityCmd = program.command('entity').description('Manage entities');
@@ -508,15 +841,10 @@ entityCmd
     const projectDir = ensureProjectDir();
 
     if (options?.status) {
-      // Show events filtered by status
-      const mapper = new EntityMapper(projectDir);
-      const data = mapper.loadProject();
-      const events = mapper.loadAllEvents(data.chapters);
+      // Show events filtered by status (authored events only)
+      const events = initializeProject(projectDir, new FsStorage()).events;
 
-      const filtered = events.filter((e) => {
-        if (e.id === 'system:genesis') return false;
-        return e.status === options?.status;
-      });
+      const filtered = events.filter((e) => e.status === options?.status);
 
       if (filtered.length === 0) {
         console.log(`No events with status "${options.status}".`);
@@ -1643,15 +1971,12 @@ program
     const storage = new FsStorage();
     const cacheDir = path.join(projectDir, '.nova', 'render-cache');
 
-    // Load events to compute current evidence hashes
-    const mapper = new EntityMapper(projectDir, storage);
-    const data = mapper.loadProject();
-    const events = mapper.loadAllEvents(data.chapters);
+    // Load authored events to compute current evidence hashes
+    const events = initializeProject(projectDir, storage).events;
 
     // Build evidence hash map
     const evidenceHashes = new Map<string, string>();
     for (const event of events) {
-      if (event.source === 'genesis') continue; // skip genesis system event
       const hash = computeEvidenceHash(
         event.id,
         event.preconditions ?? [],
@@ -1710,30 +2035,20 @@ program
   .action((options: { format?: string }) => {
     const projectDir = ensureProjectDir();
 
-    const mapper = new EntityMapper(projectDir);
-    const data = mapper.loadProject();
-    const allEvents = mapper.loadAllEvents(data.chapters);
-    const genesis = allEvents.find((e) => e.id === 'system:genesis');
-    const compiled = compileStoryRuntimeGraph({
-      events: allEvents,
-      initialFacts: genesis?.postconditions ?? [],
-      initialThreads: [],
-      timeAnchors: data.timeAnchors,
-      branchPath: { decisions: [] },
-    });
+    const project = initializeProject(projectDir, new FsStorage());
 
-    const eventProps = compiled.selectedEvents.map(
-      (e: { id: string; title: string; sceneType: string }) => ({
-        eventId: e.id,
-        title: e.title,
-        sceneType: e.sceneType,
-      }),
-    );
+    const eventProps = project.events.map((e) => ({
+      eventId: e.id,
+      title: e.title,
+      sceneType: e.sceneType,
+    }));
+
+    const adjacency = project.runtime.graphs.storyAdjacency;
 
     const output =
       options.format === 'mermaid'
-        ? exportDAGtoMermaid(compiled.storyAdjacency, eventProps)
-        : exportDAGtoDOT(compiled.storyAdjacency, eventProps);
+        ? exportDAGtoMermaid(adjacency, eventProps)
+        : exportDAGtoDOT(adjacency, eventProps);
 
     console.log(output);
   });

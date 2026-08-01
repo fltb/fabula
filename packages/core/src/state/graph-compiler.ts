@@ -1,3 +1,6 @@
+import { sha256Canonical } from '../cache/render-cache.js';
+import { compareStoryCoordinates } from '../entity/timestamp.js';
+import { DagCycleError, DagProviderError } from '../errors.js';
 import type {
   DiscourseGraph,
   EdgeClass,
@@ -15,42 +18,23 @@ import type {
   StoryGraph,
 } from '../types/graph.js';
 import {
-  AmbiguousOutputError,
   AssertionMismatchError,
   BranchCoverageError,
-  BranchIncompatibilityError,
   CrossClockEdgeError,
   DuplicateBranchProviderError,
   DuplicateDiscoursePositionError,
-  DynamicLifecycleError,
   EdgeOriginCycleError,
-  EllipsisSummaryError,
   FutureTimeError,
-  GraphCompileError,
+  type GraphCompileError,
   InitialRootMisuseError,
   InvalidSameCoordinateOrderError,
-  MergeInputError,
-  MissingOutputError,
-  NoOutputEdgeError,
-  ProvenanceError,
-  ReadMismatchError,
   SelfPredecessorError,
-  SemanticOutputDependencyError,
-  StaleProviderSelectionError,
   UnknownPredecessorError,
   UnknownReadIdError,
   UnorderedStoryConflictError,
 } from '../types/graph.js';
-import { DagCycleError, DagProviderError } from '../errors.js';
 import type { SceneStoryCoordinate, StoryCoordinate } from '../types/index.js';
-import { compareStoryCoordinates } from '../entity/timestamp.js';
-import { sha256Canonical } from '../cache/render-cache.js';
-import {
-  type AdjacencyList,
-  type StoryOrderIndex,
-  buildStoryOrderIndex,
-  isProvenBefore,
-} from './dag.js';
+import { buildStoryOrderIndex, isProvenBefore, type StoryOrderIndex } from './dag.js';
 // Novalistically — Graph Compiler (GRAPH-1)
 // Compiled graph layer over deterministic replay effects.
 // FIXED compiler order (§23):
@@ -218,7 +202,6 @@ function filterBranch(
   });
 
   // Shrink compile state so excluded branches cannot affect resolutions/hashes
-  const selectedIds = new Set(selected.map((n) => n.id));
   const selectedOutputIds = new Set<string>();
   const selectedReadIds = new Set<string>();
   for (const node of selected) {
@@ -283,32 +266,6 @@ function resolveDeclarations(state: CompileState, nodes: CompileNode[]): void {
 // Stage 5: Validate coordinate/order (§16–17)
 // ============================================================================
 
-/**
- * Compare two effective coordinates.
- * For storyTime coordinates, delegates to compareStoryCoordinates (resolved
- * coordinate model). For discoursePosition, uses numeric comparison.
- * Returns -1 if a < b, 0 if equal, 1 if a > b, null if incomparable.
- */
-function compareCoordinates(a: EffectiveCoordinate, b: EffectiveCoordinate): number | null {
-  if (a.type === 'discoursePosition' && b.type === 'discoursePosition') {
-    if (a.value < b.value) return -1;
-    if (a.value > b.value) return 1;
-    return 0;
-  }
-
-  if (a.type === 'storyTime' && b.type === 'storyTime') {
-    const order = compareStoryCoordinates(a, b);
-    switch (order) {
-      case 'before': return -1;
-      case 'equal': return 0;
-      case 'after': return 1;
-      case 'incomparable': return null;
-    }
-  }
-
-  return null; // cross-domain
-}
-
 function validateCoordinateOrder(state: CompileState, nodes: CompileNode[]): void {
   // Check duplicate discourse position (§16)
   const discoursePositions = new Map<number, string>();
@@ -347,15 +304,11 @@ function validateCoordinateOrder(state: CompileState, nodes: CompileNode[]): voi
       if (edge.edgeClass === 'same_coordinate_order') {
         if (order !== 'equal' || preCoord.kind === 'initial') {
           state.errors.push(
-            new InvalidSameCoordinateOrderError(
-              edge.predecessor,
-              edge.dependent,
-              {
-                code: 'INVALID_SAME_COORDINATE_ORDER',
-                nodeId: edge.dependent,
-                detail: `predecessor coordinate: ${JSON.stringify(preCoord)}, dependent coordinate: ${JSON.stringify(depCoord)}`,
-              },
-            ),
+            new InvalidSameCoordinateOrderError(edge.predecessor, edge.dependent, {
+              code: 'INVALID_SAME_COORDINATE_ORDER',
+              nodeId: edge.dependent,
+              detail: `predecessor coordinate: ${JSON.stringify(preCoord)}, dependent coordinate: ${JSON.stringify(depCoord)}`,
+            }),
           );
         }
         continue;
@@ -402,8 +355,7 @@ function validateCoordinateOrder(state: CompileState, nodes: CompileNode[]): voi
  */
 function deriveTemporalEdges(state: CompileState, nodes: CompileNode[]): void {
   const storyNodes = nodes.filter(
-    (n): n is CompileNode & { coordinate: StoryCoordinate } =>
-      n.coordinate.type === 'storyTime',
+    (n): n is CompileNode & { coordinate: StoryCoordinate } => n.coordinate.type === 'storyTime',
   );
 
   // Group point nodes by clock
@@ -414,9 +366,7 @@ function deriveTemporalEdges(state: CompileState, nodes: CompileNode[]): void {
     if (entries) {
       entries.push({ nodeId: node.id, scalar: node.coordinate.scalar });
     } else {
-      byClock.set(node.coordinate.clock, [
-        { nodeId: node.id, scalar: node.coordinate.scalar },
-      ]);
+      byClock.set(node.coordinate.clock, [{ nodeId: node.id, scalar: node.coordinate.scalar }]);
     }
   }
 
@@ -480,20 +430,16 @@ function buildOrderFromEdges(
   for (const edge of state.edges) {
     if (edge.predecessor !== '' && !nodeIdSet.has(edge.predecessor)) {
       state.errors.push(
-        new UnknownPredecessorError(
-          edge.dependent,
-          edge.predecessor,
-          { detail: `unknown predecessor '${edge.predecessor}' referenced by edge in story graph` },
-        ),
+        new UnknownPredecessorError(edge.dependent, edge.predecessor, {
+          detail: `unknown predecessor '${edge.predecessor}' referenced by edge in story graph`,
+        }),
       );
     }
     if (edge.dependent !== '' && !nodeIdSet.has(edge.dependent)) {
       state.errors.push(
-        new UnknownPredecessorError(
-          edge.predecessor,
-          edge.dependent,
-          { detail: `unknown dependent '${edge.dependent}' referenced by edge in story graph` },
-        ),
+        new UnknownPredecessorError(edge.predecessor, edge.dependent, {
+          detail: `unknown dependent '${edge.dependent}' referenced by edge in story graph`,
+        }),
       );
     }
   }
@@ -503,8 +449,12 @@ function buildOrderFromEdges(
   for (const id of nodeIdSet) adj.set(id, []);
 
   for (const edge of state.edges) {
-    if (edge.predecessor !== '' && edge.dependent !== '' &&
-        nodeIdSet.has(edge.predecessor) && nodeIdSet.has(edge.dependent)) {
+    if (
+      edge.predecessor !== '' &&
+      edge.dependent !== '' &&
+      nodeIdSet.has(edge.predecessor) &&
+      nodeIdSet.has(edge.dependent)
+    ) {
       adj.get(edge.predecessor)!.push(edge.dependent);
     }
   }
@@ -784,15 +734,10 @@ function validateCommutativity(state: CompileState, nodes: CompileNode[]): void 
 
       if (overlap) {
         state.errors.push(
-          new UnorderedStoryConflictError(
-            a.id,
-            a.coordinate,
-            b.id,
-            {
-              code: 'UNORDERED_STORY_CONFLICT',
-              detail: `overlapping read/write keys at ${JSON.stringify(a.coordinate)} / ${JSON.stringify(b.coordinate)}`,
-            },
-          ),
+          new UnorderedStoryConflictError(a.id, a.coordinate, b.id, {
+            code: 'UNORDERED_STORY_CONFLICT',
+            detail: `overlapping read/write keys at ${JSON.stringify(a.coordinate)} / ${JSON.stringify(b.coordinate)}`,
+          }),
         );
       }
     }
@@ -803,7 +748,7 @@ function validateCommutativity(state: CompileState, nodes: CompileNode[]): void 
 // Stage 11 (was 8): Branch/closure/cycle validation (§20–21)
 // ============================================================================
 
-function validateBranches(state: CompileState, nodes: CompileNode[]): void {
+function validateBranches(state: CompileState, _nodes: CompileNode[]): void {
   // Check each read per branch has a resolution (§21)
   for (const read of state.reads) {
     const resolutionKey = `${read.readId}:${read.branchScope}`;
@@ -999,7 +944,9 @@ export function compileGraph(
       storyNodes.flatMap((node) => node.effects.map((effect) => effect.effectId)),
     );
     const storyReadIds = new Set(
-      storyNodes.flatMap((node) => node.requirements.map((requirement) => requirement.requirementId)),
+      storyNodes.flatMap((node) =>
+        node.requirements.map((requirement) => requirement.requirementId),
+      ),
     );
     const storyOutputs = state.outputs.filter((output) => storyOutputIds.has(output.outputId));
     const storyReads = state.reads.filter((read) => storyReadIds.has(read.readId));

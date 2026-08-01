@@ -2,13 +2,75 @@
 // fact-three-forms.test.ts — Three forms of postcondition facts:
 // set (value + optional 'set'), unset (operation unset + no value/narrativeHint),
 // narrativeHint-only. Schema validation + replay-level duplicate detection.
+//
+// The replay-level case supplies an explicit synthetic catalog context: hero
+// is declared 'character', event-introduced by E_1, and the fixture includes
+// the canonical system:introduction transition that activates it (day_0)
+// before the authored duplicate write (day_1).
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
+import { compileEntityTypeCatalog } from '../../src/entity/entity-catalog-compiler.js';
 import { ConfigError } from '../../src/errors.js';
 import { postconditionSchema } from '../../src/schemas/primitives.js';
 import { ReplayEngine } from '../../src/state/replay.js';
-import type { Fact, NarrativeEvent, WorldState } from '../../src/types/index.js';
+import type {
+  EntityCatalogContext,
+  EntityTypeCatalog,
+  EntityTypeCatalogSource,
+  EntityTypeDefinitionSource,
+  Fact,
+  NarrativeEvent,
+} from '../../src/types/index.js';
+
+// ─── Synthetic catalog (explicit; no default catalog) ───────────────────────
+
+const CHARACTER_SOURCE: EntityTypeDefinitionSource = {
+  typeId: 'character',
+  kind: 'character',
+  attributes: {
+    name: {
+      attributeId: 'name',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'immutable',
+      unsetAllowed: false,
+    },
+    health: {
+      attributeId: 'health',
+      valueType: 'number',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: false,
+    },
+  },
+  lifecyclePolicy: { allowedTransitions: [] },
+  referenceCapabilities: { defaultEligibility: 'live' },
+  typedInvariants: [],
+};
+
+const SYNTHETIC_SOURCE: EntityTypeCatalogSource = {
+  types: { character: CHARACTER_SOURCE },
+};
+
+const TYPE_CATALOG: EntityTypeCatalog = compileEntityTypeCatalog(SYNTHETIC_SOURCE);
+
+function makeCatalogContext(): EntityCatalogContext {
+  return {
+    entityDeclarationCatalog: {
+      declarations: {
+        hero: {
+          entityId: 'hero',
+          typeRef: { typeId: 'character', schemaVersion: 1 },
+          immutableMetadata: { name: 'Hero', definitionFile: 'hero.yaml' },
+          introduction: { type: 'event', eventId: 'E_1' },
+        },
+      },
+      version: 1,
+    },
+    entityTypeCatalog: TYPE_CATALOG,
+  };
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -31,18 +93,25 @@ function makeEvent(
   overrides: Partial<NarrativeEvent> = {},
 ): NarrativeEvent {
   return {
+    kind: 'event',
     id: `E_${narrativeOrder}`,
+    event: `E_${narrativeOrder}`,
     narrativeOrder,
     title: 'Test',
     storyTime: { type: 'absolute' as const, value: 'day_1' },
+    sceneType: 'linear',
     pov: { character: 'narrator' as const, type: 'first_person' as const },
     sceneBrief: 'Test scene',
+    beats: ['Test scene'],
     branchExistence: { type: 'all' as const },
     preconditions: [],
     postconditions: [],
     threadProgress: [],
+    foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
+    source: 'event_file',
+    participants: { entities: [] },
     ...overrides,
   };
 }
@@ -109,8 +178,17 @@ describe('Postcondition three-form schema validation', () => {
 
 describe('Replay-level duplicate write detection', () => {
   it('throws ConfigError on duplicate write to same entityId+attribute in one event', () => {
-    const engine = new ReplayEngine();
+    const engine = new ReplayEngine(makeCatalogContext());
+    const activation = makeEvent(0.5, {
+      id: 'system:introduction:E_1:hero',
+      event: 'system:introduction:E_1:hero',
+      storyTime: { type: 'absolute' as const, value: 'day_0' },
+      source: 'system',
+      participants: { entities: ['hero'] },
+      postconditions: [makeFact({ entityId: 'hero', attribute: 'name', value: 'Hero' })],
+    });
     const events: NarrativeEvent[] = [
+      activation,
       makeEvent(1, {
         postconditions: [
           makeFact({ entityId: 'hero', attribute: 'health', value: 100 }),

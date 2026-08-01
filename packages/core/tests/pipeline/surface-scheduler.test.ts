@@ -10,28 +10,24 @@
 //   §6: Determinism — same inputs → same waves
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import * as crypto from 'node:crypto';
+import { describe, expect, it } from 'vitest';
+import type { RenderJob } from '../../src/pipeline/render.ts';
 import {
   AcceptedArtifactResolver,
   SurfaceScheduler,
 } from '../../src/pipeline/surface-scheduler.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type { NarrativeEvent } from '../../src/types/event.ts';
-import type { RenderJob } from '../../src/pipeline/render.ts';
-import type {
-  ReleaseDecision,
-} from '../../src/types/render-surface.ts';
+import type { ReleaseDecision } from '../../src/types/render-surface.ts';
 import type { WorldState } from '../../src/types/world.ts';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 // ============================================================================
 // Helper factories
 // ============================================================================
 
-function makeJob(
-  id: string,
-  predecessorEventId?: string,
-): RenderJob {
+function makeJob(id: string, predecessorEventId?: string): RenderJob {
   return {
     event: {
       id,
@@ -85,9 +81,7 @@ function makeJob(
   };
 }
 
-function makeJobs(
-  spec: Array<{ id: string; pred?: string }>,
-): RenderJob[] {
+function makeJobs(spec: Array<{ id: string; pred?: string }>): RenderJob[] {
   return spec.map((s) => makeJob(s.id, s.pred));
 }
 
@@ -130,11 +124,7 @@ describe('SurfaceScheduler', () => {
     });
 
     it('linear chain produces sequential waves', () => {
-      const jobs = makeJobs([
-        { id: 'S1' },
-        { id: 'S2', pred: 'S1' },
-        { id: 'S3', pred: 'S2' },
-      ]);
+      const jobs = makeJobs([{ id: 'S1' }, { id: 'S2', pred: 'S1' }, { id: 'S3', pred: 'S2' }]);
       const plan = scheduler.buildWavePlan(jobs);
 
       expect(plan.waves).toHaveLength(3);
@@ -164,18 +154,13 @@ describe('SurfaceScheduler', () => {
 
     it('excludes jobs with a missing predecessor from executable waves', () => {
       // Pred 'outside' is absent from the selected job set and must fail closed.
-      const jobs = makeJobs([
-        { id: 'S1' },
-        { id: 'S2', pred: 'outside' },
-      ]);
+      const jobs = makeJobs([{ id: 'S1' }, { id: 'S2', pred: 'outside' }]);
       const plan = scheduler.buildWavePlan(jobs);
 
       // Only the genuinely predecessor-free job is executable in wave 0.
       expect(plan.waves).toHaveLength(1);
       expect(plan.waves[0].eventIds).toEqual(['S1']);
-      expect(plan.missingPredecessors).toEqual([
-        { eventId: 'S2', predecessorEventId: 'outside' },
-      ]);
+      expect(plan.missingPredecessors).toEqual([{ eventId: 'S2', predecessorEventId: 'outside' }]);
     });
   });
 
@@ -183,10 +168,7 @@ describe('SurfaceScheduler', () => {
 
   describe('missing predecessor detection (§2)', () => {
     it('reports missing predecessor and excludes job from waves', () => {
-      const jobs = makeJobs([
-        { id: 'S1' },
-        { id: 'S2', pred: 'MISSING' },
-      ]);
+      const jobs = makeJobs([{ id: 'S1' }, { id: 'S2', pred: 'MISSING' }]);
       const plan = scheduler.buildWavePlan(jobs);
 
       expect(plan.missingPredecessors).toHaveLength(1);
@@ -198,11 +180,7 @@ describe('SurfaceScheduler', () => {
     });
 
     it('reports multiple missing predecessors', () => {
-      const jobs = makeJobs([
-        { id: 'A', pred: 'X' },
-        { id: 'B', pred: 'Y' },
-        { id: 'C' },
-      ]);
+      const jobs = makeJobs([{ id: 'A', pred: 'X' }, { id: 'B', pred: 'Y' }, { id: 'C' }]);
       const plan = scheduler.buildWavePlan(jobs);
 
       expect(plan.missingPredecessors).toHaveLength(2);
@@ -240,9 +218,7 @@ describe('SurfaceScheduler', () => {
     });
 
     it('detects self-loop cycle', () => {
-      const jobs = makeJobs([
-        { id: 'A', pred: 'A' },
-      ]);
+      const jobs = makeJobs([{ id: 'A', pred: 'A' }]);
       const plan = scheduler.buildWavePlan(jobs);
 
       expect(plan.cycleParticipants).toEqual(['A']);
@@ -250,11 +226,7 @@ describe('SurfaceScheduler', () => {
     });
 
     it('non-cycle chain is not flagged', () => {
-      const jobs = makeJobs([
-        { id: 'A' },
-        { id: 'B', pred: 'A' },
-        { id: 'C', pred: 'B' },
-      ]);
+      const jobs = makeJobs([{ id: 'A' }, { id: 'B', pred: 'A' }, { id: 'C', pred: 'B' }]);
       const plan = scheduler.buildWavePlan(jobs);
 
       expect(plan.cycleParticipants).toHaveLength(0);
@@ -262,11 +234,7 @@ describe('SurfaceScheduler', () => {
     });
 
     it('cycle does not affect unrelated parallel jobs', () => {
-      const jobs = makeJobs([
-        { id: 'A', pred: 'B' },
-        { id: 'B', pred: 'A' },
-        { id: 'C' },
-      ]);
+      const jobs = makeJobs([{ id: 'A', pred: 'B' }, { id: 'B', pred: 'A' }, { id: 'C' }]);
       const plan = scheduler.buildWavePlan(jobs);
 
       expect(plan.cycleParticipants.sort()).toEqual(['A', 'B']);
@@ -280,11 +248,11 @@ describe('SurfaceScheduler', () => {
   describe('mixed scenarios (§4)', () => {
     it('handles missing, cycle, and valid jobs simultaneously', () => {
       const jobs = makeJobs([
-        { id: 'A' },                       // valid, wave 0
-        { id: 'B', pred: 'MISSING' },      // missing predecessor
-        { id: 'C', pred: 'D' },            // cycle (C→D→C)
-        { id: 'D', pred: 'C' },            // cycle partner
-        { id: 'E', pred: 'A' },            // valid, wave 1
+        { id: 'A' }, // valid, wave 0
+        { id: 'B', pred: 'MISSING' }, // missing predecessor
+        { id: 'C', pred: 'D' }, // cycle (C→D→C)
+        { id: 'D', pred: 'C' }, // cycle partner
+        { id: 'E', pred: 'A' }, // valid, wave 1
       ]);
       const plan = scheduler.buildWavePlan(jobs);
 
@@ -320,11 +288,7 @@ describe('SurfaceScheduler', () => {
 
     it('wave eventIds are deterministically sorted', () => {
       // Input order differs from sorted order.
-      const jobs = makeJobs([
-        { id: 'Z' },
-        { id: 'Y' },
-        { id: 'X' },
-      ]);
+      const jobs = makeJobs([{ id: 'Z' }, { id: 'Y' }, { id: 'X' }]);
       const plan = scheduler.buildWavePlan(jobs);
 
       expect(plan.waves).toHaveLength(1);
@@ -356,7 +320,36 @@ describe('AcceptedArtifactResolver', () => {
     const ad = archiveDir ?? ARCHIVE_DIR;
     const rid = revisionId ?? crypto.randomUUID();
     const ph = proseHash ?? crypto.createHash('sha256').update(prose).digest('hex');
-    const sceneHash = crypto.createHash('sha256').update(prose + ph + eventId).digest('hex');
+    // Current AnalysisResult contract: eventId + protocol + observations
+    // (one produced observation per active field, evidence an exact prose
+    // substring) + the dynamic analysis payload. protocol.proseHash is the
+    // canonical SHA-256 of the prose, matching the pipeline's construction.
+    const analysisPayload: Record<string, unknown> = {
+      postconditions: { covered: [], dropped: [] },
+      preconditions: { violated: [] },
+      pov: { consistent: true, leaks: [] },
+      inventedDetails: [],
+      quality: {
+        proseScore: 4,
+        maxScore: 5,
+        strengths: [],
+        weaknesses: [],
+        estimatedWordCount: 1,
+      },
+      threadProgressAchieved: [],
+      foreshadowingDeployed: [],
+      narrativeChecks: [],
+      appearanceChecks: [],
+      characterReferences: [],
+      tenseDetected: 'past',
+      conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+      ruleChecks: [],
+      knowledgeChecks: [],
+    };
+    const sceneHash = crypto
+      .createHash('sha256')
+      .update(prose + ph + eventId)
+      .digest('hex');
 
     // Head pointer
     storage.mkdirp(hd);
@@ -388,31 +381,9 @@ describe('AcceptedArtifactResolver', () => {
           decision.status === 'accepted'
             ? {
                 eventId,
-                analysis: {
-                  postconditions: { covered: [], dropped: [] },
-                  preconditions: { violated: [] },
-                  pov: { consistent: true, leaks: [] },
-                  inventedDetails: [],
-                  quality: {
-                    proseScore: 4,
-                    maxScore: 5,
-                    strengths: [],
-                    weaknesses: [],
-                    estimatedWordCount: 1,
-                  },
-                  threadProgressAchieved: [],
-                  foreshadowingDeployed: [],
-                  narrativeChecks: [],
-                  appearanceChecks: [],
-                  characterReferences: [],
-                  tenseDetected: 'past',
-                  conflictAnalysis: {
-                    primaryType: 'none',
-                    resolutionAchieved: true,
-                  },
-                  ruleChecks: [],
-                  knowledgeChecks: [],
-                },
+                protocol: makeProtocol(prose),
+                observations: makeObservations(analysisPayload, prose),
+                analysis: analysisPayload,
               }
             : null,
         validation:
@@ -516,7 +487,10 @@ describe('AcceptedArtifactResolver', () => {
       );
       storage.write(
         `${HEAD_DIR}/S1.json`,
-        JSON.stringify({ prose: 'Inline prose without revision pointer', releaseDecision: decision }),
+        JSON.stringify({
+          prose: 'Inline prose without revision pointer',
+          releaseDecision: decision,
+        }),
       );
       const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
 

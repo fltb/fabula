@@ -2,11 +2,11 @@
 // StateManager — Coordinates EventStore + SnapshotEngine + ReplayEngine
 // ============================================================================
 
-import type { BranchPath, NarrativeEvent, WorldState } from '../types/index.js';
 import type { Storage } from '../storage/types.js';
+import type { EntityCatalogContext, NarrativeEvent, WorldState } from '../types/index.js';
 import { EventStore } from './event-store.ts';
-import { ReplayEngine } from './replay.ts';
 import type { ReplayOptions } from './replay.ts';
+import { ReplayEngine } from './replay.ts';
 import { SnapshotEngine } from './snapshot.ts';
 
 export class StateManager {
@@ -17,13 +17,14 @@ export class StateManager {
 
   constructor(
     snapshotsDir: string,
+    catalogContext: EntityCatalogContext,
     snapshotInterval = 20,
     storage?: Storage,
     replayDefaults?: ReplayOptions,
   ) {
     this.eventStore = new EventStore(storage);
     this.snapshotEngine = new SnapshotEngine(snapshotsDir, snapshotInterval, storage);
-    this.replayEngine = new ReplayEngine();
+    this.replayEngine = new ReplayEngine(catalogContext);
     this.replayDefaults = replayDefaults ?? {};
   }
 

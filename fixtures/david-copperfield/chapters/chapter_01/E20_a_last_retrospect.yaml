@@ -13,6 +13,12 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "David closes his written story with a final retrospect. He looks back over his life and sees himself 'with Agnes at my side, journeying along the road of life.' Their married life is happy: they have children (including a little Betsey Trotwood), and their friends and family gather around them — Aunt Betsey in her old age, Peggotty with her 'Crocodile Book,' Mr Dick with his kites and his Memorial (which he has finally finished). David is a successful novelist, Agnes is the 'centre of his life,' and all the sorrows of the past have been transformed into wisdom. The chapter surveys each major character's fate — Traddles and Sophy in their happy home, the Micawbers thriving in Australia, Mr Peggotty and Emily contented — and closes with Agnes's face, the guiding star of David's life, and the final image of the road stretching before them."
+beats:
+  - "David closes his written story with a final retrospect."
+  - "He looks back over his life and sees himself 'with Agnes at my side, journeying along the road of life.'"
+  - "Their married life is happy: they have children (including a little Betsey Trotwood), and their friends and family gather around them — Aunt Betsey in her old age, Peggotty with her 'Crocodile Book,' Mr Dick with his kites and his Memorial (which he has finally finished)."
+  - "David is a successful novelist, Agnes is the 'centre of his life,' and all the sorrows of the past have been transformed into wisdom."
+  - "The chapter surveys each major character's fate — Traddles and Sophy in their happy home, the Micawbers thriving in Australia, Mr Peggotty and Emily contented — and closes with Agnes's face, the guiding star of David's life, and the final image of the road stretching before them."
 preconditions:
   - entity: david_copperfield
     attribute: status

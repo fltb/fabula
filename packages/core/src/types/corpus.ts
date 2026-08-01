@@ -94,7 +94,17 @@ export interface NarrativeEllipsisFile {
     entity: string;
     attribute: string;
     value?: unknown;
-    operator?: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'not_contains' | 'exists' | 'not_exists';
+    operator?:
+      | 'eq'
+      | 'neq'
+      | 'gt'
+      | 'gte'
+      | 'lt'
+      | 'lte'
+      | 'contains'
+      | 'not_contains'
+      | 'exists'
+      | 'not_exists';
     narrativeHint?: string;
   }>;
   /** Postconditions: Entity attribute writes resulting from this ellipsis */

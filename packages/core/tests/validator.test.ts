@@ -3,10 +3,17 @@
 // ============================================================================
 
 import { beforeEach, describe, expect, it } from 'vitest';
+import { compileEntityTypeCatalog } from '../src/entity/entity-catalog-compiler.js';
 import { InMemoryEntityRegistry } from '../src/entity/index.js';
+import type { StoryOrderIndex } from '../src/state/dag.js';
+import type { PointStoryCoordinate, SceneStoryCoordinate } from '../src/types/entity.js';
 import type {
+  AttributeDefinitionSource,
   Entity,
   EntityRegistry,
+  EntityTypeCatalog,
+  EntityTypeCatalogSource,
+  EntityTypeDefinitionSource,
   ForeshadowEntry,
   NarrativeEvent,
   PostRenderInput,
@@ -15,12 +22,7 @@ import type {
   ThreadRunId,
   WorldState,
 } from '../src/types/index.js';
-import type { StoryOrderIndex } from '../src/state/dag.js';
 import type { StoryValidationContext } from '../src/types/validator.js';
-import type {
-  SceneStoryCoordinate,
-  PointStoryCoordinate,
-} from '../src/types/entity.js';
 import {
   BranchMergeValidator,
   CausalityValidator,
@@ -51,6 +53,7 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'jinx', type: 'third_person_limited' },
     sceneBrief: 'A test scene.',
+    beats: ['A test scene.'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
@@ -85,6 +88,7 @@ function buildPreInput(
     worldState: defaultState,
     events: [event],
     entityRegistry: defaultRegistry,
+    entityTypeCatalog: TEST_CATALOG,
     chapter: 1,
     queryState: (_entityId: string, _attribute: string) => undefined,
     getKnowledge: (_characterId: string) => ({
@@ -115,7 +119,7 @@ function makeStoryContext(
   return {
     coordinatesByEventId: new Map(Object.entries(coords)),
     order: {
-      initialRootId: 'system:initial',
+      initialRootId: null,
       topologicalOrder,
       ancestorsByEventId,
     },
@@ -139,6 +143,53 @@ function registerCharacter(
   };
   registry.register(entity);
 }
+
+// ─── Explicit compiled minimal EntityTypeCatalog ────────────────────────────
+// Catalog-driven validators (CharacterState, Knowledge, Causality) look up
+// semanticRole/writePolicy metadata from the project's compiled catalog; with
+// no catalog the lookups return undefined and those checks are skipped. These
+// tests exercise the catalog-driven paths, so they supply an explicit minimal
+// catalog declaring exactly the roles the fixtures below rely on. Compiled
+// fresh per import — no shared Zod schema instances, no default fallback.
+
+function sourceAttr(
+  attributeId: string,
+  overrides?: Partial<AttributeDefinitionSource>,
+): AttributeDefinitionSource {
+  return {
+    attributeId,
+    valueType: 'string',
+    requiredAt: 'never',
+    writePolicy: 'mutable',
+    unsetAllowed: true,
+    ...overrides,
+  };
+}
+
+const CHARACTER_TYPE_SOURCE: EntityTypeDefinitionSource = {
+  typeId: 'character',
+  kind: 'character',
+  attributes: {
+    status: sourceAttr('status', { semanticRole: 'lifecycle' }),
+    alive: sourceAttr('alive', { valueType: 'boolean', semanticRole: 'lifecycle' }),
+    knows: sourceAttr('knows', { semanticRole: 'knowledge' }),
+    location: sourceAttr('location', { semanticRole: 'location' }),
+  },
+  lifecyclePolicy: {
+    allowedTransitions: [
+      ['active', 'inactive'],
+      ['active', 'retired'],
+      ['inactive', 'active'],
+      ['inactive', 'retired'],
+    ],
+  },
+  referenceCapabilities: { defaultEligibility: 'live' },
+  typedInvariants: [],
+};
+
+const TEST_CATALOG: EntityTypeCatalog = compileEntityTypeCatalog({
+  types: { character: CHARACTER_TYPE_SOURCE },
+});
 
 // ============================================================================
 // 1. TimelineValidator Tests
@@ -164,8 +215,8 @@ describe('TimelineValidator', () => {
       events: [prevEvent, currentEvent],
       story: makeStoryContext(
         {
-          'evt_prev': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
-          'evt_current': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 5 },
+          evt_prev: { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
+          evt_current: { type: 'storyTime', kind: 'point', clock: 'story', scalar: 5 },
         },
         ['evt_prev', 'evt_current'],
       ),
@@ -195,8 +246,8 @@ describe('TimelineValidator', () => {
       events: [prevEvent, flashbackEvent],
       story: makeStoryContext(
         {
-          'evt_prev': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
-          'evt_flashback': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 3 },
+          evt_prev: { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
+          evt_flashback: { type: 'storyTime', kind: 'point', clock: 'story', scalar: 3 },
         },
         ['evt_prev', 'evt_flashback'],
       ),
@@ -237,8 +288,8 @@ describe('TimelineValidator', () => {
       events: [prevEvent, currentEvent],
       story: makeStoryContext(
         {
-          'evt_prev': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 1 },
-          'evt_current': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 5 },
+          evt_prev: { type: 'storyTime', kind: 'point', clock: 'story', scalar: 1 },
+          evt_current: { type: 'storyTime', kind: 'point', clock: 'story', scalar: 5 },
         },
         ['evt_prev', 'evt_current'],
       ),
@@ -381,6 +432,7 @@ describe('CharacterStateValidator', () => {
       analysis: null,
       chapter: 3,
       entityRegistry: new InMemoryEntityRegistry(),
+      entityTypeCatalog: TEST_CATALOG,
     };
 
     const issues = validator.validatePost(input);
@@ -696,6 +748,7 @@ describe('CausalityValidator', () => {
       analysis: null,
       chapter: 3,
       entityRegistry: registry,
+      entityTypeCatalog: TEST_CATALOG,
     };
 
     const issues = validator.validatePost(input);
@@ -737,6 +790,7 @@ describe('CausalityValidator', () => {
       analysis: null,
       chapter: 3,
       entityRegistry: registry,
+      entityTypeCatalog: TEST_CATALOG,
     };
 
     const issues = validator.validatePost(input);
@@ -1323,7 +1377,9 @@ describe('ResultAggregator', () => {
     const aggregator = new ResultAggregator();
 
     // Test 'off' override
-    const resultOff = aggregator.validate(event, state, registry, [event], 1, { overrides: { timeline: 'off' } });
+    const resultOff = aggregator.validate(event, state, registry, [event], 1, {
+      overrides: { timeline: 'off' },
+    });
     const timelineIssuesOff = [
       ...resultOff.warnings,
       ...resultOff.infos,
@@ -1390,10 +1446,10 @@ describe('ResultAggregator', () => {
     expect(validators[0].name).toBe('mock');
   });
 
-  it('validateAll should skip system:genesis events', () => {
+  it('validateAll returns a result for every event, including an order-0 event', () => {
     const registry = new InMemoryEntityRegistry();
-    const genesis = makeEvent({
-      id: 'system:genesis',
+    const first = makeEvent({
+      id: 'E0',
       narrativeOrder: 0,
     });
     const evt = makeEvent({
@@ -1410,8 +1466,9 @@ describe('ResultAggregator', () => {
     };
 
     const aggregator = new ResultAggregator();
-    const results = aggregator.validateAll([genesis, evt], state, registry);
-    expect(results.has('system:genesis')).toBe(false);
+    const results = aggregator.validateAll([first, evt], state, registry);
+    expect(results.size).toBe(2);
+    expect(results.has('E0')).toBe(true);
     expect(results.has('evt_real')).toBe(true);
   });
 });
@@ -1423,29 +1480,30 @@ describe('ResultAggregator', () => {
 describe('Validator Edge Cases', () => {
   describe('TimelineValidator — edge cases', () => {
     const validator = new TimelineValidator();
-
-    it('should handle genesis event gracefully', () => {
-      const genesis = makeEvent({
-        id: 'system:genesis',
+    it('does not flag a same-time order-0 event as a backward jump', () => {
+      const first = makeEvent({
+        id: 'E0',
         narrativeOrder: 0,
+        storyTime: { type: 'absolute', value: 'day_0' },
       });
       const nextEvent = makeEvent({
-        id: 'evt_after_genesis',
+        id: 'evt_after_first',
         narrativeOrder: 5,
         storyTime: { type: 'absolute', value: 'day_0' },
       });
       const input = buildPreInput(nextEvent, {
-        events: [genesis, nextEvent],
+        events: [first, nextEvent],
         story: makeStoryContext(
           {
-            'evt_after_genesis': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 0 },
+            E0: { type: 'storyTime', kind: 'point', clock: 'story', scalar: 0 },
+            evt_after_first: { type: 'storyTime', kind: 'point', clock: 'story', scalar: 0 },
           },
-          ['evt_after_genesis'],
+          ['E0', 'evt_after_first'],
         ),
       });
 
       const issues = validator.validatePre(input);
-      // Genesis is filtered out in comparison; should not error if times are same
+      // Same-clock events at the same coordinate are not backward jumps.
       const backwardIssues = issues.filter((i) => i.message.includes('before previous event'));
       expect(backwardIssues).toHaveLength(0);
     });
@@ -1468,8 +1526,8 @@ describe('Validator Edge Cases', () => {
         // Relative anchor 'start' is unknown → resolved as unlocated
         story: makeStoryContext(
           {
-            'evt_prev': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
-            'evt_current': { type: 'storyTime', kind: 'unlocated' },
+            evt_prev: { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
+            evt_current: { type: 'storyTime', kind: 'unlocated' },
           },
           ['evt_prev', 'evt_current'],
         ),
@@ -1499,9 +1557,7 @@ describe('Validator Edge Cases', () => {
       });
       const issues = validator.validatePre(input);
       // Without story context, no backward-time error should appear
-      expect(
-        issues.filter((i) => i.message.includes('before previous event')),
-      ).toHaveLength(0);
+      expect(issues.filter((i) => i.message.includes('before previous event'))).toHaveLength(0);
       // The narrationTime and sceneType checks still run
       expect(issues.filter((i) => i.message.includes('no narration_time'))).toHaveLength(0);
     });
@@ -1524,16 +1580,14 @@ describe('Validator Edge Cases', () => {
         events: [prevEvent, currentEvent],
         story: makeStoryContext(
           {
-            'evt_prev': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
-            'evt_current': { type: 'storyTime', kind: 'unlocated' },
+            evt_prev: { type: 'storyTime', kind: 'point', clock: 'story', scalar: 10 },
+            evt_current: { type: 'storyTime', kind: 'unlocated' },
           },
           ['evt_prev', 'evt_current'],
         ),
       });
       const issues = validator.validatePre(input);
-      expect(
-        issues.filter((i) => i.message.includes('before previous event')),
-      ).toHaveLength(0);
+      expect(issues.filter((i) => i.message.includes('before previous event'))).toHaveLength(0);
     });
 
     it('skips chronology check for cross-clock scenes', () => {
@@ -1554,16 +1608,14 @@ describe('Validator Edge Cases', () => {
         events: [prevEvent, currentEvent],
         story: makeStoryContext(
           {
-            'evt_prev': { type: 'storyTime', kind: 'point', clock: 'chapter', scalar: 1 },
-            'evt_current': { type: 'storyTime', kind: 'point', clock: 'story', scalar: 5 },
+            evt_prev: { type: 'storyTime', kind: 'point', clock: 'chapter', scalar: 1 },
+            evt_current: { type: 'storyTime', kind: 'point', clock: 'story', scalar: 5 },
           },
           ['evt_prev', 'evt_current'],
         ),
       });
       const issues = validator.validatePre(input);
-      expect(
-        issues.filter((i) => i.message.includes('before previous event')),
-      ).toHaveLength(0);
+      expect(issues.filter((i) => i.message.includes('before previous event'))).toHaveLength(0);
     });
   });
 

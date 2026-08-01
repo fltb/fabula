@@ -3,10 +3,10 @@
 // Covers MemoryStorage and FsStorage with deterministic, no-network tests.
 // ============================================================================
 
-import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
-import * as path from 'node:path';
 import * as os from 'node:os';
+import * as path from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { StorageConflictError } from '../../src/errors.ts';
 import {
   computeContentHash,
@@ -15,6 +15,7 @@ import {
   MemoryStorage,
   type StorageTransaction,
 } from '../../src/storage/index.ts';
+
 // Helpers
 // ============================================================================
 
@@ -66,9 +67,7 @@ describe('StorageTransaction — editorial cutover', () => {
         storage.commitBatch(
           memoryTx({
             transactionId: 'tx-null-hash',
-            writes: [
-              { type: 'put', path: 'novel.md', content: '# Hello', expectedHash: null },
-            ],
+            writes: [{ type: 'put', path: 'novel.md', content: '# Hello', expectedHash: null }],
           }),
         );
         expect(storage.read('novel.md')).toBe('# Hello');
@@ -187,9 +186,7 @@ describe('StorageTransaction — editorial cutover', () => {
             memoryTx({
               transactionId: 'tx-dir-add',
               readSet: [{ kind: 'directory', path: 'defs', expectedManifestHash: hash }],
-              writes: [
-                { type: 'put', path: 'run/out.txt', content: 'new', expectedHash: null },
-              ],
+              writes: [{ type: 'put', path: 'run/out.txt', content: 'new', expectedHash: null }],
             }),
           ),
         ).toThrow(StorageConflictError);
@@ -206,9 +203,7 @@ describe('StorageTransaction — editorial cutover', () => {
             memoryTx({
               transactionId: 'tx-dir-del',
               readSet: [{ kind: 'directory', path: 'defs', expectedManifestHash: hash }],
-              writes: [
-                { type: 'put', path: 'run/out.txt', content: 'new', expectedHash: null },
-              ],
+              writes: [{ type: 'put', path: 'run/out.txt', content: 'new', expectedHash: null }],
             }),
           ),
         ).toThrow(StorageConflictError);
@@ -263,9 +258,7 @@ describe('StorageTransaction — editorial cutover', () => {
                 expectedHash: computeContentHash('data'),
               },
             ],
-            writes: [
-              { type: 'put', path: 'out.txt', content: 'done', expectedHash: null },
-            ],
+            writes: [{ type: 'put', path: 'out.txt', content: 'done', expectedHash: null }],
           }),
         );
         expect(storage.read('out.txt')).toBe('done');
@@ -281,9 +274,7 @@ describe('StorageTransaction — editorial cutover', () => {
             memoryTx({
               transactionId: 'tx-read-stale',
               readSet: [{ kind: 'file', path: 'source.yaml', expectedHash: hash }],
-              writes: [
-                { type: 'put', path: 'out.txt', content: 'done', expectedHash: null },
-              ],
+              writes: [{ type: 'put', path: 'out.txt', content: 'done', expectedHash: null }],
             }),
           ),
         ).toThrow(StorageConflictError);
@@ -352,8 +343,18 @@ describe('StorageTransaction — editorial cutover', () => {
             memoryTx({
               transactionId: 'tx-atomic-fail',
               writes: [
-                { type: 'put', path: 'first.yaml', content: 'changed', expectedHash: computeContentHash('original') },
-                { type: 'put', path: 'second.yaml', content: 'also', expectedHash: computeContentHash('WRONG') },
+                {
+                  type: 'put',
+                  path: 'first.yaml',
+                  content: 'changed',
+                  expectedHash: computeContentHash('original'),
+                },
+                {
+                  type: 'put',
+                  path: 'second.yaml',
+                  content: 'also',
+                  expectedHash: computeContentHash('WRONG'),
+                },
               ],
             }),
           ),
@@ -856,7 +857,12 @@ describe('StorageTransaction — editorial cutover', () => {
               transactionId: 'fs-readset',
               readSet: [{ kind: 'file', path: source, expectedHash: hash }],
               writes: [
-                { type: 'put', path: path.join(tmpDir, 'out.txt'), content: 'x', expectedHash: null },
+                {
+                  type: 'put',
+                  path: path.join(tmpDir, 'out.txt'),
+                  content: 'x',
+                  expectedHash: null,
+                },
               ],
             }),
           ),
@@ -924,11 +930,7 @@ describe('StorageTransaction — editorial cutover', () => {
 
         // existing/a exists, go up via b/../c/new.txt
         const resolved = storage.resolvePath(path.join(tmpDir, 'a', 'b', '..', 'c', 'new.txt'));
-        const expected = path.join(
-          fs.realpathSync.native(path.join(tmpDir, 'a')),
-          'c',
-          'new.txt',
-        );
+        const expected = path.join(fs.realpathSync.native(path.join(tmpDir, 'a')), 'c', 'new.txt');
         expect(resolved).toBe(expected);
       });
 
@@ -943,9 +945,7 @@ describe('StorageTransaction — editorial cutover', () => {
         fs.symlinkSync(linkA, linkB);
 
         const resolved = storage.resolvePath(path.join(tmpDir, 'link-b', 'config.yaml'));
-        expect(resolved).toBe(
-          fs.realpathSync.native(path.join(tmpDir, 'target', 'config.yaml')),
-        );
+        expect(resolved).toBe(fs.realpathSync.native(path.join(tmpDir, 'target', 'config.yaml')));
       });
 
       it('resolves an absolute path directly', () => {

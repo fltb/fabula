@@ -16,7 +16,11 @@
 // ============================================================================
 
 import { z } from 'zod';
-import type { NarrativeNode as CorpusNode, NarrativeEllipsis, NarrativeEllipsisFile } from '../types/corpus.js';
+import type {
+  NarrativeNode as CorpusNode,
+  NarrativeEllipsis,
+  NarrativeEllipsisFile,
+} from '../types/corpus.js';
 import type { NarrativeEvent } from '../types/event.js';
 import { postconditionSchema, preconditionSchema } from './primitives.js';
 import { relationshipTransactionSchema } from './relationship.js';
@@ -25,7 +29,6 @@ import { threadTransactionSchema } from './thread.js';
 import { authoredStoryTimeSchema, storyTimestampSchema } from './timestamp.js';
 
 // ─── Reusable sub-schemas ────────────────────────────────────────────────
-
 
 const branchPathSchema = z
   .object({
@@ -195,22 +198,10 @@ export const narrativeEllipsisFileSchema = z
       .optional()
       .default([])
       .describe('Postconditions: Entity attribute writes resulting from this ellipsis.'),
-    relationshipEffects: z
-      .array(relationshipTransactionSchema)
-      .optional()
-      .default([]),
-    knowledgeTransactions: z
-      .array(informationActSchema)
-      .optional()
-      .default([]),
-    threadProgress: z
-      .array(threadTransactionSchema)
-      .optional()
-      .default([]),
-    ruleEffects: z
-      .array(ruleTransactionSchema)
-      .optional()
-      .default([]),
+    relationshipEffects: z.array(relationshipTransactionSchema).optional().default([]),
+    knowledgeTransactions: z.array(informationActSchema).optional().default([]),
+    threadProgress: z.array(threadTransactionSchema).optional().default([]),
+    ruleEffects: z.array(ruleTransactionSchema).optional().default([]),
     provenance: ellipsisProvenanceSchema,
   })
   .strict(

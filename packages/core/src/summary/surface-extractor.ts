@@ -7,7 +7,11 @@
 // ============================================================================
 
 import * as crypto from 'node:crypto';
-import type { AcceptedSceneArtifact, StyleMetrics, SurfaceReferencePacket } from '../types/render-surface.ts';
+import type {
+  AcceptedSceneArtifact,
+  StyleMetrics,
+  SurfaceReferencePacket,
+} from '../types/render-surface.ts';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 

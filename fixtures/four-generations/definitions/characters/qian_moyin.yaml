@@ -18,12 +18,6 @@ traits:
 - brave
 - transformed
 - righteous
-initialState:
-  location: loc_qianjia
-  status: alive
-  condition: poet_scholar
-  emotionalState: peaceful_content
-  political_stance: apolitical_turned_resistance
 backstory: 满腹诗书，爱花草、爱茵陈酒、爱作诗。两个儿子——孟石文弱、仲石刚烈。仲石在卢沟桥事变后摔死一车日本兵，他自己也被捕入狱。
 knownSecrets:
 - 从事地下抗日宣传

@@ -16,13 +16,14 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
     sceneType: 'linear',
     pov: { character: 'char_hero', type: 'third_person_limited' },
     sceneBrief: 'A test scene.',
+    beats: ['A test scene.'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
     foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
-    source: 'genesis',
+    source: 'event_file',
     branchExistence: { type: 'all' },
     participants: { entities: [] },
     ...overrides,
@@ -132,11 +133,9 @@ describe('DiscourseValidator', () => {
 
     it('does not revive removed discourse replay fallback errors post-render', () => {
       const event = makeEvent({ id: 'E1' });
-      const input = makeInput(
-        event,
-        null,
-        { discourseReplayError: 'Truth boundary violation in entry_reveal_death' },
-      );
+      const input = makeInput(event, null, {
+        discourseReplayError: 'Truth boundary violation in entry_reveal_death',
+      });
 
       // Planned discourse failures are rejected during strict preflight, before
       // a post-render validator exists; this legacy context field is ignored.

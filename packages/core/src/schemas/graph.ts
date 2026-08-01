@@ -8,8 +8,8 @@
 // ============================================================================
 
 import { z } from 'zod';
-import type { EffectiveCoordinate, GraphReadResolution } from '../types/graph.js';
 import type { SceneStoryCoordinate, StoryCoordinate } from '../types/entity.js';
+import type { EffectiveCoordinate, GraphReadResolution } from '../types/graph.js';
 
 // ——— Coordinates ———
 

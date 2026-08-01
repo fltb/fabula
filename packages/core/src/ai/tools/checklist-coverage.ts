@@ -29,8 +29,12 @@ interface NarrativeChecklistItem {
   required: boolean;
 }
 
-interface NarrativeChecklist {
-  items: NarrativeChecklistItem[];
+interface EventChecklistYaml {
+  event: string;
+  title: string;
+  narrativeChecklist?: {
+    items?: NarrativeChecklistItem[];
+  };
 }
 
 interface EventChecklistData {
@@ -59,9 +63,9 @@ interface CoverageReport {
   };
 }
 
-function readYaml(path: string): any {
+function readYaml(path: string): EventChecklistYaml {
   const content = readFileSync(path, 'utf-8');
-  return YAML.parse(content);
+  return YAML.parse(content) as unknown as EventChecklistYaml;
 }
 
 function main() {
@@ -86,13 +90,14 @@ function main() {
       for (const item of items) {
         dimensions.push(item.dimension);
         if (item.required) requiredCount++;
-        if (!dimensionMap.has(item.dimension)) {
-          dimensionMap.set(item.dimension, {
+        let stats = dimensionMap.get(item.dimension);
+        if (!stats) {
+          stats = {
             eventSet: new Set(),
             requiredCount: 0,
-          });
+          };
+          dimensionMap.set(item.dimension, stats);
         }
-        const stats = dimensionMap.get(item.dimension)!;
         stats.eventSet.add(eventId);
         if (item.required) stats.requiredCount++;
       }

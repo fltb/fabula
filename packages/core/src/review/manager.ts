@@ -5,14 +5,12 @@
 // ============================================================================
 
 import * as crypto from 'node:crypto';
-import { computeContentHash } from '../storage/hash.ts';
-import type { Storage } from '../storage/types.ts';
-import type { ProjectTransactionCoordinator } from '../editorial/transaction.ts';
 import { EditorialOperationError } from '../editorial/errors.ts';
+import type { ProjectTransactionCoordinator } from '../editorial/transaction.ts';
 import { ConfigError, StorageConflictError } from '../errors.ts';
 import { reviewLedgerV1Schema } from '../schemas/review.ts';
-import type { CommentFilter, StatusSummary } from './types.js';
-import { getSummary } from './summary.js';
+import { computeContentHash } from '../storage/hash.ts';
+import type { Storage } from '../storage/types.ts';
 import type {
   NewReviewComment,
   ReviewApplicationV1,
@@ -20,6 +18,8 @@ import type {
   ReviewLedgerV1,
   ReviewPatch,
 } from '../types/index.js';
+import { getSummary } from './summary.js';
+import type { CommentFilter, StatusSummary } from './types.js';
 
 // ─── Snapshot type ──────────────────────────────────────────────────────────
 
@@ -30,21 +30,15 @@ export interface ReviewLedgerSnapshot {
 }
 
 export class ReviewManager {
-
   private readonly storage: Storage;
   private readonly coordinator: ProjectTransactionCoordinator;
   private readonly ledgerPath: string;
 
-  constructor(
-    storage: Storage,
-    coordinator: ProjectTransactionCoordinator,
-    ledgerPath: string,
-  ) {
+  constructor(storage: Storage, coordinator: ProjectTransactionCoordinator, ledgerPath: string) {
     if ('storage' in coordinator && coordinator.storage !== storage) {
-      throw new ConfigError(
-        'ReviewManager storage must match coordinator storage',
-        { path: ledgerPath },
-      );
+      throw new ConfigError('ReviewManager storage must match coordinator storage', {
+        path: ledgerPath,
+      });
     }
     this.storage = storage;
     this.coordinator = coordinator;
@@ -110,11 +104,7 @@ export class ReviewManager {
     const trimmedActor = actorId.trim();
 
     // Validate line bounds
-    if (
-      input.target.type === 'line' &&
-      sceneLineCount !== undefined &&
-      input.target.lineRange
-    ) {
+    if (input.target.type === 'line' && sceneLineCount !== undefined && input.target.lineRange) {
       if (input.target.lineRange[1] > sceneLineCount) {
         throw new EditorialOperationError(
           'INVALID_OPERATION',
@@ -125,14 +115,10 @@ export class ReviewManager {
 
     // CAS check
     const current = this.readLedger();
-    if (
-      opts?.expectedLedgerHash !== undefined &&
-      current.contentHash !== opts.expectedLedgerHash
-    ) {
-      throw new StorageConflictError(
-        'Expected ledger hash does not match current content',
-        { path: this.ledgerPath },
-      );
+    if (opts?.expectedLedgerHash !== undefined && current.contentHash !== opts.expectedLedgerHash) {
+      throw new StorageConflictError('Expected ledger hash does not match current content', {
+        path: this.ledgerPath,
+      });
     }
 
     const now = new Date().toISOString();
@@ -188,14 +174,11 @@ export class ReviewManager {
   // ── Applicable Open Comments ──────────────────────────────────────────────
 
   // ── Applicable Open Comments (including line-level) ────────────
-  
-  getApplicableOpenComments(
-    eventId: string,
-    chapterNum: number,
-  ): ReviewComment[] {
+
+  getApplicableOpenComments(eventId: string, chapterNum: number): ReviewComment[] {
     const { ledger } = this.readLedger();
     const chapterId = `chapter:${chapterNum}`;
-  
+
     // Filter to open comments that match by scope
     const applicable = ledger.comments.filter((c) => {
       if (c.status !== 'open') return false;
@@ -206,7 +189,7 @@ export class ReviewManager {
       if (t.type === 'line') return t.id === eventId;
       return false;
     });
-  
+
     // Stable order: scope, then creation time, then immutable ID
     const order: Record<string, number> = { novel: 0, chapter: 1, scene: 2, line: 3 };
     applicable.sort((left, right) => {
@@ -215,7 +198,7 @@ export class ReviewManager {
       const createdOrder = left.createdAt.localeCompare(right.createdAt);
       return createdOrder !== 0 ? createdOrder : left.id.localeCompare(right.id);
     });
-  
+
     return applicable;
   }
 
@@ -232,40 +215,24 @@ export class ReviewManager {
     const current = this.readLedger();
 
     // CAS check
-    if (
-      opts?.expectedLedgerHash !== undefined &&
-      current.contentHash !== opts.expectedLedgerHash
-    ) {
-      throw new StorageConflictError(
-        'Expected ledger hash does not match current content',
-        { path: this.ledgerPath },
-      );
+    if (opts?.expectedLedgerHash !== undefined && current.contentHash !== opts.expectedLedgerHash) {
+      throw new StorageConflictError('Expected ledger hash does not match current content', {
+        path: this.ledgerPath,
+      });
     }
 
-    const originalIndex = current.ledger.comments.findIndex(
-      (c) => c.id === id,
-    );
+    const originalIndex = current.ledger.comments.findIndex((c) => c.id === id);
     if (originalIndex === -1) {
-      throw new EditorialOperationError(
-        'INVALID_OPERATION',
-        `Comment ${id} not found`,
-      );
+      throw new EditorialOperationError('INVALID_OPERATION', `Comment ${id} not found`);
     }
 
     const original = current.ledger.comments[originalIndex];
     if (original.status === 'superseded') {
-      throw new EditorialOperationError(
-        'INVALID_OPERATION',
-        `Comment ${id} is already superseded`,
-      );
+      throw new EditorialOperationError('INVALID_OPERATION', `Comment ${id} is already superseded`);
     }
 
     // Validate line bounds on replacement input
-    if (
-      input.target.type === 'line' &&
-      sceneLineCount !== undefined &&
-      input.target.lineRange
-    ) {
+    if (input.target.type === 'line' && sceneLineCount !== undefined && input.target.lineRange) {
       if (input.target.lineRange[1] > sceneLineCount) {
         throw new EditorialOperationError(
           'INVALID_OPERATION',
@@ -319,18 +286,12 @@ export class ReviewManager {
     const current = this.readLedger();
     const index = current.ledger.comments.findIndex((c) => c.id === id);
     if (index === -1) {
-      throw new EditorialOperationError(
-        'INVALID_OPERATION',
-        `Comment ${id} not found`,
-      );
+      throw new EditorialOperationError('INVALID_OPERATION', `Comment ${id} not found`);
     }
 
     const comment = current.ledger.comments[index];
     if (comment.status === 'superseded') {
-      throw new EditorialOperationError(
-        'INVALID_OPERATION',
-        `Comment ${id} is superseded`,
-      );
+      throw new EditorialOperationError('INVALID_OPERATION', `Comment ${id} is superseded`);
     }
 
     let updated: ReviewComment;
@@ -398,10 +359,7 @@ export class ReviewManager {
     // Validate all IDs exist
     for (const id of ids) {
       if (!current.ledger.comments.some((c) => c.id === id)) {
-        throw new EditorialOperationError(
-          'INVALID_OPERATION',
-          `Comment ${id} not found`,
-        );
+        throw new EditorialOperationError('INVALID_OPERATION', `Comment ${id} not found`);
       }
     }
 
@@ -458,61 +416,51 @@ export class ReviewManager {
     const rawComments = Array.isArray(raw.comments) ? raw.comments : [];
     const rawPatches = Array.isArray(raw.patches) ? raw.patches : [];
 
-    const comments: ReviewComment[] = rawComments.map(
-      (c: unknown) => {
-        const entry = c as Record<string, unknown>;
-        return {
-          id: String(entry.id ?? ''),
-          author: (entry.author === 'llm' ? 'llm' : 'human') as 'human' | 'llm',
-          actorId: entry.actorId ? String(entry.actorId) : 'legacy',
-          target: (entry.target ?? {
-            type: 'scene',
-            id: '',
-          }) as ReviewComment['target'],
-          severity: (entry.severity ?? 'nit') as ReviewComment['severity'],
-          category: (entry.category ?? 'style') as ReviewComment['category'],
-          content: String(entry.content ?? ''),
-          status: (entry.status ?? 'open') as ReviewComment['status'],
-          applications: Array.isArray(entry.applications)
-            ? (entry.applications as ReviewApplicationV1[])
-            : [],
-          ...(entry.supersedesId
-            ? { supersedesId: String(entry.supersedesId) }
-            : {}),
-          ...(entry.resolvedBy
-            ? { resolvedBy: String(entry.resolvedBy) }
-            : {}),
-          createdAt: String(entry.createdAt ?? new Date().toISOString()),
-          ...(entry.resolvedAt
-            ? { resolvedAt: String(entry.resolvedAt) }
-            : {}),
-        };
-      },
-    );
+    const comments: ReviewComment[] = rawComments.map((c: unknown) => {
+      const entry = c as Record<string, unknown>;
+      return {
+        id: String(entry.id ?? ''),
+        author: (entry.author === 'llm' ? 'llm' : 'human') as 'human' | 'llm',
+        actorId: entry.actorId ? String(entry.actorId) : 'legacy',
+        target: (entry.target ?? {
+          type: 'scene',
+          id: '',
+        }) as ReviewComment['target'],
+        severity: (entry.severity ?? 'nit') as ReviewComment['severity'],
+        category: (entry.category ?? 'style') as ReviewComment['category'],
+        content: String(entry.content ?? ''),
+        status: (entry.status ?? 'open') as ReviewComment['status'],
+        applications: Array.isArray(entry.applications)
+          ? (entry.applications as ReviewApplicationV1[])
+          : [],
+        ...(entry.supersedesId ? { supersedesId: String(entry.supersedesId) } : {}),
+        ...(entry.resolvedBy ? { resolvedBy: String(entry.resolvedBy) } : {}),
+        createdAt: String(entry.createdAt ?? new Date().toISOString()),
+        ...(entry.resolvedAt ? { resolvedAt: String(entry.resolvedAt) } : {}),
+      };
+    });
 
-    const patches: ReviewPatch[] = rawPatches.map(
-      (p: unknown) => {
-        const entry = p as Record<string, unknown>;
-        return {
-          sourceReviewIds: Array.isArray(entry.sourceReviewIds)
-            ? entry.sourceReviewIds.map(String)
-            : [],
-          description: String(entry.description ?? ''),
-          changes: Array.isArray(entry.changes)
-            ? entry.changes.map((ch: unknown) => {
-                const ce = ch as Record<string, unknown>;
-                return {
-                  type: ce.type as ReviewPatch['changes'][number]['type'],
-                  target: String(ce.target ?? ''),
-                  oldValue: ce.oldValue,
-                  newValue: ce.newValue,
-                  rationale: String(ce.rationale ?? ''),
-                };
-              })
-            : [],
-        };
-      },
-    );
+    const patches: ReviewPatch[] = rawPatches.map((p: unknown) => {
+      const entry = p as Record<string, unknown>;
+      return {
+        sourceReviewIds: Array.isArray(entry.sourceReviewIds)
+          ? entry.sourceReviewIds.map(String)
+          : [],
+        description: String(entry.description ?? ''),
+        changes: Array.isArray(entry.changes)
+          ? entry.changes.map((ch: unknown) => {
+              const ce = ch as Record<string, unknown>;
+              return {
+                type: ce.type as ReviewPatch['changes'][number]['type'],
+                target: String(ce.target ?? ''),
+                oldValue: ce.oldValue,
+                newValue: ce.newValue,
+                rationale: String(ce.rationale ?? ''),
+              };
+            })
+          : [],
+      };
+    });
 
     return { version: 1, comments, patches };
   }

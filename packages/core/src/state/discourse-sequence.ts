@@ -9,8 +9,8 @@
 
 import { ConfigError } from '../errors.ts';
 import type { BranchPath } from '../types/branch.ts';
-import type { NarrativeEvent } from '../types/event.ts';
 import type { PlannedDiscourseLedger } from '../types/discourse.ts';
+import type { NarrativeEvent } from '../types/event.ts';
 import type { DiscourseSceneSequenceEntry } from '../types/graph.ts';
 
 // DiscourseSceneSequenceEntry is defined in types/graph.ts (the source of truth).
@@ -47,21 +47,16 @@ export function compileDiscourseSceneSequence(input: {
   const { events, ledger, branch } = input;
 
   // ── Filter to only event_file scenes ──
-  const eventFileEvents = events.filter(
-    (event) => event.source === 'event_file',
-  );
+  const eventFileEvents = events.filter((event) => event.source === 'event_file');
   const eventById = new Map(eventFileEvents.map((event) => [event.id, event]));
   if (eventById.size !== eventFileEvents.length) {
-    throw new ConfigError(
-      `Duplicate event IDs supplied for discourse branch "${branch}".`,
-      { phase: 'discourse-sequence' },
-    );
+    throw new ConfigError(`Duplicate event IDs supplied for discourse branch "${branch}".`, {
+      phase: 'discourse-sequence',
+    });
   }
 
   // ── Branch chapter blocks must exist ──
-  const chapterBlocks = ledger.chapters.filter(
-    (chapter) => chapter.branch === branch,
-  );
+  const chapterBlocks = ledger.chapters.filter((chapter) => chapter.branch === branch);
   if (chapterBlocks.length === 0) {
     throw new ConfigError(
       `Discourse ledger "${ledger.id}" has no chapter sequence for branch "${branch}".`,
@@ -140,9 +135,7 @@ export function compileDiscourseSceneSequence(input: {
 
   for (const [sceneId, entries] of entriesByScene) {
     if (entries.length < 2) continue; // single action is trivially contiguous
-    const sorted = entries
-      .map((e) => e.discoursePosition)
-      .sort((a, b) => a - b);
+    const sorted = entries.map((e) => e.discoursePosition).sort((a, b) => a - b);
     for (let i = 1; i < sorted.length; i++) {
       if (sorted[i] !== sorted[i - 1] + 1) {
         throw new ConfigError(
@@ -159,9 +152,7 @@ export function compileDiscourseSceneSequence(input: {
   // ── Compute action intervals ──
   const actionIntervals = new Map<string, { start: number; end: number }>();
   for (const [sceneId, entries] of entriesByScene) {
-    const sortedPositions = entries
-      .map((e) => e.discoursePosition)
-      .sort((a, b) => a - b);
+    const sortedPositions = entries.map((e) => e.discoursePosition).sort((a, b) => a - b);
     actionIntervals.set(sceneId, {
       start: sortedPositions[0]!,
       end: sortedPositions[sortedPositions.length - 1]!,

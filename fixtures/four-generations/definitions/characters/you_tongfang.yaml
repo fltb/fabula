@@ -15,11 +15,6 @@ traits:
 - kind
 - resentful
 - patriotic_deep_down
-initialState:
-  location: loc_guanjia
-  status: alive
-  condition: concubine
-  emotionalState: resentful_but_resigned
 backstory: 东北人，家乡沦陷后流落北平，被冠晓荷娶作妾。她始终记得沈阳的小河沿。
 knownSecrets:
 - 暗中给钱家送钱

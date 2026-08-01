@@ -2,6 +2,7 @@
 // AI Provider — Mock Provider
 // ============================================================================
 
+import { extractExpectedProtocol } from '../prompts/render-analysis.ts';
 import type { CompletionRequest, CompletionResponse, LLMProvider, Message } from '../types.ts';
 
 /**
@@ -68,6 +69,25 @@ export class MockProvider implements LLMProvider {
       // Default: echo last user message with a brief narrative wrapper
       const lastUser = [...request.messages].reverse().find((m: Message) => m.role === 'user');
       content = lastUser ? `Mock response: ${lastUser.content.slice(0, 80)}…` : 'Mock response';
+    }
+
+    // Pass 2 responses behave like a compliant model: if the canned content is
+    // JSON, echo the REAL protocol from the prompt into it. Non-JSON responses
+    // (intentional parse failures, prose) pass through untouched.
+    const isPass2 = request.seed !== undefined || request.responseFormat?.type === 'json_object';
+    if (isPass2) {
+      const echoed = extractExpectedProtocol(request.messages);
+      if (echoed) {
+        try {
+          const parsed = JSON.parse(content) as Record<string, unknown>;
+          if (parsed && typeof parsed === 'object') {
+            parsed.protocol = echoed;
+            content = JSON.stringify(parsed);
+          }
+        } catch {
+          // Not JSON — leave the canned content untouched (parse failure path).
+        }
+      }
     }
 
     return {

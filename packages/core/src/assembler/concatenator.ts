@@ -93,6 +93,6 @@ export class ProseConcatenator {
       }
     }
 
-    return blocks.join('\n').trimEnd() + '\n';
+    return `${blocks.join('\n').trimEnd()}\n`;
   }
 }

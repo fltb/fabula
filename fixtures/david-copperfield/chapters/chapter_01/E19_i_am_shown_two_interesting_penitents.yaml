@@ -22,6 +22,14 @@ sceneBrief: David has returned to England and is living at Aunt Betsey's house i
   with his usual optimism, declares that he will 'shine' in the colonies. Before they
   go, David also visits Littimer and Uriah Heep in prison — two fascinating penitents,
   though their penitence is more tactical than genuine.
+beats:
+  - "David has returned to England and is living at Aunt Betsey's house in Dover, completing his novel."
+  - "He goes to visit the Micawbers and the Peggottys before their emigration to Australia."
+  - "Mr Peggotty shows David Emily, who has been living quietly in London under Martha's care, genuinely penitent and deeply changed."
+  - "Emily asks David to write to Ham's family and to tell them she will spend her life trying to be worthy of their forgiveness."
+  - "Mr Peggotty, Emily, Mrs Gummidge, and the entire Micawber family sail for Australia, where they will start new lives."
+  - "Mr Micawber, with his usual optimism, declares that he will 'shine' in the colonies."
+  - "Before they go, David also visits Littimer and Uriah Heep in prison — two fascinating penitents, though their penitence is more tactical than genuine."
 preconditions:
 - entity: david_copperfield
   attribute: location

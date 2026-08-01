@@ -10,6 +10,6 @@ export const itemDefinitionSchema = z
     name: z.string(),
     kind: z.string(),
     description: z.string(),
-    initialState: z.record(z.string(), z.unknown()),
+    initialState: z.record(z.string(), z.unknown()).optional(),
   })
   .strict();

@@ -3,7 +3,7 @@
 // Claim/act transaction application + evaluate() deterministic three-valued logic
 // ============================================================================
 
-import type { EntityId, FactId, StoryTimestamp, WorldState } from '../types/index.js';
+import type { EntityId, FactId, WorldState } from '../types/index.js';
 import type {
   ActProposition,
   Claim,
@@ -12,11 +12,8 @@ import type {
   EpistemicLedger,
   EpistemicProposition,
   EvaluationResult,
-  EvidenceSource,
   GroundedProposition,
   InformationAct,
-  InformationActType,
-  IntensionalProposition,
   Proposition,
   PropositionCatalog,
   PropositionId,
@@ -87,11 +84,10 @@ function evaluateGrounded(p: GroundedProposition, state: WorldState): Evaluation
 function evaluateEpistemic(
   p: EpistemicProposition,
   ledger: EpistemicLedger,
-  catalog: PropositionCatalog,
+  _catalog: PropositionCatalog,
 ): EvaluationResult {
   const key = claimKey(p.subject, p.propositionId);
   const claim = ledger.claims[key];
-
   if (!claim) return 'indeterminate';
 
   // The epistemic truth is determined by the ledger claim matching the stated attitude

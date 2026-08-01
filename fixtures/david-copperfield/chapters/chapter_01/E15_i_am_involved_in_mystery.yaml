@@ -21,6 +21,12 @@ sceneBrief: David receives a mysterious letter from Mr Micawber, written in his 
   decide to go to Canterbury on the appointed day. The chapter builds suspense for
   the climactic exposure of Heep's schemes, for which Micawber has been secretly gathering
   evidence.
+beats:
+  - "David receives a mysterious letter from Mr Micawber, written in his most elaborate style, hinting at 'a disclosure of the most momentous nature' and requesting David's presence — along with Traddles and Aunt Betsey — in Canterbury."
+  - "The letter is dated from Canterbury, where Micawber has been working as Uriah Heep's confidential clerk."
+  - "It is full of dark hints about 'the destruction that is brewing' and 'the serpent that has gnawed my vitals.'"
+  - "David, Traddles, and Aunt Betsey consult and decide to go to Canterbury on the appointed day."
+  - "The chapter builds suspense for the climactic exposure of Heep's schemes, for which Micawber has been secretly gathering evidence."
 preconditions:
 - entity: micawber
   attribute: location

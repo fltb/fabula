@@ -1,8 +1,8 @@
 import * as path from 'node:path';
+import type { CompiledGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import { ConfigError } from '../errors.ts';
 import type { Storage } from '../storage/index.ts';
 import type { NarrativeEvent } from '../types/index.ts';
-import type { CompiledGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 
 export interface AssembleGameDialogueTreeOptions {
   projectDir: string;
@@ -30,7 +30,8 @@ function orderedEventIds(tree: CompiledGameDialogueTree): string[] {
   const roots = [...tree.eventScopes.entries()]
     .filter(([, scope]) => scope.type === 'all')
     .map(([eventId]) => eventId);
-  if (roots.length !== 1) {
+  const root = roots[0];
+  if (roots.length !== 1 || root === undefined) {
     throw new ConfigError(`Game dialogue tree requires exactly one root; found ${roots.length}`, {
       phase: 'game_dialogue_assembly',
     });
@@ -41,7 +42,7 @@ function orderedEventIds(tree: CompiledGameDialogueTree): string[] {
     ordered.push(eventId);
     for (const choice of tree.choicesByEventId.get(eventId) ?? []) visit(choice.targetEvent);
   };
-  visit(roots[0]!);
+  visit(root);
   return ordered;
 }
 
@@ -106,6 +107,13 @@ export function assembleGameDialogueTree(
         phase: 'game_dialogue_assembly',
       });
     }
+    const scene = resolvedScenes.get(eventId);
+    if (scene === undefined) {
+      throw new ConfigError(`Missing resolved game dialogue scene '${eventId}'`, {
+        eventId,
+        phase: 'game_dialogue_assembly',
+      });
+    }
     const choices = tree.choicesByEventId.get(eventId) ?? [];
     const choiceLinks =
       choices.length === 0
@@ -116,12 +124,7 @@ export function assembleGameDialogueTree(
                 `- [${choice.label}](#${anchorFor(choice.targetEvent)}) — ${choice.description}`,
             )
             .join('\n')}`;
-    return [
-      `<a id="${anchorFor(eventId)}"></a>`,
-      `## ${event.title}`,
-      resolvedScenes.get(eventId)!.trim(),
-      choiceLinks,
-    ]
+    return [`<a id="${anchorFor(eventId)}"></a>`, `## ${event.title}`, scene.trim(), choiceLinks]
       .filter((part) => part !== '')
       .join('\n');
   });

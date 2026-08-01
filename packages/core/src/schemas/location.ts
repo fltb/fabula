@@ -11,7 +11,7 @@ export const locationDefinitionSchema = z
     kind: z.string(),
     parent: z.string().optional(),
     description: z.string(),
-    initialState: z.record(z.string(), z.unknown()),
+    initialState: z.record(z.string(), z.unknown()).optional(),
     notableFeatures: z.array(z.string()).optional(),
   })
   .strict();

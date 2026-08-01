@@ -10,36 +10,41 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../../src/schemas/analysis.js';
 import { analysisContentSchema } from '../../src/validator/index.js';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
+const ALL_FIELDS_PAYLOAD: Record<string, unknown> = {
+  postconditions: { covered: ['char.status'], dropped: [] },
+  preconditions: { violated: [] },
+  pov: { consistent: true, leaks: [] },
+  inventedDetails: [],
+  quality: {
+    proseScore: 8,
+    maxScore: 10,
+    strengths: ['good'],
+    weaknesses: [],
+    estimatedWordCount: 350,
+  },
+  threadProgressAchieved: ['thread-1'],
+  foreshadowingDeployed: [],
+  narrativeChecks: [],
+  appearanceChecks: [],
+  characterReferences: [],
+  tenseDetected: 'past',
+  conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+  ruleChecks: [],
+  knowledgeChecks: [],
+  checklistResults: [],
+};
+
 const ALL_FIELDS_VALID = {
   eventId: 'E1',
-  analysis: {
-    postconditions: { covered: ['char.status'], dropped: [] },
-    preconditions: { violated: [] },
-    pov: { consistent: true, leaks: [] },
-    inventedDetails: [],
-    quality: {
-      proseScore: 8,
-      maxScore: 10,
-      strengths: ['good'],
-      weaknesses: [],
-      estimatedWordCount: 350,
-    },
-    threadProgressAchieved: ['thread-1'],
-    foreshadowingDeployed: [],
-    narrativeChecks: [],
-    appearanceChecks: [],
-    characterReferences: [],
-    tenseDetected: 'past',
-    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-    ruleChecks: [],
-    knowledgeChecks: [],
-    checklistResults: [],
-  },
+  protocol: makeProtocol('prose'),
+  observations: makeObservations(ALL_FIELDS_PAYLOAD, 'prose'),
+  analysis: ALL_FIELDS_PAYLOAD,
 };
 
 // ---------------------------------------------------------------------------

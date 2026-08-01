@@ -25,6 +25,7 @@ function makeIssue(
   },
 ): ValidationIssue {
   return {
+    kind: 'interpretive_assessment',
     event: 'E0',
     entity: 'system',
     attribute: undefined,
@@ -222,7 +223,7 @@ describe('computeDisattenuatedRho', () => {
     // disattenuated = 0.6 / 0.8485 ≈ 0.7071
     const result = computeDisattenuatedRho(0.6, 0.8, 0.9);
     expect(result.applicable).toBe(true);
-    expect(result.value).toBeCloseTo(0.7071, 4);
+    expect(result.value).toBeCloseTo(Math.SQRT1_2, 4);
   });
 
   it('clamps value to [-1, 1] when corrected exceeds range', () => {
@@ -355,14 +356,18 @@ describe('computePerValidatorBreakdown', () => {
 
     expect(result.size).toBe(2);
 
-    const v1 = result.get('V1')!;
+    const v1 = result.get('V1');
+    expect(v1).toBeDefined();
+    if (!v1) throw new Error('Expected V1 breakdown');
     expect(v1.errors).toBe(2);
     expect(v1.warnings).toBe(1);
     expect(v1.infos).toBe(0);
     expect(v1.nCED).toBeCloseTo(6, 10); // (2+1+0) / 0.5 = 6
     expect(v1.category).toBe('');
 
-    const v2 = result.get('V2')!;
+    const v2 = result.get('V2');
+    expect(v2).toBeDefined();
+    if (!v2) throw new Error('Expected V2 breakdown');
     expect(v2.errors).toBe(0);
     expect(v2.warnings).toBe(0);
     expect(v2.infos).toBe(2);

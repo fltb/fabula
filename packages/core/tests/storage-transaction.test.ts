@@ -87,9 +87,7 @@ describe('Storage.commitBatch', () => {
         lockPath: '.nova/transactions/workspace.lock',
         journalPath: '.nova/transactions/tx-stale-directory.json',
         conflictDir: '.nova/conflicts',
-        readSet: [
-          { kind: 'directory', path: 'definitions', expectedManifestHash },
-        ],
+        readSet: [{ kind: 'directory', path: 'definitions', expectedManifestHash }],
         writes: [{ type: 'put', path: 'run/output.txt', content: 'new', expectedHash: null }],
       }),
     ).toThrow(StorageConflictError);

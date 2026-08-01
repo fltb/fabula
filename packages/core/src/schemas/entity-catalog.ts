@@ -87,6 +87,16 @@ export const entityTypeCatalogSchema = z
 
 // ——— Entity Declaration ———
 
+export const entityIntroductionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('initial') }).strict(),
+  z
+    .object({
+      type: z.literal('event'),
+      eventId: z.string(),
+    })
+    .strict(),
+]);
+
 export const entityDeclarationSchema = z
   .object({
     entityId: z.string(),
@@ -95,6 +105,7 @@ export const entityDeclarationSchema = z
       name: z.string(),
       definitionFile: z.string(),
     }),
+    introduction: entityIntroductionSchema,
     provenance: z
       .object({
         source: z.string(),
@@ -110,5 +121,63 @@ export const entityDeclarationCatalogSchema = z
   .object({
     declarations: z.record(z.string(), entityDeclarationSchema),
     version: z.number().int().nonnegative(),
+  })
+  .strict();
+
+// ——— Author-facing Catalog Source (strict, versionless) ———
+//
+// Strict Zod contract for definitions/entity-types.yaml. No `version` or
+// `schemaVersion` fields: files that do not match the current shape fail
+// validation with ConfigError — no negotiation, dual reads, or migration.
+
+export const attributeValueTypeSchema = z.enum([
+  'string',
+  'number',
+  'boolean',
+  'string_list',
+  'string_map',
+]);
+
+export const attributeDefinitionSourceSchema = z
+  .object({
+    attributeId: z.string(),
+    valueType: attributeValueTypeSchema,
+    requiredAt: requiredAtSchema,
+    writePolicy: writePolicySchema,
+    allowedLifecycleStates: z.array(entityRuntimeStateSchema).optional(),
+    unsetAllowed: z.boolean(),
+    semanticRole: z.string().optional(),
+    typedReferenceConstraint: z
+      .object({
+        targetKind: z.string(),
+        targetTypeId: z.string().optional(),
+      })
+      .optional(),
+  })
+  .strict();
+
+export const entityTypeDefinitionSourceSchema = z
+  .object({
+    typeId: z.string(),
+    kind: z.enum(['character', 'location', 'item', 'concept', 'faction', 'rule']),
+    attributes: z.record(z.string(), attributeDefinitionSourceSchema),
+    lifecyclePolicy: z.object({
+      allowedTransitions: z.array(z.tuple([entityRuntimeStateSchema, entityRuntimeStateSchema])),
+    }),
+    referenceCapabilities: z.object({
+      defaultEligibility: z.enum(['identity', 'live', 'historical']),
+    }),
+    typedInvariants: z.array(
+      z.object({
+        id: z.string(),
+        description: z.string(),
+      }),
+    ),
+  })
+  .strict();
+
+export const entityTypeCatalogSourceSchema = z
+  .object({
+    types: z.record(z.string(), entityTypeDefinitionSourceSchema),
   })
   .strict();

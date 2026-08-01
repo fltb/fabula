@@ -69,6 +69,108 @@
       "ruleChecks": [],
       "knowledgeChecks": [],
       "checklistResults": []
+    },
+    "protocol": {
+      "proseHash": "1de062d64cad0f590443105120147422ef2d34f50bd9fd10ae303aa8e4962857",
+      "analysisSchema": "mock-analysis-contract",
+      "model": "mock-stage1",
+      "provider": "mock-pass2",
+      "analysisPromptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "samplingConfigHash": "mock-sampling-config",
+      "validatorPolicy": "mock-validator-policy",
+      "referencePolicy": "mock-reference-policy"
+    },
+    "observations": {
+      "postconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "preconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "pov": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "inventedDetails": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "quality": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "threadProgressAchieved": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "foreshadowingDeployed": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "narrativeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "appearanceChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "characterReferences": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "tenseDetected": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "conflictAnalysis": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "ruleChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "knowledgeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      },
+      "checklistResults": {
+        "disposition": "produced",
+        "evidence": [
+          "冬至祭祖时节，四婶照例要准备祭品。祥林嫂默默地帮"
+        ]
+      }
     }
   },
   "metadata": {

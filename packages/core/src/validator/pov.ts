@@ -9,7 +9,7 @@ import type {
   ValidationIssue,
   Validator,
 } from '../types/index.js';
-import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
+import { makeIssue } from './base.js';
 
 // ── Schemas ───────────────────────────────────────────────────────────
 
@@ -88,9 +88,6 @@ export class POVValidator implements Validator {
   validatePost(input: PostRenderInput): ValidationIssue[] {
     const issues: ValidationIssue[] = [];
     const event = input.event;
-    const prose = input.prose;
-    const povType = event.pov.type; // event-level field, not in entity attribute catalog
-    const povChar = event.pov.character; // event-level field, not in entity attribute catalog
 
     // First-person detection: handled by Pass 2 pov.consistent + pov.leaks; see getAnalysisRequirements().
 
@@ -110,6 +107,9 @@ export class POVValidator implements Validator {
               'Review POV consistency',
               'edit_file',
               'pov',
+              undefined,
+              undefined,
+              'interpretive_assessment',
             ),
           );
         }
@@ -125,6 +125,9 @@ export class POVValidator implements Validator {
               'Review POV consistency throughout the scene.',
               'edit_file',
               'pov',
+              undefined,
+              undefined,
+              'interpretive_assessment',
             ),
           );
         }

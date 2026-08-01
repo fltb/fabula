@@ -30,6 +30,7 @@ function event(id: string, day: number, postconditions: Fact[] = []): NarrativeE
     sceneType: 'linear',
     pov: { character: 'narrator', type: 'omniscient' },
     sceneBrief: id,
+    beats: [id],
     preconditions: [],
     postconditions,
     threadProgress: [],

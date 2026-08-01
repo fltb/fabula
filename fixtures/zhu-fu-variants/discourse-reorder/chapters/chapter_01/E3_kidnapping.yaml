@@ -14,6 +14,18 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "新年才过，祥林嫂在河边淘米时看见对岸一个男人——像是夫家的堂伯——她失色地缩回。过了几天，婆婆带人来了：先是声称要她回去帮忙春耕。四叔说'既是她的婆婆要她回去，那有什么话可说的呢？'婆婆结清了她的工钱（一千七百五十文，她一文未花全存着），收拾了铺盖衣物。那天上午，祥林嫂在河边淘米时，一只白篷船突然靠岸，两个男人跳出来把她抱住，塞进船里——她不停嚎骂，被堵了嘴。卫老婆子从船舱里钻出来——原来她是同谋。祥林嫂被捆着抬上花轿，一路嚎哭到贺家坳。拜堂时她一头撞在香案角上，额上碰了一个大窟窿，鲜血直流。人们七手八脚把她按住，强行拜了堂。然而到了年底，卫老婆子来拜年时说：她生了个儿子，母子都胖了——'她真是交了好运了'。贺老六有力气，会做活，房子是自家的，上头没有婆婆——她度过了两年安稳日子。"
+beats:
+  - "新年才过，祥林嫂在河边淘米时看见对岸一个男人——像是夫家的堂伯——她失色地缩回。"
+  - "过了几天，婆婆带人来了：先是声称要她回去帮忙春耕。"
+  - "四叔说'既是她的婆婆要她回去，那有什么话可说的呢？"
+  - "'婆婆结清了她的工钱（一千七百五十文，她一文未花全存着），收拾了铺盖衣物。"
+  - "那天上午，祥林嫂在河边淘米时，一只白篷船突然靠岸，两个男人跳出来把她抱住，塞进船里——她不停嚎骂，被堵了嘴。"
+  - "卫老婆子从船舱里钻出来——原来她是同谋。"
+  - "祥林嫂被捆着抬上花轿，一路嚎哭到贺家坳。"
+  - "拜堂时她一头撞在香案角上，额上碰了一个大窟窿，鲜血直流。"
+  - "人们七手八脚把她按住，强行拜了堂。"
+  - "然而到了年底，卫老婆子来拜年时说：她生了个儿子，母子都胖了——'她真是交了好运了'。"
+  - "贺老六有力气，会做活，房子是自家的，上头没有婆婆——她度过了两年安稳日子。"
 preconditions:
   - entity: xianglins_wife
     attribute: location
@@ -93,6 +105,8 @@ introduces:
     id: he_family_hollow
     initialState:
       status: remote_rural
+      population: sparse
+      wildlife_risk: wolves_in_spring
   - type: character
     id: he_laoliu
     initialState:
@@ -105,6 +119,7 @@ introduces:
       location: weijia_shan
       status: alive
       condition: well
+      motivation: financial_gain
 ruleEffects:
   - rule: patriarchal_clan_authority
     effect: reinforce

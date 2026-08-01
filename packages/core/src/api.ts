@@ -9,19 +9,15 @@
 // 7. bench/reporters.ts — Storage-backed: uses FsStorage/Storage types
 // ================================
 
-// ============================================================================
-// Novalistically Core — Orchestration Functions (Public API)
-// ============================================================================
-//
-import type { RelationshipRuntimeState } from './types/index.js';
+import type { PreviewResult } from './editorial/index.ts';
 // pure-function-like API for CLIs, MCP servers, and external consumers.
 // They are the recommended entry point for most use cases.
 // ============================================================================
 import {
   EditorialOperationError,
+  previewEditorialRun as editorialPreviewRun,
   executeEditorialRender,
   executeEditorialTreeRender,
-  previewEditorialRun as editorialPreviewRun,
 } from './editorial/index.ts';
 import {
   editorialPreviewRequestV1Schema,
@@ -30,126 +26,51 @@ import {
 } from './schemas/editorial.ts';
 import type {
   EditorialRenderRequestV1,
+  EditorialRuntime,
   RenderGameDialogueTreeRequestV1,
   RenderGameDialogueTreeResult,
   RenderNovelResult,
 } from './types/editorial.ts';
-import type { EditorialRuntime } from './types/editorial.ts';
-import type { PreviewResult } from './editorial/index.ts';
 // ============================================================================
-import { computeSourceContentHash } from './cache/render-cache.ts';
+// Novalistically Core — Orchestration Functions (Public API)
+// ============================================================================
+//
+import type { RelationshipRuntimeState } from './types/index.js';
+// ============================================================================
 
-import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import type { LLMProvider } from './ai/types.ts';
-import { countNarrativeText } from './assembler/count.ts';
-import { assembleGameDialogueTree } from './assembler/index.ts';
-import { branchPathsEqual } from './branch/path.ts';
-import { compileGameDialogueTree } from './branch/game-dialogue-tree.ts';
-import type { CompiledGameDialogueTree } from './branch/game-dialogue-tree.ts';
-import type { BatchConfig } from './batch-renderer.ts';
-import { BatchRenderPipeline } from './batch-renderer.ts';
 import { DEFAULT_CONFIG } from './config/index.js';
-import { ContextCompiler } from './context/compiler.ts';
-import { PromptAssembler } from './context/prompt-assembler.ts';
 import type { ProjectData } from './entity/index.js';
-import { EntityMapper } from './entity/mapper.ts';
-import { ConfigError, sanitizeError } from './errors.ts';
-import { InMemoryEntityRegistry } from './entity/registry.ts';
-import type { TypedEventBus } from './event-bus.ts';
+import type { EntityMapper } from './entity/mapper.ts';
+import { compileCanonicalRuntime, loadCanonicalProject } from './entity/project-runtime.ts';
+import type { InMemoryEntityRegistry } from './entity/registry.ts';
+import { sanitizeError } from './errors.ts';
 import { calculateISS } from './iss/score.ts';
 import { JsonlLogTransport, LevelFilterTransport, Logger } from './observability/logger.ts';
-import { TraceCollector } from './observability/trace.ts';
-import { buildAndWriteOutputs, evaluateReleaseDecision, type InteractionManager, RenderPipeline } from './pipeline/index.ts';
-import type { ProviderCallLedgerEntry, RenderJob, RenderSceneResult } from './pipeline/render.ts';
+import type { RenderSceneResult } from './pipeline/render.ts';
 import { PluginHooksManager, PluginLoader, ValidatorRegistry } from './plugin/index.js';
 import type { PluginContext, ProviderRegistry } from './plugin/types.js';
-import { StateManager } from './state/manager.ts';
-import { compileNarrativeRuntime } from './state/narrative-runtime.ts';
+import { canonicalJson } from './render/scene-contract.ts';
 import { resolveDiscourseBranch } from './state/discourse-sequence.ts';
+import { StateManager } from './state/manager.ts';
 import type { CompiledNarrativeRuntime } from './state/narrative-runtime.ts';
 import { FsStorage } from './storage/fs-storage.ts';
 import type { Storage } from './storage/types.ts';
-import { canonicalJson, compileSceneContract, computeSha256Hex } from './render/scene-contract.ts';
-import type {
-  AcceptedSceneArtifact,
-  RenderGroup,
-  RenderSurfaceConfig,
-  SceneTransition,
-  SurfacePlanResult,
-  SurfacePlannerOptions,
-} from './types/render-surface.ts';
-import { SurfacePlanner } from './render/surface-planner.ts';
-import { SurfaceScheduler, AcceptedArtifactResolver } from './pipeline/surface-scheduler.ts';
-import { LogicalDisclosureSummaryCompiler, SurfaceReferenceExtractor } from './summary/index.ts';
 import type { BranchPath } from './types/branch.js';
-import type { SystemContext } from './types/context.js';
 import type {
-  AnalysisResult,
-  Entity,
-  EventFile,
+  EntityDeclarationCatalog,
+  EntityKind,
+  EntityTypeCatalog,
   Fact,
   ISSSnapshot,
   NarrativeEvent,
-  ReleaseDecision,
   ValidationIssue,
   ValidationResult,
   WorldState,
 } from './types/index.ts';
 import { ResultAggregator } from './validator/aggregator.ts';
 
-
-// ============================================================================
-// Module-level cache for initializeProject — API-1 / API-5
-// ============================================================================
-
-interface ProjectSourceCacheEntry {
-  hash: string;
-  data: ProjectData;
-  events: NarrativeEvent[];
-}
-
-// Source data is isolated by backend identity. Mutable runtime objects are
-// deliberately never cached: every initializeProject call creates a new
-// registry, event store, snapshot engine, and world state.
-const projectCache = new WeakMap<Storage, Map<string, ProjectSourceCacheEntry>>();
-
-function cacheFor(storage: Storage): Map<string, ProjectSourceCacheEntry> {
-  let cache = projectCache.get(storage);
-  if (!cache) {
-    cache = new Map<string, ProjectSourceCacheEntry>();
-    projectCache.set(storage, cache);
-  }
-  return cache;
-}
-
-function hashDirectory(storage: Storage, directory: string, baseDirectory: string, hasher: crypto.Hash): void {
-  if (!storage.exists(directory)) return;
-  for (const entry of [...storage.list(directory)].sort((left, right) => left.name.localeCompare(right.name))) {
-    const filePath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      hashDirectory(storage, filePath, baseDirectory, hasher);
-    } else if (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml')) {
-      hasher.update(path.relative(baseDirectory, filePath));
-      hasher.update('\0');
-      hasher.update(storage.read(filePath));
-      hasher.update('\0');
-    }
-  }
-}
-
-function computeProjectHash(projectDir: string, storage: Storage): string {
-  const hasher = crypto.createHash('sha256');
-  const configPath = path.join(projectDir, 'nova.yaml');
-  if (storage.exists(configPath)) {
-    hasher.update('nova.yaml\0');
-    hasher.update(storage.read(configPath));
-    hasher.update('\0');
-  }
-  hashDirectory(storage, path.join(projectDir, 'definitions'), projectDir, hasher);
-  hashDirectory(storage, path.join(projectDir, 'chapters'), projectDir, hasher);
-  return hasher.digest('hex');
-}
 // ============================================================================
 // Type Definitions
 // ============================================================================
@@ -186,128 +107,61 @@ export interface ImpactAnalysisResult {
 // ============================================================================
 
 /**
- * Build the initial state from genesis event data (post-
- * conditions + entity registry).
- */
-function buildInitialState(
-  events: NarrativeEvent[],
-  registry: InMemoryEntityRegistry,
-  data: ProjectData,
-): {
-  initialFacts: Fact[];
-  authoredEvents: NarrativeEvent[];
-  initialThreads: Array<{ id: string }>;
-} {
-  const genesis = events.find((event) => event.id === 'system:genesis');
-  const initialFacts: Fact[] = [
-    ...(genesis?.postconditions ?? []),
-    ...registry.getAll().flatMap((entity) =>
-      Object.entries(entity.state ?? {}).map(([attribute, value]) => ({
-        id: `${entity.id}.${attribute}`,
-        entityId: entity.id,
-        attribute,
-        value,
-        validity: {
-          temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
-          branches: { type: 'all' as const },
-        },
-      })),
-    ),
-  ];
-  const initialThreads = (data.worldInitialState?.threads ?? []).map((t: { id: string }) => ({
-    id: t.id,
-  }));
-  const authoredEvents = events.filter((event) => event.id !== 'system:genesis');
-  return { initialFacts, authoredEvents, initialThreads };
-}
-
-/**
- * Load a project's mapper, data, events, registry, and state manager.
- * This is the common initialization sequence used by most functions.
+ * Load a project through the canonical kernel and return the current
+ * repository-facing projection: the mapper/registry that performed the
+ * single load, authored events, the canonical catalogs, a StateManager
+ * (initialized with runtime events + the kernel's catalog context), the
+ * replayed default-branch world state, and the compiled narrative runtime.
+ *
+ * The third parameter carries inline optional branch/discourse route options.
+ * The returned `events` are the authored (renderable) events; synthetic
+ * introduction/choice transitions live in `runtimeEvents`/`runtime` only.
  */
 export function initializeProject(
   projectDir: string,
   storage: Storage,
+  options?: { branchPath?: BranchPath; discourseBranch?: string },
 ): {
   mapper: EntityMapper;
   data: ProjectData;
   events: NarrativeEvent[];
+  runtimeEvents: NarrativeEvent[];
+  initialFacts: Fact[];
+  entityTypes: EntityTypeCatalog;
+  entityDeclarations: EntityDeclarationCatalog;
   registry: InMemoryEntityRegistry;
   stateManager: StateManager;
   state: WorldState;
+  runtime: CompiledNarrativeRuntime;
 } {
-  const mapper = new EntityMapper(projectDir, storage);
-  const sourceData = mapper.loadProject();
-  const sourceEvents = mapper.loadAllEvents(sourceData.chapters);
-  const hash = computeProjectHash(projectDir, storage);
-  const sourceCache = cacheFor(storage);
-  const cached = sourceCache.get(projectDir);
-  const source =
-    cached && cached.hash === hash
-      ? cached
-      : {
-          hash,
-          data: structuredClone(sourceData),
-          events: structuredClone(sourceEvents),
-        };
-  if (source !== cached) sourceCache.set(projectDir, source);
-
-  // Cloning prevents a caller's stateful work from contaminating the next
-  // initialization while retaining the backend-specific immutable source cache.
-  const data = structuredClone(source.data);
-  const events = structuredClone(source.events);
-  const registry = new InMemoryEntityRegistry();
-  registry.load(projectDir, storage);
-  for (const event of events) {
-    for (const introduction of event.introduces ?? []) {
-      if (registry.resolve(introduction.id)) continue;
-      registry.register({
-        id: introduction.id,
-        kind: introduction.type,
-        name: introduction.id,
-        definitionFile: `definitions/introduces/${introduction.id}.yaml`,
-        lifecycle: 'active',
-        typeRef: { typeId: introduction.type, schemaVersion: 1 },
-        state: { ...introduction.initialState },
-      });
-    }
-  }
-
+  const ir = loadCanonicalProject(projectDir, storage);
+  const runtime = compileCanonicalRuntime(ir, options);
   const stateManager = new StateManager(
-    path.join(projectDir, data.config?.outputDir ?? DEFAULT_CONFIG.outputDir, 'snapshots'),
-    20,
+    path.join(projectDir, ir.data.config?.outputDir ?? DEFAULT_CONFIG.outputDir, 'snapshots'),
+    ir.catalogContext,
+    ir.data.config?.snapshotInterval ?? 20,
     storage,
+    {
+      initialFacts: [...ir.initialFacts],
+      initialThreads: [...ir.initialThreads],
+      timeAnchors: ir.data.timeAnchors,
+    },
   );
-  stateManager.initialize(events);
-  const state = {
-    entities: {},
-    relationships: {},
-    knowledge: {},
-    epistemicLedger: { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
-    propositionCatalog: { version: 0, propositions: {}, dependencyGraph: {} },
-    threads: {},
-    rules: {},
-    facts: [],
-  } satisfies WorldState;
-
-  return { mapper, data, events, registry, stateManager, state };
+  stateManager.initialize([...ir.runtimeEvents]);
+  return {
+    mapper: ir.mapper,
+    data: ir.data,
+    events: [...ir.authoredEvents],
+    runtimeEvents: [...ir.runtimeEvents],
+    initialFacts: [...ir.initialFacts],
+    entityTypes: ir.entityTypes,
+    entityDeclarations: ir.entityDeclarations,
+    registry: ir.registry,
+    stateManager,
+    state: stateManager.getCurrentState(),
+    runtime,
+  };
 }
-
-
-
-/**
- * Find which chapter an event belongs to.
- */
-function findChapterForEvent(
-  data: ReturnType<EntityMapper['loadProject']>,
-  eventId: string,
-): number {
-  for (const [ch, chapter] of data.chapters) {
-    if (chapter.events.some((e) => e.event === eventId)) return ch;
-  }
-  return 1;
-}
-
 
 /**
  * Build a release-gate diagnostic message for a single scene result.
@@ -336,7 +190,6 @@ export function buildReleaseDiagnostic(result: RenderSceneResult): string {
 
   return `${result.eventId}: ${sanitizeError(reason)}`;
 }
-
 
 // ============================================================================
 // Plugin initialization helper
@@ -485,9 +338,9 @@ export async function previewEditorialRun(
 // ============================================================================
 
 /**
- * Run all 18 validators against the project and calculate ISS.
+ * Run all validators against the project and calculate ISS.
  *
- * Internally: EntityMapper → InMemoryEntityRegistry → StateManager
+ * Internally: canonical project kernel → compiled runtime boundaries
  * → ResultAggregator → calculateISS.
  */
 export async function validateNovel(
@@ -503,54 +356,38 @@ export async function validateNovel(
   const validateLogger = new Logger(new LevelFilterTransport(new JsonlLogTransport()), {
     module: 'validate',
   });
-  const { data, events, registry } = initializeProject(projectDir, resolvedStorage);
-
-  // Compile story boundaries for per-event pre-state
-  const { initialFacts, initialThreads } = buildInitialState(
-    events,
-    registry,
-    data,
-  );
+  const ir = loadCanonicalProject(projectDir, resolvedStorage);
+  const events = [...ir.authoredEvents];
 
   // Initialize plugins (if configured)
   const { validatorRegistry, conflictErrors: pluginConflictErrors } = await initializePlugins(
     projectDir,
     resolvedStorage,
     validateLogger,
-    data.config ?? undefined,
+    ir.data.config ?? undefined,
   );
 
-
-  const compiledDiscourseBranch = resolveDiscourseBranch({
+  const discourseBranch = resolveDiscourseBranch({
     selectedEventIds: new Set(events.map((ev) => ev.id)),
     branchPath: { decisions: [] },
-    ledger: data.discourseLedger,
+    ledger: ir.data.discourseLedger,
   });
-  const runtime = compileNarrativeRuntime({
-    events,
-    initialFacts,
-    timeAnchors: data.timeAnchors,
-    branchPath: undefined,
-    discourseBranch: compiledDiscourseBranch,
-    ledger: data.discourseLedger,
-    assertions: data.narratorAssertions,
-    narratorProfiles: data.narratorProfiles,
-    initialThreads,
-  });
+  const runtime = compileCanonicalRuntime(ir, { discourseBranch });
   const boundaries = runtime.boundaries;
 
   // Run validators with per-event pre-state and plugin validators
-  const aggregator = new ResultAggregator(undefined, validatorRegistry?.validators);
-  const mergedOverrides = overrides ?? data.config?.validatorOverrides;
-  const validationResults = aggregator.validateAll(
-    events,
-    boundaries.finalState,
-    registry,
-    {
-      overrides: mergedOverrides,
-      stateBeforeByEventId: boundaries.stateBeforeByEventId,
-    },
+  const aggregator = new ResultAggregator(
+    undefined,
+    validatorRegistry?.validators,
+    undefined,
+    undefined,
+    ir.entityTypes,
   );
+  const mergedOverrides = overrides ?? ir.data.config?.validatorOverrides;
+  const validationResults = aggregator.validateAll(events, boundaries.finalState, ir.registry, {
+    overrides: mergedOverrides,
+    stateBeforeByEventId: boundaries.stateBeforeByEventId,
+  });
 
   // Add plugin conflict as synthetic validation failure if present
   if (pluginConflictErrors.length > 0) {
@@ -559,8 +396,9 @@ export async function validateNovel(
       errors: pluginConflictErrors.map((msg) => ({
         validator: 'plugin-loader',
         severity: 'error' as const,
+        kind: 'compiler_invariant' as const,
         event: '__plugin__',
-        entity: 'system',
+        entity: '',
         message: msg,
         fixSuggestion: 'Resolve plugin conflicts (e.g., remove duplicate plugins).',
         fixAction: 'manual' as const,
@@ -582,13 +420,13 @@ export async function validateNovel(
   }
 
   // ISS calculation
-  const threads = data.worldInitialState?.threads ?? [];
+  const threads = ir.data.worldInitialState?.threads ?? [];
   const iss = calculateISS({
     projectDir,
-    entityRegistry: registry,
+    entityRegistry: ir.registry,
     events,
     threads: threads.map((t) => ({ id: t.id, name: t.name })),
-    rules: data.rules,
+    rules: ir.data.rules,
   });
 
   return { passed, results: validationResults, iss };
@@ -612,7 +450,8 @@ export function getProjectStatus(
   storage?: Storage,
 ): ProjectStatusResult {
   const resolvedStorage = storage ?? new FsStorage();
-  const { data, events, registry } = initializeProject(projectDir, resolvedStorage);
+  const ir = loadCanonicalProject(projectDir, resolvedStorage);
+  const events = [...ir.authoredEvents];
 
   // Determine rendered events by checking scenes/ directory for .md files
   const renderedSet = new Set<string>();
@@ -630,52 +469,34 @@ export function getProjectStatus(
     }
   }
 
-  // Compile story boundaries for per-event pre-state validation
-  const { initialFacts, initialThreads } = buildInitialState(
-    events,
-    registry,
-    data,
-  );
-
-  const compiledDiscourseBranch = resolveDiscourseBranch({
+  const discourseBranch = resolveDiscourseBranch({
     selectedEventIds: new Set(events.map((ev) => ev.id)),
     branchPath: { decisions: [] },
-    ledger: data.discourseLedger,
+    ledger: ir.data.discourseLedger,
   });
-  const runtime = compileNarrativeRuntime({
-    events,
-    initialFacts,
-    timeAnchors: data.timeAnchors,
-    branchPath: undefined,
-    discourseBranch: compiledDiscourseBranch,
-    ledger: data.discourseLedger,
-    assertions: data.narratorAssertions,
-    narratorProfiles: data.narratorProfiles,
-    initialThreads,
-  });
+  const runtime = compileCanonicalRuntime(ir, { discourseBranch });
   const boundaries = runtime.boundaries;
 
   // Use provided validation results or run validateAll
   if (!validationResults) {
-    const aggregator = new ResultAggregator();
-    const overrides = data.config?.validatorOverrides;
-    validationResults = aggregator.validateAll(
-      events,
-      boundaries.finalState,
-      registry,
-      {
-        overrides,
-        stateBeforeByEventId: boundaries.stateBeforeByEventId,
-      },
+    const aggregator = new ResultAggregator(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      ir.entityTypes,
     );
+    const overrides = ir.data.config?.validatorOverrides;
+    validationResults = aggregator.validateAll(events, boundaries.finalState, ir.registry, {
+      overrides,
+      stateBeforeByEventId: boundaries.stateBeforeByEventId,
+    });
   }
 
   const eventStatuses: ProjectStatusResult['events'] = [];
 
   for (const event of events) {
-    if (event.id === 'system:genesis') continue;
-
-    const chapterNum = findChapterForEvent(data, event.id);
+    const chapterNum = ir.chapterByEventId[event.id] ?? 1;
 
     let status: 'rendered' | 'pending' | 'blocked';
     let wordCount: number | undefined;
@@ -746,36 +567,26 @@ export function getProjectStatus(
 /**
  * Show the world state before and after a specific event.
  *
- * Uses compileNarrativeRuntime for graph-driven state with time anchors.
+ * Uses the canonical compiled runtime for graph-driven state with time anchors.
  */
-export function diffEvent(projectDir: string, eventId: string, storage?: Storage): DiffResult | null {
+export function diffEvent(
+  projectDir: string,
+  eventId: string,
+  storage?: Storage,
+): DiffResult | null {
   const resolvedStorage = storage ?? new FsStorage();
-  const { events, registry, data } = initializeProject(projectDir, resolvedStorage);
+  const ir = loadCanonicalProject(projectDir, resolvedStorage);
+  const events = [...ir.authoredEvents];
 
   const targetEvent = events.find((e) => e.id === eventId);
   if (!targetEvent) return null;
 
-  const { initialFacts, initialThreads } = buildInitialState(
-    events,
-    registry,
-    data,
-  );
-  const compiledDiscourseBranch = resolveDiscourseBranch({
+  const discourseBranch = resolveDiscourseBranch({
     selectedEventIds: new Set(events.map((ev) => ev.id)),
     branchPath: { decisions: [] },
-    ledger: data.discourseLedger,
+    ledger: ir.data.discourseLedger,
   });
-  const runtime = compileNarrativeRuntime({
-    events,
-    initialFacts,
-    timeAnchors: data.timeAnchors,
-    branchPath: undefined,
-    discourseBranch: compiledDiscourseBranch,
-    ledger: data.discourseLedger,
-    assertions: data.narratorAssertions,
-    narratorProfiles: data.narratorProfiles,
-    initialThreads,
-  });
+  const runtime = compileCanonicalRuntime(ir, { discourseBranch });
   const boundaries = runtime.boundaries;
 
   const orderedIds = boundaries.orderedEventIds;
@@ -877,7 +688,7 @@ export function diffEvent(projectDir: string, eventId: string, storage?: Storage
 /**
  * List all entities in the project, optionally filtered by kind.
  *
- * EntityMapper → InMemoryEntityRegistry → getAll() or findByKind(kind).
+ * Canonical kernel → InMemoryEntityRegistry → getAll() or findByKind(kind).
  */
 export function listEntities(
   projectDir: string,
@@ -885,13 +696,10 @@ export function listEntities(
   storage?: Storage,
 ): Array<{ id: string; kind: string; name?: string }> {
   const resolvedStorage = storage ?? new FsStorage();
-  const mapper = new EntityMapper(projectDir, resolvedStorage);
-  mapper.loadProject(); // validates project exists
-
-  const registry = new InMemoryEntityRegistry();
-  registry.load(projectDir, resolvedStorage);
-
-  const entities: Entity[] = kind ? registry.findByKind(kind as any) : registry.getAll();
+  const ir = loadCanonicalProject(projectDir, resolvedStorage);
+  // Public API accepts any kind string; findByKind compares by equality,
+  // so unknown kinds simply match nothing.
+  const entities = kind ? ir.registry.findByKind(kind as EntityKind) : ir.registry.getAll();
 
   return entities.map((e) => ({
     id: e.id,
@@ -907,17 +715,17 @@ export function listEntities(
 /**
  * Get detailed information about a specific entity.
  *
- * EntityMapper → InMemoryEntityRegistry → resolve(entityId).
+ * Canonical kernel → InMemoryEntityRegistry → resolve(entityId).
  */
-export function showEntity(projectDir: string, entityId: string, storage?: Storage): Record<string, unknown> | null {
+export function showEntity(
+  projectDir: string,
+  entityId: string,
+  storage?: Storage,
+): Record<string, unknown> | null {
   const resolvedStorage = storage ?? new FsStorage();
-  const mapper = new EntityMapper(projectDir, resolvedStorage);
-  mapper.loadProject(); // validates project exists
+  const ir = loadCanonicalProject(projectDir, resolvedStorage);
 
-  const registry = new InMemoryEntityRegistry();
-  registry.load(projectDir, resolvedStorage);
-
-  const entity = registry.resolve(entityId);
+  const entity = ir.registry.resolve(entityId);
   if (!entity) return null;
 
   return {
@@ -935,8 +743,8 @@ export function showEntity(projectDir: string, entityId: string, storage?: Stora
 /**
  * Compare two project versions and classify each event's impact level.
  *
- * Loads both project YAML directories, compares event definitions, and
- * classifies changes:
+ * Loads both project directories through the canonical kernel (one
+ * EntityMapper.loadProject per version) and compares authored events:
  * - Green: only narrativeOrder changed (no downstream effect)
  * - Yellow: event data changed but preconditions/postconditions intact
  * - Red: precondition/postcondition changed → causal chain potentially broken
@@ -950,33 +758,24 @@ export function showEntity(projectDir: string, entityId: string, storage?: Stora
  * @returns Impact analysis result with per-event levels and downstream map
  */
 export function analyzeProjectImpact(oldPath: string, newPath: string): ImpactAnalysisResult {
-  const oldStorage = new FsStorage();
-  const newStorage = new FsStorage();
-  const oldMapper = new EntityMapper(oldPath, oldStorage);
-  const newMapper = new EntityMapper(newPath, newStorage);
-  const oldData = oldMapper.loadProject();
-  const newData = newMapper.loadProject();
-  const oldEvents = new Map<string, EventFile>();
-  for (const [, chapter] of oldData.chapters) {
-    for (const ev of chapter.events) {
-      oldEvents.set(ev.event, ev);
-    }
+  const oldIr = loadCanonicalProject(oldPath, new FsStorage());
+  const newIr = loadCanonicalProject(newPath, new FsStorage());
+
+  const oldEvents = new Map<string, NarrativeEvent>();
+  for (const ev of oldIr.authoredEvents) {
+    oldEvents.set(ev.id, ev);
   }
 
-  const newEvents = new Map<string, EventFile>();
-  for (const [, chapter] of newData.chapters) {
-    for (const ev of chapter.events) {
-      newEvents.set(ev.event, ev);
-    }
+  const newEvents = new Map<string, NarrativeEvent>();
+  for (const ev of newIr.authoredEvents) {
+    newEvents.set(ev.id, ev);
   }
 
   // Helper: serialize a precondition or postcondition for comparison
-  const pcKey = (pc: {
-    entity: string;
-    attribute: string;
-    value: unknown;
-    operator?: string;
-  }): string => `${pc.entity}:${pc.attribute}:${JSON.stringify(pc.value)}:${pc.operator ?? 'eq'}`;
+  const preconditionKey = (pc: Fact): string =>
+    `${pc.entityId}:${pc.attribute}:${JSON.stringify(pc.value)}:${pc.operator ?? 'eq'}`;
+  const postconditionKey = (pc: Fact): string =>
+    `${pc.entityId}:${pc.attribute}:${JSON.stringify(pc.value)}:${pc.operation ?? 'set'}`;
 
   const events: Record<string, ImpactLevel> = {};
   const downstream: Record<string, string[]> = {};
@@ -985,8 +784,8 @@ export function analyzeProjectImpact(oldPath: string, newPath: string): ImpactAn
   const postconditionPairs = new Map<string, Set<string>>();
   for (const [id, ev] of newEvents) {
     const pairs = new Set<string>();
-    for (const pc of ev.expectedPostconditions) {
-      pairs.add(`${pc.entity}:${pc.attribute}`);
+    for (const pc of ev.postconditions) {
+      pairs.add(`${pc.entityId}:${pc.attribute}`);
     }
     postconditionPairs.set(id, pairs);
   }
@@ -996,7 +795,7 @@ export function analyzeProjectImpact(oldPath: string, newPath: string): ImpactAn
   for (const [id, ev] of newEvents) {
     const pairs = new Set<string>();
     for (const pc of ev.preconditions) {
-      pairs.add(`${pc.entity}:${pc.attribute}`);
+      pairs.add(`${pc.entityId}:${pc.attribute}`);
     }
     preconditionPairs.set(id, pairs);
   }
@@ -1023,14 +822,14 @@ export function analyzeProjectImpact(oldPath: string, newPath: string): ImpactAn
     if (!oldEv || !newEv) continue;
 
     // Compare preconditions
-    const oldPreKeys = new Set(oldEv.preconditions.map(pcKey));
-    const newPreKeys = new Set(newEv.preconditions.map(pcKey));
+    const oldPreKeys = new Set(oldEv.preconditions.map(preconditionKey));
+    const newPreKeys = new Set(newEv.preconditions.map(preconditionKey));
     const preChanged =
       oldPreKeys.size !== newPreKeys.size || [...oldPreKeys].some((k) => !newPreKeys.has(k));
 
     // Compare postconditions
-    const oldPostKeys = new Set(oldEv.expectedPostconditions.map(pcKey));
-    const newPostKeys = new Set(newEv.expectedPostconditions.map(pcKey));
+    const oldPostKeys = new Set(oldEv.postconditions.map(postconditionKey));
+    const newPostKeys = new Set(newEv.postconditions.map(postconditionKey));
     const postChanged =
       oldPostKeys.size !== newPostKeys.size || [...oldPostKeys].some((k) => !newPostKeys.has(k));
 
@@ -1043,6 +842,7 @@ export function analyzeProjectImpact(oldPath: string, newPath: string): ImpactAn
     const dataChanged =
       oldEv.title !== newEv.title ||
       oldEv.sceneBrief !== newEv.sceneBrief ||
+      JSON.stringify(oldEv.beats) !== JSON.stringify(newEv.beats) ||
       canonicalJson(oldEv.storyTime) !== canonicalJson(newEv.storyTime) ||
       canonicalJson(oldEv.narrationTime) !== canonicalJson(newEv.narrationTime) ||
       oldEv.sceneType !== newEv.sceneType ||

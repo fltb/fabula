@@ -12,7 +12,7 @@ export interface CharacterDefinition {
   faction?: string;
   role?: 'minor' | 'supporting' | 'antagonist' | 'background';
   description: string;
-  initialState: Record<string, unknown>;
+  initialState?: Record<string, unknown>;
   traits: string[];
   voiceNotes?: string;
   backstory?: string;
@@ -31,7 +31,7 @@ export interface FactionDefinition {
   name: string;
   kind: string;
   description: string;
-  initialState: Record<string, unknown>;
+  initialState?: Record<string, unknown>;
 }
 
 // ——— Character-level Relationship Definition (file/YAML format) ———

@@ -13,6 +13,12 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "David hosts a dinner party in his London chambers for his friends: Traddles (now a struggling law student living on bread and milk), Steerforth, and the newly-arrived Mr and Mrs Micawber. The evening is a glorious success despite David's love-lorn appetite — he lives on Dora and coffee. Mr Micawber makes a magnificent speech and Mrs Micawber declares she 'never will desert Mr Micawber.' The chapter also advances the Dora romance: Mr Spenlow forbids David from visiting Dora, and David discovers that Miss Murdstone (his step-aunt) has become Dora's companion, making the courtship even more difficult. Traddles, meanwhile, confides his own long engagement to his beloved Sophy."
+beats:
+  - "David hosts a dinner party in his London chambers for his friends: Traddles (now a struggling law student living on bread and milk), Steerforth, and the newly-arrived Mr and Mrs Micawber."
+  - "The evening is a glorious success despite David's love-lorn appetite — he lives on Dora and coffee."
+  - "Mr Micawber makes a magnificent speech and Mrs Micawber declares she 'never will desert Mr Micawber.'"
+  - "The chapter also advances the Dora romance: Mr Spenlow forbids David from visiting Dora, and David discovers that Miss Murdstone (his step-aunt) has become Dora's companion, making the courtship even more difficult."
+  - "Traddles, meanwhile, confides his own long engagement to his beloved Sophy."
 preconditions:
   - entity: david_copperfield
     attribute: location

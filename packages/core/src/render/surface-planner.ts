@@ -124,9 +124,10 @@ export class SurfacePlanner {
     const manifest = this.buildManifest(groups, lanes, mode);
 
     // Generate warnings for suggest mode (reference proposal lanes, not empty effective ones)
-    const warnings = mode === 'suggest'
-      ? this.generateSuggestWarnings(proposal?.groups ?? groups, proposal?.lanes ?? lanes)
-      : undefined;
+    const warnings =
+      mode === 'suggest'
+        ? this.generateSuggestWarnings(proposal?.groups ?? groups, proposal?.lanes ?? lanes)
+        : undefined;
 
     return {
       manifest,
@@ -574,7 +575,7 @@ export class SurfacePlanner {
   /**
    * Generate human-readable warnings for suggest mode.
    */
-  private generateSuggestWarnings(groups: RenderGroup[], lanes: SerialLane[]): string[] {
+  private generateSuggestWarnings(_groups: RenderGroup[], lanes: SerialLane[]): string[] {
     const warnings: string[] = [];
 
     if (lanes.length > 0) {
@@ -599,16 +600,11 @@ export class SurfacePlanner {
    * Uses canonical JSON (sorted key order) for deterministic identity.
    * Excludes wall-clock `generatedAt` field.
    */
-  private computeSourceHash(
-    groups: RenderGroup[],
-    lanes: SerialLane[],
-    mode: PlannerMode,
-  ): string {
+  private computeSourceHash(groups: RenderGroup[], lanes: SerialLane[], mode: PlannerMode): string {
     const payload = { groups, lanes, mode };
     const json = canonicalJson(payload);
     return computeSha256Hex(json);
   }
-
 
   private createError(code: SurfaceErrorCode, message: string): SurfacePlannerError {
     return new SurfacePlannerError(message, code, {

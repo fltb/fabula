@@ -14,27 +14,32 @@
 
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-
-// Core graph/state compilation
-import { compileNarrativeRuntime } from '../src/state/narrative-runtime.ts';
-import { compileDiscourseSceneSequence } from '../src/state/discourse-sequence.ts';
-import { compilePlannedDiscourseLedger } from '../src/state/discourse-ledger.ts';
-
-// Render entry points
-import { renderNovel } from '../src/api.ts';
-
+import { z } from 'zod';
+import type { MockPass2Entry } from '../src/ai/providers/mock-pass2.ts';
 // Deterministic provider
 import { MockPass2Provider } from '../src/ai/providers/mock-pass2.ts';
-
+// Render entry points
+import { renderNovel } from '../src/api.ts';
+// Assembly entry point (canonical runtime discourse sequence)
+import { assembleNovel } from '../src/assembler/index.js';
+import type { PromoteCandidateInput } from '../src/editorial/index.js';
+import { compilePlannedDiscourseLedger } from '../src/state/discourse-ledger.ts';
+import { compileDiscourseSceneSequence } from '../src/state/discourse-sequence.ts';
+// Core graph/state compilation
+import { compileNarrativeRuntime } from '../src/state/narrative-runtime.ts';
 // In‑memory storage for full pipeline test
 import { MemoryStorage } from '../src/storage/memory-storage.ts';
-
+import type { PlannedDiscourseLedger } from '../src/types/discourse.ts';
 // Types
 import type { DiscourseSceneSequenceEntry } from '../src/types/graph.ts';
-import type { Fact, NarrativeEvent, TimeAnchor } from '../src/types/index.ts';
-import type { PlannedDiscourseLedger } from '../src/types/discourse.ts';
-import type { MockPass2Entry } from '../src/ai/providers/mock-pass2.ts';
-import type { PromoteCandidateInput } from '../src/editorial/index.js';
+import type {
+  AttributeDefinition,
+  EntityCatalogContext,
+  Fact,
+  NarrativeEvent,
+  TimeAnchor,
+} from '../src/types/index.ts';
+import { makeAnalysisResult } from './fixtures/mock-pass2-helpers.ts';
 
 // ═════════════════════════════════════════════════════════════════════════════
 // Test Data
@@ -69,6 +74,7 @@ function eventBase(id: string, day: number, narrativeOrder: number): NarrativeEv
     sceneType: 'linear',
     pov: { character: 'narrator', type: 'omniscient' },
     sceneBrief: `Scene ${id}`,
+    beats: [`Scene ${id}`],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
@@ -86,6 +92,7 @@ function makeE1(): NarrativeEvent {
   return {
     ...eventBase('E1', 1, 1),
     sceneBrief: 'Story‑first scene. It writes the status fact.',
+    beats: ['Story‑first scene. It writes the status fact.'],
     postconditions: [FACT_F1],
     surfaceMode: {
       instruction: 'Write in simple, declarative sentences',
@@ -99,18 +106,131 @@ function makeE2(): NarrativeEvent {
   return {
     ...eventBase('E2', 2, 2),
     sceneBrief: 'Story‑second scene. It consumes the status fact.',
+    beats: ['Story‑second scene. It consumes the status fact.'],
     preconditions: [FACT_F1],
   };
+}
+
+// ─── Synthetic activation transition + ontology catalogs ────────────────────
+// E1 activates hero through a canonical system:introduction transition (the
+// exact shape the kernel compiles from an `introduces:` block), so catalog
+// write enforcement (activation before live write) holds in these tests.
+
+function lifecycleAttribute(): AttributeDefinition {
+  return {
+    attributeId: 'lifecycle',
+    valueSchema: z.string(),
+    requiredAt: 'introduction',
+    writePolicy: 'lifecycle_managed',
+    allowedLifecycleStates: ['active', 'inactive', 'retired'],
+    unsetAllowed: false,
+    semanticRole: 'lifecycle',
+  };
+}
+
+const LIFECYCLE_POLICY = {
+  allowedTransitions: [
+    ['active', 'inactive'],
+    ['active', 'retired'],
+    ['inactive', 'active'],
+    ['inactive', 'retired'],
+  ],
+} as const;
+
+const catalogContext: EntityCatalogContext = {
+  entityDeclarationCatalog: {
+    declarations: {
+      hero: {
+        entityId: 'hero',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
+        immutableMetadata: { name: 'Hero', definitionFile: 'hero.yaml' },
+        introduction: { type: 'event', eventId: 'E1' },
+      },
+    },
+    version: 1,
+  },
+  entityTypeCatalog: {
+    types: {
+      character: {
+        typeRef: { typeId: 'character', schemaVersion: 1 },
+        kind: 'character',
+        attributes: {
+          lifecycle: lifecycleAttribute(),
+          status: {
+            attributeId: 'status',
+            valueSchema: z.string(),
+            requiredAt: 'never',
+            writePolicy: 'mutable',
+            unsetAllowed: true,
+            semanticRole: 'lifecycle',
+          },
+        },
+        lifecyclePolicy: LIFECYCLE_POLICY,
+        referenceCapabilities: { defaultEligibility: 'live' },
+        typedInvariants: [],
+      },
+    },
+    version: 1,
+  },
+};
+
+/** Synthetic activation transition for an `introduces:` block (kernel shape). */
+function makeIntroTransition(target: NarrativeEvent, entityId: string): NarrativeEvent {
+  const id = `system:introduction:${target.id}:${entityId}`;
+  return {
+    kind: 'event',
+    id,
+    event: id,
+    narrativeOrder: target.narrativeOrder - 0.5,
+    title: `Introduce ${entityId} before ${target.id}`,
+    storyTime: target.storyTime,
+    sceneType: 'linear',
+    pov: { character: 'system', type: 'omniscient' },
+    sceneBrief: `Activate entity ${entityId}.`,
+    beats: [`Activate entity ${entityId}.`],
+    preconditions: [],
+    postconditions: [
+      {
+        id: `${entityId}.lifecycle`,
+        entityId,
+        attribute: 'lifecycle',
+        value: 'active',
+        operation: 'set',
+        confidence: 1.0,
+        validity: {
+          temporal: { start: target.storyTime, end: null },
+          branches: target.branchExistence,
+        },
+      },
+    ],
+    threadProgress: [],
+    foreshadowing: [],
+    relationshipEffects: [],
+    ruleEffects: [],
+    source: 'system',
+    branchExistence: target.branchExistence,
+    participants: { entities: [entityId] },
+    causalPredecessors: [],
+  };
+}
+
+/** Prepend E1's activation transition, linked as its causal predecessor. */
+function withIntroductions(events: NarrativeEvent[]): NarrativeEvent[] {
+  const transition = makeIntroTransition(makeE1(), 'hero');
+  return [
+    transition,
+    ...events.map((event) =>
+      event.id === 'E1'
+        ? { ...event, causalPredecessors: [...(event.causalPredecessors ?? []), transition.id] }
+        : event,
+    ),
+  ];
 }
 
 // (makeAssertion is available if needed for future technique tests using resolveNarrativeTechniques)
 
 /** Build a discourse ledger with one scene per chapter, in sceneIds order. */
-function makeOrderedLedger(
-  id: string,
-  branch: string,
-  sceneIds: string[],
-): PlannedDiscourseLedger {
+function makeOrderedLedger(id: string, branch: string, sceneIds: string[]): PlannedDiscourseLedger {
   return compilePlannedDiscourseLedger({
     id,
     chapters: sceneIds.map((sceneId, i) => ({
@@ -166,13 +286,14 @@ describe('graph-render-assembly ordering', () => {
   describe('ordering invariants (compileNarrativeRuntime)', () => {
     it('E2 state‑before includes E1 write despite ledger ordering E2 first', () => {
       const runtime = compileNarrativeRuntime({
-        events: [makeE1(), makeE2()],
+        events: withIntroductions([makeE1(), makeE2()]),
         initialFacts: [],
         timeAnchors: [
           { id: 'day_1', at: { type: 'absolute', value: 'day_1' } },
           { id: 'day_2', at: { type: 'absolute', value: 'day_2' } },
         ],
         branchPath: { decisions: [] },
+        catalogs: catalogContext,
         discourseBranch: 'main',
         ledger: makeOrderedLedger('invariant-test', 'main', ['E2', 'E1']),
         assertions: {},
@@ -203,13 +324,14 @@ describe('graph-render-assembly ordering', () => {
 
     it('surfaceMode technique contracts resolve for E1, not for E2', () => {
       const runtime = compileNarrativeRuntime({
-        events: [makeE1(), makeE2()],
+        events: withIntroductions([makeE1(), makeE2()]),
         initialFacts: [],
         timeAnchors: [
           { id: 'day_1', at: { type: 'absolute', value: 'day_1' } },
           { id: 'day_2', at: { type: 'absolute', value: 'day_2' } },
         ],
         branchPath: { decisions: [] },
+        catalogs: catalogContext,
         discourseBranch: 'main',
         ledger: makeOrderedLedger('technique-test', 'main', ['E2', 'E1']),
         assertions: {},
@@ -229,8 +351,33 @@ describe('graph-render-assembly ordering', () => {
       expect(runtime.graphs.techniquesByEventId.has('E2')).toBe(false);
     });
 
+    it('synthetic transition events never enter the discourse scene sequence', () => {
+      const runtime = compileNarrativeRuntime({
+        events: withIntroductions([makeE1(), makeE2()]),
+        initialFacts: [],
+        timeAnchors: [
+          { id: 'day_1', at: { type: 'absolute', value: 'day_1' } },
+          { id: 'day_2', at: { type: 'absolute', value: 'day_2' } },
+        ],
+        branchPath: { decisions: [] },
+        catalogs: catalogContext,
+        discourseBranch: 'main',
+        ledger: makeOrderedLedger('no-synthetic-prose', 'main', ['E2', 'E1']),
+        assertions: {},
+        narratorProfiles: {},
+      });
+
+      // The transition participates in the compiled runtime, but the
+      // discourse scene sequence — the only assembly ordering source —
+      // contains authored event-file scenes only, so no synthetic
+      // transition can ever be assembled as prose.
+      const sceneIds = runtime.graphs.discourseGraph.sceneSequence.map((entry) => entry.sceneId);
+      expect(sceneIds).toEqual(['E2', 'E1']);
+      expect(sceneIds).not.toContain('system:introduction:E1:hero');
+    });
+
     it('deterministic graph hash survives across compilations', () => {
-      const events = [makeE1(), makeE2()];
+      const events = withIntroductions([makeE1(), makeE2()]);
       const ledger = makeOrderedLedger('hash-test', 'main', ['E2', 'E1']);
       const anchors: TimeAnchor[] = [
         { id: 'day_1', at: { type: 'absolute', value: 'day_1' } },
@@ -242,6 +389,7 @@ describe('graph-render-assembly ordering', () => {
         initialFacts: [],
         timeAnchors: anchors,
         branchPath: { decisions: [] } as const,
+        catalogs: catalogContext,
         discourseBranch: 'main',
         ledger,
         assertions: {},
@@ -258,7 +406,7 @@ describe('graph-render-assembly ordering', () => {
     });
 
     it('graph hash changes when discourse branch changes', () => {
-      const events = [makeE1(), makeE2()];
+      const events = withIntroductions([makeE1(), makeE2()]);
       const ledger = makeOrderedLedger('branch-hash-test', 'main', ['E2', 'E1']);
 
       const opts = {
@@ -269,6 +417,7 @@ describe('graph-render-assembly ordering', () => {
           { id: 'day_2', at: { type: 'absolute', value: 'day_2' } },
         ],
         branchPath: { decisions: [] } as const,
+        catalogs: catalogContext,
         ledger,
         assertions: {},
         narratorProfiles: {},
@@ -359,9 +508,10 @@ describe('graph-render-assembly ordering', () => {
   describe('full render pipeline (renderNovel with MemoryStorage)', () => {
     const PROJ_DIR = '/graph-render-assembly-test';
 
-    function trackProvider(
-      inner: MockPass2Provider,
-    ): { provider: MockPass2Provider; callCount: () => number } {
+    function trackProvider(inner: MockPass2Provider): {
+      provider: MockPass2Provider;
+      callCount: () => number;
+    } {
       let count = 0;
       const originalComplete = inner.complete.bind(inner);
       inner.complete = async (req) => {
@@ -374,42 +524,25 @@ describe('graph-render-assembly ordering', () => {
       };
     }
 
-      function makeEntry(eventId: string): MockPass2Entry {
-      return {
-        prose: `Rendered prose for ${eventId}.`,
-        analysis: {
-          eventId,
-          analysis: {
-            postconditions:
-              eventId === 'E1'
-                ? {
-                    covered: ['hero.status=alive - hero is shown alive and well'],
-                    dropped: [],
-                  }
-                : { covered: [], dropped: [] },
-            preconditions: { violated: [] },
-            pov: { consistent: true, leaks: [] },
-            inventedDetails: [],
-            quality: {
-              proseScore: 4,
-              maxScore: 5,
-              strengths: ['clear'],
-              weaknesses: [],
-              estimatedWordCount: 10,
-            },
-            threadProgressAchieved: [],
-            foreshadowingDeployed: [],
-            narrativeChecks: [],
-            appearanceChecks: [],
-            characterReferences: [],
-            tenseDetected: 'past',
-            conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-            ruleChecks: [],
-            knowledgeChecks: [],
-            checklistResults: [],
-          },
+    function makeEntry(eventId: string): MockPass2Entry {
+      // Canonical fixture factory: full AnalysisResult contract (protocol +
+      // observations + payload) with evidence quotes that are exact
+      // substrings of the entry prose. E1 declares a covered postcondition
+      // for the hero.status=alive write; E2 has none. Quality is set above
+      // the release-gate threshold so cold renders are accepted.
+      return makeAnalysisResult(eventId, {
+        postconditions:
+          eventId === 'E1'
+            ? { covered: ['hero.status=alive - hero is shown alive and well'], dropped: [] }
+            : { covered: [], dropped: [] },
+        quality: {
+          proseScore: 8,
+          maxScore: 10,
+          strengths: ['clear prose'],
+          weaknesses: [],
+          estimatedWordCount: 120,
         },
-      };
+      });
     }
 
     function setupProject(storage: MemoryStorage): void {
@@ -485,6 +618,51 @@ describe('graph-render-assembly ordering', () => {
           'traits: []',
         ].join('\n'),
       );
+      // entity-types.yaml — mandatory canonical catalog source. Declares the
+      // character type with the same lifecycle/status attributes the
+      // compileNarrativeRuntime tests use in catalogContext, so ontology
+      // enforcement (activation before live write) holds end-to-end.
+      storage.write(
+        `${PROJ_DIR}/definitions/entity-types.yaml`,
+        [
+          'types:',
+          '  character:',
+          '    typeId: character',
+          '    kind: character',
+          '    attributes:',
+          '      lifecycle:',
+          '        attributeId: lifecycle',
+          '        valueType: string',
+          '        requiredAt: introduction',
+          '        writePolicy: lifecycle_managed',
+          '        allowedLifecycleStates:',
+          '          - active',
+          '          - inactive',
+          '          - retired',
+          '        unsetAllowed: false',
+          '      status:',
+          '        attributeId: status',
+          '        valueType: string',
+          '        requiredAt: never',
+          '        writePolicy: mutable',
+          '        unsetAllowed: true',
+          '      traits:',
+          '        attributeId: traits',
+          '        valueType: string_list',
+          '        requiredAt: never',
+          '        writePolicy: mutable',
+          '        unsetAllowed: true',
+          '    lifecyclePolicy:',
+          '      allowedTransitions:',
+          '        - [active, inactive]',
+          '        - [active, retired]',
+          '        - [inactive, active]',
+          '        - [inactive, retired]',
+          '    referenceCapabilities:',
+          '      defaultEligibility: live',
+          '    typedInvariants: []',
+        ].join('\n'),
+      );
 
       // ── Chapter directories matching discourse ledger ──
       // chapter 1 → E2, chapter 2 → E1
@@ -512,6 +690,8 @@ describe('graph-render-assembly ordering', () => {
           '  character: narrator',
           '  type: omniscient',
           'sceneBrief: "Second in story time, first in discourse order."',
+          'beats:',
+          '  - "Second in story time, first in discourse order."',
           'preconditions:',
           '  - entity: hero',
           '    attribute: status',
@@ -539,11 +719,17 @@ describe('graph-render-assembly ordering', () => {
           'event: E1',
           'narrativeOrder: 1',
           'title: "Story-First Event"',
+          'introduces:',
+          '  - type: character',
+          '    id: hero',
+          '    initialState: {}',
           'storyTime: day_1',
           'pov:',
           '  character: narrator',
           '  type: omniscient',
           'sceneBrief: "First in story time, produces the status write."',
+          'beats:',
+          '  - "First in story time, produces the status write."',
           'preconditions: []',
           'expectedPostconditions:',
           '  - entity: hero',
@@ -573,7 +759,10 @@ describe('graph-render-assembly ordering', () => {
       );
 
       // No pipeline errors
-      expect(result.errors).toHaveLength(0);
+      expect(
+        result.errors,
+        `renderNovel pipeline errors: ${JSON.stringify(result.errors)}`,
+      ).toHaveLength(0);
       expect(result.results).toHaveLength(2);
 
       // Both scenes released
@@ -583,8 +772,8 @@ describe('graph-render-assembly ordering', () => {
       expect(e1Scene).toBeDefined();
       expect(e2Scene!.released).toBe(true);
       expect(e1Scene!.released).toBe(true);
-      expect(e2Scene!.prose).toContain('Rendered prose for E2');
-      expect(e1Scene!.prose).toContain('Rendered prose for E1');
+      expect(e2Scene!.prose).toContain('This is test prose for event E2.');
+      expect(e1Scene!.prose).toContain('This is test prose for event E1.');
 
       // Provider called at least once per scene (Pass 1 + Pass 2)
       expect(callCount()).toBeGreaterThanOrEqual(4);
@@ -619,7 +808,10 @@ describe('graph-render-assembly ordering', () => {
         { provider, storage },
       );
 
-      expect(result.errors).toHaveLength(0);
+      expect(
+        result.errors,
+        `renderNovel pipeline errors: ${JSON.stringify(result.errors)}`,
+      ).toHaveLength(0);
       // Confirm narrativeOrder is 1→2 but discourse sceneSequence is E2→E1
       expect(result.results.find((s) => s.eventId === 'E1')).toBeDefined();
       expect(result.results.find((s) => s.eventId === 'E2')).toBeDefined();
@@ -629,6 +821,45 @@ describe('graph-render-assembly ordering', () => {
       const e1Meta = storage.read(`${PROJ_DIR}/scenes/chapter-02/E1.yaml`);
       expect(e1Meta).toContain('narrative_order: 1');
       expect(e2Meta).toContain('narrative_order: 2');
+    });
+
+    it('assembleNovel orders scenes by the canonical runtime sequence (E2 before E1)', async () => {
+      const storage = new MemoryStorage();
+      setupProject(storage);
+      const { provider } = trackProvider(
+        new MockPass2Provider({ entries: { E1: makeEntry('E1'), E2: makeEntry('E2') } }),
+      );
+
+      await renderNovel(
+        {
+          version: 1,
+          projectDir: PROJ_DIR,
+          mutation: { operationId: crypto.randomUUID(), actorId: 'test' },
+          selector: { type: 'all' },
+          model: 'mock-pass2',
+        },
+        { provider, storage },
+      );
+
+      // Assemble from the same materialized scenes via the canonical runtime
+      const result = assembleNovel({
+        projectDir: PROJ_DIR,
+        storage,
+        title: 'Graph Render Assembly Test',
+      });
+      expect(result.sceneCount).toBe(2);
+      expect(result.scenes.map((s) => s.eventId)).toEqual(['E2', 'E1']);
+
+      // Discourse order in the final document, not narrativeOrder
+      const e2Index = result.markdown.indexOf('This is test prose for event E2.');
+      const e1Index = result.markdown.indexOf('This is test prose for event E1.');
+      expect(e2Index).toBeGreaterThan(0);
+      expect(e1Index).toBeGreaterThan(e2Index);
+
+      // Exactly the two authored scenes — no synthetic transition prose
+      expect(result.markdown).toContain('## Chapter 1: Opening Chapter');
+      expect(result.markdown).toContain('## Chapter 2: Later Chapter');
+      expect(result.markdown).not.toMatch(/system:/);
     });
   });
 
@@ -680,14 +911,9 @@ describe('graph-render-assembly ordering', () => {
         { sceneId: 'E1', sequence: 0, chapter: 1 },
       ];
 
-      expect(() =>
-        buildDocumentFromSequence(
-          [],
-          new Map(),
-          'Test',
-          sceneSequence,
-        ),
-      ).toThrow(/Missing candidate/i);
+      expect(() => buildDocumentFromSequence([], new Map(), 'Test', sceneSequence)).toThrow(
+        /Missing candidate/i,
+      );
     });
   });
 
@@ -750,7 +976,7 @@ describe('graph-render-assembly ordering', () => {
           ledger: badChapterLedger,
           branch: 'main',
         }),
-      ).toThrow(/non\-increasing/i);
+      ).toThrow(/non-increasing/i);
     });
   });
 });

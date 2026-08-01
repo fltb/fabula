@@ -1,0 +1,23 @@
+id: martha_endell
+name: "Martha Endell"
+type: supporting_character
+archetype: fallen_woman_redemptrix
+role: supporting
+description: "A Yarmouth girl of Emily's age who has 'gone wrong' — seduced and abandoned, she has sunk into the lowest depths of London. Ostracised by the townspeople of Yarmouth, she watches the Peggotty family from a distance with a desperate, envious longing for the respectability she has lost. Her knowledge of the Thames-side underworld where fallen women hide makes her the instrument of Emily's rescue: it is Martha who finds Emily after Steerforth abandons her, and leads Mr Peggotty to her. Her redemption is Dickens's clearest statement that the 'fallen woman' can be the agent of salvation."
+appearance: "A thin, dark-haired young woman with a wild, hunted look; in Yarmouth she wears a shawl over her head and keeps to the edges of the crowd. In London she is ragged and desperate, but her face shows a fierce intelligence beneath the ruin."
+aliases:
+  - "Martha"
+  - "Martha Endell"
+gender: female
+age: "About Emily's age, early twenties"
+profession: "Needleworker (fallen)"
+traits:
+  - ruined
+  - desperate
+  - intelligent
+  - remorseful
+  - proud
+  - redemptive
+  - knowing
+voiceNotes: "Low, urgent, and self-lacerating — she speaks of her own shame with a terrible frankness, and of the world's dark places with the authority of one who has lived in them. Her offer to find Emily is made as a form of penance."
+backstory: "A Yarmouth girl who fell into prostitution and was driven from the town. She watches the Peggotty household with longing. Years later, living in the London slums, she hears of Emily's flight, finds her in a house near the Thames, and brings Mr Peggotty to her — the instrument of Emily's rescue and her own partial redemption. She emigrates to Australia with the Peggotty party."

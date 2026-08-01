@@ -5,7 +5,7 @@ role: supporting
 description: 贾瑞，贾代儒之孙（贾家族人），在贾府家塾中附读。第十二回"王熙凤毒设相思局"的核心人物，因垂涎王熙凤美色，被凤姐两次设局捉弄后病倒，照风月宝鉴而亡。是全书"情淫"教训的典型案例。
 appearance: 二十来岁之人，面貌尚可
 gender: 男
-age: 20
+age: "20"
 profession: 学生（贾家族人）
 traits:
   - 轻浮

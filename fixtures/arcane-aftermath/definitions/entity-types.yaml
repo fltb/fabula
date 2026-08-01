@@ -1,0 +1,291 @@
+types:
+  character:
+    typeId: character
+    kind: character
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      condition:
+        attributeId: condition
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      emotionalState:
+        attributeId: emotionalState
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: emotional
+      has_accepted_case:
+        attributeId: has_accepted_case
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      has_detected_anomaly:
+        attributeId: has_detected_anomaly
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_anomalous_frequency:
+        attributeId: knows_anomalous_frequency
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_ferros_manifest_irregularities:
+        attributeId: knows_ferros_manifest_irregularities
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_missing_crystals_HX04_HX07_HX11:
+        attributeId: knows_missing_crystals_HX04_HX07_HX11
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_mysterious_signal:
+        attributeId: knows_mysterious_signal
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knows_signal_not_human:
+        attributeId: knows_signal_not_human
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      location:
+        attributeId: location
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: location
+      inventory:
+        attributeId: inventory
+        valueType: string_map
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+      suspects_enforcer_corruption:
+        attributeId: suspects_enforcer_corruption
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      suspects_interim_commander:
+        attributeId: suspects_interim_commander
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      traits:
+        attributeId: traits
+        valueType: string_list
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  concept:
+    typeId: concept
+    kind: concept
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      description:
+        attributeId: description
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      value:
+        attributeId: value
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: identity
+    typedInvariants: []
+  location:
+    typeId: location
+    kind: location
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      activeFactions:
+        attributeId: activeFactions
+        valueType: string_map
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      activeInvestigations:
+        attributeId: activeInvestigations
+        valueType: string_map
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      controlledBy:
+        attributeId: controlledBy
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      currentTension:
+        attributeId: currentTension
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      hextech_crystal_investigation_active:
+        attributeId: hextech_crystal_investigation_active
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      notableEvents:
+        attributeId: notableEvents
+        valueType: string_list
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      npcsPresent:
+        attributeId: npcsPresent
+        valueType: string_list
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      personnelPresent:
+        attributeId: personnelPresent
+        valueType: string_list
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      securityLevel:
+        attributeId: securityLevel
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  rule:
+    typeId: rule
+    kind: rule
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      category:
+        attributeId: category
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      type:
+        attributeId: type
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: identity
+    typedInvariants: []

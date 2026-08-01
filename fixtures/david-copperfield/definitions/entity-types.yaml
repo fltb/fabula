@@ -1,0 +1,358 @@
+types:
+  character:
+    typeId: character
+    kind: character
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      age:
+        attributeId: age
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      aliases:
+        attributeId: aliases
+        valueType: string_list
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      appearance:
+        attributeId: appearance
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: appearance
+      awareness_of_steerforth:
+        attributeId: awareness_of_steerforth
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      condition:
+        attributeId: condition
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      custody_of_david:
+        attributeId: custody_of_david
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      decision:
+        attributeId: decision
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      emotionalState:
+        attributeId: emotionalState
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: emotional
+      employment:
+        attributeId: employment
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      engagement_emily:
+        attributeId: engagement_emily
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      engagement_ham:
+        attributeId: engagement_ham
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      financial:
+        attributeId: financial
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      financial_status:
+        attributeId: financial_status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      gender:
+        attributeId: gender
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      location:
+        attributeId: location
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: location
+      name:
+        attributeId: name
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      occupation:
+        attributeId: occupation
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      profession:
+        attributeId: profession
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      relationship:
+        attributeId: relationship
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      relationship_clara:
+        attributeId: relationship_clara
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      relationship_david:
+        attributeId: relationship_david
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      relationship_murdstone:
+        attributeId: relationship_murdstone
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      relationship_to_david:
+        attributeId: relationship_to_david
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      relationship_to_emily:
+        attributeId: relationship_to_emily
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      reputation:
+        attributeId: reputation
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      social_standing:
+        attributeId: social_standing
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      social_status:
+        attributeId: social_status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      undisciplined_heart:
+        attributeId: undisciplined_heart
+        valueType: boolean
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+      traits:
+        attributeId: traits
+        valueType: string_list
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  concept:
+    typeId: concept
+    kind: concept
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      description:
+        attributeId: description
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      value:
+        attributeId: value
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: identity
+    typedInvariants: []
+  location:
+    typeId: location
+    kind: location
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      atmosphere:
+        attributeId: atmosphere
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      condition:
+        attributeId: condition
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      notable_feature:
+        attributeId: notable_feature
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      season:
+        attributeId: season
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      social_standing:
+        attributeId: social_standing
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  rule:
+    typeId: rule
+    kind: rule
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates:
+          - active
+          - inactive
+          - retired
+        unsetAllowed: false
+        semanticRole: lifecycle
+      category:
+        attributeId: category
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      type:
+        attributeId: type
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - - active
+          - inactive
+        - - active
+          - retired
+        - - inactive
+          - active
+        - - inactive
+          - retired
+    referenceCapabilities:
+      defaultEligibility: identity
+    typedInvariants: []

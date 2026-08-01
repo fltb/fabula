@@ -2,5 +2,3 @@ id: loc_beiping
 name: 北平
 description: 故事发生的城市。一九三七年七七事变后沦陷。天安门、护国寺、西单、东四、什刹海等地名在书中反复出现。北平的秋景之美与亡国之痛形成强烈反差。
 kind: city
-initialState:
-  status: active

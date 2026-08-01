@@ -34,8 +34,8 @@ initialState:
   location: luchen_town
   status: alive
   condition: well
+  emotionalState: uneasy
   purpose: new_year_visit
-  emotionalState: restless_uneasy
   knowledge_of_xianglins_wife: none_yet
   moral_state: untested
 voiceNotes: >

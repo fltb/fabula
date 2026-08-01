@@ -72,6 +72,9 @@ export class FocalizationConsistencyValidator implements Validator {
           'Update the prose to match the declared focalization, or change the focalization declaration.',
           'edit_file',
           'focalization',
+          undefined,
+          undefined,
+          'interpretive_assessment',
         ),
       );
     }

@@ -12,10 +12,8 @@ initialState:
   condition: well
   emotionalState: uneasy
   inventory:
-    - item: "pipe"
-      description: "A pipe for smoking"
-    - item: "lighter"
-      description: "Pocket lighter"
+    pipe: "A pipe for smoking"
+    lighter: "Pocket lighter"
 voiceNotes: "Lyrical and philosophical. Prone to introspection and moral questioning. Speaks in longer, more measured sentences than Rainsford, with a tendency toward metaphor."
 backstory: "A fellow hunter and traveling companion of Rainsford. Familiar with the sea and its lore. The crew's unease around Ship-Trap Island has affected him deeply."
 knownSecrets: []

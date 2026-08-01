@@ -6,14 +6,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
   ContextCompiler,
-  compileStoryBoundaries,
-  compileStoryRuntimeGraph,
-  EntityMapper,
-  type Fact,
   FsStorage,
-  InMemoryEntityRegistry,
+  type InMemoryEntityRegistry,
+  initializeProject,
   type NarrativeEvent,
-  type ProjectData,
   ResultAggregator,
   type StoryBoundaries,
   type ValidationIssue,
@@ -54,24 +50,6 @@ export interface RegressionResults {
 
 // ─── Main entry ─────────────────────────────────────────────────────────────
 
-function initialFactsFor(registry: InMemoryEntityRegistry, genesis?: NarrativeEvent): Fact[] {
-  return [
-    ...(genesis?.postconditions ?? []),
-    ...registry.getAll().flatMap((entity) =>
-      Object.entries(entity.state ?? {}).map(([attribute, value]) => ({
-        id: `${entity.id}.${attribute}`,
-        entityId: entity.id,
-        attribute,
-        value,
-        validity: {
-          temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
-          branches: { type: 'all' as const },
-        },
-      })),
-    ),
-  ];
-}
-
 /**
  * Run validation against the zhu-fu fixture and return detailed per-issue results.
  * Each ValidationIssue includes: validator, severity, event, entity, message, attribute, fixSuggestion, fixTarget.
@@ -79,33 +57,12 @@ function initialFactsFor(registry: InMemoryEntityRegistry, genesis?: NarrativeEv
  */
 export function validateFixtureIssues(fixturePath?: string): ValidationIssue[] {
   const p = fixturePath ?? path.resolve(__dirname, '..', '..', '..', 'fixtures', 'zhu-fu');
-  const mapper = new EntityMapper(p);
-  const projectData = mapper.loadProject();
-  const registry = new InMemoryEntityRegistry();
-  registry.load(p);
-  const allEvents = mapper.loadAllEvents(projectData.chapters);
-  const genesis = allEvents.find((event) => event.id === 'system:genesis');
-  const narrativeEvents = allEvents.filter((event) => event.id !== 'system:genesis');
-  const initialThreads = (projectData.worldInitialState?.threads ?? []).map((t) => ({
-    id: t.id,
-  }));
-  const compiled = compileStoryRuntimeGraph({
-    events: allEvents,
-    initialFacts: initialFactsFor(registry, genesis),
-    initialThreads,
-    timeAnchors: projectData.timeAnchors ?? [],
-    branchPath: { decisions: [] },
-  });
-  const boundaries = compileStoryBoundaries(
-    [...compiled.selectedEvents],
-    compiled.initialFacts,
-    compiled.storyAdjacency,
-  );
+  const { events, registry, runtime } = initializeProject(p, new FsStorage());
   const results = new ResultAggregator().validateAll(
-    narrativeEvents,
-    boundaries.finalState,
+    events,
+    runtime.boundaries.finalState,
     registry,
-    { stateBeforeByEventId: boundaries.stateBeforeByEventId },
+    { stateBeforeByEventId: runtime.boundaries.stateBeforeByEventId },
   );
   return [...results.values()].flatMap((result) => [
     ...result.errors,
@@ -134,8 +91,7 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
   const startTime = Date.now();
   const stages: RegressionStageResult[] = [];
 
-  // Shared state populated across stages
-  let projectData!: ProjectData;
+  // Shared state populated from the single canonical kernel load
   let registry!: InMemoryEntityRegistry;
   let allEvents: NarrativeEvent[] = [];
   let boundaries!: StoryBoundaries;
@@ -167,14 +123,16 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
     }
   }
 
-  // ── 1. Load entities ──────────────────────────────────────────────────
+  // ── 1. Load canonical project (entities, events, DAG, replayed state) ─
   await mark(
     'Load entities',
     async () => {
-      const mapper = new EntityMapper(p);
-      projectData = mapper.loadProject();
-      registry = new InMemoryEntityRegistry();
-      registry.load(p);
+      const project = initializeProject(p, new FsStorage());
+      registry = project.registry;
+      allEvents = project.events;
+      boundaries = project.runtime.boundaries;
+      stateBeforeByEventId = boundaries.stateBeforeByEventId;
+      state = boundaries.finalState;
     },
     () => {
       const chars = registry.findByKind('character').length;
@@ -184,42 +142,20 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
     },
   );
 
-  // ── 2. Load events (including system:genesis) ─────────────────────────
+  // ── 2. Load events (canonical authored events) ────────────────────────
   await mark(
     'Load events',
     async () => {
-      const mapper = new EntityMapper(p);
-      // Re-use projectData loaded in step 1
-      allEvents = mapper.loadAllEvents(projectData.chapters);
+      // Authored events arrive with the canonical kernel load (stage 1).
     },
-    () => {
-      const total = allEvents.length;
-      const genesisCount = allEvents.filter((e) => e.id === 'system:genesis').length;
-      return `Total events: ${total} (${genesisCount} genesis, ${total - genesisCount} narrative)`;
-    },
+    () => `Total events: ${allEvents.length} narrative events`,
   );
 
   // ── 3. Build DAG ─────────────────────────────────────────────────────
   await mark(
     'Build DAG',
     async () => {
-      const genesis = allEvents.find((event) => event.id === 'system:genesis');
-      const initialThreads = (projectData.worldInitialState?.threads ?? []).map((t) => ({
-        id: t.id,
-      }));
-      const compiled = compileStoryRuntimeGraph({
-        events: allEvents,
-        initialFacts: initialFactsFor(registry, genesis),
-        initialThreads,
-        timeAnchors: projectData.timeAnchors ?? [],
-        branchPath: { decisions: [] },
-      });
-      boundaries = compileStoryBoundaries(
-        [...compiled.selectedEvents],
-        compiled.initialFacts,
-        compiled.storyAdjacency,
-      );
-      stateBeforeByEventId = boundaries.stateBeforeByEventId;
+      // Canonical boundaries arrive with the kernel load (stage 1).
     },
     () => `DAG order: ${boundaries.orderedEventIds.length} narrative events`,
   );
@@ -227,8 +163,7 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
   await mark(
     'Replay state',
     async () => {
-      state = boundaries.finalState;
-      stateBeforeByEventId = boundaries.stateBeforeByEventId;
+      // Canonical final state arrives with the kernel load (stage 1).
     },
     () => {
       const entityCount = Object.keys(state.entities).length;
@@ -243,14 +178,8 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
     'Run validators',
     async () => {
       const aggregator = new ResultAggregator();
-      const narrativeEvents = allEvents.filter((event) => event.id !== 'system:genesis');
-      const results = aggregator.validateAll(
-        narrativeEvents,
-        state,
-        registry,
-        { stateBeforeByEventId },
-      );
-      if (results.size === 0 && narrativeEvents.length > 0) {
+      const results = aggregator.validateAll(allEvents, state, registry, { stateBeforeByEventId });
+      if (results.size === 0 && allEvents.length > 0) {
         throw new Error('Aggregator returned empty results');
       }
       // Collect all L1 issues
@@ -269,7 +198,7 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
         else if (issue.severity === 'warning') warnings++;
         else if (issue.severity === 'info') infos++;
       }
-      return `Errors: ${errors}, Warnings: ${warnings}, Infos: ${infos} (${allEvents.filter((e) => e.id !== 'system:genesis').length} events validated)`;
+      return `Errors: ${errors}, Warnings: ${warnings}, Infos: ${infos} (${allEvents.length} events validated)`;
     },
   );
 
@@ -391,8 +320,7 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
     'Compile context',
     async () => {
       const compiler = new ContextCompiler();
-      const narrativeEvents = allEvents.filter((event) => event.id !== 'system:genesis');
-      const lastEvent = narrativeEvents[narrativeEvents.length - 1];
+      const lastEvent = allEvents[allEvents.length - 1];
       if (!lastEvent) throw new Error('No narrative events to compile context for');
       const stateBefore = stateBeforeByEventId.get(lastEvent.id);
       if (!stateBefore) throw new Error(`Missing state boundary for ${lastEvent.id}`);
@@ -412,8 +340,7 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
     },
     () => {
       const compiler = new ContextCompiler();
-      const narrativeEvents = allEvents.filter((event) => event.id !== 'system:genesis');
-      const lastEvent = narrativeEvents[narrativeEvents.length - 1];
+      const lastEvent = allEvents[allEvents.length - 1];
       if (!lastEvent) return 'No narrative event';
       const stateBefore = stateBeforeByEventId.get(lastEvent.id);
       if (!stateBefore) return `Missing state boundary for ${lastEvent.id}`;
@@ -428,8 +355,7 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
   const totalFailed = stages.filter((s) => !s.passed).length;
 
   // Estimate total word count (400 words per narrative event as default)
-  const narrativeEvents = allEvents.filter((e) => e.id !== 'system:genesis');
-  const totalWordCount = narrativeEvents.length * 400;
+  const totalWordCount = allEvents.length * 400;
 
   // Per-validator breakdown: group issues by validator, split by severity
   function buildPerValidator(issues: ValidationIssue[]): PerValidatorBreakdown[] {

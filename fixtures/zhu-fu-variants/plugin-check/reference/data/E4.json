@@ -68,6 +68,108 @@
       "ruleChecks": [],
       "knowledgeChecks": [],
       "checklistResults": []
+    },
+    "protocol": {
+      "proseHash": "cb7592f009224aefe2ca59677ed99aa028f19c71ecdb3a5649e80a19d6cd1d4c",
+      "analysisSchema": "mock-analysis-contract",
+      "model": "mock-stage1",
+      "provider": "mock-pass2",
+      "analysisPromptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "samplingConfigHash": "mock-sampling-config",
+      "validatorPolicy": "mock-validator-policy",
+      "referencePolicy": "mock-reference-policy"
+    },
+    "observations": {
+      "postconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "preconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "pov": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "inventedDetails": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "quality": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "threadProgressAchieved": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "foreshadowingDeployed": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "narrativeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "appearanceChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "characterReferences": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "tenseDetected": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "conflictAnalysis": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "ruleChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "knowledgeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      },
+      "checklistResults": {
+        "disposition": "produced",
+        "evidence": [
+          "祥林嫂第二次到鲁镇的时候，已经没有了先前的精神。"
+        ]
+      }
     }
   },
   "metadata": {

@@ -1,0 +1,11 @@
+injected:
+  - entityId: "E1"
+    attribute: "preconditions"
+    expectedValidator: "reachability"
+    expectedSeverity: "warning"
+    description: "E1 receives a deterministic precondition whose value has no authored provider, so the event is unreachable."
+  - entityId: "E2"
+    attribute: "preconditions"
+    expectedValidator: "reachability"
+    expectedSeverity: "warning"
+    description: "E2 receives a deterministic precondition whose value has no authored provider, so the event is unreachable."

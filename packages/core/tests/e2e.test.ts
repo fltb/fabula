@@ -46,6 +46,7 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'system', type: 'omniscient' },
     sceneBrief: 'Test event',
+    beats: ['Test event'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
@@ -66,7 +67,7 @@ function makeGenesisEvent(): NarrativeEvent {
     narrativeOrder: 0,
     title: 'World Genesis',
     storyTime: { type: 'absolute', value: 'day_-1' },
-    source: 'genesis',
+    source: 'system',
     postconditions: [
       ['world', 'status', 'post_arcane_s1'],
       ['world', 'day', 0],

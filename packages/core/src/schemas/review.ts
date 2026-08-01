@@ -8,12 +8,14 @@ const reviewTargetBaseSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('novel'), id: z.literal('novel') }).strict(),
   z.object({ type: z.literal('chapter'), id: z.string().regex(/^chapter:[1-9]\d*$/) }).strict(),
   z.object({ type: z.literal('scene'), id: nonEmptyString }).strict(),
-  z.object({
-    type: z.literal('line'),
-    id: nonEmptyString,
-    lineRange: z.tuple([z.number().int().positive(), z.number().int().positive()]),
-    lineBasis: z.object({ revisionId: uuidSchema, proseHash: hashSchema }).strict(),
-  }).strict(),
+  z
+    .object({
+      type: z.literal('line'),
+      id: nonEmptyString,
+      lineRange: z.tuple([z.number().int().positive(), z.number().int().positive()]),
+      lineBasis: z.object({ revisionId: uuidSchema, proseHash: hashSchema }).strict(),
+    })
+    .strict(),
   z.object({ type: z.literal('character'), id: nonEmptyString }).strict(),
   z.object({ type: z.literal('worldrule'), id: nonEmptyString }).strict(),
 ]);
@@ -49,17 +51,19 @@ export const reviewApplicationV1Schema = z
   })
   .strict();
 
-export const reviewCommentSchema = newReviewCommentSchema.extend({
-  id: nonEmptyString,
-  author: z.enum(['human', 'llm']),
-  actorId: nonEmptyString,
-  status: z.enum(['open', 'addressed', 'resolved', 'wontfix', 'superseded']),
-  applications: z.array(reviewApplicationV1Schema),
-  supersedesId: nonEmptyString.optional(),
-  resolvedBy: z.string().optional(),
-  createdAt: z.string().datetime(),
-  resolvedAt: z.string().datetime().optional(),
-}).strict();
+export const reviewCommentSchema = newReviewCommentSchema
+  .extend({
+    id: nonEmptyString,
+    author: z.enum(['human', 'llm']),
+    actorId: nonEmptyString,
+    status: z.enum(['open', 'addressed', 'resolved', 'wontfix', 'superseded']),
+    applications: z.array(reviewApplicationV1Schema),
+    supersedesId: nonEmptyString.optional(),
+    resolvedBy: z.string().optional(),
+    createdAt: z.string().datetime(),
+    resolvedAt: z.string().datetime().optional(),
+  })
+  .strict();
 
 const patchChangeSchema = z
   .object({

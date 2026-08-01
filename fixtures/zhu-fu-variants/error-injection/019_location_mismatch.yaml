@@ -3,4 +3,4 @@ injected:
     attribute: "location"
     expectedValidator: "character_state"
     expectedSeverity: "error"
-    description: "An event's pov.character has location beijing but that location is not in the definitions/locations/ directory"
+    description: "E3 postconditions set xianglins_wife.location=beijing (a location that is not in definitions/locations/) and xianglins_wife.status=dead, while E4's preconditions still expect status=alive — the character's declared state contradicts its established lifecycle."

@@ -13,6 +13,13 @@ pov:
   character: omniscient
   type: omniscient
 sceneBrief: 蓝东阳在冠家打牌输了八十块钱，恼羞成怒向瑞丰索要，甚至威胁要去报告瑞全逃走的事。瑞丰一怒之下打了蓝东阳一拳，蓝东阳闭过气去。瑞丰吓得跑回家，从此不敢再去学校。后来蓝东阳又想买校长的职位，冠晓荷也想插一脚。大赤包建议他们拜把兄弟，三人都觉得别扭。汉奸之间为了利益互相撕咬，丑态百出。
+beats:
+  - "蓝东阳在冠家打牌输了八十块钱，恼羞成怒向瑞丰索要，甚至威胁要去报告瑞全逃走的事。"
+  - "瑞丰一怒之下打了蓝东阳一拳，蓝东阳闭过气去。"
+  - "瑞丰吓得跑回家，从此不敢再去学校。"
+  - "后来蓝东阳又想买校长的职位，冠晓荷也想插一脚。"
+  - "大赤包建议他们拜把兄弟，三人都觉得别扭。"
+  - "汉奸之间为了利益互相撕咬，丑态百出。"
 preconditions:
 - entity: qi_ruifeng
   attribute: location
@@ -41,6 +48,14 @@ threadProgress:
   advancement: 汉奸之间为了金钱和权力互相撕咬。蓝东阳、瑞丰、冠晓荷各怀鬼胎。
   progressAfter: 50
   progressTotal: 100
+introduces:
+- type: character
+  id: blue_dongyang
+  initialState:
+    location: loc_guanjia
+    status: alive
+    condition: hanjian_accomplice
+    emotionalState: smug_aggressive
 styleGuidance:
   tone: 讽刺、可笑、可鄙
   targetWordCount: 1200

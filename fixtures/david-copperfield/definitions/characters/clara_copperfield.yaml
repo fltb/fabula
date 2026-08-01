@@ -21,12 +21,5 @@ traits:
   - malleable
   - easily_led
   - devoted
-initialState:
-  location: blunderstone
-  status: alive
-  condition: pregnant_with_david
-  emotionalState: anxious_tender
-  social_status: widow
-  relationship_murdstone: single
 voiceNotes: "David narrates her with affectionate hindsight. She is always 'my poor mother' in his telling — beloved but fragile. Her speech is soft and yielding, easily overborne by Murdstone's firmness and Miss Murdstone's asperity. She calls David 'my Davy' with an endearing tenderness."
 backstory: "Daughter of a country gentleman, orphaned young. She married David Copperfield senior (a man double her age) and was left a widow within a year when he died of a constitution weakened by age. She is left to raise her posthumous son alone, with the help of Peggotty. Her brother-in-law — or rather her husband's aunt — Miss Betsey Trotwood disapproved of the marriage and calls Clara a 'wax doll.' When Mr Murdstone courts her, she is flattered and relieved to have a protector. After the marriage, she becomes increasingly powerless in her own home."

@@ -21,14 +21,6 @@ traits:
   - kind
   - stubborn
   - home_bound
-initialState:
-  location: loc_qijia
-  status: alive
-  condition: "healthy_for_his_age"
-  emotionalState: "anxious_but_hopeful"
-  health: "fair"
-  worldview: "peace_and_harmony"
-  confidence_in_victory: "three_months"
 voiceNotes: "祁老人说话带有北平老人的从容与固执，常用'过不了三个月'来表达他对战争结束的乐观预期。他虽不识字，但自有一套生存哲学——忍让、和气、不出头。他的话语里充满了俗语和老理儿。"
 backstory: "祁老人年轻时从乡下到北平学买卖，靠省吃俭用攒钱买下小羊圈五号院的房产。他一辈子勤劳本分，把祁家从一口人发展到四世同堂。他最大的骄傲就是这一院子和一大家子人。他相信只要人老实、不惹事，老天爷就不会亏待好人。"
 knownSecrets: []

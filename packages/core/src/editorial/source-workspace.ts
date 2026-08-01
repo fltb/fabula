@@ -2,15 +2,18 @@
 // SourceWorkspace — author-source registry, overlay preview, and atomic apply.
 //
 // Approves and tracks project source document paths, validates change sets,
-// runs whole-project EntityMapper compilation on overlay, and commits changes
-// atomically through ProjectTransactionCoordinator.
+// runs the canonical kernel + ontology preflight on overlay (and on the
+// external working copy during reconcile), and commits changes atomically
+// through ProjectTransactionCoordinator.
 // ============================================================================
 
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
 import YAML from 'yaml';
 import type { ZodType } from 'zod';
-import { EntityMapper } from '../entity/index.ts';
+import { validateProjectOntology } from '../entity/ontology.ts';
+import { loadCanonicalProject } from '../entity/project-runtime.ts';
+import { NovalisticallyError } from '../errors.ts';
 import {
   editorialOperationV1Schema,
   publicationManifestV1Schema,
@@ -171,13 +174,6 @@ function matchRegistry(relPath: string): RegistryEntry | null {
   return null;
 }
 
-/** Strip projectDir prefix from a full path to get the relative source path. */
-function _stripPrefix(fullPath: string, projectDir: string): string {
-  const dir = projectDir.endsWith('/') ? projectDir : `${projectDir}/`;
-  if (fullPath.startsWith(dir)) return fullPath.slice(dir.length);
-  return fullPath;
-}
-
 /** Reject invalid change paths. Returns the kind on success, throws on rejection. */
 function validateChangePath(
   changePath: string,
@@ -276,8 +272,6 @@ function collectDocumentHashes(storage: Storage, projectDir: string): Record<str
 
 /** Collect hashes from an OverlayStorage (uses full paths). */
 function collectOverlayHashes(overlay: OverlayStorage, projectDir: string): Record<string, string> {
-  const _dir = projectDir.endsWith('/') ? projectDir : `${projectDir}/`;
-
   return collectDocumentHashes(
     {
       exists(fp: string) {
@@ -344,6 +338,22 @@ function parseYamlWithSchema(
       ],
     };
   }
+}
+
+/**
+ * Carry a ConfigError's phase/path/eventId through the editorial mapping.
+ * EditorialOperationError.context keeps all three; the strict EditorialError
+ * schema only accepts eventId/path, which callers pick out separately.
+ */
+function configErrorContext(error: unknown): { eventId?: string; path?: string; phase?: string } {
+  if (error instanceof NovalisticallyError) {
+    return {
+      ...(error.context.eventId ? { eventId: error.context.eventId } : {}),
+      ...(error.context.path ? { path: error.context.path } : {}),
+      ...(error.context.phase ? { phase: error.context.phase } : {}),
+    };
+  }
+  return {};
 }
 
 // ─── SourceWorkspace ─────────────────────────────────────────────────────────
@@ -452,7 +462,7 @@ export class SourceWorkspace {
    *
    * 1. Validate paths, CAS expectations, and unique paths.
    * 2. Create an overlay with the proposed changes.
-   * 3. Run EntityMapper on the overlay to detect compilation errors.
+   * 3. Run the canonical kernel + ontology preflight on the overlay.
    * 4. Compute before/after hashes and impact.
    * 5. Return a deterministic preview.
    */
@@ -522,7 +532,7 @@ export class SourceWorkspace {
     // Compute after hashes from overlay
     const afterHashes = collectOverlayHashes(overlay, this.paths.projectDir);
 
-    // Validate YAML content and run EntityMapper
+    // Validate YAML content and run the canonical preflight
     const validation = this.compileOverlay(overlay, parsed.changes);
 
     // Determine affected event IDs
@@ -854,11 +864,12 @@ export class SourceWorkspace {
       );
     }
     try {
-      new EntityMapper(this.paths.projectDir, this.storage).loadProject();
+      this.preflightProject(this.storage);
     } catch (error) {
       throw new EditorialOperationError(
         'INVALID_SOURCE_CHANGE',
         `External source working copy does not compile: ${toEditorialError(error).message}`,
+        configErrorContext(error),
       );
     }
 
@@ -1029,13 +1040,14 @@ export class SourceWorkspace {
     return null;
   }
 
-  /** Run EntityMapper on the overlay to detect compilation problems.
+  /** Run the canonical kernel + ontology preflight on the overlay.
    *
    * Checks YAML parseability of changed files and runs the full project
-   * EntityMapper. Schema validation errors from the mapper are captured as
-   * compilation errors when they indicate structural problems (missing files,
-   * YAML parse failures). Individual field validation is deferred to the
-   * SourceDocumentV1 diagnostics surfaced by get()/list(). */
+   * preflight — the same canonical source + ontology check reconcile uses on
+   * the external working copy. Source/ontology ConfigErrors keep their
+   * phase/path/eventId; the surfaced EditorialError carries path/eventId and
+   * maps to INVALID_SOURCE_CHANGE. Individual field validation is deferred to
+   * the SourceDocumentV1 diagnostics surfaced by get()/list(). */
   private compileOverlay(
     overlay: OverlayStorage,
     changes: readonly SourceDocumentChange[],
@@ -1050,20 +1062,35 @@ export class SourceWorkspace {
     if (errors.length > 0) return { valid: false, errors };
 
     try {
-      new EntityMapper(this.paths.projectDir, overlay as unknown as Storage).loadProject();
+      this.preflightProject(overlay as unknown as Storage);
       return { valid: true, errors: [] };
     } catch (error) {
       const editorialError = toEditorialError(error);
+      const { eventId, path: errorPath } = configErrorContext(error);
       return {
         valid: false,
         errors: [
           {
             ...editorialError,
+            ...(eventId ? { eventId } : {}),
+            ...(errorPath ? { path: errorPath } : {}),
             code: 'INVALID_SOURCE_CHANGE',
           },
         ],
       };
     }
+  }
+
+  /**
+   * Canonical source + ontology preflight shared by overlay previews and the
+   * reconcile external-working-copy check: load the project through the
+   * internal canonical kernel and run the pure ontology preflight over the
+   * given storage view. Throws ConfigError (phase 'source' for ontology
+   * violations) on the first violation.
+   */
+  private preflightProject(storage: Storage): void {
+    const ir = loadCanonicalProject(this.paths.projectDir, storage);
+    validateProjectOntology(ir);
   }
 
   /** Determine affected event IDs from before/after hash comparison. */

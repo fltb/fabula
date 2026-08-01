@@ -1,0 +1,23 @@
+id: rosa_dartle
+name: "Rosa Dartle"
+type: supporting_character
+archetype: wounded_observer
+role: supporting
+description: "Mrs Steerforth's orphaned ward, a companion in the Highgate household and one of the novel's most haunting minor figures. Rosa is a clever, passionate, embittered young woman with a scar across her lip — a scar inflicted years before by Steerforth's own hand when he threw a hammer at her. Her sharp tongue and her probing, insistent questions about Steerforth's doings betray a fierce, unconsummated love for him and a hunger for his ruin. After his death she fades into grief and silence, her life emptied of its one obsession."
+appearance: "A slim, dark-haired young woman with a thin, eager face and a scar across her upper lip, which she has a way of drawing back over her teeth when she speaks. Her eyes are bright, restless, and piercing."
+aliases:
+  - "Rosa"
+  - "Miss Dartle"
+gender: female
+age: "Young woman, about Steerforth's age"
+profession: "Ward and companion to Mrs Steerforth"
+traits:
+  - clever
+  - passionate
+  - bitter
+  - sharp_tongued
+  - wounded
+  - obsessive
+  - perceptive
+voiceNotes: "Eager, insistent, and barbed — her questions pursue a point like a hound, and her speech is full of sharp asides and probing repetitions. She speaks of Steerforth with a mixture of adoration and accusation."
+backstory: "Orphaned niece of Mrs Steerforth, raised in her house. Steerforth scarred her lip with a hammer in childhood. She loves him secretly and bitterly, and her questions to David about his doings are the reader's first warning of Steerforth's capacity for cruelty. After Steerforth drowns she is broken, and vanishes from the story into grief."

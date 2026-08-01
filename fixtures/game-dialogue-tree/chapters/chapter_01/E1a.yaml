@@ -6,6 +6,8 @@ pov:
   character: hero
   type: third_person_limited
 sceneBrief: "The hunt begins in the jungle."
+beats:
+  - "The hunt begins in the jungle."
 preconditions:
   - entity: hero
     attribute: chose_hunt

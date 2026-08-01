@@ -15,11 +15,6 @@ traits:
   - hardworking
   - simple
   - providing
-initialState:
-  location: he_family_hollow
-  status: alive
-  condition: well
-  marital_status: unmarried
 voiceNotes: "文中贺老六从未直接开口说话——他的一切都是通过祥林嫂（对柳妈）和卫老婆子的转述得知的。他唯一的'话语'是被转述的一句：'你不知道他力气多么大呀'（祥林嫂对柳妈说的）。他是一个沉默的、靠力气生活的男人。"
 backstory: "贺老六是贺家坳的本地人，以打猎和种地为生。他本可以娶一个正常的媳妇，但因家境贫寒，只能通过买卖的方式获得被婆婆卖掉的祥林嫂——他既是压迫结构的一部分（买了她），又是她生命中最好的遭遇（他待她不错）。他的死因（吃了冷饭复发伤寒）是当时农村缺医少药、营养匮乏的典型悲剧。"
 knownSecrets: []

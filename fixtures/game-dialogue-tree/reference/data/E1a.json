@@ -3,21 +3,149 @@
   "analysis": {
     "eventId": "E1a",
     "analysis": {
-      "postconditions": { "covered": [], "dropped": [] },
-      "preconditions": { "violated": [] },
-      "pov": { "consistent": true, "leaks": [] },
+      "postconditions": {
+        "covered": [],
+        "dropped": []
+      },
+      "preconditions": {
+        "violated": []
+      },
+      "pov": {
+        "consistent": true,
+        "leaks": []
+      },
       "inventedDetails": [],
-      "quality": { "proseScore": 5, "maxScore": 5, "strengths": ["branch-aware tension"], "weaknesses": [], "estimatedWordCount": 80 },
+      "quality": {
+        "proseScore": 5,
+        "maxScore": 5,
+        "strengths": [
+          "branch-aware tension"
+        ],
+        "weaknesses": [],
+        "estimatedWordCount": 80
+      },
       "threadProgressAchieved": [],
       "foreshadowingDeployed": [],
       "narrativeChecks": [],
       "appearanceChecks": [],
-      "characterReferences": [{ "entityId": "hero", "namesUsed": ["hero"] }],
+      "characterReferences": [
+        {
+          "entityId": "hero",
+          "namesUsed": [
+            "hero"
+          ]
+        }
+      ],
       "tenseDetected": "past",
-      "conflictAnalysis": { "primaryType": "person_vs_nature", "resolutionAchieved": false },
+      "conflictAnalysis": {
+        "primaryType": "person_vs_nature",
+        "resolutionAchieved": false
+      },
       "ruleChecks": [],
       "knowledgeChecks": [],
       "checklistResults": []
+    },
+    "protocol": {
+      "proseHash": "689d7a76854d39e736bdad883567402a59ca219aa25e5a353b253532bf10c8ac",
+      "analysisSchema": "mock-analysis-contract",
+      "model": "mock-stage1",
+      "provider": "mock-pass2",
+      "analysisPromptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "samplingConfigHash": "mock-sampling-config",
+      "validatorPolicy": "mock-validator-policy",
+      "referencePolicy": "mock-reference-policy"
+    },
+    "observations": {
+      "postconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "preconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "pov": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "inventedDetails": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "quality": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "threadProgressAchieved": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "foreshadowingDeployed": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "narrativeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "appearanceChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "characterReferences": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "tenseDetected": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "conflictAnalysis": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "ruleChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "knowledgeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      },
+      "checklistResults": {
+        "disposition": "produced",
+        "evidence": [
+          "Perhaps the jungle offer"
+        ]
+      }
     }
   }
 }

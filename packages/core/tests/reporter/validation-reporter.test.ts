@@ -3,9 +3,9 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import { writeValidationReport } from '../../src/reporter/validation-reporter.ts';
 import type { ValidationReport } from '../../src/reporter/validation-reporter.ts';
+import { writeValidationReport } from '../../src/reporter/validation-reporter.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 
 describe('writeValidationReport', () => {
   it('writes validation.md through MemoryStorage', () => {

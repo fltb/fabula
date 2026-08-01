@@ -65,6 +65,8 @@ export interface SystemContext {
 
 export interface SceneSpecification {
   goal: string;
+  /** Ordered, non-empty beats: the sequence of actions/turns in the scene. */
+  beats: [string, ...string[]];
   povType: string;
   povCharacter: string;
   conflict: string;
@@ -111,4 +113,3 @@ export interface ThreadStatus {
   total: number;
   description: string;
 }
-

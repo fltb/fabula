@@ -1,7 +1,10 @@
 import * as path from 'node:path';
+import { compileGameDialogueTree } from '../branch/game-dialogue-tree.ts';
+import { ConfigError } from '../errors.ts';
 import {
   chapterMetadataSchema,
   characterDefinitionSchema,
+  entityTypeCatalogSourceSchema,
   eventFileSchema,
   factionDefinitionSchema,
   itemDefinitionSchema,
@@ -9,18 +12,17 @@ import {
   narratorAssertionSchema,
   narratorProfileSchema,
   plannedDiscourseLedgerSourceSchema,
-  projectConfigSchema,
   relationshipDefinitionSchema,
   ruleDefinitionSchema,
   worldInitialStateSchema,
 } from '../schemas/index.js';
-import { compileGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import { compilePlannedDiscourseLedger } from '../state/discourse-ledger.ts';
-import { ConfigError } from '../errors.ts';
 import { FsStorage, type Storage } from '../storage/index.ts';
+import type { NarrativeEllipsis } from '../types/corpus.js';
 import type {
   ChapterMetadata,
   CharacterDefinition,
+  EntityTypeCatalogSource,
   EventFile,
   Fact,
   FactionDefinition,
@@ -36,7 +38,6 @@ import type {
   TimeAnchor,
   WorldInitialState,
 } from '../types/index.js';
-import type { NarrativeEllipsis } from '../types/corpus.js';
 import { convertRelationshipChange } from '../types/relationship.js';
 import { factIdFrom, parseStoryTimestamp, resolveTemporalContext } from './timestamp.js';
 import type { ProjectData } from './types.js';
@@ -128,6 +129,16 @@ export class EntityMapper {
       narratorAssertions[na.id] = na;
     }
 
+    // Entity type catalog source (strict, versionless current contract).
+    // Required: a missing file fails with ConfigError through readYamlFile.
+    // Only the serializable source is stored — never a live Zod object; the
+    // runtime catalog is compiled fresh per call by the internal compiler.
+    const entityTypeCatalogSource = readYamlFile({
+      filePath: path.join(defsDir, 'entity-types.yaml'),
+      schema: entityTypeCatalogSourceSchema,
+      storage: this.storage,
+    }) as EntityTypeCatalogSource;
+
     const worldInitialState = readYamlFile({
       filePath: path.join(defsDir, 'state_initial.yaml'),
       schema: worldInitialStateSchema,
@@ -198,6 +209,7 @@ export class EntityMapper {
       narratorProfiles: this.narratorProfiles,
       discourseLedger,
       narratorAssertions,
+      entityTypeCatalogSource,
     };
   }
 
@@ -205,7 +217,9 @@ export class EntityMapper {
   mapToNarrativeEvent(eventFile: EventFile): NarrativeEvent {
     const storyTime = parseStoryTimestamp(eventFile.storyTime);
     const narrationTime =
-      eventFile.narrationTime === undefined ? undefined : parseStoryTimestamp(eventFile.narrationTime);
+      eventFile.narrationTime === undefined
+        ? undefined
+        : parseStoryTimestamp(eventFile.narrationTime);
     const preconditions: Fact[] = (eventFile.preconditions ?? []).map((pc) => ({
       id: factIdFrom(pc.entity, pc.attribute),
       entityId: pc.entity,
@@ -263,6 +277,7 @@ export class EntityMapper {
         type: eventFile.pov.type,
       },
       sceneBrief: eventFile.sceneBrief,
+      beats: eventFile.beats,
       preconditions,
       postconditions,
       choices: eventFile.choices,
@@ -321,30 +336,26 @@ export class EntityMapper {
     };
   }
 
-  /** Load all events as NarrativeEvent objects */
-  loadAllEvents(
-    chapters: Map<number, { metadata: ChapterMetadata | null; events: EventFile[] }>,
-  ): NarrativeEvent[] {
-    const projectData = this.loadProject();
-    const eventFiles = [...chapters.values()].flatMap((chapter) => chapter.events);
+  /**
+   * Load all authored events as NarrativeEvent objects from already-loaded
+   * ProjectData. Never loads the project itself (the canonical kernel owns
+   * the single loadProject call). Applies game-dialogue scopes to authored
+   * events and injects choice-transition predecessor ids, but returns ONLY
+   * renderable event-file events — synthetic transitions (introduction,
+   * branch choice) are composed into runtimeEvents by the canonical kernel.
+   */
+  loadAllEvents(data: ProjectData): NarrativeEvent[] {
+    const eventFiles = [...data.chapters.values()].flatMap((chapter) => chapter.events);
 
     // Step 1: Map all EventFile to NarrativeEvent (parses storyTime once,
     // shared with Fact validity via mapToNarrativeEvent).
     const authoredEvents = eventFiles.map((eventFile) => this.mapToNarrativeEvent(eventFile));
 
     // Step 2: Resolve TemporalContext from mapped events + project time anchors.
-    const temporalContext = resolveTemporalContext(authoredEvents, projectData.timeAnchors);
+    const temporalContext = resolveTemporalContext(authoredEvents, data.timeAnchors);
 
     // Step 3: Compile game dialogue tree using NarrativeEvent[] + TemporalContext.
     const gameDialogueTree = compileGameDialogueTree(authoredEvents, temporalContext);
-
-    const allEvents: NarrativeEvent[] = [];
-
-    // Add genesis event from world initial state
-    if (projectData.worldInitialState) {
-      const genesisEvent = this.createGenesisEvent(projectData.worldInitialState);
-      allEvents.push(genesisEvent);
-    }
 
     if (gameDialogueTree) {
       const authoredEventById = new Map(authoredEvents.map((event) => [event.id, event]));
@@ -373,61 +384,17 @@ export class EntityMapper {
             });
           }
           const transitionId = `system:branch-choice:${eventId}:${choice.id}`;
-          if (!target.causalPredecessors?.includes(transitionId)) {
-            (target.causalPredecessors ??= []).push(transitionId);
+          const predecessors = target.causalPredecessors ?? [];
+          if (!predecessors.includes(transitionId)) {
+            predecessors.push(transitionId);
+            target.causalPredecessors = predecessors;
           }
         }
       }
-      allEvents.push(...authoredEvents, ...gameDialogueTree.transitionEvents);
-    } else {
-      allEvents.push(...authoredEvents);
     }
 
-    // Sort by narrative order
-    allEvents.sort((a, b) => a.narrativeOrder - b.narrativeOrder);
-
-    return allEvents;
-  }
-
-  /** Create the genesis event from world initial state */
-  createGenesisEvent(wis: WorldInitialState): NarrativeEvent {
-    const postconditions: Fact[] = (wis.worldFacts ?? []).map((wf) => ({
-      id: wf.id,
-      entityId: 'world',
-      attribute: wf.id,
-      value: wf.value,
-      confidence: 1.0,
-      validity: {
-        temporal: {
-          start: { type: 'absolute' as const, value: 'day_0' },
-          end: null,
-        },
-        branches: { type: 'all' as const },
-      },
-    }));
-
-    return {
-      kind: 'event',
-      id: 'system:genesis',
-      event: 'system:genesis',
-      narrativeOrder: 0,
-      title: 'World Genesis',
-      storyTime: { type: 'absolute', value: 'day_0' },
-      sceneType: 'linear',
-      pov: { character: 'system', type: 'omniscient' },
-      sceneBrief: 'World initial state. Generated automatically from state_initial.yaml.',
-      preconditions: [],
-      postconditions,
-      threadProgress: [],
-      foreshadowing: [],
-      relationshipEffects: [],
-      ruleEffects: [],
-      source: 'genesis',
-      branchExistence: { type: 'all' },
-      participants: { entities: [] },
-      targetAudience: undefined,
-      status: 'draft',
-    };
+    // Authored renderable events only; sort by narrative order.
+    return [...authoredEvents].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
   }
 }
 

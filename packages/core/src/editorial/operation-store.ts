@@ -5,7 +5,9 @@
 // ============================================================================
 
 import * as path from 'node:path';
+import { editorialOperationV1Schema, publicationManifestV1Schema } from '../schemas/editorial.ts';
 import { computeContentHash, computeFileHash } from '../storage/hash.ts';
+import type { StorageWrite } from '../storage/types.ts';
 import type {
   Clock,
   EditorialError,
@@ -14,11 +16,9 @@ import type {
   EditorialOperationV1,
   PublicationManifestV1,
 } from '../types/editorial.ts';
-import { editorialOperationV1Schema, publicationManifestV1Schema } from '../schemas/editorial.ts';
 import { EditorialOperationError } from './errors.ts';
 import type { ProjectPaths } from './paths.ts';
-import { ProjectTransactionCoordinator, stableJson } from './transaction.ts';
-import type { StorageWrite } from '../storage/types.ts';
+import { type ProjectTransactionCoordinator, stableJson } from './transaction.ts';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -47,7 +47,6 @@ export class OperationStore {
   private operationPath(operationId: string): string {
     return path.join(this.paths.operationsDir, `${operationId}.json`);
   }
-
 
   // ── Register ─────────────────────────────────────────────────────────────
 
@@ -78,7 +77,8 @@ export class OperationStore {
     this.recoverStalePublicationReference(operationId);
 
     let existingContent = this.coordinator.storage.readOptional(opPath);
-    const existingContentHash = existingContent !== null ? computeContentHash(existingContent) : null;
+    const existingContentHash =
+      existingContent !== null ? computeContentHash(existingContent) : null;
     let isOverwrite = false; // true when existing file is malformed and must be CAS-overwritten
 
     if (existingContent !== null) {
@@ -158,11 +158,12 @@ export class OperationStore {
 
     // Compute expected hash: use re-read content if available (recovery case),
     // or the original file's hash for malformed overwrite, or null for fresh creation.
-    const expectedOpHash = existingContent !== null
-      ? computeContentHash(existingContent)
-      : isOverwrite
-        ? existingContentHash
-        : null;
+    const expectedOpHash =
+      existingContent !== null
+        ? computeContentHash(existingContent)
+        : isOverwrite
+          ? existingContentHash
+          : null;
 
     // Atomically set active_operation_id in the publication manifest
     const writes: StorageWrite[] = [
@@ -176,10 +177,7 @@ export class OperationStore {
         type: 'put',
         path: this.paths.publicationPath,
         content: stableJson(this.buildActivePublicationManifest(operationId)),
-        expectedHash: computeFileHash(
-          this.coordinator.storage,
-          this.paths.publicationPath,
-        ),
+        expectedHash: computeFileHash(this.coordinator.storage, this.paths.publicationPath),
       },
     ];
 
@@ -320,10 +318,7 @@ export class OperationStore {
         type: 'put',
         path: this.paths.publicationPath,
         content: stableJson(this.buildActivePublicationManifest(operationId)),
-        expectedHash: computeFileHash(
-          this.coordinator.storage,
-          this.paths.publicationPath,
-        ),
+        expectedHash: computeFileHash(this.coordinator.storage, this.paths.publicationPath),
       },
     ];
 
@@ -379,11 +374,7 @@ export class OperationStore {
    * Only the owning worker may checkpoint.
    * @throws EditorialOperationError if not the owner, terminal, or non-monotonic.
    */
-  checkpointSequence(
-    operationId: string,
-    workerId: string,
-    sequence: number,
-  ): void {
+  checkpointSequence(operationId: string, workerId: string, sequence: number): void {
     const opPath = this.operationPath(operationId);
     const currentContent = this.coordinator.storage.read(opPath);
     const op = this.parseOperation(currentContent, operationId);
@@ -497,14 +488,8 @@ export class OperationStore {
         {
           type: 'put',
           path: this.paths.publicationPath,
-          content: stableJson(this.buildStalePublicationManifest(
-            operation.operationId,
-            reason,
-          )),
-          expectedHash: computeFileHash(
-            this.coordinator.storage,
-            this.paths.publicationPath,
-          ),
+          content: stableJson(this.buildStalePublicationManifest(operation.operationId, reason)),
+          expectedHash: computeFileHash(this.coordinator.storage, this.paths.publicationPath),
         },
       ],
     });
@@ -515,9 +500,7 @@ export class OperationStore {
    * exist or is malformed.
    */
   private readPublicationManifest(): PublicationManifestV1 | null {
-    const content = this.coordinator.storage.readOptional(
-      this.paths.publicationPath,
-    );
+    const content = this.coordinator.storage.readOptional(this.paths.publicationPath);
     if (content === null) return null;
     try {
       const raw = JSON.parse(content);
@@ -528,9 +511,7 @@ export class OperationStore {
   }
 
   /** Set active ownership without changing publication freshness or evidence. */
-  private buildActivePublicationManifest(
-    operationId: string,
-  ): PublicationManifestV1 {
+  private buildActivePublicationManifest(operationId: string): PublicationManifestV1 {
     const existing = this.readPublicationManifest();
     return {
       version: 1,
@@ -598,11 +579,13 @@ export class OperationStore {
         ? [{ code: 'OPERATION_CANCELLED', message: 'Operation cancelled', operationId }]
         : errors.length > 0
           ? [...errors]
-          : [{
-              code: 'PUBLICATION_INCOMPLETE',
-              message: 'Operation failed before publication completed',
-              operationId,
-            }];
+          : [
+              {
+                code: 'PUBLICATION_INCOMPLETE',
+                message: 'Operation failed before publication completed',
+                operationId,
+              },
+            ];
     return {
       version: 1,
       status: 'stale',
@@ -678,10 +661,7 @@ export class OperationStore {
           type: 'put',
           path: this.paths.publicationPath,
           content: stableJson(staleManifest),
-          expectedHash: computeFileHash(
-            this.coordinator.storage,
-            this.paths.publicationPath,
-          ),
+          expectedHash: computeFileHash(this.coordinator.storage, this.paths.publicationPath),
         },
       ],
     });
@@ -715,13 +695,8 @@ export class OperationStore {
       {
         type: 'put',
         path: this.paths.publicationPath,
-        content: stableJson(
-          this.buildActivePublicationManifest(operation.operationId),
-        ),
-        expectedHash: computeFileHash(
-          this.coordinator.storage,
-          this.paths.publicationPath,
-        ),
+        content: stableJson(this.buildActivePublicationManifest(operation.operationId)),
+        expectedHash: computeFileHash(this.coordinator.storage, this.paths.publicationPath),
       },
     ];
 
@@ -786,12 +761,8 @@ export class OperationStore {
       lastSequence: op.lastSequence ?? 1,
       completedAt: now.toISOString(),
       result: status === 'succeeded' ? result : null,
-      errors:
-        status === 'failed'
-          ? [...op.errors, ...errors]
-          : op.errors,
+      errors: status === 'failed' ? [...op.errors, ...errors] : op.errors,
     };
-
 
     const writes: StorageWrite[] = [
       {
@@ -803,10 +774,7 @@ export class OperationStore {
     ];
 
     // Atomically clear active_operation_id from the publication manifest
-    const pubHash = computeFileHash(
-      this.coordinator.storage,
-      this.paths.publicationPath,
-    );
+    const pubHash = computeFileHash(this.coordinator.storage, this.paths.publicationPath);
     writes.push({
       type: 'put',
       path: this.paths.publicationPath,
@@ -823,15 +791,11 @@ export class OperationStore {
     return updated;
   }
 
-
   /**
    * Parse and schema-validate a raw JSON string into an EditorialOperationV1.
    * @throws EditorialOperationError on malformed JSON or schema violation.
    */
-  private parseOperation(
-    content: string,
-    operationId: string,
-  ): EditorialOperationV1 {
+  private parseOperation(content: string, operationId: string): EditorialOperationV1 {
     let raw: Record<string, unknown>;
     try {
       raw = JSON.parse(content);

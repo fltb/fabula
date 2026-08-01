@@ -1,14 +1,11 @@
 // ============================================================================
 // WorldRuleValidator — Consume Pass 2 AnalysisResult rule checks
-// Uses RuleRuntimeState and RuleEvaluationRecord from STATE-6.
 // ============================================================================
 
 import { z } from 'zod';
 import type {
   PostRenderInput,
   PreRenderInput,
-  RuleEvaluationRecord,
-  RuleRuntimeState,
   ValidationIssue,
   Validator,
 } from '../types/index.js';
@@ -62,7 +59,11 @@ export class WorldRuleValidator implements Validator {
     for (const pc of event.postconditions) {
       const entity = input.entityRegistry.resolve(pc.entityId);
       if (!entity) continue;
-      const writePolicy = getAttributeWritePolicy(entity.kind, pc.attribute);
+      const writePolicy = getAttributeWritePolicy(
+        input.entityTypeCatalog,
+        entity.kind,
+        pc.attribute,
+      );
       if (
         writePolicy === 'immutable' &&
         entity.state[pc.attribute] !== undefined &&
@@ -94,6 +95,7 @@ export class WorldRuleValidator implements Validator {
       z.array(ruleCheckSchema).safeParse(input.analysis.analysis.ruleChecks).data ?? [];
     for (const check of ruleChecks) {
       if (check.violated) {
+        const checkIndex = ruleChecks.indexOf(check);
         issues.push(
           makeIssue(
             'world_rule',
@@ -104,6 +106,12 @@ export class WorldRuleValidator implements Validator {
             'Review scene for rule compliance',
             'edit_file',
             'ruleEffects',
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            checkIndex >= 0
+              ? { field: 'ruleChecks', analysisPointer: `/ruleChecks/${checkIndex}` }
+              : { field: 'ruleChecks' },
           ),
         );
       }

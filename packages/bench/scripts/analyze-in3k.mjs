@@ -1,5 +1,5 @@
+import { readFileSync } from 'node:fs';
 import { tableFromIPC } from 'apache-arrow';
-import { readFileSync } from 'fs';
 
 const buf = readFileSync(
   '/home/float/myfile/Projects/novalistically/bench-data/interactive-novels-3k/data-00000-of-00002.arrow',

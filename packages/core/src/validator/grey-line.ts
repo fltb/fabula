@@ -20,7 +20,7 @@ export class GreyLineValidator implements Validator {
   name = 'greyLine';
   category = 'factual_detail' as const;
 
-  validatePre(input: PreRenderInput): ValidationIssue[] {
+  validatePre(_input: PreRenderInput): ValidationIssue[] {
     return [];
   }
 
@@ -79,6 +79,10 @@ export class GreyLineValidator implements Validator {
               'Ensure the imagery text appears in the rendered prose',
               'edit_file',
               'greyLines',
+              undefined,
+              undefined,
+              'evidence_mismatch',
+              { field: 'narrativeChecks' },
             ),
           );
         }

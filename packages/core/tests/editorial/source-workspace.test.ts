@@ -5,24 +5,25 @@
 // No live LLM, filesystem, or network access.
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
 import * as crypto from 'node:crypto';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import type { Storage } from '../../src/storage/types.ts';
-import { computeContentHash } from '../../src/storage/hash.ts';
+import { describe, expect, it } from 'vitest';
 import {
+  EditorialOperationError,
   OverlayStorage,
-  SourceWorkspace,
   resolveProjectPaths,
+  SourceWorkspace,
   stableJson,
 } from '../../src/editorial/index.ts';
+import type { ProjectPaths } from '../../src/editorial/paths.ts';
+import { computeContentHash } from '../../src/storage/hash.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import type { Storage } from '../../src/storage/types.ts';
 import type {
   SourceChangePreviewV1,
   SourceChangeResultV1,
   SourceChangeSetV1,
   SourceDocumentV1,
 } from '../../src/types/editorial.ts';
-import type { ProjectPaths } from '../../src/editorial/paths.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -50,56 +51,210 @@ function seedRealisticProject(storage: MemoryStorage): SourceWorkspace {
   const p = TEST_PROJECT;
 
   // nova.yaml — project: required
-  storage.write(`${p}/nova.yaml`, 'project: test\nschemaVersion: 1\ntitle: "Test"\nauthor: "Tester"\n');
+  storage.write(`${p}/nova.yaml`, 'project: test\ntitle: "Test"\nauthor: "Tester"\n');
 
   // state_initial.yaml
-  storage.write(`${p}/definitions/state_initial.yaml`,
-    'info:\n  currentEra: "modern"\n  politicalSituation: "peace"\nthreads: []\nworldFacts: []\n');
+  storage.write(
+    `${p}/definitions/state_initial.yaml`,
+    'info:\n  currentEra: "modern"\n  politicalSituation: "peace"\nthreads: []\nworldFacts: []\n',
+  );
 
   // Characters
   storage.mkdirp(`${p}/definitions/characters`);
-  storage.write(`${p}/definitions/characters/alice.yaml`,
-    'id: alice\nname: "Alice"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n');
-  storage.write(`${p}/definitions/characters/bob.yaml`,
-    'id: bob\nname: "Bob"\ntype: human\ndescription: "Friend"\ninitialState: {}\ntraits: []\n');
+  storage.write(
+    `${p}/definitions/characters/alice.yaml`,
+    'id: alice\nname: "Alice"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n',
+  );
+  storage.write(
+    `${p}/definitions/characters/bob.yaml`,
+    'id: bob\nname: "Bob"\ntype: human\ndescription: "Friend"\ninitialState: {}\ntraits: []\n',
+  );
 
   // Locations
   storage.mkdirp(`${p}/definitions/locations`);
-  storage.write(`${p}/definitions/locations/woods.yaml`,
-    'id: woods\nname: "Dark Forest"\nkind: forest\ndescription: "A dark forest"\ninitialState: {}\n');
+  storage.write(
+    `${p}/definitions/locations/woods.yaml`,
+    'id: woods\nname: "Dark Forest"\nkind: forest\ndescription: "A dark forest"\ninitialState: {}\n',
+  );
 
   // Items
   storage.mkdirp(`${p}/definitions/items`);
-  storage.write(`${p}/definitions/items/key.yaml`,
-    'id: key\nname: "Golden Key"\nkind: key\ndescription: "A key"\ninitialState: {}\n');
+  storage.write(
+    `${p}/definitions/items/key.yaml`,
+    'id: key\nname: "Golden Key"\nkind: key\ndescription: "A key"\ninitialState: {}\n',
+  );
 
   // Factions
   storage.mkdirp(`${p}/definitions/factions`);
-  storage.write(`${p}/definitions/factions/guild.yaml`,
-    'id: guild\nname: "Writers Guild"\nkind: guild\ndescription: "A guild"\ninitialState: {}\n');
+  storage.write(
+    `${p}/definitions/factions/guild.yaml`,
+    'id: guild\nname: "Writers Guild"\nkind: guild\ndescription: "A guild"\ninitialState: {}\n',
+  );
 
   // Relationships
   storage.mkdirp(`${p}/definitions/relationships`);
-  storage.write(`${p}/definitions/relationships/friendship.yaml`,
-    'id: friendship\ntype: ally\nparticipants:\n  - alice\n  - bob\nbidirectional: true\ninitialState:\n  trust: 50\n  emotionalDistance: 20\n  intensity: 40\n  status: active\n');
+  storage.write(
+    `${p}/definitions/relationships/friendship.yaml`,
+    'id: friendship\ntype: ally\nparticipants:\n  - alice\n  - bob\nbidirectional: true\ninitialState:\n  trust: 50\n  emotionalDistance: 20\n  intensity: 40\n  status: active\n',
+  );
 
   // Rules
   storage.mkdirp(`${p}/definitions/rules`);
-  storage.write(`${p}/definitions/rules/magic.yaml`,
-    'ruleId: magic\nname: "Magic Rule"\ncategory: magic\ntype: constraint\nstatement: "Magic is unavailable."\nlogicalConsequences: []\nevidenceChain: []\n');
+  storage.write(
+    `${p}/definitions/rules/magic.yaml`,
+    'ruleId: magic\nname: "Magic Rule"\ncategory: magic\ntype: constraint\nstatement: "Magic is unavailable."\nlogicalConsequences: []\nevidenceChain: []\n',
+  );
 
   // Narrators — needs proper discriminated union
   storage.mkdirp(`${p}/definitions/narrators`);
-  storage.write(`${p}/definitions/narrators/omni.yaml`,
-    'id: omni\ntype: omniscient\naccess: full\nassertion: full\ntruth: full_knowledge\nfidelity: reliable\nsincerity: sincere\nautoReveal: false\n');
+  storage.write(
+    `${p}/definitions/narrators/omni.yaml`,
+    'id: omni\ntype: omniscient\naccess: full\nassertion: full\ntruth: full_knowledge\nfidelity: reliable\nsincerity: sincere\nautoReveal: false\n',
+  );
 
   // Assertions
   storage.mkdirp(`${p}/definitions/assertions`);
-  storage.write(`${p}/definitions/assertions/fact1.yaml`,
-    'id: fact1\nnarrator: omni\nproposition: "alice is the protagonist"\npolarity: affirmative\ntype: authoritative_reveal\ntruthBoundary: true\nnarrationBoundary:\n  narratorId: omni\n');
+  storage.write(
+    `${p}/definitions/assertions/fact1.yaml`,
+    'id: fact1\nnarrator: omni\nproposition: "alice is the protagonist"\npolarity: affirmative\ntype: authoritative_reveal\nstatus: asserted\nnarrationBoundary:\n  narratorId: omni\n',
+  );
+
+  // Entity type catalog — required by the canonical kernel; minimal types for
+  // every definition kind the fixture declares (character, location, item,
+  // faction, rule) with the lifecycle attribute the baseline activation writes.
+  storage.write(
+    `${p}/definitions/entity-types.yaml`,
+    [
+      'types:',
+      '  character:',
+      '    typeId: character',
+      '    kind: character',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates: [active, inactive, retired]',
+      '        unsetAllowed: false',
+      '        semanticRole: lifecycle',
+      '      traits:',
+      '        attributeId: traits',
+      '        valueType: string_list',
+      '        requiredAt: never',
+      '        writePolicy: immutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+      '  location:',
+      '    typeId: location',
+      '    kind: location',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates: [active, inactive, retired]',
+      '        unsetAllowed: false',
+      '        semanticRole: lifecycle',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+      '  item:',
+      '    typeId: item',
+      '    kind: item',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates: [active, inactive, retired]',
+      '        unsetAllowed: false',
+      '        semanticRole: lifecycle',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+      '  faction:',
+      '    typeId: faction',
+      '    kind: faction',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates: [active, inactive, retired]',
+      '        unsetAllowed: false',
+      '        semanticRole: lifecycle',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+      '  rule:',
+      '    typeId: rule',
+      '    kind: rule',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates: [active, inactive, retired]',
+      '        unsetAllowed: false',
+      '        semanticRole: lifecycle',
+      '      category:',
+      '        attributeId: category',
+      '        valueType: string',
+      '        requiredAt: never',
+      '        writePolicy: immutable',
+      '        unsetAllowed: true',
+      '      type:',
+      '        attributeId: type',
+      '        valueType: string',
+      '        requiredAt: never',
+      '        writePolicy: immutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+    ].join('\n') + '\n',
+  );
 
   // Discourse ledger — mandatory reader-order source (no hash field in source)
-  storage.write(`${p}/definitions/discourse-ledger.yaml`,
+  storage.write(
+    `${p}/definitions/discourse-ledger.yaml`,
     [
       'id: default',
       'chapters:',
@@ -114,17 +269,25 @@ function seedRealisticProject(storage: MemoryStorage): SourceWorkspace {
 
   // Chapter 01
   storage.mkdirp(`${p}/chapters/chapter_01`);
-  storage.write(`${p}/chapters/chapter_01/_chapter.yaml`,
-    'chapter: 1\ntitle: "The Beginning"\nsummary: "Alice enters the forest."\nintent: "Setup"\nplannedScenes: 2\n');
-  storage.write(`${p}/chapters/chapter_01/E001.yaml`,
-    'event: E001\nformatVersion: 1\nnarrativeOrder: 1\ntitle: "Alice enters the woods"\nstoryTime: "day 1"\nsceneBrief: "Alice walks into the dark forest"\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n');
-  storage.write(`${p}/chapters/chapter_01/E002.yaml`,
-    'event: E002\nformatVersion: 1\nnarrativeOrder: 2\ntitle: "Alice finds the key"\nstoryTime: "day 1"\nsceneBrief: "Alice discovers a golden key"\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n');
+  storage.write(
+    `${p}/chapters/chapter_01/_chapter.yaml`,
+    'chapter: 1\ntitle: "The Beginning"\nsummary: "Alice enters the forest."\nintent: "Setup"\nplannedScenes: 2\n',
+  );
+  storage.write(
+    `${p}/chapters/chapter_01/E001.yaml`,
+    'event: E001\nnarrativeOrder: 1\ntitle: "Alice enters the woods"\nstoryTime: "day 1"\nsceneBrief: "Alice walks into the dark forest"\nbeats:\n  - "Alice walks into the dark forest"\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n',
+  );
+  storage.write(
+    `${p}/chapters/chapter_01/E002.yaml`,
+    'event: E002\nnarrativeOrder: 2\ntitle: "Alice finds the key"\nstoryTime: "day 1"\nsceneBrief: "Alice discovers a golden key"\nbeats:\n  - "Alice discovers a golden key"\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n',
+  );
 
   // Chapter 02 (metadata only)
   storage.mkdirp(`${p}/chapters/chapter_02`);
-  storage.write(`${p}/chapters/chapter_02/_chapter.yaml`,
-    'chapter: 2\ntitle: "The Forest"\nsummary: "The journey continues."\nintent: "Development"\nplannedScenes: 0\n');
+  storage.write(
+    `${p}/chapters/chapter_02/_chapter.yaml`,
+    'chapter: 2\ntitle: "The Forest"\nsummary: "The journey continues."\nintent: "Development"\nplannedScenes: 0\n',
+  );
 
   return makeWorkspace(storage);
 }
@@ -142,7 +305,8 @@ function seedWithHead(storage: MemoryStorage): SourceWorkspace {
         type: 'put',
         path: 'definitions/characters/alice.yaml',
         expectedHash: (ws.get('definitions/characters/alice.yaml') as SourceDocumentV1).contentHash,
-        content: 'id: alice\nname: "Alice"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n',
+        content:
+          'id: alice\nname: "Alice"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n',
       },
     ],
   };
@@ -164,6 +328,27 @@ function computeProjectHash(ws: SourceWorkspace): string {
   }
   return h.digest('hex');
 }
+
+/**
+ * E001 content that is schema-valid but violates the ontology preflight:
+ * precondition writes to an attribute the character type does not declare.
+ */
+const ONTOLOGY_VIOLATING_E001 =
+  'event: E001\n' +
+  'narrativeOrder: 1\n' +
+  'title: "Alice enters the woods"\n' +
+  'storyTime: "day 1"\n' +
+  'sceneBrief: "Alice walks into the dark forest"\n' +
+  'beats:\n' +
+  '  - "Alice walks into the dark forest"\n' +
+  'pov:\n' +
+  '  character: alice\n' +
+  '  type: third_person_limited\n' +
+  'preconditions:\n' +
+  '  - entity: alice\n' +
+  '    attribute: nonexistentAttr\n' +
+  '    value: true\n' +
+  'expectedPostconditions: []\n';
 
 // ─── Source Path Registry & Validation ──────────────────────────────────────
 
@@ -373,7 +558,8 @@ describe('SourceWorkspace — preview', () => {
           type: 'put',
           path: 'definitions/characters/bob.yaml',
           expectedHash: (ws.get('definitions/characters/bob.yaml') as SourceDocumentV1).contentHash,
-          content: 'id: bob\nname: "Bobby"\ntype: human\ndescription: "Friend"\ninitialState: {}\ntraits: []\n',
+          content:
+            'id: bob\nname: "Bobby"\ntype: human\ndescription: "Friend"\ninitialState: {}\ntraits: []\n',
         },
       ],
     };
@@ -421,7 +607,11 @@ describe('SourceWorkspace — preview', () => {
       version: 1,
       expectedProjectSourceHash: projHash,
       changes: [
-        { type: 'delete', path: 'definitions/characters/alice.yaml', expectedHash: aliceDoc.contentHash },
+        {
+          type: 'delete',
+          path: 'definitions/characters/alice.yaml',
+          expectedHash: aliceDoc.contentHash,
+        },
       ],
     };
 
@@ -496,7 +686,12 @@ describe('SourceWorkspace — preview', () => {
       version: 1,
       expectedProjectSourceHash: sha256Hex(),
       changes: [
-        { type: 'put', path: 'definitions/characters/bob.yaml', expectedHash: null, content: 'id: bob\n' },
+        {
+          type: 'put',
+          path: 'definitions/characters/bob.yaml',
+          expectedHash: null,
+          content: 'id: bob\n',
+        },
       ],
     };
 
@@ -510,7 +705,9 @@ describe('SourceWorkspace — preview', () => {
     const changeSet: SourceChangeSetV1 = {
       version: 1,
       expectedProjectSourceHash: projHash,
-      changes: [{ type: 'delete', path: 'definitions/characters/nope.yaml', expectedHash: sha256Hex() }],
+      changes: [
+        { type: 'delete', path: 'definitions/characters/nope.yaml', expectedHash: sha256Hex() },
+      ],
     };
 
     expect(() => ws.preview(changeSet)).toThrow(/non-existent/i);
@@ -524,13 +721,46 @@ describe('SourceWorkspace — preview', () => {
       version: 1,
       expectedProjectSourceHash: projHash,
       changes: [
-        { type: 'put', path: 'definitions/characters/bob.yaml', expectedHash: (ws.get('definitions/characters/bob.yaml') as SourceDocumentV1).contentHash, content: 'id: bob\nname: "Bobby"\n' },
+        {
+          type: 'put',
+          path: 'definitions/characters/bob.yaml',
+          expectedHash: (ws.get('definitions/characters/bob.yaml') as SourceDocumentV1).contentHash,
+          content: 'id: bob\nname: "Bobby"\n',
+        },
       ],
     };
 
     const p1 = ws.preview(changeSet);
     const p2 = ws.preview(changeSet);
     expect(p1.previewToken).toBe(p2.previewToken);
+  });
+
+  it('rejects preview changes that violate the ontology preflight', () => {
+    const ws = seedRealisticProject(new MemoryStorage());
+    const projHash = computeProjectHash(ws);
+    const e001Doc = ws.get('chapters/chapter_01/E001.yaml') as SourceDocumentV1;
+
+    const changeSet: SourceChangeSetV1 = {
+      version: 1,
+      expectedProjectSourceHash: projHash,
+      changes: [
+        {
+          type: 'put',
+          path: 'chapters/chapter_01/E001.yaml',
+          expectedHash: e001Doc.contentHash,
+          content: ONTOLOGY_VIOLATING_E001,
+        },
+      ],
+    };
+
+    const preview = ws.preview(changeSet);
+    expect(preview.validation.valid).toBe(false);
+    expect(preview.validation.errors).toHaveLength(1);
+    const error = preview.validation.errors[0]!;
+    expect(error.code).toBe('INVALID_SOURCE_CHANGE');
+    expect(error.message).toContain('alice.nonexistentAttr');
+    expect(error.eventId).toBe('E001');
+    expect(error.path).toBe('alice.nonexistentAttr');
   });
 });
 
@@ -645,7 +875,8 @@ describe('SourceWorkspace — apply', () => {
           type: 'put',
           path: 'definitions/characters/alice.yaml',
           expectedHash: aliceDoc.contentHash,
-          content: 'id: alice\nname: "Alice Updated"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n',
+          content:
+            'id: alice\nname: "Alice Updated"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n',
         },
       ],
     };
@@ -654,7 +885,10 @@ describe('SourceWorkspace — apply', () => {
     expect(preview.validation.valid).toBe(true);
 
     const opId = uuid();
-    const result = ws.apply(changeSet, preview.previewToken, { operationId: opId, actorId: 'test-actor' });
+    const result = ws.apply(changeSet, preview.previewToken, {
+      operationId: opId,
+      actorId: 'test-actor',
+    });
 
     expect(result.operationId).toBe(opId);
     expect(result.sourceRevisionId).toBeTypeOf('string');
@@ -666,7 +900,9 @@ describe('SourceWorkspace — apply', () => {
     expect(result.publication.status).toBe('stale');
 
     // Storage effects
-    expect(storage.exists(`${TEST_PROJECT}/.nova/revisions/sources/${result.sourceRevisionId}.json`)).toBe(true);
+    expect(
+      storage.exists(`${TEST_PROJECT}/.nova/revisions/sources/${result.sourceRevisionId}.json`),
+    ).toBe(true);
     expect(storage.exists(`${TEST_PROJECT}/.nova/source-head.json`)).toBe(true);
 
     const head = JSON.parse(storage.read(`${TEST_PROJECT}/.nova/source-head.json`));
@@ -687,11 +923,18 @@ describe('SourceWorkspace — apply', () => {
       version: 1,
       expectedProjectSourceHash: projHash,
       changes: [
-        { type: 'put', path: 'definitions/characters/bob.yaml', expectedHash: (ws.get('definitions/characters/bob.yaml') as SourceDocumentV1).contentHash, content: 'id: bob\n' },
+        {
+          type: 'put',
+          path: 'definitions/characters/bob.yaml',
+          expectedHash: (ws.get('definitions/characters/bob.yaml') as SourceDocumentV1).contentHash,
+          content: 'id: bob\n',
+        },
       ],
     };
 
-    expect(() => ws.apply(changeSet, sha256Hex(), { operationId: uuid(), actorId: 't' })).toThrow(/preview token/i);
+    expect(() => ws.apply(changeSet, sha256Hex(), { operationId: uuid(), actorId: 't' })).toThrow(
+      /preview token/i,
+    );
   });
 
   it('rejects apply when compilation errors exist', () => {
@@ -714,8 +957,12 @@ describe('SourceWorkspace — apply', () => {
     };
 
     // EntityMapper will fail to parse this
-    expect(() => ws.apply(changeSet, computeContentHash(stableJson(changeSet)), { operationId: uuid(), actorId: 't' }))
-      .toThrow();
+    expect(() =>
+      ws.apply(changeSet, computeContentHash(stableJson(changeSet)), {
+        operationId: uuid(),
+        actorId: 't',
+      }),
+    ).toThrow();
   });
 
   it('does not modify storage on failed apply', () => {
@@ -727,7 +974,12 @@ describe('SourceWorkspace — apply', () => {
       version: 1,
       expectedProjectSourceHash: projHash,
       changes: [
-        { type: 'put', path: 'definitions/characters/bob.yaml', expectedHash: (ws.get('definitions/characters/bob.yaml') as SourceDocumentV1).contentHash, content: 'id: bob\n' },
+        {
+          type: 'put',
+          path: 'definitions/characters/bob.yaml',
+          expectedHash: (ws.get('definitions/characters/bob.yaml') as SourceDocumentV1).contentHash,
+          content: 'id: bob\n',
+        },
       ],
     };
 
@@ -743,12 +995,14 @@ describe('SourceWorkspace — apply', () => {
     const changeSet: SourceChangeSetV1 = {
       version: 1,
       expectedProjectSourceHash: computeProjectHash(ws),
-      changes: [{
-        type: 'put',
-        path: 'definitions/characters/alice.yaml',
-        expectedHash: null,
-        content: (ws.get('definitions/characters/alice.yaml')!).content,
-      }],
+      changes: [
+        {
+          type: 'put',
+          path: 'definitions/characters/alice.yaml',
+          expectedHash: null,
+          content: ws.get('definitions/characters/alice.yaml')!.content,
+        },
+      ],
     };
     expect(() => ws.preview(changeSet)).toThrow(/create-only/i);
   });
@@ -760,12 +1014,14 @@ describe('SourceWorkspace — apply', () => {
     const changeSet: SourceChangeSetV1 = {
       version: 1,
       expectedProjectSourceHash: computeProjectHash(ws),
-      changes: [{
-        type: 'put',
-        path: current.path,
-        expectedHash: current.contentHash,
-        content: current.content.replace('Alice', 'Alicia'),
-      }],
+      changes: [
+        {
+          type: 'put',
+          path: current.path,
+          expectedHash: current.contentHash,
+          content: current.content.replace('Alice', 'Alicia'),
+        },
+      ],
     };
     const preview = ws.preview(changeSet);
     const mutation = { operationId: uuid(), actorId: 'editor' };
@@ -775,9 +1031,7 @@ describe('SourceWorkspace — apply', () => {
 
     const revisions = storage
       .listFiles(`${TEST_PROJECT}/.nova/revisions/sources`)
-      .map((file) =>
-        JSON.parse(storage.read(`${TEST_PROJECT}/.nova/revisions/sources/${file}`)),
-      );
+      .map((file) => JSON.parse(storage.read(`${TEST_PROJECT}/.nova/revisions/sources/${file}`)));
     expect(revisions).toHaveLength(2);
     const applied = revisions.find((revision) => revision.revisionId === first.sourceRevisionId);
     const baseline = revisions.find((revision) => revision.origin === 'external_edit');
@@ -805,8 +1059,10 @@ describe('SourceWorkspace — reconcile', () => {
     const ws = seedWithHead(storage);
 
     // Simulate external edit
-    storage.write(`${TEST_PROJECT}/definitions/characters/alice.yaml`,
-      'id: alice\nname: "Alice Ext"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n');
+    storage.write(
+      `${TEST_PROJECT}/definitions/characters/alice.yaml`,
+      'id: alice\nname: "Alice Ext"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n',
+    );
 
     const result = ws.reconcile({ operationId: uuid(), actorId: 'reconciler' });
     expect(result).not.toBeNull();
@@ -816,7 +1072,9 @@ describe('SourceWorkspace — reconcile', () => {
     // Head updated
     const head = JSON.parse(storage.read(`${TEST_PROJECT}/.nova/source-head.json`));
     expect(head.documents['definitions/characters/alice.yaml']).toBe(
-      computeContentHash('id: alice\nname: "Alice Ext"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n'),
+      computeContentHash(
+        'id: alice\nname: "Alice Ext"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n',
+      ),
     );
   });
 
@@ -825,13 +1083,13 @@ describe('SourceWorkspace — reconcile', () => {
     const ws = seedWithHead(storage);
 
     // Invalid YAML
-    storage.write(`${TEST_PROJECT}/definitions/characters/alice.yaml`,
-      '{ invalid: yaml: [[bad }\n');
+    storage.write(
+      `${TEST_PROJECT}/definitions/characters/alice.yaml`,
+      '{ invalid: yaml: [[bad }\n',
+    );
 
     const headBefore = storage.read(`${TEST_PROJECT}/.nova/source-head.json`);
-    expect(() =>
-      ws.reconcile({ operationId: uuid(), actorId: 'reconciler' }),
-    ).toThrow(/invalid/i);
+    expect(() => ws.reconcile({ operationId: uuid(), actorId: 'reconciler' })).toThrow(/invalid/i);
     expect(storage.read(`${TEST_PROJECT}/.nova/source-head.json`)).toBe(headBefore);
   });
 
@@ -842,6 +1100,32 @@ describe('SourceWorkspace — reconcile', () => {
     expect(result).not.toBeNull();
     expect(result!.changedDocuments.length).toBeGreaterThan(0);
     expect(storage.exists(`${TEST_PROJECT}/.nova/source-head.json`)).toBe(true);
+  });
+
+  it('reports ontology-violating external edits with ConfigError context preserved', () => {
+    const storage = new MemoryStorage();
+    const ws = seedWithHead(storage);
+
+    // Schema-valid external edit that violates the ontology preflight.
+    storage.write(`${TEST_PROJECT}/chapters/chapter_01/E001.yaml`, ONTOLOGY_VIOLATING_E001);
+
+    const headBefore = storage.read(`${TEST_PROJECT}/.nova/source-head.json`);
+    let caught: unknown = null;
+    try {
+      ws.reconcile({ operationId: uuid(), actorId: 'reconciler' });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(EditorialOperationError);
+    const err = caught as EditorialOperationError;
+    expect(err.code).toBe('INVALID_SOURCE_CHANGE');
+    expect(err.message).toContain('does not compile');
+    expect(err.context).toMatchObject({
+      eventId: 'E001',
+      path: 'alice.nonexistentAttr',
+      phase: 'source',
+    });
+    expect(storage.read(`${TEST_PROJECT}/.nova/source-head.json`)).toBe(headBefore);
   });
 });
 
@@ -883,7 +1167,8 @@ describe('SourceWorkspace — impact sets', () => {
           type: 'put',
           path: 'definitions/characters/alice.yaml',
           expectedHash: aliceDoc.contentHash,
-          content: 'id: alice\nname: "Alice Mod"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n',
+          content:
+            'id: alice\nname: "Alice Mod"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n',
         },
       ],
     };
@@ -912,7 +1197,15 @@ describe('SourceWorkspace — exact formatting', () => {
     const ws = seedRealisticProject(new MemoryStorage());
     const doc = ws.get('nova.yaml') as SourceDocumentV1;
     expect(Object.keys(doc).sort()).toEqual([
-      'content', 'contentHash', 'diagnostics', 'kind', 'parsedValue', 'path', 'sourceRevisionId', 'tracked', 'version',
+      'content',
+      'contentHash',
+      'diagnostics',
+      'kind',
+      'parsedValue',
+      'path',
+      'sourceRevisionId',
+      'tracked',
+      'version',
     ]);
   });
 });

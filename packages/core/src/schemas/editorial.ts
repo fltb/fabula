@@ -120,6 +120,12 @@ const validationIssueSchema = z
   .object({
     validator: nonEmptyString,
     severity: z.enum(['error', 'warning', 'info']),
+    kind: z.enum([
+      'compiler_invariant',
+      'evidence_mismatch',
+      'interpretive_assessment',
+      'analysis_uncertainty',
+    ]),
     event: z.string(),
     entity: z.string(),
     attribute: z.string().optional(),
@@ -139,6 +145,13 @@ const validationIssueSchema = z
     fixTarget: z
       .object({ file: z.string(), field: z.string().optional(), value: z.unknown().optional() })
       .strict(),
+    observationRef: z
+      .object({
+        field: z.string(),
+        analysisPointer: z.string().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

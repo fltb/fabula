@@ -1,0 +1,27 @@
+id: narrator
+name: "The Narrator (David Copperfield, writing his memoirs)"
+type: narrator
+archetype: retrospective_autobiographer
+role: supporting
+description: "The first-person narrator of the novel — David Copperfield as a mature man, looking back over his own life and writing it down. His voice is warm, detailed, self-deprecating, and emotionally honest, moving between the child's feelings and the adult's understanding. He is the retrospective author of the whole story, and every event of the novel is filtered through his memory and his moral reckoning with his own 'undisciplined heart'."
+appearance: "Not described in the story itself; the narrator is the mature David Copperfield, a successful novelist looking back on the events of his life."
+aliases:
+  - "Narrator"
+  - "David Copperfield (narrator)"
+gender: male
+age: "Adult, writing in later life"
+profession: "Novelist"
+traits:
+  - observant
+  - reflective
+  - self_aware
+  - warm
+  - honest
+  - wry
+initialState:
+  location: london
+  status: alive
+  condition: writing_his_memoirs
+  emotionalState: reflective_contentment
+voiceNotes: "First-person throughout — the mature David's voice, at once immediate in recreating past scenes and detached in commenting on them with the wisdom of hindsight."
+backstory: "The narrator is David Copperfield himself, the protagonist of the story, writing the history of his own life from his earliest memories to the fulfilment of his marriage to Agnes."

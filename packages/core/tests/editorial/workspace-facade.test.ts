@@ -1,47 +1,82 @@
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import type {
+  AnalysisResult,
+  SceneRevisionEnvelopeV1,
+  SourceChangeSetV1,
+  SourceDocumentV1,
+} from '../../src/index.ts';
 import {
-  EditorialOperationError,
-  MockPass2Provider,
-  MemoryStorage,
-  ProjectTransactionCoordinator,
-  SceneRevisionStore,
   addReviewComment,
   adoptSceneProse,
+  applySourceChange,
+  EditorialOperationError,
+  getEditorialOperation,
   getSceneRevision,
+  getSourceDocument,
   inspectScenes,
+  listEditorialOperations,
   listReviewComments,
   listSceneRevisions,
-  resolveProjectPaths,
-  applySourceChange,
-  getEditorialOperation,
-  getSourceDocument,
-  listEditorialOperations,
   listSourceDocuments,
   listSourceRevisions,
+  MemoryStorage,
+  MockPass2Provider,
+  ProjectTransactionCoordinator,
   previewSourceChange,
   reconcileSourceWorkingCopy,
   replaceReviewComment,
+  resolveProjectPaths,
   rollbackSceneRevision,
+  SceneRevisionStore,
   setSceneLock,
   updateReviewComment,
 } from '../../src/index.ts';
-import type {
-  SourceChangeSetV1,
-  SceneRevisionEnvelopeV1,
-  SourceDocumentV1,
-} from '../../src/index.ts';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 const PROJECT = '/public-workspace-project';
 
 function seedProject(storage: MemoryStorage): void {
   storage.write(
     `${PROJECT}/nova.yaml`,
-    'project: public-workspace\nschemaVersion: 1\ntitle: "Public Workspace"\nauthor: "Tester"\n',
+    'project: public-workspace\ntitle: "Public Workspace"\nauthor: "Tester"\n',
   );
   storage.write(
     `${PROJECT}/definitions/state_initial.yaml`,
     'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n',
+  );
+  storage.write(
+    `${PROJECT}/definitions/entity-types.yaml`,
+    [
+      'types:',
+      '  character:',
+      '    typeId: character',
+      '    kind: character',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates: [active, inactive, retired]',
+      '        unsetAllowed: false',
+      '        semanticRole: lifecycle',
+      '      traits:',
+      '        attributeId: traits',
+      '        valueType: string_list',
+      '        requiredAt: never',
+      '        writePolicy: immutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+    ].join('\n'),
   );
   storage.write(
     `${PROJECT}/definitions/characters/alice.yaml`,
@@ -53,7 +88,7 @@ function seedProject(storage: MemoryStorage): void {
   );
   storage.write(
     `${PROJECT}/chapters/chapter_01/E001.yaml`,
-    'event: E001\nformatVersion: 1\nnarrativeOrder: 1\ntitle: "Opening"\nstoryTime: "day 1"\nsceneBrief: "Alice begins."\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n',
+    'event: E001\nnarrativeOrder: 1\ntitle: "Opening"\nstoryTime: "day 1"\nsceneBrief: "Alice begins."\nbeats:\n  - "Alice begins."\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n',
   );
   // discourse-ledger.yaml (mandatory reader-order source)
   storage.write(
@@ -72,7 +107,9 @@ function seedProject(storage: MemoryStorage): void {
 
 function projectHash(documents: readonly SourceDocumentV1[]): string {
   const hash = crypto.createHash('sha256');
-  for (const document of [...documents].sort((left, right) => left.path.localeCompare(right.path))) {
+  for (const document of [...documents].sort((left, right) =>
+    left.path.localeCompare(right.path),
+  )) {
     hash.update(`${document.path}\0${document.contentHash}\0`);
   }
   return hash.digest('hex');
@@ -82,12 +119,46 @@ function replacementChange(document: SourceDocumentV1): SourceChangeSetV1 {
   return {
     version: 1,
     expectedProjectSourceHash: '',
-    changes: [{
-      type: 'put',
-      path: document.path,
-      expectedHash: document.contentHash,
-      content: document.content.replace('Alice', 'Alicia'),
-    }],
+    changes: [
+      {
+        type: 'put',
+        path: document.path,
+        expectedHash: document.contentHash,
+        content: document.content.replace('Alice', 'Alicia'),
+      },
+    ],
+  };
+}
+
+function analysisFor(prose: string): AnalysisResult {
+  const analysisPayload: Record<string, unknown> = {
+    postconditions: { covered: [], dropped: [] },
+    preconditions: { violated: [] },
+    pov: { consistent: true, leaks: [] },
+    inventedDetails: [],
+    quality: {
+      proseScore: 8,
+      maxScore: 10,
+      strengths: ['clear'],
+      weaknesses: [],
+      estimatedWordCount: 3,
+    },
+    threadProgressAchieved: [],
+    foreshadowingDeployed: [],
+    narrativeChecks: [],
+    appearanceChecks: [],
+    characterReferences: [],
+    tenseDetected: 'past',
+    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+    ruleChecks: [],
+    knowledgeChecks: [],
+    checklistResults: [],
+  };
+  return {
+    eventId: 'E001',
+    protocol: makeProtocol(prose),
+    observations: makeObservations(analysisPayload, prose),
+    analysis: analysisPayload,
   };
 }
 
@@ -115,32 +186,7 @@ function seedAcceptedScene(storage: MemoryStorage): SceneRevisionEnvelopeV1 {
     validationIdentity: 'validator-v1',
     feedbackHash: null,
     reviewIds: [],
-    analysis: {
-      eventId: 'E001',
-      analysis: {
-        postconditions: { covered: [], dropped: [] },
-        preconditions: { violated: [] },
-        pov: { consistent: true, leaks: [] },
-        inventedDetails: [],
-        quality: {
-          proseScore: 8,
-          maxScore: 10,
-          strengths: ['clear'],
-          weaknesses: [],
-          estimatedWordCount: 3,
-        },
-        threadProgressAchieved: [],
-        foreshadowingDeployed: [],
-        narrativeChecks: [],
-        appearanceChecks: [],
-        characterReferences: [],
-        tenseDetected: 'past',
-        conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-        ruleChecks: [],
-        knowledgeChecks: [],
-        checklistResults: [],
-      },
-    },
+    analysis: analysisFor(prose),
     validation: { passed: true, errors: [], warnings: [], infos: [] },
     releaseDecision: {
       status: 'accepted',
@@ -168,7 +214,7 @@ function seedAcceptedScene(storage: MemoryStorage): SceneRevisionEnvelopeV1 {
   storage.write(`${PROJECT}/scenes/chapter-01/E001.md`, prose);
   storage.write(
     `${PROJECT}/scenes/chapter-01/E001.yaml`,
-    `schema_version: 1\nevent: E001\nnarrative_order: 1\nrevision_id: ${revision.revisionId}\nprose_source: llm\nprose_hash: ${revision.proseHash}\nscene_hash: ${revision.sceneHash}\neditorial_basis_hash: ${revision.editorialBasisHash}\nscope_hash: ${revision.scopeHash}\nvalidation_identity: ${revision.validationIdentity}\nrendered_at: \"${revision.createdAt}\"\nword_count: 3\ntext_count_version: 1\nedit_history: []\nbranch_existence:\n  type: all\n`,
+    `schema_version: 1\nevent: E001\nnarrative_order: 1\nrevision_id: ${revision.revisionId}\nprose_source: llm\nprose_hash: ${revision.proseHash}\nscene_hash: ${revision.sceneHash}\neditorial_basis_hash: ${revision.editorialBasisHash}\nscope_hash: ${revision.scopeHash}\nvalidation_identity: ${revision.validationIdentity}\nrendered_at: "${revision.createdAt}"\nword_count: 3\ntext_count_version: 1\nedit_history: []\nbranch_existence:\n  type: all\n`,
   );
   return revision;
 }
@@ -234,14 +280,16 @@ describe('root editorial workspace facade', () => {
       ),
     ).rejects.toMatchObject({ code: 'STORAGE_CONFLICT' });
 
-    expect(storage.read(`${PROJECT}/${alice.path}`)).toBe(changeSet.changes[0].type === 'put'
-      ? changeSet.changes[0].content
-      : '');
+    expect(storage.read(`${PROJECT}/${alice.path}`)).toBe(
+      changeSet.changes[0].type === 'put' ? changeSet.changes[0].content : '',
+    );
     expect(listSourceRevisions({ projectDir: PROJECT }, { storage })).toHaveLength(2);
-    expect(getEditorialOperation(
-      { projectDir: PROJECT, operationId: mutationA.operationId },
-      { storage },
-    ).result).toEqual(applied);
+    expect(
+      getEditorialOperation(
+        { projectDir: PROJECT, operationId: mutationA.operationId },
+        { storage },
+      ).result,
+    ).toEqual(applied);
     expect(listEditorialOperations({ projectDir: PROJECT }, { storage })).toHaveLength(1);
   });
 
@@ -285,7 +333,10 @@ describe('root editorial workspace facade', () => {
     const storage = new MemoryStorage();
     seedProject(storage);
     await expect(
-      getSourceDocument({ projectDir: PROJECT, path: 'definitions/items/missing.yaml' }, { storage }),
+      getSourceDocument(
+        { projectDir: PROJECT, path: 'definitions/items/missing.yaml' },
+        { storage },
+      ),
     ).rejects.toBeInstanceOf(EditorialOperationError);
   });
 
@@ -307,16 +358,15 @@ describe('root editorial workspace facade', () => {
     expect(inspection.sceneContent).toBe(revision.prose);
     expect(inspection.artifactPaths.scene).toBe('scenes/chapter-01/E001.md');
 
-    const history = listSceneRevisions(
-      { projectDir: PROJECT, eventId: 'E001' },
-      { storage },
-    );
+    const history = listSceneRevisions({ projectDir: PROJECT, eventId: 'E001' }, { storage });
     expect(history).toHaveLength(1);
     expect(history[0].isHead).toBe(true);
-    expect(getSceneRevision(
-      { projectDir: PROJECT, eventId: 'E001', revisionId: revision.revisionId },
-      { storage },
-    )).toEqual(revision);
+    expect(
+      getSceneRevision(
+        { projectDir: PROJECT, eventId: 'E001', revisionId: revision.revisionId },
+        { storage },
+      ),
+    ).toEqual(revision);
   });
 
   it('adopts, locks, unlocks, and rolls back through root actions', async () => {
@@ -327,7 +377,7 @@ describe('root editorial workspace facade', () => {
       entries: {
         E001: {
           prose: 'unused-pass1-prose',
-          analysis: original.analysis!,
+          analysis: analysisFor('Human-authored replacement prose.'),
         },
       },
     });
@@ -351,16 +401,17 @@ describe('root editorial workspace facade', () => {
     expect(adopted.promoted).toBe(true);
     expect(adopted.locked).toBe(true);
     expect(adopted.proseSource).toBe('human_locked');
-    const adoptedRevision = getSceneRevision({
-      projectDir: PROJECT,
-      eventId: 'E001',
-      revisionId: adopted.revisionId!,
-    }, { storage });
+    const adoptedRevision = getSceneRevision(
+      {
+        projectDir: PROJECT,
+        eventId: 'E001',
+        revisionId: adopted.revisionId!,
+      },
+      { storage },
+    );
     expect(adoptedRevision.prose).toBe('Human-authored replacement prose.');
     expect(adoptedRevision.llmPass1.totalTokens).toBe(0);
-    expect(
-      adoptedRevision.providerCalls.every((call) => call.phase !== 'pass1'),
-    ).toBe(true);
+    expect(adoptedRevision.providerCalls.every((call) => call.phase !== 'pass1')).toBe(true);
 
     const unlocked = await setSceneLock(
       {
@@ -400,11 +451,14 @@ describe('root editorial workspace facade', () => {
     );
     expect(rolledBack.promoted).toBe(true);
     expect(
-      getSceneRevision({
-        projectDir: PROJECT,
-        eventId: 'E001',
-        revisionId: rolledBack.revisionId!,
-      }, { storage }).restoredFromRevisionId,
+      getSceneRevision(
+        {
+          projectDir: PROJECT,
+          eventId: 'E001',
+          revisionId: rolledBack.revisionId!,
+        },
+        { storage },
+      ).restoredFromRevisionId,
     ).toBe(original.revisionId);
   });
 
@@ -425,10 +479,9 @@ describe('root editorial workspace facade', () => {
       { projectDir: PROJECT, input, mutation: addMutation },
       { storage },
     );
-    expect(addReviewComment(
-      { projectDir: PROJECT, input, mutation: addMutation },
-      { storage },
-    )).toEqual(added);
+    expect(
+      addReviewComment({ projectDir: PROJECT, input, mutation: addMutation }, { storage }),
+    ).toEqual(added);
 
     const replacement = replaceReviewComment(
       {
@@ -444,8 +497,7 @@ describe('root editorial workspace facade', () => {
     );
     const reviews = listReviewComments({ projectDir: PROJECT }, { storage });
     expect(reviews).toHaveLength(2);
-    expect(reviews.find((review) => review.id === added.id)?.status)
-      .toBe('superseded');
+    expect(reviews.find((review) => review.id === added.id)?.status).toBe('superseded');
     expect(replacement.supersedesId).toBe(added.id);
 
     const resolved = updateReviewComment(
@@ -461,12 +513,14 @@ describe('root editorial workspace facade', () => {
       { storage },
     );
     expect(resolved.status).toBe('resolved');
-    expect(getEditorialOperation(
-      {
-        projectDir: PROJECT,
-        operationId: addMutation.operationId,
-      },
-      { storage },
-    ).result).toEqual(added);
+    expect(
+      getEditorialOperation(
+        {
+          projectDir: PROJECT,
+          operationId: addMutation.operationId,
+        },
+        { storage },
+      ).result,
+    ).toEqual(added);
   });
 });

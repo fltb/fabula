@@ -570,7 +570,7 @@ describe('BoundaryReference — one-way no-edge', () => {
       sourceSnapshotHash: 'snapshot_hash_abc',
       branch,
       propositions: ['prop_world_status', 'prop_hero_alive'],
-      truthValues: { prop_world_status: true, prop_hero_alive: true },
+      evaluations: { prop_world_status: 'true', prop_hero_alive: 'true' },
     };
 
     // BoundaryReference is purely a reference — no causality edge
@@ -581,7 +581,7 @@ describe('BoundaryReference — one-way no-edge', () => {
 
     // It references a snapshot but doesn't contain one
     expect(boundaryRef.sourceSnapshotHash).toBe('snapshot_hash_abc');
-    expect(Object.keys(boundaryRef.truthValues)).toHaveLength(2);
+    expect(Object.keys(boundaryRef.evaluations)).toHaveLength(2);
   });
 });
 

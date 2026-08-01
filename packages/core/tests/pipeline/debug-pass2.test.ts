@@ -14,33 +14,41 @@ import type {
   WorldState,
 } from '../../src/types/index.ts';
 import { ResultAggregator } from '../../src/validator/aggregator.ts';
-import { makeAnalysisResult } from '../fixtures/mock-pass2-helpers.ts';
+import {
+  makeAnalysisResult,
+  makeObservations,
+  makeProtocol,
+} from '../fixtures/mock-pass2-helpers.ts';
+
+const ANALYSIS_PAYLOAD: Record<string, unknown> = {
+  postconditions: { covered: [], dropped: [] },
+  preconditions: { violated: [] },
+  pov: { consistent: true, leaks: [] },
+  inventedDetails: [],
+  quality: {
+    proseScore: 80,
+    maxScore: 100,
+    strengths: [],
+    weaknesses: [],
+    estimatedWordCount: 300,
+  },
+  threadProgressAchieved: [],
+  foreshadowingDeployed: [],
+  narrativeChecks: [],
+  appearanceChecks: [],
+  characterReferences: [],
+  tenseDetected: 'past',
+  conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+  ruleChecks: [],
+  knowledgeChecks: [],
+  checklistResults: [],
+};
 
 const VALID_ANALYSIS_JSON = JSON.stringify({
   eventId: 'evt_test',
-  analysis: {
-    postconditions: { covered: [], dropped: [] },
-    preconditions: { violated: [] },
-    pov: { consistent: true, leaks: [] },
-    inventedDetails: [],
-    quality: {
-      proseScore: 80,
-      maxScore: 100,
-      strengths: [],
-      weaknesses: [],
-      estimatedWordCount: 300,
-    },
-    threadProgressAchieved: [],
-    foreshadowingDeployed: [],
-    narrativeChecks: [],
-    appearanceChecks: [],
-    characterReferences: [],
-    tenseDetected: 'past',
-    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-    ruleChecks: [],
-    knowledgeChecks: [],
-    checklistResults: [],
-  },
+  protocol: makeProtocol('prose'),
+  observations: makeObservations(ANALYSIS_PAYLOAD, 'prose'),
+  analysis: ANALYSIS_PAYLOAD,
 });
 
 function makeEvent(id: string): NarrativeEvent {
@@ -53,13 +61,14 @@ function makeEvent(id: string): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'entity_1', type: 'third_person_limited' },
     sceneBrief: 'A test scene.',
+    beats: ['A test scene.'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
     foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
-    source: 'genesis',
+    source: 'event_file',
     branchExistence: { type: 'all' as const },
     participants: { entities: ['entity_1'] },
   };
@@ -75,6 +84,7 @@ function makeContext(eventId: string): ContextPackage {
     } satisfies SystemContext,
     sceneSpec: {
       goal: 'Advance plot',
+      beats: ['Advance plot'],
       povType: 'third_person',
       povCharacter: 'narrator',
       conflict: 'none',
@@ -141,6 +151,7 @@ function makePipeline(opts: MockProviderOptions = {}) {
       storage: new MemoryStorage(),
       skipCache: true,
       maxRetries: 3,
+      validatorPolicyId: 'test-policy-v1',
     }),
     provider,
   };
@@ -161,6 +172,7 @@ function makePipelineWithAggregator(entry: MockPass2Entry) {
     skipCache: true,
     maxRetries: 1,
     aggregator,
+    validatorPolicyId: 'test-policy-v1',
   });
 }
 

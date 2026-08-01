@@ -68,6 +68,108 @@
       "ruleChecks": [],
       "knowledgeChecks": [],
       "checklistResults": []
+    },
+    "protocol": {
+      "proseHash": "3fcb6974def856c664e605c7e9175076bcc4306abcf35c0ffe6116c9fa27cb18",
+      "analysisSchema": "mock-analysis-contract",
+      "model": "mock-stage1",
+      "provider": "mock-pass2",
+      "analysisPromptHash": "0000000000000000000000000000000000000000000000000000000000000000",
+      "samplingConfigHash": "mock-sampling-config",
+      "validatorPolicy": "mock-validator-policy",
+      "referencePolicy": "mock-reference-policy"
+    },
+    "observations": {
+      "postconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "preconditions": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "pov": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "inventedDetails": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "quality": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "threadProgressAchieved": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "foreshadowingDeployed": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "narrativeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "appearanceChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "characterReferences": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "tenseDetected": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "conflictAnalysis": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "ruleChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "knowledgeChecks": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      },
+      "checklistResults": {
+        "disposition": "produced",
+        "evidence": [
+          "她是春天没有了丈夫的。他本来也打柴为生，比她小十"
+        ]
+      }
     }
   },
   "metadata": {

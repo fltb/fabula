@@ -18,7 +18,7 @@ import type {
   ValidationIssue,
   Validator,
 } from '../types/index.js';
-import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
+import { makeIssue } from './base.js';
 
 export const conflictAnalysisSchema = z.object({
   primaryType: z.string(),
@@ -88,6 +88,9 @@ export class ConflictValidator implements Validator {
           'Rewrite the scene to explicitly resolve the conflict according to the declared resolution type, or remove the resolutionType if this is a setup scene.',
           'edit_file',
           'resolutionType',
+          undefined,
+          undefined,
+          'interpretive_assessment',
         ),
       );
     }
@@ -104,6 +107,9 @@ export class ConflictValidator implements Validator {
           'Either the conflict was portrayed differently in prose, or the declaration needs updating.',
           'change_value',
           'conflictType',
+          undefined,
+          undefined,
+          'interpretive_assessment',
         ),
       );
     }
@@ -120,6 +126,9 @@ export class ConflictValidator implements Validator {
           'Consider adding a resolutionType to document how this conflict wraps up.',
           'add_field',
           'resolutionType',
+          undefined,
+          undefined,
+          'interpretive_assessment',
         ),
       );
     }

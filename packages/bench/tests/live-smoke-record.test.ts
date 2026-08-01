@@ -728,7 +728,7 @@ describe('sanitizeError — redacts secret-like content', () => {
   });
 
   it('caps long messages to prevent prompt/prose leakage', () => {
-    const longMessage = 'Error: ' + '_'.repeat(300);
+    const longMessage = `Error: ${'_'.repeat(300)}`;
     const result = sanitizeError(longMessage);
     expect(result.length).toBeLessThanOrEqual(200);
     expect(result.endsWith('...')).toBe(true);

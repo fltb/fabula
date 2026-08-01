@@ -10,7 +10,7 @@ import type {
   ValidationIssue,
   Validator,
 } from '../types/index.js';
-import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
+import { getAttributeSemanticRole, makeIssue } from './base.js';
 import { resolveDeferredFacts } from './deferred-resolver.js';
 
 // ── Schemas ───────────────────────────────────────────────────────────
@@ -103,7 +103,10 @@ export class CausalityValidator implements Validator {
       if (pc.value === undefined) continue;
 
       const entityKind = input.entityRegistry?.resolve(pc.entityId)?.kind;
-      if (entityKind && getAttributeSemanticRole(entityKind, pc.attribute) === 'location') {
+      if (
+        entityKind &&
+        getAttributeSemanticRole(input.entityTypeCatalog, entityKind, pc.attribute) === 'location'
+      ) {
         const expectedValue = String(pc.value).toLowerCase();
         if (!proseLower.includes(expectedValue)) {
           // Only flag if the entity is mentioned in prose
@@ -153,6 +156,10 @@ export class CausalityValidator implements Validator {
             'Add explicit mention of this state change in the scene.',
             'manual',
             pc.attribute,
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            { field: 'postconditions' },
           ),
         );
       }
@@ -169,6 +176,11 @@ export class CausalityValidator implements Validator {
           `Majority of postconditions dropped: ${droppedCount}/${totalPostconditions} (${coveredCount} covered).`,
           'Scene needs rewrite — too many expected state changes are missing.',
           'manual',
+          undefined,
+          undefined,
+          undefined,
+          'evidence_mismatch',
+          { field: 'postconditions' },
         ),
       );
     }
@@ -176,7 +188,8 @@ export class CausalityValidator implements Validator {
     // Check preconditions violations from Pass 2 analysis
     const preResult = preconditionBlockSchema.safeParse(analysis.analysis.preconditions);
     const violated = preResult.success ? preResult.data.violated : [];
-    for (const v of violated) {
+    for (let vIndex = 0; vIndex < violated.length; vIndex++) {
+      const v = violated[vIndex];
       issues.push(
         makeIssue(
           this.name,
@@ -187,6 +200,13 @@ export class CausalityValidator implements Validator {
           'Revise prose to respect the declared precondition.',
           'edit_file',
           v.attribute,
+          undefined,
+          undefined,
+          'evidence_mismatch',
+          {
+            field: 'preconditions',
+            analysisPointer: `/preconditions/violated/${vIndex}`,
+          },
         ),
       );
     }

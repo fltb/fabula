@@ -1,0 +1,18 @@
+id: little_betsey_trotwood
+name: "Little Betsey Trotwood"
+type: supporting_character
+archetype: child
+role: supporting
+description: "The eldest child of David and Agnes Copperfield, named after Aunt Betsey Trotwood. Her existence in the final retrospect completes the family picture of David's happy married life — the child around whom Aunt Betsey, now an old woman, dotes. She appears only in the closing survey of the novel, as the emblem of the fulfilled life David has earned."
+appearance: "A little girl, the child of David and Agnes; she is presented in the final retrospect among the children at play in the evening light of the family drawing-room."
+aliases:
+  - "Little Betsey Trotwood"
+  - "Betsey Trotwood (the younger)"
+gender: female
+age: "Child"
+profession: "None (child)"
+traits:
+  - child
+  - beloved
+voiceNotes: "She does not speak in the retrospect; her presence is part of the domestic tableau of David's fulfilled life."
+backstory: "Eldest daughter of David and Agnes Copperfield, born after their marriage. She is named for Aunt Betsey Trotwood, who dotes on her in old age. She appears in the final retrospect as part of the happy family circle."

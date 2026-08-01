@@ -22,10 +22,5 @@ traits:
   - innocent
   - fragile
   - devoted
-initialState:
-  location: london
-  status: alive
-  condition: unmarried_daughter
-  emotionalState: carefree_happy
 voiceNotes: "Light, playful, affectionate. She speaks in short, eager sentences, full of exclamations and diminutives. She calls David 'Doady' in her babyish speech. Her letters are almost illegible, full of blots and crossed lines. She is never angry, only hurt or confused."
 backstory: "Only daughter of Mr Spenlow, a proctor with the firm Spenlow and Jorkins. Her mother died when she was young. She lives at home with her father, her maiden aunts (Miss Lavinia and Miss Clarissa Spenlow) acting as chaperones. David meets her at Mr Spenlow's house and begins an obsessive courtship. After a long engagement (complicated by Mr Spenlow's opposition, then his sudden death), Dora and David marry. Their marriage is happy in affection but troubled by Dora's utter incapacity for housekeeping. She dies after a long illness, naming Agnes as the wife David should marry after her."

@@ -1,0 +1,7 @@
+id: late_servant
+name: 迟到的仆人
+type: minor
+role: minor
+description: 宁国府一名无名的仆从。王熙凤协理宁国府期间清晨点卯查岗，此人迟到，被凤姐当众打了二十板子并革去一个月银米——"杀鸡儆猴"，宁府上下自此知道凤姐的厉害，再不敢懈怠。
+traits:
+  - 懈怠

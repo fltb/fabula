@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AnalysisResult, NarrativeEvent, ValidationIssue } from '../../src/types/index.js';
 import { resolveDeferredFacts } from '../../src/validator/deferred-resolver.js';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.js';
 
 // ============================================================================
 // Helpers
@@ -20,13 +21,14 @@ function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): Narrati
     sceneType: 'linear',
     pov: { character: 'char_hero', type: 'third_person_limited' },
     sceneBrief: 'A test scene.',
+    beats: ['A test scene.'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
     foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
-    source: 'genesis',
+    source: 'event_file',
     branchExistence: { type: 'all' },
     participants: { entities: [] },
     ...overrides,
@@ -43,17 +45,21 @@ function makeAnalysis(
     evidence?: string;
   }>,
 ): AnalysisResult {
+  const prose = 'Test prose';
+  const checks = narrativeChecks.map((nc) => ({
+    entityId: nc.entityId,
+    attribute: nc.attribute,
+    hint: nc.hint ?? '',
+    evidence: nc.evidence ?? '',
+    matchLevel: nc.matchLevel,
+  }));
   return {
     eventId: 'evt_test',
+    protocol: makeProtocol(prose),
+    observations: makeObservations({ narrativeChecks: checks }, prose),
     analysis: {
-      narrativeChecks: narrativeChecks.map((nc) => ({
-        entityId: nc.entityId,
-        attribute: nc.attribute,
-        hint: nc.hint ?? '',
-        evidence: nc.evidence ?? '',
-        matchLevel: nc.matchLevel,
-      })),
-      // Other analysis fields are optional for this test
+      narrativeChecks: checks,
+      // Other analysis fields are intentionally absent in this focused resolver test.
     },
   };
 }
@@ -219,8 +225,11 @@ describe('resolveDeferredFacts', () => {
       id: 'E1',
       preconditions: [narrativeHintFact('jinx', 'mood', 'Anxious')],
     });
+    const prose = 'Test prose';
     const analysis: AnalysisResult = {
       eventId: 'E1',
+      protocol: makeProtocol(prose),
+      observations: {},
       analysis: {}, // no narrativeChecks
     };
 

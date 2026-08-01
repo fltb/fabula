@@ -24,13 +24,6 @@ traits:
   - loyal
   - imaginative
   - persevering
-initialState:
-  location: blunderstone
-  status: alive
-  condition: newborn_baby
-  emotionalState: innocent_contentment
-  social_status: gentry_child
-  undisciplined_heart: true
 voiceNotes: "First-person narrator throughout. David's voice matures over the course of the novel. As a child narrating, he retains the adult's reflective perspective but enters into the child's feelings. His style is warm, detailed, self-deprecating, and emotionally honest. He often steps back to comment on his younger self with wisdom gained from hindsight. His descriptions are vivid and particular — he notices small details of rooms, faces, and clothing."
 backstory: "Born at Blunderstone Rookery in Suffolk, the son of David Copperfield (senior) and Clara Copperfield. His father died before he was born. His early childhood is happy, spent with his mother and the devoted servant Peggotty. When his mother marries the severe Mr Murdstone, his life changes: he is sent away to Salem House school after biting Mr Murdstone. At Salem House he meets Steerforth and Traddles. His mother dies when he is about ten, and Mr Murdstone sends him to work in London at Murdstone and Grinby's warehouse. He lodges with the improvident Micawber family. Unable to endure his situation, he runs away to Dover to seek his only known relative, Aunt Betsey Trotwood. She takes him in, sends him to Doctor Strong's school in Canterbury (where he lodges with Mr Wickfield and meets Agnes and Uriah Heep), and later articled him as a proctor in Doctors' Commons. He falls in love with Dora Spenlow, whom he eventually marries after a long courtship. Dora dies after a brief illness. David goes abroad for three years, returns to England, marries Agnes Wickfield, and becomes a successful novelist."
 knownSecrets:

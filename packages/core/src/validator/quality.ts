@@ -14,7 +14,7 @@ import type {
   ValidationIssue,
   Validator,
 } from '../types/index.js';
-import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
+import { makeIssue } from './base.js';
 
 // ── Schemas ───────────────────────────────────────────────────────────
 
@@ -51,6 +51,10 @@ export class QualityValidator implements Validator {
           `Low prose quality: score ${q.proseScore}/${q.maxScore}. Weaknesses: ${q.weaknesses.join('; ')}`,
           'Consider rewriting this scene for higher quality.',
           'manual',
+          undefined,
+          undefined,
+          undefined,
+          'interpretive_assessment',
         ),
       );
     }
@@ -64,6 +68,10 @@ export class QualityValidator implements Validator {
           `Short scene: ${q.estimatedWordCount} words. Consider expanding.`,
           'Add more descriptive detail or action.',
           'manual',
+          undefined,
+          undefined,
+          undefined,
+          'interpretive_assessment',
         ),
       );
     }

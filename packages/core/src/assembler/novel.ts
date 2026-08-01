@@ -1,8 +1,7 @@
 import * as path from 'node:path';
 import { parse as parseYaml } from 'yaml';
-import { EntityMapper } from '../entity/mapper.ts';
+import { compileCanonicalRuntime, loadCanonicalProject } from '../entity/project-runtime.ts';
 import { logger } from '../observability/logger.ts';
-import { compileDiscourseSceneSequence } from '../state/discourse-sequence.ts';
 import { FsStorage, type Storage } from '../storage/index.ts';
 import { filterScenesByBranchPath } from './branch-filter.js';
 import { loadChapterMetadata } from './chapter.js';
@@ -31,7 +30,15 @@ import { AssemblyError, AssemblyErrorCode } from './types.js';
  *   8. Return the markdown, word count, and scene metadata
  */
 export function assembleNovel(options: AssembleOptions): AssembleResult {
-  const { projectDir, outputPath, title, branchPath, discourseBranch, storage, language = 'en' } = options;
+  const {
+    projectDir,
+    outputPath,
+    title,
+    branchPath,
+    discourseBranch,
+    storage,
+    language = 'en',
+  } = options;
   const st = storage ?? new FsStorage();
 
   // ── Resolve paths ──────────────────────────────────────────────
@@ -66,20 +73,12 @@ export function assembleNovel(options: AssembleOptions): AssembleResult {
   // ── Determine scene order via discourse scene sequence ─────────
   let orderedScenes: typeof scenes;
   try {
-    // Load project data to get events and discourse ledger for the sequence compiler
-    const mapper = new EntityMapper(projectDir, st);
-    const data = mapper.loadProject();
-    const eventFiles = [...data.chapters.values()].flatMap(
-      (ch) => ch.events,
-    );
-    const events = eventFiles.map((ef) => mapper.mapToNarrativeEvent(ef));
-
-    const branch = discourseBranch ?? 'main';
-    const sequence = compileDiscourseSceneSequence({
-      events,
-      ledger: data.discourseLedger,
-      branch,
-    });
+    // ── Load the canonical project IR and compile its runtime once ──────
+    // The runtime discourse sequence (ledger chapters, branch-selected,
+    // event-file scenes only) is the single source of final scene order.
+    const ir = loadCanonicalProject(projectDir, st);
+    const runtime = compileCanonicalRuntime(ir, { branchPath, discourseBranch });
+    const sequence = runtime.graphs.discourseGraph.sceneSequence;
 
     // Index scenes by eventId
     const sceneById = new Map(scenes.map((s) => [s.eventId, s]));

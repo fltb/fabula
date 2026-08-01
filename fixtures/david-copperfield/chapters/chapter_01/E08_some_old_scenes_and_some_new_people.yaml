@@ -13,6 +13,13 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "David brings his charismatic friend Steerforth to Yarmouth for a visit. Steerforth charms everyone — the Peggotty family, Mr Barkis, Little Emily, and especially David, who basks in his friend's admiration of his humble origins. Steerforth commissions a boat from Mr Peggotty, naming it the 'Little Emily.' But beneath the surface, Steerforth is laying a fatal fascination on Emily. David, blinded by his hero-worship, notices nothing amiss. The chapter also introduces Martha Endell, a girl of questionable reputation who is shunned by Yarmouth society, and the sharp, eccentric Miss Mowcher, a little hairdresser who knows everyone's secrets."
+beats:
+  - "David brings his charismatic friend Steerforth to Yarmouth for a visit."
+  - "Steerforth charms everyone — the Peggotty family, Mr Barkis, Little Emily, and especially David, who basks in his friend's admiration of his humble origins."
+  - "Steerforth commissions a boat from Mr Peggotty, naming it the 'Little Emily.'"
+  - "But beneath the surface, Steerforth is laying a fatal fascination on Emily."
+  - "David, blinded by his hero-worship, notices nothing amiss."
+  - "The chapter also introduces Martha Endell, a girl of questionable reputation who is shunned by Yarmouth society, and the sharp, eccentric Miss Mowcher, a little hairdresser who knows everyone's secrets."
 preconditions:
   - entity: david_copperfield
     attribute: location

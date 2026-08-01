@@ -6,10 +6,18 @@
 
 import { describe, expect, it } from 'vitest';
 import { compareFact } from '../../src/entity/compare.js';
+import { compileEntityTypeCatalog } from '../../src/entity/entity-catalog-compiler.js';
 import { ConfigError, PreconditionMismatchError } from '../../src/errors.js';
 import { preconditionSchema } from '../../src/schemas/primitives.js';
 import { ReplayEngine } from '../../src/state/replay.js';
-import type { Fact, NarrativeEvent } from '../../src/types/index.js';
+import type {
+  EntityCatalogContext,
+  EntityTypeCatalog,
+  EntityTypeDefinitionSource,
+  Fact,
+  NarrativeEvent,
+  WorldState,
+} from '../../src/types/index.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 // Each event gets storyTime day_N so DAG builder can order and find providers.
@@ -40,6 +48,7 @@ function makeEvent(
     storyTime: { type: 'absolute' as const, value: `day_${daySuffix}` },
     pov: { character: 'narrator' as const, type: 'first_person' as const },
     sceneBrief: 'Test scene',
+    beats: ['Test scene'],
     branchExistence: { type: 'all' as const },
     preconditions: [],
     postconditions: [],
@@ -48,6 +57,103 @@ function makeEvent(
     ruleEffects: [],
     ...overrides,
   };
+}
+
+// ─── Synthetic catalog + activation (current contract) ────────────────────
+// Explicit synthetic catalog compiled via compileEntityTypeCatalog — no
+// default/optional catalog, no fallback. hero is initial-introduced and
+// activated by baseline initial facts, so every replay below sees a live
+// entity before the first authored write.
+
+const CHARACTER_SOURCE: EntityTypeDefinitionSource = {
+  typeId: 'character',
+  kind: 'character',
+  attributes: {
+    lifecycle: {
+      attributeId: 'lifecycle',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'lifecycle_managed',
+      allowedLifecycleStates: ['active', 'inactive', 'retired'],
+      unsetAllowed: false,
+    },
+    name: {
+      attributeId: 'name',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: false,
+    },
+    status: {
+      attributeId: 'status',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: false,
+    },
+    other: {
+      attributeId: 'other',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: false,
+    },
+    secret: {
+      attributeId: 'secret',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: false,
+    },
+    level: {
+      attributeId: 'level',
+      valueType: 'number',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: false,
+    },
+  },
+  lifecyclePolicy: { allowedTransitions: [] },
+  referenceCapabilities: { defaultEligibility: 'live' },
+  typedInvariants: [],
+};
+
+const TYPE_CATALOG: EntityTypeCatalog = compileEntityTypeCatalog({
+  types: { character: CHARACTER_SOURCE },
+});
+
+const CATALOG_CONTEXT: EntityCatalogContext = {
+  entityDeclarationCatalog: {
+    version: 1,
+    declarations: {
+      hero: {
+        entityId: 'hero',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
+        immutableMetadata: { name: 'Hero', definitionFile: 'hero.yaml' },
+        introduction: { type: 'initial' },
+      },
+    },
+  },
+  entityTypeCatalog: TYPE_CATALOG,
+};
+
+/** Baseline activation: hero is live from day_0 with lifecycle 'active'. */
+const ACTIVATION_FACTS: Fact[] = [
+  {
+    id: 'hero.activation',
+    entityId: 'hero',
+    attribute: 'lifecycle',
+    value: 'active',
+    confidence: 1,
+    validity: {
+      temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+      branches: { type: 'all' },
+    },
+  },
+];
+
+function replay(events: NarrativeEvent[]): WorldState {
+  return new ReplayEngine(CATALOG_CONTEXT).replay(events, { initialFacts: ACTIVATION_FACTS });
 }
 
 // ─── Schema-level tests ────────────────────────────────────────────────────
@@ -146,7 +252,6 @@ describe('Precondition schema: comparison operators', () => {
 
 describe('Replay precondition evaluation', () => {
   it('exists precondition: passes when attribute is present', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })],
@@ -162,12 +267,11 @@ describe('Replay precondition evaluation', () => {
         ],
       }),
     ];
-    const state = engine.replay(events);
+    const state = replay(events);
     expect(state.entities.hero?.status).toBe('alive');
   });
 
   it('exists precondition: throws when attribute is absent', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'other', value: 'present' })],
@@ -183,11 +287,10 @@ describe('Replay precondition evaluation', () => {
         ],
       }),
     ];
-    expect(() => engine.replay(events)).toThrow(PreconditionMismatchError);
+    expect(() => replay(events)).toThrow(PreconditionMismatchError);
   });
 
   it('not_exists precondition: passes when attribute is absent', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'other', value: 'present' })],
@@ -203,11 +306,10 @@ describe('Replay precondition evaluation', () => {
         ],
       }),
     ];
-    expect(() => engine.replay(events)).not.toThrow();
+    expect(() => replay(events)).not.toThrow();
   });
 
   it('not_exists precondition: fails at compile time when attribute is present', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'secret', value: 'hidden' })],
@@ -225,7 +327,7 @@ describe('Replay precondition evaluation', () => {
     ];
     // The graph compiler deterministically detects that a set provider
     // contradicts not_exists → compile-first ConfigError, not runtime error.
-    expect(() => engine.replay(events)).toThrow(ConfigError);
+    expect(() => replay(events)).toThrow(ConfigError);
   });
 
   // Operator-based preconditions: the graph compiler resolves the key via
@@ -233,7 +335,6 @@ describe('Replay precondition evaluation', () => {
   // operators. The tests set a value in an earlier event, then check it with
   // the operator — runtime enforcement is delegated to applyNarrativeEvent.
   it('eq precondition: matches present value', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'level', value: 5 })],
@@ -244,11 +345,10 @@ describe('Replay precondition evaluation', () => {
         ],
       }),
     ];
-    expect(() => engine.replay(events)).not.toThrow();
+    expect(() => replay(events)).not.toThrow();
   });
 
   it('neq precondition: passes when current state is different from precondition value', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'level', value: 5 })],
@@ -262,11 +362,10 @@ describe('Replay precondition evaluation', () => {
         ],
       }),
     ];
-    expect(() => engine.replay(events)).not.toThrow();
+    expect(() => replay(events)).not.toThrow();
   });
 
   it('neq precondition: throws when current state equals precondition value', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'level', value: 5 })],
@@ -277,11 +376,10 @@ describe('Replay precondition evaluation', () => {
         ],
       }),
     ];
-    expect(() => engine.replay(events)).toThrow(PreconditionMismatchError);
+    expect(() => replay(events)).toThrow(PreconditionMismatchError);
   });
 
   it('gt precondition: checks numeric ordering', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'level', value: 5 })],
@@ -295,11 +393,10 @@ describe('Replay precondition evaluation', () => {
         ],
       }),
     ];
-    expect(() => engine.replay(events)).not.toThrow();
+    expect(() => replay(events)).not.toThrow();
   });
 
   it('contains precondition: checks substring', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'name', value: 'xand' })],
@@ -313,7 +410,7 @@ describe('Replay precondition evaluation', () => {
         ],
       }),
     ];
-    expect(() => engine.replay(events)).not.toThrow();
+    expect(() => replay(events)).not.toThrow();
   });
 });
 

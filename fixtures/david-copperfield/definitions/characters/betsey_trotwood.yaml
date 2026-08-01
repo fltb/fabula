@@ -22,11 +22,5 @@ traits:
   - loyal
   - secret_kindness
   - independent
-initialState:
-  location: dover
-  status: alive
-  condition: living_secluded_in_dover
-  emotionalState: settled_contentment
-  financial: comfortable
 voiceNotes: "Peremptory, emphatic, and wonderfully peculiar. She calls David 'Trot' or 'Trotwood.' She repeats her opinions with comic vehemence — especially about donkeys, the King's Bench prison, and the virtues of her great-nephew. She speaks her mind without reserve, regardless of whom she offends."
 backstory: "The aunt of David Copperfield senior. She was married briefly, unhappily, and unconventionally to a man younger than herself who beat her and tried to throw her from a window; she paid him to leave. She took back her maiden name, bought a cottage in Dover, and lived there in absolute independence. She opposed her nephew's marriage to Clara Copperfield, and when David was born a boy (she had wanted a girl — to be named Betsey Trotwood), she washed her hands of the family. Years later, when David arrives at her door penniless and desperate, she takes him in without hesitation, becoming his guardian and the agent of his salvation. She later loses most of her fortune through Uriah Heep's machinations but conceals it from David to spare him worry."

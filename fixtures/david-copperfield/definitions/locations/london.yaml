@@ -2,8 +2,3 @@ id: london
 name: "London"
 kind: metropolis
 description: "The vast, sprawling city where David lives at several different stages of his life: as a child labourer in the wine warehouse, as a proctor's apprentice, and later as a successful novelist. Different Londons appear: the filthy riverside district of Murdstone and Grinby's; the genteel streets of Doctors' Commons and the Inns of Court; Buckingham Street in the Strand where David lodges as a young man; Mr Spenlow's house in Norwood; the seedy neighbourhood where Martha lives; and the Marshalsea Prison where Mr Micawber is confined. London represents both David's lowest point (the warehouse) and his triumph (his literary success)."
-initialState:
-  status: active
-  season: victorian_era
-  atmosphere: bustling_sprawling
-  notable_feature: thames_river_districts

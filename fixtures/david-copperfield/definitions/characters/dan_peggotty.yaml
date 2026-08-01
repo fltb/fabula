@@ -20,10 +20,5 @@ traits:
   - honourable
   - determined
   - simplehearted
-initialState:
-  location: yarmouth
-  status: alive
-  condition: head_of_boathouse_household
-  emotionalState: contented
 voiceNotes: "Speaks in the Yarmouth dialect — rough, warm, and direct. He uses 'you' for 'your,' 'd'ye' for 'do you,' and has a habit of ending sentences with 'my pretty' or 'my beauty.' His speech becomes more formal when he is deeply moved, as if emotion elevates his natural dignity."
 backstory: "Brother of Clara Peggotty. A fisherman by trade, he takes in his orphaned nephew Ham and niece Emily, raising them in his boathouse home. He also shelters the widowed Mrs Gummidge (his partner's widow). His household is a model of kindness and mutual support. After Emily's elopement with Steerforth, he travels across France and Italy searching for her. When he finds her (with Martha's help), he forgives her completely. He emigrates to Australia with Emily, where they start a new life, and Mr Peggotty eventually becomes a successful sheep farmer."

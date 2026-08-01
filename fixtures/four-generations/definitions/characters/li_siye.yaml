@@ -17,10 +17,5 @@ traits:
 - experienced
 - generous
 - neighborly
-initialState:
-  location: loc_xiaoyangquan
-  status: alive
-  condition: active
-  emotionalState: calm_and_helpful
 backstory: 在北平干了一辈子的杠房营生，什么事都见过。
 knownSecrets: []

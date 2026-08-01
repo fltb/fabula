@@ -5,9 +5,9 @@
 // to keep the implementation simple and path-agnostic (absolute vs relative).
 // ============================================================================
 
-import type { DirEntry, Storage, StorageTransaction, StorageWrite } from './types.ts';
-import { computeContentHash, computeDirectoryManifestHash } from './hash.ts';
 import { StorageConflictError } from '../errors.ts';
+import { computeContentHash, computeDirectoryManifestHash } from './hash.ts';
+import type { DirEntry, Storage, StorageTransaction, StorageWrite } from './types.ts';
 
 export class MemoryStorage implements Storage {
   private files = new Map<string, string>();
@@ -73,7 +73,9 @@ export class MemoryStorage implements Storage {
     const seenPaths = new Set<string>();
     for (const write of transaction.writes) {
       if (seenPaths.has(write.path)) {
-        throw new Error(`Duplicate write path in transaction ${transaction.transactionId}: ${write.path}`);
+        throw new Error(
+          `Duplicate write path in transaction ${transaction.transactionId}: ${write.path}`,
+        );
       }
       seenPaths.add(write.path);
 
@@ -106,31 +108,33 @@ export class MemoryStorage implements Storage {
     this.dirs = nextDirs;
   }
   /** Throw StorageConflictError if a file expectation is stale. */
-  private _checkFileExpectation(
-    expectation: { kind: 'file'; path: string; expectedHash: string | null },
-  ): void {
+  private _checkFileExpectation(expectation: {
+    kind: 'file';
+    path: string;
+    expectedHash: string | null;
+  }): void {
     const p = this._norm(expectation.path);
     const current = this.files.get(p) ?? null;
     const currentHash = current !== null ? computeContentHash(current) : null;
 
     if (currentHash !== expectation.expectedHash) {
-      throw new StorageConflictError(
-        `File expectation mismatch: ${expectation.path}`,
-        { path: expectation.path },
-      );
+      throw new StorageConflictError(`File expectation mismatch: ${expectation.path}`, {
+        path: expectation.path,
+      });
     }
   }
 
   /** Throw StorageConflictError if a directory manifest is stale. */
-  private _checkDirectoryExpectation(
-    expectation: { kind: 'directory'; path: string; expectedManifestHash: string },
-  ): void {
+  private _checkDirectoryExpectation(expectation: {
+    kind: 'directory';
+    path: string;
+    expectedManifestHash: string;
+  }): void {
     const currentHash = computeDirectoryManifestHash(this, expectation.path);
     if (currentHash !== expectation.expectedManifestHash) {
-      throw new StorageConflictError(
-        `Directory expectation mismatch: ${expectation.path}`,
-        { path: expectation.path },
-      );
+      throw new StorageConflictError(`Directory expectation mismatch: ${expectation.path}`, {
+        path: expectation.path,
+      });
     }
   }
 
@@ -154,10 +158,9 @@ export class MemoryStorage implements Storage {
 
     // String hash: exact match required
     if (currentHash !== write.expectedHash) {
-      throw new StorageConflictError(
-        `Write preimage mismatch for ${write.path}`,
-        { path: write.path },
-      );
+      throw new StorageConflictError(`Write preimage mismatch for ${write.path}`, {
+        path: write.path,
+      });
     }
   }
 

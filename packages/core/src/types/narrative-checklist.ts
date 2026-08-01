@@ -26,3 +26,15 @@ export interface NarrativeChecklistItem {
 export interface NarrativeChecklist {
   items: NarrativeChecklistItem[];
 }
+
+/**
+ * Per-dimension coverage result from Pass 2 narrative checklist analysis.
+ * Lives in the analysis payload (`analysis.checklistResults`), never at the
+ * top level of AnalysisResult.
+ */
+export interface ChecklistResult {
+  dimension: string;
+  covered: boolean;
+  /** Optional quote from prose demonstrating coverage */
+  evidence?: string;
+}

@@ -4,10 +4,18 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
+import { compileEntityTypeCatalog } from '../../src/entity/entity-catalog-compiler.js';
 import { ConfigError } from '../../src/errors.js';
-import { ReplayEngine } from '../../src/state/replay.js';
-import type { Fact, NarrativeEvent } from '../../src/types/index.js';
 import type { AdjacencyList } from '../../src/state/dag.js';
+import { ReplayEngine } from '../../src/state/replay.js';
+import type {
+  EntityCatalogContext,
+  EntityTypeCatalog,
+  EntityTypeDefinitionSource,
+  Fact,
+  NarrativeEvent,
+  WorldState,
+} from '../../src/types/index.js';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 // Each event gets storyTime day_N so DAG builder can order and find providers.
@@ -41,6 +49,7 @@ function makeEvent(
     sceneType: 'linear' as const,
     pov: { character: 'narrator' as const, type: 'first_person' as const },
     sceneBrief: 'Test scene',
+    beats: ['Test scene'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
@@ -54,22 +63,110 @@ function makeEvent(
   };
 }
 
+// ─── Synthetic catalog + activation (current contract) ────────────────────
+// Explicit synthetic catalog compiled via compileEntityTypeCatalog — no
+// default/optional catalog, no fallback. hero is initial-introduced and
+// activated by baseline initial facts, so every replay below sees a live
+// entity before the first authored write.
+
+const CHARACTER_SOURCE: EntityTypeDefinitionSource = {
+  typeId: 'character',
+  kind: 'character',
+  attributes: {
+    lifecycle: {
+      attributeId: 'lifecycle',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'lifecycle_managed',
+      allowedLifecycleStates: ['active', 'inactive', 'retired'],
+      unsetAllowed: false,
+    },
+    status: {
+      attributeId: 'status',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: true,
+    },
+    color: {
+      attributeId: 'color',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: false,
+    },
+    level: {
+      attributeId: 'level',
+      valueType: 'number',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: false,
+    },
+    magic: {
+      attributeId: 'magic',
+      valueType: 'number',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: false,
+    },
+  },
+  lifecyclePolicy: { allowedTransitions: [] },
+  referenceCapabilities: { defaultEligibility: 'live' },
+  typedInvariants: [],
+};
+
+const TYPE_CATALOG: EntityTypeCatalog = compileEntityTypeCatalog({
+  types: { character: CHARACTER_SOURCE },
+});
+
+const CATALOG_CONTEXT: EntityCatalogContext = {
+  entityDeclarationCatalog: {
+    version: 1,
+    declarations: {
+      hero: {
+        entityId: 'hero',
+        typeRef: { typeId: 'character', schemaVersion: 1 },
+        immutableMetadata: { name: 'Hero', definitionFile: 'hero.yaml' },
+        introduction: { type: 'initial' },
+      },
+    },
+  },
+  entityTypeCatalog: TYPE_CATALOG,
+};
+
+/** Baseline activation: hero is live from day_0 with lifecycle 'active'. */
+const ACTIVATION_FACTS: Fact[] = [
+  {
+    id: 'hero.activation',
+    entityId: 'hero',
+    attribute: 'lifecycle',
+    value: 'active',
+    confidence: 1,
+    validity: {
+      temporal: { start: { type: 'absolute', value: 'day_0' }, end: null },
+      branches: { type: 'all' },
+    },
+  },
+];
+
+function replay(events: NarrativeEvent[]): WorldState {
+  return new ReplayEngine(CATALOG_CONTEXT).replay(events, { initialFacts: ACTIVATION_FACTS });
+}
+
 // ─── Core set/unset semantics ──────────────────────────────────────────────
 
 describe('ReplayEngine set/unset semantics', () => {
   it('set writes value to entity state', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })],
       }),
     ];
-    const state = engine.replay(events);
+    const state = replay(events);
     expect(state.entities.hero?.status).toBe('alive');
   });
 
   it('overwrite replaces existing value', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })],
@@ -78,12 +175,11 @@ describe('ReplayEngine set/unset semantics', () => {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' })],
       }),
     ];
-    const state = engine.replay(events);
+    const state = replay(events);
     expect(state.entities.hero?.status).toBe('dead');
   });
 
   it('unset removes attribute from entity state', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })],
@@ -92,12 +188,11 @@ describe('ReplayEngine set/unset semantics', () => {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'status', operation: 'unset' })],
       }),
     ];
-    const state = engine.replay(events);
+    const state = replay(events);
     expect(state.entities.hero?.status).toBeUndefined();
   });
 
   it('re-set after unset restores value', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'alive' })],
@@ -109,12 +204,11 @@ describe('ReplayEngine set/unset semantics', () => {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'revived' })],
       }),
     ];
-    const state = engine.replay(events);
+    const state = replay(events);
     expect(state.entities.hero?.status).toBe('revived');
   });
 
   it('last writer wins for same attribute across events', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'color', value: 'red' })],
@@ -126,7 +220,7 @@ describe('ReplayEngine set/unset semantics', () => {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'color', value: 'red' })],
       }),
     ];
-    const state = engine.replay(events);
+    const state = replay(events);
     expect(state.entities.hero?.color).toBe('red');
   });
 });
@@ -135,17 +229,15 @@ describe('ReplayEngine set/unset semantics', () => {
 
 describe('ReplayEngine hard errors', () => {
   it('throws ConfigError on unset of absent attribute', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [makeFact({ entityId: 'hero', attribute: 'status', operation: 'unset' })],
       }),
     ];
-    expect(() => engine.replay(events)).toThrow(ConfigError);
+    expect(() => replay(events)).toThrow(ConfigError);
   });
 
   it('throws ConfigError on duplicate write to same entityId+attribute in one event', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       makeEvent(1, 1, {
         postconditions: [
@@ -154,11 +246,10 @@ describe('ReplayEngine hard errors', () => {
         ],
       }),
     ];
-    expect(() => engine.replay(events)).toThrow(ConfigError);
+    expect(() => replay(events)).toThrow(ConfigError);
   });
 
   it('throws ConfigError when precondition value does not match current state', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       // DAG provider: set magic=200
       makeEvent(1, 1, {
@@ -173,11 +264,10 @@ describe('ReplayEngine hard errors', () => {
         preconditions: [makeFact({ entityId: 'hero', attribute: 'magic', value: 200 })],
       }),
     ];
-    expect(() => engine.replay(events)).toThrow(ConfigError);
+    expect(() => replay(events)).toThrow(ConfigError);
   });
 
   it('throws ConfigError when precondition value mismatches (after overwrite)', () => {
-    const engine = new ReplayEngine();
     const events: NarrativeEvent[] = [
       // DAG provider: set status='dead'
       makeEvent(1, 1, {
@@ -192,7 +282,7 @@ describe('ReplayEngine hard errors', () => {
         preconditions: [makeFact({ entityId: 'hero', attribute: 'status', value: 'dead' })],
       }),
     ];
-    expect(() => engine.replay(events)).toThrow(ConfigError);
+    expect(() => replay(events)).toThrow(ConfigError);
   });
 });
 
@@ -207,7 +297,7 @@ import { compileStoryBoundaries } from '../../src/state/story-boundaries.ts';
 
 describe('boundary/replay equivalence — state dimensions', () => {
   function engineRun(events: NarrativeEvent[]) {
-    return new ReplayEngine().replay(events);
+    return new ReplayEngine(CATALOG_CONTEXT).replay(events, { initialFacts: ACTIVATION_FACTS });
   }
 
   it('produces identical entity state after set/unset sequence', () => {
@@ -226,7 +316,7 @@ describe('boundary/replay equivalence — state dimensions', () => {
       ['E_1', ['E_2']],
       ['E_2', ['E_3']],
     ]);
-    const boundary = compileStoryBoundaries(events, [], adjacency);
+    const boundary = compileStoryBoundaries(events, ACTIVATION_FACTS, adjacency, CATALOG_CONTEXT);
     const engineState = engineRun(events);
 
     expect(boundary.finalState.entities).toEqual(engineState.entities);
@@ -242,7 +332,7 @@ describe('boundary/replay equivalence — state dimensions', () => {
       }),
     ];
     const adjacency: AdjacencyList = new Map();
-    const boundary = compileStoryBoundaries(events, [], adjacency);
+    const boundary = compileStoryBoundaries(events, ACTIVATION_FACTS, adjacency, CATALOG_CONTEXT);
     const engineState = engineRun(events);
 
     // facts array captures every applied postcondition
@@ -262,8 +352,12 @@ describe('boundary/replay equivalence — state dimensions', () => {
     ];
 
     const adjacency: AdjacencyList = new Map();
-    expect(() => compileStoryBoundaries(events, [], adjacency)).toThrow();
-    expect(() => new ReplayEngine().replay(events)).toThrow();
+    expect(() =>
+      compileStoryBoundaries(events, ACTIVATION_FACTS, adjacency, CATALOG_CONTEXT),
+    ).toThrow();
+    expect(() =>
+      new ReplayEngine(CATALOG_CONTEXT).replay(events, { initialFacts: ACTIVATION_FACTS }),
+    ).toThrow();
   });
 
   it('throws same error class for precondition mismatch in both paths', () => {
@@ -276,22 +370,19 @@ describe('boundary/replay equivalence — state dimensions', () => {
       }),
     ];
 
-    const adjacency: AdjacencyList = new Map([
-      ['E_1', ['E_2']],
-    ]);
-    expect(() => compileStoryBoundaries(events, [], adjacency)).toThrow();
-    expect(() => new ReplayEngine().replay(events)).toThrow();
+    const adjacency: AdjacencyList = new Map([['E_1', ['E_2']]]);
+    expect(() =>
+      compileStoryBoundaries(events, ACTIVATION_FACTS, adjacency, CATALOG_CONTEXT),
+    ).toThrow();
+    expect(() =>
+      new ReplayEngine(CATALOG_CONTEXT).replay(events, { initialFacts: ACTIVATION_FACTS }),
+    ).toThrow();
   });
 
   it('produces identical final state dimension equality for thread/relationship/rule/epistemic fields', () => {
-    const events: NarrativeEvent[] = [
-      makeEvent(1, 1),
-      makeEvent(2, 2),
-    ];
-    const adjacency: AdjacencyList = new Map([
-      ['E_1', ['E_2']],
-    ]);
-    const boundary = compileStoryBoundaries(events, [], adjacency);
+    const events: NarrativeEvent[] = [makeEvent(1, 1), makeEvent(2, 2)];
+    const adjacency: AdjacencyList = new Map([['E_1', ['E_2']]]);
+    const boundary = compileStoryBoundaries(events, ACTIVATION_FACTS, adjacency, CATALOG_CONTEXT);
     const engineState = engineRun(events);
 
     expect(boundary.finalState.threads).toEqual(engineState.threads);

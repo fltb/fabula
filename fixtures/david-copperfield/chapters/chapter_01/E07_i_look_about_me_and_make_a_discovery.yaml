@@ -13,6 +13,14 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "David's school days end, and he must choose a profession. After a visit to Yarmouth where he sees the Peggotty family (now with Peggotty married to Mr Barkis) and a now-grown Little Emily, he travels to London to visit Steerforth at his mother's elegant house in Highgate. There he meets the bitter, scarred Rosa Dartle, Mrs Steerforth's ward. David finds London society fascinating but feels the pressure of choosing his path. Miss Betsey decides he shall be a proctor in Doctors' Commons — a genteel legal profession. David agrees, and his apprenticeship is arranged with Mr Spenlow. He takes lodgings in Buckingham Street in the Strand, beginning his independent adult life in London."
+beats:
+  - "David's school days end, and he must choose a profession."
+  - "After a visit to Yarmouth where he sees the Peggotty family (now with Peggotty married to Mr Barkis) and a now-grown Little Emily, he travels to London to visit Steerforth at his mother's elegant house in Highgate."
+  - "There he meets the bitter, scarred Rosa Dartle, Mrs Steerforth's ward."
+  - "David finds London society fascinating but feels the pressure of choosing his path."
+  - "Miss Betsey decides he shall be a proctor in Doctors' Commons — a genteel legal profession."
+  - "David agrees, and his apprenticeship is arranged with Mr Spenlow."
+  - "He takes lodgings in Buckingham Street in the Strand, beginning his independent adult life in London."
 preconditions:
   - entity: david_copperfield
     attribute: status

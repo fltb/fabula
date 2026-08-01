@@ -19,7 +19,7 @@ import type {
 } from '../types/editorial.ts';
 import type { ReviewComment } from '../types/review.ts';
 import {
-  EditorialWorkspace,
+  type EditorialWorkspace,
   getEditorialWorkspace,
   type LegacySceneInspection,
 } from './workspace.ts';
@@ -59,11 +59,7 @@ function notFound(entity: string, id: string): QueryResult<never> {
 export class QueryService {
   private readonly ws: EditorialWorkspace;
 
-  constructor(
-    projectDir: string,
-    outputDir?: string,
-    storage?: Storage,
-  ) {
+  constructor(projectDir: string, outputDir?: string, storage?: Storage) {
     this.ws = getEditorialWorkspace(projectDir, outputDir, storage);
   }
 
@@ -101,7 +97,10 @@ export class QueryService {
     try {
       return ok(this.ws.listSourceRevisions(pathFilter));
     } catch (err) {
-      return fail('INVALID_OPERATION', `Failed to list source revisions: ${(err as Error).message}`);
+      return fail(
+        'INVALID_OPERATION',
+        `Failed to list source revisions: ${(err as Error).message}`,
+      );
     }
   }
 

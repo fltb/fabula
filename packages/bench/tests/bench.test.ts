@@ -6,13 +6,19 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import type { RegressionResults } from '../src/index.js';
+import type { BenchResults, RegressionResults } from '../src/index.js';
 import { runPerformanceBench, runRegressionBench, writeResults } from '../src/index.js';
 
 // ─── Config ────────────────────────────────────────────────────────────────
 
 const ZHU_FU_FIXTURE = path.resolve(__dirname, '../../../fixtures/zhu-fu');
 const FALLBACK_FIXTURE = path.resolve(__dirname, '../../../fixtures/most-dangerous-game');
+
+function requireValue<T>(value: T | undefined, label: string): T {
+  expect(value, `missing ${label}`).toBeDefined();
+  if (value === undefined) throw new Error(`Missing ${label}`);
+  return value;
+}
 
 /** Pick the best available fixture */
 function pickFixture(): string {
@@ -92,14 +98,16 @@ describe('Regression Benchmarks', () => {
     }
   });
   it('Run post-render validators (L2) stage exists', () => {
-    const stage = results.stages.find((s) => s.stage === 'Run post-render validators (L2)');
-    expect(stage).toBeDefined();
+    const stage = requireValue(
+      results.stages.find((s) => s.stage === 'Run post-render validators (L2)'),
+      'post-render validator stage',
+    );
     // Under fail-closed contract, L2 succeeds only with complete, hash-verified
     // reference data (review.json, generation-record.json, valid hashes).
     // Without a properly reviewed reference, the stage reports a descriptive failure.
-    console.log(`[L2] Passed: ${stage!.passed}, Detail: ${stage!.detail}`);
-    if (stage!.passed) {
-      expect(stage!.detail).toContain('L2 issues');
+    console.log(`[L2] Passed: ${stage.passed}, Detail: ${stage.detail}`);
+    if (stage.passed) {
+      expect(stage.detail).toContain('L2 issues');
     }
   });
 
@@ -183,14 +191,20 @@ describe('Regression Benchmarks', () => {
       expect(typeof sc.l2CED).toBe('number');
       expect(sc.l2CED).toBeGreaterThanOrEqual(0);
     }
-    const errorEntry = results.severityCED.find((s) => s.severity === 'error');
-    const warningEntry = results.severityCED.find((s) => s.severity === 'warning');
-    const infoEntry = results.severityCED.find((s) => s.severity === 'info');
-    expect(errorEntry).toBeDefined();
-    expect(warningEntry).toBeDefined();
-    expect(infoEntry).toBeDefined();
+    const errorEntry = requireValue(
+      results.severityCED.find((s) => s.severity === 'error'),
+      'error severity CED',
+    );
+    const warningEntry = requireValue(
+      results.severityCED.find((s) => s.severity === 'warning'),
+      'warning severity CED',
+    );
+    const infoEntry = requireValue(
+      results.severityCED.find((s) => s.severity === 'info'),
+      'info severity CED',
+    );
     console.log(
-      `[Severity CED] error: L1=${errorEntry!.l1CED.toFixed(2)} L2=${errorEntry!.l2CED.toFixed(2)}, warning: L1=${warningEntry!.l1CED.toFixed(2)} L2=${warningEntry!.l2CED.toFixed(2)}, info: L1=${infoEntry!.l1CED.toFixed(2)} L2=${infoEntry!.l2CED.toFixed(2)}`,
+      `[Severity CED] error: L1=${errorEntry.l1CED.toFixed(2)} L2=${errorEntry.l2CED.toFixed(2)}, warning: L1=${warningEntry.l1CED.toFixed(2)} L2=${warningEntry.l2CED.toFixed(2)}, info: L1=${infoEntry.l1CED.toFixed(2)} L2=${infoEntry.l2CED.toFixed(2)}`,
     );
   });
 });
@@ -226,8 +240,9 @@ describe('Performance Benchmarks', () => {
     const byName = new Map<string, typeof perfResults.measurements>();
     for (const m of perfResults.measurements) {
       const baseName = m.name.replace(/ \(N=\d+\)$/, '');
-      if (!byName.has(baseName)) byName.set(baseName, []);
-      byName.get(baseName)!.push(m);
+      const measurements = byName.get(baseName);
+      if (measurements) measurements.push(m);
+      else byName.set(baseName, [m]);
     }
     console.log('\n── Scaling Summary ──');
     console.log('Stage                    | N=10       | N=100      | N=1000     | scaling');
@@ -256,21 +271,25 @@ describe('Performance Benchmarks', () => {
 
   it('run all validators is measurable at all scales', () => {
     for (const scale of ['10', '100', '1000']) {
-      const m = perfResults.measurements.find(
-        (x) => x.name.includes('Run all validators') && x.scale === scale,
+      const m = requireValue(
+        perfResults.measurements.find(
+          (x) => x.name.includes('Run all validators') && x.scale === scale,
+        ),
+        `Run all validators measurement at N=${scale}`,
       );
-      expect(m).toBeDefined();
-      expect(m!.meanMs).toBeGreaterThan(0);
+      expect(m.meanMs).toBeGreaterThan(0);
     }
   });
 
   it('ResultAggregator is measurable at all scales', () => {
     for (const scale of ['10', '100', '1000']) {
-      const m = perfResults.measurements.find(
-        (x) => x.name.includes('ResultAggregator') && x.scale === scale,
+      const m = requireValue(
+        perfResults.measurements.find(
+          (x) => x.name.includes('ResultAggregator') && x.scale === scale,
+        ),
+        `ResultAggregator measurement at N=${scale}`,
       );
-      expect(m).toBeDefined();
-      expect(m!.meanMs).toBeGreaterThan(0);
+      expect(m.meanMs).toBeGreaterThan(0);
     }
   });
 });
@@ -280,7 +299,7 @@ describe('Performance Benchmarks', () => {
 describe('Benchmark Reporting', () => {
   it('writes JSON and Markdown results to disk', async () => {
     const results = await runRegressionBench(FIXTURE);
-    const benchResults = {
+    const benchResults: BenchResults = {
       timestamp: new Date().toISOString(),
       regression: results.stages.map((s) => ({
         stage: s.stage,
@@ -299,14 +318,14 @@ describe('Benchmark Reporting', () => {
     // Include L2 stats if present
     const l2Stage = results.stages.find((s) => s.stage === 'Run post-render validators (L2)');
     if (l2Stage) {
-      (benchResults as any).l2Stats = {
+      benchResults.l2Stats = {
         passed: l2Stage.passed,
         ms: l2Stage.ms,
         detail: l2Stage.detail,
       };
     }
 
-    const basePath = writeResults(benchResults as any);
+    const basePath = writeResults(benchResults);
 
     const jsonPath = `${basePath}.json`;
     const mdPath = `${basePath}.md`;

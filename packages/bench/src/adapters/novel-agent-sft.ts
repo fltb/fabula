@@ -110,6 +110,7 @@ export function convertAgentSFTEvent(
     title: raw.description.slice(0, 50),
     narrativeOrder: chapterIndex * 10 + parseInt(raw.event_id.replace(/\D/g, '') || '0', 10),
     sceneBrief: raw.description,
+    beats: [raw.description],
     pov: {
       character: raw.characters_involved[0] ?? 'unknown',
       type: 'third_person_limited',

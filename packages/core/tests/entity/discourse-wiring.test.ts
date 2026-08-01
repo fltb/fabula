@@ -14,9 +14,9 @@ import { PromptAssembler } from '../../src/context/prompt-assembler.ts';
 import { EntityMapper } from '../../src/entity/mapper.ts';
 import { InMemoryEntityRegistry } from '../../src/entity/registry.ts';
 import type { ProjectData } from '../../src/entity/types.ts';
-import type { NarrativeEvent, WorldState } from '../../src/types/index.ts';
-import { compileDiscourseBoundaries } from '../../src/state/discourse-context.ts';
 import type { CompiledDiscourseRenderContext } from '../../src/state/discourse-context.ts';
+import { compileDiscourseBoundaries } from '../../src/state/discourse-context.ts';
+import type { NarrativeEvent, WorldState } from '../../src/types/index.ts';
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const FIXTURE = path.join(ROOT, 'fixtures', 'zhu-fu');
@@ -38,7 +38,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
   beforeAll(() => {
     const mapper = new EntityMapper(FIXTURE);
     data = mapper.loadProject();
-    events = mapper.loadAllEvents(data.chapters).filter((event) => event.id !== 'system:genesis');
+    events = mapper.loadAllEvents(data);
     discourseContexts = compileDiscourseBoundaries(
       events,
       data.discourseLedger,
@@ -63,9 +63,9 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
 
   it('loads both narrator assertions from definitions/assertions/', () => {
     expect(data.narratorAssertions['assertion_xianglin_death']).toBeDefined();
-    expect(data.narratorAssertions['assertion_xianglin_death'].truthBoundary).toBe(true);
+    expect(data.narratorAssertions['assertion_xianglin_death'].status).toBe('asserted');
     expect(data.narratorAssertions['assertion_afterlife_uncertain']).toBeDefined();
-    expect(data.narratorAssertions['assertion_afterlife_uncertain'].truthBoundary).toBe(false);
+    expect(data.narratorAssertions['assertion_afterlife_uncertain'].status).toBe('unknown');
   });
 
   it('compile() resolves narratorProfileRef and replays the ledger without error for E0', () => {
@@ -74,7 +74,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
     expect(e0!.narratorProfileRef).toBe('narrator_wo');
 
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
     const pkg = new ContextCompiler().compile(e0!, EMPTY_STATE, registry, {
       narratorProfiles: data.narratorProfiles,
@@ -88,7 +88,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
   it('projects E0 claim surface into the Pass 1 context package', () => {
     const e0 = events.find((ev) => ev.id === 'E0')!;
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
     const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
       narratorProfiles: data.narratorProfiles,
@@ -107,15 +107,30 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
     });
     expect(pkg.discourseProjection?.authorizedTargets).toHaveLength(2);
 
-    const prompt = new PromptAssembler().assemble(pkg).userPrompt;
+    const assembled = new PromptAssembler().assemble(pkg);
+    // The Pass 1 prompt is a system + user message pair; the scene spec
+    // (goal + ordered beats) travels inside the serialized context package
+    // in the user message — not the system message.
+    const userMessage = assembled.messages.find((m) => m.role === 'user');
+    expect(userMessage).toBeDefined();
+    const prompt = userMessage!.content;
     expect(prompt).toContain('"discourseProjection"');
     expect(prompt).toContain("灵魂和地狱是否存在——'也许有罢……说不清'");
+    // Golden contract: the Pass 1 user message carries the scene goal and the
+    // ordered beats derived from the authored E0 brief (fixtures/zhu-fu).
+    const contextBlock = prompt.match(/```json\n([\s\S]*?)```/)?.[1];
+    expect(contextBlock).toBeDefined();
+    const contextPackage = JSON.parse(contextBlock!);
+    expect(contextPackage.sceneSpec.goal).toContain('旧历年底，叙述者');
+    expect(contextPackage.sceneSpec.beats[0]).toContain('旧历年底，叙述者');
+    expect(contextPackage.sceneSpec.beats[1]).toContain('除夕前日');
+    expect(contextPackage.sceneSpec.beats[2]).toContain('她突然拦住');
   });
 
   it('compile() surfaces a replay error for a corrupt ledger (duplicate positions)', () => {
     const e0 = events.find((ev) => ev.id === 'E0')!;
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
     const corruptLedger = {
       ...data.discourseLedger!,
@@ -126,14 +141,20 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
     };
 
     expect(() =>
-      compileDiscourseBoundaries(events, corruptLedger, data.narratorAssertions, data.narratorProfiles, 'main'),
+      compileDiscourseBoundaries(
+        events,
+        corruptLedger,
+        data.narratorAssertions,
+        data.narratorProfiles,
+        'main',
+      ),
     ).toThrow(/Duplicate discourse position/);
   });
   it('compile() produces correct projection for E0 with two continuous actions (positions 0,1)', () => {
     // The zhu-fu ledger has two entries for E0: reveal at pos 0, claim at pos 1
     const e0 = events.find((ev) => ev.id === 'E0')!;
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
     const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
       narratorProfiles: data.narratorProfiles,
@@ -153,7 +174,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
   it('compile() uses precompiled discourse context for sparse global positions', () => {
     const e0 = events.find((ev) => ev.id === 'E0')!;
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
     const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
       narratorProfiles: data.narratorProfiles,
       discourseContext: discourseContexts[e0.id],
@@ -163,11 +184,10 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
     expect(pkg.discourseProjection!.openClaims).toContain('assertion_afterlife_uncertain');
   });
 
-
   it('compile() uses the precompiled context projection', () => {
     const e0 = events.find((ev) => ev.id === 'E0')!;
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
     const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
       narratorProfiles: data.narratorProfiles,
@@ -178,11 +198,11 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
 
   it('compile() surfaces error when reveal assertion missing from catalog', () => {
     // Omit narratorAssertions — reveal will fail because it can't find assertion_xianglin_death
-    // Current code: without assertions catalog, reveal doesn't validate truthBoundary
+    // Current code: without assertions catalog, reveal doesn't validate status
     // (the findAssertion check returns undefined, skipping the throw)
     const e0 = events.find((ev) => ev.id === 'E0')!;
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
     expect(() =>
       compileDiscourseBoundaries(events, data.discourseLedger, {}, data.narratorProfiles, 'main'),
@@ -191,25 +211,31 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
     // Strict preflight rejects assertion-bearing ledgers without a catalog.
   });
 
-  it('compile() with mismatched assertion truthBoundary for reveal fails', () => {
-    // Provide a catalog where assertion_xianglin_death has truthBoundary=false
+  it('compile() with mismatched assertion status for reveal fails', () => {
+    // Provide a catalog where assertion_xianglin_death has status=unknown
     const e0 = events.find((ev) => ev.id === 'E0')!;
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
-    // Tamper with the assertion — flip truthBoundary on the reveal assertion
+    // Tamper with the assertion — flip status on the reveal assertion
     const tamperedAssertions = {
       ...data.narratorAssertions,
       assertion_xianglin_death: {
         ...data.narratorAssertions!['assertion_xianglin_death'],
-        truthBoundary: false,
+        status: 'unknown' as const,
         type: 'claim' as const,
       },
     };
 
     expect(() =>
-      compileDiscourseBoundaries(events, data.discourseLedger, tamperedAssertions, data.narratorProfiles, 'main'),
-    ).toThrow(/Reveals require truthBoundary=true/);
+      compileDiscourseBoundaries(
+        events,
+        data.discourseLedger,
+        tamperedAssertions,
+        data.narratorProfiles,
+        'main',
+      ),
+    ).toThrow(/Reveals require status=asserted/);
 
     // Strict preflight rejects a reveal whose catalog entry is not authoritative.
   });
@@ -217,7 +243,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
   it('compile() default discourseBranch produces correct branch projection', () => {
     const e0 = events.find((ev) => ev.id === 'E0')!;
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
     // Default branch is 'main'
     const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
@@ -239,7 +265,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
       id: 'E_OTHER',
     };
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
     // With mandatory contiguous ledger semantics, an event id unknown to the
     // ledger chapters is a hard preflight failure, not a silent empty projection.
@@ -257,7 +283,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
   it("compile() with explicit 'main' branch projects E0 entries correctly", () => {
     const e0 = events.find((ev) => ev.id === 'E0')!;
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
     const pkg = new ContextCompiler().compile(e0, EMPTY_STATE, registry, {
       narratorProfiles: data.narratorProfiles,
@@ -273,7 +299,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
     // Add a hint entry to the ledger, verify hint target doesn't leak
     const e0 = events.find((ev) => ev.id === 'E0')!;
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
     const ledgerWithHint = {
       ...data.discourseLedger!,
@@ -320,7 +346,7 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
   it('compile() replay error for corrupt ledger (position out of bounds)', () => {
     const e0 = events.find((ev) => ev.id === 'E0')!;
     const registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
 
     // Position 99 breaks the contiguous-from-0 invariant in discourse-sequence
     const badLedger = {
@@ -341,7 +367,13 @@ describe('discourse wiring — zhu-fu fixture load→compile chain', () => {
 
     // Strict preflight rejects positions that violate the scene contract.
     expect(() =>
-      compileDiscourseBoundaries(events, badLedger, data.narratorAssertions, data.narratorProfiles, 'main'),
+      compileDiscourseBoundaries(
+        events,
+        badLedger,
+        data.narratorAssertions,
+        data.narratorProfiles,
+        'main',
+      ),
     ).toThrow(/non-continuous action positions/);
   });
 });
@@ -360,7 +392,7 @@ describe('compileDiscourseBoundaries projection from stateAfter', () => {
   beforeAll(() => {
     const mapper = new EntityMapper(FIXTURE);
     const data = mapper.loadProject();
-    events = mapper.loadAllEvents(data.chapters);
+    events = mapper.loadAllEvents(data);
   });
 
   it('stateBefore is empty for E0 with positions 0,1 (pre-range)', () => {
@@ -369,7 +401,7 @@ describe('compileDiscourseBoundaries projection from stateAfter', () => {
     const data = mapper.loadProject();
 
     const ctx = compileDiscourseBoundaries(
-      events.filter((ev) => ev.id !== 'system:genesis'),
+      events,
       data.discourseLedger!,
       data.narratorAssertions,
       data.narratorProfiles,
@@ -391,7 +423,7 @@ describe('compileDiscourseBoundaries projection from stateAfter', () => {
     const data = mapper.loadProject();
 
     const ctx = compileDiscourseBoundaries(
-      events.filter((ev) => ev.id !== 'system:genesis'),
+      events,
       data.discourseLedger!,
       data.narratorAssertions,
       data.narratorProfiles,
@@ -414,7 +446,7 @@ describe('compileDiscourseBoundaries projection from stateAfter', () => {
     const data = mapper.loadProject();
 
     const ctx = compileDiscourseBoundaries(
-      events.filter((ev) => ev.id !== 'system:genesis'),
+      events,
       data.discourseLedger!,
       data.narratorAssertions,
       data.narratorProfiles,
@@ -462,7 +494,7 @@ describe('compileDiscourseBoundaries projection from stateAfter', () => {
     };
 
     const ctx = compileDiscourseBoundaries(
-      events.filter((ev) => ev.id !== 'system:genesis'),
+      events,
       ledgerWithHint,
       data.narratorAssertions,
       data.narratorProfiles,
@@ -484,29 +516,29 @@ describe('compileDiscourseBoundaries projection from stateAfter', () => {
     expect(proj.visibleHints[0]).not.toHaveProperty('targetProposition');
   });
 
-  it('compileDiscourseBoundaries rejects reveal without truthBoundary', () => {
+  it('compileDiscourseBoundaries rejects reveal without asserted status', () => {
     const e0Event = events.find((ev) => ev.id === 'E0')!;
     const mapper = new EntityMapper(FIXTURE);
     const data = mapper.loadProject();
 
-    // Flip truthBoundary on the reveal assertion
+    // Flip status on the reveal assertion
     const tamperedAssertions = {
       ...data.narratorAssertions,
       assertion_xianglin_death: {
         ...data.narratorAssertions!['assertion_xianglin_death'],
-        truthBoundary: false,
+        status: 'unknown' as const,
         type: 'claim' as const,
       },
     };
 
     expect(() =>
       compileDiscourseBoundaries(
-        events.filter((ev) => ev.id !== 'system:genesis'),
+        events,
         data.discourseLedger!,
         tamperedAssertions,
         data.narratorProfiles,
         'main',
       ),
-    ).toThrow('Reveals require truthBoundary=true');
+    ).toThrow('Reveals require status=asserted');
   });
 });

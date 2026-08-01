@@ -100,10 +100,18 @@ export class DiscourseBalanceValidator implements Validator {
           // Catalog-driven: verify attribute is a narrative attribute
           const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
           if (entityKind) {
-            const role = getAttributeSemanticRole(entityKind, check.attribute);
+            const role = getAttributeSemanticRole(
+              input.entityTypeCatalog,
+              entityKind,
+              check.attribute,
+            );
             if (role !== 'narrative') return false;
             // Narrow to discourse-specific narrative attributes from catalog
-            const narrativeAttrs = getAttributesBySemanticRole(entityKind, 'narrative');
+            const narrativeAttrs = getAttributesBySemanticRole(
+              input.entityTypeCatalog,
+              entityKind,
+              'narrative',
+            );
             const discourseAttrs: string[] = narrativeAttrs.filter(
               (a) => a === 'discourse_balance' || a === 'discourseMode',
             );
@@ -116,7 +124,7 @@ export class DiscourseBalanceValidator implements Validator {
           }
           return check.matchLevel === 'absent' || check.matchLevel === 'contradicted';
         },
-        (check) =>
+        (check, index) =>
           makeIssue(
             this.name,
             event.id,
@@ -125,6 +133,14 @@ export class DiscourseBalanceValidator implements Validator {
             `Discourse balance signal: "${check.hint}" — ${check.matchLevel}`,
             check.evidence,
             'manual',
+            undefined,
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            {
+              field: 'narrativeChecks',
+              analysisPointer: `/narrativeChecks/${index}`,
+            },
           ),
       ),
     );

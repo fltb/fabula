@@ -2,8 +2,3 @@ id: canterbury
 name: "Canterbury"
 kind: cathedral_city
 description: "The historic city where David attends Doctor Strong's school and lodges with Mr Wickfield. The city is dominated by its great Cathedral, with its towers, bells, and jackdaws. Mr Wickfield's house is an old, dignified building near the Cathedral, with a dark wainscoted hall, a staircase with many landings, and a drawing-room opening onto a garden of old trees. Doctor Strong's school is in a grave building in a courtyard with iron rails. David walks the streets of Canterbury for several happy years: the High Street, the Cathedral precincts, the river, the water-mill."
-initialState:
-  status: active
-  season: perpetual_schooldays
-  atmosphere: scholarly_antiquity
-  notable_feature: cathedral_precincts

@@ -17,12 +17,9 @@ initialState:
   condition: shimmer_damaged
   emotionalState: anxious
   inventory:
-    - item: "broken_goggles"
-      description: "Copper-plated goggles with a cracked left lens; keeps them as a reminder of who he used to be"
-    - item: "information_cache"
-      description: "A mental map of secrets, rumors, and transactions he's witnessed; sells piecemeal"
-    - item: "shimmer_vial_emergency"
-      description: "A single dose of refined shimmer hidden in a hollow heel — for emergencies only"
+    broken_goggles: "Copper-plated goggles with a cracked left lens; keeps them as a reminder of who he used to be"
+    information_cache: "A mental map of secrets, rumors, and transactions he's witnessed; sells piecemeal"
+    shimmer_vial_emergency: "A single dose of refined shimmer hidden in a hollow heel — for emergencies only"
 voiceNotes: "Nervous, jittery, and overly talkative. His voice has a reedy quality, often cracking when he's stressed. He laughs too easily and too loudly at his own jokes, a nervous tic from years of trying to seem harmless. When discussing serious business, his voice drops to a conspiratorial whisper. He has a habit of trailing off mid-sentence and checking over his shoulder."
 backstory: "Once a promising if minor inventor in the Entresol level of Zaun, Gideon Marlow dreamed of creating a device that could filter the undercity's toxic air cheaply enough to save thousands. But the parts were expensive, the Ferros clan owned the patents on the necessary filtration membranes, and desperation led him to the shimmer trade. He started small — running packages, looking the other way — but shimmer is a poison that takes everything. His hands began to shake, his inventions gathered dust, and soon he was in debt to dealers who didn't accept broken promises. Now he survives by selling information to anyone with coin: enforcers, chem-barons, rival gangs, and occasionally the mysterious Ferros agent who calls herself Camille. He tells himself he's just trying to survive, but deep down he knows he's already lost everything that mattered."
 knownSecrets:

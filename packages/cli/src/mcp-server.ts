@@ -361,7 +361,10 @@ export async function mcpNovaRenderScene(
       selector: { type: 'events', eventIds: [eventId] },
       mutation: { operationId: crypto.randomUUID(), actorId: 'mcp' },
       model: options?.model,
-      ...resolveRoute({ branchPath: options?.branchPath, discourseBranch: options?.discourseBranch }),
+      ...resolveRoute({
+        branchPath: options?.branchPath,
+        discourseBranch: options?.discourseBranch,
+      }),
     },
     { provider },
   );
@@ -675,9 +678,11 @@ export function createMCPServer(projectPath: string): {
           ...resolveRoute({ branchPath: input.branchPath, discourseBranch: input.discourseBranch }),
           batch: { batchSize: input.batchSize, windowSize: input.windowSize, failFast: true },
         }),
-      nova_assemble: (
-        options?: { outputPath?: string; branchPath?: BranchPath; discourseBranch?: string },
-      ) => mcpNovaAssemble(projectPath, options),
+      nova_assemble: (options?: {
+        outputPath?: string;
+        branchPath?: BranchPath;
+        discourseBranch?: string;
+      }) => mcpNovaAssemble(projectPath, options),
 
       // Review tools (backward-compatible)
       nova_review_list: (

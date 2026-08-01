@@ -160,219 +160,219 @@ describe('SurfacePlanner', () => {
   // Category 2: Author group/order/branch validation
   // ======================================================================
 
-    it('validates each scene belongs to exactly one group', () => {
-      const contracts = makeContracts(['S1', 'S2']);
-      const planner = new SurfacePlanner(
-        makeOptions({
-          mode: 'manual',
-          branch: 'main',
-          sceneIds: ['S1', 'S2'],
-          contracts,
-          authorGroups: [
-            { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
-            { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
-          ],
-        }),
-      );
+  it('validates each scene belongs to exactly one group', () => {
+    const contracts = makeContracts(['S1', 'S2']);
+    const planner = new SurfacePlanner(
+      makeOptions({
+        mode: 'manual',
+        branch: 'main',
+        sceneIds: ['S1', 'S2'],
+        contracts,
+        authorGroups: [
+          { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+          { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
+        ],
+      }),
+    );
 
-      const result = planner.plan();
-      expect(result.manifest.groupIds).toHaveLength(2);
-      expect(result.manifest.groupIds).toEqual(['g1', 'g2']);
-    });
-    it('throws when a scene appears in multiple groups', () => {
-      const contracts = makeContracts(['S1', 'S2', 'S3']);
-      const planner = new SurfacePlanner(
-        makeOptions({
-          mode: 'manual',
-          branch: 'main',
-          sceneIds: ['S1', 'S2', 'S3'],
-          contracts,
-          authorGroups: [
-            { groupId: 'g1', sceneIds: ['S1', 'S2'], surfacePolicy: { type: 'parallel' } },
-            { groupId: 'g2', sceneIds: ['S2', 'S3'], surfacePolicy: { type: 'parallel' } },
-          ],
-        }),
-      );
+    const result = planner.plan();
+    expect(result.manifest.groupIds).toHaveLength(2);
+    expect(result.manifest.groupIds).toEqual(['g1', 'g2']);
+  });
+  it('throws when a scene appears in multiple groups', () => {
+    const contracts = makeContracts(['S1', 'S2', 'S3']);
+    const planner = new SurfacePlanner(
+      makeOptions({
+        mode: 'manual',
+        branch: 'main',
+        sceneIds: ['S1', 'S2', 'S3'],
+        contracts,
+        authorGroups: [
+          { groupId: 'g1', sceneIds: ['S1', 'S2'], surfacePolicy: { type: 'parallel' } },
+          { groupId: 'g2', sceneIds: ['S2', 'S3'], surfacePolicy: { type: 'parallel' } },
+        ],
+      }),
+    );
 
-      // S2 appears in both g1 and g2 → GROUP_SCENE_CONFLICT
-      expect(() => planner.plan()).toThrow(SurfacePlannerError);
-      expect(() => planner.plan()).toThrow(/appears in multiple groups/i);
-    });
-    it('default parallel uses group IDs distinct from scene IDs', () => {
-      // When no authorLanes are provided, defaultParallelGroups creates
-      // group IDs with a 'group_' prefix — distinct from bare scene IDs.
-      // Contract: group IDs are grouping constructs, NOT scene IDs (§5).
-      const contracts = makeContracts(['S1', 'S2', 'S3']);
-      const planner = new SurfacePlanner(
-        makeOptions({
-          mode: 'manual',
-          branch: 'main',
-          sceneIds: ['S1', 'S2', 'S3'],
-          contracts,
-          // No authorLanes → default parallel
-        }),
-      );
+    // S2 appears in both g1 and g2 → GROUP_SCENE_CONFLICT
+    expect(() => planner.plan()).toThrow(SurfacePlannerError);
+    expect(() => planner.plan()).toThrow(/appears in multiple groups/i);
+  });
+  it('default parallel uses group IDs distinct from scene IDs', () => {
+    // When no authorLanes are provided, defaultParallelGroups creates
+    // group IDs with a 'group_' prefix — distinct from bare scene IDs.
+    // Contract: group IDs are grouping constructs, NOT scene IDs (§5).
+    const contracts = makeContracts(['S1', 'S2', 'S3']);
+    const planner = new SurfacePlanner(
+      makeOptions({
+        mode: 'manual',
+        branch: 'main',
+        sceneIds: ['S1', 'S2', 'S3'],
+        contracts,
+        // No authorLanes → default parallel
+      }),
+    );
 
-      const result = planner.plan();
+    const result = planner.plan();
 
-      for (const group of result.surfaceDependencyGraph.groups) {
-        // Group ID must NOT equal the bare scene ID
-        expect(group.groupId).not.toBe(group.sceneIds[0]);
-        // Group ID must have the 'group_' prefix from default parallel
-        expect(group.groupId).toMatch(/^group_/);
-        // Each default parallel group holds exactly one scene
-        expect(group.sceneIds).toHaveLength(1);
+    for (const group of result.surfaceDependencyGraph.groups) {
+      // Group ID must NOT equal the bare scene ID
+      expect(group.groupId).not.toBe(group.sceneIds[0]);
+      // Group ID must have the 'group_' prefix from default parallel
+      expect(group.groupId).toMatch(/^group_/);
+      // Each default parallel group holds exactly one scene
+      expect(group.sceneIds).toHaveLength(1);
+    }
+  });
+  it('throws when lane references nonexistent group ID', () => {
+    // Lane groupIds must reference groups that exist in the plan (§5).
+    const contracts = makeContracts(['S1', 'S2']);
+    const planner = new SurfacePlanner(
+      makeOptions({
+        mode: 'manual',
+        branch: 'main',
+        sceneIds: ['S1', 'S2'],
+        contracts,
+        authorGroups: [
+          { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+          { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
+        ],
+        authorLanes: [serialLane('lane1', ['nonexistent_group'])],
+      }),
+    );
+
+    // 'nonexistent_group' is not a defined group → UNKNOWN_GROUP_ID
+    expect(() => planner.plan()).toThrow(SurfacePlannerError);
+    expect(() => planner.plan()).toThrow(/unknown group/i);
+  });
+
+  it('throws on cross-branch scene references', () => {
+    // Cross-branch surface edges are invalid — each branch has its own plan
+    const contracts = makeContracts(['S1', 'S2'], 'branch_a');
+    const planner = new SurfacePlanner(
+      makeOptions({
+        mode: 'manual',
+        branch: 'branch_a',
+        sceneIds: ['S1', 'S2'],
+        contracts,
+        authorLanes: [serialLane('branch_a_lane', ['S1', 'S2'])],
+      }),
+    );
+
+    const result = planner.plan();
+
+    // All groups belong to 'branch_a' — no cross-branch edge
+    expect(result.surfaceDependencyGraph.branch).toBe('branch_a');
+    for (const group of result.surfaceDependencyGraph.groups) {
+      expect(group.groupId).toBeDefined();
+      for (const sid of group.sceneIds) {
+        // No scene IDs from a different branch
+        expect(sid).not.toMatch(/branch_b/);
       }
-    });
-    it('throws when lane references nonexistent group ID', () => {
-      // Lane groupIds must reference groups that exist in the plan (§5).
-      const contracts = makeContracts(['S1', 'S2']);
-      const planner = new SurfacePlanner(
-        makeOptions({
-          mode: 'manual',
-          branch: 'main',
-          sceneIds: ['S1', 'S2'],
-          contracts,
-          authorGroups: [
-            { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
-            { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
-          ],
-          authorLanes: [serialLane('lane1', ['nonexistent_group'])],
-        }),
-      );
+    }
+  });
 
-      // 'nonexistent_group' is not a defined group → UNKNOWN_GROUP_ID
-      expect(() => planner.plan()).toThrow(SurfacePlannerError);
-      expect(() => planner.plan()).toThrow(/unknown group/i);
-    });
+  it('dependency graph has no cycles by construction', () => {
+    // SurfaceDependencyGraph is built from groups and lanes.
+    // Each lane orders groups in discourse sequence; there is no
+    // mechanism for a group to reference itself or another group
+    // in a loop.  Cycles would require cross-lane references.
+    const contracts = makeContracts(['S1', 'S2', 'S3']);
+    const planner = new SurfacePlanner(
+      makeOptions({
+        mode: 'manual',
+        branch: 'main',
+        sceneIds: ['S1', 'S2', 'S3'],
+        contracts,
+        authorGroups: [
+          { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+          { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'serial_surface' } },
+          { groupId: 'g3', sceneIds: ['S3'], surfacePolicy: { type: 'parallel' } },
+        ],
+        authorLanes: [serialLane('lane1', ['g1', 'g2']), serialLane('lane2', ['g3'])],
+      }),
+    );
 
-    it('throws on cross-branch scene references', () => {
-      // Cross-branch surface edges are invalid — each branch has its own plan
-      const contracts = makeContracts(['S1', 'S2'], 'branch_a');
-      const planner = new SurfacePlanner(
-        makeOptions({
-          mode: 'manual',
-          branch: 'branch_a',
-          sceneIds: ['S1', 'S2'],
-          contracts,
-          authorLanes: [serialLane('branch_a_lane', ['S1', 'S2'])],
-        }),
-      );
+    const result = planner.plan();
+    const groupIds = new Set(result.surfaceDependencyGraph.groups.map((g) => g.groupId));
 
-      const result = planner.plan();
-
-      // All groups belong to 'branch_a' — no cross-branch edge
-      expect(result.surfaceDependencyGraph.branch).toBe('branch_a');
-      for (const group of result.surfaceDependencyGraph.groups) {
-        expect(group.groupId).toBeDefined();
-        for (const sid of group.sceneIds) {
-          // No scene IDs from a different branch
-          expect(sid).not.toMatch(/branch_b/);
-        }
+    // Each lane's groupIds must reference existing groups
+    for (const lane of result.surfaceDependencyGraph.serialLanes) {
+      for (const gid of lane.groupIds) {
+        expect(groupIds.has(gid)).toBe(true);
       }
-    });
+    }
 
-    it('dependency graph has no cycles by construction', () => {
-      // SurfaceDependencyGraph is built from groups and lanes.
-      // Each lane orders groups in discourse sequence; there is no
-      // mechanism for a group to reference itself or another group
-      // in a loop.  Cycles would require cross-lane references.
-      const contracts = makeContracts(['S1', 'S2', 'S3']);
-      const planner = new SurfacePlanner(
-        makeOptions({
-          mode: 'manual',
-          branch: 'main',
-          sceneIds: ['S1', 'S2', 'S3'],
-          contracts,
-          authorGroups: [
-            { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
-            { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'serial_surface' } },
-            { groupId: 'g3', sceneIds: ['S3'], surfacePolicy: { type: 'parallel' } },
-          ],
-          authorLanes: [serialLane('lane1', ['g1', 'g2']), serialLane('lane2', ['g3'])],
-        }),
+    // No group references itself — each group only holds sceneIds
+    for (const group of result.surfaceDependencyGraph.groups) {
+      expect(group.groupId).toBeDefined();
+      expect(group.sceneIds.every((s) => s !== group.groupId));
+    }
+  });
+
+  it('UNVERSIONED_BUDGET and UNVERSIONED_EXTRACTION are valid error codes', () => {
+    // These error codes exist in the SurfaceErrorCode union and
+    // SurfacePlannerError can carry them.  The planner itself
+    // does not raise them (they are enforced by the extractor
+    // and render pipeline), but they are part of the contract.
+    const budgetErr = new SurfacePlannerError(
+      'Extraction budget has no version',
+      'UNVERSIONED_BUDGET',
+      { branch: 'main' },
+    );
+    const extractErr = new SurfacePlannerError(
+      'Extractor has no version identifier',
+      'UNVERSIONED_EXTRACTION',
+      { branch: 'main' },
+    );
+
+    expect(budgetErr.code).toBe('UNVERSIONED_BUDGET');
+    expect(extractErr.code).toBe('UNVERSIONED_EXTRACTION');
+    expect(budgetErr).toBeInstanceOf(SurfacePlannerError);
+    expect(extractErr).toBeInstanceOf(SurfacePlannerError);
+  });
+
+  it('surface policy type is one of the allowed types', () => {
+    // Only 'parallel', 'serial_surface', and 'fallback_without_surface'
+    // are valid SurfacePolicy types per §7.
+    const contracts = makeContracts(['S1']);
+    const planner = new SurfacePlanner(
+      makeOptions({
+        mode: 'auto',
+        branch: 'main',
+        sceneIds: ['S1'],
+        contracts,
+        autoConfig: { maxParallelGroupSize: 5, authorized: true },
+      }),
+    );
+
+    const result = planner.plan();
+    for (const group of result.surfaceDependencyGraph.groups) {
+      expect(['parallel', 'serial_surface', 'fallback_without_surface']).toContain(
+        group.surfacePolicy.type,
       );
+    }
+  });
 
-      const result = planner.plan();
-      const groupIds = new Set(result.surfaceDependencyGraph.groups.map((g) => g.groupId));
+  it('throws when manual mode has unassigned scene IDs', () => {
+    const contracts = makeContracts(['S1', 'S2', 'S3']);
+    const planner = new SurfacePlanner(
+      makeOptions({
+        mode: 'manual',
+        branch: 'main',
+        sceneIds: ['S1', 'S2', 'S3'],
+        contracts,
+        authorGroups: [
+          { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
+          { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
+        ],
+      }),
+    );
 
-      // Each lane's groupIds must reference existing groups
-      for (const lane of result.surfaceDependencyGraph.serialLanes) {
-        for (const gid of lane.groupIds) {
-          expect(groupIds.has(gid)).toBe(true);
-        }
-      }
-
-      // No group references itself — each group only holds sceneIds
-      for (const group of result.surfaceDependencyGraph.groups) {
-        expect(group.groupId).toBeDefined();
-        expect(group.sceneIds.every((s) => s !== group.groupId));
-      }
-    });
-
-    it('UNVERSIONED_BUDGET and UNVERSIONED_EXTRACTION are valid error codes', () => {
-      // These error codes exist in the SurfaceErrorCode union and
-      // SurfacePlannerError can carry them.  The planner itself
-      // does not raise them (they are enforced by the extractor
-      // and render pipeline), but they are part of the contract.
-      const budgetErr = new SurfacePlannerError(
-        'Extraction budget has no version',
-        'UNVERSIONED_BUDGET',
-        { branch: 'main' },
-      );
-      const extractErr = new SurfacePlannerError(
-        'Extractor has no version identifier',
-        'UNVERSIONED_EXTRACTION',
-        { branch: 'main' },
-      );
-
-      expect(budgetErr.code).toBe('UNVERSIONED_BUDGET');
-      expect(extractErr.code).toBe('UNVERSIONED_EXTRACTION');
-      expect(budgetErr).toBeInstanceOf(SurfacePlannerError);
-      expect(extractErr).toBeInstanceOf(SurfacePlannerError);
-    });
-
-    it('surface policy type is one of the allowed types', () => {
-      // Only 'parallel', 'serial_surface', and 'fallback_without_surface'
-      // are valid SurfacePolicy types per §7.
-      const contracts = makeContracts(['S1']);
-      const planner = new SurfacePlanner(
-        makeOptions({
-          mode: 'auto',
-          branch: 'main',
-          sceneIds: ['S1'],
-          contracts,
-          autoConfig: { maxParallelGroupSize: 5, authorized: true },
-        }),
-      );
-
-      const result = planner.plan();
-      for (const group of result.surfaceDependencyGraph.groups) {
-        expect(['parallel', 'serial_surface', 'fallback_without_surface']).toContain(
-          group.surfacePolicy.type,
-        );
-      }
-    });
-
-    it('throws when manual mode has unassigned scene IDs', () => {
-      const contracts = makeContracts(['S1', 'S2', 'S3']);
-      const planner = new SurfacePlanner(
-        makeOptions({
-          mode: 'manual',
-          branch: 'main',
-          sceneIds: ['S1', 'S2', 'S3'],
-          contracts,
-          authorGroups: [
-            { groupId: 'g1', sceneIds: ['S1'], surfacePolicy: { type: 'parallel' } },
-            { groupId: 'g2', sceneIds: ['S2'], surfacePolicy: { type: 'parallel' } },
-          ],
-        }),
-      );
-
-      // S3 is not assigned to any group
-      expect(() => planner.plan()).toThrow(SurfacePlannerError);
-      expect(() => planner.plan()).toThrow(/not assigned to any group/i);
-    });
+    // S3 is not assigned to any group
+    expect(() => planner.plan()).toThrow(SurfacePlannerError);
+    expect(() => planner.plan()).toThrow(/not assigned to any group/i);
+  });
 
   // ======================================================================
   // Category 3: Manual/suggest/auto manifest determinism
@@ -1328,10 +1328,7 @@ describe('SurfacePlanner', () => {
     });
 
     it('proposal hash is deterministic across runs with same inputs', () => {
-      const contracts = makeContracts(['S1', 'S2'], 'main', [
-        'continuous',
-        'continuous',
-      ]);
+      const contracts = makeContracts(['S1', 'S2'], 'main', ['continuous', 'continuous']);
       const options = makeOptions({
         mode: 'suggest',
         branch: 'main',
@@ -1347,10 +1344,7 @@ describe('SurfacePlanner', () => {
       expect(r1.proposal!.hash).toBe(r2.proposal!.hash);
 
       // Proposal hash differs when scene transition changes
-      const contractsChanged = makeContracts(['S1', 'S2'], 'main', [
-        'hard_cut',
-        'hard_cut',
-      ]);
+      const contractsChanged = makeContracts(['S1', 'S2'], 'main', ['hard_cut', 'hard_cut']);
       const r3 = new SurfacePlanner(
         makeOptions({
           mode: 'suggest',
@@ -1477,5 +1471,4 @@ describe('SurfacePlanner', () => {
       }
     });
   });
-
 });

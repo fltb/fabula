@@ -13,6 +13,13 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "David is engaged to Dora and writes to Agnes with joyful news, but his happiness is interrupted when Aunt Betsey arrives unexpectedly in London, looking strained and serious. She reveals that she has lost nearly all her money — ruined by Uriah Heep's machinations and by investments that failed. She is now poor. David is shocked but immediately resolves to support her and reduce their expenses. He takes on additional work as a secretary for Doctor Strong, who has also moved to London, and begins writing fiction in earnest, starting his literary career. The chapter marks a turning point: David must become responsible and self-reliant, no longer dependent on his aunt's fortune."
+beats:
+  - "David is engaged to Dora and writes to Agnes with joyful news, but his happiness is interrupted when Aunt Betsey arrives unexpectedly in London, looking strained and serious."
+  - "She reveals that she has lost nearly all her money — ruined by Uriah Heep's machinations and by investments that failed."
+  - "She is now poor."
+  - "David is shocked but immediately resolves to support her and reduce their expenses."
+  - "He takes on additional work as a secretary for Doctor Strong, who has also moved to London, and begins writing fiction in earnest, starting his literary career."
+  - "The chapter marks a turning point: David must become responsible and self-reliant, no longer dependent on his aunt's fortune."
 preconditions:
   - entity: david_copperfield
     attribute: status

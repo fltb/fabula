@@ -442,11 +442,67 @@
       "severity": "warning"
     },
     {
+      "validator": "checklist",
+      "eventId": "E0",
+      "category": "narrative_style",
+      "attribute": "narrativeChecklist",
+      "severity": "warning"
+    },
+    {
+      "validator": "checklist",
+      "eventId": "E1",
+      "category": "narrative_style",
+      "attribute": "narrativeChecklist",
+      "severity": "warning"
+    },
+    {
+      "validator": "checklist",
+      "eventId": "E2",
+      "category": "narrative_style",
+      "attribute": "narrativeChecklist",
+      "severity": "warning"
+    },
+    {
+      "validator": "checklist",
+      "eventId": "E3",
+      "category": "narrative_style",
+      "attribute": "narrativeChecklist",
+      "severity": "warning"
+    },
+    {
+      "validator": "checklist",
+      "eventId": "E4",
+      "category": "narrative_style",
+      "attribute": "narrativeChecklist",
+      "severity": "warning"
+    },
+    {
+      "validator": "checklist",
+      "eventId": "E5",
+      "category": "narrative_style",
+      "attribute": "narrativeChecklist",
+      "severity": "warning"
+    },
+    {
+      "validator": "checklist",
+      "eventId": "E6",
+      "category": "narrative_style",
+      "attribute": "narrativeChecklist",
+      "severity": "warning"
+    },
+    {
       "validator": "conflict",
       "eventId": "E2",
       "category": "factual_detail",
       "attribute": "conflictType",
       "severity": "info"
+    },
+    {
+      "validator": "discourse",
+      "eventId": "E0",
+      "category": "narrative_style",
+      "attribute": "narratorProfileRef",
+      "severity": "error"
     },
     {
       "validator": "foreshadowing",
@@ -457,78 +513,6 @@
       "severity": "warning"
     },
     {
-      "validator": "pov",
-      "eventId": "E0",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E1",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E2",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E3",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E4",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E5",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "pov",
-      "eventId": "E6",
-      "category": "narrative_style",
-      "entityId": "narrator",
-      "attribute": "pov.type",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E0",
-      "category": "timeline_plot",
-      "entityId": "T2",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E0",
-      "category": "timeline_plot",
-      "entityId": "T3",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
       "validator": "thread_progress",
       "eventId": "E0",
       "category": "timeline_plot",
@@ -540,31 +524,7 @@
       "validator": "thread_progress",
       "eventId": "E1",
       "category": "timeline_plot",
-      "entityId": "T1",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E1",
-      "category": "timeline_plot",
-      "entityId": "T3",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E1",
-      "category": "timeline_plot",
       "entityId": "T4",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E2",
-      "category": "timeline_plot",
-      "entityId": "T1",
       "attribute": "threadProgress",
       "severity": "warning"
     },
@@ -604,46 +564,6 @@
       "validator": "thread_progress",
       "eventId": "E5",
       "category": "timeline_plot",
-      "entityId": "T2",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E5",
-      "category": "timeline_plot",
-      "entityId": "T3",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E5",
-      "category": "timeline_plot",
-      "entityId": "T4",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E6",
-      "category": "timeline_plot",
-      "entityId": "T1",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E6",
-      "category": "timeline_plot",
-      "entityId": "T2",
-      "attribute": "threadProgress",
-      "severity": "warning"
-    },
-    {
-      "validator": "thread_progress",
-      "eventId": "E6",
-      "category": "timeline_plot",
       "entityId": "T3",
       "attribute": "threadProgress",
       "severity": "warning"
@@ -652,7 +572,7 @@
       "validator": "thread_progress",
       "eventId": "E6",
       "category": "timeline_plot",
-      "entityId": "T4",
+      "entityId": "T2",
       "attribute": "threadProgress",
       "severity": "warning"
     }

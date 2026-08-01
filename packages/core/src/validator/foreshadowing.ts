@@ -16,7 +16,7 @@ import type {
   ValidationIssue,
   Validator,
 } from '../types/index.js';
-import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
+import { makeIssue } from './base.js';
 export const foreshadowingDeployedSchema = z.array(z.string());
 
 export class ForeshadowingValidator implements Validator {
@@ -99,6 +99,10 @@ export class ForeshadowingValidator implements Validator {
             'Ensure foreshadowing is present in the rendered prose',
             'edit_file',
             'foreshadowing',
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            { field: 'foreshadowingDeployed' },
           ),
         );
       }

@@ -3,11 +3,12 @@
 // ============================================================================
 
 import { z } from 'zod';
-import { authoredStoryTimeSchema } from './timestamp.js';
 import { anachronySchema, voiceProfileSchema } from './discourse.js';
 import { durationProfileSchema } from './duration.js';
 import { frequencyProfileSchema } from './frequency.js';
+import { gameDialogueChoicesSchema } from './game-dialogue.js';
 import { greyLineSchema } from './grey-line.js';
+import { narrativeChecklistSchema } from './narrative-checklist.js';
 import {
   absentApparatusSchema,
   causalDiscontinuitySchema,
@@ -18,8 +19,6 @@ import {
   surfaceModeSchema,
   voiceDissonanceSchema,
 } from './narrative-techniques.js';
-import { narrativeChecklistSchema } from './narrative-checklist.js';
-import { gameDialogueChoicesSchema } from './game-dialogue.js';
 import {
   foreshadowEntrySchema,
   introduceEntrySchema,
@@ -31,10 +30,10 @@ import {
   threadProgressEntrySchema,
 } from './primitives.js';
 import { sourceContextSchema } from './source-context.js';
+import { authoredStoryTimeSchema } from './timestamp.js';
 export const eventFileSchema = z
   .object({
     event: z.string(),
-    formatVersion: z.number().default(1),
     narrativeOrder: z.number(),
     title: z.string(),
     storyTime: authoredStoryTimeSchema.optional(),
@@ -45,7 +44,10 @@ export const eventFileSchema = z
       .optional()
       .superRefine((value, ctx) => {
         if (value && new Set(value).size !== value.length) {
-          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'causalPredecessors must be unique' });
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'causalPredecessors must be unique',
+          });
         }
       }),
     sceneType: z.enum(['linear', 'flashback', 'flashforward', 'dream', 'parallel']).optional(),
@@ -64,6 +66,7 @@ export const eventFileSchema = z
       })
       .strict(),
     sceneBrief: z.string(),
+    beats: z.tuple([z.string().min(1)]).rest(z.string().min(1)),
     preconditions: z.array(preconditionSchema),
     expectedPostconditions: z.array(postconditionSchema),
     styleGuidance: styleGuidanceSchema.optional(),

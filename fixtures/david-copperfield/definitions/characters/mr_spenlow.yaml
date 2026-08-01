@@ -1,0 +1,21 @@
+id: mr_spenlow
+name: "Mr Spenlow"
+type: supporting_character
+archetype: complacent_proctor
+role: supporting
+description: "A proctor in Doctors' Commons and a partner in the firm Spenlow and Jorkins, to which David is articled. Mr Spenlow is a formal, complacent gentleman of the old school, more concerned with the dignity of his profession than with his daughter's happiness. He is the father of Dora Spenlow and the master of a pleasant house in Norwood. He opposes David's courtship of Dora, and his sudden death — a riding accident — removes the chief obstacle to the marriage while leaving Dora's fortune entangled in Chancery."
+appearance: "A neat, formal gentleman of middle age, dressed in the sober black of his profession, with a complacent expression and an air of legal consequence."
+aliases:
+  - "Mr Spenlow"
+  - "Spenlow"
+gender: male
+age: "Middle-aged"
+profession: "Proctor (Spenlow and Jorkins)"
+traits:
+  - formal
+  - complacent
+  - pompous
+  - conventional
+  - fond_of_dora
+voiceNotes: "Measured, legalistic, and a little pompous — he speaks in rounded periods about the dignity of Doctors' Commons and the dangers of imprudent attachments. He is always mindful of appearances."
+backstory: "A proctor of Doctors' Commons, widower and father of Dora Spenlow. He takes David as an articled clerk. When David falls in love with Dora, Mr Spenlow opposes the match; his sudden death from a riding accident leaves Dora an orphan and her fortune subject to Chancery proceedings."

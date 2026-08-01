@@ -13,6 +13,15 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "Mr Barkis, Peggotty's husband and the carrier, dies after a long illness. David goes to Yarmouth for the funeral and stays with Peggotty in her grief. Barkis's will reveals that he has left Peggotty a substantial fortune of three thousand pounds saved from his miserly ways — 'Barkis is willin'' turns out to have been truer than anyone knew. David administers the will and is moved by Peggotty's simple goodness. But the greater loss is that Little Emily has run away with Steerforth. The Peggotty household is shattered. Ham is devastated but forgives her. Mr Peggotty, refusing to curse her, sets out on a desperate search for his lost niece, vowing to find her and bring her home."
+beats:
+  - "Mr Barkis, Peggotty's husband and the carrier, dies after a long illness."
+  - "David goes to Yarmouth for the funeral and stays with Peggotty in her grief."
+  - "Barkis's will reveals that he has left Peggotty a substantial fortune of three thousand pounds saved from his miserly ways — 'Barkis is willin'' turns out to have been truer than anyone knew."
+  - "David administers the will and is moved by Peggotty's simple goodness."
+  - "But the greater loss is that Little Emily has run away with Steerforth."
+  - "The Peggotty household is shattered."
+  - "Ham is devastated but forgives her."
+  - "Mr Peggotty, refusing to curse her, sets out on a desperate search for his lost niece, vowing to find her and bring her home."
 preconditions:
   - entity: emily
     attribute: status
@@ -64,7 +73,14 @@ foreshadowing:
     hint: "Mr Peggotty's vow to find Emily — refusing to curse her, setting out across the world — establishes the moral gravity that will define the resolution of this thread. His forgiveness prefigures the story's deepest theme of redemption."
     targetRevealChapter: 40
     thread: T4
-introduces: []
+introduces:
+  - type: character
+    id: mr_barkis
+    initialState:
+      location: yarmouth
+      status: dying
+      condition: pegottys_carrier_husband
+      emotionalState: fading_contentment
 styleGuidance:
   tone: "mournful, tender, with moments of bitter irony — Barkis's posthumous generosity set against the devastation of Emily's flight"
   targetWordCount: 900

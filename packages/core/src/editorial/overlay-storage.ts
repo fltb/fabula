@@ -120,7 +120,10 @@ export class OverlayStorage {
 
   /** List every tracked overlay path as an OverlayDocument. */
   listOverlay(
-    parseCallback?: (path: string, content: string) => { parsedValue: unknown; diagnostics: EditorialError[] },
+    parseCallback?: (
+      path: string,
+      content: string,
+    ) => { parsedValue: unknown; diagnostics: EditorialError[] },
   ): OverlayDocument[] {
     const docs: OverlayDocument[] = [];
     for (const [filePath, content] of this.overlays) {
@@ -135,7 +138,10 @@ export class OverlayStorage {
   /** Get a document by path from overlay (tracked=true) or base (tracked=false). */
   get(
     filePath: string,
-    parseCallback?: (path: string, content: string) => { parsedValue: unknown; diagnostics: EditorialError[] },
+    parseCallback?: (
+      path: string,
+      content: string,
+    ) => { parsedValue: unknown; diagnostics: EditorialError[] },
   ): OverlayDocument {
     const tracked = this.overlays.has(filePath);
     const content = this.read(filePath);
@@ -146,7 +152,10 @@ export class OverlayStorage {
     filePath: string,
     content: string,
     tracked: boolean,
-    parseCallback?: (path: string, content: string) => { parsedValue: unknown; diagnostics: EditorialError[] },
+    parseCallback?: (
+      path: string,
+      content: string,
+    ) => { parsedValue: unknown; diagnostics: EditorialError[] },
   ): OverlayDocument {
     const hash = computeContentHash(content);
     let parsedValue: unknown = content;

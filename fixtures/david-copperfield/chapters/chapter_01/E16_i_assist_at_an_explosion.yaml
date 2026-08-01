@@ -12,16 +12,14 @@ conflictType: person_vs_person
 pov:
   character: narrator
   type: first_person
-sceneBrief: 'David, Aunt Betsey, and Traddles travel to Canterbury on the appointed
-  day, joining Mr Micawber in Wickfield''s office for the long-awaited confrontation.
-  Micawber, in a magnificent written statement, systematically exposes Uriah Heep''s
-  frauds: forging Wickfield''s signature, manipulating accounts, and attempting to
-  force Agnes into marriage. Heep writhes and threatens, but the evidence is irrefutable
-  — Micawber has been secretly collecting it for months. Traddles, as the legal mind,
-  takes charge of the paperwork. Heep is compelled to return the stolen documents
-  and money, and to surrender his power over Wickfield''s firm. The episode is a triumph
-  of justice: Micawber''s finest hour, Traddles''s legal competence, and Heep''s deserved
-  humiliation.'
+sceneBrief: "David, Aunt Betsey, and Traddles travel to Canterbury on the appointed day, joining Mr Micawber in Wickfield's office for the long-awaited confrontation. Micawber, in a magnificent written statement, systematically exposes Uriah Heep's frauds: forging Wickfield's signature, manipulating accounts, and attempting to force Agnes into marriage. Heep writhes and threatens, but the evidence is irrefutable — Micawber has been secretly collecting it for months. Traddles, as the legal mind, takes charge of the paperwork. Heep is compelled to return the stolen documents and money, and to surrender his power over Wickfield's firm. The episode is a triumph of justice: Micawber's finest hour, Traddles's legal competence, and Heep's deserved humiliation."
+beats:
+  - "David, Aunt Betsey, and Traddles travel to Canterbury on the appointed day, joining Mr Micawber in Wickfield's office for the long-awaited confrontation."
+  - "Micawber, in a magnificent written statement, systematically exposes Uriah Heep's frauds: forging Wickfield's signature, manipulating accounts, and attempting to force Agnes into marriage."
+  - "Heep writhes and threatens, but the evidence is irrefutable — Micawber has been secretly collecting it for months."
+  - "Traddles, as the legal mind, takes charge of the paperwork."
+  - "Heep is compelled to return the stolen documents and money, and to surrender his power over Wickfield's firm."
+  - "The episode is a triumph of justice: Micawber's finest hour, Traddles's legal competence, and Heep's deserved humiliation."
 preconditions:
 - entity: micawber
   attribute: location
@@ -42,7 +40,7 @@ expectedPostconditions:
   attribute: status
   value: legal_agent_of_justice
   confidence: 1.0
-- entity: wickfield
+- entity: mr_wickfield
   attribute: status
   value: freed_from_heep
   confidence: 1.0

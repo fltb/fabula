@@ -14,6 +14,31 @@ pov:
   type: omniscient
 narratorProfileRef: shuoshuren
 sceneBrief: "秦可卿殡仪队伍送至铁槛寺安灵，凤姐嫌铁槛寺不便，带了宝玉和秦钟住进附近的馒头庵（水月庵）。庵中老尼净虚趁机求凤姐办事——有一大户人家张财主的女儿金哥已许配守备之子，却被长安府太爷的小舅子李衙内看中，两家争聘打官司。净虚请凤姐以贾府权势出面摆平守备退亲。凤姐起初推托，经净虚激将——'虽说如此，只是太太知道，连我也不敢去的'——凤姐好胜心起，开价三千两银子。凤姐以贾琏名义写信给长安节度使云光，云光便压守备退婚。不料金哥是个多情烈女，闻退婚消息后自缢身亡；守备之子也投河殉情。凤姐坐享三千两，此后胆子更大，从此'所作所为，诸如此类，不可胜数'——这是凤姐手上沾上的第一条人命。"
+beats:
+  - "秦可卿殡仪队伍送至铁槛寺安灵，凤姐嫌铁槛寺不便，带了宝玉和秦钟住进附近的馒头庵（水月庵）。"
+  - "庵中老尼净虚趁机求凤姐办事——有一大户人家张财主的女儿金哥已许配守备之子，却被长安府太爷的小舅子李衙内看中，两家争聘打官司。"
+  - "净虚请凤姐以贾府权势出面摆平守备退亲。"
+  - "凤姐起初推托，经净虚激将——'虽说如此，只是太太知道，连我也不敢去的'——凤姐好胜心起，开价三千两银子。"
+  - "凤姐以贾琏名义写信给长安节度使云光，云光便压守备退婚。"
+  - "不料金哥是个多情烈女，闻退婚消息后自缢身亡；守备之子也投河殉情。"
+  - "凤姐坐享三千两，此后胆子更大，从此'所作所为，诸如此类，不可胜数'——这是凤姐手上沾上的第一条人命。"
+introduces:
+  - type: character
+    id: jinqge
+    initialState:
+      status: alive
+  - type: character
+    id: garrison_commander_son
+    initialState:
+      status: alive
+  - type: character
+    id: jingxu_nun
+    initialState:
+      status: alive
+  - type: character
+    id: qinzhong
+    initialState:
+      status: alive
 preconditions:
   - entity: wangxifeng
     attribute: location

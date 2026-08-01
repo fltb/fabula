@@ -43,6 +43,21 @@ const validatorIssueIdentitySchema = z
     entityId: z.string().min(1).optional(),
     attribute: z.string().min(1).optional(),
     severity: z.enum(['error', 'warning', 'info']),
+    kind: z
+      .enum([
+        'compiler_invariant',
+        'evidence_mismatch',
+        'interpretive_assessment',
+        'analysis_uncertainty',
+      ])
+      .optional(),
+    observationRef: z
+      .object({
+        field: z.string().min(1),
+        analysisPointer: z.string().min(1).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

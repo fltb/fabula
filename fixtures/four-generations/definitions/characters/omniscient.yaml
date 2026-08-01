@@ -1,0 +1,23 @@
+id: omniscient
+name: "全知叙述者"
+type: narrator
+archetype: omniscient_voice
+role: supporting
+description: "《四世同堂》的全知叙述者——第三人称全知叙事的声音。他不作为人物出现在故事中，却深入每一个角色的内心，俯瞰小羊圈胡同的众生相：祁家的忠厚、冠家的无耻、钱家的气节、底层市民的挣扎。他的声音冷静而带着深沉的悲悯，是沦陷区北平世相的观察者与评判者。"
+appearance: "不出现在故事中；是俯瞰小羊圈胡同的全知叙事视角。"
+aliases:
+  - "叙述者"
+  - "全知视角"
+gender: male
+age: "无（叙述声音）"
+profession: "叙述者"
+traits:
+  - 全知
+  - 悲悯
+  - 冷静
+  - 洞察
+initialState:
+  status: active
+  condition: omniscient_narration
+voiceNotes: "第三人称全知叙事，穿插人物内心独白，冷静中带着对亡国奴相的痛切与对民族气节的敬意。"
+backstory: "《四世同堂》的全知叙述声音，贯穿全书，观察并讲述北平小羊圈胡同在沦陷时期的故事。"

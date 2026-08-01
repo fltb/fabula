@@ -91,9 +91,17 @@ export class PacingValidator implements Validator {
         (check) => {
           // Catalog-driven: check if attribute is a pacing-related narrative attribute
           const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
-          if (entityKind && getAttributeSemanticRole(entityKind, check.attribute) === 'narrative') {
+          if (
+            entityKind &&
+            getAttributeSemanticRole(input.entityTypeCatalog, entityKind, check.attribute) ===
+              'narrative'
+          ) {
             // Filter for pacing-specific attributes derived from catalog
-            const narrativeAttrs = getAttributesBySemanticRole(entityKind, 'narrative');
+            const narrativeAttrs = getAttributesBySemanticRole(
+              input.entityTypeCatalog,
+              entityKind,
+              'narrative',
+            );
             const paceAttrs = narrativeAttrs.filter(
               (a) => a.includes('pacing') || a.includes('pace'),
             );
@@ -105,7 +113,7 @@ export class PacingValidator implements Validator {
           }
           return check.matchLevel === 'absent' || check.matchLevel === 'contradicted';
         },
-        (check) =>
+        (check, index) =>
           makeIssue(
             this.name,
             event.id,
@@ -116,6 +124,14 @@ export class PacingValidator implements Validator {
               ? 'Expected pacing signal was not detected in the prose.'
               : 'Prose contradicts expected pacing signal.',
             'manual',
+            undefined,
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            {
+              field: 'narrativeChecks',
+              analysisPointer: `/narrativeChecks/${index}`,
+            },
           ),
       ),
     );

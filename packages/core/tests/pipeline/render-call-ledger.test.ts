@@ -27,36 +27,47 @@ import type {
   WorldState,
 } from '../../src/types/index.ts';
 import { ResultAggregator } from '../../src/validator/aggregator.ts';
-import { makeAnalysisResult } from '../fixtures/mock-pass2-helpers.ts';
+import {
+  makeAnalysisResult,
+  makeObservations,
+  makeProtocol,
+} from '../fixtures/mock-pass2-helpers.ts';
 
 // ============================================================================
 // Test fixtures
 // ============================================================================
 
+const ANALYSIS_PAYLOAD: Record<string, unknown> = {
+  postconditions: { covered: [], dropped: [] },
+  preconditions: { violated: [] },
+  pov: { consistent: true, leaks: [] },
+  inventedDetails: [],
+  quality: {
+    proseScore: 80,
+    maxScore: 100,
+    strengths: [],
+    weaknesses: [],
+    estimatedWordCount: 300,
+  },
+  threadProgressAchieved: [],
+  foreshadowingDeployed: [],
+  narrativeChecks: [],
+  appearanceChecks: [],
+  characterReferences: [],
+  tenseDetected: 'past',
+  conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+  ruleChecks: [],
+  knowledgeChecks: [],
+};
+
+// Evidence must be an exact substring of EVERY prose variant used with this
+// fixture across the file ('prose' is present in all of them). The protocol is
+// replaced at response time by MockProvider's protocol echo.
 const VALID_ANALYSIS_JSON = JSON.stringify({
   eventId: 'evt_test',
-  analysis: {
-    postconditions: { covered: [], dropped: [] },
-    preconditions: { violated: [] },
-    pov: { consistent: true, leaks: [] },
-    inventedDetails: [],
-    quality: {
-      proseScore: 80,
-      maxScore: 100,
-      strengths: [],
-      weaknesses: [],
-      estimatedWordCount: 300,
-    },
-    threadProgressAchieved: [],
-    foreshadowingDeployed: [],
-    narrativeChecks: [],
-    appearanceChecks: [],
-    characterReferences: [],
-    tenseDetected: 'past',
-    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-    ruleChecks: [],
-    knowledgeChecks: [],
-  },
+  protocol: makeProtocol('prose'),
+  observations: makeObservations(ANALYSIS_PAYLOAD, 'prose'),
+  analysis: ANALYSIS_PAYLOAD,
 });
 
 /** Minimal stub for a narrative event. Only fields accessed by the pipeline. */
@@ -70,13 +81,14 @@ function makeEvent(id: string): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'entity_1', type: 'third_person_limited' },
     sceneBrief: 'A test scene.',
+    beats: ['A test scene.'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
     foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
-    source: 'genesis',
+    source: 'event_file',
     branchExistence: { type: 'all' as const },
     participants: { entities: ['entity_1'] },
     styleGuidance: undefined,
@@ -93,6 +105,7 @@ function makeContext(eventId: string): ContextPackage {
     } satisfies SystemContext,
     sceneSpec: {
       goal: 'Advance plot',
+      beats: ['Advance plot'],
       povType: 'third_person',
       povCharacter: 'narrator',
       conflict: 'none',
@@ -160,6 +173,7 @@ function makePipeline(opts: MockProviderOptions = {}) {
     storage,
     skipCache: true,
     maxRetries: 3,
+    validatorPolicyId: 'test-policy-v1',
   });
   return { pipeline, provider, storage };
 }
@@ -180,6 +194,7 @@ function makePipelineWithAggregator(entry: MockPass2Entry) {
     skipCache: true,
     maxRetries: 1,
     aggregator,
+    validatorPolicyId: 'test-policy-v1',
   });
   return { pipeline, provider, storage };
 }
@@ -403,15 +418,28 @@ describe('RenderPipeline provider call ledger', () => {
   // ── Cache hit yields empty ledger ──────────────────────────────────
 
   it('returns empty providerCalls on cache hit', async () => {
-    const { pipeline } = makePipeline({
-      responses: ['prose', VALID_ANALYSIS_JSON],
+    const storage = new MemoryStorage();
+    const provider = new MockProvider({ responses: ['prose', VALID_ANALYSIS_JSON] });
+    const pipeline = new RenderPipeline({
+      provider,
+      model: 'mock-model',
+      cacheDir: '/tmp/test-cache',
+      storage,
+      skipCache: false,
+      maxRetries: 3,
+      validatorPolicyId: 'test-policy-v1',
     });
 
-    // With skipCache: true, cache path is never taken. We test the shape
-    // contract: every RenderSceneResult includes providerCalls.
-    const result = await pipeline.renderScene(makeJob('evt_cache_check'));
-    expect(Array.isArray(result.providerCalls)).toBe(true);
-    expect(result.providerCalls.length).toBeGreaterThanOrEqual(0);
+    // First render populates the cache — a miss with provider calls
+    const miss = await pipeline.renderScene(makeJob('evt_cache_check'));
+    expect(miss.cacheHit).toBe(false);
+    expect(miss.providerCalls.length).toBeGreaterThan(0);
+
+    // Second render with the same cache — a hit with zero provider calls
+    const hit = await pipeline.renderScene(makeJob('evt_cache_check'));
+    expect(hit.cacheHit).toBe(true);
+    expect(hit.providerCalls).toEqual([]);
+    expect(hit.analysis).not.toBeNull();
   });
 
   // ── No secrets in failureReason ────────────────────────────────────
@@ -665,7 +693,7 @@ describe('RenderPipeline provider call ledger', () => {
   it('every Pass2 parse retry yields a different requestHash (identity mutation)', async () => {
     const { pipeline } = makePipeline({
       responses: [
-        'Prose content.',
+        'prose content.',
         '{invalid}', // first Pass2 — parse failure
         '{also invalid}', // second Pass2 — parse failure (with feedback from first)
         VALID_ANALYSIS_JSON, // third Pass2 — success (with feedback from two prior)
@@ -768,24 +796,40 @@ describe('RenderPipeline provider call ledger', () => {
     // No blind retry — the circuit breaker opens and we get needsReview
     // The timeout is a hard failure, not retried without material mutation
   });
-
   it('cache hit returns providerCalls: [] not null or partial analysis', async () => {
     const storage = new MemoryStorage();
-    // Build a pipeline that renders once, then render again with cache
-    async function renderOnce(opts: { skipCache: boolean }): Promise<boolean> {
-      const rp = makePipeline(opts);
-      return true;
-    }
 
-    const { pipeline } = makePipeline({ responses: ['Prose.', VALID_ANALYSIS_JSON] });
-    const result1 = await pipeline.renderScene(makeJob('evt_cache_hit'));
-    expect(result1.cacheHit).toBe(false);
-    expect(result1.analysis).not.toBeNull();
+    // Populate the cache with a fully rendered scene
+    const populateProvider = new MockProvider({ responses: ['prose.', VALID_ANALYSIS_JSON] });
+    const populatePipeline = new RenderPipeline({
+      provider: populateProvider,
+      model: 'mock-model',
+      providerProfile: 'mock-provider',
+      cacheDir: '/tmp/test-cache',
+      storage,
+      skipCache: false,
+      maxRetries: 3,
+      validatorPolicyId: 'test-policy-v1',
+    });
+    const miss = await populatePipeline.renderScene(makeJob('evt_cache_hit'));
+    expect(miss.cacheHit).toBe(false);
+    expect(miss.analysis).not.toBeNull();
 
-    // With same cache, second render should be cache hit
-    // But MockProvider doesn't have skipCache control per-scene
-    // Just verify the providerCalls contract
-    expect(Array.isArray(result1.providerCalls)).toBe(true);
+    // A fresh pipeline with no provider re-parses the persisted cache fixture
+    // under the current contract — a hit is complete, never partial.
+    const cachedPipeline = new RenderPipeline({
+      model: 'mock-model',
+      providerProfile: 'mock-provider',
+      cacheDir: '/tmp/test-cache',
+      storage,
+      skipCache: false,
+      maxRetries: 3,
+      validatorPolicyId: 'test-policy-v1',
+    });
+    const hit = await cachedPipeline.renderScene(makeJob('evt_cache_hit'));
+    expect(hit.cacheHit).toBe(true);
+    expect(hit.analysis).not.toBeNull();
+    expect(hit.providerCalls).toEqual([]);
   });
 
   it('needsReview true when Pass2 exhausted does not return analysis', async () => {

@@ -1,6 +1,11 @@
 import * as crypto from 'node:crypto';
 import * as path from 'node:path';
-import { Storage, StorageTransaction, StorageWrite, TransactionReadExpectation } from '../storage/types.ts';
+import type {
+  Storage,
+  StorageTransaction,
+  StorageWrite,
+  TransactionReadExpectation,
+} from '../storage/types.ts';
 import type { ProjectPaths } from './paths.ts';
 
 export interface ProjectTransactionInput {

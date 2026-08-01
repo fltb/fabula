@@ -9,7 +9,7 @@ import type {
   ValidationIssue,
   Validator,
 } from '../types/index.js';
-import { getAttributeSemanticRole, getAttributesBySemanticRole, makeIssue } from './base.js';
+import { makeIssue } from './base.js';
 export const threadProgressAchievedSchema = z.array(z.string());
 
 export class ThreadProgressValidator implements Validator {
@@ -69,6 +69,10 @@ export class ThreadProgressValidator implements Validator {
             'Ensure the scene advances this narrative thread.',
             'edit_file',
             'threadProgress',
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            { field: 'threadProgressAchieved' },
           ),
         );
       }

@@ -6,6 +6,7 @@
 // ============================================================================
 
 import { z } from 'zod';
+import { evaluationResultSchema } from './knowledge.js';
 
 // ─── AbsenceBasis — exactly 4 values ─────────────────────────────────────────
 
@@ -105,7 +106,7 @@ export const boundaryReferenceSchema = z
       })
       .strict(),
     propositions: z.array(z.string()),
-    truthValues: z.record(z.string(), z.boolean()),
+    evaluations: z.record(z.string(), evaluationResultSchema),
   })
   .strict();
 

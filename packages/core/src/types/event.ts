@@ -9,6 +9,7 @@ import type { AuthoredStoryTime, EntityId, Fact, StoryTimestamp } from './entity
 import type { FrequencyProfile } from './frequency.js';
 import type { GameDialogueChoice } from './game-dialogue.js';
 import type { GreyLine } from './grey-line.js';
+import type { NarrativeChecklist } from './narrative-checklist.js';
 import type {
   AbsentApparatus,
   CausalDiscontinuity,
@@ -19,41 +20,9 @@ import type {
   SurfaceMode,
   VoiceDissonance,
 } from './narrative-techniques.js';
-import type { NarrativeChecklist } from './narrative-checklist.js';
-import type {
-  DimensionScope,
-  DimensionState,
-  DimensionUnset,
-  DimensionWrite,
-  EpochId,
-  EpochLifecycle,
-  EpochRuntimeState,
-  Membership,
-  MembershipId,
-  RelationshipId,
-  RelationshipRuntimeState,
-  RelationshipTransaction,
-} from './relationship.js';
-import type { RuleEffectEntry, RuleTransaction } from './rule.js';
+import type { RelationshipTransaction } from './relationship.js';
+import type { RuleEffectEntry } from './rule.js';
 import type { SourceContext } from './source-context.js';
-import type {
-  GoalLifecycle,
-  GoalState,
-  MilestoneLifecycle,
-  MilestoneState,
-  ThreadDeclaration,
-  ThreadDeclarationCatalog,
-  ThreadId,
-  ThreadLifecycle,
-  ThreadMergeResult,
-  ThreadMergeStrategy,
-  ThreadRunId,
-  ThreadRuntimeState,
-  ThreadTransaction,
-  ThreadTypeCatalog,
-  ThreadTypeDefinition,
-  TimeDomain,
-} from './thread.js';
 
 // ——— Narrative Event (§7.4.1) ———
 
@@ -83,6 +52,8 @@ export interface NarrativeEvent {
     type: 'first_person' | 'third_person_limited' | 'omniscient';
   };
   sceneBrief: string;
+  /** Ordered, non-empty beats: the sequence of actions/turns in the scene. */
+  beats: [string, ...string[]];
   preconditions: Fact[];
   postconditions: Fact[];
   /** Event-local player choices leading to child game-tree nodes. */
@@ -93,7 +64,7 @@ export interface NarrativeEvent {
   relationshipEffects: RelationshipTransaction[];
   ruleEffects: RuleEffectEntry[];
   styleGuidance?: StyleGuidance;
-  source: 'genesis' | 'event_file' | 'branch_point' | 'system';
+  source: 'event_file' | 'branch_point' | 'system';
   /** Explicit predecessor events injected by trusted internal compilation. */
   causalPredecessors?: string[];
   branchExistence: BranchSet;
@@ -231,8 +202,6 @@ export interface StyleGuidance {
 export interface EventFile {
   /** Event identifier, e.g. "E0", "E1" */
   event: string;
-  /** Format version for migration tracking */
-  formatVersion?: number;
   /** Narrative order within the story */
   narrativeOrder: number;
   /** Human-readable title */
@@ -270,12 +239,24 @@ export interface EventFile {
   };
   /** Brief description of what happens in the scene */
   sceneBrief: string;
+  /** Ordered, non-empty beats: the sequence of actions/turns in the scene. */
+  beats: [string, ...string[]];
   /** Preconditions that must be true before this event */
   preconditions: Array<{
     entity: string;
     attribute: string;
     value: unknown;
-    operator?: 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'contains' | 'not_contains' | 'exists' | 'not_exists';
+    operator?:
+      | 'eq'
+      | 'neq'
+      | 'gt'
+      | 'gte'
+      | 'lt'
+      | 'lte'
+      | 'contains'
+      | 'not_contains'
+      | 'exists'
+      | 'not_exists';
     narrativeHint?: string;
   }>;
   /** Expected postconditions after this event */

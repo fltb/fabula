@@ -27,9 +27,7 @@ export class TimelineValidator implements Validator {
 
     if (story) {
       // Choose preceding scene by narrativeOrder.
-      const prevEvents = events.filter(
-        (e) => e.narrativeOrder < event.narrativeOrder && e.id !== 'system:genesis',
-      );
+      const prevEvents = events.filter((e) => e.narrativeOrder < event.narrativeOrder);
       const prevEvent = prevEvents[prevEvents.length - 1];
 
       if (prevEvent && event.storyTime && prevEvent.storyTime) {
@@ -111,12 +109,16 @@ export class TimelineValidator implements Validator {
           // time_period is the primary attribute; also accept any catalog temporal attrs
           if (check.attribute !== 'time_period') {
             const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
-            if (!entityKind || getAttributeSemanticRole(entityKind, check.attribute) !== 'temporal')
+            if (
+              !entityKind ||
+              getAttributeSemanticRole(input.entityTypeCatalog, entityKind, check.attribute) !==
+                'temporal'
+            )
               return false;
           }
           return check.matchLevel === 'absent' || check.matchLevel === 'contradicted';
         },
-        (check) =>
+        (check, index) =>
           makeIssue(
             'timeline',
             input.event.id,
@@ -126,6 +128,13 @@ export class TimelineValidator implements Validator {
             'Review time-of-day consistency',
             'edit_file',
             'storyTime',
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            {
+              field: 'narrativeChecks',
+              analysisPointer: `/narrativeChecks/${index}`,
+            },
           ),
       ),
     );

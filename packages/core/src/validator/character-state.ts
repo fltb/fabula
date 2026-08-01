@@ -29,7 +29,11 @@ export class CharacterStateValidator implements Validator {
       if (!entity || entity.kind !== 'character') continue;
 
       // Catalog-driven: check all lifecycle attributes for death/cessation signals
-      const lifecycleAttrs = getAttributesBySemanticRole('character', 'lifecycle');
+      const lifecycleAttrs = getAttributesBySemanticRole(
+        input.entityTypeCatalog,
+        'character',
+        'lifecycle',
+      );
       let isDead = false;
       for (const attr of lifecycleAttrs) {
         const val = input.queryState(pc.entityId, attr);
@@ -73,12 +77,16 @@ export class CharacterStateValidator implements Validator {
             if (check.attribute !== 'character_state') {
               // Catalog-driven: check if this is a lifecycle attribute via semanticRole
               const entity = input.entityRegistry?.resolve(check.entityId);
-              if (entity && getAttributeSemanticRole(entity.kind, check.attribute) !== 'lifecycle')
+              if (
+                entity &&
+                getAttributeSemanticRole(input.entityTypeCatalog, entity.kind, check.attribute) !==
+                  'lifecycle'
+              )
                 return false;
             }
             return check.matchLevel === 'absent' || check.matchLevel === 'contradicted';
           },
-          (check) =>
+          (check, index) =>
             makeIssue(
               'character_state',
               input.event.id,
@@ -88,6 +96,13 @@ export class CharacterStateValidator implements Validator {
               'Review character state consistency in prose',
               'edit_file',
               'state',
+              undefined,
+              undefined,
+              'evidence_mismatch',
+              {
+                field: 'narrativeChecks',
+                analysisPointer: `/narrativeChecks/${index}`,
+              },
             ),
         ),
       );
@@ -123,7 +138,8 @@ export class CharacterStateValidator implements Validator {
                 `"${entityId}" is ${status} per world state but prose describes them performing actions`,
                 'Remove actions attributed to this character or mark the segment as a flashback/memory.',
                 'edit_file',
-                getAttributesBySemanticRole('character', 'lifecycle')[0] ?? 'status',
+                getAttributesBySemanticRole(input.entityTypeCatalog, 'character', 'lifecycle')[0] ??
+                  'status',
               ),
             );
             break;

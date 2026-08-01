@@ -17,11 +17,5 @@ traits:
 - silent
 - dutiful
 - worried
-initialState:
-  location: loc_beiping
-  status: alive
-  condition: working
-  emotionalState: anxious_about_business
-  financial: declining
 backstory: 从小在父亲的教导下学做买卖，一辈子规规矩矩。他最在乎的就是"规矩"二字，从不趁火打劫或浑水摸鱼。国难当头，他的生意眼看就要维持不下去了。
 knownSecrets: []

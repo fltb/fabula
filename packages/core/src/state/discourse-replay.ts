@@ -8,7 +8,7 @@
 // Binding constraints enforced:
 //   §1 — DiscourseState NOT part of WorldState
 //   §3 — Canonical = PlannedDiscourseLedger only
-//   §5 — reveal truth-boundary hard rule
+//   §5 — reveal asserted-status hard rule
 //   §6 — claim no truth commitment
 //   §7 — hint contract states (6)
 //   §8 — retraction no fake forget
@@ -37,7 +37,6 @@ import type {
   NarratorSincerity,
   NarratorTruthCapability,
   PlannedDiscourseLedger,
-  WithholdingPolicy,
 } from '../types/discourse.js';
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -207,11 +206,11 @@ function applyAction(
 ): void {
   switch (action.type) {
     case 'reveal': {
-      // §5: when a catalog is supplied, reveal truth-boundary is a hard rule.
+      // §5: when a catalog is supplied, reveal asserted-status is a hard rule.
       // Sparse ledgers without a matching assertion retain legacy replay semantics.
       const assertion = findAssertion(assertions, action.assertionId);
-      if (assertion !== undefined && assertion.truthBoundary !== true) {
-        throw new Error(`Reveal requires truthBoundary=true for assertion "${action.assertionId}"`);
+      if (assertion !== undefined && assertion.status !== 'asserted') {
+        throw new Error(`Reveal requires status=asserted for assertion "${action.assertionId}"`);
       }
       if (!state.reveals.includes(action.assertionId)) {
         state.reveals.push(action.assertionId);
@@ -345,9 +344,7 @@ export function replayDiscourseState(
   }
 
   if (position < -1) {
-    throw new Error(
-      `DiscoursePosition out of range: ${position}. Must be -1 or nonnegative.`,
-    );
+    throw new Error(`DiscoursePosition out of range: ${position}. Must be -1 or nonnegative.`);
   }
 
   const state = emptyDiscourseState(branch);
@@ -520,13 +517,13 @@ export function areProjectionsIdentical(
 }
 
 /**
- * Validate truth-boundary for a reveal action (§5).
- * reveal can ONLY plan to expose truth-boundary=true propositions.
+ * Validate the reveal status rule (§5).
+ * reveal can ONLY plan to expose status=asserted propositions.
  *
  * @returns true if the assertion may be revealed; false if only claim/conjecture.
  */
 export function canReveal(assertion: NarratorAssertion): boolean {
-  return assertion.truthBoundary === true;
+  return assertion.status === 'asserted';
 }
 
 /**

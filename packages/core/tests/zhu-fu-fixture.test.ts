@@ -31,7 +31,7 @@ describe('zhu-fu fixture — loadProject', () => {
   it('loads 8 characters as array', () => {
     const data = mapper.loadProject();
     expect(data.characters).toHaveLength(8);
-    const xw = data.characters.find((c: any) => c.id === 'xianglins_wife');
+    const xw = data.characters.find((c) => c.id === 'xianglins_wife');
     expect(xw).toBeTruthy();
     expect(xw!.appearance).toBeTruthy();
     expect(xw!.aliases).toBeInstanceOf(Array);
@@ -71,20 +71,19 @@ describe('zhu-fu fixture — loadAllEvents', () => {
   const mapper = new EntityMapper(FIXTURE_PATH);
   const data = mapper.loadProject();
 
-  it('loads events correctly (7 authored + 1 system:genesis)', () => {
-    const events = mapper.loadAllEvents(data.chapters);
-    // loadAllEvents includes a system:genesis event, plus our 7 authored events
-    expect(events.length).toBe(8);
-    const authoredEvents = events.filter((e: any) => e.id !== 'system:genesis');
-    expect(authoredEvents).toHaveLength(7);
+  it('loads 7 authored events with no genesis', () => {
+    const events = mapper.loadAllEvents(data);
+    expect(events).toHaveLength(7);
+    expect(events.some((e) => e.id === 'system:genesis')).toBe(false);
+    expect(events.some((e) => e.source === 'genesis')).toBe(false);
   });
 
   it('E0-E1 are linear, E2-E6 are flashback', () => {
-    const events = mapper.loadAllEvents(data.chapters);
-    const e0 = events.find((e: any) => e.id === 'E0');
-    const e1 = events.find((e: any) => e.id === 'E1');
-    const e2 = events.find((e: any) => e.id === 'E2');
-    const e6 = events.find((e: any) => e.id === 'E6');
+    const events = mapper.loadAllEvents(data);
+    const e0 = events.find((e) => e.id === 'E0');
+    const e1 = events.find((e) => e.id === 'E1');
+    const e2 = events.find((e) => e.id === 'E2');
+    const e6 = events.find((e) => e.id === 'E6');
 
     expect(e0?.sceneType).toBe('linear');
     expect(e1?.sceneType).toBe('linear');
@@ -93,8 +92,8 @@ describe('zhu-fu fixture — loadAllEvents', () => {
   });
 
   it('E0 has discourseMode, arcPosition, emotionalValence, conflictType', () => {
-    const events = mapper.loadAllEvents(data.chapters);
-    const e0 = events.find((e: any) => e.id === 'E0');
+    const events = mapper.loadAllEvents(data);
+    const e0 = events.find((e) => e.id === 'E0');
     expect(e0?.discourseMode).toBe('reflection');
     expect(e0?.arcPosition).toBe('opening');
     expect(e0?.emotionalValence).toBeTruthy();
@@ -106,7 +105,7 @@ describe('zhu-fu fixture — loadAllEvents', () => {
     expect(events.length).toBe(7);
 
     for (const eventFile of events) {
-      const ne = mapper.mapToNarrativeEvent(eventFile, [], data.timeAnchors);
+      const ne = mapper.mapToNarrativeEvent(eventFile);
       expect(ne.id).toBeTruthy();
       expect(ne.sceneBrief).toBeTruthy();
       // New P0 fields should be present

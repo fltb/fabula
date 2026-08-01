@@ -22,7 +22,7 @@ export class DiscourseValidator implements Validator {
   name = 'discourse';
   category = 'narrative_style' as const;
 
-  validatePre(input: PreRenderInput): ValidationIssue[] {
+  validatePre(_input: PreRenderInput): ValidationIssue[] {
     // PreRenderInput does not carry narrator profiles or ContextPackage data;
     // narrator profile resolution is only available after Pass 1 (post-render).
     return [];

@@ -8,14 +8,13 @@ import type { EntityId } from './entity.js';
 //   1. DiscourseState NOT part of WorldState
 //   2. ModelReaderProfile only immutable default_model_reader_v1
 //   3. Canonical = PlannedDiscourseLedger only; Pass 2 NEVER writes
-//   4. 7 disclosure actions
-//   5. reveal truth-boundary hard rule
+//   5. reveal asserted-status hard rule
 //   6. claim exposes assertion without truth commitment
 //   7. 6 hint contract states
 //   8. retraction no fake forget
 //   9. correction NEVER retcons WorldState
 //  10. 4 narrator profile types with independent capabilities
-//  11. NarratorAssertion with truthBoundary/narrationBoundary/evidence
+//  11. NarratorAssertion with status/narrationBoundary/evidence
 //  12. Pass 1 DiscourseContextProjection capability-separated
 //  13. flashback/flashforward rules
 //  14. branch-independent; shared post-merge only if identical projection
@@ -207,12 +206,13 @@ export type AssertionType =
 export type AssertionPolarity = 'affirmative' | 'negative';
 
 /**
- * Truth boundary: true = authoritative truth the narrator knows;
- * false/indeterminate = claim/conjecture only (constraint #5).
- * Determines whether a disclosure action may be a reveal (truthBoundary=true)
- * or only a claim/conjecture (truthBoundary=false/indeterminate).
+ * Narrator assertion status — the authored certainty the narrator attaches
+ * to a proposition (constraint #5). Only `asserted` may back a reveal;
+ * `unknown`/`contested` may only be disclosed via claim/conjecture/
+ * implication. This is a discourse-domain status and never shares an alias
+ * with Pass 2 observation dispositions (produced/abstained/ambiguous).
  */
-export type TruthBoundary = boolean;
+export type NarratorAssertionStatus = 'asserted' | 'unknown' | 'contested';
 
 export interface NarrationBoundary {
   /** Narrator at the time of assertion. */
@@ -231,11 +231,10 @@ export interface AssertionEvidence {
   /** Confidence level. */
   confidence?: 'certain' | 'probable' | 'speculative';
 }
-
 /**
  * NarratorAssertion (§11): narrator/proposition/polarity,
  * authoritative_reveal|claim|conjecture|quotation|implication,
- * truthBoundary, narrationBoundary/evidence.
+ * status, narrationBoundary/evidence.
  */
 export interface NarratorAssertion {
   /** Unique assertion ID. */
@@ -249,10 +248,12 @@ export interface NarratorAssertion {
   /** Assertion type. */
   type: AssertionType;
   /**
-   * Truth boundary: true → authoritative truth (reveal-capable).
-   * false/indeterminate → claim/conjecture ONLY (hard rule, §5).
+   * Narrator assertion status: `asserted` → authoritative truth
+   * (reveal-capable, hard rule §5); `unknown`/`contested` →
+   * claim/conjecture/implication ONLY. An `authoritative_reveal` may only
+   * carry `status: asserted`.
    */
-  truthBoundary: TruthBoundary;
+  status: NarratorAssertionStatus;
   /** Narration boundary: narrator/focalizer. */
   narrationBoundary: NarrationBoundary;
   /** Optional evidence. */
@@ -270,7 +271,7 @@ export type DisclosureActionType =
   | 'withhold_start'
   | 'withhold_end';
 
-/** Reveal — exposes assertion with truthBoundary=true (§5). */
+/** Reveal — exposes assertion with status=asserted (§5). */
 export interface RevealAction {
   type: 'reveal';
   assertionId: string;
@@ -570,17 +571,32 @@ export interface DiscourseCacheKey {
   narratorProfileHash: string;
   propositionCatalogHash: string;
   selectionHash: string;
-  provenanceHash: string;
 }
-
 /**
  * ValidationKey — independent from logical/discourse cache (§18).
+ * Pins the exact Pass 2 measurement configuration: rendered prose,
+ * analysis schema, model+provider, canonical prompt preimage, sampling
+ * parameters, and validator/reference policy. `analysisPromptHash` covers
+ * the non-self-referential Pass 2 prompt preimage; `samplingConfigHash`
+ * covers temperature/seed/response format etc. No second protocol/cache key
+ * exists — this is the one.
  */
 export interface ValidationKey {
+  /** SHA-256 of the rendered prose the analysis measured. */
   proseHash: string;
+  /** Hash of the active analysis content schema/contract. */
   analysisSchema: string;
+  /** Model id used for the Pass 2 call. */
   model: string;
+  /** Provider identity used for the Pass 2 call. */
+  provider: string;
+  /** SHA-256 of the canonical Pass 2 prompt preimage (incl. plugin decorations). */
+  analysisPromptHash: string;
+  /** SHA-256 of the Pass 2 sampling config (temperature/seed/responseFormat). */
+  samplingConfigHash: string;
+  /** Validator policy identity the release gate ran under. */
   validatorPolicy: string;
+  /** Reference policy version for validator reference data. */
   referencePolicy: string;
 }
 

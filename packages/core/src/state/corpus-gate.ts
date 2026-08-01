@@ -6,7 +6,7 @@
 // ============================================================================
 
 import { ConfigError } from '../errors.ts';
-import type { CandidateEventIndex, SourceManifest, WorkIndex } from './corpus-index.ts';
+import type { SourceManifest, WorkIndex } from './corpus-index.ts';
 import type { StoryBoundaryOracle } from './corpus-replay.ts';
 import type { SelectionPlan } from './corpus-selection.ts';
 

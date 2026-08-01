@@ -20,8 +20,8 @@ branchPoints:
             attribute: cause_of_death
             value: ivan_execution
             confidence: 1.0
-          - entity: world
-            attribute: zaroff_hunt_active
+          - entity: zaroff_hunt_3day
+            attribute: active
             value: false
             confidence: 1.0
       - id: B
@@ -34,7 +34,7 @@ branchPoints:
             attribute: in_hunt
             value: true
             confidence: 1.0
-          - entity: world
-            attribute: zaroff_hunt_active
+          - entity: zaroff_hunt_3day
+            attribute: active
             value: true
             confidence: 1.0

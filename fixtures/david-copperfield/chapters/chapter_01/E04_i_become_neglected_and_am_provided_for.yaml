@@ -13,6 +13,14 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "David's mother Clara dies suddenly, and the baby brother dies shortly after. David is called home from Salem House for the funeral — a heartbreaking return to a house now ruled entirely by the Murdstones. Peggotty is dismissed with a month's warning. After the funeral, David is not sent back to school. Instead he is sent to London to work at Murdstone and Grinby's wine warehouse, a filthy, rat-infested establishment on the Thames. At age ten, David spends his days washing bottles alongside rough boys, feeling utterly degraded and abandoned. He lodges at the home of the improvident but kind Mr Micawber, who is soon arrested for debt and sent to the Marshalsea prison."
+beats:
+  - "David's mother Clara dies suddenly, and the baby brother dies shortly after."
+  - "David is called home from Salem House for the funeral — a heartbreaking return to a house now ruled entirely by the Murdstones."
+  - "Peggotty is dismissed with a month's warning."
+  - "After the funeral, David is not sent back to school."
+  - "Instead he is sent to London to work at Murdstone and Grinby's wine warehouse, a filthy, rat-infested establishment on the Thames."
+  - "At age ten, David spends his days washing bottles alongside rough boys, feeling utterly degraded and abandoned."
+  - "He lodges at the home of the improvident but kind Mr Micawber, who is soon arrested for debt and sent to the Marshalsea prison."
 preconditions:
   - entity: david_copperfield
     attribute: status
@@ -79,6 +87,9 @@ introduces:
     id: london
     initialState:
       status: active
+      season: victorian_era
+      atmosphere: bustling_sprawling
+      notable_feature: thames_river_districts
   - type: character
     id: micawber
     initialState:

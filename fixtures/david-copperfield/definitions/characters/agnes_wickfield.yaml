@@ -21,10 +21,5 @@ traits:
   - faithful
   - strong
   - angelic
-initialState:
-  location: canterbury
-  status: alive
-  condition: housekeeper_for_father
-  emotionalState: burdened_but_serene
 voiceNotes: "Quiet, earnest, and measured. Her speech reflects her wisdom and her emotional restraint. She speaks little but her words are well-chosen and often profoundly perceptive. She has a habit of raising her eyes to David's when she wants him to understand something without words. She calls him 'Trotwood' affectionately after he is adopted by Betsey."
 backstory: "Daughter of Mr Wickfield of Canterbury. Her mother died when she was young, and she took over the household at age twelve. She bears her father's love and his weakness for drink with equal grace. She is aware of Uriah Heep's true character from the beginning and resists his advances. She loves David Copperfield from childhood but never declares it, acting as his confidante in his courtship of Dora. After Dora's death and David's return from abroad, she finally marries him, becoming the true companion of his life."

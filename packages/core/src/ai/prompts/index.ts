@@ -7,8 +7,11 @@ export {
   type ProseOnlyInput,
 } from './prose-only.ts';
 export {
+  type BuildAnalysisPromptResult,
   buildAnalysisPrompt,
+  extractExpectedProtocol,
   type RenderAnalysisInput,
+  type ValidationKeyMaterial,
 } from './render-analysis.ts';
 export {
   buildSceneRenderPrompt,

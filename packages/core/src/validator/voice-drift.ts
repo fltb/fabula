@@ -37,14 +37,18 @@ export class VoiceDriftDetector implements Validator {
           // Catalog validation: if entity kind is known, verify the attribute is a narrative attribute
           const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
           if (entityKind) {
-            const role = getAttributeSemanticRole(entityKind, check.attribute);
+            const role = getAttributeSemanticRole(
+              input.entityTypeCatalog,
+              entityKind,
+              check.attribute,
+            );
             // Accept if found with narrative role, or if undefined (wildcard 'voice_*' template)
             if (role !== undefined && role !== 'narrative') return false;
           }
 
           return check.matchLevel === 'absent' || check.matchLevel === 'contradicted';
         },
-        (check) =>
+        (check, index) =>
           makeIssue(
             'voice_drift',
             input.event.id,
@@ -54,6 +58,13 @@ export class VoiceDriftDetector implements Validator {
             'Review character voice consistency',
             'edit_file',
             'voiceNotes',
+            undefined,
+            undefined,
+            'evidence_mismatch',
+            {
+              field: 'narrativeChecks',
+              analysisPointer: `/narrativeChecks/${index}`,
+            },
           ),
       ),
     );

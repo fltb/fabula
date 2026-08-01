@@ -8,8 +8,20 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createEmptyBranchPath } from '../src/branch/index.js';
+import { compileEntityTypeCatalog } from '../src/entity/entity-catalog-compiler.js';
 import { EventStore, ReplayEngine, SnapshotEngine, StateManager } from '../src/state/index.js';
-import type { BranchPath, Fact, NarrativeEvent, Snapshot, WorldState } from '../src/types/index.js';
+import type {
+  BranchPath,
+  EntityCatalogContext,
+  EntityDeclarationCatalog,
+  EntityTypeCatalog,
+  EntityTypeCatalogSource,
+  EntityTypeDefinitionSource,
+  Fact,
+  NarrativeEvent,
+  Snapshot,
+  WorldState,
+} from '../src/types/index.js';
 
 // ============================================================================
 // Helpers — test event factories
@@ -57,6 +69,7 @@ function makeEvent(
     sceneType: 'linear',
     pov: { character: 'camille', type: 'third_person_limited' },
     sceneBrief: `Scene brief for event ${narrativeOrder}`,
+    beats: [`Scene brief for event ${narrativeOrder}`],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
@@ -70,6 +83,167 @@ function makeEvent(
     ...overrides,
   };
 }
+
+// ============================================================================
+// Synthetic entity catalog — explicit declarations, schemas, and activation
+// ============================================================================
+
+const LIFECYCLE_TRANSITIONS: Array<
+  ['active' | 'inactive' | 'retired', 'active' | 'inactive' | 'retired']
+> = [
+  ['active', 'inactive'],
+  ['active', 'retired'],
+  ['inactive', 'active'],
+  ['inactive', 'retired'],
+];
+
+const CHARACTER_SOURCE: EntityTypeDefinitionSource = {
+  typeId: 'character',
+  kind: 'character',
+  attributes: {
+    lifecycle: {
+      attributeId: 'lifecycle',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'lifecycle_managed',
+      allowedLifecycleStates: ['active', 'inactive', 'retired'],
+      unsetAllowed: false,
+    },
+    name: {
+      attributeId: 'name',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: true,
+    },
+    age: {
+      attributeId: 'age',
+      valueType: 'number',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: true,
+    },
+    location: {
+      attributeId: 'location',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: true,
+    },
+    knows: {
+      attributeId: 'knows',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: true,
+    },
+    knowledge: {
+      attributeId: 'knowledge',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: true,
+    },
+    path: {
+      attributeId: 'path',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: true,
+    },
+    fate: {
+      attributeId: 'fate',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: true,
+    },
+    value: {
+      attributeId: 'value',
+      valueType: 'number',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: true,
+    },
+    counter: {
+      attributeId: 'counter',
+      valueType: 'number',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: true,
+    },
+  },
+  lifecyclePolicy: { allowedTransitions: LIFECYCLE_TRANSITIONS },
+  referenceCapabilities: { defaultEligibility: 'live' },
+  typedInvariants: [],
+};
+
+const ITEM_SOURCE: EntityTypeDefinitionSource = {
+  typeId: 'item',
+  kind: 'item',
+  attributes: {
+    lifecycle: {
+      attributeId: 'lifecycle',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'lifecycle_managed',
+      allowedLifecycleStates: ['active', 'inactive', 'retired'],
+      unsetAllowed: false,
+    },
+    status: {
+      attributeId: 'status',
+      valueType: 'string',
+      requiredAt: 'never',
+      writePolicy: 'mutable',
+      unsetAllowed: true,
+    },
+  },
+  lifecyclePolicy: { allowedTransitions: LIFECYCLE_TRANSITIONS },
+  referenceCapabilities: { defaultEligibility: 'live' },
+  typedInvariants: [],
+};
+
+const SYNTHETIC_TYPE_SOURCE: EntityTypeCatalogSource = {
+  types: {
+    character: CHARACTER_SOURCE,
+    item: ITEM_SOURCE,
+  },
+};
+
+const TYPE_CATALOG: EntityTypeCatalog = compileEntityTypeCatalog(SYNTHETIC_TYPE_SOURCE);
+
+const DECLARATION_CATALOG: EntityDeclarationCatalog = {
+  declarations: {
+    camille: {
+      entityId: 'camille',
+      typeRef: { typeId: 'character', schemaVersion: 1 },
+      immutableMetadata: { name: 'Camille', definitionFile: 'camille.yaml' },
+      introduction: { type: 'initial' },
+    },
+    npc_gear: {
+      entityId: 'npc_gear',
+      typeRef: { typeId: 'item', schemaVersion: 1 },
+      immutableMetadata: { name: 'NPC Gear', definitionFile: 'npc_gear.yaml' },
+      introduction: { type: 'initial' },
+    },
+  },
+  version: 1,
+};
+
+const CATALOG_CONTEXT: EntityCatalogContext = {
+  entityDeclarationCatalog: DECLARATION_CATALOG,
+  entityTypeCatalog: TYPE_CATALOG,
+};
+
+/**
+ * Baseline activation facts for the initial-introduced test entities. Every
+ * entity the tests write facts for is declared above and activated here, so
+ * replay never hits the "write before activation" guard.
+ */
+const INITIAL_FACTS: Fact[] = [
+  makeFact('camille', 'lifecycle', 'active'),
+  makeFact('npc_gear', 'lifecycle', 'active'),
+];
 
 // ============================================================================
 // EventStore Tests
@@ -226,10 +400,12 @@ describe('EventStore', () => {
       const e1 = makeEvent(1, {
         title: 'First',
         sceneBrief: 'Brief one',
+        beats: ['Brief one'],
       });
       const e2 = makeEvent(2, {
         title: 'Second',
         sceneBrief: 'Brief two',
+        beats: ['Brief two'],
       });
       store.commit(e1);
       store.commit(e2);
@@ -583,7 +759,7 @@ describe('ReplayEngine', () => {
   let engine: ReplayEngine;
 
   beforeEach(() => {
-    engine = new ReplayEngine();
+    engine = new ReplayEngine(CATALOG_CONTEXT);
   });
 
   describe('replay()', () => {
@@ -617,7 +793,7 @@ describe('ReplayEngine', () => {
         }),
       ];
 
-      const state = engine.replay(events);
+      const state = engine.replay(events, { initialFacts: INITIAL_FACTS });
 
       expect(state.entities.camille).toEqual({
         lifecycle: 'active',
@@ -734,7 +910,7 @@ describe('ReplayEngine', () => {
         }),
       ];
 
-      const state = engine.replay(events);
+      const state = engine.replay(events, { initialFacts: INITIAL_FACTS });
 
       // Legacy state.knowledge shim is removed — epistemic ledger handles knowledge now
       expect(state.knowledge.camille).toBeUndefined();
@@ -777,7 +953,9 @@ describe('ReplayEngine', () => {
 
       // Precondition validation happens at replay time — the event sets
       // age=25 but then checks precondition age=24 before allowing the event
-      expect(() => engine.replay(events)).toThrow('Precondition eq fails');
+      expect(() => engine.replay(events, { initialFacts: INITIAL_FACTS })).toThrow(
+        'Precondition eq fails',
+      );
     });
 
     it('should handle branch filtering — skip events not on current path', () => {
@@ -818,7 +996,7 @@ describe('ReplayEngine', () => {
         pathBEvent,
       ];
 
-      const state = engine.replay(events, { branchPath });
+      const state = engine.replay(events, { branchPath, initialFacts: INITIAL_FACTS });
 
       expect(state.entities.camille.name).toBe('Camille');
       expect(state.entities.camille.path).toBe('A');
@@ -867,7 +1045,7 @@ describe('ReplayEngine', () => {
         }),
       ];
 
-      const state = engine.replay(events, { branchPath });
+      const state = engine.replay(events, { branchPath, initialFacts: INITIAL_FACTS });
 
       // Only the fact scoped to 'path_a' should be applied
       expect(state.entities.camille.location).toBe('village');
@@ -891,10 +1069,10 @@ describe('ReplayEngine', () => {
         }),
       ];
 
-      const stateAt2 = engine.getStateAt(events, 2);
+      const stateAt2 = engine.getStateAt(events, 2, { initialFacts: INITIAL_FACTS });
       expect(stateAt2.entities.camille.age).toBe(26);
 
-      const stateAt1 = engine.getStateAt(events, 1);
+      const stateAt1 = engine.getStateAt(events, 1, { initialFacts: INITIAL_FACTS });
       expect(stateAt1.entities.camille.age).toBe(25);
     });
 
@@ -915,7 +1093,7 @@ describe('ReplayEngine', () => {
         }),
       ];
 
-      const state = engine.getStateAt(events, 999);
+      const state = engine.getStateAt(events, 999, { initialFacts: INITIAL_FACTS });
       expect(state.entities.camille.age).toBe(25);
     });
 
@@ -944,10 +1122,15 @@ describe('ReplayEngine', () => {
         }),
       ];
 
-      const stateWithoutBranch = engine.getStateAt(events, 3);
+      const stateWithoutBranch = engine.getStateAt(events, 3, {
+        initialFacts: INITIAL_FACTS,
+      });
       expect(stateWithoutBranch.entities.camille.fate).toBeUndefined();
 
-      const stateWithBranch = engine.getStateAt(events, 3, { branchPath });
+      const stateWithBranch = engine.getStateAt(events, 3, {
+        branchPath,
+        initialFacts: INITIAL_FACTS,
+      });
       expect(stateWithBranch.entities.camille.fate).toBe('hero');
     });
   });
@@ -963,7 +1146,7 @@ describe('StateManager', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sm-test-'));
-    manager = new StateManager(tmpDir, 20);
+    manager = new StateManager(tmpDir, CATALOG_CONTEXT, 20);
   });
 
   afterEach(() => {
@@ -1058,7 +1241,7 @@ describe('StateManager', () => {
         }),
       );
 
-      const state = manager.getCurrentState();
+      const state = manager.getCurrentState({ initialFacts: INITIAL_FACTS });
 
       expect(state.entities.camille.age).toBe(26);
       expect(state.threads.main).toBeDefined();
@@ -1104,7 +1287,7 @@ describe('StateManager', () => {
         }),
       );
 
-      const state = manager.getCurrentState({ branchPath });
+      const state = manager.getCurrentState({ branchPath, initialFacts: INITIAL_FACTS });
       expect(state.entities.camille.path).toBe('A');
     });
   });
@@ -1120,14 +1303,19 @@ describe('StateManager', () => {
         );
       }
 
-      const stateAt3 = manager.getStateAt(3);
+      const stateAt3 = manager.getStateAt(3, { initialFacts: INITIAL_FACTS });
       expect(stateAt3.entities.camille.age).toBe(23);
 
-      const stateAt5 = manager.getStateAt(5);
+      const stateAt5 = manager.getStateAt(5, { initialFacts: INITIAL_FACTS });
       expect(stateAt5.entities.camille.age).toBe(25);
     });
 
     it('should use snapshots when available for optimization', () => {
+      // Snapshot-time replays (commit at order 20) also write camille, so this
+      // manager carries the baseline activation facts in its replay defaults.
+      const manager = new StateManager(tmpDir, CATALOG_CONTEXT, 20, undefined, {
+        initialFacts: INITIAL_FACTS,
+      });
       // Commit events that create a snapshot at 20
       for (let i = 1; i <= 25; i++) {
         manager.commit(
@@ -1182,7 +1370,7 @@ describe('StateManager', () => {
 
       manager.initialize(events);
 
-      const state = manager.getCurrentState();
+      const state = manager.getCurrentState({ initialFacts: INITIAL_FACTS });
       expect(state.entities.camille.age).toBe(25);
     });
   });
@@ -1204,19 +1392,24 @@ describe('StateManager', () => {
 
       manager.saveToDisk(tmpDir);
 
-      const manager2 = new StateManager(tmpDir, 20);
+      const manager2 = new StateManager(tmpDir, CATALOG_CONTEXT, 20);
       manager2.loadFromDisk(tmpDir);
 
       expect(manager2.eventStore.count).toBe(2);
       expect(manager2.eventStore.getLastOrder()).toBe(2);
 
-      const state = manager2.getCurrentState();
+      const state = manager2.getCurrentState({ initialFacts: INITIAL_FACTS });
       expect(state.entities.camille.age).toBe(26);
     });
   });
 
   describe('edge cases', () => {
     it('should handle many events without error', () => {
+      // Snapshot-time replays (orders 20/40/…/100) also write camille, so this
+      // manager carries the baseline activation facts in its replay defaults.
+      const manager = new StateManager(tmpDir, CATALOG_CONTEXT, 20, undefined, {
+        initialFacts: INITIAL_FACTS,
+      });
       const count = 100;
       for (let i = 1; i <= count; i++) {
         manager.commit(

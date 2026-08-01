@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { readYamlFile } from '../../src/entity/yaml-loader.ts';
-import { eventFileSchema } from '../../src/schemas/event.ts';
 import { plannedDiscourseLedgerSourceSchema } from '../../src/schemas/discourse.ts';
+import { eventFileSchema } from '../../src/schemas/event.ts';
 import { compileDiscourseBoundaries } from '../../src/state/discourse-context.ts';
 import { compilePlannedDiscourseLedger } from '../../src/state/discourse-ledger.ts';
 import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import type { NarrativeEvent } from '../../src/types/event.ts';
 import type { PlannedDiscourseLedgerSource } from '../../src/types/discourse.ts';
+import type { NarrativeEvent } from '../../src/types/event.ts';
 
 function makeEvent(id: string): NarrativeEvent {
   return {
@@ -18,6 +18,7 @@ function makeEvent(id: string): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'narrator', type: 'omniscient' },
     sceneBrief: id,
+    beats: [id],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
@@ -30,7 +31,9 @@ function makeEvent(id: string): NarrativeEvent {
   };
 }
 
-function makeSource(overrides: Partial<PlannedDiscourseLedgerSource> = {}): PlannedDiscourseLedgerSource {
+function makeSource(
+  overrides: Partial<PlannedDiscourseLedgerSource> = {},
+): PlannedDiscourseLedgerSource {
   return {
     id: 'ledger',
     chapters: [{ branch: 'main', chapter: 1, sceneIds: ['E1'] }],
@@ -47,7 +50,8 @@ describe('planned discourse ledger compilation', () => {
     expect(compiled.hash).toMatch(/^[a-f0-9]{64}$/);
     expect(compilePlannedDiscourseLedger(source).hash).toBe(compiled.hash);
     expect(
-      plannedDiscourseLedgerSourceSchema.safeParse({ ...makeSource(), hash: 'author-supplied' }).success,
+      plannedDiscourseLedgerSourceSchema.safeParse({ ...makeSource(), hash: 'author-supplied' })
+        .success,
     ).toBe(false);
   });
 
@@ -82,7 +86,7 @@ describe('planned discourse ledger compilation', () => {
         proposition: 'The truth',
         polarity: 'affirmative' as const,
         type: 'authoritative_reveal' as const,
-        truthBoundary: true,
+        status: 'asserted',
         narrationBoundary: { narratorId: 'narrator' },
       },
     };
@@ -221,6 +225,7 @@ describe('planned discourse ledger compilation', () => {
         storyTime: 'day_1',
         pov: { character: 'narrator', type: 'omniscient' },
         sceneBrief: 'E1',
+        beats: ['E1'],
         preconditions: [],
         expectedPostconditions: [],
         discourseCursor: -1,

@@ -19,11 +19,5 @@ traits:
   - cold
   - manipulative
   - firm_as_virtue
-initialState:
-  location: unknown
-  status: alive
-  condition: bachelor_seeking_wife
-  emotionalState: calculating
-  relationship_clara: suitor
 voiceNotes: "Polished and articulate, using the language of moral rectitude to justify cruelty. His favourite word is 'firmness.' He speaks in measured, deliberate tones, often employing religious and moral justifications for his harshness. His letters are cold and formal."
 backstory: "A wine merchant of respectable standing. He courts Clara Copperfield soon after she is widowed, attracted by her beauty, her property, and her pliability. After marriage he takes full control of the household, dismissing Peggotty, sending David away, and reducing Clara to a silent, fearful shadow of herself. After Clara's death, he sends David to work at Murdstone and Grinby's, the firm he co-owns. He eventually remarries another young, pliable woman."

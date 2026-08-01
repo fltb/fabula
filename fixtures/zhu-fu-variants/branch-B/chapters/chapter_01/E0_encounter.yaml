@@ -12,6 +12,13 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "旧历年底，叙述者'我'回到故乡鲁镇，暂住在四叔鲁四老爷家。除夕前日，'我'在镇东头河边遇到沦为乞丐的祥林嫂——她头发全白，脸黄中带黑，木刻似的神情，只有眼珠间或一轮表明她还活着。她突然拦住'我'，用发亮的眼睛盯着'我'，问了三个关于灵魂和地狱的问题：人死了有没有灵魂？有没有地狱？死去的家人能不能见面？'我'在惊慌中给出含糊的回答——'也许有罢……说不清'——然后匆匆逃回四叔家，心中惴惴不安。"
+beats:
+  - "旧历年底，叙述者'我'回到故乡鲁镇，暂住在四叔鲁四老爷家。"
+  - "除夕前日，'我'在镇东头河边遇到沦为乞丐的祥林嫂——她头发全白，脸黄中带黑，木刻似的神情，只有眼珠间或一轮表明她还活着。"
+  - "她突然拦住'我'，用发亮的眼睛盯着'我'，问了三个关于灵魂和地狱的问题：人死了有没有灵魂？"
+  - "有没有地狱？"
+  - "死去的家人能不能见面？"
+  - "'我'在惊慌中给出含糊的回答——'也许有罢……说不清'——然后匆匆逃回四叔家，心中惴惴不安。"
 preconditions:
   - entity: narrator
     attribute: purpose
@@ -35,6 +42,10 @@ expectedPostconditions:
   - entity: narrator
     attribute: knowledge_of_xianglins_wife
     value: saw_her_as_beggar
+    confidence: 1.0
+  - entity: narrator
+    attribute: location
+    value: fourth_master_lu_house
     confidence: 1.0
   - entity: xianglins_wife
     attribute: emotionalState
@@ -77,21 +88,9 @@ introduces:
     id: luchen_town
     initialState:
       status: active
-  - type: character
-    id: xianglins_wife
-    initialState:
-      location: luchen_east_riverbank
-      status: beggar
-      condition: dying
-      appearance: white_hair_haggard_wooden_face
-      emotionalState: desperate_seeking_answers
-  - type: character
-    id: narrator
-    initialState:
-      location: luchen_town
-      status: alive
-      condition: well
-      emotionalState: uneasy
+      season: deep_winter
+      atmosphere: new_year_preparation
+      social_mood: festive_busy
 styleGuidance:
   tone: "冷峻、不安、深冬的沉闷"
   atmosphere: "灰白色的沉重晚云，满天飞舞的雪花，爆竹的火药香——鲁镇的年终氛围与祥林嫂的凄凉形成对照。"

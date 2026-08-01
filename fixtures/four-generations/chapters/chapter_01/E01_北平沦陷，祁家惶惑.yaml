@@ -13,6 +13,10 @@ pov:
   character: omniscient
   type: omniscient
 sceneBrief: 一九三七年七七事变后，北平城在七月二十九日沦陷。小羊圈胡同里，祁老人还惦记着三个月准保平安的老话和八十大寿；瑞宣听到炮声心中惶惑；瑞全热血沸腾想要出走；韵梅依旧操持家务。胡同里的人们第一次感觉到亡国的滋味——不知日本人来了会怎样，是福是祸。
+beats:
+  - "一九三七年七七事变后，北平城在七月二十九日沦陷。"
+  - "小羊圈胡同里，祁老人还惦记着三个月准保平安的老话和八十大寿；瑞宣听到炮声心中惶惑；瑞全热血沸腾想要出走；韵梅依旧操持家务。"
+  - "胡同里的人们第一次感觉到亡国的滋味——不知日本人来了会怎样，是福是祸。"
 preconditions:
 - entity: sr_qi
   attribute: location
@@ -76,6 +80,9 @@ introduces:
     status: alive
     condition: healthy_for_his_age
     emotionalState: anxious_but_hopeful
+    health: fair
+    worldview: peace_and_harmony
+    confidence_in_victory: three_months
 - type: character
   id: qi_ruixuan
   initialState:
@@ -83,6 +90,7 @@ introduces:
     status: alive
     condition: teaching
     emotionalState: anxious_and_conflicted
+    political_stance: patriotic_but_passive
 - type: character
   id: qi_ruiquan
   initialState:
@@ -90,6 +98,7 @@ introduces:
     status: alive
     condition: student
     emotionalState: determined_to_fight
+    political_stance: resistance
 - type: character
   id: yunmei
   initialState:
@@ -104,6 +113,7 @@ introduces:
     status: alive
     condition: working
     emotionalState: anxious_about_business
+    financial: declining
 - type: location
   id: loc_xiaoyangquan
   initialState:

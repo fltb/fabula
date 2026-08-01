@@ -6,10 +6,12 @@
 // Validator System — Barrel exports
 // ============================================================================
 
+export type { StoryValidationContext, ValidationRunOptions } from '../types/validator.js';
 export { ResultAggregator } from './aggregator.js';
 export { AliasValidator } from './alias.js';
 export { AnachronyConsistencyValidator } from './anachrony-consistency.js';
 export { AppearanceValidator } from './appearance.js';
+export { makeObservationRef } from './base.js';
 export { BranchMergeValidator } from './branch-merge.js';
 export { CausalityValidator } from './causality.js';
 export { CharacterStateValidator } from './character-state.js';
@@ -32,7 +34,6 @@ export { PronounValidator } from './pronoun.js';
 export { ReachabilityValidator } from './reachability.js';
 export { TenseConsistencyValidator } from './tense-consistency.js';
 export { TimelineValidator } from './timeline.js';
-export type { StoryValidationContext, ValidationRunOptions } from '../types/validator.js';
 export { VoiceConsistencyValidator } from './voice-consistency.js';
 export { VoiceDriftDetector } from './voice-drift.js';
 export { WorldRuleValidator } from './world-rule.js';
@@ -53,9 +54,9 @@ import { focalizationDetectedSchema } from './focalization-consistency.js';
 import { foreshadowingDeployedSchema } from './foreshadowing.js';
 import { frequencyDetectedSchema } from './frequency-consistency.js';
 import { knowledgeCheckSchema } from './knowledge.js';
-import { narrativeCheckSchema } from './schemas.js';
 import { povBlockSchema } from './pov.js';
 import { qualityBlockSchema } from './quality.js';
+import { narrativeCheckSchema } from './schemas.js';
 import { tenseDetectedSchema } from './tense-consistency.js';
 import { threadProgressAchievedSchema } from './thread-progress.js';
 import { voiceDetectedSchema } from './voice-consistency.js';

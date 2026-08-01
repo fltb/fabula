@@ -30,6 +30,7 @@ export function validateStrict(context: StrictValidationContext): ValidationIssu
       issues.push({
         validator: 'iss-strict',
         severity: 'error',
+        kind: 'compiler_invariant',
         event: '',
         entity: char.id,
         attribute: 'traits',
@@ -51,6 +52,7 @@ export function validateStrict(context: StrictValidationContext): ValidationIssu
       issues.push({
         validator: 'iss-strict',
         severity: 'error',
+        kind: 'compiler_invariant',
         event: event.id,
         entity: '',
         message:
@@ -73,6 +75,7 @@ export function validateStrict(context: StrictValidationContext): ValidationIssu
       issues.push({
         validator: 'iss-strict',
         severity: 'error',
+        kind: 'compiler_invariant',
         event: '',
         entity: rule.ruleId,
         message:
@@ -99,6 +102,7 @@ export function validateStrict(context: StrictValidationContext): ValidationIssu
       issues.push({
         validator: 'iss-strict',
         severity: 'error',
+        kind: 'compiler_invariant',
         event: '',
         entity: thread.id,
         message:
@@ -119,6 +123,7 @@ export function validateStrict(context: StrictValidationContext): ValidationIssu
         issues.push({
           validator: 'iss-strict',
           severity: 'error',
+          kind: 'compiler_invariant',
           event: event.id,
           entity: post.entityId,
           attribute: post.attribute,

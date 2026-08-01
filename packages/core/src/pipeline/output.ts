@@ -17,9 +17,9 @@ import { countNarrativeText, NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/c
 import { ProjectTransactionCoordinator, resolveProjectPaths } from '../editorial/index.js';
 import { computeFileHash } from '../storage/hash.ts';
 import type { Storage } from '../storage/index.js';
-import type { StorageWrite, StorageTransaction } from '../storage/types.ts';
-import type { RenderJob, RenderSceneResult } from './render.js';
+import type { StorageWrite } from '../storage/types.ts';
 import type { GameDialogueChoice } from '../types/index.ts';
+import type { RenderJob, RenderSceneResult } from './render.js';
 
 export interface OutputEntry {
   eventId: string;
@@ -37,12 +37,16 @@ export interface DerivedData {
 }
 
 function yamlScalar(value: string): string {
-  return /^[A-Za-z_][A-Za-z0-9_-]*$/.test(value) && !/^(true|false|null|yes|no|on|off)$/i.test(value)
+  return /^[A-Za-z_][A-Za-z0-9_-]*$/.test(value) &&
+    !/^(true|false|null|yes|no|on|off)$/i.test(value)
     ? value
     : JSON.stringify(value);
 }
 
-export function appendPlayerChoicesBlock(prose: string, choices: readonly GameDialogueChoice[]): string {
+export function appendPlayerChoicesBlock(
+  prose: string,
+  choices: readonly GameDialogueChoice[],
+): string {
   const lines = [
     '<!-- FABULA:PLAYER_CHOICES:v1 -->',
     '```yaml',
@@ -255,4 +259,3 @@ export function buildAndWriteOutputs(
 
   return { entries, derived };
 }
-

@@ -5,27 +5,27 @@
 // deterministic data. No live LLM, filesystem, or network access.
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
 import * as crypto from 'node:crypto';
-import { computeContentHash } from '../../src/storage/hash.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import { ConfigError } from '../../src/errors.ts';
-import { StorageConflictError } from '../../src/errors.ts';
+import { describe, expect, it } from 'vitest';
 import {
+  ProjectTransactionCoordinator,
+  resolveProjectPaths,
   SceneRevisionStore,
   SourceRevisionStore,
-  resolveProjectPaths,
-  ProjectTransactionCoordinator,
   stableJson,
 } from '../../src/editorial/index.ts';
+import type { ProjectPaths } from '../../src/editorial/paths.ts';
+import { ConfigError, StorageConflictError } from '../../src/errors.ts';
+import { computeContentHash } from '../../src/storage/hash.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type {
   AnalysisResult,
   SceneRevisionEnvelopeV1,
-  SourceRevisionV1,
   SourceHeadV1,
+  SourceRevisionV1,
   ValidationResult,
 } from '../../src/types/editorial.ts';
-import type { ProjectPaths } from '../../src/editorial/paths.ts';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -48,25 +48,34 @@ function makeCoordinator(storage: MemoryStorage): ProjectTransactionCoordinator 
   return new ProjectTransactionCoordinator(storage, makePaths());
 }
 
-function analysisResult(eventId: string): AnalysisResult {
+function analysisResult(eventId: string, prose: string): AnalysisResult {
+  const payload: Record<string, unknown> = {
+    postconditions: { covered: [], dropped: [] },
+    preconditions: { violated: [] },
+    pov: { consistent: true, leaks: [] },
+    inventedDetails: [],
+    quality: {
+      proseScore: 8,
+      maxScore: 10,
+      strengths: ['clear'],
+      weaknesses: [],
+      estimatedWordCount: 200,
+    },
+    threadProgressAchieved: [],
+    foreshadowingDeployed: [],
+    narrativeChecks: [],
+    appearanceChecks: [],
+    characterReferences: [],
+    tenseDetected: 'past' as const,
+    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+    ruleChecks: [],
+    knowledgeChecks: [],
+  };
   return {
     eventId,
-    analysis: {
-      postconditions: { covered: [], dropped: [] },
-      preconditions: { violated: [] },
-      pov: { consistent: true, leaks: [] },
-      inventedDetails: [],
-      quality: { proseScore: 8, maxScore: 10, strengths: ['clear'], weaknesses: [], estimatedWordCount: 200 },
-      threadProgressAchieved: [],
-      foreshadowingDeployed: [],
-      narrativeChecks: [],
-      appearanceChecks: [],
-      characterReferences: [],
-      tenseDetected: 'past' as const,
-      conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-      ruleChecks: [],
-      knowledgeChecks: [],
-    },
+    protocol: makeProtocol(prose),
+    observations: makeObservations(payload, prose),
+    analysis: payload,
   };
 }
 
@@ -80,7 +89,11 @@ function validationResult(passed: boolean = true): ValidationResult {
 }
 
 function makeSceneEnvelope(
-  overrides: Partial<SceneRevisionEnvelopeV1> & { eventId: string; revisionId: string; prose: string },
+  overrides: Partial<SceneRevisionEnvelopeV1> & {
+    eventId: string;
+    revisionId: string;
+    prose: string;
+  },
 ): SceneRevisionEnvelopeV1 {
   const proseHash = computeContentHash(overrides.prose);
   return {
@@ -98,7 +111,7 @@ function makeSceneEnvelope(
     modelUsed: 'test-model',
     feedbackHash: null,
     reviewIds: [],
-    analysis: analysisResult(overrides.eventId),
+    analysis: analysisResult(overrides.eventId, overrides.prose),
     validation: validationResult(true),
     releaseDecision: {
       status: 'accepted',
@@ -122,7 +135,9 @@ function makeSceneEnvelope(
   };
 }
 
-function makeSourceRevision(overrides: Partial<SourceRevisionV1> & { revisionId: string }): SourceRevisionV1 {
+function makeSourceRevision(
+  overrides: Partial<SourceRevisionV1> & { revisionId: string },
+): SourceRevisionV1 {
   return {
     version: 1,
     parentRevisionId: null,
@@ -345,7 +360,10 @@ describe('SceneRevisionStore', () => {
         prose: 'Some prose.',
       });
       // Override the correct hash with a wrong one using type coercion
-      const bad = { ...envelope, proseHash: '0000000000000000000000000000000000000000000000000000000000000000' };
+      const bad = {
+        ...envelope,
+        proseHash: '0000000000000000000000000000000000000000000000000000000000000000',
+      };
 
       expect(() => store.archive(bad)).toThrow(ConfigError);
       expect(() => store.archive(bad)).toThrow(/proseHash does not match prose/);

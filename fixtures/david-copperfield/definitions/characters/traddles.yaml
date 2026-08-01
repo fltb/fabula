@@ -20,10 +20,5 @@ traits:
   - optimistic
   - humble
   - contented
-initialState:
-  location: salem_house
-  status: alive
-  condition: schoolboy_with_no_protector
-  emotionalState: cheerful_despite_woes
 voiceNotes: "Earnest, unpretentious, often expressing wonder at his own good fortune. He has a habit of recounting his misfortunes (broken shins, unjust punishments) without rancour. His letters are laboriously written and full of exclamation marks."
 backstory: "Son of a poor but respectable Devonshire family. At Salem House he is beaten more than any other boy — Mr Creakle counts the skeletons Traddles draws on his slate as evidence of idleness. He forms a close friendship with David that lasts all their lives. He struggles through poverty to qualify as a barrister, endures boarding in attics on bread and milk, and eventually marries Sophy (the daughter of a country parson with ten children, for whom he has waited years). He helps David and Micawber expose Uriah Heep."

@@ -1,0 +1,18 @@
+id: traddles_children
+name: "The Traddles Children"
+type: supporting_character
+archetype: family_group
+role: supporting
+description: "The numerous children of Tommy Traddles and his wife Sophy, who fill their happy home in the final retrospect. Their existence — a house full of children, with Traddles a successful judge and family man — completes the portrait of the steady, good friend whose homely virtues were rewarded, in pointed contrast to the glamorous ruin of Steerforth."
+appearance: "A troop of healthy, happy children, the children of Traddles and Sophy; they appear in the closing retrospect as the cheerful population of the Traddles household."
+aliases:
+  - "The Traddles children"
+  - "Traddles's children"
+gender: male
+age: "Children"
+profession: "None (children)"
+traits:
+  - children
+  - happy
+voiceNotes: "They do not speak individually in the retrospect; they are the sound of a full, happy house."
+backstory: "The children of Tommy Traddles and Sophy. In the final retrospect they are shown in their happy family home, completing the picture of Traddles's deserved prosperity."

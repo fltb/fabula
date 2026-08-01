@@ -20,32 +20,37 @@ import type {
   SceneSpecification,
   SystemContext,
 } from '../../src/types/index.ts';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
+
+const ANALYSIS_PAYLOAD: Record<string, unknown> = {
+  postconditions: { covered: [], dropped: [] },
+  preconditions: { violated: [] },
+  pov: { consistent: true, leaks: [] },
+  inventedDetails: [],
+  quality: {
+    proseScore: 80,
+    maxScore: 100,
+    strengths: [],
+    weaknesses: [],
+    estimatedWordCount: 300,
+  },
+  threadProgressAchieved: [],
+  foreshadowingDeployed: [],
+  narrativeChecks: [],
+  appearanceChecks: [],
+  characterReferences: [],
+  tenseDetected: 'past',
+  conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+  ruleChecks: [],
+  knowledgeChecks: [],
+  checklistResults: [],
+};
 
 const VALID_ANALYSIS_JSON = JSON.stringify({
   eventId: 'evt_checklist',
-  analysis: {
-    postconditions: { covered: [], dropped: [] },
-    preconditions: { violated: [] },
-    pov: { consistent: true, leaks: [] },
-    inventedDetails: [],
-    quality: {
-      proseScore: 80,
-      maxScore: 100,
-      strengths: [],
-      weaknesses: [],
-      estimatedWordCount: 300,
-    },
-    threadProgressAchieved: [],
-    foreshadowingDeployed: [],
-    narrativeChecks: [],
-    appearanceChecks: [],
-    characterReferences: [],
-    tenseDetected: 'past',
-    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-    ruleChecks: [],
-    knowledgeChecks: [],
-    checklistResults: [],
-  },
+  protocol: makeProtocol('This is generated prose.'),
+  observations: makeObservations(ANALYSIS_PAYLOAD, 'This is generated prose.'),
+  analysis: ANALYSIS_PAYLOAD,
 });
 
 function makeEvent(): NarrativeEvent {
@@ -58,13 +63,14 @@ function makeEvent(): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'entity_1', type: 'third_person_limited' },
     sceneBrief: 'A test scene.',
+    beats: ['A test scene.'],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
     foreshadowing: [],
     relationshipEffects: [],
     ruleEffects: [],
-    source: 'genesis',
+    source: 'event_file',
     branchExistence: { type: 'all' as const },
     participants: { entities: ['entity_1'] },
     narrativeChecklist: {
@@ -89,6 +95,7 @@ function makeContext(): ContextPackage {
     } satisfies SystemContext,
     sceneSpec: {
       goal: 'Advance plot',
+      beats: ['Advance plot'],
       povType: 'third_person',
       povCharacter: 'narrator',
       conflict: 'none',
@@ -156,6 +163,7 @@ describe('RenderPipeline — checklist + source context Pass 1 wiring', () => {
       storage: new MemoryStorage(),
       skipCache: true,
       maxRetries: 1,
+      validatorPolicyId: 'test-policy-v1',
     });
 
     await pipeline.renderScene(makeJob());

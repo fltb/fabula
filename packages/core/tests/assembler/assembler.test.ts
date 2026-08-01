@@ -394,11 +394,7 @@ describe('assembleNovel', () => {
     writeFile(
       projectDir,
       'nova.yaml',
-      [
-        'project: test',
-        'title: Test Novel',
-        'author: Tester',
-      ].join('\n'),
+      ['project: test', 'title: Test Novel', 'author: Tester'].join('\n'),
     );
 
     // Chapter metadata
@@ -521,6 +517,56 @@ describe('assembleNovel', () => {
         'worldFacts: []',
       ].join('\n'),
     );
+    // ── Required entity catalog + participant declaration ───────
+    writeFile(
+      projectDir,
+      'definitions',
+      'entity-types.yaml',
+      [
+        'types:',
+        '  character:',
+        '    typeId: character',
+        '    kind: character',
+        '    attributes:',
+        '      lifecycle:',
+        '        attributeId: lifecycle',
+        '        valueType: string',
+        '        requiredAt: introduction',
+        '        writePolicy: lifecycle_managed',
+        '        allowedLifecycleStates: [active, inactive, retired]',
+        '        unsetAllowed: false',
+        '        semanticRole: lifecycle',
+        '      traits:',
+        '        attributeId: traits',
+        '        valueType: string_list',
+        '        requiredAt: never',
+        '        writePolicy: immutable',
+        '        unsetAllowed: true',
+        '    lifecyclePolicy:',
+        '      allowedTransitions:',
+        '        - [active, inactive]',
+        '        - [active, retired]',
+        '        - [inactive, active]',
+        '        - [inactive, retired]',
+        '    referenceCapabilities:',
+        '      defaultEligibility: live',
+        '    typedInvariants: []',
+      ].join('\n'),
+    );
+    writeFile(
+      projectDir,
+      'definitions',
+      'characters',
+      'narrator.yaml',
+      [
+        'id: narrator',
+        'name: Narrator',
+        'type: person',
+        'description: "The story narrator"',
+        'initialState: {}',
+        'traits: []',
+      ].join('\n'),
+    );
 
     // ── Event source files (required by EntityMapper) ───────────
     writeFile(
@@ -537,6 +583,8 @@ describe('assembleNovel', () => {
         '  character: narrator',
         '  type: first_person',
         'sceneBrief: "The hero wakes up."',
+        'beats:',
+        '  - "The hero wakes up."',
         'preconditions: []',
         'expectedPostconditions: []',
       ].join('\n'),
@@ -555,6 +603,8 @@ describe('assembleNovel', () => {
         '  character: narrator',
         '  type: first_person',
         'sceneBrief: "The mentor arrives."',
+        'beats:',
+        '  - "The mentor arrives."',
         'preconditions: []',
         'expectedPostconditions: []',
       ].join('\n'),
@@ -573,6 +623,8 @@ describe('assembleNovel', () => {
         '  character: narrator',
         '  type: first_person',
         'sceneBrief: "The battle begins."',
+        'beats:',
+        '  - "The battle begins."',
         'preconditions: []',
         'expectedPostconditions: []',
       ].join('\n'),
@@ -642,11 +694,7 @@ describe('assembleNovel', () => {
     writeFile(
       noLedgerDir,
       'nova.yaml',
-      [
-        'project: test',
-        'title: Missing Ledger',
-        'author: Tester',
-      ].join('\n'),
+      ['project: test', 'title: Missing Ledger', 'author: Tester'].join('\n'),
     );
     writeFile(
       noLedgerDir,
@@ -675,6 +723,8 @@ describe('assembleNovel', () => {
         '  character: narrator',
         '  type: first_person',
         'sceneBrief: "A test scene."',
+        'beats:',
+        '  - "A test scene."',
         'preconditions: []',
         'expectedPostconditions: []',
       ].join('\n'),
@@ -686,12 +736,72 @@ describe('assembleNovel', () => {
       'E1.yaml',
       committedMeta({ event: 'E1', narrativeOrder: 1 }),
     );
+    writeFile(noLedgerDir, 'scenes', 'chapter-01', 'E1.md', 'Scene prose.');
+
+    // Rest of the project is valid: entity catalog, initial state, and the
+    // POV participant are all present — only the ledger is intentionally absent.
     writeFile(
       noLedgerDir,
-      'scenes',
-      'chapter-01',
-      'E1.md',
-      'Scene prose.',
+      'definitions',
+      'entity-types.yaml',
+      [
+        'types:',
+        '  character:',
+        '    typeId: character',
+        '    kind: character',
+        '    attributes:',
+        '      lifecycle:',
+        '        attributeId: lifecycle',
+        '        valueType: string',
+        '        requiredAt: introduction',
+        '        writePolicy: lifecycle_managed',
+        '        allowedLifecycleStates: [active, inactive, retired]',
+        '        unsetAllowed: false',
+        '        semanticRole: lifecycle',
+        '      traits:',
+        '        attributeId: traits',
+        '        valueType: string_list',
+        '        requiredAt: never',
+        '        writePolicy: immutable',
+        '        unsetAllowed: true',
+        '    lifecyclePolicy:',
+        '      allowedTransitions:',
+        '        - [active, inactive]',
+        '        - [active, retired]',
+        '        - [inactive, active]',
+        '        - [inactive, retired]',
+        '    referenceCapabilities:',
+        '      defaultEligibility: live',
+        '    typedInvariants: []',
+      ].join('\n'),
+    );
+    writeFile(
+      noLedgerDir,
+      'definitions',
+      'state_initial.yaml',
+      [
+        'info:',
+        '  currentEra: "contemporary"',
+        '  politicalSituation: "stable"',
+        'timeAnchors:',
+        '  - { id: day_1, at: day_1, description: "Day 1" }',
+        'threads: []',
+        'worldFacts: []',
+      ].join('\n'),
+    );
+    writeFile(
+      noLedgerDir,
+      'definitions',
+      'characters',
+      'narrator.yaml',
+      [
+        'id: narrator',
+        'name: Narrator',
+        'type: person',
+        'description: "The story narrator"',
+        'initialState: {}',
+        'traits: []',
+      ].join('\n'),
     );
 
     // No definitions/discourse-ledger.yaml — must fail before write

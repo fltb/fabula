@@ -4,11 +4,11 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { resolveNarrativeTechniques } from '../../src/state/technique-resolver.ts';
 import type { ConfigError } from '../../src/errors.ts';
-import type { DiscourseGraph, GraphEdge, StoryGraph } from '../../src/types/graph.ts';
+import { resolveNarrativeTechniques } from '../../src/state/technique-resolver.ts';
 import type { NarratorAssertion } from '../../src/types/discourse.ts';
 import type { NarrativeEvent } from '../../src/types/event.ts';
+import type { DiscourseGraph, GraphEdge, StoryGraph } from '../../src/types/graph.ts';
 import type {
   AbsentApparatus,
   CausalDiscontinuity,
@@ -31,11 +31,19 @@ function storyTimeCoordinate(day: number): { type: 'storyTime'; value: string } 
   return { type: 'storyTime', value: `day_${day}` };
 }
 
-function storyEdge(predecessor: string, dependent: string, edgeClass: 'author_origin' | 'provider'): GraphEdge {
+function storyEdge(
+  predecessor: string,
+  dependent: string,
+  edgeClass: 'author_origin' | 'provider',
+): GraphEdge {
   return { predecessor, dependent, edgeClass };
 }
 
-function storyOutput(outputId: string, canonicalKey: string, day: number): StoryGraph['outputs'][number] {
+function storyOutput(
+  outputId: string,
+  canonicalKey: string,
+  day: number,
+): StoryGraph['outputs'][number] {
   return {
     outputId,
     canonicalKey,
@@ -46,7 +54,10 @@ function storyOutput(outputId: string, canonicalKey: string, day: number): Story
   };
 }
 
-function storyAbsenceResolution(readId: string, canonicalKey: string): StoryGraph['resolutions'][number] {
+function storyAbsenceResolution(
+  readId: string,
+  canonicalKey: string,
+): StoryGraph['resolutions'][number] {
   return {
     type: 'absence',
     readId,
@@ -97,6 +108,7 @@ function baseEvent(id: string, day: number): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'narrator', type: 'omniscient' },
     sceneBrief: id,
+    beats: [id],
     preconditions: [],
     postconditions: [],
     threadProgress: [],
@@ -115,9 +127,9 @@ function makeAssertion(id: string): NarratorAssertion {
     narrator: 'narrator',
     proposition: `prop_${id}`,
     polarity: 'affirmative',
-    type: 'declarative',
-    truthBoundary: true,
-    narrationBoundary: { type: 'internal_focalization', focalizer: 'narrator' },
+    type: 'claim',
+    status: 'unknown',
+    narrationBoundary: { narratorId: 'narrator' },
   };
 }
 
@@ -145,9 +157,7 @@ function buildStoryGraph(opts: {
   };
 }
 
-function buildDiscourseGraph(opts: {
-  outputs?: DiscourseGraph['outputs'];
-}): DiscourseGraph {
+function buildDiscourseGraph(opts: { outputs?: DiscourseGraph['outputs'] }): DiscourseGraph {
   return {
     type: 'discourse',
     edges: [],
@@ -167,7 +177,10 @@ describe('resolveNarrativeTechniques', () => {
 
   describe('surfaceMode', () => {
     it('resolves surfaceMode contract with no external references', () => {
-      const sm: SurfaceMode = { instruction: 'Use vivid sensory language', requiredEvidence: 'Sensory description present' };
+      const sm: SurfaceMode = {
+        instruction: 'Use vivid sensory language',
+        requiredEvidence: 'Sensory description present',
+      };
       const event = { ...baseEvent('E1', 1), surfaceMode: sm };
 
       const result = resolveNarrativeTechniques({
@@ -190,7 +203,10 @@ describe('resolveNarrativeTechniques', () => {
 
   describe('metanarrativeLevel', () => {
     it('resolves metanarrativeLevel contract with no external references', () => {
-      const mn: MetanarrativeLevel = { instruction: 'Acknowledge the constructed nature', requiredEvidence: 'Metafictional commentary' };
+      const mn: MetanarrativeLevel = {
+        instruction: 'Acknowledge the constructed nature',
+        requiredEvidence: 'Metafictional commentary',
+      };
       const event = { ...baseEvent('E1', 1), metanarrativeLevel: mn };
 
       const result = resolveNarrativeTechniques({
@@ -246,10 +262,7 @@ describe('resolveNarrativeTechniques', () => {
         requiredEvidence: 'Break evidence',
       };
       const event = { ...baseEvent('E1', 1), causalDiscontinuity: cd };
-      const events: NarrativeEvent[] = [
-        { ...baseEvent('E2', 2) },
-        event,
-      ];
+      const events: NarrativeEvent[] = [{ ...baseEvent('E2', 2) }, event];
 
       expect(() =>
         resolveNarrativeTechniques({
@@ -561,14 +574,16 @@ describe('resolveNarrativeTechniques', () => {
       };
       const event = { ...baseEvent('E1', 1), absentApparatus: aa };
       const storyGraph = buildStoryGraph({
-        reads: [{
-          readId: 'E1:precondition:0',
-          canonicalKey: 'entity.attr',
-          predicate: { type: 'exists' },
-          phase: 'stateBefore',
-          branchScope: BRANCH_SCOPE,
-          origin: 'precondition',
-        }],
+        reads: [
+          {
+            readId: 'E1:precondition:0',
+            canonicalKey: 'entity.attr',
+            predicate: { type: 'exists' },
+            phase: 'stateBefore',
+            branchScope: BRANCH_SCOPE,
+            origin: 'precondition',
+          },
+        ],
         resolutions: [storyAbsenceResolution('E1:precondition:0', 'entity.attr')],
       });
 
@@ -593,14 +608,16 @@ describe('resolveNarrativeTechniques', () => {
       const event = { ...baseEvent('E1', 1), absentApparatus: aa };
       // The readId resolves to an OUTPUT, not an absence
       const storyGraph = buildStoryGraph({
-        reads: [{
-          readId: 'E1:precondition:0',
-          canonicalKey: 'entity.attr',
-          predicate: { type: 'exists' },
-          phase: 'stateBefore',
-          branchScope: BRANCH_SCOPE,
-          origin: 'precondition',
-        }],
+        reads: [
+          {
+            readId: 'E1:precondition:0',
+            canonicalKey: 'entity.attr',
+            predicate: { type: 'exists' },
+            phase: 'stateBefore',
+            branchScope: BRANCH_SCOPE,
+            origin: 'precondition',
+          },
+        ],
         outputs: [storyOutput('E1:postcondition:0', 'entity.attr', 1)],
         resolutions: [storyProviderResolution('E1:postcondition:0', 'entity.attr', 1)],
       });
@@ -843,8 +860,14 @@ describe('resolveNarrativeTechniques', () => {
 
   describe('multiple techniques on one event', () => {
     it('resolves all techniques on a single event in kind order', () => {
-      const sm: SurfaceMode = { instruction: 'Vivid language', requiredEvidence: 'Sensory details' };
-      const mn: MetanarrativeLevel = { instruction: 'Meta awareness', requiredEvidence: 'Meta commentary' };
+      const sm: SurfaceMode = {
+        instruction: 'Vivid language',
+        requiredEvidence: 'Sensory details',
+      };
+      const mn: MetanarrativeLevel = {
+        instruction: 'Meta awareness',
+        requiredEvidence: 'Meta commentary',
+      };
       const event = {
         ...baseEvent('E1', 1),
         surfaceMode: sm,
@@ -875,7 +898,7 @@ describe('resolveNarrativeTechniques', () => {
     it('only processes source === event_file events', () => {
       const sm: SurfaceMode = { instruction: 'Vivid', requiredEvidence: 'Sensory' };
       const events: NarrativeEvent[] = [
-        { ...baseEvent('E1', 1), source: 'genesis' as const, surfaceMode: sm },
+        { ...baseEvent('E1', 1), source: 'branch_point' as const, surfaceMode: sm },
         { ...baseEvent('E2', 2), source: 'system' as const },
       ];
 
@@ -886,14 +909,14 @@ describe('resolveNarrativeTechniques', () => {
         assertions: {},
       });
 
-      // E1 is genesis, E2 is system — neither is event_file → result is empty
+      // E1 is branch_point, E2 is system — neither is event_file → result is empty
       expect(result.size).toBe(0);
     });
 
     it('omits events with no contracts from result map', () => {
       const events: NarrativeEvent[] = [
-        { ...baseEvent('E1', 1) },         // no technique contracts
-        { ...baseEvent('E2', 2) },         // no technique contracts
+        { ...baseEvent('E1', 1) }, // no technique contracts
+        { ...baseEvent('E2', 2) }, // no technique contracts
       ];
 
       const result = resolveNarrativeTechniques({
@@ -926,11 +949,16 @@ describe('resolveNarrativeTechniques', () => {
       // A_OLD via priorAssertionId, A_NEW via newAssertionId
       const discGraph = buildDiscourseGraph({
         outputs: [
-          discOutput('disc:corr1', 'disclosure:E1:corr', {
-            type: 'correction',
-            priorAssertionId: 'A_OLD',
-            newAssertionId: 'A_NEW',
-          }, 1),
+          discOutput(
+            'disc:corr1',
+            'disclosure:E1:corr',
+            {
+              type: 'correction',
+              priorAssertionId: 'A_OLD',
+              newAssertionId: 'A_NEW',
+            },
+            1,
+          ),
         ],
       });
 

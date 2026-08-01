@@ -8,7 +8,6 @@
 // ============================================================================
 
 import { ConfigError } from '../errors.ts';
-import type { NarrativeEvent } from '../types/event.js';
 import type {
   DiscourseContextProjection,
   DiscourseState,
@@ -16,8 +15,8 @@ import type {
   NarratorProfile,
   PlannedDiscourseLedger,
   PlannedLedgerEntry,
-  RevealAction,
 } from '../types/discourse.js';
+import type { NarrativeEvent } from '../types/event.js';
 import {
   emptyDiscourseState,
   projectDiscourseContext,
@@ -82,7 +81,11 @@ function cloneDiscourseState(state: DiscourseState): DiscourseState {
 }
 
 /** Build a fresh empty state for the given branch, pre-loaded with assertions. */
-function makeEmptyState(branch: string, assertions: Record<string, NarratorAssertion>, ledgerHash: string): DiscourseState {
+function makeEmptyState(
+  branch: string,
+  assertions: Record<string, NarratorAssertion>,
+  ledgerHash: string,
+): DiscourseState {
   const s = emptyDiscourseState(branch);
   s.assertions = { ...assertions };
   s.ledgerHash = ledgerHash;
@@ -137,7 +140,7 @@ function preflightAssertionCatalog(
   if (Object.keys(assertions).length === 0) {
     throw new ConfigError(
       `Discourse ledger "${ledger.id}" contains reveal/claim/retraction/correction actions but no assertion ` +
-      `catalog was loaded from definitions/assertions/. In strict mode, assertion catalog is required.`,
+        `catalog was loaded from definitions/assertions/. In strict mode, assertion catalog is required.`,
     );
   }
 
@@ -150,7 +153,7 @@ function preflightAssertionCatalog(
         if (!assertions[action.assertionId]) {
           throw new ConfigError(
             `Ledger entry "${entry.id}" references assertion "${action.assertionId}" which does not exist ` +
-            `in the assertion catalog (definitions/assertions/).`,
+              `in the assertion catalog (definitions/assertions/).`,
           );
         }
         break;
@@ -159,7 +162,7 @@ function preflightAssertionCatalog(
         if (!assertions[action.assertionId]) {
           throw new ConfigError(
             `Ledger entry "${entry.id}" retracts assertion "${action.assertionId}" which does not exist ` +
-            `in the assertion catalog.`,
+              `in the assertion catalog.`,
           );
         }
         break;
@@ -168,13 +171,13 @@ function preflightAssertionCatalog(
         if (!assertions[action.priorAssertionId]) {
           throw new ConfigError(
             `Ledger entry "${entry.id}" correction references priorAssertion "${action.priorAssertionId}" ` +
-            `which does not exist in the assertion catalog.`,
+              `which does not exist in the assertion catalog.`,
           );
         }
         if (!assertions[action.newAssertionId]) {
           throw new ConfigError(
             `Ledger entry "${entry.id}" correction references newAssertion "${action.newAssertionId}" ` +
-            `which does not exist in the assertion catalog.`,
+              `which does not exist in the assertion catalog.`,
           );
         }
         break;
@@ -201,7 +204,7 @@ function preflightBranchEntries(
     if (!eventIds.has(entry.sceneId)) {
       throw new ConfigError(
         `Ledger entry "${entry.id}" on branch "${branch}" references sceneId "${entry.sceneId}" ` +
-        `which does not match any event ID.`,
+          `which does not match any event ID.`,
       );
     }
 
@@ -209,7 +212,7 @@ function preflightBranchEntries(
     if (entry.discoursePosition < 0) {
       throw new ConfigError(
         `Ledger entry "${entry.id}" on branch "${branch}" has negative discourse position ` +
-        `${entry.discoursePosition}.`,
+          `${entry.discoursePosition}.`,
       );
     }
 
@@ -217,7 +220,7 @@ function preflightBranchEntries(
     if (seenPositions.has(entry.discoursePosition)) {
       throw new ConfigError(
         `Duplicate discourse position ${entry.discoursePosition} on branch "${branch}" ` +
-        `(entry "${entry.id}"). Each position must be unique within a branch.`,
+          `(entry "${entry.id}"). Each position must be unique within a branch.`,
       );
     }
     seenPositions.add(entry.discoursePosition);
@@ -226,7 +229,7 @@ function preflightBranchEntries(
     if (entry.discoursePosition <= lastPosition) {
       throw new ConfigError(
         `Non-monotonic discourse position ${entry.discoursePosition} on branch "${branch}" ` +
-        `(entry "${entry.id}"). Positions must be strictly increasing.`,
+          `(entry "${entry.id}"). Positions must be strictly increasing.`,
       );
     }
     lastPosition = entry.discoursePosition;
@@ -235,7 +238,7 @@ function preflightBranchEntries(
     if (entry.action.discoursePosition !== entry.discoursePosition) {
       throw new ConfigError(
         `Ledger entry "${entry.id}" has action.discoursePosition (${entry.action.discoursePosition}) ` +
-        `different from entry.discoursePosition (${entry.discoursePosition}). They must be equal.`,
+          `different from entry.discoursePosition (${entry.discoursePosition}). They must be equal.`,
       );
     }
   }
@@ -245,10 +248,7 @@ function preflightBranchEntries(
  * Validate that each scene's action positions form a single contiguous range
  * with no gaps within the scene's interval.
  */
-function preflightSceneContinuity(
-  entries: PlannedLedgerEntry[],
-  branch: string,
-): void {
+function preflightSceneContinuity(entries: PlannedLedgerEntry[], branch: string): void {
   // Group by sceneId
   const byScene = new Map<string, PlannedLedgerEntry[]>();
   for (const entry of entries) {
@@ -265,8 +265,8 @@ function preflightSceneContinuity(
       if (positions[i] !== positions[i - 1] + 1) {
         throw new ConfigError(
           `Scene "${sceneId}" on branch "${branch}" has non-continuous action positions: ` +
-          `${positions.join(', ')}. Scene action positions must form a contiguous range. ` +
-          `Gap between ${positions[i - 1]} and ${positions[i]}.`,
+            `${positions.join(', ')}. Scene action positions must form a contiguous range. ` +
+            `Gap between ${positions[i - 1]} and ${positions[i]}.`,
         );
       }
     }
@@ -296,7 +296,6 @@ function preflightSemanticRules(
   //   - corrections: replace in both reveals and claims
   const activeReveals = new Set<string>();
   const activeClaims = new Set<string>();
-  const activeWithholdPolicies = new Set<string>();
 
   for (const entry of sorted) {
     const action = entry.action;
@@ -306,12 +305,12 @@ function preflightSemanticRules(
       case 'reveal': {
         const assertionId = action.assertionId;
         const catAssertion = assertions[assertionId];
-        // §5: truth-boundary hard rule
-        if (catAssertion && catAssertion.truthBoundary !== true) {
+        // §5: asserted-status hard rule
+        if (catAssertion && catAssertion.status !== 'asserted') {
           throw new ConfigError(
             `Reveal in entry "${entry.id}" on branch "${branch}" references assertion ` +
-            `"${assertionId}" which has truthBoundary=${catAssertion.truthBoundary}. ` +
-            `Reveals require truthBoundary=true.`,
+              `"${assertionId}" which has status=${catAssertion.status}. ` +
+              `Reveals require status=asserted.`,
           );
         }
         activeReveals.add(assertionId);
@@ -323,11 +322,11 @@ function preflightSemanticRules(
         const catAssertion = assertions[assertionId];
         // §6: claim references non-authoritative assertion
         if (catAssertion) {
-          if (catAssertion.truthBoundary === true || catAssertion.type === 'authoritative_reveal') {
+          if (catAssertion.status === 'asserted' || catAssertion.type === 'authoritative_reveal') {
             throw new ConfigError(
               `Claim in entry "${entry.id}" on branch "${branch}" references assertion ` +
-              `"${assertionId}" which is authoritative/truth-boundary. ` +
-              `Claims must reference non-authoritative assertions.`,
+                `"${assertionId}" which is authoritative/asserted. ` +
+                `Claims must reference non-asserted assertions.`,
             );
           }
         }
@@ -341,9 +340,9 @@ function preflightSemanticRules(
         if (!activeReveals.has(retractId) && !activeClaims.has(retractId)) {
           throw new ConfigError(
             `Retraction in entry "${entry.id}" on branch "${branch}" references assertion ` +
-            `"${retractId}" which has not been revealed or claimed in an earlier entry. ` +
-            `Available reveals: [${[...activeReveals].join(', ')}]. ` +
-            `Available claims: [${[...activeClaims].join(', ')}].`,
+              `"${retractId}" which has not been revealed or claimed in an earlier entry. ` +
+              `Available reveals: [${[...activeReveals].join(', ')}]. ` +
+              `Available claims: [${[...activeClaims].join(', ')}].`,
           );
         }
         activeClaims.delete(retractId);
@@ -358,35 +357,35 @@ function preflightSemanticRules(
         if (!activeReveals.has(priorId) && !activeClaims.has(priorId)) {
           throw new ConfigError(
             `Correction in entry "${entry.id}" on branch "${branch}" references ` +
-            `priorAssertion "${priorId}" which is not currently active ` +
-            `(has not been revealed or claimed earlier on this branch).`,
+              `priorAssertion "${priorId}" which is not currently active ` +
+              `(has not been revealed or claimed earlier on this branch).`,
           );
         }
 
         if (priorId === newId) {
           throw new ConfigError(
             `Correction in entry "${entry.id}" on branch "${branch}" has identical ` +
-            `priorAssertionId and newAssertionId "${priorId}". Correction must reference ` +
-            `two different assertions.`,
+              `priorAssertionId and newAssertionId "${priorId}". Correction must reference ` +
+              `two different assertions.`,
           );
         }
 
         if (activeReveals.has(newId) || activeClaims.has(newId)) {
           throw new ConfigError(
             `Correction in entry "${entry.id}" on branch "${branch}" references ` +
-            `newAssertion "${newId}" which is already revealed or claimed. ` +
-            `The replacement assertion must not already be active.`,
+              `newAssertion "${newId}" which is already revealed or claimed. ` +
+              `The replacement assertion must not already be active.`,
           );
         }
 
         const priorAssertion = assertions[priorId];
         const newAssertion = assertions[newId];
         if (priorAssertion && newAssertion && priorAssertion.type === 'authoritative_reveal') {
-          if (newAssertion.type !== 'authoritative_reveal' || newAssertion.truthBoundary !== true) {
+          if (newAssertion.type !== 'authoritative_reveal' || newAssertion.status !== 'asserted') {
             throw new ConfigError(
               `Correction in entry "${entry.id}" on branch "${branch}": prior assertion ` +
-              `"${priorId}" is authoritative_reveal but replacement "${newId}" does not ` +
-              `satisfy reveal requirements (type=authoritative_reveal, truthBoundary=true).`,
+                `"${priorId}" is authoritative_reveal but replacement "${newId}" does not ` +
+                `satisfy reveal requirements (type=authoritative_reveal, status=asserted).`,
             );
           }
         }
@@ -422,8 +421,7 @@ function preflightSemanticRules(
  *   - entry/action position equality
  *   - unique/continuous per-scene action ranges
  *   - unknown scene IDs
- *   - invalid cursors (< -1 or range jumps)
- *   - reveal must reference existing truthBoundary=true assertion
+ *   - reveal must reference existing status=asserted assertion
  *   - claim must reference non-authoritative assertion
  *   - retraction must reference earlier active claim/reveal
  *   - correction must have valid differing prior/new assertions
@@ -441,7 +439,7 @@ function preflightSemanticRules(
  * @returns Record keyed by event id with fully pre-compiled discourse contexts.
  */
 export function compileDiscourseBoundaries(
-  events: NarrativeEvent[],
+  events: readonly NarrativeEvent[],
   ledger: PlannedDiscourseLedger,
   assertions: Record<string, NarratorAssertion>,
   narratorProfiles: Record<string, NarratorProfile>,

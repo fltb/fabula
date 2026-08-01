@@ -8,16 +8,17 @@
 // for deterministic Pass 1 / Pass 2 output.
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
 import * as crypto from 'node:crypto';
-import { renderNovel, previewEditorialRun } from '../../src/api.ts';
-import { MockPass2Provider, type MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import { canonicalJson, computeSha256Hex } from '../../src/render/scene-contract.ts';
+import { describe, expect, it } from 'vitest';
+import { type MockPass2Entry, MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import type { RenderNovelResult } from '../../src/api.ts';
+import { previewEditorialRun, renderNovel } from '../../src/api.ts';
 import { sha256Canonical } from '../../src/cache/render-cache.ts';
 import { AcceptedArtifactResolver } from '../../src/pipeline/surface-scheduler.ts';
-import type { RenderNovelResult } from '../../src/api.ts';
+import { canonicalJson, computeSha256Hex } from '../../src/render/scene-contract.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type { ReleaseDecision } from '../../src/types/index.ts';
+import { makeCustomEntry, makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -27,36 +28,38 @@ const SAMPLE_PROSE =
   'The morning light filtered through the tall windows of the converted ' +
   'conference room, painting golden rectangles across the scuffed wooden floor.';
 
+const ANALYSIS_PAYLOAD: Record<string, unknown> = {
+  postconditions: { covered: [], dropped: [] },
+  preconditions: { violated: [] },
+  pov: { consistent: true, leaks: [] },
+  inventedDetails: [],
+  quality: {
+    proseScore: 4,
+    maxScore: 5,
+    strengths: ['clear prose'],
+    weaknesses: ['slightly dry'],
+    estimatedWordCount: 80,
+  },
+  threadProgressAchieved: [],
+  foreshadowingDeployed: [],
+  narrativeChecks: [],
+  appearanceChecks: [],
+  characterReferences: [],
+  tenseDetected: 'past',
+  conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+  ruleChecks: [],
+  knowledgeChecks: [],
+  checklistResults: [],
+};
+
 function makeEntry(eventId: string, prose?: string): MockPass2Entry {
-  return {
-    prose: prose ?? `Test prose for event ${eventId}. ${SAMPLE_PROSE}`,
-    analysis: {
-      eventId,
-      analysis: {
-        postconditions: { covered: [], dropped: [] },
-        preconditions: { violated: [] },
-        pov: { consistent: true, leaks: [] },
-        inventedDetails: [],
-        quality: {
-          proseScore: 4,
-          maxScore: 5,
-          strengths: ['clear prose'],
-          weaknesses: ['slightly dry'],
-          estimatedWordCount: 80,
-        },
-        threadProgressAchieved: [],
-        foreshadowingDeployed: [],
-        narrativeChecks: [],
-        appearanceChecks: [],
-        characterReferences: [],
-        tenseDetected: 'past',
-        conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-        ruleChecks: [],
-        knowledgeChecks: [],
-        checklistResults: [],
-      },
-    },
-  };
+  const text = prose ?? `Test prose for event ${eventId}. ${SAMPLE_PROSE}`;
+  return makeCustomEntry(eventId, text, {
+    eventId,
+    protocol: makeProtocol(text),
+    observations: makeObservations(ANALYSIS_PAYLOAD, text),
+    analysis: ANALYSIS_PAYLOAD,
+  });
 }
 
 /**
@@ -98,6 +101,59 @@ function setupProject(
       'worldFacts: []',
     ].join('\n'),
   );
+  // entity-types.yaml (required — EntityMapper reads it via readYamlFile; the
+  // runtime kernel compiles it into the EntityTypeCatalog that write-policy
+  // validation checks, so the fixture must declare the character kind and the
+  // lifecycle attribute the baseline activation writes)
+  storage.write(
+    `${PROJECT_DIR}/definitions/entity-types.yaml`,
+    [
+      'types:',
+      '  character:',
+      '    typeId: character',
+      '    kind: character',
+      '    attributes:',
+      '      lifecycle:',
+      '        attributeId: lifecycle',
+      '        valueType: string',
+      '        requiredAt: introduction',
+      '        writePolicy: lifecycle_managed',
+      '        allowedLifecycleStates: [active, inactive, retired]',
+      '        unsetAllowed: false',
+      '        semanticRole: lifecycle',
+      '      traits:',
+      '        attributeId: traits',
+      '        valueType: string_list',
+      '        requiredAt: never',
+      '        writePolicy: immutable',
+      '        unsetAllowed: true',
+      '    lifecyclePolicy:',
+      '      allowedTransitions:',
+      '        - [active, inactive]',
+      '        - [active, retired]',
+      '        - [inactive, active]',
+      '        - [inactive, retired]',
+      '    referenceCapabilities:',
+      '      defaultEligibility: live',
+      '    typedInvariants: []',
+    ].join('\n'),
+  );
+
+  // POV character — declared so the entity registry resolves the narrator
+  // (POVValidator emits an error otherwise) and the baseline activation
+  // writes its lifecycle initial fact.
+  storage.mkdirp(`${PROJECT_DIR}/definitions/characters`);
+  storage.write(
+    `${PROJECT_DIR}/definitions/characters/narrator.yaml`,
+    [
+      'id: narrator',
+      'name: Narrator',
+      'type: person',
+      'description: "The story narrator"',
+      'initialState: {}',
+      'traits: []',
+    ].join('\n'),
+  );
 
   // ── Discourse ledger ───────────────────────────────────────────
   const sceneIdsYaml = eventIds.map((id: string) => `      - ${id}`).join('\n');
@@ -126,6 +182,8 @@ function setupProject(
       '  character: narrator',
       '  type: first_person',
       'sceneBrief: "Test scene"',
+      'beats:',
+      '  - "Test scene"',
       'preconditions: []',
       'expectedPostconditions: []',
     ].join('\n');
@@ -150,10 +208,14 @@ function setupProject(
  * Each event becomes its own serial_surface group in the lane.
  */
 function serialLaneYaml(eventIds: string[]): string {
-  const groups = eventIds.map((id, i) => `
+  const groups = eventIds
+    .map(
+      (id, i) => `
   - groupId: group_${i}
     sceneIds: [${id}]
-    surfacePolicy: serial_surface`).join('');
+    surfacePolicy: serial_surface`,
+    )
+    .join('');
 
   return `
 mode: manual
@@ -167,13 +229,15 @@ lanes:
  * Configure a serial lane where the last event uses fallback_without_surface.
  */
 function fallbackLaneYaml(eventIds: string[]): string {
-  const groups = eventIds.map((id, i) => {
-    const isLast = i === eventIds.length - 1;
-    return `
+  const groups = eventIds
+    .map((id, i) => {
+      const isLast = i === eventIds.length - 1;
+      return `
   - groupId: group_${i}
     sceneIds: [${id}]
     surfacePolicy: ${isLast ? 'fallback_without_surface' : 'serial_surface'}`;
-  }).join('');
+    })
+    .join('');
 
   return `
 mode: manual
@@ -183,9 +247,10 @@ lanes:
     groupIds: [${eventIds.map((_, i) => `group_${i}`).join(', ')}]`;
 }
 
-function trackProvider(
-  inner: MockPass2Provider,
-): { provider: MockPass2Provider; callCount: () => number } {
+function trackProvider(inner: MockPass2Provider): {
+  provider: MockPass2Provider;
+  callCount: () => number;
+} {
   let count = 0;
   const originalComplete = inner.complete.bind(inner);
   inner.complete = async (req) => {
@@ -286,7 +351,9 @@ describe('Surface Lifecycle — serial dependency scheduling', () => {
     expect(e2.released).toBe(false);
 
     // E2 should have predecessor-blocked error
-    expect(e2.errors.some((msg) => msg.includes('not accepted and no surface source available'))).toBe(true);
+    expect(
+      e2.errors.some((msg) => msg.includes('not accepted and no surface source available')),
+    ).toBe(true);
     expect(e2.prose).toBe('');
 
     // V1 result fields
@@ -369,7 +436,9 @@ describe('Surface Lifecycle — serial dependency scheduling', () => {
     expect(result.results).toHaveLength(1);
     const e2 = result.results[0]!;
     expect(e2.released).toBe(false);
-    expect(e2.errors.some((msg) => msg.includes('not accepted and no surface source available'))).toBe(true);
+    expect(
+      e2.errors.some((msg) => msg.includes('not accepted and no surface source available')),
+    ).toBe(true);
     expect(e2.prose).toBe('');
 
     // V1 result fields
@@ -430,10 +499,7 @@ describe('Surface Lifecycle — serial dependency scheduling', () => {
       requestRecords: [],
       createdAt: '2025-01-01T00:00:00.000Z',
     };
-    storage.write(
-      `${PROJECT_DIR}/.nova/responses/E1.json`,
-      JSON.stringify(envelope),
-    );
+    storage.write(`${PROJECT_DIR}/.nova/responses/E1.json`, JSON.stringify(envelope));
     storage.write(
       `${PROJECT_DIR}/.nova/revisions/scenes/E1/${revisionId}.json`,
       JSON.stringify(envelope),
@@ -478,9 +544,7 @@ describe('Surface Lifecycle — serial dependency scheduling', () => {
     expect(callCount()).toBeGreaterThan(0);
     expect(result.results).toHaveLength(1);
     expect(result.results[0]?.released).toBe(true);
-    expect(result.results[0]?.errors).not.toContain(
-      expect.stringContaining('not accepted'),
-    );
+    expect(result.results[0]?.errors).not.toContain(expect.stringContaining('not accepted'));
 
     // V1 result fields
     expect(result.operationId).toBe('00000005-0005-4005-8005-000000000005');
@@ -540,10 +604,7 @@ describe('Surface Lifecycle — serial dependency scheduling', () => {
       createdAt: '2025-01-01T00:00:00.000Z',
     };
     storage.write(`${HEAD_DIR}/E1.json`, JSON.stringify(envelope));
-    storage.write(
-      `${ARCHIVE_DIR}/E1/${revisionId}.json`,
-      JSON.stringify(envelope),
-    );
+    storage.write(`${ARCHIVE_DIR}/E1/${revisionId}.json`, JSON.stringify(envelope));
 
     const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
 

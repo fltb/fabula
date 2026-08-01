@@ -13,6 +13,14 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "David arrives at Salem House school, a grim establishment run by the cruel Mr Creakle who beats boys with a stick. As a punishment for biting Mr Murdstone, David is made to wear a placard on his back reading 'Take care of him. He bites.' The older, charismatic James Steerforth takes David under his protection, making him his 'favourite' and securing him privileges. David becomes Steerforth's devoted admirer, telling him stories at night and buying him wine and biscuits. He also befriends the poor, good-natured Tommy Traddles, who draws skeletons on his slate and is beaten more than any other boy. Despite the harsh conditions, David finds a measure of happiness through these friendships."
+beats:
+  - "David arrives at Salem House school, a grim establishment run by the cruel Mr Creakle who beats boys with a stick."
+  - "As a punishment for biting Mr Murdstone, David is made to wear a placard on his back reading 'Take care of him."
+  - "He bites.'"
+  - "The older, charismatic James Steerforth takes David under his protection, making him his 'favourite' and securing him privileges."
+  - "David becomes Steerforth's devoted admirer, telling him stories at night and buying him wine and biscuits."
+  - "He also befriends the poor, good-natured Tommy Traddles, who draws skeletons on his slate and is beaten more than any other boy."
+  - "Despite the harsh conditions, David finds a measure of happiness through these friendships."
 preconditions:
   - entity: david_copperfield
     attribute: location
@@ -81,6 +89,13 @@ introduces:
       status: schoolboy
       condition: poor_and_beaten
       emotionalState: cheerful_resilient
+  - type: character
+    id: creakle
+    initialState:
+      location: salem_house
+      status: headmaster
+      condition: cruel_and_tyrannical
+      emotionalState: menacing
 styleGuidance:
   tone: "grim humour — cruelty rendered through a child's eyes with adult retrospective irony"
   targetWordCount: 800

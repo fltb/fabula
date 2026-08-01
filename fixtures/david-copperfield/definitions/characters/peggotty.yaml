@@ -21,11 +21,5 @@ traits:
   - domestic
   - loyal
   - sentimental
-initialState:
-  location: blunderstone
-  status: alive
-  condition: servant_in_copperfield_household
-  emotionalState: devoted
-  relationship_david: nurse_and_protector
 voiceNotes: "Earthy, warm, simple English speech. She is not highly educated but speaks with great common sense and directness. Her conversation is full of domestic details, references to her brother, and expressions of affection for David. She calls him 'my Davy' or 'my dear.' She has a deep and simple religious faith."
 backstory: "Has served the Copperfield family since before David's birth. She is the sister of Daniel Peggotty, a Yarmouth fisherman. She introduces David to the Yarmouth boathouse and the Peggotty family, who become his second family. She marries Mr Barkis, the carrier, who courts her through David with the message 'Barkis is willin'.' As Mrs Barkis she continues to care for David after his mother's death. She is widowed when Barkis dies, and later keeps house for David during his bachelor days in London."

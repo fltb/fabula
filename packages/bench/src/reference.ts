@@ -3,13 +3,9 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   type AnalysisResult,
-  compileStoryBoundaries,
-  compileStoryRuntimeGraph,
-  EntityMapper,
   expectedOutcomeManifestSchema,
-  type Fact,
-  InMemoryEntityRegistry,
-  type NarrativeEvent,
+  FsStorage,
+  initializeProject,
   type ProjectData,
   provenanceManifestSchema,
   ReferenceFormatError,
@@ -358,26 +354,6 @@ function findChapterForEvent(data: ProjectData, eventId: string): number {
   return 1;
 }
 
-// ─── Initial facts (mirrors regression.ts initialFactsFor) ────────────
-
-function initialFactsFor(registry: InMemoryEntityRegistry, genesis?: NarrativeEvent): Fact[] {
-  return [
-    ...(genesis?.postconditions ?? []),
-    ...registry.getAll().flatMap((entity) =>
-      Object.entries(entity.state ?? {}).map(([attribute, value]) => ({
-        id: `${entity.id}.${attribute}`,
-        entityId: entity.id,
-        attribute,
-        value,
-        validity: {
-          temporal: { start: { type: 'absolute' as const, value: 'day_0' }, end: null },
-          branches: { type: 'all' as const },
-        },
-      })),
-    ),
-  ];
-}
-
 // ─── Public functions ─────────────────────────────────────────────────
 
 /**
@@ -598,7 +574,7 @@ export function loadApprovedReferences(referenceDir: string): ApprovedReferenceS
     }
 
     // ── Verify provider/model/seed consistency with generation record ──
-    const genLedger = ledgerByEvent.get(eventId)!;
+    const genLedger = ledgerByEvent.get(eventId);
     if (!genLedger) {
       throw new ReferenceFormatError(
         `Event ${eventId} not found in generation-record call.perEvent`,
@@ -654,7 +630,13 @@ export function loadApprovedReferences(referenceDir: string): ApprovedReferenceS
       }
     }
 
-    const provEntry = provenanceByEvent.get(eventId)!;
+    const provEntry = provenanceByEvent.get(eventId);
+    if (!provEntry) {
+      throw new ReferenceFormatError(`Missing provenance entry for event ${eventId}`, {
+        path: join(referenceDir, 'provenance.json'),
+        eventId,
+      });
+    }
     references.set(eventId, {
       prose: parsed.data.prose,
       analysis: parsed.data.analysis as AnalysisResult,
@@ -674,48 +656,25 @@ export function loadApprovedReferences(referenceDir: string): ApprovedReferenceS
 /**
  * Collect the deterministic six-field issue identities from L1 (validate)
  * and L2 (validateRender) for every E0–E6 reference entry.
- * Excludes `system:genesis`. Chapter is derived from project data.
  * Returns a deduplicated, lexicographically-sorted array.
  */
 export function collectReferenceIssueIdentities(
   fixturePath: string,
   references: ReadonlyMap<string, ApprovedReference>,
 ): ValidatorIssueIdentity[] {
-  // ── 1. Load fixture data ────────────────────────────────────────
-  const mapper = new EntityMapper(fixturePath);
-  const projectData = mapper.loadProject();
-  const registry = new InMemoryEntityRegistry();
-  registry.load(fixturePath);
-  const allEvents = mapper.loadAllEvents(projectData.chapters);
-  const genesis = allEvents.find((e) => e.id === 'system:genesis');
-  const narrativeEvents = allEvents.filter((e) => e.id !== 'system:genesis');
-
-  // ── 2. Compile canonical runtime graph + boundaries ─────────────
-  const compiled = compileStoryRuntimeGraph({
-    events: allEvents,
-    initialFacts: initialFactsFor(registry, genesis),
-    initialThreads: [],
-    timeAnchors: projectData.timeAnchors ?? [],
-    branchPath: { decisions: [] },
-  });
-  const boundaries = compileStoryBoundaries(
-    [...compiled.selectedEvents],
-    compiled.initialFacts,
-    compiled.storyAdjacency,
-  );
-
-  const stateBeforeByEventId = boundaries.stateBeforeByEventId;
+  // ── 1. Load canonical project (authored events, registry, runtime) ──
+  const { data, events, registry, runtime } = initializeProject(fixturePath, new FsStorage());
+  const stateBeforeByEventId = runtime.boundaries.stateBeforeByEventId;
   const aggregator = new ResultAggregator();
 
   // Build chapter-by-event lookup
   const chapterByEventId = new Map<string, number>();
-  for (const evt of narrativeEvents) {
-    chapterByEventId.set(evt.id, findChapterForEvent(projectData, evt.id));
+  for (const evt of events) {
+    chapterByEventId.set(evt.id, findChapterForEvent(data, evt.id));
   }
 
   // Build event-by-id lookup
-  const eventById = new Map(allEvents.map((e) => [e.id, e]));
-
+  const eventById = new Map(events.map((e) => [e.id, e]));
   const allIdentities: ValidatorIssueIdentity[] = [];
 
   for (const [eventId, ref] of references) {
@@ -728,7 +687,7 @@ export function collectReferenceIssueIdentities(
     const chapter = chapterByEventId.get(eventId) ?? 1;
 
     // L1: validate
-    const l1Result = aggregator.validate(event, stateBefore, registry, narrativeEvents, chapter);
+    const l1Result = aggregator.validate(event, stateBefore, registry, events, chapter);
     const l1Issues = [...l1Result.errors, ...l1Result.warnings, ...l1Result.infos];
 
     // L2: validateRender

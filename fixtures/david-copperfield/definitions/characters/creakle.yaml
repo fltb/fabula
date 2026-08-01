@@ -1,0 +1,21 @@
+id: creakle
+name: "Mr Creakle"
+type: antagonist
+archetype: cruel_headmaster
+role: supporting
+description: "The half-deaf, blustering headmaster of Salem House, a school presided over by brute force rather than instruction. Mr Creakle is a fierce little man with a reputation for beating boys with a cane, sending them to bed without supper, and interrogating them through his deafness. His assistant Tungay carries his messages and his stick. He regards David, sent to him as a punishment for biting Mr Murdstone, as a boy to be broken, though David escapes the worst of his attentions through Steerforth's protection."
+appearance: "A small, stout, fierce-looking man with a bald head and a harsh voice, always carrying a cane. He has a habit of shaking his head violently when he speaks, as if contradicting himself."
+aliases:
+  - "Mr Creakle"
+  - "Creakle"
+gender: male
+age: "Middle-aged"
+profession: "Schoolmaster"
+traits:
+  - cruel
+  - blustering
+  - brutal
+  - half_deaf
+  - self_important
+voiceNotes: "Loud, blustering, and aggressive — he speaks in capital letters, punctuated by the shaking of his head and the brandishing of his cane. His deafness makes him shout, and his temper makes him strike first and ask questions afterwards."
+backstory: "Headmaster of Salem House, a boarding school to which David is sent after biting Mr Murdstone. His regime of beatings and starvation makes the school a place of dread, redeemed for David only by the friendship of Steerforth and Traddles. David meets him again years later when he has become a Middlesex magistrate."

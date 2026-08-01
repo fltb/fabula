@@ -17,6 +17,7 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
     sceneType: 'linear',
     pov: { character: 'alice', type: 'third_person_limited' },
     sceneBrief: 'Test scene.',
+    beats: ['Test scene.'],
     preconditions: [
       {
         id: 'alice.location',

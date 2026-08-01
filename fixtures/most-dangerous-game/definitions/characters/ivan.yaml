@@ -13,10 +13,8 @@ initialState:
   condition: well
   emotionalState: watchful
   inventory:
-    - item: "revolver"
-      description: "A long-barrelled revolver, kept in a crimson sash"
-    - item: "knouter_implements"
-      description: "Instruments of torture from his service to the Tsar"
+    revolver: "A long-barrelled revolver, kept in a crimson sash"
+    knouter_implements: "Instruments of torture from his service to the Tsar"
 voiceNotes: "Silent. Communicates entirely through action, gesture, and the direction of his revolver. His presence alone speaks volumes."
 backstory: "A Cossack who served as official knouter to the Great White Tsar before the revolution. Deaf and dumb from birth. He followed General Zaroff into exile and serves as his enforcer, butler, and keeper of the hounds. He is utterly loyal to Zaroff."
 knownSecrets: []

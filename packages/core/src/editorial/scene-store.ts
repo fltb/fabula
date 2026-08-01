@@ -5,7 +5,7 @@ import { computeContentHash, computeFileHash } from '../storage/hash.ts';
 import type { SceneRevisionEnvelopeV1 } from '../types/editorial.ts';
 import { EditorialOperationError } from './errors.ts';
 import type { ProjectPaths } from './paths.ts';
-import { ProjectTransactionCoordinator, stableJson } from './transaction.ts';
+import { type ProjectTransactionCoordinator, stableJson } from './transaction.ts';
 
 export class SceneRevisionStore {
   constructor(
@@ -26,7 +26,9 @@ export class SceneRevisionStore {
     const revisionPath = this.revisionPath(parsed.eventId, parsed.revisionId);
     this.coordinator.commit({
       readSet: [{ kind: 'file', path: revisionPath, expectedHash: null }],
-      writes: [{ type: 'put', path: revisionPath, content: stableJson(parsed), expectedHash: null }],
+      writes: [
+        { type: 'put', path: revisionPath, content: stableJson(parsed), expectedHash: null },
+      ],
     });
     return revisionPath;
   }
@@ -75,10 +77,14 @@ export class SceneRevisionStore {
     const revisionPath = this.revisionPath(eventId, revisionId);
     const content = this.coordinator.storage.readOptional(revisionPath);
     if (content === null) {
-      throw new EditorialOperationError('REVISION_NOT_FOUND', `Scene revision not found: ${revisionId}`, {
-        eventId,
-        path: revisionPath,
-      });
+      throw new EditorialOperationError(
+        'REVISION_NOT_FOUND',
+        `Scene revision not found: ${revisionId}`,
+        {
+          eventId,
+          path: revisionPath,
+        },
+      );
     }
     return this.parseEnvelope(content, revisionPath, eventId);
   }
@@ -101,11 +107,16 @@ export class SceneRevisionStore {
       .filter((name) => name.endsWith('.json'))
       .map((name) => {
         const revisionPath = path.join(eventDir, name);
-        return this.parseEnvelope(this.coordinator.storage.read(revisionPath), revisionPath, eventId);
+        return this.parseEnvelope(
+          this.coordinator.storage.read(revisionPath),
+          revisionPath,
+          eventId,
+        );
       })
       .sort(
         (left, right) =>
-          left.createdAt.localeCompare(right.createdAt) || left.revisionId.localeCompare(right.revisionId),
+          left.createdAt.localeCompare(right.createdAt) ||
+          left.revisionId.localeCompare(right.revisionId),
       );
   }
 
@@ -127,16 +138,23 @@ export class SceneRevisionStore {
     return parsed;
   }
 
-  private parseEnvelope(content: string, revisionPath: string, eventId: string): SceneRevisionEnvelopeV1 {
+  private parseEnvelope(
+    content: string,
+    revisionPath: string,
+    eventId: string,
+  ): SceneRevisionEnvelopeV1 {
     try {
       return this.validateEnvelope(JSON.parse(content) as SceneRevisionEnvelopeV1);
     } catch (error) {
       if (error instanceof EditorialOperationError) throw error;
-      throw new ConfigError(`Invalid scene revision at ${revisionPath}: ${(error as Error).message}`, {
-        eventId,
-        path: revisionPath,
-        phase: 'scene_revision',
-      });
+      throw new ConfigError(
+        `Invalid scene revision at ${revisionPath}: ${(error as Error).message}`,
+        {
+          eventId,
+          path: revisionPath,
+          phase: 'scene_revision',
+        },
+      );
     }
   }
 }

@@ -12,6 +12,5 @@ initialState:
     - ivan
   prisoners:
     - "spanish_sailors_from_sanlucar"
-  guardDogs:
-    count: 12
-    description: "Enormous black hounds released at seven every evening"
+  guardDogCount: 12
+  guardDogDescription: "Enormous black hounds released at seven every evening"

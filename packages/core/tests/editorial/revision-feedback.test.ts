@@ -1,13 +1,10 @@
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import YAML from 'yaml';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import { computeContentHash } from '../../src/storage/hash.ts';
-import { ReviewManager } from '../../src/review/manager.ts';
 import {
   ProjectTransactionCoordinator,
-  SceneRevisionStore,
   resolveProjectPaths,
+  SceneRevisionStore,
 } from '../../src/editorial/index.ts';
 import {
   applyChapterNovelReviews,
@@ -15,12 +12,16 @@ import {
   buildEventRevisionStates,
   type EventRevisionState,
 } from '../../src/editorial/render-service.ts';
+import { ReviewManager } from '../../src/review/manager.ts';
+import { computeContentHash } from '../../src/storage/hash.ts';
+import { MemoryStorage } from '../../src/storage/memory-storage.ts';
 import type {
   AnalysisResult,
   ReviewComment,
   SceneRevisionEnvelopeV1,
   ValidationResult,
 } from '../../src/types/index.ts';
+import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 const PROJECT = '/revision-feedback-project';
 const NOW = '2026-07-28T00:00:00.000Z';
@@ -28,32 +29,34 @@ const NOW = '2026-07-28T00:00:00.000Z';
 function hash(value = crypto.randomUUID()): string {
   return computeContentHash(value);
 }
-
-function analysis(eventId: string): AnalysisResult {
+function analysis(eventId: string, prose: string): AnalysisResult {
+  const payload: Record<string, unknown> = {
+    postconditions: { covered: [], dropped: [] },
+    preconditions: { violated: [] },
+    pov: { consistent: true, leaks: [] },
+    inventedDetails: [],
+    quality: {
+      proseScore: 8,
+      maxScore: 10,
+      strengths: ['clear'],
+      weaknesses: [],
+      estimatedWordCount: 20,
+    },
+    threadProgressAchieved: [],
+    foreshadowingDeployed: [],
+    narrativeChecks: [],
+    appearanceChecks: [],
+    characterReferences: [],
+    tenseDetected: 'past',
+    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
+    ruleChecks: [],
+    knowledgeChecks: [],
+  };
   return {
     eventId,
-    analysis: {
-      postconditions: { covered: [], dropped: [] },
-      preconditions: { violated: [] },
-      pov: { consistent: true, leaks: [] },
-      inventedDetails: [],
-      quality: {
-        proseScore: 8,
-        maxScore: 10,
-        strengths: ['clear'],
-        weaknesses: [],
-        estimatedWordCount: 20,
-      },
-      threadProgressAchieved: [],
-      foreshadowingDeployed: [],
-      narrativeChecks: [],
-      appearanceChecks: [],
-      characterReferences: [],
-      tenseDetected: 'past',
-      conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-      ruleChecks: [],
-      knowledgeChecks: [],
-    },
+    protocol: makeProtocol(prose),
+    observations: makeObservations(payload, prose),
+    analysis: payload,
   };
 }
 
@@ -87,7 +90,7 @@ function envelope(
     modelUsed: 'mock',
     feedbackHash: null,
     reviewIds: [],
-    analysis: status === 'accepted' ? analysis(eventId) : null,
+    analysis: status === 'accepted' ? analysis(eventId, prose) : null,
     validation: status === 'accepted' ? validation() : null,
     releaseDecision: {
       status,
@@ -99,9 +102,8 @@ function envelope(
     cacheHit: false,
     errors: status === 'accepted' ? [] : ['blocked'],
     llmPass1: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-    llmPass2: status === 'accepted'
-      ? { promptTokens: 1, completionTokens: 1, totalTokens: 2 }
-      : null,
+    llmPass2:
+      status === 'accepted' ? { promptTokens: 1, completionTokens: 1, totalTokens: 2 } : null,
     attempts: 1,
     needsReview: status !== 'accepted',
     promptHash: hash(),
@@ -185,15 +187,19 @@ describe('editorial revision feedback', () => {
     const storage = new MemoryStorage();
     seedAcceptedHead(storage, 'E1');
     const reviews = [
-      comment('rev_line', {
-        type: 'line',
-        id: 'E1',
-        lineRange: [1, 1],
-        lineBasis: {
-          revisionId: '',
-          proseHash: '',
+      comment(
+        'rev_line',
+        {
+          type: 'line',
+          id: 'E1',
+          lineRange: [1, 1],
+          lineBasis: {
+            revisionId: '',
+            proseHash: '',
+          },
         },
-      }, '2026-07-28T00:04:00.000Z'),
+        '2026-07-28T00:04:00.000Z',
+      ),
       comment('rev_scene_b', { type: 'scene', id: 'E1' }, '2026-07-28T00:03:00.000Z'),
       comment('rev_novel', { type: 'novel', id: 'novel' }, '2026-07-28T00:05:00.000Z'),
       comment('rev_chapter', { type: 'chapter', id: 'chapter:1' }, '2026-07-28T00:02:00.000Z'),
@@ -240,12 +246,14 @@ describe('editorial revision feedback', () => {
       ...base,
       actorId: 'other-reviewer',
       createdAt: '2026-07-29T00:00:00.000Z',
-      applications: [{
-        eventId: 'E0',
-        revisionId: crypto.randomUUID(),
-        operationId: crypto.randomUUID(),
-        appliedAt: '2026-07-29T00:00:00.000Z',
-      }],
+      applications: [
+        {
+          eventId: 'E0',
+          revisionId: crypto.randomUUID(),
+          operationId: crypto.randomUUID(),
+          appliedAt: '2026-07-29T00:00:00.000Z',
+        },
+      ],
     };
     const args = [storage, resolveProjectPaths(PROJECT), { E1: 1 }] as const;
     const first = buildEventRevisionStates(['E1'], {}, [base], ...args)[0];
@@ -256,15 +264,19 @@ describe('editorial revision feedback', () => {
   it('checks both revision ID and prose hash for line review staleness', () => {
     const storage = new MemoryStorage();
     const { envelope: accepted } = seedAcceptedHead(storage, 'E1');
-    const review = comment('rev_line', {
-      type: 'line',
-      id: 'E1',
-      lineRange: [1, 1],
-      lineBasis: {
-        revisionId: crypto.randomUUID(),
-        proseHash: accepted.proseHash,
+    const review = comment(
+      'rev_line',
+      {
+        type: 'line',
+        id: 'E1',
+        lineRange: [1, 1],
+        lineBasis: {
+          revisionId: crypto.randomUUID(),
+          proseHash: accepted.proseHash,
+        },
       },
-    }, NOW);
+      NOW,
+    );
 
     const [result] = buildEventRevisionStates(
       ['E1'],
@@ -302,26 +314,42 @@ describe('editorial revision feedback', () => {
     const paths = resolveProjectPaths(PROJECT);
     const review = comment('rev_scene', { type: 'scene', id: 'E1' }, NOW);
     const lockPath = `${paths.workDir}/locks/E1.lock`;
-    storage.write(lockPath, JSON.stringify({
-      revisionId: accepted.revisionId,
-      proseHash: accepted.proseHash,
-      lockedAt: NOW,
-      actorId: 'editor',
-    }));
+    storage.write(
+      lockPath,
+      JSON.stringify({
+        revisionId: accepted.revisionId,
+        proseHash: accepted.proseHash,
+        lockedAt: NOW,
+        actorId: 'editor',
+      }),
+    );
 
     const current = buildEventRevisionStates(
-      ['E1'], { reviewIds: [review.id] }, [review], storage, paths, { E1: 1 },
+      ['E1'],
+      { reviewIds: [review.id] },
+      [review],
+      storage,
+      paths,
+      { E1: 1 },
     )[0];
     expect(current.state).toBe('skipped_by_lock');
 
-    storage.write(lockPath, JSON.stringify({
-      revisionId: crypto.randomUUID(),
-      proseHash: accepted.proseHash,
-      lockedAt: NOW,
-      actorId: 'editor',
-    }));
+    storage.write(
+      lockPath,
+      JSON.stringify({
+        revisionId: crypto.randomUUID(),
+        proseHash: accepted.proseHash,
+        lockedAt: NOW,
+        actorId: 'editor',
+      }),
+    );
     const stale = buildEventRevisionStates(
-      ['E1'], { reviewIds: [review.id] }, [review], storage, paths, { E1: 1 },
+      ['E1'],
+      { reviewIds: [review.id] },
+      [review],
+      storage,
+      paths,
+      { E1: 1 },
     )[0];
     expect(stale.state).toBe('lock_stale');
   });
@@ -334,23 +362,31 @@ describe('editorial revision feedback', () => {
       new ProjectTransactionCoordinator(storage, paths),
       paths.reviewLedgerPath,
     );
-    const sceneReview = manager.addReviewComment({
-      target: { type: 'scene', id: 'E1' },
-      severity: 'suggestion',
-      category: 'style',
-      content: 'Tighten scene',
-    }, 'reviewer');
-    const lineReview = manager.addReviewComment({
-      target: {
-        type: 'line',
-        id: 'E1',
-        lineRange: [1, 1],
-        lineBasis: { revisionId: crypto.randomUUID(), proseHash: hash('old prose') },
+    const sceneReview = manager.addReviewComment(
+      {
+        target: { type: 'scene', id: 'E1' },
+        severity: 'suggestion',
+        category: 'style',
+        content: 'Tighten scene',
       },
-      severity: 'blocking',
-      category: 'plot_logic',
-      content: 'Fix line',
-    }, 'reviewer', undefined, 1);
+      'reviewer',
+    );
+    const lineReview = manager.addReviewComment(
+      {
+        target: {
+          type: 'line',
+          id: 'E1',
+          lineRange: [1, 1],
+          lineBasis: { revisionId: crypto.randomUUID(), proseHash: hash('old prose') },
+        },
+        severity: 'blocking',
+        category: 'plot_logic',
+        content: 'Fix line',
+      },
+      'reviewer',
+      undefined,
+      1,
+    );
     const promotedRevisionId = crypto.randomUUID();
 
     applySceneLineReviews(
@@ -376,18 +412,24 @@ describe('editorial revision feedback', () => {
       new ProjectTransactionCoordinator(storage, paths),
       paths.reviewLedgerPath,
     );
-    const chapterReview = manager.addReviewComment({
-      target: { type: 'chapter', id: 'chapter:1' },
-      severity: 'suggestion',
-      category: 'pacing',
-      content: 'Tighten chapter',
-    }, 'reviewer');
-    const novelReview = manager.addReviewComment({
-      target: { type: 'novel', id: 'novel' },
-      severity: 'suggestion',
-      category: 'reader_experience',
-      content: 'Tighten novel',
-    }, 'reviewer');
+    const chapterReview = manager.addReviewComment(
+      {
+        target: { type: 'chapter', id: 'chapter:1' },
+        severity: 'suggestion',
+        category: 'pacing',
+        content: 'Tighten chapter',
+      },
+      'reviewer',
+    );
+    const novelReview = manager.addReviewComment(
+      {
+        target: { type: 'novel', id: 'novel' },
+        severity: 'suggestion',
+        category: 'reader_experience',
+        content: 'Tighten novel',
+      },
+      'reviewer',
+    );
     const states = [
       state('E1', [chapterReview.id, novelReview.id]),
       state('E2', [chapterReview.id, novelReview.id]),
@@ -409,14 +451,10 @@ describe('editorial revision feedback', () => {
     expect(comments.find((entry) => entry.id === chapterReview.id)?.status).toBe('addressed');
     expect(comments.find((entry) => entry.id === novelReview.id)?.status).toBe('open');
 
-    applyChapterNovelReviews(
-      promoted,
-      states,
-      manager,
-      crypto.randomUUID(),
-      { type: 'all' },
-      ['E1', 'E2'],
-    );
+    applyChapterNovelReviews(promoted, states, manager, crypto.randomUUID(), { type: 'all' }, [
+      'E1',
+      'E2',
+    ]);
     comments = manager.getComments();
     const novel = comments.find((entry) => entry.id === novelReview.id)!;
     expect(novel.status).toBe('addressed');

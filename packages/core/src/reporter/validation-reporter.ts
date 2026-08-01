@@ -3,9 +3,9 @@
 // ============================================================================
 
 import * as path from 'node:path';
-import type { Storage } from '../storage/types.ts';
 import type { PipelineRunResult } from '../report/writer.js';
 import { ReportWriter } from '../report/writer.js';
+import type { Storage } from '../storage/types.ts';
 import type { ValidationIssue } from '../types/validator.js';
 
 export interface ValidationReport {
@@ -15,7 +15,11 @@ export interface ValidationReport {
   l2Issues: ValidationIssue[]; // post-render issues
 }
 
-export function writeValidationReport(storage: Storage, projectDir: string, report: ValidationReport): string {
+export function writeValidationReport(
+  storage: Storage,
+  projectDir: string,
+  report: ValidationReport,
+): string {
   // Build a PipelineRunResult from the ValidationReport and delegate to ReportWriter
   const runResult: PipelineRunResult = {
     projectName: report.projectName,

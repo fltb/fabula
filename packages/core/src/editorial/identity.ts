@@ -118,8 +118,9 @@ export interface ValidationIdentityInput {
 export function computeValidationIdentity(input: ValidationIdentityInput): string {
   const validators = [...input.validators]
     .map((validator) => ({ ...validator }))
-    .sort((left, right) =>
-      left.name.localeCompare(right.name) || left.version.localeCompare(right.version),
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(right.name) || left.version.localeCompare(right.version),
     );
   const plugins = [...input.plugins]
     .map((plugin) => ({
@@ -127,13 +128,15 @@ export function computeValidationIdentity(input: ValidationIdentityInput): strin
       version: plugin.version,
       validators: [...plugin.validators]
         .map((validator) => ({ ...validator }))
-        .sort((left, right) =>
-          left.name.localeCompare(right.name) || left.version.localeCompare(right.version),
+        .sort(
+          (left, right) =>
+            left.name.localeCompare(right.name) || left.version.localeCompare(right.version),
         ),
       promptHookIdentity: plugin.promptHookIdentity,
     }))
-    .sort((left, right) =>
-      left.name.localeCompare(right.name) || left.version.localeCompare(right.version),
+    .sort(
+      (left, right) =>
+        left.name.localeCompare(right.name) || left.version.localeCompare(right.version),
     );
 
   return sha256(
@@ -169,7 +172,9 @@ export interface PlanHashInput {
   readonly providerProfile: string | undefined;
   readonly waiverHashes: readonly string[];
   readonly feedbackHashes: readonly string[];
-  readonly batch: { readonly batchSize?: number; readonly windowSize?: number; readonly failFast?: boolean } | undefined;
+  readonly batch:
+    | { readonly batchSize?: number; readonly windowSize?: number; readonly failFast?: boolean }
+    | undefined;
   readonly maxRounds: number | undefined;
 }
 

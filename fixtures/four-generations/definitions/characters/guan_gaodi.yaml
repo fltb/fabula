@@ -17,11 +17,6 @@ traits:
 - kind
 - confused
 - principled
-initialState:
-  location: loc_guanjia
-  status: alive
-  condition: unmarried
-  emotionalState: discontent_with_family
 backstory: 生在冠家却不认同父母的做法。她对钱仲石有朦胧的爱意，但仲石牺牲了。
 knownSecrets:
 - 曾和桐芳一起给钱家送钱

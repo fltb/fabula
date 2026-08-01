@@ -8,15 +8,9 @@ initialState:
   securityLevel: medium
   currentTension: moderate
   activeFactions:
-    - name: zaun_chem_barons
-      influence: 0.7
-      mood: territorial
-    - name: independent_merchants
-      influence: 0.5
-      mood: wary
-    - name: ferros_clan_agents
-      influence: 0.3
-      mood: covert
+    zaun_chem_barons: "influence=0.7; mood=territorial"
+    independent_merchants: "influence=0.5; mood=wary"
+    ferros_clan_agents: "influence=0.3; mood=covert"
   notableEvents:
     - "Three days ago, a Ferros agent was spotted meeting with an unknown chem-baron representative in the Rusty Cog"
     - "Rumors of a 'big score' circulating among the regulars — something involving hextech weapons"

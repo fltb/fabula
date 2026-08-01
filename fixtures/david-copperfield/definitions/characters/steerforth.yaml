@@ -19,10 +19,5 @@ traits:
   - reckless
   - patronising
   - secretly_cruel
-initialState:
-  location: salem_house
-  status: alive
-  condition: senior_boy_at_salem_house
-  emotionalState: supremely_confident
 voiceNotes: "Melodious, confident, patronising. He has a habit of telling other people's stories better than they can, and of claiming superior knowledge of everyone. He calls David 'Daisy' as a patronising nickname. His tone can shift — warm and natural with David, condescending with servants, cruel with Mr Mell."
 backstory: "Son of a wealthy widow, Mrs Steerforth of Highgate. He is sent to Salem House after his mother remarried. There he dominates the school as its senior boy, making the younger David his protégé. He takes David to his home in Highgate and later to Yarmouth, where he meets and seduces Little Emily. After their elopement he abandons her abroad. He drowns when his yacht sinks off Yarmouth during the great storm; Ham Peggotty dies trying to save him."

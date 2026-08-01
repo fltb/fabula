@@ -2,28 +2,33 @@
 // Registry Catalog-Driven Load Tests
 // ============================================================================
 //
-// STATE-3a: Verifies that InMemoryEntityRegistry.load() uses the default
-// EntityTypeCatalog to drive entity construction, and that all entity kinds
-// get lifecycle/typeRef fields. Specifically tests the zhu-fu fixture to
-// confirm character promoted fields survive and rules get category/type.
+// STATE-3a: Verifies that the canonical project load (loadCanonicalProject)
+// drives registry construction from ProjectData — never from a filesystem
+// path — so all entity kinds get lifecycle/typeRef fields. Specifically tests
+// the zhu-fu fixture to confirm character promoted fields survive and rules
+// get category/type.
 // ============================================================================
 
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { defaultEntityTypeCatalog } from '../../src/entity/default-catalog.js';
-import { InMemoryEntityRegistry } from '../../src/entity/index.js';
+import { loadCanonicalProject } from '../../src/entity/project-runtime.js';
+import type { InMemoryEntityRegistry } from '../../src/entity/registry.js';
+import { FsStorage } from '../../src/storage/index.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..', '..', '..');
 const ZHU_FU_FIXTURE = path.resolve(ROOT, 'fixtures', 'zhu-fu');
 const ARCANE_FIXTURE = path.resolve(ROOT, 'fixtures', 'arcane-aftermath');
+
+function loadRegistry(fixtureDir: string): InMemoryEntityRegistry {
+  return loadCanonicalProject(fixtureDir, new FsStorage()).registry;
+}
 
 describe('registry catalog-driven load', () => {
   describe('zhu-fu fixture', () => {
     let registry: InMemoryEntityRegistry;
 
     beforeAll(() => {
-      registry = new InMemoryEntityRegistry();
-      registry.load(ZHU_FU_FIXTURE);
+      registry = loadRegistry(ZHU_FU_FIXTURE);
     });
 
     it('loads all character entities', () => {
@@ -74,14 +79,10 @@ describe('registry catalog-driven load', () => {
       expect(entity!.state['profession']).toBe('佣工');
     });
 
-    it('characters have traits in state (always set)', () => {
-      const entity = registry.resolve('xianglins_wife');
-      expect(Array.isArray(entity!.state['traits'])).toBe(true);
-    });
-
     it('characters preserve initialState values (location) alongside promoted fields', () => {
-      const entity = registry.resolve('xianglins_wife');
-      expect(entity!.state['location']).toBe('weijia_shan');
+      const entity = registry.resolve('fourth_aunt');
+      expect(entity).not.toBeNull();
+      expect(entity!.state['location']).toBe('fourth_master_lu_house');
     });
 
     it('loads location entities with lifecycle and typeRef', () => {
@@ -130,8 +131,7 @@ describe('registry catalog-driven load', () => {
     let registry: InMemoryEntityRegistry;
 
     beforeAll(() => {
-      registry = new InMemoryEntityRegistry();
-      registry.load(ARCANE_FIXTURE);
+      registry = loadRegistry(ARCANE_FIXTURE);
     });
 
     it('loads all entities', () => {
@@ -159,14 +159,13 @@ describe('registry catalog-driven load', () => {
 
   describe('catalog-driven invariant', () => {
     it('entity kinds match catalog typeId in typeRef', () => {
-      const registry = new InMemoryEntityRegistry();
-      registry.load(ZHU_FU_FIXTURE);
-      const all = registry.getAll();
+      const ir = loadCanonicalProject(ZHU_FU_FIXTURE, new FsStorage());
+      const all = ir.registry.getAll();
       for (const entity of all) {
         // Every loaded entity's typeRef.typeId should match its kind
         expect(entity.typeRef.typeId).toBe(entity.kind);
-        // The kind should exist in the catalog
-        expect(defaultEntityTypeCatalog.types[entity.kind]).toBeDefined();
+        // The kind should exist in the project's compiled catalog
+        expect(ir.entityTypes.types[entity.kind]).toBeDefined();
       }
     });
   });

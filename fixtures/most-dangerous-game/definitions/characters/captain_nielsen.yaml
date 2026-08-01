@@ -11,7 +11,7 @@ initialState:
   status: alive
   condition: well
   emotionalState: uneasy
-  inventory: []
+  inventory: {}
 voiceNotes: "Gravely spoken, economical with words. A man of the sea who trusts his instincts."
 backstory: "A seasoned Swedish sea captain who has sailed the Caribbean for decades. He knows the legends of Ship-Trap Island and treats them with a sailor's respect."
 knownSecrets: []

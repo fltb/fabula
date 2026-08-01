@@ -1,0 +1,11 @@
+injected:
+  - entityId: "E4"
+    attribute: "preconditions"
+    expectedValidator: "causality"
+    expectedSeverity: "error"
+    description: "E4 receives a deterministic location precondition whose value has no provider in the canonical story boundary."
+  - entityId: "E5"
+    attribute: "preconditions"
+    expectedValidator: "causality"
+    expectedSeverity: "error"
+    description: "E5 receives a second deterministic location precondition whose value has no provider in the canonical story boundary."

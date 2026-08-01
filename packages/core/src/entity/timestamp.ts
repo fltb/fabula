@@ -2,7 +2,6 @@ import { ConfigError } from '../errors.js';
 import { authoredStoryTimeSchema } from '../schemas/timestamp.js';
 import type {
   AuthoredStoryTime,
-  LocatableStoryTimestamp,
   NarrativeEvent,
   PointStoryCoordinate,
   SceneStoryCoordinate,
@@ -25,8 +24,7 @@ const MILLIS_BY_UNIT: Record<TimeUnit, number> = {
 
 const DAY_PATTERN = /^day[_\s]*(-?(?:\d+(?:\.\d+)?|\.\d+))$/i;
 const CHAPTER_PATTERN = /^chapter[_\s]*(\d+)$/i;
-const RELATIVE_PATTERN =
-  /^(\S+)\s*\+\s*(\d+(?:\.\d+)?|\.\d+)\s*(minute|hour|day|week|month)s?$/i;
+const RELATIVE_PATTERN = /^(\S+)\s*\+\s*(\d+(?:\.\d+)?|\.\d+)\s*(minute|hour|day|week|month)s?$/i;
 const OFFSET_PATTERN = /^(-?(?:\d+(?:\.\d+)?|\.\d+))\s*(minute|hour|day|week|month)s?$/i;
 const ISO_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2})(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2}))?$/;
@@ -44,7 +42,11 @@ export function parseStoryTimestamp(raw: AuthoredStoryTime | undefined): StoryTi
 
   const parsed = authoredStoryTimeSchema.safeParse(raw);
   if (!parsed.success) {
-    throw configError('Invalid authored story timestamp', 'timestamp', parsed.error.issues[0]?.message);
+    throw configError(
+      'Invalid authored story timestamp',
+      'timestamp',
+      parsed.error.issues[0]?.message,
+    );
   }
 
   const authored = parsed.data;
@@ -99,11 +101,16 @@ function parseAuthoredStringTimestamp(raw: string): StoryTimestamp {
 }
 
 function configError(message: string, path: string, detail?: string): ConfigError {
-  return new ConfigError(message, { path, phase: 'timestamp', ...(detail ? { stateKey: detail } : {}) });
+  return new ConfigError(message, {
+    path,
+    phase: 'timestamp',
+    ...(detail ? { stateKey: detail } : {}),
+  });
 }
 
 function normalizedScalar(scalar: number, path: string): number {
-  if (!Number.isFinite(scalar)) throw configError(`Timestamp resolves to a non-finite scalar at ${path}`, path);
+  if (!Number.isFinite(scalar))
+    throw configError(`Timestamp resolves to a non-finite scalar at ${path}`, path);
   return Object.is(scalar, -0) ? 0 : scalar;
 }
 
@@ -119,7 +126,8 @@ function parseIsoMillis(value: string, path: string): number | null {
   const match = value.match(ISO_PATTERN);
   if (!match) return null;
 
-  const [, yearText, monthText, dayText, hourText, minuteText, secondText, fractionText, zone] = match;
+  const [, yearText, monthText, dayText, hourText, minuteText, secondText, fractionText, zone] =
+    match;
   const year = Number(yearText);
   const month = Number(monthText);
   const day = Number(dayText);
@@ -128,15 +136,7 @@ function parseIsoMillis(value: string, path: string): number | null {
   const second = secondText === undefined ? 0 : Number(secondText);
   const millis = fractionText === undefined ? 0 : Number(`${fractionText.slice(1).padEnd(3, '0')}`);
 
-  if (
-    month < 1 ||
-    month > 12 ||
-    day < 1 ||
-    day > 31 ||
-    hour > 23 ||
-    minute > 59 ||
-    second > 59
-  ) {
+  if (month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) {
     throw configError(`Invalid ISO timestamp '${value}' at ${path}`, path);
   }
 
@@ -160,7 +160,6 @@ function parseIsoMillis(value: string, path: string): number | null {
   return utc - sign * (zoneHours * MILLIS_BY_UNIT.hour + zoneMinutes * MILLIS_BY_UNIT.minute);
 }
 
-
 /**
  * Resolve all authored times into graph-only coordinates. Resolution is deliberately
  * performed over the complete event set before any branch projection.
@@ -174,7 +173,10 @@ export function resolveTemporalContext(
 
   for (const event of events) {
     if (event.id === INITIAL_STORY_ROOT_ID) {
-      throw configError(`Event id '${INITIAL_STORY_ROOT_ID}' is reserved for the initial story root`, `event:${event.id}`);
+      throw configError(
+        `Event id '${INITIAL_STORY_ROOT_ID}' is reserved for the initial story root`,
+        `event:${event.id}`,
+      );
     }
     if (eventById.has(event.id)) {
       throw configError(`Duplicate event id '${event.id}'`, `event:${event.id}`);
@@ -183,13 +185,19 @@ export function resolveTemporalContext(
   }
   for (const anchor of anchors) {
     if (OFFSET_PATTERN.test(anchor.id)) {
-      throw configError(`Time anchor id '${anchor.id}' conflicts with bare duration syntax`, `anchor:${anchor.id}.at`);
+      throw configError(
+        `Time anchor id '${anchor.id}' conflicts with bare duration syntax`,
+        `anchor:${anchor.id}.at`,
+      );
     }
     if (anchorById.has(anchor.id)) {
       throw configError(`Duplicate time anchor id '${anchor.id}'`, `anchor:${anchor.id}.at`);
     }
     if (eventById.has(anchor.id)) {
-      throw configError(`Event id '${anchor.id}' collides with a time anchor`, `anchor:${anchor.id}.at`);
+      throw configError(
+        `Event id '${anchor.id}' collides with a time anchor`,
+        `anchor:${anchor.id}.at`,
+      );
     }
     anchorById.set(anchor.id, anchor);
   }
@@ -199,7 +207,10 @@ export function resolveTemporalContext(
   const coordinatesByAnchorId = new Map<string, PointStoryCoordinate>();
   const resolving: string[] = [];
 
-  const resolveReference = (reference: string, path: string): SceneStoryCoordinate | PointStoryCoordinate => {
+  const resolveReference = (
+    reference: string,
+    path: string,
+  ): SceneStoryCoordinate | PointStoryCoordinate => {
     const event = eventById.get(reference);
     if (event) return resolveEvent(event.id, path);
     const anchor = anchorById.get(reference);
@@ -227,7 +238,10 @@ export function resolveTemporalContext(
       }
       case 'relative': {
         if (!Number.isFinite(timestamp.offset.amount) || timestamp.offset.amount < 0) {
-          throw configError(`Relative offset must be a non-negative finite number at ${path}`, path);
+          throw configError(
+            `Relative offset must be a non-negative finite number at ${path}`,
+            path,
+          );
         }
         const base = resolveReference(timestamp.anchor, path);
         if (base.kind !== 'point' || base.clock === 'chapter') {
@@ -237,7 +251,11 @@ export function resolveTemporalContext(
             timestamp.anchor,
           );
         }
-        return point(base.clock, base.scalar + timestamp.offset.amount * MILLIS_BY_UNIT[timestamp.offset.unit], path);
+        return point(
+          base.clock,
+          base.scalar + timestamp.offset.amount * MILLIS_BY_UNIT[timestamp.offset.unit],
+          path,
+        );
       }
     }
   };
@@ -285,7 +303,10 @@ export function resolveTemporalContext(
     if (event.narrationTime !== undefined) {
       narrationCoordinatesByEventId.set(
         event.id,
-        resolveTimestamp(event.narrationTime, `event:${event.id}.narrationTime`) as SceneStoryCoordinate,
+        resolveTimestamp(
+          event.narrationTime,
+          `event:${event.id}.narrationTime`,
+        ) as SceneStoryCoordinate,
       );
     }
   }

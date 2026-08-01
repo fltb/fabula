@@ -258,12 +258,14 @@ describe('zhu-fu-variants / extreme-damage (5 files)', () => {
     expect(data.injected[0].expectedValidator).toBe('causality');
   });
 
-  it('should have missing genesis test file', () => {
-    const data = loadYaml(path.join(edDir, '004_missing_genesis.yaml'));
-    expect(data.injected.length).toBeGreaterThanOrEqual(1);
-    const genesisEntry = data.injected.find((e: any) => e.entityId === 'system:genesis');
-    expect(genesisEntry).toBeDefined();
-    expect(genesisEntry.expectedValidator).toBe('reachability');
+  it('should have missing state provider test file', () => {
+    const data = loadYaml(path.join(edDir, '004_missing_state_provider.yaml'));
+    expect(data.injected).toHaveLength(2);
+    expect(
+      data.injected.every(
+        (entry: { expectedValidator?: unknown }) => entry.expectedValidator === 'reachability',
+      ),
+    ).toBe(true);
   });
 });
 
@@ -313,14 +315,19 @@ describe('zhu-fu-variants / validation result contracts', () => {
     expect(benchResults.errorInjection.length).toBe(30);
   });
 
-  it('should have exactly 10 extreme-damage entries total', () => {
-    expect(benchResults.extremeDamage.length).toBe(10);
+  it('should have exactly 9 extreme-damage entries total', () => {
+    // The current missing-state-provider fixture carries two entries, so the
+    // curated extreme-damage set is 3+2+1+2+1 = 9 entries.
+    expect(benchResults.extremeDamage.length).toBe(9);
   });
 
   // ── Pipeline F1 must be near-perfect ────────────────────────────────
-  it('pipelineF1 should be { precision: 1, recall: 0.925, f1: 0.961 }', () => {
+  it('pipelineF1 should be { precision: 1, recall: 0.923, f1: 0.96 }', () => {
     expect(benchResults.pipelineF1).toBeDefined();
-    expect(benchResults.pipelineF1).toMatchObject({ precision: 1, recall: 0.925, f1: 0.961 });
+    // 36 of 39 curated entries match: every expectMatch-true contract fires
+    // its validator; only the three documented expectMatch-false contracts
+    // (006 world_rule, 012/013 factual_detail) are counted as misses.
+    expect(benchResults.pipelineF1).toMatchObject({ precision: 1, recall: 0.923, f1: 0.96 });
   });
 
   // ── Per-file fixture contract checks ───────────────────────────────
@@ -455,7 +462,7 @@ describe('zhu-fu-variants / validation result contracts', () => {
         { expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true },
       ],
     },
-    '002_postcondition_swap': {
+    '002_boundary_precondition_breaks': {
       entries: [
         { expectedValidator: 'causality', expectedSeverity: 'error', expectMatch: true },
         { expectedValidator: 'causality', expectedSeverity: 'error', expectMatch: true },
@@ -464,9 +471,8 @@ describe('zhu-fu-variants / validation result contracts', () => {
     '003_circular_dependency': {
       entries: [{ expectedValidator: 'causality', expectedSeverity: 'error', expectMatch: true }],
     },
-    '004_missing_genesis': {
+    '004_missing_state_provider': {
       entries: [
-        { expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true },
         { expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true },
         { expectedValidator: 'reachability', expectedSeverity: 'warning', expectMatch: true },
       ],
@@ -571,7 +577,10 @@ import {
   type AnalysisResult,
   EntityMapper,
   type EntityRegistry,
+  type EntityTypeCatalog,
+  FsStorage,
   InMemoryEntityRegistry,
+  initializeProject,
   ResultAggregator,
   type WorldState,
 } from '../src/index.ts';
@@ -581,8 +590,10 @@ describe('zhu-fu-variants / registry field availability', () => {
 
   let registry: EntityRegistry;
   beforeAll(() => {
+    // Current contract: registry.load receives ProjectData (never a path).
+    const data = new EntityMapper(FIXTURE).loadProject();
     registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    registry.load(data);
   });
 
   it('xianglins_wife entity has aliases in registry state', () => {
@@ -619,14 +630,16 @@ describe('zhu-fu-variants / registry field availability', () => {
     expect(entity!.state['profession']).toBe('佣工');
   });
 
-  it('registry state preserves explicit initialState without overwrite', () => {
+  it('registry state exposes promoted definition fields without fabrication', () => {
     const entity = registry.resolve('xianglins_wife');
     expect(entity).not.toBeNull();
-    // initialState.location should be present (not overwritten by top-level fields)
-    expect(entity!.state['location']).toBe('weijia_shan');
-    expect(entity!.state['status']).toBe('alive');
-    expect(entity!.state['condition']).toBe('widowed_seeking_work');
-    // traits should also be present
+    // initialState moved to event introduction boundaries in the current
+    // contract — the registry must not fabricate those fields from top-level
+    // definition data.
+    expect(entity!.state['location']).toBeUndefined();
+    expect(entity!.state['status']).toBeUndefined();
+    expect(entity!.state['condition']).toBeUndefined();
+    // Promoted top-level fields survive into state.
     const traits = entity!.state['traits'];
     expect(Array.isArray(traits)).toBe(true);
     expect(traits).toContain('hardworking');
@@ -637,11 +650,14 @@ describe('zhu-fu-variants / alias validator issue emission', () => {
   const FIXTURE = path.resolve(ROOT, 'fixtures', 'zhu-fu');
 
   let registry: EntityRegistry;
+  let entityTypeCatalog: EntityTypeCatalog;
   beforeAll(() => {
-    registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    // Current contract: validators receive the compiled project catalog for
+    // semantic-role lookups (aliases carries semanticRole 'identity').
+    const { registry: loadedRegistry, entityTypes } = initializeProject(FIXTURE, new FsStorage());
+    registry = loadedRegistry;
+    entityTypeCatalog = entityTypes;
   });
-
   it('AliasValidator emits issue for name not in known aliases when registry is seeded', () => {
     // Build a minimal event and state matching the 024_alias_inconsistency fixture
     const event = {
@@ -711,7 +727,13 @@ describe('zhu-fu-variants / alias validator issue emission', () => {
       },
     };
 
-    const aggregator = new ResultAggregator();
+    const aggregator = new ResultAggregator(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      entityTypeCatalog,
+    );
     const result = aggregator.validateRender('', event, state, mockAnalysis, undefined, registry);
 
     // The alias validator should fire for "祥林家的" — not in known aliases
@@ -725,9 +747,13 @@ describe('zhu-fu-variants / pronoun validator issue emission', () => {
   const FIXTURE = path.resolve(ROOT, 'fixtures', 'zhu-fu');
 
   let registry: EntityRegistry;
+  let entityTypeCatalog: EntityTypeCatalog;
   beforeAll(() => {
-    registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE);
+    // Current contract: validators receive the compiled project catalog for
+    // semantic-role lookups (pronoun_consistency is a narrative attribute).
+    const { registry: loadedRegistry, entityTypes } = initializeProject(FIXTURE, new FsStorage());
+    registry = loadedRegistry;
+    entityTypeCatalog = entityTypes;
   });
 
   it('PronounValidator emits issue for gender-mismatched pronouns via Pass 2 narrativeChecks', () => {
@@ -803,7 +829,13 @@ describe('zhu-fu-variants / pronoun validator issue emission', () => {
       },
     };
 
-    const aggregator = new ResultAggregator();
+    const aggregator = new ResultAggregator(
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      entityTypeCatalog,
+    );
     const result = aggregator.validateRender(
       prose,
       event,

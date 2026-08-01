@@ -16,23 +16,22 @@
 //   6. Read set & jobs      → what reads to verify, what work to execute
 // ============================================================================
 
+import type { StorageWrite, TransactionReadExpectation } from '../storage/types.ts';
 import type { BranchPath } from '../types/branch.ts';
 import type { EditorialError, EditorialPlanSummaryV1, SceneSelector } from '../types/editorial.ts';
 import type { ReviewComment } from '../types/review.ts';
-import type { TransactionReadExpectation, StorageWrite } from '../storage/types.ts';
-import type { SceneCatalog, SelectorPreflightResult } from './selector.ts';
-import { preflightSelector } from './selector.ts';
 import {
+  type CompiledSceneIdentity,
   canonicalJson,
+  computeEditorialBasisHash,
+  computePlanHash,
   computeSceneSourceHash,
   computeScopeHash,
-  computeEditorialBasisHash,
   computeValidationIdentity,
-  computePlanHash,
-  type CompiledSceneIdentity,
   type ValidationIdentityInput,
-  type PlanHashInput,
 } from './identity.ts';
+import type { SceneCatalog, SelectorPreflightResult } from './selector.ts';
+import { preflightSelector } from './selector.ts';
 
 // ============================================================================
 // Compile Input
@@ -62,7 +61,11 @@ export interface EditorialCompileInput {
       readonly signedAt: string;
       readonly reason: string;
     }>;
-    readonly batch?: { readonly batchSize?: number; readonly windowSize?: number; readonly failFast?: boolean };
+    readonly batch?: {
+      readonly batchSize?: number;
+      readonly windowSize?: number;
+      readonly failFast?: boolean;
+    };
     readonly maxRounds?: number;
   };
   /** Branch‑scoped event catalog (all authored events reachable on this branch). */
@@ -231,12 +234,9 @@ const REVIEW_SCOPE_ORDER: Readonly<Record<ReviewComment['target']['type'], numbe
 };
 
 /** Stable feedback order: scope, creation time, then immutable review ID. */
-export function sortReviewFeedback(
-  reviews: readonly ReviewComment[],
-): ReviewComment[] {
+export function sortReviewFeedback(reviews: readonly ReviewComment[]): ReviewComment[] {
   return [...reviews].sort((left, right) => {
-    const scopeOrder =
-      REVIEW_SCOPE_ORDER[left.target.type] - REVIEW_SCOPE_ORDER[right.target.type];
+    const scopeOrder = REVIEW_SCOPE_ORDER[left.target.type] - REVIEW_SCOPE_ORDER[right.target.type];
     if (scopeOrder !== 0) return scopeOrder;
     const createdOrder = left.createdAt.localeCompare(right.createdAt);
     return createdOrder !== 0 ? createdOrder : left.id.localeCompare(right.id);
@@ -244,9 +244,7 @@ export function sortReviewFeedback(
 }
 
 /** Canonical feedback identity excludes lifecycle, actor, applications, and time. */
-export function reviewFeedbackProjection(
-  review: ReviewComment,
-): ReviewFeedbackProjection {
+export function reviewFeedbackProjection(review: ReviewComment): ReviewFeedbackProjection {
   return {
     target: {
       type: review.target.type,
@@ -464,9 +462,7 @@ export function compileReadSet(
  * Two identical inputs ALWAYS produce two identical outputs (deep‑equal
  * and planHash‑equal).
  */
-export function compileEditorialRun(
-  input: EditorialCompileInput,
-): EditorialCompileOutput {
+export function compileEditorialRun(input: EditorialCompileInput): EditorialCompileOutput {
   // ── 1. Selector preflight ──────────────────────────────────────────
 
   const preflight: SelectorPreflightResult = preflightSelector(
@@ -507,11 +503,7 @@ export function compileEditorialRun(
 
   for (const eventId of selectedEventIds) {
     const eventContent = input.eventContents[eventId] ?? '';
-    const sourceHash = computeSceneSourceHash(
-      eventId,
-      eventContent,
-      input.sourceDocumentContents,
-    );
+    const sourceHash = computeSceneSourceHash(eventId, eventContent, input.sourceDocumentContents);
     const scopeHash = computeScopeHash(eventId, input.request.branchPath);
     const latestRev = input.latestRevisions[eventId] ?? null;
     const editorialBasisHash = computeEditorialBasisHash(
@@ -575,9 +567,7 @@ export function compileEditorialRun(
 
   // ── 5. Plan hash ───────────────────────────────────────────────────
 
-  const waiverHashes = (input.request.waivers ?? [])
-    .map((waiver) => canonicalJson(waiver))
-    .sort();
+  const waiverHashes = (input.request.waivers ?? []).map((waiver) => canonicalJson(waiver)).sort();
   const feedbackHashes = (input.request.revision?.reviewIds ?? []).map((reviewId) => {
     const review = input.reviewComments.find((candidate) => candidate.id === reviewId);
     return canonicalJson({

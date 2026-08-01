@@ -250,7 +250,7 @@ function validateCrossDomainReadSets(
   // For requireEqual: all incoming snapshots must agree on the value.
   // For selectBranch: the selected branch must have a valid snapshot.
   // For literal: the literal value must respect lifecycle constraints.
-  for (const [domain, policy] of Object.entries(plan.policies)) {
+  for (const policy of Object.values(plan.policies)) {
     if (policy.type === 'requireEqual') {
       // requireEqual demands all incoming snapshots produce identical values
       // (cross-branch agreement check — full validation at reconciliation time).

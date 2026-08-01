@@ -6,7 +6,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const FILES = [
   ['docs/report/drc-stress-report-run1-2026-07-27.md', 'docs/report/drc-stress-report-run1.md'],
   ['docs/report/drc-stress-report-run2-2026-07-27.md', 'docs/report/drc-stress-report-run2.md'],
-  ['docs/report/drc-stress-stability-run2-2026-07-27.md', 'docs/report/drc-stress-stability-run2.md'],
+  [
+    'docs/report/drc-stress-stability-run2-2026-07-27.md',
+    'docs/report/drc-stress-stability-run2.md',
+  ],
 ];
 
 const canonicalFor = (oldPath) => {

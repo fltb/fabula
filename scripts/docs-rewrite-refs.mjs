@@ -54,16 +54,21 @@ const DATED = (old) => {
 
 const oldPaths = Object.keys(RENAME_DATE);
 // Find all files in repo (excluding .git/, node_modules, dist) and update references.
-const candidates = execSync(
-  'git ls-files | grep -E "\\.(md|mdx|json|yaml|yml|ts|mjs|js|sh)$"',
-  { encoding: 'utf8' },
-).split('\n').filter(Boolean);
+const candidates = execSync('git ls-files | grep -E "\\.(md|mdx|json|yaml|yml|ts|mjs|js|sh)$"', {
+  encoding: 'utf8',
+})
+  .split('\n')
+  .filter(Boolean);
 
 // Build a fast lookup: which old paths appear in this file?
 const fileToOlds = new Map();
 for (const file of candidates) {
   let content;
-  try { content = readFileSync(file, 'utf8'); } catch { continue; }
+  try {
+    content = readFileSync(file, 'utf8');
+  } catch {
+    continue;
+  }
   const present = oldPaths.filter((old) => content.includes(old));
   if (present.length > 0) fileToOlds.set(file, present);
 }

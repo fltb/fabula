@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Strict docs time-stamping. Run from repo root.
 import { execSync } from 'node:child_process';
-import { readFileSync, writeFileSync, statSync, existsSync, renameSync } from 'node:fs';
+import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SKIP_RENAME = new Set([
@@ -23,7 +23,8 @@ function gitLogDate(path) {
     let mm = parseInt(m[2].slice(3, 5), 10);
     if (tzHours !== 8 || tzSign !== 1) {
       // Convert to CST
-      const offset = tzSign * (parseInt(m[3].slice(1, 3), 10) * 60 + parseInt(m[3].slice(3, 5), 10));
+      const offset =
+        tzSign * (parseInt(m[3].slice(1, 3), 10) * 60 + parseInt(m[3].slice(3, 5), 10));
       const cstOffset = 8 * 60;
       const delta = cstOffset - offset;
       const total = hh * 60 + mm + delta;
@@ -54,13 +55,7 @@ function mtimeInfo(path) {
 }
 
 function listFiles() {
-  const roots = [
-    'docs/report',
-    'docs/audits',
-    'docs/todos',
-    'docs/handoffs',
-    'docs/decisions',
-  ];
+  const roots = ['docs/report', 'docs/audits', 'docs/todos', 'docs/handoffs', 'docs/decisions'];
   const out = [];
   for (const root of roots) {
     try {
@@ -75,12 +70,16 @@ function ensureHeader(path, timeLine) {
   const original = readFileSync(path, 'utf8');
   const lines = original.split('\n');
   // Find first H1.
-  let h1Idx = lines.findIndex((l) => /^#\s/.test(l));
+  const h1Idx = lines.findIndex((l) => /^#\s/.test(l));
   // Find first matching existing time-line, in any common form.
-  const timeRe = /^(\s*)(>+\s*)?(\*\*?)(?:时间|Time|Date|日期|TIME|DATE|DATE)\1?(?:[:：]\s*)(.+?)\*?$/;
+  const timeRe =
+    /^(\s*)(>+\s*)?(\*\*?)(?:时间|Time|Date|日期|TIME|DATE|DATE)\1?(?:[:：]\s*)(.+?)\*?$/;
   let existingIdx = -1;
   for (let i = 0; i < Math.min(lines.length, 12); i++) {
-    if (timeRe.test(lines[i])) { existingIdx = i; break; }
+    if (timeRe.test(lines[i])) {
+      existingIdx = i;
+      break;
+    }
   }
   let next = lines;
   if (existingIdx >= 0) {
@@ -147,4 +146,14 @@ for (const { newPath, timeLine } of plan) {
   }
 }
 
-console.log(JSON.stringify({ renamedCount, updatedCount, plan: plan.map(({ oldPath, newPath }) => ({ oldPath, newPath })) }, null, 2));
+console.log(
+  JSON.stringify(
+    {
+      renamedCount,
+      updatedCount,
+      plan: plan.map(({ oldPath, newPath }) => ({ oldPath, newPath })),
+    },
+    null,
+    2,
+  ),
+);

@@ -16,6 +16,9 @@ const result = await build({
     // Host server entry: listener lifecycle + facade. Bundling inlines its
     // listener/Yjs imports, so no separate listener entry is emitted.
     resolve(root, 'src/host/server.ts'),
+    // Authenticated Streamable MCP attachment: explicit entry so the Host
+    // composition layer can import the production endpoint after bundling.
+    resolve(root, 'src/host/mcp/index.ts'),
     // Host process entry: runnable `start:host` target (node dist/host/host/main.js).
     resolve(root, 'src/host/main.ts'),
   ],

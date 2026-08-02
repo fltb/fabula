@@ -1,28 +1,36 @@
 import {
   getProjectStatus,
   listEntities,
+  type ProjectSourceSnapshotV1,
   showEntity,
   validateNovel,
-  type ProjectSourceSnapshotV1,
 } from '@novalistically/core';
 import {
+  type EditorialRuntime,
   getSourceDocument,
   listSourceDocuments,
   previewSourceChange,
   renderNovel,
-  type EditorialRuntime,
   type SceneSelector,
   type SourceChangeV1,
 } from '@novalistically/core/editorial';
 
 /**
  * CLI's optional MCP registry is host-bound: callers supply an already-open
- * source projection and explicit semantic runtime. It owns no path, storage,
- * credentials, or transport. Workbench supplies the authenticated transport.
+ * source projection, an explicit semantic runtime, and the local mutation
+ * identity (actor + operation-ID allocator) sourced from the injected
+ * runtime/host. It owns no path, storage, credentials, or transport.
+ * Workbench supplies the authenticated transport.
  */
 export interface HostBoundMcpContext {
   readonly currentSource: () => ProjectSourceSnapshotV1;
   readonly runtime: EditorialRuntime;
+  /** Host-supplied local actor identity for mutation attribution; never client-supplied. */
+  readonly actorId: string;
+  /** Host-supplied operation-ID allocator, sourced from the injected runtime/host; never client-supplied. */
+  readonly allocateOperationId: () => string;
+  /** Optional host-level render seam; production uses Core renderNovel. */
+  readonly render?: typeof renderNovel;
 }
 
 export interface HostBoundMcpTool {
@@ -43,7 +51,11 @@ function selector(value: unknown): SceneSelector {
   if (input.type === 'chapter' && typeof input.chapter === 'number') {
     return { type: 'chapter', chapter: input.chapter };
   }
-  if (input.type === 'events' && Array.isArray(input.eventIds) && input.eventIds.every((id) => typeof id === 'string')) {
+  if (
+    input.type === 'events' &&
+    Array.isArray(input.eventIds) &&
+    input.eventIds.every((id) => typeof id === 'string')
+  ) {
     return { type: 'events', eventIds: input.eventIds };
   }
   throw new Error('Invalid scene selector');
@@ -51,13 +63,17 @@ function selector(value: unknown): SceneSelector {
 
 /** Return explicit tool definitions suitable for an authenticated Host transport. */
 export function createHostBoundMcpTools(context: HostBoundMcpContext): readonly HostBoundMcpTool[] {
+  const render = context.render ?? renderNovel;
   return [
     {
       name: 'nova_status',
       run: async () => {
         const source = context.currentSource();
         const validation = await validateNovel(source);
-        return { status: getProjectStatus(source, new Map(validation.results)), iss: validation.iss };
+        return {
+          status: getProjectStatus(source, new Map(validation.results)),
+          iss: validation.iss,
+        };
       },
     },
     {
@@ -96,7 +112,8 @@ export function createHostBoundMcpTools(context: HostBoundMcpContext): readonly 
       name: 'nova_entity_list',
       run: async (input) => {
         const { kind } = asRecord(input);
-        if (kind !== undefined && typeof kind !== 'string') throw new Error('kind must be a string');
+        if (kind !== undefined && typeof kind !== 'string')
+          throw new Error('kind must be a string');
         return listEntities(context.currentSource(), kind as string | undefined);
       },
     },
@@ -104,18 +121,25 @@ export function createHostBoundMcpTools(context: HostBoundMcpContext): readonly 
       name: 'nova_render',
       run: async (input) => {
         const request = asRecord(input);
-        const { operationId, actorId, sceneSelector, model } = request;
-        if (typeof operationId !== 'string' || typeof actorId !== 'string') {
-          throw new Error('operationId and actorId must be strings');
+        // Fail closed: mutation identity is host-derived. Client-supplied
+        // actorId/operationId (or any other field) are rejected as unknown.
+        const unknown = Object.keys(request).find(
+          (key) => key !== 'sceneSelector' && key !== 'model',
+        );
+        if (unknown !== undefined) {
+          throw new Error(
+            `Unknown field "${unknown}"; this tool accepts only: sceneSelector, model.`,
+          );
         }
-        if (model !== undefined && typeof model !== 'string') throw new Error('model must be a string');
-        return renderNovel(
+        if (request.model !== undefined && typeof request.model !== 'string')
+          throw new Error('model must be a string');
+        return render(
           {
             version: 1,
             source: context.currentSource(),
-            selector: selector(sceneSelector),
-            mutation: { operationId, actorId },
-            ...(typeof model === 'string' ? { model } : {}),
+            selector: selector(request.sceneSelector),
+            mutation: { operationId: context.allocateOperationId(), actorId: context.actorId },
+            ...(typeof request.model === 'string' ? { model: request.model } : {}),
           },
           context.runtime,
         );

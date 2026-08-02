@@ -7,9 +7,11 @@
  * or protocol) from client-supplied headers, and it never terminates TLS
  * itself. The optional `upgrade` seam wires raw HTTP upgrade events (the
  * authenticated Yjs WebSocket surface mounts here) and guarantees upgraded
- * resources are closed before the HTTP server stops. Identity, Yjs and MCP
- * surfaces are otherwise out of scope for this module; the Host server
- * facade (`./server.ts`) is the composition seam where they mount.
+ * resources are closed before the HTTP server stops. Mutation and MCP routes
+ * register through guarded pre-start-only seams; identity, the Yjs gateway
+ * and the MCP transport protocol are otherwise out of scope for this module —
+ * the Host server facade (`./server.ts`) is the composition seam where they
+ * mount.
  */
 
 import type { IncomingMessage } from 'node:http';
@@ -22,12 +24,15 @@ export type HostListenerMode = 'loopback' | 'lan' | 'unix';
 export type EffectiveProtocol = 'http' | 'https';
 export type HostHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type MutationHttpMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-export type HostEndpointKind = 'health' | 'status' | 'mutation';
+export type HostEndpointKind = 'health' | 'status' | 'mutation' | 'mcp';
 
 export const DEFAULT_HOST_LISTENER_PORT = 8787;
 export const DEFAULT_HOST_HEALTH_PATH = '/health';
 export const HOST_STATUS_PATH = '/status';
 export const MUTATION_METHODS: readonly MutationHttpMethod[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
+
+/** Methods mounted for each MCP transport route: streamable HTTP negotiation plus JSON-RPC. */
+export const MCP_METHODS: readonly HostHttpMethod[] = ['GET', 'POST', 'DELETE'];
 
 /** Host/Origin values that never expose the listener on the network. */
 export function isLoopbackHost(host: string): boolean {
@@ -53,7 +58,7 @@ export interface HostListenerConfig {
   readonly trustForwardedHeaders?: boolean;
   /** Health endpoint path. Default {@link DEFAULT_HOST_HEALTH_PATH}. */
   readonly healthPath?: string;
-  /** Host/Origin allowlist enforced on mutation route requests. */
+  /** Host/Origin allowlist enforced on guarded route (mutation and MCP) requests. */
   readonly mutation?: MutationAllowlist;
   /**
    * Optional transport-level upgrade seam. When set, the listener wires raw
@@ -120,7 +125,7 @@ export interface HostEndpoint {
   readonly method: HostHttpMethod;
   readonly path: string;
   readonly kind: HostEndpointKind;
-  /** True for mutation routes, which are allowlist-guarded. */
+  /** True for allowlist-guarded routes (mutation and MCP). */
   readonly guarded: boolean;
 }
 
@@ -128,6 +133,7 @@ export interface HostEndpointProjection {
   readonly health: HostEndpoint;
   readonly status: HostEndpoint;
   readonly mutations: readonly HostEndpoint[];
+  readonly mcp: readonly HostEndpoint[];
 }
 
 export interface HostHealthPayload {
@@ -167,7 +173,7 @@ export interface HostListenerHandle {
 
 export interface HostListener {
   readonly config: Readonly<HostListenerConfig>;
-  /** Root Hono app: protocol middleware, health and status endpoints, mutation routes. */
+  /** Root Hono app: protocol middleware, health and status endpoints, guarded mutation and MCP routes. */
   readonly app: HostListenerApp;
   /** Bind the configured transport and resolve a launch handle. */
   start(): Promise<HostListenerHandle>;
@@ -175,7 +181,7 @@ export interface HostListener {
   close(): Promise<void>;
   /** Live typed status projection. */
   status(): HostListenerStatus;
-  /** Typed endpoint projection (health, status, registered mutations). */
+  /** Typed endpoint projection (health, status, registered mutations, MCP routes). */
   endpoints(): HostEndpointProjection;
   /**
    * Register a mutation route under the Host/Origin allowlist. Only mutation
@@ -187,6 +193,13 @@ export interface HostListener {
     path: string,
     handler: Handler<HostListenerEnv>,
   ): void;
+  /**
+   * Register an MCP transport route. GET, POST and DELETE are mounted at
+   * exactly `path`, each behind the same Host/Origin allowlist guard as
+   * mutation routes; the MCP transport itself (authentication, protocol)
+   * stays with the caller. Registration must happen before `start()`.
+   */
+  registerMcpRoute(path: string, handler: Handler<HostListenerEnv>): void;
   isMutationAllowed(host: string | undefined, origin: string | undefined): boolean;
 }
 
@@ -512,6 +525,7 @@ class HostListenerImpl implements HostListener {
     port: null,
   };
   private readonly mutationEndpoints: HostEndpoint[] = [];
+  private readonly mcpEndpoints: HostEndpoint[] = [];
 
   constructor(config: HostListenerConfig) {
     this.config = { ...config };
@@ -626,8 +640,14 @@ class HostListenerImpl implements HostListener {
         kind: 'health',
         guarded: false,
       },
-      status: { method: 'GET', path: HOST_STATUS_PATH, kind: 'status', guarded: false },
+      status: {
+        method: 'GET',
+        path: HOST_STATUS_PATH,
+        kind: 'status',
+        guarded: false,
+      },
       mutations: [...this.mutationEndpoints],
+      mcp: [...this.mcpEndpoints],
     };
   }
 
@@ -651,6 +671,21 @@ class HostListenerImpl implements HostListener {
     }
     this.mutationEndpoints.push({ method, path, kind: 'mutation', guarded: true });
     this.app.on(method, path, mutationGuard(this), handler);
+  }
+
+  registerMcpRoute(path: string, handler: Handler<HostListenerEnv>): void {
+    if (typeof path !== 'string' || path.length === 0 || !path.startsWith('/')) {
+      throw new HostListenerError(
+        `MCP route path must start with '/'; got ${JSON.stringify(path)}`,
+      );
+    }
+    if (this.state.running) {
+      throw new HostListenerStateError('MCP routes must be registered before start()');
+    }
+    for (const method of MCP_METHODS) {
+      this.mcpEndpoints.push({ method, path, kind: 'mcp', guarded: true });
+      this.app.on(method, path, mutationGuard(this), handler);
+    }
   }
 
   isMutationAllowed(host: string | undefined, origin: string | undefined): boolean {

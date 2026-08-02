@@ -15,6 +15,7 @@ import type {
   MutationHttpMethod,
 } from './listener.js';
 import { createHostListener, HostListenerStateError } from './listener.js';
+import { DEFAULT_MCP_STREAMABLE_PATH, type McpStreamableEndpoint } from './mcp/index.js';
 import type { ProjectSessionRegistry } from './project-session.js';
 import {
   createYjsGateway,
@@ -86,9 +87,22 @@ export interface HostYjsOptions {
   readonly now?: () => string;
 }
 
+/**
+ * Optional prebuilt authenticated MCP endpoint wiring. Absent = no MCP
+ * surface at all: the Host fails closed and no route is exposed.
+ */
+export interface HostServerMcpOptions {
+  /** Prebuilt authenticated Streamable HTTP MCP endpoint to mount. */
+  readonly endpoint: McpStreamableEndpoint;
+  /** Exact guarded route path; defaults to the MCP module's `DEFAULT_MCP_STREAMABLE_PATH` (`/mcp`). */
+  readonly path?: string;
+}
+
 export interface HostServerOptions extends HostListenerConfig {
   /** Mount an authenticated Yjs gateway on this Host; defaults to none (fail closed). */
   readonly yjs?: HostYjsOptions;
+  /** Mount a prebuilt authenticated MCP endpoint on this Host; defaults to none (fail closed). */
+  readonly mcp?: HostServerMcpOptions;
 }
 
 export interface HostServer {
@@ -112,6 +126,12 @@ export interface HostServer {
     path: string,
     handler: Handler<HostListenerEnv>,
   ): void;
+  /**
+   * Register an MCP transport route on the listener: GET/POST/DELETE at one
+   * exact path, each behind the same Host/Origin allowlist guard as mutation
+   * routes. Pre-start-only, like mutation registration.
+   */
+  registerMcpRoute(path: string, handler: Handler<HostListenerEnv>): void;
   isMutationAllowed(host: string | undefined, origin: string | undefined): boolean;
 }
 
@@ -545,7 +565,10 @@ type ReopenableYjsGateway = YjsGateway & { readonly open?: () => void | Promise<
  * `close()` disconnects every Yjs connection (presence cleanup), terminates
  * every WebSocket and the ws server, then stops the HTTP listener. A later
  * `start()` reopens the surface for a fresh listen cycle, so close/start
- * sequences are safe and never duplicate the upgrade handler.
+ * sequences are safe and never duplicate the upgrade handler. When `mcp`
+ * options are provided, the prebuilt authenticated MCP endpoint is mounted
+ * through the listener's guarded MCP route during construction, before any
+ * start; without `mcp` options the Host exposes no MCP surface (fail closed).
  */
 export function createHostServer(options: HostServerOptions = {}): HostServer {
   const yjs = options.yjs === undefined ? null : createYjsGateway(options.yjs);
@@ -554,6 +577,16 @@ export function createHostServer(options: HostServerOptions = {}): HostServer {
   // seam so no second, less-guarded upgrade path can exist beside it.
   const upgrade = yjs === null ? options.upgrade : createYjsUpgradeHandler(yjs);
   const listener = createHostListener({ ...options, upgrade });
+  // Mount the prebuilt authenticated MCP endpoint through the guarded MCP
+  // route while the listener is still unstarted: registration happens during
+  // construction so the surface exists before `start()` and an unconfigured
+  // Host never registers an MCP route at all.
+  const mcp = options.mcp;
+  if (mcp !== undefined) {
+    listener.registerMcpRoute(mcp.path ?? DEFAULT_MCP_STREAMABLE_PATH, (context) =>
+      mcp.endpoint.handle(context.req.raw),
+    );
+  }
   return {
     listener,
     app: listener.app,
@@ -580,6 +613,7 @@ export function createHostServer(options: HostServerOptions = {}): HostServer {
     endpoints: () => listener.endpoints(),
     registerMutationRoute: (method, path, handler) =>
       listener.registerMutationRoute(method, path, handler),
+    registerMcpRoute: (path, handler) => listener.registerMcpRoute(path, handler),
     isMutationAllowed: (host, origin) => listener.isMutationAllowed(host, origin),
   };
 }

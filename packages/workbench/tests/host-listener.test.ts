@@ -136,6 +136,7 @@ describe('Host listener HTTP surface', () => {
       health: { method: 'GET', path: '/_health', kind: 'health', guarded: false },
       status: { method: 'GET', path: '/status', kind: 'status', guarded: false },
       mutations: [{ method: 'POST', path: '/api/scenes', kind: 'mutation', guarded: true }],
+      mcp: [],
     });
     const handle = await listener.start();
     const res = await listener.app.request('/status');
@@ -311,6 +312,108 @@ describe('mutation route allowlist', () => {
   });
 });
 
+describe('MCP route registration', () => {
+  it('mounts GET, POST and DELETE behind the Host/Origin guard', async () => {
+    const listener = track(
+      createHostListener({
+        port: 0,
+        mutation: { allowedHosts: ['localhost'] },
+      }),
+    );
+    const hits: string[] = [];
+    listener.registerMcpRoute('/mcp', (c) => {
+      hits.push(c.req.method);
+      return c.json({ ok: true, method: c.req.method });
+    });
+    const handle = await listener.start();
+
+    for (const method of ['GET', 'POST', 'DELETE'] as const) {
+      const res = await listener.app.request('/mcp', {
+        method,
+        headers: { host: 'localhost:9000' },
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true, method });
+    }
+    expect(hits).toEqual(['GET', 'POST', 'DELETE']);
+
+    // A disallowed host is rejected on every MCP method and never reaches the handler.
+    for (const method of ['GET', 'POST', 'DELETE'] as const) {
+      const denied = await listener.app.request('/mcp', {
+        method,
+        headers: { host: 'evil.example' },
+      });
+      expect(denied.status).toBe(403);
+    }
+    expect(hits).toEqual(['GET', 'POST', 'DELETE']);
+    await handle.close();
+  });
+
+  it('guards MCP routes by Origin while allowing non-browser clients', async () => {
+    const listener = track(
+      createHostListener({ port: 0, mutation: { allowedOrigins: ['http://localhost:5173'] } }),
+    );
+    let reached = false;
+    listener.registerMcpRoute('/mcp', (c) => {
+      reached = true;
+      return c.json({ ok: true });
+    });
+    const handle = await listener.start();
+
+    const allowed = await listener.app.request('/mcp', {
+      method: 'POST',
+      headers: { origin: 'http://localhost:5173' },
+    });
+    expect(allowed.status).toBe(200);
+    expect(reached).toBe(true);
+
+    reached = false;
+    const denied = await listener.app.request('/mcp', {
+      method: 'POST',
+      headers: { origin: 'http://evil.example' },
+    });
+    expect(denied.status).toBe(403);
+    expect(reached).toBe(false);
+    await handle.close();
+  });
+
+  it('projects MCP routes as guarded endpoints in the status body', async () => {
+    const listener = track(createHostListener({ port: 0 }));
+    listener.registerMcpRoute('/mcp', (c) => c.json({ ok: true }));
+    expect(listener.endpoints().mcp).toEqual([
+      { method: 'GET', path: '/mcp', kind: 'mcp', guarded: true },
+      { method: 'POST', path: '/mcp', kind: 'mcp', guarded: true },
+      { method: 'DELETE', path: '/mcp', kind: 'mcp', guarded: true },
+    ]);
+    const handle = await listener.start();
+    const res = await listener.app.request('/status');
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.endpoints.mcp).toEqual([
+      { method: 'GET', path: '/mcp', kind: 'mcp', guarded: true },
+      { method: 'POST', path: '/mcp', kind: 'mcp', guarded: true },
+      { method: 'DELETE', path: '/mcp', kind: 'mcp', guarded: true },
+    ]);
+    await handle.close();
+  });
+
+  it('rejects invalid paths and late registration like mutation routes', async () => {
+    const listener = createHostListener();
+    expect(() => listener.registerMcpRoute('mcp', (c) => c.text('no'))).toThrow(HostListenerError);
+    expect(() => listener.registerMcpRoute('', (c) => c.text('no'))).toThrow(HostListenerError);
+    expect(() => listener.registerMcpRoute(undefined as never, (c) => c.text('no'))).toThrow(
+      HostListenerError,
+    );
+
+    const started = track(createHostListener({ port: 0 }));
+    const handle = await started.start();
+    expect(() => started.registerMcpRoute('/mcp', (c) => c.text('no'))).toThrow(
+      HostListenerStateError,
+    );
+    await handle.close();
+  });
+});
+
 describe('allowlist and protocol primitives', () => {
   it('splits hosts and matches portless allowlist entries', () => {
     expect(splitHostPort('LOCALHOST:9000')).toEqual({ host: 'localhost', port: '9000' });
@@ -396,6 +499,27 @@ describe('Host server facade', () => {
     expect(allowed.status).toBe(200);
     const denied = await server.app.request('/api/scenes/1', {
       method: 'DELETE',
+      headers: { host: 'evil.example' },
+    });
+    expect(denied.status).toBe(403);
+    await handle.close();
+  });
+
+  it('exposes MCP route registration through the facade under the guard', async () => {
+    const server = createHostServer({
+      port: 0,
+      mutation: { allowedHosts: ['localhost'] },
+    });
+    server.registerMcpRoute('/mcp', (c) => c.json({ ok: true }));
+    const handle = await server.start();
+    expect(server.endpoints().mcp).toHaveLength(3);
+    const allowed = await server.app.request('/mcp', {
+      method: 'POST',
+      headers: { host: 'localhost:9000' },
+    });
+    expect(allowed.status).toBe(200);
+    const denied = await server.app.request('/mcp', {
+      method: 'POST',
       headers: { host: 'evil.example' },
     });
     expect(denied.status).toBe(403);

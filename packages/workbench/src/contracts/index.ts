@@ -53,6 +53,7 @@ export type {
   AuthoringOperationStatusV1,
   AuthoringPhaseV1,
   AuthoringReconcileChoiceV1,
+  AuthoringPresenceMemberV1,
   AuthoringStateV1,
   AuthoringSubmitBlockReasonV1,
   AuthoringSubmitReceiptV1,

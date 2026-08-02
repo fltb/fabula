@@ -279,7 +279,24 @@ export type AuthoringActivityEventV1 =
       readonly projectId: string;
       readonly candidate: AuthoringExternalCandidateV1;
       readonly at: string;
+    }
+  | {
+      readonly type: 'presence-changed';
+      readonly version: AuthoringContractVersion;
+      readonly projectId: string;
+      /** Monotonic session presence generation; no session or capability data. */
+      readonly generation: number;
+      /** Safe collaborator projection only; never raw Yjs or credentials. */
+      readonly presence: readonly AuthoringPresenceMemberV1[];
+      readonly at: string;
     };
+
+/** Safe collaborator identity carried only by the authoring activity stream. */
+export interface AuthoringPresenceMemberV1 {
+  readonly actorId: string;
+  readonly surface: 'browser' | 'mcp' | 'yjs' | 'agent';
+  readonly since: string;
+}
 
 // ─── Browser authoring API paths ────────────────────────────────────────────
 
@@ -295,6 +312,9 @@ export const BROWSER_AUTHORING_RECONCILE_PATH = `${BROWSER_AUTHORING_BASE_PATH}/
 export const BROWSER_AUTHORING_OPERATIONS_PATH = `${BROWSER_AUTHORING_BASE_PATH}/operations`;
 /** `GET .../authoring/operations/:operationId` — one operation receipt. */
 export const BROWSER_AUTHORING_OPERATION_PATH = `${BROWSER_AUTHORING_BASE_PATH}/operations/:operationId`;
+/** `GET .../authoring/events` — guarded activity stream. */
+export const BROWSER_AUTHORING_EVENTS_PATH = `${BROWSER_AUTHORING_BASE_PATH}/events`;
+
 
 // ─── Strict MCP authoring tool I/O ──────────────────────────────────────────
 

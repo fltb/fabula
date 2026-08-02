@@ -1,0 +1,234 @@
+import { onCleanup, onMount } from 'solid-js';
+import * as Y from 'yjs';
+import { EditorState } from '@codemirror/state';
+import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { keymap, drawSelection, highlightActiveLine, lineNumbers, EditorView } from '@codemirror/view';
+import { yaml } from '@codemirror/lang-yaml';
+import { yCollab } from 'y-codemirror.next';
+import type { SourceStudioDocumentDescriptorV1 } from '../contracts/source-studio.js';
+
+export type YjsEditorConnectionStatus =
+  | 'idle'
+  | 'connecting'
+  | 'connected'
+  | 'disconnected'
+  | 'unavailable';
+
+export interface YjsEditorSelection {
+  readonly from: number;
+  readonly to: number;
+}
+
+export interface YjsEditorController {
+  /** Close this editor's private Yjs/WebSocket resources. */
+  close(): void;
+}
+
+export interface YjsEditorProps {
+  /** Host-issued descriptor; no document bytes are accepted as props. */
+  readonly descriptor: SourceStudioDocumentDescriptorV1;
+  /** Transient authenticated session credential, read only while connecting. */
+  readonly sessionId: string | null | undefined;
+  /** Same-origin Host URL; defaults to the current page origin. */
+  readonly baseUrl?: string;
+  readonly readOnly?: boolean;
+  readonly onStatusChange?: (status: YjsEditorConnectionStatus) => void;
+  /** Fired after local or remote Yjs state changes; never performs HTTP. */
+  readonly onWorkingChange?: () => void;
+  readonly onSelectionChange?: (selection: YjsEditorSelection) => void;
+  readonly onController?: (controller: YjsEditorController) => void;
+}
+
+const MESSAGE_SYNC = 0;
+const SYNC_STEP_1 = 0;
+const SYNC_STEP_2 = 1;
+const SYNC_UPDATE = 2;
+const REMOTE_ORIGIN = {};
+const WORKING_TEXT_TYPE = 'prose';
+
+function writeVarUint(target: number[], value: number): void {
+  let number = value >>> 0;
+  while (number > 0x7f) {
+    target.push((number & 0x7f) | 0x80);
+    number >>>= 7;
+  }
+  target.push(number);
+}
+
+function readVarUint(bytes: Uint8Array, cursor: { offset: number }): number {
+  let number = 0;
+  let shift = 0;
+  while (true) {
+    if (cursor.offset >= bytes.length) throw new Error('yjs frame is truncated');
+    const byte = bytes[cursor.offset++];
+    number |= (byte & 0x7f) << shift;
+    if ((byte & 0x80) === 0) return number >>> 0;
+    shift += 7;
+    if (shift > 28) throw new Error('yjs frame varuint overflow');
+  }
+}
+
+function encodeSyncFrame(syncType: number, payload: Uint8Array): Uint8Array {
+  const header: number[] = [];
+  writeVarUint(header, MESSAGE_SYNC);
+  writeVarUint(header, syncType);
+  writeVarUint(header, payload.length);
+  const frame = new Uint8Array(header.length + payload.length);
+  frame.set(header, 0);
+  frame.set(payload, header.length);
+  return frame;
+}
+
+function parseSyncFrame(bytes: Uint8Array): { readonly syncType: number; readonly payload: Uint8Array } | null {
+  const cursor = { offset: 0 };
+  const messageType = readVarUint(bytes, cursor);
+  if (messageType !== MESSAGE_SYNC) return null;
+  const syncType = readVarUint(bytes, cursor);
+  const length = readVarUint(bytes, cursor);
+  if (length > bytes.length - cursor.offset) throw new Error('yjs frame payload is truncated');
+  return { syncType, payload: bytes.slice(cursor.offset, cursor.offset + length) };
+}
+
+async function bytesFromSocketData(data: unknown): Promise<Uint8Array> {
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (data instanceof Uint8Array) return data;
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    return new Uint8Array(await data.arrayBuffer());
+  }
+  throw new Error('unsupported yjs WebSocket payload');
+}
+
+function yjsUrl(baseUrl: string | undefined, descriptor: SourceStudioDocumentDescriptorV1, sessionId: string): string {
+  const source = baseUrl ?? (typeof location === 'undefined' ? 'http://localhost/' : location.href);
+  const url = new URL(source);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.pathname = '/yjs';
+  url.search = '';
+  url.searchParams.set('session', sessionId);
+  url.searchParams.set('project', descriptor.projectId);
+  url.searchParams.set('document', descriptor.documentId);
+  return url.toString();
+}
+
+/**
+ * CodeMirror/Yjs editor binding for one Host-validated descriptor. The only
+ * network writes here are authenticated binary WebSocket Yjs updates. No
+ * fetch, submit or provider request is made from editor transactions.
+ */
+export function YjsEditor(props: YjsEditorProps) {
+  let host: HTMLDivElement | undefined;
+
+  onMount(() => {
+    const document = new Y.Doc();
+    const text = document.getText(WORKING_TEXT_TYPE);
+    let view: EditorView;
+    let socket: WebSocket | null = null;
+    let closed = false;
+    const pending: Uint8Array[] = [];
+
+    const status = (next: YjsEditorConnectionStatus): void => props.onStatusChange?.(next);
+    const send = (update: Uint8Array): void => {
+      if (socket?.readyState === WebSocket.OPEN) {
+        socket.send(encodeSyncFrame(SYNC_UPDATE, update));
+      } else {
+        pending.push(update.slice());
+      }
+    };
+
+    document.on('update', (update: Uint8Array, origin: unknown) => {
+      if (origin !== REMOTE_ORIGIN) send(update);
+      props.onWorkingChange?.();
+    });
+
+    const extensions = [
+      lineNumbers(),
+      drawSelection(),
+      highlightActiveLine(),
+      history(),
+      keymap.of([...defaultKeymap, ...historyKeymap]),
+      yaml(),
+      EditorView.lineWrapping,
+      yCollab(text, null),
+      EditorView.updateListener.of((update) => {
+        if (update.selectionSet) {
+          const range = update.state.selection.main;
+          props.onSelectionChange?.({ from: range.from, to: range.to });
+        }
+      }),
+      ...(props.readOnly ? [EditorState.readOnly.of(true)] : []),
+    ];
+    view = new EditorView({
+      state: EditorState.create({ doc: text.toString(), extensions }),
+      parent: host,
+    });
+
+    const controller: YjsEditorController = {
+      close() {
+        if (closed) return;
+        closed = true;
+        socket?.close();
+        socket = null;
+        view.destroy();
+        document.destroy();
+        status('disconnected');
+      },
+    };
+    props.onController?.(controller);
+
+    if (!props.descriptor.available) {
+      status('unavailable');
+    } else if (typeof props.sessionId !== 'string' || props.sessionId.length === 0) {
+      status('disconnected');
+    } else if (typeof WebSocket !== 'function') {
+      status('unavailable');
+    } else {
+      status('connecting');
+      try {
+        socket = new WebSocket(yjsUrl(props.baseUrl, props.descriptor, props.sessionId));
+        socket.binaryType = 'arraybuffer';
+        socket.addEventListener('open', () => {
+          if (closed || socket === null) return;
+          status('connected');
+          socket.send(encodeSyncFrame(SYNC_STEP_1, Y.encodeStateVector(document)));
+          for (const update of pending.splice(0)) {
+            if (socket.readyState !== WebSocket.OPEN) {
+              pending.unshift(update);
+              break;
+            }
+            socket.send(encodeSyncFrame(SYNC_UPDATE, update));
+          }
+        });
+        socket.addEventListener('message', (event) => {
+          void bytesFromSocketData(event.data)
+            .then((bytes) => {
+              if (closed) return;
+              const frame = parseSyncFrame(bytes);
+              if (frame === null) return;
+              if (frame.syncType === SYNC_STEP_2 || frame.syncType === SYNC_UPDATE) {
+                Y.applyUpdate(document, frame.payload, REMOTE_ORIGIN);
+                props.onWorkingChange?.();
+              }
+            })
+            .catch(() => {
+              if (!closed) status('disconnected');
+            });
+        });
+        socket.addEventListener('close', () => {
+          if (!closed) status('disconnected');
+        });
+        socket.addEventListener('error', () => {
+          if (!closed) status('disconnected');
+        });
+      } catch {
+        socket = null;
+        status('unavailable');
+      }
+    }
+
+    onCleanup(() => controller.close());
+  });
+
+  return <div ref={host} class="min-h-0 flex-1 overflow-auto" aria-label={`Editing ${props.descriptor.documentId}`} />;
+}
+
+export { encodeSyncFrame, parseSyncFrame };

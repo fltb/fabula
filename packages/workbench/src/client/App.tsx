@@ -1,11 +1,16 @@
 import type { JSX } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import type {
+  AuthoringOperationReceiptV1,
+  AuthoringStateV1,
+  BrowserAuthoringReconcileRequestV1,
+  BrowserAuthoringSubmitRequestV1,
   BrowserProjectOverviewV1,
   SceneAdoptionViewV1,
   SourceStudioDocumentDescriptorV1,
   SourceStudioStateV1,
   WorkbenchGraphProjectionV1,
+  WorkbenchRouteSelectorV1,
 } from '../contracts/index.js';
 import {
   loadWorkbenchPreferences,
@@ -15,6 +20,13 @@ import {
 import { GraphRoute, ProjectHome } from './projection-views';
 import { SceneCanvas } from './scene-canvas';
 import { SourceStudio, type SourceStudioYjsStatus } from './source-studio';
+import type { AgentClient } from './agent-client';
+import { AgentDrawer } from './ui/AgentDrawer';
+import {
+  createEditorAssistantContext,
+  EditorAssistantProvider,
+} from './editor-assistant-context';
+import type { YjsEditorSelection } from './yjs-editor';
 
 export const WORKBENCH_VIEWS = [
   { id: 'project-home', label: 'Project Home', glyph: '⌂' },
@@ -46,9 +58,24 @@ export interface AppProps {
   readonly graphProjection?: WorkbenchGraphProjectionV1 | null;
   /** Host-derived Source Studio state; working edits stay noncanonical until Host submission. */
   readonly sourceStudio?: SourceStudioStateV1 | null;
+  readonly authoringState?: AuthoringStateV1 | null;
+  readonly authoringOperations?: readonly AuthoringOperationReceiptV1[];
+  readonly sourceSessionId?: string | null;
   readonly sourceYjsStatus?: Readonly<Record<string, SourceStudioYjsStatus>>;
   readonly onConnectSourceYjs?: (descriptor: SourceStudioDocumentDescriptorV1) => void;
   readonly onSubmitSource?: (descriptor: SourceStudioDocumentDescriptorV1) => void;
+  readonly onSubmitAuthoring?: (
+    request: BrowserAuthoringSubmitRequestV1,
+  ) => void | Promise<void>;
+  readonly onReconcileAuthoring?: (
+    request: BrowserAuthoringReconcileRequestV1,
+  ) => void | Promise<void>;
+  readonly onGraphRouteChange?: (selector: WorkbenchRouteSelectorV1) => void;
+  readonly onSourceYjsStatusChange?: (
+    descriptor: SourceStudioDocumentDescriptorV1,
+    status: SourceStudioYjsStatus,
+  ) => void;
+  readonly agentClient?: AgentClient;
   /** Explicit, Host-derived adoption preview for the selected Scene Canvas. */
   readonly sceneAdoption?: SceneAdoptionViewV1 | null;
   readonly onRequestAdoption?: (candidate: SceneAdoptionViewV1) => void;
@@ -68,6 +95,7 @@ export interface InspectorProps {
 
 export interface OperationCenterProps {
   readonly expanded: boolean;
+  readonly operations?: readonly AuthoringOperationReceiptV1[];
   readonly onExpandedToggle: () => void;
 }
 
@@ -82,9 +110,28 @@ interface WorkspaceProps {
   readonly overview?: BrowserProjectOverviewV1 | null;
   readonly graphProjection?: WorkbenchGraphProjectionV1 | null;
   readonly sourceStudio?: SourceStudioStateV1 | null;
+  readonly authoringState?: AuthoringStateV1 | null;
+  readonly authoringOperations?: readonly AuthoringOperationReceiptV1[];
+  readonly sourceSessionId?: string | null;
+  readonly selectedSourceDocumentId?: string | null;
   readonly sourceYjsStatus?: Readonly<Record<string, SourceStudioYjsStatus>>;
   readonly onConnectSourceYjs?: (descriptor: SourceStudioDocumentDescriptorV1) => void;
   readonly onSubmitSource?: (descriptor: SourceStudioDocumentDescriptorV1) => void;
+  readonly onSubmitAuthoring?: (
+    request: BrowserAuthoringSubmitRequestV1,
+  ) => void | Promise<void>;
+  readonly onReconcileAuthoring?: (
+    request: BrowserAuthoringReconcileRequestV1,
+  ) => void | Promise<void>;
+  readonly onGraphRouteChange?: (selector: WorkbenchRouteSelectorV1) => void;
+  readonly onSourceYjsStatusChange?: (
+    descriptor: SourceStudioDocumentDescriptorV1,
+    status: SourceStudioYjsStatus,
+  ) => void;
+  readonly onSourceSelection?: (
+    descriptor: SourceStudioDocumentDescriptorV1,
+    selection: YjsEditorSelection,
+  ) => void;
   readonly sceneAdoption?: SceneAdoptionViewV1 | null;
   readonly onRequestAdoption?: (candidate: SceneAdoptionViewV1) => void;
 }
@@ -244,14 +291,26 @@ export function Workspace(props: WorkspaceProps) {
         <ProjectHome overview={props.overview ?? null} />
       </Show>
       <Show when={props.hostStatus === 'ready' && props.activeView === 'graph-route'}>
-        <GraphRoute projection={props.graphProjection ?? null} />
+        <GraphRoute
+          projection={props.graphProjection ?? null}
+          onRouteChange={props.onGraphRouteChange}
+        />
       </Show>
       <Show when={props.hostStatus === 'ready' && props.activeView === 'source-studio'}>
         <SourceStudio
           state={props.sourceStudio ?? null}
+          authoring={props.authoringState}
+          operations={props.authoringOperations}
+          sessionId={props.sourceSessionId}
+          selectedDocumentId={props.selectedSourceDocumentId}
+          onSelectDocument={props.onConnectSourceYjs}
           yjsStatus={props.sourceYjsStatus}
           onConnectYjs={props.onConnectSourceYjs}
           onSubmit={props.onSubmitSource}
+          onSubmitAuthoring={props.onSubmitAuthoring}
+          onReconcileAuthoring={props.onReconcileAuthoring}
+          onYjsStatusChange={props.onSourceYjsStatusChange}
+          onEditorSelection={props.onSourceSelection}
         />
       </Show>
       <Show when={props.hostStatus === 'ready' && props.activeView === 'scene-canvas'}>
@@ -325,13 +384,31 @@ export function OperationCenter(props: OperationCenterProps) {
       </div>
 
       <Show when={props.expanded}>
-        <div class="operation-empty" id="operation-center-content">
-          <span class="operation-pulse" aria-hidden="true" />
-          <div>
-            <h3>No operations running</h3>
-            <p>Host operations will appear here with explicit status and provenance.</p>
-          </div>
-        </div>
+        <Show
+          when={(props.operations?.length ?? 0) > 0}
+          fallback={
+            <div class="operation-empty" id="operation-center-content">
+              <span class="operation-pulse" aria-hidden="true" />
+              <div>
+                <h3>No operations running</h3>
+                <p>Host operations will appear here with explicit status and provenance.</p>
+              </div>
+            </div>
+          }
+        >
+          <ul id="operation-center-content" class="grid gap-[var(--wb-space-2)]" aria-label="Authoring operations">
+            <For each={props.operations ?? []}>
+              {(operation) => (
+                <li class="flex flex-wrap items-center justify-between gap-[var(--wb-space-3)] rounded-[var(--wb-radius-sm)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-[var(--wb-space-3)] py-[var(--wb-space-2)] text-sm">
+                  <span>
+                    <strong>{operation.kind}</strong> <code>{operation.operationId}</code>
+                  </span>
+                  <span aria-label={`${operation.kind} status`}>{operation.status}</span>
+                </li>
+              )}
+            </For>
+          </ul>
+        </Show>
       </Show>
     </section>
   );
@@ -441,6 +518,34 @@ export function WorkbenchShell(props: AppProps = {}) {
   const [agentShelfOpen, setAgentShelfOpen] = createSignal(
     props.initialAgentShelfOpen ?? stored.agentShelfOpen,
   );
+  const assistant = createEditorAssistantContext();
+  const [selectedSourceDocumentId, setSelectedSourceDocumentId] = createSignal<string | null>(
+    null,
+  );
+
+  const selectSourceDocument = (descriptor: SourceStudioDocumentDescriptorV1): void => {
+    setSelectedSourceDocumentId(descriptor.documentId);
+    assistant.clearSelection();
+    props.onConnectSourceYjs?.(descriptor);
+  };
+
+  const publishSourceSelection = (
+    descriptor: SourceStudioDocumentDescriptorV1,
+    selection: YjsEditorSelection,
+  ): void => {
+    const baseVector = props.authoringState?.workspaceDigest;
+    if (baseVector === null || baseVector === undefined) {
+      assistant.clearSelection();
+      return;
+    }
+    assistant.setSelection({
+      version: 1,
+      projectId: descriptor.projectId,
+      documentId: descriptor.documentId,
+      selection,
+      baseVector,
+    });
+  };
 
   const hostStatus = () => props.hostStatus ?? 'unavailable';
 
@@ -487,50 +592,75 @@ export function WorkbenchShell(props: AppProps = {}) {
   };
 
   return (
-    <div
-      class={`workbench-shell${navigatorCollapsed() ? ' navigator-is-collapsed' : ''}`}
-      data-testid="workbench-shell"
-      data-view={activeView()}
-    >
-      <Topbar
-        activeView={activeView()}
-        hostStatus={hostStatus()}
-        agentShelfOpen={agentShelfOpen()}
-        onAgentShelfToggle={toggleAgentShelf}
-      />
-
-      <div class="workbench-body">
-        <Navigator
+    <EditorAssistantProvider value={assistant}>
+      <div
+        class={`workbench-shell${navigatorCollapsed() ? ' navigator-is-collapsed' : ''}`}
+        data-testid="workbench-shell"
+        data-view={activeView()}
+      >
+        <Topbar
           activeView={activeView()}
-          collapsed={navigatorCollapsed()}
-          onCollapseToggle={toggleNavigator}
-          onViewChange={chooseView}
+          hostStatus={hostStatus()}
+          agentShelfOpen={agentShelfOpen()}
+          onAgentShelfToggle={toggleAgentShelf}
         />
 
-        <div class="workspace-column">
-          <Workspace
+        <div class="workbench-body">
+          <Navigator
             activeView={activeView()}
-            hostStatus={hostStatus()}
-            overview={props.overview}
-            graphProjection={props.graphProjection}
-            sourceStudio={props.sourceStudio}
-            sourceYjsStatus={props.sourceYjsStatus}
-            onConnectSourceYjs={props.onConnectSourceYjs}
-            onSubmitSource={props.onSubmitSource}
-            sceneAdoption={props.sceneAdoption}
-            onRequestAdoption={props.onRequestAdoption}
+            collapsed={navigatorCollapsed()}
+            onCollapseToggle={toggleNavigator}
+            onViewChange={chooseView}
           />
-          <OperationCenter
-            expanded={operationCenterExpanded()}
-            onExpandedToggle={toggleOperationCenter}
-          />
+
+          <div class="workspace-column">
+            <Workspace
+              activeView={activeView()}
+              hostStatus={hostStatus()}
+              overview={props.overview}
+              graphProjection={props.graphProjection}
+              sourceStudio={props.sourceStudio}
+              authoringState={props.authoringState}
+              authoringOperations={props.authoringOperations}
+              sourceSessionId={props.sourceSessionId}
+              sourceYjsStatus={props.sourceYjsStatus}
+              onConnectSourceYjs={selectSourceDocument}
+              onSubmitSource={props.onSubmitSource}
+              onSubmitAuthoring={props.onSubmitAuthoring}
+              onReconcileAuthoring={props.onReconcileAuthoring}
+              onGraphRouteChange={props.onGraphRouteChange}
+              selectedSourceDocumentId={selectedSourceDocumentId()}
+              onSourceYjsStatusChange={props.onSourceYjsStatusChange}
+              onSourceSelection={publishSourceSelection}
+              sceneAdoption={props.sceneAdoption}
+              onRequestAdoption={props.onRequestAdoption}
+            />
+            <OperationCenter
+              expanded={operationCenterExpanded()}
+              operations={props.authoringOperations}
+              onExpandedToggle={toggleOperationCenter}
+            />
+          </div>
+
+          <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
         </div>
 
-        <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
+        <Show
+          when={props.agentClient}
+          fallback={<AgentShelf open={agentShelfOpen()} onClose={toggleAgentShelf} />}
+        >
+          {(client) => (
+            <AgentDrawer
+              open={agentShelfOpen()}
+              context={assistant.selection()}
+              client={client()}
+              onClose={toggleAgentShelf}
+              onApplied={() => assistant.clearSelection()}
+            />
+          )}
+        </Show>
       </div>
-
-      <AgentShelf open={agentShelfOpen()} onClose={toggleAgentShelf} />
-    </div>
+    </EditorAssistantProvider>
   );
 }
 

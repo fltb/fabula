@@ -1,7 +1,7 @@
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App, type HostStatus } from '../../src/client/App';
 
 const navigationLabels = [
@@ -178,5 +178,74 @@ describe('Workbench Host projections', () => {
     expect(screen.getByRole('heading', { name: 'Authoring source' })).toBeInTheDocument();
     expect(screen.getByText(/online-only, not accepted source/i)).toBeInTheDocument();
     expect(screen.getByText('definitions/characters/author.yaml')).toBeInTheDocument();
+  });
+
+  it('forwards only the authoring CAS request and presents streamed operations', async () => {
+    const submit = vi.fn();
+    const user = userEvent.setup();
+    render(() => (
+      <App
+        hostStatus="ready"
+        initialView="source-studio"
+        initialOperationCenterExpanded
+        sourceStudio={{
+          version: 1,
+          projectId: 'project-a',
+          accepted: null,
+          working: {
+            documents: [
+              {
+                projectId: 'project-a',
+                documentId: 'nova.yaml',
+                kind: 'raw-yaml',
+                available: true,
+              },
+            ],
+          },
+          generatedAt: '2026-08-02T00:00:00.000Z',
+        }}
+        authoringState={{
+          version: 1,
+          projectId: 'project-a',
+          phase: 'working-dirty',
+          acceptedSourceHash: 'accepted-hash',
+          workingDirty: true,
+          workspaceDigest: 'workspace-hash',
+          externalCandidate: null,
+          conflicts: [],
+          diagnostics: [],
+          canSubmit: true,
+          submitBlockReason: 'none',
+          generatedAt: '2026-08-02T00:00:00.000Z',
+        }}
+        authoringOperations={[
+          {
+            version: 1,
+            operationId: 'operation-1',
+            projectId: 'project-a',
+            kind: 'submit',
+            status: 'queued',
+            acceptedSourceHash: 'accepted-hash',
+            workspaceDigest: 'workspace-hash',
+            gitSubmitId: null,
+            gitReceiptHash: null,
+            errorCode: null,
+            createdAt: '2026-08-02T00:00:00.000Z',
+            updatedAt: '2026-08-02T00:00:00.000Z',
+          },
+        ]}
+        onSubmitAuthoring={submit}
+      />
+    ));
+
+    await user.click(screen.getByRole('button', { name: 'Submit working layer' }));
+    expect(submit).toHaveBeenCalledWith({
+      version: 1,
+      projectId: 'project-a',
+      expectedAcceptedSourceHash: 'accepted-hash',
+      expectedWorkspaceDigest: 'workspace-hash',
+    });
+    expect(screen.getAllByText('operation-1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('queued').length).toBeGreaterThan(0);
   });
 });

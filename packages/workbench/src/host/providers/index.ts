@@ -5,15 +5,7 @@
  * any of these types, so no credential value or secret-bearing type can reach
  * browser DTOs, Yjs documents, MCP tools, or Git commits through this package.
  */
-export {
-  assertValidProviderId,
-  createProviderCredentialStore,
-  CredentialStoreError,
-  isValidProviderId,
-  PROVIDER_ID_PATTERN,
-  resolveXdgConfigDir,
-  XdgCredentialFileStore,
-} from './credential-store.js';
+
 export type {
   CredentialStoreErrorCode,
   OsCredentialStore,
@@ -21,4 +13,13 @@ export type {
   ProviderCredentialStoreOptions,
   XdgConfigEnv,
   XdgCredentialFileStoreOptions,
+} from './credential-store.js';
+export {
+  assertValidProviderId,
+  CredentialStoreError,
+  createProviderCredentialStore,
+  isValidProviderId,
+  PROVIDER_ID_PATTERN,
+  resolveXdgConfigDir,
+  XdgCredentialFileStore,
 } from './credential-store.js';

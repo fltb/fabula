@@ -8,6 +8,8 @@ export type { CanonicalFactValue } from './fact-value.js';
 export { canonicalDeepEqual, canonicalizeFactValue, isCanonicalFactValue } from './fact-value.js';
 export { EntityMapper, mapToNarrativeEllipsis } from './mapper.js';
 export { InMemoryEntityRegistry } from './registry.js';
+export type { SourceAnalysisOptions } from './source-analysis.js';
+export { analyzeSource } from './source-analysis.js';
 export type { TemporalContext } from './timestamp.js';
 export {
   compareStoryCoordinates,
@@ -21,5 +23,3 @@ export {
   readYamlFile,
   readYamlFilesInDir,
 } from './yaml-loader.js';
-export { analyzeSource } from './source-analysis.js';
-export type { SourceAnalysisOptions } from './source-analysis.js';

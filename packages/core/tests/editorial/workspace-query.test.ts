@@ -8,15 +8,15 @@
 
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { getSourceDocument, listSourceDocuments } from '../../src/editorial/facade.ts';
-import { QueryService } from '../../src/editorial/query-service.ts';
-import { EditorialWorkspace, getEditorialWorkspace } from '../../src/editorial/workspace.ts';
-import { buildSourceSnapshot, compareLogicalPaths } from '../../src/source/source-identity.ts';
 import type {
   ProjectSourceSnapshotV1,
   SourceChangeV1,
   SourceDocumentV1,
 } from '../../src/contracts/source.ts';
+import { getSourceDocument, listSourceDocuments } from '../../src/editorial/facade.ts';
+import { QueryService } from '../../src/editorial/query-service.ts';
+import { EditorialWorkspace, getEditorialWorkspace } from '../../src/editorial/workspace.ts';
+import { buildSourceSnapshot, compareLogicalPaths } from '../../src/source/source-identity.ts';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

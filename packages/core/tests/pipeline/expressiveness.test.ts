@@ -14,7 +14,6 @@ import { MockProvider } from '../../src/ai/providers/mock.ts';
 import type { Message } from '../../src/ai/types.ts';
 import type { RenderJob } from '../../src/pipeline/render.ts';
 import { RenderPipeline } from '../../src/pipeline/render.ts';
-import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 import type {
   ContextPackage,
   KnowledgeBoundary,
@@ -25,6 +24,7 @@ import type {
 } from '../../src/types/index.ts';
 import { ResultAggregator } from '../../src/validator/aggregator.ts';
 import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
+import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 
 // ============================================================================
 // Sentinel constants — each authored field gets an unmistakable unique value

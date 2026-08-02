@@ -6,7 +6,7 @@
 // ============================================================================
 
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -44,7 +44,6 @@ const packages = [
 
 let allOk = true;
 const validatedMetafiles = new Map();
-
 
 console.log('═══════════════════════════════════════════════');
 console.log('  Bundle Check Report');

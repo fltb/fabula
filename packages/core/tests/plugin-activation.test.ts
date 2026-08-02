@@ -168,7 +168,6 @@ const REL_CATALOG_CONTEXT: EntityCatalogContext = {
   }),
 };
 
-
 // ============================================================================
 // 2. RenderPipeline with PluginHooksManager + MockPass2Provider
 // ============================================================================

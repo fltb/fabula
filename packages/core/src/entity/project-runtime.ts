@@ -15,10 +15,10 @@
 // the core root, or public-api.manifest.json.
 // ============================================================================
 
-import type { ProjectSourceSnapshotV1 } from '../contracts/source.js';
 import type { CompiledGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import { compileGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import { branchPathsEqual, createEmptyBranchPath } from '../branch/index.js';
+import type { ProjectSourceSnapshotV1 } from '../contracts/source.js';
 import { ConfigError } from '../errors.ts';
 import { parseIntroductionTransition } from '../state/event-application.ts';
 import type { CompiledNarrativeRuntime } from '../state/narrative-runtime.ts';
@@ -140,7 +140,9 @@ function buildDefinitionIndex(data: ProjectData): Map<string, DefinitionEntry> {
  */
 function buildEventFilePathIndex(data: ProjectData): Map<string, string> {
   const index = new Map<string, string>();
-  for (const chapter of data.chapters.values()) for (const event of chapter.events) if (event.logicalPath) index.set(event.event, event.logicalPath);
+  for (const chapter of data.chapters.values())
+    for (const event of chapter.events)
+      if (event.logicalPath) index.set(event.event, event.logicalPath);
   return index;
 }
 
@@ -173,29 +175,58 @@ function collectIntroductions(
 // Declaration catalog — every entity declared before any activation
 // ============================================================================
 
-function buildDeclarationCatalog(data: ProjectData, introductions: ReadonlyMap<string, IntroductionSource>): EntityDeclarationCatalog {
+function buildDeclarationCatalog(
+  data: ProjectData,
+  introductions: ReadonlyMap<string, IntroductionSource>,
+): EntityDeclarationCatalog {
   const declarations: Record<string, EntityDeclaration> = {};
   const eventFilePath = buildEventFilePathIndex(data);
   const definitionFileOf = (hostEventId: string, entityId: string): string => {
     const logicalPath = eventFilePath.get(hostEventId);
-    if (!logicalPath) throw new ConfigError(`Introduction of "${entityId}" cannot be located`, { eventId: hostEventId, phase: 'introductions' });
+    if (!logicalPath)
+      throw new ConfigError(`Introduction of "${entityId}" cannot be located`, {
+        eventId: hostEventId,
+        phase: 'introductions',
+      });
     return logicalPath;
   };
   const add = (entityId: string, kind: EntityKind, name: string, definitionFile: string): void => {
     if (declarations[entityId] !== undefined) return;
     const intro = introductions.get(entityId);
-    declarations[entityId] = { entityId, typeRef: { typeId: kind, schemaVersion: RUNTIME_TYPE_SCHEMA_VERSION }, immutableMetadata: { name, definitionFile }, introduction: intro ? { type: 'event', eventId: intro.hostEventId } : { type: 'initial' } };
+    declarations[entityId] = {
+      entityId,
+      typeRef: { typeId: kind, schemaVersion: RUNTIME_TYPE_SCHEMA_VERSION },
+      immutableMetadata: { name, definitionFile },
+      introduction: intro ? { type: 'event', eventId: intro.hostEventId } : { type: 'initial' },
+    };
   };
-  for (const char of data.characters) add(char.id, 'character', char.name, `definitions/characters/${char.id}.yaml`);
-  for (const loc of data.locations) add(loc.id, 'location', loc.name, `definitions/locations/${loc.id}.yaml`);
-  for (const item of data.items) add(item.id, 'item', item.name, `definitions/items/${item.id}.yaml`);
-  for (const fac of data.factions) add(fac.id, 'faction', fac.name, `definitions/factions/${fac.id}.yaml`);
-  for (const rule of data.rules) add(rule.ruleId, 'rule', rule.name, `definitions/rules/${rule.ruleId.split('.').pop() ?? rule.ruleId}.yaml`);
-  for (const wf of data.worldInitialState?.worldFacts ?? []) add(wf.id, 'concept', wf.id, 'definitions/state_initial.yaml');
-  for (const intro of introductions.values()) if (declarations[intro.entityId] === undefined) add(intro.entityId, intro.kind, intro.entityId, definitionFileOf(intro.hostEventId, intro.entityId));
+  for (const char of data.characters)
+    add(char.id, 'character', char.name, `definitions/characters/${char.id}.yaml`);
+  for (const loc of data.locations)
+    add(loc.id, 'location', loc.name, `definitions/locations/${loc.id}.yaml`);
+  for (const item of data.items)
+    add(item.id, 'item', item.name, `definitions/items/${item.id}.yaml`);
+  for (const fac of data.factions)
+    add(fac.id, 'faction', fac.name, `definitions/factions/${fac.id}.yaml`);
+  for (const rule of data.rules)
+    add(
+      rule.ruleId,
+      'rule',
+      rule.name,
+      `definitions/rules/${rule.ruleId.split('.').pop() ?? rule.ruleId}.yaml`,
+    );
+  for (const wf of data.worldInitialState?.worldFacts ?? [])
+    add(wf.id, 'concept', wf.id, 'definitions/state_initial.yaml');
+  for (const intro of introductions.values())
+    if (declarations[intro.entityId] === undefined)
+      add(
+        intro.entityId,
+        intro.kind,
+        intro.entityId,
+        definitionFileOf(intro.hostEventId, intro.entityId),
+      );
   return { declarations, version: RUNTIME_DECLARATION_CATALOG_VERSION };
 }
-
 
 // ============================================================================
 // system:introduction transitions — one per event activation, placed
@@ -330,7 +361,10 @@ export function loadCanonicalProject(snapshot: ProjectSourceSnapshotV1): Canonic
   for (const [entityId, intro] of introductions) {
     const definition = definitionIndex.get(entityId);
     if (definition && Object.keys(definition.initialState ?? {}).length > 0) {
-      throw new ConfigError(`Entity "${entityId}" is introduced by event "${intro.hostEventId}" but its definition still declares initialState`, { path: `definitions:${entityId}`, phase: 'introductions' });
+      throw new ConfigError(
+        `Entity "${entityId}" is introduced by event "${intro.hostEventId}" but its definition still declares initialState`,
+        { path: `definitions:${entityId}`, phase: 'introductions' },
+      );
     }
   }
   const registry = new InMemoryEntityRegistry();
@@ -342,28 +376,76 @@ export function loadCanonicalProject(snapshot: ProjectSourceSnapshotV1): Canonic
   for (const intro of introductions.values()) {
     if (registry.resolve(intro.entityId) !== null) continue;
     const logicalPath = eventFilePath.get(intro.hostEventId);
-    if (!logicalPath) throw new ConfigError(`Introduction host event "${intro.hostEventId}" not found`, { eventId: intro.hostEventId, phase: 'introductions' });
-    registry.register({ id: intro.entityId, kind: intro.kind, name: intro.entityId, definitionFile: logicalPath, lifecycle: 'active', typeRef: { typeId: intro.kind, schemaVersion: RUNTIME_TYPE_SCHEMA_VERSION }, state: { ...intro.initialState } });
+    if (!logicalPath)
+      throw new ConfigError(`Introduction host event "${intro.hostEventId}" not found`, {
+        eventId: intro.hostEventId,
+        phase: 'introductions',
+      });
+    registry.register({
+      id: intro.entityId,
+      kind: intro.kind,
+      name: intro.entityId,
+      definitionFile: logicalPath,
+      lifecycle: 'active',
+      typeRef: { typeId: intro.kind, schemaVersion: RUNTIME_TYPE_SCHEMA_VERSION },
+      state: { ...intro.initialState },
+    });
   }
   const entityTypes = compileEntityTypeCatalog(data.entityTypeCatalogSource);
   const entityDeclarations = buildDeclarationCatalog(data, introductions);
-  const catalogContext: EntityCatalogContext = { entityDeclarationCatalog: entityDeclarations, entityTypeCatalog: entityTypes };
-  const gameDialogueTree = compileGameDialogueTree(authoredEvents, resolveTemporalContext(authoredEvents, data.timeAnchors));
+  const catalogContext: EntityCatalogContext = {
+    entityDeclarationCatalog: entityDeclarations,
+    entityTypeCatalog: entityTypes,
+  };
+  const gameDialogueTree = compileGameDialogueTree(
+    authoredEvents,
+    resolveTemporalContext(authoredEvents, data.timeAnchors),
+  );
   const introductionTransitions: NarrativeEvent[] = [];
   for (const intro of introductions.values()) {
     const host = authoredEvents.find((event) => event.id === intro.hostEventId);
-    if (!host) throw new ConfigError(`Introduction host event "${intro.hostEventId}" not found`, { eventId: intro.hostEventId, phase: 'introductions' });
+    if (!host)
+      throw new ConfigError(`Introduction host event "${intro.hostEventId}" not found`, {
+        eventId: intro.hostEventId,
+        phase: 'introductions',
+      });
     const transition = makeIntroductionTransition(host, intro);
     introductionTransitions.push(transition);
     const predecessors = host.causalPredecessors ?? [];
-    if (!predecessors.includes(transition.id)) { predecessors.push(transition.id); host.causalPredecessors = predecessors; }
+    if (!predecessors.includes(transition.id)) {
+      predecessors.push(transition.id);
+      host.causalPredecessors = predecessors;
+    }
   }
   const transitionsByHost = new Map<string, NarrativeEvent[]>();
-  for (const transition of introductionTransitions) { const targetId = parseIntroductionTransition(transition.id)?.targetEventId; if (targetId) transitionsByHost.set(targetId, [...(transitionsByHost.get(targetId) ?? []), transition]); }
-  const orderedBaseEvents = [...authoredEvents, ...(gameDialogueTree?.transitionEvents ?? [])].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
+  for (const transition of introductionTransitions) {
+    const targetId = parseIntroductionTransition(transition.id)?.targetEventId;
+    if (targetId)
+      transitionsByHost.set(targetId, [...(transitionsByHost.get(targetId) ?? []), transition]);
+  }
+  const orderedBaseEvents = [...authoredEvents, ...(gameDialogueTree?.transitionEvents ?? [])].sort(
+    (a, b) => a.narrativeOrder - b.narrativeOrder,
+  );
   const runtimeEvents: NarrativeEvent[] = [];
-  for (const event of orderedBaseEvents) { if (event.source === 'event_file') runtimeEvents.push(...(transitionsByHost.get(event.id) ?? [])); runtimeEvents.push(event); }
-  return { sourceHash: hash, data, authoredEvents, runtimeEvents, initialFacts: buildInitialFacts(entityDeclarations, registry), initialThreads: (data.worldInitialState?.threads ?? []).map((thread) => ({ id: thread.id })), registry, entityDeclarations, entityTypes, catalogContext, gameDialogueTree, chapterByEventId: buildChapterIndex(data) };
+  for (const event of orderedBaseEvents) {
+    if (event.source === 'event_file')
+      runtimeEvents.push(...(transitionsByHost.get(event.id) ?? []));
+    runtimeEvents.push(event);
+  }
+  return {
+    sourceHash: hash,
+    data,
+    authoredEvents,
+    runtimeEvents,
+    initialFacts: buildInitialFacts(entityDeclarations, registry),
+    initialThreads: (data.worldInitialState?.threads ?? []).map((thread) => ({ id: thread.id })),
+    registry,
+    entityDeclarations,
+    entityTypes,
+    catalogContext,
+    gameDialogueTree,
+    chapterByEventId: buildChapterIndex(data),
+  };
 }
 
 /**

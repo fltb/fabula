@@ -1,7 +1,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-export function writeAuthoringFixture(root: string, options: { discourseLedger?: boolean } = {}): void {
+export function writeAuthoringFixture(
+  root: string,
+  options: { discourseLedger?: boolean } = {},
+): void {
   mkdirSync(join(root, 'definitions', 'characters'), { recursive: true });
   mkdirSync(join(root, 'chapters', 'chapter_01'), { recursive: true });
   writeFileSync(join(root, 'nova.yaml'), 'project: fixture\n', 'utf8');
@@ -11,5 +14,6 @@ export function writeAuthoringFixture(root: string, options: { discourseLedger?:
   writeFileSync(join(root, 'definitions', 'characters', 'a.yaml'), 'id: a\n', 'utf8');
   writeFileSync(join(root, 'chapters', 'chapter_01', '_chapter.yaml'), 'chapter: 1\n', 'utf8');
   writeFileSync(join(root, 'chapters', 'chapter_01', 'E1.yaml'), 'event: E1\n', 'utf8');
-  if (options.discourseLedger) writeFileSync(join(root, 'definitions', 'discourse-ledger.yaml'), 'version: 1\n', 'utf8');
+  if (options.discourseLedger)
+    writeFileSync(join(root, 'definitions', 'discourse-ledger.yaml'), 'version: 1\n', 'utf8');
 }

@@ -29,8 +29,6 @@ const SNAPSHOT = materializeFixtureSnapshot(
   path.resolve(import.meta.dirname, '..', '..', '..', 'fixtures', 'arcane-aftermath'),
 );
 
-
-
 // ============================================================================
 // 1. EntityMapper.loadProject()
 // ============================================================================

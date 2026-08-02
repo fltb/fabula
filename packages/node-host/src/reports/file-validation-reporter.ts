@@ -1,6 +1,11 @@
 import * as path from 'node:path';
 import { formatValidationReport, type ValidationReport } from '@novalistically/core/tooling';
-import { atomicWrite, prepareDirectory, recoverJournal, withDirectoryLock } from '../execution/types.js';
+import {
+  atomicWrite,
+  prepareDirectory,
+  recoverJournal,
+  withDirectoryLock,
+} from '../execution/types.js';
 
 /** Persist a pure Core validation report under a Host-owned output directory. */
 export async function writeFileValidationReport(

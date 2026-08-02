@@ -1,6 +1,10 @@
-import type { CoreExecutionRepository } from '../ports/execution-repository.ts';
 import { includesPath } from '../branch/set.ts';
+import { sha256 } from '../cache/pure-sha256.ts';
+import type { JsonObject } from '../contracts/json.ts';
+import { PublicationError } from '../editorial/errors.ts';
+import type { CoreExecutionRepository } from '../ports/execution-repository.ts';
 import type { BranchPath, BranchSet, Condition } from '../types/branch.ts';
+import type { ChapterMetadata } from '../types/chapter.ts';
 import type {
   AssembleRequestV1,
   EditorialAssembleResult,
@@ -9,12 +13,12 @@ import type {
   SceneProseSource,
   SceneRevisionEnvelopeV1,
 } from '../types/editorial.ts';
-import { PublicationError } from '../editorial/errors.ts';
-import { sha256 } from '../cache/pure-sha256.ts';
-import { buildNovelDocument, type PromoteCandidateInput, type VerifiedHeadData } from './publication-model.ts';
 import type { GameDialogueChoice } from '../types/index.ts';
-import type { JsonObject } from '../contracts/json.ts';
-import type { ChapterMetadata } from '../types/chapter.ts';
+import {
+  buildNovelDocument,
+  type PromoteCandidateInput,
+  type VerifiedHeadData,
+} from './publication-model.ts';
 
 export interface VerifiedAssemblyScene {
   eventId: string;
@@ -36,7 +40,10 @@ export interface AssemblySemanticInput {
   readonly sourceHash: string;
   readonly manifest: PublicationManifestV1;
   readonly revisions: ReadonlyMap<string, SceneRevisionEnvelopeV1>;
-  readonly scenes: ReadonlyMap<string, { prose: string; chapterNumber: number; metadata: JsonObject }>;
+  readonly scenes: ReadonlyMap<
+    string,
+    { prose: string; chapterNumber: number; metadata: JsonObject }
+  >;
   readonly discourseSequence: readonly { sceneId: string; sequence: number; chapter: number }[];
   readonly chapterTitles?: ReadonlyMap<number, ChapterMetadata>;
 }
@@ -49,17 +56,42 @@ function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function toGameDialogueChoices(value: JsonObject['player_choices']): GameDialogueChoice[] | undefined {
+function toGameDialogueChoices(
+  value: JsonObject['player_choices'],
+): GameDialogueChoice[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const choices: GameDialogueChoice[] = [];
   for (const candidate of value) {
-    if (!isJsonObject(candidate) || typeof candidate.id !== 'string' || typeof candidate.label !== 'string' || typeof candidate.description !== 'string' || typeof candidate.targetEvent !== 'string' || !Array.isArray(candidate.effects)) return undefined;
+    if (
+      !isJsonObject(candidate) ||
+      typeof candidate.id !== 'string' ||
+      typeof candidate.label !== 'string' ||
+      typeof candidate.description !== 'string' ||
+      typeof candidate.targetEvent !== 'string' ||
+      !Array.isArray(candidate.effects)
+    )
+      return undefined;
     const effects: GameDialogueChoice['effects'] = [];
     for (const effect of candidate.effects) {
-      if (!isJsonObject(effect) || typeof effect.entity !== 'string' || typeof effect.attribute !== 'string') return undefined;
-      if (effect.narrativeHint !== undefined && typeof effect.narrativeHint !== 'string') return undefined;
-      if (effect.confidence !== undefined && (typeof effect.confidence !== 'number' || !Number.isFinite(effect.confidence))) return undefined;
-      if (effect.operation !== undefined && effect.operation !== 'set' && effect.operation !== 'unset') return undefined;
+      if (
+        !isJsonObject(effect) ||
+        typeof effect.entity !== 'string' ||
+        typeof effect.attribute !== 'string'
+      )
+        return undefined;
+      if (effect.narrativeHint !== undefined && typeof effect.narrativeHint !== 'string')
+        return undefined;
+      if (
+        effect.confidence !== undefined &&
+        (typeof effect.confidence !== 'number' || !Number.isFinite(effect.confidence))
+      )
+        return undefined;
+      if (
+        effect.operation !== undefined &&
+        effect.operation !== 'set' &&
+        effect.operation !== 'unset'
+      )
+        return undefined;
       effects.push({
         entity: effect.entity,
         attribute: effect.attribute,
@@ -69,7 +101,13 @@ function toGameDialogueChoices(value: JsonObject['player_choices']): GameDialogu
         ...(effect.operation !== undefined ? { operation: effect.operation } : {}),
       });
     }
-    choices.push({ id: candidate.id, label: candidate.label, description: candidate.description, targetEvent: candidate.targetEvent, effects });
+    choices.push({
+      id: candidate.id,
+      label: candidate.label,
+      description: candidate.description,
+      targetEvent: candidate.targetEvent,
+      effects,
+    });
   }
   return choices;
 }
@@ -86,7 +124,10 @@ const toCondition = (value: unknown): Condition | undefined => {
     if (!Array.isArray(value.conditions)) return undefined;
     const conditions = value.conditions.map(toCondition);
     if (conditions.some((condition) => condition === undefined)) return undefined;
-    return { type: value.type, conditions: conditions.filter((condition): condition is Condition => condition !== undefined) };
+    return {
+      type: value.type,
+      conditions: conditions.filter((condition): condition is Condition => condition !== undefined),
+    };
   }
   if (
     value.type !== 'equals' &&
@@ -161,13 +202,25 @@ export async function validateManifestHeads(
   for (const eventId of entries) {
     const revisionId = manifest.revision_ids[eventId];
     if (!revisionId) {
-      errors.push(error('PUBLICATION_INCOMPLETE', `Required event ${eventId} has no published revision`, eventId));
+      errors.push(
+        error(
+          'PUBLICATION_INCOMPLETE',
+          `Required event ${eventId} has no published revision`,
+          eventId,
+        ),
+      );
       continue;
     }
     const scene = input.scenes.get(eventId);
     const envelope = input.revisions.get(eventId);
     if (!scene || !envelope) {
-      errors.push(error('SCENE_NOT_FOUND', `Scene ${eventId} is not present in the materialized source`, eventId));
+      errors.push(
+        error(
+          'SCENE_NOT_FOUND',
+          `Scene ${eventId} is not present in the materialized source`,
+          eventId,
+        ),
+      );
       continue;
     }
     if (
@@ -175,7 +228,13 @@ export async function validateManifestHeads(
       envelope.releaseDecision.status !== 'accepted' ||
       !envelope.released
     ) {
-      errors.push(error('REVISION_BLOCKED', `Revision ${revisionId} for event ${eventId} is not accepted`, eventId));
+      errors.push(
+        error(
+          'REVISION_BLOCKED',
+          `Revision ${revisionId} for event ${eventId} is not accepted`,
+          eventId,
+        ),
+      );
       continue;
     }
     const accepted = await repository.resolveAcceptedArtifact({
@@ -190,11 +249,19 @@ export async function validateManifestHeads(
       accepted.proseHash !== envelope.proseHash ||
       accepted.sceneHash !== envelope.sceneHash
     ) {
-      errors.push(error('REVISION_STALE', `Accepted artifact for event ${eventId} no longer matches its manifest head`, eventId));
+      errors.push(
+        error(
+          'REVISION_STALE',
+          `Accepted artifact for event ${eventId} no longer matches its manifest head`,
+          eventId,
+        ),
+      );
       continue;
     }
     if (sha256(scene.prose) !== envelope.sceneHash) {
-      errors.push(error('PUBLICATION_CONTENT_CONFLICT', `Scene hash mismatch for event ${eventId}`, eventId));
+      errors.push(
+        error('PUBLICATION_CONTENT_CONFLICT', `Scene hash mismatch for event ${eventId}`, eventId),
+      );
       continue;
     }
     const metadata = scene.metadata;
@@ -210,7 +277,8 @@ export async function validateManifestHeads(
       validationIdentity: envelope.validationIdentity,
       proseSource: toSceneProseSource(metadata.prose_source),
       ...(typeof metadata.model_used === 'string' ? { modelUsed: metadata.model_used } : {}),
-      renderedAt: typeof metadata.rendered_at === 'string' ? metadata.rendered_at : envelope.createdAt,
+      renderedAt:
+        typeof metadata.rendered_at === 'string' ? metadata.rendered_at : envelope.createdAt,
       wordCount: isFiniteNumber(metadata.word_count) ? metadata.word_count : 0,
       editHistory: [],
       playerChoices: toGameDialogueChoices(metadata.player_choices),

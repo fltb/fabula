@@ -1,6 +1,9 @@
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { canonicalAssemble, type AssemblySemanticInput } from '../../src/assembler/release-assembly.ts';
+import {
+  type AssemblySemanticInput,
+  canonicalAssemble,
+} from '../../src/assembler/release-assembly.ts';
 import { PublicationError } from '../../src/editorial/errors.ts';
 import { MemoryExecutionRepository } from '../../src/testing/memory-repositories.ts';
 import type { PublicationManifestV1, SceneRevisionEnvelopeV1 } from '../../src/types/editorial.ts';
@@ -10,7 +13,10 @@ const hash = (value: string): string => crypto.createHash('sha256').update(value
 const sourceHash = 'release-source-hash';
 const prose = 'Alice entered quietly and closed the door behind her.';
 const revisionId = '00000000-0000-4000-8000-000000000001';
-function envelope(status: 'accepted' | 'blocked' = 'accepted', sceneProse = prose): SceneRevisionEnvelopeV1 {
+function envelope(
+  status: 'accepted' | 'blocked' = 'accepted',
+  sceneProse = prose,
+): SceneRevisionEnvelopeV1 {
   const sceneHash = hash(sceneProse);
   const proseHash = hash(sceneProse);
   return {
@@ -30,7 +36,12 @@ function envelope(status: 'accepted' | 'blocked' = 'accepted', sceneProse = pros
     reviewIds: [],
     analysis: null,
     validation: null,
-    releaseDecision: { status, scopeHash: 'scope-hash', validationIdentity: 'validator-v1', reasons: [] },
+    releaseDecision: {
+      status,
+      scopeHash: 'scope-hash',
+      validationIdentity: 'validator-v1',
+      reasons: [],
+    },
     released: status === 'accepted',
     cacheHit: false,
     errors: [],
@@ -60,9 +71,20 @@ function input(revision: SceneRevisionEnvelopeV1 = envelope()): AssemblySemantic
       reasons: [],
     } satisfies PublicationManifestV1,
     revisions: new Map([['E001', revision]]),
-    scenes: new Map([['E001', { prose, chapterNumber: 1, metadata: { prose_source: 'llm', word_count: 9, rendered_at: '2026-07-28T00:00:00.000Z' } }]]),
+    scenes: new Map([
+      [
+        'E001',
+        {
+          prose,
+          chapterNumber: 1,
+          metadata: { prose_source: 'llm', word_count: 9, rendered_at: '2026-07-28T00:00:00.000Z' },
+        },
+      ],
+    ]),
     discourseSequence: [{ sceneId: 'E001', sequence: 0, chapter: 1 }],
-    chapterTitles: new Map([[1, { chapter: 1, title: 'Opening', summary: '', intent: '', plannedScenes: 1 }]]),
+    chapterTitles: new Map([
+      [1, { chapter: 1, title: 'Opening', summary: '', intent: '', plannedScenes: 1 }],
+    ]),
   };
 }
 
@@ -114,13 +136,36 @@ describe('release-aware pure assembly', () => {
     const second = { ...envelope(), revisionId: '00000000-0000-4000-8000-000000000003' };
     const semantic = {
       ...input(first),
-      manifest: { ...input(first).manifest, revision_ids: { E001: first.revisionId, E002: second.revisionId } },
-      revisions: new Map([['E001', first], ['E002', second]]),
-      scenes: new Map([
-        ['E001', { prose, chapterNumber: 1, metadata: { prose_source: 'llm', rendered_at: '2026-07-28T00:00:00.000Z' } }],
-        ['E002', { prose, chapterNumber: 2, metadata: { prose_source: 'llm', rendered_at: '2026-07-28T00:00:00.000Z' } }],
+      manifest: {
+        ...input(first).manifest,
+        revision_ids: { E001: first.revisionId, E002: second.revisionId },
+      },
+      revisions: new Map([
+        ['E001', first],
+        ['E002', second],
       ]),
-      discourseSequence: [{ sceneId: 'E001', sequence: 0, chapter: 1 }, { sceneId: 'E002', sequence: 1, chapter: 2 }],
+      scenes: new Map([
+        [
+          'E001',
+          {
+            prose,
+            chapterNumber: 1,
+            metadata: { prose_source: 'llm', rendered_at: '2026-07-28T00:00:00.000Z' },
+          },
+        ],
+        [
+          'E002',
+          {
+            prose,
+            chapterNumber: 2,
+            metadata: { prose_source: 'llm', rendered_at: '2026-07-28T00:00:00.000Z' },
+          },
+        ],
+      ]),
+      discourseSequence: [
+        { sceneId: 'E001', sequence: 0, chapter: 1 },
+        { sceneId: 'E002', sequence: 1, chapter: 2 },
+      ],
     } satisfies AssemblySemanticInput;
     const result = await canonicalAssemble(request(), semantic, await repositoryFor(semantic));
     expect(result.markdown.indexOf(prose)).toBeLessThan(result.markdown.lastIndexOf(prose));

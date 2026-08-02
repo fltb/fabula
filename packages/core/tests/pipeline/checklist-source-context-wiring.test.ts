@@ -11,7 +11,6 @@ import { describe, expect, it } from 'vitest';
 import { MockProvider } from '../../src/ai/providers/mock.ts';
 import type { RenderJob } from '../../src/pipeline/render.ts';
 import { RenderPipeline } from '../../src/pipeline/render.ts';
-import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 import type {
   CompiledSceneContract,
   ContextPackage,
@@ -21,6 +20,7 @@ import type {
   SystemContext,
 } from '../../src/types/index.ts';
 import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
+import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 
 const ANALYSIS_PAYLOAD: Record<string, unknown> = {
   postconditions: { covered: [], dropped: [] },

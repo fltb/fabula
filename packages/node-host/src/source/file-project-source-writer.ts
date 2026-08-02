@@ -5,15 +5,36 @@ import type { ProjectSourceSnapshotV1, SourceChangeV1 } from '@novalistically/co
 import { computeSourceDocumentHash } from '@novalistically/core/source';
 import { isMissing, prepareDirectory, withDirectoryLock } from '../execution/types.js';
 import { FileProjectSourceLoaderImpl } from './file-project-source-loader.js';
-import { SourceConflictError, SourceInputError, SourcePathError, type FileProjectSourceLoader as FileProjectSourceLoaderContract, type FileProjectSourceWriter as FileProjectSourceWriterContract, type FileProjectSourceWriterOptions } from './types.js';
+import {
+  type FileProjectSourceLoader as FileProjectSourceLoaderContract,
+  type FileProjectSourceWriter as FileProjectSourceWriterContract,
+  type FileProjectSourceWriterOptions,
+  SourceConflictError,
+  SourceInputError,
+  SourcePathError,
+} from './types.js';
 
 const approved = (path: string): boolean =>
-  ['nova.yaml', 'definitions/state_initial.yaml', 'definitions/entity-types.yaml', 'definitions/discourse-ledger.yaml'].includes(path) ||
-  /^definitions\/(characters|locations|items|factions|relationships|rules|narrators|assertions)\/[^/].*\.yaml$/.test(path) ||
+  [
+    'nova.yaml',
+    'definitions/state_initial.yaml',
+    'definitions/entity-types.yaml',
+    'definitions/discourse-ledger.yaml',
+  ].includes(path) ||
+  /^definitions\/(characters|locations|items|factions|relationships|rules|narrators|assertions)\/[^/].*\.yaml$/.test(
+    path,
+  ) ||
   /^chapters\/chapter_[0-9]{2}\/(_chapter|E[^/]+)\.yaml$/.test(path);
 
 function validateLogicalPath(path: string): void {
-  if (!path || path.includes('\\') || path.includes('\0') || path.startsWith('/') || path.split('/').some((part) => part === '' || part === '.' || part === '..') || !approved(path)) {
+  if (
+    !path ||
+    path.includes('\\') ||
+    path.includes('\0') ||
+    path.startsWith('/') ||
+    path.split('/').some((part) => part === '' || part === '.' || part === '..') ||
+    !approved(path)
+  ) {
     throw new SourcePathError(`Invalid authoring logical path: ${path}`);
   }
 }
@@ -26,27 +47,42 @@ function validateLogicalPath(path: string): void {
 function validateChangeInput(change: SourceChangeV1): void {
   const { logicalPath, beforeContent, beforeHash, afterContent, afterHash } = change;
   if ((beforeContent === null) !== (beforeHash === null)) {
-    throw new SourceInputError(`Invalid source change ${logicalPath}: beforeContent and beforeHash must be both present or both null`);
+    throw new SourceInputError(
+      `Invalid source change ${logicalPath}: beforeContent and beforeHash must be both present or both null`,
+    );
   }
   if ((afterContent === null) !== (afterHash === null)) {
-    throw new SourceInputError(`Invalid source change ${logicalPath}: afterContent and afterHash must be both present or both null`);
+    throw new SourceInputError(
+      `Invalid source change ${logicalPath}: afterContent and afterHash must be both present or both null`,
+    );
   }
   if (beforeContent !== null && beforeHash !== computeSourceDocumentHash(beforeContent)) {
-    throw new SourceInputError(`Invalid source change ${logicalPath}: beforeHash does not match beforeContent`);
+    throw new SourceInputError(
+      `Invalid source change ${logicalPath}: beforeHash does not match beforeContent`,
+    );
   }
   if (afterContent !== null && afterHash !== computeSourceDocumentHash(afterContent)) {
-    throw new SourceInputError(`Invalid source change ${logicalPath}: afterHash does not match afterContent`);
+    throw new SourceInputError(
+      `Invalid source change ${logicalPath}: afterHash does not match afterContent`,
+    );
   }
 }
 
 function contained(root: string, target: string): void {
   const rel = relative(root, target);
-  if (rel === '..' || rel.startsWith(`..${sep}`) || resolve(target) !== target && rel.startsWith('..')) throw new SourcePathError(`Path escapes project root: ${target}`);
+  if (
+    rel === '..' ||
+    rel.startsWith(`..${sep}`) ||
+    (resolve(target) !== target && rel.startsWith('..'))
+  )
+    throw new SourcePathError(`Path escapes project root: ${target}`);
 }
 
 export class FileProjectSourceWriter implements FileProjectSourceWriterContract {
   private readonly loader: FileProjectSourceLoaderContract;
-  constructor(options: FileProjectSourceWriterOptions = {}) { this.loader = options.loader ?? new FileProjectSourceLoaderImpl(); }
+  constructor(options: FileProjectSourceWriterOptions = {}) {
+    this.loader = options.loader ?? new FileProjectSourceLoaderImpl();
+  }
 
   async apply(
     projectRoot: string,

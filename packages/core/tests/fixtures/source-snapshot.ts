@@ -14,7 +14,6 @@
 
 import YAML from 'yaml';
 import type { ZodType } from 'zod';
-import { buildSourceSnapshot, computeSourceDocumentHash } from '../../src/source/source-identity.ts';
 import type {
   ProjectSourceSnapshotV1,
   SourceChangeV1,
@@ -37,6 +36,10 @@ import {
   ruleDefinitionSchema,
   worldInitialStateSchema,
 } from '../../src/schemas/index.ts';
+import {
+  buildSourceSnapshot,
+  computeSourceDocumentHash,
+} from '../../src/source/source-identity.ts';
 
 // ── Authoring topology (mirrors source-analysis.ts) ─────────────────────────
 
@@ -49,7 +52,10 @@ const TOPOLOGY_RULES: readonly TopologyRule[] = [
   { re: /^nova\.yaml$/, schema: projectConfigSchema },
   { re: /^definitions\/state_initial\.yaml$/, schema: worldInitialStateSchema },
   { re: /^definitions\/entity-types\.yaml$/, schema: null },
-  { re: /^definitions\/(characters|locations|items|factions|relationships|rules|narrators|assertions)\/[^/]+\.(yaml|yml)$/, schema: null },
+  {
+    re: /^definitions\/(characters|locations|items|factions|relationships|rules|narrators|assertions)\/[^/]+\.(yaml|yml)$/,
+    schema: null,
+  },
   { re: /^definitions\/discourse-ledger\.yaml$/, schema: plannedDiscourseLedgerSourceSchema },
   { re: /^chapters\/chapter_\d{2}\/_chapter\.yaml$/, schema: chapterMetadataSchema },
   { re: /^chapters\/chapter_\d{2}\/E[^/]+\.(yaml|yml)$/, schema: eventFileSchema },
@@ -70,7 +76,8 @@ function ruleFor(logicalPath: string): TopologyRule | null {
   const rule = TOPOLOGY_RULES.find((candidate) => candidate.re.test(logicalPath)) ?? null;
   if (rule && logicalPath.startsWith('definitions/')) {
     const directory = logicalPath.split('/')[1];
-    if (directory in SCHEMA_BY_DIRECTORY) return { ...rule, schema: SCHEMA_BY_DIRECTORY[directory] };
+    if (directory in SCHEMA_BY_DIRECTORY)
+      return { ...rule, schema: SCHEMA_BY_DIRECTORY[directory] };
   }
   return rule;
 }
@@ -90,10 +97,22 @@ export function isAuthoringPath(logicalPath: string): boolean {
 
 // ── JSON-safe parse results and diagnostics ─────────────────────────────────
 
-type JsonValueLike = string | number | boolean | null | JsonValueLike[] | { [key: string]: JsonValueLike };
+type JsonValueLike =
+  | string
+  | number
+  | boolean
+  | null
+  | JsonValueLike[]
+  | { [key: string]: JsonValueLike };
 
 function toJsonValue(value: unknown): JsonValueLike | null {
-  if (value === null || typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') return value;
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'boolean' ||
+    typeof value === 'number'
+  )
+    return value;
   if (Array.isArray(value)) {
     const out: JsonValueLike[] = [];
     for (const item of value) {
@@ -115,12 +134,20 @@ function toJsonValue(value: unknown): JsonValueLike | null {
   return null;
 }
 
-function diagnostic(code: string, severity: SourceDiagnosticV1['severity'], message: string, logicalPath: string | null): SourceDiagnosticV1 {
+function diagnostic(
+  code: string,
+  severity: SourceDiagnosticV1['severity'],
+  message: string,
+  logicalPath: string | null,
+): SourceDiagnosticV1 {
   return { code, severity, message, logicalPath };
 }
 
 /** Derive the JSON-safe parse result and diagnostics for one logical document. */
-export function parseSourceDocument(logicalPath: string, content: string): { parseResult: SourceParseResultV1; diagnostics: readonly SourceDiagnosticV1[] } {
+export function parseSourceDocument(
+  logicalPath: string,
+  content: string,
+): { parseResult: SourceParseResultV1; diagnostics: readonly SourceDiagnosticV1[] } {
   const rule = ruleFor(logicalPath);
   if (!rule) return { parseResult: { status: 'not_applicable', value: null }, diagnostics: [] };
   try {
@@ -135,17 +162,29 @@ export function parseSourceDocument(logicalPath: string, content: string): { par
           diagnostic(
             'SOURCE_SCHEMA_INVALID',
             'error',
-            checked.error.issues.map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`).join('; '),
+            checked.error.issues
+              .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+              .join('; '),
             logicalPath,
           ),
         );
       }
     }
-    return { parseResult: { status: diagnostics.length ? 'invalid' : 'parsed', value }, diagnostics };
+    return {
+      parseResult: { status: diagnostics.length ? 'invalid' : 'parsed', value },
+      diagnostics,
+    };
   } catch (error) {
     return {
       parseResult: { status: 'invalid', value: null },
-      diagnostics: [diagnostic('SOURCE_YAML_INVALID', 'error', `YAML parsing failed: ${error instanceof Error ? error.message : 'invalid document'}`, logicalPath)],
+      diagnostics: [
+        diagnostic(
+          'SOURCE_YAML_INVALID',
+          'error',
+          `YAML parsing failed: ${error instanceof Error ? error.message : 'invalid document'}`,
+          logicalPath,
+        ),
+      ],
     };
   }
 }
@@ -171,8 +210,12 @@ export function createSourceDocument(logicalPath: string, content: string): Sour
  * canonical SHA-256 identities; parse results and diagnostics are derived from
  * the supplied text (invalid YAML stays an invalid document, never a throw).
  */
-export function createSourceSnapshot(entries: Readonly<Record<string, string>>): ProjectSourceSnapshotV1 {
-  const documents = Object.entries(entries).map(([logicalPath, content]) => createSourceDocument(logicalPath, content));
+export function createSourceSnapshot(
+  entries: Readonly<Record<string, string>>,
+): ProjectSourceSnapshotV1 {
+  const documents = Object.entries(entries).map(([logicalPath, content]) =>
+    createSourceDocument(logicalPath, content),
+  );
   return buildSourceSnapshot(documents);
 }
 
@@ -183,26 +226,45 @@ export function toSourceSnapshot(documents: readonly SourceDocumentV1[]): Projec
 
 /** Extract the `{ logicalPath: content }` map back out of a snapshot. */
 export function sourceEntryMap(snapshot: ProjectSourceSnapshotV1): Record<string, string> {
-  return Object.fromEntries(snapshot.documents.map((document) => [document.logicalPath, document.content]));
+  return Object.fromEntries(
+    snapshot.documents.map((document) => [document.logicalPath, document.content]),
+  );
 }
 
 // ── Pure source alteration (fresh snapshots, recomputed sourceHash) ─────────
 
 /** Replace or add one logical document, returning a fresh snapshot. */
-export function withDocument(snapshot: ProjectSourceSnapshotV1, logicalPath: string, content: string): ProjectSourceSnapshotV1 {
-  return buildSourceSnapshot([...snapshot.documents.filter((document) => document.logicalPath !== logicalPath), createSourceDocument(logicalPath, content)]);
+export function withDocument(
+  snapshot: ProjectSourceSnapshotV1,
+  logicalPath: string,
+  content: string,
+): ProjectSourceSnapshotV1 {
+  return buildSourceSnapshot([
+    ...snapshot.documents.filter((document) => document.logicalPath !== logicalPath),
+    createSourceDocument(logicalPath, content),
+  ]);
 }
 
 /** Remove one logical document, returning a fresh snapshot. */
-export function withoutDocument(snapshot: ProjectSourceSnapshotV1, logicalPath: string): ProjectSourceSnapshotV1 {
-  return buildSourceSnapshot(snapshot.documents.filter((document) => document.logicalPath !== logicalPath));
+export function withoutDocument(
+  snapshot: ProjectSourceSnapshotV1,
+  logicalPath: string,
+): ProjectSourceSnapshotV1 {
+  return buildSourceSnapshot(
+    snapshot.documents.filter((document) => document.logicalPath !== logicalPath),
+  );
 }
 
 // ── SourceChangeV1 construction for analyzeSource inputs ────────────────────
 
 /** Build a SourceChangeV1 against `snapshot`; `afterContent: null` means delete. */
-export function toSourceChange(snapshot: ProjectSourceSnapshotV1, logicalPath: string, afterContent: string | null): SourceChangeV1 {
-  const before = snapshot.documents.find((document) => document.logicalPath === logicalPath) ?? null;
+export function toSourceChange(
+  snapshot: ProjectSourceSnapshotV1,
+  logicalPath: string,
+  afterContent: string | null,
+): SourceChangeV1 {
+  const before =
+    snapshot.documents.find((document) => document.logicalPath === logicalPath) ?? null;
   return {
     logicalPath,
     beforeContent: before?.content ?? null,
@@ -213,6 +275,11 @@ export function toSourceChange(snapshot: ProjectSourceSnapshotV1, logicalPath: s
 }
 
 /** Batch SourceChangeV1 construction; `{ path: null }` entries mean deletion. */
-export function toSourceChanges(snapshot: ProjectSourceSnapshotV1, entries: Readonly<Record<string, string | null>>): SourceChangeV1[] {
-  return Object.entries(entries).map(([logicalPath, afterContent]) => toSourceChange(snapshot, logicalPath, afterContent));
+export function toSourceChanges(
+  snapshot: ProjectSourceSnapshotV1,
+  entries: Readonly<Record<string, string | null>>,
+): SourceChangeV1[] {
+  return Object.entries(entries).map(([logicalPath, afterContent]) =>
+    toSourceChange(snapshot, logicalPath, afterContent),
+  );
 }

@@ -1,10 +1,5 @@
 import YAML from 'yaml';
 import type { ZodType } from 'zod';
-import {
-  compareLogicalPaths,
-  computeSourceDocumentHash,
-  computeSourceHash,
-} from '../source/source-identity.js';
 import type {
   JsonValue,
   ProjectSourceSnapshotV1,
@@ -28,6 +23,11 @@ import {
   ruleDefinitionSchema,
   worldInitialStateSchema,
 } from '../schemas/index.js';
+import {
+  compareLogicalPaths,
+  computeSourceDocumentHash,
+  computeSourceHash,
+} from '../source/source-identity.js';
 
 interface Rule {
   readonly re: RegExp;

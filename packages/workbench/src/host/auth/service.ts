@@ -15,11 +15,23 @@ import type {
   SessionState,
 } from '../../contracts/persistence.js';
 import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
-import { backoffDelayMs, DEFAULT_BACKOFF_POLICY, type BackoffPolicy } from './backoff.js';
-import { DEFAULT_ARGON2_PARAMETERS, DUMMY_PASSWORD_HASH, hashPassword, verifyPassword, type Argon2Parameters } from './password.js';
+import { type BackoffPolicy, backoffDelayMs, DEFAULT_BACKOFF_POLICY } from './backoff.js';
+import {
+  type Argon2Parameters,
+  DEFAULT_ARGON2_PARAMETERS,
+  DUMMY_PASSWORD_HASH,
+  hashPassword,
+  verifyPassword,
+} from './password.js';
 export interface AuthPersistence {
   getAuthState(): Promise<{ ownerUserId: string | null }>;
-  bootstrapOwner(input: { userId: string; displayName: string; passwordHash: PasswordHashRecord; capabilityVersion: number; createdAt: string }): Promise<AuthUserRecord>;
+  bootstrapOwner(input: {
+    userId: string;
+    displayName: string;
+    passwordHash: PasswordHashRecord;
+    capabilityVersion: number;
+    createdAt: string;
+  }): Promise<AuthUserRecord>;
   acceptInviteUser(input: {
     inviteId: string;
     consumedAt: string;
@@ -32,7 +44,12 @@ export interface AuthPersistence {
   }): Promise<AcceptInviteUserResult>;
   loadUser(input: { userId: string }): Promise<AuthUserRecord | null>;
   loadOwner(): Promise<AuthUserRecord | null>;
-  resetOwnerPassword(input: { userId: string; passwordHash: PasswordHashRecord; capabilityVersion: number; at: string }): Promise<{ user: AuthUserRecord; revokedSessions: number; revokedCapabilities: number }>;
+  resetOwnerPassword(input: {
+    userId: string;
+    passwordHash: PasswordHashRecord;
+    capabilityVersion: number;
+    at: string;
+  }): Promise<{ user: AuthUserRecord; revokedSessions: number; revokedCapabilities: number }>;
   recordAuthFailure(input: { subject: string; at: string }): Promise<AuthBackoffState>;
   loadAuthBackoff(input: { subject: string }): Promise<AuthBackoffState | null>;
   clearAuthBackoff(input: { subject: string }): Promise<{ cleared: true }>;
@@ -46,19 +63,19 @@ export interface AuthPersistence {
 export function createAuthPersistence(client: PersistenceWorkerClient): AuthPersistence {
   return {
     getAuthState: () => client.request('getAuthState', undefined),
-    bootstrapOwner: input => client.request('bootstrapOwner', input),
-    acceptInviteUser: input => client.request('acceptInviteUser', input),
-    loadUser: input => client.request('loadUser', input),
+    bootstrapOwner: (input) => client.request('bootstrapOwner', input),
+    acceptInviteUser: (input) => client.request('acceptInviteUser', input),
+    loadUser: (input) => client.request('loadUser', input),
     loadOwner: () => client.request('loadOwner', undefined),
-    resetOwnerPassword: input => client.request('resetOwnerPassword', input),
-    recordAuthFailure: input => client.request('recordAuthFailure', input),
-    loadAuthBackoff: input => client.request('loadAuthBackoff', input),
-    clearAuthBackoff: input => client.request('clearAuthBackoff', input),
-    createSession: state => client.request('createSession', state),
-    loadSession: input => client.request('loadSession', input),
-    revokeSession: input => client.request('revokeSession', input),
-    createInvite: state => client.request('createInvite', state),
-    consumeInvite: input => client.request('consumeInvite', input),
+    resetOwnerPassword: (input) => client.request('resetOwnerPassword', input),
+    recordAuthFailure: (input) => client.request('recordAuthFailure', input),
+    loadAuthBackoff: (input) => client.request('loadAuthBackoff', input),
+    clearAuthBackoff: (input) => client.request('clearAuthBackoff', input),
+    createSession: (state) => client.request('createSession', state),
+    loadSession: (input) => client.request('loadSession', input),
+    revokeSession: (input) => client.request('revokeSession', input),
+    createInvite: (state) => client.request('createInvite', state),
+    consumeInvite: (input) => client.request('consumeInvite', input),
   };
 }
 
@@ -77,7 +94,10 @@ export interface LocalAuthServiceOptions {
   passwordParameters?: Argon2Parameters;
 }
 
-export interface BootstrapResult { user: AuthUserRecord; session: SessionState }
+export interface BootstrapResult {
+  user: AuthUserRecord;
+  session: SessionState;
+}
 export interface AuthenticateFailure {
   code: 'AUTH_FAILED';
   message: typeof AUTH_FAILURE_MESSAGE;
@@ -86,19 +106,31 @@ export interface AuthenticateFailure {
   retryAfterMs?: number;
   lockedUntil?: string;
 }
-export type AuthenticateResult = { ok: true; session: SessionState } | { ok: false; failure: AuthenticateFailure };
+export type AuthenticateResult =
+  | { ok: true; session: SessionState }
+  | { ok: false; failure: AuthenticateFailure };
 export type AcceptInviteResult =
   | { status: 'accepted'; user: AuthUserRecord; session: SessionState }
   | { status: 'already-consumed' | 'expired' | 'not-found' };
-export interface ResetOwnerPasswordResult { user: AuthUserRecord; revokedSessions: number; revokedCapabilities: number }
+export interface ResetOwnerPasswordResult {
+  user: AuthUserRecord;
+  revokedSessions: number;
+  revokedCapabilities: number;
+}
 
 export class OwnerAlreadyExistsError extends Error {
   readonly code = 'OWNER_EXISTS';
-  constructor() { super('An owner account already exists'); this.name = 'OwnerAlreadyExistsError'; }
+  constructor() {
+    super('An owner account already exists');
+    this.name = 'OwnerAlreadyExistsError';
+  }
 }
 export class NotOwnerAccountError extends Error {
   readonly code = 'NOT_OWNER_ACCOUNT';
-  constructor() { super('Password reset is only available for the owner account'); this.name = 'NotOwnerAccountError'; }
+  constructor() {
+    super('Password reset is only available for the owner account');
+    this.name = 'NotOwnerAccountError';
+  }
 }
 
 export class LocalAuthService {
@@ -126,12 +158,21 @@ export class LocalAuthService {
   }
 
   /** First-run owner bootstrap. Once an owner exists this throws `OwnerAlreadyExistsError`. */
-  async bootstrapOwner(input: { password: string; displayName?: string }): Promise<BootstrapResult> {
+  async bootstrapOwner(input: {
+    password: string;
+    displayName?: string;
+  }): Promise<BootstrapResult> {
     const { ownerExists } = await this.getAuthState();
     if (ownerExists) throw new OwnerAlreadyExistsError();
     const now = new Date(this.#now()).toISOString();
     const passwordHash = await hashPassword(input.password, this.#parameters);
-    const user = await this.#persistence.bootstrapOwner({ userId: this.#newId(), displayName: input.displayName ?? 'Owner', passwordHash, capabilityVersion: 1, createdAt: now });
+    const user = await this.#persistence.bootstrapOwner({
+      userId: this.#newId(),
+      displayName: input.displayName ?? 'Owner',
+      passwordHash,
+      capabilityVersion: 1,
+      createdAt: now,
+    });
     const session = await this.#persistence.createSession(this.#newSession(user));
     return { user, session };
   }
@@ -151,11 +192,15 @@ export class LocalAuthService {
       return this.#failure(lockedUntil, at);
     }
     const user = await this.#persistence.loadUser({ userId: input.userId });
-    const valid = user?.passwordHash != null
-      ? await verifyPassword(input.password, user.passwordHash)
-      : await verifyPassword(input.password, DUMMY_PASSWORD_HASH);
+    const valid =
+      user?.passwordHash != null
+        ? await verifyPassword(input.password, user.passwordHash)
+        : await verifyPassword(input.password, DUMMY_PASSWORD_HASH);
     if (!valid) {
-      const state = await this.#persistence.recordAuthFailure({ subject, at: new Date(at).toISOString() });
+      const state = await this.#persistence.recordAuthFailure({
+        subject,
+        at: new Date(at).toISOString(),
+      });
       return this.#failure(this.#lockedUntil(state) ?? 0, at);
     }
     // A verified password implies the user exists; the dummy record never verifies.
@@ -188,7 +233,11 @@ export class LocalAuthService {
    * Hashes before persistence, then atomically consumes the invite, creates
    * the user, and creates the first session in one worker transaction.
    */
-  async acceptInvite(input: { inviteId: string; password: string; displayName?: string }): Promise<AcceptInviteResult> {
+  async acceptInvite(input: {
+    inviteId: string;
+    password: string;
+    displayName?: string;
+  }): Promise<AcceptInviteResult> {
     const now = new Date(this.#now()).toISOString();
     const passwordHash = await hashPassword(input.password, this.#parameters);
     const userId = this.#newId();
@@ -218,26 +267,44 @@ export class LocalAuthService {
    * the capability version, deletes the owner's sessions and revokes the
    * owner's capabilities in one transaction.
    */
-  async resetOwnerPassword(input: { userId: string; newPassword: string }): Promise<ResetOwnerPasswordResult> {
+  async resetOwnerPassword(input: {
+    userId: string;
+    newPassword: string;
+  }): Promise<ResetOwnerPasswordResult> {
     const owner = await this.#persistence.loadOwner();
     if (owner == null || owner.userId !== input.userId) throw new NotOwnerAccountError();
     const at = new Date(this.#now()).toISOString();
     const passwordHash = await hashPassword(input.newPassword, this.#parameters);
-    return this.#persistence.resetOwnerPassword({ userId: input.userId, passwordHash, capabilityVersion: owner.capabilityVersion + 1, at });
+    return this.#persistence.resetOwnerPassword({
+      userId: input.userId,
+      passwordHash,
+      capabilityVersion: owner.capabilityVersion + 1,
+      at,
+    });
   }
 
   #newSession(user: AuthUserRecord): SessionState {
-    return { sessionId: this.#newId(), userId: user.userId, expiresAt: new Date(this.#now() + this.#sessionTtlMs).toISOString(), capabilityVersion: user.capabilityVersion };
+    return {
+      sessionId: this.#newId(),
+      userId: user.userId,
+      expiresAt: new Date(this.#now() + this.#sessionTtlMs).toISOString(),
+      capabilityVersion: user.capabilityVersion,
+    };
   }
 
   #lockedUntil(backoff: AuthBackoffState | null): number | null {
     if (backoff == null) return null;
-    const lockMs = new Date(backoff.updatedAt).getTime() + backoffDelayMs(backoff.failures, this.#backoff);
+    const lockMs =
+      new Date(backoff.updatedAt).getTime() + backoffDelayMs(backoff.failures, this.#backoff);
     return Number.isFinite(lockMs) ? lockMs : null;
   }
 
   #failure(lockedUntilMs: number, at: number): AuthenticateResult {
-    const failure: AuthenticateFailure = { code: 'AUTH_FAILED', message: AUTH_FAILURE_MESSAGE, retryable: true };
+    const failure: AuthenticateFailure = {
+      code: 'AUTH_FAILED',
+      message: AUTH_FAILURE_MESSAGE,
+      retryable: true,
+    };
     if (lockedUntilMs > at) {
       failure.retryAfterMs = lockedUntilMs - at;
       failure.lockedUntil = new Date(lockedUntilMs).toISOString();

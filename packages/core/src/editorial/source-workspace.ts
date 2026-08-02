@@ -1,10 +1,10 @@
-import { analyzeSource } from '../entity/source-analysis.ts';
 import type {
   ProjectSourceSnapshotV1,
   SourceAnalysisV1,
   SourceChangeV1,
   SourceDocumentV1,
 } from '../contracts/source.ts';
+import { analyzeSource } from '../entity/source-analysis.ts';
 
 /** Pure authored-source queries and candidate analysis over an immutable snapshot. */
 export class SourceWorkspace {

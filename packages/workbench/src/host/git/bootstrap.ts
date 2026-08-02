@@ -38,18 +38,18 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { GitBaselineRecord } from '../../contracts/persistence.js';
-import { requireGitCapability, type GitCapability } from './capability.js';
-import { AuthoringManifest, type AuthoringEntry } from './manifest.js';
+import { type GitCapability, requireGitCapability } from './capability.js';
+import { type AuthoringEntry, AuthoringManifest } from './manifest.js';
 import {
   ControlledGitRunner,
   GitHostError,
-  GitIsolationError,
-  WORKBENCH_AUTHORING_REF,
-  WORKBENCH_GIT_IDENTITY,
   type GitIdentity,
+  GitIsolationError,
   type GitPreflightCondition,
   type GitRepositoryPreflight,
   type GitRunResult,
+  WORKBENCH_AUTHORING_REF,
+  WORKBENCH_GIT_IDENTITY,
 } from './runner.js';
 
 /** Fixed subject of the single baseline commit; reopen verifies history roots against it. */
@@ -141,7 +141,10 @@ type RepoProbe = {
   readonly ident: GitRunResult;
 };
 
-type RepoState = { readonly kind: 'not-a-repo' } | { readonly kind: 'create' } | { readonly kind: 'reopen' };
+type RepoState =
+  | { readonly kind: 'not-a-repo' }
+  | { readonly kind: 'create' }
+  | { readonly kind: 'reopen' };
 
 export class GitBootstrap {
   readonly #runner: ControlledGitRunner;
@@ -163,17 +166,26 @@ export class GitBootstrap {
     }
     const ref = options.ref ?? WORKBENCH_AUTHORING_REF;
     if (!ref.startsWith('refs/heads/') || ref.length <= 'refs/heads/'.length) {
-      throw new GitBootstrapInputError(`fixed authoring ref must be a branch under refs/heads/: ${ref}`);
+      throw new GitBootstrapInputError(
+        `fixed authoring ref must be a branch under refs/heads/: ${ref}`,
+      );
     }
     const identity = options.identity ?? WORKBENCH_GIT_IDENTITY;
-    if (typeof identity.name !== 'string' || identity.name.length === 0 || typeof identity.email !== 'string' || identity.email.length === 0) {
+    if (
+      typeof identity.name !== 'string' ||
+      identity.name.length === 0 ||
+      typeof identity.email !== 'string' ||
+      identity.email.length === 0
+    ) {
       throw new GitBootstrapInputError('service identity must carry a non-empty name and email');
     }
     if (!options.entries || options.entries.length === 0) {
       throw new GitBootstrapInputError('baseline manifest must contain at least one author entry');
     }
     if (!(options.runner instanceof ControlledGitRunner)) {
-      throw new GitBootstrapInputError('runner must be a ControlledGitRunner (the only Git authority)');
+      throw new GitBootstrapInputError(
+        'runner must be a ControlledGitRunner (the only Git authority)',
+      );
     }
     if (!(options.manifest instanceof AuthoringManifest)) {
       throw new GitBootstrapInputError('manifest must be an AuthoringManifest');
@@ -207,7 +219,9 @@ export class GitBootstrap {
       probe = await this.#probeState();
       state = this.#classify(probe);
       if (state.kind === 'reopen' || state.kind === 'not-a-repo') {
-        throw new GitBootstrapConflictError(`git init did not produce an authoring repository at ${this.#root}`);
+        throw new GitBootstrapConflictError(
+          `git init did not produce an authoring repository at ${this.#root}`,
+        );
       }
     }
     return state.kind === 'reopen' ? this.#reopen() : this.#create();
@@ -235,7 +249,9 @@ export class GitBootstrap {
 
     if (!check('inside-work-tree')) {
       if (probe.isBare) {
-        throw new GitBootstrapConflictError(`bare repository at ${this.#root} is not an authoring worktree`);
+        throw new GitBootstrapConflictError(
+          `bare repository at ${this.#root} is not an authoring worktree`,
+        );
       }
       return { kind: 'not-a-repo' };
     }
@@ -253,7 +269,9 @@ export class GitBootstrap {
     }
     if (!check('fixed-ref-present')) {
       if (!probe.unborn) {
-        throw new GitBootstrapConflictError(`fixed ref ${this.#ref} is missing while HEAD resolves`);
+        throw new GitBootstrapConflictError(
+          `fixed ref ${this.#ref} is missing while HEAD resolves`,
+        );
       }
       if (!probe.stagedClean || !probe.unstagedClean) {
         throw new GitBootstrapDirtyError(
@@ -307,7 +325,9 @@ export class GitBootstrap {
         const entry = this.#entries[index];
         const blobFile = join(scratch, `blob-${index}`);
         writeFileSync(blobFile, entry.bytes);
-        const blob = (await this.#strict(['hash-object', '-w', '--no-filters', blobFile])).stdout.trim();
+        const blob = (
+          await this.#strict(['hash-object', '-w', '--no-filters', blobFile])
+        ).stdout.trim();
         const mode = entry.mode === 'executable' ? '100755' : '100644';
         await this.#strict(
           ['update-index', '--add', '--cacheinfo', `${mode},${blob},${entry.path}`],
@@ -449,11 +469,15 @@ export class GitBootstrap {
   async #readBaseline(status: 'created' | 'reopened'): Promise<GitBootstrapResult> {
     const commit = (await this.#strict(['rev-parse', this.#ref])).stdout.trim();
     const tree = (await this.#strict(['rev-parse', `${this.#ref}^{tree}`])).stdout.trim();
-    const commitCount = Number((await this.#strict(['rev-list', '--count', this.#ref])).stdout.trim());
-    const committedAt = (await this.#strict(['log', '-1', '--format=%cI', this.#ref])).stdout.trim();
+    const commitCount = Number(
+      (await this.#strict(['rev-list', '--count', this.#ref])).stdout.trim(),
+    );
+    const committedAt = (
+      await this.#strict(['log', '-1', '--format=%cI', this.#ref])
+    ).stdout.trim();
     const message = (await this.#strict(['log', '-1', '--format=%B', this.#ref])).stdout;
-    const entries = (await this.#strict(['ls-tree', '-r', '--name-only', '-z', this.#ref]))
-      .stdout.split('\0')
+    const entries = (await this.#strict(['ls-tree', '-r', '--name-only', '-z', this.#ref])).stdout
+      .split('\0')
       .filter((path) => path.length > 0);
     return {
       status,

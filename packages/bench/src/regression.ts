@@ -10,13 +10,13 @@ import {
   type ValidationIssue,
   type WorldState,
 } from '@novalistically/core';
-import { FileProjectSourceLoader } from '@novalistically/node-host';
 import {
   ContextCompiler,
   type PipelineRunResult,
   ReportWriter,
   ResultAggregator,
 } from '@novalistically/core/tooling';
+import { FileProjectSourceLoader } from '@novalistically/node-host';
 import { computeNCED, type PerValidatorBreakdown, type SeverityLevelCED } from './consistency.js';
 import type { ApprovedReferenceSet, ValidatorIssueIdentity } from './reference.js';
 import { collectReferenceIssueIdentities, loadApprovedReferences } from './reference.js';

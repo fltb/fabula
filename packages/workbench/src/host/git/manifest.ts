@@ -211,7 +211,11 @@ export function classifyAuthoringPath(path: string): PathClassification {
   }
   for (const segment of segments) {
     if (segment === '.git')
-      return { ok: false, code: 'git-internal-path', message: `Git internal path rejected: ${path}` };
+      return {
+        ok: false,
+        code: 'git-internal-path',
+        message: `Git internal path rejected: ${path}`,
+      };
     if (segment === '.nova')
       return {
         ok: false,

@@ -196,7 +196,6 @@ function makePipelineWithAggregator(entry: MockPass2Entry) {
   return { pipeline, provider, renderCache };
 }
 
-
 describe('dynamic schema path with aggregator', () => {
   it('parses analysis with dynamic schema from aggregator', async () => {
     const entry = makeAnalysisResult('test');
@@ -386,7 +385,11 @@ describe('RenderPipeline provider call ledger', () => {
   // ── Pass2 provider failure ─────────────────────────────────────────
 
   it('records valid requestHash on Pass2 provider throw', async () => {
-    const { pipeline } = makePipeline({ failOnCall: 2, failMessage: 'Pass2 connection lost', responses: ['Some prose.', VALID_ANALYSIS_JSON] });
+    const { pipeline } = makePipeline({
+      failOnCall: 2,
+      failMessage: 'Pass2 connection lost',
+      responses: ['Some prose.', VALID_ANALYSIS_JSON],
+    });
     const result = await pipeline.renderScene(makeJob('evt_p2_fail'));
     const entries = result.providerCalls;
     expect(entries).toHaveLength(2);
@@ -402,7 +405,14 @@ describe('RenderPipeline provider call ledger', () => {
     const renderCache = new MemoryRenderCacheRepository();
     const provider = new MockProvider({ responses: ['prose', VALID_ANALYSIS_JSON] });
     const runtimeServices = { renderCache };
-    const pipeline = new RenderPipeline({ provider, model: 'mock-model', runtimeServices, skipCache: false, maxRetries: 3, validatorPolicyId: 'test-policy-v1' });
+    const pipeline = new RenderPipeline({
+      provider,
+      model: 'mock-model',
+      runtimeServices,
+      skipCache: false,
+      maxRetries: 3,
+      validatorPolicyId: 'test-policy-v1',
+    });
     const miss = await pipeline.renderScene(makeJob('evt_cache_check'));
     expect(miss.cacheHit).toBe(false);
     expect(miss.providerCalls.length).toBeGreaterThan(0);
@@ -770,11 +780,26 @@ describe('RenderPipeline provider call ledger', () => {
     const renderCache = new MemoryRenderCacheRepository();
     const populateProvider = new MockProvider({ responses: ['prose.', VALID_ANALYSIS_JSON] });
     const populateServices = { renderCache };
-    const populatePipeline = new RenderPipeline({ provider: populateProvider, model: 'mock-model', providerProfile: 'mock-provider', runtimeServices: populateServices, skipCache: false, maxRetries: 3, validatorPolicyId: 'test-policy-v1' });
+    const populatePipeline = new RenderPipeline({
+      provider: populateProvider,
+      model: 'mock-model',
+      providerProfile: 'mock-provider',
+      runtimeServices: populateServices,
+      skipCache: false,
+      maxRetries: 3,
+      validatorPolicyId: 'test-policy-v1',
+    });
     const miss = await populatePipeline.renderScene(makeJob('evt_cache_hit'));
     expect(miss.cacheHit).toBe(false);
     expect(miss.analysis).not.toBeNull();
-    const cachedPipeline = new RenderPipeline({ model: 'mock-model', providerProfile: 'mock-provider', runtimeServices: { renderCache }, skipCache: false, maxRetries: 3, validatorPolicyId: 'test-policy-v1' });
+    const cachedPipeline = new RenderPipeline({
+      model: 'mock-model',
+      providerProfile: 'mock-provider',
+      runtimeServices: { renderCache },
+      skipCache: false,
+      maxRetries: 3,
+      validatorPolicyId: 'test-policy-v1',
+    });
     const hit = await cachedPipeline.renderScene(makeJob('evt_cache_hit'));
     expect(hit.cacheHit).toBe(true);
     expect(hit.analysis).not.toBeNull();

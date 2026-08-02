@@ -1,15 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { BackoffPolicy } from '../src/host/auth/backoff.js';
 import {
   AUTH_FAILURE_MESSAGE,
+  type AuthenticateResult,
   createAuthPersistence,
   LocalAuthService,
   NotOwnerAccountError,
   OwnerAlreadyExistsError,
-  type AuthenticateResult,
 } from '../src/host/auth/service.js';
-import type { BackoffPolicy } from '../src/host/auth/backoff.js';
 import { createRealPersistence, type RealPersistenceHarness } from './helpers/real-persistence.js';
 
 const TINY_BACKOFF: BackoffPolicy = { initialDelayMs: 10, factor: 2, maxDelayMs: 1000 };
@@ -25,23 +25,33 @@ describe('LocalAuthService over the real persistence worker', () => {
     service = new LocalAuthService({
       persistence: createAuthPersistence(harness.client),
       now: () => now,
-      newId: (() => { let n = 0; return () => `id-${++n}`; })(),
+      newId: (() => {
+        let n = 0;
+        return () => `id-${++n}`;
+      })(),
       backoff: TINY_BACKOFF,
       sessionTtlMs: 60_000,
       inviteTtlMs: 60_000,
     });
   });
 
-  afterEach(() => { harness.dispose(); });
+  afterEach(() => {
+    harness.dispose();
+  });
 
   it('bootstraps the owner once and closes the bootstrap path afterwards', async () => {
     await expect(service.getAuthState()).resolves.toEqual({ ownerExists: false });
-    const result = await service.bootstrapOwner({ password: 'owner-password', displayName: 'Owner' });
+    const result = await service.bootstrapOwner({
+      password: 'owner-password',
+      displayName: 'Owner',
+    });
     expect(result.user.role).toBe('owner');
     expect(result.session.userId).toBe(result.user.userId);
     expect(result.session.capabilityVersion).toBe(1);
     await expect(service.getAuthState()).resolves.toEqual({ ownerExists: true });
-    await expect(service.bootstrapOwner({ password: 'second' })).rejects.toBeInstanceOf(OwnerAlreadyExistsError);
+    await expect(service.bootstrapOwner({ password: 'second' })).rejects.toBeInstanceOf(
+      OwnerAlreadyExistsError,
+    );
   });
 
   it('returns a uniform failure for unknown users and wrong passwords', async () => {
@@ -76,14 +86,20 @@ describe('LocalAuthService over the real persistence worker', () => {
     expect(locked.failure.retryAfterMs).toBe(80);
     expect(locked.failure.lockedUntil).toBe(new Date(now + 80).toISOString());
     const backoff = await harness.client.request('loadAuthBackoff', { subject: `user:${userId}` });
-    expect(backoff).toEqual({ subject: `user:${userId}`, failures: 4, updatedAt: new Date(now).toISOString() });
+    expect(backoff).toEqual({
+      subject: `user:${userId}`,
+      failures: 4,
+      updatedAt: new Date(now).toISOString(),
+    });
 
     // Locked attempts fail fast with the same uniform failure and do not extend the count.
     now += 10;
     const during = await service.authenticate({ userId, password: 'still-wrong' });
     if (during.ok) throw new Error('expected failure');
     expect(during.failure.retryAfterMs).toBe(70);
-    await expect(harness.client.request('loadAuthBackoff', { subject: `user:${userId}` })).resolves.toMatchObject({ failures: 4 });
+    await expect(
+      harness.client.request('loadAuthBackoff', { subject: `user:${userId}` }),
+    ).resolves.toMatchObject({ failures: 4 });
 
     // A second service instance over the same database still sees the lock (persisted backoff).
     const secondService = new LocalAuthService({
@@ -100,13 +116,21 @@ describe('LocalAuthService over the real persistence worker', () => {
     now += 200;
     const success = await service.authenticate({ userId, password: 'owner-password' });
     expect(success.ok).toBe(true);
-    await expect(harness.client.request('loadAuthBackoff', { subject: `user:${userId}` })).resolves.toBeNull();
+    await expect(
+      harness.client.request('loadAuthBackoff', { subject: `user:${userId}` }),
+    ).resolves.toBeNull();
   });
 
   it('creates multiple independent sessions and revokes them individually', async () => {
     const owner = await service.bootstrapOwner({ password: 'owner-password' });
-    const first = await service.authenticate({ userId: owner.user.userId, password: 'owner-password' });
-    const second = await service.authenticate({ userId: owner.user.userId, password: 'owner-password' });
+    const first = await service.authenticate({
+      userId: owner.user.userId,
+      password: 'owner-password',
+    });
+    const second = await service.authenticate({
+      userId: owner.user.userId,
+      password: 'owner-password',
+    });
     if (!first.ok || !second.ok) throw new Error('expected successes');
     expect(first.session.sessionId).not.toBe(second.session.sessionId);
     await expect(service.getSession(first.session.sessionId)).resolves.toEqual(first.session);
@@ -122,7 +146,10 @@ describe('LocalAuthService over the real persistence worker', () => {
 
     const invite = await service.createInvite({ ttlMs: 1000 });
     now += 100;
-    const accepted = await service.acceptInvite({ inviteId: invite.inviteId, password: 'invited-password' });
+    const accepted = await service.acceptInvite({
+      inviteId: invite.inviteId,
+      password: 'invited-password',
+    });
     expect(accepted.status).toBe('accepted');
     if (accepted.status !== 'accepted') throw new Error('expected accepted');
     expect(accepted.user.role).toBe('user');
@@ -161,10 +188,16 @@ describe('LocalAuthService over the real persistence worker', () => {
     ).resolves.toMatchObject({ status: 'accepted' });
   });
 
-  it('resets the owner password and revokes that owner\'s sessions and capabilities', async () => {
+  it("resets the owner password and revokes that owner's sessions and capabilities", async () => {
     const owner = await service.bootstrapOwner({ password: 'owner-password' });
-    const first = await service.authenticate({ userId: owner.user.userId, password: 'owner-password' });
-    const second = await service.authenticate({ userId: owner.user.userId, password: 'owner-password' });
+    const first = await service.authenticate({
+      userId: owner.user.userId,
+      password: 'owner-password',
+    });
+    const second = await service.authenticate({
+      userId: owner.user.userId,
+      password: 'owner-password',
+    });
     if (!first.ok || !second.ok) throw new Error('expected successes');
 
     const capability = await harness.client.request('upsertCapability', {
@@ -176,7 +209,10 @@ describe('LocalAuthService over the real persistence worker', () => {
       expiresAt: new Date(now + 60_000).toISOString(),
     });
     expect(capability.capabilityId).toBe('cap-1');
-    const reset = await service.resetOwnerPassword({ userId: owner.user.userId, newPassword: 'fresh-password' });
+    const reset = await service.resetOwnerPassword({
+      userId: owner.user.userId,
+      newPassword: 'fresh-password',
+    });
     expect(reset.revokedSessions).toBe(3);
     expect(reset.revokedCapabilities).toBe(1);
     expect(reset.user.capabilityVersion).toBe(2);
@@ -188,10 +224,16 @@ describe('LocalAuthService over the real persistence worker', () => {
     expect(revoked?.revokedAt).toBeTruthy();
 
     // Old password no longer works; the new one does, with the bumped capability version.
-    const oldAttempt = await service.authenticate({ userId: owner.user.userId, password: 'owner-password' });
+    const oldAttempt = await service.authenticate({
+      userId: owner.user.userId,
+      password: 'owner-password',
+    });
     expect(oldAttempt.ok).toBe(false);
     now += 200;
-    const newLogin = await service.authenticate({ userId: owner.user.userId, password: 'fresh-password' });
+    const newLogin = await service.authenticate({
+      userId: owner.user.userId,
+      password: 'fresh-password',
+    });
     expect(newLogin.ok).toBe(true);
     if (newLogin.ok) expect(newLogin.session.capabilityVersion).toBe(2);
   });
@@ -199,10 +241,17 @@ describe('LocalAuthService over the real persistence worker', () => {
   it('only permits resetting the owner account', async () => {
     const owner = await service.bootstrapOwner({ password: 'owner-password' });
     const invite = await service.createInvite();
-    const accepted = await service.acceptInvite({ inviteId: invite.inviteId, password: 'user-password' });
+    const accepted = await service.acceptInvite({
+      inviteId: invite.inviteId,
+      password: 'user-password',
+    });
     if (accepted.status !== 'accepted') throw new Error('expected accepted');
-    await expect(service.resetOwnerPassword({ userId: accepted.user.userId, newPassword: 'x' })).rejects.toBeInstanceOf(NotOwnerAccountError);
-    await expect(service.resetOwnerPassword({ userId: owner.user.userId, newPassword: 'x' })).resolves.toMatchObject({ revokedSessions: 1 });
+    await expect(
+      service.resetOwnerPassword({ userId: accepted.user.userId, newPassword: 'x' }),
+    ).rejects.toBeInstanceOf(NotOwnerAccountError);
+    await expect(
+      service.resetOwnerPassword({ userId: owner.user.userId, newPassword: 'x' }),
+    ).resolves.toMatchObject({ revokedSessions: 1 });
   });
 });
 
@@ -211,7 +260,10 @@ describe('host auth boundaries', () => {
 
   it('keeps the auth service free of sync argon2 and database access', async () => {
     for (const name of await readdir(fileURLToPath(new URL('../src/host/auth', import.meta.url)))) {
-      const source = await readFile(`${fileURLToPath(new URL('../src/host/auth', import.meta.url))}/${name}`, 'utf8');
+      const source = await readFile(
+        `${fileURLToPath(new URL('../src/host/auth', import.meta.url))}/${name}`,
+        'utf8',
+      );
       expect(source, name).not.toMatch(/argon2Sync/);
       expect(source, name).not.toMatch(/DatabaseSync|node:sqlite|kysely/);
       expect(source, name).not.toMatch(/from 'node:sqlite'/);
@@ -224,7 +276,8 @@ describe('host auth boundaries', () => {
     for (const name of files) {
       if (!String(name).endsWith('.ts')) continue;
       const source = await readFile(`${srcDir}/${name}`, 'utf8');
-      if (source.includes('node:sqlite') || source.includes('DatabaseSync')) offenders.push(String(name));
+      if (source.includes('node:sqlite') || source.includes('DatabaseSync'))
+        offenders.push(String(name));
     }
     expect(offenders).toEqual(['persistence/worker.ts']);
   });
@@ -240,7 +293,12 @@ describe('host auth boundaries', () => {
   });
 
   it('does not expose password hash records through the browser contract barrel', async () => {
-    const barrel = await readFile(fileURLToPath(new URL('../src/contracts/index.ts', import.meta.url)), 'utf8');
-    expect(barrel).not.toMatch(/PasswordHashRecord|PersistencePayloads|PersistenceResults|PersistenceOperation/);
+    const barrel = await readFile(
+      fileURLToPath(new URL('../src/contracts/index.ts', import.meta.url)),
+      'utf8',
+    );
+    expect(barrel).not.toMatch(
+      /PasswordHashRecord|PersistencePayloads|PersistenceResults|PersistenceOperation/,
+    );
   });
 });

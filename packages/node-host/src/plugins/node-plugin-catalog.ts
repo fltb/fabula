@@ -1,7 +1,6 @@
-import { promises as fs, type Dirent } from 'node:fs';
-import { pathToFileURL } from 'node:url';
+import { type Dirent, promises as fs } from 'node:fs';
 import * as path from 'node:path';
-import * as yaml from 'yaml';
+import { pathToFileURL } from 'node:url';
 import type {
   BuildPromptInput,
   PluginContext,
@@ -11,6 +10,7 @@ import type {
   ProviderRegistry,
   ValidatorRegistrar,
 } from '@novalistically/core/extensions';
+import * as yaml from 'yaml';
 
 export interface LoadedNodePlugin {
   readonly manifest: PluginManifest;
@@ -23,7 +23,7 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((entry) => typeof entry === 'string');
 
-const isCallback = (value: unknown): value is ((...args: unknown[]) => unknown) =>
+const isCallback = (value: unknown): value is (...args: unknown[]) => unknown =>
   typeof value === 'function';
 
 const isWithin = (root: string, target: string): boolean => {
@@ -127,12 +127,48 @@ const toHooks = (value: unknown, manifest: PluginManifest): PluginHooks | null =
 
   return {
     name: value.name,
-    ...(onLoad ? { onLoad: async (context: PluginContext) => { await onLoad(context); } } : {}),
-    ...(onUnload ? { onUnload: async (context: PluginContext) => { await onUnload(context); } } : {}),
-    ...(registerValidators ? { registerValidators: (registrar: ValidatorRegistrar) => { registerValidators(registrar); } } : {}),
-    ...(registerProvider ? { registerProvider: (registry: ProviderRegistry) => { registerProvider(registry); } } : {}),
-    ...(beforeRender ? { beforeRender: async (context: PluginContext) => { await beforeRender(context); } } : {}),
-    ...(afterRender ? { afterRender: async (context: PluginContext) => { await afterRender(context); } } : {}),
+    ...(onLoad
+      ? {
+          onLoad: async (context: PluginContext) => {
+            await onLoad(context);
+          },
+        }
+      : {}),
+    ...(onUnload
+      ? {
+          onUnload: async (context: PluginContext) => {
+            await onUnload(context);
+          },
+        }
+      : {}),
+    ...(registerValidators
+      ? {
+          registerValidators: (registrar: ValidatorRegistrar) => {
+            registerValidators(registrar);
+          },
+        }
+      : {}),
+    ...(registerProvider
+      ? {
+          registerProvider: (registry: ProviderRegistry) => {
+            registerProvider(registry);
+          },
+        }
+      : {}),
+    ...(beforeRender
+      ? {
+          beforeRender: async (context: PluginContext) => {
+            await beforeRender(context);
+          },
+        }
+      : {}),
+    ...(afterRender
+      ? {
+          afterRender: async (context: PluginContext) => {
+            await afterRender(context);
+          },
+        }
+      : {}),
     ...(onBuildPass1Prompt
       ? {
           onBuildPass1Prompt: async (input: BuildPromptInput) =>
@@ -191,7 +227,10 @@ export class NodePluginCatalog {
       if (!manifestStat.isFile() || manifestStat.isSymbolicLink()) {
         throw new Error(`Plugin manifest must be a regular file: ${manifestPath}`);
       }
-      const manifest = parseManifest(yaml.parse(await fs.readFile(manifestPath, 'utf8')), manifestPath);
+      const manifest = parseManifest(
+        yaml.parse(await fs.readFile(manifestPath, 'utf8')),
+        manifestPath,
+      );
 
       const modulePath = path.join(pluginDirectory, 'index.js');
       const moduleStat = await fs.lstat(modulePath).catch((error: unknown) => {

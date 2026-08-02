@@ -36,14 +36,12 @@ export class MockPass2Provider implements LLMProvider {
     this.latencyMs = options.latencyMs ?? 0;
   }
 
-
   /** Returns true if the given request appears to be a Pass 2 (analysis) request. */
   static isPass2Request(request: CompletionRequest): boolean {
     return request.seed !== undefined || request.responseFormat?.type === 'json_object';
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
-
     const isPass2 = MockPass2Provider.isPass2Request(request);
 
     // Simulate latency

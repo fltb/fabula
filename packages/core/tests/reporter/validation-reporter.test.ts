@@ -21,15 +21,17 @@ describe('formatValidationReport', () => {
     const report: ValidationReport = {
       projectName: 'failing-project',
       generatedAt: '2026-07-27T12:00:00.000Z',
-      l1Issues: [{
-        validator: 'test-validator',
-        eventId: 'e1',
-        category: 'consistency',
-        severity: 'error',
-        message: 'Something went wrong',
-        entityId: 'entity-a',
-        attribute: 'name',
-      }],
+      l1Issues: [
+        {
+          validator: 'test-validator',
+          eventId: 'e1',
+          category: 'consistency',
+          severity: 'error',
+          message: 'Something went wrong',
+          entityId: 'entity-a',
+          attribute: 'name',
+        },
+      ],
       l2Issues: [],
     };
 
@@ -44,20 +46,24 @@ describe('formatValidationReport', () => {
     const report: ValidationReport = {
       projectName: 'multi-level',
       generatedAt: '2026-07-27T12:00:00.000Z',
-      l1Issues: [{
-        validator: 'v1',
-        eventId: 'e1',
-        category: 'logic',
-        severity: 'warning',
-        message: 'Pre-render warning',
-      }],
-      l2Issues: [{
-        validator: 'v2',
-        eventId: 'e2',
-        category: 'style',
-        severity: 'error',
-        message: 'Post-render error',
-      }],
+      l1Issues: [
+        {
+          validator: 'v1',
+          eventId: 'e1',
+          category: 'logic',
+          severity: 'warning',
+          message: 'Pre-render warning',
+        },
+      ],
+      l2Issues: [
+        {
+          validator: 'v2',
+          eventId: 'e2',
+          category: 'style',
+          severity: 'error',
+          message: 'Post-render error',
+        },
+      ],
     };
 
     const markdown = formatValidationReport(report);
@@ -70,8 +76,20 @@ describe('formatValidationReport', () => {
       projectName: 'stable-order',
       generatedAt: '2026-07-27T12:00:00.000Z',
       l1Issues: [
-        { validator: 'zeta', eventId: 'e1', category: 'logic', severity: 'warning', message: 'later' },
-        { validator: 'alpha', eventId: 'e2', category: 'logic', severity: 'error', message: 'earlier' },
+        {
+          validator: 'zeta',
+          eventId: 'e1',
+          category: 'logic',
+          severity: 'warning',
+          message: 'later',
+        },
+        {
+          validator: 'alpha',
+          eventId: 'e2',
+          category: 'logic',
+          severity: 'error',
+          message: 'earlier',
+        },
       ],
       l2Issues: [],
     };

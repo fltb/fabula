@@ -7,7 +7,10 @@ import {
   sha256Canonical,
   verifyEvidenceChain,
 } from '../../src/cache/render-cache.ts';
-import type { LayeredCacheKey, RenderCacheRecord } from '../../src/ports/render-cache-repository.ts';
+import type {
+  LayeredCacheKey,
+  RenderCacheRecord,
+} from '../../src/ports/render-cache-repository.ts';
 import { MemoryRenderCacheRepository } from '../../src/testing/memory-repositories.ts';
 import type { Fact } from '../../src/types/entity.js';
 
@@ -18,7 +21,15 @@ const cacheKey = (eventId: string, sourceHash = 'abc123def456'): LayeredCacheKey
 });
 
 function makeRecord(key: LayeredCacheKey, prose: string, evidenceHash?: string): RenderCacheRecord {
-  const output: Record<string, unknown> = { prose, analysis: { eventId: key.layers.eventId ?? 'cache-event', protocol: { proseHash: 'cache-prose' }, observations: {}, analysis: { cache: true } } };
+  const output: Record<string, unknown> = {
+    prose,
+    analysis: {
+      eventId: key.layers.eventId ?? 'cache-event',
+      protocol: { proseHash: 'cache-prose' },
+      observations: {},
+      analysis: { cache: true },
+    },
+  };
   if (evidenceHash !== undefined) output.evidenceHash = evidenceHash;
   return { version: 1, key, recordHash: sha256Canonical({ key, output }), output };
 }
@@ -92,7 +103,9 @@ describe('cache evidence verification', () => {
     const tamperedPre = [makeFact('f1_tampered')];
     const tamperedHash = computeEvidenceHash(eventId, tamperedPre, post);
     expect(tamperedHash).not.toBe(originalHash);
-    expect(await getCachedRender(repository, { key, eventId, evidenceHash: tamperedHash })).toBeNull();
+    expect(
+      await getCachedRender(repository, { key, eventId, evidenceHash: tamperedHash }),
+    ).toBeNull();
   });
 
   it('cache hit when evidence hash matches', async () => {
@@ -135,9 +148,14 @@ describe('cache evidence verification', () => {
     const key = cacheKey(eventId);
 
     // Malformed record: analysis output missing entirely.
-    await repository.put({ key, record: { ...makeRecord(key, 'test', hash), output: { prose: 'test', evidenceHash: hash } } });
+    await repository.put({
+      key,
+      record: { ...makeRecord(key, 'test', hash), output: { prose: 'test', evidenceHash: hash } },
+    });
     const diagnostics: CacheDiagnostics[] = [];
-    expect(await getCachedRender(repository, { key, eventId, evidenceHash: hash }, diagnostics)).toBeNull();
+    expect(
+      await getCachedRender(repository, { key, eventId, evidenceHash: hash }, diagnostics),
+    ).toBeNull();
     expect(diagnostics[0]?.diagnosis).toBe('corrupt');
   });
 });
@@ -247,13 +265,21 @@ describe('verifyEvidenceChain', () => {
     await setCachedRender(repository, key, makeRecord(key, 'original', originalHash));
 
     // A lookup pinned to the original evidence identity succeeds...
-    const verified = await getCachedRender(repository, { key, eventId, evidenceHash: originalHash });
+    const verified = await getCachedRender(repository, {
+      key,
+      eventId,
+      evidenceHash: originalHash,
+    });
     expect(verified).not.toBeNull();
 
     // ...but a tampered evidence identity yields a safe miss, so the chain
     // reports the event as missing rather than a partial hit.
     const tamperedHash = computeEvidenceHash(eventId, [makeFact('f1_tampered')], [makeFact('f2')]);
-    const staleLookup = await getCachedRender(repository, { key, eventId, evidenceHash: tamperedHash });
+    const staleLookup = await getCachedRender(repository, {
+      key,
+      eventId,
+      evidenceHash: tamperedHash,
+    });
     expect(staleLookup).toBeNull();
     const result = verifyEvidenceChain(
       new Map<string, RenderCacheRecord | null>([[eventId, staleLookup]]),

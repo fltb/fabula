@@ -29,7 +29,12 @@ export function getActiveBlocking(
 }
 
 /** Resolve a comment */
-export function resolve(comments: ReviewComment[], commentId: string, resolvedAt: string, patchId?: string): void {
+export function resolve(
+  comments: ReviewComment[],
+  commentId: string,
+  resolvedAt: string,
+  patchId?: string,
+): void {
   const comment = comments.find((c) => c.id === commentId);
   if (comment) {
     comment.status = 'resolved';

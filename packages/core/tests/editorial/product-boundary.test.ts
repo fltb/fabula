@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { ProjectSourceSnapshotV1 } from '../../src/contracts/source.ts';
 import {
   getSourceDocument,
   listSourceDocuments,
@@ -9,7 +10,6 @@ import {
   editorialRenderRequestV1Schema,
   sceneSelectorSchema,
 } from '../../src/schemas/editorial.ts';
-import type { ProjectSourceSnapshotV1 } from '../../src/contracts/source.ts';
 
 const HASH = 'a'.repeat(64);
 

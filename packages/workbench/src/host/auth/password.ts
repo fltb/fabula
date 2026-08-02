@@ -13,21 +13,48 @@ export const PASSWORD_HASH_VERSION = 1 as const;
 export const PASSWORD_HASH_ALGORITHM = 'argon2id' as const;
 export const SALT_BYTES = 16;
 
-export interface Argon2Parameters { memory: number; passes: number; parallelism: number; tagLength: number }
+export interface Argon2Parameters {
+  memory: number;
+  passes: number;
+  parallelism: number;
+  tagLength: number;
+}
 
-export const DEFAULT_ARGON2_PARAMETERS: Argon2Parameters = { memory: 65536, passes: 3, parallelism: 1, tagLength: 32 };
+export const DEFAULT_ARGON2_PARAMETERS: Argon2Parameters = {
+  memory: 65536,
+  passes: 3,
+  parallelism: 1,
+  tagLength: 32,
+};
 
-function deriveKey(message: string, nonce: Uint8Array, parameters: Argon2Parameters): Promise<Buffer> {
+function deriveKey(
+  message: string,
+  nonce: Uint8Array,
+  parameters: Argon2Parameters,
+): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     argon2(
       PASSWORD_HASH_ALGORITHM,
-      { message, nonce, memory: parameters.memory, passes: parameters.passes, parallelism: parameters.parallelism, tagLength: parameters.tagLength },
-      (error, derivedKey) => { if (error) reject(error); else resolve(Buffer.from(derivedKey)); },
+      {
+        message,
+        nonce,
+        memory: parameters.memory,
+        passes: parameters.passes,
+        parallelism: parameters.parallelism,
+        tagLength: parameters.tagLength,
+      },
+      (error, derivedKey) => {
+        if (error) reject(error);
+        else resolve(Buffer.from(derivedKey));
+      },
     );
   });
 }
 
-export async function hashPassword(password: string, parameters: Argon2Parameters = DEFAULT_ARGON2_PARAMETERS): Promise<PasswordHashRecord> {
+export async function hashPassword(
+  password: string,
+  parameters: Argon2Parameters = DEFAULT_ARGON2_PARAMETERS,
+): Promise<PasswordHashRecord> {
   const salt = randomBytes(SALT_BYTES);
   const derivedKey = await deriveKey(password, salt, parameters);
   return {
@@ -39,12 +66,21 @@ export async function hashPassword(password: string, parameters: Argon2Parameter
   };
 }
 
-export async function verifyPassword(password: string, record: PasswordHashRecord): Promise<boolean> {
-  if (record.version !== PASSWORD_HASH_VERSION || record.algorithm !== PASSWORD_HASH_ALGORITHM) return false;
+export async function verifyPassword(
+  password: string,
+  record: PasswordHashRecord,
+): Promise<boolean> {
+  if (record.version !== PASSWORD_HASH_VERSION || record.algorithm !== PASSWORD_HASH_ALGORITHM)
+    return false;
   const salt = Buffer.from(record.saltBase64, 'base64');
   const expected = Buffer.from(record.hashBase64, 'base64');
   if (salt.length === 0 || expected.length === 0) return false;
-  const derivedKey = await deriveKey(password, salt, { memory: record.memory, passes: record.passes, parallelism: record.parallelism, tagLength: record.tagLength });
+  const derivedKey = await deriveKey(password, salt, {
+    memory: record.memory,
+    passes: record.passes,
+    parallelism: record.parallelism,
+    tagLength: record.tagLength,
+  });
   return derivedKey.length === expected.length && timingSafeEqual(derivedKey, expected);
 }
 

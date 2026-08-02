@@ -31,9 +31,9 @@ vi.mock('ai', async () => {
 
 // ── SUT ──────────────────────────────────────────────────────────────────
 
+import type { CompletionRequest } from '@novalistically/core';
 import { generateText, Output } from 'ai';
 import { AiSdkProvider } from '../src/providers/ai-sdk.ts';
-import type { CompletionRequest } from '@novalistically/core';
 
 // ============================================================================
 // Helpers

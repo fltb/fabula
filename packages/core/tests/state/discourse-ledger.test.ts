@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import type { ProjectSourceSnapshotV1 } from '../../src/contracts/source.ts';
 import { readYamlFile } from '../../src/entity/yaml-loader.ts';
 import { plannedDiscourseLedgerSourceSchema } from '../../src/schemas/discourse.ts';
 import { eventFileSchema } from '../../src/schemas/event.ts';
 import { compileDiscourseBoundaries } from '../../src/state/discourse-context.ts';
 import { compilePlannedDiscourseLedger } from '../../src/state/discourse-ledger.ts';
-import type { ProjectSourceSnapshotV1 } from '../../src/contracts/source.ts';
 import type { PlannedDiscourseLedgerSource } from '../../src/types/discourse.ts';
 import type { NarrativeEvent } from '../../src/types/event.ts';
 

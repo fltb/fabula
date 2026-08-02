@@ -32,8 +32,8 @@ vi.mock('ai', async () => {
 
 // ── SUT ──────────────────────────────────────────────────────────────────
 
-import { AiSdkProvider } from '../src/providers/ai-sdk.ts';
 import type { CompletionRequest } from '@novalistically/core';
+import { AiSdkProvider } from '../src/providers/ai-sdk.ts';
 
 // ============================================================================
 // Helpers

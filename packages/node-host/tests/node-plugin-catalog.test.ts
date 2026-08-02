@@ -1,13 +1,16 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
-import * as path from 'node:path';
 import * as os from 'node:os';
+import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { compileCanonicalRuntime, loadCanonicalProject } from '../../core/src/entity/project-runtime.ts';
+import {
+  compileCanonicalRuntime,
+  loadCanonicalProject,
+} from '../../core/src/entity/project-runtime.ts';
 import { PluginHooksManager, ValidatorRegistry } from '../../core/src/plugin/index.ts';
 import { ResultAggregator } from '../../core/src/validator/aggregator.ts';
 import { createBuiltInValidators } from '../../core/src/validator/builtins.ts';
-import { FileProjectSourceLoaderImpl } from '../src/source/file-project-source-loader.js';
 import { NodePluginCatalog } from '../src/plugins/node-plugin-catalog.js';
+import { FileProjectSourceLoaderImpl } from '../src/source/file-project-source-loader.js';
 
 const fixtureRoot = path.resolve(
   import.meta.dirname,

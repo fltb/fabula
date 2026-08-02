@@ -20,10 +20,8 @@ import {
 import type { CompletionRequest, CompletionResponse, LLMProvider, Message } from '../ai/types.ts';
 import { countNarrativeText } from '../assembler/count.ts';
 import {
-  buildAttemptKeyMaterial,
   buildLogicalKeyMaterial,
   buildSurfaceKeyMaterial,
-  buildValidationKeyMaterial,
   type CacheDiagnostics,
   computeEvidenceHash,
   getCachedRender,
@@ -37,9 +35,13 @@ import type { Logger } from '../observability/logger.ts';
 import type { TraceCollector } from '../observability/trace.ts';
 import type { PluginHooksManager } from '../plugin/hooks-manager.ts';
 import type { BuildPromptInput, PromptDecoration } from '../plugin/types.ts';
-import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
-import type { Clock, CoreRuntimeServices, PromptTemplateCatalog } from '../ports/runtime-services.ts';
 import type { LayeredCacheKey } from '../ports/render-cache-repository.ts';
+import type {
+  Clock,
+  CoreRuntimeServices,
+  PromptTemplateCatalog,
+} from '../ports/runtime-services.ts';
+import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
 import { type StyleProfile, StyleResolver, toStyleNotes } from '../style/index.ts';
 import type { ValidationKey } from '../types/discourse.ts';
 import type {
@@ -61,16 +63,31 @@ import { ConcurrencyPool } from '../util/pool.ts';
 import type { AnalysisContract, ResultAggregator } from '../validator/aggregator.ts';
 import { analysisContentSchema } from '../validator/index.ts';
 import { createCircuitBreaker, DEFAULT_RETRY_JITTER, type RetryJitter } from './circuit-breaker.ts';
+
 function toJsonValue(value: unknown): JsonValue | null {
-  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  )
+    return value;
   if (Array.isArray(value)) {
     const values: JsonValue[] = [];
-    for (const item of value) { const converted = toJsonValue(item); if (converted === null && item !== null) return null; values.push(converted); }
+    for (const item of value) {
+      const converted = toJsonValue(item);
+      if (converted === null && item !== null) return null;
+      values.push(converted);
+    }
     return values;
   }
   if (typeof value === 'object') {
     const object: Record<string, JsonValue> = {};
-    for (const [key, item] of Object.entries(value)) { const converted = toJsonValue(item); if (converted === null && item !== null) return null; object[key] = converted; }
+    for (const [key, item] of Object.entries(value)) {
+      const converted = toJsonValue(item);
+      if (converted === null && item !== null) return null;
+      object[key] = converted;
+    }
     return object;
   }
   return null;
@@ -78,6 +95,7 @@ function toJsonValue(value: unknown): JsonValue | null {
 function isJsonObject(value: JsonValue): value is { readonly [key: string]: JsonValue } {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
+
 import { analyzeValidationErrors, decideRepairStrategy } from './reverse-validate.ts';
 
 /**
@@ -1264,16 +1282,47 @@ export class RenderPipeline {
 
     // Save cache ONLY if validation passed (don't cache bad renders)
     // Cache only analysable, no-error candidates (warning-only ok)
-    const hasErrorIssues = renderValidation?.errors.some((e: ValidationIssue) => e.severity === 'error') ?? false;
+    const hasErrorIssues =
+      renderValidation?.errors.some((e: ValidationIssue) => e.severity === 'error') ?? false;
     const isCacheable = job.proseCandidate === undefined && analysis !== null && !hasErrorIssues;
     if (cacheKey && isCacheable) {
-      const evidenceHash = computeEvidenceHash(event.id, event.preconditions ?? [], event.postconditions ?? []);
-      const cacheKeyRecord: LayeredCacheKey = { version: 1, sourceHash: job.sourceContentHash, layers: { eventId, logical: logicalKeyStr, surface: surfaceKeyStr } };
+      const evidenceHash = computeEvidenceHash(
+        event.id,
+        event.preconditions ?? [],
+        event.postconditions ?? [],
+      );
+      const cacheKeyRecord: LayeredCacheKey = {
+        version: 1,
+        sourceHash: job.sourceContentHash,
+        layers: { eventId, logical: logicalKeyStr, surface: surfaceKeyStr },
+      };
       let cacheAnalysis: JsonValue | null;
-      try { cacheAnalysis = toJsonValue(analysisRaw ? JSON.parse(analysisRaw) : null); } catch { cacheAnalysis = null; }
-      if (cacheAnalysis !== null && typeof cacheAnalysis === 'object' && !Array.isArray(cacheAnalysis)) {
-        const output: JsonValue = { prose, analysis: cacheAnalysis, evidenceHash, llmPass1, llmPass2, promptHash, renderedAt: this.clock?.now() ?? '', chapters: [chapter] };
-        await setCachedRender(this.renderCache, cacheKeyRecord, { version: 1, key: cacheKeyRecord, recordHash: sha256Canonical({ key: cacheKeyRecord, output }), output });
+      try {
+        cacheAnalysis = toJsonValue(analysisRaw ? JSON.parse(analysisRaw) : null);
+      } catch {
+        cacheAnalysis = null;
+      }
+      if (
+        cacheAnalysis !== null &&
+        typeof cacheAnalysis === 'object' &&
+        !Array.isArray(cacheAnalysis)
+      ) {
+        const output: JsonValue = {
+          prose,
+          analysis: cacheAnalysis,
+          evidenceHash,
+          llmPass1,
+          llmPass2,
+          promptHash,
+          renderedAt: this.clock?.now() ?? '',
+          chapters: [chapter],
+        };
+        await setCachedRender(this.renderCache, cacheKeyRecord, {
+          version: 1,
+          key: cacheKeyRecord,
+          recordHash: sha256Canonical({ key: cacheKeyRecord, output }),
+          output,
+        });
       }
     }
     this.traceCollector?.record({

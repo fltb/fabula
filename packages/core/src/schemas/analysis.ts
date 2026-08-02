@@ -38,14 +38,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * performs the full schema validation before a record becomes cacheable.
  */
 export function hasAnalysisResultShape(value: unknown): value is Record<string, unknown> {
-  return isRecord(value)
-    && typeof value.eventId === 'string'
-    && value.eventId.length > 0
-    && isRecord(value.protocol)
-    && Object.keys(value.protocol).length > 0
-    && isRecord(value.observations)
-    && isRecord(value.analysis)
-    && Object.keys(value.analysis).length > 0;
+  return (
+    isRecord(value) &&
+    typeof value.eventId === 'string' &&
+    value.eventId.length > 0 &&
+    isRecord(value.protocol) &&
+    Object.keys(value.protocol).length > 0 &&
+    isRecord(value.observations) &&
+    isRecord(value.analysis) &&
+    Object.keys(value.analysis).length > 0
+  );
 }
 
 // ── Observation schemas ───────────────────────────────────────────────────────

@@ -8,7 +8,6 @@ import {
   type ValidationIssue,
   type Validator,
 } from '@novalistically/core';
-import { FileProjectSourceLoader } from '@novalistically/node-host';
 import {
   expectedOutcomeManifestSchema,
   provenanceManifestSchema,
@@ -16,6 +15,7 @@ import {
   ResultAggregator,
   responseReferenceSchema,
 } from '@novalistically/core/tooling';
+import { FileProjectSourceLoader } from '@novalistically/node-host';
 
 /** Patterns that look like secrets in metadata values. */
 const SECRET_VALUE_PATTERN =

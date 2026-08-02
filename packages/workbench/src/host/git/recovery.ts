@@ -25,12 +25,16 @@
  * the same receipt or the same typed terminal outcome.
  */
 
+import type {
+  GitSubmissionJournal,
+  GitSubmissionPhase,
+  GitSubmissionReceipt,
+} from '../../contracts/persistence.js';
 import {
   GIT_SUBMISSION_PHASE_COMPLETE,
   GIT_SUBMISSION_PHASE_CONFLICT,
   GIT_SUBMISSION_PHASE_STALE,
 } from '../../contracts/persistence.js';
-import type { GitSubmissionJournal, GitSubmissionPhase, GitSubmissionReceipt } from '../../contracts/persistence.js';
 
 /** Journal phase written when a submit is accepted; the row becomes immutable. */
 export const SUBMIT_PHASE_COMPLETE = GIT_SUBMISSION_PHASE_COMPLETE;
@@ -67,7 +71,9 @@ export interface SubmitJournalRecord {
   readonly updatedAt: string;
 }
 
-export function normalizeSubmitJournal(record: GitSubmissionJournal | GitSubmissionReceipt): SubmitJournalRecord {
+export function normalizeSubmitJournal(
+  record: GitSubmissionJournal | GitSubmissionReceipt,
+): SubmitJournalRecord {
   if ('phase' in record) {
     return {
       submitId: record.submitId,
@@ -140,7 +146,10 @@ export function resolveSubmitRecovery(
   if (probe.commitWithSubmitTrailer != null) {
     // A commit with this submitId exists. It must be OUR candidate, and it may
     // only be accepted once the fixed ref points at it.
-    if (record.candidateCommit != null && probe.commitWithSubmitTrailer !== record.candidateCommit) {
+    if (
+      record.candidateCommit != null &&
+      probe.commitWithSubmitTrailer !== record.candidateCommit
+    ) {
       return { kind: 'conflict' }; // two different commits claim this submitId
     }
     if (probe.fixedRefHead === probe.commitWithSubmitTrailer) {
@@ -205,8 +214,12 @@ export class SubmitRecovery {
 
   async recover(submitId: string, probe: SubmitRecoveryProbe): Promise<SubmitRecoveryOutcome> {
     const record = await this.#journal.load(submitId);
-    const outcome = resolveSubmitRecovery(record === null ? null : normalizeSubmitJournal(record), probe);
-    if (outcome.kind !== 'accepted' && outcome.kind !== 'stale' && outcome.kind !== 'conflict') return outcome;
+    const outcome = resolveSubmitRecovery(
+      record === null ? null : normalizeSubmitJournal(record),
+      probe,
+    );
+    if (outcome.kind !== 'accepted' && outcome.kind !== 'stale' && outcome.kind !== 'conflict')
+      return outcome;
     if (record === null) return outcome;
 
     const normalized = normalizeSubmitJournal(record);
@@ -225,7 +238,9 @@ export class SubmitRecovery {
         projectId: normalized.projectId,
         phase: outcome.kind,
         expectedGitHead: normalized.expectedGitHead,
-        ...(normalized.candidateCommit != null ? { candidateCommit: normalized.candidateCommit } : {}),
+        ...(normalized.candidateCommit != null
+          ? { candidateCommit: normalized.candidateCommit }
+          : {}),
         ...(normalized.receiptHash != null ? { receiptHash: normalized.receiptHash } : {}),
         diagnostic: `recovery: ${outcome.kind} detected via git probe`,
         updatedAt: this.#now(),

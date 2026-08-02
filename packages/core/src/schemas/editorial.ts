@@ -1,9 +1,12 @@
 import { z } from 'zod';
+import type {
+  EditorialRenderRequestV1,
+  RenderGameDialogueTreeRequestV1,
+} from '../types/editorial.ts';
 import { analysisResultSchema } from './analysis.ts';
+import { projectSourceSnapshotV1Schema } from './core-contracts.ts';
 import { gameDialogueChoicesSchema } from './game-dialogue.ts';
 import { reviewCommentSchema } from './review.ts';
-import { projectSourceSnapshotV1Schema } from './core-contracts.ts';
-import type { EditorialRenderRequestV1, RenderGameDialogueTreeRequestV1 } from '../types/editorial.ts';
 
 const nonEmptyString = z.string().trim().min(1);
 const contentHashSchema = z.string().regex(/^[a-f0-9]{64}$/);
@@ -231,7 +234,6 @@ export const sceneRevisionEnvelopeV1Schema = z
   })
   .strict();
 
-
 const sceneEditHistoryEntryV1Schema = z
   .object({
     action: z.enum([
@@ -326,7 +328,14 @@ const editorialRenderRequestV1Schema = z
     branchPath: branchPathV1Schema.optional(),
     discourseBranch: nonEmptyString.optional(),
     waivers: z.array(waiverRecordSchema).optional(),
-    batch: z.object({ batchSize: z.number().int().positive().optional(), windowSize: z.number().int().positive().optional(), failFast: z.boolean().optional() }).strict().optional(),
+    batch: z
+      .object({
+        batchSize: z.number().int().positive().optional(),
+        windowSize: z.number().int().positive().optional(),
+        failFast: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
     maxRounds: z.number().int().positive().optional(),
   })
   .strict() satisfies z.ZodType<EditorialRenderRequestV1>;
@@ -336,9 +345,13 @@ export { editorialRenderRequestV1Schema };
 /**
  * Strict schema for preview requests without mutation context.
  */
-export const editorialPreviewRequestV1Schema = editorialRenderRequestV1Schema.omit({ mutation: true }).strict() satisfies z.ZodType<Omit<EditorialRenderRequestV1, 'mutation'>>;
+export const editorialPreviewRequestV1Schema = editorialRenderRequestV1Schema
+  .omit({ mutation: true })
+  .strict() satisfies z.ZodType<Omit<EditorialRenderRequestV1, 'mutation'>>;
 
-export const renderGameDialogueTreeRequestV1Schema = editorialRenderRequestV1Schema.omit({ selector: true, revision: true, branchPath: true, discourseBranch: true }).strict() satisfies z.ZodType<RenderGameDialogueTreeRequestV1>;
+export const renderGameDialogueTreeRequestV1Schema = editorialRenderRequestV1Schema
+  .omit({ selector: true, revision: true, branchPath: true, discourseBranch: true })
+  .strict() satisfies z.ZodType<RenderGameDialogueTreeRequestV1>;
 
 export const sourceDocumentChangeSchema = z.discriminatedUnion('type', [
   z

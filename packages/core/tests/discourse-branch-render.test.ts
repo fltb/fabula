@@ -15,11 +15,9 @@ import * as fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
-import { createRuntimeServices } from './fixtures/runtime-services.ts';
-import type { ProjectSourceSnapshotV1 } from '../src/contracts/source.ts';
 import { previewEditorialRun, renderNovel } from '../src/api.ts';
 import { ContextCompiler } from '../src/context/compiler.ts';
+import type { ProjectSourceSnapshotV1 } from '../src/contracts/source.ts';
 import { InMemoryEntityRegistry } from '../src/entity/registry.ts';
 import type { CompiledDiscourseRenderContext } from '../src/state/discourse-context.ts';
 import { compileDiscourseBoundaries } from '../src/state/discourse-context.ts';
@@ -42,6 +40,8 @@ import type {
   ThreadRunId,
   WorldState,
 } from '../src/types/index.ts';
+import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
+import { createRuntimeServices } from './fixtures/runtime-services.ts';
 
 const previewRuntime = { services: createRuntimeServices().services };
 
@@ -909,9 +909,7 @@ describe('renderNovel discourse-branch validation', () => {
   });
 
   it('rejects explicit discourseBranch not found in ledger chapters (strict preflight)', async () => {
-    const { source, cleanup } = setupMinimalProject(
-      makeDiscourseLedgerYaml(SINGLE_BRANCH_ENTRIES),
-    );
+    const { source, cleanup } = setupMinimalProject(makeDiscourseLedgerYaml(SINGLE_BRANCH_ENTRIES));
     try {
       await expect(
         previewEditorialRun(
@@ -961,9 +959,7 @@ describe('renderNovel discourse-branch validation', () => {
   });
 
   it('succeeds with explicit valid discourseBranch (no error)', async () => {
-    const { source, cleanup } = setupMinimalProject(
-      makeDiscourseLedgerYaml(SINGLE_BRANCH_ENTRIES),
-    );
+    const { source, cleanup } = setupMinimalProject(makeDiscourseLedgerYaml(SINGLE_BRANCH_ENTRIES));
     try {
       const result = await previewEditorialRun(
         {

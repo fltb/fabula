@@ -16,13 +16,18 @@ import {
   replaceReviewComment,
   updateReviewComment,
 } from '../src/editorial/review-facade.ts';
+import type { Clock, IdGenerator } from '../src/ports/runtime-services.ts';
+import { markWontfix, resolve } from '../src/review/comment.ts';
 import { ReviewManager } from '../src/review/index.ts';
 import { reviewLedgerV1Schema } from '../src/schemas/review.ts';
 import { MemoryExecutionRepository } from '../src/testing/memory-repositories.ts';
 import type { EditorialRuntime } from '../src/types/editorial.ts';
-import type { NewReviewComment, ReviewApplicationV1, ReviewComment, ReviewLedgerV1 } from '../src/types/index.ts';
-import { markWontfix, resolve } from '../src/review/comment.ts';
-import type { Clock, IdGenerator } from '../src/ports/runtime-services.ts';
+import type {
+  NewReviewComment,
+  ReviewApplicationV1,
+  ReviewComment,
+  ReviewLedgerV1,
+} from '../src/types/index.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -65,10 +70,7 @@ function reviewComment(id: string, overrides?: Partial<ReviewComment>): ReviewCo
 }
 
 /** Scripted Clock/IdGenerator pair for deterministic ledger mutations. */
-function fixedServices(
-  now: string,
-  ids: readonly string[],
-): { clock: Clock; ids: IdGenerator } {
+function fixedServices(now: string, ids: readonly string[]): { clock: Clock; ids: IdGenerator } {
   let index = 0;
   return {
     clock: { now: () => now },
@@ -156,7 +158,10 @@ describe('ReviewManager', () => {
     it('persists the comment as a review record in the execution repository', async () => {
       const comment = await manager.addReviewComment(newComment(), 'actor-1');
 
-      const record = await execution.readReview({ projectId: PROJECT_ID, reviewId: LEDGER_REVIEW_ID });
+      const record = await execution.readReview({
+        projectId: PROJECT_ID,
+        reviewId: LEDGER_REVIEW_ID,
+      });
       expect(record).not.toBeNull();
       const parsed = reviewLedgerV1Schema.parse(record!.value.value);
       expect(parsed.version).toBe(1);
@@ -486,9 +491,9 @@ describe('ReviewManager', () => {
           category: 'style',
           content: 'out of bounds',
         };
-        await expect(manager.replaceReviewComment(original.id, badInput, 'a', {}, 50)).rejects.toThrow(
-          EditorialOperationError,
-        );
+        await expect(
+          manager.replaceReviewComment(original.id, badInput, 'a', {}, 50),
+        ).rejects.toThrow(EditorialOperationError);
       });
     });
   });
@@ -560,7 +565,12 @@ describe('ReviewManager', () => {
         projectId: PROJECT_ID,
         reviewId: LEDGER_REVIEW_ID,
         expectedVersion: null,
-        value: { version: 1, projectId: PROJECT_ID, reviewId: LEDGER_REVIEW_ID, value: 'just a string' },
+        value: {
+          version: 1,
+          projectId: PROJECT_ID,
+          reviewId: LEDGER_REVIEW_ID,
+          value: 'just a string',
+        },
       });
       await expect(manager.readLedger()).rejects.toThrow('Invalid review ledger structure');
     });
@@ -811,7 +821,11 @@ describe('ReviewManager', () => {
     const FIXED_NOW = '2026-08-02T12:00:00.000Z';
 
     it('creates a comment with the exact injected ID and timestamp', async () => {
-      const manager = new ReviewManager(execution, PROJECT_ID, fixedServices(FIXED_NOW, ['rev_fixed_1']));
+      const manager = new ReviewManager(
+        execution,
+        PROJECT_ID,
+        fixedServices(FIXED_NOW, ['rev_fixed_1']),
+      );
       const comment = await manager.addReviewComment(newComment(), 'actor-1');
 
       expect(comment.id).toBe('rev_fixed_1');
@@ -821,8 +835,16 @@ describe('ReviewManager', () => {
     });
 
     it('identical inputs under identical fixed services produce identical comments', async () => {
-      const managerA = new ReviewManager(execution, PROJECT_ID, fixedServices(FIXED_NOW, ['rev_fixed_1']));
-      const managerB = new ReviewManager(new MemoryExecutionRepository(), PROJECT_ID, fixedServices(FIXED_NOW, ['rev_fixed_1']));
+      const managerA = new ReviewManager(
+        execution,
+        PROJECT_ID,
+        fixedServices(FIXED_NOW, ['rev_fixed_1']),
+      );
+      const managerB = new ReviewManager(
+        new MemoryExecutionRepository(),
+        PROJECT_ID,
+        fixedServices(FIXED_NOW, ['rev_fixed_1']),
+      );
 
       const a = await managerA.addReviewComment(newComment({ content: 'same content' }), 'actor-1');
       const b = await managerB.addReviewComment(newComment({ content: 'same content' }), 'actor-1');
@@ -831,7 +853,11 @@ describe('ReviewManager', () => {
     });
 
     it('replacement and supersession stamps come from the injected services', async () => {
-      const manager = new ReviewManager(execution, PROJECT_ID, fixedServices(FIXED_NOW, ['rev_orig', 'rev_repl']));
+      const manager = new ReviewManager(
+        execution,
+        PROJECT_ID,
+        fixedServices(FIXED_NOW, ['rev_orig', 'rev_repl']),
+      );
       const original = await manager.addReviewComment(newComment(), 'a');
       const replacement = await manager.replaceReviewComment(original.id, newComment(), 'b');
 
@@ -846,7 +872,11 @@ describe('ReviewManager', () => {
     });
 
     it('resolution stamps the injected clock time', async () => {
-      const manager = new ReviewManager(execution, PROJECT_ID, fixedServices(FIXED_NOW, ['rev_c1']));
+      const manager = new ReviewManager(
+        execution,
+        PROJECT_ID,
+        fixedServices(FIXED_NOW, ['rev_c1']),
+      );
       const comment = await manager.addReviewComment(newComment(), 'a');
       const updated = await manager.updateReviewComment(comment.id, 'resolve', 'reviewer-1');
 
@@ -858,9 +888,20 @@ describe('ReviewManager', () => {
     it('a create/replace/resolve sequence yields byte-identical persisted ledgers for fixed services', async () => {
       const run = async () => {
         const repo = new MemoryExecutionRepository();
-        const manager = new ReviewManager(repo, PROJECT_ID, fixedServices(FIXED_NOW, ['rev_s1', 'rev_s2']));
-        const created = await manager.addReviewComment(newComment({ content: 'deterministic' }), 'a');
-        await manager.replaceReviewComment(created.id, newComment({ content: 'deterministic replacement' }), 'b');
+        const manager = new ReviewManager(
+          repo,
+          PROJECT_ID,
+          fixedServices(FIXED_NOW, ['rev_s1', 'rev_s2']),
+        );
+        const created = await manager.addReviewComment(
+          newComment({ content: 'deterministic' }),
+          'a',
+        );
+        await manager.replaceReviewComment(
+          created.id,
+          newComment({ content: 'deterministic replacement' }),
+          'b',
+        );
         const open = (await manager.getComments()).find((c) => c.status === 'open')!;
         await manager.updateReviewComment(open.id, 'resolve', 'c');
         const record = await repo.readReview({ projectId: PROJECT_ID, reviewId: LEDGER_REVIEW_ID });
@@ -947,7 +988,11 @@ describe('ReviewManager', () => {
       const repo = new MemoryExecutionRepository();
       const facade = facadeRuntime(repo, ['rev_facade_a', 'rev_facade_b']);
       const created = await addReviewComment(
-        { projectId: PROJECT_ID, input: newComment(), mutation: { operationId: crypto.randomUUID(), actorId: 'a' } },
+        {
+          projectId: PROJECT_ID,
+          input: newComment(),
+          mutation: { operationId: crypto.randomUUID(), actorId: 'a' },
+        },
         facade,
       );
       const replacement = await replaceReviewComment(

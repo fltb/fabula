@@ -68,9 +68,7 @@ describe('InteractionManager', () => {
       expect(first.getWaiver('gate:E0:validation')!.signedAt).toBe(FIXED_NOW);
       expect(second.getWaiver('gate:E0:validation')!.signedAt).toBe(FIXED_NOW);
       // Same gate + same clock → byte-identical waiver records
-      expect(first.getWaiver('gate:E0:validation')).toEqual(
-        second.getWaiver('gate:E0:validation'),
-      );
+      expect(first.getWaiver('gate:E0:validation')).toEqual(second.getWaiver('gate:E0:validation'));
     });
 
     it('honors the timestamp supplied by the injected clock', () => {

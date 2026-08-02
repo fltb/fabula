@@ -10,13 +10,16 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { SourceWorkspace } from '../../src/editorial/source-workspace.ts';
-import { buildSourceSnapshot, computeSourceDocumentHash } from '../../src/source/source-identity.ts';
 import type {
   ProjectSourceSnapshotV1,
   SourceChangeV1,
   SourceDocumentV1,
 } from '../../src/contracts/source.ts';
+import { SourceWorkspace } from '../../src/editorial/source-workspace.ts';
+import {
+  buildSourceSnapshot,
+  computeSourceDocumentHash,
+} from '../../src/source/source-identity.ts';
 
 function document(logicalPath: string, content: string): SourceDocumentV1 {
   return {
@@ -31,7 +34,9 @@ function document(logicalPath: string, content: string): SourceDocumentV1 {
 
 /** Build a canonical snapshot from logical text; sorted, with content-only hashes. */
 function snapshot(entries: Record<string, string>): ProjectSourceSnapshotV1 {
-  return buildSourceSnapshot(Object.entries(entries).map(([logicalPath, content]) => document(logicalPath, content)));
+  return buildSourceSnapshot(
+    Object.entries(entries).map(([logicalPath, content]) => document(logicalPath, content)),
+  );
 }
 
 function change(logicalPath: string, afterContent: string | null): SourceChangeV1 {
@@ -119,7 +124,9 @@ describe('SourceWorkspace — pure source snapshot facade', () => {
       },
     ]);
     expect(result.diagnostics.some((d) => d.code === 'SOURCE_PRECONDITION_MISMATCH')).toBe(true);
-    expect(result.candidate.documents.find((d) => d.logicalPath === 'nova.yaml')?.content).toBe('name: next\n');
+    expect(result.candidate.documents.find((d) => d.logicalPath === 'nova.yaml')?.content).toBe(
+      'name: next\n',
+    );
   });
 
   it('produces a byte-identical candidate for byte-identical changes', () => {

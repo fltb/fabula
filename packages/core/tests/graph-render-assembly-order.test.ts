@@ -493,7 +493,6 @@ describe('graph-render-assembly ordering', () => {
 
   // ── Full Render Pipeline ───────────────────────────────────────
 
-
   // ── Document Assembly Ordering ─────────────────────────────────
 
   describe('document assembly ordering (buildNovelDocument contract)', () => {

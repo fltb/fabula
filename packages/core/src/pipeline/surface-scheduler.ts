@@ -315,7 +315,9 @@ export class AcceptedArtifactResolver {
     requestedScopeHash?: string,
   ): Promise<Map<string, AcceptedSceneArtifact>> {
     const resolved = await Promise.all(
-      eventIds.map(async (eventId) => [eventId, await this.resolve(eventId, requestedScopeHash)] as const),
+      eventIds.map(
+        async (eventId) => [eventId, await this.resolve(eventId, requestedScopeHash)] as const,
+      ),
     );
     const results = new Map<string, AcceptedSceneArtifact>();
     for (const [eventId, artifact] of resolved) {

@@ -4,9 +4,17 @@
  * the last failure time, so no clock is persisted and the lock is fully
  * deterministic for a given policy.
  */
-export interface BackoffPolicy { initialDelayMs: number; factor: number; maxDelayMs: number }
+export interface BackoffPolicy {
+  initialDelayMs: number;
+  factor: number;
+  maxDelayMs: number;
+}
 
-export const DEFAULT_BACKOFF_POLICY: BackoffPolicy = { initialDelayMs: 500, factor: 2, maxDelayMs: 60_000 };
+export const DEFAULT_BACKOFF_POLICY: BackoffPolicy = {
+  initialDelayMs: 500,
+  factor: 2,
+  maxDelayMs: 60_000,
+};
 
 export function backoffDelayMs(failures: number, policy: BackoffPolicy): number {
   if (failures <= 1) return Math.min(policy.initialDelayMs, policy.maxDelayMs);

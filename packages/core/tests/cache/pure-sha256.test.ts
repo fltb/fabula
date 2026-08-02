@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { sha256Canonical } from '../../src/cache/render-cache.ts';
 import { sha256 } from '../../src/cache/pure-sha256.ts';
+import { sha256Canonical } from '../../src/cache/render-cache.ts';
 
 describe('pure synchronous SHA-256', () => {
   it.each([
@@ -13,6 +13,8 @@ describe('pure synchronous SHA-256', () => {
   });
 
   it('is invariant to canonical object key insertion order', () => {
-    expect(sha256Canonical({ b: 'second', a: 'first' })).toBe(sha256Canonical({ a: 'first', b: 'second' }));
+    expect(sha256Canonical({ b: 'second', a: 'first' })).toBe(
+      sha256Canonical({ a: 'first', b: 'second' }),
+    );
   });
 });

@@ -19,7 +19,8 @@ import { createSourceSnapshot } from './fixtures/source-snapshot.ts';
 function project(events: Record<string, string> = {}): ProjectSourceSnapshotV1 {
   const base: Record<string, string> = {
     'nova.yaml': 'project: test\ntitle: "Test"\nauthor: "Tester"\n',
-    'definitions/state_initial.yaml': 'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n',
+    'definitions/state_initial.yaml':
+      'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n',
     'definitions/entity-types.yaml': [
       'types:',
       '  narrator:',

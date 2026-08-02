@@ -1,22 +1,10 @@
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createHash } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { GitBootstrap } from '../src/host/git/bootstrap.js';
 import type { GitCapability } from '../src/host/git/capability.js';
-import { AuthoringManifest, type AuthoringEntry } from '../src/host/git/manifest.js';
-import type { SubmitJournalPort } from '../src/host/git/recovery.js';
-import { ControlledGitRunner, WORKBENCH_AUTHORING_REF } from '../src/host/git/runner.js';
-import {
-  AuthoringSubmitInputError,
-  GitAuthoringSubmitError,
-  GitAuthoringSubmitService,
-  type CandidateValidator,
-  type GitAuthoringSubmitRequest,
-  type WorkingStateVectorConfirmer,
-} from '../src/host/git/submit-service.js';
-import type { PersistenceWorkerClient } from '../src/persistence/worker-client.js';
 import {
   AuthoringSubmitInputError as BarrelAuthoringSubmitInputError,
   AuthoringSubmitPreflightError as BarrelAuthoringSubmitPreflightError,
@@ -24,12 +12,25 @@ import {
   GitAuthoringSubmitError as BarrelGitAuthoringSubmitError,
   GitAuthoringSubmitService as BarrelGitAuthoringSubmitService,
 } from '../src/host/git/index.js';
+import { type AuthoringEntry, AuthoringManifest } from '../src/host/git/manifest.js';
+import type { SubmitJournalPort } from '../src/host/git/recovery.js';
+import { ControlledGitRunner, WORKBENCH_AUTHORING_REF } from '../src/host/git/runner.js';
+import {
+  AuthoringSubmitInputError,
+  type CandidateValidator,
+  GitAuthoringSubmitError,
+  type GitAuthoringSubmitRequest,
+  GitAuthoringSubmitService,
+  type WorkingStateVectorConfirmer,
+} from '../src/host/git/submit-service.js';
+import type { PersistenceWorkerClient } from '../src/persistence/worker-client.js';
 import { createRealPersistence } from './helpers/real-persistence.js';
 
 const temp = (prefix: string): string => mkdtempSync(join(tmpdir(), prefix));
 const utf8 = (content: string): Uint8Array => new TextEncoder().encode(content);
 const entry = (path: string, content: string): AuthoringEntry => ({ path, bytes: utf8(content) });
-const sha256 = (content: string): string => createHash('sha256').update(content, 'utf8').digest('hex');
+const sha256 = (content: string): string =>
+  createHash('sha256').update(content, 'utf8').digest('hex');
 
 /** Capability is exercised by its own probe tests; bootstrap only requires `ok`. */
 const CAPABILITY: GitCapability = {
@@ -63,11 +64,26 @@ const refHead = async (runner: ControlledGitRunner, cwd: string): Promise<string
   (await runner.runStrict({ args: ['rev-parse', WORKBENCH_AUTHORING_REF], cwd })).stdout.trim();
 
 const commitCount = async (runner: ControlledGitRunner, cwd: string): Promise<number> =>
-  Number((await runner.runStrict({ args: ['rev-list', '--count', WORKBENCH_AUTHORING_REF], cwd })).stdout.trim());
+  Number(
+    (
+      await runner.runStrict({ args: ['rev-list', '--count', WORKBENCH_AUTHORING_REF], cwd })
+    ).stdout.trim(),
+  );
 
-const hasSubmitCommit = async (runner: ControlledGitRunner, cwd: string, submitId: string): Promise<boolean> => {
+const hasSubmitCommit = async (
+  runner: ControlledGitRunner,
+  cwd: string,
+  submitId: string,
+): Promise<boolean> => {
   const probe = await runner.run({
-    args: ['log', '--format=%H', '--fixed-strings', '--grep', `Submit-Id: ${submitId}`, WORKBENCH_AUTHORING_REF],
+    args: [
+      'log',
+      '--format=%H',
+      '--fixed-strings',
+      '--grep',
+      `Submit-Id: ${submitId}`,
+      WORKBENCH_AUTHORING_REF,
+    ],
     cwd,
   });
   return probe.stdout.trim().length > 0;
@@ -83,7 +99,9 @@ const journalPort = (client: PersistenceWorkerClient): SubmitJournalPort => ({
 const VECTOR = new Uint8Array([0, 1, 2]);
 let submitSequence = 0;
 
-const submitRequest = (overrides: Partial<GitAuthoringSubmitRequest> = {}): GitAuthoringSubmitRequest => {
+const submitRequest = (
+  overrides: Partial<GitAuthoringSubmitRequest> = {},
+): GitAuthoringSubmitRequest => {
   submitSequence += 1;
   return {
     submitId: `submit-${submitSequence}`,
@@ -125,7 +143,8 @@ describe('GitAuthoringSubmitService', () => {
 
       const request = submitRequest({ submitId: 'submit-ok-1', expectedGitHead: head });
       const outcome = await service.submit(request);
-      if (outcome.kind !== 'accepted') throw new Error(`expected accepted outcome, got ${outcome.kind}`);
+      if (outcome.kind !== 'accepted')
+        throw new Error(`expected accepted outcome, got ${outcome.kind}`);
 
       const receipt = outcome.receipt;
       expect(receipt.submitId).toBe('submit-ok-1');
@@ -142,7 +161,10 @@ describe('GitAuthoringSubmitService', () => {
 
       // The commit message carries the sanitized non-secret trailers.
       const message = (
-        await runner.runStrict({ args: ['log', '-1', '--format=%B', WORKBENCH_AUTHORING_REF], cwd: dir })
+        await runner.runStrict({
+          args: ['log', '-1', '--format=%B', WORKBENCH_AUTHORING_REF],
+          cwd: dir,
+        })
       ).stdout;
       expect(message).toContain('Submit-Id: submit-ok-1');
       expect(message).toContain(`Source-Hash: ${sha256('candidate')}`);
@@ -151,7 +173,10 @@ describe('GitAuthoringSubmitService', () => {
 
       // The tree preserves the baseline files and applies the manifest delta.
       const treeFiles = (
-        await runner.runStrict({ args: ['ls-tree', '-r', '--name-only', WORKBENCH_AUTHORING_REF], cwd: dir })
+        await runner.runStrict({
+          args: ['ls-tree', '-r', '--name-only', WORKBENCH_AUTHORING_REF],
+          cwd: dir,
+        })
       ).stdout
         .trim()
         .split('\n');
@@ -196,7 +221,10 @@ describe('GitAuthoringSubmitService', () => {
       await bootstrapFor(runner, dir).bootstrap();
       const head = await refHead(runner, dir);
 
-      const confirm = vi.fn<WorkingStateVectorConfirmer>(async () => ({ ok: false, reason: 'working state diverged' }));
+      const confirm = vi.fn<WorkingStateVectorConfirmer>(async () => ({
+        ok: false,
+        reason: 'working state diverged',
+      }));
       const validate = vi.fn<CandidateValidator>(async () => ({ ok: true }));
       const service = new GitAuthoringSubmitService({
         runner,
@@ -206,7 +234,9 @@ describe('GitAuthoringSubmitService', () => {
         validateCandidate: validate,
       });
 
-      const outcome = await service.submit(submitRequest({ submitId: 'submit-vector-1', expectedGitHead: head }));
+      const outcome = await service.submit(
+        submitRequest({ submitId: 'submit-vector-1', expectedGitHead: head }),
+      );
 
       expect(outcome).toEqual({
         kind: 'rejected',
@@ -245,7 +275,9 @@ describe('GitAuthoringSubmitService', () => {
         validateCandidate: validate,
       });
 
-      const outcome = await service.submit(submitRequest({ submitId: 'submit-validate-1', expectedGitHead: head }));
+      const outcome = await service.submit(
+        submitRequest({ submitId: 'submit-validate-1', expectedGitHead: head }),
+      );
 
       expect(outcome).toEqual({
         kind: 'rejected',
@@ -269,7 +301,10 @@ describe('GitAuthoringSubmitService', () => {
       const head = await refHead(runner, dir);
 
       // An external commit moves the fixed ref while the Host is not writing.
-      await runner.runStrict({ args: ['commit', '--allow-empty', '-m', 'external change'], cwd: dir });
+      await runner.runStrict({
+        args: ['commit', '--allow-empty', '-m', 'external change'],
+        cwd: dir,
+      });
       const externalHead = await refHead(runner, dir);
       expect(externalHead).not.toBe(head);
 
@@ -294,7 +329,9 @@ describe('GitAuthoringSubmitService', () => {
 
       // The journal recorded the terminal stale outcome, and a retry of the
       // same submitId replays it without touching Git again.
-      const stored = await harness.client.request('loadGitSubmission', { submitId: 'submit-stale-1' });
+      const stored = await harness.client.request('loadGitSubmission', {
+        submitId: 'submit-stale-1',
+      });
       expect(stored).toMatchObject({ phase: 'stale', expectedGitHead: head });
       const retry = await service.submit(request);
       expect(retry.kind).toBe('stale');
@@ -343,7 +380,9 @@ describe('GitAuthoringSubmitService', () => {
       expect(validate).toHaveBeenCalledTimes(1);
 
       // The journal holds exactly one receipt row for the submitId.
-      const stored = await harness.client.request('loadGitSubmission', { submitId: 'submit-dup-1' });
+      const stored = await harness.client.request('loadGitSubmission', {
+        submitId: 'submit-dup-1',
+      });
       expect(stored).toEqual(first.receipt);
     } finally {
       await harness.dispose();
@@ -395,7 +434,9 @@ describe('GitAuthoringSubmitService', () => {
       release();
       const [firstOutcome, secondOutcome] = await Promise.all([first, second]);
       if (firstOutcome.kind !== 'accepted' || secondOutcome.kind !== 'accepted') {
-        throw new Error(`expected accepted outcomes, got ${firstOutcome.kind} and ${secondOutcome.kind}`);
+        throw new Error(
+          `expected accepted outcomes, got ${firstOutcome.kind} and ${secondOutcome.kind}`,
+        );
       }
       expect(secondOutcome.receipt).toEqual(firstOutcome.receipt);
 
@@ -403,11 +444,16 @@ describe('GitAuthoringSubmitService', () => {
       // created before the ref CAS.
       expect(await commitCount(runner, dir)).toBe(2);
       expect(await refHead(runner, dir)).toBe(firstOutcome.receipt.commit);
-      const fsck = await runner.run({ args: ['fsck', '--no-reflogs', '--unreachable', '--no-progress'], cwd: dir });
+      const fsck = await runner.run({
+        args: ['fsck', '--no-reflogs', '--unreachable', '--no-progress'],
+        cwd: dir,
+      });
       expect(fsck.exitCode).toBe(0);
       expect(`${fsck.stdout}\n${fsck.stderr}`).not.toContain('unreachable commit');
 
-      const stored = await harness.client.request('loadGitSubmission', { submitId: 'submit-concurrent-1' });
+      const stored = await harness.client.request('loadGitSubmission', {
+        submitId: 'submit-concurrent-1',
+      });
       expect(stored).toEqual(firstOutcome.receipt);
     } finally {
       await harness.dispose();
@@ -436,7 +482,8 @@ describe('GitAuthoringSubmitService', () => {
       });
 
       const outcome = await service.submit(request);
-      if (outcome.kind !== 'rejected') throw new Error(`expected rejected outcome, got ${outcome.kind}`);
+      if (outcome.kind !== 'rejected')
+        throw new Error(`expected rejected outcome, got ${outcome.kind}`);
       expect(outcome.code).toBe('manifest-rejected');
       expect(outcome.reason).toContain('.nova/cache/secret.yaml');
 
@@ -447,7 +494,9 @@ describe('GitAuthoringSubmitService', () => {
 
       // The journal recorded the manifest rejection; a retry of the same
       // submitId reproduces the same typed rejection without a commit.
-      const stored = await harness.client.request('loadGitSubmission', { submitId: 'submit-runtime-1' });
+      const stored = await harness.client.request('loadGitSubmission', {
+        submitId: 'submit-runtime-1',
+      });
       expect(stored).toMatchObject({ phase: 'manifest-rejected' });
       const retry = await service.submit(request);
       expect(retry).toMatchObject({ kind: 'rejected', code: 'manifest-rejected' });

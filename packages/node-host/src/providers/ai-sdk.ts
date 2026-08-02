@@ -1,6 +1,11 @@
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
+import {
+  type CompletionRequest,
+  type CompletionResponse,
+  LLMError,
+  type LLMProvider,
+} from '@novalistically/core';
 import { generateText, type LanguageModel, Output } from 'ai';
-import { LLMError, type CompletionRequest, type CompletionResponse, type LLMProvider } from '@novalistically/core';
 
 /** Explicit Node-host configuration for an OpenAI-compatible provider. */
 export interface AiSdkProviderOptions {
@@ -24,12 +29,14 @@ export class AiSdkProvider implements LLMProvider {
   readonly #model: LanguageModel;
 
   constructor(private readonly options: AiSdkProviderOptions = {}) {
-    const baseURL = options.baseURL ?? process.env.NOVALISTICALLY_AI_BASE_URL ?? 'https://opencode.ai/zen/v1';
+    const baseURL =
+      options.baseURL ?? process.env.NOVALISTICALLY_AI_BASE_URL ?? 'https://opencode.ai/zen/v1';
     const apiKey = options.apiKey ?? process.env.NOVALISTICALLY_AI_API_KEY ?? '';
     if (!apiKey) {
       throw new Error('API key not provided. Set NOVALISTICALLY_AI_API_KEY or provide apiKey.');
     }
-    this.#modelId = options.model ?? process.env.NOVALISTICALLY_AI_MODEL ?? 'deepseek-v4-flash-free';
+    this.#modelId =
+      options.model ?? process.env.NOVALISTICALLY_AI_MODEL ?? 'deepseek-v4-flash-free';
     this.#client = createOpenAICompatible({ name: this.name, baseURL, apiKey });
     this.#model = this.#modelFor(this.#modelId);
   }
@@ -65,7 +72,10 @@ export class AiSdkProvider implements LLMProvider {
         finishReason: result.finishReason ?? 'stop',
       };
     } catch (error) {
-      throw new LLMError(`ai-sdk error: ${(error as Error).message}`, { provider: this.name, cause: error });
+      throw new LLMError(`ai-sdk error: ${(error as Error).message}`, {
+        provider: this.name,
+        cause: error,
+      });
     }
   }
 

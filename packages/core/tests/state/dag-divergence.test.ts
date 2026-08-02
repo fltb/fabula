@@ -21,8 +21,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { compileEntityTypeCatalog } from '../../src/entity/entity-catalog-compiler.js';
 import { buildStoryOrderIndex } from '../../src/state/dag.ts';
-import { compileStoryBoundaries } from '../../src/state/story-boundaries.ts';
 import { ReplayEngine } from '../../src/state/replay.ts';
+import { compileStoryBoundaries } from '../../src/state/story-boundaries.ts';
 import type {
   EntityCatalogContext,
   EntityDeclarationCatalog,
@@ -221,9 +221,7 @@ describe('DAG determinism: identical inputs produce equal outputs independent of
 
     expect(second).toEqual(first);
     expect(first.topologicalOrder).toEqual(['E_alpha', 'E_beta', 'E_gamma']);
-    expect(first.ancestorsByEventId.get('E_gamma')).toEqual(
-      new Set(['E_alpha', 'E_beta']),
-    );
+    expect(first.ancestorsByEventId.get('E_gamma')).toEqual(new Set(['E_alpha', 'E_beta']));
     expect(first.initialRootId).toBeNull();
   });
 
@@ -257,9 +255,7 @@ describe('DAG determinism: identical inputs produce equal outputs independent of
     // Topological causal ordering preserved: T → A → C → B, with B (day_9)
     // causally latest so its status="first" overrides A's "second".
     expect(first.orderedEventIds).toEqual([T.id, 'A', 'C', 'B']);
-    expect(first.stateAfterByEventId.get('B')?.entities['hero']?.['status']).toBe(
-      'first',
-    );
+    expect(first.stateAfterByEventId.get('B')?.entities['hero']?.['status']).toBe('first');
     expect(first.finalState.entities['hero']?.['status']).toBe('first');
     expect(first.finalState.entities['hero']?.['location']).toBe('end');
     expect(first.finalState.entities['hero']?.['name']).toBe('Hero');

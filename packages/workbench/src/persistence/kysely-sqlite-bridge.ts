@@ -1,5 +1,8 @@
 /** Private adapter between Kysely's SQLite driver shape and Node 26 StatementSync. */
-export interface RunResult { changes: number | bigint; lastInsertRowid: number | bigint }
+export interface RunResult {
+  changes: number | bigint;
+  lastInsertRowid: number | bigint;
+}
 
 export interface StatementSyncLike {
   readonly reader?: boolean;
@@ -52,7 +55,10 @@ export class KyselySqliteBridge {
   }
 }
 
-export function createKyselySqliteDatabase(database: { close(): void; prepare(sql: string): StatementSyncLike }): KyselySqliteDatabase {
+export function createKyselySqliteDatabase(database: {
+  close(): void;
+  prepare(sql: string): StatementSyncLike;
+}): KyselySqliteDatabase {
   return {
     close: () => database.close(),
     prepare: (sql: string) => new KyselySqliteBridge(database.prepare(sql)),

@@ -3,35 +3,34 @@ import { access, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import * as gitHost from '../src/host/git/index.js';
-import type {
-  SubmitJournalPort as BarrelSubmitJournalPort,
-  SubmitRecoveryOutcome as BarrelSubmitRecoveryOutcome,
-  SubmitRecoveryProbe as BarrelSubmitRecoveryProbe,
-} from '../src/host/git/index.js';
+import type { GitSubmissionJournal, GitSubmissionReceipt } from '../src/contracts/persistence.js';
 import {
   GitCapabilityError,
   probeGitCapability,
   probeSystemGit,
   requireGitCapability,
 } from '../src/host/git/capability.js';
+import type {
+  SubmitJournalPort as BarrelSubmitJournalPort,
+  SubmitRecoveryOutcome as BarrelSubmitRecoveryOutcome,
+  SubmitRecoveryProbe as BarrelSubmitRecoveryProbe,
+} from '../src/host/git/index.js';
+import * as gitHost from '../src/host/git/index.js';
+import {
+  normalizeSubmitJournal,
+  receiptFromRecord,
+  resolveSubmitRecovery,
+  SUBMIT_PHASE_COMPLETE,
+  type SubmitJournalPort,
+  SubmitRecovery,
+  type SubmitRecoveryProbe,
+} from '../src/host/git/recovery.js';
 import {
   ControlledGitRunner,
   type GitCommandRunner,
   type GitRunRequest,
   type GitRunResult,
 } from '../src/host/git/runner.js';
-import {
-  SUBMIT_PHASE_COMPLETE,
-  SubmitRecovery,
-  normalizeSubmitJournal,
-  receiptFromRecord,
-  resolveSubmitRecovery,
-  type SubmitJournalPort,
-  type SubmitRecoveryProbe,
-} from '../src/host/git/recovery.js';
-import type { GitSubmissionJournal, GitSubmissionReceipt } from '../src/contracts/persistence.js';
-
 
 describe('Git Host barrel', () => {
   it('exposes Host composition primitives without browser or persistence internals', () => {
@@ -195,8 +194,12 @@ const COMMITTED = journal({
 describe('submit recovery decision', () => {
   it('allows a fresh submit only when no journal record exists', () => {
     expect(resolveSubmitRecovery(null, probe())).toEqual({ kind: 'proceed' });
-    expect(resolveSubmitRecovery(normalizeSubmitJournal(RECEIPT), probe())).not.toEqual({ kind: 'proceed' });
-    expect(resolveSubmitRecovery(normalizeSubmitJournal(journal()), probe())).not.toEqual({ kind: 'proceed' });
+    expect(resolveSubmitRecovery(normalizeSubmitJournal(RECEIPT), probe())).not.toEqual({
+      kind: 'proceed',
+    });
+    expect(resolveSubmitRecovery(normalizeSubmitJournal(journal()), probe())).not.toEqual({
+      kind: 'proceed',
+    });
   });
 
   it('returns the exact same accepted receipt on every retry after completion', () => {
@@ -218,38 +221,71 @@ describe('submit recovery decision', () => {
 
   it('accepts an in-flight submit whose candidate commit landed on the fixed ref', () => {
     const record = normalizeSubmitJournal(COMMITTED);
-    expect(resolveSubmitRecovery(record, { fixedRefHead: CANDIDATE, commitWithSubmitTrailer: CANDIDATE })).toEqual({
+    expect(
+      resolveSubmitRecovery(record, {
+        fixedRefHead: CANDIDATE,
+        commitWithSubmitTrailer: CANDIDATE,
+      }),
+    ).toEqual({
       kind: 'accepted',
       receipt: RECEIPT,
     });
   });
 
   it('reports cas-pending when the commit exists but the fixed ref has not moved', () => {
-    expect(resolveSubmitRecovery(normalizeSubmitJournal(COMMITTED), { fixedRefHead: EXPECTED_HEAD, commitWithSubmitTrailer: CANDIDATE })).toEqual({
+    expect(
+      resolveSubmitRecovery(normalizeSubmitJournal(COMMITTED), {
+        fixedRefHead: EXPECTED_HEAD,
+        commitWithSubmitTrailer: CANDIDATE,
+      }),
+    ).toEqual({
       kind: 'cas-pending',
     });
   });
 
   it('permits a full protocol retry only when nothing was committed and the base ref is unchanged', () => {
     const acked = normalizeSubmitJournal(journal());
-    expect(resolveSubmitRecovery(acked, { fixedRefHead: EXPECTED_HEAD, commitWithSubmitTrailer: null })).toEqual({ kind: 'retry' });
+    expect(
+      resolveSubmitRecovery(acked, { fixedRefHead: EXPECTED_HEAD, commitWithSubmitTrailer: null }),
+    ).toEqual({ kind: 'retry' });
     // A retry is NEVER authorized once a candidate commit was recorded...
-    expect(resolveSubmitRecovery(normalizeSubmitJournal(COMMITTED), { fixedRefHead: EXPECTED_HEAD, commitWithSubmitTrailer: null })).not.toEqual({ kind: 'retry' });
+    expect(
+      resolveSubmitRecovery(normalizeSubmitJournal(COMMITTED), {
+        fixedRefHead: EXPECTED_HEAD,
+        commitWithSubmitTrailer: null,
+      }),
+    ).not.toEqual({ kind: 'retry' });
     // ...or once a commit with the submitId trailer exists...
-    expect(resolveSubmitRecovery(acked, { fixedRefHead: EXPECTED_HEAD, commitWithSubmitTrailer: CANDIDATE })).not.toEqual({ kind: 'retry' });
+    expect(
+      resolveSubmitRecovery(acked, {
+        fixedRefHead: EXPECTED_HEAD,
+        commitWithSubmitTrailer: CANDIDATE,
+      }),
+    ).not.toEqual({ kind: 'retry' });
     // ...or when the base ref moved.
-    expect(resolveSubmitRecovery(acked, { fixedRefHead: 'other-head', commitWithSubmitTrailer: null })).toEqual({ kind: 'stale' });
+    expect(
+      resolveSubmitRecovery(acked, { fixedRefHead: 'other-head', commitWithSubmitTrailer: null }),
+    ).toEqual({ kind: 'stale' });
   });
 
   it('fails closed when a different commit claims the same submitId', () => {
-    expect(resolveSubmitRecovery(normalizeSubmitJournal(COMMITTED), { fixedRefHead: 'other-head', commitWithSubmitTrailer: 'other-commit' })).toEqual({
+    expect(
+      resolveSubmitRecovery(normalizeSubmitJournal(COMMITTED), {
+        fixedRefHead: 'other-head',
+        commitWithSubmitTrailer: 'other-commit',
+      }),
+    ).toEqual({
       kind: 'conflict',
     });
   });
 
   it('fails closed without Git state instead of risking a second commit', () => {
-    expect(resolveSubmitRecovery(normalizeSubmitJournal(COMMITTED), null)).toEqual({ kind: 'in-progress' });
-    expect(resolveSubmitRecovery(normalizeSubmitJournal(journal()), null)).toEqual({ kind: 'in-progress' });
+    expect(resolveSubmitRecovery(normalizeSubmitJournal(COMMITTED), null)).toEqual({
+      kind: 'in-progress',
+    });
+    expect(resolveSubmitRecovery(normalizeSubmitJournal(journal()), null)).toEqual({
+      kind: 'in-progress',
+    });
   });
 
   it('never treats a malformed completed row as accepted', () => {
@@ -324,7 +360,10 @@ describe('SubmitRecovery journal service', () => {
   it('returns a stored receipt without touching the journal again', async () => {
     const store = memoryJournal(new Map([[RECEIPT.submitId, RECEIPT]]));
     const recovery = new SubmitRecovery({ journal: store });
-    const outcome = await recovery.recover(RECEIPT.submitId, { fixedRefHead: 'elsewhere', commitWithSubmitTrailer: null });
+    const outcome = await recovery.recover(RECEIPT.submitId, {
+      fixedRefHead: 'elsewhere',
+      commitWithSubmitTrailer: null,
+    });
     expect(outcome).toEqual({ kind: 'accepted', receipt: RECEIPT });
     expect(store.calls.load).toBe(1);
     expect(store.calls.checkpoint).toBe(0);
@@ -334,12 +373,18 @@ describe('SubmitRecovery journal service', () => {
   it('completes a landed in-flight submit exactly once and replays the stored receipt', async () => {
     const store = memoryJournal(new Map([[COMMITTED.submitId, COMMITTED]]));
     const recovery = new SubmitRecovery({ journal: store, now: () => '2026-08-02T00:00:00.000Z' });
-    const outcome = await recovery.recover(COMMITTED.submitId, { fixedRefHead: CANDIDATE, commitWithSubmitTrailer: CANDIDATE });
+    const outcome = await recovery.recover(COMMITTED.submitId, {
+      fixedRefHead: CANDIDATE,
+      commitWithSubmitTrailer: CANDIDATE,
+    });
     expect(outcome).toEqual({ kind: 'accepted', receipt: RECEIPT });
     expect(store.calls.complete).toBe(1);
     // A retry — even with contradictory Git state — replays the stored
     // receipt and never creates a second commit or a duplicate receipt.
-    const retried = await recovery.recover(COMMITTED.submitId, { fixedRefHead: 'elsewhere', commitWithSubmitTrailer: 'other' });
+    const retried = await recovery.recover(COMMITTED.submitId, {
+      fixedRefHead: 'elsewhere',
+      commitWithSubmitTrailer: 'other',
+    });
     expect(retried).toEqual({ kind: 'accepted', receipt: RECEIPT });
     expect(store.calls.complete).toBe(1);
     expect(store.calls.checkpoint).toBe(0);
@@ -348,7 +393,10 @@ describe('SubmitRecovery journal service', () => {
   it('records a probe-derived conflict once and replays the same typed outcome', async () => {
     const store = memoryJournal(new Map([[COMMITTED.submitId, COMMITTED]]));
     const recovery = new SubmitRecovery({ journal: store, now: () => '2026-08-02T00:00:01.000Z' });
-    const outcome = await recovery.recover(COMMITTED.submitId, { fixedRefHead: 'other-head', commitWithSubmitTrailer: 'other-commit' });
+    const outcome = await recovery.recover(COMMITTED.submitId, {
+      fixedRefHead: 'other-head',
+      commitWithSubmitTrailer: 'other-commit',
+    });
     expect(outcome).toEqual({ kind: 'conflict' });
     expect(store.calls.checkpoint).toBe(1);
     expect(store.calls.complete).toBe(0);
@@ -358,13 +406,14 @@ describe('SubmitRecovery journal service', () => {
   });
 
   it('re-resolves identically after a simulated restart against the same journal data', async () => {
-    const before = await new SubmitRecovery({ journal: memoryJournal(new Map([[RECEIPT.submitId, RECEIPT]])) }).recover(RECEIPT.submitId, probe());
+    const before = await new SubmitRecovery({
+      journal: memoryJournal(new Map([[RECEIPT.submitId, RECEIPT]])),
+    }).recover(RECEIPT.submitId, probe());
     // A restarted Host rebuilds the recovery service over the same durable
     // journal rows; the outcome and receipt must be identical.
-    const after = await new SubmitRecovery({ journal: memoryJournal(new Map([[RECEIPT.submitId, RECEIPT]])) }).recover(
-      RECEIPT.submitId,
-      { fixedRefHead: 'elsewhere', commitWithSubmitTrailer: null },
-    );
+    const after = await new SubmitRecovery({
+      journal: memoryJournal(new Map([[RECEIPT.submitId, RECEIPT]])),
+    }).recover(RECEIPT.submitId, { fixedRefHead: 'elsewhere', commitWithSubmitTrailer: null });
     expect(before).toEqual({ kind: 'accepted', receipt: RECEIPT });
     expect(after).toEqual(before);
   });

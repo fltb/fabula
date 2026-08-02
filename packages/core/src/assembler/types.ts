@@ -1,8 +1,8 @@
 import type { JsonObject } from '../contracts/json.ts';
 import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
-import type { BranchPath, BranchSet } from '../types/index.js';
 import type { ChapterMetadata } from '../types/chapter.ts';
 import type { DiscourseSceneSequenceEntry } from '../types/graph.ts';
+import type { BranchPath, BranchSet } from '../types/index.js';
 
 export const AssemblyErrorCode = {
   NO_SCENES: 'NO_SCENES',
@@ -17,7 +17,11 @@ export const AssemblyErrorCode = {
 export type AssemblyErrorCodeType = (typeof AssemblyErrorCode)[keyof typeof AssemblyErrorCode];
 export class AssemblyError extends Error {
   readonly code: AssemblyErrorCodeType;
-  constructor(code: AssemblyErrorCodeType, message: string) { super(message); this.name = 'AssemblyError'; this.code = code; }
+  constructor(code: AssemblyErrorCodeType, message: string) {
+    super(message);
+    this.name = 'AssemblyError';
+    this.code = code;
+  }
 }
 
 export interface SceneEntry {
@@ -35,7 +39,12 @@ export interface SortedScene {
   chapter: number;
   branchExistence: BranchSet;
 }
-interface SceneInfo { eventId: string; chapter: number; narrativeOrder: number; branchExistence: BranchSet; }
+interface SceneInfo {
+  eventId: string;
+  chapter: number;
+  narrativeOrder: number;
+  branchExistence: BranchSet;
+}
 
 /** Materialized semantic inputs for assembly. Host loaders create this value. */
 export interface AssemblySource {

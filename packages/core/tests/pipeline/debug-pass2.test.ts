@@ -4,7 +4,6 @@ import { MockProvider } from '../../src/ai/providers/mock.ts';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
 import type { Pass2RejectionCategory, RenderJob } from '../../src/pipeline/render.ts';
 import { RenderPipeline } from '../../src/pipeline/render.ts';
-import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 import type {
   ContextPackage,
   KnowledgeBoundary,
@@ -19,6 +18,7 @@ import {
   makeObservations,
   makeProtocol,
 } from '../fixtures/mock-pass2-helpers.ts';
+import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 
 const ANALYSIS_PAYLOAD: Record<string, unknown> = {
   postconditions: { covered: [], dropped: [] },

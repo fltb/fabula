@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeSource } from '../../src/entity/source-analysis.ts';
-import { getSourceDocument, listSourceDocuments, previewSourceChange } from '../../src/editorial/facade.ts';
+import type { ProjectSourceSnapshotV1 } from '../../src/contracts/source.ts';
+import {
+  getSourceDocument,
+  listSourceDocuments,
+  previewSourceChange,
+} from '../../src/editorial/facade.ts';
 import { QueryService } from '../../src/editorial/query-service.ts';
 import { SourceWorkspace } from '../../src/editorial/source-workspace.ts';
-import type { ProjectSourceSnapshotV1 } from '../../src/contracts/source.ts';
+import { analyzeSource } from '../../src/entity/source-analysis.ts';
 
 const snapshot: ProjectSourceSnapshotV1 = {
   version: 1,
@@ -28,13 +32,15 @@ describe('snapshot source facade', () => {
   });
 
   it('returns a pure candidate analysis without mutation', () => {
-    const changes = [{
-      logicalPath: 'nova.yaml',
-      beforeContent: 'name: test\n',
-      beforeHash: 'b'.repeat(64),
-      afterContent: 'name: changed\n',
-      afterHash: null,
-    }];
+    const changes = [
+      {
+        logicalPath: 'nova.yaml',
+        beforeContent: 'name: test\n',
+        beforeHash: 'b'.repeat(64),
+        afterContent: 'name: changed\n',
+        afterHash: null,
+      },
+    ];
     const result = previewSourceChange(snapshot, changes);
     expect(result.current).toBe(snapshot);
     expect(result.candidate.documents[0].content).toBe('name: changed\n');

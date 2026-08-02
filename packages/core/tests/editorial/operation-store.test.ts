@@ -10,20 +10,20 @@
 
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import type { JsonValue } from '../../src/contracts/json.js';
 import { EditorialOperationError } from '../../src/editorial/errors.ts';
 import { getEditorialOperation } from '../../src/editorial/facade.ts';
+import type {
+  CoreExecutionRepository,
+  OperationRecord,
+} from '../../src/ports/execution-repository.ts';
+import type { Clock } from '../../src/ports/runtime-services.ts';
 import {
   MemoryExecutionRepository,
   MemoryRenderCacheRepository,
   MemoryStateLogRepository,
   MemoryStateSnapshotRepository,
 } from '../../src/testing/memory-repositories.ts';
-import type { JsonValue } from '../../src/contracts/json.js';
-import type {
-  CoreExecutionRepository,
-  OperationRecord,
-} from '../../src/ports/execution-repository.ts';
-import type { Clock } from '../../src/ports/runtime-services.ts';
 import type {
   EditorialError,
   EditorialOperationKind,
@@ -174,7 +174,11 @@ class OperationLifecycle {
         completedAt: this.clock.iso(),
         errors: [
           ...op.errors,
-          { code: 'OPERATION_INTERRUPTED', message: 'Lease expired', operationId: input.operationId },
+          {
+            code: 'OPERATION_INTERRUPTED',
+            message: 'Lease expired',
+            operationId: input.operationId,
+          },
         ],
       };
       await this.write(input.operationId, version, interrupted);
@@ -209,9 +213,13 @@ class OperationLifecycle {
   async get(operationId: string): Promise<EditorialOperationV1> {
     const existing = await this.read(operationId);
     if (!existing) {
-      throw new EditorialOperationError('INVALID_OPERATION', `Operation ${operationId} was not found`, {
-        operationId,
-      });
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Operation ${operationId} was not found`,
+        {
+          operationId,
+        },
+      );
     }
     return existing.op;
   }
@@ -219,9 +227,13 @@ class OperationLifecycle {
   async heartbeat(operationId: string, workerId: string): Promise<EditorialOperationV1> {
     const existing = await this.read(operationId);
     if (!existing) {
-      throw new EditorialOperationError('INVALID_OPERATION', `Operation ${operationId} was not found`, {
-        operationId,
-      });
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Operation ${operationId} was not found`,
+        {
+          operationId,
+        },
+      );
     }
     const { version, op } = existing;
     if (op.actorId !== workerId) {
@@ -257,9 +269,13 @@ class OperationLifecycle {
   async promote(operationId: string, workerId: string): Promise<EditorialOperationV1> {
     const existing = await this.read(operationId);
     if (!existing) {
-      throw new EditorialOperationError('INVALID_OPERATION', `Operation ${operationId} was not found`, {
-        operationId,
-      });
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Operation ${operationId} was not found`,
+        {
+          operationId,
+        },
+      );
     }
     const { version, op } = existing;
     if (op.status !== 'interrupted') {
@@ -288,9 +304,13 @@ class OperationLifecycle {
   ): Promise<EditorialOperationV1> {
     const existing = await this.read(operationId);
     if (!existing) {
-      throw new EditorialOperationError('INVALID_OPERATION', `Operation ${operationId} was not found`, {
-        operationId,
-      });
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Operation ${operationId} was not found`,
+        {
+          operationId,
+        },
+      );
     }
     const { version, op } = existing;
     if (op.actorId !== workerId) {
@@ -353,9 +373,13 @@ class OperationLifecycle {
   async checkpointSequence(operationId: string, workerId: string, sequence: number): Promise<void> {
     const existing = await this.read(operationId);
     if (!existing) {
-      throw new EditorialOperationError('INVALID_OPERATION', `Operation ${operationId} was not found`, {
-        operationId,
-      });
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Operation ${operationId} was not found`,
+        {
+          operationId,
+        },
+      );
     }
     const { version, op } = existing;
     if (op.actorId !== workerId) {
@@ -483,7 +507,12 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const opId = uuid();
       const rhs = sha256Hex();
 
-      await lifecycle.register({ operationId: opId, kind: 'revise', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'revise',
+        actorId: TEST_ACTOR,
+        requestHash: rhs,
+      });
       clock.advance(1000);
       await lifecycle.succeed(opId, TEST_ACTOR, null);
 
@@ -504,7 +533,12 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const rhs = sha256Hex();
 
       // Create and let lease expire
-      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: rhs,
+      });
       clock.advance(31 * 60 * 1000);
 
       // Re-register with same hash — recovers expired running to interrupted, creates new
@@ -525,7 +559,12 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const opId = uuid();
       const rhs1 = sha256Hex();
 
-      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs1 });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: rhs1,
+      });
       await lifecycle.succeed(opId, TEST_ACTOR, null);
 
       await expect(
@@ -543,7 +582,12 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const opId = uuid();
       const rhs1 = sha256Hex();
 
-      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs1 });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: rhs1,
+      });
 
       // Expire lease then register with different hash — triggers recovery + creation
       clock.advance(31 * 60 * 1000);
@@ -573,7 +617,12 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const opId = uuid();
       const rhs = sha256Hex();
 
-      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: rhs,
+      });
 
       await expect(
         lifecycle.register({
@@ -590,7 +639,12 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const opId = uuid();
       const rhs1 = sha256Hex();
 
-      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs1 });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: rhs1,
+      });
 
       await expect(
         lifecycle.register({
@@ -607,7 +661,12 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const opId = uuid();
       const rhs = sha256Hex();
 
-      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: rhs,
+      });
       clock.advance(31 * 60 * 1000);
 
       const result = await lifecycle.register({
@@ -651,11 +710,21 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const opId = uuid();
       const rhs = sha256Hex();
 
-      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: rhs,
+      });
       clock.advance(31 * 60 * 1000);
 
       // Recover and create new
-      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: rhs,
+      });
       clock.advance(1000);
 
       // Succeed
@@ -718,17 +787,32 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const ids: string[] = [];
 
       const idA = uuid();
-      await lifecycle.register({ operationId: idA, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      await lifecycle.register({
+        operationId: idA,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       ids.push(idA);
       clock.advance(5000);
 
       const idB = uuid();
-      await lifecycle.register({ operationId: idB, kind: 'revise', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      await lifecycle.register({
+        operationId: idB,
+        kind: 'revise',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       ids.push(idB);
       clock.advance(2000);
 
       const idC = uuid();
-      await lifecycle.register({ operationId: idC, kind: 'render_tree', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      await lifecycle.register({
+        operationId: idC,
+        kind: 'render_tree',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
       ids.push(idC);
 
       const records = await Promise.all(
@@ -789,7 +873,9 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       });
       await lifecycle.succeed(opId, TEST_ACTOR, null);
 
-      await expect(lifecycle.heartbeat(opId, TEST_ACTOR)).rejects.toThrow(/Cannot heartbeat terminal/);
+      await expect(lifecycle.heartbeat(opId, TEST_ACTOR)).rejects.toThrow(
+        /Cannot heartbeat terminal/,
+      );
     });
 
     it('throws on interrupted operation', async () => {
@@ -821,7 +907,12 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const opId = uuid();
       const rhs = sha256Hex();
 
-      await lifecycle.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: rhs });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: 'worker-a',
+        requestHash: rhs,
+      });
       clock.advance(31 * 60 * 1000); // Expire lease
 
       // Two workers both observe the stale running record at version 1.
@@ -1111,8 +1202,12 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       });
       await lifecycle.checkpointSequence(opId, TEST_ACTOR, 5);
 
-      await expect(lifecycle.checkpointSequence(opId, TEST_ACTOR, 5)).rejects.toThrow(/not greater than/);
-      await expect(lifecycle.checkpointSequence(opId, TEST_ACTOR, 3)).rejects.toThrow(/not greater than/);
+      await expect(lifecycle.checkpointSequence(opId, TEST_ACTOR, 5)).rejects.toThrow(
+        /not greater than/,
+      );
+      await expect(lifecycle.checkpointSequence(opId, TEST_ACTOR, 3)).rejects.toThrow(
+        /not greater than/,
+      );
     });
 
     it('rejects when worker does not own the operation', async () => {
@@ -1126,7 +1221,9 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
         requestHash: sha256Hex(),
       });
 
-      await expect(lifecycle.checkpointSequence(opId, 'worker-b', 1)).rejects.toThrow(/does not own/);
+      await expect(lifecycle.checkpointSequence(opId, 'worker-b', 1)).rejects.toThrow(
+        /does not own/,
+      );
     });
 
     it('rejects on terminal operation', async () => {
@@ -1178,7 +1275,12 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const opId = uuid();
       const rhs = sha256Hex();
 
-      await lifecycle.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: rhs });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: 'worker-a',
+        requestHash: rhs,
+      });
       clock.advance(31 * 60 * 1000);
 
       // Worker B registers — triggers recovery of A's stale operation
@@ -1224,7 +1326,12 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const { repo, lifecycle } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
-      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: rhs,
+      });
 
       const loaded = await getEditorialOperation(
         { projectId: PROJECT_ID, operationId: opId },
@@ -1238,9 +1345,9 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
     });
 
     it('throws when no semantic runtime is provided', async () => {
-      await expect(getEditorialOperation({ projectId: PROJECT_ID, operationId: uuid() })).rejects.toThrow(
-        'CoreExecutionRepository is required',
-      );
+      await expect(
+        getEditorialOperation({ projectId: PROJECT_ID, operationId: uuid() }),
+      ).rejects.toThrow('CoreExecutionRepository is required');
     });
   });
 
@@ -1299,7 +1406,9 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
         actorId: TEST_ACTOR,
         requestHash: sha256Hex(),
       });
-      await lifecycle.fail(opId, TEST_ACTOR, [{ code: 'PROVIDER_REQUIRED', message: 'no provider' }]);
+      await lifecycle.fail(opId, TEST_ACTOR, [
+        { code: 'PROVIDER_REQUIRED', message: 'no provider' },
+      ]);
 
       const loaded = await lifecycle.get(opId);
       expect(loaded.status).toBe('failed');

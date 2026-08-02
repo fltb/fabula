@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_ARGON2_PARAMETERS,
   hashPassword,
@@ -9,7 +9,8 @@ import {
   verifyPassword,
 } from '../src/host/auth/password.js';
 
-const sourcePath = (name: string): string => fileURLToPath(new URL(`../src/host/auth/${name}.ts`, import.meta.url));
+const sourcePath = (name: string): string =>
+  fileURLToPath(new URL(`../src/host/auth/${name}.ts`, import.meta.url));
 
 describe('host auth password primitives', () => {
   it('hashes and verifies a password with argon2id and a random salt', async () => {

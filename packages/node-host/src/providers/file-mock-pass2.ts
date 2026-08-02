@@ -1,9 +1,9 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import {
-  MockPass2Provider,
   type MockPass2Entry,
   type MockPass2Options,
+  MockPass2Provider,
 } from '@novalistically/core/testing';
 
 export interface FileMockPass2Options extends MockPass2Options {
@@ -28,7 +28,9 @@ export class FileMockPass2Provider extends MockPass2Provider {
 export function loadReferenceEntries(referenceDir: string): Record<string, MockPass2Entry> {
   const root = resolve(referenceDir);
   const entries: Record<string, MockPass2Entry> = {};
-  for (const file of readdirSync(root).filter((entry) => entry.endsWith('.json')).sort()) {
+  for (const file of readdirSync(root)
+    .filter((entry) => entry.endsWith('.json'))
+    .sort()) {
     const filePath = join(root, file);
     const value: unknown = JSON.parse(readFileSync(filePath, 'utf8'));
     if (

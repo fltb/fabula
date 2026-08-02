@@ -47,10 +47,14 @@ export {
   computeValidationIdentity,
 } from './identity.ts';
 export {
+  executeEditorialRender,
+  executeEditorialTreeRender,
+  previewEditorialRun,
+} from './render-service.ts';
+export {
   addReviewComment,
   listReviewComments,
   replaceReviewComment,
   updateReviewComment,
 } from './review-facade.ts';
-export { executeEditorialRender, executeEditorialTreeRender, previewEditorialRun } from './render-service.ts';
 export { preflightSelector } from './selector.ts';

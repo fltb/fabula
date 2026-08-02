@@ -24,7 +24,9 @@ export const cacheRecord = (key: LayeredCacheKey): RenderCacheRecord => ({
   },
 });
 
-export const withTempProject = async (run: (projectRoot: string) => Promise<void>): Promise<void> => {
+export const withTempProject = async (
+  run: (projectRoot: string) => Promise<void>,
+): Promise<void> => {
   const projectRoot = await mkdtemp(path.join(tmpdir(), 'fabula-node-host-cache-'));
   try {
     await run(projectRoot);

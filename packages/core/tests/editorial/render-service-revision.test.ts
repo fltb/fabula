@@ -34,7 +34,13 @@ const payload: Record<string, unknown> = {
   preconditions: { violated: [] },
   pov: { consistent: true, leaks: [] },
   inventedDetails: [],
-  quality: { proseScore: 4, maxScore: 5, strengths: ['clear prose'], weaknesses: [], estimatedWordCount: 80 },
+  quality: {
+    proseScore: 4,
+    maxScore: 5,
+    strengths: ['clear prose'],
+    weaknesses: [],
+    estimatedWordCount: 80,
+  },
   threadProgressAchieved: [],
   foreshadowingDeployed: [],
   narrativeChecks: [],
@@ -50,12 +56,18 @@ const payload: Record<string, unknown> = {
 function source(): ProjectSourceSnapshotV1 {
   const entries: Record<string, string> = {
     'nova.yaml': `project: ${PROJECT_ID}\ntitle: Test Novel\nauthor: Test Author\ndefaultModel: mock-pass2\ndefaultLanguage: en\n`,
-    'definitions/state_initial.yaml': 'info:\n  currentEra: contemporary\n  politicalSituation: stable\ntimeAnchors:\n  - { id: day_1, at: day_1, description: Day 1 }\nthreads: []\nworldFacts: []\n',
-    'definitions/characters/narrator.yaml': 'id: narrator\nname: Narrator\ntype: person\ndescription: The narrator\ninitialState: {}\ntraits: []\n',
-    'definitions/entity-types.yaml': 'types:\n  character:\n    typeId: character\n    kind: character\n    attributes:\n      lifecycle:\n        attributeId: lifecycle\n        valueType: string\n        requiredAt: introduction\n        writePolicy: lifecycle_managed\n        allowedLifecycleStates: [active, inactive, retired]\n        unsetAllowed: false\n        semanticRole: lifecycle\n      traits:\n        attributeId: traits\n        valueType: string_list\n        requiredAt: never\n        writePolicy: immutable\n        unsetAllowed: true\n    lifecyclePolicy:\n      allowedTransitions:\n        - [active, inactive]\n        - [active, retired]\n        - [inactive, active]\n        - [inactive, retired]\n    referenceCapabilities:\n      defaultEligibility: live\n    typedInvariants: []\n',
-    'definitions/discourse-ledger.yaml': 'id: test-ledger\nchapters:\n  - branch: main\n    chapter: 1\n    sceneIds: [E1]\nentries: []\n',
-    'chapters/chapter_01/_chapter.yaml': 'chapter: 1\ntitle: Chapter 1\nsummary: First chapter\nintent: Introduction\nplannedScenes: 1\n',
-    'chapters/chapter_01/E1.yaml': 'event: E1\nnarrativeOrder: 1\ntitle: First Event\nstoryTime: day_1\npov:\n  character: narrator\n  type: first_person\nsceneBrief: A test scene.\nbeats:\n  - A test scene.\npreconditions: []\nexpectedPostconditions: []\n',
+    'definitions/state_initial.yaml':
+      'info:\n  currentEra: contemporary\n  politicalSituation: stable\ntimeAnchors:\n  - { id: day_1, at: day_1, description: Day 1 }\nthreads: []\nworldFacts: []\n',
+    'definitions/characters/narrator.yaml':
+      'id: narrator\nname: Narrator\ntype: person\ndescription: The narrator\ninitialState: {}\ntraits: []\n',
+    'definitions/entity-types.yaml':
+      'types:\n  character:\n    typeId: character\n    kind: character\n    attributes:\n      lifecycle:\n        attributeId: lifecycle\n        valueType: string\n        requiredAt: introduction\n        writePolicy: lifecycle_managed\n        allowedLifecycleStates: [active, inactive, retired]\n        unsetAllowed: false\n        semanticRole: lifecycle\n      traits:\n        attributeId: traits\n        valueType: string_list\n        requiredAt: never\n        writePolicy: immutable\n        unsetAllowed: true\n    lifecyclePolicy:\n      allowedTransitions:\n        - [active, inactive]\n        - [active, retired]\n        - [inactive, active]\n        - [inactive, retired]\n    referenceCapabilities:\n      defaultEligibility: live\n    typedInvariants: []\n',
+    'definitions/discourse-ledger.yaml':
+      'id: test-ledger\nchapters:\n  - branch: main\n    chapter: 1\n    sceneIds: [E1]\nentries: []\n',
+    'chapters/chapter_01/_chapter.yaml':
+      'chapter: 1\ntitle: Chapter 1\nsummary: First chapter\nintent: Introduction\nplannedScenes: 1\n',
+    'chapters/chapter_01/E1.yaml':
+      'event: E1\nnarrativeOrder: 1\ntitle: First Event\nstoryTime: day_1\npov:\n  character: narrator\n  type: first_person\nsceneBrief: A test scene.\nbeats:\n  - A test scene.\npreconditions: []\nexpectedPostconditions: []\n',
   };
   const documents: SourceDocumentV1[] = Object.entries(entries)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
@@ -70,7 +82,9 @@ function source(): ProjectSourceSnapshotV1 {
   return {
     version: 1,
     documents,
-    sourceHash: hash(documents.map((document) => `${document.logicalPath}\0${document.content}`).join('')),
+    sourceHash: hash(
+      documents.map((document) => `${document.logicalPath}\0${document.content}`).join(''),
+    ),
   };
 }
 

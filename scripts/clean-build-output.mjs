@@ -32,9 +32,7 @@ const PACKAGES = ['core', 'node-host', 'bench', 'cli', 'workbench'];
 function assertInsideRepoRoot(target) {
   const relative = path.relative(repoRoot, target);
   if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
-    throw new Error(
-      `clean-build-output: refusing path outside repository root: ${target}`,
-    );
+    throw new Error(`clean-build-output: refusing path outside repository root: ${target}`);
   }
 }
 
@@ -48,9 +46,7 @@ async function assertNoSymlinkComponents(target) {
     current = path.join(current, part);
     const stat = await lstat(current).catch(() => null);
     if (stat?.isSymbolicLink()) {
-      throw new Error(
-        `clean-build-output: refusing to remove through symlink: ${current}`,
-      );
+      throw new Error(`clean-build-output: refusing to remove through symlink: ${current}`);
     }
   }
 }
@@ -76,9 +72,7 @@ for (const pkg of PACKAGES) {
     throw new Error(`clean-build-output: refusing to remove symlink: ${target}`);
   }
   if (!stat.isDirectory()) {
-    throw new Error(
-      `clean-build-output: refusing to remove non-directory: ${target}`,
-    );
+    throw new Error(`clean-build-output: refusing to remove non-directory: ${target}`);
   }
 
   // Race guard: re-resolve immediately before removal so a directory

@@ -11,14 +11,25 @@
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { reviewFeedbackProjection, sortReviewFeedback } from '../../src/editorial/compiler.ts';
-import { buildEventRevisionStates, composeRevisionDirective } from '../../src/editorial/render-service.ts';
-import { addReviewComment, replaceReviewComment, updateReviewComment } from '../../src/editorial/review-facade.ts';
-import { ReviewManager } from '../../src/review/manager.ts';
-import { MemoryExecutionRepository } from '../../src/testing/memory-repositories.ts';
+import {
+  buildEventRevisionStates,
+  composeRevisionDirective,
+} from '../../src/editorial/render-service.ts';
+import {
+  addReviewComment,
+  replaceReviewComment,
+  updateReviewComment,
+} from '../../src/editorial/review-facade.ts';
 import type { AcceptedSceneRecord } from '../../src/ports/execution-repository.ts';
 import type { Clock, IdGenerator } from '../../src/ports/runtime-services.ts';
+import { ReviewManager } from '../../src/review/manager.ts';
+import { MemoryExecutionRepository } from '../../src/testing/memory-repositories.ts';
 import type { EditorialRuntime, RevisionRequest } from '../../src/types/editorial.ts';
-import type { NewReviewComment, ReviewApplicationV1, ReviewComment } from '../../src/types/index.ts';
+import type {
+  NewReviewComment,
+  ReviewApplicationV1,
+  ReviewComment,
+} from '../../src/types/index.ts';
 
 const PROJECT_ID = 'revision-feedback-project';
 const NOW = '2026-07-28T00:00:00.000Z';
@@ -177,7 +188,12 @@ describe('editorial revision feedback', () => {
         '2026-07-28T00:04:00.000Z',
         '  Fix the line.  ',
       ),
-      comment('rev_scene', { type: 'scene', id: 'E1' }, '2026-07-28T00:01:00.000Z', 'Tighten the scene.'),
+      comment(
+        'rev_scene',
+        { type: 'scene', id: 'E1' },
+        '2026-07-28T00:01:00.000Z',
+        'Tighten the scene.',
+      ),
       comment('rev_novel', { type: 'novel', id: 'novel' }, '2026-07-28T00:02:00.000Z', '  '),
     ];
 
@@ -195,7 +211,9 @@ describe('editorial revision feedback', () => {
 
   it('returns undefined when neither instruction nor review content is present', () => {
     expect(composeRevisionDirective(undefined, [])).toBeUndefined();
-    expect(composeRevisionDirective('  ', [comment('rev_x', { type: 'scene', id: 'E1' }, NOW, '  ')])).toBeUndefined();
+    expect(
+      composeRevisionDirective('  ', [comment('rev_x', { type: 'scene', id: 'E1' }, NOW, '  ')]),
+    ).toBeUndefined();
   });
 
   it('ignores lifecycle and time in an individual feedback hash', () => {
@@ -219,7 +237,9 @@ describe('editorial revision feedback', () => {
       ],
     };
 
-    expect(reviewFeedbackProjection(changedIncidentalFields)).toEqual(reviewFeedbackProjection(base));
+    expect(reviewFeedbackProjection(changedIncidentalFields)).toEqual(
+      reviewFeedbackProjection(base),
+    );
     expect(reviewFeedbackProjection(base).trimmedContent).toBe('Tighten this paragraph.');
   });
 
@@ -278,7 +298,11 @@ describe('editorial revision feedback', () => {
     // Same prose hash but a different revision ID is stale.
     await expect(
       addReviewComment(
-        { projectId: PROJECT_ID, mutation, input: line(crypto.randomUUID(), hash('line one\nline two')) },
+        {
+          projectId: PROJECT_ID,
+          mutation,
+          input: line(crypto.randomUUID(), hash('line one\nline two')),
+        },
         runtime(execution),
       ),
     ).rejects.toMatchObject({ code: 'REVISION_STALE' });
@@ -317,7 +341,10 @@ describe('editorial revision feedback', () => {
       },
     });
 
-    const artifact = await execution.resolveAcceptedArtifact({ projectId: PROJECT_ID, eventId: 'E1' });
+    const artifact = await execution.resolveAcceptedArtifact({
+      projectId: PROJECT_ID,
+      eventId: 'E1',
+    });
     expect(artifact?.prose).toBe('E1 accepted prose');
     expect(artifact?.revisionId).toBe(acceptedRevisionId);
   });
@@ -433,7 +460,12 @@ describe('editorial revision feedback', () => {
         ids: { next: () => 'rev_fixed_1' },
       });
       const created = await manager.addReviewComment(
-        { target: { type: 'scene', id: 'E1' }, severity: 'suggestion', category: 'style', content: 'Tighten scene' },
+        {
+          target: { type: 'scene', id: 'E1' },
+          severity: 'suggestion',
+          category: 'style',
+          content: 'Tighten scene',
+        },
         'reviewer',
       );
       const resolved = await manager.updateReviewComment(created.id, 'resolve', 'reviewer');
@@ -462,7 +494,12 @@ describe('editorial revision feedback', () => {
     const created = await addReviewComment(
       {
         projectId: PROJECT_ID,
-        input: { target: { type: 'scene', id: 'E1' }, severity: 'suggestion', category: 'style', content: 'Facade comment' },
+        input: {
+          target: { type: 'scene', id: 'E1' },
+          severity: 'suggestion',
+          category: 'style',
+          content: 'Facade comment',
+        },
         mutation: { operationId: crypto.randomUUID(), actorId: 'reviewer' },
       },
       facadeRuntime,
@@ -474,7 +511,12 @@ describe('editorial revision feedback', () => {
       {
         projectId: PROJECT_ID,
         commentId: created.id,
-        input: { target: { type: 'scene', id: 'E1' }, severity: 'blocking', category: 'plot_logic', content: 'Facade replacement' },
+        input: {
+          target: { type: 'scene', id: 'E1' },
+          severity: 'blocking',
+          category: 'plot_logic',
+          content: 'Facade replacement',
+        },
         mutation: { operationId: crypto.randomUUID(), actorId: 'reviewer' },
       },
       facadeRuntime,

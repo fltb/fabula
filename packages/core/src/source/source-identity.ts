@@ -29,11 +29,15 @@ export function computeSourceDocumentHash(content: string): string {
  * hash material is `path\0contentHash\0` per document, joined in that order.
  */
 export function computeSourceHash(documents: readonly SourceDocumentV1[]): string {
-  return sha256(documents.map((document) => `${document.logicalPath}\0${document.contentHash}\0`).join(''));
+  return sha256(
+    documents.map((document) => `${document.logicalPath}\0${document.contentHash}\0`).join(''),
+  );
 }
 
 /** Build a canonical snapshot: documents sorted by logicalPath plus the content-only sourceHash. */
-export function buildSourceSnapshot(documents: readonly SourceDocumentV1[]): ProjectSourceSnapshotV1 {
+export function buildSourceSnapshot(
+  documents: readonly SourceDocumentV1[],
+): ProjectSourceSnapshotV1 {
   const sorted = [...documents].sort((a, b) => compareLogicalPaths(a.logicalPath, b.logicalPath));
   return { version: 1, documents: sorted, sourceHash: computeSourceHash(sorted) };
 }

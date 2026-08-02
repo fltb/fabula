@@ -9,7 +9,10 @@ import type {
 } from '@novalistically/core';
 import { FileRenderCacheRepository } from './cache/file-render-cache-repository.js';
 import { FileExecutionRepository } from './execution/file-execution-repository.js';
-import { FileStateLogRepository, FileStateSnapshotRepository } from './state/file-state-repositories.js';
+import {
+  FileStateLogRepository,
+  FileStateSnapshotRepository,
+} from './state/file-state-repositories.js';
 
 /** Node-owned composition of Core's semantic runtime ports for one project. */
 export interface FileCoreRuntimeOptions {
@@ -29,7 +32,10 @@ class StaticPromptTemplateCatalog implements PromptTemplateCatalog {
     }));
   }
 
-  async get(input: { readonly name: string; readonly version?: string }): Promise<PromptTemplate | null> {
+  async get(input: {
+    readonly name: string;
+    readonly version?: string;
+  }): Promise<PromptTemplate | null> {
     const template = this.#templates.find(
       (candidate) =>
         candidate.name === input.name &&

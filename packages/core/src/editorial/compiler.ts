@@ -19,7 +19,11 @@
 
 import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
 import type { BranchPath } from '../types/branch.ts';
-import type { EditorialError, EditorialPlanSummaryV1, EditorialRenderRequestV1, SceneSelector } from '../types/editorial.ts';
+import type {
+  EditorialError,
+  EditorialPlanSummaryV1,
+  EditorialRenderRequestV1,
+} from '../types/editorial.ts';
 import type { ReviewComment } from '../types/review.ts';
 import {
   type CompiledSceneIdentity,

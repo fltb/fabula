@@ -8,14 +8,32 @@ type Listener = (event: { data: Response }) => void;
 function portPair() {
   let listener: Listener | undefined;
   return {
-    client: { postMessage(message: Message) { queueMicrotask(() => listener?.({ data: { correlationId: message.correlationId, ok: true, operation: message.operation, result: message.payload } })); }, addEventListener(_type: 'message', next: Listener) { listener = next; } },
+    client: {
+      postMessage(message: Message) {
+        queueMicrotask(() =>
+          listener?.({
+            data: {
+              correlationId: message.correlationId,
+              ok: true,
+              operation: message.operation,
+              result: message.payload,
+            },
+          }),
+        );
+      },
+      addEventListener(_type: 'message', next: Listener) {
+        listener = next;
+      },
+    },
   };
 }
 describe('persistence contracts', () => {
   it('correlates domain messages', async () => {
     const pair = portPair();
     const client = new PersistenceClient(pair.client);
-    await expect(client.request('getProject', { projectId: 'p' })).resolves.toEqual({ projectId: 'p' });
+    await expect(client.request('getProject', { projectId: 'p' })).resolves.toEqual({
+      projectId: 'p',
+    });
   });
   it('serializes deterministic failures and aborts before task boundary', async () => {
     const pair = portPair();
@@ -26,7 +44,7 @@ describe('persistence contracts', () => {
     await expect(request).rejects.toMatchObject({ code: 'ABORTED', retryable: false });
   });
   it('describes migrations as values and exposes no generic query', () => {
-    expect(persistenceSchema[0]?.tables.map(table => table.name)).toContain('projects');
+    expect(persistenceSchema[0]?.tables.map((table) => table.name)).toContain('projects');
     expect((PersistenceClient.prototype as Record<string, unknown>).query).toBeUndefined();
   });
 });

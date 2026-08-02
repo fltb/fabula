@@ -8,7 +8,6 @@ import { eventFileSchema } from '../../src/schemas/event.ts';
 import { compileStoryRuntimeGraph } from '../../src/state/graph-adapter.ts';
 import { ReplayEngine } from '../../src/state/replay.ts';
 import { compileStoryBoundaries } from '../../src/state/story-boundaries.ts';
-import { materializeFixtureSnapshot } from '../fixtures/fixture-snapshots.ts';
 import type { Fact, TimeAnchor } from '../../src/types/entity.ts';
 import type {
   BranchPath,
@@ -17,6 +16,7 @@ import type {
   NarrativeEvent,
   TemporalContext,
 } from '../../src/types/index.ts';
+import { materializeFixtureSnapshot } from '../fixtures/fixture-snapshots.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -158,7 +158,6 @@ function defaultContext(): TemporalContext {
 // ---------------------------------------------------------------------------
 
 const PROJECT_DIR = '/game-dialogue-tree';
-
 
 function event(
   id: string,

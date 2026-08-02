@@ -1,7 +1,7 @@
 import type { CompletionResponse, LLMProvider, Message } from '../ai/types.ts';
-import type { CoreRuntimeServices } from '../ports/runtime-services.ts';
 import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
 import type { TypedEventBus } from '../event-bus.ts';
+import type { CoreRuntimeServices } from '../ports/runtime-services.ts';
 import type { AnalysisResult } from './analysis.ts';
 import type { BranchPath, BranchSet } from './branch.ts';
 import type { GameDialogueChoice } from './game-dialogue.ts';
@@ -67,7 +67,6 @@ export interface SceneRevisionEnvelopeV1 {
   requestRecords: RenderRequestRecordV1[];
   createdAt: string;
 }
-
 
 export interface SceneEditHistoryEntryV1 {
   action: 'llm_generated' | 'llm_revised' | 'human_adopted' | 'locked' | 'unlocked' | 'rollback';

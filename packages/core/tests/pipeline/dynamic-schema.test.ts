@@ -16,7 +16,6 @@ import { z } from 'zod';
 import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
 import { type RenderJob, RenderPipeline } from '../../src/pipeline/render.ts';
-import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 import type {
   ContextPackage,
   KnowledgeBoundary,
@@ -32,6 +31,7 @@ import {
   makeObservations,
   makeProtocol,
 } from '../fixtures/mock-pass2-helpers.ts';
+import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 
 // ============================================================================
 // Test fixtures

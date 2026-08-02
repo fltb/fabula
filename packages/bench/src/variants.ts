@@ -15,8 +15,8 @@ import {
   type ValidationIssue,
   type WorldState,
 } from '@novalistically/core';
-import { FileProjectSourceLoader } from '@novalistically/node-host';
 import { ResultAggregator } from '@novalistically/core/tooling';
+import { FileProjectSourceLoader } from '@novalistically/node-host';
 import YAML from 'yaml';
 
 /** Deterministic injection ID counter — replaces non-deterministic Date.now() */
@@ -937,9 +937,7 @@ export async function runVariantBench(): Promise<VariantResults> {
 
 // ─── Branch variant runner ──────────────────────────────────────────────────
 
-function runBranchVariant(
-  dir: string,
-): { eventsLoaded: number; issues: ValidationIssue[] } {
+function runBranchVariant(dir: string): { eventsLoaded: number; issues: ValidationIssue[] } {
   const compilation = compileProject(new FileProjectSourceLoader().load(dir));
   const events = [...compilation.events];
   const entities = compilation.entities;

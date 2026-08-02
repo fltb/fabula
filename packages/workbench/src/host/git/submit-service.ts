@@ -39,23 +39,27 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import type { GitSubmissionJournal, GitSubmissionPhase, GitSubmissionReceipt } from '../../contracts/persistence.js';
-import { AuthoringManifest, ManifestValidationError, type AuthoringEntry } from './manifest.js';
+import type {
+  GitSubmissionJournal,
+  GitSubmissionPhase,
+  GitSubmissionReceipt,
+} from '../../contracts/persistence.js';
+import { type AuthoringEntry, AuthoringManifest, ManifestValidationError } from './manifest.js';
 import {
   normalizeSubmitJournal,
   receiptFromRecord,
-  SubmitRecovery,
   SUBMIT_PHASE_CONFLICT,
   SUBMIT_PHASE_STALE,
   type SubmitJournalPort,
+  SubmitRecovery,
   type SubmitRecoveryProbe,
 } from './recovery.js';
 import {
   ControlledGitRunner,
   GitHostError,
-  WORKBENCH_AUTHORING_REF,
   type GitRepositoryPreflight,
   type GitRunResult,
+  WORKBENCH_AUTHORING_REF,
 } from './runner.js';
 
 /** Non-secret actor/capability provenance recorded in commit trailers. */
@@ -122,7 +126,11 @@ export type AuthoringSubmitOutcome =
   | { readonly kind: 'accepted'; readonly receipt: GitSubmissionReceipt }
   | { readonly kind: 'stale'; readonly reason: string }
   | { readonly kind: 'conflict'; readonly reason: string }
-  | { readonly kind: 'rejected'; readonly code: AuthoringSubmitRejectionCode; readonly reason: string };
+  | {
+      readonly kind: 'rejected';
+      readonly code: AuthoringSubmitRejectionCode;
+      readonly reason: string;
+    };
 
 export interface GitAuthoringSubmitServiceOptions {
   /** The only Git authority; must be a controlled runner pinning the fixed identity. */
@@ -191,21 +199,35 @@ function hasControlCharacter(value: string): boolean {
   return false;
 }
 
-/** Strip control characters and collapse whitespace so a value can never inject message content. */
+/** Replace control characters (U+0000–U+001F, U+007F) with spaces, then collapse whitespace so a value can never inject message content. */
 function sanitizeTrailerValue(value: string): string {
   const sanitized = value
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
+    .split('')
+    .map((character) => {
+      const code = character.charCodeAt(0);
+      return code <= 0x1f || code === 0x7f ? ' ' : character;
+    })
+    .join('')
     .replace(/\s+/g, ' ')
     .trim();
   if (sanitized.length === 0) {
-    throw new AuthoringSubmitInputError(`commit trailer value is empty after sanitization: ${JSON.stringify(value)}`);
+    throw new AuthoringSubmitInputError(
+      `commit trailer value is empty after sanitization: ${JSON.stringify(value)}`,
+    );
   }
   return sanitized;
 }
 
 /** Deterministic non-secret receipt fingerprint; excludes the acceptance timestamp. */
-function computeReceiptHash(submitId: string, projectId: string, commit: string, sourceHash: string): string {
-  return createHash('sha256').update(`${submitId}\0${projectId}\0${commit}\0${sourceHash}`).digest('hex');
+function computeReceiptHash(
+  submitId: string,
+  projectId: string,
+  commit: string,
+  sourceHash: string,
+): string {
+  return createHash('sha256')
+    .update(`${submitId}\0${projectId}\0${commit}\0${sourceHash}`)
+    .digest('hex');
 }
 
 export class GitAuthoringSubmitService {
@@ -229,7 +251,9 @@ export class GitAuthoringSubmitService {
       throw new AuthoringSubmitInputError(`project root is not an existing directory: ${root}`);
     }
     if (!(options.runner instanceof ControlledGitRunner)) {
-      throw new AuthoringSubmitInputError('runner must be a ControlledGitRunner (the only Git authority)');
+      throw new AuthoringSubmitInputError(
+        'runner must be a ControlledGitRunner (the only Git authority)',
+      );
     }
     if (typeof options.confirmWorkingStateVector !== 'function') {
       throw new AuthoringSubmitInputError(
@@ -249,11 +273,15 @@ export class GitAuthoringSubmitService {
       typeof journal.checkpoint !== 'function' ||
       typeof journal.complete !== 'function'
     ) {
-      throw new AuthoringSubmitInputError('journal must be a SubmitJournalPort exposing load/checkpoint/complete');
+      throw new AuthoringSubmitInputError(
+        'journal must be a SubmitJournalPort exposing load/checkpoint/complete',
+      );
     }
     const ref = options.ref ?? WORKBENCH_AUTHORING_REF;
     if (!ref.startsWith('refs/heads/') || ref.length <= 'refs/heads/'.length) {
-      throw new AuthoringSubmitInputError(`fixed authoring ref must be a branch under refs/heads/: ${ref}`);
+      throw new AuthoringSubmitInputError(
+        `fixed authoring ref must be a branch under refs/heads/: ${ref}`,
+      );
     }
     this.#runner = options.runner;
     this.#root = root;
@@ -312,7 +340,10 @@ export class GitAuthoringSubmitService {
   // --- retry/replay paths ----------------------------------------------------------
 
   /** Replay an already-accepted receipt; completes an interrupted primary sync only when the ref still points at the accepted commit. */
-  async #replayAccepted(request: GitAuthoringSubmitRequest, receipt: GitSubmissionReceipt): Promise<AuthoringSubmitOutcome> {
+  async #replayAccepted(
+    request: GitAuthoringSubmitRequest,
+    receipt: GitSubmissionReceipt,
+  ): Promise<AuthoringSubmitOutcome> {
     // Preflight without an expected head: the fixed ref may legitimately have
     // advanced past this receipt. The checks protect the primary worktree
     // before the idempotent sync below.
@@ -331,7 +362,11 @@ export class GitAuthoringSubmitService {
   async #replayCas(request: GitAuthoringSubmitRequest): Promise<AuthoringSubmitOutcome> {
     const record = await this.#journal.load(request.submitId);
     const normalized = record === null ? null : normalizeSubmitJournal(record);
-    if (normalized === null || normalized.candidateCommit == null || normalized.receiptHash == null) {
+    if (
+      normalized === null ||
+      normalized.candidateCommit == null ||
+      normalized.receiptHash == null
+    ) {
       throw new AuthoringSubmitRecoveryError(
         `cannot replay the ref CAS for submit ${request.submitId}: the journal lacks the candidate commit or receipt hash`,
       );
@@ -356,7 +391,12 @@ export class GitAuthoringSubmitService {
       }
       throw new AuthoringSubmitPreflightError(preflight);
     }
-    const cas = await this.#run(['update-ref', this.#ref, normalized.candidateCommit, normalized.expectedGitHead]);
+    const cas = await this.#run([
+      'update-ref',
+      this.#ref,
+      normalized.candidateCommit,
+      normalized.expectedGitHead,
+    ]);
     if (cas.exitCode !== 0) {
       await this.#checkpointTerminal(
         request.submitId,
@@ -372,7 +412,9 @@ export class GitAuthoringSubmitService {
     await this.#strict(['reset', '--hard', normalized.candidateCommit]);
     const receipt = receiptFromRecord(normalized);
     if (receipt === null) {
-      throw new AuthoringSubmitRecoveryError(`cannot build the receipt for submit ${request.submitId}`);
+      throw new AuthoringSubmitRecoveryError(
+        `cannot build the receipt for submit ${request.submitId}`,
+      );
     }
     const stored = await this.#journal.complete(receipt);
     return { kind: 'accepted', receipt: stored };
@@ -383,7 +425,11 @@ export class GitAuthoringSubmitService {
   async #runFreshSubmit(request: GitAuthoringSubmitRequest): Promise<AuthoringSubmitOutcome> {
     const checkpoint = (
       phase: GitSubmissionPhase,
-      extra: { readonly candidateCommit?: string; readonly receiptHash?: string; readonly diagnostic?: string } = {},
+      extra: {
+        readonly candidateCommit?: string;
+        readonly receiptHash?: string;
+        readonly diagnostic?: string;
+      } = {},
     ): Promise<GitSubmissionJournal> =>
       this.#journal.checkpoint({
         submitId: request.submitId,
@@ -457,7 +503,12 @@ export class GitAuthoringSubmitService {
     //    the journal diagnostic slot so any replay builds the identical
     //    receipt without refabricating it.
     const commit = await this.#createCommit(tree, request);
-    const receiptHash = computeReceiptHash(request.submitId, request.projectId, commit, request.sourceHash);
+    const receiptHash = computeReceiptHash(
+      request.submitId,
+      request.projectId,
+      commit,
+      request.sourceHash,
+    );
     await checkpoint(SUBMIT_PHASE_COMMIT_CREATED, {
       candidateCommit: commit,
       receiptHash,
@@ -478,11 +529,19 @@ export class GitAuthoringSubmitService {
       );
       return { kind: 'conflict', reason: this.#conflictReason(request) };
     }
-    await checkpoint(SUBMIT_PHASE_REF_CAS, { candidateCommit: commit, receiptHash, diagnostic: request.sourceHash });
+    await checkpoint(SUBMIT_PHASE_REF_CAS, {
+      candidateCommit: commit,
+      receiptHash,
+      diagnostic: request.sourceHash,
+    });
 
     // 7. Primary sync only after the CAS succeeded.
     await this.#strict(['reset', '--hard', commit]);
-    await checkpoint(SUBMIT_PHASE_PRIMARY_SYNCED, { candidateCommit: commit, receiptHash, diagnostic: request.sourceHash });
+    await checkpoint(SUBMIT_PHASE_PRIMARY_SYNCED, {
+      candidateCommit: commit,
+      receiptHash,
+      diagnostic: request.sourceHash,
+    });
 
     // 8. Exactly one durable receipt.
     const receipt: GitSubmissionReceipt = {
@@ -502,10 +561,18 @@ export class GitAuthoringSubmitService {
   /** Read-only Git state for recovery: the fixed ref head and any commit carrying this submitId trailer. */
   async #probeGitState(submitId: string): Promise<SubmitRecoveryProbe> {
     const refRev = await this.#run(['rev-parse', '--verify', '--quiet', this.#ref]);
-    const fixedRefHead = refRev.exitCode === 0 && refRev.stdout.trim().length > 0 ? refRev.stdout.trim() : null;
+    const fixedRefHead =
+      refRev.exitCode === 0 && refRev.stdout.trim().length > 0 ? refRev.stdout.trim() : null;
 
     let commitWithSubmitTrailer: string | null = null;
-    const log = await this.#run(['log', '--format=%H', '--fixed-strings', '--grep', `Submit-Id: ${submitId}`, this.#ref]);
+    const log = await this.#run([
+      'log',
+      '--format=%H',
+      '--fixed-strings',
+      '--grep',
+      `Submit-Id: ${submitId}`,
+      this.#ref,
+    ]);
     if (log.exitCode === 0) {
       const first = log.stdout.split('\n').find((line) => line.trim().length > 0);
       commitWithSubmitTrailer = first === undefined ? null : first.trim();
@@ -533,7 +600,9 @@ export class GitAuthoringSubmitService {
    * divergence that must fail closed instead.
    */
   #isExpectedHeadMismatch(preflight: GitRepositoryPreflight): boolean {
-    const failed = new Set(preflight.checks.filter((check) => !check.ok).map((check) => check.condition));
+    const failed = new Set(
+      preflight.checks.filter((check) => !check.ok).map((check) => check.condition),
+    );
     return (
       failed.has('expected-head-match') &&
       !failed.has('inside-work-tree') &&
@@ -556,7 +625,10 @@ export class GitAuthoringSubmitService {
   }
 
   /** Manifest-gated tree: seed a temporary index from the expected head, then stage the entries. */
-  async #writeManifestTree(entries: readonly AuthoringEntry[], expectedGitHead: string): Promise<string> {
+  async #writeManifestTree(
+    entries: readonly AuthoringEntry[],
+    expectedGitHead: string,
+  ): Promise<string> {
     const scratch = mkdtempSync(join(this.#runner.scratchDir, 'workbench-submit-'));
     try {
       const indexEnv = { GIT_INDEX_FILE: join(scratch, 'index') };
@@ -567,9 +639,14 @@ export class GitAuthoringSubmitService {
         const item = entries[index];
         const blobFile = join(scratch, `blob-${index}`);
         writeFileSync(blobFile, item.bytes);
-        const blob = (await this.#strict(['hash-object', '-w', '--no-filters', blobFile])).stdout.trim();
+        const blob = (
+          await this.#strict(['hash-object', '-w', '--no-filters', blobFile])
+        ).stdout.trim();
         const mode = item.mode === 'executable' ? '100755' : '100644';
-        await this.#strict(['update-index', '--add', '--cacheinfo', `${mode},${blob},${item.path}`], indexEnv);
+        await this.#strict(
+          ['update-index', '--add', '--cacheinfo', `${mode},${blob},${item.path}`],
+          indexEnv,
+        );
       }
       return (await this.#strict(['write-tree'], indexEnv)).stdout.trim();
     } finally {
@@ -645,10 +722,18 @@ export class GitAuthoringSubmitService {
       throw new AuthoringSubmitInputError(message);
     };
     if (typeof request !== 'object' || request === null) fail('submit request must be an object');
-    if (typeof request.submitId !== 'string' || request.submitId.length === 0 || hasControlCharacter(request.submitId)) {
+    if (
+      typeof request.submitId !== 'string' ||
+      request.submitId.length === 0 ||
+      hasControlCharacter(request.submitId)
+    ) {
       fail('submitId must be a non-empty string without control characters');
     }
-    if (typeof request.projectId !== 'string' || request.projectId.length === 0 || hasControlCharacter(request.projectId)) {
+    if (
+      typeof request.projectId !== 'string' ||
+      request.projectId.length === 0 ||
+      hasControlCharacter(request.projectId)
+    ) {
       fail('projectId must be a non-empty string without control characters');
     }
     if (!/^[0-9a-f]{40}$/.test(request.expectedGitHead)) {
@@ -663,7 +748,11 @@ export class GitAuthoringSubmitService {
     if (!Array.isArray(request.entries) || request.entries.length === 0) {
       fail('entries must be a non-empty array of AuthoringEntry');
     }
-    if (typeof request.sourceHash !== 'string' || request.sourceHash.length === 0 || hasControlCharacter(request.sourceHash)) {
+    if (
+      typeof request.sourceHash !== 'string' ||
+      request.sourceHash.length === 0 ||
+      hasControlCharacter(request.sourceHash)
+    ) {
       fail('sourceHash must be a non-empty string without control characters');
     }
     if (

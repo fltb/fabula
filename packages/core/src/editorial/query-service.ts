@@ -1,8 +1,8 @@
 import type {
-  SourceAnalysisV1,
   ProjectSourceSnapshotV1,
-  SourceDocumentV1,
+  SourceAnalysisV1,
   SourceChangeV1,
+  SourceDocumentV1,
 } from '../contracts/source.ts';
 import { analyzeSource } from '../entity/source-analysis.ts';
 

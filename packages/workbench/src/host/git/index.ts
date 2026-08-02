@@ -6,6 +6,17 @@
  * browser, MCP and Agents never invoke Git directly.
  */
 
+export type { GitBootstrapOptions, GitBootstrapResult } from './bootstrap.js';
+export {
+  DEFAULT_BOOTSTRAP_IGNORE_PATTERNS,
+  GIT_BASELINE_SUBJECT,
+  GitBootstrap,
+  GitBootstrapConflictError,
+  GitBootstrapDirtyError,
+  GitBootstrapError,
+  GitBootstrapInputError,
+  GitBootstrapRefConflictError,
+} from './bootstrap.js';
 export type { GitCapability, GitCapabilityCheck, GitCapabilityProbeOptions } from './capability.js';
 export {
   GitCapabilityError,
@@ -37,6 +48,22 @@ export {
   validateAdoptClaim,
 } from './manifest.js';
 export type {
+  SubmitJournalPort,
+  SubmitJournalRecord,
+  SubmitRecoveryOptions,
+  SubmitRecoveryOutcome,
+  SubmitRecoveryProbe,
+} from './recovery.js';
+export {
+  normalizeSubmitJournal,
+  receiptFromRecord,
+  resolveSubmitRecovery,
+  SUBMIT_PHASE_COMPLETE,
+  SUBMIT_PHASE_CONFLICT,
+  SUBMIT_PHASE_STALE,
+  SubmitRecovery,
+} from './recovery.js';
+export type {
   GitCommandRunner,
   GitCommandRunnerOptions,
   GitIdentity,
@@ -60,33 +87,6 @@ export {
   WORKBENCH_AUTHORING_REF,
   WORKBENCH_GIT_IDENTITY,
 } from './runner.js';
-export type { GitBootstrapOptions, GitBootstrapResult } from './bootstrap.js';
-export {
-  DEFAULT_BOOTSTRAP_IGNORE_PATTERNS,
-  GIT_BASELINE_SUBJECT,
-  GitBootstrap,
-  GitBootstrapConflictError,
-  GitBootstrapDirtyError,
-  GitBootstrapError,
-  GitBootstrapInputError,
-  GitBootstrapRefConflictError,
-} from './bootstrap.js';
-export type {
-  SubmitJournalPort,
-  SubmitJournalRecord,
-  SubmitRecoveryOptions,
-  SubmitRecoveryOutcome,
-  SubmitRecoveryProbe,
-} from './recovery.js';
-export {
-  SUBMIT_PHASE_COMPLETE,
-  SUBMIT_PHASE_CONFLICT,
-  SUBMIT_PHASE_STALE,
-  SubmitRecovery,
-  normalizeSubmitJournal,
-  receiptFromRecord,
-  resolveSubmitRecovery,
-} from './recovery.js';
 export type {
   AuthoringSubmitOutcome,
   AuthoringSubmitProvenance,

@@ -67,12 +67,7 @@ describe('Core public runtime contract', () => {
     expect(testing).toHaveProperty('MemoryStateSnapshotRepository');
     expect(Object.keys(extensions)).toHaveLength(0);
 
-    for (const name of [
-      'EntityMapper',
-      'StateManager',
-      'initializeProject',
-      'TimelineValidator',
-    ]) {
+    for (const name of ['EntityMapper', 'StateManager', 'initializeProject', 'TimelineValidator']) {
       for (const namespace of namespaces) {
         expect(namespace).not.toHaveProperty(name);
       }

@@ -7,18 +7,43 @@
 
 export type BinaryPayload = Uint8Array;
 
-export interface YjsDocumentKey { projectId: string; documentId: string }
+export interface YjsDocumentKey {
+  projectId: string;
+  documentId: string;
+}
 export interface WorkingDocumentState {
   key: YjsDocumentKey;
   stateVector: BinaryPayload;
   update: BinaryPayload;
   updatedAt: string;
 }
-export interface PersistYjsUpdateInput extends YjsDocumentKey { update: BinaryPayload; stateVector?: BinaryPayload }
+export interface PersistYjsUpdateInput extends YjsDocumentKey {
+  update: BinaryPayload;
+  stateVector?: BinaryPayload;
+}
 
-export interface SessionState { sessionId: string; userId: string; expiresAt: string; capabilityVersion: number; }
-export interface InviteState { inviteId: string; projectId?: string; role: string; expiresAt: string; consumedAt?: string }
-export interface CapabilityState { capabilityId: string; userId: string; projectId: string; scope: string[]; version: number; expiresAt: string; revokedAt?: string }
+export interface SessionState {
+  sessionId: string;
+  userId: string;
+  expiresAt: string;
+  capabilityVersion: number;
+}
+export interface InviteState {
+  inviteId: string;
+  projectId?: string;
+  role: string;
+  expiresAt: string;
+  consumedAt?: string;
+}
+export interface CapabilityState {
+  capabilityId: string;
+  userId: string;
+  projectId: string;
+  scope: string[];
+  version: number;
+  expiresAt: string;
+  revokedAt?: string;
+}
 
 export type UserRole = 'owner' | 'user';
 export interface UserState {
@@ -43,9 +68,15 @@ export interface PasswordHashRecord {
 }
 
 /** Full stored user row including the password hash; host-to-worker wire only. */
-export interface AuthUserRecord extends UserState { passwordHash: PasswordHashRecord | null }
+export interface AuthUserRecord extends UserState {
+  passwordHash: PasswordHashRecord | null;
+}
 
-export interface AuthBackoffState { subject: string; failures: number; updatedAt: string }
+export interface AuthBackoffState {
+  subject: string;
+  failures: number;
+  updatedAt: string;
+}
 
 export interface BootstrapOwnerInput {
   userId: string;
@@ -70,9 +101,18 @@ export interface ResetOwnerPasswordInput {
   capabilityVersion: number;
   at: string;
 }
-export interface ResetOwnerPasswordResult { user: AuthUserRecord; revokedSessions: number; revokedCapabilities: number }
-export interface RecordAuthFailureInput { subject: string; at: string }
-export interface AuthState { ownerUserId: string | null }
+export interface ResetOwnerPasswordResult {
+  user: AuthUserRecord;
+  revokedSessions: number;
+  revokedCapabilities: number;
+}
+export interface RecordAuthFailureInput {
+  subject: string;
+  at: string;
+}
+export interface AuthState {
+  ownerUserId: string | null;
+}
 
 export type ConsumeInviteResult =
   | { status: 'accepted'; invite: InviteState }
@@ -85,8 +125,19 @@ export type AcceptInviteUserResult =
   | { status: 'expired' }
   | { status: 'not-found' };
 
-export interface ProjectRegistryEntry { projectId: string; displayName: string; rootLabel: string; createdAt: string; updatedAt: string; }
-export interface OperationCheckpoint { operationId: string; checkpoint: string; version: number; updatedAt: string; }
+export interface ProjectRegistryEntry {
+  projectId: string;
+  displayName: string;
+  rootLabel: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface OperationCheckpoint {
+  operationId: string;
+  checkpoint: string;
+  version: number;
+  updatedAt: string;
+}
 /**
  * Submit pipeline phases recorded in the durable journal. A phase names the
  * exact step a crash interrupted (or the typed outcome that ended the submit),
@@ -123,10 +174,23 @@ export const GIT_SUBMISSION_PHASE_STALE = 'stale' satisfies GitSubmissionPhase;
 export const GIT_SUBMISSION_PHASE_CONFLICT = 'conflict' satisfies GitSubmissionPhase;
 
 export interface GitSubmissionJournal {
-  submitId: string; projectId: string; phase: GitSubmissionPhase; expectedGitHead: string; candidateCommit?: string;
-  receiptHash?: string; diagnostic?: string; updatedAt: string;
+  submitId: string;
+  projectId: string;
+  phase: GitSubmissionPhase;
+  expectedGitHead: string;
+  candidateCommit?: string;
+  receiptHash?: string;
+  diagnostic?: string;
+  updatedAt: string;
 }
-export interface GitSubmissionReceipt { submitId: string; projectId: string; commit: string; sourceHash: string; receiptHash: string; acceptedAt: string }
+export interface GitSubmissionReceipt {
+  submitId: string;
+  projectId: string;
+  commit: string;
+  sourceHash: string;
+  receiptHash: string;
+  acceptedAt: string;
+}
 /**
  * Non-secret Git baseline provenance returned by Workbench bootstrap/reopen of
  * the fixed authoring ref. Carries only public commit identity (ref, commit,
@@ -152,19 +216,45 @@ export interface GitBaselineRecord {
   /** Tree paths at the ref head, sorted. */
   readonly entries: readonly string[];
 }
-export interface UiPreferences { userId: string; values: Record<string, string | number | boolean | null>; updatedAt: string }
+export interface UiPreferences {
+  userId: string;
+  values: Record<string, string | number | boolean | null>;
+  updatedAt: string;
+}
 
 export type PersistenceOperation =
-  | 'persistYjsUpdate' | 'loadWorkingDocument'
-  | 'getAuthState' | 'bootstrapOwner' | 'acceptInviteUser' | 'loadUser' | 'loadOwner' | 'resetOwnerPassword'
-  | 'recordAuthFailure' | 'loadAuthBackoff' | 'clearAuthBackoff'
-  | 'createSession' | 'loadSession' | 'revokeSession'
-  | 'createInvite' | 'consumeInvite' | 'listInvites'
-  | 'upsertCapability' | 'loadCapability' | 'revokeCapability'
-  | 'listProjects' | 'getProject' | 'upsertProject' | 'removeProject'
-  | 'checkpointOperation' | 'loadOperationCheckpoint'
-  | 'beginGitSubmission' | 'checkpointGitSubmission' | 'completeGitSubmission' | 'loadGitSubmission'
-  | 'loadUiPreferences' | 'saveUiPreferences';
+  | 'persistYjsUpdate'
+  | 'loadWorkingDocument'
+  | 'getAuthState'
+  | 'bootstrapOwner'
+  | 'acceptInviteUser'
+  | 'loadUser'
+  | 'loadOwner'
+  | 'resetOwnerPassword'
+  | 'recordAuthFailure'
+  | 'loadAuthBackoff'
+  | 'clearAuthBackoff'
+  | 'createSession'
+  | 'loadSession'
+  | 'revokeSession'
+  | 'createInvite'
+  | 'consumeInvite'
+  | 'listInvites'
+  | 'upsertCapability'
+  | 'loadCapability'
+  | 'revokeCapability'
+  | 'listProjects'
+  | 'getProject'
+  | 'upsertProject'
+  | 'removeProject'
+  | 'checkpointOperation'
+  | 'loadOperationCheckpoint'
+  | 'beginGitSubmission'
+  | 'checkpointGitSubmission'
+  | 'completeGitSubmission'
+  | 'loadGitSubmission'
+  | 'loadUiPreferences'
+  | 'saveUiPreferences';
 
 export interface PersistencePayloads {
   persistYjsUpdate: PersistYjsUpdateInput;
@@ -236,4 +326,9 @@ export interface PersistenceResults {
   saveUiPreferences: UiPreferences;
 }
 
-export interface PersistenceError { code: string; message: string; retryable: boolean; details?: Record<string, string>; }
+export interface PersistenceError {
+  code: string;
+  message: string;
+  retryable: boolean;
+  details?: Record<string, string>;
+}

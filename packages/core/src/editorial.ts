@@ -4,6 +4,12 @@
 export { previewEditorialRun, renderGameDialogueTree, renderNovel } from './api.ts';
 export { compileGameDialogueTree } from './branch/game-dialogue-tree.ts';
 export { branchPathsEqual } from './branch/path.ts';
+export type {
+  ProjectSourceSnapshotV1,
+  SourceAnalysisV1,
+  SourceChangeV1,
+  SourceDocumentV1,
+} from './contracts/source.ts';
 export {
   getEditorialOperation,
   getSceneRevision,
@@ -70,12 +76,6 @@ export type {
   SceneRevisionSummary,
   SceneSelector,
 } from './types/editorial.ts';
-export type {
-  ProjectSourceSnapshotV1,
-  SourceAnalysisV1,
-  SourceChangeV1,
-  SourceDocumentV1,
-} from './contracts/source.ts';
 export type {
   NewReviewComment,
   ReviewApplicationV1,

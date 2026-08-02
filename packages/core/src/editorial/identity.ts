@@ -33,7 +33,6 @@ export function canonicalJson(value: unknown): string {
   return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
 }
 
-
 // ─── Scene Hashing ───────────────────────────────────────────────────────────
 
 /** Source hash — covers the event definition + source documents content. */
@@ -67,7 +66,15 @@ export function computeEditorialBasisHash(
   latestRevisionId: string | null,
   latestProseHash: string | null,
 ): string {
-  return sha256(canonicalJson({ eventId, branchPath: branchPath ?? null, sourceHash, latestRevisionId, latestProseHash }));
+  return sha256(
+    canonicalJson({
+      eventId,
+      branchPath: branchPath ?? null,
+      sourceHash,
+      latestRevisionId,
+      latestProseHash,
+    }),
+  );
 }
 
 // ─── Validation Identity ─────────────────────────────────────────────────────

@@ -46,7 +46,9 @@ export class TraceCollector {
   }
 
   toJsonLines(): string {
-    return this.events.map((event) => JSON.stringify(event)).join('\n') +
-      (this.events.length > 0 ? '\n' : '');
+    return (
+      this.events.map((event) => JSON.stringify(event)).join('\n') +
+      (this.events.length > 0 ? '\n' : '')
+    );
   }
 }

@@ -105,7 +105,9 @@ describe('FileRenderCacheRepository', () => {
       await fs.rm(path.join(root, '.nova', 'render-cache'), { recursive: true, force: true });
       await fs.symlink(outside, path.join(root, '.nova', 'render-cache'), 'dir');
 
-      await expect(repository.remove({ key })).rejects.toThrow(/escapes project root|not a directory/);
+      await expect(repository.remove({ key })).rejects.toThrow(
+        /escapes project root|not a directory/,
+      );
       expect(await fs.readdir(outside)).toEqual(['victim.json']);
       expect(await fs.readFile(path.join(outside, 'victim.json'), 'utf8')).toBe('outside bytes');
     });

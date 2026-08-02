@@ -16,7 +16,10 @@ describe('FileMockPass2Provider', () => {
       expect(loadReferenceEntries(references)).toEqual({
         E1: { prose: 'fixture prose', analysis: { eventId: 'E1' } },
       });
-      expect(new FileMockPass2Provider({ referenceDir: references })).toHaveProperty('name', 'mock-pass2');
+      expect(new FileMockPass2Provider({ referenceDir: references })).toHaveProperty(
+        'name',
+        'mock-pass2',
+      );
     });
   });
 

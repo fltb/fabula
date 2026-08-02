@@ -1,8 +1,8 @@
 import YAML from 'yaml';
 import type { ZodType } from 'zod';
+import type { ProjectSourceSnapshotV1 } from '../contracts/source.js';
 import { ConfigError } from '../errors.js';
 import { projectConfigSchema } from '../schemas/project.js';
-import type { ProjectSourceSnapshotV1 } from '../contracts/source.js';
 import type { ProjectConfig } from '../types/chapter.js';
 
 export interface ReadYamlOptions<T> {
@@ -17,7 +17,12 @@ function documentAt(snapshot: ProjectSourceSnapshotV1, logicalPath: string) {
 }
 
 /** Reads and validates one YAML document from an immutable source snapshot. */
-export function readYamlFile<T>({ logicalPath, schema, snapshot, optional = false }: ReadYamlOptions<T>): T | null {
+export function readYamlFile<T>({
+  logicalPath,
+  schema,
+  snapshot,
+  optional = false,
+}: ReadYamlOptions<T>): T | null {
   const source = documentAt(snapshot, logicalPath);
   if (!source) {
     if (optional) return null;
@@ -41,10 +46,17 @@ export function readYamlFile<T>({ logicalPath, schema, snapshot, optional = fals
   return parsed.data;
 }
 
-export function readYamlFilesInDir<T>(dirPath: string, schema: ZodType<T>, snapshot: ProjectSourceSnapshotV1): T[] {
+export function readYamlFilesInDir<T>(
+  dirPath: string,
+  schema: ZodType<T>,
+  snapshot: ProjectSourceSnapshotV1,
+): T[] {
   const prefix = dirPath.endsWith('/') ? dirPath : `${dirPath}/`;
   return snapshot.documents
-    .filter((document) => document.logicalPath.startsWith(prefix) && /\.ya?ml$/i.test(document.logicalPath))
+    .filter(
+      (document) =>
+        document.logicalPath.startsWith(prefix) && /\.ya?ml$/i.test(document.logicalPath),
+    )
     .sort((a, b) => a.logicalPath.localeCompare(b.logicalPath))
     .map((document) => readYamlFile({ logicalPath: document.logicalPath, schema, snapshot }))
     .filter((value): value is T => value !== null);

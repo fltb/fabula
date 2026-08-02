@@ -17,6 +17,7 @@
 
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import type { ProjectSourceSnapshotV1, SourceDocumentV1 } from '../../src/contracts/source.ts';
 import {
   compileBranchContracts,
   compileEditorialRun,
@@ -37,7 +38,6 @@ import {
 } from '../../src/editorial/identity.ts';
 import type { SceneCatalog } from '../../src/editorial/selector.ts';
 import { preflightSelector } from '../../src/editorial/selector.ts';
-import type { ProjectSourceSnapshotV1, SourceDocumentV1 } from '../../src/contracts/source.ts';
 import type { BranchPath } from '../../src/types/branch.ts';
 import type { SceneSelector } from '../../src/types/editorial.ts';
 import type { ReviewComment } from '../../src/types/review.ts';
@@ -117,7 +117,9 @@ function defaultDocuments(options?: {
  * content SHA‑256, and a single content‑derived sourceHash. No host paths,
  * revisions, actors, or timestamps.
  */
-function buildSnapshot(documents: Record<string, string> = defaultDocuments()): ProjectSourceSnapshotV1 {
+function buildSnapshot(
+  documents: Record<string, string> = defaultDocuments(),
+): ProjectSourceSnapshotV1 {
   const sorted = Object.entries(documents).sort(([a], [b]) => a.localeCompare(b));
   const sourceDocuments: SourceDocumentV1[] = sorted.map(([logicalPath, content]) => ({
     version: 1,

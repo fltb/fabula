@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { analyzeSource } from '../../src/entity/source-analysis.ts';
-import { buildSourceSnapshot, computeSourceDocumentHash } from '../../src/source/source-identity.ts';
 import type {
   ProjectSourceSnapshotV1,
   SourceChangeV1,
   SourceDocumentV1,
 } from '../../src/contracts/source.ts';
+import { analyzeSource } from '../../src/entity/source-analysis.ts';
+import {
+  buildSourceSnapshot,
+  computeSourceDocumentHash,
+} from '../../src/source/source-identity.ts';
 
 const hash = (value: string) => 'a'.repeat(64);
 
@@ -121,7 +124,9 @@ describe('pure source analysis', () => {
       },
     ]);
     expect(result.diagnostics.some((d) => d.code === 'SOURCE_PRECONDITION_MISMATCH')).toBe(true);
-    const doc = result.candidate.documents.find((d) => d.logicalPath === 'definitions/items/a.yaml');
+    const doc = result.candidate.documents.find(
+      (d) => d.logicalPath === 'definitions/items/a.yaml',
+    );
     expect(doc?.content).toBe('id: a\n');
     expect(doc?.contentHash).toBe(computeSourceDocumentHash('id: a\n'));
   });
@@ -129,7 +134,9 @@ describe('pure source analysis', () => {
   it('lists an event as affected when its chapter file is deleted', () => {
     const result = analyzeSource(current, [change('chapters/chapter_01/E2.yaml', null)]);
     expect(result.affectedEventIds).toEqual(['E2']);
-    expect(result.candidate.documents.map((d) => d.logicalPath)).toEqual(['definitions/items/a.yaml']);
+    expect(result.candidate.documents.map((d) => d.logicalPath)).toEqual([
+      'definitions/items/a.yaml',
+    ]);
   });
 
   it('keeps a no-op analysis byte-identical to the canonical snapshot', () => {

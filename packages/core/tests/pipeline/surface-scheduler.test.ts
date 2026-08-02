@@ -305,8 +305,7 @@ describe('AcceptedArtifactResolver', () => {
   const projectId = 'surface-test-project';
   const sourceHash = crypto.createHash('sha256').update('surface-source').digest('hex');
 
-  const hash = (value: string): string =>
-    crypto.createHash('sha256').update(value).digest('hex');
+  const hash = (value: string): string => crypto.createHash('sha256').update(value).digest('hex');
 
   function makeEnvelope(eventId: string, prose: string, decision: ReleaseDecision) {
     const proseHash = hash(prose);
@@ -391,10 +390,20 @@ describe('AcceptedArtifactResolver', () => {
     const resolver = new AcceptedArtifactResolver(execution, projectId);
     expect(await resolver.resolve('missing')).toBeNull();
 
-    await seedAcceptedArtifact(execution, 'blocked', 'Blocked prose', makeBlockedDecision(hash('blocked')));
+    await seedAcceptedArtifact(
+      execution,
+      'blocked',
+      'Blocked prose',
+      makeBlockedDecision(hash('blocked')),
+    );
     expect(await resolver.resolve('blocked')).toBeNull();
 
-    await seedAcceptedArtifact(execution, 'malformed', 'Malformed prose', makeAcceptedDecision(hash('malformed')));
+    await seedAcceptedArtifact(
+      execution,
+      'malformed',
+      'Malformed prose',
+      makeAcceptedDecision(hash('malformed')),
+    );
     const malformed = await execution.readAcceptedScene({ projectId, eventId: 'malformed' });
     if (malformed === null) throw new Error('missing seeded artifact');
     await execution.compareAndSwapAcceptedScene({
@@ -405,7 +414,12 @@ describe('AcceptedArtifactResolver', () => {
     });
     expect(await resolver.resolve('malformed')).toBeNull();
 
-    await seedAcceptedArtifact(execution, 'scoped', 'Scoped prose', makeAcceptedDecision(hash('scope-a')));
+    await seedAcceptedArtifact(
+      execution,
+      'scoped',
+      'Scoped prose',
+      makeAcceptedDecision(hash('scope-a')),
+    );
     expect(await resolver.resolve('scoped', hash('scope-b'))).toBeNull();
   });
 

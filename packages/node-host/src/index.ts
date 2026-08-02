@@ -1,4 +1,25 @@
 /** Public semantic adapters for the Node Host boundary. */
+
+export { FileRenderCacheRepository } from './cache/file-render-cache-repository.js';
+export type {
+  FileRenderCacheRepositoryOptions,
+  LayeredCacheKey,
+  RenderCacheRecord,
+  RenderCacheRepository,
+} from './cache/types.js';
+export { FileExecutionRepository } from './execution/file-execution-repository.js';
+export type { LoadedNodePlugin } from './plugins/node-plugin-catalog.js';
+export { NodePluginCatalog } from './plugins/node-plugin-catalog.js';
+export type { AiSdkProviderOptions } from './providers/ai-sdk.js';
+export { AiSdkProvider } from './providers/ai-sdk.js';
+export type { FileMockPass2Options } from './providers/file-mock-pass2.js';
+export {
+  FileMockPass2Provider,
+  loadReferenceEntries,
+} from './providers/file-mock-pass2.js';
+export { writeFileValidationReport } from './reports/file-validation-reporter.js';
+export type { FileCoreRuntimeOptions } from './runtime.js';
+export { createFileCoreRuntimeServices } from './runtime.js';
 export {
   FileProjectSourceLoader,
   FileProjectSourceLoaderImpl,
@@ -12,39 +33,6 @@ export type {
   FileProjectSourceWriterOptions,
 } from './source/types.js';
 export { SourceConflictError, SourcePathError } from './source/types.js';
-
-export {
-  createFileCoreRuntimeServices,
-} from './runtime.js';
-export type {
-  FileCoreRuntimeOptions,
-} from './runtime.js';
-
-export { AiSdkProvider } from './providers/ai-sdk.js';
-export type { AiSdkProviderOptions } from './providers/ai-sdk.js';
-
-export {
-  FileMockPass2Provider,
-  loadReferenceEntries,
-} from './providers/file-mock-pass2.js';
-export type {
-  FileMockPass2Options,
-} from './providers/file-mock-pass2.js';
-
-export { FileRenderCacheRepository } from './cache/file-render-cache-repository.js';
-export type { FileRenderCacheRepositoryOptions } from './cache/types.js';
-
-export { NodePluginCatalog } from './plugins/node-plugin-catalog.js';
-export type { LoadedNodePlugin } from './plugins/node-plugin-catalog.js';
-
-export { writeFileValidationReport } from './reports/file-validation-reporter.js';
-
-export type {
-  LayeredCacheKey,
-  RenderCacheRecord,
-  RenderCacheRepository,
-} from './cache/types.js';
-export { FileExecutionRepository } from './execution/file-execution-repository.js';
 export {
   FileStateLogRepository,
   FileStateSnapshotRepository,

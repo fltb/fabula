@@ -9,7 +9,12 @@
 
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import type { JsonValue } from '../../src/contracts/json.js';
 import { getSceneRevision } from '../../src/editorial/facade.ts';
+import type {
+  CoreExecutionRepository,
+  SceneRevisionRecord,
+} from '../../src/ports/execution-repository.ts';
 import { sceneRevisionEnvelopeV1Schema } from '../../src/schemas/editorial.ts';
 import {
   MemoryExecutionRepository,
@@ -17,11 +22,6 @@ import {
   MemoryStateLogRepository,
   MemoryStateSnapshotRepository,
 } from '../../src/testing/memory-repositories.ts';
-import type { JsonValue } from '../../src/contracts/json.js';
-import type {
-  CoreExecutionRepository,
-  SceneRevisionRecord,
-} from '../../src/ports/execution-repository.ts';
 import type {
   AnalysisResult,
   EditorialRuntime,

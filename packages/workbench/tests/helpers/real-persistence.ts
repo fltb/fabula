@@ -1,7 +1,7 @@
-import { MessageChannel } from 'node:worker_threads';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { MessageChannel } from 'node:worker_threads';
 import { afterAll } from 'vitest';
 import { start } from '../../src/persistence/worker.js';
 import { PersistenceWorkerClient } from '../../src/persistence/worker-client.js';
@@ -38,11 +38,13 @@ export interface RealPersistenceHarness {
  */
 export function createRealPersistence(databasePath?: string): RealPersistenceHarness {
   let tempDir: string | undefined;
-  const resolvedPath = databasePath ?? (() => {
-    tempDir = mkdtempSync(join(tmpdir(), 'fabula-workbench-test-'));
-    ownedTempDirs.add(tempDir);
-    return join(tempDir, 'workbench.sqlite');
-  })();
+  const resolvedPath =
+    databasePath ??
+    (() => {
+      tempDir = mkdtempSync(join(tmpdir(), 'fabula-workbench-test-'));
+      ownedTempDirs.add(tempDir);
+      return join(tempDir, 'workbench.sqlite');
+    })();
   const { port1, port2 } = new MessageChannel();
   const disposeWorker = start(port1, { databasePath: resolvedPath });
   const client = new PersistenceWorkerClient(port2);

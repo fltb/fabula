@@ -12,10 +12,10 @@
 // entirely through the repository ports.
 // ============================================================================
 
-import { sha256 } from '../../src/cache/pure-sha256.ts';
-import type { LLMProvider } from '../../src/ai/types.ts';
 import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
+import type { LLMProvider } from '../../src/ai/types.ts';
+import { sha256 } from '../../src/cache/pure-sha256.ts';
 import type { JsonValue } from '../../src/contracts/json.ts';
 import type {
   AcceptedSceneRecord,
@@ -27,9 +27,25 @@ import type {
   SceneRevisionRecord,
   TraceRecord,
 } from '../../src/ports/execution-repository.ts';
-import type { LayeredCacheKey, RenderCacheRecord, RenderCacheRepository } from '../../src/ports/render-cache-repository.ts';
-import type { Clock, CoreRuntimeServices, IdGenerator, PromptTemplate, PromptTemplateCatalog } from '../../src/ports/runtime-services.ts';
-import type { StateEvent, StateLogRepository, StateSnapshotRecord, StateSnapshotRepository, StateStreamKey } from '../../src/ports/state-repository.ts';
+import type {
+  LayeredCacheKey,
+  RenderCacheRecord,
+  RenderCacheRepository,
+} from '../../src/ports/render-cache-repository.ts';
+import type {
+  Clock,
+  CoreRuntimeServices,
+  IdGenerator,
+  PromptTemplate,
+  PromptTemplateCatalog,
+} from '../../src/ports/runtime-services.ts';
+import type {
+  StateEvent,
+  StateLogRepository,
+  StateSnapshotRecord,
+  StateSnapshotRepository,
+  StateStreamKey,
+} from '../../src/ports/state-repository.ts';
 import {
   MemoryExecutionRepository,
   MemoryRenderCacheRepository,
@@ -95,9 +111,15 @@ export class MemoryPromptTemplateCatalog implements PromptTemplateCatalog {
     this.templates.set(this.keyOf(template.name, template.version), template);
   }
 
-  async get(input: { readonly name: string; readonly version?: string }): Promise<PromptTemplate | null> {
+  async get(input: {
+    readonly name: string;
+    readonly version?: string;
+  }): Promise<PromptTemplate | null> {
     const exact = input.version ? this.keyOf(input.name, input.version) : null;
-    const hit = (exact !== null ? this.templates.get(exact) : undefined) ?? this.templates.get(this.keyOf(input.name)) ?? null;
+    const hit =
+      (exact !== null ? this.templates.get(exact) : undefined) ??
+      this.templates.get(this.keyOf(input.name)) ??
+      null;
     return hit ? { ...hit } : null;
   }
 
@@ -178,7 +200,12 @@ export interface PublicationInput {
 }
 
 export function publicationRecord(input: PublicationInput): PublicationRecord {
-  return { version: 1, projectId: input.projectId, sourceHash: input.sourceHash, value: input.value ?? {} };
+  return {
+    version: 1,
+    projectId: input.projectId,
+    sourceHash: input.sourceHash,
+    value: input.value ?? {},
+  };
 }
 
 export interface OperationInput {
@@ -188,7 +215,12 @@ export interface OperationInput {
 }
 
 export function operationRecord(input: OperationInput): OperationRecord {
-  return { version: 1, projectId: input.projectId, operationId: input.operationId, value: input.value ?? {} };
+  return {
+    version: 1,
+    projectId: input.projectId,
+    operationId: input.operationId,
+    value: input.value ?? {},
+  };
 }
 
 export interface TraceInput {
@@ -198,66 +230,155 @@ export interface TraceInput {
 }
 
 export function traceRecord(input: TraceInput): TraceRecord {
-  return { version: 1, projectId: input.projectId, operationId: input.operationId, value: input.value ?? {} };
+  return {
+    version: 1,
+    projectId: input.projectId,
+    operationId: input.operationId,
+    value: input.value ?? {},
+  };
 }
 
 // ── Accepted execution record writes through repository CAS ─────────────────
 
 function committed<T>(result: CommitResult<T>): T {
   if (result.kind === 'conflict') {
-    throw new Error(`Expected committed CAS result, got conflict (expected ${result.expectedVersion}, actual ${result.actualVersion})`);
+    throw new Error(
+      `Expected committed CAS result, got conflict (expected ${result.expectedVersion}, actual ${result.actualVersion})`,
+    );
   }
   return result.value;
 }
 
 /** CAS-write an accepted scene, throwing on version conflict, returning the record. */
-export async function commitAcceptedScene(execution: CoreExecutionRepository, input: AcceptedSceneInput, expectedVersion: number | null = null): Promise<AcceptedSceneRecord> {
+export async function commitAcceptedScene(
+  execution: CoreExecutionRepository,
+  input: AcceptedSceneInput,
+  expectedVersion: number | null = null,
+): Promise<AcceptedSceneRecord> {
   const value = acceptedSceneRecord(input);
-  return committed(await execution.compareAndSwapAcceptedScene({ projectId: value.projectId, eventId: value.eventId, expectedVersion, value }));
+  return committed(
+    await execution.compareAndSwapAcceptedScene({
+      projectId: value.projectId,
+      eventId: value.eventId,
+      expectedVersion,
+      value,
+    }),
+  );
 }
 
 /** CAS-write a scene revision, throwing on version conflict, returning the record. */
-export async function commitSceneRevision(execution: CoreExecutionRepository, input: SceneRevisionInput, expectedVersion: number | null = null): Promise<SceneRevisionRecord> {
+export async function commitSceneRevision(
+  execution: CoreExecutionRepository,
+  input: SceneRevisionInput,
+  expectedVersion: number | null = null,
+): Promise<SceneRevisionRecord> {
   const value = sceneRevisionRecord(input);
-  return committed(await execution.compareAndSwapSceneRevision({ projectId: value.projectId, eventId: value.eventId, revisionId: value.revisionId, expectedVersion, value }));
+  return committed(
+    await execution.compareAndSwapSceneRevision({
+      projectId: value.projectId,
+      eventId: value.eventId,
+      revisionId: value.revisionId,
+      expectedVersion,
+      value,
+    }),
+  );
 }
 
 /** CAS-write a review record, throwing on version conflict, returning the record. */
-export async function commitReview(execution: CoreExecutionRepository, input: ReviewInput, expectedVersion: number | null = null): Promise<ReviewRecord> {
+export async function commitReview(
+  execution: CoreExecutionRepository,
+  input: ReviewInput,
+  expectedVersion: number | null = null,
+): Promise<ReviewRecord> {
   const value = reviewRecord(input);
-  return committed(await execution.compareAndSwapReview({ projectId: value.projectId, reviewId: value.reviewId, expectedVersion, value }));
+  return committed(
+    await execution.compareAndSwapReview({
+      projectId: value.projectId,
+      reviewId: value.reviewId,
+      expectedVersion,
+      value,
+    }),
+  );
 }
 
 /** CAS-write a publication record, throwing on version conflict, returning the record. */
-export async function commitPublication(execution: CoreExecutionRepository, input: PublicationInput, expectedVersion: number | null = null): Promise<PublicationRecord> {
+export async function commitPublication(
+  execution: CoreExecutionRepository,
+  input: PublicationInput,
+  expectedVersion: number | null = null,
+): Promise<PublicationRecord> {
   const value = publicationRecord(input);
-  return committed(await execution.compareAndSwapPublication({ projectId: value.projectId, expectedVersion, value }));
+  return committed(
+    await execution.compareAndSwapPublication({
+      projectId: value.projectId,
+      expectedVersion,
+      value,
+    }),
+  );
 }
 
 /** CAS-write an operation record, throwing on version conflict, returning the record. */
-export async function commitOperation(execution: CoreExecutionRepository, input: OperationInput, expectedVersion: number | null = null): Promise<OperationRecord> {
+export async function commitOperation(
+  execution: CoreExecutionRepository,
+  input: OperationInput,
+  expectedVersion: number | null = null,
+): Promise<OperationRecord> {
   const value = operationRecord(input);
-  return committed(await execution.compareAndSwapOperation({ projectId: value.projectId, operationId: value.operationId, expectedVersion, value }));
+  return committed(
+    await execution.compareAndSwapOperation({
+      projectId: value.projectId,
+      operationId: value.operationId,
+      expectedVersion,
+      value,
+    }),
+  );
 }
 
 /** CAS-write a trace record, throwing on version conflict, returning the record. */
-export async function commitTrace(execution: CoreExecutionRepository, input: TraceInput, expectedVersion: number | null = null): Promise<TraceRecord> {
+export async function commitTrace(
+  execution: CoreExecutionRepository,
+  input: TraceInput,
+  expectedVersion: number | null = null,
+): Promise<TraceRecord> {
   const value = traceRecord(input);
-  return committed(await execution.compareAndSwapTrace({ projectId: value.projectId, operationId: value.operationId, expectedVersion, value }));
+  return committed(
+    await execution.compareAndSwapTrace({
+      projectId: value.projectId,
+      operationId: value.operationId,
+      expectedVersion,
+      value,
+    }),
+  );
 }
 
 // ── Render cache helpers ────────────────────────────────────────────────────
 
-export function layeredCacheKey(sourceHash: string, layers: Readonly<Record<string, string>> = {}): LayeredCacheKey {
+export function layeredCacheKey(
+  sourceHash: string,
+  layers: Readonly<Record<string, string>> = {},
+): LayeredCacheKey {
   return { version: 1, sourceHash, layers: { ...layers } };
 }
 
-export function renderCacheRecord(key: LayeredCacheKey, output: JsonValue, recordHash?: string): RenderCacheRecord {
-  return { version: 1, key, recordHash: recordHash ?? sha256(JSON.stringify({ key, output })), output };
+export function renderCacheRecord(
+  key: LayeredCacheKey,
+  output: JsonValue,
+  recordHash?: string,
+): RenderCacheRecord {
+  return {
+    version: 1,
+    key,
+    recordHash: recordHash ?? sha256(JSON.stringify({ key, output })),
+    output,
+  };
 }
 
 /** Seed the cache with one derived record (returned for assertions). */
-export async function putRenderCacheRecord(cache: RenderCacheRepository, key: LayeredCacheKey, output: JsonValue): Promise<RenderCacheRecord> {
+export async function putRenderCacheRecord(
+  cache: RenderCacheRepository,
+  key: LayeredCacheKey,
+  output: JsonValue,
+): Promise<RenderCacheRecord> {
   const record = renderCacheRecord(key, output);
   await cache.put({ key, record });
   return record;
@@ -265,11 +386,25 @@ export async function putRenderCacheRecord(cache: RenderCacheRepository, key: La
 
 // ── State helpers ───────────────────────────────────────────────────────────
 
-export function stateEvent(eventId: string, sequence: number, type: string, payload: JsonValue): StateEvent {
+export function stateEvent(
+  eventId: string,
+  sequence: number,
+  type: string,
+  payload: JsonValue,
+): StateEvent {
   return { eventId, sequence, type, payload };
 }
 
-export function stateSnapshotRecord(key: StateStreamKey, sequence: number, state: JsonValue, options: { readonly schema?: string; readonly schemaVersion?: number; readonly snapshotHash?: string } = {}): StateSnapshotRecord {
+export function stateSnapshotRecord(
+  key: StateStreamKey,
+  sequence: number,
+  state: JsonValue,
+  options: {
+    readonly schema?: string;
+    readonly schemaVersion?: number;
+    readonly snapshotHash?: string;
+  } = {},
+): StateSnapshotRecord {
   return {
     version: 1,
     key,
@@ -282,19 +417,32 @@ export function stateSnapshotRecord(key: StateStreamKey, sequence: number, state
 }
 
 /** Append contiguous state events at the given expected version, throwing on conflict. */
-export async function appendStateEvents(log: StateLogRepository, key: StateStreamKey, expectedVersion: number, events: readonly StateEvent[]): Promise<readonly StateEvent[]> {
+export async function appendStateEvents(
+  log: StateLogRepository,
+  key: StateStreamKey,
+  expectedVersion: number,
+  events: readonly StateEvent[],
+): Promise<readonly StateEvent[]> {
   const result = await log.append({ key, expectedVersion, events });
   if (result.kind === 'conflict') {
-    throw new Error(`Expected appended state events, got conflict (expected ${result.expectedVersion}, actual ${result.actualVersion})`);
+    throw new Error(
+      `Expected appended state events, got conflict (expected ${result.expectedVersion}, actual ${result.actualVersion})`,
+    );
   }
   return result.events;
 }
 
 /** CAS-save a state snapshot, throwing on version conflict. */
-export async function saveStateSnapshot(snapshots: StateSnapshotRepository, snapshot: StateSnapshotRecord, expectedVersion: number | null = null): Promise<void> {
+export async function saveStateSnapshot(
+  snapshots: StateSnapshotRepository,
+  snapshot: StateSnapshotRecord,
+  expectedVersion: number | null = null,
+): Promise<void> {
   const result = await snapshots.save({ snapshot, expectedVersion });
   if (result.kind === 'conflict') {
-    throw new Error(`Expected saved state snapshot, got conflict (expected ${result.expectedVersion}, actual ${result.actualVersion})`);
+    throw new Error(
+      `Expected saved state snapshot, got conflict (expected ${result.expectedVersion}, actual ${result.actualVersion})`,
+    );
   }
 }
 
@@ -345,21 +493,46 @@ export interface RuntimeServicesHarness {
  * repositories, an in-memory prompt catalog, a fixed clock, sequential IDs,
  * and an injected mock LLM.
  */
-export function createRuntimeServices(options: RuntimeServicesOptions = {}): RuntimeServicesHarness {
+export function createRuntimeServices(
+  options: RuntimeServicesOptions = {},
+): RuntimeServicesHarness {
   const execution = options.execution ?? new MemoryExecutionRepository();
   const renderCache = options.renderCache ?? new MemoryRenderCacheRepository();
   const stateLog = options.stateLog ?? new MemoryStateLogRepository();
   const stateSnapshots = options.stateSnapshots ?? new MemoryStateSnapshotRepository();
-  const promptTemplates = options.promptTemplateCatalog ?? new MemoryPromptTemplateCatalog(options.promptTemplates);
+  const promptTemplates =
+    options.promptTemplateCatalog ?? new MemoryPromptTemplateCatalog(options.promptTemplates);
   const clock = options.clock ?? new FixedClock(options.now);
   const ids = options.ids ?? new SequenceIdGenerator(options.idPrefix);
   const provider = options.provider ?? new MockPass2Provider({ entries: options.entries ?? {} });
-  const services: CoreRuntimeServices = { execution, renderCache, stateLog, stateSnapshots, promptTemplates, clock, ids, llm: provider };
-  return { services, execution, renderCache, stateLog, stateSnapshots, promptTemplates, clock, ids, provider };
+  const services: CoreRuntimeServices = {
+    execution,
+    renderCache,
+    stateLog,
+    stateSnapshots,
+    promptTemplates,
+    clock,
+    ids,
+    llm: provider,
+  };
+  return {
+    services,
+    execution,
+    renderCache,
+    stateLog,
+    stateSnapshots,
+    promptTemplates,
+    clock,
+    ids,
+    provider,
+  };
 }
 
 /** Wrap a harness into the EditorialRuntime accepted by render/preview APIs. */
-export function toEditorialRuntime(harness: RuntimeServicesHarness, extra?: Partial<EditorialRuntime>): EditorialRuntime {
+export function toEditorialRuntime(
+  harness: RuntimeServicesHarness,
+  extra?: Partial<EditorialRuntime>,
+): EditorialRuntime {
   return { services: harness.services, provider: harness.provider, ...extra };
 }
 

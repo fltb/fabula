@@ -3,32 +3,32 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
+  GIT_BASELINE_SUBJECT,
   GitBootstrap,
   GitBootstrapConflictError,
   GitBootstrapDirtyError,
   GitBootstrapRefConflictError,
-  GIT_BASELINE_SUBJECT,
 } from '../src/host/git/bootstrap.js';
 import type { GitCapability } from '../src/host/git/capability.js';
 import {
+  GIT_BASELINE_SUBJECT as BarrelGIT_BASELINE_SUBJECT,
+  GitBootstrap as BarrelGitBootstrap,
+  GitBootstrapDirtyError as BarrelGitBootstrapDirtyError,
+  GitBootstrapRefConflictError as BarrelGitBootstrapRefConflictError,
+  WORKBENCH_AUTHORING_REF as BarrelWORKBENCH_AUTHORING_REF,
+} from '../src/host/git/index.js';
+import {
+  type AuthoringEntry,
   AuthoringManifest,
   ManifestValidationError,
-  type AuthoringEntry,
 } from '../src/host/git/manifest.js';
 import {
   ControlledGitRunner,
   GitIsolationError,
-  WORKBENCH_AUTHORING_REF,
   type GitRunRequest,
   type GitRunResult,
+  WORKBENCH_AUTHORING_REF,
 } from '../src/host/git/runner.js';
-import {
-  GitBootstrap as BarrelGitBootstrap,
-  GitBootstrapDirtyError as BarrelGitBootstrapDirtyError,
-  GitBootstrapRefConflictError as BarrelGitBootstrapRefConflictError,
-  GIT_BASELINE_SUBJECT as BarrelGIT_BASELINE_SUBJECT,
-  WORKBENCH_AUTHORING_REF as BarrelWORKBENCH_AUTHORING_REF,
-} from '../src/host/git/index.js';
 
 /** All-zero OID used by `git update-ref <ref> <new> <zero>` as CAS-create. */
 const ZERO_OID = '0'.repeat(40);
@@ -55,7 +55,10 @@ const baselineEntries = (): AuthoringEntry[] => [
   entry('chapters/chapter_01/_chapter.yaml', 'title: Opening\n'),
 ];
 
-const sortedEntryPaths = (): string[] => baselineEntries().map((item) => item.path).sort();
+const sortedEntryPaths = (): string[] =>
+  baselineEntries()
+    .map((item) => item.path)
+    .sort();
 
 const bootstrapFor = (runner: ControlledGitRunner, projectRoot: string): GitBootstrap =>
   new GitBootstrap({

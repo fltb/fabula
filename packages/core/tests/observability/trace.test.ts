@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TraceCollector } from '../../src/observability/trace.ts';
+
 const trace = (jobId: string, traceId = jobId) =>
   new TraceCollector(jobId, traceId, { now: () => '2026-08-02T00:00:00.000Z' });
 
@@ -187,7 +188,11 @@ describe('TraceCollector', () => {
   });
 
   it('records the injected clock timestamp verbatim for every event', () => {
-    const stamps = ['2001-02-03T04:05:06.000Z', '2002-03-04T05:06:07.000Z', '2003-04-05T06:07:08.000Z'];
+    const stamps = [
+      '2001-02-03T04:05:06.000Z',
+      '2002-03-04T05:06:07.000Z',
+      '2003-04-05T06:07:08.000Z',
+    ];
     let i = 0;
     const traces = new TraceCollector('job-seq', 'trace-seq', {
       now: () => stamps[i++] ?? '2004-05-06T07:08:09.000Z',

@@ -8,8 +8,8 @@
 // keeps the shape consumed by editorial publishing and assembly consumers.
 // ============================================================================
 
-import { countNarrativeText, NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/count.ts';
 import type { Message } from '../ai/types.ts';
+import { countNarrativeText, NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/count.ts';
 import type { JsonValue } from '../contracts/json.ts';
 import type { BranchSet, Condition } from '../types/branch.ts';
 import type { GameDialogueChoice } from '../types/index.ts';
@@ -120,9 +120,7 @@ function conditionToJsonValue(condition: Condition): JsonValue {
   return json;
 }
 
-function toJsonSafeRenderRequestRecord(
-  record: RenderRequestRecord,
-): RenderRequestRecordOutputV1 {
+function toJsonSafeRenderRequestRecord(record: RenderRequestRecord): RenderRequestRecordOutputV1 {
   return {
     phase: record.phase,
     attempt: record.attempt,
@@ -166,10 +164,7 @@ export function appendPlayerChoicesBlock(
  * Emits explicit JSON-safe values: absent relationship state is omitted
  * rather than written as an undefined field.
  */
-function collectAllReferenceFiles(
-  jobs: RenderJob[],
-  results: RenderSceneResult[],
-): DerivedData {
+function collectAllReferenceFiles(jobs: RenderJob[], results: RenderSceneResult[]): DerivedData {
   const resultMap = new Map(results.map((r) => [r.eventId, r]));
   const threads: Record<string, unknown> = {};
   const foreshadowing: Array<Record<string, unknown>> = [];
@@ -234,10 +229,7 @@ function collectAllReferenceFiles(
 }
 
 /** Build JSON-safe scene metadata for an output entry. */
-function buildEntryMetadata(
-  job: RenderJob,
-  result: RenderSceneResult,
-): Record<string, JsonValue> {
+function buildEntryMetadata(job: RenderJob, result: RenderSceneResult): Record<string, JsonValue> {
   const metadata: Record<string, JsonValue> = {
     schema_version: 1,
     event: job.event.id,
@@ -252,9 +244,7 @@ function buildEntryMetadata(
     branch_existence: branchSetToJsonValue(job.event.branchExistence ?? { type: 'all' }),
   };
   if (job.gameDialogue) {
-    metadata.player_choices = job.gameDialogue.choices.map((choice) =>
-      toJsonSafeValue(choice),
-    );
+    metadata.player_choices = job.gameDialogue.choices.map((choice) => toJsonSafeValue(choice));
   }
   return metadata;
 }

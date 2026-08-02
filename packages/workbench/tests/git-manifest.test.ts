@@ -110,9 +110,9 @@ describe('classifyAuthoringPath', () => {
     expect(classifyAuthoringPath('data/project.sqlite').code).toBe('unknown-extension');
     expect(classifyAuthoringPath('.nova/workbench.sqlite').code).toBe('nova-runtime-path');
     const sqliteHeader = utf8('SQLite format 3\u0000');
-    expect(new AuthoringManifest().checkEntry({ path: 'nova.yaml', bytes: sqliteHeader }).code).toBe(
-      'nul-byte',
-    );
+    expect(
+      new AuthoringManifest().checkEntry({ path: 'nova.yaml', bytes: sqliteHeader }).code,
+    ).toBe('nul-byte');
   });
 });
 
@@ -275,7 +275,15 @@ describe('AuthoringManifest adopt-scene proof', () => {
 describe('AuthoringManifest staging surface', () => {
   it('exposes no generic staging API — validation is the only entry point', () => {
     const proto = AuthoringManifest.prototype as unknown as Record<string, unknown>;
-    for (const name of ['stage', 'stageAll', 'add', 'addAll', 'updateIndex', 'writeTree', 'commit']) {
+    for (const name of [
+      'stage',
+      'stageAll',
+      'add',
+      'addAll',
+      'updateIndex',
+      'writeTree',
+      'commit',
+    ]) {
       expect(proto[name]).toBeUndefined();
     }
   });

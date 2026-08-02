@@ -961,10 +961,7 @@ describe('credential absence (offline)', () => {
         },
         { services },
       );
-      const allErrors = [
-        ...result.errors,
-        ...result.results.flatMap((r) => r.errors ?? []),
-      ];
+      const allErrors = [...result.errors, ...result.results.flatMap((r) => r.errors ?? [])];
       expect(allErrors.some((error) => error.includes('PROVIDER_REQUIRED'))).toBe(true);
     } finally {
       if (previousApiKey === undefined) {

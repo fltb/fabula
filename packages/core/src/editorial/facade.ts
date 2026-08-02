@@ -1,10 +1,10 @@
-import { analyzeSource } from '../entity/source-analysis.ts';
 import type {
   ProjectSourceSnapshotV1,
   SourceAnalysisV1,
   SourceChangeV1,
   SourceDocumentV1,
 } from '../contracts/source.ts';
+import { analyzeSource } from '../entity/source-analysis.ts';
 import type { CoreExecutionRepository } from '../ports/execution-repository.ts';
 import type { CoreRuntimeServices } from '../ports/runtime-services.ts';
 import type {

@@ -5,7 +5,9 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyBranchPath } from '../src/branch/index.js';
+import type { JsonValue } from '../src/contracts/json.js';
 import { compileEntityTypeCatalog } from '../src/entity/entity-catalog-compiler.js';
+import type { StateEvent, StateStreamKey } from '../src/ports/state-repository.js';
 import { EventStore, ReplayEngine, SnapshotEngine, StateManager } from '../src/state/index.js';
 import { applyRuleTransaction } from '../src/state/rule-replay.js';
 import {
@@ -26,8 +28,6 @@ import type {
   Snapshot,
   WorldState,
 } from '../src/types/index.js';
-import type { StateEvent, StateStreamKey } from '../src/ports/state-repository.js';
-import type { JsonValue } from '../src/contracts/json.js';
 
 // ============================================================================
 // Helpers — test event factories

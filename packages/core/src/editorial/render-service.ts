@@ -24,45 +24,42 @@
 import { BatchRenderPipeline } from '../batch-renderer.ts';
 import type { CompiledGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import { sha256 } from '../cache/pure-sha256.ts';
-import type { JsonValue } from '../contracts/json.js';
-import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
 import { ContextCompiler } from '../context/compiler.ts';
 import { PromptAssembler } from '../context/prompt-assembler.ts';
+import type { JsonValue } from '../contracts/json.js';
+import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
+import type { ProjectData } from '../entity/index.js';
 import {
+  type CanonicalProjectIR,
   compileCanonicalRuntime,
   loadCanonicalProject,
-  type CanonicalProjectIR,
 } from '../entity/project-runtime.ts';
-import type { ProjectData } from '../entity/index.js';
 import type { TypedEventBus } from '../event-bus.ts';
 import { TraceCollector } from '../observability/trace.ts';
 import {
   evaluateReleaseDecision,
   PASS1_PROMPT_TEMPLATE_NAME,
-  RenderPipeline,
-  SurfaceScheduler,
   type ProviderCallLedgerEntry,
   type RenderJob,
+  RenderPipeline,
   type RenderPipelineOptions,
   type RenderSceneResult,
+  SurfaceScheduler,
 } from '../pipeline/index.ts';
 import { appendPlayerChoicesBlock } from '../pipeline/output.ts';
-import type { AcceptedSceneRecord, CoreExecutionRepository } from '../ports/execution-repository.ts';
-import type { Clock, IdGenerator } from '../ports/runtime-services.ts';
-import { SurfacePlanner } from '../render/surface-planner.ts';
-import { canonicalJson, compileSceneContract, computeSha256Hex } from '../render/scene-contract.ts';
-import { ReviewManager } from '../review/manager.ts';
-import { LogicalDisclosureSummaryCompiler, SurfaceReferenceExtractor } from '../summary/index.ts';
-import type { CompiledNarrativeRuntime } from '../state/narrative-runtime.ts';
-import { resolveDiscourseBranch } from '../state/discourse-sequence.ts';
-import type { SystemContext } from '../types/context.ts';
-import type { BranchPath } from '../types/branch.ts';
 import type {
-  EntityTypeCatalog,
-  NarrativeEvent,
-  ReleaseDecision,
-  RevisionContext,
-} from '../types/index.ts';
+  AcceptedSceneRecord,
+  CoreExecutionRepository,
+} from '../ports/execution-repository.ts';
+import type { Clock, IdGenerator } from '../ports/runtime-services.ts';
+import { canonicalJson, compileSceneContract, computeSha256Hex } from '../render/scene-contract.ts';
+import { SurfacePlanner } from '../render/surface-planner.ts';
+import { ReviewManager } from '../review/manager.ts';
+import { resolveDiscourseBranch } from '../state/discourse-sequence.ts';
+import type { CompiledNarrativeRuntime } from '../state/narrative-runtime.ts';
+import { LogicalDisclosureSummaryCompiler, SurfaceReferenceExtractor } from '../summary/index.ts';
+import type { BranchPath } from '../types/branch.ts';
+import type { SystemContext } from '../types/context.ts';
 import type {
   EditorialError,
   EditorialErrorCode,
@@ -81,10 +78,16 @@ import type {
   SceneRevisionOrigin,
 } from '../types/editorial.ts';
 import type {
+  EntityTypeCatalog,
+  NarrativeEvent,
+  ReleaseDecision,
+  RevisionContext,
+} from '../types/index.ts';
+import type {
   AcceptedSceneArtifact,
   RenderGroup,
-  SurfacePlanResult,
   SurfacePlannerOptions,
+  SurfacePlanResult,
 } from '../types/render-surface.ts';
 import type { ReviewComment } from '../types/review.ts';
 import { ResultAggregator } from '../validator/aggregator.ts';
@@ -96,11 +99,11 @@ import {
   sortReviewFeedback,
 } from './compiler.ts';
 import { EditorialOperationError } from './errors.ts';
-import { preflightSelector, type SceneCatalog } from './selector.ts';
 import {
   BUILT_IN_VALIDATOR_IMPLEMENTATION_VERSION,
   type ValidationIdentityInput,
 } from './identity.ts';
+import { preflightSelector, type SceneCatalog } from './selector.ts';
 
 // ============================================================================
 // Local helpers
@@ -154,7 +157,6 @@ function initialize(source: ProjectSourceSnapshotV1): ProjectInitialization {
     },
   };
 }
-
 
 function requiresProviderByEventId(
   events: readonly NarrativeEvent[],
@@ -443,9 +445,7 @@ function applySurfacePlanToJobs(jobs: RenderJob[], plan: SurfacePlanResult): voi
 
     const predecessorGroupId = groupPredecessors.get(groupId);
     if (predecessorGroupId !== undefined) {
-      const predecessorGroup = groups.find(
-        (candidate) => candidate.groupId === predecessorGroupId,
-      );
+      const predecessorGroup = groups.find((candidate) => candidate.groupId === predecessorGroupId);
       if (predecessorGroup && predecessorGroup.sceneIds.length > 0) {
         predecessorEventId = predecessorGroup.sceneIds[predecessorGroup.sceneIds.length - 1];
       }
@@ -573,7 +573,6 @@ function mapSceneResult(
   };
 }
 
-
 function buildPublication(
   selectedEventIds: readonly string[],
   decisions: ReadonlyMap<string, ReleaseDecision>,
@@ -662,8 +661,16 @@ function buildRevisionEnvelope(
 }
 
 type AcceptedPromotion =
-  | { readonly kind: 'committed'; readonly revisionId: string; readonly envelope: SceneRevisionEnvelopeV1 }
-  | { readonly kind: 'conflict'; readonly revisionId: string; readonly envelope: SceneRevisionEnvelopeV1 };
+  | {
+      readonly kind: 'committed';
+      readonly revisionId: string;
+      readonly envelope: SceneRevisionEnvelopeV1;
+    }
+  | {
+      readonly kind: 'conflict';
+      readonly revisionId: string;
+      readonly envelope: SceneRevisionEnvelopeV1;
+    };
 
 /**
  * Promote a released candidate to the accepted head. The scene revision record
@@ -756,7 +763,7 @@ interface AcceptedSceneRecordLike {
 function buildFailedResult(
   operationId: string,
   editorialErrors: readonly EditorialError[],
-  planSummary: EditorialPlanSummaryV1,
+  _planSummary: EditorialPlanSummaryV1,
 ): RenderNovelResult {
   return {
     operationId,
@@ -772,7 +779,6 @@ function buildFailedResult(
   };
 }
 
-
 // ============================================================================
 // Progress events
 // ============================================================================
@@ -782,7 +788,14 @@ function createProgressEmitter(
   operationId: string,
   clock: Clock,
 ): {
-  emit(event: { kind: string; eventId?: string; phase?: string; completedScenes?: number; totalScenes?: number; disposition?: string }): void;
+  emit(event: {
+    kind: string;
+    eventId?: string;
+    phase?: string;
+    completedScenes?: number;
+    totalScenes?: number;
+    disposition?: string;
+  }): void;
 } {
   let sequence = 0;
   return {
@@ -814,10 +827,7 @@ function assertRuntime(runtime: EditorialRuntime): asserts runtime is EditorialR
     );
   }
   if (!runtime.services) {
-    throw new EditorialOperationError(
-      'INVALID_OPERATION',
-      'Runtime services are required',
-    );
+    throw new EditorialOperationError('INVALID_OPERATION', 'Runtime services are required');
   }
 }
 
@@ -971,7 +981,6 @@ export function composeRevisionDirective(
   return parts.join('\n');
 }
 
-
 export function persistInlineInstructionReview(): string | null {
   return null;
 }
@@ -1019,7 +1028,12 @@ export async function executeEditorialRender(
   const preflight = preflightSelector(request.selector, init.catalog);
   const acceptedHeads = await resolveAcceptedHeads(execution, projectId, preflight.eventIds);
   const plan = compileEditorialRun(
-    buildCompileInput(init, request, reviewComments, buildLatestRevisions(preflight.eventIds, acceptedHeads)),
+    buildCompileInput(
+      init,
+      request,
+      reviewComments,
+      buildLatestRevisions(preflight.eventIds, acceptedHeads),
+    ),
   );
 
   if (plan.selectorErrors.length > 0) {
@@ -1035,9 +1049,12 @@ export async function executeEditorialRender(
   // Revision preflight: every explicitly revised scene must resolve an
   // accepted base. Missing bases block before any provider call.
   const revisionStates = new Map(
-    buildEventRevisionStates(plan.selectedEventIds, request.revision, reviewComments, acceptedHeads).map(
-      (state) => [state.eventId, state] as const,
-    ),
+    buildEventRevisionStates(
+      plan.selectedEventIds,
+      request.revision,
+      reviewComments,
+      acceptedHeads,
+    ).map((state) => [state.eventId, state] as const),
   );
   const noAcceptedBaseErrors = collectNoAcceptedBaseErrors([...revisionStates.values()]);
   if (noAcceptedBaseErrors.length > 0) {
@@ -1045,17 +1062,15 @@ export async function executeEditorialRender(
     return buildFailedResult(operationId, noAcceptedBaseErrors, plan.planSummary);
   }
 
-
   // ── 2. Canonical runtime + surface plan ──────────────────────────────
   const discourseBranch = request.discourseBranch;
   const compiledRuntime = compileCanonicalRuntime(init.ir, {
     branchPath: request.branchPath,
     discourseBranch,
   });
-  const resolvedModel =
-    request.model ?? init.data.config?.defaultModel ?? 'default';
+  const resolvedModel = request.model ?? init.data.config?.defaultModel ?? 'default';
 
-  let jobs = buildRenderJobs(
+  const jobs = buildRenderJobs(
     plan,
     init,
     request,
@@ -1066,7 +1081,12 @@ export async function executeEditorialRender(
     reviewComments,
   );
   if (init.data.config?.renderSurface) {
-    const surfacePlan = compileConfiguredSurfacePlan(init.data, jobs, request.branchPath, runtime.services.clock);
+    const surfacePlan = compileConfiguredSurfacePlan(
+      init.data,
+      jobs,
+      request.branchPath,
+      runtime.services.clock,
+    );
     if (surfacePlan) applySurfacePlanToJobs(jobs, surfacePlan);
   }
 
@@ -1076,19 +1096,8 @@ export async function executeEditorialRender(
     if (candidateJob) candidateJob.proseCandidate = candidateExecution.prose;
   }
 
-  const traceCollector = new TraceCollector(
-    operationId,
-    operationId,
-    runtime.services.clock,
-  );
-  const pipeline = buildPipeline(
-    runtime,
-    init,
-    plan,
-    request,
-    resolvedModel,
-    traceCollector,
-  );
+  const traceCollector = new TraceCollector(operationId, operationId, runtime.services.clock);
+  const pipeline = buildPipeline(runtime, init, plan, request, resolvedModel, traceCollector);
 
   // ── 3. Wave-based execution ──────────────────────────────────────────
   const extractor = new SurfaceReferenceExtractor(
@@ -1201,9 +1210,7 @@ export async function executeEditorialRender(
     if (waveJobs.length === 0) continue;
 
     const waveResults = request.batch
-      ? (
-          await new BatchRenderPipeline(pipeline).renderBatched(waveJobs, request.batch)
-        ).results
+      ? (await new BatchRenderPipeline(pipeline).renderBatched(waveJobs, request.batch)).results
       : await pipeline.renderAll(waveJobs, runtime.signal);
 
     for (const result of waveResults) {
@@ -1353,15 +1360,10 @@ export async function executeEditorialRender(
       sceneDispositions.get(result.eventId) ?? 'candidate_blocked',
     ),
   );
-  const publication = buildPublication(
-    plan.selectedEventIds,
-    decisions,
-    editorialErrors,
-  );
+  const publication = buildPublication(plan.selectedEventIds, decisions, editorialErrors);
   const resultErrors = editorialErrors.map((error) => error.message);
   const operationSucceeded =
-    publication.status === 'current' &&
-    mappedResults.every((result) => result.released);
+    publication.status === 'current' && mappedResults.every((result) => result.released);
 
   const completedAt = runtime.services.clock.now();
   await execution.compareAndSwapOperation({
@@ -1491,7 +1493,10 @@ export async function previewEditorialRun(
   assertRuntime(runtime);
   const init = initialize(request.source);
   const projectId = init.data.config?.project ?? 'default-project';
-  const reviewComments = await new ReviewManager(runtime.services.execution, projectId).getComments();
+  const reviewComments = await new ReviewManager(
+    runtime.services.execution,
+    projectId,
+  ).getComments();
   const preflight = preflightSelector(request.selector, init.catalog);
   const acceptedHeads = await resolveAcceptedHeads(
     runtime.services.execution,
@@ -1499,7 +1504,12 @@ export async function previewEditorialRun(
     preflight.eventIds,
   );
   const plan = compileEditorialRun(
-    buildCompileInput(init, request, reviewComments, buildLatestRevisions(preflight.eventIds, acceptedHeads)),
+    buildCompileInput(
+      init,
+      request,
+      reviewComments,
+      buildLatestRevisions(preflight.eventIds, acceptedHeads),
+    ),
   );
 
   const scenes = plan.scenes.map((scene) => ({
@@ -1525,9 +1535,12 @@ export async function previewEditorialRun(
   }
 
   const revisionStates = new Map(
-    buildEventRevisionStates(plan.selectedEventIds, request.revision, reviewComments, acceptedHeads).map(
-      (state) => [state.eventId, state] as const,
-    ),
+    buildEventRevisionStates(
+      plan.selectedEventIds,
+      request.revision,
+      reviewComments,
+      acceptedHeads,
+    ).map((state) => [state.eventId, state] as const),
   );
   const noAcceptedBaseErrors = collectNoAcceptedBaseErrors([...revisionStates.values()]);
   if (noAcceptedBaseErrors.length > 0) {
@@ -1684,13 +1697,12 @@ export async function executeEditorialTreeRender(
     results,
     errors,
     editorialErrors,
-    publication:
-      publication ?? {
-        status: 'unchanged',
-        outputPath: '',
-        novelHash: null,
-        reasons: [],
-      },
+    publication: publication ?? {
+      status: 'unchanged',
+      outputPath: '',
+      novelHash: null,
+      reasons: [],
+    },
   };
 }
 

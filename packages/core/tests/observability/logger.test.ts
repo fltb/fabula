@@ -230,9 +230,12 @@ describe('Logger', () => {
         module: 'json',
       });
       jsonLogger.info('json');
-      const replacementLogger = new Logger(new JsonlLogTransport((line) => secondLines.push(line)), {
-        module: 'replacement',
-      });
+      const replacementLogger = new Logger(
+        new JsonlLogTransport((line) => secondLines.push(line)),
+        {
+          module: 'replacement',
+        },
+      );
       replacementLogger.info('replacement');
 
       expect(memTransport.entries).toHaveLength(1);
@@ -257,7 +260,6 @@ describe('Logger', () => {
       expect(transportA.entries[0].context.module).toBe('a');
       expect(transportB.entries[0].context.module).toBe('b');
     });
-
   });
 
   describe('error handling', () => {

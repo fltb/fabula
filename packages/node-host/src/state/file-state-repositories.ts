@@ -1,7 +1,25 @@
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
-import type { StateAppendResult, StateEvent, StateLogReadResult, StateLogRepository, StateSnapshotRecord, StateSnapshotRepository, StateSnapshotWriteResult, StateStreamKey } from '@novalistically/core';
-import { atomicWrite, assertSafeDirectory, clone, encodeKey, isMissing, prepareDirectory, recoverJournal, withDirectoryLock } from '../execution/types.js';
+import type {
+  StateAppendResult,
+  StateEvent,
+  StateLogReadResult,
+  StateLogRepository,
+  StateSnapshotRecord,
+  StateSnapshotRepository,
+  StateSnapshotWriteResult,
+  StateStreamKey,
+} from '@novalistically/core';
+import {
+  assertSafeDirectory,
+  atomicWrite,
+  clone,
+  encodeKey,
+  isMissing,
+  prepareDirectory,
+  recoverJournal,
+  withDirectoryLock,
+} from '../execution/types.js';
 
 const streamId = (key: StateStreamKey) => ['state', key.projectId, key.streamId, key.branchId];
 
@@ -56,10 +74,7 @@ export class FileStateLogRepository implements StateLogRepository {
     });
   }
 
-  async read(input: {
-    key: StateStreamKey;
-    fromSequence?: number;
-  }): Promise<StateLogReadResult> {
+  async read(input: { key: StateStreamKey; fromSequence?: number }): Promise<StateLogReadResult> {
     try {
       await assertSafeDirectory(this.#root, this.#directory);
       await recoverJournal(this.#root, this.#directory);
@@ -146,7 +161,12 @@ const isStoredStateLog = (value: unknown, key: StateStreamKey): value is StoredS
 export class FileStateSnapshotRepository implements StateSnapshotRepository {
   readonly #root: string;
   readonly #directory: string;
-  constructor(projectRoot: string, relativeDirectory = path.join('.nova', 'state-snapshots')) { this.#root = path.resolve(projectRoot); this.#directory = path.resolve(this.#root, relativeDirectory); if (!this.#directory.startsWith(`${this.#root}${path.sep}`)) throw new Error('Snapshot directory escapes project root'); }
+  constructor(projectRoot: string, relativeDirectory = path.join('.nova', 'state-snapshots')) {
+    this.#root = path.resolve(projectRoot);
+    this.#directory = path.resolve(this.#root, relativeDirectory);
+    if (!this.#directory.startsWith(`${this.#root}${path.sep}`))
+      throw new Error('Snapshot directory escapes project root');
+  }
   async save(input: {
     snapshot: StateSnapshotRecord;
     expectedVersion: number | null;
@@ -170,14 +190,31 @@ export class FileStateSnapshotRepository implements StateSnapshotRepository {
       return { kind: 'saved', sequence: input.snapshot.sequence, version: records.length };
     });
   }
-  async readNearestValid(input: { key: StateStreamKey; atOrBeforeSequence: number; schema: string; schemaVersion: number }): Promise<StateSnapshotRecord | null> {
-    try { await assertSafeDirectory(this.#root, this.#directory); await recoverJournal(this.#root, this.#directory); } catch (error) { if (!isMissing(error)) throw error; }
+  async readNearestValid(input: {
+    key: StateStreamKey;
+    atOrBeforeSequence: number;
+    schema: string;
+    schemaVersion: number;
+  }): Promise<StateSnapshotRecord | null> {
+    try {
+      await assertSafeDirectory(this.#root, this.#directory);
+      await recoverJournal(this.#root, this.#directory);
+    } catch (error) {
+      if (!isMissing(error)) throw error;
+    }
     const records = await this.#read(this.#file(input.key), input.key);
-    const valid = records.filter((snapshot) => snapshot.sequence <= input.atOrBeforeSequence && snapshot.schema === input.schema && snapshot.schemaVersion === input.schemaVersion);
+    const valid = records.filter(
+      (snapshot) =>
+        snapshot.sequence <= input.atOrBeforeSequence &&
+        snapshot.schema === input.schema &&
+        snapshot.schemaVersion === input.schemaVersion,
+    );
     valid.sort((a, b) => b.sequence - a.sequence);
     return valid[0] ? clone(valid[0]) : null;
   }
-  #file(key: StateStreamKey) { return path.join(this.#directory, `${encodeKey(streamId(key))}.json`); }
+  #file(key: StateStreamKey) {
+    return path.join(this.#directory, `${encodeKey(streamId(key))}.json`);
+  }
   async #read(file: string, key: StateStreamKey): Promise<StateSnapshotRecord[]> {
     let raw: string;
     try {
@@ -195,7 +232,8 @@ export class FileStateSnapshotRepository implements StateSnapshotRepository {
     }
   }
 }
-const isObject = (value: unknown): value is Record<string, any> => typeof value === 'object' && value !== null;
+const isObject = (value: unknown): value is Record<string, any> =>
+  typeof value === 'object' && value !== null;
 
 const isStateSnapshotRecord = (value: unknown, key: StateStreamKey): value is StateSnapshotRecord =>
   isObject(value) &&

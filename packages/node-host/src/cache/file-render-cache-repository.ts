@@ -40,7 +40,12 @@ export class FileRenderCacheRepository implements RenderCacheRepository {
       const text = await fs.readFile(file, 'utf8');
       const parsed: unknown = JSON.parse(text);
       const result = renderCacheRecordSchema.safeParse(parsed);
-      if (!result.success || !sameKey(result.data.key, input.key) || result.data.version !== CACHE_VERSION) return null;
+      if (
+        !result.success ||
+        !sameKey(result.data.key, input.key) ||
+        result.data.version !== CACHE_VERSION
+      )
+        return null;
       return result.data;
     } catch (error) {
       if (isMissing(error)) return null;
@@ -49,7 +54,10 @@ export class FileRenderCacheRepository implements RenderCacheRepository {
     }
   }
 
-  async put(input: { readonly key: LayeredCacheKey; readonly record: RenderCacheRecord }): Promise<void> {
+  async put(input: {
+    readonly key: LayeredCacheKey;
+    readonly record: RenderCacheRecord;
+  }): Promise<void> {
     if (input.record.version !== CACHE_VERSION || !sameKey(input.record.key, input.key)) {
       throw new Error('Render cache record does not match its key or version');
     }
@@ -62,7 +70,11 @@ export class FileRenderCacheRepository implements RenderCacheRepository {
     const file = this.#fileFor(input.key);
     const temporary = `${file}.${process.pid}.${Date.now().toString(36)}.tmp`;
     try {
-      await fs.writeFile(temporary, JSON.stringify(checked.data), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      await fs.writeFile(temporary, JSON.stringify(checked.data), {
+        encoding: 'utf8',
+        mode: 0o600,
+        flag: 'wx',
+      });
       await fs.rename(temporary, file);
     } finally {
       await fs.rm(temporary, { force: true }).catch(() => undefined);
@@ -117,7 +129,8 @@ export class FileRenderCacheRepository implements RenderCacheRepository {
     const cache = await fs.realpath(this.#cacheDirectory);
     if (!isContained(root, cache)) throw new Error('Render cache directory escapes project root');
     const stat = await fs.lstat(this.#cacheDirectory);
-    if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('Render cache directory is not a directory');
+    if (stat.isSymbolicLink() || !stat.isDirectory())
+      throw new Error('Render cache directory is not a directory');
   }
 }
 
@@ -127,6 +140,12 @@ const canonicalKey = (key: LayeredCacheKey) => ({
   layers: Object.fromEntries(Object.entries(key.layers).sort(([a], [b]) => a.localeCompare(b))),
 });
 
-const sameKey = (a: LayeredCacheKey, b: LayeredCacheKey): boolean => JSON.stringify(canonicalKey(a)) === JSON.stringify(canonicalKey(b));
-const isContained = (root: string, target: string): boolean => target === root || target.startsWith(`${root}${path.sep}`);
-const isMissing = (error: unknown): boolean => typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === 'ENOENT';
+const sameKey = (a: LayeredCacheKey, b: LayeredCacheKey): boolean =>
+  JSON.stringify(canonicalKey(a)) === JSON.stringify(canonicalKey(b));
+const isContained = (root: string, target: string): boolean =>
+  target === root || target.startsWith(`${root}${path.sep}`);
+const isMissing = (error: unknown): boolean =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  (error as { code?: string }).code === 'ENOENT';

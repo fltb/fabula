@@ -89,11 +89,7 @@ export class Logger {
   private readonly context: LogContext;
   private readonly clock: Clock;
 
-  constructor(
-    transport?: LogTransport,
-    context: LogContext = { module: 'core' },
-    clock?: Clock,
-  ) {
+  constructor(transport?: LogTransport, context: LogContext = { module: 'core' }, clock?: Clock) {
     // Default transport is non-emitting: logging only happens where a
     // host explicitly injects one.
     this.transport = transport ?? new JsonlLogTransport();

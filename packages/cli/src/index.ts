@@ -4,33 +4,35 @@ import * as crypto from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
 import {
-  compileProject,
+  type BranchPath,
   getProjectStatus,
+  type LLMProvider,
   listEntities,
   showEntity,
   validateNovel,
-  type BranchPath,
-  type LLMProvider,
 } from '@novalistically/core';
 import {
-  compileGameDialogueTree,
-  previewEditorialRun,
-  previewSourceChange,
-  renderGameDialogueTree,
-  renderNovel,
   type EditorialRenderRequestV1,
   type EditorialRuntime,
+  previewEditorialRun,
+  previewSourceChange,
   type RenderGameDialogueTreeRequestV1,
+  renderGameDialogueTree,
+  renderNovel,
   type SceneSelector,
   type SourceChangeV1,
 } from '@novalistically/core/editorial';
-import { exportDAGtoDOT, exportDAGtoMermaid, inspectProjectGraph } from '@novalistically/core/tooling';
+import {
+  exportDAGtoDOT,
+  exportDAGtoMermaid,
+  inspectProjectGraph,
+} from '@novalistically/core/tooling';
 import {
   AiSdkProvider,
-  FileProjectSourceLoader,
-  FileProjectSourceWriter,
   createFileCoreRuntimeServices,
   FileMockPass2Provider,
+  FileProjectSourceLoader,
+  FileProjectSourceWriter,
 } from '@novalistically/node-host';
 import { Command } from 'commander';
 import { resolveRoute } from './route.ts';
@@ -65,15 +67,12 @@ function parseBranchPath(raw: string | undefined): BranchPath | undefined {
   return value as BranchPath;
 }
 
-function selector(input: {
-  eventId?: string;
-  all?: boolean;
-  chapter?: string;
-}): SceneSelector {
+function selector(input: { eventId?: string; all?: boolean; chapter?: string }): SceneSelector {
   if (input.all) return { type: 'all' };
   if (input.chapter !== undefined) {
     const chapter = Number(input.chapter);
-    if (!Number.isInteger(chapter) || chapter < 1) throw new Error('--chapter must be a positive integer');
+    if (!Number.isInteger(chapter) || chapter < 1)
+      throw new Error('--chapter must be a positive integer');
     return { type: 'chapter', chapter };
   }
   if (!input.eventId) throw new Error('Provide an event ID, --all, or --chapter.');
@@ -117,7 +116,10 @@ program
       if (!event.passed) process.exitCode = 1;
       return;
     }
-    printResult({ passed: result.passed, results: Object.fromEntries(result.results), iss: result.iss }, options.json ?? false);
+    printResult(
+      { passed: result.passed, results: Object.fromEntries(result.results), iss: result.iss },
+      options.json ?? false,
+    );
     if (!result.passed) process.exitCode = 1;
   });
 
@@ -150,23 +152,34 @@ program
   .action((options: { format: 'dot' | 'mermaid' }) => {
     const graph = inspectProjectGraph(loadSource(ensureProjectDir()));
     const events = graph.events.map((event) => ({ eventId: event.id, label: event.title }));
-    console.log(options.format === 'mermaid' ? exportDAGtoMermaid(graph.adjacency, events) : exportDAGtoDOT(graph.adjacency, events));
+    console.log(
+      options.format === 'mermaid'
+        ? exportDAGtoMermaid(graph.adjacency, events)
+        : exportDAGtoDOT(graph.adjacency, events),
+    );
   });
 
-const source = program.command('source').description('Inspect and apply host-CAS authoring source changes');
-source
-  .command('list')
-  .action(() => {
-    const snapshot = loadSource(ensureProjectDir());
-    printResult(snapshot.documents.map((document) => ({ logicalPath: document.logicalPath, contentHash: document.contentHash, diagnostics: document.diagnostics })), true);
-  });
-source
-  .command('show <logicalPath>')
-  .action((logicalPath: string) => {
-    const document = loadSource(ensureProjectDir()).documents.find((candidate) => candidate.logicalPath === logicalPath);
-    if (!document) throw new Error(`Source document "${logicalPath}" not found.`);
-    process.stdout.write(document.content);
-  });
+const source = program
+  .command('source')
+  .description('Inspect and apply host-CAS authoring source changes');
+source.command('list').action(() => {
+  const snapshot = loadSource(ensureProjectDir());
+  printResult(
+    snapshot.documents.map((document) => ({
+      logicalPath: document.logicalPath,
+      contentHash: document.contentHash,
+      diagnostics: document.diagnostics,
+    })),
+    true,
+  );
+});
+source.command('show <logicalPath>').action((logicalPath: string) => {
+  const document = loadSource(ensureProjectDir()).documents.find(
+    (candidate) => candidate.logicalPath === logicalPath,
+  );
+  if (!document) throw new Error(`Source document "${logicalPath}" not found.`);
+  process.stdout.write(document.content);
+});
 source
   .command('preview <logicalPath> <contentFile>')
   .action((logicalPath: string, contentFile: string) => {
@@ -207,7 +220,18 @@ source
 
 async function render(
   projectDir: string,
-  input: { eventId?: string; all?: boolean; chapter?: string; provider?: string; referenceDir?: string; branchPath?: string; discourseBranch?: string; dryRun?: boolean; json?: boolean; revision?: string },
+  input: {
+    eventId?: string;
+    all?: boolean;
+    chapter?: string;
+    provider?: string;
+    referenceDir?: string;
+    branchPath?: string;
+    discourseBranch?: string;
+    dryRun?: boolean;
+    json?: boolean;
+    revision?: string;
+  },
 ): Promise<void> {
   const branchPath = parseBranchPath(input.branchPath);
   const llm = provider(input);
@@ -275,7 +299,8 @@ program
     };
     const result = await renderGameDialogueTree(request, runtime(projectDir, llm));
     printResult(result, options.json ?? false);
-    if (result.errors.length > 0 || result.results.some((scene) => !scene.released)) process.exitCode = 1;
+    if (result.errors.length > 0 || result.results.some((scene) => !scene.released))
+      process.exitCode = 1;
   });
 
 const project = program.command('project').description('Manage local authoring projects');
@@ -287,13 +312,34 @@ project
     mkdirSync(path.join(root, 'definitions'), { recursive: true });
     mkdirSync(path.join(root, 'definitions', 'characters'), { recursive: true });
     mkdirSync(path.join(root, 'chapters', 'chapter_01'), { recursive: true });
-    writeFileSync(path.join(root, 'nova.yaml'), `project: ${name}\ntitle: ${JSON.stringify(name)}\nauthor: local\ndefaultModel: mock\ndefaultLanguage: en\nsnapshotInterval: 20\n`);
-    writeFileSync(path.join(root, 'definitions', 'state_initial.yaml'), 'info:\n  currentEra: initial\n  politicalSituation: undeclared\nthreads: []\nworldFacts: []\n');
-    writeFileSync(path.join(root, 'definitions', 'entity-types.yaml'), 'types:\n  character:\n    typeId: character\n    kind: character\n    attributes:\n      lifecycle:\n        attributeId: lifecycle\n        valueType: string\n        requiredAt: introduction\n        writePolicy: lifecycle_managed\n        allowedLifecycleStates: [active, inactive, retired]\n        unsetAllowed: false\n        semanticRole: lifecycle\n      traits:\n        attributeId: traits\n        valueType: string_list\n        requiredAt: never\n        writePolicy: immutable\n        unsetAllowed: true\n    lifecyclePolicy:\n      allowedTransitions: []\n    referenceCapabilities:\n      defaultEligibility: live\n    typedInvariants: []\n');
-    writeFileSync(path.join(root, 'definitions', 'characters', 'narrator.yaml'), 'id: narrator\nname: Narrator\ntype: character\ndescription: The initial point-of-view character.\ntraits: []\n');
-    writeFileSync(path.join(root, 'definitions', 'discourse-ledger.yaml'), `id: ${name}_ledger\nchapters:\n  - branch: main\n    chapter: 1\n    sceneIds: [E1]\nentries: []\n`);
-    writeFileSync(path.join(root, 'chapters', 'chapter_01', '_chapter.yaml'), 'chapter: 1\ntitle: Opening\nsummary: Initial chapter.\nintent: Establish the story.\nplannedScenes: 1\n');
-    writeFileSync(path.join(root, 'chapters', 'chapter_01', 'E1.yaml'), 'event: E1\nnarrativeOrder: 1\ntitle: Opening scene\nstoryTime: day_0\npov:\n  character: narrator\n  type: omniscient\nsceneBrief: Establish the initial dramatic situation.\nbeats:\n  - Establish the initial dramatic situation.\npreconditions: []\nexpectedPostconditions: []\n');
+    writeFileSync(
+      path.join(root, 'nova.yaml'),
+      `project: ${name}\ntitle: ${JSON.stringify(name)}\nauthor: local\ndefaultModel: mock\ndefaultLanguage: en\nsnapshotInterval: 20\n`,
+    );
+    writeFileSync(
+      path.join(root, 'definitions', 'state_initial.yaml'),
+      'info:\n  currentEra: initial\n  politicalSituation: undeclared\nthreads: []\nworldFacts: []\n',
+    );
+    writeFileSync(
+      path.join(root, 'definitions', 'entity-types.yaml'),
+      'types:\n  character:\n    typeId: character\n    kind: character\n    attributes:\n      lifecycle:\n        attributeId: lifecycle\n        valueType: string\n        requiredAt: introduction\n        writePolicy: lifecycle_managed\n        allowedLifecycleStates: [active, inactive, retired]\n        unsetAllowed: false\n        semanticRole: lifecycle\n      traits:\n        attributeId: traits\n        valueType: string_list\n        requiredAt: never\n        writePolicy: immutable\n        unsetAllowed: true\n    lifecyclePolicy:\n      allowedTransitions: []\n    referenceCapabilities:\n      defaultEligibility: live\n    typedInvariants: []\n',
+    );
+    writeFileSync(
+      path.join(root, 'definitions', 'characters', 'narrator.yaml'),
+      'id: narrator\nname: Narrator\ntype: character\ndescription: The initial point-of-view character.\ntraits: []\n',
+    );
+    writeFileSync(
+      path.join(root, 'definitions', 'discourse-ledger.yaml'),
+      `id: ${name}_ledger\nchapters:\n  - branch: main\n    chapter: 1\n    sceneIds: [E1]\nentries: []\n`,
+    );
+    writeFileSync(
+      path.join(root, 'chapters', 'chapter_01', '_chapter.yaml'),
+      'chapter: 1\ntitle: Opening\nsummary: Initial chapter.\nintent: Establish the story.\nplannedScenes: 1\n',
+    );
+    writeFileSync(
+      path.join(root, 'chapters', 'chapter_01', 'E1.yaml'),
+      'event: E1\nnarrativeOrder: 1\ntitle: Opening scene\nstoryTime: day_0\npov:\n  character: narrator\n  type: omniscient\nsceneBrief: Establish the initial dramatic situation.\nbeats:\n  - Establish the initial dramatic situation.\npreconditions: []\nexpectedPostconditions: []\n',
+    );
     console.log(`Initialized ${root}`);
   });
 

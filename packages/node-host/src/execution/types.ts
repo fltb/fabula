@@ -1,5 +1,5 @@
-import { promises as fs } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { promises as fs, type Stats } from 'node:fs';
 import * as path from 'node:path';
 
 export interface FileRepositoryOptions {
@@ -26,7 +26,6 @@ const hasCode = (error: unknown, code: string): boolean =>
 
 export const isMissing = (error: unknown): boolean => hasCode(error, 'ENOENT');
 const isAlreadyExists = (error: unknown): boolean => hasCode(error, 'EEXIST');
-
 
 export const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -139,7 +138,7 @@ export async function withDirectoryLock<T>(
       handle = await fs.open(lock, 'wx', 0o600);
     } catch (error) {
       if (!isAlreadyExists(error)) throw error;
-      let stat;
+      let stat: Stats;
       try {
         stat = await fs.lstat(lock);
       } catch (statError) {
@@ -168,14 +167,17 @@ export async function withDirectoryLock<T>(
   }
 }
 
-export const encodeKey = (parts: readonly string[]): string => Buffer.from(JSON.stringify(parts), 'utf8').toString('base64url');
+export const encodeKey = (parts: readonly string[]): string =>
+  Buffer.from(JSON.stringify(parts), 'utf8').toString('base64url');
 
-export const contained = (root: string, target: string): boolean => target === root || target.startsWith(`${root}${path.sep}`);
+export const contained = (root: string, target: string): boolean =>
+  target === root || target.startsWith(`${root}${path.sep}`);
 
 export async function assertSafeParents(root: string, target: string): Promise<void> {
   const realRoot = await fs.realpath(root);
   const relative = path.relative(realRoot, target);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Repository path escapes project root');
+  if (relative.startsWith('..') || path.isAbsolute(relative))
+    throw new Error('Repository path escapes project root');
   let current = realRoot;
   for (const part of relative.split(path.sep).filter(Boolean)) {
     current = path.join(current, part);
@@ -192,18 +194,26 @@ export async function assertSafeDirectory(root: string, directory: string): Prom
   await assertSafeParents(root, directory);
   const realRoot = await fs.realpath(root);
   const realDirectory = await fs.realpath(directory);
-  if (!contained(realRoot, realDirectory)) throw new Error('Repository directory escapes project root');
+  if (!contained(realRoot, realDirectory))
+    throw new Error('Repository directory escapes project root');
   const stat = await fs.lstat(directory);
-  if (stat.isSymbolicLink() || !stat.isDirectory()) throw new Error('Repository directory is not a directory');
+  if (stat.isSymbolicLink() || !stat.isDirectory())
+    throw new Error('Repository directory is not a directory');
 }
 
 export async function recoverJournal(root: string, directory: string): Promise<void> {
   const journal = path.join(directory, '.journal.json');
   try {
     const parsed = JSON.parse(await fs.readFile(journal, 'utf8')) as JournalRecord;
-    if (parsed.version !== 1 || typeof parsed.target !== 'string' || typeof parsed.content !== 'string') throw new Error('Invalid repository journal');
+    if (
+      parsed.version !== 1 ||
+      typeof parsed.target !== 'string' ||
+      typeof parsed.content !== 'string'
+    )
+      throw new Error('Invalid repository journal');
     const target = path.resolve(directory, parsed.target);
-    if (!contained(directory, target) || !target.endsWith('.json')) throw new Error('Repository journal target escapes directory');
+    if (!contained(directory, target) || !target.endsWith('.json'))
+      throw new Error('Repository journal target escapes directory');
     await assertSafeParents(root, target);
     await fs.writeFile(target, parsed.content, { encoding: 'utf8', mode: 0o600 });
     await fs.unlink(journal);
@@ -213,12 +223,22 @@ export async function recoverJournal(root: string, directory: string): Promise<v
   }
 }
 
-export async function atomicWrite(root: string, directory: string, file: string, content: string): Promise<void> {
+export async function atomicWrite(
+  root: string,
+  directory: string,
+  file: string,
+  content: string,
+): Promise<void> {
   await assertSafeDirectory(root, directory);
   const relative = path.relative(directory, file);
-  if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error('Repository file escapes directory');
+  if (relative.startsWith('..') || path.isAbsolute(relative))
+    throw new Error('Repository file escapes directory');
   const journal = path.join(directory, '.journal.json');
-  await fs.writeFile(journal, JSON.stringify({ version: 1, target: relative, content } satisfies JournalRecord), { encoding: 'utf8', mode: 0o600 });
+  await fs.writeFile(
+    journal,
+    JSON.stringify({ version: 1, target: relative, content } satisfies JournalRecord),
+    { encoding: 'utf8', mode: 0o600 },
+  );
   const temporary = `${file}.${process.pid}.${Date.now().toString(36)}.tmp`;
   try {
     await fs.writeFile(temporary, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' });

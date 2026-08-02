@@ -1,4 +1,4 @@
-import { NARRATIVE_TEXT_COUNT_VERSION } from './count.ts';
+import { PublicationError } from '../editorial/errors.ts';
 import type { DerivedData } from '../pipeline/output.ts';
 import type { BranchSet } from '../types/branch.ts';
 import type {
@@ -9,7 +9,7 @@ import type {
 } from '../types/editorial.ts';
 import type { GameDialogueChoice } from '../types/game-dialogue.ts';
 import type { DiscourseSceneSequenceEntry } from '../types/graph.ts';
-import { PublicationError } from '../editorial/errors.ts';
+import { NARRATIVE_TEXT_COUNT_VERSION } from './count.ts';
 
 /** Verified accepted/current head data independent of Host persistence. */
 export interface VerifiedHeadData {
@@ -76,8 +76,7 @@ export interface PromoteCandidateInput {
   };
 }
 
-const stringValue = (value: unknown): string =>
-  typeof value === 'string' ? value : '';
+const stringValue = (value: unknown): string => (typeof value === 'string' ? value : '');
 
 const numberValue = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : 0;
@@ -113,9 +112,13 @@ export function collectDerivedData(
 
     for (const effect of event.relationshipEffects) {
       const participants = effect.membershipAfter?.map((member) => member.entityId) ?? [];
-      const direction = effect.dimensionSet?.find((dimension) => dimension.dimensionId === 'direction');
+      const direction = effect.dimensionSet?.find(
+        (dimension) => dimension.dimensionId === 'direction',
+      );
       const type = effect.dimensionSet?.find((dimension) => dimension.dimensionId === 'type');
-      const intensity = effect.dimensionSet?.find((dimension) => dimension.dimensionId === 'intensity');
+      const intensity = effect.dimensionSet?.find(
+        (dimension) => dimension.dimensionId === 'intensity',
+      );
       relationships.push({
         participants: participants.length >= 2 ? [participants[0], participants[1]] : [],
         effect: effect.provenance?.replace('compat:RelationshipChange:', '') ?? 'change',
@@ -204,11 +207,13 @@ export function buildNovelDocument(
   const byId = new Map<string, PromoteCandidateInput>();
   for (const candidate of candidates) {
     if (byId.has(candidate.eventId)) {
-      throw new PublicationError('Duplicate candidate', [{
-        code: 'REVISION_STALE',
-        message: `Duplicate candidate for event "${candidate.eventId}" in buildNovelDocument`,
-        eventId: candidate.eventId,
-      }]);
+      throw new PublicationError('Duplicate candidate', [
+        {
+          code: 'REVISION_STALE',
+          message: `Duplicate candidate for event "${candidate.eventId}" in buildNovelDocument`,
+          eventId: candidate.eventId,
+        },
+      ]);
     }
     byId.set(candidate.eventId, candidate);
   }
@@ -218,27 +223,33 @@ export function buildNovelDocument(
   for (const entry of sceneSequence) {
     const candidate = byId.get(entry.sceneId);
     if (!candidate) {
-      throw new PublicationError('Candidate not found for scene sequence entry', [{
-        code: 'PUBLICATION_INCOMPLETE',
-        message: `Scene sequence entry "${entry.sceneId}" has no matching candidate in buildNovelDocument`,
-        eventId: entry.sceneId,
-      }]);
+      throw new PublicationError('Candidate not found for scene sequence entry', [
+        {
+          code: 'PUBLICATION_INCOMPLETE',
+          message: `Scene sequence entry "${entry.sceneId}" has no matching candidate in buildNovelDocument`,
+          eventId: entry.sceneId,
+        },
+      ]);
     }
     if (seen.has(entry.sceneId)) {
-      throw new PublicationError('Duplicate scene in sequence', [{
-        code: 'REVISION_STALE',
-        message: `Scene "${entry.sceneId}" appears more than once in the scene sequence`,
-        eventId: entry.sceneId,
-      }]);
+      throw new PublicationError('Duplicate scene in sequence', [
+        {
+          code: 'REVISION_STALE',
+          message: `Scene "${entry.sceneId}" appears more than once in the scene sequence`,
+          eventId: entry.sceneId,
+        },
+      ]);
     }
     seen.add(entry.sceneId);
 
     if (entry.chapter !== candidate.chapterNumber) {
-      throw new PublicationError('Chapter mismatch in scene sequence', [{
-        code: 'REVISION_STALE',
-        message: `Scene "${entry.sceneId}" has chapter ${entry.chapter} in sequence but candidate has chapter ${candidate.chapterNumber}`,
-        eventId: entry.sceneId,
-      }]);
+      throw new PublicationError('Chapter mismatch in scene sequence', [
+        {
+          code: 'REVISION_STALE',
+          message: `Scene "${entry.sceneId}" has chapter ${entry.chapter} in sequence but candidate has chapter ${candidate.chapterNumber}`,
+          eventId: entry.sceneId,
+        },
+      ]);
     }
 
     if (entry.chapter !== currentChapter) {
@@ -255,11 +266,13 @@ export function buildNovelDocument(
 
   for (const candidate of candidates) {
     if (!seen.has(candidate.eventId)) {
-      throw new PublicationError('Candidate not in scene sequence', [{
-        code: 'PUBLICATION_INCOMPLETE',
-        message: `Candidate "${candidate.eventId}" is not covered by the scene sequence`,
-        eventId: candidate.eventId,
-      }]);
+      throw new PublicationError('Candidate not in scene sequence', [
+        {
+          code: 'PUBLICATION_INCOMPLETE',
+          message: `Candidate "${candidate.eventId}" is not covered by the scene sequence`,
+          eventId: candidate.eventId,
+        },
+      ]);
     }
   }
 

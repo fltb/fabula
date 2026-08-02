@@ -50,9 +50,7 @@ export class SnapshotEngine {
 
   /** Invalidate snapshots at or after a given event count */
   invalidateFrom(eventCount: number): void {
-    this.snapshots = this.snapshots.filter(
-      (snapshot) => snapshot.eventCount < eventCount,
-    );
+    this.snapshots = this.snapshots.filter((snapshot) => snapshot.eventCount < eventCount);
   }
 
   /** List all available snapshot event counts */

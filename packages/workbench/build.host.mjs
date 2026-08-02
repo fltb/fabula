@@ -9,7 +9,15 @@ const outdir = resolve(root, 'dist/host');
 mkdirSync(outdir, { recursive: true });
 
 const result = await build({
-  entryPoints: [resolve(root, 'src/contracts/index.ts')],
+  entryPoints: [
+    // Browser-safe contract barrel (package "exports" target).
+    resolve(root, 'src/contracts/index.ts'),
+    // Host server entry: listener lifecycle + facade.
+    resolve(root, 'src/host/server.ts'),
+    // Host listener module: server.ts imports it and bundle:false keeps
+    // imports external, so it must be emitted as its own entry point.
+    resolve(root, 'src/host/listener.ts'),
+  ],
   bundle: false,
   platform: 'node',
   target: 'node26',

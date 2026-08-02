@@ -2,7 +2,9 @@
 
 > **前身**: `docs/archive/TODO-stage-1-1.5.md` (1420 lines, stage 1 + 1.5 complete)
 > **阶段 2 部分验收**: `docs/audits/stage-2-corpus-audit-2026-07-24.md`
-> **基准项目**: `fixtures/dream-of-red-chamber/` — 12 events, 40 characters, 8 locations, 5 rules
+> **基准项目（历史快照）**: `fixtures/dream-of-red-chamber/` — 12 events, 40 characters, 8 locations, 5 rules（旧快照数字，不代表当前夹具；现状见下方「基准项目现状」校正）
+> **历史状态**: 本文档是阶段 1–3 的规划与审查记录（2026-07-23 起），保留为历史规划，不作为 current reference。当前事实以 [`docs/current-state.md`](./current-state.md)（2026-08-02 源码核验基线）为准。
+> **基准项目现状（2026-08-02 校正）**: `fixtures/dream-of-red-chamber/` 当前为四章 E01–E36（每章 9 个事件）；本页各处 "12 events / 20 events" 均为旧快照数字，不代表当前夹具。
 
 ---
 
@@ -214,11 +216,15 @@ yaml 的工作量过于巨大，甚至超过了故事本身的创作成本：作
 
 **依赖**: 当前 schema 可扩展，向后兼容
 
+**2026-08-02 校正**: 此条目现已在默认管线中——`ChecklistValidator` 是 28 个 built-in validators 之一（`packages/core/src/validator/builtins.ts`），从当前 AnalysisResult envelope（`eventId`/`protocol`/`observations`/`analysis`）的 `analysis.analysis.checklistResults` 读取 Pass 2 结果；`docs/report.md` 曾记载的 envelope 未对齐缺口已修复。
+
 ### [x] S2 — greyLines: 草蛇灰线多点追踪
 
 替代 `foreshadowing` 的二元模型（种子→应验）。`greyLines` 为多点结构——同一意象在多个事件中反复出现、每次累积不同语义。节点列表持续增长，不要求闭合。
 
 **产出**: `greyLines` schema 字段，跨事件追踪逻辑，`GreyLineValidator`
+
+**2026-08-02 校正（诚实标注）**: `GreyLineValidator` 已导出但**不在**默认 built-in 集合中（`packages/core/src/validator/builtins.ts` 未注册）——属 opt-in 能力，不是默认管线行为；`ForeshadowingValidator` 仍为默认项。上方 `[x]` 仅表示类型/验证器存在，不代表已接入默认管线。
 
 ### [x] S3 — 现代小说结构建模层
 
@@ -316,6 +322,8 @@ Planner 可消费的现有资产：WorldState（实体/关系/知识/线程/规�
 
 > **2026-07-24 设计修正**: S8 的原始假设（前向事件生成）与当前系统架构不兼容。本系统的 Novel IR 输入是已完成的小说——事件全部已发生，不存在"下一步该写什么"。Planner 是面向生成式写作工具（Novel OS、Sudowrite）的设计，不是面向已完成小说的结构化建模系统。如果未来需要此方向的能力，应该是独立的 **YAML 编辑器模块**（利用 LLM 辅助人工将小说原文写成稳定的 YAML），而不是 core 管线内的前向规划器。现有类型定义和 18 个测试保留作为参考实现。
 
+> **2026-08-02 校正（supersedes 上一段）**: 上段 "现有类型定义和 18 个测试保留作为参考实现" 已过期——S8 类型与测试随后被删除（`docs/report.md` 记载其于 2026-07-24 从 `packages/core/src/types/index.ts` 移除并注明 "S8 removed (design incompatible with Novel IR)"，`modern-novel.test.ts` / `narrative-planner.test.ts` 亦不再存在）。Planner 不是当前能力，见 [`docs/current-state.md`](./current-state.md) 已知限制表。上方标题的 `[x]` 与正文 "完全缺失" 的矛盾由此澄清：S8 从未实现、已移除。
+
 ## C: 测量能力 (Measured)
 
 ### [x] C1 — 红楼梦 80 事件覆盖度基准
@@ -324,11 +332,15 @@ Planner 可消费的现有资产：WorldState（实体/关系/知识/线程/规�
 
 **产出**: `output/checklist-coverage.md`
 
+**2026-08-02 校正**: 规划标题 "80 事件" 与正文 "12→20 事件" 均为规划期数字，未按此规模完成。当前夹具为四章 E01–E36；`output/checklist-coverage.md`/`.json` 保留为 20 事件时期的**历史快照**（Pre-run，未含 LLM Pass 2 实测），生成它的 `checklist-coverage.ts` 脚本已不在当前源码中——旧数字无法由当前源码重新生成。
+
 ### [x] C2 — (scaffolds ready, awaiting human annotation) 人类标注：12 事件的 precondition/postcondition
 
 对现有 12 个事件进行人工标注精确的前置/后置条件。与 LLM 生成的比较 F1。用作 `compareFact()` 的 ground truth。
 
 **产出**: 标注数据 + F1 报告
+
+**2026-08-02 校正**: "现有 12 个事件" 为旧夹具数字——当前夹具为四章 E01–E36；该任务仍待人工完成（scaffold 现状见 `docs/report.md` C2 节）。
 
 ### [x] C3 — (scaffolds ready, awaiting human annotation) 人类标注：双轮标注（标注规范已有）
 
@@ -357,6 +369,8 @@ Planner 可消费的现有资产：WorldState（实体/关系/知识/线程/规�
 **S 能力**: S1-S8 全部实现 + 测试通过。S3-research 已完成（字段集 9 个锁定）。S3 须标注 A 类（deterministic validator）和 B 类（依赖 S1 Pass 2 通道）各自的完成度。S6（base-narratology Genette 五维度）须标注 Duration/Frequency/Mood-wiring/Voice 各子项完成度。S7（Idea IR + Story IR）+ S8（Planner）须标注各子项完成度。
 **C 能力**: C1 覆盖报告完成 + C2 F1 ≥ 0.70 + C3 Cohen's kappa ≥ 0.60
 **项目**: `fixtures/dream-of-red-chamber/` 20 events 通过全量 validation（含 ChecklistValidator + GreyLineValidator + S6 Genette 维度 validator）
+
+> **2026-08-02 校正（验收标准已部分失效）**: 本节为阶段 3 规划期验收标准（页脚日期 2026-07-23）。"S1-S8 全部实现" 已不成立——S8（Planner）是移除而非实现；"20 events 通过全量 validation" 为旧夹具数字，当前夹具为四章 E01–E36，该验收项未按原数字完成。当前已核验事实（28 个默认 built-in validators、GreyLine opt-in、`npm test` 根 2,881 + Host 367 + Client 36、lint 0 errors/630 warnings/236 infos）以 [`docs/current-state.md`](./current-state.md) 为准。
 
 ---
 

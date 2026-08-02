@@ -25,7 +25,7 @@
 | `profession` | `string`（可选） | 职业或社会角色 |
 | `backstory` | `string`（可选） | 完整的背景故事叙述 |
 | `knownSecrets` | `string[]`（可选） | 角色所知的可能不公开的信息 |
-| `initialState` | `Record<string, unknown>` | 起始世界状态键值对——直接流入 `EntityRegistry` |
+| `initialState` | `Record<string, unknown>`（可选） | 起始世界状态键值对——叠加在 `buildCharacterState()` 提升的定义级字段之上（同名键覆盖）；省略时实体只携带被提升的字段 |
 
 ## 角色状态的流动方式
 
@@ -66,15 +66,10 @@ traits:
   - silenced
   - nameless
 voiceNotes: "初到鲁镇时沉默寡言，只是不停地做活。丧子后反复讲述阿毛被狼叼走的故事——'我真傻，真的'是她的标志句..."
-initialState:
-  location: weijia_shan
-  status: alive
-  condition: "widowed_seeking_work"
-  marital_status: "widow_of_xianglin"
-  emotionalState: "fearful_but_determined"
-  spiritual_state: "innocent"
 backstory: "她是卫家山人，家里穷，年纪很小的时候就嫁给了比她小十岁的祥林..."
 knownSecrets:
   - "她曾从婆家逃跑，这被视为不守妇道"
   - "她是被绑着、塞进花轿强行嫁给贺老六的"
 ```
+
+示例为节略：`description`/`appearance`/`backstory`/`voiceNotes` 在夹具中有更完整文本。`initialState` 是可选字段，该夹具**未声明**——需要进入实体状态的额外属性（如 `voice_notes`、`archetype`、`role`）应在 `initialState` 中提供。

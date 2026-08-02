@@ -1,7 +1,7 @@
 # YAML Contract Reference
 
-**Status:** Frozen — Wave 4+5 normalized runtime contracts
-**Policy:** This directory contains the YAML wire contracts of the Novalistically compiler, divided into two groups: author-facing contracts (`initial-state`, `relationship`, `knowledge`, `thread`, `rule`, `causal-deps`, `discourse`, `ellipsis-bridge`) describe YAML files authors write under `definitions/`; internal reference documents (`entity`) describe compiler-produced serialization shapes that are **not** accepted project YAML. The compiler reads the author-facing YAML files and produces normalized IR (internal representation). Changes are classified by compatibility; the structured-timestamp extension adds no new YAML version discriminator.
+**Status:** Current — synchronized with the source-verified baseline at [`docs/current-state.md`](../../current-state.md) (commit `0e46174`); the prior "Wave 4+5 frozen" framing is historical. Statements in this directory describe current runtime behavior; future-policy or design-only material is explicitly marked as such.
+**Policy:** This directory contains the YAML wire contracts of the Novalistically compiler, divided into two groups: author-facing contracts (`initial-state`, `relationship`, `knowledge`, `thread`, `rule`, `causal-deps`, `discourse`, `ellipsis-bridge`) describe YAML files authors write under `definitions/`; internal reference documents (`entity`) describe compiler-produced serialization shapes that are **not** accepted project YAML — the one authored exception is `definitions/entity-types.yaml`, a required loader input (see [entity.md](./entity.md)). The compiler reads the author-facing YAML files and produces normalized IR (internal representation). Changes are classified by compatibility; the structured-timestamp extension adds no new YAML version discriminator.
 
 ## Version Policy
 
@@ -13,8 +13,8 @@
 
 | #  | Document | YAML Contract | Source Schema File | Fixture Sources |
 |----|----------|---------------|-------------------|-----------------|
-| 1  | [initial-state.md](./initial-state.md) | `worldInitialState` — world facts, threads, time anchors | `state-initial.ts` | `zhu-fu/definitions/state_initial.yaml`, `arcane-aftermath/definitions/state_initial.yaml` |
-| 2  | [entity.md](./entity.md) | Internal `EntityTypeCatalog` / `EntityDeclarationCatalog` serialization (compiler-produced — not author YAML) | `entity-catalog.ts` | Built-in `default-catalog.ts`; author input: `definitions/{characters,locations,items,factions,rules}/` |
+| 1  | [initial-state.md](./initial-state.md) | `worldInitialState` — world facts, threads, time anchors (required loader input) | `state-initial.ts` | `zhu-fu/definitions/state_initial.yaml`, `arcane-aftermath/definitions/state_initial.yaml` |
+| 2  | [entity.md](./entity.md) | Author-facing `EntityTypeCatalogSource` (`definitions/entity-types.yaml`, required) + internal `EntityTypeCatalog` / `EntityDeclarationCatalog` serialization (compiler-produced) | `entity-catalog.ts` | Author input: required `definitions/entity-types.yaml` + `definitions/{characters,locations,items,factions,rules}/` |
 | 3  | [relationship.md](./relationship.md) | n-ary relationship type/epoch/membership/dimension | `relationship.ts` | `zhu-fu/definitions/relationships/*.yaml`, `arcane-aftermath/definitions/relationships/*.yaml` |
 | 4  | [knowledge.md](./knowledge.md) | Proposition/claim/information act | `knowledge.ts` | `zhu-fu/definitions/state_initial.yaml` (worldFacts) |
 | 5  | [thread.md](./thread.md) | Thread type/run/goal/milestone | `thread.ts` | `zhu-fu/definitions/state_initial.yaml` (threads) |
@@ -56,21 +56,21 @@ my-story/
     rules/                  → RuleDefinition (yaml-format/rule.md)
     narrators/              → NarratorProfile (S6c)
     assertions/             → NarratorAssertion (DISCOURSE-1, optional directory)
-    discourse-ledger.yaml   → PlannedDiscourseLedgerSource (mandatory; hash is compiler-derived)
-    state_initial.yaml      → WorldInitialState
+    entity-types.yaml       → EntityTypeCatalogSource (required loader input; strict, versionless)
+    discourse-ledger.yaml   → PlannedDiscourseLedgerSource (optional; when absent the loader
+                             substitutes an empty runtime ledger; hash is compiler-derived)
+    state_initial.yaml      → WorldInitialState (required loader input)
   chapters/
     chapter_NN/
-      _chapter.yaml
+      _chapter.yaml         → ChapterMetadata (optional)
       E*.yaml       → Event files (contain preconditions, postconditions, threadProgress, ruleEffects, etc.)
-  scenes/
+  scenes/                   → rendered scene prose + metadata — Host repository output, never written by Core
     chapter-NN/
-      E*.md                → rendered scene prose (compiler output, not authored input)
-      E*.yaml              → scene metadata (prose_source, edit_history, …)
-      E*_render_request.yaml → context package sent to the LLM
-  .nova/
-    derived/               → compiler-produced: threads.yaml, foreshadowing.yaml,
-                             relationships.yaml, rules.yaml
-    responses/             → persisted provider responses
+      E*.md
+      E*.yaml
+      E*_render_request.yaml
+  .nova/                    → Host-owned runtime artifacts: derived/ (threads, foreshadowing,
+                             relationships, rules), responses/ (persisted provider responses)
 ```
 
 ## Source-Map Diagnostics

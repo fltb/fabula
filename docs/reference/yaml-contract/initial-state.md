@@ -3,7 +3,7 @@
 **Source Zod Schema:** `packages/core/src/schemas/state-initial.ts` — `worldInitialStateSchema`
 **Fixture files:** `fixtures/zhu-fu/definitions/state_initial.yaml`, `fixtures/arcane-aftermath/definitions/state_initial.yaml`
 
-The `state_initial.yaml` file at `definitions/state_initial.yaml` describes the world at story-start: its historical context, temporal anchors, narrative threads, and established facts. `EntityMapper.loadProject()` reads it through `worldInitialStateSchema` (strict mode); the compiler derives the initial `WorldState` baseline from it via the synthetic genesis event and replay baseline.
+The `state_initial.yaml` file at `definitions/state_initial.yaml` describes the world at story-start: its historical context, temporal anchors, narrative threads, and established facts. It is a **required loader input**: `EntityMapper.loadProject()` reads it through `worldInitialStateSchema` (strict mode; a missing file is a `ConfigError`). The runtime derives the initial `WorldState` baseline from initial-introduction declaration states (see Normalized Target) and applies it before any authored event replays — there is no synthetic genesis event.
 
 ## Fields
 
@@ -22,7 +22,7 @@ The `state_initial.yaml` file at `definitions/state_initial.yaml` describes the 
 | `threads[].description` | `string` | required | — | Prose description of the thread's narrative arc. |
 | `threads[].type` | `string` | required | — | Thread type label (e.g. `primary`, `thematic`, `character_arc`, `primary_conflict`). |
 | `threads[].targetRevealChapter` | `number` | required | — | The chapter number where this thread is expected to culminate. |
-| `threads[].initialProgress` | `string` | required | — | 未经验证的起始进度元数据——schema 接受任意字符串（`z.string()`），`buildInitialState()` 只复制线程 `id`，重放从空的 goal/milestone 状态初始化基线，运行时从不读取该字段。 |
+| `threads[].initialProgress` | `string` | required | — | 未经验证的起始进度元数据——schema 接受任意字符串（`z.string()`），`loadCanonicalProject()` 只把线程 `id` 复制进 `initialThreads`，重放从空的 goal/milestone 状态初始化基线，运行时从不读取该字段。 |
 | `threads[].structuralFunction` | `enum` | optional | — | Propp structural function label (`structuralFunctionSchema` from `schemas/story-ir.ts`). |
 | `worldFacts` | `array` | **required** | — | Established factual claims about the world. Each fact has `id` (string), `value` (unknown), `description` (string). |
 | `worldFacts[].id` | `string` | required | — | Fact identifier. |
@@ -130,13 +130,13 @@ The compiler does **not** project `state_initial.yaml` fields 1:1 onto `WorldSta
 
 - **`info`** — validated and carried on `ProjectData.worldInitialState.info`. There is no `WorldState.meta`; the era/political prose is not projected into runtime state.
 - **`timeAnchors`** — each `at` is parsed by `parseStoryTimestamp()` (`entity/timestamp.ts`) into a `LocatableStoryTimestamp` (absolute/relative/chapter/offset). An indeterminate result is rejected (anchors must be locatable). The result is `ProjectData.timeAnchors: TimeAnchor[]`, consumed by `resolveTemporalContext()` to build story-clock coordinates.
-- **`threads`** — carried on `ProjectData.worldInitialState.threads`. `buildInitialState()` (`api.ts`) extracts the thread IDs as `initialThreads`; replay and boundary compilation (`state/replay.ts`, `state/story-boundaries.ts`) initialize each `WorldState.threads[id]` baseline entry with `status: "planned"`, `currentRunId: "init-<threadId>"`, empty `phase`/`bindings`/`goalStates`/`milestoneStates`, and empty `semanticStateHash`.
-- **`worldFacts`** — normalized three ways:
-  1. `EntityMapper.createGenesisEvent()` produces the synthetic `system:genesis` event (`narrativeOrder: 0`, `source: 'genesis'`, `storyTime: { type: 'absolute', value: 'day_0' }`) whose postconditions carry each fact with `entityId: 'world'`, `attribute: <fact id>`, `value: <fact value>`.
-  2. `InMemoryEntityRegistry.load()` registers each fact as a `concept` entity with state `{ value, description }`.
-  3. `buildInitialState()` folds the genesis postconditions into `initialFacts`; `applyInitialFacts()` (`state/event-application.ts`) writes them into `WorldState.entities['world'][factId]` and appends them to `WorldState.facts` as the baseline before any authored event replays.
+- **`threads`** — carried on `ProjectData.worldInitialState.threads`. `loadCanonicalProject()` (`entity/project-runtime.ts`) extracts the thread IDs into `initialThreads` as `{ id }` entries; replay and boundary compilation (`state/replay.ts`, `state/story-boundaries.ts`) initialize each `WorldState.threads[id]` baseline entry with `status: "planned"`, `currentRunId: "init-<threadId>"`, empty `phase`/`bindings`/`goalStates`/`milestoneStates`, and empty `semanticStateHash`.
+- **`worldFacts`** — normalized three ways (no synthetic genesis event):
+  1. `buildDeclarationCatalog()` (`entity/project-runtime.ts`) registers each fact as a `concept` declaration with `definitionFile: 'definitions/state_initial.yaml'` and `introduction: { type: 'initial' }`.
+  2. `InMemoryEntityRegistry.load()` registers each fact as a `concept` entity with state `{ value, description }` (values canonicalized via `canonicalizeFactValue`).
+  3. `buildInitialFacts()` folds initial-introduction declaration states into `initialFacts` — `lifecycle: 'active'` unless the authored state declares one (author wins) — with validity `{ temporal: { start: { type: 'absolute', value: 'day_0' }, end: null }, branches: { type: 'all' } }`. Equal duplicate keys dedupe; conflicting duplicates throw `ConfigError` (phase `introductions`). `applyInitialFacts()` (`state/event-application.ts`) writes them into `WorldState.entities[entityId][attribute]` and appends them to `WorldState.facts` as the baseline before any authored event replays.
 
-Authored chapter events replay on top of this baseline (genesis first, then topological/causal order); the genesis event is filtered out of authored-event lists by `buildInitialState`/`ReplayEngine`.
+Authored chapter events replay on top of this baseline in topological/causal order. Initial facts are baseline inputs applied directly to the initial root (`compileStoryRuntimeGraph` in `state/graph-adapter.ts`), never replayed as authored events; event-introduced entities instead enter through injected `system:introduction:<targetId>:<entityId>` transition events placed immediately before their host events.
 
 ## Source-Map Diagnostic Format
 

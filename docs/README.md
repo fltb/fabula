@@ -1,6 +1,6 @@
 # Novalistically 文档
 
-> 规范文档入口现在位于 **[docs/INDEX.md](./INDEX.md)**。
+> 源码核验的现状基线见 **[docs/current-state.md](./current-state.md)**；文档入口见 **[docs/INDEX.md](./INDEX.md)**。
 
 此文件保留用于现有链接的向后兼容性。所有文档已重构为一个统一入口点，并附带一个按角色组织的子文档网络：
 

@@ -14,7 +14,6 @@
 | 字段 | 类型 | 描述 |
 |---|---|---|
 | `event` | `string` | 事件标识符，例如 `"E0"`、`"E1"` |
-| `formatVersion` | `number`（可选） | 格式版本，用于迁移追踪；省略时 schema 默认 `1` |
 | `narrativeOrder` | `number` | 叙事/装配排序键；`eventFileSchema` 接受任意数字，mapper 原样拷贝，不要求从 1 开始（规范 fixture 使用 `0`） |
 | `title` | `string` | 人类可读的标题 |
 | `storyTime` | `AuthoredStoryTime`（可选） | 场景的故事时间；可省略，或显式声明时间不可确定 |
@@ -22,9 +21,22 @@
 | `sceneType` | `enum`（可选） | `linear`、`flashback`、`flashforward`、`dream` 或 `parallel`；省略时 mapper 默认 `linear` |
 | `pov` | `{ character, type }` | 视角角色 ID 和视角类型（`first_person`、`third_person_limited`、`omniscient`） |
 | `sceneBrief` | `string` | 描述场景中发生事件的散文概要 |
-| `preconditions` | `Fact[]` | 此事件发生前必须为真的事实 |
-| `expectedPostconditions` | `Fact[]` | 事件发生后应为真的事实 |
+| `beats` | `[string, ...string[]]` | 有序、非空的场景节拍（动作/回合序列）；schema 要求至少一个非空字符串，事件文件必须提供 |
+| `preconditions` | wire `Fact[]` | 此事件发生前必须为真的事实（wire 形式，见下方「Wire Fact 与 runtime Fact」） |
+| `expectedPostconditions` | wire `Fact[]` | 事件发生后应为真的事实（wire 形式，见下方「Wire Fact 与 runtime Fact」） |
 | `styleGuidance` | `StyleGuidance`（可选） | 供 LLM 使用的语调、氛围、角色声音、节奏指令 |
+
+### Wire Fact 与 runtime Fact
+
+`preconditions`、`expectedPostconditions` 与 choice `effects` 在 YAML 里是 **wire Fact**：
+字段为 `entity`、`attribute`、`value`、`operator?`、`narrativeHint?`、`confidence?`
+（后件另有 `operation?`）。它与运行时 `Fact`（`types/entity.ts`）不是同一表示：runtime Fact 携带生成的 `id`（`factIdFrom(entity, attribute)`，即
+`"<entity>.<attribute>"`）、`entityId`、默认 `confidence`（后件取显式值或 `1.0`，前件
+恒为 `1.0`）以及 `validity: { temporal: { start: 已解析的 storyTime, end: null },
+branches }`。`EntityMapper.mapToNarrativeEvent()` 在加载时完成归一化：wire `entity`
+映射为 `entityId`，初始 `branches` 为 `{ type: 'all' }`；game-dialogue 项目随后由
+`loadAllEvents()` 按每个事件的 branch scope 覆盖 `validity.branches`。作者永远写 wire
+形式——runtime 的 `id`/`entityId`/`validity` 字段不是 YAML 输入。
 
 ### 玩家选择与游戏对话树
 
@@ -140,7 +152,7 @@ storyTime:
 
 `expectedPostconditions` 中每个 `Fact` 条目必须采用以下三种互斥形式之一：
 
-**形式 1——set（默认）：** 提供 `value` 字段，将规范化的值写入 `WorldState`。`operation: set` 可以显式指定，但为可选（省略时默认为 set）。
+**形式 1——set（默认）：** 提供 `value` 字段，将规范化的值写入 `WorldState`。`operation: set` 可以显式指定，但为可选（省略时默认为 set）。重放写入还须通过项目 `definitions/entity-types.yaml` 目录的校验——未知声明/未知属性、value schema、writePolicy（immutable/write_once/mutable/lifecycle_managed）、lifecycle 转换与 `unsetAllowed` 均由 `validateCatalogWrite()`（`state/event-application.ts`）强制，不存在跨项目的默认属性集合。
 
 ```yaml
 expectedPostconditions:
@@ -194,7 +206,7 @@ expectedPostconditions:
 - **`foreshadowing`** — 为埋设未来揭示内容而设的数组，每项包含 `{ id, hint, targetRevealChapter, thread? }`。
 - **`relationshipEffects`** — 关系演变的数组，每项包含 `{ participants: [EntityId, EntityId], effect, direction, newState? }`。
 - **`ruleEffects`** — 世界规则影响的数组，每项包含 `{ rule, effect: "reinforce" | "weaken" | "introduce_exception" | "nullify", evidence }`。
-- **`introduces`** — 独立于 `expectedPostconditions` 的 EventFile 字段：引入新实体的数组，每项包含 `{ type, id, initialState }`；`type` 仅限 `character`、`location`、`item`、`concept`（不包含 `faction` 与 `rule`）。注册时机依赖入口路径：`api.initializeProject()` 在 replay 前一次性注册所有事件的全部 introductions（`name` = id、`definitionFile` = `definitions/introduces/<id>.yaml`）；而 `renderNovel()` 走 `executeEditorialRender()` → `loadProjectData()`，只调用 `InMemoryEntityRegistry.load()`，**不**注册 introductions——`EntityMapper.mapToNarrativeEvent()` 仅把该数组原样转发到事件上。
+- **`introduces`** — 独立于 `expectedPostconditions` 的 EventFile 字段：引入新实体的数组，每项包含 `{ type, id, initialState }`；`type` 仅限 `character`、`location`、`item`、`concept`（不包含 `faction` 与 `rule`）。规范内核 `loadCanonicalProject()`（`entity/project-runtime.ts`）的 `collectIntroductions()` 收集全部 introduces：同一实体只能由恰好一个事件引入（重复引入 → `ConfigError`）；若该实体已有定义文件且仍声明非空 `initialState`，同样报错（初始状态必须移到引入边界）。definition-less 的引入实体由内核按引入数据注册（kind/typeRef/`initialState`），并为每个引入合成 `system:introduction:<hostEvent>:<entityId>` transition——置于宿主事件之前并加入其 `causalPredecessors`，重放时激活实体（`lifecycle: active` + `initialState` 各键）。`compileProject()` 的投影只暴露分离的规范化数据与只读 `EntityLookup`，不暴露 registry；editorial `renderNovel()` 同样经 `executeEditorialRender()` → `loadCanonicalProject()` 走这套引入激活，而不是把该数组原样透传。
 - **`cast`** — 对象，包含 `onScreen: string[]`（物理上在场的角色）和 `affected: string[]`（受影响的幕后角色）。
 
 ### 进阶字段（S1/S4/S6 叙事契约）
@@ -230,7 +242,9 @@ schema 位于 `packages/core/src/schemas/{narrative-checklist,source-context,dur
 | `metanarrativeLevel` | `object`（可选） | strict；`{ instruction: string, requiredEvidence: string }`（均非空） |
 | `authorNotes` | `string[]`（可选） | 自由形式作者注记，原样透传给 Pass 1 prompt（纯 pass-through） |
 
-## 示例（来自 zhu-fu 测试夹具: E5_threshold_rejection.yaml）
+## 示例（来自 zhu-fu 测试夹具: E5_threshold_rejection.yaml，节略）
+
+下例为节略版本：`beats` 仅摘取数条（完整文件含 12 条），`narrationTime`、`threadProgress`、`styleGuidance`、S1/S4/S6 字段等从略；结构字段（`event`/`title`/`narrativeOrder`/`pov`/`sceneBrief`/`beats`/`preconditions`/`expectedPostconditions`）均保持与夹具一致。
 
 ```yaml
 event: E5
@@ -248,6 +262,10 @@ pov:
   character: narrator
   type: first_person
 sceneBrief: "祥林嫂反复讲述阿毛的故事..."
+beats:
+  - "祥林嫂反复讲述阿毛的故事，但鲁镇人从掉泪到厌烦到嘲弄——他们开始故意逗她说'祥林嫂，你们的阿毛如果还在，不是也就有这么大了么？"
+  - "柳妈来做帮工，一日问她额角上的伤疤来历，随后告诉她：到了阴司，两个死鬼男人会争她，阎罗王只好把她锯成两半分给他们。"
+  - "但冬至祭祀时，当她坦然伸手去拿酒杯和筷子时，四婶慌忙大叫：'你放着罢，祥林嫂！'她像被炮烙似的缩了手，脸色同时变成灰黑——连捐了门槛也洗不清她的'污秽'。"
 
 preconditions:
   - entity: xianglins_wife

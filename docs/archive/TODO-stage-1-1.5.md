@@ -306,7 +306,7 @@ SurfaceReferenceExtractor
 
 ## 对标系统有而 Novalistically 少做的功能
 
-> 来源：2026-07-19 竞品分析（详见 [docs/reference/competitive-analysis.md](./reference/competitive-analysis.md#对标系统有而-novalistically-少做的功能)）
+> 来源：2026-07-19 竞品分析（详见 [docs/reference/competitive-analysis.md](../reference/competitive-analysis.md#对标系统有而-novalistically-少做的功能)）
 > 对标系统：Novel Studio（学术）、Sudowrite（商业）、Novel-OS（开源）
 
 ### [x] 交互式审批（Human-in-the-Loop Pipeline Gate）

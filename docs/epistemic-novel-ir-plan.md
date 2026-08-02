@@ -1,5 +1,7 @@
 # Epistemic NovelIR 最小变更实施计划
 
+> ⚠️ **设计计划（design-only / unverified，2026-08-01）。** 本文档是破坏式切换的实施计划，记录目标形态与工程决策，不构成当前实现合同；其中未经源码或门禁验证的步骤不能视为已交付能力。已核验现状以 [当前系统状态](./current-state.md)（2026-08-02 源码核验）为准，当前架构与接线见 [架构](./architecture.md) 和 [完整接线图](./reference/wiring.md)。本文档与当前源码冲突时，以当前源码与 current-state 为准。
+
 ## Context
 
 目标是一次 fixture-first 的破坏式切换：项目源码先编译为唯一的内部 NovelIR，再进入图、状态边界、discourse 与渲染；确定性状态只保存作者声明和纯确定性推导；Pass 2 文学判断保存为带协议、证据和不确定性的外部 measurement observation，绝不伪装成故事角色的知识 claim；验证结果明确区分编译器不变量、证据不匹配、解释性评估和测量不确定性；实体 ontology 只在真实 fixture 校准、显式编目并人工确认 policy 后启用。

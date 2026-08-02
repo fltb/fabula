@@ -91,6 +91,8 @@ Relationships are first-class entities that model n-ary connections between stor
 
 `RelationshipIdentityTransitionGroup` is a **schema-only IR shape**: it declares `oldEpochClosures`, `newTransactions`, and an optional `carryMap` (`relationshipIdentityTransitionGroupSchema` / `RelationshipIdentityTransitionGroup`), but no replay code consumes it. `applyRelationshipTransaction` accepts a single `RelationshipTransaction` per call and there is no group dispatcher, so the group is a wire/type-level blueprint for a future atomic identity transition, not executable replay behavior.
 
+`RelationshipTypeDefinition` / `RelationshipRoleDefinition` (`relationshipTypeDefinitionSchema`, `relationshipRoleDefinitionSchema`) are the same category of **schema-only catalog IR**: `EntityMapper.loadProject()` reads `definitions/relationships/*.yaml` exclusively through `relationshipDefinitionSchema`, so no loader consumes a relationship type catalog from YAML, and no replay or context code consults `roles`, `minCardinality`/`maxCardinality`, `allowedEntityKinds`, `exclusiveGroup`, or `continuityImpact`. `applyRelationshipTransaction` hardcodes `typeId: 'default'` on every runtime relationship ("will be refined by catalog validation" — that catalog wiring does not exist).
+
 ## Closed Enums / IDs
 
 - `relationshipTypeDefinition.continuityImpact`: `"preserve"`, `"new_epoch"`, `"new_relationship"` (3 values)
@@ -165,7 +167,7 @@ The thrown `ConfigError` has exactly these two properties: `message` holds the i
 
 ## Normalized Target
 
-- `RelationshipDefinition` instances are loaded into `ProjectData.relationships` (validated by `relationshipDefinitionSchema`). Participant IDs are stored as authored; there is no cross-validation against the entity catalog at load time.
+- `RelationshipDefinition` instances are loaded into `ProjectData.relationships` (validated by `relationshipDefinitionSchema`) — a declaration catalog, not runtime state: definitions never seed `WorldState.relationships`, and `initialState` / `establishedEvent` / `breakingEvent` are not applied by replay (runtime state is created solely by `applyRelationshipTransaction` from event `relationshipEffects`). Participant IDs are stored as authored; there is no cross-validation against the entity catalog at load time.
 - At runtime, each relationship advanced by an event's `relationshipEffects` lives in `WorldState.relationships` as a `RelationshipRuntimeState`: `relationshipId`, `typeId`, an `epochs` map (`EpochRuntimeState` with `lifecycle`, `memberships`, `dimensions`), and `activeEpochId` (unset while dissolved or between epochs).
 - Context assembly derives `RelationshipContext` from the active epoch's memberships for events that include one of the participants.
 

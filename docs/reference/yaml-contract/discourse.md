@@ -1,6 +1,6 @@
 # Discourse YAML Contract
 
-**Source Zod Schemas:** `packages/core/src/schemas/discourse.ts` — `discourseStateSchema`, `modelReaderProfileSchema`, `narratorProfileSchema` (with `narratorProfileTypeSchema`, `narratorAccessSchema`, `narratorAssertionCapabilitySchema`, `narratorTruthCapabilitySchema`, `narratorFidelitySchema`, `narratorSinceritySchema`), `voiceProfileSchema` (with `narrativeLevelSchema`, `diegeticRelationSchema`), `narratorAssertionSchema` (with `assertionTypeSchema`, `assertionPolaritySchema`, `truthBoundarySchema`, `narrationBoundarySchema`, `assertionEvidenceSchema`), `disclosureActionSchema` (with `revealActionSchema`, `claimActionSchema`, `hintActionSchema`, `retractionActionSchema`, `correctionActionSchema`, `withholdStartActionSchema`, `withholdEndActionSchema`, `discoursePositionSchema`), `hintSchema` (with `hintStateSchema`), `withholdingPolicySchema`, `plannedLedgerEntrySchema`, `ledgerChapterSchema`, `plannedDiscourseLedgerSourceSchema`, `discourseContextProjectionSchema`, `disclosureObservationSchema`, `excerptDisclosureCheckpointSchema`, `fullWorkContextSchema`, `sparseRunDeclarationSchema`
+**Source Zod Schemas:** `packages/core/src/schemas/discourse.ts` — `discourseStateSchema`, `modelReaderProfileSchema`, `narratorProfileSchema` (with `narratorProfileTypeSchema`, `narratorAccessSchema`, `narratorAssertionCapabilitySchema`, `narratorTruthCapabilitySchema`, `narratorFidelitySchema`, `narratorSinceritySchema`), `voiceProfileSchema` (with `narrativeLevelSchema`, `diegeticRelationSchema`), `narratorAssertionSchema` (with `assertionTypeSchema`, `assertionPolaritySchema`, `narratorAssertionStatusSchema`, `narrationBoundarySchema`, `assertionEvidenceSchema`), `disclosureActionSchema` (with `revealActionSchema`, `claimActionSchema`, `hintActionSchema`, `retractionActionSchema`, `correctionActionSchema`, `withholdStartActionSchema`, `withholdEndActionSchema`, `discoursePositionSchema`), `hintSchema` (with `hintStateSchema`), `withholdingPolicySchema`, `plannedLedgerEntrySchema`, `ledgerChapterSchema`, `plannedDiscourseLedgerSourceSchema`, `discourseContextProjectionSchema`, `disclosureObservationSchema`, `excerptDisclosureCheckpointSchema`, `fullWorkContextSchema`, `sparseRunDeclarationSchema`
 
 The discourse contract governs **how** narrative information is disclosed to the reader — the telling, not the told. It models narrator profiles, disclosure actions (reveals, claims, hints, retractions, corrections, withholds), hint lifecycles, and the planned disclosure ledger.
 
@@ -11,9 +11,11 @@ Four author-facing YAML surfaces exist. Three are dedicated definition-level sur
 | Surface | Path | Schema | Mandatory |
 |---------|------|--------|-----------|
 | Narrator profiles | `definitions/narrators/*.yaml` (one profile per file) | `narratorProfileSchema` | optional directory |
-| Planned disclosure ledger | `definitions/discourse-ledger.yaml` | `plannedDiscourseLedgerSourceSchema` | **required** — the mandatory reader-order source |
+| Planned disclosure ledger | `definitions/discourse-ledger.yaml` | `plannedDiscourseLedgerSourceSchema` | optional — the loader substitutes an empty runtime ledger when the file is absent |
 | Narrator assertions | `definitions/assertions/*.yaml` (one assertion per file) | `narratorAssertionSchema` | optional directory; required when the ledger contains reveal/claim/retraction/correction actions |
 | Scene event files | `chapters/chapter_<N>/*.yaml` (one scene per file) | `eventFileSchema` (`voice`, `focalization`, `narratorProfileRef`) | required — scenes are the primary narrative surface; every reachable `event_file` scene must be listed in the ledger |
+
+> The ledger **file** is optional: `EntityMapper.loadProject()` reads `definitions/discourse-ledger.yaml` with `optional: true` and, when absent, compiles a placeholder ledger (`id: "empty"`, no entries, no real scenes) via `compilePlannedDiscourseLedger()`. The strict scene-sequence preflight below applies to whatever ledger is compiled — the placeholder's `__empty__` chapter reference is not an event ID, so projects that rely on it fail the preflight (`references unknown scene "__empty__"`). Authoring the ledger remains the path to passing canonical discourse compilation.
 
 The following are **not** authored YAML:
 
@@ -81,7 +83,7 @@ Validated by `narratorAssertionSchema`. Authoring surface: one assertion per fil
 | `proposition` | `string` | **required** | The proposition being asserted (free text). |
 | `polarity` | `enum` | **required** | `"affirmative"` or `"negative"`. |
 | `type` | `enum` | **required** | `"authoritative_reveal"`, `"claim"`, `"conjecture"`, `"quotation"`, `"implication"`. |
-| `truthBoundary` | `boolean` | **required** | `true` = authoritative truth the narrator knows (reveal-capable); `false` = non-authoritative/unknown truth status (claim/conjecture only). The schema is `z.boolean()`: only `true` or `false` are accepted — `indeterminate` is not an authored value. |
+| `status` | `enum` | **required** | `"asserted"`, `"unknown"`, or `"contested"` (`narratorAssertionStatusSchema`). `asserted` = authoritative truth the narrator knows (reveal-capable, §5 hard rule); `unknown`/`contested` = non-authoritative truth status (claim/conjecture/implication only, §6). A `superRefine` rejects `authoritative_reveal` with any status other than `"asserted"` — unknown/contested assertions may only be `claim`/`conjecture`/`implication`. |
 | `narrationBoundary` | `object` | **required** | See below. |
 | `evidence` | `object` | optional | See below. |
 
@@ -110,14 +112,14 @@ narrator: narrator_wo
 proposition: "祥林嫂死于祝福前夜——'昨天夜里，或者就是今天罢'"
 polarity: affirmative
 type: authoritative_reveal
-truthBoundary: true
+status: asserted
 narrationBoundary:
   narratorId: narrator_wo
 ```
 
 ## Planned Discourse Ledger
 
-Validated by `plannedDiscourseLedgerSourceSchema` from `definitions/discourse-ledger.yaml`. The `hash` field of the runtime `PlannedDiscourseLedger` is **never authored** — `compilePlannedDiscourseLedger()` derives it at runtime.
+Validated by `plannedDiscourseLedgerSourceSchema` from `definitions/discourse-ledger.yaml`. The file is optional to the loader: when absent, `EntityMapper` substitutes a placeholder (`id: "empty"`, no entries) before compiling. The `hash` field of the runtime `PlannedDiscourseLedger` is **never authored** — `compilePlannedDiscourseLedger()` derives it at runtime.
 
 ### Ledger Top-Level Fields
 
@@ -213,7 +215,7 @@ Disclosure actions are a discriminated union on `type`. In the ledger they are a
 | `discoursePosition` | `number` | required | Position in the discourse sequence. |
 
 ```yaml
-# definitions/discourse-ledger.yaml (required surface)
+# definitions/discourse-ledger.yaml (optional surface — the loader substitutes an empty ledger when the file is absent)
 id: zhu_fu_main_ledger
 chapters:
   - branch: main
@@ -258,12 +260,12 @@ entries:
 
 `compileDiscourseBoundaries()` (`state/discourse-context.ts`) enforces these rules and throws `ConfigError` on violation:
 
-- Assertion-bearing entries (reveal/claim/retraction/correction) require an assertion catalog loaded from `definitions/assertions/`.
+- Assertion-bearing entries (reveal/claim/retraction/correction) require an assertion catalog loaded from `definitions/assertions/`; ledgers with hints/withholds only do not.
 - Every referenced assertion must exist in the catalog.
-- `reveal` requires the referenced assertion to have `truthBoundary: true` (§5 hard rule).
-- `claim` requires the referenced assertion to be non-authoritative (`truthBoundary !== true` and `type !== 'authoritative_reveal'`) (§6).
+- `reveal` requires the referenced assertion to have `status: "asserted"` (§5 hard rule).
+- `claim` requires the referenced assertion to be non-authoritative (`status !== 'asserted'` and `type !== 'authoritative_reveal'`) (§6).
 - `retraction` must reference an assertion that is **still active at the retraction point** on the same branch (§8): a member of the active reveal set or an open claim. Retraction removes the target from the open-claim set (reveals persist), so a later second retraction of the same claim is rejected even though it was claimed earlier.
-- `correction` requires a currently-active `priorAssertionId`, distinct from `newAssertionId`, which must not already be active; correcting an `authoritative_reveal` requires an `authoritative_reveal` replacement with `truthBoundary: true`.
+- `correction` requires a currently-active `priorAssertionId`, distinct from `newAssertionId`, which must not already be active; correcting an `authoritative_reveal` requires an `authoritative_reveal` replacement with `status: "asserted"`. The correction replaces the prior in both the active-reveal and open-claim sets, classified by the replacement's type.
 - Entries are branch-local, and `compileDiscourseSceneSequence()` (`state/discourse-sequence.ts`) enforces the full scene-sequence contract:
   - Only `source === 'event_file'` scenes participate; duplicate event IDs are rejected.
   - The branch must have at least one chapter block, and chapter numbers must be strictly increasing.
@@ -280,6 +282,7 @@ Not enforced: `narrationBoundary.focalizerId` is never checked against character
 - `assertionPolarity`: `"affirmative"`, `"negative"` (2 values)
 - `assertionEvidence.type`: `"direct_observation"`, `"testimony"`, `"inference"`, `"documented"`, `"knowledge_boundary"` (5 values)
 - `assertionEvidence.confidence`: `"certain"`, `"probable"`, `"speculative"` (3 values)
+- `narratorAssertionStatus` (field `status`): `"asserted"`, `"unknown"`, `"contested"` (3 values)
 - `narratorProfile.type`: `"focalizer_bound"`, `"retrospective_entity"`, `"explicit_ledger"`, `"omniscient"` (4 values)
 - `narratorAccess` (field `access`): `"full"`, `"focalizer_only"`, `"limited"` (3 values)
 - `narratorAssertionCapability` (field `assertion`): `"full"`, `"constrained"`, `"minimal"` (3 values)
@@ -302,7 +305,7 @@ narrator: narrator_wo
 proposition: "灵魂和地狱是否存在——'也许有罢……说不清'"
 polarity: affirmative
 type: claim
-truthBoundary: false
+status: unknown
 narrationBoundary:
   narratorId: narrator_wo
 ```
@@ -325,7 +328,7 @@ narrator: narrator_wo
 proposition: "Test"
 polarity: maybe          # not in the polarity enum
 type: claim
-truthBoundary: false
+status: unknown
 narrationBoundary:
   narratorId: narrator_wo
 ```
@@ -338,10 +341,10 @@ ConfigError (code CONFIG_INVALID)
   context.path: definitions/assertions/bad_assertion.yaml:polarity
 ```
 
-A semantic violation (e.g. a reveal referencing a `truthBoundary: false` assertion, or an entry whose `action.discoursePosition` differs from its `discoursePosition`) is a preflight `ConfigError` with a plain message, not a schema path:
+A semantic violation (e.g. a reveal referencing a `status: "unknown"` assertion, or an entry whose `action.discoursePosition` differs from its `discoursePosition`) is a preflight `ConfigError` with a plain message, not a schema path:
 
 ```
-ConfigError: Reveal in entry "entry_reveal_unknown" on branch "main" references assertion "a1" which has truthBoundary=false. Reveals require truthBoundary=true.
+ConfigError: Reveal in entry "entry_reveal_unknown" on branch "main" references assertion "a1" which has status=unknown. Reveals require status=asserted.
 ```
 
 ## Normalized Target

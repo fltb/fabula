@@ -5,6 +5,8 @@
 
 规则定义了世界的治理原则——从自然法则和社会规范到道德原则和法律法规。它们以 YAML 文件形式存放在 `definitions/rules/` 目录中，由 `EntityMapper.loadProject()` 通过 `ruleDefinitionSchema`（严格模式）验证并加载。
 
+> 本页为当前参考文档，与 [当前系统状态](../../current-state.md) 保持同步。
+
 ## RuleDefinition 字段
 
 | 字段 | 类型 | 描述 |
@@ -37,7 +39,7 @@
 - **`introduce_exception`** — 建立了规则的新例外情况
 - **`nullify`** — 规则被裁定为不适用
 
-重放时，`applyEventRuleEffects`（`packages/core/src/state/event-application.ts`）通过 `convertLegacyRuleEffect`（`packages/core/src/state/rule-replay.ts`）把每个遗留条目转换为一条 `RuleTransaction`，再由 `applyRuleTransaction` 应用到 `WorldState.rules`（`Record<ruleId, RuleRuntimeState>`）：
+重放时，`event-application.ts` 的 `applyTransactions` 通过 `convertLegacyRuleEffect`（`packages/core/src/state/rule-replay.ts`）把每个遗留条目转换为一条 `RuleTransaction`，再由 `applyRuleTransaction` 应用到 `WorldState.rules`（`Record<ruleId, RuleRuntimeState>`）：
 
 | 遗留 effect | 转换后的操作 |
 |---|---|
@@ -46,7 +48,7 @@
 | `introduce_exception` | `add_exception`（新建 `effect: exempt` 的异常） |
 | `nullify` | `set_effectiveness`（`newEffectiveness: nullified`） |
 
-`RuleTransaction` 的完整操作集合为 `enable`、`suspend`、`revoke`、`amend`、`replace`、`set_effectiveness`、`add_exception`、`remove_exception`。渲染管线（`pipeline/output.ts`）从已渲染事件收集规则效果，写入 `.nova/derived/rules.yaml` 作为证据链产物。
+`RuleTransaction` 的完整操作集合为 `enable`、`suspend`、`revoke`、`amend`、`replace`、`set_effectiveness`、`add_exception`、`remove_exception`。渲染完成后，`pipeline/output.ts` 的 `collectAllReferenceFiles` 把规则效果（连同 threads、foreshadowing、relationships）收集为 JSON-safe 的 `DerivedData` 输出意图；**Core 从不直接写文件**——序列化与落盘由 Host repositories（`@novalistically/node-host`）负责，不要把 `.nova/derived/rules.yaml` 描述为 Core 的写入产物。
 
 ## 规则的流动方式
 

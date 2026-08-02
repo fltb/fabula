@@ -2,6 +2,8 @@
 
 > ~300 字 — 几分钟内上手 Novalistically。
 
+> 本文为当前参考文档，与 [当前系统状态](../current-state.md) 保持同步。
+
 ## 前置条件
 
 - Node.js 26.5+（`package.json` 的 `engines` 限定 `>=26.5.0 <27`）
@@ -15,7 +17,7 @@ npm install
 npm run build
 ```
 
-`npm install` 安装所有工作空间包（`core`、`cli`、`bench`）；`npm run build` 编译 TypeScript 并打包各包产物（基准测试与 CLI 都依赖 `packages/core/dist`）。
+`npm install` 安装所有工作空间包（`core`、`node-host`、`bench`、`cli` 与私有 `workbench`）；`npm run build` 编译 TypeScript 并打包各包产物（CLI 依赖 `packages/core` 与 `packages/node-host` 的 `dist`）。
 
 ## 配置
 
@@ -37,6 +39,8 @@ NOVALISTICALLY_AI_API_KEY=your_api_key_here
 
 如果使用其他提供商，可以通过 `NOVALISTICALLY_AI_BASE_URL` 和 `NOVALISTICALLY_AI_MODEL` 覆盖。
 
+这些变量由 `@novalistically/node-host` 的 `AiSdkProvider`（`packages/node-host/src/providers/ai-sdk.ts`）读取；CLI **不会**自动加载 `.env` 文件——运行前需要把变量导出到 shell 环境。
+
 ## 运行现有测试夹具
 
 `zhu-fu`（祝福 — "New Year's Sacrifice"）测试夹具是主要的回归测试夹具。运行基准测试套件：
@@ -45,14 +49,13 @@ NOVALISTICALLY_AI_API_KEY=your_api_key_here
 npx vitest run packages/bench/tests/bench.test.ts
 ```
 
-**预期输出（无需 LLM；耗时与数量因机器/夹具状态而异）：**
+**预期输出（无需 LLM；以下为格式示意，具体数字随机器与夹具状态而异）：**
 
 ```
-[Regression] Fixture: .../fixtures/zhu-fu
-[Regression] 8/8 passed, 0 failed, 250ms total
+[Regression] N/N passed, 0 failed, NNNms total
 [L2] Passed: true, Detail: L2 issues — errors: 0, warnings: N, infos: 0
 [L1 Issues] Total: N
-[Perf] Total measurements: 15
+[Perf] Total measurements: N
 ```
 
 这个测试文件会运行（`packages/bench/src/`）：

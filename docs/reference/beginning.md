@@ -1,5 +1,9 @@
 # AI Harness 小说创作框架
 _2026-07-16 11:12:32 | Model: gpt-5-5-mini_
+> **历史记录，非当前实现契约**：本文是 2026-07-16 的原始 AI Harness 设计讨论转录
+> （Model: gpt-5-5-mini），仅作历史证据保留，不代表当前系统行为。
+> 源码核验的现状基线见 [`docs/current-state.md`](../current-state.md)（2026-08-02）；
+> 当前架构与参考页面见 [`docs/architecture.md`](../architecture.md) 与 `docs/reference/` 下的页面。
 
 ### User
 我现在有个 idea

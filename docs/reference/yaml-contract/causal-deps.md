@@ -42,7 +42,7 @@ One predecessor per dependency. Multiple causes of the same dependent produce mu
 
 | `edgeClass` | Produced from | Notes |
 |-------------|---------------|-------|
-| `"author_origin"` | Authored `causalPredecessors` (event YAML) or trusted compiler-injected predecessors (`NarrativeEvent.causalPredecessors`, e.g. branch-point transitions) | Validated: predecessor must be a reachable event on the branch; references to the genesis event are dropped; the initial root can never be an `author_origin` predecessor. |
+| `"author_origin"` | Authored `causalPredecessors` (event YAML) or trusted compiler-injected predecessors (`NarrativeEvent.causalPredecessors`, e.g. branch-point and `system:introduction` transitions) | Validated: predecessor must be a reachable event on the branch (`ConfigError`, phase `narrative-graphs`); the initial root can never be an `author_origin` predecessor. |
 | `"provider"` | Maximal-provider resolution during compilation | Edge from the provider node to the reader node; skipped when an event reads its own `stateAfter` output. |
 | `"same_coordinate_order"` | Explicit equal-coordinate ordering | Only valid between two equal `point` story coordinates; the initial root can never be a predecessor. |
 | `"internal"` | Derived temporal edges | Complete bipartite edges between adjacent same-clock scalar buckets; `causalGroupId` = `temporal:<clock>:<fromScalar>:<toScalar>`. Transitivity makes any earlier point reach any later one. |
@@ -155,12 +155,9 @@ Boundary references are hash-pinned, one-way, read-only links between graphs —
 |-------|------|----------|---------|-------------|
 | `causalPredecessors` | `array` | optional | — | Explicit predecessor event IDs. Each entry must be nonblank after trimming; entries must be unique; when present, at least one entry is required. |
 
-Semantics: an optional explicit dependency on any scene; it is principally useful when timestamps cannot order the pair (unlocated, indeterminate, or cross-clock scenes), but the wire schema and compiler do not restrict it to those — the document's own E1a/E1b fixture is a same-story-clock example. `graph-compiler.ts::validateCoordinateOrder` accepts an explicit `author_origin` edge whenever the predecessor is earlier, equal, or incomparable with the dependent, and rejects only a strictly later comparable predecessor. `causalPredecessors` is the only author-facing spelling of an explicit dependency edge. At graph compilation, `graph-adapter.ts` converts them to `author_origin` edges after:
+Semantics: an optional explicit dependency on any scene; it is principally useful when timestamps cannot order the pair (unlocated, indeterminate, or cross-clock scenes), but the wire schema and compiler do not restrict it to those — the document's own E1a/E1b fixture is a same-story-clock example. `graph-compiler.ts::validateCoordinateOrder` accepts an explicit `author_origin` edge whenever the predecessor is earlier, equal, or incomparable with the dependent, and rejects only a strictly later comparable predecessor. `causalPredecessors` is the only author-facing spelling of an explicit dependency edge. At graph compilation, `graph-adapter.ts` converts them to `author_origin` edges and rejects predecessors that are not reachable events on the selected branch (`ConfigError`, phase `narrative-graphs`).
 
-- dropping references to the genesis event (`system:genesis`, whose postconditions are merged into the initial root instead of replaying);
-- rejecting predecessors that are not reachable events on the selected branch (`ConfigError`, phase `narrative-graphs`).
-
-`NarrativeEvent.causalPredecessors` may also be injected by trusted internal compilation (e.g. branch-point transition edges from the game-dialogue tree); the runtime type does not distinguish authored from injected provenance.
+`NarrativeEvent.causalPredecessors` may also be injected by trusted internal compilation (e.g. branch-point transition edges from the game-dialogue tree and `system:introduction:<targetId>:<entityId>` entity-introduction transitions, which copy their host event's predecessor list); the runtime type does not distinguish authored from injected provenance.
 
 ## Closed Enums / IDs
 
@@ -252,7 +249,7 @@ resolutions:
     provenanceHash: "<sha256>"
 ```
 
-Note on root fact indices: `api.ts::buildInitialState` places genesis postconditions **before** registry facts, and `graph-adapter.ts` assigns `system:initial:fact:<index>` in that order. This fixture has multiple `worldFacts`, so `system:initial:fact:0` is a genesis world-fact output (the first worldFact, `council_disarray`), **not** `camille.location` — `camille.location` is a registry-state fact indexed after all genesis postconditions. Use a symbolic placeholder (`system:initial:fact:<n>`) or look up the actual generated index rather than attaching `camille.location` to fact zero.
+Note on root fact indices: initial-root outputs come from `initialFacts`, built by `buildInitialFacts()` (`entity/project-runtime.ts`) from initial-introduction declaration states — in declaration-catalog order (characters, locations, items, factions, rules, then `state_initial.yaml` world facts, then definition-less introductions). `graph-adapter.ts` assigns `system:initial:fact:<index>` in that array order (branch-filtered, with equal same-key facts deduplicated). This fixture has multiple `worldFacts`, so `system:initial:fact:0` is the first declaration fact (e.g. a character's `lifecycle`), **not** necessarily `camille.location`. Thread baselines are separate outputs (`thread:<threadId>` with `status: "planned"`). Use a symbolic placeholder (`system:initial:fact:<n>`) or look up the actual generated index rather than attaching `camille.location` to fact zero.
 
 ## Invalid Example
 
@@ -289,7 +286,7 @@ The compiler produces, per branch:
 - `StoryOrderIndex` — topological replay order built from all four edge classes plus resolved coordinates; causal predecessors provide explicit ordering where story time cannot.
 - Event-to-event adjacency (`storyAdjacency`) including all edge classes, used by replay, branch merge, sparse-run excerpt disclosure, and coverage manifests.
 
-The story root is the synthetic node `system:initial` (`INITIAL_STORY_ROOT_ID`), whose outputs come from the selected initial facts (including genesis postconditions) and thread baselines (`thread:<threadId>` with `status: "planned"`).
+The story root is the synthetic node `system:initial` (`INITIAL_STORY_ROOT_ID`), whose outputs come from the selected initial facts (built by `buildInitialFacts()` from initial-activation declarations and `state_initial.yaml` world facts — initial facts are baseline inputs, never replayed as authored events) and thread baselines (`thread:<threadId>` with `status: "planned"`).
 
 ## Source-Map Diagnostic Format
 

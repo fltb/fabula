@@ -2,6 +2,8 @@
 
 > 撰写日期：2026-07-19
 > 对标范围：Novel Studio（宋致远，学术系统）、Sudowrite / NovelAI / Novelcrafter（商业工具）、Novel-OS / InkOS（开源多 Agent 系统）、Yarn Spinner / Ink（游戏叙事引擎）
+>
+> **历史记录（dated snapshot）**：本页是 2026-07-19 撰写的竞品快照分析，属于有日期的历史记录；文中“现状”描述的是撰写时的源码状态。当前系统状态以 [`docs/current-state.md`](../current-state.md) 为准，两者冲突时以当前源码为准。此后实现已改变的部分已就地标注（见 [⑦ 管线 Trace 系统](#⑦-管线-trace-系统orchestration-trace) 的 2026-08-02 更新）。
 
 ## 概述
 
@@ -305,6 +307,8 @@ Agent API 脚手架已存在，但管线未消费：
 - QA 决策和证据来源
 
 **Novalistically 的现状**：**trace 只是内存中的不完整插桩**——`runtime.trace` 开启时 `render-service.ts` 会构造 `TraceCollector`（`observability/trace.ts`）并传给 `RenderPipeline`，由管线记录 pipeline / cache / pass1 / pass2 / validator / circuit 各阶段的 span 起止与耗时（`durationMs`）；`ResultAggregator` 也支持在构造时接收 collector 记录每个 validator 的 span。但**没有任何生产调用执行 `TraceCollector.write()` 或读取 `snapshot()`**——不会产出 `{projectDir}/.nova/traces/{jobId}.jsonl` 文件；`context` / `output` 两个声明阶段没有任何记录点；且 `render-service.ts` 构造的 `ResultAggregator` 未传入 collector，per-validator span 实际不会记录。
+
+> **2026-08-02 更新（已落地部分）**：`render-service.ts` 现在**无条件**构造 `TraceCollector`（`observability/trace.ts`，phase 含 context/output 但 pipeline 只记录 pipeline / cache / pass1 / pass2 / validator / circuit 六类 span）并在每次执行结束时经 `persistTrace()` 把 `toJsonLines()` 结果通过 CAS 写入 Host execution repository（node-host `file-execution-repository.ts` 的 `compareAndSwapTrace()`，路径 `trace/{projectId}/{operationId}`）——**trace 已可落盘**，上文的“无 JSONL 落盘 / 无生产调用方”不再成立（落盘形式是 execution repository，而非 `{projectDir}/.nova/traces/` 文件）。仍成立的部分：`context` / `output` 阶段仍无记录点；`ResultAggregator` 构造签名已变为 `(customValidators?, entityTypeCatalog?)`，不再接收 collector（validator span 由管线自身 `phase: 'validator'` 记录，而非 aggregator 记录）；token 计量、RelevanceEngine 8 维评分、cache-key 追溯与 analysis 消费追踪仍未入 trace。
 
 仍无法回答的问题：
 - "这个场景为什么渲染了这些角色？" → RelevanceEngine 的 8 维评分没有暴露到 trace

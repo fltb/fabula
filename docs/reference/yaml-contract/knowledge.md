@@ -14,7 +14,7 @@ The knowledge contract models **what is known** in the story world. It has three
 
 Authors never write proposition, claim, or ledger YAML directly. The author-facing surface is:
 
-- `worldFacts` in `definitions/state_initial.yaml` — established world facts (become genesis postconditions and `concept` entities);
+- `worldFacts` in `definitions/state_initial.yaml` — established world facts (become `concept` registry entities and the initial facts projected from them);
 - event `preconditions` / `expectedPostconditions` (see [event.md](../yaml-format/event.md)) — deterministic reads/writes that ground grounded propositions;
 - ellipsis `knowledgeTransactions` (array of `InformationAct`, see [ellipsis-bridge.md](./ellipsis-bridge.md)) — authored information acts (schema-validated and mapped onto the runtime ellipsis, but not replayed into the ledger).
 
@@ -35,7 +35,7 @@ Propositions come in four discriminated kinds.
 | `entityId` | `string` | required | — | The entity this proposition is about (nonblank). |
 | `attribute` | `string` | required | — | The attribute being asserted (nonblank). |
 | `value` | `unknown` | required | — | The attribute value. |
-| `quantifier` | `enum` | optional | `undefined` | `"identity"` (default), `"all"`, `"any"`, or `"not"`. |
+| `quantifier` | `enum` | optional | `undefined` | `"identity"`, `"all"`, `"any"`, or `"not"`. The schema has no default; `evaluate()` treats an absent quantifier as `"identity"`. |
 | `factId` | `string` | optional | — | Links to the canonical fact that grounds this proposition. |
 
 ### EpistemicProposition
@@ -215,7 +215,7 @@ The runtime produces:
 
 - `PropositionCatalog` — an available runtime/API IR that must be supplied externally: an immutable, versioned record of all propositions with an expected per-kind dependency graph (`grounded` → `[]`, `epistemic` → `[propositionId]`, `act` → `contentPropositions`, `intensional` → `[]`). `validatePropositionCatalog` rejects self-references, dependencies on propositions absent from the catalog, and cycles; it does not derive a catalog from authored facts, and `emptyWorldState` starts with an empty catalog. Facts can be evaluated by an existing grounded proposition but do not create propositions. Intensional propositions are recognized but do not provide world-truth access.
 - `EpistemicLedger` — claims keyed by `${subject}:${propositionId}`, with `bySubject` / `byProposition` indices and an ordered `actLog` of `InformationAct`s. `applyClaimTransaction` rejects duplicate writes to the same claim cell; `recordInformationAct` appends acts.
-- `worldFacts` entries in `state_initial.yaml` become genesis-event postconditions (facts on `entityId: "world"`) and registry entities of `kind: "concept"` — they do not become proposition-catalog entries. Event preconditions/expectedPostconditions ground deterministic reads/writes. Ellipsis files carry `knowledgeTransactions` (an `InformationAct` array) that is schema-validated and copied onto the runtime ellipsis by `mapToNarrativeEllipsis`, but it is **not currently replayed**: `computeStateBefore` explicitly skips ellipsis/non-event nodes, and `recordInformationAct` (the API that would append acts to `EpistemicLedger.actLog`) has no production callsite. The array is thus validated/mapped authoring input, not recorded ledger activity.
+- `worldFacts` entries in `state_initial.yaml` become registry entities of `kind: "concept"` (entity state `{ value, description }`), and `buildInitialFacts` (`entity/project-runtime.ts`) projects those concept states into the runtime initial facts (`<worldFactId>.value`, `<worldFactId>.description`) — there is no synthetic genesis event and no `entityId: "world"` fact; they do not become proposition-catalog entries. Event preconditions/expectedPostconditions ground deterministic reads/writes. Ellipsis files carry `knowledgeTransactions` (an `InformationAct` array) that is schema-validated and copied onto the runtime ellipsis by `mapToNarrativeEllipsis`, but it is **not currently replayed**: `computeStateBefore` explicitly skips ellipsis/non-event nodes, and `recordInformationAct` (the API that would append acts to `EpistemicLedger.actLog`) has no production callsite. The array is thus validated/mapped authoring input, not recorded ledger activity.
 - `evaluate()` computes deterministic three-valued truth for propositions: grounded compares against `WorldState` entities, epistemic checks the subject's settled claim against the attitude, act checks the act log, intensional is always `"indeterminate"`. `hasSufficientWarrant` decides whether an evidence chain supports a `"know"` claim.
 
 ## Source-Map Diagnostic Format

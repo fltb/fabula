@@ -1,10 +1,12 @@
 # Pass 2 分析
 
 **源类型：** `packages/core/src/types/analysis.ts` (AnalysisResult)、`packages/core/src/validator/index.ts` (AnalysisContent — 唯一声明处，为 `z.infer<typeof analysisContentSchema>`)
-**Schema：** `packages/core/src/schemas/analysis.ts` (analysisResultSchema、parseAnalysisJSON、parseAnalysisJSONWithErrors)、`packages/core/src/validator/index.ts` (analysisContentSchema、AnalysisContent)
+**Schema：** `packages/core/src/schemas/analysis.ts` (buildAnalysisResultSchema、analysisResultSchema、parseAnalysisJSON、parseAnalysisJSONWithErrors)、`packages/core/src/validator/index.ts` (analysisContentSchema、AnalysisContent)
 **提示：** `packages/core/src/ai/prompts/render-analysis.ts` (buildAnalysisPrompt)
 
-Pass 2 是两趟渲染管线中的结构化自我分析阶段。在 LLM 生成散文（Pass 1，温度 0.8）后，同一篇散文加上完整上下文以温度 0.3 和种子 42 被反馈给 LLM，生成一个机器可解析的 JSON 分析结果。这是一个**硬性要求**——Pass 2 不可用将被视为硬错误，且没有正则表达式回退。
+> 本页为 current reference，与 [`docs/current-state.md`](../current-state.md)（2026-08-02 源码核验基线）同步。
+
+Pass 2 是两趟渲染管线中的结构化自我分析阶段。在 LLM 生成散文（Pass 1，温度 0.8）后，同一篇散文加上完整上下文以温度 0.3 和种子 42 被反馈给 LLM，生成一个机器可解析的 JSON 分析结果。这是一个**硬性要求**——Pass 2 不可用（缺失 analysis）会让该场景在 release 决策中 `blocked`（`missing analysis output`，没有 waiver 路径），且没有正则表达式回退。
 
 ## Pass 2 是什么
 
@@ -36,6 +38,22 @@ Pass 2 要求 LLM 扮演文学编辑和质量保证代理的角色：给定场�
 | `focalizationDetected` | 可选 (S6c) | `FocalizationDetected` | Genette 聚焦检测：`zero` \| `internal` \| `external` |
 | `voiceDetected` | 可选 (S6d) | `{ level, relation }` | Genette 叙事声音检测（叙事层级 + 同/异故事） |
 | `anachronyDetected` | 可选 (S6e) | `AnachronyDetected` | Genette 时序倒错检测：`analepsis` \| `prolepsis` \| `none` |
+
+## Envelope：eventId / protocol / observations / analysis
+
+`AnalysisResult`（`types/analysis.ts`）是 Pass 2 的外层测量记录，含四个字段：
+
+- **`eventId`** — 被测场景的事件 ID。
+- **`protocol`** — `ValidationKey`，精确测量协议：散文（proseHash）、激活 schema、模型、提示、采样、validator/reference 策略。解析器把解析出的协议与 `buildAnalysisPrompt()` 嵌入提示的真实期望协议逐字段比较——任何缺失、多余或不同的字段都 fail closed（`protocolMatches()`）。
+- **`observations`** — 按激活的顶层分析字段键控的测量记录（`AnalysisObservation`），每个字段恰好一条 disposition：
+  - `produced`：字段测量完成，规范 payload 存在于 `analysis[field]` 且通过块 schema；`evidence` 是散文的逐字引用
+  - `abstained`：无法测量，无规范 payload，附 `reason`
+  - `ambiguous`：单次评估发现至少两个文本支持的合理解读，无规范 payload（不是多评估者共识，绝不叫 `contested`）
+- **`analysis`** — 原有动态 domain payload（`Record<string, unknown>`，块形状不变；插件可在运行时贡献字段）。
+
+顶层 schema 由 `buildAnalysisResultSchema()` 动态构建：每个激活字段在顶层都是可选的（`produced` 才要求存在、`abstained`/`ambiguous` 可省略 payload），配对 refinement（`pairObservationsWithPayload()`）再强制：`produced` ⇒ payload 存在且 schema 有效；`abstained`/`ambiguous` ⇒ payload 缺失；每个存在的 payload 与每个必需激活字段恰好对应一条 observation。解析器拿到散文时，每条 evidence 引用还会被校验为渲染散文的非空精确子串（基于 `protocol.proseHash`）。
+
+observation 记录的是“测量是否产生”，不是“测量结论为真”；observations 从不进入 WorldState、DiscourseState、epistemic ledger/catalog 或 reference index。
 
 ### MatchLevel 枚举
 
@@ -70,8 +88,11 @@ Pass 2 请求在管线层（`pipeline/render.ts`）统一设置 `responseFormat:
 
 1. `parseAnalysisJSONWithErrors()` 去除 Markdown 代码围栏（```json ... ```）。
 2. `JSON.parse()` 解析为对象；失败记录 `parse` 拒绝类别。
-3. 对照 Zod schema（`analysisResultSchema`，即 `{ eventId, analysis }` + 聚合的 `analysisContentSchema`；有插件时使用 `getCombinedValidationSchema()`）验证；失败返回字段级 Zod issue。
+3. 对照动态构建的顶层 schema（`buildAnalysisResultSchema()`：envelope `{ eventId, protocol, observations, analysis }`，payload 字段按激活分析契约可选；有插件时以 `getCombinedValidationSchema()` 扩展）验证；失败返回字段级 Zod issue（`validation` 拒绝类别）。
+4. `protocolMatches()` 把解析出的 `protocol` 与期望协议（`buildAnalysisPrompt` 返回的真实协议）逐字段比较——任何缺失、多余或不同的字段都 fail closed。
+5. 配对 refinement（`pairObservationsWithPayload()`）强制 observations↔payload 对应关系（见 Envelope 一节）。
+6. 提供散文时，每条 evidence 引用必须是渲染散文的非空精确子串。
 
-验证失败时，具体错误详情会被反馈给 LLM 进行修正（带反馈的重试）——最多 4 次子尝试（初始 + 最多 3 次反馈重试），拒绝类别（`empty` / `parse` / `validation`）被记录。没有正则表达式回退方案；全部子尝试耗尽后 Pass 2 视为失败，场景被标记 `needsReview`。
+验证失败时，具体错误详情会被反馈给 LLM 进行修正（带反馈的重试）——最多 4 次子尝试（初始 + 最多 3 次反馈重试），拒绝类别（`empty` / `parse` / `validation`）被记录。没有正则表达式回退方案；全部子尝试耗尽后 Pass 2 视为失败：`analysis` 置 null，`RenderSceneResult.errors` 记录对应拒绝类别的错误（`Pass 2 exhausted: ...`），`needsReview` 置 true。随后 release 决策路径（`evaluateReleaseDecision()`）对缺失 analysis 或耗尽重试一律返回 `blocked`（reason：`missing analysis output` / `exhausted retries — needs review`），场景进入 review 路径——这是**逐场景**的 release/review 判定，不会让所有外层处理立即终止，其他场景照常渲染。
 
-同一套解析/验证逻辑也暴露为 `evaluateProseCandidate()`（`pipeline/render.ts`），供编辑服务等外部消费者复用。
+同一套解析/验证逻辑也暴露为 `evaluateProseCandidate()`（`pipeline/render.ts`，Pass 2 解析 + Zod + aggregator + release 判定），供编辑服务等外部消费者复用。

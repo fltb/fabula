@@ -1,6 +1,6 @@
 # 项目：叙事工程系统 (Narrative Engineering System)
 
-> ⚠️ **历史参考文档。** 本文档是 2025 年 7 月的原始系统设计，部分内容已过时。当前活跃的设计文档为 `bench-rewrite-design.md`（索引）和 `bench-rewrite-full.md`（完整规格）。本文档保留在此供架构参考和历史溯源。
+> ⚠️ **历史参考文档（2025 年 7 月）。** 本文档是原始系统设计，部分内容已过时，不代表当前实现。已核验现状以 [当前系统状态](../current-state.md)（2026-08-02 源码核验）为准，当前架构与参考页面见 [架构](../architecture.md) 和 [文档索引](../INDEX.md)。文中 `bench-rewrite-design.md` / `bench-rewrite-full.md` 已归档于本目录（见 [归档索引](./README.md)），其现行对应页面为 [基准系统](../reference/bench.md)。本文档保留在此供架构参考和历史溯源。
 
 > 让人和 LLM 在同一套可靠规则下协作；让小说变成可管理的工程对象；让写作像开发一样可分支、可回滚、可审查、可缓存、可调试；让 LLM 负责创造，让系统负责稳定。
 

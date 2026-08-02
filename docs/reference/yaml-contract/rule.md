@@ -57,7 +57,7 @@ Rules define the governing principles of the story world — natural laws, socia
 
 ## Mutual Exclusions & Semantics
 
-- `exceptions` and `evidenceChain` are independent arrays; both may be absent/empty (only `evidenceChain` is required).
+- `exceptions` and `evidenceChain` are independent arrays; `exceptions` is optional (may be absent), while `evidenceChain` is required but may be an empty array (the schema imposes no minimum length).
 - An empty `logicalConsequences` array is schema-valid. However, ISS executability scoring requires at least one consequence with a complete `check` (`calcRuleExecutability`), and strict-mode validation rejects a rule with no executable check (`iss/strict.ts`).
 - `ruleClass` is optional with no inference: nothing derives a class from `category`.
 - At replay, event `ruleEffects` entries (legacy `RuleEffectEntry` shape `{ rule, effect, evidence }`) are converted by `convertLegacyRuleEffect` into `RuleTransaction`s:
@@ -129,7 +129,7 @@ error.context.path: definitions/rules/bad_rule.yaml:ruleClass
   - **Replay:** event `ruleEffects` → rule transactions building/advancing `RuleRuntimeState` in `WorldState.rules` (activation `dormant` → `enabled`/`suspended`/`revoked`, effectiveness `full`/`limited`/`nullified`, exceptions). Evaluation records are not retained: the runtime state schema has no evaluation-record field, and the records `applyRuleTransaction` returns for transactions that carry `constraintEvaluation` are discarded by event replay.
   - **`WorldRuleValidator.validatePre`:** flags a `nullify` effect when the target rule is `enabled` and not already `nullified`, and flags postcondition writes that contradict an immutable attribute defined by the entity registry.
   - **`WorldRuleValidator.validatePost`:** consumes Pass 2 LLM `ruleChecks` (`{ ruleId, violated, evidence, severity: "minor" | "major" }`), mapping `major` violations to errors and `minor` to warnings. `getAnalysisRequirements()` instructs the analysis pass to report a `ruleChecks` block for each active rule.
-- Context assembly exposes rules that are `enabled` and not `nullified` as `activeRules` to the LLM context.
+- Context assembly (`_buildActiveRules`) exposes only rules present in `WorldState.rules` as `activeRules` — `WorldState.rules` is populated exclusively by replay transactions, so a declared rule that never receives an event `ruleEffects` transaction never becomes an active rule, and only those with `activation: "enabled"` and `effectiveness !== "nullified"` are included. Each assembled `RuleDefinition` carries only the entity-registry state fields (`name`, `statement`, `category`, `type`, `logicalConsequences`, `evidenceChain`); `ruleClass` and `exceptions` are not included.
 
 ## Source-Map Diagnostic Format
 

@@ -12,6 +12,8 @@ pov:
   character: narrator
   type: omniscient
 sceneBrief: "The player receives an offer."
+beats:
+  - "The player receives an offer that changes the route."
 preconditions: []
 expectedPostconditions: []
 choices:

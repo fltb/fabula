@@ -16,16 +16,16 @@ NOVALISTICALLY_AI_API_KEY=... NOVALISTICALLY_AI_MODEL=... npm run smoke:stage1:l
 1. 把夹具复制到临时目录（排除 `.nova`/`scenes`/`output`，确保任何开发者缓存都无法命中）
 2. 通过公共 API `renderNovel()` + `AiSdkProvider` 渲染全部事件（Pass 1 散文 + Pass 2 分析 JSON；Pass 1 seed 为 null，Pass 2 seed 固定 42）
 
-> ⚠️ **该命令当前不可运行**（2026-07-31 现状）：`generate-reference.mjs` 调用了 `buildLiveSmokeRecord()`（`packages/bench/src/live-smoke.ts`）与 `collectReferenceIssueIdentities()`（`packages/bench/src/reference.ts`），但从未导入这两个 helper——任何非空渲染都会在 LLM 调用之后抛 `ReferenceError`。在补上导入之前，`npm run smoke:stage1:live` 无法产出候选集。
+> ⚠️ **该命令当前不可运行**（2026-08-02 现状）：`generate-reference.mjs` 调用了 `buildLiveSmokeRecord()`（`packages/bench/src/live-smoke.ts`）与 `collectReferenceIssueIdentities()`（`packages/bench/src/reference.ts`），但从未导入这两个 helper——任何非空渲染都会在 LLM 调用之后抛 `ReferenceError`。该错误发生在账本构建步骤（此时尚未写任何候选文件），以 “Smoke record build failed: buildLiveSmokeRecord is not defined” 形式非零退出，也不会写 `fatal-error.json`。在补上导入之前，`npm run smoke:stage1:live` 无法产出候选集。
 
 修复后脚本的预期产物（写到 `fixtures/{project}/.nova/smoke-candidates/{timestamp}/`）：
 - `smoke-record.json` — 账本记录（`reviewStatus: candidate`；成功要求 E0–E6 全部存在、已释放、无错误）
 - `{eventId}.json` — 每个事件的候选响应（`reviewStatus: candidate`）
 - `observed-outcomes.json`、`candidate-provenance.json`
 
-**失败语义（按当前实现）**：`fatal-error.json` 只在三条路径写入——`renderNovel` 抛出、返回零结果、候选 schema 校验失败；其余失败路径（账本构建失败、provenance 校验失败、`smokeOutput.success === false`）只清理临时目录并以非零码退出，**不写** `fatal-error.json`，且候选事件 JSON 可能在后续步骤失败前已落盘。因此“失败必写 fatal-error.json、绝不留下残缺候选集”是目标语义，当前实现并不保证。
+**失败语义（按当前实现）**：`fatal-error.json` 在三条路径写入——`renderNovel` 抛出、返回零结果、候选 schema 校验失败（`responseReferenceSchema`）。其中候选校验失败路径**先全量校验、后写文件**：任何候选无效时写 `fatalType: 'candidate_validation_failure'` 的 `fatal-error.json` 并退出，候选事件 JSON 尚未落盘，不会留下部分候选集。**不写** `fatal-error.json` 的失败路径：账本构建失败（`buildLiveSmokeRecord` 抛出——包括未导入 helper 的 `ReferenceError`）时尚未写任何候选文件；provenance manifest 校验失败时事件 JSON 与 `observed-outcomes.json` 已落盘；`smokeOutput.success === false` 时全部文件（含 `reviewStatus: 'failed'` 的 `smoke-record.json`，脚本自称为 failure record）已写入。临时目录在所有退出路径都被清理，但 `fixtures/{project}/.nova/smoke-candidates/{timestamp}/` 下已写出的产物会保留。因此“失败必写 fatal-error.json、绝不留下残缺候选集”是目标语义，当前实现并不保证。
 
-**Live smoke 产出的是候选集（candidates），不是已批准参考。** 脚本绝不写入 `reference/data/` 目录。候选集经人工审核（`reference/review.json` 中 `decision: approved`）后才成为参考；`verify-stage1-acceptance.mjs` 负责校验 review 记录与 `live-smoke-record.json`（要求 cache.hits=0、事件恰好为 E0–E6、pass2 seed=42 等）。
+**Live smoke 产出的是候选集（candidates），不是已批准参考。** 脚本绝不写入 `reference/data/` 目录。候选集经人工审核（`reference/review.json` 中 `decision: approved`）后才成为参考；`verify-stage1-acceptance.mjs` 负责校验 review 记录与 `live-smoke-record.json`（要求 cache.hits=0、事件恰好为 E0–E6、pass2 seed=42 等）。**证据资格**：在未导入 helper 的缺陷修复前，本脚本无法产出候选集；`reference/` 下已有的 mock/参考 fixture 数据及其确定性重放结果**不是**人工或 live-LLM 证据。候选集只有在 helper 修复后由真实 LLM 运行产出、并经人工审核批准后，才能作为 live-LLM 证据引用。
 
 ### 何时重新生成 live smoke
 
@@ -55,15 +55,14 @@ npx vitest run packages/bench/tests/bench.test.ts
 
 ### L1 — 预渲染验证（无需 LLM）
 
-- 从测试夹具加载 YAML 定义和事件
-- 通过 `compileStoryRuntimeGraph()` 构建故事图；`compileStoryBoundaries()` 在 “Build DAG” 阶段按拓扑序重放每个事件并解析状态边界（`stateBeforeByEventId` / `finalState`）——**规范重放发生在这里**，`runRegressionBench()` 并不构造 `ReplayEngine`
-- 后续 “Replay state” 阶段只消费 `compileStoryBoundaries()` 的产物（`boundaries.finalState` 与 `stateBeforeByEventId`），不执行新的重放
+- 通过 `FileProjectSourceLoader` 加载测试夹具，`compileProject()`（canonical kernel load）在 “Load entities” 阶段一次性编译实体、事件与 story boundaries（`stateBeforeByEventId` / `finalState` / `orderedEventIds`）——**规范重放/边界编译发生在这里**，`runRegressionBench()` 并不构造 `ReplayEngine`
+- 后续 “Load events” / “Build DAG” / “Replay state” 阶段只是消费 kernel load 产物的占位阶段，不执行新的重放
 - 通过 `ResultAggregator.validateAll()` 运行全部 28 个内建验证器（仅结构性检查）
 
 ### L2 — 后渲染验证（基于已批准参考）
 
 - 用 `loadApprovedReferences()` 加载 `fixtures/{project}/reference/` 参考数据
-- 使用存储的分析运行 `ResultAggregator.validateRender()`
+- 使用存储的分析按事件运行 `ResultAggregator.validatePost()`（不存在 `validateRender()` 方法）
 - 将实际验证 issue 身份与 `expected-outcomes.json` 清单逐项比较（缺失或意外即失败）
 - 计算 N-CED / S-CED 等一致性指标（`packages/bench/src/consistency.ts`）
 
@@ -87,4 +86,5 @@ npx vitest run packages/bench/tests/bench.test.ts
 - **速度**：确定性基准无 LLM 调用（秒级），live smoke 需要 30-60 秒
 - **确定性**：已批准参考数据固定 → 结果可复现；live smoke 候选集只为人工审核提供真实 LLM 证据
 - **CI 兼容性**：确定性基准可以在 CI 中运行，无需 API 密钥
+- **证据资格**：确定性基准与参考 fixture 的重放结果不是人工或 live-LLM 证据；只有 live smoke（helper 修复后）的真实 LLM 运行并经理人工审核批准，才能作为 live-LLM 证据引用
 - **迭代开发**：开发过程中反复运行确定性基准，仅在提示模板/分析需求变更时重新生成 live smoke 候选集

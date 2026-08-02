@@ -2,7 +2,7 @@
 
 > ~400 字 — 向 Novalistically 核心引擎添加新验证器的分步指南。
 
-验证器是检查叙事输出质量的主要机制。每个验证器实现 `packages/core/src/types/validator.ts` 中的 `Validator` 接口，并注册到 `ResultAggregator`。
+验证器是检查叙事输出质量的主要机制。每个验证器实现 `packages/core/src/types/validator.ts` 中的 `Validator` 接口。注册分两条路径：**built-in** 验证器编译进 Core 的默认集合；**plugin** 验证器在构造 `ResultAggregator` 时通过 `customValidators` 注入（见第 4 步），不修改任何 Core 源文件。
 
 ## 第 1 步：创建验证器文件
 
@@ -31,9 +31,9 @@ export class MyValidator implements Validator {
 
 该接口支持两个可选的检查方法：
 
-- **`validatePre(input: PreRenderInput): ValidationIssue[]`** — 在渲染前对事件定义和世界状态进行结构性检查。`PreRenderInput` 提供 `event`、`worldState`、`events`、`entityRegistry`、`chapter`、`queryState`、`getKnowledge` 和 `getThreadProgress`（`eventStore`、`story` 可选）。
+- **`validatePre(input: PreRenderInput): ValidationIssue[]`** — 在渲染前对事件定义和世界状态进行结构性检查。`PreRenderInput` 提供 `event`、`worldState`、`events`、`entities`、`chapter`、`queryState`、`getKnowledge` 和 `getThreadProgress`（`story`、`entityTypeCatalog` 可选）。
 
-- **`validatePost(input: PostRenderInput): ValidationIssue[]`** — 使用 Pass 2 分析对渲染后的散文进行语义检查。`PostRenderInput` 提供 `event`、`worldState`、`prose`、`analysis`（已解析的 `AnalysisResult | null`）和 `chapter`（`entityRegistry`、`context` 可选）。
+- **`validatePost(input: PostRenderInput): ValidationIssue[]`** — 使用 Pass 2 分析对渲染后的散文进行语义检查。`PostRenderInput` 提供 `event`、`worldState`、`prose`、`analysis`（已解析的 `AnalysisResult | null`）和 `chapter`（`entities`、`entityTypeCatalog`、`context` 可选）。
 
 ## 第 3 步：声明分析需求
 
@@ -60,26 +60,24 @@ getAnalysisRequirements() {
 
 `ResultAggregator` 会按字段合并所有验证器的需求，并检测同一字段上属性和 schema 的冲突。
 
-## 第 4 步：在聚合器中注册
+## 第 4 步：注册验证器（built-in 与 plugin 是两条路径）
 
-编辑 `packages/core/src/validator/aggregator.ts`：添加导入并在构造函数的验证器数组中插入 `new MyValidator()`：
+**Built-in 验证器**：编辑 `packages/core/src/validator/builtins.ts`，把 `new MyValidator()` 加入 `createBuiltInValidators()` 返回的数组。这是默认集合的唯一来源：`ResultAggregator` 构造函数在未传 `customValidators` 时调用它，`render-service.ts` 也显式用它构造聚合器。**不要**在 `aggregator.ts` 里插入验证器——它的构造函数只接受注入的 `customValidators` 列表。当前默认集合共 28 个验证器；`GreyLineValidator` 已导出但不在默认集合中（opt-in），需要启用时自行加入数组。
 
-```typescript
-import { MyValidator } from './my-validator.js';
+**Plugin 验证器**：不修改任何 Core 源文件。在宿主代码中构造 `new ResultAggregator(customValidators, entityTypeCatalog)` 并传入验证器实例。注意 `customValidators` 是**整体替换**默认集合而不是追加——通常用 `[...createBuiltInValidators(), new MyValidator()]` 扩展。验证器的 `getAnalysisRequirements()` 会通过 `ResultAggregator.getCombinedValidationSchema()` / `getAnalysisContract()` 动态合并进 Pass 2 的 JSON schema 与提示模板。
 
-// 构造函数内：
-this.validators = customValidators ?? [
-  // ... 现有验证器 ...
-  new MyValidator(),
-];
-```
+如果你的验证器引入**新的顶层 Pass 2 字段**：
 
-如果你的验证器引入**新的顶层 Pass 2 字段**，还需要把它登记到 `packages/core/src/validator/index.ts` 中的静态 `analysisContentSchema`（并相应更新其契约测试/辅助类型）——在 `ResultAggregator` 中注册只更新动态 schema，`parseAnalysisJSON()` 与 schema 合并测试仍然使用这个静态 `analysisContentSchema`。如果复用的是已有块（例如 `narrativeChecks`），则无需此步。
+- **Built-in**：把块 schema 登记到 `packages/core/src/validator/index.ts` 中的静态 `analysisContentSchema`（当前 20 个字段），并相应更新其契约测试/辅助类型。`parseAnalysisJSON()`（默认 built-in 合约）与持久化合约解析仍使用这个静态 schema；只有 `parseAnalysisJSONWithErrors()` 被传入动态 `combinedSchema` 时才包含 plugin 字段。
+- **Plugin**：**无需**登记到 `analysisContentSchema`——字段通过 validator requirements 动态进入 `combinedSchema`，live 管线用 `analysisContract.combinedSchema` 解析。字段必须是顶层块（带 `.` 的路径会被截断为顶层段，见第 3 步）。
 
-## 第 5 步：添加模块导出
+如果复用的是已有块（例如 `narrativeChecks`），则不引入新字段，以上登记步骤都不需要。
+
+## 第 5 步：添加模块导出（仅 built-in）
+
+Plugin 验证器位于 Core 之外、由宿主注入，**不**改动 Core 的任何导出。Built-in 验证器需要两步：
 
 1. 添加到 `packages/core/src/validator/index.ts`：
-
 ```typescript
 export { MyValidator } from './my-validator.js';
 ```

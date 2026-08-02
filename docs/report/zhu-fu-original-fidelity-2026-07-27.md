@@ -94,9 +94,9 @@ E6 的 YAML 在 expanded 与 calibrated 两次中相同。所有 render job 都�
 
 三份报告都逐场景包含：完整原文段、完整生成 prose、行级 unified diff、LCS 指标；calibrated 报告额外包含 E6 的完整错误链和 `analysis === null` gate predicate。
 
-- baseline：[`zhu-fu-original-fidelity-baseline-comparison.md`](./zhu-fu-original-fidelity-baseline-comparison.md)
-- adopted expanded：[`zhu-fu-original-fidelity-comparison.md`](./zhu-fu-original-fidelity-comparison.md)
-- rejected calibrated：[`zhu-fu-original-fidelity-calibrated-comparison.md`](./zhu-fu-original-fidelity-calibrated-comparison.md)
+- baseline：[`zhu-fu-original-fidelity-baseline-comparison-2026-07-27.md`](./zhu-fu-original-fidelity-baseline-comparison-2026-07-27.md)
+- adopted expanded：[`zhu-fu-original-fidelity-comparison-2026-07-27.md`](./zhu-fu-original-fidelity-comparison-2026-07-27.md)
+- rejected calibrated：[`zhu-fu-original-fidelity-calibrated-comparison-2026-07-27.md`](./zhu-fu-original-fidelity-calibrated-comparison-2026-07-27.md)
 
 真实运行产物位于本地忽略目录：
 

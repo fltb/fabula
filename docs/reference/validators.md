@@ -1,11 +1,13 @@
 # 验证器
 
-**源文件：** `packages/core/src/validator/*.ts`（28 个默认验证器文件）
+**源文件：** `packages/core/src/validator/*.ts`（28 个默认验证器文件 + 导出的 opt-in `grey-line.ts`）
 **聚合器：** `packages/core/src/validator/aggregator.ts` (ResultAggregator)
-**基础辅助函数：** `packages/core/src/validator/base.ts` (buildContext、makeIssue)
+**基础辅助函数：** `packages/core/src/validator/base.ts` (makeIssue、makeObservationRef、consumeNarrativeChecks、getAttributeSemanticRole / getAttributeWritePolicy / getAttributesBySemanticRole)
 **类型：** `packages/core/src/types/validator.ts` (Validator、PreRenderInput、PostRenderInput、AnalysisBlockRequirement、ValidationResult)
 
-Novalistically 默认运行 28 个验证器（`ResultAggregator` 构造时的内置列表），在两个层面检查叙事完整性：**L1（渲染前）**检查事件定义和世界状态一致性，**L2（渲染后）**检查 LLM 生成的散文是否符合规范以及 Pass 2 结构化分析。所有验证器都符合 `Validator` 接口。
+Novalistically 默认运行 28 个 built-in 验证器（由 `validator/builtins.ts` 的 `createBuiltInValidators()` 构造，`ResultAggregator` 无自定义数组时使用），在两个层面检查叙事完整性：**L1（渲染前）**检查事件定义和世界状态一致性，**L2（渲染后）**检查 LLM 生成的散文是否符合规范以及 Pass 2 结构化分析。所有验证器都符合 `Validator` 接口。`GreyLineValidator`（`greyLine`）已从 `validator/index.ts` 导出，但**不是**默认注册项（opt-in），需要调用方自行把它加入验证器数组。
+
+> 本页为 current reference，与 [`docs/current-state.md`](../current-state.md)（2026-08-02 源码核验基线）同步。
 
 ## 验证器架构
 
@@ -47,7 +49,7 @@ Novalistically 默认运行 28 个验证器（`ResultAggregator` 构造时的内
 
 | 验证器 | 名称 | 检查内容 |
 |---|---|---|
-| **WorldRuleValidator** | `world_rule` | L1：nullify 规则效果与当前规则运行状态不一致为错误；写后置条件违反不可变属性（registry 写策略 immutable）为错误；L2：消费 Pass 2 `ruleChecks`——violated 且 severity 为 major 为错误、minor 为警告 |
+| **WorldRuleValidator** | `world_rule` | L1：nullify 规则效果与当前规则运行状态不一致为错误；写后置条件违反不可变属性（项目 entity type catalog 中该属性的 writePolicy 为 `immutable` 且世界状态已有不同值）为错误；L2：消费 Pass 2 `ruleChecks`——violated 且 severity 为 major 为错误、minor 为警告 |
 | **KnowledgeValidator** | `knowledge` | 知识边界执行——重复获取已知命题为信息；POV 角色在事实建立之前（更晚的事件中才建立）就“知道”该事实为错误；Pass 2 `knowledgeChecks` 中 contradicted 为警告 |
 
 ### 叙事
@@ -70,8 +72,8 @@ Novalistically 默认运行 28 个验证器（`ResultAggregator` 构造时的内
 | **VoiceConsistencyValidator** | `voice_consistency` | 消费 Pass 2 `voiceDetected`（S6d，level + relation）——与声明的 `voice.level`/`voice.relation` 任一不一致为警告 |
 | **AnachronyConsistencyValidator** | `anachrony_consistency` | `analepsis`/`prolepsis` 倒错缺少 `distance` 为警告；消费 Pass 2 `anachronyDetected`（S6e，`analepsis` \| `prolepsis` \| `none`）——与声明的类型不一致为警告 |
 | **DiscourseValidator** | `discourse` | `narratorProfileRef` 未解析到已加载的 `NarratorProfile`（PostRenderInput.context 中缺失）为错误。纯确定性，不消费 Pass 2 |
-| **ChecklistValidator** | `checklist` | 每个必需的叙事清单条目（`narrativeChecklist.items` 中 required）必须在 Pass 2 `checklistResults` 中有 `covered: true` 的对应项——未评估或未覆盖为警告；无清单的事件跳过。注意：解析后的 Pass 2 数据把该块存在 `analysis.analysis.checklistResults`，而 `validatePost()` 读的是外层包装上的 `analysis.checklistResults`，正常解析路径从不产生该顶层字段——因此当前所有必需条目实际都被视为未评估 |
-| **NarrativeTechniqueValidator** | `narrative_technique` | 原始技巧字段存在但解析后的 context 契约为空为接线错误（error）；每个已解析技巧契约要求恰好一个匹配的 `narrativeCheck`（entityId=事件 ID、attribute=技巧 kind）——缺失、重复、absent 或 contradicted 均为错误，exact/similar 通过。同样受嵌套读取缺陷影响：解析后的检查在 `analysis.analysis.narrativeChecks`，而 `validatePost()` 读 `analysis.narrativeChecks`，因此当前该路径看到空数组，每个已解析契约都会被报告为缺失 |
+| **ChecklistValidator** | `checklist` | 每个必需的叙事清单条目（`narrativeChecklist.items` 中 required）必须在 Pass 2 `checklistResults` 中有 `covered: true` 的对应项——未评估或未覆盖为警告；无清单的事件跳过。`validatePost()` 从当前 envelope 的 payload 读取解析结果（`input.analysis.analysis.checklistResults`），命中项携带 `observationRef { field: 'checklistResults', analysisPointer: '/checklistResults/<i>' }` |
+| **NarrativeTechniqueValidator** | `narrative_technique` | 原始技巧字段存在但解析后的 context 契约为空为接线错误（error）；每个已解析技巧契约要求恰好一个匹配的 `narrativeCheck`（entityId=事件 ID、attribute=技巧 kind）——缺失、重复、absent 或 contradicted 均为错误，exact/similar 通过。`validatePost()` 从当前 envelope 的 payload 读取解析结果（`input.analysis.analysis.narrativeChecks`），并携带 `observationRef { field: 'narrativeChecks', analysisPointer: '/narrativeChecks/<i>' }` |
 
 ### 输出质量
 
@@ -81,12 +83,21 @@ Novalistically 默认运行 28 个验证器（`ResultAggregator` 构造时的内
 | **QualityValidator** | `quality` | 消费 Pass 2 `quality` 块——`proseScore < 4` 时标记低散文质量并列出弱点列表（警告）；`estimatedWordCount < 100` 时提示短场景（信息） |
 | **ThreadProgressValidator** | `thread_progress` | L1：`threadProgress` 引用世界状态中不存在的线程为警告；L2：Pass 2 `threadProgressAchieved` 与声明的 `threadProgress` 对比——当声明的线程未在散文中实现时发出警告 |
 
+### 非默认验证器（opt-in）
+
+| 验证器 | 名称 | 检查内容 |
+|---|---|---|
+| **GreyLineValidator** | `greyLine` | 灰线母题跟踪（`factual_detail`）：事件声明的 `greyLines` 节点必须引用合法 eventId、意象文本出现在散文里（消费 Pass 2 `narrativeChecks`）、同一灰线内同一事件无重复节点；不要求 closure，节点可无限增长。**不在默认 28 个 built-in 中**——`createBuiltInValidators()` 不包含它，需调用方显式构造，例如 `new ResultAggregator([...createBuiltInValidators(), new GreyLineValidator()])`。 |
+
 ## L1 与 L2：validatePre 与 validatePost
 
-从旧的单一 `validate()` 方法迁移到 `validatePre`/`validatePost`，使得验证器可以同时参与渲染前和渲染后的检查。`ResultAggregator` 使用：
+`Validator` 接口只有三个可选方法：`validatePre()`、`validatePost()` 与 `getAnalysisRequirements()`；不存在旧的 `validate()` / `validateRender()` 回退路径。`ResultAggregator` 使用：
 
-- **`validate()`** — 在所有验证器上运行 `validatePre()`（新路径），如果未实现则回退到旧的 `validate()`
-- **`validateRender()`** — 在所有验证器上运行 `validatePost()`（新路径），如果未实现则回退到旧的 `validateRender()`
+- **`validatePre()`** — 对每个验证器运行 `validatePre()`（L1，渲染前）：事件定义、状态查询、注册表查找、DAG 因果边
+- **`validatePost()`** — 对每个验证器运行 `validatePost()`（L2，渲染后）：散文 + `AnalysisResult`（可空）
+- **`validateAll()`** — 按事件顺序对全部事件运行 `validatePre()`，产出按 event id 索引的 `ValidationResult` map
+
+`validatePost()` 另有两层 envelope 集成：**不确定性预检**——某验证器需要的字段在 `observations` 中为 `abstained`/`ambiguous` 时，不把缺失的 payload 交给该验证器，而是为每个（验证器, 字段）对发出默认 `warning` 的 `analysis_uncertainty` finding（显式 override 仍生效，severity 不取决于 disposition）；**observationRef 校验**——每个 finding 的 `observationRef` 必须指向存在的 observation 且其 RFC 6901 `analysisPointer` 能解析进 `AnalysisResult.analysis`，非法引用被替换为 fail-closed 的 `compiler_invariant` error。
 
 这种分离使得像 `PacingValidator` 这样的验证器可以在渲染前检查弧段推进，并在渲染后消费叙事节奏信号。
 

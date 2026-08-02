@@ -28,15 +28,15 @@ Novalistically 采用不同的方法：它验证 LLM 实际生成的内容。但
 
 - **Pass 2（温度 0.3，种子 42）：** 散文（来自 Pass 1）和上下文被重新输入 LLM。这次它生成结构化分析 JSON：后置条件覆盖、POV 一致性、发明细节、角色名称使用、叙事检查级别（`exact | similar | absent | contradicted`）、时态检测、冲突分析等。
 
-Pass 2 是**硬性要求**。如果 LLM 未生成有效的分析 JSON，则该渲染被视为失败——没有正则表达式兜底。系统在放弃前会使用 Zod 错误反馈（采用 Instructor 模式）进行重试。
+Pass 2 是**硬性要求**——没有正则表达式兜底。如果 LLM 未生成有效的分析 JSON，系统会使用 Zod 错误反馈（采用 Instructor 模式）进行重试；反馈尝试耗尽时该场景记录错误并进入 review/release 决策路径，而不是所有外层处理立即终止。
 
 ### 3. 带 DAG 因果边的事件溯源
 
-Novalistically 叙事中的每一个状态变更都是一个**事件**。事件按顺序提交，世界状态始终通过从头开始（或从最近的快照）重放事件来推导。
+Novalistically 叙事中的每一个状态变更都是一个**事件**。事件按顺序提交，世界状态始终通过 `ReplayEngine` 从 event store 重放事件来推导；`StateManager` 的内存快照只是 recovery primitive，`getCurrentState()` / `getStateAt()` 当前仍走完整重放，尚未接入快照恢复加速。
 
-其独特之处在于**时间模型**：事件通过 DAG 边形成因果连接。每个事件定义后置条件（它确立的事实）和前置条件（它依赖的事实）。`ReplayEngine` 从这些因果边构建有向无环图，并按照拓扑顺序重放事件——而非依据 `narrativeOrder`。这保证了因果一致性：倒叙事件的条件基于读者当时已知的信息进行评估，而非事件被创作的时间。
+其独特之处在于**时间模型**：事件通过 DAG 边形成因果连接。每个事件定义后置条件（它确立的事实）和前置条件（它依赖的事实）。`ReplayEngine` 从这些因果边构建有向无环图，并按照拓扑顺序重放事件——而非依据 `narrativeOrder`。这保证了因果一致性：倒叙事件的条件基于读者当时已知的信息进行评估，而非事件被创作的时间。这不等于"`narrativeOrder` 从不使用"：canonical release assembly 以 discourse scene sequence 为主，runtime/legacy 路径仍存在按 `narrativeOrder` 排序；已核验的不变量只是它不作为因果 replay 顺序。
 
-可在配置的间隔创建快照，以防止无限制的重放。
+`SnapshotEngine` 可在配置的间隔（默认 20）创建**内存**快照，但当前没有任何生产调用方从快照恢复：每次状态查询仍从头重放事件，快照尚未提供恢复加速。
 
 ### 4. YAML 作为真相来源
 

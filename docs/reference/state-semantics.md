@@ -1,8 +1,8 @@
 # State Semantics Reference
 
 **Version:** 1.0
-**Date:** 2026-07-22
-**Status:** Baseline frozen
+**Date:** 2026-07-22 (initial baseline)
+**Status:** Current reference — synchronized with the source-verified baseline [`docs/current-state.md`](../current-state.md) (2026-08-02). Facts follow current source; the date above records when this page was first frozen.
 
 **Source files:**
 - `packages/core/src/state/graph-adapter.ts` — `compileStoryRuntimeGraph()`, `compileNarrativeGraphs()`, `INITIAL_STORY_ROOT_ID`
@@ -56,9 +56,9 @@ The `WorldState` interface captures the core dimensions of narrative state:
 
 The causal order is produced by a three-stage compilation pipeline (`buildCausalEdges()` / `topologicalSort()` no longer exist):
 
-1. **`compileStoryRuntimeGraph()`** (`graph-adapter.ts`) resolves the temporal context for ALL events *before* branch projection (`resolveTemporalContext()`), filters events by `includesPath(event.branchExistence, branchPath)`, merges `initialFacts` + genesis postconditions into the `system:initial` root node (genesis is NOT replayed as an ordinary event), and emits normalized `CompileNode[]` (effects, reads, branch scope, explicit edges).
-2. **`compileGraph()`** (`graph-compiler.ts`) runs a fixed 12-stage compiler: normalize outputs → extract reads → filter branch → resolve declarations → validate coordinate/order → derive temporal edges → infer providers/absence → commutativity → branch/closure/cycle validation → hash. It produces a `StoryGraph` and/or `DiscourseGraph` with four edge classes: `author_origin` (explicit `causalPredecessors`), `provider` (read→write), `same_coordinate_order` (explicit ordering at equal coordinates), and `internal` (derived temporal edges).
-3. **`buildStoryOrderIndex()`** (`dag.ts`) runs Kahn's algorithm over the compiled adjacency to produce the deterministic linear extension plus a transitive-ancestor index. Story point coordinates on the same clock already generate bipartite `internal` temporal edges between adjacent scalar buckets (`causalGroupId: "temporal:<clock>:<from>:<to>"`), so the index itself only breaks ties among genuinely unrelated nodes — by event ID (`localeCompare`), with the initial root first. `narrativeOrder` is NEVER consulted for causal ordering.
+1. **`compileStoryRuntimeGraph()`** (`graph-adapter.ts`) resolves the temporal context for ALL events *before* branch projection (`resolveTemporalContext()`), filters events by `includesPath(event.branchExistence, branchPath)`, merges deduplicated/conflict-checked `initialFacts` plus initial thread declarations into the `system:initial` root node (`INITIAL_STORY_ROOT_ID`) — there is NO genesis narrative event; initial writes are separate deterministic input and are never replayed as an ordinary event — and emits normalized `CompileNode[]` (effects, reads, branch scope, explicit edges).
+2. **`compileGraph()`** (`graph-compiler.ts`) runs the fixed 12-stage compiler: 1 normalize outputs → 2 extract reads → 3 filter branch → 4 resolve declarations → 5 validate coordinate/order → 6 derive temporal internal edges → 7 pre-provider StoryOrderIndex → 8 infer providers/absence → 9 rebuild final StoryOrderIndex → 10 commutativity → 11 branch/closure/cycle validation → 12 hash/replay. It produces a `StoryGraph` and/or `DiscourseGraph` with four edge classes: `author_origin` (explicit `causalPredecessors`), `provider` (read→write), `same_coordinate_order` (explicit ordering at equal coordinates), and `internal` (derived temporal edges).
+3. **`buildStoryOrderIndex()`** (`dag.ts`) runs Kahn's algorithm over the compiled adjacency to produce the deterministic linear extension plus a transitive-ancestor index. Story point coordinates on the same clock already generate bipartite `internal` temporal edges between adjacent scalar buckets (`causalGroupId: "temporal:<clock>:<from>:<to>"`), so the index itself only breaks ties among genuinely unrelated nodes — by event ID (`localeCompare`), with the initial root first. `narrativeOrder` is NEVER consulted for causal ordering — it remains used for catalog/selector sorting, scene metadata, EventStore ordering, and runtime/legacy assembly paths (e.g. `ProseConcatenator`); the verified invariant is only that it is never the causal replay order.
 
 Canonical keys: deterministic facts use `factKey(fact) = "${entityId}.${attribute}"`; thread effects use `thread:<threadId>`, relationship effects `relationship:<relationshipId>`, rule effects `rule:<ruleId>`. Values are NOT part of the key — same-cell later writes supersede earlier ones via provider resolution.
 
@@ -82,7 +82,7 @@ Initial facts (`initialFacts`) are applied before the first event, providing the
 `ReplayEngine.replay()` (in `replay.ts`) first compiles `compileStoryRuntimeGraph()` and then replays the ordinary events in `order.topologicalOrder`, applying the baseline (`applyInitialFacts` + initial thread declarations) before the first event. Each event is applied through `applyNarrativeEvent()` (`event-application.ts`) in a fixed phase order:
 
 1. **Phase 1: Validate all deterministic preconditions** — throws `PreconditionMismatchError` on failure
-2. **Phase 2: Apply postcondition effects** — set/unset writes, lifecycle validation (invalid transition, duplicate write, unset on absent attribute, retired-entity writes all throw `ConfigError`)
+2. **Phase 2: Apply postcondition effects** — set/unset writes with catalog-driven write constraints (`validateCatalogWrite()`: `immutable` / `write_once` / `mutable` / `lifecycle_managed` write policies, `unsetAllowed`, lifecycle-attribute unset rejection, invalid lifecycle state / disallowed transition, same-coordinate lifecycle conflicts, and writes to retired entities — all throw `ConfigError`; duplicate write to the same `(entityId, attribute)` within one event throws `ConfigError`)
 3. **Phase 3: Validate participants** — retired entities cannot participate
 4. **Phase 4: Apply transactions** — thread transactions, relationship transactions, rule transactions
 
@@ -90,7 +90,7 @@ Initial facts (`initialFacts`) are applied before the first event, providing the
 
 ### 1.5 SnapshotEngine
 
-`SnapshotEngine` in `snapshot.ts` periodically captures `WorldState` at configurable intervals (default every 20 events). Snapshots are keyed by event count (not narrativeOrder). Each `Snapshot` stores `{ eventCount, eventId, timestamp, version, state }`. `findNearest()` enables fast recovery by finding the closest snapshot at or before a target count.
+`SnapshotEngine` in `snapshot.ts` periodically captures `WorldState` at configurable intervals (default every 20 events) — pure in-memory value semantics (interval policy, deep-clone serialization, nearest selection, invalidation) that never touches the filesystem. Snapshots are keyed by event count (not narrativeOrder). Each `Snapshot` stores `{ eventCount, eventId, timestamp, version, state }`. `findNearest()` is a value-selection helper only: `StateManager.getCurrentState()` / `getStateAt()` still replay through `ReplayEngine` and never hydrate from snapshots, so snapshot-based fast recovery is NOT a wired capability. Durable event logs and snapshots belong to the semantic `StateLogRepository` / `StateSnapshotRepository` ports (`ports/state-repository.ts`); Hosts write the Snapshot values produced here through those ports.
 
 ### 1.6 Timestamp Resolution
 
@@ -503,7 +503,7 @@ Cross-branch reconciliation defines `MergePlan` with three `MergePolicy` discrim
 
 ### 5.5 Non-Rules
 
-- `narrativeOrder` is NEVER used for causal ordering, state replay, or snapshot keying
+- `narrativeOrder` is NEVER used for causal ordering, state replay, or snapshot keying — it remains used for catalog/selector sorting, scene metadata, EventStore ordering, and runtime/legacy assembly paths (`ProseConcatenator`); the verified invariant is only that it is never the causal replay order
 - Linear narratives (empty `BranchPath`) NEVER include lane-scoped events
 - Events with non-matching `branchExistence` are completely invisible
 - Same-coordinate events are ordered only by explicit edges (`author_origin` / `same_coordinate_order` / `provider`); unordered pairs whose read/write keys overlap are rejected with `UnorderedStoryConflictError` (`UNORDERED_STORY_CONFLICT`) during commutativity validation

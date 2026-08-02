@@ -1,5 +1,9 @@
 # 归档文档
 
+> **当前权威状态**：`docs/current-state.md`（2026-08-02 源码核验）是已核验的现状基线，
+> `docs/architecture.md` 与 `docs/reference/` 中的当前页面与之同步。本目录内容保留各自
+> 日期的原始结论与证据，**不代表当前实现**；两者冲突时以 `docs/current-state.md` 为准。
+
 这些文档是 Novalistically 的原始设计和规划文档。它们为历史参考而保留。规范文档现在位于 `docs/INDEX.md` 及其链接的子文档中。
 
 ## 归档内容

@@ -447,14 +447,16 @@ function projectDeleteHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     }
     const loaded = await api.requireConfiguration();
     if (!loaded.ok) return loaded.response;
-    if (!loaded.active.configuration.projects.some((project) => project.projectId === projectId)) {
+    const configuredProject = loaded.active.configuration.projects.find(
+      (project) => project.projectId === projectId,
+    );
+    if (configuredProject === undefined) {
       return adminError('PROJECT_NOT_FOUND', `Project "${projectId}" is not registered.`);
     }
-    // Removal requires the runtime session to be closed first (plan: project
-    // remove first requires runtime close and no pending authoring recovery).
+    let closedRuntime = false;
     try {
       if (api.options.runtime.isOpen(projectId)) {
-        await api.options.runtime.close(projectId);
+        closedRuntime = await api.options.runtime.close(projectId);
       }
     } catch (error) {
       if ((error as { code?: string }).code === 'PROJECT_BUSY') {
@@ -465,22 +467,52 @@ function projectDeleteHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
       }
       throw error;
     }
-    const receipt = await api.options.configuration.apply({
-      candidate: {
-        ...loaded.active.configuration,
-        projects: loaded.active.configuration.projects.filter(
-          (project) => project.projectId !== projectId,
-        ),
-        defaultProjectId:
-          loaded.active.configuration.defaultProjectId === projectId
-            ? (loaded.active.configuration.projects.find((p) => p.projectId !== projectId)
-                ?.projectId ?? null)
-            : loaded.active.configuration.defaultProjectId,
-      },
-      expectedRevision: loaded.active.revision,
-      origin: 'dashboard',
-      actorId: owner.userId,
-    });
+    const restoreClosedRuntime = async (): Promise<Response | null> => {
+      if (!closedRuntime) return null;
+      try {
+        const active = await api.options.configuration.readActive();
+        const projectToRestore = active?.configuration.projects.find(
+          (project) => project.projectId === projectId,
+        );
+        if (projectToRestore !== undefined) await api.options.runtime.open(projectToRestore);
+        return null;
+      } catch {
+        return adminError(
+          'PROJECT_PENDING_RECOVERY',
+          `Project "${projectId}" could not be restored after the configuration change was rejected.`,
+        );
+      }
+    };
+    let receipt: ConfigOperationReceiptV1;
+    try {
+      receipt = await api.options.configuration.apply({
+        candidate: {
+          ...loaded.active.configuration,
+          projects: loaded.active.configuration.projects.filter(
+            (project) => project.projectId !== projectId,
+          ),
+          defaultProjectId:
+            loaded.active.configuration.defaultProjectId === projectId
+              ? (loaded.active.configuration.projects.find((p) => p.projectId !== projectId)
+                  ?.projectId ?? null)
+              : loaded.active.configuration.defaultProjectId,
+        },
+        expectedRevision: loaded.active.revision,
+        origin: 'dashboard',
+        actorId: owner.userId,
+      });
+    } catch {
+      const recovery = await restoreClosedRuntime();
+      if (recovery !== null) return recovery;
+      return adminError(
+        'INTERNAL',
+        `The configuration change for project "${projectId}" failed; its runtime was restored.`,
+      );
+    }
+    if (receipt.status === 'stale' || receipt.status === 'invalid') {
+      const recovery = await restoreClosedRuntime();
+      if (recovery !== null) return recovery;
+    }
     if (receipt.status === 'stale') {
       return adminError('CONFIG_STALE', 'The configuration changed; re-read and retry.');
     }

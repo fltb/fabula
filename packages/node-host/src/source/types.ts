@@ -39,3 +39,10 @@ export class SourceConflictError extends Error {
     this.actualSourceHash = actualSourceHash;
   }
 }
+
+export class SourceInputError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SourceInputError';
+  }
+}

@@ -84,8 +84,24 @@ export class FileProjectSourceLoader implements FileProjectSourceLoaderContract 
     const content = readFileSync(join(root, ...path.split('/'))).toString('utf8');
     const diagnostics: SourceDiagnosticV1[] = [];
     let parseResult: SourceParseResultV1;
-    try { parseResult = { status: 'parsed', value: parseJsonValue(this.parse(content, path)) }; }
-    catch (error) { diagnostics.push({ code: 'yaml_parse_error', severity: 'error', message: String(error), logicalPath: path }); parseResult = { status: 'invalid', value: null }; }
+    try {
+      const parsed = this.parse(content, path);
+      const value = parseJsonValue(parsed);
+      if (parsed === null || parsed === undefined || value === null) {
+        diagnostics.push({
+          code: 'yaml_empty_document',
+          severity: 'error',
+          message: 'YAML document must contain a value',
+          logicalPath: path,
+        });
+        parseResult = { status: 'invalid', value: null };
+      } else {
+        parseResult = { status: 'parsed', value };
+      }
+    } catch (error) {
+      diagnostics.push({ code: 'yaml_parse_error', severity: 'error', message: String(error), logicalPath: path });
+      parseResult = { status: 'invalid', value: null };
+    }
     return { version: 1, logicalPath: path, content, contentHash: computeSourceDocumentHash(content), parseResult, diagnostics };
   }
 }

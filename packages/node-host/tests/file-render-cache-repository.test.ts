@@ -92,4 +92,30 @@ describe('FileRenderCacheRepository', () => {
       await repository.remove({ key });
     });
   });
+
+  it('fails closed when removing through a symlinked cache directory', async () => {
+    await withTempProject(async (root) => {
+      const repository = new FileRenderCacheRepository(root);
+      const key = cacheKey();
+      await repository.put({ key, record: cacheRecord(key) });
+
+      const outside = path.join(root, 'outside');
+      await fs.mkdir(outside);
+      await fs.writeFile(path.join(outside, 'victim.json'), 'outside bytes', 'utf8');
+      await fs.rm(path.join(root, '.nova', 'render-cache'), { recursive: true, force: true });
+      await fs.symlink(outside, path.join(root, '.nova', 'render-cache'), 'dir');
+
+      await expect(repository.remove({ key })).rejects.toThrow(/escapes project root|not a directory/);
+      expect(await fs.readdir(outside)).toEqual(['victim.json']);
+      expect(await fs.readFile(path.join(outside, 'victim.json'), 'utf8')).toBe('outside bytes');
+    });
+  });
+
+  it('removes nothing when the cache directory has never been created', async () => {
+    await withTempProject(async (root) => {
+      const repository = new FileRenderCacheRepository(root);
+      await expect(repository.remove({ key: cacheKey() })).resolves.toBeUndefined();
+      await expect(repository.get({ key: cacheKey() })).resolves.toBeNull();
+    });
+  });
 });

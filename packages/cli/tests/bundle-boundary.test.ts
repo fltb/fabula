@@ -20,4 +20,18 @@ describe('built ESM package boundaries', () => {
       }),
     ).toContain('Usage:');
   });
+
+  it('keeps the CLI bundle from embedding Core source', () => {
+    const cli = readFileSync(resolve(root, 'packages/cli/dist/index.js'), 'utf8');
+    expect(cli).toMatch(/from "@novalistically\/core/);
+  });
+
+  it('keeps the MCP bundle free of the Commander entry, Bench, and embedded Core', () => {
+    const mcp = readFileSync(resolve(root, 'packages/cli/dist/mcp-server.js'), 'utf8');
+    expect(mcp).not.toContain('@novalistically/bench');
+    expect(mcp).not.toMatch(/from "commander"/);
+    expect(mcp).not.toContain('parseAsync');
+    expect(mcp).not.toContain('resolveRoute');
+    expect(mcp).toMatch(/from "@novalistically\/core/);
+  });
 });

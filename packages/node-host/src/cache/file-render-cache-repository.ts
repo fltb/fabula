@@ -71,6 +71,15 @@ export class FileRenderCacheRepository implements RenderCacheRepository {
 
   async remove(input: { readonly key: LayeredCacheKey }): Promise<void> {
     try {
+      await this.#assertSafeDirectory();
+    } catch (error) {
+      // A cache directory that has never been created has nothing to remove.
+      if (isMissing(error)) return;
+      // A tampered (symlinked/escaped) cache directory fails closed: removing
+      // through it could delete files outside the project root.
+      throw error;
+    }
+    try {
       await fs.unlink(this.#fileFor(input.key));
     } catch (error) {
       if (!isMissing(error)) throw error;

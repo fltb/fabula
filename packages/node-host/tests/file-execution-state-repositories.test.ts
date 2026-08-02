@@ -3,7 +3,9 @@ import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { FileExecutionRepository } from '../src/execution/file-execution-repository.js';
 import { FileStateLogRepository, FileStateSnapshotRepository } from '../src/state/file-state-repositories.js';
+import { FileRenderCacheRepository } from '../src/cache/file-render-cache-repository.js';
 import { acceptedScene, executionFiles, snapshot, stateEvent, stateKey, stateLogFile, stateSnapshotFile, withTempProject } from './execution-fixtures.js';
+import { cacheKey, cacheRecord } from './cache-fixtures.js';
 
 describe('filesystem semantic execution/state repositories', () => {
   it('enforces compare-and-swap and accepted artifact separation', async () => withTempProject(async (root) => {
@@ -12,6 +14,30 @@ describe('filesystem semantic execution/state repositories', () => {
     expect((await repository.compareAndSwapAcceptedScene({ projectId: 'project', eventId: 'event-1', expectedVersion: null, value: acceptedScene() })).kind).toBe('committed');
     expect(await repository.resolveAcceptedArtifact({ projectId: 'project', eventId: 'event-1' })).toMatchObject({ prose: 'accepted' });
     expect(await repository.resolveAcceptedArtifact({ projectId: 'project', eventId: 'missing' })).toBeNull();
+  }));
+
+  it('never resolves accepted artifacts from render cache records', async () => withTempProject(async (root) => {
+    const execution = new FileExecutionRepository(root);
+    const cache = new FileRenderCacheRepository(root);
+    const eventId = 'cache-event';
+    const key = cacheKey();
+    await cache.put({ key, record: cacheRecord(key) });
+
+    // A cache record alone must not surface as an accepted artifact or scene:
+    // the cache is derived output and never an accepted-artifact source.
+    expect(await execution.resolveAcceptedArtifact({ projectId: 'project', eventId })).toBeNull();
+    expect(await execution.readAcceptedScene({ projectId: 'project', eventId })).toBeNull();
+
+    // Committing an accepted scene must not leak into the cache, and the
+    // accepted artifact resolves exclusively from the execution record.
+    expect((await execution.compareAndSwapAcceptedScene({
+      projectId: 'project',
+      eventId,
+      expectedVersion: null,
+      value: acceptedScene(eventId),
+    })).kind).toBe('committed');
+    expect(await cache.get({ key })).toEqual(cacheRecord(key));
+    expect((await execution.resolveAcceptedArtifact({ projectId: 'project', eventId }))?.prose).toBe('accepted');
   }));
   it('serializes concurrent execution compare-and-swap writers', async () => withTempProject(async (root) => {
     const first = new FileExecutionRepository(root);

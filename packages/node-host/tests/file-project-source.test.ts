@@ -6,6 +6,7 @@ import type {
   ProjectSourceSnapshotV1,
   SourceDocumentV1,
 } from '@novalistically/core';
+import { sourceParseResultV1Schema } from '@novalistically/core/schema';
 import {
   buildSourceSnapshot,
   computeSourceDocumentHash,
@@ -13,7 +14,7 @@ import {
 } from '@novalistically/core/source';
 import { FileProjectSourceLoaderImpl } from '../src/source/file-project-source-loader.js';
 import { FileProjectSourceWriterImpl } from '../src/source/file-project-source-writer.js';
-import { SourceConflictError, SourcePathError } from '../src/source/types.js';
+import { SourceConflictError, SourceInputError, SourcePathError } from '../src/source/types.js';
 import { writeAuthoringFixture } from './fixtures.js';
 
 const project = () => { const root = mkdtempSync(join(tmpdir(), 'node-host-source-')); writeAuthoringFixture(root); return root; };
@@ -83,6 +84,40 @@ describe('file project source boundary', () => {
     expect(snapshot.documents.map((document) => document.logicalPath)).toEqual([...snapshot.documents].map((document) => document.logicalPath).sort());
     expect(snapshot.documents.some((document) => document.logicalPath === 'definitions/discourse-ledger.yaml')).toBe(false);
   });
+  it('marks empty and null-only YAML as invalid while preserving source bytes and topology', () => {
+    const root = project();
+    const emptyPath = 'nova.yaml';
+    const nullPath = 'definitions/characters/null.yaml';
+    writeFileSync(join(root, emptyPath), '', 'utf8');
+    writeFileSync(join(root, ...nullPath.split('/')), 'null\n', 'utf8');
+
+    const snapshot = new FileProjectSourceLoaderImpl().load(root);
+    const empty = snapshot.documents.find((document) => document.logicalPath === emptyPath);
+    const nullOnly = snapshot.documents.find((document) => document.logicalPath === nullPath);
+    if (!empty || !nullOnly) throw new Error('expected empty and null-only YAML documents');
+
+    for (const [document, content] of [[empty, ''], [nullOnly, 'null\n']] as const) {
+      expect(document.content).toBe(content);
+      expect(document.parseResult).toEqual({ status: 'invalid', value: null });
+      expect(sourceParseResultV1Schema.safeParse(document.parseResult).success).toBe(true);
+      expect(document.diagnostics).toEqual([{
+        code: 'yaml_empty_document',
+        severity: 'error',
+        message: 'YAML document must contain a value',
+        logicalPath: document.logicalPath,
+      }]);
+    }
+    expect(snapshot.documents.map((document) => document.logicalPath)).toEqual([
+      'chapters/chapter_01/E1.yaml',
+      'chapters/chapter_01/_chapter.yaml',
+      'definitions/characters/a.yaml',
+      'definitions/characters/null.yaml',
+      'definitions/characters/z.yaml',
+      'definitions/entity-types.yaml',
+      'definitions/state_initial.yaml',
+      'nova.yaml',
+    ]);
+  });
   it('applies source hash CAS atomically', async () => {
     const root = project();
     const loader = new FileProjectSourceLoaderImpl();
@@ -94,9 +129,48 @@ describe('file project source boundary', () => {
       beforeContent: before.content,
       beforeHash: before.contentHash,
       afterContent: 'project: changed\n',
-      afterHash: null,
+      afterHash: computeSourceDocumentHash('project: changed\n'),
     }]);
     expect(next.sourceHash).not.toBe(current.sourceHash);
+  });
+  it('rejects an update whose afterHash is missing or mismatched without touching bytes', async () => {
+    const root = project();
+    const loader = new FileProjectSourceLoaderImpl();
+    const current = loader.load(root);
+    const before = current.documents.find((document) => document.logicalPath === 'nova.yaml');
+    if (!before) throw new Error('fixture missing nova.yaml');
+    const target = join(root, ...before.logicalPath.split('/'));
+    const originalBytes = readFileSync(target);
+    const base = {
+      logicalPath: before.logicalPath,
+      beforeContent: before.content,
+      beforeHash: before.contentHash,
+      afterContent: 'project: changed\n',
+    };
+    await expect(new FileProjectSourceWriterImpl().apply(root, current.sourceHash, [{ ...base, afterHash: null }]))
+      .rejects.toBeInstanceOf(SourceInputError);
+    await expect(new FileProjectSourceWriterImpl().apply(root, current.sourceHash, [{ ...base, afterHash: '0'.repeat(64) }]))
+      .rejects.toBeInstanceOf(SourceInputError);
+    expect(readFileSync(target)).toEqual(originalBytes);
+    expect(loader.load(root).sourceHash).toBe(current.sourceHash);
+  });
+  it('rejects an invalid deletion pairing without touching bytes', async () => {
+    const root = project();
+    const loader = new FileProjectSourceLoaderImpl();
+    const current = loader.load(root);
+    const before = current.documents.find((document) => document.logicalPath === 'nova.yaml');
+    if (!before) throw new Error('fixture missing nova.yaml');
+    const target = join(root, ...before.logicalPath.split('/'));
+    const originalBytes = readFileSync(target);
+    await expect(new FileProjectSourceWriterImpl().apply(root, current.sourceHash, [{
+      logicalPath: before.logicalPath,
+      beforeContent: before.content,
+      beforeHash: before.contentHash,
+      afterContent: null,
+      afterHash: computeSourceDocumentHash('project: changed\n'),
+    }])).rejects.toBeInstanceOf(SourceInputError);
+    expect(readFileSync(target)).toEqual(originalBytes);
+    expect(loader.load(root).sourceHash).toBe(current.sourceHash);
   });
   it('serializes concurrent source compare-and-swap writers', async () => {
     const root = project();
@@ -108,7 +182,7 @@ describe('file project source boundary', () => {
       beforeContent: before.content,
       beforeHash: before.contentHash,
       afterContent: 'project: changed once\n',
-      afterHash: null,
+      afterHash: computeSourceDocumentHash('project: changed once\n'),
     };
     const results = await Promise.allSettled([
       new FileProjectSourceWriterImpl().apply(root, current.sourceHash, [change]),
@@ -128,7 +202,7 @@ describe('file project source boundary', () => {
       beforeContent: null,
       beforeHash: null,
       afterContent: 'x',
-      afterHash: null,
+      afterHash: computeSourceDocumentHash('x'),
     }])).rejects.toBeInstanceOf(SourcePathError);
   });
   it('rejects symlink escapes', () => {

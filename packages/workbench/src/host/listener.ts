@@ -210,6 +210,10 @@ export interface HostListener {
    * before `start()`.
    */
   registerReadRoute(path: string, handler: Handler<HostListenerEnv>): void;
+  /** Register one unguarded static GET/HEAD route before start. */
+  registerPublicStaticRoute(path: string, handler: Handler<HostListenerEnv>): void;
+  /** Register one explicit unauthenticated auth POST under `/api/v1/auth/`. */
+  registerPublicAuthPostRoute(path: string, handler: Handler<HostListenerEnv>): void;
   isMutationAllowed(host: string | undefined, origin: string | undefined): boolean;
 }
 
@@ -711,6 +715,35 @@ class HostListenerImpl implements HostListener {
     }
     this.readEndpoints.push({ method: 'GET', path, kind: 'read', guarded: true });
     this.app.on('GET', path, mutationGuard(this), handler);
+  }
+  registerPublicStaticRoute(path: string, handler: Handler<HostListenerEnv>): void {
+    if (typeof path !== 'string' || path.length === 0 || !path.startsWith('/')) {
+      throw new HostListenerError(
+        `public static route path must start with '/'; got ${JSON.stringify(path)}`,
+      );
+    }
+    if (path === '/health' || path === '/status' || path.startsWith('/api/')) {
+      throw new HostListenerError(`public static route cannot shadow a Host API path: ${path}`);
+    }
+    if (path === '/mcp' || path === '/yjs' || path.startsWith('/yjs/')) {
+      throw new HostListenerError(`public static route cannot shadow a transport path: ${path}`);
+    }
+    if (this.state.running) {
+      throw new HostListenerStateError('public routes must be registered before start()');
+    }
+    this.app.on(['GET', 'HEAD'], path, handler);
+  }
+
+  registerPublicAuthPostRoute(path: string, handler: Handler<HostListenerEnv>): void {
+    if (!/^\/api\/v1\/auth\/(?:login|bootstrap)$/.test(path)) {
+      throw new HostListenerError(
+        `public auth route must be /api/v1/auth/login or /api/v1/auth/bootstrap; got ${JSON.stringify(path)}`,
+      );
+    }
+    if (this.state.running) {
+      throw new HostListenerStateError('public routes must be registered before start()');
+    }
+    this.app.post(path, handler);
   }
 
   isMutationAllowed(host: string | undefined, origin: string | undefined): boolean {

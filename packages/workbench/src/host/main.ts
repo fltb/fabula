@@ -14,6 +14,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { HostListenerHandle, HostServer, HostServerOptions } from './server.js';
 import { createHostServer } from './server.js';
+import { parseWorkbenchLaunchConfig, startWorkbench } from './workbench-launch.js';
 
 /** Resolved launch of a Host server: bind handle, endpoint, health path, close. */
 export interface HostStartHandle {
@@ -54,26 +55,50 @@ export async function startHostServer(options: HostServerOptions = {}): Promise<
     close: () => server.close(),
   };
 }
-
 async function main(): Promise<void> {
-  const host = await startHostServer();
-  console.log(`[workbench-host] listening on ${host.endpoint}`);
-  console.log(`[workbench-host] health check: ${host.endpoint}${host.healthPath}`);
-
+  const mode = process.env.WORKBENCH_MODE;
+  if (mode === 'listener') {
+    const host = await startHostServer();
+    console.log(`[workbench-host] listener smoke endpoint: ${host.endpoint}`);
+    console.log(`[workbench-host] health check: ${host.endpoint}${host.healthPath}`);
+    let shuttingDown = false;
+    const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      console.log(`[workbench-host] ${signal} received; closing listener`);
+      try {
+        await host.close();
+        process.exit(0);
+      } catch (error) {
+        console.error('[workbench-host] shutdown failed:', error);
+        process.exit(1);
+      }
+    };
+    process.on('SIGINT', () => void shutdown('SIGINT'));
+    process.on('SIGTERM', () => void shutdown('SIGTERM'));
+    return;
+  }
+  if (mode !== 'workbench') {
+    throw new Error(
+      'Set WORKBENCH_MODE=workbench for Workbench or WORKBENCH_MODE=listener for smoke mode',
+    );
+  }
+  const workbench = await startWorkbench(parseWorkbenchLaunchConfig());
+  console.log(`[workbench-host] Workbench listening on ${workbench.endpoint}`);
+  console.log(`[workbench-host] browser: ${workbench.endpoint}/`);
   let shuttingDown = false;
   const shutdown = async (signal: NodeJS.Signals): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
-    console.log(`[workbench-host] ${signal} received; closing listener`);
+    console.log(`[workbench-host] ${signal} received; closing Workbench`);
     try {
-      await host.close();
+      await workbench.close();
       process.exit(0);
     } catch (error) {
       console.error('[workbench-host] shutdown failed:', error);
       process.exit(1);
     }
   };
-
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 }

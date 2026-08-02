@@ -17,9 +17,12 @@
     }
   },
   "scripts": {
+    "dev": "node scripts/dev.mjs",
     "dev:host": "node --watch build.host.mjs",
     "build:host": "npm run typecheck:host && node build.host.mjs",
-    "start:host": "node dist/host/host/main.js",
+    "start:host": "node scripts/start.mjs workbench",
+    "start:listener": "node scripts/start.mjs listener",
+    "start:workbench": "node scripts/start.mjs workbench",
     "dev:client": "vite --config vite.config.ts",
     "build:client": "vite build --config vite.config.ts",
     "test:host": "vitest run --config vitest.host.config.ts",
@@ -35,6 +38,7 @@
     "hono": "^4.7.11",
     "@hono/node-server": "^1.14.1",
     "@modelcontextprotocol/sdk": "^1.12.0",
+    "dotenv": "^17.4.2",
     "solid-js": "^1.9.7",
     "@solidjs/router": "^0.15.3",
     "@kobalte/core": "^0.13.8",

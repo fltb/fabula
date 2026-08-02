@@ -60,7 +60,14 @@ Run a single test: `npx vitest run packages/core/tests/validator/`. The core E2E
 
 ## CLI
 
-Host-bound commands: `project init`, `validate`, `status`, `entity`, `graph`, `source`, `render`, `revise`, and `render-tree`. The CLI does not read `.env` automatically.
+Host-bound commands: `project init`, `validate`, `status`, `entity`, `graph`, `source`, `render`, `revise`, and `render-tree`. The CLI does not read `.env` automatically. Workbench launch commands and environment configuration are documented in the root README; `start:listener` is the bare smoke listener, while `start:workbench` is the composed entry.
+
+## Workbench startup
+
+- `WORKBENCH_MODE=workbench` is the composed authenticated Workbench; missing/unknown mode fails closed. `WORKBENCH_MODE=listener` is a loopback health/status smoke process only.
+- `packages/workbench/scripts/dev.mjs` runs the composed Host plus Vite proxy/HMR; `scripts/start.mjs workbench` runs the production Host, and `scripts/start.mjs listener` is the smoke entry.
+- Node launchers load dotenv from `WORKBENCH_ENV_FILE` or `.env` without overriding existing shell variables. Production requires explicit project root, SQLite path, built asset root, and `NOVALISTICALLY_AI_API_KEY`; development may explicitly opt into the mock provider and loopback bootstrap.
+- Static SPA fallback is restricted to unknown browser GET paths. `/api/**`, `/health`, `/status`, `/mcp`, and `/yjs` must never receive `index.html`.
 
 ## Agent prompts and durable memory
 

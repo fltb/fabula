@@ -127,9 +127,70 @@ npx nova render E1 --provider mock-pass2 --reference-dir path/to/matching-refere
 Use `source preview` before `source apply`; the latter writes through source-hash CAS:
 
 ```bash
+# Prepare a candidate file, then analyze it before committing the CAS-protected change.
+cp definitions/characters/narrator.yaml narrator-draft.yaml
 npx nova source preview definitions/characters/narrator.yaml narrator-draft.yaml
 npx nova source apply definitions/characters/narrator.yaml narrator-draft.yaml
 ```
+
+## Start and use Workbench
+
+Workbench has two explicit modes. `start:listener` is only a loopback health/status smoke listener; it is not the Workbench UI. `dev` and `start:workbench` use the composed Host with authentication, SQLite persistence, project projection, protected browser API, and (when configured) the built browser shell.
+
+### Development
+
+From the repository root, copy the tracked template to the ignored `.env`, then set the project path. The project must contain `nova.yaml`; the repository root itself is not a project. Workbench launchers load `.env` with `dotenv`; shell variables override file values. Use `WORKBENCH_ENV_FILE=/absolute/path/to/file` when the file is elsewhere.
+
+```bash
+cp .env.example .env
+# Edit .env:
+#   WORKBENCH_PROJECT_ROOT=/absolute/path/to/fixtures/zhu-fu
+#   WORKBENCH_PROVIDER=mock
+#   WORKBENCH_ALLOW_MOCK_PROVIDER=true
+#   WORKBENCH_ALLOW_BOOTSTRAP=true
+fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench dev
+```
+
+This starts the composed Host on `http://127.0.0.1:8787` and Vite with HMR on `http://127.0.0.1:5173`. Development defaults to the explicit mock provider, creates `.nova/workbench.sqlite` under the current directory, and proxies `/api`, `/health`, `/status`, `/mcp`, and `/yjs` to the Host. No password is supplied by the script.
+
+On first run, open the Vite URL and use the **First-run owner bootstrap** form. It creates the owner and signs that browser session in directly; the opaque session remains in memory. The equivalent API call returns both `userId` and `sessionId`, but a curl-created session is not injected into an already-open browser:
+
+```bash
+curl -sS -X POST http://127.0.0.1:8787/api/v1/auth/bootstrap \
+  -H 'content-type: application/json' \
+  -d '{"password":"choose-a-development-password","displayName":"Developer"}'
+```
+
+If using curl, use the returned `userId` with the browser sign-in form. The current client is read/projection oriented: source submit, Git adoption, and an in-browser Yjs editor are not exposed yet.
+
+### Production
+
+Build first, then provide every deployment path explicitly. Production uses the real Node Host provider and fails closed when the API key or source/database paths are absent.
+
+```bash
+fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench build
+export WORKBENCH_ENV_FILE=/etc/fabula/workbench.env
+# Populate that file from .env.example, with:
+#   WORKBENCH_MODE=workbench
+#   WORKBENCH_PROJECT_ROOT=/srv/fabula/projects/my-novel
+#   WORKBENCH_DATABASE_PATH=/var/lib/fabula/workbench.sqlite
+#   WORKBENCH_ASSETS_ROOT=/srv/fabula/app/packages/workbench/dist/client
+#   WORKBENCH_PROVIDER=ai-sdk
+#   NOVALISTICALLY_AI_API_KEY=<provider-key>
+fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench start:workbench
+```
+
+The default production listener is loopback HTTP on port `8787`. For LAN exposure, set `WORKBENCH_HOST=lan`, `WORKBENCH_LAN=true`, and explicit `WORKBENCH_ALLOWED_HOSTS` / `WORKBENCH_ALLOWED_ORIGINS`. Do not expose the Host directly to the public Internet.
+
+For production TLS, terminate TLS in a trusted reverse proxy and give Workbench a Unix socket:
+
+```bash
+export WORKBENCH_UNIX_SOCKET=/run/fabula/workbench.sock
+export WORKBENCH_TRUST_FORWARDED_HEADERS=true
+fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench start:workbench
+```
+
+The direct Workbench listener never terminates TLS. The reverse proxy owns HTTPS, authentication at the network edge if desired, socket permissions, and static compression. Keep the SQLite/database directory private and backed up; only the Workbench Host writes it.
 
 ## Development
 

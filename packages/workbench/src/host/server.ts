@@ -141,16 +141,14 @@ export interface HostServer {
   ): void;
   /**
    * Register an MCP transport route on the listener: GET/POST/DELETE at one
-   * exact path, each behind the same Host/Origin allowlist guard as mutation
-   * routes. Pre-start-only, like mutation registration.
+   * exact path, each behind the same Host/Origin allowlist guard.
    */
   registerMcpRoute(path: string, handler: Handler<HostListenerEnv>): void;
-  /**
-   * Register an authenticated browser read route on the listener: GET at one
-   * exact path behind the same Host/Origin allowlist guard as mutation and
-   * MCP routes. Pre-start-only, like mutation registration.
-   */
   registerReadRoute(path: string, handler: Handler<HostListenerEnv>): void;
+  /** Register one unguarded static GET/HEAD route before start. */
+  registerPublicStaticRoute(path: string, handler: Handler<HostListenerEnv>): void;
+  /** Register one explicit unauthenticated auth POST before start. */
+  registerPublicAuthPostRoute(path: string, handler: Handler<HostListenerEnv>): void;
   isMutationAllowed(host: string | undefined, origin: string | undefined): boolean;
 }
 
@@ -648,6 +646,9 @@ export function createHostServer(options: HostServerOptions = {}): HostServer {
       listener.registerMutationRoute(method, path, handler),
     registerMcpRoute: (path, handler) => listener.registerMcpRoute(path, handler),
     registerReadRoute: (path, handler) => listener.registerReadRoute(path, handler),
+    registerPublicStaticRoute: (path, handler) => listener.registerPublicStaticRoute(path, handler),
+    registerPublicAuthPostRoute: (path, handler) =>
+      listener.registerPublicAuthPostRoute(path, handler),
     isMutationAllowed: (host, origin) => listener.isMutationAllowed(host, origin),
   };
 }

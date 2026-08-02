@@ -1,9 +1,9 @@
 /**
  * Workbench Host Git authoring boundary: controlled command runner, verified
  * system-Git capability probe, the strict AuthoringManifest, the deterministic
- * repository bootstrap, and journal-backed submit recovery. Git belongs
- * exclusively to this directory; Core, browser, MCP and Agents never invoke
- * Git directly.
+ * repository bootstrap, journal-backed submit recovery, and the exact-once
+ * authoring submit service. Git belongs exclusively to this directory; Core,
+ * browser, MCP and Agents never invoke Git directly.
  */
 
 export type { GitCapability, GitCapabilityCheck, GitCapabilityProbeOptions } from './capability.js';
@@ -87,3 +87,21 @@ export {
   receiptFromRecord,
   resolveSubmitRecovery,
 } from './recovery.js';
+export type {
+  AuthoringSubmitOutcome,
+  AuthoringSubmitProvenance,
+  AuthoringSubmitRejectionCode,
+  CandidateValidationResult,
+  CandidateValidator,
+  GitAuthoringSubmitRequest,
+  GitAuthoringSubmitServiceOptions,
+  WorkingStateVectorConfirmation,
+  WorkingStateVectorConfirmer,
+} from './submit-service.js';
+export {
+  AuthoringSubmitInputError,
+  AuthoringSubmitPreflightError,
+  AuthoringSubmitRecoveryError,
+  GitAuthoringSubmitError,
+  GitAuthoringSubmitService,
+} from './submit-service.js';

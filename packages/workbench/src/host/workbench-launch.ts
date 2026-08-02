@@ -23,7 +23,7 @@
  * setup/admin API and runtime registry stay with the configuration slice.
  */
 
-import { readFileSync, watch } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { mkdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -65,6 +65,10 @@ import {
   createProjectAuthoringRuntime,
   type ProjectAuthoringRuntime,
 } from './authoring/project-runtime.js';
+import {
+  createProjectAuthoringTreeWatcher,
+  type ProjectAuthoringTreeWatcher,
+} from './authoring/project-tree-watcher.js';
 import type { AuthoringCoordinatorEvent } from './authoring/types.js';
 import { type BrowserAgentProject, createBrowserAgentApi } from './browser-agent-api.js';
 import {
@@ -546,6 +550,7 @@ export async function startWorkbench(
   });
 
   let host: HostServer | undefined;
+  let disposeAuthoringRuntimes: (() => Promise<void>) | undefined;
   try {
     const auth = new LocalAuthService({ persistence: createAuthPersistence(persistence.client) });
     const capabilities = new AgentCapabilityService({
@@ -612,6 +617,13 @@ export async function startWorkbench(
     const yjsPersistence = createYjsPersistencePort(persistence.client);
     const yjsCore = createYjsWorkingDocumentCore({ persistence: yjsPersistence });
     const authoring = new Map<string, ProjectAuthoringRuntime>();
+    const authoringWatchers = new Map<string, ProjectAuthoringTreeWatcher>();
+    disposeAuthoringRuntimes = async () => {
+      for (const watcher of authoringWatchers.values()) watcher.dispose();
+      authoringWatchers.clear();
+      for (const runtime of authoring.values()) await runtime.dispose();
+      authoring.clear();
+    };
     const agentProjects = new Map<string, BrowserAgentProject>();
     const listeners = new Map<string, Set<(event: AuthoringActivityEventV1) => void>>();
     const eventSource: BrowserAuthoringEventSource = {
@@ -674,7 +686,18 @@ export async function startWorkbench(
           yjsCore,
           events: { publish: publishAuthoringEvent },
         });
+        let authoringWatcher: ProjectAuthoringTreeWatcher;
+        try {
+          authoringWatcher = createProjectAuthoringTreeWatcher({
+            projectRoot: project.root,
+            onChange: (input) => projectAuthoring.observer.notify(input).then(() => undefined),
+          });
+        } catch (error) {
+          await projectAuthoring.dispose();
+          throw error;
+        }
         authoring.set(project.projectId, projectAuthoring);
+        authoringWatchers.set(project.projectId, authoringWatcher);
         projectConfiguration.set(project.projectId, project);
         if (agentTasks !== null) {
           const command = createAgentCommandService({
@@ -705,6 +728,9 @@ export async function startWorkbench(
       },
       closeSession: async (session) => {
         agentProjects.delete(session.projectId);
+        const authoringWatcher = authoringWatchers.get(session.projectId);
+        authoringWatchers.delete(session.projectId);
+        authoringWatcher?.dispose();
         const projectAuthoring = authoring.get(session.projectId);
         authoring.delete(session.projectId);
         await projectAuthoring?.dispose();
@@ -737,14 +763,22 @@ export async function startWorkbench(
         _principal: BrowserSessionPrincipalV1,
       ): Promise<readonly BrowserProjectSummaryV1[]> => {
         const rows = await persistence.client.request('listProjects', undefined);
-        return rows.map((row) => ({
-          version: BROWSER_API_VERSION,
-          projectId: row.projectId,
-          displayName: row.displayName,
-          createdAt: row.createdAt,
-          updatedAt: row.updatedAt,
-          open: sessions.get(row.projectId) !== null,
-        }));
+        const active = await configurationService.readActive();
+        const configuredIds = new Set(
+          (active?.configuration.projects ?? configuredProjects).map(
+            (project) => project.projectId,
+          ),
+        );
+        return rows
+          .filter((row) => configuredIds.has(row.projectId))
+          .map((row) => ({
+            version: BROWSER_API_VERSION,
+            projectId: row.projectId,
+            displayName: row.displayName,
+            createdAt: row.createdAt,
+            updatedAt: row.updatedAt,
+            open: sessions.get(row.projectId) !== null,
+          }));
       },
     };
     const browser: HostServerOptions['browser'] =
@@ -1029,7 +1063,7 @@ export async function startWorkbench(
       auth,
       provider,
       close: async () => {
-        for (const runtime of authoring.values()) await runtime.dispose();
+        await disposeAuthoringRuntimes?.();
         configurationService.dispose();
         await hostServer.close();
         await persistence.dispose();
@@ -1038,6 +1072,7 @@ export async function startWorkbench(
   } catch (error) {
     // Partial-launch failure: dispose the worker (bounded terminate) and any
     // already-created server so no thread or port survives the failed start.
+    await disposeAuthoringRuntimes?.().catch(() => undefined);
     await host?.close().catch(() => undefined);
     await persistence.dispose();
     throw error;

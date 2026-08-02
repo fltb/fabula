@@ -27,8 +27,8 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
-import { FileProjectSourceLoader } from '@novalistically/node-host';
 import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
+import { FileProjectSourceLoader } from '@novalistically/node-host';
 import type { AuthoringDiagnosticV1 } from '../../contracts/authoring.js';
 import type { AuthoringTreeLoader, AuthoringTreeSnapshot } from './types.js';
 
@@ -53,10 +53,7 @@ export interface AuthoringCandidateStore {
     readonly projectId: string;
     readonly candidateHash: string;
   }): Promise<AuthoringCandidateBundle | null>;
-  delete(input: {
-    readonly projectId: string;
-    readonly candidateHash: string;
-  }): Promise<void>;
+  delete(input: { readonly projectId: string; readonly candidateHash: string }): Promise<void>;
 }
 
 /** In-memory content-addressed staging (tests and un-wired hosts). */
@@ -135,7 +132,11 @@ export function createFileCandidateStore(stagingRoot: string): AuthoringCandidat
       await mkdir(root, { recursive: true, mode: 0o700 });
       const temporary = `${path}.tmp-${randomUUID()}`;
       try {
-        await writeFile(temporary, JSON.stringify(validated), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+        await writeFile(temporary, JSON.stringify(validated), {
+          encoding: 'utf8',
+          mode: 0o600,
+          flag: 'wx',
+        });
         await rename(temporary, path);
       } catch (error) {
         await rm(temporary, { force: true }).catch(() => undefined);
@@ -152,10 +153,7 @@ export function createFileCandidateStore(stagingRoot: string): AuthoringCandidat
         throw error;
       }
       const bundle = validate(JSON.parse(raw) as unknown);
-      if (
-        bundle.projectId !== input.projectId ||
-        bundle.candidateHash !== input.candidateHash
-      ) {
+      if (bundle.projectId !== input.projectId || bundle.candidateHash !== input.candidateHash) {
         throw new Error('staged authoring candidate identity mismatch');
       }
       return bundle;
@@ -279,47 +277,73 @@ function createAuthoringFilesystemObserverImpl(
   /** Last tree hash the observer emitted (or loaded); identical re-reads are suppressed. */
   let lastTreeHash: string | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
-  let flushing: Promise<void> | null = null;
+  let flushing = false;
+  let queued = false;
   let disposed = false;
+  /** Waiters coupled to the current full re-read so dispose() can reject them. */
+  let inFlightWaiters: NotifyWaiter[] = [];
 
   async function loadSnapshot(): Promise<AuthoringTreeSnapshot> {
     return loader.loadTree({ projectId });
   }
 
-  /** Debounced full re-read → stage → emit; resolves all pending waiters. */
+  function scheduleFlush(): void {
+    if (disposed || timer !== null) return;
+    timer = setTimeout(() => {
+      timer = null;
+      void flush();
+    }, debounceMs);
+  }
+
+  /**
+   * Drain one already-debounced batch. A hint arriving during the async
+   * re-read remains queued; when its timer has elapsed, the finally block
+   * immediately starts a second re-read. This prevents waiters from being
+   * stranded behind the in-flight flush.
+   */
   async function flush(): Promise<void> {
-    let snapshot: AuthoringTreeSnapshot;
+    if (disposed || flushing || !queued) return;
+    flushing = true;
+    queued = false;
+    const flushWaiters = waiters.splice(0);
+    inFlightWaiters = flushWaiters;
     try {
-      snapshot = await loadSnapshot();
+      const snapshot = await loadSnapshot();
+      if (disposed) return;
       if (snapshot.treeHash !== lastTreeHash) {
         await staging.put({
           projectId,
           candidateHash: snapshot.treeHash,
           entries: snapshot.entries,
         });
+        if (disposed) return;
         lastTreeHash = snapshot.treeHash;
-        for (const listener of candidateListeners) listener(snapshot);
+        for (const listener of candidateListeners) {
+          if (disposed) return;
+          listener(snapshot);
+        }
       }
-      for (const waiter of waiters.splice(0)) waiter.resolve(snapshot);
+      if (disposed) return;
+      for (const waiter of flushWaiters) waiter.resolve(snapshot);
     } catch (error) {
-      for (const waiter of waiters.splice(0)) waiter.reject(error);
+      if (!disposed) {
+        for (const waiter of flushWaiters) waiter.reject(error);
+      }
+    } finally {
+      inFlightWaiters = [];
+      flushing = false;
+      if (!disposed && queued && timer === null) void flush();
     }
   }
 
   return {
     projectId,
-    async notify(input = {}) {
+    async notify(_input = {}) {
       if (disposed) {
         throw new Error('AuthoringFilesystemObserver is disposed');
       }
-      if (timer === null) {
-        timer = setTimeout(() => {
-          timer = null;
-          flushing ??= flush().finally(() => {
-            flushing = null;
-          });
-        }, debounceMs);
-      }
+      queued = true;
+      scheduleFlush();
       return new Promise<AuthoringTreeSnapshot>((resolve, reject) => {
         waiters.push({ resolve, reject });
       });
@@ -338,8 +362,12 @@ function createAuthoringFilesystemObserverImpl(
       disposed = true;
       if (timer !== null) clearTimeout(timer);
       timer = null;
+      queued = false;
       candidateListeners.clear();
       for (const waiter of waiters.splice(0)) {
+        waiter.reject(new Error('AuthoringFilesystemObserver is disposed'));
+      }
+      for (const waiter of inFlightWaiters.splice(0)) {
         waiter.reject(new Error('AuthoringFilesystemObserver is disposed'));
       }
     },
@@ -352,4 +380,3 @@ export function createAuthoringFilesystemObserver(
 ): AuthoringFilesystemObserver {
   return createAuthoringFilesystemObserverImpl(options);
 }
-

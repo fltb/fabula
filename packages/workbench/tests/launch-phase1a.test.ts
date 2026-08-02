@@ -9,13 +9,13 @@
  */
 
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { MockProvider } from '@novalistically/core/testing';
 import { build } from 'esbuild';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { serializeConfigurationYaml } from '../src/host/configuration-file-store.js';
 import { HostProviderError, HostProviderFactory } from '../src/host/provider-factory.js';
 import { XdgCredentialFileStore } from '../src/host/providers/index.js';
@@ -443,6 +443,18 @@ describe('startWorkbench setup runtime', () => {
         ],
       });
 
+      const novaPath = join(rootA, 'nova.yaml');
+      await writeFile(novaPath, `${await readFile(novaPath, 'utf8')}# external authoring edit\n`);
+      await vi.waitFor(async () => {
+        const state = await fetch(`${handle.endpoint}/api/v1/projects/project-a/authoring/state`, {
+          headers,
+        });
+        expect(state.status).toBe(200);
+        expect((await state.json()) as { phase: string }).toMatchObject({
+          phase: 'external-pending',
+        });
+      });
+
       const overview = await fetch(`${handle.endpoint}/api/v1/admin/overview`, { headers });
       expect(overview.status).toBe(200);
       expect((await overview.json()) as { openProjects: number }).toMatchObject({
@@ -466,6 +478,18 @@ describe('startWorkbench setup runtime', () => {
           { projectId: 'project-b', open: true },
         ],
       });
+
+      const removed = await fetch(`${handle.endpoint}/api/v1/admin/projects/project-b`, {
+        method: 'DELETE',
+        headers,
+      });
+      expect(removed.status).toBe(200);
+      const remaining = await fetch(`${handle.endpoint}/api/v1/projects`, { headers });
+      expect(
+        ((await remaining.json()) as { projects: { projectId: string }[] }).projects.map(
+          (project) => project.projectId,
+        ),
+      ).toEqual(['project-a']);
     } finally {
       await handle.close();
     }

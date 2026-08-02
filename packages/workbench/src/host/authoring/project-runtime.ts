@@ -1,34 +1,25 @@
 import { Buffer } from 'node:buffer';
-import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
 import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
+import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
 import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
-import { type AgentCapabilityService } from '../agent/capability-service.js';
-import type { ProjectSession } from '../project-session.js';
-import {
-  GitBootstrap,
-  GitBootstrapDirtyError,
-} from '../git/bootstrap.js';
+import type { AgentCapabilityService } from '../agent/capability-service.js';
+import { GitBootstrap, GitBootstrapDirtyError } from '../git/bootstrap.js';
 import { probeGitCapability } from '../git/capability.js';
 import { AuthoringManifest } from '../git/manifest.js';
 import { ControlledGitRunner, WORKBENCH_AUTHORING_REF } from '../git/runner.js';
 import { GitAuthoringSubmitService } from '../git/submit-service.js';
+import type { ProjectSession } from '../project-session.js';
+import type { YjsWorkingDocumentCore } from '../yjs/gateway.js';
+import { type AuthoringCoordinatorPersistence, createAuthoringCoordinator } from './coordinator.js';
 import {
-  createYjsPersistencePort,
-  type YjsWorkingDocumentCore,
-} from '../yjs/gateway.js';
-import {
-  createAuthoringCoordinator,
-  type AuthoringCoordinatorPersistence,
-} from './coordinator.js';
-import {
-  createAuthoringDocumentStore,
   type AuthoringWorkingDocumentStore,
+  createAuthoringDocumentStore,
 } from './document-store.js';
 import {
+  type AuthoringFilesystemObserver,
   createAuthoringFilesystemObserver,
   createFileCandidateStore,
   createFileTreeLoader,
-  type AuthoringFilesystemObserver,
 } from './filesystem-observer.js';
 import type {
   AuthoringCoordinator,
@@ -179,7 +170,8 @@ export async function createProjectAuthoringRuntime(
   });
   const coordinatorPersistence: AuthoringCoordinatorPersistence = {
     load: (input) => options.persistence.request('loadAuthoringState', input),
-    save: (record) => options.persistence.request('saveAuthoringState', record).then(() => undefined),
+    save: (record) =>
+      options.persistence.request('saveAuthoringState', record).then(() => undefined),
   };
   const sessionPort: AuthoringSessionOperationPort = {
     async enqueue(input) {
@@ -209,7 +201,8 @@ export async function createProjectAuthoringRuntime(
     },
     confirmWorkingStateVector: async (request) => {
       const digest = await documents.workspaceDigest();
-      return digest !== null && Buffer.from(request.expectedWorkingStateVector).toString('hex') === digest.digest
+      return digest !== null &&
+        Buffer.from(request.expectedWorkingStateVector).toString('hex') === digest.digest
         ? { ok: true }
         : { ok: false, reason: 'working document vectors changed before Git submission' };
     },

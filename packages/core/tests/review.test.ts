@@ -10,10 +10,19 @@
 import * as crypto from 'node:crypto';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EditorialOperationError } from '../src/editorial/errors.ts';
+import {
+  addReviewComment,
+  listReviewComments,
+  replaceReviewComment,
+  updateReviewComment,
+} from '../src/editorial/review-facade.ts';
 import { ReviewManager } from '../src/review/index.ts';
 import { reviewLedgerV1Schema } from '../src/schemas/review.ts';
 import { MemoryExecutionRepository } from '../src/testing/memory-repositories.ts';
-import type { NewReviewComment, ReviewApplicationV1, ReviewLedgerV1 } from '../src/types/index.ts';
+import type { EditorialRuntime } from '../src/types/editorial.ts';
+import type { NewReviewComment, ReviewApplicationV1, ReviewComment, ReviewLedgerV1 } from '../src/types/index.ts';
+import { markWontfix, resolve } from '../src/review/comment.ts';
+import type { Clock, IdGenerator } from '../src/ports/runtime-services.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -36,6 +45,41 @@ function makeApplication(eventId: string): ReviewApplicationV1 {
     revisionId: crypto.randomUUID(),
     operationId: crypto.randomUUID(),
     appliedAt: '2025-01-01T00:00:00.000Z',
+  };
+}
+
+function reviewComment(id: string, overrides?: Partial<ReviewComment>): ReviewComment {
+  return {
+    id,
+    author: 'human',
+    actorId: 'reviewer',
+    target: { type: 'scene', id: 'E1' },
+    severity: 'suggestion',
+    category: 'style',
+    content: 'Tighten',
+    status: 'open',
+    applications: [],
+    createdAt: '2026-08-02T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+/** Scripted Clock/IdGenerator pair for deterministic ledger mutations. */
+function fixedServices(
+  now: string,
+  ids: readonly string[],
+): { clock: Clock; ids: IdGenerator } {
+  let index = 0;
+  return {
+    clock: { now: () => now },
+    ids: {
+      next: () => {
+        const id = ids[index];
+        index += 1;
+        if (id === undefined) throw new Error(`Fixed ID generator exhausted after ${index} calls`);
+        return id;
+      },
+    },
   };
 }
 
@@ -758,6 +802,182 @@ describe('ReviewManager', () => {
       const summary = await manager.getSummary();
       expect(summary.wontfix).toBe(1);
       expect(summary.superseded).toBe(1);
+    });
+  });
+
+  // 12. Deterministic injected services ─────────────────────────────────────
+
+  describe('deterministic injected services', () => {
+    const FIXED_NOW = '2026-08-02T12:00:00.000Z';
+
+    it('creates a comment with the exact injected ID and timestamp', async () => {
+      const manager = new ReviewManager(execution, PROJECT_ID, fixedServices(FIXED_NOW, ['rev_fixed_1']));
+      const comment = await manager.addReviewComment(newComment(), 'actor-1');
+
+      expect(comment.id).toBe('rev_fixed_1');
+      expect(comment.createdAt).toBe(FIXED_NOW);
+      expect(comment.status).toBe('open');
+      expect(comment.applications).toEqual([]);
+    });
+
+    it('identical inputs under identical fixed services produce identical comments', async () => {
+      const managerA = new ReviewManager(execution, PROJECT_ID, fixedServices(FIXED_NOW, ['rev_fixed_1']));
+      const managerB = new ReviewManager(new MemoryExecutionRepository(), PROJECT_ID, fixedServices(FIXED_NOW, ['rev_fixed_1']));
+
+      const a = await managerA.addReviewComment(newComment({ content: 'same content' }), 'actor-1');
+      const b = await managerB.addReviewComment(newComment({ content: 'same content' }), 'actor-1');
+      expect(a).toEqual(b);
+      expect(a.createdAt).toBe(FIXED_NOW);
+    });
+
+    it('replacement and supersession stamps come from the injected services', async () => {
+      const manager = new ReviewManager(execution, PROJECT_ID, fixedServices(FIXED_NOW, ['rev_orig', 'rev_repl']));
+      const original = await manager.addReviewComment(newComment(), 'a');
+      const replacement = await manager.replaceReviewComment(original.id, newComment(), 'b');
+
+      expect(original.id).toBe('rev_orig');
+      expect(replacement.id).toBe('rev_repl');
+      expect(replacement.supersedesId).toBe('rev_orig');
+      expect(replacement.createdAt).toBe(FIXED_NOW);
+
+      const superseded = (await manager.getComments({ status: 'superseded' }))[0];
+      expect(superseded.resolvedAt).toBe(FIXED_NOW);
+      expect(superseded.resolvedBy).toBe('b');
+    });
+
+    it('resolution stamps the injected clock time', async () => {
+      const manager = new ReviewManager(execution, PROJECT_ID, fixedServices(FIXED_NOW, ['rev_c1']));
+      const comment = await manager.addReviewComment(newComment(), 'a');
+      const updated = await manager.updateReviewComment(comment.id, 'resolve', 'reviewer-1');
+
+      expect(updated.status).toBe('resolved');
+      expect(updated.resolvedAt).toBe(FIXED_NOW);
+      expect(updated.resolvedBy).toBe('reviewer-1');
+    });
+
+    it('a create/replace/resolve sequence yields byte-identical persisted ledgers for fixed services', async () => {
+      const run = async () => {
+        const repo = new MemoryExecutionRepository();
+        const manager = new ReviewManager(repo, PROJECT_ID, fixedServices(FIXED_NOW, ['rev_s1', 'rev_s2']));
+        const created = await manager.addReviewComment(newComment({ content: 'deterministic' }), 'a');
+        await manager.replaceReviewComment(created.id, newComment({ content: 'deterministic replacement' }), 'b');
+        const open = (await manager.getComments()).find((c) => c.status === 'open')!;
+        await manager.updateReviewComment(open.id, 'resolve', 'c');
+        const record = await repo.readReview({ projectId: PROJECT_ID, reviewId: LEDGER_REVIEW_ID });
+        return record!.value.value;
+      };
+      expect(await run()).toEqual(await run());
+    });
+  });
+
+  // 13. Pure comment lifecycle — explicit timestamps ────────────────────────
+
+  describe('comment lifecycle pure functions', () => {
+    const NOW = '2026-08-02T12:00:00.000Z';
+
+    it('resolve stamps the caller-supplied timestamp and patch', () => {
+      const comments = [reviewComment('c1')];
+      resolve(comments, 'c1', NOW, 'patch-1');
+
+      expect(comments[0].status).toBe('resolved');
+      expect(comments[0].resolvedAt).toBe(NOW);
+      expect(comments[0].resolvedBy).toBe('patch-1');
+    });
+
+    it('resolve without a patch keeps the previous resolvedBy', () => {
+      const comments = [reviewComment('c1', { resolvedBy: 'other' })];
+      resolve(comments, 'c1', NOW);
+
+      expect(comments[0].status).toBe('resolved');
+      expect(comments[0].resolvedAt).toBe(NOW);
+      expect(comments[0].resolvedBy).toBe('other');
+    });
+
+    it('resolve ignores unknown comment IDs', () => {
+      const comments = [reviewComment('c1')];
+      resolve(comments, 'missing', NOW);
+
+      expect(comments[0].status).toBe('open');
+      expect(comments[0].resolvedAt).toBeUndefined();
+    });
+
+    it('markWontfix stamps the caller-supplied timestamp without mutating the input', () => {
+      const input = [reviewComment('c1')];
+      const updated = markWontfix(input, 'c1', NOW, 'reviewer-1');
+
+      expect(updated[0].status).toBe('wontfix');
+      expect(updated[0].resolvedAt).toBe(NOW);
+      expect(updated[0].resolvedBy).toBe('reviewer-1');
+      expect(input[0].status).toBe('open');
+      expect(input[0].resolvedAt).toBeUndefined();
+    });
+  });
+
+  // 14. Editorial review facade — injected services reach ReviewManager ─────
+
+  describe('editorial review facade', () => {
+    const FACADE_NOW = '2026-08-02T12:00:00.000Z';
+
+    function facadeRuntime(
+      repo: MemoryExecutionRepository,
+      ids: readonly string[],
+    ): EditorialRuntime {
+      const services = fixedServices(FACADE_NOW, ids);
+      return {
+        services: { execution: repo, clock: services.clock, ids: services.ids },
+      } as unknown as EditorialRuntime;
+    }
+
+    it('adds a facade comment with the injected ID and timestamp, not the fallback', async () => {
+      const repo = new MemoryExecutionRepository();
+      const created = await addReviewComment(
+        {
+          projectId: PROJECT_ID,
+          input: newComment({ content: 'facade add' }),
+          mutation: { operationId: crypto.randomUUID(), actorId: 'actor-1' },
+        },
+        facadeRuntime(repo, ['rev_facade_1']),
+      );
+
+      expect(created.id).toBe('rev_facade_1');
+      expect(created.createdAt).toBe(FACADE_NOW);
+    });
+
+    it('replacement and resolution stamp the same injected services through the facade', async () => {
+      const repo = new MemoryExecutionRepository();
+      const facade = facadeRuntime(repo, ['rev_facade_a', 'rev_facade_b']);
+      const created = await addReviewComment(
+        { projectId: PROJECT_ID, input: newComment(), mutation: { operationId: crypto.randomUUID(), actorId: 'a' } },
+        facade,
+      );
+      const replacement = await replaceReviewComment(
+        {
+          projectId: PROJECT_ID,
+          commentId: created.id,
+          input: newComment({ content: 'facade replacement' }),
+          mutation: { operationId: crypto.randomUUID(), actorId: 'b' },
+        },
+        facade,
+      );
+      const resolved = await updateReviewComment(
+        {
+          projectId: PROJECT_ID,
+          commentId: replacement.id,
+          action: 'resolve',
+          mutation: { operationId: crypto.randomUUID(), actorId: 'c' },
+        },
+        facade,
+      );
+
+      expect(created.id).toBe('rev_facade_a');
+      expect(replacement.id).toBe('rev_facade_b');
+      expect(replacement.createdAt).toBe(FACADE_NOW);
+      expect(replacement.supersedesId).toBe(created.id);
+      expect(resolved.status).toBe('resolved');
+      expect(resolved.resolvedAt).toBe(FACADE_NOW);
+
+      const listed = await listReviewComments({ projectId: PROJECT_ID }, facade);
+      expect(listed.map((entry) => entry.id)).toEqual(['rev_facade_a', 'rev_facade_b']);
     });
   });
 });

@@ -3,9 +3,23 @@ import type { CoreExecutionRepository } from '../ports/execution-repository.ts';
 import { sha256Canonical } from '../cache/render-cache.ts';
 import type { JsonObject, JsonValue } from '../contracts/json.ts';
 import { reviewCommentSchema, reviewLedgerV1Schema } from '../schemas/review.ts';
+import type { Clock, IdGenerator } from '../ports/runtime-services.ts';
 import type { NewReviewComment, ReviewApplicationV1, ReviewComment, ReviewLedgerV1, ReviewPatch } from '../types/index.js';
 import { getSummary } from './summary.js';
-import type { CommentFilter, StatusSummary } from './types.js';
+import type { CommentFilter, ReviewServices, StatusSummary } from './types.js';
+
+// Deterministic fallbacks when the host does not inject services — never
+// wall-clock or random UUIDs, so identical inputs yield identical ledgers.
+const FALLBACK_CLOCK: Clock = { now: () => '1970-01-01T00:00:00.000Z' };
+
+/** Deterministic sequential comment ID fallback — unique per manager, never random. */
+class SequentialReviewIdGenerator implements IdGenerator {
+  private sequence = 0;
+  next(): string {
+    this.sequence += 1;
+    return `rev_${this.sequence}`;
+  }
+}
 
 function canonicalJsonValue(value: unknown): JsonValue {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
@@ -42,7 +56,17 @@ export interface ReviewLedgerSnapshot { ledger: ReviewLedgerV1; contentHash: str
 const key = 'ledger';
 
 export class ReviewManager {
-  constructor(private readonly execution: CoreExecutionRepository, private readonly projectId: string) {}
+  private readonly clock: Clock;
+  private readonly ids: IdGenerator;
+
+  constructor(
+    private readonly execution: CoreExecutionRepository,
+    private readonly projectId: string,
+    services?: Partial<ReviewServices>,
+  ) {
+    this.clock = services?.clock ?? FALLBACK_CLOCK;
+    this.ids = services?.ids ?? new SequentialReviewIdGenerator();
+  }
 
   async readLedger(): Promise<ReviewLedgerSnapshot> {
     const record = await this.execution.readReview({ projectId: this.projectId, reviewId: key });
@@ -63,7 +87,7 @@ export class ReviewManager {
     this.validateLine(input, sceneLineCount);
     const current = await this.readLedger();
     this.assertHash(current, opts?.expectedLedgerHash);
-    const comment: ReviewComment = { id: `rev_${globalThis.crypto.randomUUID()}`, author: 'human', actorId: actorId.trim(), target: input.target, severity: input.severity, category: input.category, content: input.content, status: 'open', applications: [], createdAt: new Date().toISOString() };
+    const comment: ReviewComment = { id: this.ids.next({ kind: 'review_comment' }), author: 'human', actorId: actorId.trim(), target: input.target, severity: input.severity, category: input.category, content: input.content, status: 'open', applications: [], createdAt: this.clock.now() };
     await this.persist({ ...current.ledger, comments: [...current.ledger.comments, comment] }, current.version);
     return comment;
   }
@@ -84,7 +108,7 @@ export class ReviewManager {
     const current = await this.readLedger(); this.assertHash(current, opts?.expectedLedgerHash);
     const index = current.ledger.comments.findIndex(c => c.id === id); if (index < 0) throw new EditorialOperationError('INVALID_OPERATION', `Comment ${id} not found`);
     const original = current.ledger.comments[index]; if (original.status === 'superseded') throw new EditorialOperationError('INVALID_OPERATION', `Comment ${id} is already superseded`);
-    const now = new Date().toISOString(); const replacement: ReviewComment = { id: `rev_${globalThis.crypto.randomUUID()}`, author: 'human', actorId: actorId.trim(), target: input.target, severity: input.severity, category: input.category, content: input.content, status: 'open', applications: [], supersedesId: id, createdAt: now };
+    const now = this.clock.now(); const replacement: ReviewComment = { id: this.ids.next({ kind: 'review_comment' }), author: 'human', actorId: actorId.trim(), target: input.target, severity: input.severity, category: input.category, content: input.content, status: 'open', applications: [], supersedesId: id, createdAt: now };
     const comments = [...current.ledger.comments]; comments[index] = { ...original, status: 'superseded', resolvedAt: now, resolvedBy: actorId.trim() }; comments.push(replacement);
     await this.persist({ ...current.ledger, comments }, current.version); return replacement;
   }
@@ -92,7 +116,7 @@ export class ReviewManager {
   async updateReviewComment(id: string, action: 'resolve'|'wontfix'|'reopen'|'escalate', actorId: string, opts?: { expectedLedgerHash?: string }): Promise<ReviewComment> {
     const current = await this.readLedger(); this.assertHash(current, opts?.expectedLedgerHash); const index = current.ledger.comments.findIndex(c => c.id === id); if (index < 0) throw new EditorialOperationError('INVALID_OPERATION', `Comment ${id} not found`);
     const comment = current.ledger.comments[index]; if (comment.status === 'superseded') throw new EditorialOperationError('INVALID_OPERATION', `Comment ${id} is superseded`);
-    const now = new Date().toISOString();
+    const now = this.clock.now();
     let updated: ReviewComment;
     if (action === 'resolve' || action === 'wontfix') {
       updated = { ...comment, status: action === 'resolve' ? 'resolved' : 'wontfix', resolvedAt: now, resolvedBy: actorId };

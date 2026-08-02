@@ -1070,3 +1070,106 @@ describe('BatchRenderPipeline — stops scheduling after abort', () => {
     expect(result.stats.aborted).toBe(true);
   });
 });
+
+// ============================================================================
+// 13. Deterministic retry jitter — no implicit Math.random
+// ============================================================================
+
+describe('retry jitter — deterministic when injected', () => {
+  it('getRetryStrategy applies a fixed jitter source to timeout delays', async () => {
+    const { getRetryStrategy } = await import('../../src/pipeline/circuit-breaker.ts');
+    const { TimeoutError } = await import('../../src/errors.ts');
+
+    const timeout = new TimeoutError('request timed out');
+    // Fixed jitter () => 0.5 → 500 + 0.5 * 1000 = 1000ms
+    const result = getRetryStrategy(timeout, 0, () => 0.5);
+    expect(result.delayMs).toBe(1000);
+    expect(result.strategy).toBe('jitter');
+    expect(result.shouldRetry).toBe(true);
+    // Fixed jitter () => 0.25 → 500 + 0.25 * 1000 = 750ms
+    expect(getRetryStrategy(timeout, 3, () => 0.25).delayMs).toBe(750);
+    // The jitter source receives the zero-based attempt index
+    expect(getRetryStrategy(timeout, 1, (attempt) => attempt / 2).delayMs).toBe(1000);
+  });
+
+  it('repeated calls with the same fixed jitter are identical (no hidden randomness)', async () => {
+    const { getRetryStrategy } = await import('../../src/pipeline/circuit-breaker.ts');
+    const { TimeoutError } = await import('../../src/errors.ts');
+
+    const fixed: (attempt: number) => number = () => 0.5;
+    const first = getRetryStrategy(new TimeoutError('x'), 0, fixed).delayMs;
+    const second = getRetryStrategy(new TimeoutError('x'), 0, fixed).delayMs;
+    expect(first).toBe(second);
+    expect(first).toBe(1000);
+  });
+
+  it('default jitter is deterministic and collapses the jitter window to its base', async () => {
+    const { DEFAULT_RETRY_JITTER, getRetryStrategy } = await import(
+      '../../src/pipeline/circuit-breaker.ts'
+    );
+    const { TimeoutError } = await import('../../src/errors.ts');
+
+    expect(DEFAULT_RETRY_JITTER(0)).toBe(0);
+    const a = getRetryStrategy(new TimeoutError('x'));
+    const b = getRetryStrategy(new TimeoutError('x'));
+    expect(a.delayMs).toBe(500);
+    expect(b.delayMs).toBe(500);
+    expect(a.strategy).toBe('jitter');
+  });
+
+  it('breaker retryDelayMs honors the configured jitter and stays bounded', async () => {
+    const { createCircuitBreaker } = await import('../../src/pipeline/circuit-breaker.ts');
+    const { TimeoutError } = await import('../../src/errors.ts');
+
+    const breaker = createCircuitBreaker({ retryJitter: () => 0.5 });
+    expect(breaker.retryDelayMs(new TimeoutError('x'), 0)).toBe(1000);
+    expect(breaker.retryDelayMs(new TimeoutError('x'), 4)).toBe(1000);
+
+    const defaultBreaker = createCircuitBreaker();
+    expect(defaultBreaker.retryDelayMs(new TimeoutError('x'), 0)).toBe(500);
+    expect(defaultBreaker.retryDelayMs(new TimeoutError('x'), 0)).toBe(
+      defaultBreaker.retryDelayMs(new TimeoutError('x'), 0),
+    );
+
+    // Non-jitter strategies are unaffected by the injected jitter
+    const { RateLimitError } = await import('../../src/errors.ts');
+    expect(breaker.retryDelayMs(new RateLimitError('too many'), 2)).toBe(3000);
+  });
+
+  it('RenderPipeline threads a fixed retry jitter without changing bounded retry', async () => {
+    const mod = await import('../../src/pipeline/render.ts');
+    const { MockProvider } = await import('../../src/ai/providers/mock.ts');
+    const { TimeoutError } = await import('../../src/errors.ts');
+
+    let firstPass1 = true;
+    const provider = new MockProvider({
+      generator: (req: CompletionRequest) => {
+        if (req.taskType === 'pass2' || req.seed !== undefined) {
+          return SAMPLE_PASS2;
+        }
+        if (firstPass1) {
+          firstPass1 = false;
+          throw new TimeoutError('request timed out');
+        }
+        return 'deterministic retried prose';
+      },
+    });
+
+    const pipeline = new mod.RenderPipeline({
+      provider,
+      model: 'test-model',
+      runtimeServices: createRuntimeServices().services,
+      skipCache: true,
+      retryJitter: () => 0.5,
+      validatorPolicyId: 'test-policy-v1',
+    });
+
+    const result = await pipeline.renderScene(makeJob());
+
+    // The timeout was retried exactly once with the injected jitter, then succeeded
+    const pass1Calls = provider.calls.filter((r) => r.taskType === 'pass1');
+    expect(pass1Calls.length).toBe(2);
+    expect(result.prose).toBe('deterministic retried prose');
+    expect(result.errors.some((e) => e.includes('timed out'))).toBe(true);
+  });
+});

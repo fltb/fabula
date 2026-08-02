@@ -29,11 +29,11 @@ export function getActiveBlocking(
 }
 
 /** Resolve a comment */
-export function resolve(comments: ReviewComment[], commentId: string, patchId?: string): void {
+export function resolve(comments: ReviewComment[], commentId: string, resolvedAt: string, patchId?: string): void {
   const comment = comments.find((c) => c.id === commentId);
   if (comment) {
     comment.status = 'resolved';
-    comment.resolvedAt = new Date().toISOString();
+    comment.resolvedAt = resolvedAt;
     if (patchId) comment.resolvedBy = patchId;
   }
 }
@@ -69,6 +69,7 @@ export function escalate(comments: ReviewComment[], commentId: string): void {
 export function markWontfix(
   comments: ReviewComment[],
   commentId: string,
+  resolvedAt: string,
   resolvedBy?: string,
 ): ReviewComment[] {
   return comments.map((c) =>
@@ -77,7 +78,7 @@ export function markWontfix(
           ...c,
           status: 'wontfix' as const,
           resolvedBy: resolvedBy ?? c.resolvedBy,
-          resolvedAt: new Date().toISOString(),
+          resolvedAt,
         }
       : c,
   );

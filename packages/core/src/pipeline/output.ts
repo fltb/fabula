@@ -245,10 +245,10 @@ function buildEntryMetadata(
     prose_source: result.cacheHit ? 'cache' : 'llm',
     word_count: countNarrativeText(result.prose, 'zh'),
     text_count_version: NARRATIVE_TEXT_COUNT_VERSION,
-    rendered_at: new Date(result.renderStart).toISOString(),
+    rendered_at: result.renderedAt ?? '',
     edit_history: result.cacheHit
       ? []
-      : [{ action: 'llm_generated', timestamp: new Date().toISOString() }],
+      : [{ action: 'llm_generated', timestamp: result.renderedAt ?? '' }],
     branch_existence: branchSetToJsonValue(job.event.branchExistence ?? { type: 'all' }),
   };
   if (job.gameDialogue) {

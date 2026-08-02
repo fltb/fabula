@@ -7,6 +7,7 @@ import type { CoreExecutionRepository } from '../ports/execution-repository.ts';
 import type { EditorialMutationContext, EditorialRuntime } from '../types/editorial.ts';
 import type { NewReviewComment, ReviewComment } from '../types/review.ts';
 import { EditorialOperationError } from './errors.ts';
+import { reviewServices } from './facade.ts';
 
 const hashSchema = z.string().regex(/^[a-f0-9]{64}$/).nullable();
 const base = { projectId: z.string().trim().min(1), mutation: editorialMutationContextSchema, expectedLedgerHash: hashSchema.optional() };
@@ -17,7 +18,7 @@ const updateSchema = z.object({ ...base, commentId: z.string().trim().min(1), ac
 function manager(projectId: string, runtime?: EditorialRuntime): ReviewManager {
   const execution = runtime?.services?.execution;
   if (!execution) throw new EditorialOperationError('INVALID_OPERATION', 'CoreExecutionRepository is required for review operations');
-  return new ReviewManager(execution, projectId);
+  return new ReviewManager(execution, projectId, reviewServices(runtime));
 }
 
 async function validateLineTarget(execution: CoreExecutionRepository, projectId: string, input: NewReviewComment): Promise<void> {

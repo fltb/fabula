@@ -1,4 +1,5 @@
 import type { ReviewComment } from '../types/index.js';
+import type { CoreRuntimeServices } from '../ports/runtime-services.ts';
 
 /** Filter used by semantic ReviewManager queries. */
 export interface CommentFilter {
@@ -7,6 +8,9 @@ export interface CommentFilter {
   targetType?: string;
   targetId?: string;
 }
+
+/** Time and ID sources injected by the host for review ledger mutations. */
+export type ReviewServices = Pick<CoreRuntimeServices, 'clock' | 'ids'>;
 
 
 export interface StatusSummary {

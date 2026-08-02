@@ -346,4 +346,63 @@ describe('editorial revision render — resolved accepted bases in Pass 1', () =
     expect(preview.prompts[0]?.userPrompt).toContain('Write exactly in the custom house style.');
     expect(preview.prompts[0]?.userPrompt).toContain('## Instructions');
   });
+
+  it('fixed injected ids/clock make revision IDs and timestamps deterministic', async () => {
+    const FIXED_NOW = '2026-04-05T06:07:08.000Z';
+    const run = async () => {
+      const execution = new MemoryExecutionRepository();
+      await seedAcceptedBase(execution);
+      const reviewId = await seedOpenReview(execution);
+      const provider = new MockPass2Provider({ entries: { E1: entry('E1', REVISED_PROSE) } });
+      const runtime: EditorialRuntime = {
+        provider,
+        services: {
+          ...services(provider),
+          execution,
+          clock: { now: () => FIXED_NOW },
+          ids: { next: () => 'deterministic-rev-1' },
+        },
+      };
+      const result = await renderNovel(
+        {
+          version: 1,
+          source: source(),
+          selector: { type: 'events', eventIds: ['E1'] },
+          revision: { reviewIds: [reviewId], instruction: 'Rewrite in a colder register.' },
+          mutation: { operationId: '33333333-3333-4333-8333-333333333333', actorId: 'test' },
+          model: 'mock-pass2',
+        },
+        runtime,
+      );
+      return { result, execution };
+    };
+    const a = await run();
+    const b = await run();
+    expect(a.result.errors).toHaveLength(0);
+    expect(b.result.errors).toHaveLength(0);
+    expect(a.result.results[0]?.revisionId).toBe('deterministic-rev-1');
+    expect(b.result.results[0]?.revisionId).toBe('deterministic-rev-1');
+
+    // The persisted revision record is byte-identical across runs: same
+    // revisionId, same injected createdAt, same parent/base.
+    const recA = await a.execution.readSceneRevision({
+      projectId: PROJECT_ID,
+      eventId: 'E1',
+      revisionId: 'deterministic-rev-1',
+    });
+    const recB = await b.execution.readSceneRevision({
+      projectId: PROJECT_ID,
+      eventId: 'E1',
+      revisionId: 'deterministic-rev-1',
+    });
+    expect(recA).not.toBeNull();
+    expect(recA!.value).toEqual(recB!.value);
+    const envelope = recA!.value.value;
+    if (typeof envelope === 'object' && envelope !== null && 'createdAt' in envelope) {
+      expect(envelope.createdAt).toBe(FIXED_NOW);
+    }
+
+    const accepted = await a.execution.readAcceptedScene({ projectId: PROJECT_ID, eventId: 'E1' });
+    expect(accepted?.value.revisionId).toBe('deterministic-rev-1');
+  });
 });

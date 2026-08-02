@@ -11,6 +11,11 @@
 //     - 'info' severity: no approval needed
 // ============================================================================
 
+import type { Clock } from '../ports/runtime-services.ts';
+
+// Deterministic fallback when the host does not supply a Clock — never wall-clock.
+const FALLBACK_CLOCK: Clock = { now: () => '1970-01-01T00:00:00.000Z' };
+
 /**
  * Describes an interaction gate — a point where the pipeline is waiting
  * for human input to proceed.
@@ -47,9 +52,17 @@ export interface WaiverRecord {
  *   renderNovel({ ..., interactionManager: mgr });
  */
 export class InteractionManager {
+  private readonly clock: Clock;
   private waivers: Map<string, WaiverRecord> = new Map();
   private gates: Map<string, InteractionGate> = new Map();
 
+  /**
+   * @param clock - explicit time source for waiver records; defaults to a
+   *                deterministic epoch clock so records stay reproducible
+   */
+  constructor(clock?: Clock) {
+    this.clock = clock ?? FALLBACK_CLOCK;
+  }
   /**
    * Check whether a condition needs human approval.
    *
@@ -91,7 +104,7 @@ export class InteractionManager {
     const record: WaiverRecord = {
       gateId,
       signedBy: signedBy ?? 'auto',
-      signedAt: new Date().toISOString(),
+      signedAt: this.clock.now(),
       reason,
     };
     this.waivers.set(gateId, record);

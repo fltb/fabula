@@ -48,6 +48,7 @@ import {
 } from '../pipeline/index.ts';
 import { appendPlayerChoicesBlock } from '../pipeline/output.ts';
 import type { AcceptedSceneRecord, CoreExecutionRepository } from '../ports/execution-repository.ts';
+import type { Clock, IdGenerator } from '../ports/runtime-services.ts';
 import { SurfacePlanner } from '../render/surface-planner.ts';
 import { canonicalJson, compileSceneContract, computeSha256Hex } from '../render/scene-contract.ts';
 import { ReviewManager } from '../review/manager.ts';
@@ -357,11 +358,11 @@ function buildRenderJobs(
 // ============================================================================
 // Configured surface plan (pure, from renderSurface config)
 // ============================================================================
-
 function compileConfiguredSurfacePlan(
   data: ProjectData,
   jobs: readonly RenderJob[],
-  branchPath?: BranchPath,
+  branchPath: BranchPath | undefined,
+  clock: Clock,
 ): SurfacePlanResult | undefined {
   const config = data.config?.renderSurface;
   if (!config) return undefined;
@@ -404,7 +405,7 @@ function compileConfiguredSurfacePlan(
         }
       : {}),
   };
-  return new SurfacePlanner(options).plan();
+  return new SurfacePlanner(options, clock).plan();
 }
 
 function applySurfacePlanToJobs(jobs: RenderJob[], plan: SurfacePlanResult): void {
@@ -592,7 +593,6 @@ function buildPublication(
 // ============================================================================
 // Revision envelope + promotion (semantic repository records)
 // ============================================================================
-
 function buildRevisionEnvelope(
   result: RenderSceneResult,
   job: RenderJob,
@@ -601,14 +601,16 @@ function buildRevisionEnvelope(
   request: EditorialRenderRequestV1,
   decision: ReleaseDecision,
   parentRevisionId: string | null,
+  clock: Clock,
+  ids: IdGenerator,
   override?: {
     origin: SceneRevisionOrigin;
     restoredFromRevisionId?: string;
   },
 ): SceneRevisionEnvelopeV1 {
   const sceneInfo = plan.scenes.find((s) => s.eventId === result.eventId);
-  const revisionId = globalThis.crypto.randomUUID();
-  const now = new Date().toISOString();
+  const revisionId = ids.next({ kind: 'scene_revision' });
+  const now = clock.now();
   const materializedScene = job.gameDialogue
     ? appendPlayerChoicesBlock(result.prose, job.gameDialogue.choices)
     : result.prose;
@@ -683,6 +685,8 @@ async function promoteAccepted(
   decision: ReleaseDecision,
   parentRevisionId: string | null,
   expectedVersion: number | null,
+  clock: Clock,
+  ids: IdGenerator,
 ): Promise<AcceptedPromotion> {
   const envelope = buildRevisionEnvelope(
     result,
@@ -692,6 +696,8 @@ async function promoteAccepted(
     request,
     decision,
     parentRevisionId,
+    clock,
+    ids,
   );
   await execution.compareAndSwapSceneRevision({
     projectId,
@@ -774,6 +780,7 @@ function buildFailedResult(
 function createProgressEmitter(
   eventBus: TypedEventBus | undefined,
   operationId: string,
+  clock: Clock,
 ): {
   emit(event: { kind: string; eventId?: string; phase?: string; completedScenes?: number; totalScenes?: number; disposition?: string }): void;
 } {
@@ -786,7 +793,7 @@ function createProgressEmitter(
         version: 1,
         operationId,
         sequence,
-        timestamp: new Date().toISOString(),
+        timestamp: clock.now(),
         ...event,
       });
     },
@@ -1002,7 +1009,7 @@ export async function executeEditorialRender(
   assertRuntime(runtime);
   const execution = runtime.services.execution;
   const operationId = request.mutation.operationId;
-  const emit = createProgressEmitter(runtime.eventBus, operationId);
+  const emit = createProgressEmitter(runtime.eventBus, operationId, runtime.services.clock);
   emit.emit({ kind: 'operation_started' });
 
   // ── 1. COMPILE (immutable snapshot + resolved accepted heads) ─────────
@@ -1059,7 +1066,7 @@ export async function executeEditorialRender(
     reviewComments,
   );
   if (init.data.config?.renderSurface) {
-    const surfacePlan = compileConfiguredSurfacePlan(init.data, jobs, request.branchPath);
+    const surfacePlan = compileConfiguredSurfacePlan(init.data, jobs, request.branchPath, runtime.services.clock);
     if (surfacePlan) applySurfacePlanToJobs(jobs, surfacePlan);
   }
 
@@ -1243,6 +1250,8 @@ export async function executeEditorialRender(
             decision,
             parentRevisionId,
             previousAccepted?.revision ?? null,
+            runtime.services.clock,
+            runtime.services.ids,
           );
           if (promotion.kind === 'committed') {
             sceneDispositions.set(result.eventId, 'candidate_promoted');
@@ -1305,6 +1314,8 @@ export async function executeEditorialRender(
           request,
           decision,
           parentRevisionId,
+          runtime.services.clock,
+          runtime.services.ids,
           revisionOverride,
         );
         await execution.compareAndSwapSceneRevision({

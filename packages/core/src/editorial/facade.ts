@@ -6,6 +6,7 @@ import type {
   SourceDocumentV1,
 } from '../contracts/source.ts';
 import type { CoreExecutionRepository } from '../ports/execution-repository.ts';
+import type { CoreRuntimeServices } from '../ports/runtime-services.ts';
 import type {
   EditorialOperationV1,
   EditorialRuntime,
@@ -22,6 +23,19 @@ function execution(runtime?: EditorialRuntime): CoreExecutionRepository {
     );
   }
   return repository;
+}
+
+/**
+ * Review time/ID services carried by an editorial runtime, when provided.
+ * Returns undefined when the runtime injects no services so ReviewManager's
+ * deterministic fallback stays in force for callers that supply nothing.
+ */
+export function reviewServices(
+  runtime?: EditorialRuntime,
+): Pick<CoreRuntimeServices, 'clock' | 'ids'> | undefined {
+  const services = runtime?.services;
+  if (!services) return undefined;
+  return { clock: services.clock, ids: services.ids };
 }
 
 /** Return the canonical documents from an immutable source snapshot. */

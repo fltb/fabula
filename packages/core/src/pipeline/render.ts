@@ -38,7 +38,7 @@ import type { TraceCollector } from '../observability/trace.ts';
 import type { PluginHooksManager } from '../plugin/hooks-manager.ts';
 import type { BuildPromptInput, PromptDecoration } from '../plugin/types.ts';
 import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
-import type { CoreRuntimeServices, PromptTemplateCatalog } from '../ports/runtime-services.ts';
+import type { Clock, CoreRuntimeServices, PromptTemplateCatalog } from '../ports/runtime-services.ts';
 import type { LayeredCacheKey } from '../ports/render-cache-repository.ts';
 import { type StyleProfile, StyleResolver, toStyleNotes } from '../style/index.ts';
 import type { ValidationKey } from '../types/discourse.ts';
@@ -60,7 +60,7 @@ import { compareAnalysisBlocks } from '../util/compare-analysis.ts';
 import { ConcurrencyPool } from '../util/pool.ts';
 import type { AnalysisContract, ResultAggregator } from '../validator/aggregator.ts';
 import { analysisContentSchema } from '../validator/index.ts';
-import { createCircuitBreaker } from './circuit-breaker.ts';
+import { createCircuitBreaker, DEFAULT_RETRY_JITTER, type RetryJitter } from './circuit-breaker.ts';
 function toJsonValue(value: unknown): JsonValue | null {
   if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
   if (Array.isArray(value)) {
@@ -212,6 +212,8 @@ export interface RenderSceneResult {
   promptHash: string; // SHA-256 of ordered provider-call identities
   renderStart: number;
   renderEnd: number;
+  /** ISO timestamp from the injected Clock at scene start ('' when no Clock). */
+  renderedAt?: string;
   validation: ValidationResult | null; // post-render validation result
   providerCalls: ProviderCallLedgerEntry[];
   /** Actual provider requests for fresh candidates; empty for cache hits. */
@@ -228,7 +230,8 @@ export interface RenderSceneResult {
 export interface RenderPipelineOptions {
   provider?: LLMProvider;
   model: string;
-  runtimeServices: Pick<CoreRuntimeServices, 'renderCache' | 'promptTemplates'>;
+  runtimeServices: Pick<CoreRuntimeServices, 'renderCache' | 'promptTemplates'> &
+    Partial<Pick<CoreRuntimeServices, 'clock' | 'ids'>>;
   /** Optional factory for lazy provider creation. Mutually exclusive with provider. */
   providerFactory?: ProviderFactory;
   /** Optional pipeline-level AbortSignal for cancellation. */
@@ -263,6 +266,8 @@ export interface RenderPipelineOptions {
   styleProfile?: StyleProfile;
   /** Circuit breaker max rounds (default 3) */
   maxRounds?: number;
+  /** Explicit retry jitter source for breaker delays (default: deterministic DEFAULT_RETRY_JITTER). */
+  retryJitter?: RetryJitter;
   /** Stable provider profile identifier for lazy resolution */
   providerProfile?: string;
   /** REQUIRED validator policy identity (editorial: plan.planSummary.validationIdentity). */
@@ -279,6 +284,7 @@ export class RenderPipeline {
   private _resolvedProvider: LLMProvider | undefined;
   private readonly promptTemplates?: PromptTemplateCatalog;
   private readonly pipelineSignal?: AbortSignal;
+  private readonly clock?: Clock;
   private readonly renderCache: CoreRuntimeServices['renderCache'];
   private readonly aggregator?: ResultAggregator;
   private readonly entities?: EntityLookup;
@@ -291,6 +297,7 @@ export class RenderPipeline {
   private readonly eventBus?: TypedEventBus;
   private readonly targetLengthWords: number;
   private readonly maxRounds: number;
+  private readonly retryJitter: RetryJitter;
   private readonly styleProfile?: StyleProfile;
   private readonly styleResolver: StyleResolver;
   private readonly language: string;
@@ -308,6 +315,7 @@ export class RenderPipeline {
     this.provider = opts.provider;
     this.providerFactory = opts.providerFactory;
     this.renderCache = opts.runtimeServices.renderCache;
+    this.clock = opts.runtimeServices.clock;
     this.promptTemplates = opts.runtimeServices.promptTemplates;
     this.pipelineSignal = opts.signal;
     this.model = opts.model;
@@ -329,10 +337,24 @@ export class RenderPipeline {
     this.styleResolver = new StyleResolver();
     this.language = opts.language ?? 'en';
     this.maxRounds = opts.maxRounds ?? 3;
+    this.retryJitter = opts.retryJitter ?? DEFAULT_RETRY_JITTER;
     this.pluginHooksManager = opts.pluginHooksManager;
     this.providerProfile = opts.providerProfile;
     this.validatorPolicyId = opts.validatorPolicyId;
     this.pool = new ConcurrencyPool(opts.concurrency ?? 5);
+  }
+
+  /**
+   * Epoch milliseconds for a render timing point: parses the injected Clock's
+   * ISO string (or an explicitly supplied ISO string such as a cached
+   * `renderedAt`), guarding against invalid/absent values with 0 — never the
+   * global clock. `Date.parse` only ever sees an explicitly supplied string.
+   */
+  private nowMs(iso?: string): number {
+    const value = iso ?? this.clock?.now() ?? '';
+    if (value.length === 0) return 0;
+    const ms = Date.parse(value);
+    return Number.isFinite(ms) ? ms : 0;
   }
 
   /**
@@ -438,7 +460,8 @@ export class RenderPipeline {
     this.traceCollector?.record({ phase: 'pipeline', state: 'start', spanId: eventId, eventId });
     this.logger?.info('Starting scene render', { eventId, chapter });
     this.eventBus?.emit('pipeline:render:before', { eventId });
-    const renderStart = Date.now();
+    const renderStartIso = this.clock?.now() ?? '';
+    const renderStart = this.nowMs(renderStartIso);
 
     // ── Cache check with layered diagnostics ──────────────────────
     // Revisions and externally supplied prose never use the draft cache.
@@ -588,8 +611,14 @@ export class RenderPipeline {
             cacheHit: true,
             errors,
             renderStart:
-              typeof c.renderedAt === 'string' ? new Date(c.renderedAt).getTime() : renderStart,
+              typeof c.renderedAt === 'string' && Number.isFinite(Date.parse(c.renderedAt))
+                ? Date.parse(c.renderedAt)
+                : renderStart,
             renderEnd: renderStart,
+            renderedAt:
+              typeof c.renderedAt === 'string' && c.renderedAt.length > 0
+                ? c.renderedAt
+                : renderStartIso,
             validation,
             attempts: 0,
             needsReview,
@@ -647,6 +676,7 @@ export class RenderPipeline {
       maxRounds: this.maxRounds,
       maxAttemptsPerRound: 2,
       failureThreshold: 3,
+      retryJitter: this.retryJitter,
     });
     // Resolve style profile from project config (chapter/narrator/scene levels can be added later)
     const styleNotes = this.styleProfile
@@ -659,17 +689,18 @@ export class RenderPipeline {
       this.traceCollector?.record({ phase: 'pipeline', state: 'end', spanId: eventId, eventId });
       return {
         eventId,
-        prose: '',
-        analysis: null,
-        llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-        llmPass2: null,
-        cacheHit: false,
-        errors: [...errors],
+        prose,
+        analysis,
+        llmPass1,
+        llmPass2,
         renderStart,
-        renderEnd: Date.now(),
+        renderEnd: this.nowMs(),
+        renderedAt: renderStartIso,
         validation: null,
         attempts: 0,
         needsReview: true,
+        cacheHit: false,
+        errors: [...errors],
         providerCalls: [],
         promptHash: '',
         requestRecords,
@@ -863,14 +894,13 @@ export class RenderPipeline {
           if (breaker.state().consecutiveFailures >= 2) {
             breaker.escalate();
           }
-          continue;
         }
         this.traceCollector?.record({
           phase: 'pass1',
           state: 'end',
           spanId: `${eventId}:pass1`,
           eventId,
-          durationMs: Date.now() - renderStart,
+          durationMs: this.nowMs() - renderStart,
         });
         this.logger?.info('Pass 1 completed', {
           eventId,
@@ -1118,14 +1148,13 @@ export class RenderPipeline {
           seed: 42,
         });
         this.logger?.error(sanitizeError(err), { eventId, attempts, phase: 'pass2' });
-        analysis = null;
       }
       this.traceCollector?.record({
         phase: 'pass2',
         state: 'end',
         spanId: `${eventId}:pass2`,
         eventId,
-        durationMs: Date.now() - renderStart,
+        durationMs: this.nowMs() - renderStart,
       });
       this.logger?.info('Pass 2 completed', { eventId, attempts });
 
@@ -1158,7 +1187,7 @@ export class RenderPipeline {
         state: 'end',
         spanId: `${eventId}:validator`,
         eventId,
-        durationMs: Date.now() - renderStart,
+        durationMs: this.nowMs() - renderStart,
       });
       const issueCount = renderValidation?.errors.length ?? 0;
       this.eventBus?.emit('pipeline:validation:complete', { eventId, issueCount });
@@ -1217,7 +1246,7 @@ export class RenderPipeline {
       if (job.proseCandidate !== undefined) break;
     }
 
-    const renderEnd = Date.now();
+    const renderEnd = this.nowMs();
     const needsReview =
       analysis === null ||
       breaker.state().isOpen ||
@@ -1243,7 +1272,7 @@ export class RenderPipeline {
       let cacheAnalysis: JsonValue | null;
       try { cacheAnalysis = toJsonValue(analysisRaw ? JSON.parse(analysisRaw) : null); } catch { cacheAnalysis = null; }
       if (cacheAnalysis !== null && typeof cacheAnalysis === 'object' && !Array.isArray(cacheAnalysis)) {
-        const output: JsonValue = { prose, analysis: cacheAnalysis, evidenceHash, llmPass1, llmPass2, promptHash, renderedAt: new Date().toISOString(), chapters: [chapter] };
+        const output: JsonValue = { prose, analysis: cacheAnalysis, evidenceHash, llmPass1, llmPass2, promptHash, renderedAt: this.clock?.now() ?? '', chapters: [chapter] };
         await setCachedRender(this.renderCache, cacheKeyRecord, { version: 1, key: cacheKeyRecord, recordHash: sha256Canonical({ key: cacheKeyRecord, output }), output });
       }
     }
@@ -1285,6 +1314,7 @@ export class RenderPipeline {
       errors,
       renderStart,
       renderEnd,
+      renderedAt: renderStartIso,
       validation: renderValidation,
       providerCalls,
       requestRecords,

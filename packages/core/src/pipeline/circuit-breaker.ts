@@ -25,10 +25,34 @@ export interface RetryStrategy {
 }
 
 /**
+ * Explicit retry jitter source.
+ *
+ * Receives the zero-based attempt index and returns a multiplier in [0, 1]
+ * applied to the jitter window (TimeoutError delays are `500 + jitter * 1000`).
+ * Core never samples global randomness: the default is a deterministic
+ * constant, and hosts that want randomized retry spread inject their own
+ * function here explicitly.
+ */
+export type RetryJitter = (attempt: number) => number;
+
+/**
+ * Deterministic default jitter — no random component.
+ *
+ * Retry delays are fully deterministic unless a caller explicitly injects a
+ * jitter source through pipeline configuration. The default collapses the
+ * timeout jitter window to its fixed 500 ms base.
+ */
+export const DEFAULT_RETRY_JITTER: RetryJitter = () => 0;
+
+/**
  * Determine retry strategy based on the error type.
  * Used externally by callers to decide how to handle a failed attempt.
  */
-export function getRetryStrategy(error: unknown, attempt: number = 0): RetryStrategy {
+export function getRetryStrategy(
+  error: unknown,
+  attempt: number = 0,
+  jitter: RetryJitter = DEFAULT_RETRY_JITTER,
+): RetryStrategy {
   if (error instanceof RateLimitError) {
     return {
       shouldRetry: true,
@@ -39,7 +63,7 @@ export function getRetryStrategy(error: unknown, attempt: number = 0): RetryStra
   if (error instanceof TimeoutError) {
     return {
       shouldRetry: true,
-      delayMs: 500 + Math.random() * 1000,
+      delayMs: 500 + jitter(attempt) * 1000,
       strategy: 'jitter',
     };
   }
@@ -86,6 +110,8 @@ export interface CircuitBreakerConfig {
   maxAttemptsPerRound: number; // default 2
   failureThreshold: number; // default 3
   escalationDelay: number; // ms between rounds, default 0
+  /** Explicit retry jitter source (default: deterministic DEFAULT_RETRY_JITTER). */
+  retryJitter: RetryJitter;
 }
 
 export function createCircuitBreaker(config?: Partial<CircuitBreakerConfig>): {
@@ -95,12 +121,15 @@ export function createCircuitBreaker(config?: Partial<CircuitBreakerConfig>): {
   recordFailure: (error: string) => void;
   escalate: () => boolean; // returns true if escalated to next round
   reset: () => void;
+  /** Deterministic retry delay for a failure, honoring the configured jitter. */
+  retryDelayMs: (error: unknown, attempt?: number) => number;
 } {
   const cfg: CircuitBreakerConfig = {
     maxRounds: 3,
     maxAttemptsPerRound: 2,
     failureThreshold: 3,
     escalationDelay: 0,
+    retryJitter: DEFAULT_RETRY_JITTER,
     ...config,
   };
 
@@ -163,5 +192,8 @@ export function createCircuitBreaker(config?: Partial<CircuitBreakerConfig>): {
         escalatedStrategy: 'retry',
       };
     },
+
+    retryDelayMs: (error: unknown, attempt: number = 0) =>
+      getRetryStrategy(error, attempt, cfg.retryJitter).delayMs,
   };
 }

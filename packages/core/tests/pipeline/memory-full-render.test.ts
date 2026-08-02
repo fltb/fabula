@@ -4,6 +4,7 @@ import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
 import { previewEditorialRun, renderNovel } from '../../src/api.ts';
 import type { ProjectSourceSnapshotV1, SourceDocumentV1 } from '../../src/contracts/source.ts';
+import type { RenderCacheRecord } from '../../src/ports/render-cache-repository.ts';
 import { MemoryExecutionRepository, MemoryRenderCacheRepository, MemoryStateLogRepository, MemoryStateSnapshotRepository } from '../../src/testing/memory-repositories.ts';
 import { makeCustomEntry, makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
@@ -67,5 +68,100 @@ describe('immutable source snapshot — renderNovel full contract', () => {
     const provider = new MockPass2Provider({ entries: { E1: entry('E1') } }); const calls = track(provider);
     const result = await previewEditorialRun({ version: 1, source: source(), selector: { type: 'all' }, model: 'mock-pass2' }, { provider, services: services(provider) });
     expect(result.errors).toHaveLength(0); expect(result.selectedEventIds).toEqual(['E1']); expect(result.prompts).toHaveLength(1); expect(result.prompts[0]?.userPrompt).toContain('E1'); expect(calls()).toBe(0);
+  });
+
+  it('fixed injected clock/ids stabilize cache records and revision IDs', async () => {
+    const FIXED_NOW = '2026-03-04T05:06:07.000Z';
+    const run = async () => {
+      const cache = new MemoryRenderCacheRepository();
+      const captured: RenderCacheRecord[] = [];
+      const put = cache.put.bind(cache);
+      cache.put = async (input) => {
+        captured.push(input.record);
+        return put(input);
+      };
+      const provider = new MockPass2Provider({ entries: { E1: entry('E1') } });
+      const runtime = {
+        provider,
+        services: {
+          ...services(provider),
+          execution: new MemoryExecutionRepository(),
+          renderCache: cache,
+          clock: { now: () => FIXED_NOW },
+          ids: { next: () => 'deterministic-rev-1' },
+        },
+      };
+      const result = await renderNovel(
+        {
+          version: 1,
+          source: source(),
+          selector: { type: 'all' },
+          mutation: { operationId: '11111111-1111-4111-8111-111111111111', actorId: 'test' },
+          model: 'mock-pass2',
+        },
+        runtime,
+      );
+      return { result, captured };
+    };
+    const a = await run();
+    const b = await run();
+    expect(a.result.errors).toHaveLength(0);
+    expect(b.result.errors).toHaveLength(0);
+    // Revision IDs and promotion come from the injected IdGenerator.
+    expect(a.result.results[0]?.revisionId).toBe('deterministic-rev-1');
+    expect(b.result.results[0]?.revisionId).toBe('deterministic-rev-1');
+    // Cache records (renderedAt, recordHash, full output) are identical.
+    expect(a.captured).toHaveLength(1);
+    expect(a.captured[0]).toEqual(b.captured[0]);
+    const recordOutput = a.captured[0]!.output;
+    if (typeof recordOutput === 'object' && recordOutput !== null && 'renderedAt' in recordOutput) {
+      expect(recordOutput.renderedAt).toBe(FIXED_NOW);
+    }
+  });
+
+  it('cache renderedAt follows the injected clock, never the wall clock', async () => {
+    const capture = async (now: string) => {
+      const cache = new MemoryRenderCacheRepository();
+      let record: RenderCacheRecord | null = null;
+      const put = cache.put.bind(cache);
+      cache.put = async (input) => {
+        record = input.record;
+        return put(input);
+      };
+      const provider = new MockPass2Provider({ entries: { E1: entry('E1') } });
+      await renderNovel(
+        {
+          version: 1,
+          source: source(),
+          selector: { type: 'all' },
+          mutation: { operationId: '22222222-2222-4222-8222-222222222222', actorId: 'test' },
+          model: 'mock-pass2',
+        },
+        {
+          provider,
+          services: {
+            ...services(provider),
+            renderCache: cache,
+            clock: { now: () => now },
+            ids: { next: () => 'deterministic-rev-1' },
+          },
+        },
+      );
+      return record;
+    };
+    const early = await capture('2026-01-01T00:00:00.000Z');
+    const late = await capture('2026-12-31T23:59:59.000Z');
+    const earlyOutput = early!.output;
+    const lateOutput = late!.output;
+    if (
+      typeof earlyOutput === 'object' &&
+      earlyOutput !== null &&
+      'renderedAt' in earlyOutput
+    ) {
+      expect(earlyOutput.renderedAt).toBe('2026-01-01T00:00:00.000Z');
+    }
+    if (typeof lateOutput === 'object' && lateOutput !== null && 'renderedAt' in lateOutput) {
+      expect(lateOutput.renderedAt).toBe('2026-12-31T23:59:59.000Z');
+    }
   });
 });

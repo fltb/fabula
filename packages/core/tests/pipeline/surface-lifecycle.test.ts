@@ -4,11 +4,13 @@ import { type MockPass2Entry, MockPass2Provider } from '../../src/ai/providers/m
 import { previewEditorialRun, renderNovel } from '../../src/api.ts';
 import type { ProjectSourceSnapshotV1, SourceDocumentV1 } from '../../src/contracts/source.ts';
 import { MemoryExecutionRepository, MemoryRenderCacheRepository, MemoryStateLogRepository, MemoryStateSnapshotRepository } from '../../src/testing/memory-repositories.ts';
+import { SurfacePlanner } from '../../src/render/surface-planner.ts';
 import { makeCustomEntry, makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 const sha = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const text = (id: string) => `Test prose for event ${id}. The morning light filtered through the tall windows.`;
 const analysis: Record<string, unknown> = { postconditions: { covered: [], dropped: [] }, preconditions: { violated: [] }, pov: { consistent: true, leaks: [] }, inventedDetails: [], quality: { proseScore: 4, maxScore: 5, strengths: ['clear'], weaknesses: [], estimatedWordCount: 80 }, threadProgressAchieved: [], foreshadowingDeployed: [], narrativeChecks: [], appearanceChecks: [], characterReferences: [], tenseDetected: 'past', conflictAnalysis: { primaryType: 'none', resolutionAchieved: true }, ruleChecks: [], knowledgeChecks: [], checklistResults: [] };
+const FIXED_NOW = '2026-01-01T00:00:00.000Z';
 function entry(id: string, prose = text(id)): MockPass2Entry { return makeCustomEntry(id, prose, { eventId: id, protocol: makeProtocol(prose), observations: makeObservations(analysis, prose), analysis }); }
 function source(ids: string[], surface?: string): ProjectSourceSnapshotV1 {
   const events = ids.map((id, i) => `event: ${id}\nnarrativeOrder: ${i + 1}\ntitle: ${id} scene\nstoryTime: day_1\npov:\n  character: narrator\n  type: first_person\nsceneBrief: Test scene\nbeats:\n  - Test scene\npreconditions: []\nexpectedPostconditions: []\n`);
@@ -24,7 +26,7 @@ function source(ids: string[], surface?: string): ProjectSourceSnapshotV1 {
   const documents: SourceDocumentV1[] = Object.entries(docs).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([logicalPath, content]) => ({ version: 1, logicalPath, content, contentHash: sha(content), parseResult: { status: 'parsed', value: { value: content } }, diagnostics: [] }));
   return { version: 1, documents, sourceHash: sha(documents.map((d) => `${d.logicalPath}\0${d.content}`).join('')) };
 }
-function services(provider: MockPass2Provider, execution = new MemoryExecutionRepository(), renderCache = new MemoryRenderCacheRepository()) { return { execution, renderCache, stateLog: new MemoryStateLogRepository(), stateSnapshots: new MemoryStateSnapshotRepository(), promptTemplates: { get: async () => null }, clock: { now: () => new Date().toISOString() }, ids: { next: () => crypto.randomUUID() }, llm: provider }; }
+function services(provider: MockPass2Provider, execution = new MemoryExecutionRepository(), renderCache = new MemoryRenderCacheRepository()) { return { execution, renderCache, stateLog: new MemoryStateLogRepository(), stateSnapshots: new MemoryStateSnapshotRepository(), promptTemplates: { get: async () => null }, clock: { now: () => FIXED_NOW }, ids: { next: () => crypto.randomUUID() }, llm: provider }; }
 function tracked(provider: MockPass2Provider) { let calls = 0; const complete = provider.complete.bind(provider); provider.complete = async (r) => { calls++; return complete(r); }; return () => calls; }
 const serial = (ids: string[], last = 'serial_surface') => `mode: manual\ngroups:\n${ids.map((id, i) => `  - groupId: group_${i}\n    sceneIds: [${id}]\n    surfacePolicy: ${i === ids.length - 1 && last !== 'serial_surface' ? last : 'serial_surface'}`).join('\n')}\nlanes:\n  - laneId: main_lane\n    groupIds: [${ids.map((_, i) => `group_${i}`).join(', ')}]`;
 
@@ -36,6 +38,40 @@ describe('Surface Lifecycle — immutable source snapshot scheduling', () => {
   it('batch and non-batch produce equivalent release outcomes', async () => { const s = source(['E1', 'E2'], serial(['E1', 'E2'])); const a = new MockPass2Provider({ entries: { E1: entry('E1'), E2: entry('E2') } }); const b = new MockPass2Provider({ entries: { E1: entry('E1'), E2: entry('E2') } }); const ra = await renderNovel({ version: 1, source: s, mutation: { operationId: '0000000a-000a-400a-800a-00000000000a', actorId: 'test' }, model: 'mock-pass2' }, { provider: a, services: services(a) }); const rb = await renderNovel({ version: 1, source: s, batch: { batchSize: 1 }, mutation: { operationId: '0000000b-000b-400b-800b-00000000000b', actorId: 'test' }, model: 'mock-pass2' }, { provider: b, services: services(b) }); expect(ra.results.map((r) => r.released)).toEqual(rb.results.map((r) => r.released)); });
   it('preview compiles prompts without provider calls', async () => { const provider = new MockPass2Provider({ entries: {} }); const calls = tracked(provider); const result = await previewEditorialRun({ version: 1, source: source(['E1', 'E2'], serial(['E1', 'E2'])), model: 'mock-pass2' }, { provider, services: services(provider) }); expect(calls()).toBe(0); expect(result.selectedEventIds).toEqual(['E1', 'E2']); expect(result.prompts).toHaveLength(2); });
   it('parallel groups render independently', async () => { const provider = new MockPass2Provider({ entries: { E1: entry('E1', ''), E2: entry('E2') } }); const result = await renderNovel({ version: 1, source: source(['E1', 'E2']), mutation: { operationId: '00000005-0005-4005-8005-000000000005', actorId: 'test' }, model: 'mock-pass2' }, { provider, services: services(provider) }); expect(result.results[0]?.released).toBe(false); expect(result.results[1]?.released).toBe(true); });
+
+  it('surface manifest generatedAt is deterministic under the injected clock', () => {
+    const options = { mode: 'manual' as const, branch: { decisions: [] }, sceneIds: [], contracts: [] };
+    const first = new SurfacePlanner(options, { now: () => FIXED_NOW }).plan();
+    const second = new SurfacePlanner(options, { now: () => FIXED_NOW }).plan();
+    expect(first.manifest.generatedAt).toBe(FIXED_NOW);
+    expect(first.manifest).toEqual(second.manifest);
+    const later = new SurfacePlanner(options, { now: () => '2026-02-02T02:02:02.000Z' }).plan();
+    expect(later.manifest.generatedAt).toBe('2026-02-02T02:02:02.000Z');
+    // No explicit clock → deterministic epoch fallback, never wall-clock
+    const fallback = new SurfacePlanner(options).plan();
+    expect(fallback.manifest.generatedAt).toBe('1970-01-01T00:00:00.000Z');
+  });
+
+  it('operation record timestamps come from the injected clock', async () => {
+    const provider = new MockPass2Provider({ entries: { E1: entry('E1'), E2: entry('E2') } });
+    const execution = new MemoryExecutionRepository();
+    const operationId = '0000000c-000c-400c-800c-00000000000c';
+    const result = await renderNovel(
+      { version: 1, source: source(['E1', 'E2'], serial(['E1', 'E2'])), mutation: { operationId, actorId: 'test' }, model: 'mock-pass2' },
+      { provider, services: services(provider, execution) },
+    );
+    expect(result.errors).toHaveLength(0);
+    const operation = await execution.readOperation({ projectId: 'test-project', operationId });
+    expect(operation).not.toBeNull();
+    const payload = operation!.value.value as {
+      startedAt: string;
+      heartbeatAt: string;
+      leaseExpiresAt: string;
+    };
+    expect(payload.startedAt).toBe(FIXED_NOW);
+    expect(payload.heartbeatAt).toBe(FIXED_NOW);
+    expect(payload.leaseExpiresAt).toBe(FIXED_NOW);
+  });
 });
 
 // ─── Accepted promotion CAS ────────────────────────────────────────────────

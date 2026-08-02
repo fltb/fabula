@@ -15,6 +15,7 @@
 //       blocks surface descendants; logical compilation still valid.
 // ============================================================================
 
+import type { Clock } from '../ports/runtime-services.ts';
 import type { BranchPath } from '../types/branch.js';
 import type {
   CompiledSceneContract,
@@ -41,6 +42,9 @@ const DEFAULT_MANIFEST_VERSION = 'render-surface-v1';
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_MAX_PARALLEL_GROUP_SIZE = 10;
 
+// Deterministic fallback when the host does not supply a Clock — never wall-clock.
+const FALLBACK_CLOCK: Clock = { now: () => '1970-01-01T00:00:00.000Z' };
+
 // ─── SurfacePlanner ──────────────────────────────────────────────────────────
 
 /**
@@ -55,9 +59,16 @@ const DEFAULT_MAX_PARALLEL_GROUP_SIZE = 10;
 export class SurfacePlanner {
   private readonly options: SurfacePlannerOptions;
   private readonly manifestVersion: string;
+  private readonly clock: Clock;
 
-  constructor(options: SurfacePlannerOptions) {
+  /**
+   * @param options - plan inputs (mode, branch, scenes, contracts, groups/lanes)
+   * @param clock   - explicit time source for generated metadata; defaults to a
+   *                  deterministic epoch clock so manifests stay reproducible
+   */
+  constructor(options: SurfacePlannerOptions, clock?: Clock) {
     this.options = options;
+    this.clock = clock ?? FALLBACK_CLOCK;
     this.manifestVersion = DEFAULT_MANIFEST_VERSION;
   }
 
@@ -410,7 +421,7 @@ export class SurfacePlanner {
       lanes,
       groupPolicies,
       plannerMode: mode,
-      generatedAt: new Date().toISOString(),
+      generatedAt: this.clock.now(),
     };
   }
 

@@ -12,10 +12,11 @@ import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { reviewFeedbackProjection, sortReviewFeedback } from '../../src/editorial/compiler.ts';
 import { buildEventRevisionStates, composeRevisionDirective } from '../../src/editorial/render-service.ts';
-import { addReviewComment } from '../../src/editorial/review-facade.ts';
+import { addReviewComment, replaceReviewComment, updateReviewComment } from '../../src/editorial/review-facade.ts';
 import { ReviewManager } from '../../src/review/manager.ts';
 import { MemoryExecutionRepository } from '../../src/testing/memory-repositories.ts';
 import type { AcceptedSceneRecord } from '../../src/ports/execution-repository.ts';
+import type { Clock, IdGenerator } from '../../src/ports/runtime-services.ts';
 import type { EditorialRuntime, RevisionRequest } from '../../src/types/editorial.ts';
 import type { NewReviewComment, ReviewApplicationV1, ReviewComment } from '../../src/types/index.ts';
 
@@ -64,9 +65,16 @@ function acceptedScene(
   };
 }
 
-/** Minimal EditorialRuntime carrying only the semantic execution repository. */
-function runtime(execution: MemoryExecutionRepository): EditorialRuntime {
-  return { services: { execution } } as unknown as EditorialRuntime;
+/**
+ * EditorialRuntime carrying the semantic execution repository plus optional
+ * review time/ID services, mirroring host-injected runtime services.
+ */
+function runtime(
+  execution: MemoryExecutionRepository,
+  services?: { clock: Clock; ids: IdGenerator },
+): EditorialRuntime {
+  const injected = services ? { execution, ...services } : { execution };
+  return { services: injected } as unknown as EditorialRuntime;
 }
 
 describe('editorial revision feedback', () => {
@@ -414,5 +422,85 @@ describe('editorial revision feedback', () => {
     const addressedNovel = comments.find((entry) => entry.id === novelReview.id)!;
     expect(addressedNovel.status).toBe('addressed');
     expect(addressedNovel.applications.map((entry) => entry.eventId)).toEqual(['E1', 'E2']);
+  });
+
+  it('produces identical review ledgers under identical fixed clock and ID services', async () => {
+    const NOW = '2026-07-28T00:00:00.000Z';
+    const run = async () => {
+      const repo = new MemoryExecutionRepository();
+      const manager = new ReviewManager(repo, PROJECT_ID, {
+        clock: { now: () => NOW },
+        ids: { next: () => 'rev_fixed_1' },
+      });
+      const created = await manager.addReviewComment(
+        { target: { type: 'scene', id: 'E1' }, severity: 'suggestion', category: 'style', content: 'Tighten scene' },
+        'reviewer',
+      );
+      const resolved = await manager.updateReviewComment(created.id, 'resolve', 'reviewer');
+      return {
+        comment: { ...created, applications: created.applications.map((a) => ({ ...a })) },
+        resolved: {
+          status: resolved.status,
+          resolvedAt: resolved.resolvedAt,
+          resolvedBy: resolved.resolvedBy,
+        },
+      };
+    };
+    expect(await run()).toEqual(await run());
+  });
+
+  it('facade review mutations stamp the injected clock and ID services', async () => {
+    const now = '2026-07-28T09:30:00.000Z';
+    const ids = ['rev_facade_1', 'rev_facade_2'];
+    let next = 0;
+    const execution = new MemoryExecutionRepository();
+    const facadeRuntime = runtime(execution, {
+      clock: { now: () => now },
+      ids: { next: () => ids[next++] },
+    });
+
+    const created = await addReviewComment(
+      {
+        projectId: PROJECT_ID,
+        input: { target: { type: 'scene', id: 'E1' }, severity: 'suggestion', category: 'style', content: 'Facade comment' },
+        mutation: { operationId: crypto.randomUUID(), actorId: 'reviewer' },
+      },
+      facadeRuntime,
+    );
+    expect(created.id).toBe('rev_facade_1');
+    expect(created.createdAt).toBe(now);
+
+    const replacement = await replaceReviewComment(
+      {
+        projectId: PROJECT_ID,
+        commentId: created.id,
+        input: { target: { type: 'scene', id: 'E1' }, severity: 'blocking', category: 'plot_logic', content: 'Facade replacement' },
+        mutation: { operationId: crypto.randomUUID(), actorId: 'reviewer' },
+      },
+      facadeRuntime,
+    );
+    expect(replacement.id).toBe('rev_facade_2');
+    expect(replacement.createdAt).toBe(now);
+    expect(replacement.supersedesId).toBe(created.id);
+
+    const resolved = await updateReviewComment(
+      {
+        projectId: PROJECT_ID,
+        commentId: replacement.id,
+        action: 'resolve',
+        mutation: { operationId: crypto.randomUUID(), actorId: 'reviewer' },
+      },
+      facadeRuntime,
+    );
+    expect(resolved.status).toBe('resolved');
+    expect(resolved.resolvedAt).toBe(now);
+
+    // The injected identities are exactly what reached the review ledger via
+    // repository compare-and-swap — no fallback IDs or timestamps leaked in.
+    const record = await execution.readReview({ projectId: PROJECT_ID, reviewId: 'ledger' });
+    expect(record).not.toBeNull();
+    const ledger = record!.value.value as { comments: Array<{ id: string; createdAt: string }> };
+    expect(ledger.comments.map((entry) => entry.id)).toEqual(['rev_facade_1', 'rev_facade_2']);
+    expect(ledger.comments.every((entry) => entry.createdAt === now)).toBe(true);
   });
 });

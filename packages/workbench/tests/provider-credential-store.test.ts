@@ -1,18 +1,18 @@
-import { afterAll, describe, expect, it } from 'vitest';
-import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
-import { mkdtempSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { afterAll, describe, expect, it } from 'vitest';
 import {
   CredentialStoreError,
   createProviderCredentialStore,
   isValidProviderId,
+  type OsCredentialStore,
   PROVIDER_ID_PATTERN,
   resolveXdgConfigDir,
   XdgCredentialFileStore,
-  type OsCredentialStore,
 } from '../src/host/providers/index.js';
 
 const tempDirs: string[] = [];
@@ -44,7 +44,7 @@ describe('cross-process lock', () => {
     const fabulaDir = join(configDir, 'fabula');
     await mkdir(fabulaDir, { recursive: true });
     await writeFile(join(fabulaDir, 'providers.json.lock'), 'partial', { mode: 0o600 });
-    const store = new XdgCredentialFileStore({ configDir });
+    const store = new XdgCredentialFileStore({ configDir, lockStaleMs: 0 });
     await store.set('openai', 'sk-after-abandoned-lock');
     await expect(store.get('openai')).resolves.toBe('sk-after-abandoned-lock');
   });
@@ -86,7 +86,9 @@ describe('cross-process lock', () => {
     const store = new XdgCredentialFileStore({ configDir });
     await store.set('openai', 'sk-lock-released');
     await store.get('openai');
-    await expect(stat(join(configDir, 'fabula', 'providers.json.lock'))).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(stat(join(configDir, 'fabula', 'providers.json.lock'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
   });
 });
 afterAll(() => {
@@ -177,17 +179,31 @@ describe('filesystem permissions and containment', () => {
     const store = new XdgCredentialFileStore({ configDir });
     await store.set('openai', 'sk-contained');
     const files = await readdir(join(configDir, 'fabula'));
-    expect(files.filter(name => !name.startsWith('providers.json.tmp-'))).toEqual(['providers.json']);
+    expect(files.filter((name) => !name.startsWith('providers.json.tmp-'))).toEqual([
+      'providers.json',
+    ]);
   });
 });
 
 describe('provider id validation', () => {
-  const INVALID_IDS = ['', 'OpenAI', 'open_ai', 'open ai', '123abc', '-openai', 'openai!', '..', 'x'.repeat(64)];
+  const INVALID_IDS = [
+    '',
+    'OpenAI',
+    'open_ai',
+    'open ai',
+    '123abc',
+    '-openai',
+    'openai!',
+    '..',
+    'x'.repeat(64),
+  ];
 
   it('rejects invalid provider ids without touching storage', async () => {
     const store = createProviderCredentialStore({ configDir: newTempConfigDir() });
     for (const bad of INVALID_IDS) {
-      await expect(store.set(bad, 'sk-secret')).rejects.toMatchObject({ code: 'INVALID_PROVIDER_ID' });
+      await expect(store.set(bad, 'sk-secret')).rejects.toMatchObject({
+        code: 'INVALID_PROVIDER_ID',
+      });
       await expect(store.get(bad)).rejects.toMatchObject({ code: 'INVALID_PROVIDER_ID' });
       await expect(store.remove(bad)).rejects.toMatchObject({ code: 'INVALID_PROVIDER_ID' });
     }
@@ -195,11 +211,21 @@ describe('provider id validation', () => {
 
   it('rejects invalid provider ids on the concrete file store too', async () => {
     const store = new XdgCredentialFileStore({ configDir: newTempConfigDir() });
-    await expect(store.set('Bad Provider', 'sk-secret')).rejects.toMatchObject({ code: 'INVALID_PROVIDER_ID' });
+    await expect(store.set('Bad Provider', 'sk-secret')).rejects.toMatchObject({
+      code: 'INVALID_PROVIDER_ID',
+    });
   });
 
   it('accepts well-formed provider ids', () => {
-    for (const good of ['openai', 'anthropic', 'deepseek', 'openrouter', 'a', 'x'.repeat(63), 'my-provider-2']) {
+    for (const good of [
+      'openai',
+      'anthropic',
+      'deepseek',
+      'openrouter',
+      'a',
+      'x'.repeat(63),
+      'my-provider-2',
+    ]) {
       expect(isValidProviderId(good)).toBe(true);
     }
     expect(PROVIDER_ID_PATTERN.test('openai')).toBe(true);
@@ -214,7 +240,9 @@ describe('fallback atomicity and error safety', () => {
     const configDir = newTempConfigDir();
     const fabulaDir = join(configDir, 'fabula');
     await mkdir(fabulaDir, { recursive: true });
-    await writeFile(join(fabulaDir, 'providers.json.tmp-stale-garbage'), 'partial garbage', { mode: 0o600 });
+    await writeFile(join(fabulaDir, 'providers.json.tmp-stale-garbage'), 'partial garbage', {
+      mode: 0o600,
+    });
     const store = new XdgCredentialFileStore({ configDir });
     await store.set('openai', 'sk-after-crash');
     await store.set('anthropic', 'sk-after-crash-2');
@@ -228,7 +256,9 @@ describe('fallback atomicity and error safety', () => {
     const configDir = newTempConfigDir();
     const fabulaDir = join(configDir, 'fabula');
     await mkdir(fabulaDir, { recursive: true });
-    await writeFile(join(fabulaDir, 'providers.json'), '{"openai": "sk-leaked-secret"', { mode: 0o600 });
+    await writeFile(join(fabulaDir, 'providers.json'), '{"openai": "sk-leaked-secret"', {
+      mode: 0o600,
+    });
     const store = new XdgCredentialFileStore({ configDir });
     const error = await store.get('openai').catch((e: unknown) => e);
     expect(error).toBeInstanceOf(CredentialStoreError);
@@ -262,7 +292,9 @@ describe('fallback atomicity and error safety', () => {
 
 describe('xdg config directory resolution', () => {
   it('prefers XDG_CONFIG_HOME over HOME', () => {
-    expect(resolveXdgConfigDir({ XDG_CONFIG_HOME: '/custom/xdg', HOME: '/home/user' })).toBe('/custom/xdg');
+    expect(resolveXdgConfigDir({ XDG_CONFIG_HOME: '/custom/xdg', HOME: '/home/user' })).toBe(
+      '/custom/xdg',
+    );
   });
 
   it('falls back to HOME/.config', () => {
@@ -303,7 +335,9 @@ describe('injected OS credential adapter', () => {
     await store.get('openai');
     await store.remove('openai');
     expect(calls).toEqual(['set:openai:sk-os', 'get:openai', 'remove:openai']);
-    await expect(readFile(join(configDir, 'fabula', 'providers.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      readFile(join(configDir, 'fabula', 'providers.json'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('still validates provider ids on the OS path', async () => {
@@ -316,7 +350,9 @@ describe('injected OS credential adapter', () => {
       async remove() {},
     };
     const store = createProviderCredentialStore({ osCredentialStore: osStore });
-    await expect(store.set('Bad Provider', 'sk')).rejects.toMatchObject({ code: 'INVALID_PROVIDER_ID' });
+    await expect(store.set('Bad Provider', 'sk')).rejects.toMatchObject({
+      code: 'INVALID_PROVIDER_ID',
+    });
   });
 
   it('never includes a credential value in wrapper errors', async () => {
@@ -340,8 +376,13 @@ describe('injected OS credential adapter', () => {
 
 describe('host-only provider credential boundary', () => {
   it('does not export provider credential types through the browser contract barrel', async () => {
-    const barrel = await readFile(fileURLToPath(new URL('../src/contracts/index.ts', import.meta.url)), 'utf8');
-    expect(barrel).not.toMatch(/ProviderCredentialStore|OsCredentialStore|XdgCredentialFileStore|CredentialStoreError|ProviderSecret|ApiKey/);
+    const barrel = await readFile(
+      fileURLToPath(new URL('../src/contracts/index.ts', import.meta.url)),
+      'utf8',
+    );
+    expect(barrel).not.toMatch(
+      /ProviderCredentialStore|OsCredentialStore|XdgCredentialFileStore|CredentialStoreError|ProviderSecret|ApiKey/,
+    );
   });
 
   it('keeps client code clear of provider credential imports', async () => {
@@ -357,7 +398,9 @@ describe('host-only provider credential boundary', () => {
     const providersDir = fileURLToPath(new URL('../src/host/providers', import.meta.url));
     for (const name of await readdir(providersDir)) {
       const source = await readFile(`${providersDir}/${String(name)}`, 'utf8');
-      expect(source, String(name)).not.toMatch(/node:sqlite|DatabaseSync|kysely|persistence\/worker|host\/git/);
+      expect(source, String(name)).not.toMatch(
+        /node:sqlite|DatabaseSync|kysely|persistence\/worker|host\/git/,
+      );
     }
   });
 });

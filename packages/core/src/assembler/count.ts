@@ -15,8 +15,3 @@ export function countNarrativeText(text: string, language: string): number {
   }
   return visible.match(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*/gu)?.length ?? 0;
 }
-
-/** @deprecated Use countNarrativeText(text, language). */
-export function countWords(text: string, language = 'en'): number {
-  return countNarrativeText(text, language);
-}

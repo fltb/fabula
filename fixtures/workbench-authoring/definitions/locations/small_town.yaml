@@ -1,0 +1,6 @@
+id: small_town
+name: "Small Town"
+kind: town
+description: "The small town where the fixture project's single scene takes place."
+initialState:
+  season: deep_winter

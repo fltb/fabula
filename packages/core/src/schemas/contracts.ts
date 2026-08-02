@@ -3,38 +3,6 @@ import { analysisResultSchema } from './analysis.js';
 
 const schemaVersion = z.literal(1);
 
-const capabilityEntrySchema = z
-  .object({
-    id: z.string().min(1),
-    status: z.enum(['S', 'C', 'X']),
-    inputVersion: schemaVersion,
-    normalizationVersion: schemaVersion,
-    acceptedForms: z.array(z.string().min(1)),
-    evidenceFixture: z.string().min(1),
-    gateCommand: z.string().min(1),
-    evidence: z.enum(['pending', 'verified']),
-  })
-  .strict();
-
-export const legacyCapabilityManifestSchema = z
-  .object({
-    version: schemaVersion,
-    capabilities: z.array(capabilityEntrySchema).superRefine((entries, context) => {
-      const ids = new Set<string>();
-      for (const [index, entry] of entries.entries()) {
-        if (ids.has(entry.id)) {
-          context.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: [index, 'id'],
-            message: 'Duplicate capability id',
-          });
-        }
-        ids.add(entry.id);
-      }
-    }),
-  })
-  .strict();
-
 const validatorIssueIdentitySchema = z
   .object({
     validator: z.string().min(1),

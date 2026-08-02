@@ -1,48 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { ConfigError, DagCycleError, PreconditionMismatchError } from '../src/errors.ts';
-import {
-  legacyCapabilityManifestSchema,
-  responseReferenceSchema,
-} from '../src/schemas/contracts.ts';
+import { responseReferenceSchema } from '../src/schemas/contracts.ts';
 import { postconditionSchema, preconditionSchema } from '../src/schemas/primitives.ts';
 
-describe('Stage 1 contracts', () => {
-  const manifest = JSON.parse(readFileSync('capabilities/stage-1.json', 'utf8'));
-
-  it('accepts the versioned capability manifest', () => {
-    expect(legacyCapabilityManifestSchema.parse(manifest).capabilities).not.toHaveLength(0);
-  });
-
-  it('rejects duplicate and unknown capability fields', () => {
-    expect(
-      legacyCapabilityManifestSchema.safeParse({
-        ...manifest,
-        capabilities: [manifest.capabilities[0], manifest.capabilities[0]],
-      }).success,
-    ).toBe(false);
-    expect(
-      legacyCapabilityManifestSchema.safeParse({ ...manifest, unexpected: true }).success,
-    ).toBe(false);
-  });
-
-  it('requires exactly one fact representation (value XOR narrativeHint) and rejects missing value for operator', () => {
-    const base = { entity: 'wife', attribute: 'status' };
-    expect(
-      preconditionSchema.safeParse({ ...base, value: 'alive', narrativeHint: 'alive' }).success,
-    ).toBe(false);
-    expect(preconditionSchema.safeParse({ ...base, value: 'alive', operator: 'neq' }).success).toBe(
-      true,
-    );
-    expect(preconditionSchema.safeParse({ ...base, operator: 'eq' }).success).toBe(false);
-    expect(postconditionSchema.safeParse({ ...base }).success).toBe(false);
-    expect(postconditionSchema.safeParse({ ...base, value: 'changed' }).success).toBe(false);
-  });
-
-  it('rejects unsupported contract versions and mismatched reference IDs', () => {
-    expect(legacyCapabilityManifestSchema.safeParse({ ...manifest, version: 2 }).success).toBe(
-      false,
-    );
+describe('response reference contracts', () => {
+  it('rejects mismatched reference IDs', () => {
     const fixture = JSON.parse(readFileSync('fixtures/zhu-fu/reference/data/E0.json', 'utf8'));
     const result = responseReferenceSchema.safeParse({
       prose: fixture.prose,
@@ -67,16 +29,19 @@ describe('Stage 1 contracts', () => {
       expect.objectContaining({ path: ['analysis', 'eventId'] }),
     );
   });
+});
 
-  it('provides stable safe error codes and context', () => {
-    for (const error of [
-      new ConfigError('bad config', { path: 'nova.yaml' }),
-      new DagCycleError('cycle', { cycle: ['E0', 'E1'] }),
-      new PreconditionMismatchError('mismatch', { eventId: 'E1', stateKey: 'wife.status' }),
-    ]) {
-      expect(error.code).toMatch(/^[A-Z_]+$/);
-      expect(error.context).not.toHaveProperty('prose');
-      expect(error.context).not.toHaveProperty('credential');
-    }
+describe('precondition/postcondition primitives', () => {
+  it('requires exactly one fact representation (value XOR narrativeHint) and rejects missing value for operator', () => {
+    const base = { entity: 'wife', attribute: 'status' };
+    expect(
+      preconditionSchema.safeParse({ ...base, value: 'alive', narrativeHint: 'alive' }).success,
+    ).toBe(false);
+    expect(preconditionSchema.safeParse({ ...base, value: 'alive', operator: 'neq' }).success).toBe(
+      true,
+    );
+    expect(preconditionSchema.safeParse({ ...base, operator: 'eq' }).success).toBe(false);
+    expect(postconditionSchema.safeParse({ ...base }).success).toBe(false);
+    expect(postconditionSchema.safeParse({ ...base, value: 'changed' }).success).toBe(false);
   });
 });

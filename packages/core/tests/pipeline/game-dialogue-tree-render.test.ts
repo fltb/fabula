@@ -1,17 +1,39 @@
 import { randomUUID } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FileMockPass2Provider } from '@novalistically/node-host';
 import { renderGameDialogueTree, renderNovel } from '../../src/api.ts';
+import { type MockPass2Entry, MockPass2Provider } from '../../src/testing.ts';
 import { materializeFixtureSnapshot } from '../fixtures/fixture-snapshots.ts';
 import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 
-const projectRoot = path.resolve(import.meta.dirname, '..', '..', '..', '..', 'fixtures', 'game-dialogue-tree');
+const projectRoot = path.resolve(
+  import.meta.dirname,
+  '..',
+  '..',
+  '..',
+  '..',
+  'fixtures',
+  'game-dialogue-tree',
+);
 const source = materializeFixtureSnapshot(projectRoot);
 
+/** Load deterministic Pass 2 reference fixtures without Host involvement. */
+function loadReferenceEntries(referenceDir: string): Record<string, MockPass2Entry> {
+  const root = path.resolve(referenceDir);
+  const entries: Record<string, MockPass2Entry> = {};
+  for (const file of readdirSync(root)
+    .filter((entry) => entry.endsWith('.json'))
+    .sort()) {
+    const value = JSON.parse(readFileSync(path.join(root, file), 'utf8')) as MockPass2Entry;
+    entries[path.basename(file, '.json')] = value;
+  }
+  return entries;
+}
+
 function runtime() {
-  const provider = new FileMockPass2Provider({
-    referenceDir: path.join(projectRoot, 'reference', 'data'),
+  const provider = new MockPass2Provider({
+    entries: loadReferenceEntries(path.join(projectRoot, 'reference', 'data')),
   });
   const harness = createRuntimeServices({ provider });
   return { provider, ...harness };
@@ -39,10 +61,12 @@ describe('renderGameDialogueTree()', () => {
       expect.objectContaining({ id: 'refuse_hunt', targetEvent: 'E1b' }),
     ]);
     expect(
-      (await host.execution.readTrace({
-        projectId: 'game-dialogue-tree',
-        operationId,
-      }))?.value.value,
+      (
+        await host.execution.readTrace({
+          projectId: 'game-dialogue-tree',
+          operationId,
+        })
+      )?.value.value,
     ).toMatchObject({
       format: 'jsonl',
       traceId: operationId,

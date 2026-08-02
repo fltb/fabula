@@ -3,9 +3,9 @@
 // ============================================================================
 //
 // Root intentionally exposes only universal narrative-engine semantics.
-// Editorial workflows, schemas, adapters, tooling, and test doubles live at
-// explicit subpaths: /editorial, /schema, /adapters, /tooling, /testing, and
-// /extensions. Do not add wildcard exports here.
+// Editorial workflows, schemas, tooling, and test doubles live at explicit
+// subpaths: /editorial, /schema, /tooling, /testing, and /extensions. Do not
+// add wildcard exports here.
 // ============================================================================
 
 // ── Runtime contract (exactly 10 values) ─────────────────────────────────────
@@ -66,7 +66,6 @@ export type {
   WritePolicy,
 } from './types/index.js';
 
-
 // ── Canonical compiled state ─────────────────────────────────────────────────
 
 export type {
@@ -101,25 +100,11 @@ export type {
 
 // ── Analysis / validation port ───────────────────────────────────────────────
 
-export type {
-  AnalysisBlockRequirement,
-  AnalysisDisposition,
-  AnalysisObservation,
-  AnalysisResult,
-  NovelValidationResult,
-  ObservationRef,
-  PostRenderInput,
-  PreRenderInput,
-  ValidationIssue,
-  ValidationIssueKind,
-  ValidationKey,
-  ValidationResult,
-  ValidationRunOptions,
-  Validator,
-} from './types/index.js';
+export type { EntityDetail, EntitySummary, ProjectStatusResult } from './api.js';
 
 // ── Pure contracts and semantic ports ────────────────────────────────────────
 export type * from './contracts/index.js';
+export type { ErrorContext } from './errors.js';
 export type {
   AcceptedArtifactRecord,
   AcceptedSceneRecord,
@@ -152,6 +137,19 @@ export type {
   TraceRecord,
   VersionConflict,
 } from './ports/index.js';
-
-export type { EntityDetail, EntitySummary, ProjectStatusResult } from './api.js';
-export type { ErrorContext } from './errors.js';
+export type {
+  AnalysisBlockRequirement,
+  AnalysisDisposition,
+  AnalysisObservation,
+  AnalysisResult,
+  NovelValidationResult,
+  ObservationRef,
+  PostRenderInput,
+  PreRenderInput,
+  ValidationIssue,
+  ValidationIssueKind,
+  ValidationKey,
+  ValidationResult,
+  ValidationRunOptions,
+  Validator,
+} from './types/index.js';

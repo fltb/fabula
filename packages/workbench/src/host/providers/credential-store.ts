@@ -27,7 +27,16 @@
  * adapter failures surface with static messages only.
  */
 import { randomBytes } from 'node:crypto';
-import { chmod, mkdir, open, readFile, rename, stat, unlink, type FileHandle } from 'node:fs/promises';
+import {
+  chmod,
+  type FileHandle,
+  mkdir,
+  open,
+  readFile,
+  rename,
+  stat,
+  unlink,
+} from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 /** Fabula config sub-directory under the resolved config base directory. */
@@ -40,6 +49,9 @@ const DEFAULT_LOCK_STALE_MS = 10_000;
 const DEFAULT_LOCK_RETRY_MS = 10;
 /** Fail after waiting this long for a held lock. */
 const DEFAULT_LOCK_TIMEOUT_MS = 5_000;
+
+/** Locks opened by this process but whose payload may not be visible yet. */
+const IN_PROCESS_LOCKS = new Set<string>();
 
 /** Minimal host-only credential surface shared by OS and file backends. */
 export interface ProviderCredentialStore {
@@ -76,7 +88,10 @@ export function isValidProviderId(providerId: string): boolean {
 
 export function assertValidProviderId(providerId: string): void {
   if (!isValidProviderId(providerId)) {
-    throw new CredentialStoreError('INVALID_PROVIDER_ID', `Invalid provider id; expected ${PROVIDER_ID_PATTERN}.`);
+    throw new CredentialStoreError(
+      'INVALID_PROVIDER_ID',
+      `Invalid provider id; expected ${PROVIDER_ID_PATTERN}.`,
+    );
   }
 }
 
@@ -228,8 +243,19 @@ export class XdgCredentialFileStore implements ProviderCredentialStore {
     for (;;) {
       try {
         const handle = await open(this.#lockPath, 'wx', 0o600);
-        await handle.writeFile(`${JSON.stringify({ pid: process.pid, createdAt: Date.now() })}\n`, 'utf8');
-        return handle;
+        IN_PROCESS_LOCKS.add(this.#lockPath);
+        try {
+          await handle.writeFile(
+            `${JSON.stringify({ pid: process.pid, createdAt: Date.now() })}\n`,
+            'utf8',
+          );
+          return handle;
+        } catch (writeError) {
+          IN_PROCESS_LOCKS.delete(this.#lockPath);
+          await handle.close().catch(() => {});
+          await unlink(this.#lockPath).catch(() => {});
+          throw writeError;
+        }
       } catch (error) {
         if (errorCode(error) !== 'EEXIST') {
           throw new CredentialStoreError(
@@ -245,7 +271,7 @@ export class XdgCredentialFileStore implements ProviderCredentialStore {
             `Timed out waiting for the provider credential lock at ${this.#lockPath}.`,
           );
         }
-        await new Promise<void>(resolve => setTimeout(resolve, this.#lockRetryMs));
+        await new Promise<void>((resolve) => setTimeout(resolve, this.#lockRetryMs));
       }
     }
   }
@@ -257,6 +283,7 @@ export class XdgCredentialFileStore implements ProviderCredentialStore {
    * than `lockStaleMs`, is also treated as abandoned.
    */
   async #tryStealLock(): Promise<boolean> {
+    if (IN_PROCESS_LOCKS.has(this.#lockPath)) return false;
     let stats: { mtimeMs: number } | undefined;
     try {
       stats = await stat(this.#lockPath);
@@ -267,15 +294,20 @@ export class XdgCredentialFileStore implements ProviderCredentialStore {
     let ownerPid: number | undefined;
     try {
       const parsed: unknown = JSON.parse(await readFile(this.#lockPath, 'utf8'));
-      if (parsed !== null && typeof parsed === 'object' && 'pid' in parsed && typeof parsed.pid === 'number') {
+      if (
+        parsed !== null &&
+        typeof parsed === 'object' &&
+        'pid' in parsed &&
+        typeof parsed.pid === 'number'
+      ) {
         ownerPid = parsed.pid;
       }
     } catch {
-      // The writer crashed between creating the lock and writing its payload;
-      // the lock is abandoned by definition (ownerPid stays undefined).
+      // A different process may still be writing its acquisition payload.
+      // Only an old unreadable lock is safe to recover.
     }
-    const abandoned =
-      ownerPid === undefined || !isProcessAlive(ownerPid) || Date.now() - stats.mtimeMs >= this.#lockStaleMs;
+    const ageIsStale = Date.now() - stats.mtimeMs >= this.#lockStaleMs;
+    const abandoned = ownerPid === undefined ? ageIsStale : !isProcessAlive(ownerPid) || ageIsStale;
     if (!abandoned) return false;
     await unlink(this.#lockPath).catch(() => {});
     return true;
@@ -285,7 +317,13 @@ export class XdgCredentialFileStore implements ProviderCredentialStore {
     try {
       await handle.close();
     } finally {
-      await unlink(this.#lockPath).catch(() => {});
+      try {
+        await unlink(this.#lockPath);
+      } catch {
+        // A crashed/recovered lock may already be absent.
+      } finally {
+        IN_PROCESS_LOCKS.delete(this.#lockPath);
+      }
     }
   }
 
@@ -347,7 +385,10 @@ export class XdgCredentialFileStore implements ProviderCredentialStore {
     try {
       await mkdir(dir, { recursive: true, mode: 0o700 });
       await chmod(dir, 0o700);
-      tmpPath = join(dir, `${CREDENTIALS_FILE_NAME}.tmp-${process.pid}-${randomBytes(6).toString('hex')}`);
+      tmpPath = join(
+        dir,
+        `${CREDENTIALS_FILE_NAME}.tmp-${process.pid}-${randomBytes(6).toString('hex')}`,
+      );
       const handle = await open(tmpPath, 'wx', 0o600);
       try {
         await handle.writeFile(`${JSON.stringify(entries, null, 2)}\n`, 'utf8');
@@ -414,8 +455,11 @@ export interface ProviderCredentialStoreOptions {
  * is wrapped so provider ids are validated and backend failures surface as
  * secret-free {@link CredentialStoreError}s.
  */
-export function createProviderCredentialStore(options: ProviderCredentialStoreOptions = {}): ProviderCredentialStore {
-  const backend = options.osCredentialStore ?? new XdgCredentialFileStore({ configDir: options.configDir });
+export function createProviderCredentialStore(
+  options: ProviderCredentialStoreOptions = {},
+): ProviderCredentialStore {
+  const backend =
+    options.osCredentialStore ?? new XdgCredentialFileStore({ configDir: options.configDir });
   return new ValidatedProviderCredentialStore(backend);
 }
 
@@ -453,6 +497,9 @@ class ValidatedProviderCredentialStore implements ProviderCredentialStore {
   #normalize(error: unknown): CredentialStoreError {
     if (error instanceof CredentialStoreError) return error;
     // Static message only: an injected adapter error could echo a secret.
-    return new CredentialStoreError('OS_CREDENTIAL_STORE_ERROR', 'The provider credential store backend failed.');
+    return new CredentialStoreError(
+      'OS_CREDENTIAL_STORE_ERROR',
+      'The provider credential store backend failed.',
+    );
   }
 }

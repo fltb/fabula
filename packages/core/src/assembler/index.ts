@@ -6,7 +6,7 @@
 
 export { filterScenesByBranchPath } from './branch-filter.js';
 export { ProseConcatenator } from './concatenator.js';
-export { countNarrativeText, countWords, NARRATIVE_TEXT_COUNT_VERSION } from './count.js';
+export { countNarrativeText, NARRATIVE_TEXT_COUNT_VERSION } from './count.js';
 export { assembleNovel } from './novel.js';
 export type {
   AssembleOptions,

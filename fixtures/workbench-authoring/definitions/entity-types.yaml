@@ -1,0 +1,114 @@
+types:
+  character:
+    typeId: character
+    kind: character
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates: [active, inactive, retired]
+        unsetAllowed: false
+        semanticRole: lifecycle
+      traits:
+        attributeId: traits
+        valueType: string_list
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      location:
+        attributeId: location
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: location
+      status:
+        attributeId: status
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+        semanticRole: lifecycle
+      purpose:
+        attributeId: purpose
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+      knowledge:
+        attributeId: knowledge
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - [active, inactive]
+        - [active, retired]
+        - [inactive, active]
+        - [inactive, retired]
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  location:
+    typeId: location
+    kind: location
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates: [active, inactive, retired]
+        unsetAllowed: false
+        semanticRole: lifecycle
+      season:
+        attributeId: season
+        valueType: string
+        requiredAt: never
+        writePolicy: mutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - [active, inactive]
+        - [active, retired]
+        - [inactive, active]
+        - [inactive, retired]
+    referenceCapabilities:
+      defaultEligibility: live
+    typedInvariants: []
+  concept:
+    typeId: concept
+    kind: concept
+    attributes:
+      lifecycle:
+        attributeId: lifecycle
+        valueType: string
+        requiredAt: introduction
+        writePolicy: lifecycle_managed
+        allowedLifecycleStates: [active, inactive, retired]
+        unsetAllowed: false
+        semanticRole: lifecycle
+      value:
+        attributeId: value
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+      description:
+        attributeId: description
+        valueType: string
+        requiredAt: never
+        writePolicy: immutable
+        unsetAllowed: true
+    lifecyclePolicy:
+      allowedTransitions:
+        - [active, inactive]
+        - [active, retired]
+        - [inactive, active]
+        - [inactive, retired]
+    referenceCapabilities:
+      defaultEligibility: identity
+    typedInvariants: []

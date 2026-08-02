@@ -18,10 +18,9 @@ import { beforeAll, describe, expect, it } from 'vitest';
 const SNAPSHOT = materializeFixtureSnapshot(
   path.resolve(import.meta.dirname, '..', '..', '..', 'fixtures', 'arcane-aftermath'),
 );
-import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
 
 import { z } from 'zod';
-import { assembleNovel, countWords } from '../src/assembler/index.js';
+import { assembleNovel, countNarrativeText } from '../src/assembler/index.js';
 import { ContextCompiler } from '../src/context/index.js';
 import type { ProjectData } from '../src/entity/index.js';
 import { EntityMapper, InMemoryEntityRegistry } from '../src/entity/index.js';
@@ -41,6 +40,7 @@ import type {
   WorldState,
 } from '../src/types/index.js';
 import { POVValidator, ResultAggregator, TimelineValidator } from '../src/validator/index.js';
+import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -183,7 +183,6 @@ describe('1. Full Pipeline', () => {
     mapper = new EntityMapper(SNAPSHOT);
     projectData = mapper.loadProject();
   });
-
 
   it('1a. EntityMapper loads the fixture project data', () => {
     // ── Project config ───────────────────────────────────────────
@@ -632,7 +631,6 @@ describe('4. State Transitions', () => {
     sm = new StateManager(TEST_CATALOG_CONTEXT, 20, BASELINE_REPLAY_OPTIONS);
   });
 
-
   it('4a. After E1a: seraphine has detected anomaly', () => {
     const e1a = makeEvent({
       id: 'E1a',
@@ -1077,11 +1075,11 @@ describe('6. Assembler with Empty Scenes Directory', () => {
     ).toThrow(/scene/i);
   });
 
-  it('6b. countWords utility works correctly', () => {
-    expect(countWords('')).toBe(0);
-    expect(countWords('Hello world')).toBe(2);
-    expect(countWords('# Heading\nSome **bold** text.')).toBe(4);
-    expect(countWords('See [link](url) here.')).toBe(3);
+  it('6b. countNarrativeText utility works correctly', () => {
+    expect(countNarrativeText('', 'en')).toBe(0);
+    expect(countNarrativeText('Hello world', 'en')).toBe(2);
+    expect(countNarrativeText('# Heading\nSome **bold** text.', 'en')).toBe(4);
+    expect(countNarrativeText('See [link](url) here.', 'en')).toBe(3);
   });
 
   it('6c. assembly rejects truly empty project', () => {
@@ -1092,9 +1090,7 @@ describe('6. Assembler with Empty Scenes Directory', () => {
       discourseSequence: [],
       projectTitle: 'Empty',
     };
-    expect(() => assembleNovel({ source: emptySource, title: 'Empty' })).toThrow(
-      /scene|chapter/i,
-    );
+    expect(() => assembleNovel({ source: emptySource, title: 'Empty' })).toThrow(/scene|chapter/i);
   });
 });
 
@@ -1309,7 +1305,6 @@ describe('7. Context Compilation', () => {
 // ─── 8. Cross-cutting: Full Pipeline Smoke Test ─────────────────────────────
 
 describe('8. Cross-cutting Pipeline Smoke Test', () => {
-
   it('8a. End-to-end: load → registry → state → validate → ISS → assembler → context', () => {
     // 1. LOAD
     const mapper = new EntityMapper(SNAPSHOT);

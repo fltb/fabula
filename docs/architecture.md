@@ -2,118 +2,83 @@
 
 ## 高层数据流
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        NOVALISTICALLY PIPELINE                          │
-└─────────────────────────────────────────────────────────────────────────┘
+Core 只消费不可变的 `ProjectSourceSnapshotV1` 与注入的语义端口；它不读取项目目录、不写
+`.nova`，也不知道 Git、SQLite、凭据或浏览器传输。Node Host 和 Workbench Host 分别在
+边界外实现这些能力。
 
-YAML files (.yaml)
-     │
-     ▼
-┌────────────────┐
-│  EntityMapper  │  读取 YAML 定义，映射到内部类型
-│  (entity/)     │  通过 Zod 验证 schema，设置文件路径
-└───────┬────────┘
-        │
-        ▼
-┌────────────────────┐
-│   Event Sourcing   │  StateManager commit() → EventStore，可选 Snapshot
-│  StateManager      │  ReplayEngine.replay() 按编译图顺序重放
-│  (state/)          │  （compileStoryRuntimeGraph → compileGraph → buildStoryOrderIndex）
-│                    │  循环是硬错误，绝不回退 narrativeOrder
-└───────┬────────────┘
-        │
-        ▼
-┌────────────────────┐
-│  ContextCompiler   │  ContextAssembler 填充 5 层优先级
-│  (context/)        │  RelevanceEngine 8 维评分（含 role→importance）
-│                    │  无固定 token 截断
-└───────┬────────────┘
-        │
-        ▼
-┌─────────────────────────────────────────────┐
-│             RenderPipeline                   │
-│  (pipeline/render.ts)                        │
-│                                              │
-│  ┌──────────┐   ┌──────────┐                │
-│  │  Pass 1  │ → │  Pass 2  │                │
-│  │ temp 0.8 │   │ temp 0.3 │                │
-│  │  prose   │   │ seed 42  │                │
-│  └──────────┘   │ analysis │                │
-│                 │   JSON   │                │
-│                 └──────────┘                │
-│                                              │
-│  缓存：v2 双层查找键（logical + surface）      │
-│  命中后重 parse + 重校验                       │
-│  并行：ConcurrencyPool（默认 5）              │
-│  熔断器：错误阈值                             │
-│  仅开发模式：双重运行验证                     │
-└───────┬──────────────────────────────────────┘
-        │
-        ▼
-┌────────────────────┐
-│  ResultAggregator  │  运行全部 28 个内置验证器
-│  (validator/)      │  渲染前（L1）：validatePre() → 事件定义
-│                    │  渲染后（L2）：validatePost() → 散文 + 分析
-│                    │  按严重程度分组：error | warning | info
-└───────┬────────────┘
-        │
-        ▼
-┌──────────────────────────────┐
-│   Novel assembly             │  EditorialPublisher.publish()：isCurrent 时
-│  (editorial/publisher.ts +   │  buildNovelDocument 按 ledger scene sequence
-│   assembler/release-assembly)│  写 output/novel.md，否则保留既有 novel 并标 stale。
-│                              │  CLI assemble → assembleCanonicalNovel /
-│                              │  assembleCustomNovel；legacy assembleNovel 无生产调用方
-└──────────────┬───────────────┘
 ```
+作者 YAML / 已授权场景采纳
+        │
+        ▼
+Node Host: FileProjectSourceLoader ───────► ProjectSourceSnapshotV1
+        │                                           │
+        │                                    Core: 映射、图编译、
+        │                                    回放、上下文、渲染、
+        │                                    验证、组装计算
+        │                                           │
+        ▼                                           ▼
+CLI / Bench                              注入的 execution/cache/report 端口
+
+Workbench Host
+  ├─ Local Auth + ProjectSession + browser read surface
+  ├─ Yjs：在线工作层；不是已接受 source
+  ├─ SQLite worker：会话、能力、工作层与提交 journal
+  └─ Host-only Git：受控 AuthoringManifest、固定 ref CAS、恢复 journal
+        │
+        ▼
+Workbench Browser：仅消费版本化、无秘密的 contracts DTO；
+不推断项目、图、路由或 authoring source。
+```
+
+Git authoring 是 Workbench Host 的可注入边界，而非 Core 版本历史。Git bootstrap/submit
+测试直接构造 Host Git 服务；Host 启动时是否暴露某个 surface 取决于显式注入的配置，未配置
+时保持 fail-closed。Yjs 更新只有在 Host 验证并提交后才会产生新的已接受 source。
+
+Core 的渲染路径仍为：snapshot → `EntityMapper` → 因果图与事件重放 →
+`ContextCompiler` → Pass 1 prose → Pass 2 analysis → validators → assembly 计算。Pass 2
+不可用是硬错误；确定性事实由 `compareFact()` 比较，语义提示由 Pass 2 analysis 消费。
 
 ## 包结构
 
-Monorepo 包含三个包，按依赖顺序构建：`core → bench → cli`（bench 与 cli 都依赖 core，cli 额外依赖 bench；`npm run build` = `tsc -b` 三个包 + 各自的 esbuild 构建脚本）。
+Monorepo 有五个包，依赖方向是单向的：
+`core → node-host → {bench, cli, workbench}`。`core` 不依赖任何 workspace 包；
+`bench`、`cli` 和 Workbench Host 可使用 Node Host 适配器。Workbench 浏览器客户端只依赖
+自身的 browser-safe contracts 类型，不导入 Core/Node/Host 实现。
 
 ### `@novalistically/core`（`packages/core/`）
 
-引擎。包含所有类型、状态管理、渲染和验证逻辑。入口：`src/index.ts` → `dist/`。通过 `tsc -b`（类型）+ esbuild（JS）构建。
+纯叙事引擎：source snapshot 分析、实体映射、图编译、状态重放、上下文、渲染编排、验证和
+组装计算。入口包含 root、`/source`、`/schema`、`/editorial`、`/tooling`、`/testing`；
+没有 `/adapters` 或文件系统持久化入口。
+
+### `@novalistically/node-host`（`packages/node-host/`）
+
+Node 运行时适配器：文件 source loader/writer、execution/state/cache repositories、报告、
+插件与 AI provider。它是 CLI 和 Bench 的文件系统边界；其独立测试套件禁止网络访问。
 
 ### `@novalistically/bench`（`packages/bench/`）
 
-基准测试和回归套件。调用核心 API 用于：
-
-- **回归测试** — 在 祝福（`zhu-fu`）夹具上执行 L1 + L2 验证。报告每个验证器阶段的通过/失败。
-- **变体测试** — 错误注入（故意制造 YAML 错误以测试验证器检测能力）+ 极端破坏（严重损坏的文件以测试错误韧性）+ 分支 A/B 对比 + Pipeline F1 评分。
-- **性能测试** — N=10、N=100、N=1000 事件的合成工作负载。测量每个流水线阶段的吞吐量（Hz）和平均延迟。
-- **一致性测试** — N-CED（叙事级一致性错误密度）、S-CED（场景级 CED）和 Pipeline F1（检测准确率）。
-- **外部数据集** — 适配 ChiNovelKE、AgentSFT 和 IN3KNovel 格式以通过 Novalistically 流水线运行。
-- **报告器** — 输出 JSON 和 Markdown 报告至 `output/bench/`。
+基准、回归、变体与性能套件。它通过 Core 与 Node Host 运行版本化 fixture；Bench 不能成为
+Core 的依赖。
 
 ### `@novalistically/cli`（`packages/cli/`）
 
-使用 `commander` 的 CLI 应用程序，在包含 `nova.yaml` 的项目目录内运行（`ensureProjectDir()` 检查 cwd）。命令：
+`commander` CLI 与 MCP 入口。CLI 在 Host 边界加载项目 source 并向 Core 注入运行时服务；
+它不把文件路径或 Git 行为带回 Core。
 
-- `nova project init <name>` — 初始化新项目
-- `nova render [event]` — 渲染一个/多个场景、章节或整个 branch（`--dry-run` 走 `previewEditorialRun`，`--scene` / `--all` / `--chapter` 选择，`--branch-path` / `--discourse-branch` 路由，`--model` / `--provider` / `--reference-dir` 提供者选项，`--trace` / `--concurrency` / `--actor` / `--json`）
-- `nova revise [event]` — 用 open review 反馈修订 accepted prose
-- `nova render-tree` — 渲染每个 game-dialogue node 恰好一次
-- `nova validate` — 不渲染仅验证（`--strict`、`--event <id>`）
-- `nova status` — 项目状态摘要；`nova diff [event]` — 事件 state before/after 或 `--project` 版本对比
-- `nova assemble` — 组装 `output/novel.md`（`--output` / `--branch-path` / `--discourse-branch` / `--actor`）
-- `nova scene list|show|history|adopt|lock|unlock|rollback` — scene revision 管理
-- `nova review <action> [target] [message]` — 评论管理（list/add/replace/resolve/wontfix/reopen/escalate）
-- `nova entity list [kind]` / `nova entity show <id>` — 实体查看（无独立的 `inspect` 命令）
-- `nova graph` — 导出因果边可视化（`--format dot|mermaid`）
-- `nova source list|show|preview|apply|reconcile` — 源文档工作区
-- `nova operation list|show`、`nova trace event|stats`、`nova verify`、`nova commit`、`nova migrate`
-- `nova bench` — 运行回归/性能基准（`--regression` / `--performance`）
+### `@novalistically/workbench`（`packages/workbench/`）
 
-MCP 服务器不是子命令：`packages/cli/src/mcp-server.ts` 是独立构建入口（`dist/mcp-server.js`），提供 IDE 集成用的 MCP 工具函数，全部薄包装 core root facade 调用。
+浏览器优先的本机 Host 与 Solid client。Host 持有本地认证、Yjs gateway、SQLite worker、
+provider credential boundary、ProjectSession，以及受控 Git authoring 服务。客户端拥有本地
+布局偏好，只读取认证后的 Host projection；Yjs working layer 和已接受 source 必须明确区分。
+Host 与 client 分别类型检查、构建和测试；浏览器 E2E 单独运行。
 
 ## 核心模块映射
 
-### `entity/` — YAML 加载与映射
+### `entity/` — snapshot 映射
 
-- **`EntityMapper`** — 从项目目录读取 YAML 文件，通过 Zod 验证 schema，映射到内部 `NarrativeEvent`、`Entity`、`Fact`、`RuleDefinition` 类型。
-- **`InMemoryEntityRegistry`** — 从 `EntityMapper` 填充的内存注册表。提供 `getAll()`、`findByKind()`、`resolve()`。
+- **`EntityMapper`** — 消费 `ProjectSourceSnapshotV1` 中的逻辑文档与解析结果，通过 Zod 验证并映射为 `NarrativeEvent`、`Entity`、`Fact`、`RuleDefinition`。读取目录和生成 snapshot 是 Host adapter 的职责。
+- **`InMemoryEntityRegistry`** — 从 mapper 的项目数据填充的内存注册表。提供 `getAll()`、`findByKind()`、`resolve()`。
 - **`compareFact()`** — 严格 `===` 相等比较函数，返回 `'match' | 'mismatch' | 'deferred'`（仅 hint 时）。实际调用方是 causality / branch-merge 验证器与 deferred resolver；重放前置条件校验不走它，`validatePreconditions()` 通过私有 `preconditionMatches()` 按全部 10 个 operator 分派。
 
 ### `state/` — 图编译、事件溯源与状态管理
@@ -185,20 +150,20 @@ MCP 服务器不是子命令：`packages/cli/src/mcp-server.ts` 是独立构建�
 - **`SceneCollector`** — 收集已提交的场景散文（legacy 路径）。
 - **`compileDiscourseSceneSequence()`**（`state/discourse-sequence.ts`）— 场景顺序的唯一来源：由 discourse-ledger 的 `chapters[].sceneIds` 编译出 reader-order 场景序列（`NarrativeSorter` 已移除）。
 - **`ProseConcatenator`** — 将场景拼接成一部完整小说（legacy 路径）。
-- **`buildNovelDocument()`**（`editorial/publisher.ts`）— 生产 novel 文档构建：按 ledger scene sequence 拼接 verified heads；`EditorialPublisher.publish()` 仅在 `isCurrent`（scope 完整且零 reasons）时写 `output/novel.md`，否则保留既有 novel 字节 / `novel_hash` / `last_assembled_at` 并把 manifest 标 `stale`。
-- **`assembleCanonicalNovel()` / `assembleCustomNovel()`**（`editorial/facade.ts` → `assembler/release-assembly.ts`）— CLI `nova assemble` 的 canonical / custom 组装路径（`canonicalAssemble()` / `customAssemble()`）。
+- **`buildNovelDocument()`**（`assembler/publication-model.ts`）— 将 verified scene heads 与 discourse scene sequence 组织成可验证的小说文档数据；Core 不直接写 `output/novel.md`。
+- **`assembleCanonicalNovel()` / `assembleCustomNovel()`**（`editorial/facade.ts` → `assembler/release-assembly.ts`）— canonical / custom 组装计算通过 semantic execution port 读取已接受的 scene revision；产物持久化由 Host adapter 决定。
 - **`assembleNovel()`** — legacy 组装流水线（SceneCollector → compileDiscourseSceneSequence → ProseConcatenator）；**无生产调用方**，仅测试使用。
-- **`countWords()` / `countNarrativeText()`** — 字数统计工具（`countNarrativeText` 是版本化文本计数器；`canonicalAssemble()` 报告的是剥离标题后的 `countNovelWords()` 空白计数）。
+- **`countNarrativeText()`** — 版本化文本计数器；`countWords()` 别名已移除。
 
 ### `reporter/` — 报告写入
 
 - **`writeValidationReport()`** — 将 L1 和 L2 问题表格及摘要写入 `output/validation.md`。
 
-### `storage/` — 存储抽象
+### `source/` 与持久化边界
 
-- **`FsStorage`** — 供 storage-aware core 模块使用的文件系统实现。
-- **`MemoryStorage`** — 测试用的内存实现。
-- 渲染缓存通过注入的 `Storage` 读写；不得在缓存模块直接导入或调用 Node `fs`。
+- **Core source** — `ProjectSourceSnapshotV1`、source analysis 与变更预览都是值对象/纯计算；Core 不含 `FsStorage`、`MemoryStorage`、项目路径或 Git history。
+- **Node Host** — 文件 source、execution/state/cache/report adapters 都在 `@novalistically/node-host`，通过 Core ports 注入。
+- **Workbench Host** — SQLite、认证、Yjs working documents 与 Host-only Git authoring 也通过边界服务持有。`AuthoringManifest` 只允许显式 authoring entries；`.nova/**`、cache、response、journal、output 和 derived 内容不能进入作者提交。
 
 ## 关键技术决策
 

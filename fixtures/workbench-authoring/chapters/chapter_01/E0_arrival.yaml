@@ -1,0 +1,38 @@
+event: E0
+title: "Arrival at the small town"
+narrativeOrder: 1
+storyTime: day_1
+sceneType: linear
+discourseMode: action
+arcPosition: opening
+pov:
+  character: narrator
+  type: first_person
+sceneBrief: "Ada arrives in the small town on a winter evening and is greeted by the narrator."
+beats:
+  - "Ada arrives at the edge of the small town."
+  - "The narrator welcomes her and shows her the way."
+preconditions:
+  - entity: ada
+    attribute: location
+    value: small_town
+  - entity: ada
+    attribute: status
+    value: active
+expectedPostconditions:
+  - entity: ada
+    attribute: knowledge
+    value: met_narrator
+    confidence: 1.0
+  - entity: narrator
+    attribute: knowledge
+    value: met_ada
+    confidence: 1.0
+threadProgress:
+  - thread: T1
+    advancement: "Ada arrives and begins her journey in the small town."
+    progressAfter: 20
+    progressTotal: 100
+styleGuidance:
+  tone: "quiet and observant"
+  targetWordCount: 400

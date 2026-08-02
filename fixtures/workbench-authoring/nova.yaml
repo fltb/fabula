@@ -1,0 +1,10 @@
+project: workbench-authoring
+title: "Workbench Authoring Fixture"
+author: "Fabula Test"
+defaultModel: mock
+defaultLanguage: en
+genre: literary
+synopsis: "Minimal canonical authoring topology exercised by the Workbench Host Git boundary integration test."
+tense: past
+snapshotInterval: 3
+defaultSceneTextTarget: 400

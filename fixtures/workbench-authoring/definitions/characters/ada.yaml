@@ -1,0 +1,12 @@
+id: ada
+name: Ada
+type: protagonist
+role: supporting
+description: "The protagonist of the fixture project, a traveler arriving in the small town."
+traits:
+  - observant
+  - determined
+initialState:
+  location: small_town
+  status: active
+  purpose: visiting

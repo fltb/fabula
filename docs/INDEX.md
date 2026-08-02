@@ -40,6 +40,6 @@ Novalistically 是一个叙事工程系统：结构化 YAML 定义 → 事件溯
 
 ## 项目
 
-- **[包映射](./architecture.md#package-structure)** — `packages/core`（引擎）、`packages/bench`（基准测试）、`packages/cli`（命令）
+- **[包映射](./architecture.md#包结构)** — `packages/core`（纯引擎）、`packages/node-host`（Node 适配器）、`packages/bench`（基准）、`packages/cli`（CLI/MCP）和 `packages/workbench`（本机 Host + 浏览器客户端）
 - **[贡献指南](./guides/adding-a-validator.md)** — 如何贡献、测试约定、构建顺序
 - **[历史文档](./archive/README.md)** — 原始设计文档（保留供参考）

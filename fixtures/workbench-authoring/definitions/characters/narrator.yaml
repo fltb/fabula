@@ -1,0 +1,11 @@
+id: narrator
+name: Narrator
+type: witness
+role: supporting
+description: "The first-person narrator of the fixture project."
+traits:
+  - observant
+initialState:
+  location: small_town
+  status: active
+  purpose: observing

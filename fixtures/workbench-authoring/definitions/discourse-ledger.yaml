@@ -1,0 +1,7 @@
+id: workbench_authoring_ledger
+chapters:
+  - branch: main
+    chapter: 1
+    sceneIds:
+      - E0
+entries: []

@@ -1,11 +1,11 @@
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import YAML from 'yaml';
-import type { VariantIssueResult } from '../../bench/src/variants.ts';
-import { runVariantBench } from '../../bench/src/variants.ts';
-import type { ProjectSourceSnapshotV1 } from '../src/contracts/source.ts';
-import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
-import { sourceEntryMap } from './fixtures/source-snapshot.ts';
+import type { ProjectSourceSnapshotV1 } from '../../core/src/contracts/source.ts';
+import { materializeFixtureSnapshot } from '../../core/tests/fixtures/fixture-snapshots.ts';
+import { sourceEntryMap } from '../../core/tests/fixtures/source-snapshot.ts';
+import type { VariantIssueResult } from '../src/variants.ts';
+import { runVariantBench } from '../src/variants.ts';
 
 // ============================================================
 // P1b: zhu-fu-variants test suite
@@ -65,9 +65,7 @@ describe('zhu-fu-variants / branch-A (honest answer)', () => {
 
     // Check postconditions reflect honesty, not guilt
     const posts = (e0.expectedPostconditions as Array<Record<string, unknown>>) ?? [];
-    const knowledgePost = posts.find(
-      (p) => p.entity === 'narrator' && p.attribute === 'knowledge',
-    );
+    const knowledgePost = posts.find((p) => p.entity === 'narrator' && p.attribute === 'knowledge');
     expect(knowledgePost?.value).toBe('gave_honest_answer_to_xianglins_wife');
 
     const emotionalPost = posts.find(
@@ -137,9 +135,7 @@ describe('zhu-fu-variants / branch-B (He Laoliu survives)', () => {
     expect(String(e4.sceneBrief)).toContain('活过来了');
 
     const posts = (e4.expectedPostconditions as Array<Record<string, unknown>>) ?? [];
-    const heLaoliuStatus = posts.find(
-      (p) => p.entity === 'he_laoliu' && p.attribute === 'status',
-    );
+    const heLaoliuStatus = posts.find((p) => p.entity === 'he_laoliu' && p.attribute === 'status');
     expect(heLaoliuStatus?.value).toBe('alive');
 
     const locationPost = posts.find(
@@ -636,17 +632,18 @@ describe('zhu-fu-variants / validation result contracts', () => {
     }
   });
 });
-import { EntityMapper } from '../src/entity/mapper.ts';
-import { loadCanonicalProject } from '../src/entity/project-runtime.ts';
-import { InMemoryEntityRegistry } from '../src/entity/registry.ts';
+
+import { EntityMapper } from '../../core/src/entity/mapper.ts';
+import { loadCanonicalProject } from '../../core/src/entity/project-runtime.ts';
+import { InMemoryEntityRegistry } from '../../core/src/entity/registry.ts';
 import type {
   AnalysisResult,
   EntityRegistry,
   EntityTypeCatalog,
   WorldState,
-} from '../src/types/index.ts';
-import { ResultAggregator } from '../src/validator/aggregator.ts';
-import { createBuiltInValidators } from '../src/validator/builtins.ts';
+} from '../../core/src/types/index.ts';
+import { ResultAggregator } from '../../core/src/validator/aggregator.ts';
+import { createBuiltInValidators } from '../../core/src/validator/builtins.ts';
 
 const ZHU_FU_SNAPSHOT = materializeFixtureSnapshot(path.join(ROOT, 'fixtures', 'zhu-fu'));
 
@@ -898,7 +895,7 @@ describe('zhu-fu-variants / pronoun validator issue emission', () => {
 // ============================================================
 
 // ----- Gate: Circuit Breaker (retry escalation) -----
-import { createCircuitBreaker } from '../src/pipeline/circuit-breaker.ts';
+import { createCircuitBreaker } from '../../core/src/pipeline/circuit-breaker.ts';
 
 describe('zhu-fu-variants / gate: circuit-breaker flow', () => {
   it('starts in round 1 with retry strategy and is not open', () => {
@@ -995,7 +992,7 @@ describe('zhu-fu-variants / gate: circuit-breaker flow', () => {
   });
 });
 
-import { eventFileSchema } from '../src/schemas/event.ts';
+import { eventFileSchema } from '../../core/src/schemas/event.ts';
 
 describe('zhu-fu-variants / gate: malformed reference rejection', () => {
   it('rejects event file with missing required field (sceneBrief)', () => {
@@ -1049,7 +1046,7 @@ describe('zhu-fu-variants / gate: malformed reference rejection', () => {
 });
 
 // ----- Gate: Event-level Missing-Provenance Rejection -----
-import { provenanceManifestSchema } from '../src/schemas/contracts.ts';
+import { provenanceManifestSchema } from '../../core/src/schemas/contracts.ts';
 
 describe('zhu-fu-variants / gate: missing-provenance rejection', () => {
   it('accepts a valid generated provenance entry', () => {

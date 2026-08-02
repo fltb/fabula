@@ -15,7 +15,8 @@
     "build": "tsc --emitDeclarationOnly && node build.mjs",
     "build:js": "node build.mjs",
     "build:types": "tsc --emitDeclarationOnly",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.12",
@@ -24,6 +25,7 @@
     "yaml": "^2.7.0"
   },
   "devDependencies": {
+    "@types/node": "^26.1.2",
     "esbuild": "^0.25.0",
     "typescript": "^5.9.0"
   }

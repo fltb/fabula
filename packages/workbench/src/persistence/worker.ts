@@ -179,7 +179,7 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
       }
       case 'loadUser': { const x = p as PersistencePayloads['loadUser']; const row = db.prepare('SELECT * FROM users WHERE user_id=?').get(x.userId) as Record<string, unknown> | undefined; return row ? mapUserRow(row) : null; }
       case 'loadOwner': { const row = db.prepare("SELECT * FROM users WHERE role='owner' LIMIT 1").get() as Record<string, unknown> | undefined; return row ? mapUserRow(row) : null; }
-      case 'resetOwnerPassword': { const x = p as PersistencePayloads['resetOwnerPassword']; const existing = db.prepare('SELECT user_id FROM users WHERE user_id=?').get(x.userId) as Record<string, unknown> | undefined; if (!existing) throw { code: 'NOT_FOUND', message: 'User not found', retryable: false }; db.exec('BEGIN IMMEDIATE'); try { db.prepare('UPDATE users SET password_hash=?, capability_version=?, updated_at=? WHERE user_id=?').run(json(x.passwordHash), x.capabilityVersion, x.at, x.userId); const sessions = db.prepare('DELETE FROM sessions WHERE user_id=?').run(x.userId); const capabilities = db.prepare('UPDATE capabilities SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').run(x.at, x.userId); db.exec('COMMIT'); const row = db.prepare('SELECT * FROM users WHERE user_id=?').get(x.userId) as Record<string, unknown>; return { user: mapUserRow(row), revokedSessions: Number(sessions.changes), revokedCapabilities: Number(capabilities.changes) }; } catch (error) { db.exec('ROLLBACK'); throw error; } }
+      case 'resetOwnerPassword': { const x = p as PersistencePayloads['resetOwnerPassword']; const existing = db.prepare('SELECT user_id FROM users WHERE user_id=?').get(x.userId) as Record<string, unknown> | undefined; if (!existing) throw { code: 'NOT_FOUND', message: 'User not found', retryable: false }; db.exec('BEGIN IMMEDIATE'); let revokedSessions = 0; let revokedCapabilities = 0; try { db.prepare('UPDATE users SET password_hash=?, capability_version=?, updated_at=? WHERE user_id=?').run(json(x.passwordHash), x.capabilityVersion, x.at, x.userId); revokedSessions = Number(db.prepare('DELETE FROM sessions WHERE user_id=?').run(x.userId).changes); revokedCapabilities = Number(db.prepare('UPDATE capabilities SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').run(x.at, x.userId).changes); db.exec('COMMIT'); } catch (error) { db.exec('ROLLBACK'); throw error; } const row = db.prepare('SELECT * FROM users WHERE user_id=?').get(x.userId) as Record<string, unknown>; return { user: mapUserRow(row), revokedSessions, revokedCapabilities }; }
       case 'recordAuthFailure': { const x = p as PersistencePayloads['recordAuthFailure']; const existing = db.prepare('SELECT failures FROM auth_backoff WHERE subject=?').get(x.subject) as Record<string, unknown> | undefined; const failures = existing && existing.failures != null ? Number(existing.failures) + 1 : 1; db.prepare('INSERT INTO auth_backoff(subject,failures,updated_at) VALUES(?,?,?) ON CONFLICT(subject) DO UPDATE SET failures=excluded.failures, updated_at=excluded.updated_at').run(x.subject, failures, x.at); return { subject: x.subject, failures, updatedAt: x.at }; }
       case 'loadAuthBackoff': { const x = p as PersistencePayloads['loadAuthBackoff']; const row = db.prepare('SELECT * FROM auth_backoff WHERE subject=?').get(x.subject) as Record<string, unknown> | undefined; return row ? { subject: text(row.subject), failures: Number(row.failures), updatedAt: text(row.updated_at) } : null; }
       case 'clearAuthBackoff': { const x = p as PersistencePayloads['clearAuthBackoff']; db.prepare('DELETE FROM auth_backoff WHERE subject=?').run(x.subject); return { cleared: true }; }
@@ -237,11 +237,19 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
     queued += 1;
     queue = queue.then(async () => {
       try {
+        let response: PersistenceResponse;
         try {
           const result = execute(request);
-          respond(request, { correlationId: request.correlationId, ok: true, operation: request.operation, result } as PersistenceResponse);
+          response = { correlationId: request.correlationId, ok: true, operation: request.operation, result } as PersistenceResponse;
         } catch (error) {
-          respond(request, { correlationId: request.correlationId, ok: false, error: serializePersistenceError(error) });
+          response = { correlationId: request.correlationId, ok: false, error: serializePersistenceError(error) };
+        }
+        try {
+          respond(request, response);
+        } catch {
+          // The response could not be delivered (the port may already be
+          // closed mid-drain). The request still executed; keep the serial
+          // queue alive so later requests are not silently wedged behind it.
         }
       } finally {
         queued -= 1;

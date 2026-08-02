@@ -105,7 +105,7 @@ export interface AuthoringWorkingDocumentStore
     AgentDocumentPort {
   readonly projectId: string;
   /** Seed/rebase the document catalog from the accepted source snapshot. */
-  seedFromAccepted(snapshot: ProjectSourceSnapshotV1 | null): void;
+  seedFromAccepted(snapshot: ProjectSourceSnapshotV1 | null): Promise<void>;
   /** Register one extra working document (e.g. an adopted scene) not in the accepted snapshot. */
   registerDocument(input: {
     readonly documentId: string;
@@ -302,11 +302,20 @@ function createAuthoringDocumentStoreImpl(
 
     // ── Catalog / accepted base ──────────────────────────────────────────
 
-    seedFromAccepted(snapshot) {
+    async seedFromAccepted(snapshot) {
       if (snapshot === null) {
         acceptedContentHashes.clear();
         acceptedContents.clear();
         return;
+      }
+      const acceptedPaths = new Set(snapshot.documents.map((document) => document.logicalPath));
+      for (const logicalPath of [...acceptedContentHashes.keys()]) {
+        if (acceptedPaths.has(logicalPath)) continue;
+        acceptedContentHashes.delete(logicalPath);
+        acceptedContents.delete(logicalPath);
+        for (const [documentId, entry] of catalog) {
+          if (entry.logicalPath === logicalPath) catalog.delete(documentId);
+        }
       }
       for (const document of snapshot.documents) {
         const existing = catalog.get(document.logicalPath);
@@ -319,6 +328,29 @@ function createAuthoringDocumentStoreImpl(
         }
         acceptedContentHashes.set(document.logicalPath, document.contentHash);
         acceptedContents.set(document.logicalPath, document.content);
+      }
+      for (const entry of catalog.values()) {
+        const accepted = acceptedContents.get(entry.logicalPath);
+        if (accepted === undefined) continue;
+        const key = keyOf(entry.documentId);
+        await core.enqueue(key, async () => {
+          const created = await core.getOrCreate(key);
+          if (created === null) {
+            throw new AuthoringDocumentStoreError(
+              'document.storage_unavailable',
+              'Working document storage is unavailable',
+            );
+          }
+          // A persisted Yjs state is a real working-layer decision, including
+          // an intentional empty document. Only a never-seen document inherits
+          // the accepted text, so acceptance never overwrites newer edits.
+          if (created.stored !== null) return;
+          const text = created.doc.getText(WORKING_TEXT_TYPE);
+          if (text.length > 0) return;
+          if (accepted.length > 0) text.insert(0, accepted);
+          await core.persist(key, created.doc);
+          knownWorking.add(entry.documentId);
+        });
       }
     },
 

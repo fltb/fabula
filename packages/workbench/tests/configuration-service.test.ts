@@ -9,8 +9,8 @@ import {
   serializeConfigurationYaml,
 } from '../src/host/configuration-file-store.js';
 import {
-  computeChangedFields,
   ConfigurationChangeService,
+  computeChangedFields,
   requiresRestart,
 } from '../src/host/configuration-service.js';
 
@@ -53,7 +53,7 @@ async function harness(overrides: { busyProjects?: string[] } = {}) {
 }
 
 describe('computeChangedFields / requiresRestart', () => {
-  it('reports stable changed field paths and network restart detection', () => {
+  it('reports stable changed field paths and startup-bound restart detection', () => {
     const root = '/tmp/x';
     const current = baseConfiguration(root);
     const next = baseConfiguration(root, {
@@ -71,11 +71,11 @@ describe('computeChangedFields / requiresRestart', () => {
 });
 
 describe('ConfigurationChangeService apply', () => {
-  it('applies the first setup under expectedRevision null and writes the file', async () => {
+  it('persists the first setup under expectedRevision null and requires restart', async () => {
     const { service } = await harness();
     const candidate = baseConfiguration(await tempProjectRoot());
     const receipt = await service.apply({ candidate, expectedRevision: null, origin: 'setup' });
-    expect(receipt.status).toBe('applied');
+    expect(receipt.status).toBe('restart-required');
     expect(receipt.activeRevision).toBe(receipt.candidateRevision);
     expect(receipt.changedFields).toEqual(['projects', 'defaultProjectId', 'provider', 'network']);
     expect(receipt.diagnostics).toEqual([]);
@@ -162,7 +162,7 @@ describe('ConfigurationChangeService apply', () => {
     gate.resolve();
 
     const [ra, rb] = await Promise.all([firstApply, secondApply]);
-    expect([ra.status, rb.status].sort()).toEqual(['applied', 'stale']);
+    expect([ra.status, rb.status].sort()).toEqual(['restart-required', 'stale']);
     const active = await service.readActive();
     expect(active?.configuration.defaultProjectId).toBeNull(); // the first apply won
     expect(active?.configuration.provider).toBeNull();
@@ -178,7 +178,13 @@ describe('ConfigurationChangeService apply', () => {
     const before = await readFile(store.filePath, 'utf8');
     const receipt = await service.apply({
       candidate: baseConfiguration(await tempProjectRoot(), {
-        network: { mode: 'loopback', port: 99999, allowedHosts: [], allowedOrigins: [], unixSocket: null },
+        network: {
+          mode: 'loopback',
+          port: 99999,
+          allowedHosts: [],
+          allowedOrigins: [],
+          unixSocket: null,
+        },
       }),
       expectedRevision: (await service.readActive())?.revision ?? null,
       origin: 'dashboard',
@@ -187,7 +193,6 @@ describe('ConfigurationChangeService apply', () => {
     expect(receipt.diagnostics.map((d) => d.code)).toContain('NETWORK_INVALID');
     expect(await readFile(store.filePath, 'utf8')).toBe(before);
   });
-
 
   it('refuses to remove a busy project', async () => {
     const { service, busy } = await harness();
@@ -205,7 +210,10 @@ describe('ConfigurationChangeService apply', () => {
     busy.add('demo');
     const active = await service.readActive();
     const receipt = await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot(), { projects: [], defaultProjectId: null }),
+      candidate: baseConfiguration(await tempProjectRoot(), {
+        projects: [],
+        defaultProjectId: null,
+      }),
       expectedRevision: active?.revision ?? null,
       origin: 'dashboard',
     });
@@ -213,7 +221,7 @@ describe('ConfigurationChangeService apply', () => {
     expect(receipt.diagnostics.map((d) => d.code)).toContain('PROJECT_BUSY');
   });
 
-  it('reports restart-required for listener-policy changes and persists them', async () => {
+  it('reports restart-required for startup-bound configuration changes and persists them', async () => {
     const { service } = await harness();
     const first = await service.apply({
       candidate: baseConfiguration(await tempProjectRoot()),
@@ -222,7 +230,13 @@ describe('ConfigurationChangeService apply', () => {
     });
     const receipt = await service.apply({
       candidate: baseConfiguration(await tempProjectRoot(), {
-        network: { mode: 'lan', port: 8787, allowedHosts: ['127.0.0.1'], allowedOrigins: [], unixSocket: null },
+        network: {
+          mode: 'lan',
+          port: 8787,
+          allowedHosts: ['127.0.0.1'],
+          allowedOrigins: [],
+          unixSocket: null,
+        },
       }),
       expectedRevision: first.activeRevision,
       origin: 'dashboard',
@@ -232,7 +246,7 @@ describe('ConfigurationChangeService apply', () => {
     expect((await service.readActive())?.configuration.network.mode).toBe('lan');
   });
 
-  it('applies hot-safe provider changes as applied', async () => {
+  it('requires restart when provider construction changes', async () => {
     const { service } = await harness();
     const root = await tempProjectRoot();
     const first = await service.apply({
@@ -247,13 +261,13 @@ describe('ConfigurationChangeService apply', () => {
       expectedRevision: first.activeRevision,
       origin: 'dashboard',
     });
-    expect(receipt.status).toBe('applied');
+    expect(receipt.status).toBe('restart-required');
     expect(receipt.changedFields).toEqual(['provider']);
   });
 });
 
 describe('ConfigurationChangeService watcher path', () => {
-  it('hot-applies a valid hand-edited file and reports applied', async () => {
+  it('requires restart for a valid hand-edited project configuration', async () => {
     const { store, service, root } = await harness();
     await service.apply({
       candidate: baseConfiguration(root),
@@ -268,7 +282,7 @@ describe('ConfigurationChangeService watcher path', () => {
     });
     await writeFile(store.filePath, serializeConfigurationYaml(edited), 'utf8');
     const receipt = await service.observeExternalChange();
-    expect(receipt?.status).toBe('applied');
+    expect(receipt?.status).toBe('restart-required');
     expect(receipt?.changedFields).toEqual(['projects.second']);
     expect((await service.readActive())?.configuration.projects.map((p) => p.projectId)).toEqual([
       'demo',
@@ -338,7 +352,13 @@ describe('ConfigurationChangeService watcher path', () => {
       store.filePath,
       serializeConfigurationYaml(
         baseConfiguration(root, {
-          network: { mode: 'unix', port: 8787, allowedHosts: [], allowedOrigins: [], unixSocket: '/run/wb.sock' },
+          network: {
+            mode: 'unix',
+            port: 8787,
+            allowedHosts: [],
+            allowedOrigins: [],
+            unixSocket: '/run/wb.sock',
+          },
         }),
       ),
       'utf8',

@@ -16,16 +16,22 @@ import { createProjectSessionRegistry } from './project-session.js';
 export interface RuntimeAdminPort {
   isOpen(projectId: string): boolean;
   listOpen(): readonly { readonly projectId: string }[];
-  open(project: WorkbenchProjectConfigurationV1): { readonly projectId: string };
+  /**
+   * Opens a complete project bundle. Resolution means its session and every
+   * Host-owned companion service are ready for browser, Yjs, MCP and Agent use.
+   */
+  open(project: WorkbenchProjectConfigurationV1): Promise<{ readonly projectId: string }>;
   close(projectId: string): Promise<boolean>;
 }
 
 export interface WorkbenchRuntimeOptions {
   /** Session registry; defaults to a fresh singleton-per-project registry. */
   readonly registry?: ProjectSessionRegistry;
-  /** Constructs the real session for one registered project (integration owner). */
-  readonly createSession: (project: WorkbenchProjectConfigurationV1) => ProjectSession;
-  /** Optional close hook (e.g. MCP/Yjs teardown); runs before registry removal. */
+  /** Constructs the complete session bundle for one registered project. */
+  readonly createSession: (
+    project: WorkbenchProjectConfigurationV1,
+  ) => ProjectSession | Promise<ProjectSession>;
+  /** Optional close hook (e.g. authoring/Yjs teardown); runs before registry removal. */
   readonly closeSession?: (session: ProjectSession) => void | Promise<void>;
 }
 
@@ -67,8 +73,12 @@ export class WorkbenchRuntimeUnknownProjectError extends Error {
  */
 export class WorkbenchRuntime implements RuntimeAdminPort {
   readonly #registry: ProjectSessionRegistry;
-  readonly #createSession: (project: WorkbenchProjectConfigurationV1) => ProjectSession;
+  readonly #createSession: (
+    project: WorkbenchProjectConfigurationV1,
+  ) => ProjectSession | Promise<ProjectSession>;
   readonly #closeSession: ((session: ProjectSession) => void | Promise<void>) | undefined;
+  /** Per-project open deduplication; a full bundle must never be constructed twice. */
+  readonly #opening = new Map<string, Promise<ProjectSession>>();
 
   constructor(options: WorkbenchRuntimeOptions) {
     if (typeof options.createSession !== 'function') {
@@ -99,11 +109,30 @@ export class WorkbenchRuntime implements RuntimeAdminPort {
     return this.#registry.list();
   }
 
-  /** Open (or return the existing) session for one registered project. */
-  open(project: WorkbenchProjectConfigurationV1): ProjectSession {
+  /** Open (or return the existing) complete session bundle for one registered project. */
+  open(project: WorkbenchProjectConfigurationV1): Promise<ProjectSession> {
     const existing = this.#registry.get(project.projectId);
-    if (existing !== null) return existing;
-    return this.#registry.register(this.#createSession(project));
+    if (existing !== null) return Promise.resolve(existing);
+    const pending = this.#opening.get(project.projectId);
+    if (pending !== undefined) return pending;
+
+    const opening = (async (): Promise<ProjectSession> => {
+      try {
+        const current = this.#registry.get(project.projectId);
+        if (current !== null) return current;
+        const created = await this.#createSession(project);
+        try {
+          return this.#registry.register(created);
+        } catch (error) {
+          await this.#closeSession?.(created);
+          throw error;
+        }
+      } finally {
+        this.#opening.delete(project.projectId);
+      }
+    })();
+    this.#opening.set(project.projectId, opening);
+    return opening;
   }
 
   /**
@@ -156,7 +185,7 @@ export class WorkbenchRuntime implements RuntimeAdminPort {
     }
     for (const project of projects) {
       if (this.#registry.get(project.projectId) === null) {
-        this.#registry.register(this.#createSession(project));
+        await this.open(project);
         opened.push(project.projectId);
       }
     }

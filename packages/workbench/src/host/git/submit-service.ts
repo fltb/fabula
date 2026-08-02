@@ -37,14 +37,19 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type {
   GitSubmissionJournal,
   GitSubmissionPhase,
   GitSubmissionReceipt,
 } from '../../contracts/persistence.js';
-import { type AuthoringEntry, AuthoringManifest, ManifestValidationError } from './manifest.js';
+import {
+  type AuthoringEntry,
+  AuthoringManifest,
+  classifyAuthoringPath,
+  ManifestValidationError,
+} from './manifest.js';
 import {
   normalizeSubmitJournal,
   receiptFromRecord,
@@ -87,6 +92,12 @@ export interface GitAuthoringSubmitRequest {
   readonly sourceHash: string;
   /** Non-secret actor/capability provenance recorded in commit trailers. */
   readonly provenance: AuthoringSubmitProvenance;
+  /**
+   * Host-internal reconciliation of a filesystem candidate. The candidate
+   * must be a complete manifest tree that byte-matches the primary worktree;
+   * ordinary browser/MCP working submits must never enable this path.
+   */
+  readonly externalReconciliation?: boolean;
 }
 
 /** Typed result of the injected working-state-vector confirmation. */
@@ -245,6 +256,8 @@ export class GitAuthoringSubmitService {
    * a second commit; entries are removed as soon as the run settles.
    */
   readonly #inFlight = new Map<string, Promise<AuthoringSubmitOutcome>>();
+  /** Serializes all primary-worktree preflight/CAS/sync runs for this service. */
+  #repositoryTail: Promise<void> = Promise.resolve();
   constructor(options: GitAuthoringSubmitServiceOptions) {
     const root = resolve(options.projectRoot);
     if (!existsSync(root) || !statSync(root).isDirectory()) {
@@ -305,7 +318,7 @@ export class GitAuthoringSubmitService {
     this.#assertValidRequest(request);
     const existing = this.#inFlight.get(request.submitId);
     if (existing !== undefined) return existing;
-    const run = this.#runSubmit(request);
+    const run = this.#enqueueRepository(() => this.#runSubmit(request));
     this.#inFlight.set(request.submitId, run);
     try {
       return await run;
@@ -314,7 +327,17 @@ export class GitAuthoringSubmitService {
     }
   }
 
-  /** The actual submit protocol; always entered under the per-submitId in-flight lock. */
+  /** Serialize repository-affecting runs, including distinct submit ids. */
+  #enqueueRepository<T>(run: () => Promise<T>): Promise<T> {
+    const slot = this.#repositoryTail.then(run, run);
+    this.#repositoryTail = slot.then(
+      () => undefined,
+      () => undefined,
+    );
+    return slot;
+  }
+
+  /** The actual submit protocol; always entered under the repository lock. */
   async #runSubmit(request: GitAuthoringSubmitRequest): Promise<AuthoringSubmitOutcome> {
     const probe = await this.#probeGitState(request.submitId);
     const outcome = await this.#recovery.recover(request.submitId, probe);
@@ -347,7 +370,7 @@ export class GitAuthoringSubmitService {
     // Preflight without an expected head: the fixed ref may legitimately have
     // advanced past this receipt. The checks protect the primary worktree
     // before the idempotent sync below.
-    const preflight = await this.#runner.preflightRepository({ cwd: this.#root, ref: this.#ref });
+    const { preflight } = await this.#preflightFor(request, null);
     if (!preflight.ok) throw new AuthoringSubmitPreflightError(preflight);
     const head = (await this.#strict(['rev-parse', this.#ref])).stdout.trim();
     if (head === receipt.commit) {
@@ -371,11 +394,22 @@ export class GitAuthoringSubmitService {
         `cannot replay the ref CAS for submit ${request.submitId}: the journal lacks the candidate commit or receipt hash`,
       );
     }
-    const preflight = await this.#runner.preflightRepository({
-      cwd: this.#root,
-      ref: this.#ref,
-      expectedHead: normalized.expectedGitHead,
-    });
+    const { preflight, externalCandidateFailure } = await this.#preflightFor(
+      request,
+      normalized.expectedGitHead,
+    );
+    if (externalCandidateFailure !== null) {
+      await this.#checkpointTerminal(
+        request.submitId,
+        request.projectId,
+        normalized.expectedGitHead,
+        SUBMIT_PHASE_CONFLICT,
+        normalized.candidateCommit,
+        normalized.receiptHash,
+        externalCandidateFailure,
+      );
+      return { kind: 'conflict', reason: this.#conflictReason(request) };
+    }
     if (!preflight.ok) {
       if (this.#isExpectedHeadMismatch(preflight)) {
         await this.#checkpointTerminal(
@@ -456,11 +490,22 @@ export class GitAuthoringSubmitService {
     // 2. Read-only fixed-ref preflight (expected-head match, primary clean,
     //    controlled isolation). A moved base is the terminal stale outcome;
     //    any other divergence fails closed before anything is written.
-    const preflight = await this.#runner.preflightRepository({
-      cwd: this.#root,
-      ref: this.#ref,
-      expectedHead: request.expectedGitHead,
-    });
+    const { preflight, externalCandidateFailure } = await this.#preflightFor(
+      request,
+      request.expectedGitHead,
+    );
+    if (externalCandidateFailure !== null) {
+      await this.#checkpointTerminal(
+        request.submitId,
+        request.projectId,
+        request.expectedGitHead,
+        SUBMIT_PHASE_CONFLICT,
+        undefined,
+        undefined,
+        externalCandidateFailure,
+      );
+      return { kind: 'conflict', reason: this.#conflictReason(request) };
+    }
     if (!preflight.ok) {
       if (this.#isExpectedHeadMismatch(preflight)) {
         await this.#checkpointTerminal(
@@ -489,7 +534,11 @@ export class GitAuthoringSubmitService {
     let tree: string;
     try {
       request.manifest.validate(request.entries);
-      tree = await this.#writeManifestTree(request.entries, request.expectedGitHead);
+      tree = await this.#writeManifestTree(
+        request.entries,
+        request.expectedGitHead,
+        request.externalReconciliation === true,
+      );
     } catch (error) {
       if (error instanceof ManifestValidationError) {
         await checkpoint(SUBMIT_PHASE_MANIFEST_REJECTED, { diagnostic: error.message });
@@ -516,6 +565,25 @@ export class GitAuthoringSubmitService {
     });
 
     // 6. Atomic ref compare-and-swap: the only acceptance point.
+    // The primary was byte-checked before building the isolated tree. Check
+    // again immediately before the acceptance CAS so a new handwritten change
+    // is never silently overwritten by the post-CAS primary alignment.
+    if (request.externalReconciliation === true) {
+      const candidate = await this.#verifyExternalCandidate(request);
+      if (!candidate.ok) {
+        await this.#checkpointTerminal(
+          request.submitId,
+          request.projectId,
+          request.expectedGitHead,
+          SUBMIT_PHASE_CONFLICT,
+          commit,
+          receiptHash,
+          candidate.detail,
+        );
+        return { kind: 'conflict', reason: this.#conflictReason(request) };
+      }
+    }
+
     const cas = await this.#run(['update-ref', this.#ref, commit, request.expectedGitHead]);
     if (cas.exitCode !== 0) {
       await this.#checkpointTerminal(
@@ -594,6 +662,150 @@ export class GitAuthoringSubmitService {
   }
 
   /**
+   * Strict preflight for one submission. External reconciliation is allowed
+   * to replace only the otherwise-failing `primary-clean` check, and only
+   * after the complete primary tree byte-matches the manifest candidate.
+   */
+  async #preflightFor(
+    request: GitAuthoringSubmitRequest,
+    expectedHead: string | null = request.expectedGitHead,
+  ): Promise<{
+    readonly preflight: GitRepositoryPreflight;
+    readonly externalCandidateFailure: string | null;
+  }> {
+    const preflight = await this.#runner.preflightRepository({
+      cwd: this.#root,
+      ref: this.#ref,
+      ...(expectedHead === null ? {} : { expectedHead }),
+    });
+    if (request.externalReconciliation !== true) {
+      return { preflight, externalCandidateFailure: null };
+    }
+    const candidate = await this.#verifyExternalCandidate(request);
+    if (!candidate.ok) {
+      return {
+        preflight: this.#replacePrimaryClean(
+          preflight,
+          false,
+          `external candidate does not exactly match primary: ${candidate.detail}`,
+        ),
+        externalCandidateFailure: candidate.detail,
+      };
+    }
+    return {
+      preflight: this.#replacePrimaryClean(
+        preflight,
+        true,
+        'primary worktree exactly matches the verified external manifest candidate',
+      ),
+      externalCandidateFailure: null,
+    };
+  }
+
+  /** Replace only the primary-clean result after a strict external byte check. */
+  #replacePrimaryClean(
+    preflight: GitRepositoryPreflight,
+    ok: boolean,
+    detail: string,
+  ): GitRepositoryPreflight {
+    const checks = preflight.checks.map((check) =>
+      check.condition === 'primary-clean' ? { ...check, ok, detail } : check,
+    );
+    return { ...preflight, checks, ok: checks.every((check) => check.ok) };
+  }
+
+  /**
+   * Confirm that the dirty primary is precisely the captured full external
+   * candidate: every candidate byte matches, every baseline omission is an
+   * actual deletion, the baseline contains authoring paths only, and status
+   * has neither staged nor unknown changes. New manifest-approved files are
+   * permitted only when their bytes are present in the candidate.
+   */
+  async #verifyExternalCandidate(
+    request: GitAuthoringSubmitRequest,
+  ): Promise<{ readonly ok: true } | { readonly ok: false; readonly detail: string }> {
+    try {
+      request.manifest.validate(request.entries);
+    } catch (error) {
+      return {
+        ok: false,
+        detail: error instanceof Error ? error.message : 'manifest candidate is invalid',
+      };
+    }
+    const candidateByPath = new Map(request.entries.map((entry) => [entry.path, entry]));
+    const baseline = await this.#run([
+      'ls-tree',
+      '-r',
+      '--name-only',
+      request.expectedGitHead,
+    ]);
+    if (baseline.exitCode !== 0) {
+      return { ok: false, detail: 'cannot read the expected Git baseline tree' };
+    }
+    const baselinePaths = baseline.stdout
+      .split('\n')
+      .map((path) => path.trim())
+      .filter((path) => path.length > 0);
+    for (const path of baselinePaths) {
+      if (!classifyAuthoringPath(path).ok) {
+        return { ok: false, detail: `expected Git baseline contains non-authoring path ${path}` };
+      }
+      if (!candidateByPath.has(path)) {
+        try {
+          readFileSync(join(this.#root, path));
+          return {
+            ok: false,
+            detail: `external candidate omits existing baseline path ${path}`,
+          };
+        } catch {
+          // Missing from both the candidate and primary is an explicit delete.
+        }
+      }
+    }
+    for (const entry of request.entries) {
+      try {
+        const primary = readFileSync(join(this.#root, entry.path));
+        if (!primary.equals(Buffer.from(entry.bytes))) {
+          return { ok: false, detail: `primary bytes differ for ${entry.path}` };
+        }
+      } catch {
+        return { ok: false, detail: `primary file is missing for ${entry.path}` };
+      }
+    }
+    const status = await this.#run(['status', '--porcelain=v1', '-z']);
+    if (status.exitCode !== 0) {
+      return { ok: false, detail: 'cannot inspect primary repository status' };
+    }
+    const records = status.stdout.split('\u0000').filter((record) => record.length > 0);
+    for (const record of records) {
+      if (record.length < 4 || record[2] !== ' ') {
+        return { ok: false, detail: 'primary repository status is malformed' };
+      }
+      const indexStatus = record[0];
+      const worktreeStatus = record[1];
+      const path = record.slice(3);
+      if (
+        indexStatus === 'R' ||
+        indexStatus === 'C' ||
+        worktreeStatus === 'R' ||
+        worktreeStatus === 'C'
+      ) {
+        return { ok: false, detail: `rename or copy status is not reconcilable for ${path}` };
+      }
+      if (indexStatus !== ' ') {
+        return { ok: false, detail: `staged primary change is not reconcilable for ${path}` };
+      }
+      if (!candidateByPath.has(path) && !baselinePaths.includes(path)) {
+        return { ok: false, detail: `unknown or untracked primary path ${path}` };
+      }
+      if (!classifyAuthoringPath(path).ok) {
+        return { ok: false, detail: `non-authoring primary change at ${path}` };
+      }
+    }
+    return { ok: true };
+  }
+
+  /**
    * A preflight whose only meaningful failure is `expected-head-match` means
    * the base moved externally: the submit can never CAS, so the terminal
    * stale outcome applies. Any other failing condition is a repository-level
@@ -624,17 +836,28 @@ export class GitAuthoringSubmitService {
     return this.#runner.runStrict({ args, cwd: this.#root, ...(env === undefined ? {} : { env }) });
   }
 
-  /** Manifest-gated tree: seed a temporary index from the expected head, then stage the entries. */
+  /** Manifest-gated tree: seed a temporary index, then stage the candidate. */
   async #writeManifestTree(
     entries: readonly AuthoringEntry[],
     expectedGitHead: string,
+    removeMissingBaselineEntries: boolean,
   ): Promise<string> {
     const scratch = mkdtempSync(join(this.#runner.scratchDir, 'workbench-submit-'));
     try {
       const indexEnv = { GIT_INDEX_FILE: join(scratch, 'index') };
-      // Seed from the expected head tree so unchanged authoring files survive;
-      // the manifest entries then override/add only what this submit changes.
       await this.#strict(['read-tree', expectedGitHead], indexEnv);
+      if (removeMissingBaselineEntries) {
+        const candidatePaths = new Set(entries.map((entry) => entry.path));
+        const baseline = await this.#strict(['ls-tree', '-r', '--name-only', expectedGitHead]);
+        for (const path of baseline.stdout
+          .split('\n')
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0)) {
+          if (!candidatePaths.has(path)) {
+            await this.#strict(['update-index', '--force-remove', '--', path], indexEnv);
+          }
+        }
+      }
       for (let index = 0; index < entries.length; index += 1) {
         const item = entries[index];
         const blobFile = join(scratch, `blob-${index}`);
@@ -763,6 +986,12 @@ export class GitAuthoringSubmitService {
       hasControlCharacter(request.provenance.actorId)
     ) {
       fail('provenance.actorId must be a non-empty string without control characters');
+    }
+    if (
+      request.externalReconciliation !== undefined &&
+      typeof request.externalReconciliation !== 'boolean'
+    ) {
+      fail('externalReconciliation must be a boolean when supplied');
     }
     if (
       request.provenance.capabilityId != null &&

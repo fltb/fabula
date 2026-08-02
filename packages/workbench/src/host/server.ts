@@ -30,6 +30,7 @@ import {
   type YjsGateway,
   type YjsGatewayConnection,
   type YjsPersistencePort,
+  type YjsWorkingDocumentCore,
 } from './yjs/index.js';
 
 export type { Handler, MiddlewareHandler } from 'hono';
@@ -87,6 +88,8 @@ export interface HostYjsOptions {
   /** Injected session authentication resolving user/project/document scope. */
   readonly auth: YjsAuthPort;
   /** Timestamp source for presence updates; defaults to the host clock. */
+  /** Host-wide shared core also injected into coordinator document stores. */
+  readonly core?: YjsWorkingDocumentCore;
   readonly now?: () => string;
 }
 

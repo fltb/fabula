@@ -1,5 +1,6 @@
+import { Dialog } from '@kobalte/core/dialog';
 import type { JSX } from 'solid-js';
-import { createSignal, For, Show } from 'solid-js';
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import type {
   AuthoringOperationReceiptV1,
   AuthoringStateV1,
@@ -12,6 +13,8 @@ import type {
   WorkbenchGraphProjectionV1,
   WorkbenchRouteSelectorV1,
 } from '../contracts/index.js';
+import type { AgentClient } from './agent-client';
+import { createEditorAssistantContext, EditorAssistantProvider } from './editor-assistant-context';
 import {
   loadWorkbenchPreferences,
   saveWorkbenchPreferences,
@@ -20,12 +23,7 @@ import {
 import { GraphRoute, ProjectHome } from './projection-views';
 import { SceneCanvas } from './scene-canvas';
 import { SourceStudio, type SourceStudioYjsStatus } from './source-studio';
-import type { AgentClient } from './agent-client';
 import { AgentDrawer } from './ui/AgentDrawer';
-import {
-  createEditorAssistantContext,
-  EditorAssistantProvider,
-} from './editor-assistant-context';
 import type { YjsEditorSelection } from './yjs-editor';
 
 export const WORKBENCH_VIEWS = [
@@ -64,9 +62,7 @@ export interface AppProps {
   readonly sourceYjsStatus?: Readonly<Record<string, SourceStudioYjsStatus>>;
   readonly onConnectSourceYjs?: (descriptor: SourceStudioDocumentDescriptorV1) => void;
   readonly onSubmitSource?: (descriptor: SourceStudioDocumentDescriptorV1) => void;
-  readonly onSubmitAuthoring?: (
-    request: BrowserAuthoringSubmitRequestV1,
-  ) => void | Promise<void>;
+  readonly onSubmitAuthoring?: (request: BrowserAuthoringSubmitRequestV1) => void | Promise<void>;
   readonly onReconcileAuthoring?: (
     request: BrowserAuthoringReconcileRequestV1,
   ) => void | Promise<void>;
@@ -117,9 +113,7 @@ interface WorkspaceProps {
   readonly sourceYjsStatus?: Readonly<Record<string, SourceStudioYjsStatus>>;
   readonly onConnectSourceYjs?: (descriptor: SourceStudioDocumentDescriptorV1) => void;
   readonly onSubmitSource?: (descriptor: SourceStudioDocumentDescriptorV1) => void;
-  readonly onSubmitAuthoring?: (
-    request: BrowserAuthoringSubmitRequestV1,
-  ) => void | Promise<void>;
+  readonly onSubmitAuthoring?: (request: BrowserAuthoringSubmitRequestV1) => void | Promise<void>;
   readonly onReconcileAuthoring?: (
     request: BrowserAuthoringReconcileRequestV1,
   ) => void | Promise<void>;
@@ -396,14 +390,18 @@ export function OperationCenter(props: OperationCenterProps) {
             </div>
           }
         >
-          <ul id="operation-center-content" class="grid gap-[var(--wb-space-2)]" aria-label="Authoring operations">
+          <ul
+            id="operation-center-content"
+            class="grid gap-[var(--wb-space-2)]"
+            aria-label="Authoring operations"
+          >
             <For each={props.operations ?? []}>
               {(operation) => (
                 <li class="flex flex-wrap items-center justify-between gap-[var(--wb-space-3)] rounded-[var(--wb-radius-sm)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] px-[var(--wb-space-3)] py-[var(--wb-space-2)] text-sm">
                   <span>
                     <strong>{operation.kind}</strong> <code>{operation.operationId}</code>
                   </span>
-                  <span aria-label={`${operation.kind} status`}>{operation.status}</span>
+                  <span>{operation.status}</span>
                 </li>
               )}
             </For>
@@ -455,10 +453,48 @@ export function AgentShelf(props: AgentShelfProps) {
   );
 }
 
+type WorkbenchLayoutMode = 'desktop' | 'tablet' | 'mobile';
+
+function ResponsiveDrawer(props: {
+  readonly open: boolean;
+  readonly label: string;
+  readonly onClose: () => void;
+  readonly children: JSX.Element;
+}) {
+  return (
+    <Show when={props.open}>
+      <Dialog open onOpenChange={(open) => !open && props.onClose()}>
+        <Dialog.Portal>
+          <Dialog.Overlay class="responsive-drawer-backdrop" />
+          <Dialog.Content class="responsive-drawer" role="dialog">
+            <div class="responsive-drawer-heading">
+              <Dialog.Title>{props.label}</Dialog.Title>
+              <button
+                class="icon-button"
+                type="button"
+                aria-label={`Close ${props.label}`}
+                onClick={props.onClose}
+              >
+                ×
+              </button>
+            </div>
+            {props.children}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog>
+    </Show>
+  );
+}
+
 interface TopbarProps {
   readonly activeView: WorkbenchViewId;
   readonly hostStatus: HostStatus;
+  readonly layoutMode: WorkbenchLayoutMode;
+  readonly navigatorOpen: boolean;
+  readonly inspectorOpen: boolean;
   readonly agentShelfOpen: boolean;
+  readonly onNavigatorToggle: () => void;
+  readonly onInspectorToggle: () => void;
   readonly onAgentShelfToggle: () => void;
 }
 
@@ -485,6 +521,32 @@ function Topbar(props: TopbarProps) {
           {copy().label}
         </span>
       </div>
+
+      <Show when={props.layoutMode !== 'desktop'}>
+        <fieldset class="mobile-layout-controls">
+          <legend class="sr-only">Workspace panels</legend>
+          <Show when={props.layoutMode === 'mobile'}>
+            <button
+              class="icon-button"
+              type="button"
+              aria-label="Open navigation"
+              aria-expanded={props.navigatorOpen}
+              onClick={props.onNavigatorToggle}
+            >
+              ☰
+            </button>
+          </Show>
+          <button
+            class="icon-button"
+            type="button"
+            aria-label="Open Inspector"
+            aria-expanded={props.inspectorOpen}
+            onClick={props.onInspectorToggle}
+          >
+            ⓘ
+          </button>
+        </fieldset>
+      </Show>
 
       <button
         class="agent-toggle"
@@ -518,10 +580,20 @@ export function WorkbenchShell(props: AppProps = {}) {
   const [agentShelfOpen, setAgentShelfOpen] = createSignal(
     props.initialAgentShelfOpen ?? stored.agentShelfOpen,
   );
+  const [layoutMode, setLayoutMode] = createSignal<WorkbenchLayoutMode>('desktop');
+  const [navigatorDrawerOpen, setNavigatorDrawerOpen] = createSignal(false);
+  const [inspectorDrawerOpen, setInspectorDrawerOpen] = createSignal(false);
+  onMount(() => {
+    const updateLayout = () => {
+      const width = window.innerWidth;
+      setLayoutMode(width < 768 ? 'mobile' : width < 1024 ? 'tablet' : 'desktop');
+    };
+    updateLayout();
+    window.addEventListener('resize', updateLayout);
+    onCleanup(() => window.removeEventListener('resize', updateLayout));
+  });
   const assistant = createEditorAssistantContext();
-  const [selectedSourceDocumentId, setSelectedSourceDocumentId] = createSignal<string | null>(
-    null,
-  );
+  const [selectedSourceDocumentId, setSelectedSourceDocumentId] = createSignal<string | null>(null);
 
   const selectSourceDocument = (descriptor: SourceStudioDocumentDescriptorV1): void => {
     setSelectedSourceDocumentId(descriptor.documentId);
@@ -565,6 +637,7 @@ export function WorkbenchShell(props: AppProps = {}) {
     setActiveView(view);
     persistPreferences({ selectedNavigationView: view });
     props.onViewChange?.(view);
+    if (layoutMode() === 'mobile') setNavigatorDrawerOpen(false);
   };
 
   const toggleNavigator = () => {
@@ -591,6 +664,9 @@ export function WorkbenchShell(props: AppProps = {}) {
     persistPreferences({ agentShelfOpen: open });
   };
 
+  const toggleNavigatorDrawer = () => setNavigatorDrawerOpen((open) => !open);
+  const toggleInspectorDrawer = () => setInspectorDrawerOpen((open) => !open);
+
   return (
     <EditorAssistantProvider value={assistant}>
       <div
@@ -601,17 +677,24 @@ export function WorkbenchShell(props: AppProps = {}) {
         <Topbar
           activeView={activeView()}
           hostStatus={hostStatus()}
+          layoutMode={layoutMode()}
+          navigatorOpen={navigatorDrawerOpen()}
+          inspectorOpen={inspectorDrawerOpen()}
           agentShelfOpen={agentShelfOpen()}
+          onNavigatorToggle={toggleNavigatorDrawer}
+          onInspectorToggle={toggleInspectorDrawer}
           onAgentShelfToggle={toggleAgentShelf}
         />
 
         <div class="workbench-body">
-          <Navigator
-            activeView={activeView()}
-            collapsed={navigatorCollapsed()}
-            onCollapseToggle={toggleNavigator}
-            onViewChange={chooseView}
-          />
+          <Show when={layoutMode() !== 'mobile'}>
+            <Navigator
+              activeView={activeView()}
+              collapsed={navigatorCollapsed()}
+              onCollapseToggle={toggleNavigator}
+              onViewChange={chooseView}
+            />
+          </Show>
 
           <div class="workspace-column">
             <Workspace
@@ -642,8 +725,41 @@ export function WorkbenchShell(props: AppProps = {}) {
             />
           </div>
 
-          <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
+          <Show when={layoutMode() === 'desktop'}>
+            <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
+          </Show>
         </div>
+
+        <Show when={layoutMode() === 'tablet'}>
+          <ResponsiveDrawer
+            open={inspectorDrawerOpen()}
+            label="Inspector"
+            onClose={() => setInspectorDrawerOpen(false)}
+          >
+            <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
+          </ResponsiveDrawer>
+        </Show>
+        <Show when={layoutMode() === 'mobile'}>
+          <ResponsiveDrawer
+            open={navigatorDrawerOpen()}
+            label="Navigation"
+            onClose={() => setNavigatorDrawerOpen(false)}
+          >
+            <Navigator
+              activeView={activeView()}
+              collapsed={false}
+              onCollapseToggle={() => setNavigatorDrawerOpen(false)}
+              onViewChange={chooseView}
+            />
+          </ResponsiveDrawer>
+          <ResponsiveDrawer
+            open={inspectorDrawerOpen()}
+            label="Inspector"
+            onClose={() => setInspectorDrawerOpen(false)}
+          >
+            <Inspector pinned={inspectorPinned()} onPinToggle={toggleInspector} />
+          </ResponsiveDrawer>
+        </Show>
 
         <Show
           when={props.agentClient}

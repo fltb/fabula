@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor, within } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,11 +15,19 @@ const navigationLabels = [
 
 afterEach(() => {
   cleanup();
+  setViewport(1024);
+  vi.restoreAllMocks();
 });
 
 beforeEach(() => {
   window.localStorage.clear();
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => undefined);
 });
+
+function setViewport(width: number): void {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
+  window.dispatchEvent(new Event('resize'));
+}
 
 describe('Workbench shell layout controls', () => {
   it('collapses the Navigator without removing its accessible view names', async () => {
@@ -61,6 +69,50 @@ describe('Workbench shell layout controls', () => {
 
     await user.click(screen.getByRole('button', { name: 'Close Agent Shelf' }));
     expect(screen.queryByRole('complementary', { name: 'Agent Shelf' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Workbench responsive drawers', () => {
+  it('uses focus-managed drawers on mobile and retains docked tablet navigation', async () => {
+    setViewport(700);
+    const user = userEvent.setup();
+    render(() => <App />);
+
+    await user.click(await screen.findByRole('button', { name: 'Open navigation' }));
+    const navigationDrawer = await screen.findByRole('dialog', { name: 'Navigation' });
+    const closeNavigation = within(navigationDrawer).getByRole('button', {
+      name: 'Close Navigation',
+    });
+    await waitFor(() => expect(closeNavigation).toHaveFocus());
+    expect(
+      within(navigationDrawer).getByRole('navigation', { name: 'Workbench views' }),
+    ).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Navigation' })).not.toBeInTheDocument(),
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Open Inspector' }));
+    const inspectorDrawer = await screen.findByRole('dialog', { name: 'Inspector' });
+    expect(within(inspectorDrawer).getByTestId('inspector')).toBeInTheDocument();
+    await user.click(within(inspectorDrawer).getByRole('button', { name: 'Close Inspector' }));
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog', { name: 'Inspector' })).not.toBeInTheDocument(),
+    );
+
+    cleanup();
+    setViewport(900);
+    render(() => <App />);
+    expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Workbench views' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Inspector' })).toBeInTheDocument();
+
+    cleanup();
+    setViewport(1024);
+    render(() => <App />);
+    expect(screen.queryByRole('button', { name: 'Open navigation' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open Inspector' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('inspector')).toBeInTheDocument();
   });
 });
 

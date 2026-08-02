@@ -1,34 +1,30 @@
+import { Navigate, Route, Router, useLocation, useNavigate } from '@solidjs/router';
 import type { JSX } from 'solid-js';
-import { createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createSignal, Match, onCleanup, onMount, Show, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
-import { Navigate, Route, Router, useNavigate, useParams } from '@solidjs/router';
 import type {
-  BrowserGraphRouteSelectorV1,
   BrowserAuthoringReconcileRequestV1,
   BrowserAuthoringSubmitRequestV1,
+  BrowserGraphRouteSelectorV1,
   BrowserProjectSummaryV1,
   BrowserSessionPrincipalV1,
   ConfigOperationReceiptV1,
   SourceStudioDocumentDescriptorV1,
 } from '../contracts/index.js';
 import {
-  createRuntimeClient,
-  runtimeErrorMessage,
-  runtimeHealthForError,
-  type RuntimeClient,
-  type RuntimeWorkspace,
-} from './runtime-client';
-import {
   createProjectEventClient,
   type ProjectEventClient,
   type ProjectEventClientSnapshot,
 } from './project-event-client';
-import { SetupWizard } from './ui/SetupWizard';
 import {
-  LoginForm,
-  ProjectPicker,
-  RuntimeStatePanel,
-} from './ui/RuntimeStates';
+  createRuntimeClient,
+  type RuntimeClient,
+  type RuntimeWorkspace,
+  runtimeErrorMessage,
+  runtimeHealthForError,
+} from './runtime-client';
+import { LoginForm, ProjectPicker, RuntimeStatePanel } from './ui/RuntimeStates';
+import { SetupWizard } from './ui/SetupWizard';
 import './styles.css';
 import { App } from './App';
 import { AdminShell } from './admin/AdminShell';
@@ -53,6 +49,7 @@ interface RuntimeRouterProps {
  */
 function RuntimeRouter(props: RuntimeRouterProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [startup, setStartup] = createSignal<StartupState>('loading');
   const [startupError, setStartupError] = createSignal<string | null>(null);
   const [principal, setPrincipal] = createSignal<BrowserSessionPrincipalV1 | null>(null);
@@ -151,76 +148,99 @@ function RuntimeRouter(props: RuntimeRouterProps) {
   );
 
   const loginRoute = () => (
-    <LoginForm
-      pending={startup() === 'loading'}
-      error={startupError()}
-      onSubmit={login}
-    />
+    <LoginForm pending={startup() === 'loading'} error={startupError()} onSubmit={login} />
   );
 
-  const workspaceRoute = () => (
-    <WorkspaceRoute client={props.client} onSignIn={() => navigate('/login')} />
+  const workspaceRoute = () => {
+    const encodedProjectId = location.pathname.slice('/workspace/'.length);
+    try {
+      return (
+        <WorkspaceRoute
+          client={props.client}
+          projectId={decodeURIComponent(encodedProjectId)}
+          onSignIn={() => navigate('/login')}
+        />
+      );
+    } catch {
+      return (
+        <RuntimeStatePanel
+          state="workspace"
+          health="fatal"
+          message="The project address is invalid."
+        />
+      );
+    }
+  };
+  const projectsRoute = () => (
+    <ProjectsRoute
+      client={props.client}
+      onSelect={openProject}
+      onSignIn={() => navigate('/login')}
+    />
   );
-  const projectsRoute = () => <ProjectsRoute client={props.client} onSelect={openProject} onSignIn={() => navigate('/login')} />;
   const adminRoute = () => {
-    const authorization: AdminAuthorizationState = principal() === null
-      ? 'unauthorized'
-      : principal()?.role === 'owner'
-        ? 'owner'
-        : 'user';
+    const authorization: AdminAuthorizationState =
+      principal() === null ? 'unauthorized' : principal()?.role === 'owner' ? 'owner' : 'user';
     return <AdminShell client={props.client.admin} authorization={authorization} />;
   };
 
   return (
-    <>
-      <Route
-        path="/"
-        component={() => (
+    <Switch
+      fallback={
+        <RuntimeStatePanel
+          state="fatal-host-error"
+          health="fatal"
+          message="The requested Workbench page does not exist."
+        />
+      }
+    >
+      <Match when={location.pathname === '/'}>
+        <Show
+          when={startup() !== 'loading'}
+          fallback={<RuntimeStatePanel state="login" health="loading" />}
+        >
           <Show
-            when={startup() !== 'loading'}
-            fallback={<RuntimeStatePanel state="login" health="loading" />}
+            when={startup() === 'setup'}
+            fallback={
+              <Show
+                when={startup() === 'restart-required'}
+                fallback={
+                  <Show
+                    when={startup() === 'ready'}
+                    fallback={
+                      <RuntimeStatePanel
+                        state="fatal-host-error"
+                        health="fatal"
+                        message={startupError() ?? undefined}
+                        actionLabel="Retry Host status"
+                        onAction={retryStartup}
+                      />
+                    }
+                  >
+                    <Navigate href={props.client.auth.hasSession() ? '/projects' : '/login'} />
+                  </Show>
+                }
+              >
+                <RuntimeStatePanel
+                  state="configuration-restart-required"
+                  actionLabel="Check Host again"
+                  onAction={retryStartup}
+                />
+              </Show>
+            }
           >
-            <Show
-              when={startup() === 'setup'}
-              fallback={
-                <Show
-                  when={startup() === 'restart-required'}
-                  fallback={
-                    <Show
-                      when={startup() === 'ready'}
-                      fallback={
-                        <RuntimeStatePanel
-                          state="fatal-host-error"
-                          health="fatal"
-                          message={startupError() ?? undefined}
-                          actionLabel="Retry Host status"
-                          onAction={retryStartup}
-                        />
-                      }
-                    >
-                      <Navigate href={props.client.auth.hasSession() ? '/projects' : '/login'} />
-                    </Show>
-                  }
-                >
-                  <RuntimeStatePanel
-                    state="configuration-restart-required"
-                    actionLabel="Check Host again"
-                    onAction={retryStartup}
-                  />
-                </Show>
-              }
-            >
-              <Navigate href="/setup" />
-            </Show>
+            <Navigate href="/setup" />
           </Show>
-        )}
-      />
-      <Route path="/setup" component={setupRoute} />
-      <Route path="/login" component={loginRoute} />
-      <Route path="/projects" component={projectsRoute} />
-      <Route path="/workspace/:projectId" component={workspaceRoute} />
-      <Route path="/admin/*" component={adminRoute} />
-    </>
+        </Show>
+      </Match>
+      <Match when={location.pathname === '/setup'}>{setupRoute()}</Match>
+      <Match when={location.pathname === '/login'}>{loginRoute()}</Match>
+      <Match when={location.pathname === '/projects'}>{projectsRoute()}</Match>
+      <Match when={location.pathname.startsWith('/workspace/')}>{workspaceRoute()}</Match>
+      <Match when={location.pathname === '/admin' || location.pathname.startsWith('/admin/')}>
+        {adminRoute()}
+      </Match>
+    </Switch>
   );
 }
 
@@ -232,7 +252,9 @@ function ProjectsRoute(props: {
   const [projects, setProjects] = createSignal<readonly BrowserProjectSummaryV1[]>([]);
   const [pending, setPending] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
-  const [health, setHealth] = createSignal<'empty' | 'disconnected' | 'unauthorized' | 'fatal' | null>(null);
+  const [health, setHealth] = createSignal<
+    'empty' | 'disconnected' | 'unauthorized' | 'fatal' | null
+  >(null);
 
   const load = async () => {
     if (!props.client.auth.hasSession()) {
@@ -262,7 +284,12 @@ function ProjectsRoute(props: {
       when={health() !== 'unauthorized'}
       fallback={
         <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-10)]">
-          <RuntimeStatePanel state="project-picker" health="unauthorized" actionLabel="Sign in" onAction={props.onSignIn} />
+          <RuntimeStatePanel
+            state="project-picker"
+            health="unauthorized"
+            actionLabel="Sign in"
+            onAction={props.onSignIn}
+          />
         </main>
       }
     >
@@ -278,21 +305,26 @@ function ProjectsRoute(props: {
   );
 }
 
-function WorkspaceRoute(props: { readonly client: RuntimeClient; readonly onSignIn: () => void }) {
-  const params = useParams();
+function WorkspaceRoute(props: {
+  readonly client: RuntimeClient;
+  readonly projectId: string;
+  readonly onSignIn: () => void;
+}) {
   const [pending, setPending] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
-  const [health, setHealth] = createSignal<'empty' | 'disconnected' | 'unauthorized' | 'fatal' | null>(null);
+  const [health, setHealth] = createSignal<
+    'empty' | 'disconnected' | 'unauthorized' | 'fatal' | null
+  >(null);
   const [workspace, setWorkspace] = createSignal<RuntimeWorkspace | null>(null);
   const [authoring, setAuthoring] = createSignal<ProjectEventClientSnapshot | null>(null);
-  const [yjsStatus, setYjsStatus] = createSignal<Record<string, 'idle' | 'connecting' | 'connected' | 'disconnected' | 'unavailable'>>({});
+  const [yjsStatus, setYjsStatus] = createSignal<
+    Record<string, 'idle' | 'connecting' | 'connected' | 'disconnected' | 'unavailable'>
+  >({});
   let eventClient: ProjectEventClient | null = null;
   let loadGeneration = 0;
 
-  const load = async (
-    selector: BrowserGraphRouteSelectorV1 = DEFAULT_GRAPH_SELECTOR,
-  ) => {
-    const projectId = params.projectId;
+  const load = async (selector: BrowserGraphRouteSelectorV1 = DEFAULT_GRAPH_SELECTOR) => {
+    const projectId = props.projectId;
     const generation = ++loadGeneration;
     eventClient?.stop();
     eventClient = null;
@@ -340,9 +372,7 @@ function WorkspaceRoute(props: { readonly client: RuntimeClient; readonly onSign
   const submitAuthoring = async (request: BrowserAuthoringSubmitRequestV1): Promise<void> => {
     await props.client.authoring.submit(request);
   };
-  const reconcileAuthoring = async (
-    request: BrowserAuthoringReconcileRequestV1,
-  ): Promise<void> => {
+  const reconcileAuthoring = async (request: BrowserAuthoringReconcileRequestV1): Promise<void> => {
     await props.client.authoring.reconcile(request);
   };
   const updateYjsStatus = (
@@ -353,7 +383,18 @@ function WorkspaceRoute(props: { readonly client: RuntimeClient; readonly onSign
   };
 
   return (
-    <Show when={!pending() && workspace()} fallback={<RuntimeStatePanel state="workspace" health={pending() ? 'loading' : health() ?? 'fatal'} message={error() ?? undefined} actionLabel={health() === 'unauthorized' ? 'Sign in' : 'Try again'} onAction={health() === 'unauthorized' ? props.onSignIn : () => void load()} />}>
+    <Show
+      when={!pending() && workspace()}
+      fallback={
+        <RuntimeStatePanel
+          state="workspace"
+          health={pending() ? 'loading' : (health() ?? 'fatal')}
+          message={error() ?? undefined}
+          actionLabel={health() === 'unauthorized' ? 'Sign in' : 'Try again'}
+          onAction={health() === 'unauthorized' ? props.onSignIn : () => void load()}
+        />
+      }
+    >
       {(current) => (
         <App
           hostStatus="ready"
@@ -379,7 +420,7 @@ export function RuntimeApp(): JSX.Element {
   const client = createRuntimeClient();
   return (
     <Router>
-      <RuntimeRouter client={client} />
+      <Route path="/*" component={() => <RuntimeRouter client={client} />} />
     </Router>
   );
 }

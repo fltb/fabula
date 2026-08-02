@@ -160,6 +160,8 @@ export interface AuthoringOperationReceiptV1 {
   readonly workspaceDigest: string | null;
   /** Fixed-ref Git submit id when the operation ran a submit. */
   readonly gitSubmitId: string | null;
+  /** Fixed-ref commit object accepted by this operation, when available. */
+  readonly gitCommit?: string | null;
   /** Durable Git receipt hash when the operation accepted a submit. */
   readonly gitReceiptHash: string | null;
   readonly errorCode: string | null;
@@ -314,7 +316,6 @@ export const BROWSER_AUTHORING_OPERATIONS_PATH = `${BROWSER_AUTHORING_BASE_PATH}
 export const BROWSER_AUTHORING_OPERATION_PATH = `${BROWSER_AUTHORING_BASE_PATH}/operations/:operationId`;
 /** `GET .../authoring/events` — guarded activity stream. */
 export const BROWSER_AUTHORING_EVENTS_PATH = `${BROWSER_AUTHORING_BASE_PATH}/events`;
-
 
 // ─── Strict MCP authoring tool I/O ──────────────────────────────────────────
 

@@ -139,7 +139,7 @@ Workbench has two explicit modes. `start:listener` is only a loopback health/sta
 
 ### Development
 
-`dev` starts with no env file at all: it loads the `zhu-fu` demo project from `fixtures/zhu-fu`, uses the mock provider, and enables the loopback-only owner bootstrap. Launchers discover the env file in this order: `WORKBENCH_ENV_FILE` if set, then the working-directory `.env`, then the monorepo-root `.env`; shell variables always override file values. The checked-in template is production-safe; for development copy it and flip the three development switches below:
+`dev` starts with no env file at all: it copies `fixtures/zhu-fu` into a temporary external project before controlled Git bootstrap, uses the mock provider, and enables the loopback-only owner bootstrap. Launchers discover the env file in this order: `WORKBENCH_ENV_FILE` if set, then the working-directory `.env`, then the monorepo-root `.env`; shell variables always override file values. The checked-in template is production-safe; for development copy it and flip the three development switches below:
 
 ```bash
 cp .env.example .env
@@ -154,12 +154,14 @@ fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench dev
 With no env at all, the same command prints which demo project it picked:
 
 ```text
-[workbench dev] WORKBENCH_PROJECT_ROOT unset; using demo project /…/fabula/fixtures/zhu-fu. Set WORKBENCH_PROJECT_ROOT to override.
+[workbench dev] WORKBENCH_PROJECT_ROOT unset; copied demo project to /tmp/fabula-workbench-dev-…/zhu-fu. Set WORKBENCH_PROJECT_ROOT to override.
 ```
 
 An explicitly set but invalid `WORKBENCH_PROJECT_ROOT` (missing `nova.yaml`) is a hard error — the demo default never silently replaces an explicit choice.
 
 This starts the composed Host on `http://127.0.0.1:8787` and Vite with HMR on `http://127.0.0.1:5173`. Development defaults to the explicit mock provider, creates `.nova/workbench.sqlite` under the current working directory, and proxies `/api`, `/health`, `/status`, `/mcp`, and `/yjs` to the Host. No password is supplied by the script.
+
+When a local Vite service already owns `5173`, keep the Host and Vite ports distinct: `WORKBENCH_PORT=8790 WORKBENCH_VITE_PORT=5174 npm run -w @novalistically/workbench dev`. `WORKBENCH_PORT` is the Host and proxy target; `WORKBENCH_VITE_PORT` is only the browser dev-server port.
 
 On first run, open the Vite URL and use the **First-run owner bootstrap** form. It creates the owner and signs that browser session in directly; the opaque session remains in memory. The equivalent API call returns both `userId` and `sessionId`, but a curl-created session is not injected into an already-open browser:
 
@@ -169,22 +171,16 @@ curl -sS -X POST http://127.0.0.1:8787/api/v1/auth/bootstrap \
   -d '{"password":"choose-a-development-password","displayName":"Developer"}'
 ```
 
-If using curl, use the returned `userId` with the browser sign-in form. The current client is read/projection oriented: source submit, Git adoption, and an in-browser Yjs editor are not exposed yet.
+If using curl, use the returned `userId` with the browser sign-in form. The browser now exposes Source Studio, Yjs working documents, authoring operations, Agent proposals, project graph views, and owner administration. All mutations remain Host-authorized and coordinator-queued; see [Workbench Host](docs/reference/workbench-host.md) for the source/Git boundary and recovery procedure.
 
 ### Production
 
-Build first, then provide every deployment path explicitly. Production uses the real Node Host provider and fails closed when the API key or source/database paths are absent.
+Build first, then start the packaged loopback Host. Production may begin unconfigured and use the first-run owner setup; multi-project YAML lives under `WORKBENCH_HOME`, and provider credentials are stored through the Host setup/admin surface rather than environment variables.
 
 ```bash
 fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench build
-export WORKBENCH_ENV_FILE=/etc/fabula/workbench.env
-# Populate that file from .env.example, with:
-#   WORKBENCH_MODE=workbench
-#   WORKBENCH_PROJECT_ROOT=/srv/fabula/projects/my-novel
-#   WORKBENCH_DATABASE_PATH=/var/lib/fabula/workbench.sqlite
-#   WORKBENCH_ASSETS_ROOT=/srv/fabula/app/packages/workbench/dist/client
-#   WORKBENCH_PROVIDER=ai-sdk
-#   NOVALISTICALLY_AI_API_KEY=<provider-key>
+export WORKBENCH_HOME=/var/lib/fabula/workbench
+export WORKBENCH_ASSETS_ROOT=$PWD/packages/workbench/dist/client
 fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench start:workbench
 ```
 

@@ -23,7 +23,7 @@
  * setup/admin API and runtime registry stay with the configuration slice.
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, watch } from 'node:fs';
 import { mkdir, readFile, stat } from 'node:fs/promises';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -31,12 +31,16 @@ import { Worker } from 'node:worker_threads';
 import type { LLMProvider } from '@novalistically/core';
 import { MockProvider } from '@novalistically/core/testing';
 import { createFileCoreRuntimeServices, FileProjectSourceLoader } from '@novalistically/node-host';
+import type { AuthoringActivityEventV1 } from '../contracts/authoring.js';
 import {
   BROWSER_API_VERSION,
   type BrowserProjectSummaryV1,
   type BrowserSessionPrincipalV1,
 } from '../contracts/browser-api.js';
-import type { WorkbenchConfigurationV1 } from '../contracts/configuration.js';
+import type {
+  WorkbenchConfigurationV1,
+  WorkbenchProjectConfigurationV1,
+} from '../contracts/configuration.js';
 import type {
   PersistenceOperation,
   PersistencePayloads,
@@ -45,15 +49,51 @@ import type {
 import type { SourceStudioStateV1 } from '../contracts/source-studio.js';
 import type { PersistenceMessagePort, PersistenceResponse } from '../persistence/messages.js';
 import { PersistenceWorkerClient } from '../persistence/worker-client.js';
-import { AgentCapabilityService, createCapabilityPersistence } from './agent/index.js';
+import { createAdminApi } from './admin-api.js';
+import {
+  AgentCapabilityService,
+  AgentTaskService,
+  createAgentCommandService,
+  createAgentDurableAudit,
+  createAgentSuggestionService,
+  createCapabilityPersistence,
+  createDurableAuditSink,
+} from './agent/index.js';
 import { createAuthPersistence, LocalAuthService } from './auth/index.js';
+import { createMcpAuthoringCoordinatorPort } from './authoring/mcp-adapter.js';
+import {
+  createProjectAuthoringRuntime,
+  type ProjectAuthoringRuntime,
+} from './authoring/project-runtime.js';
+import type { AuthoringCoordinatorEvent } from './authoring/types.js';
+import { type BrowserAgentProject, createBrowserAgentApi } from './browser-agent-api.js';
+import {
+  type BrowserAuthoringEventSource,
+  createBrowserAuthoringApi,
+} from './browser-authoring-api.js';
 import { createBrowserPrincipalResolver } from './browser-read-api.js';
+import { ConfigurationFileStore } from './configuration-file-store.js';
+import { ConfigurationChangeService } from './configuration-service.js';
 import { createProjectCoreRuntime } from './core-runtime.js';
 import { projectCanonicalGraphRuntime } from './graph-projection.js';
-import { createProjectSessionRegistry } from './project-session.js';
+import {
+  createDeviceVerifierPersistence,
+  createMcpAuthorizationPort,
+  createMcpDevicePairingService,
+  createMcpStreamableEndpoint,
+  createProjectSessionMcpRegistry,
+} from './mcp/index.js';
+import { createProjectSession, createProjectSessionRegistry } from './project-session.js';
 import { HostProviderError, HostProviderFactory } from './provider-factory.js';
 import { createProviderCredentialStore } from './providers/index.js';
 import { createHostServer, type HostServer, type HostServerOptions } from './server.js';
+import { createSetupApi, createSetupStatusBuilder } from './setup-api.js';
+import { createWorkbenchRuntime } from './workbench-runtime.js';
+import {
+  createSessionAuthPort,
+  createYjsPersistencePort,
+  createYjsWorkingDocumentCore,
+} from './yjs/index.js';
 
 export interface WorkbenchLaunchConfig extends HostServerOptions {
   readonly mode: 'workbench';
@@ -150,7 +190,10 @@ function validateConfig(config: WorkbenchLaunchConfig): void {
       'An unconfigured Workbench starts loopback-only; LAN or reverse-proxy binding requires an owner-configured Host',
     );
   }
-  if (config.projectRoot === undefined && (config.lan === true || config.unixSocket !== undefined)) {
+  if (
+    config.projectRoot === undefined &&
+    (config.lan === true || config.unixSocket !== undefined)
+  ) {
     throw new Error(
       'An unconfigured Workbench starts loopback-only; LAN or Unix-socket binding requires an owner-configured Host',
     );
@@ -438,7 +481,9 @@ export function parseWorkbenchLaunchConfig(
     databasePath,
     projectRoot,
     projectId:
-      projectRoot === undefined ? undefined : (opt(env.WORKBENCH_PROJECT_ID) ?? basename(projectRoot)),
+      projectRoot === undefined
+        ? undefined
+        : (opt(env.WORKBENCH_PROJECT_ID) ?? basename(projectRoot)),
     displayName:
       projectRoot === undefined
         ? undefined
@@ -468,9 +513,7 @@ export async function startWorkbench(
   // Phase-1B seam: load the validated configuration DTO when a service is
   // wired; the launch itself never reads or writes `workbench.yaml`.
   const configuration =
-    config.configurationService === undefined
-      ? null
-      : await config.configurationService.load();
+    config.configurationService === undefined ? null : await config.configurationService.load();
 
   // Built-assets diagnostics before any runtime resource is constructed.
   const assetsRoot = config.assetsRoot ?? null;
@@ -508,146 +551,444 @@ export async function startWorkbench(
     const capabilities = new AgentCapabilityService({
       persistence: createCapabilityPersistence(persistence.client),
     });
+    const sessions = createProjectSessionRegistry();
+    const configurationStore = new ConfigurationFileStore({
+      filePath: join(config.hostHome, 'config', 'workbench.yaml'),
+    });
+    const configurationService = new ConfigurationChangeService({
+      store: configurationStore,
+      isProjectBusy: (projectId) => sessions.get(projectId)?.busy ?? false,
+      operations: {
+        record: (operation) =>
+          persistence.client
+            .request('createConfigurationOperation', {
+              ...operation,
+              changedFields: [...operation.changedFields],
+              diagnostics: operation.diagnostics.map((diagnostic) => ({ ...diagnostic })),
+            })
+            .then(() => undefined),
+      },
+    });
+    const storedConfiguration = await configurationService.readActive().catch(() => null);
+    const activeConfiguration = configuration ?? storedConfiguration?.configuration ?? null;
 
     // Host-only provider construction: the API key is read exclusively from
     // the credential store and passed as an explicit AI SDK option; the
-    // factory never consults `NOVALISTICALLY_AI_API_KEY` or any other env key.
+    // factory never consults process environment keys.
     const credentialStore = createProviderCredentialStore();
     const provider = new HostProviderFactory({
       store: credentialStore,
-      configuration: configuration?.provider ?? null,
+      configuration: activeConfiguration?.provider ?? null,
       override:
         config.providerOverride ?? (config.provider === 'mock' ? new MockProvider() : undefined),
     });
-
-    let browser: HostServerOptions['browser'];
-    if (config.projectRoot === undefined) {
-      // Unconfigured setup runtime: loopback listener, static assets, auth
-      // seams and health/status only. The Phase-1B setup/admin API mounts
-      // here; no project session or provider is constructed.
-      browser = undefined;
-    } else {
-      const projectId = config.projectId ?? basename(config.projectRoot);
-      const displayName = config.displayName ?? basename(config.projectRoot);
-      if (
-        config.provider === 'ai-sdk' &&
-        config.providerOverride === undefined &&
-        !(await provider.hasCredential())
-      ) {
+    const configuredProjects: readonly WorkbenchProjectConfigurationV1[] =
+      activeConfiguration?.projects ??
+      (config.projectRoot === undefined
+        ? []
+        : [
+            {
+              projectId: config.projectId ?? basename(config.projectRoot),
+              displayName: config.displayName ?? basename(config.projectRoot),
+              root: config.projectRoot,
+            },
+          ]);
+    const providerReady =
+      config.providerOverride !== undefined ||
+      config.provider === 'mock' ||
+      (activeConfiguration?.provider !== null && (await provider.hasCredential()));
+    const unavailableProvider: LLMProvider = {
+      name: 'workbench-provider-unavailable',
+      complete: async () => {
         throw new HostProviderError(
           'PROVIDER_CREDENTIAL_UNAVAILABLE',
-          'No stored AI provider credential for this Host; complete setup or import a credential before opening a project',
+          'The Host provider is not configured. Complete provider setup before rendering or requesting an Agent proposal.',
         );
-      }
-      const loader = new FileProjectSourceLoader();
-      const source = loader.load(config.projectRoot);
-      const runtime = createProjectCoreRuntime({
-        projectId,
-        services: createFileCoreRuntimeServices(config.projectRoot, {
-          provider: await provider.create(),
-        }),
-      });
-      const sessions = createProjectSessionRegistry();
-      const session = sessions.open({
-        projectId,
-        runtime,
-        capabilities,
-        audit: { record: async () => undefined },
-        initialSource: source,
-      });
-      await persistence.client.request('upsertProject', {
-        projectId,
-        displayName,
-        rootLabel: basename(config.projectRoot),
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-      const project = await persistence.client.request('getProject', { projectId });
-      const users = {
-        loadUser: async (userId: string) => {
-          const user = await persistence.client.request('loadUser', { userId });
-          return user
-            ? {
-                userId: user.userId,
-                role: user.role,
-                displayName: user.displayName,
-                capabilityVersion: user.capabilityVersion,
-                createdAt: user.createdAt,
-                updatedAt: user.updatedAt,
-              }
-            : null;
-        },
-      };
-      const principal = createBrowserPrincipalResolver({ sessions: auth, users });
-      const catalog = {
-        listProjects: async (
-          _p: BrowserSessionPrincipalV1,
-        ): Promise<readonly BrowserProjectSummaryV1[]> => {
-          const rows = await persistence.client.request('listProjects', undefined);
-          return rows.map((row) => ({
-            version: BROWSER_API_VERSION,
-            projectId: row.projectId,
-            displayName: row.displayName,
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-            open: sessions.get(row.projectId) !== null,
-          }));
-        },
-      };
-      browser = {
-        principal,
-        authorization: {
-          canAccessProject: async (_userId: string, id: string) => id === projectId,
-        },
-        catalog,
-        overview: {
-          loadOverview: async (id: string) =>
-            id !== projectId || !project
-              ? null
-              : {
+      },
+    };
+    const runtimeProvider = providerReady ? await provider.create() : unavailableProvider;
+    const audit = createAgentDurableAudit({ client: persistence.client });
+    const projectConfiguration = new Map<string, WorkbenchProjectConfigurationV1>();
+    const yjsPersistence = createYjsPersistencePort(persistence.client);
+    const yjsCore = createYjsWorkingDocumentCore({ persistence: yjsPersistence });
+    const authoring = new Map<string, ProjectAuthoringRuntime>();
+    const agentProjects = new Map<string, BrowserAgentProject>();
+    const listeners = new Map<string, Set<(event: AuthoringActivityEventV1) => void>>();
+    const eventSource: BrowserAuthoringEventSource = {
+      subscribe(projectId, listener) {
+        const current = listeners.get(projectId) ?? new Set();
+        current.add(listener);
+        listeners.set(projectId, current);
+        return () => {
+          current.delete(listener);
+          if (current.size === 0) listeners.delete(projectId);
+        };
+      },
+    };
+    const publishAuthoringEvent = (event: AuthoringCoordinatorEvent): void => {
+      const subscribers = listeners.get(event.projectId);
+      if (subscribers === undefined || event.type === 'submit-receipt') return;
+      const safe: AuthoringActivityEventV1 = { ...event, version: 1 };
+      for (const listener of subscribers) listener(safe);
+    };
+    const agentTasks = providerReady ? new AgentTaskService({ provider: runtimeProvider }) : null;
+
+    /**
+     * One lifecycle owns each project's session, Yjs working store, observer,
+     * controlled Git submission service and optional Agent service. Browser,
+     * MCP and Yjs resolve these maps only after this factory resolves.
+     */
+    const runtimeLifecycle = createWorkbenchRuntime({
+      registry: sessions,
+      createSession: async (project) => {
+        const source = new FileProjectSourceLoader().load(project.root);
+        const coreRuntime = createProjectCoreRuntime({
+          projectId: project.projectId,
+          services: createFileCoreRuntimeServices(project.root, { provider: runtimeProvider }),
+        });
+        const session = createProjectSession({
+          projectId: project.projectId,
+          runtime: coreRuntime,
+          capabilities,
+          audit: createDurableAuditSink(audit),
+          initialSource: source,
+        });
+        const now = new Date().toISOString();
+        const existing = await persistence.client.request('getProject', {
+          projectId: project.projectId,
+        });
+        await persistence.client.request('upsertProject', {
+          projectId: project.projectId,
+          displayName: project.displayName,
+          rootLabel: basename(project.root),
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+        });
+        const projectAuthoring = await createProjectAuthoringRuntime({
+          projectId: project.projectId,
+          projectRoot: project.root,
+          hostStagingRoot: join(config.hostHome, 'staging', project.projectId),
+          session,
+          capabilities,
+          persistence: persistence.client,
+          yjsCore,
+          events: { publish: publishAuthoringEvent },
+        });
+        authoring.set(project.projectId, projectAuthoring);
+        projectConfiguration.set(project.projectId, project);
+        if (agentTasks !== null) {
+          const command = createAgentCommandService({
+            session,
+            documents: projectAuthoring.documents,
+            presence: { isHumanEditing: () => session.hasHumanPresence },
+          });
+          agentProjects.set(project.projectId, {
+            projectId: project.projectId,
+            documents: projectAuthoring.documents,
+            suggestions: createAgentSuggestionService({
+              documents: projectAuthoring.documents,
+              tasks: agentTasks,
+              command,
+              presence: { isHumanEditing: () => session.hasHumanPresence },
+            }),
+            async issueCapability(input) {
+              const issued = await capabilities.issue({
+                userId: input.principal.userId,
+                projectId: project.projectId,
+                scopes: ['mcp:author'],
+              });
+              return { capabilityId: issued.grant.capabilityId, scopes: issued.grant.scopes };
+            },
+          });
+        }
+        return session;
+      },
+      closeSession: async (session) => {
+        agentProjects.delete(session.projectId);
+        const projectAuthoring = authoring.get(session.projectId);
+        authoring.delete(session.projectId);
+        await projectAuthoring?.dispose();
+      },
+    });
+    await runtimeLifecycle.sync(configuredProjects);
+
+    const users = {
+      loadUser: async (userId: string) => {
+        const user = await persistence.client.request('loadUser', { userId });
+        return user
+          ? {
+              userId: user.userId,
+              role: user.role,
+              displayName: user.displayName,
+              capabilityVersion: user.capabilityVersion,
+              createdAt: user.createdAt,
+              updatedAt: user.updatedAt,
+            }
+          : null;
+      },
+    };
+    const principal = createBrowserPrincipalResolver({ sessions: auth, users });
+    const authorization = {
+      canAccessProject: async (_userId: string, projectId: string) =>
+        sessions.get(projectId) !== null,
+    };
+    const catalog = {
+      listProjects: async (
+        _principal: BrowserSessionPrincipalV1,
+      ): Promise<readonly BrowserProjectSummaryV1[]> => {
+        const rows = await persistence.client.request('listProjects', undefined);
+        return rows.map((row) => ({
+          version: BROWSER_API_VERSION,
+          projectId: row.projectId,
+          displayName: row.displayName,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          open: sessions.get(row.projectId) !== null,
+        }));
+      },
+    };
+    const browser: HostServerOptions['browser'] =
+      configuredProjects.length === 0
+        ? undefined
+        : {
+            principal,
+            authorization,
+            catalog,
+            overview: {
+              loadOverview: async (projectId) => {
+                const session = sessions.get(projectId);
+                const project = projectConfiguration.get(projectId);
+                const record = await persistence.client.request('getProject', { projectId });
+                if (session === null || project === undefined || record === null) return null;
+                return {
                   version: 1 as const,
-                  projectId: id,
+                  projectId,
                   metadata: {
                     displayName: project.displayName,
-                    createdAt: project.createdAt,
-                    updatedAt: project.updatedAt,
+                    createdAt: record.createdAt,
+                    updatedAt: record.updatedAt,
                   },
                   projection: session.projection,
                   activity: { busy: session.busy, hasHumanPresence: session.hasHumanPresence },
                   generatedAt: new Date().toISOString(),
-                },
-        },
-        graph: {
-          project: async (id: string, selector: Parameters<typeof projectCanonicalGraphRuntime>[1]) => {
-            if (id !== projectId || session.source === null)
-              throw new Error('project unavailable');
-            return projectCanonicalGraphRuntime(session.source, selector);
-          },
-        },
-        source: {
-          loadSourceStudio: async (id: string): Promise<SourceStudioStateV1 | null> =>
-            id !== projectId
-              ? null
-              : {
+                };
+              },
+            },
+            graph: {
+              project: async (
+                projectId,
+                selector: Parameters<typeof projectCanonicalGraphRuntime>[1],
+              ) => {
+                const session = sessions.get(projectId);
+                if (session === null || session.source === null)
+                  throw new Error('project unavailable');
+                return projectCanonicalGraphRuntime(session.source, selector);
+              },
+            },
+            source: {
+              loadSourceStudio: async (projectId): Promise<SourceStudioStateV1 | null> => {
+                const session = sessions.get(projectId);
+                const runtime = authoring.get(projectId);
+                if (session === null || runtime === undefined) return null;
+                return {
                   version: 1,
-                  projectId: id,
+                  projectId,
                   accepted: session.projection,
                   working: {
-                    documents: source.documents.map((d) => ({
-                      projectId: id,
-                      documentId: d.logicalPath,
-                      kind: 'raw-yaml' as const,
-                      available: false,
+                    documents: runtime.documents.descriptors().map((document) => ({
+                      projectId,
+                      documentId: document.documentId,
+                      kind: document.kind,
+                      available: document.available,
                     })),
                   },
                   generatedAt: new Date().toISOString(),
-                },
-        },
-      };
-    }
+                };
+              },
+            },
+          };
+    const yjs =
+      configuredProjects.length === 0
+        ? undefined
+        : {
+            persistence: yjsPersistence,
+            sessions,
+            core: yjsCore,
+            auth: createSessionAuthPort({
+              sessions: auth,
+              canAccessProject: authorization.canAccessProject,
+              isValidDocument: (projectId, documentId) =>
+                authoring.get(projectId)?.documents.descriptor(documentId) !== null,
+            }),
+          };
 
-    const hostServer = createHostServer({ ...config, browser });
+    const devices = createMcpDevicePairingService({
+      persistence: createDeviceVerifierPersistence(persistence.client),
+    });
+    const defaultProjectId =
+      activeConfiguration?.defaultProjectId ?? configuredProjects[0]?.projectId ?? null;
+    const defaultSession = defaultProjectId === null ? null : sessions.get(defaultProjectId);
+    const defaultAuthoring =
+      defaultProjectId === null ? undefined : authoring.get(defaultProjectId);
+    const mcp =
+      defaultSession === null || defaultAuthoring === undefined
+        ? undefined
+        : {
+            endpoint: createMcpStreamableEndpoint({
+              registry: createProjectSessionMcpRegistry(defaultSession, {
+                coordinator: createMcpAuthoringCoordinatorPort({
+                  session: defaultSession,
+                  coordinator: defaultAuthoring.coordinator,
+                  documents: defaultAuthoring.documents,
+                  capabilities,
+                }),
+                admin: {
+                  async preview(request) {
+                    const active = await configurationService.readActive();
+                    if (active?.revision !== request.expectedRevision) {
+                      return {
+                        status: 'stale',
+                        activeRevision: active?.revision ?? null,
+                        candidateRevision: null,
+                        changedFields: ['configuration'],
+                        diagnostics: [
+                          { code: 'CONFIG_STALE', message: 'Configuration revision changed.' },
+                        ],
+                      };
+                    }
+                    const validation = await configurationService.validateCandidate(
+                      request.configuration,
+                    );
+                    return validation.ok
+                      ? {
+                          status: 'applied',
+                          activeRevision: active?.revision ?? null,
+                          candidateRevision: validation.revision,
+                          changedFields: [],
+                          diagnostics: [],
+                        }
+                      : {
+                          status: 'invalid',
+                          activeRevision: active?.revision ?? null,
+                          candidateRevision: null,
+                          changedFields: [],
+                          diagnostics: [...validation.diagnostics],
+                        };
+                  },
+                  apply: (request) =>
+                    configurationService.apply({
+                      candidate: request.configuration,
+                      expectedRevision: request.expectedRevision,
+                      origin: 'mcp',
+                    }),
+                },
+              }),
+              authorization: createMcpAuthorizationPort({
+                sessions: auth,
+                capabilities,
+                devices,
+                owner: {
+                  loadOwner: () => persistence.client.request('loadOwner', undefined),
+                },
+              }),
+            }),
+          };
+
+    const hostServer = createHostServer({
+      ...config,
+      browser,
+      ...(yjs === undefined ? {} : { yjs }),
+      ...(mcp === undefined ? {} : { mcp }),
+    });
     host = hostServer;
+    const setupStatus = createSetupStatusBuilder({
+      configuration: configurationService,
+      credentials: credentialStore,
+      auth,
+      listenerMode: () => hostServer.status().mode,
+      runtime: runtimeLifecycle,
+    });
+    createSetupApi({
+      configuration: configurationService,
+      credentials: credentialStore,
+      auth,
+      listenerMode: () => hostServer.status().mode,
+      runtime: runtimeLifecycle,
+    }).register(hostServer);
+    createAdminApi({
+      resolver: principal,
+      configuration: configurationService,
+      auth,
+      credentials: credentialStore,
+      devices: {
+        createPairing: (input) => devices.createPairing(input),
+        claim: (input) =>
+          devices.claim({
+            pairingCode: input.pairingCode,
+            clientLabel: input.label,
+            scopes: input.scopes,
+            ttlMs: input.ttlMs,
+          }),
+        listDevices: () => devices.listDevices(),
+        revoke: (deviceId, revokedAt) => devices.revoke(deviceId, revokedAt),
+      },
+      operations: {
+        async list({ limit }) {
+          const [configuration, audit] = await Promise.all([
+            persistence.client.request('listConfigurationOperations', { limit }),
+            persistence.client.request('listAudit', { limit }),
+          ]);
+          return { configuration, audit };
+        },
+      },
+      runtime: runtimeLifecycle,
+      status: setupStatus,
+      loadOwnerProfile: async () => {
+        const owner = await persistence.client.request('loadOwner', undefined);
+        return owner === null
+          ? null
+          : {
+              displayName: owner.displayName,
+              capabilityVersion: owner.capabilityVersion,
+            };
+      },
+      listenerStatus: () => {
+        const status = hostServer.status();
+        return { mode: status.mode, port: status.port };
+      },
+      unixSocketDir: join(config.hostHome, 'sockets'),
+    }).register(hostServer);
+    if (configuredProjects.length > 0) {
+      createBrowserAuthoringApi({
+        principal,
+        authorization,
+        catalog,
+        coordinators: {
+          get: (projectId) => authoring.get(projectId)?.coordinator ?? null,
+        },
+        capabilities: {
+          async resolve(input) {
+            const issued = await capabilities.issue({
+              userId: input.principal.userId,
+              projectId: input.projectId,
+              scopes: ['mcp:submit'],
+            });
+            return { capabilityId: issued.grant.capabilityId, scopes: issued.grant.scopes };
+          },
+        },
+        events: eventSource,
+      }).register(hostServer);
+    }
+    if (agentProjects.size > 0) {
+      createBrowserAgentApi({
+        principal,
+        authorization,
+        catalog,
+        projects: {
+          get: (projectId) => agentProjects.get(projectId) ?? null,
+        },
+      }).register(hostServer);
+    }
     hostServer.registerPublicAuthPostRoute('/api/v1/auth/login', async (c) => {
       const body = await bodyObject(c.req.raw);
       if (typeof body?.userId !== 'string' || typeof body.password !== 'string')
@@ -684,11 +1025,12 @@ export async function startWorkbench(
     return {
       host: hostServer,
       endpoint,
-      projectId:
-        config.projectRoot === undefined ? null : (config.projectId ?? basename(config.projectRoot)),
+      projectId: activeConfiguration?.defaultProjectId ?? configuredProjects[0]?.projectId ?? null,
       auth,
       provider,
       close: async () => {
+        for (const runtime of authoring.values()) await runtime.dispose();
+        configurationService.dispose();
         await hostServer.close();
         await persistence.dispose();
       },

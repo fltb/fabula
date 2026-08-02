@@ -194,10 +194,19 @@ export interface McpAuthoringCoordinatorPort {
   getDocument(
     input: McpAuthoringDocumentGetInputV1,
   ): Promise<McpAuthoringDocumentGetOutputV1 | AuthoringFailureV1>;
-  apply(input: McpAuthoringApplyInputV1): Promise<McpAuthoringApplyOutputV1>;
-  submit(input: McpAuthoringSubmitInputV1): Promise<McpAuthoringSubmitOutputV1>;
+  apply(
+    input: McpAuthoringApplyInputV1,
+    caller: McpAuthorizedCaller,
+  ): Promise<McpAuthoringApplyOutputV1>;
+  submit(
+    input: McpAuthoringSubmitInputV1,
+    caller: McpAuthorizedCaller,
+  ): Promise<McpAuthoringSubmitOutputV1>;
   getOperation(input: McpOperationGetInputV1): Promise<McpOperationGetOutputV1>;
-  resolveConflict(input: McpConflictResolveInputV1): Promise<McpConflictResolveOutputV1>;
+  resolveConflict(
+    input: McpConflictResolveInputV1,
+    caller: McpAuthorizedCaller,
+  ): Promise<McpConflictResolveOutputV1>;
 }
 
 /** Owner-scoped configuration surface for `nova_admin_config_*` (revision CAS). */
@@ -1148,7 +1157,7 @@ export function createProjectSessionMcpRegistry(
         'Full-replacement write to one working document, CAS-bound to the workspace digest and accepted source hash; a stale/conflicting digest is a typed failure, never last-writer-wins.',
       requiredScopes: [MCP_AUTHOR_SCOPE],
       inputSchema: AUTHORING_APPLY_SCHEMA,
-      run: async (_caller, input) => {
+      run: async (caller, input) => {
         const parsed = parseToolInput(input, [
           'version',
           'projectId',
@@ -1178,7 +1187,7 @@ export function createProjectSessionMcpRegistry(
           expectedAcceptedSourceHash: expectedAccepted.value,
           replacementText: replacement.value,
         };
-        return authoringApplyResult(await coordinator.apply(request));
+        return authoringApplyResult(await coordinator.apply(request, caller));
       },
     },
     {
@@ -1187,7 +1196,7 @@ export function createProjectSessionMcpRegistry(
         'Explicit submit of the working layer through the coordinator; the workspace digest CAS is required.',
       requiredScopes: [MCP_SUBMIT_SCOPE],
       inputSchema: AUTHORING_SUBMIT_SCHEMA,
-      run: async (_caller, input) => {
+      run: async (caller, input) => {
         const parsed = parseToolInput(input, [
           'version',
           'projectId',
@@ -1213,7 +1222,7 @@ export function createProjectSessionMcpRegistry(
           expectedWorkspaceDigest: digest.value,
           ...(message !== undefined ? { message } : {}),
         };
-        return authoringAsyncResult(await coordinator.submit(request));
+        return authoringAsyncResult(await coordinator.submit(request, caller));
       },
     },
     {
@@ -1241,7 +1250,7 @@ export function createProjectSessionMcpRegistry(
         'Resolve an external candidate or working-vs-external conflict with a predefined choice.',
       requiredScopes: [MCP_SUBMIT_SCOPE],
       inputSchema: CONFLICT_RESOLVE_SCHEMA,
-      run: async (_caller, input) => {
+      run: async (caller, input) => {
         const parsed = parseToolInput(input, [
           'version',
           'projectId',
@@ -1269,7 +1278,7 @@ export function createProjectSessionMcpRegistry(
           choice,
           candidateHash: candidateHash.value,
         };
-        return authoringAsyncResult(await coordinator.resolveConflict(request));
+        return authoringAsyncResult(await coordinator.resolveConflict(request, caller));
       },
     },
     {

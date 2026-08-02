@@ -27,3 +27,5 @@ omp-session-*.html
 # Workbench runtime state (root and any workspace/package .nova directories)
 .nova/workbench.sqlite*
 **/.nova/workbench.sqlite*
+.nova/workbench/
+packages/workbench/.nova/

@@ -16,7 +16,14 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Context, Handler } from 'hono';
+import type { BrowserSessionPrincipalV1 } from '../contracts/browser-api.js';
 import {
+  type AdminDevicePairRequestV1,
+  type AdminInviteCreateRequestV1,
+  type AdminNetworkUpdateRequestV1,
+  type AdminProjectSaveRequestV1,
+  type AdminProviderUpdateRequestV1,
+  type AdminSetCredentialRequestV1,
   BROWSER_ADMIN_BASE_PATH,
   BROWSER_ADMIN_DEVICES_PATH,
   BROWSER_ADMIN_INVITES_PATH,
@@ -25,14 +32,8 @@ import {
   BROWSER_ADMIN_OVERVIEW_PATH,
   BROWSER_ADMIN_PROJECTS_PATH,
   BROWSER_ADMIN_PROVIDER_PATH,
-  WORKBENCH_CONFIGURATION_VERSION,
-  type AdminDevicePairRequestV1,
-  type AdminInviteCreateRequestV1,
-  type AdminNetworkUpdateRequestV1,
-  type AdminProjectSaveRequestV1,
-  type AdminProviderUpdateRequestV1,
-  type AdminSetCredentialRequestV1,
   type ConfigOperationReceiptV1,
+  WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchAdminErrorCode,
   type WorkbenchAdminOverviewV1,
   type WorkbenchConfigurationV1,
@@ -40,16 +41,24 @@ import {
   type WorkbenchInviteSafeViewV1,
   type WorkbenchProjectSafeViewV1,
 } from '../contracts/configuration.js';
-import type { AuditRecord, ConfigurationOperationRecord, DeviceVerifierReadState } from '../contracts/persistence.js';
+import type {
+  AuditRecord,
+  ConfigurationOperationRecord,
+  DeviceVerifierReadState,
+} from '../contracts/persistence.js';
 import type { LocalAuthService } from './auth/index.js';
 import type { BrowserPrincipalResolver } from './browser-read-api.js';
-import type { BrowserSessionPrincipalV1 } from '../contracts/browser-api.js';
 import type { ConfigurationChangeService } from './configuration-service.js';
 import type { HostListenerMode, MutationHttpMethod } from './listener.js';
 import type { ProviderCredentialStore } from './providers/credential-store.js';
 import { isValidProviderId } from './providers/credential-store.js';
 import type { HostListenerEnv, HostServer } from './server.js';
-import { maskEndpoint, maskModel, resolveNetworkRequest, type SetupStatusBuilder } from './setup-api.js';
+import {
+  maskEndpoint,
+  maskModel,
+  resolveNetworkRequest,
+  type SetupStatusBuilder,
+} from './setup-api.js';
 import type { RuntimeAdminPort } from './workbench-runtime.js';
 
 /** `/api/v1/admin/projects/validate` — one-way project root validation. */
@@ -133,7 +142,12 @@ export type McpDeviceClaimResult =
   | { ok: true; credential: string; device: DeviceVerifierReadState }
   | {
       ok: false;
-      code: 'PAIRING_NOT_FOUND' | 'PAIRING_EXPIRED' | 'PAIRING_USED' | 'SCOPE_INVALID' | 'INVALID_INPUT';
+      code:
+        | 'PAIRING_NOT_FOUND'
+        | 'PAIRING_EXPIRED'
+        | 'PAIRING_USED'
+        | 'SCOPE_INVALID'
+        | 'INVALID_INPUT';
     };
 
 /** Durable operation/audit reads for the Operations page. */
@@ -196,7 +210,13 @@ function deviceSafeView(device: DeviceVerifierReadState): WorkbenchDeviceSafeVie
   };
 }
 
-function inviteSafeView(invite: { inviteId: string; projectId?: string; role: string; expiresAt: string; consumedAt?: string }): WorkbenchInviteSafeViewV1 {
+function inviteSafeView(invite: {
+  inviteId: string;
+  projectId?: string;
+  role: string;
+  expiresAt: string;
+  consumedAt?: string;
+}): WorkbenchInviteSafeViewV1 {
   return {
     inviteId: invite.inviteId,
     projectId: invite.projectId ?? null,
@@ -207,9 +227,7 @@ function inviteSafeView(invite: { inviteId: string; projectId?: string; role: st
 }
 
 /** Derive whether the running listener already honors the configured policy. */
-async function restartRequiredFor(
-  api: AdminApiImpl,
-): Promise<boolean> {
+async function restartRequiredFor(api: AdminApiImpl): Promise<boolean> {
   const active = await api.options.configuration.readActive();
   if (active === null) return false;
   const net = active.configuration.network;
@@ -279,7 +297,10 @@ function projectValidateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const body = await c.req.raw.json().catch(() => null);
     const parsed = parseRequest(body, ['projectId', 'displayName', 'root']);
     if (parsed === null) {
-      return adminError('UNKNOWN_FIELD', 'projects/validate accepts only projectId, displayName, root.');
+      return adminError(
+        'UNKNOWN_FIELD',
+        'projects/validate accepts only projectId, displayName, root.',
+      );
     }
     const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : '';
     const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';
@@ -287,13 +308,16 @@ function projectValidateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const config = await api.options.configuration.readActive();
     const candidate: WorkbenchConfigurationV1 = {
       version: 1,
-      projects: [
-        ...(config?.configuration.projects ?? []),
-        { projectId, displayName, root },
-      ],
+      projects: [...(config?.configuration.projects ?? []), { projectId, displayName, root }],
       defaultProjectId: config?.configuration.defaultProjectId ?? null,
       provider: config?.configuration.provider ?? null,
-      network: config?.configuration.network ?? { mode: 'loopback', port: 8787, allowedHosts: [], allowedOrigins: [], unixSocket: null },
+      network: config?.configuration.network ?? {
+        mode: 'loopback',
+        port: 8787,
+        allowedHosts: [],
+        allowedOrigins: [],
+        unixSocket: null,
+      },
     };
     const result = await api.options.configuration.validateCandidate(candidate);
     if (!result.ok) {
@@ -345,7 +369,11 @@ async function projectReceiptResponse(
   if (receipt.status === 'invalid') {
     const first = receipt.diagnostics[0];
     const code = (first?.code ?? 'CONFIG_INVALID') as WorkbenchAdminErrorCode;
-    return adminError(code, first?.message ?? 'The configuration change was rejected.', ADMIN_ERROR_STATUS[code] ?? 400);
+    return adminError(
+      code,
+      first?.message ?? 'The configuration change was rejected.',
+      ADMIN_ERROR_STATUS[code] ?? 400,
+    );
   }
   const setup = await api.options.status.build();
   const view = setup.projects.find((project) => project.projectId === projectId) ?? null;
@@ -430,7 +458,10 @@ function projectDeleteHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
       }
     } catch (error) {
       if ((error as { code?: string }).code === 'PROJECT_BUSY') {
-        return adminError('PROJECT_BUSY', `Project "${projectId}" is busy; close it before removal.`);
+        return adminError(
+          'PROJECT_BUSY',
+          `Project "${projectId}" is busy; close it before removal.`,
+        );
       }
       throw error;
     }
@@ -442,7 +473,8 @@ function projectDeleteHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
         ),
         defaultProjectId:
           loaded.active.configuration.defaultProjectId === projectId
-            ? (loaded.active.configuration.projects.find((p) => p.projectId !== projectId)?.projectId ?? null)
+            ? (loaded.active.configuration.projects.find((p) => p.projectId !== projectId)
+                ?.projectId ?? null)
             : loaded.active.configuration.defaultProjectId,
       },
       expectedRevision: loaded.active.revision,
@@ -474,7 +506,11 @@ function projectOpenHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     if (project === undefined) {
       return adminError('PROJECT_NOT_FOUND', `Project "${projectId}" is not registered.`);
     }
-    api.options.runtime.open(project);
+    try {
+      await api.options.runtime.open(project);
+    } catch {
+      return adminError('INTERNAL', `Project "${projectId}" could not be opened.`);
+    }
     return json({
       version: WORKBENCH_CONFIGURATION_VERSION,
       project: {
@@ -518,9 +554,13 @@ function providerUpdateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const body = await c.req.raw.json().catch(() => null);
     const parsed = parseRequest(body, ['kind', 'baseUrl', 'model']);
     if (parsed === null || parsed.kind !== 'ai-sdk') {
-      return adminError('UNKNOWN_FIELD', 'providers/ai-sdk accepts only kind "ai-sdk", baseUrl, model.');
+      return adminError(
+        'UNKNOWN_FIELD',
+        'providers/ai-sdk accepts only kind "ai-sdk", baseUrl, model.',
+      );
     }
-    const baseUrl = parsed.baseUrl === null || typeof parsed.baseUrl === 'string' ? parsed.baseUrl : null;
+    const baseUrl =
+      parsed.baseUrl === null || typeof parsed.baseUrl === 'string' ? parsed.baseUrl : null;
     const model = parsed.model === null || typeof parsed.model === 'string' ? parsed.model : null;
     const loaded = await api.requireConfiguration();
     if (!loaded.ok) return loaded.response;
@@ -554,7 +594,10 @@ function providerTestHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     if (owner instanceof Response) return owner;
     const test = api.options.providerTest;
     if (test == null) {
-      return adminError('PROVIDER_VALIDATION_FAILED', 'Provider validation is not available on this Host.');
+      return adminError(
+        'PROVIDER_VALIDATION_FAILED',
+        'Provider validation is not available on this Host.',
+      );
     }
     const loaded = await api.requireConfiguration();
     if (!loaded.ok) return loaded.response;
@@ -592,7 +635,10 @@ function credentialSetHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const body = await c.req.raw.json().catch(() => null);
     const parsed = parseRequest(body, ['providerId', 'apiKey']);
     if (parsed === null || parsed.providerId !== 'ai-sdk') {
-      return adminError('UNKNOWN_FIELD', 'providers/ai-sdk/credential accepts only providerId "ai-sdk" and apiKey.');
+      return adminError(
+        'UNKNOWN_FIELD',
+        'providers/ai-sdk/credential accepts only providerId "ai-sdk" and apiKey.',
+      );
     }
     const apiKey = typeof parsed.apiKey === 'string' ? parsed.apiKey : '';
     if (apiKey.length === 0) {
@@ -603,7 +649,11 @@ function credentialSetHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     } catch {
       return adminError('CREDENTIAL_INVALID', 'The credential could not be stored.');
     }
-    return json({ version: WORKBENCH_CONFIGURATION_VERSION, providerId: 'ai-sdk', configured: true });
+    return json({
+      version: WORKBENCH_CONFIGURATION_VERSION,
+      providerId: 'ai-sdk',
+      configured: true,
+    });
   };
 }
 
@@ -612,7 +662,11 @@ function credentialClearHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const owner = await api.requireOwner(c);
     if (owner instanceof Response) return owner;
     await api.options.credentials.remove('ai-sdk');
-    return json({ version: WORKBENCH_CONFIGURATION_VERSION, providerId: 'ai-sdk', configured: false });
+    return json({
+      version: WORKBENCH_CONFIGURATION_VERSION,
+      providerId: 'ai-sdk',
+      configured: false,
+    });
   };
 }
 
@@ -621,9 +675,18 @@ function networkUpdateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const owner = await api.requireOwner(c);
     if (owner instanceof Response) return owner;
     const body = await c.req.raw.json().catch(() => null);
-    const parsed = parseRequest(body, ['mode', 'port', 'allowedHosts', 'allowedOrigins', 'unixSocketName']);
+    const parsed = parseRequest(body, [
+      'mode',
+      'port',
+      'allowedHosts',
+      'allowedOrigins',
+      'unixSocketName',
+    ]);
     if (parsed === null) {
-      return adminError('UNKNOWN_FIELD', 'network accepts only mode, port, allowedHosts, allowedOrigins, unixSocketName.');
+      return adminError(
+        'UNKNOWN_FIELD',
+        'network accepts only mode, port, allowedHosts, allowedOrigins, unixSocketName.',
+      );
     }
     const resolved = resolveNetworkRequest(parsed, api.options.unixSocketDir);
     if (!resolved.ok) return adminError('NETWORK_INVALID', resolved.message);
@@ -677,7 +740,9 @@ function inviteCreateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     if (projectId !== undefined) {
       const loaded = await api.requireConfiguration();
       if (!loaded.ok) return loaded.response;
-      if (!loaded.active.configuration.projects.some((project) => project.projectId === projectId)) {
+      if (
+        !loaded.active.configuration.projects.some((project) => project.projectId === projectId)
+      ) {
         return adminError('PROJECT_NOT_FOUND', `Project "${projectId}" is not registered.`);
       }
     }
@@ -736,7 +801,10 @@ function devicesClaimHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     const body = await c.req.raw.json().catch(() => null);
     const parsed = parseRequest(body, ['pairingCode', 'label', 'scopes', 'ttlMs']);
     if (parsed === null) {
-      return adminError('UNKNOWN_FIELD', 'mcp-devices accepts only pairingCode, label, scopes, ttlMs.');
+      return adminError(
+        'UNKNOWN_FIELD',
+        'mcp-devices accepts only pairingCode, label, scopes, ttlMs.',
+      );
     }
     const pairingCode = typeof parsed.pairingCode === 'string' ? parsed.pairingCode : '';
     const label = typeof parsed.label === 'string' ? parsed.label : '';
@@ -763,7 +831,10 @@ function devicesClaimHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
       if (result.code === 'SCOPE_INVALID' || result.code === 'INVALID_INPUT') {
         return adminError('CREDENTIAL_INVALID', 'The device request is invalid.');
       }
-      return adminError('DEVICE_NOT_FOUND', 'The pairing code is unknown, expired or already used.');
+      return adminError(
+        'DEVICE_NOT_FOUND',
+        'The pairing code is unknown, expired or already used.',
+      );
     }
     // The opaque device credential is returned exactly once; no later read DTO carries it.
     return json({
@@ -826,28 +897,57 @@ export function createAdminApi(options: AdminApiOptions): AdminApiSurface {
     readonly path: string;
     readonly handler: Handler<HostListenerEnv>;
   }[] = [
-    { method: 'POST', path: BROWSER_ADMIN_PROJECTS_VALIDATE_PATH, handler: projectValidateHandler(api) },
+    {
+      method: 'POST',
+      path: BROWSER_ADMIN_PROJECTS_VALIDATE_PATH,
+      handler: projectValidateHandler(api),
+    },
     { method: 'POST', path: BROWSER_ADMIN_PROJECTS_PATH, handler: projectCreateHandler(api) },
-    { method: 'PUT', path: `${BROWSER_ADMIN_PROJECTS_PATH}/:projectId`, handler: projectUpdateHandler(api) },
-    { method: 'DELETE', path: `${BROWSER_ADMIN_PROJECTS_PATH}/:projectId`, handler: projectDeleteHandler(api) },
+    {
+      method: 'PUT',
+      path: `${BROWSER_ADMIN_PROJECTS_PATH}/:projectId`,
+      handler: projectUpdateHandler(api),
+    },
+    {
+      method: 'DELETE',
+      path: `${BROWSER_ADMIN_PROJECTS_PATH}/:projectId`,
+      handler: projectDeleteHandler(api),
+    },
     { method: 'POST', path: BROWSER_ADMIN_PROJECTS_OPEN_PATH, handler: projectOpenHandler(api) },
     { method: 'POST', path: BROWSER_ADMIN_PROJECTS_CLOSE_PATH, handler: projectCloseHandler(api) },
     { method: 'PUT', path: BROWSER_ADMIN_PROVIDER_PATH, handler: providerUpdateHandler(api) },
     { method: 'POST', path: BROWSER_ADMIN_PROVIDER_TEST_PATH, handler: providerTestHandler(api) },
-    { method: 'POST', path: BROWSER_ADMIN_PROVIDER_CREDENTIAL_PATH, handler: credentialSetHandler(api) },
-    { method: 'DELETE', path: BROWSER_ADMIN_PROVIDER_CREDENTIAL_PATH, handler: credentialClearHandler(api) },
+    {
+      method: 'POST',
+      path: BROWSER_ADMIN_PROVIDER_CREDENTIAL_PATH,
+      handler: credentialSetHandler(api),
+    },
+    {
+      method: 'DELETE',
+      path: BROWSER_ADMIN_PROVIDER_CREDENTIAL_PATH,
+      handler: credentialClearHandler(api),
+    },
     { method: 'POST', path: BROWSER_ADMIN_INVITES_PATH, handler: inviteCreateHandler(api) },
-    { method: 'DELETE', path: `${BROWSER_ADMIN_SESSIONS_PATH}/:sessionId`, handler: sessionDeleteHandler(api) },
+    {
+      method: 'DELETE',
+      path: `${BROWSER_ADMIN_SESSIONS_PATH}/:sessionId`,
+      handler: sessionDeleteHandler(api),
+    },
     { method: 'POST', path: BROWSER_ADMIN_DEVICES_ISSUE_PATH, handler: devicesIssueHandler(api) },
     { method: 'POST', path: BROWSER_ADMIN_DEVICES_PATH, handler: devicesClaimHandler(api) },
-    { method: 'DELETE', path: `${BROWSER_ADMIN_DEVICES_PATH}/:deviceId`, handler: devicesRevokeHandler(api) },
+    {
+      method: 'DELETE',
+      path: `${BROWSER_ADMIN_DEVICES_PATH}/:deviceId`,
+      handler: devicesRevokeHandler(api),
+    },
     { method: 'PUT', path: BROWSER_ADMIN_NETWORK_PATH, handler: networkUpdateHandler(api) },
   ];
 
   return {
     register(host: HostServer): void {
       for (const route of reads) host.registerReadRoute(route.path, route.handler);
-      for (const route of mutations) host.registerMutationRoute(route.method, route.path, route.handler);
+      for (const route of mutations)
+        host.registerMutationRoute(route.method, route.path, route.handler);
     },
   };
 }

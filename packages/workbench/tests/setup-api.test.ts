@@ -6,9 +6,20 @@ import {
   BROWSER_SETUP_STATUS_PATH,
   type WorkbenchConfigurationV1,
 } from '../src/contracts/configuration.js';
-import { createHostListener, HostListenerError, HostListenerStateError } from '../src/host/listener.js';
-import { createHostServer, type HostServer } from '../src/host/server.js';
+import { createAuthPersistence, LocalAuthService } from '../src/host/auth/index.js';
+import {
+  ConfigurationFileStore,
+  resolveConfigurationFilePath,
+} from '../src/host/configuration-file-store.js';
+import { ConfigurationChangeService } from '../src/host/configuration-service.js';
+import type { HostListenerMode } from '../src/host/listener.js';
+import {
+  createHostListener,
+  HostListenerError,
+  HostListenerStateError,
+} from '../src/host/listener.js';
 import { createProviderCredentialStore } from '../src/host/providers/credential-store.js';
+import { createHostServer, type HostServer } from '../src/host/server.js';
 import {
   BROWSER_SETUP_FINISH_PATH,
   BROWSER_SETUP_NETWORK_PATH,
@@ -20,14 +31,7 @@ import {
   createSetupApi,
   type SetupApiSurface,
 } from '../src/host/setup-api.js';
-import type { HostListenerMode } from '../src/host/listener.js';
 import { createRealPersistence } from './helpers/real-persistence.js';
-import { createAuthPersistence, LocalAuthService } from '../src/host/auth/index.js';
-import {
-  ConfigurationFileStore,
-  resolveConfigurationFilePath,
-} from '../src/host/configuration-file-store.js';
-import { ConfigurationChangeService } from '../src/host/configuration-service.js';
 
 const openServers: HostServer[] = [];
 const disposers: Array<() => Promise<void>> = [];
@@ -43,7 +47,13 @@ function baseConfiguration(root: string): WorkbenchConfigurationV1 {
     projects: [{ projectId: 'demo', displayName: 'Demo', root }],
     defaultProjectId: 'demo',
     provider: null,
-    network: { mode: 'loopback', port: 8787, allowedHosts: [], allowedOrigins: [], unixSocket: null },
+    network: {
+      mode: 'loopback',
+      port: 8787,
+      allowedHosts: [],
+      allowedOrigins: [],
+      unixSocket: null,
+    },
   };
 }
 
@@ -119,7 +129,11 @@ describe('setup route seam', () => {
       HostListenerError,
     );
     expect(() =>
-      listener.registerSetupRoute('PATCH' as never, BROWSER_SETUP_STATUS_PATH, () => new Response()),
+      listener.registerSetupRoute(
+        'PATCH' as never,
+        BROWSER_SETUP_STATUS_PATH,
+        () => new Response(),
+      ),
     ).toThrow(HostListenerError);
     listener.registerSetupRoute('GET', BROWSER_SETUP_STATUS_PATH, (c) => c.json({ ok: true }));
     expect(listener.endpoints().setup).toEqual([
@@ -134,8 +148,9 @@ describe('setup route seam', () => {
 
   it('serves setup routes even when a public static fallback is registered', async () => {
     const { server } = await createHarness();
-    server.registerPublicStaticRoute('/*', () =>
-      new Response('<html>spa</html>', { headers: { 'content-type': 'text/html' } }),
+    server.registerPublicStaticRoute(
+      '/*',
+      () => new Response('<html>spa</html>', { headers: { 'content-type': 'text/html' } }),
     );
     const { status, body } = await jsonRequest(server, 'GET', BROWSER_SETUP_STATUS_PATH);
     expect(status).toBe(200);
@@ -268,7 +283,7 @@ describe('setup wizard flow', () => {
     });
     expect(finish.status).toBe(200);
     const receipt = (finish.body as { receipt: { status: string } }).receipt;
-    expect(receipt.status).toBe('applied');
+    expect(receipt.status).toBe('restart-required');
 
     const active = await configuration.readActive();
     expect(active).not.toBeNull();

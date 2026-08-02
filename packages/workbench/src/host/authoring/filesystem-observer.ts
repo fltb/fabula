@@ -24,6 +24,9 @@
  *    manifest-relative logical paths, content, and hashes.
  */
 
+import { randomUUID } from 'node:crypto';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { isAbsolute, join, resolve } from 'node:path';
 import { FileProjectSourceLoader } from '@novalistically/node-host';
 import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
 import type { AuthoringDiagnosticV1 } from '../../contracts/authoring.js';
@@ -68,6 +71,97 @@ export function createInMemoryCandidateStore(): AuthoringCandidateStore {
     },
     async delete(input) {
       bundles.delete(`${input.projectId}\u0000${input.candidateHash}`);
+    },
+  };
+}
+
+/**
+ * Private durable candidate store for production coordinator recovery. Bundles
+ * are content-addressed under the Host home staging directory, not the
+ * authoring project, and are written atomically with owner-only permissions.
+ * SQLite receives only the candidate hash and metadata.
+ */
+export function createFileCandidateStore(stagingRoot: string): AuthoringCandidateStore {
+  if (typeof stagingRoot !== 'string' || !isAbsolute(stagingRoot)) {
+    throw new TypeError('createFileCandidateStore requires an absolute staging root');
+  }
+  const root = resolve(stagingRoot);
+  const filename = (projectId: string, candidateHash: string): string => {
+    if (!/^[A-Za-z0-9._-]{1,128}$/.test(projectId)) {
+      throw new TypeError('candidate projectId must be a safe non-empty identifier');
+    }
+    if (!/^[a-f0-9]{64}$/.test(candidateHash)) {
+      throw new TypeError('candidateHash must be a lowercase sha256 hex digest');
+    }
+    return join(root, `${projectId}-${candidateHash}.json`);
+  };
+  const validate = (value: unknown): AuthoringCandidateBundle => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new Error('staged authoring candidate is malformed');
+    }
+    const candidate = value as {
+      projectId?: unknown;
+      candidateHash?: unknown;
+      entries?: unknown;
+    };
+    if (
+      typeof candidate.projectId !== 'string' ||
+      typeof candidate.candidateHash !== 'string' ||
+      !Array.isArray(candidate.entries) ||
+      candidate.entries.some(
+        (entry) =>
+          typeof entry !== 'object' ||
+          entry === null ||
+          Array.isArray(entry) ||
+          typeof (entry as { logicalPath?: unknown }).logicalPath !== 'string' ||
+          typeof (entry as { content?: unknown }).content !== 'string',
+      )
+    ) {
+      throw new Error('staged authoring candidate has an invalid shape');
+    }
+    return {
+      projectId: candidate.projectId,
+      candidateHash: candidate.candidateHash,
+      entries: candidate.entries.map((entry) => {
+        const value = entry as { logicalPath: string; content: string };
+        return { logicalPath: value.logicalPath, content: value.content };
+      }),
+    };
+  };
+  return {
+    async put(bundle) {
+      const path = filename(bundle.projectId, bundle.candidateHash);
+      const validated = validate(bundle);
+      await mkdir(root, { recursive: true, mode: 0o700 });
+      const temporary = `${path}.tmp-${randomUUID()}`;
+      try {
+        await writeFile(temporary, JSON.stringify(validated), { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+        await rename(temporary, path);
+      } catch (error) {
+        await rm(temporary, { force: true }).catch(() => undefined);
+        throw error;
+      }
+    },
+    async get(input) {
+      const path = filename(input.projectId, input.candidateHash);
+      let raw: string;
+      try {
+        raw = await readFile(path, 'utf8');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+        throw error;
+      }
+      const bundle = validate(JSON.parse(raw) as unknown);
+      if (
+        bundle.projectId !== input.projectId ||
+        bundle.candidateHash !== input.candidateHash
+      ) {
+        throw new Error('staged authoring candidate identity mismatch');
+      }
+      return bundle;
+    },
+    async delete(input) {
+      await rm(filename(input.projectId, input.candidateHash), { force: true });
     },
   };
 }

@@ -224,7 +224,7 @@ async function createAuthoringCoordinatorImpl(
   const notifyWaiters: (() => void)[] = [];
 
   if (assembly.initialAccepted !== undefined && assembly.initialAccepted !== null) {
-    documents.seedFromAccepted(assembly.initialAccepted);
+    await documents.seedFromAccepted(assembly.initialAccepted);
   }
 
   // Restore durable identity metadata before this coordinator becomes visible.
@@ -308,6 +308,7 @@ async function createAuthoringCoordinatorImpl(
       acceptedSourceHash: acceptedSourceHash,
       workspaceDigest: workspaceDigest,
       gitSubmitId: null,
+      gitCommit: null,
       gitReceiptHash: null,
       errorCode: null,
       createdAt,
@@ -553,6 +554,8 @@ async function createAuthoringCoordinatorImpl(
     readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
     readonly sourceHash: string;
     readonly message: string;
+    /** True only for a full filesystem candidate reconciliation. */
+    readonly externalReconciliation: boolean;
   }): Promise<SubmissionRunResult> {
     let outcome: SubmissionRunResult = { status: 'recovery', message: 'submission did not run' };
     const result = await sessions.enqueue({
@@ -572,6 +575,7 @@ async function createAuthoringCoordinatorImpl(
           message: input.message,
           actorId: input.actorId,
           capabilityId: input.capabilityId,
+          externalReconciliation: input.externalReconciliation,
         });
         if (gitOutcome.status === 'stale') {
           outcome = { status: 'stale', reason: gitOutcome.reason };
@@ -664,6 +668,7 @@ async function createAuthoringCoordinatorImpl(
           acceptedSourceHash: outcome.sourceHash,
           workspaceDigest: workspaceDigest,
           gitSubmitId: outcome.submitId,
+          gitCommit: outcome.gitHead,
           gitReceiptHash: outcome.gitReceiptHash,
           errorCode: null,
         });
@@ -718,6 +723,15 @@ async function createAuthoringCoordinatorImpl(
         phase === 'recovery-required' ||
         phase === 'submitting'
       );
+    },
+
+    async refreshWorkingState(): Promise<void> {
+      await locked(async () => {
+        if (disposed) return;
+        await captureWorkingIdentity();
+        recomputePhase();
+        await emitState();
+      });
     },
 
     async notifyExternalChange(input = {}): Promise<void> {
@@ -1021,6 +1035,7 @@ async function createAuthoringCoordinatorImpl(
             input.choice === 'apply-proposed-disjoint-merge'
               ? `Apply proposed disjoint merge over external candidate ${candidate.candidateHash.slice(0, 12)}`
               : `Accept external candidate ${candidate.candidateHash.slice(0, 12)}`,
+          externalReconciliation: true,
         });
 
         if (outcome.status === 'accepted') {

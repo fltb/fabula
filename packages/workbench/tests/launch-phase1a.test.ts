@@ -9,15 +9,16 @@
  */
 
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { cp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { afterAll, describe, expect, it } from 'vitest';
-import { build } from 'esbuild';
 import { MockProvider } from '@novalistically/core/testing';
-import { XdgCredentialFileStore } from '../src/host/providers/index.js';
+import { build } from 'esbuild';
+import { afterAll, describe, expect, it } from 'vitest';
+import { serializeConfigurationYaml } from '../src/host/configuration-file-store.js';
 import { HostProviderError, HostProviderFactory } from '../src/host/provider-factory.js';
+import { XdgCredentialFileStore } from '../src/host/providers/index.js';
 import {
   createPersistenceWorkerRuntime,
   parseWorkbenchLaunchConfig,
@@ -207,7 +208,9 @@ describe('HostProviderFactory credential boundary', () => {
   });
 
   it('constructs the AI-SDK provider from the stored credential with explicit options', async () => {
-    const store = new XdgCredentialFileStore({ configDir: newTempDir('fabula-launch-credential-') });
+    const store = new XdgCredentialFileStore({
+      configDir: newTempDir('fabula-launch-credential-'),
+    });
     await store.set('ai-sdk', 'store-secret');
     const factory = new HostProviderFactory({
       store,
@@ -373,5 +376,98 @@ describe('startWorkbench setup runtime', () => {
     // though startup failed mid-composition.
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(databaseReleased(databasePath)).toBe(true);
+  });
+  it('opens two configured project bundles and recreates a closed secondary bundle through admin', async () => {
+    const hostHome = newTempDir('fabula-launch-configured-');
+    const assetsRoot = join(hostHome, 'assets');
+    await mkdir(assetsRoot, { recursive: true });
+    await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
+    const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
+    const rootA = join(newTempDir('fabula-launch-project-a-'), 'project-a');
+    const rootB = join(newTempDir('fabula-launch-project-b-'), 'project-b');
+    await Promise.all([
+      cp(fixtureRoot, rootA, { recursive: true }),
+      cp(fixtureRoot, rootB, { recursive: true }),
+    ]);
+    const configuration = {
+      version: 1 as const,
+      projects: [
+        { projectId: 'project-a', displayName: 'Project A', root: rootA },
+        { projectId: 'project-b', displayName: 'Project B', root: rootB },
+      ],
+      defaultProjectId: 'project-a',
+      provider: null,
+      network: {
+        mode: 'loopback' as const,
+        port: 0,
+        allowedHosts: [],
+        allowedOrigins: [],
+        unixSocket: null,
+      },
+    };
+    await mkdir(join(hostHome, 'config'), { recursive: true });
+    await writeFile(
+      join(hostHome, 'config', 'workbench.yaml'),
+      serializeConfigurationYaml(configuration),
+      'utf8',
+    );
+    const handle = await startWorkbench({
+      mode: 'workbench',
+      provider: 'mock',
+      allowMockProvider: true,
+      hostHome,
+      databasePath: join(hostHome, 'workbench.sqlite'),
+      assetsRoot,
+      allowBootstrap: true,
+      persistenceWorkerEntry: await workerBundle(),
+      workerTerminationTimeoutMs: 2_000,
+      host: 'loopback',
+      port: 0,
+    });
+    try {
+      expect(handle.projectId).toBe('project-a');
+      const bootstrap = await fetch(`${handle.endpoint}/api/v1/auth/bootstrap`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ password: 'a-strong-owner-password', displayName: 'Owner' }),
+      });
+      expect(bootstrap.status).toBe(200);
+      const { sessionId } = (await bootstrap.json()) as { sessionId: string };
+      const headers = { 'x-fabula-session': sessionId };
+      const projects = await fetch(`${handle.endpoint}/api/v1/projects`, { headers });
+      expect(projects.status).toBe(200);
+      expect((await projects.json()) as { projects: unknown[] }).toMatchObject({
+        projects: [
+          { projectId: 'project-a', open: true },
+          { projectId: 'project-b', open: true },
+        ],
+      });
+
+      const overview = await fetch(`${handle.endpoint}/api/v1/admin/overview`, { headers });
+      expect(overview.status).toBe(200);
+      expect((await overview.json()) as { openProjects: number }).toMatchObject({
+        openProjects: 2,
+      });
+
+      const close = await fetch(`${handle.endpoint}/api/v1/admin/projects/project-b/close`, {
+        method: 'POST',
+        headers,
+      });
+      expect(close.status).toBe(200);
+      const reopen = await fetch(`${handle.endpoint}/api/v1/admin/projects/project-b/open`, {
+        method: 'POST',
+        headers,
+      });
+      expect(reopen.status).toBe(200);
+      const reopened = await fetch(`${handle.endpoint}/api/v1/projects`, { headers });
+      expect((await reopened.json()) as { projects: unknown[] }).toMatchObject({
+        projects: [
+          { projectId: 'project-a', open: true },
+          { projectId: 'project-b', open: true },
+        ],
+      });
+    } finally {
+      await handle.close();
+    }
   });
 });

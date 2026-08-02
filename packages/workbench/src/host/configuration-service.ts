@@ -7,10 +7,10 @@
  * revision CAS (`expectedRevision: null` is permitted only while the file
  * does not exist), validates every candidate against the strict version-1
  * shape plus Host-side root accessibility, computes typed changed-field
- * paths, and decides whether a change is hot-appliable or requires a
- * controlled restart (any listener-policy field change is
- * `restart-required`). An invalid or stale candidate never touches the file;
- * a busy project removal is refused; the watcher path never rewrites a
+ * paths, and decides whether a change requires a controlled restart. Listener
+ * policy, provider construction, project roots and MCP default routing are
+ * captured at Host startup, so changes to any of them are `restart-required`.
+ * An invalid or stale candidate never touches the file; a busy project removal is refused; the watcher path never rewrites a
  * hand-edited file, it only validates and reports.
  *
  * YAML content is never stored in SQLite and this module never reads `.env`:
@@ -19,15 +19,16 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import type { Stats } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import {
-  type ConfigChangeOriginV1,
-  type ConfigOperationDiagnosticV1,
-  type ConfigOperationReceiptV1,
-  type WorkbenchConfigurationV1,
+import type {
+  ConfigChangeOriginV1,
+  ConfigOperationDiagnosticV1,
+  ConfigOperationReceiptV1,
+  WorkbenchConfigurationV1,
 } from '../contracts/configuration.js';
 import {
-  ConfigurationFileStore,
+  type ConfigurationFileStore,
   configurationRevision,
   parseConfigurationYaml,
   validateConfigurationShape,
@@ -137,10 +138,22 @@ export function computeChangedFields(
   return changed;
 }
 
-/** True when a changed-field set touches the listener policy. */
+/**
+ * The running Host captures listener policy, providers, project roots and MCP
+ * default routing at startup. Any change to those fields is persisted but
+ * requires a controlled restart; continuing with a partial live rebuild would
+ * split Browser, Yjs, MCP, Agent and controlled-Git state across generations.
+ */
 export function requiresRestart(changedFields: readonly string[]): boolean {
   return changedFields.some(
-    (field) => field === NETWORK_PREFIX || field.startsWith(`${NETWORK_PREFIX}.`),
+    (field) =>
+      field === NETWORK_PREFIX ||
+      field.startsWith(`${NETWORK_PREFIX}.`) ||
+      field === 'provider' ||
+      field.startsWith('provider.') ||
+      field === 'projects' ||
+      field.startsWith('projects.') ||
+      field === 'defaultProjectId',
   );
 }
 
@@ -202,7 +215,7 @@ export class ConfigurationChangeService {
     if (!shaped.ok) return { ok: false, diagnostics: shaped.diagnostics };
     const diagnostics: ConfigOperationDiagnosticV1[] = [];
     for (const project of candidate.projects) {
-      let info;
+      let info: Stats | null;
       try {
         info = await stat(project.root);
       } catch {
@@ -239,26 +252,53 @@ export class ConfigurationChangeService {
 
     // Revision CAS: `expectedRevision: null` is allowed only while no file exists.
     if (input.expectedRevision === null && current !== null) {
-      return this.#receipt('stale', activeRevision, candidateRevision, ['configuration'], [
-        {
-          code: 'CONFIG_STALE',
-          message:
-            'Configuration already exists; expectedRevision null is only valid for first setup.',
-        },
-      ], input.origin, input.actorId);
+      return this.#receipt(
+        'stale',
+        activeRevision,
+        candidateRevision,
+        ['configuration'],
+        [
+          {
+            code: 'CONFIG_STALE',
+            message:
+              'Configuration already exists; expectedRevision null is only valid for first setup.',
+          },
+        ],
+        input.origin,
+        input.actorId,
+      );
     }
     if (
       input.expectedRevision !== null &&
       (current === null || current.revision !== input.expectedRevision)
     ) {
-      return this.#receipt('stale', activeRevision, candidateRevision, ['configuration'], [
-        { code: 'CONFIG_STALE', message: 'The configuration changed since it was read; re-read and retry.' },
-      ], input.origin, input.actorId);
+      return this.#receipt(
+        'stale',
+        activeRevision,
+        candidateRevision,
+        ['configuration'],
+        [
+          {
+            code: 'CONFIG_STALE',
+            message: 'The configuration changed since it was read; re-read and retry.',
+          },
+        ],
+        input.origin,
+        input.actorId,
+      );
     }
 
     const validated = await this.validateCandidate(input.candidate);
     if (!validated.ok) {
-      return this.#receipt('invalid', activeRevision, candidateRevision, [], validated.diagnostics, input.origin, input.actorId);
+      return this.#receipt(
+        'invalid',
+        activeRevision,
+        candidateRevision,
+        [],
+        validated.diagnostics,
+        input.origin,
+        input.actorId,
+      );
     }
 
     // Refuse removing a project whose session is busy (in-flight work must
@@ -270,9 +310,20 @@ export class ConfigurationChangeService {
       );
       for (const project of removed) {
         if (await this.#isProjectBusy(project.projectId)) {
-          return this.#receipt('invalid', activeRevision, candidateRevision, [], [
-            { code: 'PROJECT_BUSY', message: `Project "${project.projectId}" is busy and cannot be removed.` },
-          ], input.origin, input.actorId);
+          return this.#receipt(
+            'invalid',
+            activeRevision,
+            candidateRevision,
+            [],
+            [
+              {
+                code: 'PROJECT_BUSY',
+                message: `Project "${project.projectId}" is busy and cannot be removed.`,
+              },
+            ],
+            input.origin,
+            input.actorId,
+          );
         }
       }
     }
@@ -282,16 +333,35 @@ export class ConfigurationChangeService {
     // receipt instead of silently clobbering the external edit.
     const recheck = await this.#store.read();
     if (recheck?.revision !== current?.revision) {
-      return this.#receipt('stale', activeRevision, candidateRevision, ['configuration'], [
-        { code: 'CONFIG_STALE', message: 'The configuration changed during apply; re-read and retry.' },
-      ], input.origin, input.actorId);
+      return this.#receipt(
+        'stale',
+        activeRevision,
+        candidateRevision,
+        ['configuration'],
+        [
+          {
+            code: 'CONFIG_STALE',
+            message: 'The configuration changed during apply; re-read and retry.',
+          },
+        ],
+        input.origin,
+        input.actorId,
+      );
     }
 
     const changedFields = computeChangedFields(current?.configuration ?? null, input.candidate);
-    const status = current === null || !requiresRestart(changedFields) ? 'applied' : 'restart-required';
+    const status = requiresRestart(changedFields) ? 'restart-required' : 'applied';
     const writtenRevision = await this.#store.write(input.candidate);
     this.#lastActive = { configuration: input.candidate, revision: writtenRevision };
-    return this.#receipt(status, writtenRevision, candidateRevision, changedFields, [], input.origin, input.actorId);
+    return this.#receipt(
+      status,
+      writtenRevision,
+      candidateRevision,
+      changedFields,
+      [],
+      input.origin,
+      input.actorId,
+    );
   }
 
   /**
@@ -313,22 +383,44 @@ export class ConfigurationChangeService {
     const raw = await this.#store.readRaw();
     const activeRevision = this.#lastActive?.revision ?? null;
     if (raw === null) {
-      return this.#receipt('invalid', activeRevision, null, [], [
-        { code: 'CONFIG_INVALID', message: 'workbench.yaml is missing.' },
-      ], 'filesystem', undefined);
+      return this.#receipt(
+        'invalid',
+        activeRevision,
+        null,
+        [],
+        [{ code: 'CONFIG_INVALID', message: 'workbench.yaml is missing.' }],
+        'filesystem',
+        undefined,
+      );
     }
     if (raw.revision === this.#store.lastWrittenRevision()) {
       return null; // Our own atomic write; suppress the echo.
     }
     const parsed = parseConfigurationYaml(raw.content);
     if (!parsed.ok) {
-      return this.#receipt('invalid', activeRevision, raw.revision, [], parsed.diagnostics, 'filesystem', undefined);
+      return this.#receipt(
+        'invalid',
+        activeRevision,
+        raw.revision,
+        [],
+        parsed.diagnostics,
+        'filesystem',
+        undefined,
+      );
     }
     const candidate = parsed.configuration;
     const candidateRevision = configurationRevision(candidate);
     const validated = await this.validateCandidate(candidate);
     if (!validated.ok) {
-      return this.#receipt('invalid', activeRevision, candidateRevision, [], validated.diagnostics, 'filesystem', undefined);
+      return this.#receipt(
+        'invalid',
+        activeRevision,
+        candidateRevision,
+        [],
+        validated.diagnostics,
+        'filesystem',
+        undefined,
+      );
     }
     if (this.#lastActive !== null) {
       const removed = this.#lastActive.configuration.projects.filter(
@@ -336,9 +428,20 @@ export class ConfigurationChangeService {
       );
       for (const project of removed) {
         if (await this.#isProjectBusy(project.projectId)) {
-          return this.#receipt('invalid', activeRevision, candidateRevision, [], [
-            { code: 'PROJECT_BUSY', message: `Project "${project.projectId}" is busy and cannot be removed.` },
-          ], 'filesystem', undefined);
+          return this.#receipt(
+            'invalid',
+            activeRevision,
+            candidateRevision,
+            [],
+            [
+              {
+                code: 'PROJECT_BUSY',
+                message: `Project "${project.projectId}" is busy and cannot be removed.`,
+              },
+            ],
+            'filesystem',
+            undefined,
+          );
         }
       }
     }
@@ -346,11 +449,21 @@ export class ConfigurationChangeService {
     if (changedFields.length === 0) return null; // Content no-op (e.g. formatting).
     const status = requiresRestart(changedFields) ? 'restart-required' : 'applied';
     this.#lastActive = { configuration: candidate, revision: candidateRevision };
-    return this.#receipt(status, candidateRevision, candidateRevision, changedFields, [], 'filesystem', undefined);
+    return this.#receipt(
+      status,
+      candidateRevision,
+      candidateRevision,
+      changedFields,
+      [],
+      'filesystem',
+      undefined,
+    );
   }
 
   /** Arm the external-change watcher; `onChange` receives the receipt or null (no-op). */
-  watch(onChange: (receipt: ConfigOperationReceiptV1 | null) => void | Promise<void>): { dispose(): void } {
+  watch(onChange: (receipt: ConfigOperationReceiptV1 | null) => void | Promise<void>): {
+    dispose(): void;
+  } {
     this.#watcher?.dispose();
     const watcher = this.#store.watch(() => {
       void this.observeExternalChange().then(onChange);

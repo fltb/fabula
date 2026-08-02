@@ -132,6 +132,12 @@ export interface AuthoringGitSubmitPort {
     readonly actorId: string;
     /** Optional capability under which the actor submitted. */
     readonly capabilityId?: string;
+    /**
+     * Host-internal flag for accepting a filesystem candidate. The Git
+     * adapter requires the complete candidate to byte-match the dirty primary
+     * before it may replace the ordinary primary-clean preflight.
+     */
+    readonly externalReconciliation?: boolean;
   }): Promise<AuthoringGitSubmitOutcome>;
 }
 
@@ -209,6 +215,8 @@ export interface AuthoringCoordinator {
   getOperation(operationId: string): AuthoringOperationReceiptV1 | null;
   /** Whether authoring conflicts/recovery require agents to pause. */
   isAgentPaused(): boolean;
+  /** Refresh the browser-safe dirty/digest projection after a Yjs persist. */
+  refreshWorkingState(): Promise<void>;
   /**
    * Watcher notification. The event is only a hint: the coordinator debounces
    * and then performs a full {@link AuthoringTreeLoader.loadTree} re-read

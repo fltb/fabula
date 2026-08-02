@@ -72,10 +72,7 @@ Core 的依赖。
 
 ### `@novalistically/workbench`（`packages/workbench/`）
 
-浏览器优先的本机 Host 与 Solid client。Host 持有本地认证、Yjs gateway、SQLite worker、
-provider credential boundary、ProjectSession，以及受控 Git authoring 服务。客户端拥有本地
-布局偏好，只读取认证后的 Host projection；Yjs working layer 和已接受 source 必须明确区分。
-Host 与 client 分别类型检查、构建和测试；浏览器 E2E 单独运行。
+浏览器优先的本机多项目 Host 与 Solid client。Host 在一个共享 `ProjectSession` registry 中为每个已配置项目组合 Core runtime、Yjs working documents、filesystem observer、`AuthoringCoordinator`、controlled Git 与可选 Agent；浏览器、MCP 与 Agent 只在该 bundle 就绪后取得无秘密 DTO。Host 持有本地认证、SQLite worker 和 provider credential boundary。客户端保持布局偏好，读取认证后的 Host projection；Yjs working layer 和已接受 source 必须明确区分。项目/提供商/listener/default-MCP 配置在进程启动时捕获，变更写入 YAML 后必须受控重启，不能半热切换。Host 与 client 分别类型检查、构建和测试；浏览器 E2E 单独运行。
 
 ## 核心模块映射
 

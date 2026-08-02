@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -501,6 +501,96 @@ describe('GitAuthoringSubmitService', () => {
       const retry = await service.submit(request);
       expect(retry).toMatchObject({ kind: 'rejected', code: 'manifest-rejected' });
       expect(await commitCount(runner, dir)).toBe(1);
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it('reconciles an exact handwritten full candidate including a tracked-file deletion', async () => {
+    const dir = temp('wb-submit-external-delete-');
+    const harness = createRealPersistence();
+    try {
+      const runner = new ControlledGitRunner();
+      await bootstrapFor(runner, dir).bootstrap();
+      const head = await refHead(runner, dir);
+      const candidate = baselineEntries()
+        .filter((item) => item.path !== 'definitions/characters/ada.yaml')
+        .map((item) =>
+          item.path === 'nova.yaml' ? entry(item.path, 'project: probe\nchapter: 3\n') : item,
+        );
+      writeFileSync(join(dir, 'nova.yaml'), 'project: probe\nchapter: 3\n');
+      rmSync(join(dir, 'definitions/characters/ada.yaml'));
+
+      const service = new GitAuthoringSubmitService({
+        runner,
+        projectRoot: dir,
+        journal: journalPort(harness.client),
+        confirmWorkingStateVector: alwaysOkConfirm,
+        validateCandidate: alwaysOkValidate,
+      });
+      const outcome = await service.submit(
+        submitRequest({
+          submitId: 'submit-external-delete-1',
+          expectedGitHead: head,
+          entries: candidate,
+          externalReconciliation: true,
+        }),
+      );
+
+      if (outcome.kind !== 'accepted')
+        throw new Error(`expected accepted outcome, got ${outcome.kind}`);
+      expect(await refHead(runner, dir)).toBe(outcome.receipt.commit);
+      expect(readFileSync(join(dir, 'nova.yaml'), 'utf8')).toBe('project: probe\nchapter: 3\n');
+      expect(existsSync(join(dir, 'definitions/characters/ada.yaml'))).toBe(false);
+      const tree = (
+        await runner.runStrict({
+          args: ['ls-tree', '-r', '--name-only', WORKBENCH_AUTHORING_REF],
+          cwd: dir,
+        })
+      ).stdout.split('\n');
+      expect(tree).not.toContain('definitions/characters/ada.yaml');
+      expect(
+        (await runner.runStrict({ args: ['status', '--porcelain=v1'], cwd: dir })).stdout,
+      ).toBe('');
+    } finally {
+      await harness.dispose();
+    }
+  });
+
+  it('preserves a handwritten candidate when an unknown path is present', async () => {
+    const dir = temp('wb-submit-external-unknown-');
+    const harness = createRealPersistence();
+    try {
+      const runner = new ControlledGitRunner();
+      await bootstrapFor(runner, dir).bootstrap();
+      const head = await refHead(runner, dir);
+      const candidate = baselineEntries().map((item) =>
+        item.path === 'nova.yaml' ? entry(item.path, 'project: probe\nchapter: 4\n') : item,
+      );
+      writeFileSync(join(dir, 'nova.yaml'), 'project: probe\nchapter: 4\n');
+      writeFileSync(join(dir, 'notes.txt'), 'must remain local\n');
+
+      const service = new GitAuthoringSubmitService({
+        runner,
+        projectRoot: dir,
+        journal: journalPort(harness.client),
+        confirmWorkingStateVector: alwaysOkConfirm,
+        validateCandidate: alwaysOkValidate,
+      });
+      const outcome = await service.submit(
+        submitRequest({
+          submitId: 'submit-external-unknown-1',
+          expectedGitHead: head,
+          entries: candidate,
+          externalReconciliation: true,
+        }),
+      );
+
+      expect(outcome.kind).toBe('conflict');
+      expect(await refHead(runner, dir)).toBe(head);
+      expect(readFileSync(join(dir, 'nova.yaml'), 'utf8')).toBe('project: probe\nchapter: 4\n');
+      expect(readFileSync(join(dir, 'notes.txt'), 'utf8')).toBe('must remain local\n');
+      expect(await hasSubmitCommit(runner, dir, 'submit-external-unknown-1')).toBe(false);
     } finally {
       await harness.dispose();
     }

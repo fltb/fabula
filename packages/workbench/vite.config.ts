@@ -5,12 +5,13 @@ import solid from 'vite-plugin-solid';
 const hostPort =
   process.env.WORKBENCH_PORT?.trim() || process.env.WORKBENCH_HOST_PORT?.trim() || '8787';
 const hostTarget = `http://127.0.0.1:${hostPort}`;
+const vitePort = Number(process.env.WORKBENCH_VITE_PORT?.trim() || '5173');
 
 export default defineConfig({
   plugins: [tailwindcss(), solid()],
   server: {
     host: '127.0.0.1',
-    port: 5173,
+    port: vitePort,
     strictPort: true,
     proxy: {
       '/api': { target: hostTarget, changeOrigin: false },

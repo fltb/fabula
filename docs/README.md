@@ -7,5 +7,6 @@
 - **用户**：[快速上手](./getting-started/quickstart.md) → [配置](./getting-started/configuration.md) → [YAML 格式](./reference/yaml-format/)
 - **开发者**：[架构](./architecture.md) → [验证器](./reference/validators.md) → [添加验证器](./guides/adding-a-validator.md)
 - **调试者**：[流水线](./reference/pipeline.md) → [状态管理](./reference/state-management.md) → [基准系统](./reference/bench.md)
+- **Workbench 作者**：[Workbench Host](./reference/workbench-host.md) → 启动、配置、Yjs/Git 提交与冲突恢复
 
 历史设计文档保存在 **[docs/archive/](./archive/README.md)** 中。

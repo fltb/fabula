@@ -7,7 +7,8 @@
 // win. The Host configuration service decides whether dotenv values only
 // pre-fill initial setup or force an import (WORKBENCH_CONFIG_IMPORT=1).
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -34,9 +35,17 @@ if (envFile) {
 const unset = (value) => value === undefined || value.trim() === '';
 const rawProjectRoot = process.env.WORKBENCH_PROJECT_ROOT;
 const explicitProjectRoot = !unset(rawProjectRoot);
+let copiedDemoRoot;
 const projectRoot = explicitProjectRoot
   ? resolve(rawProjectRoot)
-  : resolve(repoRoot, 'fixtures/zhu-fu');
+  : (() => {
+      const source = resolve(repoRoot, 'fixtures/zhu-fu');
+      const workspace = mkdtempSync(join(tmpdir(), 'fabula-workbench-dev-'));
+      const destination = join(workspace, 'zhu-fu');
+      cpSync(source, destination, { recursive: true });
+      copiedDemoRoot = workspace;
+      return destination;
+    })();
 if (!existsSync(join(projectRoot, 'nova.yaml'))) {
   console.error(
     explicitProjectRoot
@@ -47,7 +56,7 @@ if (!existsSync(join(projectRoot, 'nova.yaml'))) {
 }
 if (!explicitProjectRoot) {
   console.warn(
-    `[workbench dev] WORKBENCH_PROJECT_ROOT unset; using demo project ${projectRoot}. Set WORKBENCH_PROJECT_ROOT to override.`,
+    `[workbench dev] WORKBENCH_PROJECT_ROOT unset; copied demo project to ${projectRoot}. Set WORKBENCH_PROJECT_ROOT to override.`,
   );
 }
 
@@ -57,6 +66,7 @@ const databasePath = unset(process.env.WORKBENCH_DATABASE_PATH)
 mkdirSync(dirname(databasePath), { recursive: true });
 
 const pick = (value, fallback) => (unset(value) ? fallback : value);
+const vitePort = pick(process.env.WORKBENCH_VITE_PORT, '5173');
 const env = {
   ...process.env,
   WORKBENCH_MODE: 'workbench',
@@ -66,7 +76,11 @@ const env = {
   WORKBENCH_ALLOW_MOCK_PROVIDER: pick(process.env.WORKBENCH_ALLOW_MOCK_PROVIDER, 'true'),
   WORKBENCH_ALLOW_BOOTSTRAP: pick(process.env.WORKBENCH_ALLOW_BOOTSTRAP, 'true'),
   WORKBENCH_DATABASE_PATH: databasePath,
-  WORKBENCH_ALLOWED_ORIGINS: pick(process.env.WORKBENCH_ALLOWED_ORIGINS, 'http://127.0.0.1:5173'),
+  WORKBENCH_VITE_PORT: vitePort,
+  WORKBENCH_ALLOWED_ORIGINS: pick(
+    process.env.WORKBENCH_ALLOWED_ORIGINS,
+    `http://127.0.0.1:${vitePort}`,
+  ),
   WORKBENCH_ALLOWED_HOSTS: pick(process.env.WORKBENCH_ALLOWED_HOSTS, '127.0.0.1'),
 };
 
@@ -79,18 +93,34 @@ const vite = spawn('npx', ['vite', '--config', 'vite.config.ts'], {
   stdio: 'inherit',
 });
 let shuttingDown = false;
+let hostExited = false;
+let viteExited = false;
+let shutdownCode = 0;
+let shutdownDeadline;
+const finish = () => {
+  if (shutdownDeadline !== undefined) clearTimeout(shutdownDeadline);
+  if (copiedDemoRoot !== undefined) rmSync(copiedDemoRoot, { recursive: true, force: true });
+  process.exit(shutdownCode);
+};
 const close = (code = 0) => {
   if (shuttingDown) return;
   shuttingDown = true;
+  shutdownCode = code;
   host.kill('SIGTERM');
   vite.kill('SIGTERM');
-  setTimeout(() => process.exit(code), 250);
+  // Host persistence shutdown is bounded at five seconds; leave the project
+  // copy available until both children exit, then use a small final fallback.
+  shutdownDeadline = setTimeout(finish, 5_500);
 };
 host.on('exit', (code) => {
-  if (!shuttingDown && code !== 0) close(code ?? 1);
+  hostExited = true;
+  if (!shuttingDown) close(code ?? 1);
+  else if (viteExited) finish();
 });
 vite.on('exit', (code) => {
-  if (!shuttingDown && code !== 0) close(code ?? 1);
+  viteExited = true;
+  if (!shuttingDown) close(code ?? 1);
+  else if (hostExited) finish();
 });
 process.on('SIGINT', () => close());
 process.on('SIGTERM', () => close());

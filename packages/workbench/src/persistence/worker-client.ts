@@ -10,7 +10,14 @@ import {
   serializePersistenceError,
 } from './messages.js';
 
-/** Async-only domain client. It never imports the database driver, Kysely, or a worker implementation. */
+/**
+ * Async-only domain client. It never imports the database driver, Kysely, or
+ * a worker implementation. `request` is fully generic over the typed
+ * operation map from `contracts/persistence.ts` (V1 auth/Git/Yjs operations
+ * and V2 configuration/authoring/audit/device-verifier operations all flow
+ * through the same typed surface, so the map stays exhaustive without a
+ * second client class or an untyped query escape hatch).
+ */
 export class PersistenceWorkerClient {
   readonly #port: PersistenceMessagePort;
   #sequence = 0;

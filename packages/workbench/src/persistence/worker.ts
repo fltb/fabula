@@ -2,8 +2,15 @@ import { DatabaseSync } from 'node:sqlite';
 import { type MessagePort, parentPort, workerData } from 'node:worker_threads';
 import { Kysely, SqliteDialect } from 'kysely';
 import type {
+  AuditRecord,
+  AuditSurface,
   AuthUserRecord,
+  AuthoringConflictRecord,
+  AuthoringStateRecord,
+  ConfigurationOperationRecord,
   ConsumeInviteResult,
+  DeviceVerifierReadState,
+  DeviceVerifierRecord,
   GitSubmissionJournal,
   GitSubmissionPhase,
   GitSubmissionReceipt,
@@ -14,6 +21,7 @@ import type {
   PersistenceResults,
   UserRole,
 } from '../contracts/persistence.js';
+import { AUTHORING_PHASE_VALUES } from '../contracts/authoring.js';
 import {
   GIT_SUBMISSION_PHASE_COMPLETE,
   GIT_SUBMISSION_PHASE_CONFLICT,
@@ -77,13 +85,27 @@ function migrate(db: WorkerDatabase): void {
   db.exec(
     'CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, description TEXT NOT NULL, applied_at TEXT NOT NULL);',
   );
-  const current = Number(
-    (
-      db.prepare('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations').get() as {
-        version: number;
-      }
-    ).version,
-  );
+  const migrationRow = db
+    .prepare('SELECT COALESCE(MAX(version), 0) AS version FROM schema_migrations')
+    .get();
+  const current =
+    migrationRow !== null &&
+    typeof migrationRow === 'object' &&
+    'version' in migrationRow &&
+    migrationRow.version !== null
+      ? Number(migrationRow.version)
+      : 0;
+  const newestBundled = persistenceSchema[persistenceSchema.length - 1]?.version ?? 0;
+  // Fail closed instead of running against a schema created by a NEWER Host
+  // version: the bundled migrations cannot know what that schema looks like,
+  // so starting would risk corrupting rows this build does not understand.
+  if (current > newestBundled) {
+    throw {
+      code: 'SCHEMA_VERSION_TOO_NEW',
+      message: `Database schema version ${current} is newer than the bundled schema (${newestBundled}); refusing to start`,
+      retryable: false,
+    };
+  }
   for (const migration of persistenceSchema) {
     if (migration.version <= current) continue;
     db.exec('BEGIN IMMEDIATE');
@@ -177,6 +199,253 @@ function mapGitReceiptRow(row: Record<string, unknown>): GitSubmissionReceipt {
   };
 }
 
+// ─── V2 row mappers ─────────────────────────────────────────────────────────
+
+function mapConfigurationOperationRow(row: Record<string, unknown>): ConfigurationOperationRecord {
+  return {
+    operationId: text(row.operation_id),
+    origin: text(row.origin),
+    status: text(row.status),
+    ...(row.active_revision != null ? { activeRevision: text(row.active_revision) } : {}),
+    ...(row.candidate_revision != null ? { candidateRevision: text(row.candidate_revision) } : {}),
+    changedFields: parseJson<string[]>(row.changed_fields),
+    diagnostics: parseJson<{ code: string; message: string }[]>(row.diagnostics),
+    ...(row.actor_id != null ? { actorId: text(row.actor_id) } : {}),
+    at: text(row.at),
+  };
+}
+
+/**
+ * Tolerate any phase string a previous Host version may have stored. Unknown
+ * values read as `recovery-required` so a coordinator restart never
+ * fabricates a known phase from an unrecognized one.
+ */
+const parseAuthoringPhase = (value: unknown): string =>
+  AUTHORING_PHASE_VALUES.find((phase) => phase === text(value)) ?? 'recovery-required';
+
+function mapAuthoringStateRow(row: Record<string, unknown>): AuthoringStateRecord {
+  return {
+    projectId: text(row.project_id),
+    phase: parseAuthoringPhase(row.phase),
+    ...(row.accepted_source_hash != null
+      ? { acceptedSourceHash: text(row.accepted_source_hash) }
+      : {}),
+    ...(row.observed_filesystem_hash != null
+      ? { observedFilesystemHash: text(row.observed_filesystem_hash) }
+      : {}),
+    ...(row.workspace_digest != null ? { workspaceDigest: text(row.workspace_digest) } : {}),
+    ...(row.candidate_hash != null ? { candidateHash: text(row.candidate_hash) } : {}),
+    candidateValid: Number(row.candidate_valid) === 1,
+    conflicts: parseJson<AuthoringConflictRecord[]>(row.conflicts),
+    ...(row.fixed_git_head != null ? { fixedGitHead: text(row.fixed_git_head) } : {}),
+    ...(row.pending_submit_id != null ? { pendingSubmitId: text(row.pending_submit_id) } : {}),
+    ...(row.recovery_phase != null ? { recoveryPhase: text(row.recovery_phase) } : {}),
+    updatedAt: text(row.updated_at),
+  };
+}
+
+function mapAuditRow(row: Record<string, unknown>): AuditRecord {
+  return {
+    auditId: text(row.audit_id),
+    at: text(row.at),
+    ...(row.actor_id != null ? { actorId: text(row.actor_id) } : {}),
+    surface: text(row.surface) as AuditSurface,
+    operationKind: text(row.operation_kind),
+    outcome: text(row.outcome) as AuditRecord['outcome'],
+    ...(row.project_id != null ? { projectId: text(row.project_id) } : {}),
+    ...(row.document_scope != null ? { documentScope: text(row.document_scope) } : {}),
+    ...(row.capability_version != null
+      ? { capabilityVersion: Number(row.capability_version) }
+      : {}),
+    ...(row.base_source_hash != null ? { baseSourceHash: text(row.base_source_hash) } : {}),
+    ...(row.result_source_hash != null ? { resultSourceHash: text(row.result_source_hash) } : {}),
+    ...(row.workspace_digest != null ? { workspaceDigest: text(row.workspace_digest) } : {}),
+    ...(row.submit_id != null ? { submitId: text(row.submit_id) } : {}),
+    ...(row.git_receipt_hash != null ? { gitReceiptHash: text(row.git_receipt_hash) } : {}),
+    ...(row.detail != null ? { detail: text(row.detail) } : {}),
+  };
+}
+
+/**
+ * Read projection of a device verifier. `tokenHash` is deliberately omitted:
+ * a verifier write or read can never expose the stored credential hash.
+ */
+function toDeviceVerifierRead(record: DeviceVerifierRecord): DeviceVerifierReadState {
+  return {
+    deviceId: record.deviceId,
+    scope: record.scope,
+    expiresAt: record.expiresAt,
+    clientLabel: record.clientLabel,
+    ...(record.revokedAt != null ? { revokedAt: record.revokedAt } : {}),
+    createdAt: record.createdAt,
+  };
+}
+
+function mapDeviceVerifierRow(row: Record<string, unknown>): DeviceVerifierReadState {
+  return {
+    deviceId: text(row.device_id),
+    scope: parseJson<string[]>(row.scope),
+    expiresAt: text(row.expires_at),
+    clientLabel: text(row.client_label),
+    ...(row.revoked_at != null ? { revokedAt: text(row.revoked_at) } : {}),
+    createdAt: text(row.created_at),
+  };
+}
+
+/**
+ * Exact per-operation payload field allowlist. The typed client makes unknown
+ * fields impossible at compile time; this runtime check fails closed for
+ * malformed wire input (a buggy or hostile caller) instead of silently
+ * ignoring extra fields. `Record<PersistenceOperation, ...>` keeps the map
+ * exhaustive: adding an operation without listing its fields is a compile
+ * error.
+ */
+const KNOWN_PAYLOAD_FIELDS: Record<PersistenceOperation, readonly string[]> = {
+  persistYjsUpdate: ['projectId', 'documentId', 'update', 'stateVector'],
+  loadWorkingDocument: ['projectId', 'documentId'],
+  getAuthState: [],
+  bootstrapOwner: ['userId', 'displayName', 'passwordHash', 'capabilityVersion', 'createdAt'],
+  acceptInviteUser: [
+    'inviteId',
+    'consumedAt',
+    'userId',
+    'displayName',
+    'passwordHash',
+    'capabilityVersion',
+    'createdAt',
+    'session',
+  ],
+  loadUser: ['userId'],
+  loadOwner: [],
+  resetOwnerPassword: ['userId', 'passwordHash', 'capabilityVersion', 'at'],
+  recordAuthFailure: ['subject', 'at'],
+  loadAuthBackoff: ['subject'],
+  clearAuthBackoff: ['subject'],
+  createSession: ['sessionId', 'userId', 'expiresAt', 'capabilityVersion'],
+  loadSession: ['sessionId'],
+  revokeSession: ['sessionId', 'reason'],
+  createInvite: ['inviteId', 'projectId', 'role', 'expiresAt', 'consumedAt'],
+  consumeInvite: ['inviteId', 'consumedAt'],
+  listInvites: ['projectId'],
+  upsertCapability: ['capabilityId', 'userId', 'projectId', 'scope', 'version', 'expiresAt', 'revokedAt'],
+  loadCapability: ['capabilityId'],
+  revokeCapability: ['capabilityId', 'reason'],
+  listProjects: [],
+  getProject: ['projectId'],
+  upsertProject: ['projectId', 'displayName', 'rootLabel', 'createdAt', 'updatedAt'],
+  removeProject: ['projectId'],
+  checkpointOperation: ['operationId', 'checkpoint', 'version', 'updatedAt'],
+  loadOperationCheckpoint: ['operationId'],
+  beginGitSubmission: [
+    'submitId',
+    'projectId',
+    'phase',
+    'expectedGitHead',
+    'candidateCommit',
+    'receiptHash',
+    'diagnostic',
+    'updatedAt',
+  ],
+  checkpointGitSubmission: [
+    'submitId',
+    'projectId',
+    'phase',
+    'expectedGitHead',
+    'candidateCommit',
+    'receiptHash',
+    'diagnostic',
+    'updatedAt',
+  ],
+  completeGitSubmission: ['submitId', 'projectId', 'commit', 'sourceHash', 'receiptHash', 'acceptedAt'],
+  loadGitSubmission: ['submitId'],
+  loadUiPreferences: ['userId'],
+  saveUiPreferences: ['userId', 'values', 'updatedAt'],
+  createConfigurationOperation: [
+    'operationId',
+    'origin',
+    'status',
+    'activeRevision',
+    'candidateRevision',
+    'changedFields',
+    'diagnostics',
+    'actorId',
+    'at',
+  ],
+  listConfigurationOperations: ['limit'],
+  saveAuthoringState: [
+    'projectId',
+    'phase',
+    'acceptedSourceHash',
+    'observedFilesystemHash',
+    'workspaceDigest',
+    'candidateHash',
+    'candidateValid',
+    'conflicts',
+    'fixedGitHead',
+    'pendingSubmitId',
+    'recoveryPhase',
+    'updatedAt',
+  ],
+  loadAuthoringState: ['projectId'],
+  appendAudit: [
+    'auditId',
+    'at',
+    'actorId',
+    'surface',
+    'operationKind',
+    'outcome',
+    'projectId',
+    'documentScope',
+    'capabilityVersion',
+    'baseSourceHash',
+    'resultSourceHash',
+    'workspaceDigest',
+    'submitId',
+    'gitReceiptHash',
+    'detail',
+  ],
+  listAudit: ['limit', 'surface', 'projectId'],
+  createDeviceVerifier: [
+    'deviceId',
+    'tokenHash',
+    'scope',
+    'expiresAt',
+    'clientLabel',
+    'revokedAt',
+    'createdAt',
+  ],
+  loadDeviceVerifierByTokenHash: ['tokenHash'],
+  listDeviceVerifiers: [],
+  revokeDeviceVerifier: ['deviceId', 'revokedAt'],
+  listSessions: ['userId'],
+};
+
+/** Fail closed on payload fields the operation does not declare. */
+function rejectUnknownPayloadFields(
+  operation: string,
+  payload: unknown,
+  known: readonly string[],
+): void {
+  const unknownFieldError = (field?: string): never => {
+    throw {
+      code: 'UNKNOWN_FIELD',
+      message:
+        field === undefined
+          ? `Persistence operation ${operation} does not accept a payload`
+          : `Unknown field "${field}" for persistence operation ${operation}`,
+      retryable: false,
+    };
+  };
+  if (payload == null) {
+    if (known.length > 0) unknownFieldError();
+    return;
+  }
+  if (typeof payload !== 'object' || Array.isArray(payload)) unknownFieldError();
+  for (const key of Object.keys(payload)) {
+    if (!known.includes(key)) unknownFieldError(key);
+  }
+}
+
 function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
   const db = createWorkerDatabase(options.databasePath);
   migrate(db);
@@ -192,6 +461,15 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
   const respond = (request: PersistenceRequest, response: PersistenceResponse): void =>
     port.postMessage(response);
   const execute = (request: PersistenceRequest): unknown => {
+    const known = KNOWN_PAYLOAD_FIELDS[request.operation];
+    if (known === undefined) {
+      throw {
+        code: 'UNKNOWN_OPERATION',
+        message: `Unknown persistence operation: ${String(request.operation)}`,
+        retryable: false,
+      };
+    }
+    rejectUnknownPayloadFields(request.operation, request.payload, known);
     const p = request.payload as never;
     switch (request.operation) {
       case 'persistYjsUpdate': {
@@ -682,6 +960,165 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
           x.updatedAt,
         );
         return x;
+      }
+      case 'createConfigurationOperation': {
+        const x = p as PersistencePayloads['createConfigurationOperation'];
+        db.prepare(
+          'INSERT OR REPLACE INTO configuration_operations(operation_id,origin,status,active_revision,candidate_revision,changed_fields,diagnostics,actor_id,at) VALUES(?,?,?,?,?,?,?,?,?)',
+        ).run(
+          x.operationId,
+          x.origin,
+          x.status,
+          x.activeRevision ?? null,
+          x.candidateRevision ?? null,
+          json(x.changedFields),
+          json(x.diagnostics),
+          x.actorId ?? null,
+          x.at,
+        );
+        return mapConfigurationOperationRow(
+          db
+            .prepare('SELECT * FROM configuration_operations WHERE operation_id=?')
+            .get(x.operationId) as Record<string, unknown>,
+        );
+      }
+      case 'listConfigurationOperations': {
+        const x = p as PersistencePayloads['listConfigurationOperations'];
+        const rows = db
+          .prepare('SELECT * FROM configuration_operations ORDER BY at DESC, operation_id LIMIT ?')
+          .all(x.limit) as Record<string, unknown>[];
+        return rows.map(mapConfigurationOperationRow);
+      }
+      case 'saveAuthoringState': {
+        const x = p as PersistencePayloads['saveAuthoringState'];
+        db.prepare(
+          'INSERT INTO authoring_state(project_id,phase,accepted_source_hash,observed_filesystem_hash,workspace_digest,candidate_hash,candidate_valid,conflicts,fixed_git_head,pending_submit_id,recovery_phase,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id) DO UPDATE SET phase=excluded.phase, accepted_source_hash=excluded.accepted_source_hash, observed_filesystem_hash=excluded.observed_filesystem_hash, workspace_digest=excluded.workspace_digest, candidate_hash=excluded.candidate_hash, candidate_valid=excluded.candidate_valid, conflicts=excluded.conflicts, fixed_git_head=excluded.fixed_git_head, pending_submit_id=excluded.pending_submit_id, recovery_phase=excluded.recovery_phase, updated_at=excluded.updated_at',
+        ).run(
+          x.projectId,
+          x.phase,
+          x.acceptedSourceHash ?? null,
+          x.observedFilesystemHash ?? null,
+          x.workspaceDigest ?? null,
+          x.candidateHash ?? null,
+          x.candidateValid ? 1 : 0,
+          json(x.conflicts),
+          x.fixedGitHead ?? null,
+          x.pendingSubmitId ?? null,
+          x.recoveryPhase ?? null,
+          x.updatedAt,
+        );
+        return mapAuthoringStateRow(
+          db
+            .prepare('SELECT * FROM authoring_state WHERE project_id=?')
+            .get(x.projectId) as Record<string, unknown>,
+        );
+      }
+      case 'loadAuthoringState': {
+        const x = p as PersistencePayloads['loadAuthoringState'];
+        const row = db
+          .prepare('SELECT * FROM authoring_state WHERE project_id=?')
+          .get(x.projectId) as Record<string, unknown> | undefined;
+        return row ? mapAuthoringStateRow(row) : null;
+      }
+      case 'appendAudit': {
+        const x = p as PersistencePayloads['appendAudit'];
+        db.prepare(
+          'INSERT OR IGNORE INTO audit_log(audit_id,at,actor_id,surface,operation_kind,outcome,project_id,document_scope,capability_version,base_source_hash,result_source_hash,workspace_digest,submit_id,git_receipt_hash,detail) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        ).run(
+          x.auditId,
+          x.at,
+          x.actorId ?? null,
+          x.surface,
+          x.operationKind,
+          x.outcome,
+          x.projectId ?? null,
+          x.documentScope ?? null,
+          x.capabilityVersion ?? null,
+          x.baseSourceHash ?? null,
+          x.resultSourceHash ?? null,
+          x.workspaceDigest ?? null,
+          x.submitId ?? null,
+          x.gitReceiptHash ?? null,
+          x.detail ?? null,
+        );
+        return mapAuditRow(
+          db.prepare('SELECT * FROM audit_log WHERE audit_id=?').get(x.auditId) as Record<
+            string,
+            unknown
+          >,
+        );
+      }
+      case 'listAudit': {
+        const x = p as PersistencePayloads['listAudit'];
+        const filters: string[] = [];
+        const args: string[] = [];
+        if (x.surface != null) {
+          filters.push('surface=?');
+          args.push(x.surface);
+        }
+        if (x.projectId != null) {
+          filters.push('project_id=?');
+          args.push(x.projectId);
+        }
+        const where = filters.length > 0 ? ` WHERE ${filters.join(' AND ')}` : '';
+        const rows = db
+          .prepare(`SELECT * FROM audit_log${where} ORDER BY at DESC, audit_id LIMIT ?`)
+          .all(...args, String(x.limit)) as Record<string, unknown>[];
+        return rows.map(mapAuditRow);
+      }
+      case 'createDeviceVerifier': {
+        const x = p as PersistencePayloads['createDeviceVerifier'];
+        db.prepare(
+          'INSERT OR REPLACE INTO device_verifiers(device_id,token_hash,scope,expires_at,client_label,revoked_at,created_at) VALUES(?,?,?,?,?,?,?)',
+        ).run(
+          x.deviceId,
+          x.tokenHash,
+          json(x.scope),
+          x.expiresAt,
+          x.clientLabel,
+          x.revokedAt ?? null,
+          x.createdAt,
+        );
+        // The write result is the read projection: tokenHash can never leak.
+        return toDeviceVerifierRead(x);
+      }
+      case 'loadDeviceVerifierByTokenHash': {
+        const x = p as PersistencePayloads['loadDeviceVerifierByTokenHash'];
+        const row = db
+          .prepare('SELECT * FROM device_verifiers WHERE token_hash=?')
+          .get(x.tokenHash) as Record<string, unknown> | undefined;
+        return row ? mapDeviceVerifierRow(row) : null;
+      }
+      case 'listDeviceVerifiers':
+        return (
+          db.prepare('SELECT * FROM device_verifiers ORDER BY created_at, device_id').all() as Record<
+            string,
+            unknown
+          >[]
+        ).map(mapDeviceVerifierRow);
+      case 'revokeDeviceVerifier': {
+        const x = p as PersistencePayloads['revokeDeviceVerifier'];
+        db.prepare('UPDATE device_verifiers SET revoked_at=? WHERE device_id=?').run(
+          x.revokedAt,
+          x.deviceId,
+        );
+        return { revoked: true };
+      }
+      case 'listSessions': {
+        const x = p as PersistencePayloads['listSessions'];
+        const rows = (
+          x.userId != null
+            ? db
+                .prepare('SELECT * FROM sessions WHERE user_id=? ORDER BY expires_at')
+                .all(x.userId)
+            : db.prepare('SELECT * FROM sessions ORDER BY expires_at').all()
+        ) as Record<string, unknown>[];
+        return rows.map((row) => ({
+          sessionId: text(row.session_id),
+          userId: text(row.user_id),
+          expiresAt: text(row.expires_at),
+          capabilityVersion: Number(row.capability_version),
+        }));
       }
       default: {
         // Unreachable per the typed union, but reachable for malformed wire

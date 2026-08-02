@@ -3,6 +3,13 @@
  * The browser-facing surface is `contracts/index.ts`, which re-exports only
  * non-secret domain DTOs. This module carries host-only state such as password
  * hash records and the typed operation map; never import it from client code.
+ * Version 2 of the schema adds configuration operation/audit/recovery
+ * metadata, authoring coordination metadata, the append-only audit log, MCP
+ * device token verifiers, and the dashboard queries over sessions/devices.
+ * The worker never stores `workbench.yaml` contents and never stores secrets:
+ * provider keys live in the credential store, and device verifiers persist
+ * only the SHA-256 hash of the one-time credential (the raw credential is
+ * shown once at pairing and never stored or returned).
  */
 
 export type BinaryPayload = Uint8Array;
@@ -222,6 +229,132 @@ export interface UiPreferences {
   updatedAt: string;
 }
 
+// ─── V2: configuration operation/audit/recovery metadata ────────────────────
+
+/**
+ * One durable configuration change record (setup/dashboard/MCP/filesystem/
+ * dotenv-import). Stores only metadata: revisions, changed field names,
+ * diagnostics, origin and actor — never `workbench.yaml` contents, never
+ * secrets, never filesystem paths.
+ */
+export interface ConfigurationOperationRecord {
+  operationId: string;
+  /** Which adapter produced the change (`setup` | `dashboard` | `mcp` | `filesystem` | `dotenv-import`). */
+  origin: string;
+  /** Receipt status: `applied` | `restart-required` | `invalid` | `stale`. */
+  status: string;
+  /** Content-hash revision that remained active after the change. */
+  activeRevision?: string;
+  /** Content-hash revision of the candidate that was applied or rejected. */
+  candidateRevision?: string;
+  /** Changed field paths (e.g. `network.port`), stable order. */
+  changedFields: string[];
+  diagnostics: { code: string; message: string }[];
+  /** Authenticated actor id; absent for watcher/system-originated changes. */
+  actorId?: string;
+  at: string;
+}
+
+// ─── V2: authoring coordination metadata ────────────────────────────────────
+
+/** Per-document working-vs-external conflict persisted by the coordinator. */
+export interface AuthoringConflictRecord {
+  logicalPath: string;
+  kind: 'working-vs-external';
+  baseSourceHash: string;
+  workingHash: string;
+  externalHash: string;
+}
+
+/**
+ * One per-project row of durable coordinator state. Stores identity only —
+ * hashes, phase, submit/recovery ids — never raw source, never Yjs bytes,
+ * never secrets. External candidate content lives in the Host-private
+ * staging bundle; SQLite holds just the hashes and metadata.
+ */
+export interface AuthoringStateRecord {
+  projectId: string;
+  /** Canonical coordinator phase (`AuthoringPhaseV1` string). */
+  phase: string;
+  /** Accepted last-valid source identity. */
+  acceptedSourceHash?: string;
+  /** Most recent full authoring-tree hash the watcher observed. */
+  observedFilesystemHash?: string;
+  /** Current stable workspace vector digest. */
+  workspaceDigest?: string;
+  /** Hash of the staged external candidate bundle, when one exists. */
+  candidateHash?: string;
+  /** Whether the staged candidate passed Core validation. */
+  candidateValid: boolean;
+  conflicts: AuthoringConflictRecord[];
+  /** Fixed Git authoring ref head observed at the last accepted submit. */
+  fixedGitHead?: string;
+  /** Submit id of an in-flight/pending submit, when one exists. */
+  pendingSubmitId?: string;
+  /** Crash-recovery phase, when the coordinator is mid-recovery. */
+  recoveryPhase?: string;
+  updatedAt: string;
+}
+
+// ─── V2: append-only audit ──────────────────────────────────────────────────
+
+/** Which surface produced an audited effect. */
+export type AuditSurface =
+  | 'browser'
+  | 'agent'
+  | 'mcp'
+  | 'filesystem'
+  | 'submit'
+  | 'system';
+
+/**
+ * One append-only audit entry. Records provenance (actor/surface/operation),
+ * scope identity (project/document/capability version), base/result source
+ * hashes, the workspace digest, and the Git submit receipt identity — never
+ * raw source, tokens, keys, or any secret.
+ */
+export interface AuditRecord {
+  auditId: string;
+  at: string;
+  actorId?: string;
+  surface: AuditSurface;
+  operationKind: string;
+  outcome: 'completed' | 'failed' | 'denied';
+  projectId?: string;
+  /** Document scope (logical path or document id) the effect addressed. */
+  documentScope?: string;
+  capabilityVersion?: number;
+  baseSourceHash?: string;
+  resultSourceHash?: string;
+  workspaceDigest?: string;
+  submitId?: string;
+  gitReceiptHash?: string;
+  detail?: string;
+}
+
+// ─── V2: MCP device token verifier ──────────────────────────────────────────
+
+/**
+ * Durable MCP device verifier row. The worker stores ONLY the SHA-256 hash
+ * of the one-time device credential plus scope/expiry/label/revocation — the
+ * raw credential is shown once at pairing and never persisted. `tokenHash`
+ * must never be returned by any result; reads map to
+ * {@link DeviceVerifierReadState}.
+ */
+export interface DeviceVerifierRecord {
+  deviceId: string;
+  /** SHA-256 hex of the one-time device credential. Stored, never returned. */
+  tokenHash: string;
+  scope: string[];
+  expiresAt: string;
+  clientLabel: string;
+  revokedAt?: string;
+  createdAt: string;
+}
+
+/** Safe read projection of a device verifier: `tokenHash` is deliberately absent. */
+export type DeviceVerifierReadState = Omit<DeviceVerifierRecord, 'tokenHash'>;
+
 export type PersistenceOperation =
   | 'persistYjsUpdate'
   | 'loadWorkingDocument'
@@ -254,7 +387,18 @@ export type PersistenceOperation =
   | 'completeGitSubmission'
   | 'loadGitSubmission'
   | 'loadUiPreferences'
-  | 'saveUiPreferences';
+  | 'saveUiPreferences'
+  | 'createConfigurationOperation'
+  | 'listConfigurationOperations'
+  | 'saveAuthoringState'
+  | 'loadAuthoringState'
+  | 'appendAudit'
+  | 'listAudit'
+  | 'createDeviceVerifier'
+  | 'loadDeviceVerifierByTokenHash'
+  | 'listDeviceVerifiers'
+  | 'revokeDeviceVerifier'
+  | 'listSessions';
 
 export interface PersistencePayloads {
   persistYjsUpdate: PersistYjsUpdateInput;
@@ -289,6 +433,17 @@ export interface PersistencePayloads {
   loadGitSubmission: { submitId: string };
   loadUiPreferences: { userId: string };
   saveUiPreferences: UiPreferences;
+  createConfigurationOperation: ConfigurationOperationRecord;
+  listConfigurationOperations: { limit: number };
+  saveAuthoringState: AuthoringStateRecord;
+  loadAuthoringState: { projectId: string };
+  appendAudit: AuditRecord;
+  listAudit: { limit: number; surface?: AuditSurface; projectId?: string };
+  createDeviceVerifier: DeviceVerifierRecord;
+  loadDeviceVerifierByTokenHash: { tokenHash: string };
+  listDeviceVerifiers: undefined;
+  revokeDeviceVerifier: { deviceId: string; revokedAt: string };
+  listSessions: { userId?: string };
 }
 
 export interface PersistenceResults {
@@ -324,6 +479,17 @@ export interface PersistenceResults {
   loadGitSubmission: GitSubmissionJournal | GitSubmissionReceipt | null;
   loadUiPreferences: UiPreferences | null;
   saveUiPreferences: UiPreferences;
+  createConfigurationOperation: ConfigurationOperationRecord;
+  listConfigurationOperations: ConfigurationOperationRecord[];
+  saveAuthoringState: AuthoringStateRecord;
+  loadAuthoringState: AuthoringStateRecord | null;
+  appendAudit: AuditRecord;
+  listAudit: AuditRecord[];
+  createDeviceVerifier: DeviceVerifierReadState;
+  loadDeviceVerifierByTokenHash: DeviceVerifierReadState | null;
+  listDeviceVerifiers: DeviceVerifierReadState[];
+  revokeDeviceVerifier: { revoked: true };
+  listSessions: SessionState[];
 }
 
 export interface PersistenceError {

@@ -31,7 +31,18 @@ describe('real persistence worker initialization', () => {
         const migrations = db
           .prepare('SELECT version FROM schema_migrations ORDER BY version')
           .all() as { version: number }[];
-        expect(migrations.map((m) => m.version)).toEqual([1]);
+        expect(migrations.map((m) => m.version)).toEqual([1, 2]);
+        const v2Tables = db
+          .prepare(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('configuration_operations', 'authoring_state', 'audit_log', 'device_verifiers') ORDER BY name",
+          )
+          .all() as { name: string }[];
+        expect(v2Tables.map((table) => table.name)).toEqual([
+          'audit_log',
+          'authoring_state',
+          'configuration_operations',
+          'device_verifiers',
+        ]);
         const ddl = db
           .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='yjs_documents'")
           .get() as { sql: string };

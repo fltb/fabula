@@ -442,7 +442,7 @@ export function WorkbenchShell(props: AppProps = {}) {
     props.initialAgentShelfOpen ?? stored.agentShelfOpen,
   );
 
-  const hostStatus = props.hostStatus ?? 'unavailable';
+  const hostStatus = () => props.hostStatus ?? 'unavailable';
 
   const persistPreferences = (patch: Partial<WorkbenchPreferencesV1>) => {
     saveWorkbenchPreferences({
@@ -494,7 +494,7 @@ export function WorkbenchShell(props: AppProps = {}) {
     >
       <Topbar
         activeView={activeView()}
-        hostStatus={hostStatus}
+        hostStatus={hostStatus()}
         agentShelfOpen={agentShelfOpen()}
         onAgentShelfToggle={toggleAgentShelf}
       />
@@ -510,7 +510,7 @@ export function WorkbenchShell(props: AppProps = {}) {
         <div class="workspace-column">
           <Workspace
             activeView={activeView()}
-            hostStatus={hostStatus}
+            hostStatus={hostStatus()}
             overview={props.overview}
             graphProjection={props.graphProjection}
             sourceStudio={props.sourceStudio}

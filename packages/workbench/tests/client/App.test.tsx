@@ -1,7 +1,8 @@
 import { cleanup, render, screen, within } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { App } from '../../src/client/App';
+import { App, type HostStatus } from '../../src/client/App';
 
 const navigationLabels = [
   'Project Home',
@@ -94,6 +95,15 @@ describe('Workbench Host availability states', () => {
     render(() => <App hostStatus="empty" />);
     expect(screen.getByRole('heading', { name: 'No project is open' })).toBeInTheDocument();
     expect(screen.getByText(/returned no project projection/i)).toBeInTheDocument();
+  });
+
+  it('reacts when the authenticated Host projection status changes', () => {
+    const [status, setStatus] = createSignal<HostStatus>('loading');
+    render(() => <App hostStatus={status()} />);
+
+    expect(screen.getByRole('heading', { name: 'Loading Host projection' })).toBeInTheDocument();
+    setStatus('ready');
+    expect(screen.getByRole('heading', { name: 'Projection ready' })).toBeInTheDocument();
   });
 });
 

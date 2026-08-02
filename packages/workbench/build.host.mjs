@@ -10,15 +10,26 @@ mkdirSync(outdir, { recursive: true });
 
 const result = await build({
   entryPoints: [
-    // Browser-safe contract barrel (package "exports" target).
+    // Browser-safe contract barrel (package "exports" target): pure type
+    // re-exports only, so the bundled output is a dependency-free module.
     resolve(root, 'src/contracts/index.ts'),
-    // Host server entry: listener lifecycle + facade.
+    // Host server entry: listener lifecycle + facade. Bundling inlines its
+    // listener/Yjs imports, so no separate listener entry is emitted.
     resolve(root, 'src/host/server.ts'),
-    // Host listener module: server.ts imports it and bundle:false keeps
-    // imports external, so it must be emitted as its own entry point.
-    resolve(root, 'src/host/listener.ts'),
+    // Host process entry: runnable `start:host` target (node dist/host/host/main.js).
+    resolve(root, 'src/host/main.ts'),
   ],
-  bundle: false,
+  // Bundle the complete Workbench-internal module graph (host/, persistence/
+  // clients, contracts/) into each emitted entry: relative imports are
+  // inlined, so Node never resolves them against missing dist source files,
+  // and any unresolvable internal import fails the build instead of
+  // surfacing as a runtime error.
+  bundle: true,
+  // Keep installed packages (hono, ws, yjs, @novalistically/*, ...) as
+  // external runtime imports; only Workbench-internal modules are bundled.
+  packages: 'external',
+  // Node 26 Host runtime (package engines ">=26.5.0 <27"): node:* builtins
+  // stay external and package "exports" resolve with Node conditions.
   platform: 'node',
   target: 'node26',
   format: 'esm',
@@ -29,8 +40,15 @@ const result = await build({
   logLevel: 'info',
 });
 
-writeFileSync(resolve(outdir, 'meta.json'), JSON.stringify({
-  inputs: result.metafile.inputs,
-  outputs: result.metafile.outputs,
-  warnings: result.warnings,
-}, null, 2));
+writeFileSync(
+  resolve(outdir, 'meta.json'),
+  JSON.stringify(
+    {
+      inputs: result.metafile.inputs,
+      outputs: result.metafile.outputs,
+      warnings: result.warnings,
+    },
+    null,
+    2,
+  ),
+);

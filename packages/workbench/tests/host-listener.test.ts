@@ -2,6 +2,12 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { WebSocket, WebSocketServer } from 'ws';
+import type {
+  HostListener,
+  HostListenerConfig,
+  HostUpgradeListener,
+} from '../src/host/listener.js';
 import {
   createHostListener,
   DEFAULT_HOST_LISTENER_PORT,
@@ -15,7 +21,6 @@ import {
   splitHostPort,
 } from '../src/host/listener.js';
 import { createHostServer } from '../src/host/server.js';
-import type { HostListener, HostListenerConfig } from '../src/host/listener.js';
 
 const open: HostListener[] = [];
 
@@ -103,9 +108,9 @@ describe('Host listener lifecycle', () => {
     expect(listener.status().tls).toBe(false);
     expect('setSecureContext' in handle.server).toBe(false);
     await handle.close();
-    expect(() =>
-      createHostListener({ tls: true } as HostListenerConfig),
-    ).toThrow(HostListenerConfigError);
+    expect(() => createHostListener({ tls: true } as HostListenerConfig)).toThrow(
+      HostListenerConfigError,
+    );
   });
 });
 
@@ -130,9 +135,7 @@ describe('Host listener HTTP surface', () => {
     expect(listener.endpoints()).toEqual({
       health: { method: 'GET', path: '/_health', kind: 'health', guarded: false },
       status: { method: 'GET', path: '/status', kind: 'status', guarded: false },
-      mutations: [
-        { method: 'POST', path: '/api/scenes', kind: 'mutation', guarded: true },
-      ],
+      mutations: [{ method: 'POST', path: '/api/scenes', kind: 'mutation', guarded: true }],
     });
     const handle = await listener.start();
     const res = await listener.app.request('/status');
@@ -173,9 +176,7 @@ describe('forwarded protocol trust boundary', () => {
 
   it('trusts forwarded protocol only in unix proxy mode with explicit trust', async () => {
     const sock = tempSocket();
-    const listener = track(
-      createHostListener({ unixSocket: sock, trustForwardedHeaders: true }),
-    );
+    const listener = track(createHostListener({ unixSocket: sock, trustForwardedHeaders: true }));
     const handle = await listener.start();
     expect(handle.mode).toBe('unix');
     expect(handle.address).toBe(sock);
@@ -303,12 +304,11 @@ describe('mutation route allowlist', () => {
 
     const started = track(createHostListener({ port: 0 }));
     const handle = await started.start();
-    expect(() =>
-      started.registerMutationRoute('POST', '/api/late', (c) => c.text('no')),
-    ).toThrow(HostListenerStateError);
+    expect(() => started.registerMutationRoute('POST', '/api/late', (c) => c.text('no'))).toThrow(
+      HostListenerStateError,
+    );
     await handle.close();
   });
-
 });
 
 describe('allowlist and protocol primitives', () => {
@@ -400,5 +400,163 @@ describe('Host server facade', () => {
     });
     expect(denied.status).toBe(403);
     await handle.close();
+  });
+});
+
+describe('Host listener upgrade seam', () => {
+  const openSockets: WebSocket[] = [];
+
+  afterEach(() => {
+    for (const ws of openSockets.splice(0)) ws.terminate();
+  });
+
+  /** Resolve on a real open; reject with the HTTP status when refused. */
+  const openSocket = (url: string): Promise<WebSocket> => {
+    const { promise, resolve, reject } = Promise.withResolvers<WebSocket>();
+    const ws = new WebSocket(url);
+    ws.once('open', () => {
+      openSockets.push(ws);
+      resolve(ws);
+    });
+    ws.once('error', (error) => reject(error));
+    ws.once('unexpected-response', (_request, response) => {
+      response.resume();
+      ws.terminate();
+      reject(new Error(`upgrade rejected with HTTP ${response.statusCode}`));
+    });
+    return promise;
+  };
+
+  it('wires raw upgrades through the configured seam', async () => {
+    const wss = new WebSocketServer({ noServer: true });
+    let handled = 0;
+    const { listener, handle } = await startTracked({
+      upgrade: {
+        handle: (request, socket, head) => {
+          handled += 1;
+          wss.handleUpgrade(request, socket, head, () => undefined);
+        },
+        close: async () => {
+          for (const client of wss.clients) client.terminate();
+          const { promise, resolve } = Promise.withResolvers<void>();
+          wss.close(() => resolve());
+          await promise;
+        },
+      },
+    });
+    const ws = await openSocket(`ws://127.0.0.1:${handle.port}/yjs?session=s`);
+    expect(handled).toBe(1);
+    expect(ws.readyState).toBe(WebSocket.OPEN);
+    await handle.close();
+    expect(listener.status().running).toBe(false);
+  });
+
+  it('reopens the upgrade seam on every start cycle', async () => {
+    const events: string[] = [];
+    let wss: WebSocketServer | null = null;
+    const { listener, handle: first } = await startTracked({
+      upgrade: {
+        open: () => {
+          events.push('open');
+          wss = new WebSocketServer({ noServer: true });
+        },
+        handle: (request, socket, head) => {
+          if (wss === null) throw new Error('seam is not open');
+          wss.handleUpgrade(request, socket, head, () => undefined);
+        },
+        close: async () => {
+          events.push('close');
+          if (wss === null) return;
+          for (const client of wss.clients) client.terminate();
+          const { promise, resolve } = Promise.withResolvers<void>();
+          wss.close(() => resolve());
+          await promise;
+          wss = null;
+        },
+      },
+    });
+    expect(events).toEqual(['open']);
+    const ws1 = await openSocket(`ws://127.0.0.1:${first.port}/yjs?session=s`);
+    expect(ws1.readyState).toBe(WebSocket.OPEN);
+    await first.close();
+    expect(events).toEqual(['open', 'close']);
+    expect(listener.status().running).toBe(false);
+
+    // The listener rebuilds the surface on the next start: the seam accepts a
+    // fresh upgrade instead of staying permanently closed after close().
+    const second = await listener.start();
+    expect(events).toEqual(['open', 'close', 'open']);
+    const ws2 = await openSocket(`ws://127.0.0.1:${second.port}/yjs?session=s`);
+    expect(ws2.readyState).toBe(WebSocket.OPEN);
+    await second.close();
+    expect(events).toEqual(['open', 'close', 'open', 'close']);
+  });
+
+  it('closes upgraded resources before the HTTP server stops', async () => {
+    const order: string[] = [];
+    const wss = new WebSocketServer({ noServer: true });
+    const { listener, handle } = await startTracked({
+      upgrade: {
+        handle: (request, socket, head) => {
+          wss.handleUpgrade(request, socket, head, (ws) => {
+            ws.on('close', () => order.push('socket-closed'));
+          });
+        },
+        close: async () => {
+          for (const client of wss.clients) client.terminate();
+          const { promise, resolve } = Promise.withResolvers<void>();
+          wss.close(() => resolve());
+          await promise;
+          order.push('seam-closed');
+        },
+      },
+    });
+    const ws = await openSocket(`ws://127.0.0.1:${handle.port}/yjs?session=s`);
+    const { promise: clientClosed, resolve: resolveClosed } = Promise.withResolvers<void>();
+    ws.once('close', () => resolveClosed());
+    await handle.close();
+    await clientClosed;
+    // The upgraded socket and the seam closed before the HTTP server stopped.
+    expect(order).toEqual(['socket-closed', 'seam-closed']);
+    expect(listener.status().running).toBe(false);
+  });
+
+  it('destroys the socket when the seam handler throws', async () => {
+    const { listener, handle } = await startTracked({
+      upgrade: {
+        handle: () => {
+          throw new Error('boom');
+        },
+        close: async () => undefined,
+      },
+    });
+    await expect(openSocket(`ws://127.0.0.1:${handle.port}/yjs?session=s`)).rejects.toThrow();
+    await handle.close();
+    expect(listener.status().running).toBe(false);
+  });
+
+  it('closes upgrade sockets when no seam is configured (fail closed)', async () => {
+    const { listener, handle } = await startTracked();
+    await expect(openSocket(`ws://127.0.0.1:${handle.port}/yjs?session=s`)).rejects.toThrow();
+    await handle.close();
+    expect(listener.status().running).toBe(false);
+  });
+
+  it('rejects an upgrade seam without handle/close functions', () => {
+    expect(() => createHostListener({ upgrade: {} as HostUpgradeListener })).toThrow(
+      HostListenerConfigError,
+    );
+  });
+
+  it('rejects an upgrade seam whose open hook is not a function', () => {
+    expect(() =>
+      createHostListener({
+        upgrade: {
+          handle: () => undefined,
+          close: async () => undefined,
+          open: 'not-a-function' as never,
+        },
+      }),
+    ).toThrow(HostListenerConfigError);
   });
 });

@@ -5,14 +5,18 @@
  * opt-in; Unix-domain proxy mode is the only mode permitted to trust
  * forwarded protocol headers. The listener never derives its authority (host
  * or protocol) from client-supplied headers, and it never terminates TLS
- * itself. Identity, Yjs and MCP surfaces are out of scope for this module;
- * the Host server facade (`./server.ts`) is the composition seam where they
- * will mount.
+ * itself. The optional `upgrade` seam wires raw HTTP upgrade events (the
+ * authenticated Yjs WebSocket surface mounts here) and guarantees upgraded
+ * resources are closed before the HTTP server stops. Identity, Yjs and MCP
+ * surfaces are otherwise out of scope for this module; the Host server
+ * facade (`./server.ts`) is the composition seam where they mount.
  */
 
-import { createAdaptorServer, type ServerType } from '@hono/node-server';
+import type { IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { Hono, type Context, type Handler, type MiddlewareHandler } from 'hono';
+import type { Duplex } from 'node:stream';
+import { createAdaptorServer, type ServerType } from '@hono/node-server';
+import { type Context, type Handler, Hono, type MiddlewareHandler } from 'hono';
 
 export type HostListenerMode = 'loopback' | 'lan' | 'unix';
 export type EffectiveProtocol = 'http' | 'https';
@@ -23,22 +27,13 @@ export type HostEndpointKind = 'health' | 'status' | 'mutation';
 export const DEFAULT_HOST_LISTENER_PORT = 8787;
 export const DEFAULT_HOST_HEALTH_PATH = '/health';
 export const HOST_STATUS_PATH = '/status';
-export const MUTATION_METHODS: readonly MutationHttpMethod[] = [
-  'POST',
-  'PUT',
-  'PATCH',
-  'DELETE',
-];
+export const MUTATION_METHODS: readonly MutationHttpMethod[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
 /** Host/Origin values that never expose the listener on the network. */
 export function isLoopbackHost(host: string): boolean {
   const h = host.trim().toLowerCase();
   return (
-    h === 'localhost' ||
-    h === '::1' ||
-    h === '[::1]' ||
-    h === '127.0.0.1' ||
-    h.startsWith('127.')
+    h === 'localhost' || h === '::1' || h === '[::1]' || h === '127.0.0.1' || h.startsWith('127.')
   );
 }
 
@@ -60,6 +55,36 @@ export interface HostListenerConfig {
   readonly healthPath?: string;
   /** Host/Origin allowlist enforced on mutation route requests. */
   readonly mutation?: MutationAllowlist;
+  /**
+   * Optional transport-level upgrade seam. When set, the listener wires raw
+   * HTTP upgrade events through it and invokes `close()` on every close path
+   * before the HTTP server stops, so upgraded resources (e.g. WebSocket
+   * sockets) never outlive the listener. Absent = upgrade requests are closed
+   * by Node's default fail-closed behavior.
+   */
+  readonly upgrade?: HostUpgradeListener;
+}
+
+/**
+ * One optional HTTP upgrade handler owned by a Host surface. The listener
+ * only wires the Node event and guarantees close ordering; the handler owns
+ * the upgraded socket and any WebSocket server. `handle` must reject an
+ * upgrade by writing an HTTP error response and destroying the socket; the
+ * listener destroys the socket itself only when `handle` throws.
+ */
+export interface HostUpgradeListener {
+  /** Handle one HTTP upgrade request before any data exchange. */
+  handle(request: IncomingMessage, socket: Duplex, head: Buffer): void | Promise<void>;
+  /**
+   * Optional: (re)open the upgrade surface for a fresh listen cycle. The
+   * listener invokes this on every `start()` before any upgrade event is
+   * routed, so a close/start cycle re-enables exactly one live surface
+   * instead of reusing a handler that `close()` permanently shut down.
+   * Absent = the handler stays open for the lifetime of the listener.
+   */
+  open?(): void | Promise<void>;
+  /** Close every upgraded resource before the HTTP server stops accepting. */
+  close(): Promise<void>;
 }
 
 export interface MutationAllowlist {
@@ -190,7 +215,10 @@ export class HostListenerStateError extends HostListenerError {
  * Split a `host[:port]` value (bracket-aware for IPv6) into its parts,
  * lowercased. A missing or empty port yields `port: null`.
  */
-export function splitHostPort(value: string): { readonly host: string; readonly port: string | null } {
+export function splitHostPort(value: string): {
+  readonly host: string;
+  readonly port: string | null;
+} {
   const trimmed = value.trim().toLowerCase();
   if (trimmed.startsWith('[')) {
     const end = trimmed.indexOf(']');
@@ -228,7 +256,10 @@ function normalizeOrigin(origin: string): string {
 }
 
 /** True when `origin` matches an allowlist entry; requests without an Origin remain allowed. */
-export function isOriginAllowed(origin: string | undefined, allowedOrigins: readonly string[]): boolean {
+export function isOriginAllowed(
+  origin: string | undefined,
+  allowedOrigins: readonly string[],
+): boolean {
   if (allowedOrigins.length === 0) return true;
   if (origin === undefined) return true;
   const normalized = normalizeOrigin(origin);
@@ -281,9 +312,13 @@ interface ResolvedListenerConfig {
   readonly trustForwardedHeaders: boolean;
   readonly healthPath: string;
   readonly allowlist: MutationAllowlist;
+  readonly upgrade: HostUpgradeListener | null;
 }
 
-function normalizeStringList(value: readonly string[] | undefined, name: string): readonly string[] {
+function normalizeStringList(
+  value: readonly string[] | undefined,
+  name: string,
+): readonly string[] {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.some((entry) => typeof entry !== 'string')) {
     throw new HostListenerConfigError(`${name} must be an array of strings`);
@@ -303,6 +338,15 @@ function resolveListenerConfig(config: HostListenerConfig): ResolvedListenerConf
     throw new HostListenerConfigError(
       `healthPath must be a non-empty path starting with '/'; got ${JSON.stringify(healthPath)}`,
     );
+  }
+  const upgrade = config.upgrade ?? null;
+  if (upgrade !== null) {
+    if (typeof upgrade.handle !== 'function' || typeof upgrade.close !== 'function') {
+      throw new HostListenerConfigError('upgrade must provide handle() and close() functions');
+    }
+    if (upgrade.open !== undefined && typeof upgrade.open !== 'function') {
+      throw new HostListenerConfigError('upgrade.open must be a function when provided');
+    }
   }
   const unixSocket = config.unixSocket ?? null;
   if (unixSocket !== null && (typeof unixSocket !== 'string' || unixSocket.length === 0)) {
@@ -331,6 +375,7 @@ function resolveListenerConfig(config: HostListenerConfig): ResolvedListenerConf
       trustForwardedHeaders,
       healthPath,
       allowlist,
+      upgrade,
     };
   }
 
@@ -367,6 +412,7 @@ function resolveListenerConfig(config: HostListenerConfig): ResolvedListenerConf
     trustForwardedHeaders: false,
     healthPath,
     allowlist,
+    upgrade,
   };
 }
 
@@ -486,6 +532,17 @@ class HostListenerImpl implements HostListener {
       hostname: projectedHost,
       overrideGlobalObjects: false,
     });
+    if (this.resolved.upgrade !== null) {
+      // Reopen the upgrade surface for this listen cycle before any upgrade
+      // event can be routed to it: a previous close() permanently shut the
+      // handler down, so a restart must rebuild it exactly once.
+      if (this.resolved.upgrade.open !== undefined) {
+        await this.resolved.upgrade.open();
+      }
+      server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {
+        void this.handleUpgradeRequest(request, socket, head);
+      });
+    }
     const address = await (mode === 'unix'
       ? listenOnce(server, unixSocket as string)
       : listenOnce(server, { port: bindPort, host: bindHost }));
@@ -504,6 +561,10 @@ class HostListenerImpl implements HostListener {
   async close(): Promise<void> {
     const server = this.state.server;
     if (server === null) return;
+    // Close upgraded resources (WebSocket sockets, servers) before the HTTP
+    // server stops, so no upgraded socket ever outlives the listener.
+    const upgrade = this.resolved.upgrade;
+    if (upgrade !== null) await upgrade.close();
     this.state = { running: false, server: null, address: null, port: null };
     const { promise, resolve, reject } = Promise.withResolvers<void>();
     server.close((error) => (error ? reject(error) : resolve()));
@@ -511,6 +572,34 @@ class HostListenerImpl implements HostListener {
     const withCloseAllConnections = server as { closeAllConnections?: () => void };
     withCloseAllConnections.closeAllConnections?.();
     await promise;
+  }
+
+  /**
+   * Route one raw HTTP upgrade through the configured seam. A socket error
+   * while authentication is pending must never crash the Host, so a guard
+   * listener destroys the socket until the handler is done.
+   */
+  private async handleUpgradeRequest(
+    request: IncomingMessage,
+    socket: Duplex,
+    head: Buffer,
+  ): Promise<void> {
+    const upgrade = this.resolved.upgrade;
+    if (upgrade === null) {
+      socket.destroy();
+      return;
+    }
+    const onSocketError = (): void => {
+      socket.destroy();
+    };
+    socket.on('error', onSocketError);
+    try {
+      await upgrade.handle(request, socket, head);
+    } catch {
+      socket.destroy();
+    } finally {
+      socket.off('error', onSocketError);
+    }
   }
 
   status(): HostListenerStatus {

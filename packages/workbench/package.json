@@ -19,7 +19,7 @@
   "scripts": {
     "dev:host": "node --watch build.host.mjs",
     "build:host": "npm run typecheck:host && node build.host.mjs",
-    "start:host": "node dist/host/contracts/index.js",
+    "start:host": "node dist/host/host/main.js",
     "dev:client": "vite --config vite.config.ts",
     "build:client": "vite build --config vite.config.ts",
     "test:host": "vitest run --config vitest.host.config.ts",

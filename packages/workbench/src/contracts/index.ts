@@ -1,26 +1,36 @@
 /**
  * Browser-safe contract surface. Client code may depend on this barrel only.
- * Host-internal wire plumbing (persistence operation maps, password hash
- * records) and host-only provider credential stores (the OS credential
- * adapter and its XDG file fallback) are intentionally NOT re-exported here;
- * any future provider-secret type must stay in the host layer and never be
- * added to this barrel.
+ * It exports pure data DTOs (projection, presence, capability, session
+ * state) — never host handles. Host-internal wire plumbing (persistence
+ * operation maps, password hash records), host-only provider credential
+ * stores (the OS credential adapter and its XDG file fallback), and the
+ * shared ProjectSession/Core runtime implementation are intentionally NOT
+ * re-exported here; no filesystem, Git, provider, or database handle ever
+ * crosses this boundary.
  */
+
 export type {
-  BinaryPayload,
-  YjsDocumentKey,
-  WorkingDocumentState,
-  PersistYjsUpdateInput,
-  SessionState,
-  InviteState,
-  CapabilityState,
-  UserRole,
-  UserState,
+  PresenceUpdate,
+  ProjectPresenceV1,
+  ProjectSessionProjectionV1,
+  ProjectSourceDiagnosticV1,
+  SessionPresenceSurface,
+} from '../host/project-session.js';
+export type {
   AuthBackoffState,
+  BinaryPayload,
+  CapabilityState,
   ConsumeInviteResult,
-  ProjectRegistryEntry,
-  OperationCheckpoint,
   GitSubmissionJournal,
   GitSubmissionReceipt,
+  InviteState,
+  OperationCheckpoint,
+  PersistYjsUpdateInput,
+  ProjectRegistryEntry,
+  SessionState,
   UiPreferences,
+  UserRole,
+  UserState,
+  WorkingDocumentState,
+  YjsDocumentKey,
 } from './persistence.js';

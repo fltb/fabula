@@ -15,7 +15,7 @@
     "build:types": "tsc -b packages/core --force && tsc -b packages/node-host --force && tsc -b packages/bench packages/cli packages/workbench --force",
     "build:js": "node packages/core/build.mjs && node packages/node-host/build.mjs && node packages/bench/build.mjs && node packages/cli/build.mjs && npm run -w @novalistically/workbench build",
     "smoke:stage1:live": "node packages/bench/scripts/generate-reference.mjs",
-    "test": "vitest run",
+    "test": "vitest run && npm run -w @novalistically/workbench test:host",
     "test:watch": "vitest",
     "bench": "npm run -w @novalistically/bench bench",
     "lint": "biome check .",

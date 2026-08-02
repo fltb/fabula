@@ -11,125 +11,73 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-const FIXTURE_PATH = path.resolve('fixtures/arcane-aftermath');
+const FIXTURE_PATH = path.resolve(
+  import.meta.dirname,
+  '..',
+  '..',
+  '..',
+  'fixtures',
+  'arcane-aftermath',
+);
 
 import { buildSceneRenderPrompt } from '../src/ai/prompts/scene-render.js';
 import { buildThreadStatusPrompt } from '../src/ai/prompts/thread-status.js';
 import { MockProvider } from '../src/ai/providers/mock.js';
 import { LLMError } from '../src/ai/types.js';
 import { ContextCompiler } from '../src/context/compiler.js';
-import { EntityMapper } from '../src/entity/mapper.js';
-import { InMemoryEntityRegistry } from '../src/entity/registry.js';
+import type { CanonicalProjectIR } from '../src/entity/project-runtime.js';
+import { loadCanonicalProject } from '../src/entity/project-runtime.js';
+import type { InMemoryEntityRegistry } from '../src/entity/registry.js';
 import { StateManager } from '../src/state/manager.js';
 import { ReplayEngine } from '../src/state/replay.js';
 import type {
-  CompletionResponse,
-  EntityCatalogContext,
   NarrativeEvent,
   ProjectData,
   SceneRenderInput,
   StyleGuidance,
-  WorldState,
 } from '../src/types/index.js';
+import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
 
-/** Empty catalog pair for the standalone StateManager/ReplayEngine smoke path. */
-const EMPTY_CATALOG_CONTEXT: EntityCatalogContext = {
-  entityDeclarationCatalog: { declarations: {}, version: 1 },
-  entityTypeCatalog: { types: {}, version: 1 },
-};
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
-  return {
-    id: 'test:evt',
-    event: 'test_event',
-    narrativeOrder: 1,
-    title: 'Test Event',
-    storyTime: { type: 'absolute', value: 'day_1' },
-    sceneType: 'linear',
-    pov: { character: 'system', type: 'omniscient' },
-    sceneBrief: 'Test event',
-    beats: ['Test event'],
-    preconditions: [],
-    postconditions: [],
-    threadProgress: [],
-    foreshadowing: [],
-    relationshipEffects: [],
-    ruleEffects: [],
-    source: 'event_file',
-    branchExistence: { type: 'all' },
-    participants: { entities: [] },
-    ...overrides,
-  };
-}
-
-function makeGenesisEvent(): NarrativeEvent {
-  return makeEvent({
-    id: 'system:genesis',
-    event: 'system:genesis',
-    narrativeOrder: 0,
-    title: 'World Genesis',
-    storyTime: { type: 'absolute', value: 'day_-1' },
-    source: 'system',
-    postconditions: [
-      ['world', 'status', 'post_arcane_s1'],
-      ['world', 'day', 0],
-      ['world', 'has_crystal_inventory', true],
-      ['seraphine', 'location', 'piltover_enforcer_headquarters'],
-      ['seraphine', 'status', 'alive'],
-      ['camille', 'location', 'piltover_enforcer_headquarters'],
-      ['camille', 'status', 'alive'],
-      ['camille', 'condition', 'healthy'],
-    ].map(([entityId, attribute, value]) => ({
-      id: `${entityId}.${attribute}`,
-      entityId,
-      attribute,
-      value,
-      confidence: 1.0,
-      validity: {
-        temporal: { start: { type: 'absolute' as const, value: 'day_-1' }, end: null },
-        branches: { type: 'all' as const },
-      },
-    })),
-  });
-}
-
+const SNAPSHOT = materializeFixtureSnapshot(FIXTURE_PATH);
 describe('1. Full Pipeline with MockProvider', () => {
-  let mapper: EntityMapper;
+  let ir: CanonicalProjectIR;
   let projectData: ProjectData;
   let registry: InMemoryEntityRegistry;
-  let allEvents: NarrativeEvent[];
+  let allEvents: readonly NarrativeEvent[];
   let e1aEvent: NarrativeEvent;
   let sm: StateManager;
 
   beforeAll(() => {
     expect(fs.existsSync(FIXTURE_PATH)).toBe(true);
 
-    // 1. Load fixture via EntityMapper
-    mapper = new EntityMapper(FIXTURE_PATH);
-    projectData = mapper.loadProject();
+    // 1. Load the immutable fixture snapshot through the canonical kernel.
+    //    loadCanonicalProject produces the catalog pair, registry, runtime
+    //    events, and baseline (initial facts/threads) in one pass.
+    ir = loadCanonicalProject(SNAPSHOT);
+    projectData = ir.data;
     expect(projectData.config).not.toBeNull();
 
-    // 2. Build entity registry from fixture
-    registry = new InMemoryEntityRegistry();
-    registry.load(FIXTURE_PATH);
+    // 2. Registry is built by the canonical kernel from the mapped data.
+    registry = ir.registry;
     const allEntities = registry.getAll();
     expect(allEntities.length).toBeGreaterThanOrEqual(5);
 
-    // 3. Load all events (genesis + chapter events)
-    allEvents = mapper.loadAllEvents(projectData.chapters);
+    // 3. Authored events only — the kernel never synthesizes genesis.
+    allEvents = ir.authoredEvents;
     expect(allEvents.length).toBeGreaterThanOrEqual(2);
 
     // Find E1a
     const found = allEvents.find((e) => e.id === 'E1a');
     expect(found).toBeDefined();
-    e1aEvent = found!;
+    if (found === undefined) throw new Error('fixture E1a event is missing');
+    e1aEvent = found;
   });
 
   it('1a. loads fixture and builds entity registry with expected entities', () => {
     // Project config
-    expect(projectData.config!.project).toBe('arcane_aftermath');
+    const config = projectData.config;
+    if (config === null) throw new Error('fixture project config is missing');
+    expect(config.project).toBe('arcane_aftermath');
 
     // Characters loaded
     const characters = registry.findByKind('character');
@@ -143,11 +91,11 @@ describe('1. Full Pipeline with MockProvider', () => {
     expect(locations.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('1b. loads all events with genesis + E1a', () => {
+  it('1b. loads authored events only (no synthetic genesis) including E1a', () => {
     expect(allEvents.length).toBeGreaterThanOrEqual(2);
     const ids = allEvents.map((e) => e.id);
-    expect(ids).toContain('system:genesis');
     expect(ids).toContain('E1a');
+    expect(ids).not.toContain('system:genesis');
 
     // E1a has correct properties
     expect(e1aEvent.pov.character).toBe('seraphine');
@@ -156,36 +104,61 @@ describe('1. Full Pipeline with MockProvider', () => {
     expect(e1aEvent.sceneType).toBe('linear');
   });
 
-  it('1c. commits events to StateManager and produces world state', () => {
-    sm = new StateManager(EMPTY_CATALOG_CONTEXT);
+  it('1c. commits canonical runtime events to StateManager and produces world state', () => {
+    // StateManager runs on the canonical catalog + canonical baseline
+    // (initial facts/threads and the fixture time anchors).
+    sm = new StateManager(ir.catalogContext, 20, {
+      initialFacts: ir.initialFacts,
+      initialThreads: ir.initialThreads,
+      timeAnchors: ir.data.timeAnchors,
+    });
+    for (const event of ir.runtimeEvents) sm.commit(event);
 
-    // Commit genesis + E1a
-    const genesis = makeGenesisEvent();
-    sm.commit(genesis);
-    sm.commit(e1aEvent);
-
-    expect(sm.eventStore.count).toBe(2);
+    // The canonical runtime event log holds only authored events.
+    expect(sm.eventStore.count).toBe(ir.runtimeEvents.length);
+    expect(sm.eventStore.getAll().map((e) => e.id)).not.toContain('system:genesis');
 
     const state = sm.getCurrentState();
-    // World state should have entities from postconditions
-    expect(state.entities['world']?.['status']).toBe('post_arcane_s1');
-    // Seraphine should have state from E1a postconditions
-    // (depends on the fixture — check has_detected_anomaly or knows_mysterious_signal)
-    expect(
-      state.entities['seraphine']?.['has_detected_anomaly'] ||
-        state.entities['seraphine']?.['detected_anomaly'],
-    ).toBeDefined();
+
+    // Initial baseline: characters carry their definition state.
+    expect(state.entities.seraphine?.location).toBe('piltover_enforcer_headquarters');
+    expect(state.entities.seraphine?.status).toBe('alive');
+
+    // Initial baseline: world-fact concepts from state_initial.yaml.
+    const anomalyConcept = state.entities.anomalous_emotional_signature;
+    expect(anomalyConcept).toBeDefined();
+    expect(String(anomalyConcept?.value)).toContain('anomalous emotional signature');
+
+    // E1a advances T1 out of its baseline planned state.
+    expect(state.threads.T1?.status).toBe('active');
+
+    // E1a's authored postconditions applied.
+    expect(state.entities.seraphine?.has_detected_anomaly).toBe(true);
+    expect(state.entities.seraphine?.knows_mysterious_signal).toBe(true);
   });
 
-  it('1d. ReplayEngine reconstucts state at narrative order 1', () => {
-    const replay = new ReplayEngine();
-    const causalEvents = [makeGenesisEvent(), e1aEvent];
-    const at0 = replay.getStateAt(causalEvents, 0);
-    expect(at0.entities['world']?.['status']).toBe('post_arcane_s1');
+  it('1d. ReplayEngine reconstructs state at baseline and after E1a', () => {
+    const replay = new ReplayEngine(ir.catalogContext);
+    const baseline = {
+      initialFacts: ir.initialFacts,
+      initialThreads: ir.initialThreads,
+      timeAnchors: ir.data.timeAnchors,
+    };
 
-    const at1 = replay.getStateAt(causalEvents, 1);
-    // E1a's postconditions applied
+    // Position 0 = canonical baseline (initial facts, no authored events).
+    const at0 = replay.getStateAt(ir.runtimeEvents, 0, baseline);
+    expect(at0.entities.seraphine?.location).toBe('piltover_enforcer_headquarters');
+    expect(at0.entities.seraphine?.has_detected_anomaly).toBeUndefined();
+    expect(at0.entities.anomalous_emotional_signature?.value).toBeDefined();
+    expect(at0.threads.T1?.status).toBe('planned');
+
+    // Position 1 = after E1a's authored postconditions.
+    const at1 = replay.getStateAt(ir.runtimeEvents, 1, baseline);
+    expect(at1.entities.seraphine?.has_detected_anomaly).toBe(true);
     expect(at1.facts.length).toBeGreaterThan(0);
+    expect(
+      at1.facts.some((f) => f.entityId === 'seraphine' && f.attribute === 'has_detected_anomaly'),
+    ).toBe(true);
   });
 
   it('1e. compiles context for E1a via ContextCompiler', () => {
@@ -203,7 +176,8 @@ describe('1. Full Pipeline with MockProvider', () => {
     // Character snapshots include seraphine
     const seraphineSnap = pkg.characterSnapshots.find((cs) => cs.id === 'seraphine');
     expect(seraphineSnap).toBeDefined();
-    expect(seraphineSnap!.traits).toContain('empathetic');
+    if (seraphineSnap === undefined) throw new Error('seraphine snapshot is missing');
+    expect(seraphineSnap.traits).toContain('empathetic');
 
     // Markdown is generated
     expect(pkg.markdown.length).toBeGreaterThan(0);
@@ -285,7 +259,9 @@ describe('1. Full Pipeline with MockProvider', () => {
     // Mock recorded the call
     expect(mock.callCount).toBe(1);
     expect(mock.lastRequest).toBeDefined();
-    expect(mock.lastRequest!.messages).toEqual(messages);
+    const lastRequest = mock.lastRequest;
+    if (lastRequest === undefined) throw new Error('mock request is missing');
+    expect(lastRequest.messages).toEqual(messages);
   });
 
   it('1h. uses MockProvider generator for dynamic responses', async () => {
@@ -304,7 +280,6 @@ describe('1. Full Pipeline with MockProvider', () => {
     expect(response.content.length).toBeGreaterThan(20);
     expect(mock.callCount).toBe(1);
   });
-
 });
 
 // ─── 2. LLMError Class Behavior ──────────────────────────────────────────────

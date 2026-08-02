@@ -24,5 +24,6 @@ omp-session-*.html
 .env.*
 !.env.example
 
-# Workbench runtime state
+# Workbench runtime state (root and any workspace/package .nova directories)
 .nova/workbench.sqlite*
+**/.nova/workbench.sqlite*

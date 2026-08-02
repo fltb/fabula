@@ -66,7 +66,7 @@ Host-bound commands: `project init`, `validate`, `status`, `entity`, `graph`, `s
 
 - `WORKBENCH_MODE=workbench` is the composed authenticated Workbench; missing/unknown mode fails closed. `WORKBENCH_MODE=listener` is a loopback health/status smoke process only.
 - `packages/workbench/scripts/dev.mjs` runs the composed Host plus Vite proxy/HMR; `scripts/start.mjs workbench` runs the production Host, and `scripts/start.mjs listener` is the smoke entry.
-- Node launchers load dotenv from `WORKBENCH_ENV_FILE` or `.env` without overriding existing shell variables. Production requires explicit project root, SQLite path, built asset root, and `NOVALISTICALLY_AI_API_KEY`; development may explicitly opt into the mock provider and loopback bootstrap.
+- Node launchers load dotenv from `WORKBENCH_ENV_FILE`, then the working-directory `.env`, then the monorepo-root `.env`; existing shell variables are never overridden. Production requires explicit project root, SQLite path, built asset root, and `NOVALISTICALLY_AI_API_KEY`; the dev script (`dev.mjs`) alone defaults an unset project root to `fixtures/zhu-fu`, the provider to mock, and loopback bootstrap to enabled — production (`start.mjs workbench`) forces `WORKBENCH_DEV=false` and never applies those defaults. An explicitly set but invalid `WORKBENCH_PROJECT_ROOT` is a hard error in both modes.
 - Static SPA fallback is restricted to unknown browser GET paths. `/api/**`, `/health`, `/status`, `/mcp`, and `/yjs` must never receive `index.html`.
 
 ## Agent prompts and durable memory

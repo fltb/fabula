@@ -1,8 +1,20 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
-dotenv.config({ path: process.env.WORKBENCH_ENV_FILE });
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const root = resolve(scriptDir, '..'); // packages/workbench
+const repoRoot = resolve(root, '../..'); // monorepo root
+
+const envFile = process.env.WORKBENCH_ENV_FILE;
+if (envFile) {
+  dotenv.config({ path: envFile });
+} else {
+  // cwd wins over the monorepo root; shell variables always win over dotenv.
+  dotenv.config({ path: [resolve(process.cwd(), '.env'), resolve(repoRoot, '.env')] });
+}
 
 const mode = process.argv[2];
 if (mode !== 'workbench' && mode !== 'listener') {

@@ -127,55 +127,65 @@ async function staticHandler(request: Request, assetsRoot: string): Promise<Resp
   }
 }
 
+/** Treat empty env values as unset so a copied template cannot break startup. */
+function opt(value: string | undefined): string | undefined {
+  return value === undefined || value.trim() === '' ? undefined : value;
+}
+
 export function parseWorkbenchLaunchConfig(
   env: NodeJS.ProcessEnv = process.env,
 ): WorkbenchLaunchConfig {
-  if (env.WORKBENCH_MODE !== 'workbench') {
+  if (opt(env.WORKBENCH_MODE) !== 'workbench') {
     throw new Error('WORKBENCH_MODE must be explicitly set to "workbench" for a composed Host');
   }
-  const projectRoot = env.WORKBENCH_PROJECT_ROOT;
-  const databasePath = env.WORKBENCH_DATABASE_PATH;
+  const projectRoot = opt(env.WORKBENCH_PROJECT_ROOT);
+  const databasePath = opt(env.WORKBENCH_DATABASE_PATH);
   if (!projectRoot || !databasePath) {
     throw new Error(
       'Set WORKBENCH_PROJECT_ROOT and WORKBENCH_DATABASE_PATH before starting Workbench',
     );
   }
   const devMode = env.WORKBENCH_DEV === 'true';
-  const assetsRoot = env.WORKBENCH_ASSETS_ROOT ? resolve(env.WORKBENCH_ASSETS_ROOT) : undefined;
+  const assetsRootRaw = opt(env.WORKBENCH_ASSETS_ROOT);
+  const assetsRoot = assetsRootRaw ? resolve(assetsRootRaw) : undefined;
   if (!devMode && assetsRoot === undefined) {
     throw new Error('WORKBENCH_ASSETS_ROOT is required outside Workbench development mode');
   }
   const allowBootstrap = env.WORKBENCH_ALLOW_BOOTSTRAP === 'true';
-  const host = env.WORKBENCH_HOST === 'lan' ? 'lan' : (env.WORKBENCH_HOST ?? 'loopback');
+  const hostRaw = opt(env.WORKBENCH_HOST);
+  const host = hostRaw === 'lan' ? 'lan' : (hostRaw ?? 'loopback');
   const lan = env.WORKBENCH_LAN === 'true';
-  const port = env.WORKBENCH_PORT === undefined ? 8787 : Number(env.WORKBENCH_PORT);
+  const portRaw = opt(env.WORKBENCH_PORT);
+  const port = portRaw === undefined ? 8787 : Number(portRaw);
   if (!Number.isInteger(port) || port < 0 || port > 65535)
     throw new Error('WORKBENCH_PORT must be 0..65535');
-  const providerValue = env.WORKBENCH_PROVIDER ?? 'ai-sdk';
+  const providerValue = opt(env.WORKBENCH_PROVIDER) ?? 'ai-sdk';
   if (providerValue !== 'ai-sdk' && providerValue !== 'mock') {
     throw new Error('WORKBENCH_PROVIDER must be ai-sdk or mock');
   }
   if (providerValue === 'ai-sdk' && !env.NOVALISTICALLY_AI_API_KEY) {
     throw new Error('NOVALISTICALLY_AI_API_KEY is required when WORKBENCH_PROVIDER=ai-sdk');
   }
+  const allowedHostsRaw = opt(env.WORKBENCH_ALLOWED_HOSTS) ?? '127.0.0.1';
+  const allowedOriginsRaw = opt(env.WORKBENCH_ALLOWED_ORIGINS);
   const config: WorkbenchLaunchConfig = {
     mode: 'workbench',
     provider: providerValue,
     allowMockProvider: env.WORKBENCH_ALLOW_MOCK_PROVIDER === 'true',
     projectRoot: resolve(projectRoot),
     databasePath: resolve(databasePath),
-    projectId: env.WORKBENCH_PROJECT_ID ?? basename(resolve(projectRoot)),
-    displayName: env.WORKBENCH_DISPLAY_NAME ?? basename(resolve(projectRoot)),
+    projectId: opt(env.WORKBENCH_PROJECT_ID) ?? basename(resolve(projectRoot)),
+    displayName: opt(env.WORKBENCH_DISPLAY_NAME) ?? basename(resolve(projectRoot)),
     assetsRoot,
     allowBootstrap,
-    unixSocket: env.WORKBENCH_UNIX_SOCKET,
+    unixSocket: opt(env.WORKBENCH_UNIX_SOCKET),
     trustForwardedHeaders: env.WORKBENCH_TRUST_FORWARDED_HEADERS === 'true',
     host,
     lan,
     port,
     mutation: {
-      allowedHosts: (env.WORKBENCH_ALLOWED_HOSTS ?? '127.0.0.1').split(',').map((x) => x.trim()),
-      allowedOrigins: env.WORKBENCH_ALLOWED_ORIGINS?.split(',').map((x) => x.trim()),
+      allowedHosts: allowedHostsRaw.split(',').map((x) => x.trim()),
+      allowedOrigins: allowedOriginsRaw?.split(',').map((x) => x.trim()),
     },
   };
   validateConfig(config);

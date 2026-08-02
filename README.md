@@ -139,19 +139,27 @@ Workbench has two explicit modes. `start:listener` is only a loopback health/sta
 
 ### Development
 
-From the repository root, copy the tracked template to the ignored `.env`, then set the project path. The project must contain `nova.yaml`; the repository root itself is not a project. Workbench launchers load `.env` with `dotenv`; shell variables override file values. Use `WORKBENCH_ENV_FILE=/absolute/path/to/file` when the file is elsewhere.
+`dev` starts with no env file at all: it loads the `zhu-fu` demo project from `fixtures/zhu-fu`, uses the mock provider, and enables the loopback-only owner bootstrap. Launchers discover the env file in this order: `WORKBENCH_ENV_FILE` if set, then the working-directory `.env`, then the monorepo-root `.env`; shell variables always override file values. The checked-in template is production-safe; for development copy it and flip the three development switches below:
 
 ```bash
 cp .env.example .env
-# Edit .env:
-#   WORKBENCH_PROJECT_ROOT=/absolute/path/to/fixtures/zhu-fu
+# Edit .env (the launcher finds it at the repository root):
+#   WORKBENCH_PROJECT_ROOT=/absolute/path/to/project   # must contain nova.yaml
 #   WORKBENCH_PROVIDER=mock
 #   WORKBENCH_ALLOW_MOCK_PROVIDER=true
 #   WORKBENCH_ALLOW_BOOTSTRAP=true
 fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench dev
 ```
 
-This starts the composed Host on `http://127.0.0.1:8787` and Vite with HMR on `http://127.0.0.1:5173`. Development defaults to the explicit mock provider, creates `.nova/workbench.sqlite` under the current directory, and proxies `/api`, `/health`, `/status`, `/mcp`, and `/yjs` to the Host. No password is supplied by the script.
+With no env at all, the same command prints which demo project it picked:
+
+```text
+[workbench dev] WORKBENCH_PROJECT_ROOT unset; using demo project /…/fabula/fixtures/zhu-fu. Set WORKBENCH_PROJECT_ROOT to override.
+```
+
+An explicitly set but invalid `WORKBENCH_PROJECT_ROOT` (missing `nova.yaml`) is a hard error — the demo default never silently replaces an explicit choice.
+
+This starts the composed Host on `http://127.0.0.1:8787` and Vite with HMR on `http://127.0.0.1:5173`. Development defaults to the explicit mock provider, creates `.nova/workbench.sqlite` under the current working directory, and proxies `/api`, `/health`, `/status`, `/mcp`, and `/yjs` to the Host. No password is supplied by the script.
 
 On first run, open the Vite URL and use the **First-run owner bootstrap** form. It creates the owner and signs that browser session in directly; the opaque session remains in memory. The equivalent API call returns both `userId` and `sessionId`, but a curl-created session is not injected into an already-open browser:
 

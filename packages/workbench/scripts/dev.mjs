@@ -1,29 +1,60 @@
 #!/usr/bin/env node
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { existsSync, mkdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 
-dotenv.config({ path: process.env.WORKBENCH_ENV_FILE });
-const root = resolve(new URL('.', import.meta.url).pathname, '..');
-const projectRoot = process.env.WORKBENCH_PROJECT_ROOT;
-if (!projectRoot) {
-  console.error('Set WORKBENCH_PROJECT_ROOT to a fixture/project directory containing nova.yaml.');
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const root = resolve(scriptDir, '..'); // packages/workbench
+const repoRoot = resolve(root, '../..'); // monorepo root
+
+const envFile = process.env.WORKBENCH_ENV_FILE;
+if (envFile) {
+  dotenv.config({ path: envFile });
+} else {
+  // cwd wins over the monorepo root; shell variables always win over dotenv.
+  dotenv.config({ path: [resolve(process.cwd(), '.env'), resolve(repoRoot, '.env')] });
+}
+
+// Empty values in .env count as unset so a copied template cannot break dev.
+const unset = (value) => value === undefined || value.trim() === '';
+const rawProjectRoot = process.env.WORKBENCH_PROJECT_ROOT;
+const explicitProjectRoot = !unset(rawProjectRoot);
+const projectRoot = explicitProjectRoot
+  ? resolve(rawProjectRoot)
+  : resolve(repoRoot, 'fixtures/zhu-fu');
+if (!existsSync(join(projectRoot, 'nova.yaml'))) {
+  console.error(
+    explicitProjectRoot
+      ? `WORKBENCH_PROJECT_ROOT has no nova.yaml: ${projectRoot}`
+      : 'No WORKBENCH_PROJECT_ROOT and the demo fixtures/zhu-fu project is unavailable. Set WORKBENCH_PROJECT_ROOT to a project directory containing nova.yaml.',
+  );
   process.exit(2);
 }
-const databasePath =
-  process.env.WORKBENCH_DATABASE_PATH ?? resolve(process.cwd(), '.nova/workbench.sqlite');
+if (!explicitProjectRoot) {
+  console.warn(
+    `[workbench dev] WORKBENCH_PROJECT_ROOT unset; using demo project ${projectRoot}. Set WORKBENCH_PROJECT_ROOT to override.`,
+  );
+}
+
+const databasePath = unset(process.env.WORKBENCH_DATABASE_PATH)
+  ? resolve(process.cwd(), '.nova/workbench.sqlite')
+  : resolve(process.env.WORKBENCH_DATABASE_PATH);
 mkdirSync(dirname(databasePath), { recursive: true });
+
+const pick = (value, fallback) => (unset(value) ? fallback : value);
 const env = {
   ...process.env,
   WORKBENCH_MODE: 'workbench',
   WORKBENCH_DEV: 'true',
   WORKBENCH_PROJECT_ROOT: projectRoot,
-  WORKBENCH_PROVIDER: process.env.WORKBENCH_PROVIDER ?? 'mock',
-  WORKBENCH_ALLOW_MOCK_PROVIDER: process.env.WORKBENCH_ALLOW_MOCK_PROVIDER ?? 'true',
+  WORKBENCH_PROVIDER: pick(process.env.WORKBENCH_PROVIDER, 'mock'),
+  WORKBENCH_ALLOW_MOCK_PROVIDER: pick(process.env.WORKBENCH_ALLOW_MOCK_PROVIDER, 'true'),
+  WORKBENCH_ALLOW_BOOTSTRAP: pick(process.env.WORKBENCH_ALLOW_BOOTSTRAP, 'true'),
   WORKBENCH_DATABASE_PATH: databasePath,
-  WORKBENCH_ALLOWED_ORIGINS: process.env.WORKBENCH_ALLOWED_ORIGINS ?? 'http://127.0.0.1:5173',
-  WORKBENCH_ALLOWED_HOSTS: process.env.WORKBENCH_ALLOWED_HOSTS ?? '127.0.0.1',
+  WORKBENCH_ALLOWED_ORIGINS: pick(process.env.WORKBENCH_ALLOWED_ORIGINS, 'http://127.0.0.1:5173'),
+  WORKBENCH_ALLOWED_HOSTS: pick(process.env.WORKBENCH_ALLOWED_HOSTS, '127.0.0.1'),
 };
 
 const built = spawnSync('npm', ['run', 'build:host'], { cwd: root, env, stdio: 'inherit' });

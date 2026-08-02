@@ -10,6 +10,7 @@
 import { z } from 'zod';
 import type { SceneStoryCoordinate, StoryCoordinate } from '../types/entity.js';
 import type { EffectiveCoordinate, GraphReadResolution } from '../types/graph.js';
+import { branchPathV1Schema, branchSetV1Schema } from './editorial.ts';
 
 // ——— Coordinates ———
 
@@ -75,7 +76,8 @@ export const outputDescriptorSchema = z
     outputId: z.string().min(1),
     canonicalKey: z.string().min(1),
     value: outputValueSchema,
-    branchScope: z.string().min(1),
+    // The compiler's initial-root outputs intentionally use the empty scope.
+    branchScope: z.string(),
     effectiveCoordinate: effectiveCoordinateSchema,
     provenanceHash: z.string().min(1),
   })
@@ -226,3 +228,81 @@ export const graphCacheEntrySchema = z
 // ——— Graph Types discrimated ———
 
 export const graphSchema = z.discriminatedUnion('type', [storyGraphSchema, discourseGraphSchema]);
+
+// ─── Detached canonical graph and route snapshot ────────────────────────────
+
+export const canonicalGraphNodeOriginSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('initial') }).strict(),
+  z
+    .object({
+      type: z.literal('event'),
+      eventId: z.string().min(1),
+      source: z.enum(['event_file', 'branch_point', 'system']),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('discourse'),
+      entryId: z.string().min(1),
+      sceneId: z.string().min(1),
+      branch: z.string().min(1),
+    })
+    .strict(),
+]);
+
+export const canonicalGraphNodeSchema = z
+  .object({
+    id: z.string().min(1),
+    coordinate: effectiveCoordinateSchema,
+    branchScope: z.string(),
+    origin: canonicalGraphNodeOriginSchema,
+  })
+  .strict();
+
+export const canonicalGraphRouteChoiceSchema = z
+  .object({
+    eventId: z.string().min(1),
+    choiceId: z.string().min(1),
+    label: z.string().min(1),
+    description: z.string(),
+    targetEventId: z.string().min(1),
+    narrativeOrder: z.number().finite(),
+  })
+  .strict();
+
+export const canonicalGraphRouteSchema = z
+  .object({
+    branchPath: branchPathV1Schema,
+    branchScope: z.string().min(1),
+    discourseBranch: z.string().min(1),
+    selectedEventIds: z.array(z.string().min(1)),
+    leafPaths: z.array(branchPathV1Schema).min(1),
+    eventScopes: z.array(
+      z
+        .object({
+          eventId: z.string().min(1),
+          branchExistence: branchSetV1Schema,
+        })
+        .strict(),
+    ),
+    choices: z.array(canonicalGraphRouteChoiceSchema),
+  })
+  .strict();
+
+export const canonicalGraphRuntimeSnapshotSchema = z
+  .object({
+    story: z
+      .object({
+        graph: storyGraphSchema,
+        nodes: z.array(canonicalGraphNodeSchema),
+      })
+      .strict(),
+    discourse: z
+      .object({
+        graph: discourseGraphSchema,
+        nodes: z.array(canonicalGraphNodeSchema),
+      })
+      .strict(),
+    route: canonicalGraphRouteSchema,
+  })
+  .strict();

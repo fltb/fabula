@@ -9,23 +9,24 @@ export {
   diffEvent,
   type ImpactAnalysisResult,
   type ImpactLevel,
+  inspectCanonicalGraphRuntime,
   inspectProjectGraph,
   type ProjectGraphSnapshot,
 } from './api.ts';
 export {
-  type CacheDiagnostics,
   buildAttemptKeyMaterial,
   buildLogicalKeyMaterial,
   buildSurfaceKeyMaterial,
   buildValidationKeyMaterial,
+  type CacheDiagnostics,
   canonicalJson,
+  clearEventCache,
+  clearRenderCache,
   computeEvidenceHash,
   computeFlatCacheKey,
   computeSourceContentHash,
   getCachedRender,
   setCachedRender,
-  clearEventCache,
-  clearRenderCache,
   type VerifyChainResult,
   verifyEvidenceChain,
 } from './cache/render-cache.ts';
@@ -35,8 +36,8 @@ export { calculateISS } from './iss/index.ts';
 export type { ProviderCallLedgerEntry } from './pipeline/index.ts';
 export { type PipelineRunResult, ReportWriter } from './report/index.ts';
 export {
-  type ValidationReport,
   formatValidationReport,
+  type ValidationReport,
 } from './reporter/index.ts';
 export {
   expectedOutcomeManifestSchema,
@@ -52,6 +53,13 @@ export {
   exportDAGtoMermaid,
   ReplayEngine,
 } from './state/index.ts';
+export type {
+  CanonicalGraphNode,
+  CanonicalGraphNodeOrigin,
+  CanonicalGraphRoute,
+  CanonicalGraphRouteChoice,
+  CanonicalGraphRuntimeSnapshot,
+} from './types/graph.ts';
 export type {
   Blocker,
   NextAction,

@@ -3,7 +3,12 @@ import { sha256Canonical } from '../cache/render-cache.ts';
 import type { TemporalContext } from '../entity/timestamp.ts';
 import { INITIAL_STORY_ROOT_ID, resolveTemporalContext } from '../entity/timestamp.ts';
 import { ConfigError } from '../errors.ts';
-import type { DiscourseGraph, ReadRequirement, StoryGraph } from '../types/graph.ts';
+import type {
+  CanonicalGraphNode,
+  DiscourseGraph,
+  ReadRequirement,
+  StoryGraph,
+} from '../types/graph.ts';
 import type {
   BranchPath,
   Fact,
@@ -29,7 +34,9 @@ export { INITIAL_STORY_ROOT_ID };
 
 export interface CompiledNarrativeGraphs {
   storyGraph: StoryGraph;
+  storyNodes: readonly CanonicalGraphNode[];
   discourseGraph: DiscourseGraph;
+  discourseNodes: readonly CanonicalGraphNode[];
   storyAdjacency: AdjacencyList;
   /** Branch-filtered events — the canonical event set both story
    *  boundaries and discourse contexts compile from. */
@@ -40,12 +47,42 @@ export interface CompiledNarrativeGraphs {
 export interface CompiledStoryRuntimeGraph {
   initialRootId: string;
   storyGraph: StoryGraph;
+  storyNodes: readonly CanonicalGraphNode[];
   storyAdjacency: AdjacencyList;
   selectedEvents: readonly NarrativeEvent[];
   initialFacts: readonly Fact[];
   initialThreads: readonly { id: string }[];
   temporalContext: TemporalContext;
   order: StoryOrderIndex;
+}
+
+function projectStoryNodes(
+  nodes: readonly CompileNode[],
+  events: readonly NarrativeEvent[],
+): readonly CanonicalGraphNode[] {
+  const eventById = new Map(events.map((event) => [event.id, event]));
+  return nodes.map((node) => {
+    if (node.isInitialRoot) {
+      return {
+        id: node.id,
+        coordinate: node.coordinate,
+        branchScope: node.branchScope,
+        origin: { type: 'initial' },
+      };
+    }
+    const event = eventById.get(node.id);
+    if (event === undefined) {
+      throw new ConfigError(`Story graph node "${node.id}" has no selected event`, {
+        phase: 'narrative-graphs',
+      });
+    }
+    return {
+      id: node.id,
+      coordinate: node.coordinate,
+      branchScope: node.branchScope,
+      origin: { type: 'event', eventId: event.id, source: event.source },
+    };
+  });
 }
 
 function factKey(fact: Fact): string {
@@ -307,12 +344,14 @@ export function compileStoryRuntimeGraph(input: {
         .filter(([, coord]) => coord !== undefined),
     ),
   );
+  const projectedStoryNodes = projectStoryNodes(storyNodes, selectedEvents);
 
   return {
     initialRootId: INITIAL_STORY_ROOT_ID,
     storyGraph,
     storyAdjacency,
     selectedEvents,
+    storyNodes: projectedStoryNodes,
     initialFacts: input.initialFacts,
     initialThreads: input.initialThreads,
     temporalContext,
@@ -346,7 +385,7 @@ export function compileNarrativeGraphs(input: {
     timeAnchors: input.timeAnchors,
     branchPath: input.branchPath,
   });
-  const { storyGraph, storyAdjacency, selectedEvents } = storyResult;
+  const { storyGraph, storyNodes, storyAdjacency, selectedEvents } = storyResult;
 
   // ── Discourse graph ────────────────────────────────────────────────────
   const sceneSequence = compileDiscourseSceneSequence({
@@ -355,21 +394,33 @@ export function compileNarrativeGraphs(input: {
     branch: input.discourseBranch,
   });
 
-  const discourseNodes: CompileNode[] = input.ledger.entries
-    .filter((entry) => entry.branch === input.discourseBranch)
-    .map((entry) => ({
-      id: `discourse:${entry.id}`,
-      coordinate: { type: 'discoursePosition' as const, value: entry.discoursePosition },
-      effects: [
-        {
-          effectId: `discourse:${entry.id}:action`,
-          canonicalKey: `disclosure:${entry.sceneId}:${entry.id}`,
-          value: entry.action,
-        },
-      ],
-      requirements: [],
-      branchScope: selectedScope,
-    }));
+  const discourseEntries = input.ledger.entries.filter(
+    (entry) => entry.branch === input.discourseBranch,
+  );
+  const discourseNodes: CompileNode[] = discourseEntries.map((entry) => ({
+    id: `discourse:${entry.id}`,
+    coordinate: { type: 'discoursePosition' as const, value: entry.discoursePosition },
+    effects: [
+      {
+        effectId: `discourse:${entry.id}:action`,
+        canonicalKey: `disclosure:${entry.sceneId}:${entry.id}`,
+        value: entry.action,
+      },
+    ],
+    requirements: [],
+    branchScope: selectedScope,
+  }));
+  const projectedDiscourseNodes: readonly CanonicalGraphNode[] = discourseEntries.map((entry) => ({
+    id: `discourse:${entry.id}`,
+    coordinate: { type: 'discoursePosition', value: entry.discoursePosition },
+    branchScope: selectedScope,
+    origin: {
+      type: 'discourse',
+      entryId: entry.id,
+      sceneId: entry.sceneId,
+      branch: entry.branch,
+    },
+  }));
   const discourseResult = compileGraph(discourseNodes, { branchPath: selectedScope });
   if (discourseResult.errors.length > 0) {
     throw new ConfigError(
@@ -462,8 +513,10 @@ export function compileNarrativeGraphs(input: {
   return {
     storyGraph,
     discourseGraph,
+    storyNodes,
     storyAdjacency,
     selectedEvents,
+    discourseNodes: projectedDiscourseNodes,
     techniquesByEventId,
   };
 }

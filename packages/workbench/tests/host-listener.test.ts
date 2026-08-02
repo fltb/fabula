@@ -137,6 +137,7 @@ describe('Host listener HTTP surface', () => {
       status: { method: 'GET', path: '/status', kind: 'status', guarded: false },
       mutations: [{ method: 'POST', path: '/api/scenes', kind: 'mutation', guarded: true }],
       mcp: [],
+      reads: [],
     });
     const handle = await listener.start();
     const res = await listener.app.request('/status');

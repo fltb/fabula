@@ -5,9 +5,6 @@
 // ============================================================================
 
 export { analysisResultSchema, buildAnalysisResultSchema } from './schemas/analysis.ts';
-export { entityTypeCatalogSourceSchema } from './schemas/entity-catalog.ts';
-export { eventFileSchema } from './schemas/event.ts';
-export { projectConfigSchema } from './schemas/project.js';
 export {
   acceptedArtifactRecordSchema,
   acceptedSceneRecordSchema,
@@ -15,8 +12,8 @@ export {
   commitSuccessSchema,
   layeredCacheKeySchema,
   operationRecordSchema,
-  publicationRecordSchema,
   projectSourceSnapshotV1Schema,
+  publicationRecordSchema,
   renderCacheRecordSchema,
   reviewRecordSchema,
   sceneRevisionRecordSchema,
@@ -37,3 +34,7 @@ export {
   traceRecordSchema,
   versionConflictSchema,
 } from './schemas/core-contracts.js';
+export { entityTypeCatalogSourceSchema } from './schemas/entity-catalog.ts';
+export { eventFileSchema } from './schemas/event.ts';
+export { canonicalGraphRuntimeSnapshotSchema } from './schemas/graph.ts';
+export { projectConfigSchema } from './schemas/project.js';

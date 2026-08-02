@@ -7,11 +7,11 @@
  * or protocol) from client-supplied headers, and it never terminates TLS
  * itself. The optional `upgrade` seam wires raw HTTP upgrade events (the
  * authenticated Yjs WebSocket surface mounts here) and guarantees upgraded
- * resources are closed before the HTTP server stops. Mutation and MCP routes
- * register through guarded pre-start-only seams; identity, the Yjs gateway
- * and the MCP transport protocol are otherwise out of scope for this module —
- * the Host server facade (`./server.ts`) is the composition seam where they
- * mount.
+ * resources are closed before the HTTP server stops. Mutation, MCP and
+ * browser read routes register through guarded pre-start-only seams;
+ * identity, the Yjs gateway and the MCP transport protocol are otherwise out
+ * of scope for this module — the Host server facade (`./server.ts`) is the
+ * composition seam where they mount.
  */
 
 import type { IncomingMessage } from 'node:http';
@@ -24,7 +24,7 @@ export type HostListenerMode = 'loopback' | 'lan' | 'unix';
 export type EffectiveProtocol = 'http' | 'https';
 export type HostHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type MutationHttpMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-export type HostEndpointKind = 'health' | 'status' | 'mutation' | 'mcp';
+export type HostEndpointKind = 'health' | 'status' | 'mutation' | 'mcp' | 'read';
 
 export const DEFAULT_HOST_LISTENER_PORT = 8787;
 export const DEFAULT_HOST_HEALTH_PATH = '/health';
@@ -134,6 +134,7 @@ export interface HostEndpointProjection {
   readonly status: HostEndpoint;
   readonly mutations: readonly HostEndpoint[];
   readonly mcp: readonly HostEndpoint[];
+  readonly reads: readonly HostEndpoint[];
 }
 
 export interface HostHealthPayload {
@@ -173,7 +174,7 @@ export interface HostListenerHandle {
 
 export interface HostListener {
   readonly config: Readonly<HostListenerConfig>;
-  /** Root Hono app: protocol middleware, health and status endpoints, guarded mutation and MCP routes. */
+  /** Root Hono app: protocol middleware, health and status endpoints, guarded mutation, MCP and read routes. */
   readonly app: HostListenerApp;
   /** Bind the configured transport and resolve a launch handle. */
   start(): Promise<HostListenerHandle>;
@@ -181,7 +182,7 @@ export interface HostListener {
   close(): Promise<void>;
   /** Live typed status projection. */
   status(): HostListenerStatus;
-  /** Typed endpoint projection (health, status, registered mutations, MCP routes). */
+  /** Typed endpoint projection (health, status, registered mutations, MCP and read routes). */
   endpoints(): HostEndpointProjection;
   /**
    * Register a mutation route under the Host/Origin allowlist. Only mutation
@@ -200,6 +201,15 @@ export interface HostListener {
    * stays with the caller. Registration must happen before `start()`.
    */
   registerMcpRoute(path: string, handler: Handler<HostListenerEnv>): void;
+  /**
+   * Register an authenticated browser read route: GET at exactly `path`,
+   * behind the same Host/Origin allowlist guard as mutation and MCP routes.
+   * The read surface itself (identity resolution, project authorization,
+   * payload projection) stays with the caller; the listener only wires the
+   * guard and the pre-start-only registration. Registration must happen
+   * before `start()`.
+   */
+  registerReadRoute(path: string, handler: Handler<HostListenerEnv>): void;
   isMutationAllowed(host: string | undefined, origin: string | undefined): boolean;
 }
 
@@ -526,6 +536,7 @@ class HostListenerImpl implements HostListener {
   };
   private readonly mutationEndpoints: HostEndpoint[] = [];
   private readonly mcpEndpoints: HostEndpoint[] = [];
+  private readonly readEndpoints: HostEndpoint[] = [];
 
   constructor(config: HostListenerConfig) {
     this.config = { ...config };
@@ -648,6 +659,7 @@ class HostListenerImpl implements HostListener {
       },
       mutations: [...this.mutationEndpoints],
       mcp: [...this.mcpEndpoints],
+      reads: [...this.readEndpoints],
     };
   }
 
@@ -686,6 +698,19 @@ class HostListenerImpl implements HostListener {
       this.mcpEndpoints.push({ method, path, kind: 'mcp', guarded: true });
       this.app.on(method, path, mutationGuard(this), handler);
     }
+  }
+
+  registerReadRoute(path: string, handler: Handler<HostListenerEnv>): void {
+    if (typeof path !== 'string' || path.length === 0 || !path.startsWith('/')) {
+      throw new HostListenerError(
+        `read route path must start with '/'; got ${JSON.stringify(path)}`,
+      );
+    }
+    if (this.state.running) {
+      throw new HostListenerStateError('read routes must be registered before start()');
+    }
+    this.readEndpoints.push({ method: 'GET', path, kind: 'read', guarded: true });
+    this.app.on('GET', path, mutationGuard(this), handler);
   }
 
   isMutationAllowed(host: string | undefined, origin: string | undefined): boolean {

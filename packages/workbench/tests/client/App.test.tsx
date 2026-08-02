@@ -1,0 +1,172 @@
+import { cleanup, render, screen, within } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { App } from '../../src/client/App';
+
+const navigationLabels = [
+  'Project Home',
+  'Scene Canvas',
+  'Source Studio',
+  'Graph / Route',
+  'Review Hub',
+  'Publication',
+] as const;
+
+afterEach(() => {
+  cleanup();
+});
+
+beforeEach(() => {
+  window.localStorage.clear();
+});
+
+describe('Workbench shell layout controls', () => {
+  it('collapses the Navigator without removing its accessible view names', async () => {
+    const user = userEvent.setup();
+    render(() => <App initialNavigatorCollapsed={false} />);
+
+    const navigator = screen.getByTestId('navigator');
+    await user.click(screen.getByRole('button', { name: 'Collapse Navigator' }));
+
+    expect(navigator).toHaveAttribute('data-collapsed', 'true');
+    expect(screen.getByRole('button', { name: 'Expand Navigator' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Project Home' })).toBeInTheDocument();
+  });
+
+  it('pins the Inspector, expands operations, and opens the Agent Shelf', async () => {
+    const user = userEvent.setup();
+    render(() => (
+      <App
+        initialInspectorPinned={true}
+        initialOperationCenterExpanded={false}
+        initialAgentShelfOpen={false}
+      />
+    ));
+
+    const inspectorPin = screen.getByRole('button', { name: 'Unpin Inspector' });
+    expect(inspectorPin).toHaveAttribute('aria-pressed', 'true');
+    await user.click(inspectorPin);
+    expect(screen.getByRole('button', { name: 'Pin Inspector' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Expand' }));
+    expect(screen.getByText('No operations running')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Open Agent Shelf' }));
+    expect(screen.getByRole('complementary', { name: 'Agent Shelf' })).toBeInTheDocument();
+    expect(screen.getByText('No agent activity')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Close Agent Shelf' }));
+    expect(screen.queryByRole('complementary', { name: 'Agent Shelf' })).not.toBeInTheDocument();
+  });
+});
+
+describe('Workbench named navigation', () => {
+  it('renders every named view and changes the active workspace without project data', async () => {
+    const user = userEvent.setup();
+    render(() => <App initialView="project-home" />);
+
+    const navigation = screen.getByRole('navigation', { name: 'Workbench views' });
+    for (const label of navigationLabels) {
+      expect(within(navigation).getByRole('button', { name: label })).toBeInTheDocument();
+    }
+
+    await user.click(within(navigation).getByRole('button', { name: 'Graph / Route' }));
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Graph / Route' })).toBeInTheDocument();
+    expect(within(navigation).getByRole('button', { name: 'Graph / Route' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.queryByText(/example project|demo scene|sample graph/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('Workbench Host availability states', () => {
+  it('shows an honest unavailable state by default and supports an empty Host response', () => {
+    const unavailable = render(() => <App />);
+    expect(screen.getByRole('heading', { name: 'Host is unavailable' })).toBeInTheDocument();
+    expect(screen.getByText(/read API is not configured/i)).toBeInTheDocument();
+    unavailable.unmount();
+
+    render(() => <App hostStatus="empty" />);
+    expect(screen.getByRole('heading', { name: 'No project is open' })).toBeInTheDocument();
+    expect(screen.getByText(/returned no project projection/i)).toBeInTheDocument();
+  });
+});
+
+describe('Workbench Host projections', () => {
+  it('renders an accepted Project Home projection without inventing source state', () => {
+    render(() => (
+      <App
+        hostStatus="ready"
+        initialView="project-home"
+        overview={{
+          version: 1,
+          projectId: 'project-a',
+          metadata: {
+            displayName: 'The Accepted Project',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            updatedAt: '2026-08-02T00:00:00.000Z',
+          },
+          projection: {
+            version: 1,
+            projectId: 'project-a',
+            revision: 4,
+            sourceHash: 'source-hash',
+            documents: 7,
+            events: 3,
+            rendered: 1,
+            pending: 1,
+            blocked: 1,
+            errorCount: 0,
+            warningCount: 2,
+            diagnostics: [],
+            presence: [],
+            generatedAt: '2026-08-02T00:00:00.000Z',
+          },
+          activity: { busy: false, hasHumanPresence: true },
+          generatedAt: '2026-08-02T00:00:00.000Z',
+        }}
+      />
+    ));
+
+    expect(screen.getByRole('heading', { name: 'The Accepted Project' })).toBeInTheDocument();
+    expect(screen.getByText('Documents')).toBeInTheDocument();
+    expect(
+      screen.getByText(/No Host operation is active\.\s*Human collaboration is present\./),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/example project|demo scene|sample graph/i)).not.toBeInTheDocument();
+  });
+
+  it('wires Host-provided Source Studio state into its named workspace', () => {
+    render(() => (
+      <App
+        hostStatus="ready"
+        initialView="source-studio"
+        sourceStudio={{
+          version: 1,
+          projectId: 'project-a',
+          accepted: null,
+          working: {
+            documents: [
+              {
+                projectId: 'project-a',
+                documentId: 'definitions/characters/author.yaml',
+                kind: 'raw-yaml',
+                available: true,
+              },
+            ],
+          },
+          generatedAt: '2026-08-02T00:00:00.000Z',
+        }}
+      />
+    ));
+
+    expect(screen.getByRole('heading', { name: 'Authoring source' })).toBeInTheDocument();
+    expect(screen.getByText(/online-only, not accepted source/i)).toBeInTheDocument();
+    expect(screen.getByText('definitions/characters/author.yaml')).toBeInTheDocument();
+  });
+});

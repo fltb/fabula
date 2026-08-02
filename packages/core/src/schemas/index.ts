@@ -123,6 +123,11 @@ export {
 } from './corpus.js';
 // ——— GRAPH-1: Typed Causal Graph Schemas ———
 export {
+  canonicalGraphNodeOriginSchema,
+  canonicalGraphNodeSchema,
+  canonicalGraphRouteChoiceSchema,
+  canonicalGraphRouteSchema,
+  canonicalGraphRuntimeSnapshotSchema,
   discourseCoordinateSchema,
   discourseGraphSchema,
   edgeClassSchema,

@@ -3,6 +3,8 @@ import type { Duplex } from 'node:stream';
 import type { Handler } from 'hono';
 import { type RawData, WebSocket, WebSocketServer } from 'ws';
 import type { WorkingDocumentState } from '../contracts/persistence.js';
+import type { BrowserReadApi, BrowserReadApiOptions } from './browser-read-api.js';
+import { createBrowserReadApi } from './browser-read-api.js';
 import type {
   HostEndpointProjection,
   HostListener,
@@ -103,6 +105,11 @@ export interface HostServerOptions extends HostListenerConfig {
   readonly yjs?: HostYjsOptions;
   /** Mount a prebuilt authenticated MCP endpoint on this Host; defaults to none (fail closed). */
   readonly mcp?: HostServerMcpOptions;
+  /**
+   * Mount the injected browser read surface on this Host; defaults to none
+   * (fail closed — an unconfigured Host exposes no browser API at all).
+   */
+  readonly browser?: BrowserReadApiOptions;
 }
 
 export interface HostServer {
@@ -117,6 +124,12 @@ export interface HostServer {
    * y-websocket server is ever started.
    */
   readonly yjs: YjsGateway | null;
+  /**
+   * The mounted browser read surface (the five fixed authenticated GET
+   * routes), or null when no `browser` options were provided. Absent =
+   * no browser API is exposed at all (fail closed).
+   */
+  readonly browser: BrowserReadApi | null;
   start(): Promise<HostListenerHandle>;
   close(): Promise<void>;
   status(): HostListenerStatus;
@@ -132,6 +145,12 @@ export interface HostServer {
    * routes. Pre-start-only, like mutation registration.
    */
   registerMcpRoute(path: string, handler: Handler<HostListenerEnv>): void;
+  /**
+   * Register an authenticated browser read route on the listener: GET at one
+   * exact path behind the same Host/Origin allowlist guard as mutation and
+   * MCP routes. Pre-start-only, like mutation registration.
+   */
+  registerReadRoute(path: string, handler: Handler<HostListenerEnv>): void;
   isMutationAllowed(host: string | undefined, origin: string | undefined): boolean;
 }
 
@@ -569,6 +588,9 @@ type ReopenableYjsGateway = YjsGateway & { readonly open?: () => void | Promise<
  * options are provided, the prebuilt authenticated MCP endpoint is mounted
  * through the listener's guarded MCP route during construction, before any
  * start; without `mcp` options the Host exposes no MCP surface (fail closed).
+ * When `browser` options are provided, the injected browser read surface is
+ * mounted through the listener's guarded read routes during construction;
+ * without `browser` options the Host exposes no browser API at all.
  */
 export function createHostServer(options: HostServerOptions = {}): HostServer {
   const yjs = options.yjs === undefined ? null : createYjsGateway(options.yjs);
@@ -587,10 +609,21 @@ export function createHostServer(options: HostServerOptions = {}): HostServer {
       mcp.endpoint.handle(context.req.raw),
     );
   }
+  // Mount the injected browser read surface through the guarded read route
+  // while the listener is still unstarted: registration happens during
+  // construction so the surface exists before `start()` and an unconfigured
+  // Host never registers a browser route at all.
+  const browser = options.browser === undefined ? null : createBrowserReadApi(options.browser);
+  if (browser !== null) {
+    for (const route of browser.routes) {
+      listener.registerReadRoute(route.path, route.handler);
+    }
+  }
   return {
     listener,
     app: listener.app,
     yjs,
+    browser,
     start: async () => {
       // Re-arm the gateway before the listener rebinds its upgrade seam: a
       // previous close() may be terminal, so connect() must be unblocked
@@ -614,6 +647,7 @@ export function createHostServer(options: HostServerOptions = {}): HostServer {
     registerMutationRoute: (method, path, handler) =>
       listener.registerMutationRoute(method, path, handler),
     registerMcpRoute: (path, handler) => listener.registerMcpRoute(path, handler),
+    registerReadRoute: (path, handler) => listener.registerReadRoute(path, handler),
     isMutationAllowed: (host, origin) => listener.isMutationAllowed(host, origin),
   };
 }

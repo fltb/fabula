@@ -17,6 +17,50 @@ export type {
   SessionPresenceSurface,
 } from '../host/project-session.js';
 export type {
+  BrowserApiErrorCode,
+  BrowserApiErrorV1,
+  BrowserApiVersion,
+  BrowserGraphRouteSelectorV1,
+  BrowserProjectActivityV1,
+  BrowserProjectListV1,
+  BrowserProjectOverviewV1,
+  BrowserProjectSummaryV1,
+  BrowserSessionPrincipalV1,
+} from './browser-api.js';
+export type {
+  WorkbenchBranchDecisionV1,
+  WorkbenchBranchPathV1,
+  WorkbenchBranchScopeV1,
+  WorkbenchBranchSetV1,
+  WorkbenchConditionV1,
+  WorkbenchDiscourseCoordinateV1,
+  WorkbenchGraphBoundaryReferenceV1,
+  WorkbenchGraphCoordinateV1,
+  WorkbenchGraphDomainV1,
+  WorkbenchGraphEdgeClassV1,
+  WorkbenchGraphEdgeV1,
+  WorkbenchGraphNarrativeEllipsisV1,
+  WorkbenchGraphNodeOriginV1,
+  WorkbenchGraphNodeV1,
+  WorkbenchGraphOutputV1,
+  WorkbenchGraphProjectionV1,
+  WorkbenchGraphReadV1,
+  WorkbenchGraphResolutionV1,
+  WorkbenchGraphViewV1,
+  WorkbenchGraphViewVersion,
+  WorkbenchOutputValueV1,
+  WorkbenchPresencePredicateV1,
+  WorkbenchReadOriginV1,
+  WorkbenchReadPhaseV1,
+  WorkbenchRouteChoiceV1,
+  WorkbenchRouteEventScopeV1,
+  WorkbenchRouteSelectorV1,
+  WorkbenchRouteViewV1,
+  WorkbenchSceneSequenceEntryV1,
+  WorkbenchSceneStoryCoordinateV1,
+  WorkbenchStoryCoordinateV1,
+} from './graph.js';
+export type {
   AuthBackoffState,
   BinaryPayload,
   CapabilityState,
@@ -34,3 +78,9 @@ export type {
   WorkingDocumentState,
   YjsDocumentKey,
 } from './persistence.js';
+export type { SceneAdoptionViewV1 } from './scene.js';
+export type {
+  SourceStudioDocumentDescriptorV1,
+  SourceStudioStateV1,
+  SourceStudioWorkingLayerV1,
+} from './source-studio.js';

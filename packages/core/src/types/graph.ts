@@ -8,6 +8,8 @@
 // GraphReadResolution, GraphBoundaryReference, GraphNarrativeEllipsis)
 // are GRAPH-1 specific and distinct from same-name types in integration.ts.
 // ============================================================================
+
+import type { BranchPath, BranchSet } from './branch.js';
 import type { SceneStoryCoordinate, StoryCoordinate } from './entity.js';
 
 // ——— Edge Classes & Coordinates ———
@@ -23,6 +25,32 @@ export interface DiscourseCoordinate {
 
 /** Either storyTime (StoryGraph) or DiscoursePosition (DiscourseGraph). */
 export type EffectiveCoordinate = StoryCoordinate | DiscourseCoordinate;
+
+/**
+ * The canonical compiler-owned identity of a graph node. Consumers render
+ * these nodes directly; they never infer them from output ids or prose.
+ */
+export type CanonicalGraphNodeOrigin =
+  | { readonly type: 'initial' }
+  | {
+      readonly type: 'event';
+      readonly eventId: string;
+      readonly source: 'event_file' | 'branch_point' | 'system';
+    }
+  | {
+      readonly type: 'discourse';
+      readonly entryId: string;
+      readonly sceneId: string;
+      readonly branch: string;
+    };
+
+/** One node detached from canonical graph compilation with its exact coordinate and origin. */
+export interface CanonicalGraphNode {
+  readonly id: string;
+  readonly coordinate: EffectiveCoordinate;
+  readonly branchScope: string;
+  readonly origin: CanonicalGraphNodeOrigin;
+}
 
 // ——— OutputDescriptor (§5) ———
 
@@ -191,6 +219,46 @@ export interface DiscourseSceneSequenceEntry {
   sequence: number;
   chapter: number;
   actionInterval?: { start: number; end: number };
+}
+
+/** One branch choice exposed by the canonical route compiler, without its mutation payload. */
+export interface CanonicalGraphRouteChoice {
+  readonly eventId: string;
+  readonly choiceId: string;
+  readonly label: string;
+  readonly description: string;
+  readonly targetEventId: string;
+  readonly narrativeOrder: number;
+}
+
+/**
+ * The selected canonical route plus the authored route space. `branchScope`
+ * is an opaque compiler identity; consumers must not parse it into paths.
+ */
+export interface CanonicalGraphRoute {
+  readonly branchPath: BranchPath;
+  readonly branchScope: string;
+  readonly discourseBranch: string;
+  readonly selectedEventIds: readonly string[];
+  readonly leafPaths: readonly BranchPath[];
+  readonly eventScopes: readonly {
+    readonly eventId: string;
+    readonly branchExistence: BranchSet;
+  }[];
+  readonly choices: readonly CanonicalGraphRouteChoice[];
+}
+
+/** Detached canonical graph and route artifact for read-only tooling consumers. */
+export interface CanonicalGraphRuntimeSnapshot {
+  readonly story: {
+    readonly graph: StoryGraph;
+    readonly nodes: readonly CanonicalGraphNode[];
+  };
+  readonly discourse: {
+    readonly graph: DiscourseGraph;
+    readonly nodes: readonly CanonicalGraphNode[];
+  };
+  readonly route: CanonicalGraphRoute;
 }
 
 // ——— Cache Entry (§25) ———

@@ -54,13 +54,20 @@ npm run lint             # biome check
 npm run bench            # @novalistically/bench
 ```
 
-Verified baseline (docs/current-state.md): `npm test` = 2,881 root Vitest tests + 367 Workbench Host + 36 Workbench Client; lint = 0 errors / 630 warnings / 236 infos (warnings/infos are not a pass signal). Node is pinned `>=26.5.0 <27`; scripts run through `fnm`.
+For current test totals, lint diagnostics, and verified command results, read `docs/current-state.md`. Node is pinned `>=26.5.0 <27`; scripts run through `fnm`.
 
 Run a single test: `npx vitest run packages/core/tests/validator/`. The core E2E suite (`packages/core/tests/e2e.test.ts`) runs through `MockProvider` and makes no network calls; it is included in the root `npm test`. Live-LLM runs are a separate command: `npm run smoke:stage1:live` (bench Stage-1 real-provider smoke, requires `NOVALISTICALLY_AI_API_KEY`).
 
 ## CLI
 
-Host-bound commands: `validate`, `status`, `entity`, `graph`, `source`, `render`, `revise`, `render-tree`, `project-init`. The CLI does not read `.env` automatically.
+Host-bound commands: `project init`, `validate`, `status`, `entity`, `graph`, `source`, `render`, `revise`, and `render-tree`. The CLI does not read `.env` automatically.
+
+## Agent prompts and durable memory
+
+- `agents/` holds role-specific prompt contracts, not implementation authority. Core never reads these paths: runtime Pass 1 templates arrive as `pass1` text through `PromptTemplateCatalog`. `PromptAssembler` parses `## System Prompt` and `## Instructions`, emits a fixed system message, and injects only parsed `## Instructions` into the Pass 1 user prompt; keep operational constraints under `## Instructions`. `agents/scribe/prompt.md` is the prose-only reference contract; it must never emit analysis, state mutations, metadata, or release decisions.
+- Put durable repository invariants, package boundaries, source topology, and command rules here. Put verified but time-sensitive implementation status in `docs/current-state.md`.
+- Do not copy volatile test totals, work-in-progress status, or historical design claims into prompt files. Revisit affected prompt contracts whenever a rendering or prompt boundary changes.
+- `packages/core/src/agent/` and `packages/workbench/src/host/agent/` are implementation directories, not prompt-reference directories.
 
 ## Docs
 

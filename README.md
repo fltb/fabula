@@ -1,105 +1,169 @@
 # Fabula
 
-> 叙事工程系统：结构化 YAML → Event Sourcing 状态 → 双轮 LLM → 组装小说。
->
-> 核心命题：**Fabula（故事发生的时序 + 因果 DAG）**是系统的核心创新——event sourcing + causal DAG + topological sort 做对了。上层 IR 层（Idea IR、Story IR）和 Genette 五维度（Order/Duration/Frequency/Mood/Voice）现已接入基准测试。
+Fabula is a narrative-engineering system: structured author YAML becomes canonical story state, controlled render context, two-pass scene output, and output-level validation before assembly.
 
-Fabula 是一个小说工程化引擎：作者定义角色、世界规则和事件（YAML 格式），系统通过 event sourcing 维护状态，为每个场景编译最小上下文，用双轮 LLM pipeline 渲染散文，通过 18+ 个结构化 validator 校验输出，最终组装成完整小说。
+**Verified current status:** [docs/current-state.md](docs/current-state.md). It is the operational source of truth; this README is a concise entry point.
 
-## 核心概念
+## Current baseline
 
-| 概念 | 说明 |
-|------|------|
-| **Novel IR** | 多层中间表示：Idea IR → Story IR → Scene IR → Event IR → World State → Novel Text（类比 LLVM IR） |
-| **Fabula / Syuzhet 分离** | *Fabula*（故事发生的因果链，causal DAG）vs *Syuzhet*（叙述顺序，discourse order）。topological sort on causal edges 驱动 replay，narrativeOrder 仅用于 Assembler |
-| **Event Sourcing + Snapshots** | 每个叙事事件是不可变记录；状态通过 replay 派生。支持分支、回滚、DAG 因果排序 |
-| **双轮渲染** | Pass 1：生成散文（temp 0.8）；Pass 2：结构化分析 JSON（temp 0.3, seed 42），12 个分析块供 validator 消费 |
-| **分层验证** | 确定性 fact 通过 `compareFact()` 检查；语义维度通过 Pass 2 分析检查；作者意图通过 `narrativeChecklist` prompt 透传 |
-| **传统小说为约束子集** | Schema 为最一般情况（现代小说）设计；传统小说不填现代特有字段，不是 parallel schema |
+| Area | Verified state |
+| --- | --- |
+| Packages | `@novalistically/core`, `@novalistically/node-host`, `@novalistically/bench`, `@novalistically/cli`, `@novalistically/workbench` |
+| Validation | 28 built-in validators; GreyLine is explicit opt-in |
+| Pass 2 | A 20-field static analysis-content schema, validated separately from Pass 1 prose |
+| Root tests | 2,881 passing tests |
+| Workbench | Host: 367 passing tests; Client: 36 passing tests |
+| Checks | typecheck, build, bundle, and public-API checks pass; lint has zero errors |
 
-## 架构
+Test counts and implementation detail evolve. Consult [docs/current-state.md](docs/current-state.md) before relying on them for planning or review.
 
-```
-YAML Definitions + Event Files
-    ↓
-EntityMapper → EntityRegistry
-    ↓
-StateManager (Event Sourcing + Snapshots + DAG causal edges, topological sort)
-    ↓
-ContextCompiler (5-layer priority, 8-dim relevance scoring)
-    ↓
-RenderPipeline (Pass 1: prose → Pass 2: 12-block structured analysis)
-    ↓
-PostRenderValidation (18+ validators consuming Pass 2 analysis)
-    ↓
-Assembler → output/novel.md
+## System boundary
+
+```mermaid
+flowchart LR
+  A[Author YAML] --> H[Node Host snapshot and ports]
+  H --> C[Core semantic pipeline]
+  C --> P1[Pass 1 prose]
+  P1 --> P2[Pass 2 structured analysis]
+  P2 --> V[Validators and release gate]
+  V --> O[Host-owned materialization]
 ```
 
-## 基准 (zhu-fu) 接线状态
+- **Core** is deterministic and pure: it owns narrative semantics, schemas, graphs, prompts, render coordination, and validator contracts. It performs no filesystem, Git, SQLite, process, or provider I/O.
+- **Node Host** owns snapshot storage, provider execution, operations, cache materialization, and diagnostics.
+- **CLI** owns the `commander` command and Host-bound MCP entry points over Node Host adapters.
+- **Workbench Host** owns collaborative editing, Yjs, SQLite, authentication, scoped agent capabilities, and Git-backed authoring history.
+- Git is Workbench authoring history only. It is not a Core revision model.
 
-`fixtures/zhu-fu/` (鲁迅《祝福》) 作为传统小说基准——7 个事件，全层接线：
+See [docs/architecture.md](docs/architecture.md) and [docs/reference/wiring.md](docs/reference/wiring.md) for the complete boundary and runtime flow.
 
-| 层 | 内容 | E0-E6 |
-|----|------|:--:|
-| Event IR | precondition / postcondition / threadProgress / DAG | ✅ |
-| World State | 角色、地点、关系、规则、state_initial | ✅ |
-| S6 Genette | duration / frequency / voice / anachrony | ✅ |
-| S1 narrativeChecklist | 每事件 3-4 项 must-include 维度 | ✅ |
-| S2 greyLines | 11 个共享 motif，跨事件追踪 | ✅ |
-| S4 sourceContext | 鲁迅原文摘录 (STYLE/FACT/MIXED) | ✅ |
-| S7a Idea IR | thematicIntent + emotionalArc | ✅ nova.yaml |
-| S7b Story IR | structuralFunction (Propp) + actantModel | ✅ 线程级 |
+## Packages
 
-## 快速开始
+| Package | Purpose |
+| --- | --- |
+| [`packages/core`](packages/core) | Pure narrative domain, schema validation, graph/state compilation, rendering contracts, validators |
+| [`packages/node-host`](packages/node-host) | Concrete filesystem/provider/operation/cache adapters and Host services |
+| [`packages/bench`](packages/bench) | Functional and performance benchmarks |
+| [`packages/cli`](packages/cli) | Command-line and MCP entry points over Node Host |
+| [`packages/workbench`](packages/workbench) | Browser-first collaborative authoring Host and client |
+
+## Authoring topology
+
+A project is path-specific, not a generic definitions/events blob:
+
+```text
+nova.yaml
+definitions/
+  state_initial.yaml
+  entity-types.yaml
+  characters/ locations/ items/ factions/ relationships/ rules/ narrators/ assertions/
+discourse-ledger.yaml                         # optional
+chapters/chapter_NN/
+  _chapter.yaml                               # optional
+  E*.yaml
+```
+
+`definitions/state_initial.yaml` and `definitions/entity-types.yaml` are required. `discourse-ledger.yaml` and chapter `_chapter.yaml` files are optional; role-based entity directories are loaded separately. See [YAML Contract Reference](docs/reference/yaml-contract/README.md) for the full format.
+
+## Agent guidance and durable memory
+
+- [AGENTS.md](AGENTS.md) is the repository-wide operational contract: boundaries, commands, source topology, and invariants.
+- [`agents/`](agents/) contains role-specific prompt contracts. [Scribe](agents/scribe/prompt.md) is Pass 1 only: it emits prose and never analysis, state mutations, or validator decisions.
+- Keep durable architectural invariants in `AGENTS.md`; keep verified, time-sensitive repository facts in [docs/current-state.md](docs/current-state.md). Do not duplicate volatile test counts or implementation status into model prompts.
+
+## Start and use the CLI
+
+### Install and build
+
+The workspace requires Node `26.5.0` through `fnm`.
 
 ```bash
-npm install
-npm run build          # tsc -b (types) + esbuild (JS bundle)
-npm test               # vitest run (全包)
-npm run bench          # 功能 + 性能基准
-npm run typecheck      # tsc --noEmit
-npm run lint           # biome check
+git clone <repository-url> fabula
+cd fabula
+fnm exec --using=26.5.0 -- npm install
+fnm exec --using=26.5.0 -- npm run build
+fnm exec --using=26.5.0 -- npx nova --help
 ```
 
-排除 e2e（需要 live LLM proxy）:
+### Create and inspect an authoring project
+
 ```bash
-npx vitest run --exclude '**/e2e.test.ts'
+# Create a minimal valid project without Git history.
+npx nova project init my-novel
+cd my-novel
+
+# Validate the complete source snapshot, inspect progress, and export its DAG.
+npx nova validate
+npx nova status
+npx nova graph --format mermaid
+
+# Inspect source documents before changing them.
+npx nova source list
+npx nova entity list character
 ```
 
-## Monorepo 结构
+`project init` creates `nova.yaml`, the required initial-state and entity-type files, a narrator, an optional discourse ledger, and a first chapter/event. `validate` must pass before treating a project as render-ready.
 
-| 包 | 角色 | 关键依赖 |
-|----|------|---------|
-| `packages/core` | 引擎：types, state, validators, pipeline | yaml, zod, better-sqlite3 |
-| `packages/cli` | CLI + MCP server | commander, core |
-| `packages/bench` | 基准 + regression suite | tinybench, core |
+### Render deliberately
 
-构建顺序：`core → cli`（需要时 `bench`）。
+`nova render` defaults to the `ai-sdk` provider. Configure it explicitly in the invoking shell; the CLI does **not** auto-load `.env`.
+
+```bash
+export NOVALISTICALLY_AI_API_KEY='<provider-key>'
+export NOVALISTICALLY_AI_BASE_URL='https://your-openai-compatible-endpoint/v1' # optional
+export NOVALISTICALLY_AI_MODEL='your-model'                                    # optional
+
+npx nova render E1
+npx nova render --chapter 1
+npx nova render --all
+```
+
+For deterministic reference rendering instead of a live provider, supply both the mock provider and a directory containing `<eventId>.json` entries shaped as `{ "prose": "...", "analysis": { ... } }`. The data must match the current project's event contracts; do not reuse another fixture's recordings. Render exits nonzero whenever the release gate leaves a scene unreleased, regardless of provider.
+
+```bash
+npx nova render E1 --provider mock-pass2 --reference-dir path/to/matching-reference-data
+```
+
+Use `source preview` before `source apply`; the latter writes through source-hash CAS:
+
+```bash
+npx nova source preview definitions/characters/narrator.yaml narrator-draft.yaml
+npx nova source apply definitions/characters/narrator.yaml narrator-draft.yaml
+```
+
+## Development
+
+The workspace requires Node `26.5.0` through `fnm`.
+
+```bash
+fnm exec --using=26.5.0 -- npm install
+fnm exec --using=26.5.0 -- npm test
+fnm exec --using=26.5.0 -- npm run typecheck
+fnm exec --using=26.5.0 -- npm run build
+fnm exec --using=26.5.0 -- npm run lint
+fnm exec --using=26.5.0 -- npm run bench
+```
+
+CLI configuration is explicit; it does not auto-load `.env`. See [docs/reference/cli.md](docs/reference/cli.md).
+
+## Documentation
+
+- [Current verified state](docs/current-state.md)
+- [Documentation index](docs/README.md)
+- [Core/Host architecture](docs/architecture.md)
+- [Runtime wiring](docs/reference/wiring.md)
+- [YAML Contract Reference](docs/reference/yaml-contract/README.md)
+- [CLI reference](docs/reference/cli.md)
+
+Historical documents are explicitly marked under [`docs/archive/`](docs/archive/); they are not implementation authority.
 
 ## Fixtures
 
-| Fixture | 描述 |
-|---------|------|
-| `fixtures/zhu-fu/` | 祝福 (鲁迅) — 7 事件，全层接线，传统小说基准 |
-| `fixtures/zhu-fu-variants/` | 变种矩阵：layer-minimal / discourse-reorder / pov-switch / branch-A / branch-B / error-injection / extreme-damage |
-| `fixtures/dream-of-red-chamber/` | 红楼梦 — 12 事件，40 角色，8 地点 |
-| `fixtures/most-dangerous-game/` | 6 场景，3 章，分支点 |
-| `fixtures/arcane-aftermath/` | 2 事件测试项目 |
-
-## 文档
-
-| 文件 | 用途 |
-|------|------|
-| `docs/TODO.md` | 活跃工作面（当前至 Stage 3，70+ 项） |
-| `docs/report.md` | Stage 3 实现报告 |
-| `docs/report/stage-3-audit-2026-07-24.md` | 代码级交叉引用审计 |
-| `docs/reference/stage-3/` | 叙事学参考：Genette 审计、IR 层映射、现代小说 survey、annotation 指南 |
-| `docs/archive/PROJECT.md` | ⚠️ 历史——原始系统设计 |
-
-## 状态
-
-Stage 3 代码完成。1930 测试，110 测试文件，typecheck 干净。zhu-fu 全层接线完成，变种矩阵就绪。已明确延后：C2/C3（人类标注）、S8（前向 planner——设计假设不适用于已完成小说的 Novel IR）、Syuzhet/Discourse 层接线（`NarratorProfile` 完整类型存在但 fixture 未接）。
+- `fixtures/most-dangerous-game/` — English, 6 scenes / 3 chapters
+- `fixtures/arcane-aftermath/` — Chinese, 2 events
+- `fixtures/zhu-fu/` and `fixtures/zhu-fu-variants/` — regression and variation suites
+- `fixtures/dream-of-red-chamber/` — 36 events (`E01`–`E36`) across 4 chapters
 
 ## License
 
-GPL-3.0-only
+MIT

@@ -15,12 +15,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  AiSdkProvider,
   provenanceManifestSchema,
   renderNovel,
   responseReferenceSchema,
   sanitizeError,
 } from '../../core/dist/index.js';
+import { AiSdkProvider } from '../../node-host/dist/index.js';
 import 'dotenv/config';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

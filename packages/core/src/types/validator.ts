@@ -1,22 +1,14 @@
 // ============================================================================
 // Novalistically — Validator System Types (§7.4.15)
 // ============================================================================
-//
-// Migration status:
-//   Currently supports two parallel interfaces:
-//     - Old: validate(event, context: ValidatorContext) + validateRender(...) + requiresLLM
-//     - New: validatePre?(input: PreRenderInput) + validatePost?(input: PostRenderInput)
-//   Phased migration: aggregator learns new methods first, validators migrate one by one,
-//   then old methods and types are deleted.
-// ============================================================================
-
+import type { z } from 'zod';
 import type { StoryOrderIndex } from '../state/dag.js';
-import type { EventStore } from '../state/event-store.js';
 import type { AnalysisResult } from './analysis.js';
 import type { ContextPackage } from './context.js';
-import type { EntityId, EntityRegistry, SceneStoryCoordinate } from './entity.js';
+import type { EntityId, EntityLookup, SceneStoryCoordinate } from './entity.js';
 import type { EntityTypeCatalog } from './entity-catalog.js';
 import type { NarrativeEvent } from './event.js';
+import type { ISSSnapshot } from './iss.js';
 import type { EpistemicLedger } from './knowledge.js';
 import type { ThreadRuntimeState } from './thread.js';
 import type { WorldState } from './world.js';
@@ -34,7 +26,7 @@ export interface AnalysisBlockRequirement {
   /** Only for narrativeChecks-style keyed blocks: attribute values LLM should produce */
   attributes?: string[];
   /** Zod schema for this analysis block — auto-generates the JSON example in the prompt */
-  schema: import('zod').ZodTypeAny;
+  schema: z.ZodTypeAny;
   /** LLM instruction: MUST start with the field name. e.g. "narrativeChecks[pacing]: check..." */
   instruction: string;
 }
@@ -74,9 +66,8 @@ export interface PreRenderInput {
   event: NarrativeEvent;
   worldState: WorldState;
   events: NarrativeEvent[];
-  entityRegistry: EntityRegistry;
+  entities: EntityLookup;
   chapter: number;
-  eventStore?: EventStore;
   queryState: (entityId: EntityId, attribute: string) => unknown;
   getKnowledge: (characterId: EntityId) => EpistemicLedger;
   getThreadProgress: (threadId: string) => ThreadRuntimeState | null;
@@ -97,30 +88,12 @@ export interface PostRenderInput {
   prose: string;
   analysis: AnalysisResult | null;
   chapter: number;
-  entityRegistry?: EntityRegistry;
+  entities?: EntityLookup;
   /** Project compiled entity type catalog for semanticRole/writePolicy lookups. */
   entityTypeCatalog?: EntityTypeCatalog;
   /** Discourse-layer context package (S6c/DISCOURSE-1), when available. */
   context?: ContextPackage;
 }
-
-// ——— Validator Context (legacy) ———
-// Kept as-is for backward compat with existing validators and PluginValidator.
-// @deprecated Use PreRenderInput for new validators.
-
-export interface ValidatorContext {
-  worldState: WorldState;
-  events: NarrativeEvent[];
-  entityRegistry: EntityRegistry;
-  currentEvent: NarrativeEvent;
-  currentChapter: number;
-  narrativeOrder: number;
-  queryState: (entityId: EntityId, attribute: string) => unknown;
-  getKnowledge: (characterId: EntityId) => EpistemicLedger;
-  getThreadProgress: (threadId: string) => ThreadRuntimeState | null;
-}
-
-// ——— Validation Issue ———
 
 /**
  * Kinds of validation findings. Severity remains independent (`error|warning|info`).
@@ -209,22 +182,6 @@ export interface Validator {
    * Each requirement drives dynamic construction of the Pass 2 JSON template + instructions.
    */
   getAnalysisRequirements?(): AnalysisBlockRequirement[];
-
-  // ── Legacy methods (deprecated, will be removed) ─────────────────
-
-  /** @deprecated Implement validatePre instead. */
-  validate?: (event: NarrativeEvent, context: ValidatorContext) => ValidationIssue[];
-
-  /** @deprecated Implement validatePost instead. */
-  validateRender?: (
-    prose: string,
-    event: NarrativeEvent,
-    state: WorldState,
-    analysis?: AnalysisResult,
-  ) => ValidationIssue[];
-
-  /** @deprecated Not needed — phase is determined by which method is implemented. */
-  requiresLLM?: boolean;
 }
 
 // ——— Validation Result ———
@@ -234,4 +191,16 @@ export interface ValidationResult {
   errors: ValidationIssue[];
   warnings: ValidationIssue[];
   infos: ValidationIssue[];
+}
+
+// ——— Novel Validation Result (public contract) ———
+
+/**
+ * Result of running the full validation suite over a novel project:
+ * aggregate pass/fail, per-event validator results, and the ISS snapshot.
+ */
+export interface NovelValidationResult {
+  readonly passed: boolean;
+  readonly results: ReadonlyMap<string, ValidationResult>;
+  readonly iss: ISSSnapshot;
 }

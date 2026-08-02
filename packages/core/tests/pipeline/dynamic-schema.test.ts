@@ -16,7 +16,7 @@ import { z } from 'zod';
 import type { MockPass2Entry } from '../../src/ai/providers/mock-pass2.ts';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
 import { type RenderJob, RenderPipeline } from '../../src/pipeline/render.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 import type {
   ContextPackage,
   KnowledgeBoundary,
@@ -26,6 +26,7 @@ import type {
   WorldState,
 } from '../../src/types/index.ts';
 import { ResultAggregator } from '../../src/validator/aggregator.ts';
+import { createBuiltInValidators } from '../../src/validator/builtins.ts';
 import {
   makeAnalysisResult,
   makeObservations,
@@ -102,6 +103,7 @@ function makeJob(id: string): RenderJob {
       facts: [],
     },
     context: makeContext(id),
+    sourceContentHash: 'source-dynamic',
     graphHash: 'a00',
     chapter: 1,
     contract: {
@@ -136,8 +138,7 @@ function buildPipeline(entry: MockPass2Entry, maxRetries = 1): RenderPipeline {
   return new RenderPipeline({
     provider,
     model: 'mock-pass2',
-    cacheDir: '/tmp/test-cache',
-    storage: new MemoryStorage(),
+    runtimeServices: createRuntimeServices({ provider }).services,
     skipCache: true,
     maxRetries,
     aggregator,
@@ -450,22 +451,20 @@ describe('analysis contract', () => {
   });
 
   it('plugin validator contributes requirements to contract', () => {
-    const aggregator = new ResultAggregator();
-    aggregator.addPluginValidators([
-      {
-        name: 'PluginTestValidator',
-        validate: () => ({ passed: true, errors: [], warnings: [], infos: [] }),
-        getAnalysisRequirements: () => [
-          {
-            field: 'pluginChecks',
-            attributes: ['pluginAttr'],
-            instruction: 'pluginChecks: validate plugin attributes',
-            schema: z.object({ pluginAttr: z.array(z.string()) }),
-          },
-        ],
-      },
-    ]);
-
+    const pluginValidator = {
+      name: 'PluginTestValidator',
+      category: 'prose_quality' as const,
+      validatePre: () => [],
+      getAnalysisRequirements: () => [
+        {
+          field: 'pluginChecks',
+          attributes: ['pluginAttr'],
+          instruction: 'pluginChecks: validate plugin attributes',
+          schema: z.object({ pluginAttr: z.array(z.string()) }),
+        },
+      ],
+    };
+    const aggregator = new ResultAggregator([...createBuiltInValidators(), pluginValidator]);
     const contract = aggregator.getAnalysisContract();
     const reqFields = contract.requirements.map((r) => r.field);
     expect(reqFields).toContain('pluginChecks');
@@ -477,21 +476,20 @@ describe('analysis contract', () => {
   });
 
   it('plugin validator requirements appear in combine schema and parse', () => {
-    const aggregator = new ResultAggregator();
-    aggregator.addPluginValidators([
-      {
-        name: 'PluginTestValidator',
-        validate: () => ({ passed: true, errors: [], warnings: [], infos: [] }),
-        getAnalysisRequirements: () => [
-          {
-            field: 'pluginTestField',
-            attributes: [],
-            instruction: 'pluginTestField: test',
-            schema: z.object({ testValue: z.string() }),
-          },
-        ],
-      },
-    ]);
+    const pluginValidator = {
+      name: 'PluginTestValidator',
+      category: 'prose_quality' as const,
+      validatePre: () => [],
+      getAnalysisRequirements: () => [
+        {
+          field: 'pluginTestField',
+          attributes: [],
+          instruction: 'pluginTestField: test',
+          schema: z.object({ testValue: z.string() }),
+        },
+      ],
+    };
+    const aggregator = new ResultAggregator([...createBuiltInValidators(), pluginValidator]);
 
     const contract = aggregator.getAnalysisContract();
     // Requirements include plugin field
@@ -516,8 +514,7 @@ describe('analysis contract', () => {
     const pipeline = new RenderPipeline({
       provider,
       model: 'mock-pass2',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices({ provider }).services,
       skipCache: true,
       maxRetries: 1,
       aggregator,
@@ -552,8 +549,7 @@ describe('analysis contract', () => {
     const pipeline = new RenderPipeline({
       provider,
       model: 'mock-pass2',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices({ provider }).services,
       skipCache: true,
       maxRetries: 1,
       aggregator,
@@ -579,21 +575,20 @@ describe('analysis contract', () => {
   });
 
   it('getAnalysisRequirements delegates to getAnalysisContract and includes plugins', () => {
-    const aggregator = new ResultAggregator();
-    aggregator.addPluginValidators([
-      {
-        name: 'DelegationPlugin',
-        validate: () => ({ passed: true, errors: [], warnings: [], infos: [] }),
-        getAnalysisRequirements: () => [
-          {
-            field: 'delegationTest',
-            attributes: [],
-            instruction: 'delegationTest: verify delegation works',
-            schema: z.object({ ok: z.boolean() }),
-          },
-        ],
-      },
-    ]);
+    const pluginValidator = {
+      name: 'DelegationPlugin',
+      category: 'prose_quality' as const,
+      validatePre: () => [],
+      getAnalysisRequirements: () => [
+        {
+          field: 'delegationTest',
+          attributes: [],
+          instruction: 'delegationTest: verify delegation works',
+          schema: z.object({ ok: z.boolean() }),
+        },
+      ],
+    };
+    const aggregator = new ResultAggregator([...createBuiltInValidators(), pluginValidator]);
 
     // getAnalysisRequirements is a delegate — it should include plugin fields
     const reqs = aggregator.getAnalysisRequirements();

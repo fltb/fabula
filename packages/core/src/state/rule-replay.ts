@@ -91,7 +91,7 @@ export function applyRuleTransaction(
   }
 
   // Phase 6: Commit or reject
-  applyOperation(candidate, tx);
+  applyOperation(candidate, tx, nodeId);
   rules[ruleId] = candidate;
 
   return evaluationRecords;
@@ -132,8 +132,10 @@ export function evaluateConstraints(
  *   weaken     → suspend
  *   introduce_exception → add_exception
  *   nullify    → set_effectiveness:nullified
+ * Generated epoch/exception identities derive deterministically from the rule
+ * and causal event ID (never wall-clock), so replay is reproducible.
  */
-export function convertLegacyRuleEffect(entry: RuleEffectEntry, _nodeId: string): RuleTransaction {
+export function convertLegacyRuleEffect(entry: RuleEffectEntry, nodeId: string): RuleTransaction {
   const base = {
     type: 'rule_transaction' as const,
     ruleId: entry.rule,
@@ -146,7 +148,7 @@ export function convertLegacyRuleEffect(entry: RuleEffectEntry, _nodeId: string)
       return {
         ...base,
         operation: 'enable' as const,
-        epochId: `${entry.rule}-epoch-${Date.now()}`,
+        epochId: deriveEpochId(entry.rule, nodeId),
         specificationId: `${entry.rule}-spec`,
       };
     case 'weaken':
@@ -156,7 +158,7 @@ export function convertLegacyRuleEffect(entry: RuleEffectEntry, _nodeId: string)
         ...base,
         operation: 'add_exception' as const,
         exception: {
-          exceptionId: `${entry.rule}-exc-${Date.now()}`,
+          exceptionId: `${entry.rule}-exc-${nodeId}`,
           status: 'active' as const,
           constraintIds: [],
           scopeBindings: {},
@@ -215,6 +217,11 @@ export function generateEvaluationRecord(
 // ============================================================================
 // Internal helpers
 // ============================================================================
+
+/** Derive a deterministic epoch identity from semantic inputs (rule + causal node). */
+function deriveEpochId(ruleId: string, nodeId: string): string {
+  return `${ruleId}-epoch-${nodeId}`;
+}
 
 function createDefaultRuntimeState(ruleId: string, tx: RuleTransaction): RuleRuntimeState {
   return {
@@ -326,7 +333,7 @@ function evaluatePredicate(
   return true;
 }
 
-function applyOperation(state: RuleRuntimeState, tx: RuleTransaction): void {
+function applyOperation(state: RuleRuntimeState, tx: RuleTransaction, nodeId: string): void {
   switch (tx.operation) {
     case 'enable':
       state.activation = 'enabled';
@@ -345,7 +352,7 @@ function applyOperation(state: RuleRuntimeState, tx: RuleTransaction): void {
 
     case 'amend': {
       // Close old epoch + new epoch in same RuleId
-      state.currentEpoch = tx.epochId ?? `${state.ruleId}-epoch-${Date.now()}`;
+      state.currentEpoch = tx.epochId ?? deriveEpochId(state.ruleId, nodeId);
       if (tx.specificationId) state.specificationId = tx.specificationId;
       // Reset activation to enabled for the new epoch
       state.activation = 'enabled';
@@ -355,7 +362,7 @@ function applyOperation(state: RuleRuntimeState, tx: RuleTransaction): void {
     case 'replace':
       // Full replacement — new specification
       if (tx.specificationId) state.specificationId = tx.specificationId;
-      state.currentEpoch = tx.epochId ?? `${state.ruleId}-epoch-${Date.now()}`;
+      state.currentEpoch = tx.epochId ?? deriveEpochId(state.ruleId, nodeId);
       state.activation = 'enabled';
       state.effectiveness = 'full';
       state.exceptions = [];

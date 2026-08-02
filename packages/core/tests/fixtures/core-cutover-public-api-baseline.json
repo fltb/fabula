@@ -1,0 +1,141 @@
+{
+  "adaptersExports": {
+    "providerAdapters": [
+      "AiSdkProvider",
+      "AiSdkProviderOptions"
+    ],
+    "storageAdapters": [
+      "FsStorage"
+    ]
+  },
+  "legacySurface": {
+    "fsStorage": [
+      "FsStorage"
+    ],
+    "storage": [
+      "DirEntry",
+      "Storage",
+      "StorageTransaction",
+      "StorageWrite",
+      "TransactionReadExpectation"
+    ]
+  },
+  "packageDependencyDirection": {
+    "@novalistically/bench": [
+      "@novalistically/core"
+    ],
+    "@novalistically/cli": [
+      "@novalistically/bench",
+      "@novalistically/core"
+    ],
+    "@novalistically/core": []
+  },
+  "rootExports": {
+    "runtime": [
+      "LLMError",
+      "NovalisticallyError",
+      "compareFact",
+      "compileProject",
+      "getProjectStatus",
+      "listEntities",
+      "resolveTemporalContext",
+      "sanitizeError",
+      "showEntity",
+      "validateNovel"
+    ],
+    "types": [
+      "AnalysisBlockRequirement",
+      "AnalysisDisposition",
+      "AnalysisObservation",
+      "AnalysisResult",
+      "AttributeDefinitionSource",
+      "AttributeValueType",
+      "AuthoredStoryTime",
+      "BranchPath",
+      "BranchSet",
+      "CharacterDefinition",
+      "CompileProjectOptions",
+      "CompletionRequest",
+      "CompletionResponse",
+      "ContextPackage",
+      "DirEntry",
+      "Entity",
+      "EntityDeclarationCatalog",
+      "EntityDetail",
+      "EntityId",
+      "EntityKind",
+      "EntityLookup",
+      "EntitySummary",
+      "EntityTypeCatalog",
+      "EntityTypeCatalogSource",
+      "EntityTypeDefinitionSource",
+      "EntityTypeRef",
+      "EpistemicLedger",
+      "ErrorContext",
+      "EventFile",
+      "Fact",
+      "FactId",
+      "FactValidity",
+      "FactionDefinition",
+      "ForeshadowEntry",
+      "GameDialogueChoice",
+      "ISSDimension",
+      "ISSGap",
+      "ISSSnapshot",
+      "ItemDefinition",
+      "LLMProvider",
+      "LocationDefinition",
+      "Message",
+      "NarrativeChecklist",
+      "NarrativeEvent",
+      "NarratorAssertion",
+      "NarratorProfile",
+      "NovelValidationResult",
+      "ObservationRef",
+      "PlannedDiscourseLedgerSource",
+      "PostRenderInput",
+      "PreRenderInput",
+      "ProjectCompilation",
+      "ProjectConfig",
+      "ProjectData",
+      "ProjectStatusResult",
+      "RelationshipDefinition",
+      "RelationshipTransaction",
+      "RequiredAt",
+      "RuleDefinition",
+      "RuleEffectEntry",
+      "SourceContext",
+      "Storage",
+      "StorageTransaction",
+      "StorageWrite",
+      "StoryBoundaries",
+      "StoryCoordinate",
+      "StoryTimestamp",
+      "StyleGuidance",
+      "TaskType",
+      "TemporalContext",
+      "ThreadDeclaration",
+      "ThreadProgressEntry",
+      "ThreadRuntimeState",
+      "TimeAnchor",
+      "TransactionReadExpectation",
+      "ValidationIssue",
+      "ValidationIssueKind",
+      "ValidationKey",
+      "ValidationResult",
+      "ValidationRunOptions",
+      "Validator",
+      "WorldState",
+      "WritePolicy"
+    ]
+  },
+  "schemaVersion": 1,
+  "sourceFiles": [
+    "package.json",
+    "packages/bench/package.json",
+    "packages/cli/package.json",
+    "packages/core/package.json",
+    "packages/core/src/adapters.ts",
+    "packages/core/src/index.ts"
+  ]
+}

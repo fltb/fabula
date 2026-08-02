@@ -317,8 +317,8 @@ export interface EventFile {
     onScreen: string[];
     affected: string[];
   };
-  /** Absolute file path to this event's YAML file on disk (set by EntityMapper) */
-  filePath?: string;
+  /** Logical source path to this event's YAML document in the snapshot. */
+  logicalPath?: string;
   /** Narrative checklist — dimensions the prose must cover (S1) */
   narrativeChecklist?: NarrativeChecklist;
   /** Source context — style anchors from original source text (S4) */

@@ -8,15 +8,15 @@ import * as path from 'node:path';
 import {
   type AnalysisObservation,
   type AnalysisResult,
-  type EntityRegistry,
+  compileProject,
+  type EntityLookup,
   type EntityTypeCatalog,
-  FsStorage,
-  initializeProject,
   type NarrativeEvent,
-  ResultAggregator,
   type ValidationIssue,
   type WorldState,
 } from '@novalistically/core';
+import { FileProjectSourceLoader } from '@novalistically/node-host';
+import { ResultAggregator } from '@novalistically/core/tooling';
 import YAML from 'yaml';
 
 /** Deterministic injection ID counter — replaces non-deterministic Date.now() */
@@ -673,23 +673,14 @@ function applyInjections(events: NarrativeEvent[], injections: InjectedEntry[]):
 }
 function runValidators(
   events: NarrativeEvent[],
+  entities: EntityLookup,
   state: WorldState,
-  registry: EntityRegistry,
   stateBeforeByEventId?: Map<string, WorldState>,
   entityTypeCatalog?: EntityTypeCatalog,
 ): ValidationIssue[] {
-  // Current validator contract: catalog-driven semantic checks (knowledge,
-  // character_state lifecycle, appearance, pronoun narrative attributes)
-  // receive the project's compiled entity type catalog explicitly. Without
-  // it those checks are skipped by design (no default catalog fallback).
-  const aggregator = new ResultAggregator(
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    entityTypeCatalog,
-  );
-  const results = aggregator.validateAll(events, state, registry, { stateBeforeByEventId });
+  // Catalog-driven semantic checks receive the project's compiled catalog.
+  const aggregator = new ResultAggregator(undefined, entityTypeCatalog);
+  const results = aggregator.validateAll(events, state, entities, { stateBeforeByEventId });
 
   const allIssues: ValidationIssue[] = [];
   for (const result of results.values()) {
@@ -699,9 +690,8 @@ function runValidators(
 }
 
 /**
- * Clone only the canonical boundaries explicitly corrupted by a synthetic
  * state-contradiction case. This mutates benchmark input data, not story
- * replay: every untouched boundary remains the initializeProject() result.
+ * replay: every untouched boundary remains the compiled project's result.
  */
 function buildSyntheticStateBoundaries(
   base: Map<string, WorldState>,
@@ -719,9 +709,9 @@ function buildSyntheticStateBoundaries(
     const baseState = base.get(event.id);
     if (!baseState) continue;
     const state = structuredClone(baseState);
-    const entity = state.entities['xianglins_wife'] ?? {};
-    entity['status'] = 'dead';
-    state.entities['xianglins_wife'] = entity;
+    const entity = state.entities.xianglins_wife ?? {};
+    entity.status = 'dead';
+    state.entities.xianglins_wife = entity;
     boundaries.set(event.id, state);
   }
   return boundaries;
@@ -737,20 +727,13 @@ function buildSyntheticStateBoundaries(
 function processInjectionFile(
   filePath: string,
   baseEvents: NarrativeEvent[],
-  registry: EntityRegistry,
+  entities: EntityLookup,
   baseFinalState: WorldState,
   baseStateBeforeByEventId: Map<string, WorldState>,
   entityTypeCatalog?: EntityTypeCatalog,
 ): VariantIssueResult[] {
-  // One aggregator per file, carrying the project catalog for the current
-  // catalog-driven validator contract (no default catalog fallback).
-  const fileAggregator = new ResultAggregator(
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    entityTypeCatalog,
-  );
+  // One aggregator per file, carrying the project catalog for validators.
+  const fileAggregator = new ResultAggregator(undefined, entityTypeCatalog);
   const raw = YAML.parse(fs.readFileSync(filePath, 'utf-8'));
   const injections: InjectedEntry[] = raw?.injected ?? [];
   if (injections.length === 0) return [];
@@ -761,12 +744,12 @@ function processInjectionFile(
   const mutated = cloneEvents(baseEvents);
   const appliedDesc = applyInjections(mutated, injections);
   // Synthetic mutations are evaluated against the canonical base project's
-  // state boundaries. Project replay remains owned by initializeProject().
+  // Project replay remains owned by the canonical compilation.
   const stateBeforeByEventId = buildSyntheticStateBoundaries(baseStateBeforeByEventId, mutated);
   const allIssues = runValidators(
     mutated,
+    entities,
     baseFinalState,
-    registry,
     stateBeforeByEventId,
     entityTypeCatalog,
   );
@@ -778,7 +761,7 @@ function processInjectionFile(
     // Collect ALL pre-render issues from the expected validator (any severity).
     const preIssues = allIssues.filter((issue) => issue.validator === expectedName);
 
-    // Post-render validation: run validateRender for entries with mock analysis data
+    // Post-render validation for entries with mock analysis data
     let postIssues: ValidationIssue[] = [];
     if (inj.mockAnalysis || inj.mockProse) {
       const targetEvent = mutated.find((e) => e.id === inj.entityId);
@@ -809,13 +792,14 @@ function processInjectionFile(
 
         const postRenderState = stateBeforeByEventId.get(targetEvent.id) ?? baseFinalState;
 
-        const postResult = fileAggregator.validateRender(
+        const postResult = fileAggregator.validatePost(
           inj.mockProse ?? '',
           targetEvent,
           postRenderState,
           mockAnalysis,
           undefined,
-          registry,
+          entities,
+          1,
         );
         postIssues = [...postResult.errors, ...postResult.warnings, ...postResult.infos].filter(
           (i) => i.validator === expectedName,
@@ -869,35 +853,30 @@ export async function runVariantBench(): Promise<VariantResults> {
   const startTime = Date.now();
 
   // ── Load base fixture through the canonical kernel ──────────────────
-  const storage = new FsStorage();
-  const {
-    events: baseEvents,
-    registry,
-    entityTypes,
-    runtime,
-  } = initializeProject(baseFixturePath, storage);
+  const compilation = compileProject(new FileProjectSourceLoader().load(baseFixturePath));
+  const baseEvents = [...compilation.events];
+  const entities = compilation.entities;
+  const boundaries = compilation.boundaries;
+  const entityTypes = compilation.entityTypes;
 
   // ── Branch variants ─────────────────────────────────────────────────
-  const branchA = runBranchVariant(path.join(root, 'branch-A'), storage);
-  const branchB = runBranchVariant(path.join(root, 'branch-B'), storage);
+  const branchA = runBranchVariant(path.join(root, 'branch-A'));
+  const branchB = runBranchVariant(path.join(root, 'branch-B'));
 
-  // ── Error-injection variants ────────────────────────────────────────
   const errorInjectionResults = runInjectionVariants(
     path.join(root, 'error-injection'),
     baseEvents,
-    registry,
-    runtime.boundaries.finalState,
-    runtime.boundaries.stateBeforeByEventId,
+    entities,
+    boundaries.finalState,
+    boundaries.stateBeforeByEventId,
     entityTypes,
   );
-
-  // ── Extreme-damage variants ─────────────────────────────────────────
   const extremeDamageResults = runInjectionVariants(
     path.join(root, 'extreme-damage'),
     baseEvents,
-    registry,
-    runtime.boundaries.finalState,
-    runtime.boundaries.stateBeforeByEventId,
+    entities,
+    boundaries.finalState,
+    boundaries.stateBeforeByEventId,
     entityTypes,
   );
 
@@ -960,14 +939,17 @@ export async function runVariantBench(): Promise<VariantResults> {
 
 function runBranchVariant(
   dir: string,
-  storage: FsStorage,
 ): { eventsLoaded: number; issues: ValidationIssue[] } {
-  const { events, registry, runtime, entityTypes } = initializeProject(dir, storage);
+  const compilation = compileProject(new FileProjectSourceLoader().load(dir));
+  const events = [...compilation.events];
+  const entities = compilation.entities;
+  const boundaries = compilation.boundaries;
+  const entityTypes = compilation.entityTypes;
   const issues = runValidators(
     events,
-    runtime.boundaries.finalState,
-    registry,
-    runtime.boundaries.stateBeforeByEventId,
+    entities,
+    boundaries.finalState,
+    boundaries.stateBeforeByEventId,
     entityTypes,
   );
   return { eventsLoaded: events.length, issues };
@@ -977,7 +959,7 @@ function runBranchVariant(
 function runInjectionVariants(
   dir: string,
   baseEvents: NarrativeEvent[],
-  registry: EntityRegistry,
+  entities: EntityLookup,
   baseFinalState: WorldState,
   baseStateBeforeByEventId: Map<string, WorldState>,
   entityTypeCatalog?: EntityTypeCatalog,
@@ -990,7 +972,7 @@ function runInjectionVariants(
     const results = processInjectionFile(
       filePath,
       baseEvents,
-      registry,
+      entities,
       baseFinalState,
       baseStateBeforeByEventId,
       entityTypeCatalog,

@@ -131,7 +131,7 @@ export function sanitizeError(err: unknown): string {
 
   // Cap to prevent prompt/prose leakage through long messages
   if (base.length > MAX_REASON_LENGTH) {
-    base = base.slice(0, MAX_REASON_LENGTH - 3) + '...';
+    base = `${base.slice(0, MAX_REASON_LENGTH - 3)}...`;
   }
 
   return base || 'unknown error';

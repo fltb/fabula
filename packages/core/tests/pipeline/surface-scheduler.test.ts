@@ -17,11 +17,10 @@ import {
   AcceptedArtifactResolver,
   SurfaceScheduler,
 } from '../../src/pipeline/surface-scheduler.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import { MemoryExecutionRepository } from '../../src/testing/memory-repositories.ts';
 import type { NarrativeEvent } from '../../src/types/event.ts';
 import type { ReleaseDecision } from '../../src/types/render-surface.ts';
 import type { WorldState } from '../../src/types/world.ts';
-import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 // ============================================================================
 // Helper factories
@@ -303,246 +302,125 @@ describe('SurfaceScheduler', () => {
 // ============================================================================
 
 describe('AcceptedArtifactResolver', () => {
-  const HEAD_DIR = '/project/.nova/work/responses';
-  const ARCHIVE_DIR = '/project/.nova/work/revisions/scenes';
+  const projectId = 'surface-test-project';
+  const sourceHash = crypto.createHash('sha256').update('surface-source').digest('hex');
 
-  function seedAcceptedArtifact(
-    storage: MemoryStorage,
+  const hash = (value: string): string =>
+    crypto.createHash('sha256').update(value).digest('hex');
+
+  function makeEnvelope(eventId: string, prose: string, decision: ReleaseDecision) {
+    const proseHash = hash(prose);
+    return {
+      version: 1,
+      revisionId: crypto.randomUUID(),
+      parentRevisionId: null,
+      operationId: crypto.randomUUID(),
+      planHash: hash('plan'),
+      actorId: 'test',
+      eventId,
+      origin: 'llm_draft',
+      prose,
+      proseHash,
+      sceneHash: hash(`${eventId}:${proseHash}`),
+      editorialBasisHash: hash('basis'),
+      scopeHash: decision.scopeHash,
+      validationIdentity: decision.validationIdentity,
+      feedbackHash: null,
+      reviewIds: [],
+      analysis: null,
+      validation: null,
+      releaseDecision: decision,
+      released: decision.status === 'accepted',
+      cacheHit: false,
+      errors: [],
+      llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
+      llmPass2: null,
+      attempts: 0,
+      needsReview: false,
+      promptHash: hash('prompt'),
+      providerCalls: [],
+      promotionReadSet: [],
+      requestRecords: [],
+      createdAt: '2026-08-02T00:00:00.000Z',
+    };
+  }
+
+  async function seedAcceptedArtifact(
+    execution: MemoryExecutionRepository,
     eventId: string,
     prose: string,
     decision: ReleaseDecision,
-    revisionId?: string,
-    proseHash?: string,
-    headDir?: string,
-    archiveDir?: string,
-  ): { revisionId: string; proseHash: string } {
-    const hd = headDir ?? HEAD_DIR;
-    const ad = archiveDir ?? ARCHIVE_DIR;
-    const rid = revisionId ?? crypto.randomUUID();
-    const ph = proseHash ?? crypto.createHash('sha256').update(prose).digest('hex');
-    // Current AnalysisResult contract: eventId + protocol + observations
-    // (one produced observation per active field, evidence an exact prose
-    // substring) + the dynamic analysis payload. protocol.proseHash is the
-    // canonical SHA-256 of the prose, matching the pipeline's construction.
-    const analysisPayload: Record<string, unknown> = {
-      postconditions: { covered: [], dropped: [] },
-      preconditions: { violated: [] },
-      pov: { consistent: true, leaks: [] },
-      inventedDetails: [],
-      quality: {
-        proseScore: 4,
-        maxScore: 5,
-        strengths: [],
-        weaknesses: [],
-        estimatedWordCount: 1,
-      },
-      threadProgressAchieved: [],
-      foreshadowingDeployed: [],
-      narrativeChecks: [],
-      appearanceChecks: [],
-      characterReferences: [],
-      tenseDetected: 'past',
-      conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-      ruleChecks: [],
-      knowledgeChecks: [],
-    };
-    const sceneHash = crypto
-      .createHash('sha256')
-      .update(prose + ph + eventId)
-      .digest('hex');
-
-    // Head pointer
-    storage.mkdirp(hd);
-    storage.write(`${hd}/${eventId}.json`, JSON.stringify({ revisionId: rid, proseHash: ph }));
-
-    // Full archived envelope
-    const archiveEventDir = `${ad}/${eventId}`;
-    storage.mkdirp(archiveEventDir);
-    storage.write(
-      `${archiveEventDir}/${rid}.json`,
-      JSON.stringify({
+  ) {
+    const envelope = makeEnvelope(eventId, prose, decision);
+    await execution.compareAndSwapAcceptedScene({
+      projectId,
+      eventId,
+      expectedVersion: null,
+      value: {
         version: 1,
-        revisionId: rid,
-        parentRevisionId: null,
-        operationId: crypto.randomUUID(),
-        planHash: crypto.createHash('sha256').update('plan').digest('hex'),
-        actorId: 'test',
+        projectId,
         eventId,
-        origin: 'llm_draft',
+        sourceHash,
+        revisionId: envelope.revisionId,
         prose,
-        proseHash: ph,
-        sceneHash,
-        editorialBasisHash: crypto.createHash('sha256').update('basis').digest('hex'),
-        scopeHash: decision.scopeHash,
-        validationIdentity: decision.validationIdentity,
-        feedbackHash: null,
-        reviewIds: [],
-        analysis:
-          decision.status === 'accepted'
-            ? {
-                eventId,
-                protocol: makeProtocol(prose),
-                observations: makeObservations(analysisPayload, prose),
-                analysis: analysisPayload,
-              }
-            : null,
-        validation:
-          decision.status === 'accepted'
-            ? { passed: true, errors: [], warnings: [], infos: [] }
-            : null,
-        releaseDecision: decision,
-        released: decision.status === 'accepted',
-        cacheHit: false,
-        errors: [],
-        llmPass1: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
-        llmPass2: null,
-        attempts: 0,
-        needsReview: false,
-        promptHash: crypto.createHash('sha256').update('prompt').digest('hex'),
-        providerCalls: [],
-        promotionReadSet: [],
-        requestRecords: [],
-        createdAt: new Date().toISOString(),
-      }),
-    );
-
-    return { revisionId: rid, proseHash: ph };
+        proseHash: envelope.proseHash,
+        sceneHash: envelope.sceneHash,
+        value: JSON.parse(JSON.stringify(envelope)),
+      },
+    });
+    return envelope;
   }
 
-  // ── Accepted resolution ────────────────────────────────────────────
+  it('returns a repository-backed accepted artifact', async () => {
+    const execution = new MemoryExecutionRepository();
+    const decision = makeAcceptedDecision(hash('scope-s1'));
+    await seedAcceptedArtifact(execution, 'S1', 'Once upon a time...', decision);
 
-  describe('resolve()', () => {
-    it('returns artifact for an accepted response', () => {
-      const storage = new MemoryStorage();
-      const decision = makeAcceptedDecision(
-        crypto.createHash('sha256').update('scope_s1').digest('hex'),
-      );
-      seedAcceptedArtifact(storage, 'S1', 'Once upon a time...', decision);
-      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
+    const artifact = await new AcceptedArtifactResolver(execution, projectId).resolve('S1');
 
-      const artifact = resolver.resolve('S1');
-
-      expect(artifact).not.toBeNull();
-      expect(artifact!.eventId).toBe('S1');
-      expect(artifact!.prose).toBe('Once upon a time...');
-      expect(artifact!.releaseDecision.status).toBe('accepted');
-      expect(artifact!.scopeHash).toBe(decision.scopeHash);
-    });
-
-    it('returns null when head pointer file does not exist', () => {
-      const storage = new MemoryStorage();
-      storage.mkdirp(HEAD_DIR);
-      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
-
-      const artifact = resolver.resolve('NONEXISTENT');
-
-      expect(artifact).toBeNull();
-    });
-
-    it('returns null when release decision is not accepted', () => {
-      const storage = new MemoryStorage();
-      const decision = makeBlockedDecision(
-        crypto.createHash('sha256').update('scope01').digest('hex'),
-      );
-      seedAcceptedArtifact(storage, 'S1', 'Some prose', decision);
-      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
-
-      const artifact = resolver.resolve('S1');
-
-      expect(artifact).toBeNull();
-    });
-
-    it('returns null when release decision is pending_waiver', () => {
-      const storage = new MemoryStorage();
-      const pendingDecision: ReleaseDecision = {
-        status: 'pending_waiver',
-        scopeHash: crypto.createHash('sha256').update('scope01').digest('hex'),
-        validationIdentity: 'vi01',
-        reasons: ['warnings not waived'],
-      };
-      seedAcceptedArtifact(storage, 'S1', 'Some prose', pendingDecision);
-      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
-
-      const artifact = resolver.resolve('S1');
-
-      expect(artifact).toBeNull();
-    });
-
-    it('returns null for malformed JSON in head pointer', () => {
-      const storage = new MemoryStorage();
-      storage.mkdirp(HEAD_DIR);
-      storage.write(`${HEAD_DIR}/S1.json`, 'not-json-at-all');
-      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
-
-      const artifact = resolver.resolve('S1');
-
-      expect(artifact).toBeNull();
-    });
-
-    it('returns null when head pointer lacks revisionId/proseHash (no backward compat)', () => {
-      const storage = new MemoryStorage();
-      storage.mkdirp(HEAD_DIR);
-      const decision = makeAcceptedDecision(
-        crypto.createHash('sha256').update('scope01').digest('hex'),
-      );
-      storage.write(
-        `${HEAD_DIR}/S1.json`,
-        JSON.stringify({
-          prose: 'Inline prose without revision pointer',
-          releaseDecision: decision,
-        }),
-      );
-      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
-
-      const artifact = resolver.resolve('S1');
-
-      expect(artifact).toBeNull();
+    expect(artifact).toMatchObject({
+      eventId: 'S1',
+      prose: 'Once upon a time...',
+      releaseDecision: { status: 'accepted' },
+      scopeHash: decision.scopeHash,
     });
   });
 
-  // ── Batch resolve ──────────────────────────────────────────────────
+  it('returns null for missing, blocked, malformed, or scope-mismatched artifacts', async () => {
+    const execution = new MemoryExecutionRepository();
+    const resolver = new AcceptedArtifactResolver(execution, projectId);
+    expect(await resolver.resolve('missing')).toBeNull();
 
-  describe('resolveAll()', () => {
-    it('returns only accepted artifacts from a set', () => {
-      const storage = new MemoryStorage();
-      const acceptedDecision = makeAcceptedDecision(
-        crypto.createHash('sha256').update('scope01').digest('hex'),
-      );
-      const blockedDecision = makeBlockedDecision(
-        crypto.createHash('sha256').update('scope02').digest('hex'),
-      );
+    await seedAcceptedArtifact(execution, 'blocked', 'Blocked prose', makeBlockedDecision(hash('blocked')));
+    expect(await resolver.resolve('blocked')).toBeNull();
 
-      // S1 — accepted
-      seedAcceptedArtifact(storage, 'S1', 'S1 prose', acceptedDecision);
-      // S2 — blocked
-      seedAcceptedArtifact(storage, 'S2', 'S2 prose', blockedDecision);
-      // S3 — missing, no write
-
-      const resolver = new AcceptedArtifactResolver(storage, HEAD_DIR, ARCHIVE_DIR);
-      const results = resolver.resolveAll(['S1', 'S2', 'S3']);
-
-      expect(results.size).toBe(1);
-      expect(results.has('S1')).toBe(true);
-      expect(results.get('S1')!.prose).toBe('S1 prose');
-      expect(results.has('S2')).toBe(false);
-      expect(results.has('S3')).toBe(false);
+    await seedAcceptedArtifact(execution, 'malformed', 'Malformed prose', makeAcceptedDecision(hash('malformed')));
+    const malformed = await execution.readAcceptedScene({ projectId, eventId: 'malformed' });
+    if (malformed === null) throw new Error('missing seeded artifact');
+    await execution.compareAndSwapAcceptedScene({
+      projectId,
+      eventId: 'malformed',
+      expectedVersion: malformed.revision,
+      value: { ...malformed.value, value: { malformed: true } },
     });
+    expect(await resolver.resolve('malformed')).toBeNull();
+
+    await seedAcceptedArtifact(execution, 'scoped', 'Scoped prose', makeAcceptedDecision(hash('scope-a')));
+    expect(await resolver.resolve('scoped', hash('scope-b'))).toBeNull();
   });
 
-  // ── Storage independence ───────────────────────────────────────────
+  it('resolves only accepted artifacts in a batch', async () => {
+    const execution = new MemoryExecutionRepository();
+    await seedAcceptedArtifact(execution, 'S1', 'S1 prose', makeAcceptedDecision(hash('scope-1')));
+    await seedAcceptedArtifact(execution, 'S2', 'S2 prose', makeBlockedDecision(hash('scope-2')));
 
-  it('works with any Storage backend (MemoryStorage)', () => {
-    const storage = new MemoryStorage();
-    const HEAD2 = '/proj/.nova/work/responses';
-    const ARCHIVE2 = '/proj/.nova/work/revisions/scenes';
-    const decision = makeAcceptedDecision();
-    seedAcceptedArtifact(storage, 'E1', 'E1 text', decision, undefined, undefined, HEAD2, ARCHIVE2);
+    const artifacts = await new AcceptedArtifactResolver(execution, projectId).resolveAll([
+      'S1',
+      'S2',
+      'S3',
+    ]);
 
-    const resolver = new AcceptedArtifactResolver(storage, HEAD2, ARCHIVE2);
-    const artifact = resolver.resolve('E1');
-
-    expect(artifact).not.toBeNull();
-    expect(artifact!.eventId).toBe('E1');
-    expect(artifact!.prose).toBe('E1 text');
+    expect([...artifacts.keys()]).toEqual(['S1']);
+    expect(artifacts.get('S1')?.prose).toBe('S1 prose');
   });
 });

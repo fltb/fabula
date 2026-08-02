@@ -1,5 +1,4 @@
-import * as path from 'node:path';
-import type { Storage } from '../storage/index.ts';
+import type { Clock } from '../ports/runtime-services.ts';
 
 type TracePhase =
   | 'pipeline'
@@ -29,13 +28,14 @@ export class TraceCollector {
 
   constructor(
     readonly jobId: string,
-    readonly traceId = jobId,
+    readonly traceId: string,
+    private readonly clock: Clock,
   ) {}
 
   record(event: Omit<TraceEvent, 'timestamp' | 'jobId' | 'traceId'>): void {
     this.events.push({
       ...event,
-      timestamp: new Date().toISOString(),
+      timestamp: this.clock.now(),
       jobId: this.jobId,
       traceId: this.traceId,
     });
@@ -45,14 +45,8 @@ export class TraceCollector {
     return this.events;
   }
 
-  write(storage: Storage, projectDir: string): void {
-    const dir = path.join(projectDir, '.nova', 'traces');
-    storage.mkdirp(dir);
-    const target = path.join(dir, `${this.jobId}.jsonl`);
-    storage.write(
-      target,
-      this.events.map((event) => JSON.stringify(event)).join('\n') +
-        (this.events.length > 0 ? '\n' : ''),
-    );
+  toJsonLines(): string {
+    return this.events.map((event) => JSON.stringify(event)).join('\n') +
+      (this.events.length > 0 ? '\n' : '');
   }
 }

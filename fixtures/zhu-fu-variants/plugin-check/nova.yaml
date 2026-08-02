@@ -35,4 +35,3 @@ snapshotInterval: 3
 defaultSceneTextTarget: 1200
 plugins:
   enabled: true
-  directory: plugins

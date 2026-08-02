@@ -1,8 +1,12 @@
 // ============================================================================
 // StateManager — Coordinates EventStore + SnapshotEngine + ReplayEngine
+//
+// Pure in-memory state machine: events are appended and replayed in process,
+// snapshots are tracked as values only. Durable event logs and snapshots are
+// the caller's responsibility via the semantic StateLogRepository /
+// StateSnapshotRepository ports (see ports/state-repository.ts).
 // ============================================================================
 
-import type { Storage } from '../storage/types.js';
 import type { EntityCatalogContext, NarrativeEvent, WorldState } from '../types/index.js';
 import { EventStore } from './event-store.ts';
 import type { ReplayOptions } from './replay.ts';
@@ -16,14 +20,12 @@ export class StateManager {
   private replayDefaults: ReplayOptions;
 
   constructor(
-    snapshotsDir: string,
     catalogContext: EntityCatalogContext,
     snapshotInterval = 20,
-    storage?: Storage,
     replayDefaults?: ReplayOptions,
   ) {
-    this.eventStore = new EventStore(storage);
-    this.snapshotEngine = new SnapshotEngine(snapshotsDir, snapshotInterval, storage);
+    this.eventStore = new EventStore();
+    this.snapshotEngine = new SnapshotEngine(snapshotInterval);
     this.replayEngine = new ReplayEngine(catalogContext);
     this.replayDefaults = replayDefaults ?? {};
   }
@@ -52,15 +54,5 @@ export class StateManager {
   /** Initialize with events (for testing or recovery) */
   initialize(events: NarrativeEvent[]): void {
     this.eventStore.load(events);
-  }
-
-  /** Persist everything to disk */
-  saveToDisk(dirPath: string): void {
-    this.eventStore.saveToDisk(dirPath);
-  }
-
-  /** Load everything from disk */
-  loadFromDisk(dirPath: string): void {
-    this.eventStore.loadFromDisk(dirPath);
   }
 }

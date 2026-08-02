@@ -1,13 +1,12 @@
 // ============================================================================
 // Novalistically — Canonical Project Compilation Kernel (package-private)
 //
-// The ONLY storage-backed YAML → internal NovelIR → runtime path in core.
-// `loadCanonicalProject` executes at most one `EntityMapper.loadProject()` per
-// uncached authored source; the source cache is keyed by Storage identity +
-// project path + authored YAML hash and stores structured-clone-safe
-// source/mapped data only (never live Zod objects, registries, or arrays).
-// Every call returns fresh arrays, registry, compiled Zod catalog, declaration
-// catalog, and runtime inputs — no shared mutable objects across calls.
+// The canonical immutable source-snapshot → NovelIR → runtime path in Core.
+// `loadCanonicalProject` maps each authored source snapshot once and returns
+// fresh arrays, registries, catalogs, and runtime inputs. No Host path,
+// filesystem adapter, or mutable runtime object is retained between calls.
+// The mapper pass is memoized per canonical `sourceHash`; every call returns
+// fresh clones, never the cached internals.
 //
 // `compileCanonicalRuntime` resolves the branch/discourse route and calls
 // `compileNarrativeRuntime` exactly once per invocation.
@@ -16,8 +15,7 @@
 // the core root, or public-api.manifest.json.
 // ============================================================================
 
-import * as crypto from 'node:crypto';
-import * as path from 'node:path';
+import type { ProjectSourceSnapshotV1 } from '../contracts/source.js';
 import type { CompiledGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import { compileGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import { branchPathsEqual, createEmptyBranchPath } from '../branch/index.js';
@@ -25,14 +23,13 @@ import { ConfigError } from '../errors.ts';
 import { parseIntroductionTransition } from '../state/event-application.ts';
 import type { CompiledNarrativeRuntime } from '../state/narrative-runtime.ts';
 import { compileNarrativeRuntime } from '../state/narrative-runtime.ts';
-import type { Storage } from '../storage/index.ts';
+import type { RuntimeEntityTypeCatalog } from '../types/entity-catalog.js';
 import type {
   BranchPath,
   EntityCatalogContext,
   EntityDeclaration,
   EntityDeclarationCatalog,
   EntityKind,
-  EntityTypeCatalog,
   Fact,
   NarrativeEvent,
 } from '../types/index.js';
@@ -55,59 +52,32 @@ const RUNTIME_TYPE_SCHEMA_VERSION = 1;
 const INITIAL_FACT_STORY_TIME = { type: 'absolute' as const, value: 'day_0' };
 
 // ============================================================================
-// Source cache — Storage identity + path + authored YAML hash
-// ============================================================================
-
+// Bounded content-only memoization. The cache is keyed exclusively by the
+// canonical `ProjectSourceSnapshotV1.sourceHash` — never by object identity,
+// host path, or Git/persistence provenance. Each entry owns the outputs of
+// exactly one successful mapper pass; failed mappings are never stored and
+// entries are only handed out as fresh structured clones per call.
 interface ProjectSourceCacheEntry {
-  hash: string;
-  data: ProjectData;
-  events: NarrativeEvent[];
+  readonly data: ProjectData;
+  readonly events: NarrativeEvent[];
 }
+const projectCache = new Map<string, ProjectSourceCacheEntry>();
+const PROJECT_CACHE_LIMIT = 8;
 
-const projectCache = new WeakMap<Storage, Map<string, ProjectSourceCacheEntry>>();
-
-function cacheFor(storage: Storage): Map<string, ProjectSourceCacheEntry> {
-  let cache = projectCache.get(storage);
-  if (!cache) {
-    cache = new Map<string, ProjectSourceCacheEntry>();
-    projectCache.set(storage, cache);
+/** Resolve the cached mapper outputs for a source hash, mapping on a miss. */
+function cacheSource(hash: string, snapshot: ProjectSourceSnapshotV1): ProjectSourceCacheEntry {
+  const cached = projectCache.get(hash);
+  if (cached) return cached;
+  const mapper = new EntityMapper(snapshot);
+  const data = mapper.loadProject();
+  const events = mapper.loadAllEvents(data);
+  const entry: ProjectSourceCacheEntry = { data, events };
+  projectCache.set(hash, entry);
+  if (projectCache.size > PROJECT_CACHE_LIMIT) {
+    const oldest = projectCache.keys().next().value;
+    if (oldest !== undefined) projectCache.delete(oldest);
   }
-  return cache;
-}
-
-function hashDirectory(
-  storage: Storage,
-  directory: string,
-  baseDirectory: string,
-  hasher: crypto.Hash,
-): void {
-  if (!storage.exists(directory)) return;
-  for (const entry of [...storage.list(directory)].sort((left, right) =>
-    left.name.localeCompare(right.name),
-  )) {
-    const filePath = path.join(directory, entry.name);
-    if (entry.isDirectory()) {
-      hashDirectory(storage, filePath, baseDirectory, hasher);
-    } else if (entry.name.endsWith('.yaml') || entry.name.endsWith('.yml')) {
-      hasher.update(path.relative(baseDirectory, filePath));
-      hasher.update('\0');
-      hasher.update(storage.read(filePath));
-      hasher.update('\0');
-    }
-  }
-}
-
-function computeProjectHash(projectDir: string, storage: Storage): string {
-  const hasher = crypto.createHash('sha256');
-  const configPath = path.join(projectDir, 'nova.yaml');
-  if (storage.exists(configPath)) {
-    hasher.update('nova.yaml\0');
-    hasher.update(storage.read(configPath));
-    hasher.update('\0');
-  }
-  hashDirectory(storage, path.join(projectDir, 'definitions'), projectDir, hasher);
-  hashDirectory(storage, path.join(projectDir, 'chapters'), projectDir, hasher);
-  return hasher.digest('hex');
+  return entry;
 }
 
 // ============================================================================
@@ -125,13 +95,11 @@ export interface CanonicalProjectIR {
   readonly initialThreads: readonly { id: string }[];
   readonly registry: InMemoryEntityRegistry;
   readonly entityDeclarations: EntityDeclarationCatalog;
-  readonly entityTypes: EntityTypeCatalog;
+  readonly entityTypes: RuntimeEntityTypeCatalog;
   /** The one shared catalog pair threaded to StateManager and compileNarrativeRuntime. */
   readonly catalogContext: EntityCatalogContext;
   readonly gameDialogueTree: CompiledGameDialogueTree | null;
   readonly chapterByEventId: Readonly<Record<string, number>>;
-  /** The EntityMapper instance that performed the single loadProject call. */
-  readonly mapper: EntityMapper;
 }
 
 // ============================================================================
@@ -168,17 +136,11 @@ function buildDefinitionIndex(data: ProjectData): Map<string, DefinitionEntry> {
 }
 
 /**
- * Event id → authored YAML file path. The honest definition source for a
- * definition-less introduced entity is the event file that declares it —
- * never a fabricated `definitions/introduces/` path.
+ * Event id → authored YAML logical path.
  */
 function buildEventFilePathIndex(data: ProjectData): Map<string, string> {
   const index = new Map<string, string>();
-  for (const chapter of data.chapters.values()) {
-    for (const event of chapter.events) {
-      if (event.filePath) index.set(event.event, event.filePath);
-    }
-  }
+  for (const chapter of data.chapters.values()) for (const event of chapter.events) if (event.logicalPath) index.set(event.event, event.logicalPath);
   return index;
 }
 
@@ -211,75 +173,29 @@ function collectIntroductions(
 // Declaration catalog — every entity declared before any activation
 // ============================================================================
 
-function buildDeclarationCatalog(
-  data: ProjectData,
-  introductions: ReadonlyMap<string, IntroductionSource>,
-): EntityDeclarationCatalog {
+function buildDeclarationCatalog(data: ProjectData, introductions: ReadonlyMap<string, IntroductionSource>): EntityDeclarationCatalog {
   const declarations: Record<string, EntityDeclaration> = {};
+  const eventFilePath = buildEventFilePathIndex(data);
+  const definitionFileOf = (hostEventId: string, entityId: string): string => {
+    const logicalPath = eventFilePath.get(hostEventId);
+    if (!logicalPath) throw new ConfigError(`Introduction of "${entityId}" cannot be located`, { eventId: hostEventId, phase: 'introductions' });
+    return logicalPath;
+  };
   const add = (entityId: string, kind: EntityKind, name: string, definitionFile: string): void => {
     if (declarations[entityId] !== undefined) return;
     const intro = introductions.get(entityId);
-    declarations[entityId] = {
-      entityId,
-      // The declaration's type identity equals its registry kind: the
-      // authored type catalog keys its types by the same ids.
-      typeRef: { typeId: kind, schemaVersion: RUNTIME_TYPE_SCHEMA_VERSION },
-      immutableMetadata: { name, definitionFile },
-      introduction: intro ? { type: 'event', eventId: intro.hostEventId } : { type: 'initial' },
-    };
+    declarations[entityId] = { entityId, typeRef: { typeId: kind, schemaVersion: RUNTIME_TYPE_SCHEMA_VERSION }, immutableMetadata: { name, definitionFile }, introduction: intro ? { type: 'event', eventId: intro.hostEventId } : { type: 'initial' } };
   };
-
-  const eventFilePath = buildEventFilePathIndex(data);
-  const definitionFileOf = (hostEventId: string, entityId: string): string => {
-    const filePath = eventFilePath.get(hostEventId);
-    if (!filePath) {
-      throw new ConfigError(
-        `Introduction of "${entityId}" cannot be located: host event "${hostEventId}" has no authored file path`,
-        { eventId: hostEventId, phase: 'introductions' },
-      );
-    }
-    return filePath;
-  };
-
-  for (const char of data.characters) {
-    add(char.id, 'character', char.name, `definitions/characters/${char.id}.yaml`);
-  }
-  for (const loc of data.locations) {
-    add(loc.id, 'location', loc.name, `definitions/locations/${loc.id}.yaml`);
-  }
-  for (const item of data.items) {
-    add(item.id, 'item', item.name, `definitions/items/${item.id}.yaml`);
-  }
-  for (const fac of data.factions) {
-    add(fac.id, 'faction', fac.name, `definitions/factions/${fac.id}.yaml`);
-  }
-  for (const rule of data.rules) {
-    add(
-      rule.ruleId,
-      'rule',
-      rule.name,
-      `definitions/rules/${rule.ruleId.split('.').pop() ?? rule.ruleId}.yaml`,
-    );
-  }
-  for (const wf of data.worldInitialState?.worldFacts ?? []) {
-    add(wf.id, 'concept', wf.id, 'definitions/state_initial.yaml');
-  }
-  // Definition-less event introductions are declared too — activation is
-  // never entity creation; the declaration precedes story compile. The
-  // definition source is the hosting event file, not a fabricated path.
-  for (const intro of introductions.values()) {
-    if (declarations[intro.entityId] === undefined) {
-      add(
-        intro.entityId,
-        intro.kind,
-        intro.entityId,
-        definitionFileOf(intro.hostEventId, intro.entityId),
-      );
-    }
-  }
-
+  for (const char of data.characters) add(char.id, 'character', char.name, `definitions/characters/${char.id}.yaml`);
+  for (const loc of data.locations) add(loc.id, 'location', loc.name, `definitions/locations/${loc.id}.yaml`);
+  for (const item of data.items) add(item.id, 'item', item.name, `definitions/items/${item.id}.yaml`);
+  for (const fac of data.factions) add(fac.id, 'faction', fac.name, `definitions/factions/${fac.id}.yaml`);
+  for (const rule of data.rules) add(rule.ruleId, 'rule', rule.name, `definitions/rules/${rule.ruleId.split('.').pop() ?? rule.ruleId}.yaml`);
+  for (const wf of data.worldInitialState?.worldFacts ?? []) add(wf.id, 'concept', wf.id, 'definitions/state_initial.yaml');
+  for (const intro of introductions.values()) if (declarations[intro.entityId] === undefined) add(intro.entityId, intro.kind, intro.entityId, definitionFileOf(intro.hostEventId, intro.entityId));
   return { declarations, version: RUNTIME_DECLARATION_CATALOG_VERSION };
 }
+
 
 // ============================================================================
 // system:introduction transitions — one per event activation, placed
@@ -404,166 +320,65 @@ function buildChapterIndex(data: ProjectData): Record<string, number> {
 // Public package-private kernel surface
 // ============================================================================
 
-/**
- * Load one canonical project IR. Exactly one `EntityMapper.loadProject()` per
- * uncached authored source; cache holds structured-clone-safe data only and
- * every call rebuilds registry, catalogs, arrays, and runtime inputs fresh.
- */
-export function loadCanonicalProject(projectDir: string, storage: Storage): CanonicalProjectIR {
-  const hash = computeProjectHash(projectDir, storage);
-  const sourceCache = cacheFor(storage);
-  const cached = sourceCache.get(projectDir);
-  let mapper: EntityMapper | null = null;
-  const source =
-    cached && cached.hash === hash
-      ? cached
-      : (() => {
-          mapper = new EntityMapper(projectDir, storage);
-          const data = mapper.loadProject();
-          const events = mapper.loadAllEvents(data);
-          const entry: ProjectSourceCacheEntry = {
-            hash,
-            data: structuredClone(data),
-            events: structuredClone(events),
-          };
-          sourceCache.set(projectDir, entry);
-          return entry;
-        })();
-
-  // Fresh mutable objects per call — never reuse cached instances.
+export function loadCanonicalProject(snapshot: ProjectSourceSnapshotV1): CanonicalProjectIR {
+  const hash = snapshot.sourceHash;
+  const source = cacheSource(hash, snapshot);
   const data = structuredClone(source.data);
   const authoredEvents = structuredClone(source.events);
-
   const introductions = collectIntroductions(authoredEvents);
-
-  // Authored contract: an event-introduced entity's definition must omit
-  // initialState (its state lives in the introduction). Migration error.
   const definitionIndex = buildDefinitionIndex(data);
   for (const [entityId, intro] of introductions) {
     const definition = definitionIndex.get(entityId);
     if (definition && Object.keys(definition.initialState ?? {}).length > 0) {
-      throw new ConfigError(
-        `Entity "${entityId}" is introduced by event "${intro.hostEventId}" but its definition still ` +
-          `declares initialState — the authored contract requires the definition to omit initialState ` +
-          `when an event introduction exists`,
-        { path: `definitions:${entityId}`, phase: 'introductions' },
-      );
+      throw new ConfigError(`Entity "${entityId}" is introduced by event "${intro.hostEventId}" but its definition still declares initialState`, { path: `definitions:${entityId}`, phase: 'introductions' });
     }
   }
-
   const registry = new InMemoryEntityRegistry();
   registry.load(data, [...introductions.keys()]);
 
   // Register definition-less introduced entities — the registry never
   // creates placeholders for deferred ids, so these are registered here
-  // from their authored introduction data. The definition source is the
-  // hosting event file, never a fabricated `definitions/introduces/` path.
   const eventFilePath = buildEventFilePathIndex(data);
   for (const intro of introductions.values()) {
     if (registry.resolve(intro.entityId) !== null) continue;
-    const filePath = eventFilePath.get(intro.hostEventId);
-    if (!filePath) {
-      throw new ConfigError(`Introduction host event "${intro.hostEventId}" not found`, {
-        eventId: intro.hostEventId,
-        phase: 'introductions',
-      });
-    }
-    registry.register({
-      id: intro.entityId,
-      kind: intro.kind,
-      name: intro.entityId,
-      definitionFile: filePath,
-      lifecycle: 'active',
-      typeRef: { typeId: intro.kind, schemaVersion: RUNTIME_TYPE_SCHEMA_VERSION },
-      state: { ...intro.initialState },
-    });
+    const logicalPath = eventFilePath.get(intro.hostEventId);
+    if (!logicalPath) throw new ConfigError(`Introduction host event "${intro.hostEventId}" not found`, { eventId: intro.hostEventId, phase: 'introductions' });
+    registry.register({ id: intro.entityId, kind: intro.kind, name: intro.entityId, definitionFile: logicalPath, lifecycle: 'active', typeRef: { typeId: intro.kind, schemaVersion: RUNTIME_TYPE_SCHEMA_VERSION }, state: { ...intro.initialState } });
   }
-
   const entityTypes = compileEntityTypeCatalog(data.entityTypeCatalogSource);
   const entityDeclarations = buildDeclarationCatalog(data, introductions);
-  const catalogContext: EntityCatalogContext = {
-    entityDeclarationCatalog: entityDeclarations,
-    entityTypeCatalog: entityTypes,
-  };
-
-  const gameDialogueTree = compileGameDialogueTree(
-    authoredEvents,
-    resolveTemporalContext(authoredEvents, data.timeAnchors),
-  );
-
+  const catalogContext: EntityCatalogContext = { entityDeclarationCatalog: entityDeclarations, entityTypeCatalog: entityTypes };
+  const gameDialogueTree = compileGameDialogueTree(authoredEvents, resolveTemporalContext(authoredEvents, data.timeAnchors));
   const introductionTransitions: NarrativeEvent[] = [];
   for (const intro of introductions.values()) {
     const host = authoredEvents.find((event) => event.id === intro.hostEventId);
-    if (!host) {
-      throw new ConfigError(`Introduction host event "${intro.hostEventId}" not found`, {
-        eventId: intro.hostEventId,
-        phase: 'introductions',
-      });
-    }
+    if (!host) throw new ConfigError(`Introduction host event "${intro.hostEventId}" not found`, { eventId: intro.hostEventId, phase: 'introductions' });
     const transition = makeIntroductionTransition(host, intro);
     introductionTransitions.push(transition);
-    // Add the transition to the target's author-origin predecessor list.
     const predecessors = host.causalPredecessors ?? [];
-    if (!predecessors.includes(transition.id)) {
-      predecessors.push(transition.id);
-      host.causalPredecessors = predecessors;
-    }
+    if (!predecessors.includes(transition.id)) { predecessors.push(transition.id); host.causalPredecessors = predecessors; }
   }
-
   const transitionsByHost = new Map<string, NarrativeEvent[]>();
-  for (const transition of introductionTransitions) {
-    const targetId = parseIntroductionTransition(transition.id)?.targetEventId;
-    if (!targetId) continue;
-    const grouped = transitionsByHost.get(targetId) ?? [];
-    grouped.push(transition);
-    transitionsByHost.set(targetId, grouped);
-  }
-  const orderedBaseEvents = [...authoredEvents, ...(gameDialogueTree?.transitionEvents ?? [])].sort(
-    (a, b) => a.narrativeOrder - b.narrativeOrder,
-  );
+  for (const transition of introductionTransitions) { const targetId = parseIntroductionTransition(transition.id)?.targetEventId; if (targetId) transitionsByHost.set(targetId, [...(transitionsByHost.get(targetId) ?? []), transition]); }
+  const orderedBaseEvents = [...authoredEvents, ...(gameDialogueTree?.transitionEvents ?? [])].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
   const runtimeEvents: NarrativeEvent[] = [];
-  for (const event of orderedBaseEvents) {
-    if (event.source === 'event_file') {
-      runtimeEvents.push(...(transitionsByHost.get(event.id) ?? []));
-    }
-    runtimeEvents.push(event);
-  }
-
-  return {
-    sourceHash: hash,
-    data,
-    authoredEvents,
-    runtimeEvents,
-    initialFacts: buildInitialFacts(entityDeclarations, registry),
-    initialThreads: (data.worldInitialState?.threads ?? []).map((thread) => ({ id: thread.id })),
-    registry,
-    entityDeclarations,
-    entityTypes,
-    catalogContext,
-    gameDialogueTree,
-    chapterByEventId: buildChapterIndex(data),
-    // On cache hits no loadProject call ran; a fresh unloaded mapper is the
-    // honest instance bound to this project/storage.
-    mapper: mapper ?? new EntityMapper(projectDir, storage),
-  };
+  for (const event of orderedBaseEvents) { if (event.source === 'event_file') runtimeEvents.push(...(transitionsByHost.get(event.id) ?? [])); runtimeEvents.push(event); }
+  return { sourceHash: hash, data, authoredEvents, runtimeEvents, initialFacts: buildInitialFacts(entityDeclarations, registry), initialThreads: (data.worldInitialState?.threads ?? []).map((thread) => ({ id: thread.id })), registry, entityDeclarations, entityTypes, catalogContext, gameDialogueTree, chapterByEventId: buildChapterIndex(data) };
 }
 
 /**
  * Compile the canonical narrative runtime for one branch/discourse route.
- * Resolves the route options and calls `compileNarrativeRuntime` exactly once,
- * passing the same catalog context object the kernel built.
+ *
+ * The route check intentionally happens before graph/discourse compilation:
+ * game-dialogue projects must receive one complete leaf when a branch path is
+ * supplied, while an omitted path keeps the existing no-route behavior.
  */
 export function compileCanonicalRuntime(
   ir: CanonicalProjectIR,
   options?: { branchPath?: BranchPath; discourseBranch?: string },
 ): CompiledNarrativeRuntime {
-  // Shared route invariant: a game dialogue tree project that is given an
-  // explicit branch route must select one complete, ordered leaf. Preflight
-  // at the canonical route boundary (before discourse exact-coverage) so an
-  // incomplete route fails with the leaf diagnostic; absent branch paths
-  // keep their existing no-route behavior.
+  const branchPath = options?.branchPath ?? createEmptyBranchPath();
   if (ir.gameDialogueTree && options?.branchPath) {
-    const branchPath = options.branchPath;
     if (!ir.gameDialogueTree.leafPaths.some((leafPath) => branchPathsEqual(leafPath, branchPath))) {
       throw new ConfigError(
         'Game dialogue assembly requires one complete, ordered leaf --branch-path',
@@ -575,7 +390,7 @@ export function compileCanonicalRuntime(
     events: ir.runtimeEvents,
     initialFacts: ir.initialFacts,
     timeAnchors: ir.data.timeAnchors,
-    branchPath: options?.branchPath ?? createEmptyBranchPath(),
+    branchPath,
     discourseBranch: options?.discourseBranch ?? 'main',
     ledger: ir.data.discourseLedger,
     assertions: ir.data.narratorAssertions,

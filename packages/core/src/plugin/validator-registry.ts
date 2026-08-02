@@ -1,36 +1,23 @@
-import type {
-  AnalysisBlockRequirement,
-  PostRenderInput,
-  ValidationIssue,
-  ValidationResult,
-  ValidatorContext,
-} from '../types/index.js';
+import type { Validator } from '../types/index.js';
 
-export interface PluginValidator {
-  name: string;
-  /** Version used for validation/cache provenance. */
-  version?: string;
-  /** Pre-render validation (required) */
-  validate(ctx: ValidatorContext): ValidationResult;
-  /** Optional: post-render validation (pass2 analysis consumer) */
-  validatePost?(input: PostRenderInput): ValidationIssue[];
-  /** Optional: contribute analysis blocks to the dynamic Pass 2 schema. */
-  getAnalysisRequirements?(): AnalysisBlockRequirement[];
+/**
+ * Narrow registrar surface handed to plugin `registerValidators` hooks.
+ * Plugins can only append validators — no introspection, mutation, or
+ * invocation beyond registration.
+ */
+export interface ValidatorRegistrar {
+  register(validator: Validator): void;
 }
 
-export class ValidatorRegistry {
-  private _validators: PluginValidator[] = [];
+export class ValidatorRegistry implements ValidatorRegistrar {
+  private _validators: Validator[] = [];
 
-  register(validator: PluginValidator): void {
+  register(validator: Validator): void {
     this._validators.push(validator);
   }
 
-  runAll(ctx: ValidatorContext): ValidationResult[] {
-    return this._validators.map((v) => v.validate(ctx));
-  }
-
-  /** Get all registered plugin validators */
-  get validators(): PluginValidator[] {
+  /** Get all registered validators */
+  list(): readonly Validator[] {
     return [...this._validators];
   }
 }

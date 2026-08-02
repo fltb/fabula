@@ -17,12 +17,12 @@ const result = await build({
   entryPoints: [join(__dirname, 'src/index.ts')],
   bundle: true,
   platform: 'node',
-  target: 'node24',
+  target: 'node26',
   format: 'esm',
   outfile: join(outdir, 'index.js'),
   sourcemap: true,
   metafile: true,
-  external: ['node:*', '@novalistically/core', 'tinybench', 'yaml'],
+  external: ['node:*', '@novalistically/core', '@novalistically/node-host', 'tinybench', 'yaml'],
   logLevel: 'info',
 });
 

@@ -3,13 +3,15 @@
 // Tests EventStore, SnapshotEngine, ReplayEngine, and StateManager
 // ============================================================================
 
-import * as fs from 'node:fs';
-import * as os from 'node:os';
-import * as path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyBranchPath } from '../src/branch/index.js';
 import { compileEntityTypeCatalog } from '../src/entity/entity-catalog-compiler.js';
 import { EventStore, ReplayEngine, SnapshotEngine, StateManager } from '../src/state/index.js';
+import { applyRuleTransaction } from '../src/state/rule-replay.js';
+import {
+  MemoryStateLogRepository,
+  MemoryStateSnapshotRepository,
+} from '../src/testing/memory-repositories.js';
 import type {
   BranchPath,
   EntityCatalogContext,
@@ -19,9 +21,13 @@ import type {
   EntityTypeDefinitionSource,
   Fact,
   NarrativeEvent,
+  RuleRuntimeState,
+  RuleTransaction,
   Snapshot,
   WorldState,
 } from '../src/types/index.js';
+import type { StateEvent, StateStreamKey } from '../src/ports/state-repository.js';
+import type { JsonValue } from '../src/contracts/json.js';
 
 // ============================================================================
 // Helpers — test event factories
@@ -385,18 +391,31 @@ describe('EventStore', () => {
     });
   });
 
-  describe('saveToDisk() / loadFromDisk()', () => {
-    let tmpDir: string;
+  describe('semantic persistence via StateLogRepository', () => {
+    const STREAM_KEY: StateStreamKey = {
+      projectId: 'project',
+      streamId: 'world',
+      branchId: 'main',
+    };
 
-    beforeEach(() => {
-      tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'evtstore-test-'));
+    /** Serialize a NarrativeEvent into the semantic state log record shape. */
+    const toStateEvent = (event: NarrativeEvent, sequence: number): StateEvent => ({
+      eventId: event.id,
+      sequence,
+      type: event.event,
+      payload: JSON.parse(JSON.stringify(event)) as JsonValue,
     });
 
-    afterEach(() => {
-      fs.rmSync(tmpDir, { recursive: true, force: true });
-    });
+    /** Rebuild an EventStore from a semantic log read (recovery path). */
+    const toEventStore = (events: readonly StateEvent[]): EventStore => {
+      const store = new EventStore();
+      store.load(
+        events.map((entry) => JSON.parse(JSON.stringify(entry.payload)) as NarrativeEvent),
+      );
+      return store;
+    };
 
-    it('should round-trip events correctly', () => {
+    it('should round-trip events through the repository preserving order and content', async () => {
       const e1 = makeEvent(1, {
         title: 'First',
         sceneBrief: 'Brief one',
@@ -407,46 +426,88 @@ describe('EventStore', () => {
         sceneBrief: 'Brief two',
         beats: ['Brief two'],
       });
-      store.commit(e1);
-      store.commit(e2);
+      const log = new MemoryStateLogRepository();
 
-      store.saveToDisk(tmpDir);
+      expect(
+        await log.append({
+          key: STREAM_KEY,
+          expectedVersion: 0,
+          events: [toStateEvent(e1, 1), toStateEvent(e2, 2)],
+        }),
+      ).toMatchObject({ kind: 'appended', version: 2 });
 
-      const loadedStore = new EventStore();
-      loadedStore.loadFromDisk(tmpDir);
-
+      const loadedStore = toEventStore((await log.read({ key: STREAM_KEY })).events);
       expect(loadedStore.count).toBe(2);
       expect(loadedStore.getAll().map((e) => e.narrativeOrder)).toEqual([1, 2]);
       expect(loadedStore.getById(e1.id)?.title).toBe('First');
       expect(loadedStore.getById(e2.id)?.sceneBrief).toBe('Brief two');
     });
 
-    it('should handle empty event log', () => {
-      store.saveToDisk(tmpDir);
+    it('should handle an empty event stream', async () => {
+      const log = new MemoryStateLogRepository();
+      const read = await log.read({ key: STREAM_KEY });
+      expect(read.events).toEqual([]);
+      expect(read.version).toBe(0);
+      expect(read.firstSequence).toBeNull();
+      expect(read.lastSequence).toBeNull();
 
-      const loadedStore = new EventStore();
-      loadedStore.loadFromDisk(tmpDir);
-
+      const loadedStore = toEventStore(read.events);
       expect(loadedStore.count).toBe(0);
     });
 
-    it('should preserve event ordering after load', () => {
-      store.commit(makeEvent(3));
-      store.commit(makeEvent(1));
-      store.commit(makeEvent(2));
-      store.saveToDisk(tmpDir);
+    it('should reject append on expected-version conflict (CAS)', async () => {
+      const log = new MemoryStateLogRepository();
+      await log.append({
+        key: STREAM_KEY,
+        expectedVersion: 0,
+        events: [toStateEvent(makeEvent(1), 1)],
+      });
 
-      const loadedStore = new EventStore();
-      loadedStore.loadFromDisk(tmpDir);
+      expect(
+        await log.append({
+          key: STREAM_KEY,
+          expectedVersion: 0,
+          events: [toStateEvent(makeEvent(2), 2)],
+        }),
+      ).toEqual({ kind: 'conflict', expectedVersion: 0, actualVersion: 1 });
 
-      const orders = loadedStore.getAll().map((e) => e.narrativeOrder);
-      expect(orders).toEqual([1, 2, 3]);
+      // The conflicting append must not mutate the stream.
+      const read = await log.read({ key: STREAM_KEY });
+      expect(read.events).toHaveLength(1);
+      expect(read.version).toBe(1);
     });
 
-    it('should not throw when loading from non-existent directory', () => {
-      const loadedStore = new EventStore();
-      loadedStore.loadFromDisk('/nonexistent/path');
-      expect(loadedStore.count).toBe(0);
+    it('should preserve event ordering after recovery', async () => {
+      const log = new MemoryStateLogRepository();
+      await log.append({
+        key: STREAM_KEY,
+        expectedVersion: 0,
+        events: [
+          toStateEvent(makeEvent(3), 1),
+          toStateEvent(makeEvent(1), 2),
+          toStateEvent(makeEvent(2), 3),
+        ],
+      });
+
+      const loadedStore = toEventStore((await log.read({ key: STREAM_KEY })).events);
+      expect(loadedStore.getAll().map((e) => e.narrativeOrder)).toEqual([1, 2, 3]);
+    });
+
+    it('should read a suffix from a given sequence (snapshot+replay recovery)', async () => {
+      const log = new MemoryStateLogRepository();
+      await log.append({
+        key: STREAM_KEY,
+        expectedVersion: 0,
+        events: [
+          toStateEvent(makeEvent(1), 1),
+          toStateEvent(makeEvent(2), 2),
+          toStateEvent(makeEvent(3), 3),
+        ],
+      });
+
+      const suffix = await log.read({ key: STREAM_KEY, fromSequence: 2 });
+      expect(suffix.events.map((e) => e.eventId)).toEqual([expect.any(String), expect.any(String)]);
+      expect(suffix.lastSequence).toBe(3);
     });
   });
 });
@@ -456,22 +517,10 @@ describe('EventStore', () => {
 // ============================================================================
 
 describe('SnapshotEngine', () => {
-  let tmpDir: string;
   let engine: SnapshotEngine;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'snap-test-'));
-    engine = new SnapshotEngine(tmpDir, 20);
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  describe('constructor', () => {
-    it('should create the snapshots directory', () => {
-      expect(fs.existsSync(tmpDir)).toBe(true);
-    });
+    engine = new SnapshotEngine(20);
   });
 
   describe('shouldSnapshot()', () => {
@@ -493,7 +542,7 @@ describe('SnapshotEngine', () => {
     });
 
     it('should work with custom interval', () => {
-      const custom = new SnapshotEngine(tmpDir, 5);
+      const custom = new SnapshotEngine(5);
       expect(custom.shouldSnapshot(5)).toBe(true);
       expect(custom.shouldSnapshot(10)).toBe(true);
       expect(custom.shouldSnapshot(7)).toBe(false);
@@ -501,7 +550,7 @@ describe('SnapshotEngine', () => {
   });
 
   describe('createSnapshot()', () => {
-    it('should write a snapshot file to disk', () => {
+    it('should produce a snapshot value with the event identity', () => {
       const state: WorldState = {
         entities: { camille: { age: 25 } },
         relationships: {},
@@ -527,15 +576,8 @@ describe('SnapshotEngine', () => {
       expect(snapshot.eventCount).toBe(20);
       expect(snapshot.eventId).toBe('evt_test');
       expect(snapshot.state).toEqual(state);
-      expect(snapshot.timestamp).toBeDefined();
-
-      // Verify file exists
-      const filePath = path.join(tmpDir, 'snapshot_20.json');
-      expect(fs.existsSync(filePath)).toBe(true);
-
-      // Verify file content
-      const loaded = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      expect(loaded.eventCount).toBe(20);
+      expect(snapshot.timestamp).toBe('1970-01-01T00:00:00.000Z');
+      expect(snapshot.version).toBe(1);
     });
 
     it('should deep-clone the state', () => {
@@ -567,8 +609,7 @@ describe('SnapshotEngine', () => {
       engine.createSnapshot(20, 'evt_20', state);
       engine.createSnapshot(40, 'evt_40', state);
 
-      expect(fs.existsSync(path.join(tmpDir, 'snapshot_20.json'))).toBe(true);
-      expect(fs.existsSync(path.join(tmpDir, 'snapshot_40.json'))).toBe(true);
+      expect(engine.listSnapshots()).toEqual([20, 40]);
     });
   });
 
@@ -590,7 +631,6 @@ describe('SnapshotEngine', () => {
       const found = engine.findNearest(55);
       expect(found).not.toBeNull();
       expect(found!.eventCount).toBe(40);
-      // Also verify the exact match case
     });
 
     it('should return the exact snapshot when target matches', () => {
@@ -664,10 +704,7 @@ describe('SnapshotEngine', () => {
 
       engine.invalidateFrom(30);
 
-      expect(fs.existsSync(path.join(tmpDir, 'snapshot_20.json'))).toBe(true);
-      expect(fs.existsSync(path.join(tmpDir, 'snapshot_30.json'))).toBe(false);
-      expect(fs.existsSync(path.join(tmpDir, 'snapshot_40.json'))).toBe(false);
-      expect(fs.existsSync(path.join(tmpDir, 'snapshot_50.json'))).toBe(false);
+      expect(engine.listSnapshots()).toEqual([20]);
     });
 
     it('should remove nothing when order is above all snapshots', () => {
@@ -684,7 +721,7 @@ describe('SnapshotEngine', () => {
 
       engine.invalidateFrom(100);
 
-      expect(fs.existsSync(path.join(tmpDir, 'snapshot_20.json'))).toBe(true);
+      expect(engine.listSnapshots()).toEqual([20]);
     });
 
     it('should remove all snapshots when order is 0', () => {
@@ -702,8 +739,7 @@ describe('SnapshotEngine', () => {
 
       engine.invalidateFrom(0);
 
-      expect(fs.existsSync(path.join(tmpDir, 'snapshot_20.json'))).toBe(false);
-      expect(fs.existsSync(path.join(tmpDir, 'snapshot_40.json'))).toBe(false);
+      expect(engine.listSnapshots()).toEqual([]);
     });
 
     it('should not throw when no snapshots exist', () => {
@@ -732,8 +768,93 @@ describe('SnapshotEngine', () => {
 
       expect(engine.listSnapshots()).toEqual([10, 30, 50]);
     });
+  });
 
-    it('should exclude non-snapshot files', () => {
+  describe('semantic persistence via StateSnapshotRepository', () => {
+    const STREAM_KEY: StateStreamKey = {
+      projectId: 'project',
+      streamId: 'world',
+      branchId: 'main',
+    };
+    const SCHEMA = 'world';
+
+    const toSnapshotRecord = (
+      snapshot: Snapshot,
+    ): {
+      version: 1;
+      key: StateStreamKey;
+      schema: string;
+      schemaVersion: number;
+      sequence: number;
+      state: JsonValue;
+      snapshotHash: string;
+    } => ({
+      version: 1,
+      key: STREAM_KEY,
+      schema: SCHEMA,
+      schemaVersion: 1,
+      sequence: snapshot.eventCount,
+      state: JSON.parse(JSON.stringify(snapshot.state)) as JsonValue,
+      snapshotHash: `snapshot_${snapshot.eventCount}`,
+    });
+
+    it('should save snapshots under expected-version CAS and select the nearest', async () => {
+      const state: WorldState = {
+        entities: { camille: { age: 25 } },
+        relationships: {},
+        knowledge: {},
+        threads: {},
+        rules: {},
+        facts: [],
+      };
+      const snapshots = new MemoryStateSnapshotRepository();
+
+      expect(
+        await snapshots.save({
+          snapshot: toSnapshotRecord(engine.createSnapshot(20, 'evt_20', state)),
+          expectedVersion: null,
+        }),
+      ).toMatchObject({ kind: 'saved', sequence: 20, version: 1 });
+      expect(
+        await snapshots.save({
+          snapshot: toSnapshotRecord(engine.createSnapshot(40, 'evt_40', state)),
+          expectedVersion: 1,
+        }),
+      ).toMatchObject({ kind: 'saved', sequence: 40, version: 2 });
+
+      // Stale expected version is rejected; the store keeps the last save.
+      expect(
+        await snapshots.save({
+          snapshot: toSnapshotRecord(engine.createSnapshot(60, 'evt_60', state)),
+          expectedVersion: 1,
+        }),
+      ).toEqual({ kind: 'conflict', expectedVersion: 1, actualVersion: 2 });
+
+      const nearest = await snapshots.readNearestValid({
+        key: STREAM_KEY,
+        atOrBeforeSequence: 55,
+        schema: SCHEMA,
+        schemaVersion: 1,
+      });
+      expect(nearest).not.toBeNull();
+      expect(nearest!.sequence).toBe(40);
+      expect(nearest!.state).toEqual(state);
+    });
+
+    it('should treat a missing snapshot as absent (safe full replay)', async () => {
+      const snapshots = new MemoryStateSnapshotRepository();
+
+      expect(
+        await snapshots.readNearestValid({
+          key: STREAM_KEY,
+          atOrBeforeSequence: 20,
+          schema: SCHEMA,
+          schemaVersion: 1,
+        }),
+      ).toBeNull();
+    });
+
+    it('should ignore snapshots of a different schema or version (stale/corrupt fallback)', async () => {
       const state: WorldState = {
         entities: {},
         relationships: {},
@@ -742,11 +863,30 @@ describe('SnapshotEngine', () => {
         rules: {},
         facts: [],
       };
+      const snapshots = new MemoryStateSnapshotRepository();
+      await snapshots.save({
+        snapshot: {
+          ...toSnapshotRecord(engine.createSnapshot(20, 'evt_20', state)),
+          schema: 'other',
+        },
+        expectedVersion: null,
+      });
+      await snapshots.save({
+        snapshot: {
+          ...toSnapshotRecord(engine.createSnapshot(30, 'evt_30', state)),
+          schemaVersion: 2,
+        },
+        expectedVersion: 1,
+      });
 
-      fs.writeFileSync(path.join(tmpDir, 'random.json'), '{}');
-      engine.createSnapshot(20, 'evt_20', state);
-
-      expect(engine.listSnapshots()).toEqual([20]);
+      expect(
+        await snapshots.readNearestValid({
+          key: STREAM_KEY,
+          atOrBeforeSequence: 30,
+          schema: SCHEMA,
+          schemaVersion: 1,
+        }),
+      ).toBeNull();
     });
   });
 });
@@ -1141,16 +1281,10 @@ describe('ReplayEngine', () => {
 // ============================================================================
 
 describe('StateManager', () => {
-  let tmpDir: string;
   let manager: StateManager;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sm-test-'));
-    manager = new StateManager(tmpDir, CATALOG_CONTEXT, 20);
-  });
-
-  afterEach(() => {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
+    manager = new StateManager(CATALOG_CONTEXT, 20);
   });
 
   describe('constructor', () => {
@@ -1313,7 +1447,7 @@ describe('StateManager', () => {
     it('should use snapshots when available for optimization', () => {
       // Snapshot-time replays (commit at order 20) also write camille, so this
       // manager carries the baseline activation facts in its replay defaults.
-      const manager = new StateManager(tmpDir, CATALOG_CONTEXT, 20, undefined, {
+      const manager = new StateManager(CATALOG_CONTEXT, 20, {
         initialFacts: INITIAL_FACTS,
       });
       // Commit events that create a snapshot at 20
@@ -1375,30 +1509,94 @@ describe('StateManager', () => {
     });
   });
 
-  describe('saveToDisk() / loadFromDisk()', () => {
-    it('should persist and reload events', () => {
-      manager.commit(
-        makeEvent(1, {
-          title: 'Event One',
-          postconditions: [makeFact('camille', 'age', 25)],
-        }),
-      );
-      manager.commit(
-        makeEvent(2, {
-          title: 'Event Two',
-          postconditions: [makeFact('camille', 'age', 26)],
-        }),
-      );
+  describe('semantic recovery via state repositories', () => {
+    const STREAM_KEY: StateStreamKey = {
+      projectId: 'project',
+      streamId: 'world',
+      branchId: 'main',
+    };
+    const SCHEMA = 'world';
 
-      manager.saveToDisk(tmpDir);
+    const toStateEvent = (event: NarrativeEvent, sequence: number): StateEvent => ({
+      eventId: event.id,
+      sequence,
+      type: event.event,
+      payload: JSON.parse(JSON.stringify(event)) as JsonValue,
+    });
 
-      const manager2 = new StateManager(tmpDir, CATALOG_CONTEXT, 20);
-      manager2.loadFromDisk(tmpDir);
+    it('should persist and reload events, then reconstruct state by full replay', async () => {
+      const log = new MemoryStateLogRepository();
+      await log.append({
+        key: STREAM_KEY,
+        expectedVersion: 0,
+        events: [
+          toStateEvent(
+            makeEvent(1, {
+              title: 'Event One',
+              postconditions: [makeFact('camille', 'age', 25)],
+            }),
+            1,
+          ),
+          toStateEvent(
+            makeEvent(2, {
+              title: 'Event Two',
+              postconditions: [makeFact('camille', 'age', 26)],
+            }),
+            2,
+          ),
+        ],
+      });
+
+      const manager2 = new StateManager(CATALOG_CONTEXT, 20, {
+        initialFacts: INITIAL_FACTS,
+      });
+      const read = await log.read({ key: STREAM_KEY });
+      manager2.initialize(
+        read.events.map((entry) => JSON.parse(JSON.stringify(entry.payload)) as NarrativeEvent),
+      );
 
       expect(manager2.eventStore.count).toBe(2);
       expect(manager2.eventStore.getLastOrder()).toBe(2);
 
-      const state = manager2.getCurrentState({ initialFacts: INITIAL_FACTS });
+      const state = manager2.getCurrentState();
+      expect(state.entities.camille.age).toBe(26);
+    });
+
+    it('should recover by full replay when the snapshot write never happened', async () => {
+      // Append succeeded (event log durable) but the snapshot was never saved —
+      // the missing snapshot must fall back to full replay of the log, with no
+      // events lost.
+      const log = new MemoryStateLogRepository();
+      await log.append({
+        key: STREAM_KEY,
+        expectedVersion: 0,
+        events: [
+          toStateEvent(makeEvent(1, { postconditions: [makeFact('camille', 'age', 25)] }), 1),
+          toStateEvent(makeEvent(2, { postconditions: [makeFact('camille', 'age', 26)] }), 2),
+        ],
+      });
+      const snapshots = new MemoryStateSnapshotRepository(); // empty: snapshot not yet written
+
+      expect(
+        await snapshots.readNearestValid({
+          key: STREAM_KEY,
+          atOrBeforeSequence: 2,
+          schema: SCHEMA,
+          schemaVersion: 1,
+        }),
+      ).toBeNull();
+
+      const read = await log.read({ key: STREAM_KEY });
+      expect(read.events).toHaveLength(2);
+      expect(read.lastSequence).toBe(2);
+
+      const recovered = new StateManager(CATALOG_CONTEXT, 20, {
+        initialFacts: INITIAL_FACTS,
+      });
+      recovered.initialize(
+        read.events.map((entry) => JSON.parse(JSON.stringify(entry.payload)) as NarrativeEvent),
+      );
+      const state = recovered.getCurrentState();
       expect(state.entities.camille.age).toBe(26);
     });
   });
@@ -1407,7 +1605,7 @@ describe('StateManager', () => {
     it('should handle many events without error', () => {
       // Snapshot-time replays (orders 20/40/…/100) also write camille, so this
       // manager carries the baseline activation facts in its replay defaults.
-      const manager = new StateManager(tmpDir, CATALOG_CONTEXT, 20, undefined, {
+      const manager = new StateManager(CATALOG_CONTEXT, 20, {
         initialFacts: INITIAL_FACTS,
       });
       const count = 100;
@@ -1435,5 +1633,87 @@ describe('StateManager', () => {
       const snapshots = manager.snapshotEngine.listSnapshots();
       expect(snapshots).toEqual([20, 40, 60, 80, 100]);
     });
+  });
+});
+
+// ============================================================================
+// Rule replay determinism — legacy rule effects and explicit amend/replace
+// fallbacks must produce identical semantic state regardless of wall-clock.
+// ============================================================================
+
+describe('Rule replay determinism', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('replays identical legacy rule effects to identical WorldState under different clocks', () => {
+    const events: NarrativeEvent[] = [
+      makeEvent(1, {
+        ruleEffects: [
+          { rule: 'magic_conservation', effect: 'reinforce', evidence: 'Magic is limited' },
+        ],
+      }),
+      makeEvent(2, {
+        ruleEffects: [
+          {
+            rule: 'magic_conservation',
+            effect: 'introduce_exception',
+            evidence: 'Ritual exemption',
+          },
+          { rule: 'oath_binding', effect: 'reinforce', evidence: 'Oaths hold' },
+        ],
+      }),
+    ];
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-01T00:00:00Z'));
+    const first = new ReplayEngine(CATALOG_CONTEXT).replay(events);
+
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+    const second = new ReplayEngine(CATALOG_CONTEXT).replay(events);
+
+    // Full semantic WorldState equality — no wall-clock fingerprint anywhere.
+    expect(second).toEqual(first);
+
+    // Epoch/exception identities are stable, derived from rule + event ID.
+    const magic = first.rules.magic_conservation;
+    expect(magic?.activation).toBe('enabled');
+    expect(magic?.effectiveness).toBe('full');
+    expect(magic?.currentEpoch).toBe(`magic_conservation-epoch-${events[0].id}`);
+    expect(magic?.exceptions[0]?.exceptionId).toBe(`magic_conservation-exc-${events[1].id}`);
+    expect(magic?.exceptions[0]?.status).toBe('active');
+    expect(first.rules.oath_binding?.currentEpoch).toBe(`oath_binding-epoch-${events[1].id}`);
+  });
+
+  it('derives stable fallback epochs for amend/replace without epochId under different clocks', () => {
+    const amend: RuleTransaction = {
+      type: 'rule_transaction',
+      ruleId: 'contract_law',
+      operation: 'amend',
+      evidence: 'Charter amendment',
+    };
+    const replace: RuleTransaction = {
+      type: 'rule_transaction',
+      ruleId: 'contract_law',
+      operation: 'replace',
+      evidence: 'Rewritten by decree',
+      specificationId: 'contract_law-spec-v2',
+    };
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-01T00:00:00Z'));
+    const first: Record<string, RuleRuntimeState> = {};
+    applyRuleTransaction(first, amend, { nodeId: 'E10' });
+    applyRuleTransaction(first, replace, { nodeId: 'E11' });
+
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+    const second: Record<string, RuleRuntimeState> = {};
+    applyRuleTransaction(second, amend, { nodeId: 'E10' });
+    applyRuleTransaction(second, replace, { nodeId: 'E11' });
+
+    expect(second).toEqual(first);
+    expect(first.contract_law?.currentEpoch).toBe('contract_law-epoch-E11');
+    expect(first.contract_law?.activation).toBe('enabled');
+    expect(first.contract_law?.specificationId).toBe('contract_law-spec-v2');
   });
 });

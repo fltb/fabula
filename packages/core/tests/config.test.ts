@@ -11,7 +11,6 @@ describe('ConfigLoader', () => {
     it('should provide all default values', () => {
       const loader = new ConfigLoader();
       const config = loader.resolve();
-      expect(config.outputDir).toBe('.nova');
       expect(config.snapshotInterval).toBe(10);
       expect(config.concurrency).toBe(5);
       expect(config.logLevel).toBe('info');
@@ -24,10 +23,9 @@ describe('ConfigLoader', () => {
   describe('layer precedence', () => {
     it('project layer should override defaults', () => {
       const loader = new ConfigLoader();
-      loader.addLayer('project', { concurrency: 3, outputDir: 'custom_dir' });
+      loader.addLayer('project', { concurrency: 3 });
       const config = loader.resolve();
       expect(config.concurrency).toBe(3);
-      expect(config.outputDir).toBe('custom_dir');
       expect(config.snapshotInterval).toBe(10); // unchanged
     });
 
@@ -102,7 +100,6 @@ describe('ConfigLoader', () => {
       const config = resolveConfig({ concurrency: 1, traceLevel: 'basic' });
       expect(config.concurrency).toBe(1);
       expect(config.traceLevel).toBe('basic');
-      expect(config.outputDir).toBe('.nova'); // from defaults
     });
 
     it('should not mutate the original DEFAULT_CONFIG', () => {
@@ -115,7 +112,7 @@ describe('ConfigLoader', () => {
   describe('Zod validation', () => {
     it('should validate resolved config against project schema', () => {
       const loader = new ConfigLoader();
-      loader.addLayer('project', { concurrency: 3, outputDir: 'my_nova' });
+      loader.addLayer('project', { concurrency: 3 });
       const config = loader.resolve();
       // The project schema won't accept unknown fields, but we validate
       // against what the schema knows.
@@ -140,7 +137,6 @@ describe('ConfigLoader', () => {
     it('should accept valid config values', () => {
       const result = projectConfigSchema.partial().safeParse({
         concurrency: 4,
-        outputDir: '.custom',
         logLevel: 'warn',
         traceLevel: 'detailed',
         cacheEnabled: false,

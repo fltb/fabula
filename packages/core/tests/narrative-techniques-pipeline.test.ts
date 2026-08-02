@@ -17,7 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { EntityMapper } from '../src/entity/mapper.ts';
 import { eventFileSchema } from '../src/schemas/event.ts';
-import { MemoryStorage } from '../src/storage/memory-storage.ts';
+import { buildSourceSnapshot } from '../src/source/source-identity.ts';
 import type { ContextPackage } from '../src/types/context.ts';
 import type { EventFile } from '../src/types/event.ts';
 import type { ResolvedNarrativeTechniqueContract } from '../src/types/narrative-techniques.ts';
@@ -82,7 +82,7 @@ function makeTechniqueEvent(): Record<string, unknown> {
 describe('narrative technique event contracts', () => {
   it('parses strict direct contracts and maps all eight contracts through EntityMapper', () => {
     const parsed = eventFileSchema.parse(makeTechniqueEvent()) as EventFile;
-    const mapper = new EntityMapper('/unused', new MemoryStorage());
+    const mapper = new EntityMapper(buildSourceSnapshot([]));
     const event = mapper.mapToNarrativeEvent(parsed);
 
     expect(parsed.surfaceMode?.instruction).toBe('Describe only observable action.');

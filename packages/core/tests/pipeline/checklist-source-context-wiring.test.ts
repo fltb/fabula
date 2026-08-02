@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 import { MockProvider } from '../../src/ai/providers/mock.ts';
 import type { RenderJob } from '../../src/pipeline/render.ts';
 import { RenderPipeline } from '../../src/pipeline/render.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 import type {
   CompiledSceneContract,
   ContextPackage,
@@ -126,6 +126,7 @@ function makeJob(): RenderJob {
       facts: [],
     },
     context: makeContext(),
+    sourceContentHash: 'source-checklist',
     graphHash: 'a00',
     chapter: 1,
     contract: {
@@ -159,8 +160,7 @@ describe('RenderPipeline — checklist + source context Pass 1 wiring', () => {
     const pipeline = new RenderPipeline({
       provider,
       model: 'mock-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices({ provider }).services,
       skipCache: true,
       maxRetries: 1,
       validatorPolicyId: 'test-policy-v1',

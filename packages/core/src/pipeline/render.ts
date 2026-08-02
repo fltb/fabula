@@ -1,17 +1,16 @@
 // ============================================================================
 // RenderPipeline — Two-pass parallel render with caching + validation
 // ============================================================================
-//
+import type { JsonValue } from '../contracts/json.ts';
 // Design:
 //   Pass 1: LLM produces pure prose (no format constraints)
 //   Pass 2: prose + context fed back for structured analysis JSON
-//   Validation: all 18 validators' validateRender run on the prose
+//   Validation: all validators' validatePost run on the prose
 //   Cache: hash-chain cache key → skip if fresh
 //   Parallel: ConcurrencyPool of concurrent LLM calls
 //   maxTokens: 10000 (far above target; we take what we get)
 // ============================================================================
 
-import * as crypto from 'node:crypto';
 import {
   type BuildAnalysisPromptResult,
   buildAnalysisPrompt,
@@ -39,15 +38,15 @@ import type { TraceCollector } from '../observability/trace.ts';
 import type { PluginHooksManager } from '../plugin/hooks-manager.ts';
 import type { BuildPromptInput, PromptDecoration } from '../plugin/types.ts';
 import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
-import type { Storage } from '../storage/index.ts';
-import type { TransactionReadExpectation } from '../storage/types.ts';
+import type { CoreRuntimeServices, PromptTemplateCatalog } from '../ports/runtime-services.ts';
+import type { LayeredCacheKey } from '../ports/render-cache-repository.ts';
 import { type StyleProfile, StyleResolver, toStyleNotes } from '../style/index.ts';
 import type { ValidationKey } from '../types/discourse.ts';
 import type {
   AnalysisResult,
   CompiledSceneContract,
   ContextPackage,
-  EntityRegistry,
+  EntityLookup,
   GameDialogueChoice,
   NarrativeEvent,
   ProviderFactory,
@@ -62,6 +61,23 @@ import { ConcurrencyPool } from '../util/pool.ts';
 import type { AnalysisContract, ResultAggregator } from '../validator/aggregator.ts';
 import { analysisContentSchema } from '../validator/index.ts';
 import { createCircuitBreaker } from './circuit-breaker.ts';
+function toJsonValue(value: unknown): JsonValue | null {
+  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Array.isArray(value)) {
+    const values: JsonValue[] = [];
+    for (const item of value) { const converted = toJsonValue(item); if (converted === null && item !== null) return null; values.push(converted); }
+    return values;
+  }
+  if (typeof value === 'object') {
+    const object: Record<string, JsonValue> = {};
+    for (const [key, item] of Object.entries(value)) { const converted = toJsonValue(item); if (converted === null && item !== null) return null; object[key] = converted; }
+    return object;
+  }
+  return null;
+}
+function isJsonObject(value: JsonValue): value is { readonly [key: string]: JsonValue } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 import { analyzeValidationErrors, decideRepairStrategy } from './reverse-validate.ts';
 
 /**
@@ -78,6 +94,9 @@ export const PASS2_SAMPLING_CONFIG = {
 
 /** Stable reference-policy version shared with the render-cache validation layer. */
 export const PASS2_REFERENCE_POLICY_VERSION = '1';
+
+/** Canonical PromptTemplateCatalog name for the Pass 1 prose template. */
+export const PASS1_PROMPT_TEMPLATE_NAME = 'pass1';
 
 export interface RenderJob {
   event: NarrativeEvent;
@@ -150,8 +169,6 @@ export interface RenderJob {
   /** Existing human or historical prose to evaluate without a Pass 1 call. */
   proseCandidate?: string;
 
-  /** Authoritative inputs and output preimages captured before provider work. */
-  promotionReadSet?: readonly TransactionReadExpectation[];
   surfaceReferencePacket?: SurfaceReferencePacket;
 }
 export interface ProviderCallLedgerEntry {
@@ -211,8 +228,7 @@ export interface RenderSceneResult {
 export interface RenderPipelineOptions {
   provider?: LLMProvider;
   model: string;
-  cacheDir: string;
-  storage: Storage;
+  runtimeServices: Pick<CoreRuntimeServices, 'renderCache' | 'promptTemplates'>;
   /** Optional factory for lazy provider creation. Mutually exclusive with provider. */
   providerFactory?: ProviderFactory;
   /** Optional pipeline-level AbortSignal for cancellation. */
@@ -222,8 +238,8 @@ export interface RenderPipelineOptions {
   skipCache?: boolean; // force re-render
   referenceExample?: string; // optional "good" prose example for Pass 1
   aggregator?: ResultAggregator; // optional, for post-render validation
-  /** Entity registry for validator access to entity definitions (optional) */
-  entityRegistry?: EntityRegistry;
+  /** Entity lookup for validator access to entity definitions (optional) */
+  entities?: EntityLookup;
   /** Per-validator severity overrides (optional) */
   validatorOverrides?: Record<string, 'off' | 'warning' | 'error'>;
   /** Pre-computed analysis contract for consistent Pass 2 schema (optional) */
@@ -261,12 +277,11 @@ export class RenderPipeline {
   private provider: LLMProvider | undefined;
   private readonly providerFactory?: ProviderFactory;
   private _resolvedProvider: LLMProvider | undefined;
+  private readonly promptTemplates?: PromptTemplateCatalog;
   private readonly pipelineSignal?: AbortSignal;
-  private readonly cacheDir: string;
-  private readonly storage: Storage;
-  private readonly referenceExample?: string;
+  private readonly renderCache: CoreRuntimeServices['renderCache'];
   private readonly aggregator?: ResultAggregator;
-  private readonly entityRegistry?: EntityRegistry;
+  private readonly entities?: EntityLookup;
   private readonly validatorOverrides?: Record<string, 'off' | 'warning' | 'error'>;
   private readonly analysisContract?: AnalysisContract;
   private readonly maxRetries: number;
@@ -280,6 +295,7 @@ export class RenderPipeline {
   private readonly styleResolver: StyleResolver;
   private readonly language: string;
   private readonly pluginHooksManager?: PluginHooksManager;
+  private readonly referenceExample?: string;
   private readonly providerProfile?: string;
   private readonly validatorPolicyId: string;
   constructor(opts: RenderPipelineOptions) {
@@ -291,15 +307,16 @@ export class RenderPipeline {
     }
     this.provider = opts.provider;
     this.providerFactory = opts.providerFactory;
+    this.renderCache = opts.runtimeServices.renderCache;
+    this.promptTemplates = opts.runtimeServices.promptTemplates;
     this.pipelineSignal = opts.signal;
     this.model = opts.model;
-    this.cacheDir = opts.cacheDir;
-    this.storage = opts.storage;
+    this.renderCache = opts.runtimeServices.renderCache;
     this.skipCache = opts.skipCache ?? false;
     this.maxTokens = opts.maxTokens ?? 10_000;
     this.referenceExample = opts.referenceExample;
     this.aggregator = opts.aggregator;
-    this.entityRegistry = opts.entityRegistry;
+    this.entities = opts.entities;
     this.validatorOverrides = opts.validatorOverrides;
     this.analysisContract = opts.analysisContract;
     this.maxRetries = opts.maxRetries ?? 3;
@@ -440,23 +457,25 @@ export class RenderPipeline {
         event.preconditions ?? [],
         event.postconditions ?? [],
       );
-      const cached = getCachedRender(
-        this.cacheDir,
-        eventId,
-        cacheKey,
-        this.storage,
-        evidenceHash,
+      const cacheLookupKey: LayeredCacheKey = {
+        version: 1,
+        sourceHash: job.sourceContentHash,
+        layers: { eventId, logical: logicalKeyStr, surface: surfaceKeyStr },
+      };
+      const cached = await getCachedRender(
+        this.renderCache,
+        { key: cacheLookupKey, eventId, evidenceHash },
         cacheDiagnostics,
       );
       if (cached) {
-        const c = cached as Record<string, unknown>;
+        const c = isJsonObject(cached.output) ? cached.output : {};
         // Always re-parse and re-validate cached analysis under the CURRENT
         // expected protocol. The protocol is reconstructed deterministically
         // from the cached prose + current config + prompt material; any
         // mismatch (stale prompt/schema/sampling/policy) fails closed and the
         // entry is treated as a cache miss.
         const cachedProse = String(c.prose ?? '');
-        const cachedAnalysisStr = c.analysis ? String(c.analysis) : null;
+        const cachedAnalysisStr = c.analysis ? JSON.stringify(c.analysis) : null;
         let analysis: AnalysisResult | null = null;
         if (cachedAnalysisStr) {
           // Reconstruct the exact expected protocol for a fresh Pass 2 run
@@ -524,13 +543,13 @@ export class RenderPipeline {
         } else {
           const validation =
             analysis && this.aggregator
-              ? this.aggregator.validateRender(
+              ? this.aggregator.validatePost(
                   String(c.prose ?? ''),
                   event,
                   stateBefore,
                   analysis,
                   this.validatorOverrides,
-                  this.entityRegistry,
+                  this.entities,
                   chapter,
                   context,
                 )
@@ -656,6 +675,18 @@ export class RenderPipeline {
         requestRecords,
       };
     }
+    // Resolve the optional custom Pass 1 template from the injected catalog.
+    // A missing entry or a failing catalog falls back to the built-in template.
+    let pass1TemplateText: string | undefined;
+    try {
+      const template = await this.promptTemplates?.get({ name: PASS1_PROMPT_TEMPLATE_NAME });
+      pass1TemplateText = template?.template;
+    } catch (err) {
+      this.logger?.warn('Pass 1 template catalog lookup failed; using built-in template', {
+        eventId,
+        error: sanitizeError(err),
+      });
+    }
     while (breaker.attempt()) {
       attempts = breaker.state().totalAttempts;
       // ── Check abort before each retry attempt ────────────────────
@@ -701,8 +732,7 @@ export class RenderPipeline {
           }
         }
 
-        // ── Pass 1: Pure prose (with retry guidance on retry) ────────
-        const assembler = new PromptAssembler();
+        const assembler = new PromptAssembler(pass1TemplateText);
         const assembled = assembler.assemble(context, {
           targetLengthWords: this.targetLengthWords,
           styleGuidance: job.event.styleGuidance,
@@ -1109,13 +1139,13 @@ export class RenderPipeline {
       });
       if (this.aggregator) {
         try {
-          renderValidation = this.aggregator.validateRender(
+          renderValidation = this.aggregator.validatePost(
             prose,
             event,
             stateBefore,
             analysis ?? undefined,
             this.validatorOverrides,
-            this.entityRegistry,
+            this.entities,
             chapter,
             context,
           );
@@ -1193,77 +1223,29 @@ export class RenderPipeline {
       breaker.state().isOpen ||
       (!!renderValidation && !renderValidation.passed);
 
-    // Compute aggregate promptHash from ordered provider-call identities
-    const promptHash = crypto
-      .createHash('sha256')
-      .update(
-        this.canonicalJson(
-          providerCalls.map(({ phase, attempt, requestHash, model, seed }) => ({
-            phase,
-            attempt,
-            requestHash,
-            model,
-            seed,
-          })),
-        ),
-      )
-      .digest('hex');
+    const promptHash = sha256Canonical(
+      providerCalls.map(({ phase, attempt, requestHash, model, seed }) => ({
+        phase,
+        attempt,
+        requestHash,
+        model,
+        seed,
+      })),
+    );
 
     // Save cache ONLY if validation passed (don't cache bad renders)
     // Cache only analysable, no-error candidates (warning-only ok)
-    const hasErrorIssues =
-      renderValidation?.errors.some((e: ValidationIssue) => e.severity === 'error') ?? false;
+    const hasErrorIssues = renderValidation?.errors.some((e: ValidationIssue) => e.severity === 'error') ?? false;
     const isCacheable = job.proseCandidate === undefined && analysis !== null && !hasErrorIssues;
     if (cacheKey && isCacheable) {
-      const evidenceHash = computeEvidenceHash(
-        event.id,
-        event.preconditions ?? [],
-        event.postconditions ?? [],
-      );
-
-      // Use builder functions for canonical layered keys (validation + attempt layers
-      // are stored as metadata; storage key remains logical+surface only).
-      // The validation layer is built from the SAME protocol the analysis was
-      // produced under (lastProtocol carries the real analysisPromptHash) so
-      // prompt/sampling/policy changes naturally invalidate prior cache
-      // entries. No second protocol/cache key exists.
-      const validationKeyStr = buildValidationKeyMaterial({
-        surfaceKeyString: surfaceKeyStr,
-        proseHash: lastProtocol?.proseHash ?? sha256Canonical(prose),
-        pass2SchemaModelId: this.model,
-        validatorPolicyVersion: PASS2_REFERENCE_POLICY_VERSION,
-        provider: lastProtocol?.provider ?? this.providerIdentity(),
-        analysisPromptHash: lastProtocol?.analysisPromptHash ?? '',
-        samplingConfigHash: lastProtocol?.samplingConfigHash ?? '',
-        validatorPolicy: lastProtocol?.validatorPolicy ?? this.validatorPolicyId,
-        referencePolicy: lastProtocol?.referencePolicy ?? PASS2_REFERENCE_POLICY_VERSION,
-      });
-
-      const attemptGuidance =
-        previousErrorMessages.length > 0 ? sha256Canonical(previousErrorMessages) : undefined;
-      const attemptKeyStr = buildAttemptKeyMaterial({
-        validationKeyString: validationKeyStr,
-        attemptNumber: attempts,
-        retryGuidanceHash: attemptGuidance,
-      });
-
-      setCachedRender(
-        this.cacheDir,
-        eventId,
-        cacheKey,
-        {
-          prose,
-          analysis: analysisRaw, // Store raw JSON string in cache
-          llmPass1,
-          llmPass2,
-          promptHash,
-          renderedAt: new Date().toISOString(),
-          chapters: [chapter],
-        },
-        this.storage,
-        evidenceHash,
-        { logicalKeyStr, surfaceKeyStr, validationKeyStr, attemptKeyStr },
-      );
+      const evidenceHash = computeEvidenceHash(event.id, event.preconditions ?? [], event.postconditions ?? []);
+      const cacheKeyRecord: LayeredCacheKey = { version: 1, sourceHash: job.sourceContentHash, layers: { eventId, logical: logicalKeyStr, surface: surfaceKeyStr } };
+      let cacheAnalysis: JsonValue | null;
+      try { cacheAnalysis = toJsonValue(analysisRaw ? JSON.parse(analysisRaw) : null); } catch { cacheAnalysis = null; }
+      if (cacheAnalysis !== null && typeof cacheAnalysis === 'object' && !Array.isArray(cacheAnalysis)) {
+        const output: JsonValue = { prose, analysis: cacheAnalysis, evidenceHash, llmPass1, llmPass2, promptHash, renderedAt: new Date().toISOString(), chapters: [chapter] };
+        await setCachedRender(this.renderCache, cacheKeyRecord, { version: 1, key: cacheKeyRecord, recordHash: sha256Canonical({ key: cacheKeyRecord, output }), output });
+      }
     }
     this.traceCollector?.record({
       phase: 'pipeline',
@@ -1358,8 +1340,7 @@ export class RenderPipeline {
       seed: request.seed ?? null,
       responseFormat: request.responseFormat ?? null,
     };
-    const json = this.canonicalJson(projection);
-    return crypto.createHash('sha256').update(json, 'utf-8').digest('hex');
+    return sha256Canonical(projection);
   }
 }
 
@@ -1383,7 +1364,7 @@ export interface EvaluateProseCandidateInput {
   forceRelease?: boolean;
   aggregator?: ResultAggregator;
   validatorOverrides?: Record<string, 'off' | 'warning' | 'error'>;
-  entityRegistry?: EntityRegistry;
+  entities?: EntityLookup;
   analysisContract?: AnalysisContract;
   /**
    * Expected measurement protocol for fail-closed comparison. When provided,
@@ -1433,13 +1414,13 @@ export function evaluateProseCandidate(
 
       // Run aggregator validation if available
       if (input.aggregator) {
-        const validation = input.aggregator.validateRender(
+        const validation = input.aggregator.validatePost(
           input.prose,
           input.event,
           input.stateBefore,
           analysis,
           input.validatorOverrides,
-          input.entityRegistry,
+          input.entities,
           input.chapter,
           input.context,
         );

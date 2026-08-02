@@ -1,19 +1,16 @@
 // ============================================================================
-// EventStore — Append-only event log
+// EventStore — Append-only event log (pure in-memory)
+//
+// Persistence is intentionally absent: callers that want durable event logs
+// use the semantic StateLogRepository port (see ports/state-repository.ts)
+// and rebuild this store from the read result via `load()`.
 // ============================================================================
 
-import * as path from 'node:path';
-import { FsStorage, type Storage } from '../storage/index.ts';
 import type { NarrativeEvent } from '../types/index.js';
 
 export class EventStore {
   private events: NarrativeEvent[] = [];
   private eventsByOrder: Map<number, NarrativeEvent> = new Map();
-  private storage: Storage;
-
-  constructor(storage?: Storage) {
-    this.storage = storage ?? new FsStorage();
-  }
 
   /** Append an event to the store */
   commit(event: NarrativeEvent): void {
@@ -55,30 +52,9 @@ export class EventStore {
     return this.events.length;
   }
 
-  /** Load events from an array (for testing/recovery) */
+  /** Load events from an array (for recovery from a state log read) */
   load(events: NarrativeEvent[]): void {
     this.events = [...events];
-    this.eventsByOrder.clear();
-    for (const e of this.events) {
-      this.eventsByOrder.set(e.narrativeOrder, e);
-    }
-  }
-
-  /** Persist event log to disk as JSON lines */
-  saveToDisk(dirPath: string): void {
-    const filePath = path.join(dirPath, 'event_log.jsonl');
-    const lines = this.getAll().map((e) => JSON.stringify(e));
-    this.storage.write(filePath, lines.join('\n') + '\n');
-  }
-
-  /** Load event log from disk */
-  loadFromDisk(dirPath: string): void {
-    const filePath = path.join(dirPath, 'event_log.jsonl');
-    if (!this.storage.exists(filePath)) return;
-
-    const content = this.storage.read(filePath);
-    const lines = content.trim().split('\n').filter(Boolean);
-    this.events = lines.map((line) => JSON.parse(line) as NarrativeEvent);
     this.eventsByOrder.clear();
     for (const e of this.events) {
       this.eventsByOrder.set(e.narrativeOrder, e);

@@ -9,7 +9,7 @@
 //   project → chapter → narrator/POV → scene
 // ============================================================================
 
-import * as crypto from 'node:crypto';
+import { sha256 } from '../cache/pure-sha256.ts';
 import type { BranchPath } from '../types/branch.js';
 import type { DiscoursePosition } from '../types/discourse.js';
 import type {
@@ -232,7 +232,7 @@ function computePromptContractHash(
   };
 
   const raw = canonicalJson(payload);
-  return crypto.createHash('sha256').update(raw, 'utf-8').digest('hex');
+  return sha256(raw);
 }
 
 /**
@@ -245,13 +245,13 @@ export function canonicalJson(value: unknown): string {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
-    return '[' + value.map((v) => canonicalJson(v)).join(',') + ']';
+    return `[${value.map((v) => canonicalJson(v)).join(',')}]`;
   }
   const obj = value as Record<string, unknown>;
   const keys = Object.keys(obj)
     .filter((k) => obj[k] !== undefined)
     .sort();
-  return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalJson(obj[k])).join(',') + '}';
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
 }
 
 /**
@@ -259,5 +259,5 @@ export function canonicalJson(value: unknown): string {
  * Cryptographic — suitable for contract identity.
  */
 export function computeSha256Hex(input: string): string {
-  return crypto.createHash('sha256').update(input, 'utf-8').digest('hex');
+  return sha256(input);
 }

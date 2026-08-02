@@ -855,6 +855,9 @@ function computeGraphHash(state: CompileState, nodes: CompileNode[]): string {
  * Uses branchScope as the sole scope identifier (no targetCoordinatePrefix/
  * sameCoordinateAncestors). All hash arrays are deterministically sorted to
  * ensure stable cache keys across builds.
+ * The timestamp is a deterministic, content-derived identity — never
+ * wall-clock — so identical inputs compile to byte-identical entries
+ * regardless of when they are built.
  */
 function buildCacheEntry(state: CompileState, branchScope: string): GraphCacheEntry {
   // Deterministic sort for edges
@@ -872,15 +875,24 @@ function buildCacheEntry(state: CompileState, branchScope: string): GraphCacheEn
     a.outputId < b.outputId ? -1 : a.outputId > b.outputId ? 1 : 0,
   );
 
+  const dependencyHashes = sortedEdges.map((e) => sha256Canonical(e));
+  const outputHashes = sortedOutputs.map((o) => o.provenanceHash);
+  const absenceHashes = [...state.resolutions.values()]
+    .filter((r): r is GraphAbsenceWitness => r.type === 'absence')
+    .map((a) => sha256Canonical(`${a.readId}:${a.canonicalKey}`))
+    .sort();
+
   return {
     branchScope,
-    dependencyHashes: sortedEdges.map((e) => sha256Canonical(e)),
-    outputHashes: sortedOutputs.map((o) => o.provenanceHash),
-    absenceHashes: [...state.resolutions.values()]
-      .filter((r): r is GraphAbsenceWitness => r.type === 'absence')
-      .map((a) => sha256Canonical(`${a.readId}:${a.canonicalKey}`))
-      .sort(),
-    timestamp: Date.now(),
+    dependencyHashes,
+    outputHashes,
+    absenceHashes,
+    // Content-derived cache identity — never wall-clock: identical compiled
+    // input yields a byte-identical entry regardless of when it is built.
+    timestamp: Number.parseInt(
+      sha256Canonical({ branchScope, dependencyHashes, outputHashes, absenceHashes }).slice(0, 8),
+      16,
+    ),
   };
 }
 

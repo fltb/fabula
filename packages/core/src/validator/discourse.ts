@@ -3,7 +3,7 @@
 // ============================================================================
 // Purely deterministic (no Pass 2 analysis-block dependency):
 //   validatePre: always returns [] — PreRenderInput does not carry narrator profiles
-//     or ContextPackage data (only event, worldState, events, entityRegistry, etc.).
+//     or ContextPackage data (only event, worldState, events, entities, etc.).
 //     Narrator profile resolution requires context compiled in Pass 1, available only post-render.
 //   validatePost: checks one condition:
 //     1. If event.narratorProfileRef is set but context.narratorProfile is undefined,

@@ -1,10 +1,8 @@
-import type { Storage } from '../storage/index.ts';
-import type { SceneMetadataV1 } from '../types/editorial.ts';
+import type { JsonObject } from '../contracts/json.ts';
+import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
 import type { BranchPath, BranchSet } from '../types/index.js';
-
-// ────────────────────────────────────────────────────────────────────────────
-// AssemblyError — typed error for assembly failures
-// ────────────────────────────────────────────────────────────────────────────
+import type { ChapterMetadata } from '../types/chapter.ts';
+import type { DiscourseSceneSequenceEntry } from '../types/graph.ts';
 
 export const AssemblyErrorCode = {
   NO_SCENES: 'NO_SCENES',
@@ -16,31 +14,20 @@ export const AssemblyErrorCode = {
   EMPTY_PROSE: 'EMPTY_PROSE',
   UNKNOWN_COUNT_VERSION: 'UNKNOWN_COUNT_VERSION',
 } as const;
-
 export type AssemblyErrorCodeType = (typeof AssemblyErrorCode)[keyof typeof AssemblyErrorCode];
-
 export class AssemblyError extends Error {
   readonly code: AssemblyErrorCodeType;
-
-  constructor(code: AssemblyErrorCodeType, message: string) {
-    super(message);
-    this.name = 'AssemblyError';
-    this.code = code;
-  }
+  constructor(code: AssemblyErrorCodeType, message: string) { super(message); this.name = 'AssemblyError'; this.code = code; }
 }
-
-// ────────────────────────────────────────────────────────────────────────────
-// SceneEntry, SortedScene, AssembleOptions, AssembleResult
-// ────────────────────────────────────────────────────────────────────────────
 
 export interface SceneEntry {
   prose: string;
-  metadata: SceneMetadataV1;
+  /** JSON-safe scene metadata materialized by the host loader. */
+  metadata: JsonObject;
   narrativeOrder: number;
   chapter: number;
   branchExistence: BranchSet;
 }
-
 export interface SortedScene {
   eventId: string;
   prose: string;
@@ -48,37 +35,28 @@ export interface SortedScene {
   chapter: number;
   branchExistence: BranchSet;
 }
+interface SceneInfo { eventId: string; chapter: number; narrativeOrder: number; branchExistence: BranchSet; }
 
-interface SceneInfo {
-  eventId: string;
-  chapter: number;
-  narrativeOrder: number;
-  branchExistence: BranchSet;
+/** Materialized semantic inputs for assembly. Host loaders create this value. */
+export interface AssemblySource {
+  readonly snapshot: ProjectSourceSnapshotV1;
+  readonly scenes: ReadonlyMap<string, SceneEntry>;
+  readonly chapterTitles?: ReadonlyMap<number, ChapterMetadata>;
+  readonly projectTitle?: string;
+  readonly discourseSequence: readonly DiscourseSceneSequenceEntry[];
 }
-
 export interface AssembleOptions {
-  /** Root directory of the novel project (must contain scenes/ and chapters/) */
-  projectDir: string;
-  /** Custom output path; defaults to <projectDir>/output/novel.md */
-  outputPath?: string;
-  /** Novel title (overrides the title in nova.yaml) */
-  title?: string;
-  /** Optional branch path for branch-filtered assembly */
-  branchPath?: BranchPath;
-  /** Discourse branch for scene sequencing; defaults to "main" */
-  discourseBranch?: string;
-  language?: string;
-  /** Optional storage backend (defaults to FsStorage) */
-  storage?: Storage;
+  readonly source: AssemblySource;
+  readonly outputPath?: never;
+  readonly title?: string;
+  readonly branchPath?: BranchPath;
+  readonly discourseBranch?: string;
+  readonly language?: string;
 }
-
 export interface AssembleResult {
-  /** Full novel markdown content */
-  markdown: string;
-  /** Word count of the assembled novel (excluding headings and separators) */
-  wordCount: number;
-  /** Number of scenes included */
-  sceneCount: number;
-  /** Per-scene metadata for the assembled scenes */
-  scenes: SceneInfo[];
+  readonly markdown: string;
+  readonly wordCount: number;
+  readonly sceneCount: number;
+  readonly scenes: SceneInfo[];
+  readonly sourceHash: string;
 }

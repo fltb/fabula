@@ -153,10 +153,15 @@ export function compileDiscourseSceneSequence(input: {
   const actionIntervals = new Map<string, { start: number; end: number }>();
   for (const [sceneId, entries] of entriesByScene) {
     const sortedPositions = entries.map((e) => e.discoursePosition).sort((a, b) => a - b);
-    actionIntervals.set(sceneId, {
-      start: sortedPositions[0]!,
-      end: sortedPositions[sortedPositions.length - 1]!,
-    });
+    const start = sortedPositions[0];
+    const end = sortedPositions[sortedPositions.length - 1];
+    if (start === undefined || end === undefined) {
+      throw new ConfigError(`Scene "${sceneId}" has no discourse actions on branch "${branch}".`, {
+        phase: 'discourse-sequence',
+        eventId: sceneId,
+      });
+    }
+    actionIntervals.set(sceneId, { start, end });
   }
 
   // ── Validate action intervals follow scene sequence order ──
@@ -285,5 +290,11 @@ export function resolveDiscourseBranch(input: {
     );
   }
 
-  return matchingBranches[0]!;
+  const matchingBranch = matchingBranches[0];
+  if (matchingBranch === undefined) {
+    throw new ConfigError('Discourse branch resolution produced no branch.', {
+      phase: 'discourse-branch-resolve',
+    });
+  }
+  return matchingBranch;
 }

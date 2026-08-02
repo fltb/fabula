@@ -365,18 +365,16 @@ export {
   editorialErrorSchema,
   editorialMutationContextSchema,
   editorialOperationV1Schema,
+  editorialPreviewRequestV1Schema,
   editorialProgressEventV1Schema,
   editorialRenderRequestV1Schema,
-  editorialScopedRequestV1Schema,
+  renderGameDialogueTreeRequestV1Schema,
   sceneMetadataV1Schema,
   sceneRevisionEnvelopeV1Schema,
   sceneSelectorSchema,
   sourceChangePreviewV1Schema,
   sourceChangeSetV1Schema,
   sourceDocumentChangeSchema,
-  sourceHeadV1Schema,
-  sourceRevisionV1Schema,
-  transactionReadExpectationSchema,
 } from './editorial.js';
 // ——— INTEGRATION-1: Cross-domain resolution, Merge & dual coverage ———
 export {
@@ -444,7 +442,7 @@ export {
   validationGateStatusSchema,
   validationPolicySchema,
 } from './render-surface.js';
-// ——— REVIEW V1: Schema exports for the storage-backed review ledger ———
+// ——— REVIEW V1: Schema exports for the semantic review ledger ———
 export {
   newReviewCommentSchema,
   reviewApplicationV1Schema,

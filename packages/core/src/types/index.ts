@@ -78,6 +78,7 @@ export type {
   Entity,
   EntityId,
   EntityKind,
+  EntityLookup,
   EntityRegistry,
   EntityRuntimeState,
   EntityTypeRef,
@@ -351,6 +352,7 @@ export type {
 } from './thread.js';
 export type {
   AnalysisBlockRequirement,
+  NovelValidationResult,
   ObservationRef,
   PostRenderInput,
   PreRenderInput,
@@ -360,7 +362,6 @@ export type {
   ValidationResult,
   ValidationRunOptions,
   Validator,
-  ValidatorContext,
 } from './validator.js';
 // ——— S8 removed (design incompatible with Novel IR) ———
 // NarrativePlannerMode, NarrativeGoal, ActionDefinition types deleted 2026-07-24.

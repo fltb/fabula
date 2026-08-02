@@ -6,7 +6,7 @@
 // Deterministic — pure function of prose + anchor + budget.
 // ============================================================================
 
-import * as crypto from 'node:crypto';
+import { sha256 } from '../cache/pure-sha256.ts';
 import type {
   AcceptedSceneArtifact,
   StyleMetrics,
@@ -55,7 +55,7 @@ export class SurfaceReferenceExtractor {
 
     const prose = artifact.prose;
     const maxBudget = budget ?? this.defaultBudget;
-    const sourceHash = crypto.createHash('sha256').update(prose).digest('hex');
+    const sourceHash = sha256(prose);
 
     // ── Determine excerpt mode and content ────────────────────────────
     let excerptMode: 'tail' | 'full' | 'authored_anchor';

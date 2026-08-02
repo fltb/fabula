@@ -1,23 +1,25 @@
 // ============================================================================
-// SnapshotEngine — Periodic state snapshots for fast recovery
+// SnapshotEngine — Periodic state snapshots for fast recovery (pure in-memory)
+//
+// This engine keeps only snapshot *value* semantics: interval policy, deep
+// clone serialization, nearest-snapshot selection and invalidation. It never
+// touches the filesystem. Durable snapshots belong to the semantic
+// StateSnapshotRepository port (see ports/state-repository.ts); Hosts write
+// the Snapshot values produced here through that port and hydrate selection
+// from `readNearestValid`.
 // ============================================================================
 
-import * as path from 'node:path';
-import { FsStorage, type Storage } from '../storage/index.ts';
 import type { Snapshot, WorldState } from '../types/index.js';
 
 export class SnapshotEngine {
   private snapshotInterval: number;
-  private snapshotsDir: string;
-  private storage: Storage;
+  private snapshots: Snapshot[] = [];
 
-  constructor(snapshotsDir: string, snapshotInterval = 20, storage?: Storage) {
-    this.snapshotsDir = snapshotsDir;
+  constructor(
+    snapshotInterval = 20,
+    private readonly now: () => string = () => '1970-01-01T00:00:00.000Z',
+  ) {
     this.snapshotInterval = snapshotInterval;
-    this.storage = storage ?? new FsStorage();
-    if (!this.storage.exists(snapshotsDir)) {
-      this.storage.mkdirp(snapshotsDir);
-    }
   }
 
   /** Determine if a snapshot should be created at this event count */
@@ -25,77 +27,38 @@ export class SnapshotEngine {
     return eventCount > 0 && eventCount % this.snapshotInterval === 0;
   }
 
-  /** Create a snapshot of the current world state */
+  /** Create a snapshot of the current world state (pure value, no I/O) */
   createSnapshot(eventCount: number, eventId: string, state: WorldState): Snapshot {
     const snapshot: Snapshot = {
       version: 1,
       eventCount,
       eventId,
-      timestamp: new Date().toISOString(),
+      timestamp: this.now(),
       state: JSON.parse(JSON.stringify(state)), // deep clone
     };
-
-    const filePath = path.join(this.snapshotsDir, `snapshot_${eventCount}.json`);
-    this.storage.write(filePath, JSON.stringify(snapshot, null, 2));
-
+    this.snapshots.push(snapshot);
     return snapshot;
   }
 
   /** Find the nearest snapshot at or before the given event count */
   findNearest(targetCount: number): Snapshot | null {
-    if (!this.storage.exists(this.snapshotsDir)) return null;
-
-    const files = this.storage
-      .listFiles(this.snapshotsDir)
-      .filter((f) => f.startsWith('snapshot_') && f.endsWith('.json'))
-      .map((f) => {
-        const match = f.match(/snapshot_(\d+)\.json/);
-        return match ? parseInt(match[1], 10) : 0;
-      })
-      .filter((n) => n > 0 && n <= targetCount)
-      .sort((a, b) => b - a); // descending
-
-    if (files.length === 0) return null;
-
-    const nearest = files[0];
-    const filePath = path.join(this.snapshotsDir, `snapshot_${nearest}.json`);
-    try {
-      return JSON.parse(this.storage.read(filePath)) as Snapshot;
-    } catch {
-      return null;
-    }
+    const nearest = this.snapshots
+      .filter((snapshot) => snapshot.eventCount > 0 && snapshot.eventCount <= targetCount)
+      .sort((a, b) => b.eventCount - a.eventCount)[0];
+    return nearest ?? null;
   }
 
   /** Invalidate snapshots at or after a given event count */
   invalidateFrom(eventCount: number): void {
-    if (!this.storage.exists(this.snapshotsDir)) return;
-
-    const files = this.storage
-      .listFiles(this.snapshotsDir)
-      .filter((f) => f.startsWith('snapshot_') && f.endsWith('.json'));
-
-    for (const file of files) {
-      const match = file.match(/snapshot_(\d+)\.json/);
-      if (match) {
-        const order = parseInt(match[1], 10);
-        if (order >= eventCount) {
-          this.storage.remove(path.join(this.snapshotsDir, file));
-        }
-      }
-    }
+    this.snapshots = this.snapshots.filter(
+      (snapshot) => snapshot.eventCount < eventCount,
+    );
   }
 
-  /** List all available snapshots */
+  /** List all available snapshot event counts */
   listSnapshots(): number[] {
-    if (!this.storage.exists(this.snapshotsDir)) return [];
-
-    return this.storage
-      .listFiles(this.snapshotsDir)
-      .filter((f) => f.startsWith('snapshot_') && f.endsWith('.json'))
-      .map((f) => {
-        const match = f.match(/snapshot_(\d+)\.json/);
-        return match ? parseInt(match[1], 10) : 0;
-      })
+    return this.snapshots
+      .map((snapshot) => snapshot.eventCount)
       .filter((n) => n > 0)
       .sort((a, b) => a - b);
   }

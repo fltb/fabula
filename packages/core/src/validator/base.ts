@@ -3,42 +3,16 @@
 // ============================================================================
 
 import type {
-  EntityId,
   EntityKind,
-  EntityRegistry,
   EntityTypeCatalog,
   NarrativeCheck,
-  NarrativeEvent,
   ValidationIssue,
-  ValidatorContext,
-  WorldState,
   WritePolicy,
 } from '../types/index.js';
 
 // ============================================================================
-// Helper: build ValidatorContext from current state
+// Issue and observation helpers
 // ============================================================================
-
-export function buildContext(
-  event: NarrativeEvent,
-  state: WorldState,
-  registry: EntityRegistry,
-  events: NarrativeEvent[],
-  chapter: number,
-): ValidatorContext {
-  return {
-    worldState: state,
-    events,
-    entityRegistry: registry,
-    currentEvent: event,
-    currentChapter: chapter,
-    narrativeOrder: event.narrativeOrder,
-    queryState: (entityId: EntityId, attribute: string) => state.entities[entityId]?.[attribute],
-    getKnowledge: (_characterId: EntityId) =>
-      state.epistemicLedger ?? { claims: {}, bySubject: {}, byProposition: {}, actLog: [] },
-    getThreadProgress: (threadId: string) => state.threads[threadId] ?? null,
-  };
-}
 
 export function makeIssue(
   validator: string,

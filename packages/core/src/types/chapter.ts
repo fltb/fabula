@@ -41,18 +41,13 @@ export interface ProjectConfig {
   };
   snapshotInterval?: number;
   concurrency?: number;
-  outputDir?: string;
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
   traceLevel?: 'off' | 'basic' | 'detailed';
   cacheEnabled?: boolean;
   defaultSceneTextTarget?: number;
   plugins?: {
     enabled: boolean;
-    directory?: string;
-    /** Select a provider registered by a plugin.
-     *  When set, must match a provider name registered via registerProvider.
-     *  When absent, the default model provider (AiSdkProvider) is used.
-     *  Hard-fails at pipeline start if the named provider is not registered. */
+    /** Select a provider registered by a plugin. */
     provider?: string;
   };
   renderSurface?: RenderSurfaceConfig;

@@ -149,7 +149,7 @@ describe('uncertainty preflight — one analysis_uncertainty finding per (valida
     const aggregator = new ResultAggregator([validator]);
     const analysis = makeAnalysis({ pov: abstained }, {});
 
-    const result = aggregator.validateRender(PROSE, makeEvent(), makeWorldState(), analysis);
+    const result = aggregator.validatePost(PROSE, makeEvent(), makeWorldState(), analysis);
 
     expect(calls).toHaveLength(0);
     expect(result.errors).toHaveLength(0);
@@ -167,7 +167,7 @@ describe('uncertainty preflight — one analysis_uncertainty finding per (valida
     const aggregator = new ResultAggregator([validator]);
     const analysis = makeAnalysis({ conflictAnalysis: ambiguous }, {});
 
-    const result = aggregator.validateRender(PROSE, makeEvent(), makeWorldState(), analysis);
+    const result = aggregator.validatePost(PROSE, makeEvent(), makeWorldState(), analysis);
 
     expect(calls).toHaveLength(0);
     expect(result.warnings).toHaveLength(1);
@@ -180,7 +180,7 @@ describe('uncertainty preflight — one analysis_uncertainty finding per (valida
     const aggregator = new ResultAggregator([validator]);
     const analysis = makeAnalysis({ pov: abstained, conflictAnalysis: ambiguous }, {});
 
-    const result = aggregator.validateRender(PROSE, makeEvent(), makeWorldState(), analysis);
+    const result = aggregator.validatePost(PROSE, makeEvent(), makeWorldState(), analysis);
 
     const fields = result.warnings.map((i) => i.observationRef?.field).sort();
     expect(fields).toEqual(['conflictAnalysis', 'pov']);
@@ -193,7 +193,7 @@ describe('uncertainty preflight — one analysis_uncertainty finding per (valida
     const aggregator = new ResultAggregator([a.validator, b.validator]);
     const analysis = makeAnalysis({ narrativeChecks: abstained }, {});
 
-    const result = aggregator.validateRender(PROSE, makeEvent(), makeWorldState(), analysis);
+    const result = aggregator.validatePost(PROSE, makeEvent(), makeWorldState(), analysis);
 
     expect(result.warnings).toHaveLength(2);
     expect(new Set(result.warnings.map((i) => i.validator))).toEqual(
@@ -207,7 +207,7 @@ describe('uncertainty preflight — one analysis_uncertainty finding per (valida
     const aggregator = new ResultAggregator([validator]);
     const analysis = makeAnalysis({ pov: produced() }, { pov: { consistent: true, leaks: [] } });
 
-    const result = aggregator.validateRender(PROSE, makeEvent(), makeWorldState(), analysis);
+    const result = aggregator.validatePost(PROSE, makeEvent(), makeWorldState(), analysis);
 
     expect(calls).toHaveLength(1);
     expect(result.warnings).toHaveLength(0);
@@ -219,7 +219,7 @@ describe('uncertainty preflight — one analysis_uncertainty finding per (valida
     const aggregator = new ResultAggregator([validator]);
     const analysis = makeAnalysis({ pov: abstained }, {});
 
-    const result = aggregator.validateRender(PROSE, makeEvent(), makeWorldState(), analysis);
+    const result = aggregator.validatePost(PROSE, makeEvent(), makeWorldState(), analysis);
 
     // tenseDetected has no observation at all here; the validator still runs
     expect(calls).toHaveLength(1);
@@ -231,7 +231,7 @@ describe('uncertainty preflight — one analysis_uncertainty finding per (valida
     const aggregator = new ResultAggregator([validator]);
     const analysis = makeAnalysis({ pov: abstained }, {});
 
-    const result = aggregator.validateRender(PROSE, makeEvent(), makeWorldState(), analysis, {
+    const result = aggregator.validatePost(PROSE, makeEvent(), makeWorldState(), analysis, {
       PovConsumer: 'error',
     });
 
@@ -246,7 +246,7 @@ describe('uncertainty preflight — one analysis_uncertainty finding per (valida
     const aggregator = new ResultAggregator([validator]);
     const analysis = makeAnalysis({ pov: abstained }, {});
 
-    const result = aggregator.validateRender(PROSE, makeEvent(), makeWorldState(), analysis, {
+    const result = aggregator.validatePost(PROSE, makeEvent(), makeWorldState(), analysis, {
       PovConsumer: 'off',
     });
 
@@ -312,7 +312,7 @@ describe('observationRef RFC 6901 validation (fail closed)', () => {
       ],
     };
     const aggregator = new ResultAggregator([validator]);
-    return aggregator.validateRender(
+    return aggregator.validatePost(
       PROSE,
       makeEvent(),
       makeWorldState(),
@@ -395,7 +395,7 @@ describe('observationRef RFC 6901 validation (fail closed)', () => {
       },
     };
     const aggregator = new ResultAggregator([validator]);
-    const result = aggregator.validateRender(
+    const result = aggregator.validatePost(
       PROSE,
       makeEvent(),
       makeWorldState(),
@@ -630,7 +630,7 @@ describe('evaluateReleaseDecision — waiver/release behavior', () => {
     const aggregator = new ResultAggregator([validator]);
     const analysis = makeAnalysis({ pov: abstained }, {});
 
-    const result = aggregator.validateRender(PROSE, makeEvent(), makeWorldState(), analysis);
+    const result = aggregator.validatePost(PROSE, makeEvent(), makeWorldState(), analysis);
     expect(result.warnings.some((i) => i.kind === 'analysis_uncertainty')).toBe(true);
 
     const base = {

@@ -1,0 +1,30 @@
+{
+  "name": "@novalistically/node-host",
+  "version": "0.1.0",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --emitDeclarationOnly && node build.mjs",
+    "build:js": "node build.mjs",
+    "build:types": "tsc --emitDeclarationOnly",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-sdk/openai-compatible": "^3.0.12",
+    "@novalistically/core": "*",
+    "ai": "^7.0.31",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.9.0"
+  }
+}

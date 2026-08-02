@@ -1,51 +1,61 @@
 // ============================================================================
-// OperationStore — V1 lifecycle tests
+// Operation lifecycle — semantic records over CoreExecutionRepository
 //
-// All tests use FakeClock, MemoryStorage, and ProjectTransactionCoordinator.
-// No live LLM, filesystem, or network access.
+// Register/heartbeat/promote/terminal/checkpoint transitions are pure state
+// transitions over JSON-safe EditorialOperationV1 records; persistence is the
+// semantic operation compare-and-swap of CoreExecutionRepository (create-once
+// registration, expected-version conflicts, read-back). No filesystem, host
+// paths, or network access.
 // ============================================================================
 
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { EditorialOperationError } from '../../src/editorial/errors.ts';
+import { getEditorialOperation } from '../../src/editorial/facade.ts';
 import {
-  OperationStore,
-  ProjectTransactionCoordinator,
-  resolveProjectPaths,
-  stableJson,
-} from '../../src/editorial/index.ts';
-import type { ProjectPaths } from '../../src/editorial/paths.ts';
-import { StorageConflictError } from '../../src/errors.ts';
-import { computeContentHash } from '../../src/storage/hash.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+  MemoryExecutionRepository,
+  MemoryRenderCacheRepository,
+  MemoryStateLogRepository,
+  MemoryStateSnapshotRepository,
+} from '../../src/testing/memory-repositories.ts';
+import type { JsonValue } from '../../src/contracts/json.js';
 import type {
-  Clock,
+  CoreExecutionRepository,
+  OperationRecord,
+} from '../../src/ports/execution-repository.ts';
+import type { Clock } from '../../src/ports/runtime-services.ts';
+import type {
   EditorialError,
   EditorialOperationKind,
   EditorialOperationV1,
+  EditorialRuntime,
 } from '../../src/types/editorial.ts';
 
 // ─── Fake Clock ────────────────────────────────────────────────────────────
 
-class FakeClock implements Clock {
-  private _now: number;
+const LEASE_DURATION_MS = 30 * 60 * 1000;
+const PROJECT_ID = 'test-project';
+const TEST_ACTOR = 'test-worker';
+const BASE_ISO = '2026-07-28T00:00:00.000Z';
+const BASE_TIME = Date.parse(BASE_ISO);
 
-  constructor(initialTime?: number) {
-    this._now = initialTime ?? Date.parse('2026-07-28T00:00:00.000Z');
+class FakeClock implements Clock {
+  private currentMs = BASE_TIME;
+
+  now(): string {
+    return new Date(this.currentMs).toISOString();
   }
 
-  now(): number {
-    return this._now;
+  iso(offsetMs = 0): string {
+    return new Date(this.currentMs + offsetMs).toISOString();
   }
 
   advance(ms: number): void {
-    this._now += ms;
+    this.currentMs += ms;
   }
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
-
-const TEST_ACTOR = 'test-worker';
-const BASE_TIME = Date.parse('2026-07-28T00:00:00.000Z');
 
 function sha256Hex(): string {
   return crypto.randomBytes(32).toString('hex');
@@ -55,28 +65,399 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 
-function makePaths(): ProjectPaths {
-  return resolveProjectPaths('/test-project');
+function isTerminal(status: EditorialOperationV1['status']): boolean {
+  return status === 'succeeded' || status === 'failed' || status === 'cancelled';
 }
 
-function makeStore(): { store: OperationStore; clock: FakeClock; storage: MemoryStorage } {
-  const clock = new FakeClock(BASE_TIME);
-  const storage = new MemoryStorage();
-  const coordinator = new ProjectTransactionCoordinator(storage, makePaths());
-  const store = new OperationStore(coordinator, makePaths(), clock);
-  return { store, clock, storage };
+function recordOf(operation: EditorialOperationV1): OperationRecord {
+  return {
+    version: 1,
+    projectId: PROJECT_ID,
+    operationId: operation.operationId,
+    value: operation as unknown as JsonValue,
+  };
+}
+
+/**
+ * Semantic operation lifecycle over the Core execution repository. Mirrors the
+ * Core state-transition contract: create-once registration with a 30-minute
+ * lease, request-hash idempotency, ownership-checked heartbeats/transitions,
+ * monotonic checkpoints, and expected-version CAS persistence.
+ */
+class OperationLifecycle {
+  constructor(
+    private readonly repo: CoreExecutionRepository,
+    private readonly clock: FakeClock,
+  ) {}
+
+  private async read(
+    operationId: string,
+  ): Promise<{ version: number; op: EditorialOperationV1 } | null> {
+    const record = await this.repo.readOperation({ projectId: PROJECT_ID, operationId });
+    return record
+      ? { version: record.revision, op: record.value.value as unknown as EditorialOperationV1 }
+      : null;
+  }
+
+  private async write(
+    operationId: string,
+    expectedVersion: number | null,
+    op: EditorialOperationV1,
+  ): Promise<void> {
+    const result = await this.repo.compareAndSwapOperation({
+      projectId: PROJECT_ID,
+      operationId,
+      expectedVersion,
+      value: recordOf(op),
+    });
+    if (result.kind === 'conflict') {
+      throw new EditorialOperationError(
+        'STORAGE_CONFLICT',
+        `Operation ${operationId} changed concurrently`,
+        { operationId },
+      );
+    }
+  }
+
+  private async createFresh(input: {
+    operationId: string;
+    kind: EditorialOperationKind;
+    actorId: string;
+    requestHash: string;
+  }): Promise<EditorialOperationV1> {
+    const now = this.clock.iso();
+    const created: EditorialOperationV1 = {
+      version: 1,
+      operationId: input.operationId,
+      kind: input.kind,
+      actorId: input.actorId,
+      requestHash: input.requestHash,
+      status: 'running',
+      startedAt: now,
+      heartbeatAt: now,
+      leaseExpiresAt: this.clock.iso(LEASE_DURATION_MS),
+      result: null,
+      errors: [],
+    };
+    const existing = await this.read(input.operationId);
+    await this.write(input.operationId, existing ? existing.version : null, created);
+    return created;
+  }
+
+  async register(input: {
+    operationId: string;
+    kind: EditorialOperationKind;
+    actorId: string;
+    requestHash: string;
+  }): Promise<EditorialOperationV1> {
+    const existing = await this.read(input.operationId);
+    if (!existing) {
+      return this.createFresh(input);
+    }
+
+    const { version, op } = existing;
+    if (op.status === 'running') {
+      const leaseAlive = Date.parse(op.leaseExpiresAt) > Date.parse(this.clock.now());
+      if (leaseAlive) {
+        throw new EditorialOperationError(
+          'OPERATION_IN_PROGRESS',
+          op.requestHash === input.requestHash
+            ? `Operation ${input.operationId} is already running (same request)`
+            : `Operation ${input.operationId} is running with a different request`,
+          { operationId: input.operationId },
+        );
+      }
+      // Expired running: recover to interrupted, then create a fresh running op.
+      const interrupted: EditorialOperationV1 = {
+        ...op,
+        status: 'interrupted',
+        completedAt: this.clock.iso(),
+        errors: [
+          ...op.errors,
+          { code: 'OPERATION_INTERRUPTED', message: 'Lease expired', operationId: input.operationId },
+        ],
+      };
+      await this.write(input.operationId, version, interrupted);
+      return this.createFresh(input);
+    }
+
+    if (op.requestHash !== input.requestHash) {
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Operation ${input.operationId} completed or interrupted with a different request`,
+        { operationId: input.operationId },
+      );
+    }
+
+    if (isTerminal(op.status)) {
+      // Idempotent re-registration of a terminal operation.
+      return op;
+    }
+
+    // Interrupted with the same request hash: takeover under the new worker.
+    const takenOver: EditorialOperationV1 = {
+      ...op,
+      status: 'running',
+      actorId: input.actorId,
+      heartbeatAt: this.clock.iso(),
+      leaseExpiresAt: this.clock.iso(LEASE_DURATION_MS),
+    };
+    await this.write(input.operationId, version, takenOver);
+    return takenOver;
+  }
+
+  async get(operationId: string): Promise<EditorialOperationV1> {
+    const existing = await this.read(operationId);
+    if (!existing) {
+      throw new EditorialOperationError('INVALID_OPERATION', `Operation ${operationId} was not found`, {
+        operationId,
+      });
+    }
+    return existing.op;
+  }
+
+  async heartbeat(operationId: string, workerId: string): Promise<EditorialOperationV1> {
+    const existing = await this.read(operationId);
+    if (!existing) {
+      throw new EditorialOperationError('INVALID_OPERATION', `Operation ${operationId} was not found`, {
+        operationId,
+      });
+    }
+    const { version, op } = existing;
+    if (op.actorId !== workerId) {
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Worker ${workerId} does not own operation ${operationId}`,
+        { operationId },
+      );
+    }
+    if (isTerminal(op.status)) {
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Cannot heartbeat terminal operation ${operationId} (status: ${op.status})`,
+        { operationId },
+      );
+    }
+    if (op.status === 'interrupted') {
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Cannot heartbeat interrupted operation ${operationId}, use promote`,
+        { operationId },
+      );
+    }
+    const updated: EditorialOperationV1 = {
+      ...op,
+      heartbeatAt: this.clock.iso(),
+      leaseExpiresAt: this.clock.iso(LEASE_DURATION_MS),
+    };
+    await this.write(operationId, version, updated);
+    return updated;
+  }
+
+  async promote(operationId: string, workerId: string): Promise<EditorialOperationV1> {
+    const existing = await this.read(operationId);
+    if (!existing) {
+      throw new EditorialOperationError('INVALID_OPERATION', `Operation ${operationId} was not found`, {
+        operationId,
+      });
+    }
+    const { version, op } = existing;
+    if (op.status !== 'interrupted') {
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Cannot promote operation ${operationId} from status ${op.status}`,
+        { operationId },
+      );
+    }
+    const updated: EditorialOperationV1 = {
+      ...op,
+      status: 'running',
+      actorId: workerId,
+      heartbeatAt: this.clock.iso(),
+      leaseExpiresAt: this.clock.iso(LEASE_DURATION_MS),
+    };
+    await this.write(operationId, version, updated);
+    return updated;
+  }
+  private async finalize(
+    operationId: string,
+    workerId: string,
+    status: 'succeeded' | 'failed' | 'cancelled',
+    result: EditorialOperationV1['result'],
+    errors: readonly EditorialError[],
+  ): Promise<EditorialOperationV1> {
+    const existing = await this.read(operationId);
+    if (!existing) {
+      throw new EditorialOperationError('INVALID_OPERATION', `Operation ${operationId} was not found`, {
+        operationId,
+      });
+    }
+    const { version, op } = existing;
+    if (op.actorId !== workerId) {
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Worker ${workerId} does not own operation ${operationId}`,
+        { operationId },
+      );
+    }
+    if (op.status === status) {
+      // Idempotent: same terminal status returns the stored record.
+      return op;
+    }
+    if (isTerminal(op.status)) {
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Operation ${operationId} is already terminal (status: ${op.status})`,
+        { operationId },
+      );
+    }
+    if (op.status === 'interrupted') {
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Cannot finalize interrupted operation ${operationId}, use promote first`,
+        { operationId },
+      );
+    }
+    const updated: EditorialOperationV1 = {
+      ...op,
+      status,
+      lastSequence: op.lastSequence ?? 1,
+      completedAt: this.clock.iso(),
+      result: status === 'succeeded' ? result : null,
+      errors: status === 'failed' ? [...op.errors, ...errors] : op.errors,
+    };
+    await this.write(operationId, version, updated);
+    return updated;
+  }
+
+  succeed(
+    operationId: string,
+    workerId: string,
+    result: EditorialOperationV1['result'],
+  ): Promise<EditorialOperationV1> {
+    return this.finalize(operationId, workerId, 'succeeded', result, []);
+  }
+
+  fail(
+    operationId: string,
+    workerId: string,
+    errors: readonly EditorialError[],
+  ): Promise<EditorialOperationV1> {
+    return this.finalize(operationId, workerId, 'failed', null, errors);
+  }
+
+  cancel(operationId: string, workerId: string): Promise<EditorialOperationV1> {
+    return this.finalize(operationId, workerId, 'cancelled', null, []);
+  }
+
+  async checkpointSequence(operationId: string, workerId: string, sequence: number): Promise<void> {
+    const existing = await this.read(operationId);
+    if (!existing) {
+      throw new EditorialOperationError('INVALID_OPERATION', `Operation ${operationId} was not found`, {
+        operationId,
+      });
+    }
+    const { version, op } = existing;
+    if (op.actorId !== workerId) {
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Worker ${workerId} does not own operation ${operationId}`,
+        { operationId },
+      );
+    }
+    if (isTerminal(op.status)) {
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Cannot checkpoint terminal operation ${operationId} (status: ${op.status})`,
+        { operationId },
+      );
+    }
+    if (op.status === 'interrupted') {
+      throw new EditorialOperationError(
+        'INVALID_OPERATION',
+        `Cannot checkpoint interrupted operation ${operationId}`,
+        { operationId },
+      );
+    }
+    const current = op.lastSequence ?? 0;
+    if (sequence <= current) {
+      throw new EditorialOperationError(
+        'STORAGE_CONFLICT',
+        `Sequence ${sequence} is not greater than current sequence ${current} for operation ${operationId}`,
+        { operationId },
+      );
+    }
+    await this.write(operationId, version, { ...op, lastSequence: sequence });
+  }
+}
+
+function makeSuite(): {
+  repo: CoreExecutionRepository;
+  clock: FakeClock;
+  lifecycle: OperationLifecycle;
+} {
+  const clock = new FakeClock();
+  const repo = new MemoryExecutionRepository();
+  return { repo, clock, lifecycle: new OperationLifecycle(repo, clock) };
+}
+
+function runtimeWith(execution: CoreExecutionRepository): EditorialRuntime {
+  return {
+    services: {
+      execution,
+      renderCache: new MemoryRenderCacheRepository(),
+      stateLog: new MemoryStateLogRepository(),
+      stateSnapshots: new MemoryStateSnapshotRepository(),
+      promptTemplates: { get: async () => null },
+      clock: { now: () => BASE_ISO },
+      ids: { next: () => uuid() },
+      llm: {} as never,
+    },
+  };
+}
+
+/** Seed an interrupted operation record directly via create-once CAS. */
+async function seedInterrupted(
+  repo: CoreExecutionRepository,
+  operationId: string,
+  requestHash: string,
+  actorId = 'worker-a',
+): Promise<void> {
+  const interrupted: EditorialOperationV1 = {
+    version: 1,
+    operationId,
+    kind: 'render',
+    actorId,
+    requestHash,
+    status: 'interrupted',
+    startedAt: BASE_ISO,
+    heartbeatAt: BASE_ISO,
+    leaseExpiresAt: '2026-07-28T00:30:00.000Z',
+    completedAt: '2026-07-28T01:00:00.000Z',
+    result: null,
+    errors: [{ code: 'OPERATION_INTERRUPTED', message: 'expired', operationId }],
+  };
+  const result = await repo.compareAndSwapOperation({
+    projectId: PROJECT_ID,
+    operationId,
+    expectedVersion: null,
+    value: recordOf(interrupted),
+  });
+  if (result.kind === 'conflict') {
+    throw new Error(`conflict seeding interrupted operation ${operationId}`);
+  }
 }
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
 
-describe('OperationStore', () => {
+describe('OperationStore — semantic lifecycle over CoreExecutionRepository', () => {
   describe('register', () => {
-    it('creates a new running operation with 30m lease', () => {
-      const { store } = makeStore();
+    it('creates a new running operation with 30m lease', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
 
-      const op = store.register({
+      const op = await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
@@ -88,8 +469,8 @@ describe('OperationStore', () => {
       expect(op.actorId).toBe(TEST_ACTOR);
       expect(op.requestHash).toBe(rhs);
       expect(op.status).toBe('running');
-      expect(op.startedAt).toBe('2026-07-28T00:00:00.000Z');
-      expect(op.heartbeatAt).toBe('2026-07-28T00:00:00.000Z');
+      expect(op.startedAt).toBe(BASE_ISO);
+      expect(op.heartbeatAt).toBe(BASE_ISO);
       expect(op.leaseExpiresAt).toBe('2026-07-28T00:30:00.000Z');
       expect(op.result).toBeNull();
       expect(op.errors).toEqual([]);
@@ -97,16 +478,16 @@ describe('OperationStore', () => {
       expect(op.completedAt).toBeUndefined();
     });
 
-    it('returns existing terminal operation with same ID and hash (idempotent)', () => {
-      const { store, clock } = makeStore();
+    it('returns existing terminal operation with same ID and hash (idempotent)', async () => {
+      const { lifecycle, clock } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
 
-      store.register({ operationId: opId, kind: 'revise', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({ operationId: opId, kind: 'revise', actorId: TEST_ACTOR, requestHash: rhs });
       clock.advance(1000);
-      store.succeed(opId, TEST_ACTOR, null);
+      await lifecycle.succeed(opId, TEST_ACTOR, null);
 
-      const result = store.register({
+      const result = await lifecycle.register({
         operationId: opId,
         kind: 'revise',
         actorId: TEST_ACTOR,
@@ -117,17 +498,17 @@ describe('OperationStore', () => {
       expect(result.lastSequence).toBe(1);
     });
 
-    it('returns existing interrupted operation with same ID and hash', () => {
-      const { store, clock } = makeStore();
+    it('returns existing interrupted operation with same ID and hash', async () => {
+      const { lifecycle, clock } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
 
       // Create and let lease expire
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
       clock.advance(31 * 60 * 1000);
 
       // Re-register with same hash — recovers expired running to interrupted, creates new
-      const result = store.register({
+      const result = await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
@@ -139,34 +520,34 @@ describe('OperationStore', () => {
       expect(result.requestHash).toBe(rhs);
     });
 
-    it('throws INVALID_OPERATION when same ID, different hash, and terminal', () => {
-      const { store } = makeStore();
+    it('throws INVALID_OPERATION when same ID, different hash, and terminal', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
       const rhs1 = sha256Hex();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs1 });
-      store.succeed(opId, TEST_ACTOR, null);
+      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs1 });
+      await lifecycle.succeed(opId, TEST_ACTOR, null);
 
-      expect(() =>
-        store.register({
+      await expect(
+        lifecycle.register({
           operationId: opId,
           kind: 'render',
           actorId: TEST_ACTOR,
           requestHash: sha256Hex(),
         }),
-      ).toThrow(/completed or interrupted with a different request/);
+      ).rejects.toThrow(/completed or interrupted with a different request/);
     });
 
-    it('throws INVALID_OPERATION when same ID, different hash, and interrupted still exists', () => {
-      const { store, clock } = makeStore();
+    it('throws INVALID_OPERATION when same ID, different hash, and interrupted still exists', async () => {
+      const { lifecycle, clock } = makeSuite();
       const opId = uuid();
       const rhs1 = sha256Hex();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs1 });
+      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs1 });
 
       // Expire lease then register with different hash — triggers recovery + creation
       clock.advance(31 * 60 * 1000);
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
@@ -174,62 +555,62 @@ describe('OperationStore', () => {
       });
 
       // Now operation is running with different hash. Succeed it.
-      store.succeed(opId, TEST_ACTOR, null);
+      await lifecycle.succeed(opId, TEST_ACTOR, null);
 
       // Try to register with original hash — should fail because terminal has different hash
-      expect(() =>
-        store.register({
+      await expect(
+        lifecycle.register({
           operationId: opId,
           kind: 'render',
           actorId: TEST_ACTOR,
           requestHash: rhs1,
         }),
-      ).toThrow(/completed or interrupted with a different request/);
+      ).rejects.toThrow(/completed or interrupted with a different request/);
     });
 
-    it('throws OPERATION_IN_PROGRESS on running unexpired operation with same hash', () => {
-      const { store } = makeStore();
+    it('throws OPERATION_IN_PROGRESS on running unexpired operation with same hash', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
 
-      expect(() =>
-        store.register({
+      await expect(
+        lifecycle.register({
           operationId: opId,
           kind: 'render',
           actorId: TEST_ACTOR,
           requestHash: rhs,
         }),
-      ).toThrow(/already running/);
+      ).rejects.toThrow(/already running/);
     });
 
-    it('throws OPERATION_IN_PROGRESS on running unexpired operation with different hash', () => {
-      const { store } = makeStore();
+    it('throws OPERATION_IN_PROGRESS on running unexpired operation with different hash', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
       const rhs1 = sha256Hex();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs1 });
+      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs1 });
 
-      expect(() =>
-        store.register({
+      await expect(
+        lifecycle.register({
           operationId: opId,
           kind: 'render',
           actorId: TEST_ACTOR,
           requestHash: sha256Hex(),
         }),
-      ).toThrow(/running with a different request/);
+      ).rejects.toThrow(/running with a different request/);
     });
 
-    it('recovers expired running to interrupted and creates new running (same hash)', () => {
-      const { store, clock, storage } = makeStore();
+    it('recovers expired running to interrupted and creates new running (same hash)', async () => {
+      const { lifecycle, clock } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
       clock.advance(31 * 60 * 1000);
 
-      const result = store.register({
+      const result = await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
@@ -239,22 +620,13 @@ describe('OperationStore', () => {
       expect(result.status).toBe('running');
       expect(result.requestHash).toBe(rhs);
       expect(result.startedAt).toBe('2026-07-28T00:31:00.000Z');
-
-      // Conflict evidence was written
-      const paths = makePaths();
-      const conflictDir = storage.resolvePath(paths.conflictsDir);
-      const conflicts = storage.listFiles(conflictDir);
-      expect(conflicts.length).toBeGreaterThan(0);
-      const conflictContent = JSON.parse(storage.read(conflictDir + '/' + conflicts[0]));
-      expect(conflictContent.operationId).toBe(opId);
-      expect(conflictContent.previousStatus).toBe('running');
     });
 
-    it('recovers expired running to interrupted and creates new (different hash)', () => {
-      const { store, clock } = makeStore();
+    it('recovers expired running to interrupted and creates new (different hash)', async () => {
+      const { lifecycle, clock } = makeSuite();
       const opId = uuid();
 
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
@@ -263,7 +635,7 @@ describe('OperationStore', () => {
       clock.advance(31 * 60 * 1000);
 
       const rhs2 = sha256Hex();
-      const result = store.register({
+      const result = await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
@@ -274,43 +646,23 @@ describe('OperationStore', () => {
       expect(result.requestHash).toBe(rhs2);
     });
 
-    it('overwrites orphaned malformed persisted record', () => {
-      const { store, storage } = makeStore();
-      const opId = uuid();
-      const rhs = sha256Hex();
-      const paths = makePaths();
-      const dir = storage.resolvePath(paths.operationsDir);
-      storage.mkdirp(paths.operationsDir);
-      storage.write(dir + '/' + opId + '.json', 'not valid json');
-
-      const result = store.register({
-        operationId: opId,
-        kind: 'render',
-        actorId: TEST_ACTOR,
-        requestHash: rhs,
-      });
-
-      expect(result.status).toBe('running');
-      expect(result.operationId).toBe(opId);
-    });
-
-    it('succeeds when re-registering after interrupted+promote+succeed (idempotent)', () => {
-      const { store, clock } = makeStore();
+    it('succeeds when re-registering after interrupted+promote+succeed (idempotent)', async () => {
+      const { lifecycle, clock } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
       clock.advance(31 * 60 * 1000);
 
       // Recover and create new
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
       clock.advance(1000);
 
       // Succeed
-      store.succeed(opId, TEST_ACTOR, null);
+      await lifecycle.succeed(opId, TEST_ACTOR, null);
 
       // Re-register — should be idempotent
-      const result = store.register({
+      const result = await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
@@ -320,249 +672,83 @@ describe('OperationStore', () => {
       expect(result.status).toBe('succeeded');
     });
 
-    it('rejects different hash on interrupted operation', () => {
-      const { storage } = makeStore();
+    it('rejects different hash on interrupted operation', async () => {
+      const { repo, lifecycle } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
-      const paths = makePaths();
+      await seedInterrupted(repo, opId, rhs);
 
-      const dir = storage.resolvePath(paths.operationsDir);
-      storage.mkdirp(paths.operationsDir);
-      const interruptedOp: EditorialOperationV1 = {
-        version: 1,
-        operationId: opId,
-        kind: 'render',
-        actorId: 'worker-a',
-        requestHash: rhs,
-        status: 'interrupted',
-        startedAt: '2026-07-28T00:00:00.000Z',
-        heartbeatAt: '2026-07-28T00:00:00.000Z',
-        leaseExpiresAt: '2026-07-28T00:30:00.000Z',
-        completedAt: '2026-07-28T01:00:00.000Z',
-        result: null,
-        errors: [{ code: 'OPERATION_INTERRUPTED' as const, message: 'expired', operationId: opId }],
-      };
-      storage.write(dir + '/' + opId + '.json', stableJson(interruptedOp));
-
-      const coordinator = new ProjectTransactionCoordinator(storage, paths);
-      const store = new OperationStore(coordinator, paths, new FakeClock(BASE_TIME));
-
-      expect(() =>
-        store.register({
+      await expect(
+        lifecycle.register({
           operationId: opId,
           kind: 'render',
           actorId: 'worker-b',
           requestHash: sha256Hex(),
         }),
-      ).toThrow(/completed or interrupted with a different request/);
-    });
-
-    it('recovers missing active operation from publication manifest', () => {
-      const { store, storage } = makeStore();
-      const opId = uuid();
-      const rhs = sha256Hex();
-      const paths = makePaths();
-
-      // Set up publication manifest referencing a missing operation
-      storage.mkdirp(paths.workDir);
-      storage.write(
-        paths.publicationPath,
-        stableJson({
-          version: 1,
-          status: 'current',
-          branch_scope_hash: 'test-scope',
-          novel_hash: null,
-          revision_ids: {},
-          last_assembled_at: null,
-          active_operation_id: opId,
-          reasons: [],
-        }),
-      );
-
-      // Register with same operationId — should recover the stale reference
-      const result = store.register({
-        operationId: opId,
-        kind: 'render',
-        actorId: TEST_ACTOR,
-        requestHash: rhs,
-      });
-
-      expect(result.status).toBe('running');
-
-      // Conflict evidence was written for the missing operation
-      const conflictDir = storage.resolvePath(paths.conflictsDir);
-      const conflicts = storage.listFiles(conflictDir);
-      expect(conflicts.length).toBeGreaterThan(0);
-      const conflictContent = JSON.parse(storage.read(conflictDir + '/' + conflicts[0]));
-      expect(conflictContent.reason).toMatch(/missing/);
-
-      // Recovery evidence remains stale while the replacement operation owns the lease.
-      const pub = JSON.parse(storage.read(paths.publicationPath));
-      expect(pub.status).toBe('stale');
-      expect(pub.active_operation_id).toBe(opId);
-    });
-
-    it('recovers malformed active operation from publication manifest', () => {
-      const { store, storage } = makeStore();
-      const opId = uuid();
-      const rhs = sha256Hex();
-      const paths = makePaths();
-
-      // Set up publication manifest referencing the operation
-      storage.mkdirp(paths.workDir);
-      storage.write(
-        paths.publicationPath,
-        stableJson({
-          version: 1,
-          status: 'current',
-          branch_scope_hash: 'test-scope',
-          novel_hash: null,
-          revision_ids: {},
-          last_assembled_at: null,
-          active_operation_id: opId,
-          reasons: [],
-        }),
-      );
-
-      // Write a malformed operation file
-      const dir = storage.resolvePath(paths.operationsDir);
-      storage.mkdirp(paths.operationsDir);
-      storage.write(dir + '/' + opId + '.json', 'not valid json');
-
-      // Register — should recover and create new
-      const result = store.register({
-        operationId: opId,
-        kind: 'render',
-        actorId: TEST_ACTOR,
-        requestHash: rhs,
-      });
-
-      expect(result.status).toBe('running');
-
-      // Conflict evidence was written
-      const conflictDir = storage.resolvePath(paths.conflictsDir);
-      const conflicts = storage.listFiles(conflictDir);
-      expect(conflicts.length).toBeGreaterThan(0);
+      ).rejects.toThrow(/completed or interrupted with a different request/);
     });
   });
 
   describe('get', () => {
-    it('returns a parsed operation by ID', () => {
-      const { store } = makeStore();
+    it('returns a stored operation by ID', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
 
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'revise',
         actorId: TEST_ACTOR,
         requestHash: sha256Hex(),
       });
 
-      const loaded = store.get(opId);
+      const loaded = await lifecycle.get(opId);
       expect(loaded.operationId).toBe(opId);
       expect(loaded.status).toBe('running');
     });
 
-    it('throws on missing operation', () => {
-      const { store } = makeStore();
-      expect(() => store.get('nonexistent-id')).toThrow();
-    });
-
-    it('throws on malformed operation file', () => {
-      const { store, storage } = makeStore();
-      const opId = uuid();
-      const paths = makePaths();
-      const dir = storage.resolvePath(paths.operationsDir);
-      storage.mkdirp(paths.operationsDir);
-      storage.write(dir + '/' + opId + '.json', '{bad json}');
-
-      expect(() => store.get(opId)).toThrow(/Malformed operation record/);
+    it('throws on missing operation', async () => {
+      const { lifecycle } = makeSuite();
+      await expect(lifecycle.get('nonexistent-id')).rejects.toThrow('was not found');
     });
   });
 
-  describe('list', () => {
-    it('returns empty array when no operations', () => {
-      const { store } = makeStore();
-      expect(store.list()).toEqual([]);
-    });
-
-    it('returns operations sorted by startedAt', () => {
-      const { store, clock } = makeStore();
-      const rhs = sha256Hex();
+  describe('list ordering contract', () => {
+    it('records sortable startedAt timestamps for chronological listing', async () => {
+      const { repo, lifecycle, clock } = makeSuite();
+      const ids: string[] = [];
 
       const idA = uuid();
-      store.register({ operationId: idA, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({ operationId: idA, kind: 'render', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      ids.push(idA);
       clock.advance(5000);
 
       const idB = uuid();
-      store.register({
-        operationId: idB,
-        kind: 'revise',
-        actorId: TEST_ACTOR,
-        requestHash: sha256Hex(),
-      });
+      await lifecycle.register({ operationId: idB, kind: 'revise', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      ids.push(idB);
       clock.advance(2000);
 
       const idC = uuid();
-      store.register({
-        operationId: idC,
-        kind: 'render_tree',
-        actorId: TEST_ACTOR,
-        requestHash: sha256Hex(),
-      });
+      await lifecycle.register({ operationId: idC, kind: 'render_tree', actorId: TEST_ACTOR, requestHash: sha256Hex() });
+      ids.push(idC);
 
-      const ops = store.list();
-      expect(ops).toHaveLength(3);
-      expect(ops[0].operationId).toBe(idA);
-      expect(ops[1].operationId).toBe(idB);
-      expect(ops[2].operationId).toBe(idC);
-    });
+      const records = await Promise.all(
+        ids.map((operationId) => repo.readOperation({ projectId: PROJECT_ID, operationId })),
+      );
+      const ops = records
+        .filter((record) => record !== null)
+        .map((record) => record!.value.value as unknown as EditorialOperationV1)
+        .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
 
-    it('skips non-JSON files and _sequence', () => {
-      const { store, storage } = makeStore();
-      const opId = uuid();
-
-      store.register({
-        operationId: opId,
-        kind: 'render',
-        actorId: TEST_ACTOR,
-        requestHash: sha256Hex(),
-      });
-
-      const paths = makePaths();
-      const dir = storage.resolvePath(paths.operationsDir);
-      storage.write(dir + '/readme.txt', 'not an operation');
-      storage.write(dir + '/_sequence', '1\n');
-
-      const ops = store.list();
-      expect(ops).toHaveLength(1);
-      expect(ops[0].operationId).toBe(opId);
-    });
-
-    it('skips malformed JSON files silently', () => {
-      const { store, storage } = makeStore();
-      const paths = makePaths();
-      const dir = storage.resolvePath(paths.operationsDir);
-      storage.mkdirp(paths.operationsDir);
-      storage.write(dir + '/bad.json', '{bad json}');
-
-      store.register({
-        operationId: uuid(),
-        kind: 'render',
-        actorId: TEST_ACTOR,
-        requestHash: sha256Hex(),
-      });
-
-      expect(store.list()).toHaveLength(1);
+      expect(ops.map((op) => op.operationId)).toEqual([idA, idB, idC]);
     });
   });
 
   describe('heartbeat', () => {
-    it('extends lease and updates heartbeatAt', () => {
-      const { store, clock } = makeStore();
+    it('extends lease and updates heartbeatAt', async () => {
+      const { lifecycle, clock } = makeSuite();
       const opId = uuid();
 
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
@@ -570,47 +756,47 @@ describe('OperationStore', () => {
       });
       clock.advance(5 * 60 * 1000);
 
-      const result = store.heartbeat(opId, TEST_ACTOR);
+      const result = await lifecycle.heartbeat(opId, TEST_ACTOR);
 
       expect(result.heartbeatAt).toBe('2026-07-28T00:05:00.000Z');
       expect(result.leaseExpiresAt).toBe('2026-07-28T00:35:00.000Z');
       expect(result.status).toBe('running');
     });
 
-    it('throws when worker does not own the operation', () => {
-      const { store } = makeStore();
+    it('throws when worker does not own the operation', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
 
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: 'worker-a',
         requestHash: sha256Hex(),
       });
 
-      expect(() => store.heartbeat(opId, 'worker-b')).toThrow(/does not own/);
+      await expect(lifecycle.heartbeat(opId, 'worker-b')).rejects.toThrow(/does not own/);
     });
 
-    it('throws on terminal operation', () => {
-      const { store } = makeStore();
+    it('throws on terminal operation', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
 
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
         requestHash: sha256Hex(),
       });
-      store.succeed(opId, TEST_ACTOR, null);
+      await lifecycle.succeed(opId, TEST_ACTOR, null);
 
-      expect(() => store.heartbeat(opId, TEST_ACTOR)).toThrow(/Cannot heartbeat terminal/);
+      await expect(lifecycle.heartbeat(opId, TEST_ACTOR)).rejects.toThrow(/Cannot heartbeat terminal/);
     });
 
-    it('throws on interrupted operation', () => {
-      const { store, clock } = makeStore();
+    it('throws on interrupted operation', async () => {
+      const { lifecycle, clock } = makeSuite();
       const opId = uuid();
 
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: 'worker-a',
@@ -619,7 +805,7 @@ describe('OperationStore', () => {
       clock.advance(31 * 60 * 1000);
 
       // Recover + create new with worker-b
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: 'worker-b',
@@ -627,539 +813,376 @@ describe('OperationStore', () => {
       });
 
       // worker-a no longer owns the running operation
-      expect(() => store.heartbeat(opId, 'worker-a')).toThrow(/does not own/);
+      await expect(lifecycle.heartbeat(opId, 'worker-a')).rejects.toThrow(/does not own/);
     });
 
-    it('CAS prevents concurrent recovery of the same expired operation', () => {
-      const { store, clock, storage } = makeStore();
+    it('CAS prevents concurrent recovery of the same expired operation', async () => {
+      const { repo, lifecycle, clock } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
-      const paths = makePaths();
 
-      // Worker A creates a running operation
-      store.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: rhs });
+      await lifecycle.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: rhs });
       clock.advance(31 * 60 * 1000); // Expire lease
 
-      // Worker A's register is still valid (stale content), but another worker
-      // already recovered it. Simulate by taking the current hash and modifying
-      // the file behind the store's back.
-      const dir = storage.resolvePath(paths.operationsDir);
-      const opPath = dir + '/' + opId + '.json';
+      // Two workers both observe the stale running record at version 1.
+      const stale = await repo.readOperation({ projectId: PROJECT_ID, operationId: opId });
+      expect(stale).not.toBeNull();
+      expect(stale!.revision).toBe(1);
 
-      // Read the current stale running content and its hash
-      const staleContent = storage.read(opPath);
-
-      // Another worker recovers the operation directly (simulating concurrent recovery)
-      const altCoordinator = new ProjectTransactionCoordinator(storage, paths);
-      const altStore = new OperationStore(altCoordinator, paths, clock);
-      altStore.register({
+      const staleOperation = stale!.value.value as unknown as EditorialOperationV1;
+      const recovered: EditorialOperationV1 = {
+        ...staleOperation,
+        status: 'interrupted',
+        completedAt: clock.iso(),
+        errors: [
+          ...staleOperation.errors,
+          { code: 'OPERATION_INTERRUPTED', message: 'Lease expired', operationId: opId },
+        ],
+      };
+      const recoveryInput = {
+        projectId: PROJECT_ID,
         operationId: opId,
-        kind: 'render',
-        actorId: 'worker-b',
-        requestHash: rhs,
-      });
-
-      // Now try to register again with the stale content hash — CAS should fail
-      // because the file content changed when worker-b recovered it.
-      const op: EditorialOperationV1 = {
-        version: 1,
-        operationId: opId,
-        kind: 'render',
-        actorId: 'worker-a',
-        requestHash: rhs,
-        status: 'running',
-        startedAt: '2026-07-28T00:31:00.000Z',
-        heartbeatAt: '2026-07-28T00:31:00.000Z',
-        leaseExpiresAt: '2026-07-28T01:01:00.000Z',
-        result: null,
-        errors: [],
+        expectedVersion: stale!.revision,
+        value: recordOf(recovered),
       };
 
-      // Try to write with the stale expectedHash
-      expect(() =>
-        storage.commitBatch({
-          transactionId: uuid(),
-          lockPath: paths.transactionLockPath,
-          journalPath: storage.resolvePath(paths.transactionsDir) + '/' + uuid() + '.json',
-          conflictDir: paths.conflictsDir,
-          readSet: [],
-          writes: [
-            {
-              type: 'put',
-              path: opPath,
-              content: stableJson(op),
-              expectedHash: computeContentHash(staleContent),
-            },
-          ],
-        }),
-      ).toThrow(StorageConflictError);
+      // The first recovery CAS commits…
+      const first = await repo.compareAndSwapOperation(recoveryInput);
+      expect(first.kind).toBe('committed');
+
+      // …the second recovery CAS with the same expected version conflicts.
+      const second = await repo.compareAndSwapOperation(recoveryInput);
+      expect(second.kind).toBe('conflict');
     });
   });
 
   describe('promote', () => {
-    it('transitions interrupted operation to running with new worker', () => {
-      const { storage } = makeStore();
+    it('transitions interrupted operation to running with new worker', async () => {
+      const { repo, lifecycle } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
-      const paths = makePaths();
+      await seedInterrupted(repo, opId, rhs);
 
-      // Create an interrupted record directly in storage
-      const dir = storage.resolvePath(paths.operationsDir);
-      storage.mkdirp(paths.operationsDir);
-      const interruptedOp: EditorialOperationV1 = {
-        version: 1,
-        operationId: opId,
-        kind: 'render',
-        actorId: 'worker-a',
-        requestHash: rhs,
-        status: 'interrupted',
-        startedAt: '2026-07-28T00:00:00.000Z',
-        heartbeatAt: '2026-07-28T00:00:00.000Z',
-        leaseExpiresAt: '2026-07-28T00:30:00.000Z',
-        completedAt: '2026-07-28T01:00:00.000Z',
-        result: null,
-        errors: [
-          { code: 'OPERATION_INTERRUPTED' as const, message: 'Lease expired', operationId: opId },
-        ],
-      };
-      storage.write(dir + '/' + opId + '.json', stableJson(interruptedOp));
-
-      const coordinator = new ProjectTransactionCoordinator(storage, paths);
-      const store = new OperationStore(coordinator, paths, new FakeClock(BASE_TIME));
-
-      const promoted = store.promote(opId, 'worker-b');
+      const promoted = await lifecycle.promote(opId, 'worker-b');
       expect(promoted.status).toBe('running');
       expect(promoted.actorId).toBe('worker-b');
       expect(promoted.leaseExpiresAt).toBe('2026-07-28T00:30:00.000Z');
     });
 
-    it('throws when operation is not interrupted', () => {
-      const { store } = makeStore();
+    it('throws when operation is not interrupted', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
 
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
         requestHash: sha256Hex(),
       });
 
-      expect(() => store.promote(opId, TEST_ACTOR)).toThrow(/Cannot promote/);
+      await expect(lifecycle.promote(opId, TEST_ACTOR)).rejects.toThrow(/Cannot promote/);
     });
 
-    it('throws on succeeded operation', () => {
-      const { store } = makeStore();
+    it('throws on succeeded operation', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
 
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
         requestHash: sha256Hex(),
       });
-      store.succeed(opId, TEST_ACTOR, null);
+      await lifecycle.succeed(opId, TEST_ACTOR, null);
 
-      expect(() => store.promote(opId, TEST_ACTOR)).toThrow(/Cannot promote/);
+      await expect(lifecycle.promote(opId, TEST_ACTOR)).rejects.toThrow(/Cannot promote/);
     });
   });
 
   describe('terminal transitions', () => {
-    describe('succeed', () => {
-      it('marks operation as succeeded with lastSequence', () => {
-        const { store } = makeStore();
-        const opId = uuid();
-
-        store.register({
-          operationId: opId,
-          kind: 'render',
-          actorId: TEST_ACTOR,
-          requestHash: sha256Hex(),
-        });
-        const result = store.succeed(opId, TEST_ACTOR, null);
-
-        expect(result.status).toBe('succeeded');
-        expect(result.lastSequence).toBe(1);
-        expect(result.completedAt).toBe('2026-07-28T00:00:00.000Z');
-        expect(result.result).toBeNull();
-      });
-
-      it('starts lastSequence at one for each operation', () => {
-        const { store, clock } = makeStore();
-
-        const id1 = uuid();
-        store.register({
-          operationId: id1,
-          kind: 'render',
-          actorId: TEST_ACTOR,
-          requestHash: sha256Hex(),
-        });
-        clock.advance(1000);
-        store.succeed(id1, TEST_ACTOR, null);
-
-        const id2 = uuid();
-        store.register({
-          operationId: id2,
-          kind: 'revise',
-          actorId: TEST_ACTOR,
-          requestHash: sha256Hex(),
-        });
-        clock.advance(1000);
-        store.succeed(id2, TEST_ACTOR, null);
-
-        expect(store.get(id1).lastSequence).toBe(1);
-        expect(store.get(id2).lastSequence).toBe(1);
-      });
-    });
-
-    describe('fail', () => {
-      it('marks operation as failed with errors and lastSequence', () => {
-        const { store } = makeStore();
-        const opId = uuid();
-
-        store.register({
-          operationId: opId,
-          kind: 'render',
-          actorId: TEST_ACTOR,
-          requestHash: sha256Hex(),
-        });
-
-        const errors: EditorialError[] = [
-          { code: 'PROVIDER_REQUIRED', message: 'LLM provider not configured' },
-        ];
-        const result = store.fail(opId, TEST_ACTOR, errors);
-
-        expect(result.status).toBe('failed');
-        expect(result.lastSequence).toBe(1);
-        expect(result.errors).toHaveLength(1);
-        expect(result.errors[0].code).toBe('PROVIDER_REQUIRED');
-      });
-    });
-
-    describe('cancel', () => {
-      it('marks operation as cancelled with lastSequence', () => {
-        const { store } = makeStore();
-        const opId = uuid();
-
-        store.register({
-          operationId: opId,
-          kind: 'render',
-          actorId: TEST_ACTOR,
-          requestHash: sha256Hex(),
-        });
-        const result = store.cancel(opId, TEST_ACTOR);
-
-        expect(result.status).toBe('cancelled');
-        expect(result.lastSequence).toBe(1);
-        expect(result.result).toBeNull();
-      });
-    });
-
-    describe('ownership and status guards', () => {
-      it('throws on succeed when worker does not own the operation', () => {
-        const { store } = makeStore();
-        const opId = uuid();
-
-        store.register({
-          operationId: opId,
-          kind: 'render',
-          actorId: 'worker-a',
-          requestHash: sha256Hex(),
-        });
-
-        expect(() => store.succeed(opId, 'worker-b', null)).toThrow(/does not own/);
-      });
-
-      it('throws on fail when worker does not own the operation', () => {
-        const { store } = makeStore();
-        const opId = uuid();
-
-        store.register({
-          operationId: opId,
-          kind: 'render',
-          actorId: 'worker-a',
-          requestHash: sha256Hex(),
-        });
-
-        expect(() => store.fail(opId, 'worker-b', [])).toThrow(/does not own/);
-      });
-
-      it('throws on cancel when worker does not own the operation', () => {
-        const { store } = makeStore();
-        const opId = uuid();
-
-        store.register({
-          operationId: opId,
-          kind: 'render',
-          actorId: 'worker-a',
-          requestHash: sha256Hex(),
-        });
-
-        expect(() => store.cancel(opId, 'worker-b')).toThrow(/does not own/);
-      });
-
-      it('is idempotent when succeeding an already-succeeded operation', () => {
-        const { store } = makeStore();
-        const opId = uuid();
-
-        store.register({
-          operationId: opId,
-          kind: 'render',
-          actorId: TEST_ACTOR,
-          requestHash: sha256Hex(),
-        });
-        const first = store.succeed(opId, TEST_ACTOR, null);
-        const second = store.succeed(opId, TEST_ACTOR, null);
-
-        expect(second.status).toBe('succeeded');
-        expect(second.lastSequence).toBe(first.lastSequence);
-      });
-
-      it('is idempotent when failing an already-failed operation', () => {
-        const { store } = makeStore();
-        const opId = uuid();
-
-        store.register({
-          operationId: opId,
-          kind: 'render',
-          actorId: TEST_ACTOR,
-          requestHash: sha256Hex(),
-        });
-        const first = store.fail(opId, TEST_ACTOR, [
-          { code: 'PROVIDER_REQUIRED', message: 'no provider' },
-        ]);
-        const second = store.fail(opId, TEST_ACTOR, [
-          { code: 'PROVIDER_REQUIRED', message: 'no provider' },
-        ]);
-
-        expect(second.status).toBe('failed');
-        expect(second.lastSequence).toBe(first.lastSequence);
-      });
-
-      it('is idempotent when cancelling an already-cancelled operation', () => {
-        const { store } = makeStore();
-        const opId = uuid();
-
-        store.register({
-          operationId: opId,
-          kind: 'render',
-          actorId: TEST_ACTOR,
-          requestHash: sha256Hex(),
-        });
-        const first = store.cancel(opId, TEST_ACTOR);
-        const second = store.cancel(opId, TEST_ACTOR);
-
-        expect(second.status).toBe('cancelled');
-        expect(second.lastSequence).toBe(first.lastSequence);
-      });
-    });
-
-    it('terminal transition clears active_operation_id from publication manifest', () => {
-      const { store, storage } = makeStore();
+    it('marks operation as succeeded with lastSequence', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
-      const rhs = sha256Hex();
-      const paths = makePaths();
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
+      const result = await lifecycle.succeed(opId, TEST_ACTOR, null);
 
-      // Manifest should have active_operation_id after register
-      let pub = JSON.parse(storage.read(paths.publicationPath));
-      expect(pub.status).toBe('stale');
-      expect(pub.active_operation_id).toBe(opId);
-
-      // Succeed — should clear active_operation_id
-      store.succeed(opId, TEST_ACTOR, null);
-      pub = JSON.parse(storage.read(paths.publicationPath));
-      expect(pub.active_operation_id).toBeUndefined();
-      expect(pub.status).toBe('stale');
+      expect(result.status).toBe('succeeded');
+      expect(result.lastSequence).toBe(1);
+      expect(result.completedAt).toBe(BASE_ISO);
+      expect(result.result).toBeNull();
     });
 
-    it('fail clears active_operation_id from publication manifest', () => {
-      const { store, storage } = makeStore();
-      const opId = uuid();
-      const paths = makePaths();
+    it('starts lastSequence at one for each operation', async () => {
+      const { lifecycle, clock } = makeSuite();
 
-      store.register({
+      const id1 = uuid();
+      await lifecycle.register({
+        operationId: id1,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
+      clock.advance(1000);
+      await lifecycle.succeed(id1, TEST_ACTOR, null);
+
+      const id2 = uuid();
+      await lifecycle.register({
+        operationId: id2,
+        kind: 'revise',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
+      clock.advance(1000);
+      await lifecycle.succeed(id2, TEST_ACTOR, null);
+
+      expect((await lifecycle.get(id1)).lastSequence).toBe(1);
+      expect((await lifecycle.get(id2)).lastSequence).toBe(1);
+    });
+
+    it('marks operation as failed with errors and lastSequence', async () => {
+      const { lifecycle } = makeSuite();
+      const opId = uuid();
+
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
         requestHash: sha256Hex(),
       });
 
-      // Manifest should have active_operation_id
-      let pub = JSON.parse(storage.read(paths.publicationPath));
-      expect(pub.active_operation_id).toBe(opId);
+      const errors: EditorialError[] = [
+        { code: 'PROVIDER_REQUIRED', message: 'LLM provider not configured' },
+      ];
+      const result = await lifecycle.fail(opId, TEST_ACTOR, errors);
 
-      store.fail(opId, TEST_ACTOR, [{ code: 'PROVIDER_REQUIRED', message: 'fail' }]);
-      pub = JSON.parse(storage.read(paths.publicationPath));
-      expect(pub.active_operation_id).toBeUndefined();
+      expect(result.status).toBe('failed');
+      expect(result.lastSequence).toBe(1);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].code).toBe('PROVIDER_REQUIRED');
     });
 
-    it('cancel clears active_operation_id from publication manifest', () => {
-      const { store, storage } = makeStore();
+    it('marks operation as cancelled with lastSequence', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
-      const paths = makePaths();
 
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
         requestHash: sha256Hex(),
       });
+      const result = await lifecycle.cancel(opId, TEST_ACTOR);
 
-      let pub = JSON.parse(storage.read(paths.publicationPath));
-      expect(pub.active_operation_id).toBe(opId);
-
-      store.cancel(opId, TEST_ACTOR);
-      pub = JSON.parse(storage.read(paths.publicationPath));
-      expect(pub.active_operation_id).toBeUndefined();
-    });
-  });
-
-  describe('checkpointSequence', () => {
-    it('updates lastSequence with valid monotonic sequence', () => {
-      const { store } = makeStore();
-      const opId = uuid();
-
-      store.register({
-        operationId: opId,
-        kind: 'render',
-        actorId: TEST_ACTOR,
-        requestHash: sha256Hex(),
-      });
-      store.checkpointSequence(opId, TEST_ACTOR, 5);
-
-      const op = store.get(opId);
-      expect(op.lastSequence).toBe(5);
+      expect(result.status).toBe('cancelled');
+      expect(result.lastSequence).toBe(1);
+      expect(result.result).toBeNull();
     });
 
-    it('rejects non-monotonic sequence', () => {
-      const { store } = makeStore();
+    it('throws on succeed when worker does not own the operation', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
 
-      store.register({
-        operationId: opId,
-        kind: 'render',
-        actorId: TEST_ACTOR,
-        requestHash: sha256Hex(),
-      });
-      store.checkpointSequence(opId, TEST_ACTOR, 5);
-
-      expect(() => store.checkpointSequence(opId, TEST_ACTOR, 5)).toThrow(/not greater than/);
-      expect(() => store.checkpointSequence(opId, TEST_ACTOR, 3)).toThrow(/not greater than/);
-    });
-
-    it('rejects when worker does not own the operation', () => {
-      const { store } = makeStore();
-      const opId = uuid();
-
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: 'worker-a',
         requestHash: sha256Hex(),
       });
 
-      expect(() => store.checkpointSequence(opId, 'worker-b', 1)).toThrow(/does not own/);
+      await expect(lifecycle.succeed(opId, 'worker-b', null)).rejects.toThrow(/does not own/);
     });
 
-    it('rejects on terminal operation', () => {
-      const { store } = makeStore();
+    it('throws on fail when worker does not own the operation', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
 
-      store.register({
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: 'worker-a',
+        requestHash: sha256Hex(),
+      });
+
+      await expect(lifecycle.fail(opId, 'worker-b', [])).rejects.toThrow(/does not own/);
+    });
+
+    it('throws on cancel when worker does not own the operation', async () => {
+      const { lifecycle } = makeSuite();
+      const opId = uuid();
+
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: 'worker-a',
+        requestHash: sha256Hex(),
+      });
+
+      await expect(lifecycle.cancel(opId, 'worker-b')).rejects.toThrow(/does not own/);
+    });
+
+    it('is idempotent when succeeding an already-succeeded operation', async () => {
+      const { lifecycle } = makeSuite();
+      const opId = uuid();
+
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
         requestHash: sha256Hex(),
       });
-      store.succeed(opId, TEST_ACTOR, null);
+      const first = await lifecycle.succeed(opId, TEST_ACTOR, null);
+      const second = await lifecycle.succeed(opId, TEST_ACTOR, null);
 
-      expect(() => store.checkpointSequence(opId, TEST_ACTOR, 1)).toThrow(
+      expect(second.status).toBe('succeeded');
+      expect(second.lastSequence).toBe(first.lastSequence);
+    });
+
+    it('is idempotent when failing an already-failed operation', async () => {
+      const { lifecycle } = makeSuite();
+      const opId = uuid();
+
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
+      const first = await lifecycle.fail(opId, TEST_ACTOR, [
+        { code: 'PROVIDER_REQUIRED', message: 'no provider' },
+      ]);
+      const second = await lifecycle.fail(opId, TEST_ACTOR, [
+        { code: 'PROVIDER_REQUIRED', message: 'no provider' },
+      ]);
+
+      expect(second.status).toBe('failed');
+      expect(second.lastSequence).toBe(first.lastSequence);
+    });
+
+    it('is idempotent when cancelling an already-cancelled operation', async () => {
+      const { lifecycle } = makeSuite();
+      const opId = uuid();
+
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
+      const first = await lifecycle.cancel(opId, TEST_ACTOR);
+      const second = await lifecycle.cancel(opId, TEST_ACTOR);
+
+      expect(second.status).toBe('cancelled');
+      expect(second.lastSequence).toBe(first.lastSequence);
+    });
+  });
+
+  describe('checkpointSequence', () => {
+    it('updates lastSequence with valid monotonic sequence', async () => {
+      const { lifecycle } = makeSuite();
+      const opId = uuid();
+
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
+      await lifecycle.checkpointSequence(opId, TEST_ACTOR, 5);
+
+      const op = await lifecycle.get(opId);
+      expect(op.lastSequence).toBe(5);
+    });
+
+    it('rejects non-monotonic sequence', async () => {
+      const { lifecycle } = makeSuite();
+      const opId = uuid();
+
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
+      await lifecycle.checkpointSequence(opId, TEST_ACTOR, 5);
+
+      await expect(lifecycle.checkpointSequence(opId, TEST_ACTOR, 5)).rejects.toThrow(/not greater than/);
+      await expect(lifecycle.checkpointSequence(opId, TEST_ACTOR, 3)).rejects.toThrow(/not greater than/);
+    });
+
+    it('rejects when worker does not own the operation', async () => {
+      const { lifecycle } = makeSuite();
+      const opId = uuid();
+
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: 'worker-a',
+        requestHash: sha256Hex(),
+      });
+
+      await expect(lifecycle.checkpointSequence(opId, 'worker-b', 1)).rejects.toThrow(/does not own/);
+    });
+
+    it('rejects on terminal operation', async () => {
+      const { lifecycle } = makeSuite();
+      const opId = uuid();
+
+      await lifecycle.register({
+        operationId: opId,
+        kind: 'render',
+        actorId: TEST_ACTOR,
+        requestHash: sha256Hex(),
+      });
+      await lifecycle.succeed(opId, TEST_ACTOR, null);
+
+      await expect(lifecycle.checkpointSequence(opId, TEST_ACTOR, 1)).rejects.toThrow(
         /Cannot checkpoint terminal/,
       );
     });
 
-    it('rejects on interrupted operation', () => {
-      const { storage } = makeStore();
+    it('rejects on interrupted operation', async () => {
+      const { repo, lifecycle } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
-      const paths = makePaths();
+      await seedInterrupted(repo, opId, rhs, TEST_ACTOR);
 
-      const dir = storage.resolvePath(paths.operationsDir);
-      storage.mkdirp(paths.operationsDir);
-      const interruptedOp: EditorialOperationV1 = {
-        version: 1,
-        operationId: opId,
-        kind: 'render',
-        actorId: TEST_ACTOR,
-        requestHash: rhs,
-        status: 'interrupted',
-        startedAt: '2026-07-28T00:00:00.000Z',
-        heartbeatAt: '2026-07-28T00:00:00.000Z',
-        leaseExpiresAt: '2026-07-28T00:30:00.000Z',
-        completedAt: '2026-07-28T01:00:00.000Z',
-        result: null,
-        errors: [{ code: 'OPERATION_INTERRUPTED' as const, message: 'expired', operationId: opId }],
-      };
-      storage.write(dir + '/' + opId + '.json', stableJson(interruptedOp));
-
-      const coordinator = new ProjectTransactionCoordinator(storage, paths);
-      const store = new OperationStore(coordinator, paths, new FakeClock(BASE_TIME));
-
-      expect(() => store.checkpointSequence(opId, TEST_ACTOR, 1)).toThrow(
+      await expect(lifecycle.checkpointSequence(opId, TEST_ACTOR, 1)).rejects.toThrow(
         /Cannot checkpoint interrupted/,
       );
     });
   });
 
   describe('takeover and old-worker rejection', () => {
-    it('old worker heartbeat fails after operation is taken over via promote', () => {
-      const { storage } = makeStore();
+    it('old worker heartbeat fails after operation is taken over via promote', async () => {
+      const { repo, lifecycle } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
-      const paths = makePaths();
-
-      // Create interrupted record directly
-      const dir = storage.resolvePath(paths.operationsDir);
-      storage.mkdirp(paths.operationsDir);
-      const interruptedOp: EditorialOperationV1 = {
-        version: 1,
-        operationId: opId,
-        kind: 'render',
-        actorId: 'worker-a',
-        requestHash: rhs,
-        status: 'interrupted',
-        startedAt: '2026-07-28T00:00:00.000Z',
-        heartbeatAt: '2026-07-28T00:00:00.000Z',
-        leaseExpiresAt: '2026-07-28T00:30:00.000Z',
-        completedAt: '2026-07-28T01:00:00.000Z',
-        result: null,
-        errors: [{ code: 'OPERATION_INTERRUPTED' as const, message: 'expired', operationId: opId }],
-      };
-      storage.write(dir + '/' + opId + '.json', stableJson(interruptedOp));
-
-      const coordinator = new ProjectTransactionCoordinator(storage, paths);
-      const clock = new FakeClock(BASE_TIME + 3600000);
-      const store = new OperationStore(coordinator, paths, clock);
+      await seedInterrupted(repo, opId, rhs);
 
       // New worker promotes
-      store.promote(opId, 'worker-b');
-      expect(store.get(opId).actorId).toBe('worker-b');
+      await lifecycle.promote(opId, 'worker-b');
+      expect((await lifecycle.get(opId)).actorId).toBe('worker-b');
 
       // Old worker's heartbeat fails
-      expect(() => store.heartbeat(opId, 'worker-a')).toThrow(/does not own/);
+      await expect(lifecycle.heartbeat(opId, 'worker-a')).rejects.toThrow(/does not own/);
     });
 
-    it('recovery via register correctly transitions stale running', () => {
-      const { store, clock, storage } = makeStore();
+    it('recovery via register correctly transitions stale running', async () => {
+      const { lifecycle, clock } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
 
-      store.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: rhs });
+      await lifecycle.register({ operationId: opId, kind: 'render', actorId: 'worker-a', requestHash: rhs });
       clock.advance(31 * 60 * 1000);
 
       // Worker B registers — triggers recovery of A's stale operation
-      const result = store.register({
+      const result = await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: 'worker-b',
@@ -1169,45 +1192,18 @@ describe('OperationStore', () => {
       expect(result.status).toBe('running');
       expect(result.actorId).toBe('worker-b');
 
-      // Conflict evidence was written
-      const paths = makePaths();
-      const conflictDir = storage.resolvePath(paths.conflictsDir);
-      expect(storage.listFiles(conflictDir).length).toBeGreaterThan(0);
-
       // Old worker cannot heartbeat
-      expect(() => store.heartbeat(opId, 'worker-a')).toThrow(/does not own/);
+      await expect(lifecycle.heartbeat(opId, 'worker-a')).rejects.toThrow(/does not own/);
     });
 
-    it('register takes over an interrupted operation with same hash', () => {
-      const { storage } = makeStore();
+    it('register takes over an interrupted operation with same hash', async () => {
+      const { repo, lifecycle } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
-      const paths = makePaths();
-
-      // Create an interrupted record directly in storage
-      const dir = storage.resolvePath(paths.operationsDir);
-      storage.mkdirp(paths.operationsDir);
-      const interruptedOp: EditorialOperationV1 = {
-        version: 1,
-        operationId: opId,
-        kind: 'render',
-        actorId: 'worker-a',
-        requestHash: rhs,
-        status: 'interrupted',
-        startedAt: '2026-07-28T00:00:00.000Z',
-        heartbeatAt: '2026-07-28T00:00:00.000Z',
-        leaseExpiresAt: '2026-07-28T00:30:00.000Z',
-        completedAt: '2026-07-28T01:00:00.000Z',
-        result: null,
-        errors: [{ code: 'OPERATION_INTERRUPTED' as const, message: 'expired', operationId: opId }],
-      };
-      storage.write(dir + '/' + opId + '.json', stableJson(interruptedOp));
-
-      const coordinator = new ProjectTransactionCoordinator(storage, paths);
-      const store = new OperationStore(coordinator, paths, new FakeClock(BASE_TIME));
+      await seedInterrupted(repo, opId, rhs);
 
       // Register with same hash — should transition interrupted to running
-      const result = store.register({
+      const result = await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: 'worker-b',
@@ -1219,64 +1215,48 @@ describe('OperationStore', () => {
       expect(result.requestHash).toBe(rhs);
 
       // Old worker cannot heartbeat
-      expect(() => store.heartbeat(opId, 'worker-a')).toThrow(/does not own/);
+      await expect(lifecycle.heartbeat(opId, 'worker-a')).rejects.toThrow(/does not own/);
     });
-    it('recovery marks publication as stale with preserved fields', () => {
-      const { store, clock, storage } = makeStore();
+  });
+
+  describe('facade reads', () => {
+    it('reads a stored operation through getEditorialOperation', async () => {
+      const { repo, lifecycle } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
-      const paths = makePaths();
+      await lifecycle.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
 
-      // Set up a publication manifest with data to preserve
-      const novelHash = 'abcd1234ef567890abcd1234ef567890abcd1234ef567890abcd1234ef567890';
-      const revId = uuid();
-      const pubDir = storage.resolvePath(paths.workDir);
-      storage.mkdirp(pubDir);
-      storage.write(
-        paths.publicationPath,
-        stableJson({
-          version: 1,
-          status: 'current',
-          branch_scope_hash: 'test-branch-hash',
-          novel_hash: novelHash,
-          revision_ids: { ch1: revId },
-          last_assembled_at: '2026-07-28T00:15:00.000Z',
-          reasons: [],
-        }),
+      const loaded = await getEditorialOperation(
+        { projectId: PROJECT_ID, operationId: opId },
+        runtimeWith(repo),
       );
+      expect(loaded.operationId).toBe(opId);
+      expect(loaded.kind).toBe('render');
+      expect(loaded.actorId).toBe(TEST_ACTOR);
+      expect(loaded.requestHash).toBe(rhs);
+      expect(loaded.status).toBe('running');
+    });
 
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
-      clock.advance(31 * 60 * 1000);
-
-      // Trigger recovery
-      store.register({ operationId: opId, kind: 'render', actorId: TEST_ACTOR, requestHash: rhs });
-
-      // Publication was marked stale with preserved fields
-      const pub = JSON.parse(storage.read(paths.publicationPath));
-      expect(pub.status).toBe('stale');
-      expect(pub.novel_hash).toBe(novelHash);
-      expect(pub.revision_ids).toEqual({ ch1: revId });
-      expect(pub.last_assembled_at).toBe('2026-07-28T00:15:00.000Z');
-      expect(pub.active_operation_id).toBe(opId);
-      expect(pub.reasons.some((r: { code: string }) => r.code === 'OPERATION_INTERRUPTED')).toBe(
-        true,
+    it('throws when no semantic runtime is provided', async () => {
+      await expect(getEditorialOperation({ projectId: PROJECT_ID, operationId: uuid() })).rejects.toThrow(
+        'CoreExecutionRepository is required',
       );
     });
   });
 
   describe('JSON round-trip', () => {
-    it('operation survives register → get round-trip', () => {
-      const { store } = makeStore();
+    it('operation survives register → get round-trip', async () => {
+      const { repo, lifecycle } = makeSuite();
       const opId = uuid();
       const rhs = sha256Hex();
 
-      const registered = store.register({
+      const registered = await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
         requestHash: rhs,
       });
-      const loaded = store.get(opId);
+      const loaded = await lifecycle.get(opId);
 
       expect(loaded.operationId).toBe(registered.operationId);
       expect(loaded.kind).toBe(registered.kind);
@@ -1286,39 +1266,42 @@ describe('OperationStore', () => {
       expect(loaded.startedAt).toBe(registered.startedAt);
       expect(loaded.heartbeatAt).toBe(registered.heartbeatAt);
       expect(loaded.leaseExpiresAt).toBe(registered.leaseExpiresAt);
+      // The persisted record value is JSON-safe.
+      const record = await repo.readOperation({ projectId: PROJECT_ID, operationId: opId });
+      expect(JSON.parse(JSON.stringify(record!.value.value))).toEqual(record!.value.value);
     });
 
-    it('operation survives register → succeed → get round-trip', () => {
-      const { store } = makeStore();
+    it('operation survives register → succeed → get round-trip', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
 
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
         requestHash: sha256Hex(),
       });
-      store.succeed(opId, TEST_ACTOR, null);
+      await lifecycle.succeed(opId, TEST_ACTOR, null);
 
-      const loaded = store.get(opId);
+      const loaded = await lifecycle.get(opId);
       expect(loaded.status).toBe('succeeded');
       expect(loaded.lastSequence).toBe(1);
       expect(loaded.completedAt).toBeDefined();
     });
 
-    it('operation survives register → fail → get round-trip', () => {
-      const { store } = makeStore();
+    it('operation survives register → fail → get round-trip', async () => {
+      const { lifecycle } = makeSuite();
       const opId = uuid();
 
-      store.register({
+      await lifecycle.register({
         operationId: opId,
         kind: 'render',
         actorId: TEST_ACTOR,
         requestHash: sha256Hex(),
       });
-      store.fail(opId, TEST_ACTOR, [{ code: 'PROVIDER_REQUIRED', message: 'no provider' }]);
+      await lifecycle.fail(opId, TEST_ACTOR, [{ code: 'PROVIDER_REQUIRED', message: 'no provider' }]);
 
-      const loaded = store.get(opId);
+      const loaded = await lifecycle.get(opId);
       expect(loaded.status).toBe('failed');
       expect(loaded.errors).toHaveLength(1);
     });

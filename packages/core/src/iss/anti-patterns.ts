@@ -2,7 +2,7 @@
 // ISS — Anti-pattern Detection
 // ============================================================================
 
-import type { EntityRegistry, NarrativeEvent, ValidationIssue } from '../types/index.js';
+import type { EntityLookup, NarrativeEvent, ValidationIssue } from '../types/index.js';
 
 /**
  * detectAntiPatterns — Scans the input data for known structural anti-patterns
@@ -15,17 +15,17 @@ import type { EntityRegistry, NarrativeEvent, ValidationIssue } from '../types/i
  *  4. Empty scenes              — events with zero postconditions
  */
 export function detectAntiPatterns(options: {
-  entityRegistry: EntityRegistry;
+  entities: EntityLookup;
   events: NarrativeEvent[];
   threads: Array<{ id: string; name: string }>;
 }): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  const { entityRegistry, events, threads } = options;
+  const { entities, events, threads } = options;
 
   // ═══ 1. Single-adjective traits ═══
-  const characters = entityRegistry.findByKind('character');
+  const characters = entities.findByKind('character');
   for (const char of characters) {
-    const traits = char.state?.['traits'] as unknown as string[] | undefined;
+    const traits = char.state?.traits as unknown as string[] | undefined;
     if (!traits || traits.length === 0) continue;
 
     for (const trait of traits) {
@@ -57,10 +57,12 @@ export function detectAntiPatterns(options: {
       .map((p) => `${p.entityId}:${p.attribute}:${JSON.stringify(p.value)}`)
       .sort()
       .join('|');
-    if (!precondMap.has(serialized)) {
-      precondMap.set(serialized, []);
+    let eventIds = precondMap.get(serialized);
+    if (!eventIds) {
+      eventIds = [];
+      precondMap.set(serialized, eventIds);
     }
-    precondMap.get(serialized)!.push(event.id);
+    eventIds.push(event.id);
   }
 
   for (const [serialized, eventIds] of precondMap.entries()) {

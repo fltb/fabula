@@ -10,7 +10,7 @@
 //   prose, or ellipsis summaries.
 // ============================================================================
 
-import * as crypto from 'node:crypto';
+import { sha256 } from '../cache/pure-sha256.ts';
 import type { DiscourseContextProjection, DiscourseState } from '../types/discourse.ts';
 import type { CompiledSceneContract } from '../types/render-surface.ts';
 
@@ -97,6 +97,6 @@ export class LogicalDisclosureSummaryCompiler {
       projectionRevealCount: projection.plannedReveals.length,
       projectionClaimCount: projection.openClaims.length,
     };
-    return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
+    return sha256(JSON.stringify(canonical));
   }
 }

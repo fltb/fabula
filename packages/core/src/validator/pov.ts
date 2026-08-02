@@ -31,7 +31,7 @@ export class POVValidator implements Validator {
     const povChar = event.pov.character; // event-level field, not in entity attribute catalog
 
     // Check: POV character must exist in entity registry
-    const povEntity = input.entityRegistry.resolve(povChar);
+    const povEntity = input.entities.resolve(povChar);
     if (!povEntity) {
       issues.push(
         makeIssue(

@@ -10,17 +10,17 @@
 // ============================================================================
 
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadCanonicalProject } from '../../src/entity/project-runtime.js';
 import type { InMemoryEntityRegistry } from '../../src/entity/registry.js';
-import { FsStorage } from '../../src/storage/index.js';
+import { materializeFixtureSnapshot } from '../fixtures/fixture-snapshots.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..', '..', '..');
 const ZHU_FU_FIXTURE = path.resolve(ROOT, 'fixtures', 'zhu-fu');
 const ARCANE_FIXTURE = path.resolve(ROOT, 'fixtures', 'arcane-aftermath');
 
 function loadRegistry(fixtureDir: string): InMemoryEntityRegistry {
-  return loadCanonicalProject(fixtureDir, new FsStorage()).registry;
+  return loadCanonicalProject(materializeFixtureSnapshot(fixtureDir)).registry;
 }
 
 describe('registry catalog-driven load', () => {
@@ -159,7 +159,7 @@ describe('registry catalog-driven load', () => {
 
   describe('catalog-driven invariant', () => {
     it('entity kinds match catalog typeId in typeRef', () => {
-      const ir = loadCanonicalProject(ZHU_FU_FIXTURE, new FsStorage());
+      const ir = loadCanonicalProject(materializeFixtureSnapshot(ZHU_FU_FIXTURE));
       const all = ir.registry.getAll();
       for (const entity of all) {
         // Every loaded entity's typeRef.typeId should match its kind
@@ -168,5 +168,25 @@ describe('registry catalog-driven load', () => {
         expect(ir.entityTypes.types[entity.kind]).toBeDefined();
       }
     });
+  });
+});
+
+describe('catalog compilation wall-clock determinism', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('compiles identical catalogs under different wall clocks', () => {
+    const snapshot = materializeFixtureSnapshot(ZHU_FU_FIXTURE);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T00:00:00.000Z'));
+    const early = loadCanonicalProject(snapshot);
+    vi.setSystemTime(new Date('2026-08-02T03:04:05.000Z'));
+    const late = loadCanonicalProject(snapshot);
+    expect(late.registry).toEqual(early.registry);
+    expect(late.entityDeclarations).toEqual(early.entityDeclarations);
+    // The runtime catalog carries executable Zod schemas; compare their
+    // JSON-serialized form — identical construction yields identical identity.
+    expect(JSON.stringify(late.entityTypes)).toBe(JSON.stringify(early.entityTypes));
   });
 });

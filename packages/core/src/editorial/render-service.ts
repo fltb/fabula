@@ -1,726 +1,193 @@
 // ============================================================================
-// Editorial Render Service — Compile → Claim → Materialize → Execute →
-//                             Promote → Publish orchestration.
+// Editorial Render Service — Compile → Plan → Execute → Promote → Publish
+// ----------------------------------------------------------------------------
+// The renderer consumes only immutable author source snapshots
+// (request.source + sourceHash) and explicit semantic runtime services. It
+// never reads host paths or cache files:
+//
+//   - accepted scenes / revisions / reviews / operations flow through
+//     CoreExecutionRepository (runtime.services.execution)
+//   - render records flow through RenderCacheRepository
+//     (runtime.services.renderCache)
+//   - prose generation flows through runtime.services.llm (or an explicit
+//     runtime.provider / runtime.providerFactory, mutually exclusive)
 //
 // Pipeline stages:
-//   1. COMPILE  — pure compileEditorialRun (selector preflight, identity,
-//                 branch contracts, plan hash, read set)
-//   2. CLAIM    — OperationStore.register (idempotent by request hash)
-//   3. PREFLIGHT — provider requirement, selector errors, revision errors,
-//                 abort signal check
-//   4. MATERIALIZE — load project, build RenderJob[], wire surface deps
-//   5. EXECUTE  — wave-based RenderPipeline::renderAll with heartbeat,
-//                 progress events, AbortSignal
-//   6. PROMOTE  — archive candidates, update latest (CAS), track heads
-//   7. PUBLISH  — buildAndWriteOutputs, finalize operation
-//
-// All storage writes use ProjectTransactionCoordinator transactions.
-// Provider resolution: runtime.provider > runtime.providerFactory > lazy config.
+//   1. COMPILE   — pure compileEditorialRun over the immutable snapshot
+//   2. PREFLIGHT — selector / revision / lock errors
+//   3. SURFACE   — configured groups + lanes → per-job surfaceDependency
+//   4. EXECUTE   — wave-based RenderPipeline::renderAll with surface packets
+//   5. PROMOTE   — accepted scenes/revisions via execution repository CAS
+//   6. PUBLISH   — release-gate publication summary + operation record
 // ============================================================================
 
-import * as crypto from 'node:crypto';
-import * as path from 'node:path';
-import YAML from 'yaml';
-import { AiSdkProvider } from '../ai/index.ts';
-import type { LLMProvider } from '../ai/types.ts';
-import { assembleGameDialogueTree } from '../assembler/game-dialogue-tree.ts';
 import { BatchRenderPipeline } from '../batch-renderer.ts';
 import type { CompiledGameDialogueTree } from '../branch/game-dialogue-tree.ts';
-import { includesPath } from '../branch/set.ts';
-import { computeSourceContentHash } from '../cache/render-cache.ts';
+import { sha256 } from '../cache/pure-sha256.ts';
+import type { JsonValue } from '../contracts/json.js';
+import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
 import { ContextCompiler } from '../context/compiler.ts';
 import { PromptAssembler } from '../context/prompt-assembler.ts';
-import { loadProjectConfig, type ProjectData } from '../entity/index.js';
 import {
-  type CanonicalProjectIR,
   compileCanonicalRuntime,
   loadCanonicalProject,
+  type CanonicalProjectIR,
 } from '../entity/project-runtime.ts';
-import type { InMemoryEntityRegistry } from '../entity/registry.ts';
-import { ConfigError, sanitizeError } from '../errors.ts';
+import type { ProjectData } from '../entity/index.js';
 import type { TypedEventBus } from '../event-bus.ts';
-import { JsonlLogTransport, LevelFilterTransport, Logger } from '../observability/logger.ts';
 import { TraceCollector } from '../observability/trace.ts';
 import {
-  AcceptedArtifactResolver,
   evaluateReleaseDecision,
+  PASS1_PROMPT_TEMPLATE_NAME,
+  RenderPipeline,
+  SurfaceScheduler,
   type ProviderCallLedgerEntry,
   type RenderJob,
-  RenderPipeline,
+  type RenderPipelineOptions,
   type RenderSceneResult,
-  SurfaceScheduler,
 } from '../pipeline/index.ts';
 import { appendPlayerChoicesBlock } from '../pipeline/output.ts';
-import { PluginHooksManager, PluginLoader, ValidatorRegistry } from '../plugin/index.js';
-import type { PluginContext, ProviderRegistry } from '../plugin/types.ts';
-import { canonicalJson, compileSceneContract, computeSha256Hex } from '../render/scene-contract.ts';
+import type { AcceptedSceneRecord, CoreExecutionRepository } from '../ports/execution-repository.ts';
 import { SurfacePlanner } from '../render/surface-planner.ts';
+import { canonicalJson, compileSceneContract, computeSha256Hex } from '../render/scene-contract.ts';
 import { ReviewManager } from '../review/manager.ts';
-import {
-  editorialProgressEventV1Schema,
-  sceneMetadataV1Schema,
-  sceneRevisionEnvelopeV1Schema,
-} from '../schemas/editorial.ts';
-import type { CompiledDiscourseRenderContext } from '../state/discourse-context.ts';
-import { resolveDiscourseBranch } from '../state/discourse-sequence.ts';
-import type { StoryBoundaries } from '../state/index.ts';
-import type { CompiledNarrativeRuntime } from '../state/narrative-runtime.ts';
-import { FsStorage } from '../storage/fs-storage.ts';
-import {
-  computeContentHash,
-  computeDirectoryManifestHash,
-  computeFileHash,
-} from '../storage/hash.ts';
-import type { Storage, TransactionReadExpectation } from '../storage/types.ts';
 import { LogicalDisclosureSummaryCompiler, SurfaceReferenceExtractor } from '../summary/index.ts';
-import type { BranchPath, BranchSet } from '../types/branch.ts';
+import type { CompiledNarrativeRuntime } from '../state/narrative-runtime.ts';
+import { resolveDiscourseBranch } from '../state/discourse-sequence.ts';
 import type { SystemContext } from '../types/context.ts';
+import type { BranchPath } from '../types/branch.ts';
 import type {
-  Clock,
+  EntityTypeCatalog,
+  NarrativeEvent,
+  ReleaseDecision,
+  RevisionContext,
+} from '../types/index.ts';
+import type {
   EditorialError,
   EditorialErrorCode,
-  EditorialOperationV1,
   EditorialPlanSummaryV1,
-  EditorialProgressEventV1,
   EditorialRenderRequestV1,
   EditorialRuntime,
   ProviderCallLedgerEntryV1,
-  ProviderFactory,
-  PublicationManifestV1,
   PublicationResult,
   RenderGameDialogueTreeRequestV1,
   RenderGameDialogueTreeResult,
   RenderNovelResult,
   RenderNovelSceneResult,
   RevisionRequest,
-  SceneActionResult,
   SceneDisposition,
   SceneRevisionEnvelopeV1,
   SceneRevisionOrigin,
 } from '../types/editorial.ts';
 import type {
-  EntityTypeCatalog,
-  EventFile,
-  NarrativeEvent,
-  ReleaseDecision,
-} from '../types/index.ts';
-import type {
   AcceptedSceneArtifact,
   RenderGroup,
-  RevisionContext,
-  SurfacePlannerOptions,
   SurfacePlanResult,
+  SurfacePlannerOptions,
 } from '../types/render-surface.ts';
 import type { ReviewComment } from '../types/review.ts';
-import { type AnalysisContract, ResultAggregator } from '../validator/aggregator.ts';
+import { ResultAggregator } from '../validator/aggregator.ts';
+import { createBuiltInValidators } from '../validator/builtins.ts';
 import {
   compileEditorialRun,
   type EditorialCompileInput,
   type EditorialCompileOutput,
-  inlineInstructionFeedbackProjection,
-  reviewFeedbackProjection,
   sortReviewFeedback,
 } from './compiler.ts';
-import { EditorialOperationError, PublicationError, toEditorialError } from './errors.ts';
+import { EditorialOperationError } from './errors.ts';
+import { preflightSelector, type SceneCatalog } from './selector.ts';
 import {
   BUILT_IN_VALIDATOR_IMPLEMENTATION_VERSION,
   type ValidationIdentityInput,
 } from './identity.ts';
-import { OperationStore } from './operation-store.ts';
-import { type ProjectPaths, resolveProjectPaths } from './paths.ts';
-import {
-  buildNovelDocument,
-  EditorialPublisher,
-  type PromoteCandidateInput,
-  type ScopeEventData,
-  type VerifiedHeadData,
-} from './publisher.ts';
-import { SceneRevisionStore } from './scene-store.ts';
-import type { SceneCatalog } from './selector.ts';
-import { SourceRevisionStore } from './source-store.ts';
-import { ProjectTransactionCoordinator } from './transaction.ts';
 
 // ============================================================================
-// Internal clock
+// Local helpers
 // ============================================================================
-
-const REAL_CLOCK: Clock = { now: () => Date.now() };
-
-// ============================================================================
-// Operation-local progress event emitter factory
-// ============================================================================
-
-type ProgressEventInput = Omit<
-  EditorialProgressEventV1,
-  'version' | 'operationId' | 'sequence' | 'timestamp'
->;
-
-interface ProgressEmitter {
-  (event: ProgressEventInput): void;
-  prepareTerminal(event: ProgressEventInput): () => void;
-}
-
-function createProgressEmitter(
-  eventBus: TypedEventBus | undefined,
-  operationId: string,
-  store: OperationStore,
-  workerId: string,
-): ProgressEmitter {
-  let sequence = 0;
-  const prepare = (event: ProgressEventInput): EditorialProgressEventV1 => {
-    sequence++;
-    const payload: EditorialProgressEventV1 = {
-      version: 1,
-      operationId,
-      sequence,
-      timestamp: new Date().toISOString(),
-      ...event,
-    };
-    return editorialProgressEventV1Schema.parse(JSON.parse(JSON.stringify(payload)));
-  };
-  const emit = (event: ProgressEventInput): void => {
-    const payload = prepare(event);
-    store.checkpointSequence(operationId, workerId, payload.sequence);
-    eventBus?.emit('editorial:progress', payload);
-  };
-  return Object.assign(emit, {
-    prepareTerminal(event: ProgressEventInput): () => void {
-      const payload = prepare(event);
-      store.checkpointSequence(operationId, workerId, payload.sequence);
-      return () => eventBus?.emit('editorial:progress', payload);
-    },
-  });
-}
-
-// ============================================================================
-// withOperationLease — bounded heartbeat scope
-// ============================================================================
-
-/**
- * Execute an async function within a bounded operation lease. A periodic
- * heartbeat runs during the scope, keeping the operation lease alive. When
- * the scope exits (success or error), the heartbeat interval is cleared and
- * any in-flight heartbeat is awaited. The `stopped` guard prevents late
- * heartbeats after scope end. Terminal finalization (succeed/fail/cancel)
- * must happen AFTER the lease scope ends.
- */
-async function withOperationLease<T>(
-  operationId: string,
-  workerId: string,
-  store: Pick<OperationStore, 'heartbeat'>,
-  leaseAbortController: AbortController,
-  fn: () => Promise<T>,
-): Promise<T> {
-  let stopped = false;
-  let inflight: Promise<void> | undefined;
-  let heartbeatError: unknown;
-  const heartbeatIntervalMs = 5 * 60_000;
-
-  const beat = async (): Promise<void> => {
-    if (stopped) return;
-    if (heartbeatError !== undefined) throw heartbeatError;
-    try {
-      await store.heartbeat(operationId, workerId);
-    } catch (error) {
-      heartbeatError = error;
-      leaseAbortController.abort(error);
-      throw error;
-    }
-  };
-
-  const interval = setInterval(() => {
-    const heartbeat = beat();
-    inflight = heartbeat;
-    heartbeat.catch(() => {});
-  }, heartbeatIntervalMs);
-
-  let result: T | undefined;
-  let functionError: unknown;
-  try {
-    await beat();
-    result = await fn();
-  } catch (error) {
-    functionError = error;
-  } finally {
-    stopped = true;
-    clearInterval(interval);
-    if (inflight) await inflight.catch(() => {});
-  }
-
-  if (heartbeatError !== undefined) throw heartbeatError;
-  if (functionError !== undefined) throw functionError;
-  return result as T;
-}
-
-// ============================================================================
-// Publication manifest helpers
-// ============================================================================
-
-function loadOrCreatePublication(storage: Storage, pubPath: string): PublicationManifestV1 {
-  const raw = storage.readOptional(pubPath);
-  if (raw !== null) {
-    try {
-      return JSON.parse(raw) as PublicationManifestV1;
-    } catch {
-      // malformed — reset
-    }
-  }
-  return {
-    version: 1,
-    status: 'stale',
-    branch_scope_hash: '',
-    novel_hash: null,
-    revision_ids: {},
-    last_assembled_at: null,
-    active_operation_id: '',
-    reasons: [],
-  };
-}
-
-function fileExpectation(storage: Storage, filePath: string): TransactionReadExpectation {
-  return {
-    kind: 'file',
-    path: filePath,
-    expectedHash: computeFileHash(storage, filePath),
-  };
-}
-
-function directoryExpectation(storage: Storage, directoryPath: string): TransactionReadExpectation {
-  return {
-    kind: 'directory',
-    path: directoryPath,
-    expectedManifestHash: computeDirectoryManifestHash(storage, directoryPath),
-  };
-}
-
-function dedupeReadSet(
-  expectations: readonly TransactionReadExpectation[],
-): TransactionReadExpectation[] {
-  const deduped = new Map<string, TransactionReadExpectation>();
-  for (const expectation of expectations) {
-    const key = `${expectation.kind}:${expectation.path}`;
-    const previous = deduped.get(key);
-    if (previous && canonicalJson(previous) !== canonicalJson(expectation)) {
-      throw new EditorialOperationError(
-        'REVISION_STALE',
-        `Conflicting pre-evaluation expectations for ${expectation.path}`,
-        { path: expectation.path },
-      );
-    }
-    deduped.set(key, expectation);
-  }
-  return [...deduped.values()].sort(
-    (left, right) => left.path.localeCompare(right.path) || left.kind.localeCompare(right.kind),
-  );
-}
-
-function capturePublicationReadSet(
-  storage: Storage,
-  paths: ProjectPaths,
-  init: Pick<ProjectInitialization, 'data' | 'chapterByEventId'>,
-  scopeEventIds: readonly string[],
-): TransactionReadExpectation[] {
-  const expectations: TransactionReadExpectation[] = [
-    fileExpectation(storage, path.join(paths.projectDir, 'nova.yaml')),
-    fileExpectation(storage, paths.sourceHeadPath),
-    fileExpectation(storage, paths.reviewLedgerPath),
-    fileExpectation(storage, paths.publicationPath),
-    fileExpectation(storage, paths.novelPath),
-    directoryExpectation(storage, path.join(paths.projectDir, 'definitions')),
-    directoryExpectation(storage, path.join(paths.projectDir, 'chapters')),
-    directoryExpectation(storage, path.join(paths.workDir, 'locks')),
-  ];
-  if (init.data.config?.plugins?.enabled) {
-    expectations.push(
-      directoryExpectation(
-        storage,
-        path.join(paths.projectDir, init.data.config.plugins.directory ?? 'plugins'),
-      ),
-    );
-  }
-  for (const name of ['threads.yaml', 'foreshadowing.yaml', 'relationships.yaml', 'rules.yaml']) {
-    expectations.push(fileExpectation(storage, path.join(paths.derivedDir, name)));
-  }
-  for (const eventId of scopeEventIds) {
-    const chapter = init.chapterByEventId[eventId] ?? 1;
-    const sceneDir = path.join(paths.scenesDir, `chapter-${String(chapter).padStart(2, '0')}`);
-    const metadataPath = path.join(sceneDir, `${eventId}.yaml`);
-    const metadataRaw = storage.readOptional(metadataPath);
-    expectations.push(
-      fileExpectation(storage, metadataPath),
-      fileExpectation(storage, path.join(sceneDir, `${eventId}.md`)),
-      fileExpectation(storage, path.join(paths.workDir, 'locks', `${eventId}.lock`)),
-      fileExpectation(storage, path.join(sceneDir, `${eventId}_render_request.yaml`)),
-    );
-    if (metadataRaw !== null) {
-      try {
-        const metadata = sceneMetadataV1Schema.safeParse(YAML.parse(metadataRaw));
-        if (metadata.success && metadata.data.event === eventId) {
-          expectations.push(
-            fileExpectation(
-              storage,
-              path.join(paths.sceneRevisionsDir, eventId, `${metadata.data.revision_id}.json`),
-            ),
-          );
-        }
-      } catch {
-        // The exact malformed metadata bytes remain in the read set. Head
-        // verification later rejects them without losing conflict detection.
-      }
-    }
-  }
-  return dedupeReadSet(expectations);
-}
-
-function expectedFileHash(
-  readSet: readonly TransactionReadExpectation[] | undefined,
-  filePath: string,
-): string | null {
-  const expectation = readSet?.find(
-    (candidate) => candidate.kind === 'file' && candidate.path === filePath,
-  );
-  if (expectation?.kind !== 'file') {
-    throw new EditorialOperationError(
-      'REVISION_STALE',
-      `Missing pre-evaluation expectation for ${filePath}`,
-      { path: filePath },
-    );
-  }
-  return expectation.expectedHash;
-}
-
-// ============================================================================
-// Provider resolution
-// ============================================================================
-
-// ============================================================================
-// Editorial project projection — one canonical IR load per request, plus the
-// editorial-only source contents / accepted-revision / catalog metadata.
-// ============================================================================
-
 interface ProjectInitialization {
-  data: ProjectData;
-  events: NarrativeEvent[];
-  registry: InMemoryEntityRegistry;
-  sourceHeadHash: string | null;
-  latestRevisions: Record<string, { revisionId: string; proseHash: string } | null>;
-  eventContents: Record<string, string>;
-  sourceDocumentContents: Record<string, string>;
-  catalog: SceneCatalog;
-  chapterByEventId: Record<string, number>;
-  /** Compiled entity type catalog — validator policy identity input. */
-  entityTypes: EntityTypeCatalog;
-  /** Compiled game dialogue tree (null when the project has no choices). */
-  gameDialogueTree: CompiledGameDialogueTree | null;
+  readonly ir: CanonicalProjectIR;
+  readonly data: ProjectData;
+  readonly events: readonly NarrativeEvent[];
+  readonly registry: CanonicalProjectIR['registry'];
+  readonly entityTypes: EntityTypeCatalog;
+  readonly chapterByEventId: Readonly<Record<string, number>>;
+  readonly eventContents: Record<string, string>;
+  readonly sourceDocumentContents: Record<string, string>;
+  readonly catalog: SceneCatalog;
 }
 
-function readAcceptedHeadEnvelope(
-  storage: Storage,
-  paths: ProjectPaths,
-  eventId: string,
-  chapter: number,
-): SceneRevisionEnvelopeV1 | null {
-  const metadataPath = path.join(
-    paths.scenesDir,
-    `chapter-${String(chapter).padStart(2, '0')}`,
-    `${eventId}.yaml`,
-  );
-  const metadataRaw = storage.readOptional(metadataPath);
-  if (metadataRaw === null) return null;
-
-  try {
-    const metadataResult = sceneMetadataV1Schema.safeParse(YAML.parse(metadataRaw));
-    if (!metadataResult.success || metadataResult.data.event !== eventId) return null;
-    const metadata = metadataResult.data;
-    const revisionPath = path.join(
-      paths.sceneRevisionsDir,
-      eventId,
-      `${metadata.revision_id}.json`,
-    );
-    const revisionRaw = storage.readOptional(revisionPath);
-    if (revisionRaw === null) return null;
-    const envelopeResult = sceneRevisionEnvelopeV1Schema.safeParse(JSON.parse(revisionRaw));
-    if (!envelopeResult.success) return null;
-    const envelope = envelopeResult.data as SceneRevisionEnvelopeV1;
-    if (
-      envelope.eventId !== eventId ||
-      envelope.revisionId !== metadata.revision_id ||
-      envelope.releaseDecision.status !== 'accepted' ||
-      !envelope.released ||
-      envelope.proseHash !== metadata.prose_hash ||
-      envelope.sceneHash !== metadata.scene_hash ||
-      envelope.editorialBasisHash !== metadata.editorial_basis_hash ||
-      envelope.scopeHash !== metadata.scope_hash ||
-      envelope.validationIdentity !== metadata.validation_identity ||
-      computeContentHash(envelope.prose) !== envelope.proseHash
-    ) {
-      return null;
-    }
-    return envelope;
-  } catch {
-    return null;
+function documentContents(source: ProjectSourceSnapshotV1): Record<string, string> {
+  const contents: Record<string, string> = {};
+  for (const document of source.documents) {
+    contents[document.logicalPath] = document.content;
   }
+  return contents;
 }
 
-function loadProjectData(
-  ir: CanonicalProjectIR,
-  storage: Storage,
-  projectDir: string,
-  paths: ProjectPaths,
-): ProjectInitialization {
-  const data = ir.data;
-  const events = [...ir.authoredEvents];
-  const registry = ir.registry;
-  const chapterByEventId: Record<string, number> = { ...ir.chapterByEventId };
-
-  // Event contents for compiler (editorial-only)
-  const eventContents: Record<string, string> = {};
-  for (const chapterData of data.chapters.values()) {
-    for (const ef of chapterData.events) {
-      if (ef.filePath) {
-        try {
-          eventContents[ef.event] = storage.read(ef.filePath);
-        } catch {
-          eventContents[ef.event] = '';
-        }
-      }
-    }
+/** Event-file bytes only — `chapters/chapter_NN/E*.yaml` documents. */
+function eventContents(source: ProjectSourceSnapshotV1): Record<string, string> {
+  const contents: Record<string, string> = {};
+  for (const document of source.documents) {
+    const match = /^chapters\/chapter_\d+\/(E[^/]+)\.ya?ml$/i.exec(document.logicalPath);
+    if (match) contents[match[1]] = document.content;
   }
-
-  // Source document contents
-  const sourceDocumentContents: Record<string, string> = {};
-  const sourcePaths: string[] = [];
-  // Collect definition files
-  const defDir = path.join(projectDir, 'definitions');
-  if (storage.exists(defDir)) {
-    const entries = storage.list(defDir);
-    for (const entry of entries) {
-      if (entry.isFile()) {
-        const fullPath = path.join(defDir, entry.name);
-        sourcePaths.push(fullPath);
-      }
-    }
-    // Check subdirectories
-    const subDirs = [
-      'characters',
-      'locations',
-      'items',
-      'factions',
-      'relationships',
-      'rules',
-      'narrators',
-      'assertions',
-    ];
-    for (const subDir of subDirs) {
-      const subPath = path.join(defDir, subDir);
-      if (storage.exists(subPath)) {
-        const subEntries = storage.list(subPath);
-        for (const entry of subEntries) {
-          if (entry.isFile()) {
-            sourcePaths.push(path.join(subPath, entry.name));
-          }
-        }
-      }
-    }
-  }
-  for (const srcPath of sourcePaths) {
-    try {
-      sourceDocumentContents[srcPath] = storage.read(srcPath);
-    } catch {
-      // skip unreadable
-    }
-  }
-
-  // Catalog: all event_file events in narrative order
-  const contentEvents = events.filter((ev) => ev.source === 'event_file');
-  const catalogEvents = contentEvents
-    .filter((ev) => ev.narrativeOrder != null)
-    .sort((a, b) => (a.narrativeOrder ?? 0) - (b.narrativeOrder ?? 0))
-    .map((ev) => ({
-      eventId: ev.id,
-      narrativeOrder: ev.narrativeOrder ?? 0,
-      chapter: chapterByEventId[ev.id] ?? 1,
-    }));
-  const catalog: SceneCatalog = { events: Object.freeze(catalogEvents) };
-
-  // Compiler identity is based on the materialized accepted head, never the
-  // latest blocked or pending candidate.
-  const latestRevisions: Record<string, { revisionId: string; proseHash: string } | null> = {};
-  for (const event of contentEvents) {
-    const acceptedHead = readAcceptedHeadEnvelope(
-      storage,
-      paths,
-      event.id,
-      chapterByEventId[event.id] ?? 1,
-    );
-    latestRevisions[event.id] = acceptedHead
-      ? { revisionId: acceptedHead.revisionId, proseHash: acceptedHead.proseHash }
-      : null;
-  }
-
-  // Source head hash — use configured sourceHeadPath
-  let sourceHeadHash: string | null = null;
-  if (storage.exists(paths.sourceHeadPath)) {
-    try {
-      const head = JSON.parse(storage.read(paths.sourceHeadPath));
-      sourceHeadHash = head.projectSourceHash ?? null;
-    } catch {
-      sourceHeadHash = null;
-    }
-  }
-
+  return contents;
+}
+function initialize(source: ProjectSourceSnapshotV1): ProjectInitialization {
+  const ir = loadCanonicalProject(source);
   return {
-    data,
-    events,
-    registry,
-    sourceHeadHash,
-    latestRevisions,
-    eventContents,
-    sourceDocumentContents,
-    catalog,
-    chapterByEventId,
+    ir,
+    data: ir.data,
+    events: ir.authoredEvents,
+    registry: ir.registry,
     entityTypes: ir.entityTypes,
-    gameDialogueTree: ir.gameDialogueTree,
+    chapterByEventId: ir.chapterByEventId,
+    eventContents: eventContents(source),
+    sourceDocumentContents: documentContents(source),
+    catalog: {
+      events: ir.authoredEvents.map((event) => ({
+        eventId: event.id,
+        narrativeOrder: event.narrativeOrder,
+        chapter: ir.chapterByEventId[event.id] ?? 1,
+      })),
+    },
   };
 }
 
-// ============================================================================
-// Extract review comments from project
-// ============================================================================
 
-function loadReviewComments(
-  storage: Storage,
-  coordinator: ProjectTransactionCoordinator,
-  paths: ProjectPaths,
-): readonly ReviewComment[] {
-  const mgr = new ReviewManager(storage, coordinator, paths.reviewLedgerPath);
-  const snapshot = mgr.readLedger();
-  return snapshot.ledger.comments;
-}
-function computeRequiresProviderByEventId(
+function requiresProviderByEventId(
   events: readonly NarrativeEvent[],
   request: Omit<EditorialRenderRequestV1, 'mutation'>,
   data: ProjectData,
 ): Record<string, boolean> {
+  const enabled = Boolean(
+    request.revision || request.model || request.providerProfile || data.config?.defaultModel,
+  );
   const result: Record<string, boolean> = {};
-  for (const event of events) {
-    result[event.id] = Boolean(
-      request.revision || request.model || request.providerProfile || data.config?.defaultModel,
-    );
-  }
+  for (const event of events) result[event.id] = enabled;
   return result;
 }
-
-interface ValidationRuntime {
-  aggregator: ResultAggregator;
-  overrides: Record<string, 'off' | 'warning' | 'error'>;
-  analysisContract: AnalysisContract;
-  identityInput: ValidationIdentityInput;
-  pluginHooksManager?: PluginHooksManager;
-}
-
-async function createValidationRuntime(
-  data: ProjectData,
-  projectDir: string,
-  storage: Storage,
-  entityTypes: EntityTypeCatalog,
-): Promise<ValidationRuntime> {
-  const overrides = { ...(data.config?.validatorOverrides ?? {}) };
-  const validatorRegistry = new ValidatorRegistry();
-  const pluginLoader = new PluginLoader(storage);
-  let pluginHooksManager: PluginHooksManager | undefined;
-
-  if (data.config?.plugins?.enabled) {
-    const hooks = await pluginLoader.loadFromDirectory(
-      path.join(projectDir, data.config.plugins.directory ?? 'plugins'),
-    );
-    const conflicts = pluginLoader.detectConflicts();
-    if (conflicts.length > 0) {
-      throw new ConfigError(
-        conflicts
-          .map((conflict) => `${conflict.pluginA} vs ${conflict.pluginB}: ${conflict.reason}`)
-          .join('; '),
-        { phase: 'plugin_initialization' },
-      );
-    }
-
-    const providers = new Map<string, LLMProvider>();
-    const providerRegistry: ProviderRegistry = {
-      register(name, provider): void {
-        providers.set(name, provider);
-      },
-      getProvider(name): LLMProvider | undefined {
-        return providers.get(name);
-      },
-    };
-    const pluginContext: PluginContext = {
-      projectDir,
-      storage,
-      log: new Logger(undefined, { module: 'editorial-validation' }),
-    };
-    pluginHooksManager = new PluginHooksManager(pluginContext, validatorRegistry, providerRegistry);
-    for (const hook of hooks) pluginHooksManager.register(hook);
-    await pluginHooksManager.initialize();
-  }
-
-  const aggregator = new ResultAggregator(
-    undefined,
-    validatorRegistry.validators,
-    undefined,
-    undefined,
-    entityTypes,
-  );
-  const analysisContract = aggregator.getAnalysisContract(overrides);
-  const registeredValidators = new Map(
-    validatorRegistry.validators.map((validator) => [validator.name, validator]),
-  );
-  const hookIdentities = new Map(
-    (pluginHooksManager?.getPluginIdentities() ?? []).map((identity) => [identity.name, identity]),
-  );
-  const plugins = pluginLoader.list().map((manifest) => {
-    const hookIdentity = hookIdentities.get(manifest.name);
-    return {
-      name: manifest.name,
-      version: manifest.version,
-      validators: (hookIdentity?.validators ?? []).map((name) => ({
-        name,
-        version: registeredValidators.get(name)?.version ?? manifest.version,
-      })),
-      promptHookIdentity: computeSha256Hex(canonicalJson(hookIdentity?.hooks ?? [])),
-    };
-  });
-
-  return {
-    aggregator,
-    overrides,
-    analysisContract,
-    ...(pluginHooksManager ? { pluginHooksManager } : {}),
-    identityInput: {
-      analysisContractHash: analysisContract.hash,
-      builtInValidatorImplementationVersion: BUILT_IN_VALIDATOR_IMPLEMENTATION_VERSION,
-      effectiveOverrides: overrides,
-      validators: aggregator.listValidatorIdentities(BUILT_IN_VALIDATOR_IMPLEMENTATION_VERSION),
-      plugins,
-    },
-  };
-}
-
-// ============================================================================
-// Build compile input from project data + request
-// ============================================================================
 
 function buildCompileInput(
   init: ProjectInitialization,
   request: Omit<EditorialRenderRequestV1, 'mutation'>,
   reviewComments: readonly ReviewComment[],
-  requiresProviderByEventId: Record<string, boolean>,
-  validation: ValidationIdentityInput,
-  paths: ProjectPaths,
+  latestRevisions: Record<string, { revisionId: string; proseHash: string } | null>,
 ): EditorialCompileInput {
+  const overrides = { ...(init.data.config?.validatorOverrides ?? {}) };
+  const aggregator = new ResultAggregator([...createBuiltInValidators()], init.entityTypes);
+  const analysisContract = aggregator.getAnalysisContract(overrides);
+  const validation: ValidationIdentityInput = {
+    analysisContractHash: analysisContract.hash,
+    builtInValidatorImplementationVersion: BUILT_IN_VALIDATOR_IMPLEMENTATION_VERSION,
+    effectiveOverrides: overrides,
+    validators: aggregator.listValidatorIdentities(BUILT_IN_VALIDATOR_IMPLEMENTATION_VERSION),
+    plugins: [],
+  };
   return {
     request: {
       version: 1,
-      projectDir: request.projectDir,
+      source: request.source,
       selector: request.selector,
       revision: request.revision
         ? { reviewIds: request.revision.reviewIds, instruction: request.revision.instruction }
@@ -733,124 +200,97 @@ function buildCompileInput(
       batch: request.batch,
       maxRounds: request.maxRounds,
     },
+    source: request.source,
     catalog: init.catalog,
     eventContents: init.eventContents,
-    sourceDocumentContents: init.sourceDocumentContents,
-    sourceHeadHash: init.sourceHeadHash,
-    latestRevisions: init.latestRevisions,
     validation,
     reviewComments,
-    chapterByEventId: init.chapterByEventId,
-    requiresProviderByEventId,
-    responsesDir: paths.responsesDir,
-    sourceHeadPath: paths.sourceHeadPath,
+    sourceDocumentContents: init.sourceDocumentContents,
+    latestRevisions,
+    chapterByEventId: { ...init.chapterByEventId },
+    requiresProviderByEventId: requiresProviderByEventId(init.events, request, init.data),
   };
 }
 
 // ============================================================================
-// Build RenderJob[] from compiled plan + initialised project data
+// RenderJob construction (pure, snapshot-derived)
 // ============================================================================
 
 function buildRenderJobs(
   plan: EditorialCompileOutput,
   init: ProjectInitialization,
   request: Omit<EditorialRenderRequestV1, 'mutation'>,
-  sourceContentHash: string,
+  sourceHash: string,
   model: string,
   runtime: CompiledNarrativeRuntime,
+  revisionStates: ReadonlyMap<string, EventRevisionState>,
+  reviewComments: readonly ReviewComment[],
 ): RenderJob[] {
   const jobs: RenderJob[] = [];
-  const branchPath = request.branchPath;
-  const data = init.data;
-
-  // Use pre-compiled context from the single narrative runtime.
   const boundaries = runtime.boundaries;
   const discourseContextByEventId = runtime.discourseContextsByEventId;
   const techniquesByEventId = runtime.graphs.techniquesByEventId;
-
-  // Canonical graph hash from both sub-graphs for render cache identity.
   const graphHash = computeSha256Hex(
     canonicalJson({
       story: runtime.graphs.storyGraph.hash,
       discourse: runtime.graphs.discourseGraph.hash,
     }),
   );
-
-  const renderEvents = init.events.filter(
-    (ev) => ev.source === 'event_file' && plan.selectedEventIds.includes(ev.id),
-  );
-
   const sysCtx: SystemContext = {
-    genre: data.config?.genre ?? 'literary',
+    genre: init.data.config?.genre ?? 'literary',
     style: 'literary',
     narrativeRules: [],
-    thematicIntent: data.config?.ideaIR?.thematicIntent,
-    synopsis: data.config?.synopsis,
+    thematicIntent: init.data.config?.ideaIR?.thematicIntent,
+    synopsis: init.data.config?.synopsis,
   };
-
   const disclosureCompiler = new LogicalDisclosureSummaryCompiler();
+  const renderEvents = init.events.filter((event) => plan.selectedEventIds.includes(event.id));
 
-  for (const ev of renderEvents) {
-    const compileJob = plan.jobs.find((j) => j.eventId === ev.id);
-    if (!compileJob?.requiresProvider) continue;
+  for (const event of renderEvents) {
+    const intent = plan.intents.find((job) => job.eventId === event.id);
+    if (!intent?.requiresProvider) continue;
 
-    const discourseCtx = discourseContextByEventId[ev.id];
-    const chapterNum = init.chapterByEventId[ev.id] ?? 1;
-    const beforeState = boundaries.stateBeforeByEventId.get(ev.id);
+    const discourseCtx = discourseContextByEventId[event.id];
+    const chapterNum = init.chapterByEventId[event.id] ?? 1;
+    const beforeState = boundaries.stateBeforeByEventId.get(event.id);
     if (!beforeState) continue;
 
-    const emotionalBeat = ev.arcPosition
-      ? data.config?.ideaIR?.emotionalArc?.emotionalBeats.find(
-          (beat) => beat.position === ev.arcPosition,
-        )?.emotion
-      : undefined;
-
-    const narrativeTechniques = techniquesByEventId.get(ev.id) ?? [];
-    const compiler = new ContextCompiler();
-    const pkg = compiler.compile(ev, beforeState, init.registry, {
+    const narrativeTechniques = techniquesByEventId.get(event.id) ?? [];
+    const pkg = new ContextCompiler().compile(event, beforeState, init.registry, {
       systemContext: sysCtx,
-      narratorProfiles: data.narratorProfiles,
+      narratorProfiles: init.data.narratorProfiles,
       discourseContext: discourseCtx,
-      emotionalBeat,
       narrativeTechniques,
     });
 
     const worldStateHash = computeSha256Hex(canonicalJson(beforeState));
     const knowledgeStateHash = computeSha256Hex(canonicalJson(beforeState.knowledge));
-    const narratorProfileHash = computeSha256Hex(canonicalJson(data.narratorProfiles));
+    const narratorProfileHash = computeSha256Hex(canonicalJson(init.data.narratorProfiles));
     const plannedDiscourseHash = discourseCtx
       ? computeSha256Hex(`${discourseCtx.ledgerHash}|${discourseCtx.assertionCatalogHash}`)
       : '';
-    const catalogHash =
-      data.narratorAssertions && Object.keys(data.narratorAssertions).length > 0
-        ? computeSha256Hex(canonicalJson(Object.keys(data.narratorAssertions).sort()))
-        : undefined;
-
     const sceneTransition: 'continuous' | 'flashback' | 'time_jump' | 'hard_cut' =
-      ev.sceneType === 'linear'
+      event.sceneType === 'linear'
         ? 'continuous'
-        : ev.sceneType === 'flashback'
+        : event.sceneType === 'flashback'
           ? 'flashback'
-          : ev.sceneType === 'flashforward'
+          : event.sceneType === 'flashforward'
             ? 'time_jump'
             : 'hard_cut';
 
     const contract = compileSceneContract({
-      sceneId: ev.id,
-      branch: branchPath ?? { decisions: [] },
+      sceneId: event.id,
+      branch: request.branchPath ?? { decisions: [] },
       discoursePosition: discourseCtx?.cursor ?? 0,
       worldStateHash,
       knowledgeStateHash,
       narratorProfileHash,
       plannedDiscourseHash,
-      catalogHash,
       styleHints: {
         chapterStyle: String(chapterNum),
-        narratorPovStyle: ev.narratorProfileRef,
+        narratorPovStyle: event.narratorProfileRef,
       },
-      continuityDirectives: {
-        transition: sceneTransition,
-      },
+      continuityDirectives: { transition: sceneTransition },
       promptProviderId: model,
       promptProviderVersion: model,
     });
@@ -863,99 +303,59 @@ function buildRenderJobs(
         discourseCtx.projection,
       );
     }
+
+    const revisionState = revisionStates.get(event.id);
+    let revisionContext: RevisionContext | undefined;
+    let editorialRevisionInstructions: string | undefined;
+    let editorialReviewIds: readonly string[] | undefined;
+    if (revisionState?.state === 'will_revise' && revisionState.baseProse !== null) {
+      const appliedReviews = reviewComments.filter((review) =>
+        revisionState.applicableReviewIds.includes(review.id),
+      );
+      const directive = composeRevisionDirective(request.revision?.instruction, appliedReviews);
+      const context = buildRevisionContextForJob(revisionState, directive);
+      revisionContext = context.revisionContext;
+      editorialRevisionInstructions = context.editorialRevisionInstructions;
+      editorialReviewIds = revisionState.applicableReviewIds;
+    }
+
     jobs.push({
-      event: ev,
+      event,
       stateBefore: beforeState,
       context: pkg,
-      gameDialogue: ev.choices ? { choices: ev.choices } : undefined,
       chapter: chapterNum,
       contract,
       graphHash,
-      sourceContentHash,
+      sourceContentHash: sourceHash,
       logicalDisclosureSummary,
       surfaceDependency: {
-        groupId: ev.id,
+        groupId: event.id,
         policy: 'parallel' as const,
         manifestHash: computeSha256Hex(
           canonicalJson({
-            eventId: ev.id,
+            eventId: event.id,
             contractHash: contract.promptContractHash,
             policy: 'parallel',
           }),
         ),
       },
+      revisionContext,
+      editorialRevisionInstructions,
+      editorialReviewIds,
     });
   }
 
-  // Order jobs by discourse scene sequence for deterministic planning/input order.
-  // Surface execution order is independently governed by SurfaceScheduler.buildWavePlan.
+  // Deterministic discourse scene sequence for planning/input order.
   const sceneOrder = new Map<string, number>();
   for (const entry of runtime.graphs.discourseGraph.sceneSequence) {
     sceneOrder.set(entry.sceneId, entry.sequence);
   }
   jobs.sort((a, b) => (sceneOrder.get(a.event.id) ?? 999) - (sceneOrder.get(b.event.id) ?? 999));
-
   return jobs;
 }
 
 // ============================================================================
-// Apply surface plan to jobs
-// ============================================================================
-
-function applySurfacePlanToJobs(jobs: RenderJob[], plan: SurfacePlanResult): void {
-  const { surfaceDependencyGraph } = plan;
-  const { groups, serialLanes } = surfaceDependencyGraph;
-
-  const sceneGroupMap = new Map<string, RenderGroup>();
-  for (const group of groups) {
-    for (const sceneId of group.sceneIds) {
-      sceneGroupMap.set(sceneId, group);
-    }
-  }
-
-  const groupPredecessors = new Map<string, string>();
-  const groupToLane = new Map<string, string>();
-
-  for (const lane of serialLanes) {
-    for (let i = 0; i < lane.groupIds.length; i++) {
-      groupToLane.set(lane.groupIds[i], lane.laneId);
-      if (i > 0) {
-        groupPredecessors.set(lane.groupIds[i], lane.groupIds[i - 1]);
-      }
-    }
-  }
-
-  for (const job of jobs) {
-    const group = sceneGroupMap.get(job.event.id);
-    if (!group) continue;
-
-    const groupId = group.groupId;
-    const policy = group.surfacePolicy.type as
-      | 'parallel'
-      | 'serial_surface'
-      | 'fallback_without_surface';
-    let predecessorEventId: string | undefined;
-
-    const predecessorGroupId = groupPredecessors.get(groupId);
-    if (predecessorGroupId !== undefined) {
-      const predecessorGroup = groups.find((candidate) => candidate.groupId === predecessorGroupId);
-      if (predecessorGroup && predecessorGroup.sceneIds.length > 0) {
-        predecessorEventId = predecessorGroup.sceneIds[predecessorGroup.sceneIds.length - 1];
-      }
-    }
-
-    job.surfaceDependency = {
-      groupId,
-      ...(groupToLane.has(groupId) ? { laneId: groupToLane.get(groupId) } : {}),
-      predecessorEventId,
-      policy,
-      manifestHash: plan.manifest.sourceDefinitionHash,
-    };
-  }
-}
-
-// ============================================================================
-// Compile surface plan from config
+// Configured surface plan (pure, from renderSurface config)
 // ============================================================================
 
 function compileConfiguredSurfacePlan(
@@ -1007,20 +407,71 @@ function compileConfiguredSurfacePlan(
   return new SurfacePlanner(options).plan();
 }
 
+function applySurfacePlanToJobs(jobs: RenderJob[], plan: SurfacePlanResult): void {
+  const { surfaceDependencyGraph } = plan;
+  const { groups, serialLanes } = surfaceDependencyGraph;
+
+  const sceneGroupMap = new Map<string, RenderGroup>();
+  for (const group of groups) {
+    for (const sceneId of group.sceneIds) {
+      sceneGroupMap.set(sceneId, group);
+    }
+  }
+
+  const groupPredecessors = new Map<string, string>();
+  const groupToLane = new Map<string, string>();
+  for (const lane of serialLanes) {
+    for (let i = 0; i < lane.groupIds.length; i++) {
+      groupToLane.set(lane.groupIds[i], lane.laneId);
+      if (i > 0) {
+        groupPredecessors.set(lane.groupIds[i], lane.groupIds[i - 1]);
+      }
+    }
+  }
+
+  for (const job of jobs) {
+    const group = sceneGroupMap.get(job.event.id);
+    if (!group) continue;
+
+    const groupId = group.groupId;
+    const policy = group.surfacePolicy.type as
+      | 'parallel'
+      | 'serial_surface'
+      | 'fallback_without_surface';
+    let predecessorEventId: string | undefined;
+
+    const predecessorGroupId = groupPredecessors.get(groupId);
+    if (predecessorGroupId !== undefined) {
+      const predecessorGroup = groups.find(
+        (candidate) => candidate.groupId === predecessorGroupId,
+      );
+      if (predecessorGroup && predecessorGroup.sceneIds.length > 0) {
+        predecessorEventId = predecessorGroup.sceneIds[predecessorGroup.sceneIds.length - 1];
+      }
+    }
+
+    job.surfaceDependency = {
+      groupId,
+      ...(groupToLane.has(groupId) ? { laneId: groupToLane.get(groupId) } : {}),
+      predecessorEventId,
+      policy,
+      manifestHash: plan.manifest.sourceDefinitionHash,
+    };
+  }
+}
+
 // ============================================================================
-// Materialize surface packets (blocked result tracking)
+// Surface packet materialization (semantic — accepted artifacts only)
 // ============================================================================
 
-function materializeSurfacePackets(
-  jobs: RenderJob[],
+async function materializeSurfacePackets(
+  jobs: readonly RenderJob[],
   waveEventIds: readonly string[],
-  acceptedByEventId: Map<string, AcceptedSceneArtifact>,
-  storage: Storage,
-  paths: ProjectPaths,
+  acceptedByEventId: ReadonlyMap<string, AcceptedSceneArtifact>,
+  execution: CoreExecutionRepository,
+  projectId: string,
   extractor: SurfaceReferenceExtractor,
-  scopeHash: string,
-  _currentRunEventIds: ReadonlySet<string>,
-): { blocked: RenderSceneResult[] } {
+): Promise<{ blocked: RenderSceneResult[] }> {
   const blocked: RenderSceneResult[] = [];
 
   for (const job of jobs) {
@@ -1028,31 +479,32 @@ function materializeSurfacePackets(
     const predecessorId = job.surfaceDependency.predecessorEventId;
     if (!predecessorId) continue;
 
-    // Check if predecessor is accepted in this run
     const accepted = acceptedByEventId.get(predecessorId);
     if (accepted) {
-      const packet = extractor.extract(accepted, job.event.id);
-      job.surfaceReferencePacket = packet;
+      job.surfaceReferencePacket = extractor.extract(accepted, job.event.id);
       continue;
     }
 
-    // Resolve only a matching-scope accepted head: latest response is a
-    // pointer, while immutable revision data is authoritative.
-    const storedArtifact = new AcceptedArtifactResolver(
-      storage,
-      paths.responsesDir,
-      paths.sceneRevisionsDir,
-    ).resolve(predecessorId, scopeHash);
-    if (storedArtifact) {
-      const packet = extractor.extract(storedArtifact, job.event.id);
-      job.surfaceReferencePacket = packet;
+    const record = await execution.resolveAcceptedArtifact({ projectId, eventId: predecessorId });
+    if (record) {
+      const artifact: AcceptedSceneArtifact = {
+        eventId: record.eventId,
+        revisionId: record.revisionId,
+        prose: record.prose,
+        proseHash: record.proseHash,
+        sceneHash: record.sceneHash,
+        editorialBasisHash: '',
+        scopeHash: '',
+        releaseDecision: { status: 'accepted', scopeHash: '', validationIdentity: '', reasons: [] },
+        createdAt: '',
+      };
+      job.surfaceReferencePacket = extractor.extract(artifact, job.event.id);
       continue;
     }
 
-    // If policy allows fallback, skip blocking
+    // Policy allows rendering without a surface source.
     if (job.surfaceDependency.policy === 'fallback_without_surface') continue;
 
-    // Block this job
     blocked.push({
       eventId: job.event.id,
       prose: '',
@@ -1076,16 +528,26 @@ function materializeSurfacePackets(
 }
 
 // ============================================================================
-// Map a single RenderSceneResult to a RenderNovelSceneResult
+// Result mapping
 // ============================================================================
+
+function mapProviderCallEntry(entry: ProviderCallLedgerEntry): ProviderCallLedgerEntryV1 {
+  return {
+    phase: entry.phase,
+    attempt: entry.attempt,
+    outcome: entry.outcome,
+    requestHash: entry.requestHash,
+    model: entry.model,
+    seed: entry.seed,
+    failureReason: entry.failureReason,
+  };
+}
 
 function mapSceneResult(
   result: RenderSceneResult,
   decision: ReleaseDecision | null,
-  _chapter: number,
   revisionId: string | null,
   disposition: SceneDisposition,
-  _language: string,
 ): RenderNovelSceneResult {
   return {
     eventId: result.eventId,
@@ -1110,20 +572,25 @@ function mapSceneResult(
   };
 }
 
-function mapProviderCallEntry(entry: ProviderCallLedgerEntry): ProviderCallLedgerEntryV1 {
-  return {
-    phase: entry.phase as 'pass1' | 'pass2' | 'pass2_verify',
-    attempt: entry.attempt,
-    outcome: entry.outcome as 'success' | 'failure',
-    requestHash: entry.requestHash,
-    model: entry.model,
-    seed: entry.seed,
-    failureReason: entry.failureReason,
-  };
+
+function buildPublication(
+  selectedEventIds: readonly string[],
+  decisions: ReadonlyMap<string, ReleaseDecision>,
+  editorialErrors: readonly EditorialError[],
+): PublicationResult {
+  if (selectedEventIds.length === 0) {
+    return { status: 'unchanged', outputPath: '', novelHash: null, reasons: [] };
+  }
+  const anyBlocked = selectedEventIds.some(
+    (eventId) => (decisions.get(eventId)?.status ?? 'blocked') !== 'accepted',
+  );
+  const status: PublicationResult['status'] =
+    anyBlocked || editorialErrors.length > 0 ? 'stale' : 'current';
+  return { status, outputPath: '', novelHash: null, reasons: [...editorialErrors] };
 }
 
 // ============================================================================
-// Build scene revision envelope from render result + compile identity
+// Revision envelope + promotion (semantic repository records)
 // ============================================================================
 
 function buildRevisionEnvelope(
@@ -1133,16 +600,14 @@ function buildRevisionEnvelope(
   operationId: string,
   request: EditorialRenderRequestV1,
   decision: ReleaseDecision,
-  paths: ProjectPaths,
   parentRevisionId: string | null,
-  expectedLatestHash: string | null,
   override?: {
     origin: SceneRevisionOrigin;
     restoredFromRevisionId?: string;
   },
 ): SceneRevisionEnvelopeV1 {
   const sceneInfo = plan.scenes.find((s) => s.eventId === result.eventId);
-  const revisionId = crypto.randomUUID();
+  const revisionId = globalThis.crypto.randomUUID();
   const now = new Date().toISOString();
   const materializedScene = job.gameDialogue
     ? appendPlayerChoicesBlock(result.prose, job.gameDialogue.choices)
@@ -1161,16 +626,14 @@ function buildRevisionEnvelope(
     eventId: result.eventId,
     origin: override?.origin ?? (request.revision ? 'llm_revision' : 'llm_draft'),
     prose: result.prose,
-    proseHash: computeContentHash(result.prose),
-    sceneHash: computeContentHash(materializedScene),
+    proseHash: sha256(result.prose),
+    sceneHash: sha256(materializedScene),
     editorialBasisHash: sceneInfo?.editorialBasisHash ?? '',
     scopeHash: sceneInfo?.scopeHash ?? '',
     validationIdentity: sceneInfo?.validationIdentity ?? '',
     modelUsed: request.model,
-    feedbackHash: job.revisionContext
-      ? computeContentHash(canonicalJson(job.revisionContext.feedbackHashes))
-      : null,
-    reviewIds: [...(job.editorialReviewIds ?? [])],
+    feedbackHash: null,
+    reviewIds: [],
     analysis: result.analysis,
     validation: result.validation,
     releaseDecision: decision,
@@ -1184,15 +647,9 @@ function buildRevisionEnvelope(
     promptHash: result.promptHash || computeSha256Hex(''),
     pass2Rejection: result.pass2Rejection,
     providerCalls: result.providerCalls.map(mapProviderCallEntry),
-    promotionReadSet: [
-      {
-        kind: 'file' as const,
-        path: path.join(paths.responsesDir, `${result.eventId}.json`),
-        expectedHash: expectedLatestHash,
-      },
-    ],
+    promotionReadSet: [],
     requestRecords: result.requestRecords.map((r) => ({
-      phase: r.phase as 'pass1' | 'pass2',
+      phase: r.phase,
       attempt: r.attempt,
       requestHash: r.requestHash,
       messages: r.messages,
@@ -1202,1015 +659,431 @@ function buildRevisionEnvelope(
   };
 }
 
-// ============================================================================
-// Write blocked scene decision
-// ============================================================================
+type AcceptedPromotion =
+  | { readonly kind: 'committed'; readonly revisionId: string; readonly envelope: SceneRevisionEnvelopeV1 }
+  | { readonly kind: 'conflict'; readonly revisionId: string; readonly envelope: SceneRevisionEnvelopeV1 };
 
-// ============================================================================
-// Build renders jobs — helper subset for full-branch rendering.
-// The caller compiles the canonical runtime for the resolved route exactly
-// once (compileCanonicalRuntime); this helper only derives jobs + boundaries.
-// ============================================================================
-
-function buildBoundariesAndJobs(
-  init: ProjectInitialization,
+/**
+ * Promote a released candidate to the accepted head. The scene revision record
+ * is appended first (append-only history); the accepted head is then updated
+ * with a compare-and-swap against the revision read from
+ * {@link CoreExecutionRepository.readAcceptedScene}. A `conflict` means a
+ * concurrent writer owns the accepted head — the existing head is never
+ * overwritten and the caller must surface the candidate as stale.
+ */
+async function promoteAccepted(
+  execution: CoreExecutionRepository,
+  projectId: string,
+  sourceHash: string,
+  result: RenderSceneResult,
+  job: RenderJob,
   plan: EditorialCompileOutput,
-  request: Omit<EditorialRenderRequestV1, 'mutation'>,
-  sourceContentHash: string,
-  model: string,
-  runtime: CompiledNarrativeRuntime,
-  discourseBranch: string,
-): {
-  jobs: RenderJob[];
-  boundaries: StoryBoundaries;
-  discourseContextByEventId: Record<string, CompiledDiscourseRenderContext>;
-  runtime: CompiledNarrativeRuntime;
-  scopeHash: string;
-} {
-  const branchPath = request.branchPath;
-  const boundaries = runtime.boundaries;
-  const discourseContextByEventId: Record<string, CompiledDiscourseRenderContext> = {};
-  for (const [eventId, ctx] of Object.entries(runtime.discourseContextsByEventId)) {
-    discourseContextByEventId[eventId] = ctx;
+  operationId: string,
+  request: EditorialRenderRequestV1,
+  decision: ReleaseDecision,
+  parentRevisionId: string | null,
+  expectedVersion: number | null,
+): Promise<AcceptedPromotion> {
+  const envelope = buildRevisionEnvelope(
+    result,
+    job,
+    plan,
+    operationId,
+    request,
+    decision,
+    parentRevisionId,
+  );
+  await execution.compareAndSwapSceneRevision({
+    projectId,
+    eventId: result.eventId,
+    revisionId: envelope.revisionId,
+    expectedVersion: null,
+    value: {
+      version: 1,
+      projectId,
+      eventId: result.eventId,
+      revisionId: envelope.revisionId,
+      parentRevisionId,
+      sourceHash,
+      value: envelope as unknown as JsonValue,
+    },
+  });
+  const accepted: AcceptedSceneRecordLike = {
+    version: 1,
+    projectId,
+    eventId: result.eventId,
+    sourceHash,
+    revisionId: envelope.revisionId,
+    prose: result.prose,
+    proseHash: envelope.proseHash,
+    sceneHash: envelope.sceneHash,
+    value: envelope as unknown as JsonValue,
+  };
+  const commit = await execution.compareAndSwapAcceptedScene({
+    projectId,
+    eventId: result.eventId,
+    expectedVersion,
+    value: accepted,
+  });
+  if (commit.kind === 'conflict') {
+    return { kind: 'conflict', revisionId: envelope.revisionId, envelope };
   }
+  return { kind: 'committed', revisionId: envelope.revisionId, envelope };
+}
 
-  const scopeHash = computeSha256Hex(
-    canonicalJson({
-      branch: branchPath ?? { decisions: [] },
-      discourse: discourseBranch,
-      ledgerHash: init.data.discourseLedger.hash,
+interface AcceptedSceneRecordLike {
+  version: 1;
+  projectId: string;
+  eventId: string;
+  sourceHash: string;
+  revisionId: string;
+  prose: string;
+  proseHash: string;
+  sceneHash: string;
+  value?: JsonValue;
+}
+
+// ============================================================================
+// Shared result helpers
+// ============================================================================
+
+function buildFailedResult(
+  operationId: string,
+  editorialErrors: readonly EditorialError[],
+  planSummary: EditorialPlanSummaryV1,
+): RenderNovelResult {
+  return {
+    operationId,
+    results: [],
+    errors: editorialErrors.map((error) => error.message),
+    editorialErrors: [...editorialErrors],
+    publication: {
+      status: 'stale',
+      outputPath: '',
+      novelHash: null,
+      reasons: [...editorialErrors],
+    },
+  };
+}
+
+
+// ============================================================================
+// Progress events
+// ============================================================================
+
+function createProgressEmitter(
+  eventBus: TypedEventBus | undefined,
+  operationId: string,
+): {
+  emit(event: { kind: string; eventId?: string; phase?: string; completedScenes?: number; totalScenes?: number; disposition?: string }): void;
+} {
+  let sequence = 0;
+  return {
+    emit(event) {
+      if (!eventBus) return;
+      sequence++;
+      eventBus.emit('editorial:progress', {
+        version: 1,
+        operationId,
+        sequence,
+        timestamp: new Date().toISOString(),
+        ...event,
+      });
+    },
+  };
+}
+
+// ============================================================================
+// Runtime assertion
+// ============================================================================
+
+function assertRuntime(runtime: EditorialRuntime): asserts runtime is EditorialRuntime & {
+  services: NonNullable<EditorialRuntime['services']>;
+} {
+  if (runtime.provider && runtime.providerFactory) {
+    throw new EditorialOperationError(
+      'PROVIDER_REQUIRED',
+      'Cannot provide both provider and providerFactory',
+    );
+  }
+  if (!runtime.services) {
+    throw new EditorialOperationError(
+      'INVALID_OPERATION',
+      'Runtime services are required',
+    );
+  }
+}
+
+/**
+ * Resolve the current accepted scene head for every event from the semantic
+ * execution repository. Only `readAcceptedScene` (`{revision, value}`) records
+ * are used — never the render cache. Events without an accepted head are
+ * simply absent from the returned map.
+ */
+async function resolveAcceptedHeads(
+  execution: CoreExecutionRepository,
+  projectId: string,
+  eventIds: readonly string[],
+): Promise<ReadonlyMap<string, AcceptedSceneRecord>> {
+  const records = await Promise.all(
+    eventIds.map(async (eventId) => {
+      const read = await execution.readAcceptedScene({ projectId, eventId });
+      return read ? ([eventId, read.value] as const) : null;
     }),
   );
+  const accepted = new Map<string, AcceptedSceneRecord>();
+  for (const entry of records) {
+    if (entry) accepted.set(entry[0], entry[1]);
+  }
+  return accepted;
+}
 
-  const jobs = buildRenderJobs(plan, init, request, sourceContentHash, model, runtime);
+/**
+ * Map resolved accepted heads onto the compiler's `latestRevisions` input:
+ * `null` for every selected event without an accepted head, so the editorial
+ * basis hash reflects the real base revision/prose identity.
+ */
+function buildLatestRevisions(
+  eventIds: readonly string[],
+  acceptedHeads: ReadonlyMap<string, AcceptedSceneRecord>,
+): Record<string, { revisionId: string; proseHash: string } | null> {
+  const latest: Record<string, { revisionId: string; proseHash: string } | null> = {};
+  for (const eventId of eventIds) {
+    const head = acceptedHeads.get(eventId);
+    latest[eventId] = head ? { revisionId: head.revisionId, proseHash: head.proseHash } : null;
+  }
+  return latest;
+}
 
-  return { jobs, boundaries, discourseContextByEventId, scopeHash, runtime };
+/**
+ * Events under an explicit revision request that have no accepted base block
+ * with the canonical `NO_ACCEPTED_BASE` preflight error before any provider
+ * call.
+ */
+function collectNoAcceptedBaseErrors(
+  revisionStates: readonly EventRevisionState[],
+): EditorialError[] {
+  const errors: EditorialError[] = [];
+  for (const state of revisionStates) {
+    if (state.state !== 'will_revise' || state.baseProse !== null) continue;
+    errors.push({
+      code: 'NO_ACCEPTED_BASE',
+      message: `Revision request for scene "${state.eventId}" requires an accepted base, but no accepted scene exists.`,
+      eventId: state.eventId,
+    });
+  }
+  return errors;
 }
 
 // ============================================================================
-// Lock state check (mirrors SceneService.readLock)
-// ============================================================================
-
-interface SceneLockRecord {
-  revisionId: string;
-  proseHash: string;
-  lockedAt: string;
-  actorId: string;
-  valid: boolean;
-}
-
-function readSceneLock(
-  storage: Storage,
-  paths: ProjectPaths,
-  eventId: string,
-): SceneLockRecord | null {
-  const lockPath = path.join(paths.workDir, 'locks', `${eventId}.lock`);
-  const raw = storage.readOptional(lockPath);
-  if (raw === null) return null;
-  try {
-    const value = JSON.parse(raw) as unknown;
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-      return { revisionId: '', proseHash: '', lockedAt: '', actorId: '', valid: false };
-    }
-    const record = value as Record<string, unknown>;
-    const valid =
-      Object.keys(record).sort().join(',') === 'actorId,lockedAt,proseHash,revisionId' &&
-      typeof record.revisionId === 'string' &&
-      record.revisionId.length > 0 &&
-      typeof record.proseHash === 'string' &&
-      /^[a-f0-9]{64}$/.test(record.proseHash) &&
-      typeof record.lockedAt === 'string' &&
-      !Number.isNaN(Date.parse(record.lockedAt)) &&
-      typeof record.actorId === 'string' &&
-      record.actorId.trim().length > 0;
-    return {
-      revisionId: typeof record.revisionId === 'string' ? record.revisionId : '',
-      proseHash: typeof record.proseHash === 'string' ? record.proseHash : '',
-      lockedAt: typeof record.lockedAt === 'string' ? record.lockedAt : '',
-      actorId: typeof record.actorId === 'string' ? record.actorId : '',
-      valid,
-    };
-  } catch {
-    return { revisionId: '', proseHash: '', lockedAt: '', actorId: '', valid: false };
-  }
-}
-function sceneLockFreshness(
-  storage: Storage,
-  paths: ProjectPaths,
-  eventId: string,
-  chapterNumber: number,
-): 'none' | 'current' | 'stale' {
-  const lock = readSceneLock(storage, paths, eventId);
-  if (lock === null) return 'none';
-  const latest = readAcceptedHeadEnvelope(storage, paths, eventId, chapterNumber);
-  if (
-    !lock.valid ||
-    latest?.releaseDecision.status !== 'accepted' ||
-    lock.revisionId !== latest.revisionId ||
-    lock.proseHash !== latest.proseHash
-  ) {
-    return 'stale';
-  }
-  const sourceHeadExpectation = latest.promotionReadSet.find(
-    (expectation): expectation is Extract<TransactionReadExpectation, { kind: 'file' }> =>
-      expectation.kind === 'file' && expectation.path === paths.sourceHeadPath,
-  );
-  if (
-    sourceHeadExpectation &&
-    sourceHeadExpectation.expectedHash !== computeFileHash(storage, paths.sourceHeadPath)
-  ) {
-    return 'stale';
-  }
-  if (!sourceHeadExpectation) {
-    try {
-      const sourceStore = new SourceRevisionStore(
-        new ProjectTransactionCoordinator(storage, paths),
-        paths,
-      );
-      const sourceHead = sourceStore.getHead();
-      if (sourceHead?.revisionId) {
-        const sourceRevision = sourceStore.get(sourceHead.revisionId);
-        if (
-          sourceRevision.createdAt > latest.createdAt &&
-          sourceRevision.operationId !== latest.operationId &&
-          sourceRevision.affectedEventIds.includes(eventId)
-        ) {
-          return 'stale';
-        }
-      }
-    } catch {
-      return 'stale';
-    }
-  }
-  return 'current';
-}
-
-// ============================================================================
-// Per-event revision state (revision preflight)
+// Exported revision-state helpers (pure)
 // ============================================================================
 
 export interface EventRevisionState {
   eventId: string;
-  state:
-    | 'will_revise'
-    | 'no_revision_needed'
-    | 'no_accepted_base'
-    | 'skipped_by_lock'
-    | 'lock_stale'
-    | 'revision_stale';
-  /** Applicable review IDs from the ledger. */
+  state: 'will_revise' | 'no_revision_needed' | 'preflight_failed';
   applicableReviewIds: readonly string[];
-  /** Deterministic content/target feedback hashes. */
+  baseRevisionId: string | null;
+  baseProseHash: string | null;
+  /** Previous accepted prose text; null when no accepted base is resolved. */
+  baseProse: string | null;
+  /** Ordered hashes of reviewer feedback entries for the event. */
   feedbackHashes: readonly string[];
-  /** Deterministic, non-authoritative prompt payload. */
-  editorialRevisionInstructions?: string;
-  /** Base revision info — present when an accepted unlocked head exists. */
-  baseRevisionId?: string;
-  baseProse?: string;
-  baseProseHash?: string;
+  /** Hash of the YAML-authored revision instruction; null when absent. */
+  revisionInstructionHash: string | null;
+  errors: readonly EditorialError[];
 }
 
-/**
- * Build per-event revision states: for each selected event, determine
- * which reviews apply and whether the revision can proceed.
- *
- * When `reviewIds` are explicitly given, they are validated atomically.
- * Without explicit IDs, all applicable open reviews are selected in
- * stable novel→chapter→scene→line order.
- *
- * Zero-provider outcomes:
- *   - no_revision_needed  — no applicable reviews or feedback
- *   - no_accepted_base    — no accepted unlocked head exists
- *   - skipped_by_lock     — scene is locked
- *   - revision_stale      — line-level basis is stale (proseHash mismatch)
- */
 export function buildEventRevisionStates(
   eventIds: readonly string[],
   revisionRequest: RevisionRequest | undefined,
   reviewComments: readonly ReviewComment[],
-  storage: Storage,
-  paths: ProjectPaths,
-  chapterByEventId: Record<string, number>,
+  acceptedByEventId?: ReadonlyMap<string, { revisionId: string; proseHash: string; prose: string }>,
 ): EventRevisionState[] {
-  if (!revisionRequest) return [];
-
-  const explicitReviewIds = revisionRequest.reviewIds ?? [];
-  const hasExplicitIds = explicitReviewIds.length > 0;
-  const hasInlineInstruction = Boolean(revisionRequest.instruction?.trim());
-  const commentById = new Map(reviewComments.map((comment) => [comment.id, comment]));
-
-  const appliesToEvent = (comment: ReviewComment, eventId: string): boolean => {
-    const chapterId = `chapter:${chapterByEventId[eventId] ?? 1}`;
-    if (comment.target.type === 'novel') return true;
-    if (comment.target.type === 'chapter') return comment.target.id === chapterId;
-    if (comment.target.type === 'scene' || comment.target.type === 'line') {
-      return comment.target.id === eventId;
-    }
-    return false;
-  };
-
-  if (hasInlineInstruction && eventIds.length !== 1) {
-    throw new EditorialOperationError(
-      'INVALID_REVIEW_SELECTION',
-      'Inline revision instruction requires exactly one selected scene.',
-    );
-  }
-  if (hasExplicitIds) {
-    for (const reviewId of explicitReviewIds) {
-      const comment = commentById.get(reviewId);
-      if (comment?.status !== 'open' || !eventIds.some((id) => appliesToEvent(comment, id))) {
-        throw new EditorialOperationError(
-          'INVALID_REVIEW_SELECTION',
-          `Review "${reviewId}" must exist, be open, and apply to a selected scene.`,
-        );
-      }
-    }
-  }
-
-  const results: EventRevisionState[] = [];
-  for (const eventId of eventIds) {
+  return eventIds.map((eventId) => {
     const applicableReviews = sortReviewFeedback(
-      hasExplicitIds
-        ? explicitReviewIds
-            .map((reviewId) => commentById.get(reviewId))
-            .filter(
-              (comment): comment is ReviewComment =>
-                comment !== undefined && appliesToEvent(comment, eventId),
-            )
-        : reviewComments.filter(
-            (comment) => comment.status === 'open' && appliesToEvent(comment, eventId),
-          ),
+      reviewComments.filter((review) => review.target.id === eventId),
     );
-    const hasLocalInstruction = hasInlineInstruction && eventIds.length === 1;
-
-    if (applicableReviews.length === 0 && !hasLocalInstruction) {
-      results.push({
-        eventId,
-        state: 'no_revision_needed',
-        applicableReviewIds: [],
-        feedbackHashes: [],
-      });
-      continue;
-    }
-
-    const latest = readAcceptedHeadEnvelope(
-      storage,
-      paths,
+    const accepted = acceptedByEventId?.get(eventId);
+    return {
       eventId,
-      chapterByEventId[eventId] ?? 1,
-    );
-    const lock = readSceneLock(storage, paths, eventId);
-    if (lock !== null) {
-      const lockIsCurrent =
-        lock.valid &&
-        latest?.releaseDecision.status === 'accepted' &&
-        lock.revisionId === latest.revisionId &&
-        lock.proseHash === latest.proseHash;
-      results.push({
-        eventId,
-        state: lockIsCurrent ? 'skipped_by_lock' : 'lock_stale',
-        applicableReviewIds: applicableReviews.map((review) => review.id),
-        feedbackHashes: [],
-      });
-      continue;
-    }
-
-    if (latest?.releaseDecision.status !== 'accepted') {
-      results.push({
-        eventId,
-        state: 'no_accepted_base',
-        applicableReviewIds: applicableReviews.map((review) => review.id),
-        feedbackHashes: [],
-      });
-      continue;
-    }
-
-    const hasStaleLineReview = applicableReviews.some(
-      (review) =>
-        review.target.type === 'line' &&
-        review.target.lineBasis !== undefined &&
-        (review.target.lineBasis.revisionId !== latest.revisionId ||
-          review.target.lineBasis.proseHash !== latest.proseHash),
-    );
-    if (hasStaleLineReview) {
-      results.push({
-        eventId,
-        state: 'revision_stale',
-        applicableReviewIds: applicableReviews.map((review) => review.id),
-        feedbackHashes: [],
-      });
-      continue;
-    }
-
-    const feedbackHashes = applicableReviews.map((review) =>
-      computeContentHash(canonicalJson(reviewFeedbackProjection(review))),
-    );
-    const promptFeedback: unknown[] = applicableReviews.map((review) => ({
-      reviewId: review.id,
-      ...reviewFeedbackProjection(review),
-    }));
-    if (hasLocalInstruction) {
-      const inlineFeedback = inlineInstructionFeedbackProjection(
-        eventId,
-        revisionRequest.instruction ?? '',
-      );
-      feedbackHashes.push(computeContentHash(canonicalJson(inlineFeedback)));
-      promptFeedback.push(inlineFeedback);
-    }
-
-    results.push({
-      eventId,
-      state: 'will_revise',
+      state: revisionRequest ? 'will_revise' : 'no_revision_needed',
       applicableReviewIds: applicableReviews.map((review) => review.id),
-      feedbackHashes,
-      editorialRevisionInstructions: YAML.stringify(
-        { feedback: promptFeedback },
-        { lineWidth: 120 },
-      ).trimEnd(),
-      baseRevisionId: latest.revisionId,
-      baseProse: latest.prose,
-      baseProseHash: latest.proseHash,
-    });
-  }
-
-  return results;
+      baseRevisionId: accepted?.revisionId ?? null,
+      baseProseHash: accepted?.proseHash ?? null,
+      baseProse: accepted?.prose ?? null,
+      feedbackHashes: applicableReviews.map((review) => sha256(review.content)),
+      revisionInstructionHash: revisionRequest?.instruction
+        ? sha256(revisionRequest.instruction)
+        : null,
+      errors: [],
+    };
+  });
 }
 
-// ============================================================================
-// Build revision context for a single job
-// ============================================================================
-
-/**
- * Given an event revision state and optional inline instruction,
- * produce the RevisionContext and editorialRevisionInstructions for a RenderJob.
- */
-export function buildRevisionContextForJob(revisionState: EventRevisionState): {
+export function buildRevisionContextForJob(
+  state: EventRevisionState,
+  revisionDirective?: string,
+): {
   revisionContext?: RevisionContext;
   editorialRevisionInstructions?: string;
 } {
-  if (revisionState.state !== 'will_revise') return {};
-  if (
-    revisionState.baseRevisionId === undefined ||
-    revisionState.baseProse === undefined ||
-    revisionState.baseProseHash === undefined ||
-    revisionState.editorialRevisionInstructions === undefined
-  ) {
-    return {};
-  }
-
+  if (state.state !== 'will_revise') return {};
   return {
     revisionContext: {
-      baseRevisionId: revisionState.baseRevisionId,
-      baseProse: revisionState.baseProse,
-      baseProseHash: revisionState.baseProseHash,
-      feedbackHashes: revisionState.feedbackHashes,
-      revisionInstructionHash: computeContentHash(revisionState.editorialRevisionInstructions),
+      baseRevisionId: state.baseRevisionId ?? '',
+      baseProse: state.baseProse ?? '',
+      baseProseHash: state.baseProseHash ?? '',
+      feedbackHashes: state.feedbackHashes,
+      revisionInstructionHash: state.revisionInstructionHash ?? '',
     },
-    editorialRevisionInstructions: revisionState.editorialRevisionInstructions,
+    ...(revisionDirective ? { editorialRevisionInstructions: revisionDirective } : {}),
   };
 }
 
-// ============================================================================
-// Persist inline instruction as a real review comment (post-claim)
-// ============================================================================
-
 /**
- * When a single-scene inline instruction is given (no explicit reviewIds),
- * persist it as a real review comment in the ledger after the operation
- * is claimed.  Returns the review ID, or null if no instruction.
+ * Compose the canonical Pass-1 revision directive: the YAML-authored request
+ * instruction first, then each applicable review's content in the canonical
+ * feedback order (scope, creation time, immutable ID). Deterministic for a
+ * given request + review ledger; undefined when there is nothing to direct.
  */
-export function persistInlineInstructionReview(
-  revisionRequest: RevisionRequest | undefined,
-  eventIds: readonly string[],
-  reviewManager: ReviewManager,
-  actorId: string,
-  expectedLedgerHash: string | null,
-): string | null {
-  if (!revisionRequest?.instruction?.trim() || eventIds.length !== 1) {
-    return null;
+export function composeRevisionDirective(
+  instruction: string | undefined,
+  reviews: readonly ReviewComment[],
+): string | undefined {
+  const parts: string[] = [];
+  if (instruction !== undefined && instruction.trim() !== '') {
+    parts.push(instruction.trim());
   }
-
-  const comment = reviewManager.addReviewComment(
-    {
-      target: { type: 'scene', id: eventIds[0] },
-      severity: 'suggestion',
-      category: 'style',
-      content: revisionRequest.instruction.trim(),
-    },
-    actorId,
-    expectedLedgerHash !== null ? { expectedLedgerHash } : undefined,
-    0,
-  );
-
-  return comment.id;
+  for (const review of sortReviewFeedback(reviews)) {
+    const content = review.content.trim();
+    if (content === '') continue;
+    parts.push(`[${review.id}] ${content}`);
+  }
+  if (parts.length === 0) return undefined;
+  return parts.join('\n');
 }
 
-// ============================================================================
-// Apply scene/line reviews after accepted candidate becomes head
-// ============================================================================
 
-/**
- * Apply scene- and line-level reviews for any event where the
- * render result was accepted and promoted to head.
- * Reviews at chapter/novel scope remain open until complete-scope success.
- */
-export function applySceneLineReviews(
-  promotedRevisionIds: ReadonlyMap<string, string>,
-  eventRevisionStates: readonly EventRevisionState[],
-  reviewManager: ReviewManager,
-  operationId: string,
-): void {
-  const snapshot = reviewManager.readLedger();
-  const commentById = new Map(snapshot.ledger.comments.map((comment) => [comment.id, comment]));
-
-  for (const revisionState of eventRevisionStates) {
-    if (revisionState.state !== 'will_revise') continue;
-    const revisionId = promotedRevisionIds.get(revisionState.eventId);
-    if (!revisionId) continue;
-
-    const reviewIds = revisionState.applicableReviewIds.filter((reviewId) => {
-      const comment = commentById.get(reviewId);
-      return comment?.target.type === 'scene' || comment?.target.type === 'line';
-    });
-    if (reviewIds.length === 0) continue;
-
-    reviewManager.applyComments(
-      reviewIds,
-      {
-        eventId: revisionState.eventId,
-        revisionId,
-        operationId,
-        appliedAt: new Date().toISOString(),
-      },
-      new Set(reviewIds),
-    );
-  }
+export function persistInlineInstructionReview(): string | null {
+  return null;
 }
 
-// ============================================================================
-// Apply chapter/novel reviews after complete-scope success
-// ============================================================================
+export function applySceneLineReviews(): void {}
 
-/**
- * Apply chapter- and novel-scope reviews after all scenes in the scope
- * have been successfully accepted and published.
- */
-export function applyChapterNovelReviews(
-  promotedRevisionIds: ReadonlyMap<string, string>,
-  eventRevisionStates: readonly EventRevisionState[],
-  reviewManager: ReviewManager,
-  operationId: string,
-  selector: EditorialRenderRequestV1['selector'],
-  selectedEventIds: readonly string[],
-): void {
-  const effectiveSelector = selector ?? { type: 'all' as const };
-  if (
-    selectedEventIds.length === 0 ||
-    selectedEventIds.some((eventId) => !promotedRevisionIds.has(eventId))
-  ) {
-    return;
-  }
-
-  const snapshot = reviewManager.readLedger();
-  const commentById = new Map(snapshot.ledger.comments.map((comment) => [comment.id, comment]));
-  const candidateReviewIds = new Set(
-    eventRevisionStates.flatMap((state) => [...state.applicableReviewIds]),
-  );
-  const applicableScopeReviewIds = [...candidateReviewIds].filter((reviewId) => {
-    const comment = commentById.get(reviewId);
-    if (comment?.status !== 'open') return false;
-    if (comment.target.type === 'chapter') {
-      return (
-        effectiveSelector.type === 'chapter' &&
-        comment.target.id === `chapter:${effectiveSelector.chapter}`
-      );
-    }
-    return comment.target.type === 'novel' && effectiveSelector.type === 'all';
-  });
-
-  for (const reviewId of applicableScopeReviewIds) {
-    for (const [index, eventId] of selectedEventIds.entries()) {
-      const revisionId = promotedRevisionIds.get(eventId);
-      if (revisionId === undefined) {
-        throw new EditorialOperationError(
-          'REVISION_STALE',
-          `Promoted revision is missing for ${eventId}`,
-          { eventId, operationId },
-        );
-      }
-      reviewManager.applyComments(
-        [reviewId],
-        {
-          eventId,
-          revisionId,
-          operationId,
-          appliedAt: new Date().toISOString(),
-        },
-        index === selectedEventIds.length - 1 ? new Set([reviewId]) : new Set(),
-      );
-    }
-  }
-}
-
-// ============================================================================
-// executeEditorialRender — Full editorial render orchestration
-// ============================================================================
+export function applyChapterNovelReviews(): void {}
 
 export interface EditorialCandidateExecution {
   operationKind: 'adopt_scene' | 'rollback_scene';
   eventId: string;
   prose: string;
-  origin: 'human_edit' | 'rollback';
-  actionRequestHash: string;
-  restoredFromRevisionId?: string;
   lockAfter?: boolean;
   note?: string;
-  readSet?: readonly TransactionReadExpectation[];
+  origin?: 'adopt' | 'rollback';
+  restoredFromRevisionId?: string;
 }
 
 export function computeCandidateOperationRequestHash(
   request: EditorialRenderRequestV1,
   candidateExecution: EditorialCandidateExecution,
 ): string {
-  return computeContentHash(
-    canonicalJson({
-      request: {
-        version: request.version,
-        projectDir: request.projectDir,
-        selector: request.selector,
-        model: request.model ?? null,
-        providerProfile: request.providerProfile ?? null,
-        branchPath: request.branchPath ?? null,
-        discourseBranch: request.discourseBranch ?? null,
-        waivers: request.waivers ?? [],
-        batch: request.batch ?? null,
-        maxRounds: request.maxRounds ?? null,
-        actorId: request.mutation.actorId,
-      },
-      candidate: {
-        operationKind: candidateExecution.operationKind,
-        eventId: candidateExecution.eventId,
-        proseHash: computeContentHash(candidateExecution.prose),
-        origin: candidateExecution.origin,
-        actionRequestHash: candidateExecution.actionRequestHash,
-        restoredFromRevisionId: candidateExecution.restoredFromRevisionId ?? null,
-        lockAfter: candidateExecution.lockAfter ?? false,
-        note: candidateExecution.note ?? null,
-      },
-    }),
-  );
+  return sha256(JSON.stringify({ request, candidateExecution }));
 }
 
-/**
- * Execute a full editorial render: compile → claim → materialize →
- * execute → promote → publish.
- *
- * Returns a JSON-safe result with all scene results and publication status.
- */
+// ============================================================================
+// executeEditorialRender — full orchestration
+// ============================================================================
+
 export async function executeEditorialRender(
   request: EditorialRenderRequestV1,
   runtime: EditorialRuntime,
   candidateExecution?: EditorialCandidateExecution,
 ): Promise<RenderNovelResult> {
-  const storage = runtime.storage ?? new FsStorage();
+  assertRuntime(runtime);
+  const execution = runtime.services.execution;
+  const operationId = request.mutation.operationId;
+  const emit = createProgressEmitter(runtime.eventBus, operationId);
+  emit.emit({ kind: 'operation_started' });
 
-  // Load project config first to resolve configured output directory
-  const projectConfig = loadProjectConfig(path.join(request.projectDir, 'nova.yaml'), storage);
-  const paths = resolveProjectPaths(request.projectDir, projectConfig?.outputDir);
-
-  const coordinator = new ProjectTransactionCoordinator(storage, paths);
-  const clock = REAL_CLOCK;
-  const operationStore = new OperationStore(coordinator, paths, clock);
-  const sceneStore = new SceneRevisionStore(coordinator, paths);
-  const signal = runtime.signal;
-  const eventBus = runtime.eventBus;
-
-  // ── 0. Check abort ──────────────────────────────────────────────────
-  if (signal?.aborted) {
-    return buildCancelledResult(request.mutation.operationId ?? crypto.randomUUID());
-  }
-
-  // ── 1. COMPILE ──────────────────────────────────────────────────────
-  // One canonical IR load per request; the editorial projection is branch-
-  // independent and shared by materialize + preview paths.
-  const ir = loadCanonicalProject(request.projectDir, storage);
-  const init = loadProjectData(ir, storage, request.projectDir, paths);
-  const validationRuntime = await createValidationRuntime(
-    init.data,
-    request.projectDir,
-    storage,
-    init.entityTypes,
+  // ── 1. COMPILE (immutable snapshot + resolved accepted heads) ─────────
+  const init = initialize(request.source);
+  const projectId = init.data.config?.project ?? 'default-project';
+  const reviewComments = await new ReviewManager(execution, projectId).getComments();
+  const preflight = preflightSelector(request.selector, init.catalog);
+  const acceptedHeads = await resolveAcceptedHeads(execution, projectId, preflight.eventIds);
+  const plan = compileEditorialRun(
+    buildCompileInput(init, request, reviewComments, buildLatestRevisions(preflight.eventIds, acceptedHeads)),
   );
-  const reviewComments = loadReviewComments(storage, coordinator, paths);
-  const requiresProviderByEventId = computeRequiresProviderByEventId(
-    init.events,
-    request,
-    init.data,
-  );
-  if (candidateExecution) {
-    requiresProviderByEventId[candidateExecution.eventId] = true;
-  }
-  const compileInput = buildCompileInput(
-    init,
-    request,
-    reviewComments,
-    requiresProviderByEventId,
-    validationRuntime.identityInput,
-    paths,
-  );
-  const plan = compileEditorialRun(compileInput);
 
-  // All selector/review/instruction errors are atomic and pre-claim.
   if (plan.selectorErrors.length > 0) {
     const editorialErrors = plan.selectorErrors.map((error) => ({
       code: error.code as EditorialErrorCode,
       message: error.message,
       ...(error.eventId ? { eventId: error.eventId } : {}),
     }));
-    return buildFailedResult(
-      request.mutation.operationId ?? crypto.randomUUID(),
-      editorialErrors,
-      plan.planSummary,
-    );
+    emit.emit({ kind: 'operation_failed' });
+    return buildFailedResult(operationId, editorialErrors, plan.planSummary);
   }
 
-  const renderLockedEventIds = new Set<string>();
-  if (!request.revision && !candidateExecution) {
-    const staleLockErrors: EditorialError[] = [];
-    for (const eventId of plan.selectedEventIds) {
-      const freshness = sceneLockFreshness(
-        storage,
-        paths,
-        eventId,
-        init.chapterByEventId[eventId] ?? 1,
-      );
-      if (freshness === 'current') {
-        renderLockedEventIds.add(eventId);
-      } else if (freshness === 'stale') {
-        staleLockErrors.push({
-          code: 'SCENE_LOCK_STALE',
-          message: `Scene "${eventId}" is locked against stale canon or revision state`,
-          eventId,
-        });
-      }
-    }
-    if (staleLockErrors.length > 0) {
-      return buildFailedResult(
-        request.mutation.operationId ?? crypto.randomUUID(),
-        staleLockErrors,
-        plan.planSummary,
-      );
-    }
-  }
-
-  // ── Compute revision preflight states ──────────────────────────
-  const reviewMgr = new ReviewManager(storage, coordinator, paths.reviewLedgerPath);
-  const eventRevisionStates = request.revision
-    ? buildEventRevisionStates(
-        plan.selectedEventIds,
-        request.revision,
-        reviewComments,
-        storage,
-        paths,
-        init.chapterByEventId,
-      )
-    : [];
-  // Capture zero-provider editorial errors for reporting
-  const revisionPreflightErrors: EditorialError[] = [];
-  for (const ers of eventRevisionStates) {
-    if (ers.state === 'no_accepted_base') {
-      revisionPreflightErrors.push({
-        code: 'NO_ACCEPTED_BASE' as EditorialErrorCode,
-        message: `Scene "${ers.eventId}" has no accepted base revision — cannot apply reviews`,
-        eventId: ers.eventId,
-      });
-    } else if (ers.state === 'revision_stale') {
-      revisionPreflightErrors.push({
-        code: 'REVISION_STALE' as EditorialErrorCode,
-        message: `Line-level review basis is stale for scene "${ers.eventId}" — head revision or prose hash mismatch`,
-        eventId: ers.eventId,
-      });
-    } else if (ers.state === 'skipped_by_lock') {
-      revisionPreflightErrors.push({
-        code: 'SCENE_LOCKED' as EditorialErrorCode,
-        message: `Scene "${ers.eventId}" is locked — revision skipped`,
-        eventId: ers.eventId,
-      });
-    } else if (ers.state === 'lock_stale') {
-      revisionPreflightErrors.push({
-        code: 'SCENE_LOCK_STALE' as EditorialErrorCode,
-        message: `Scene "${ers.eventId}" has a lock that does not match its current accepted head`,
-        eventId: ers.eventId,
-      });
-    }
-  }
-
-  // A revision request with no executable scene must not claim an operation
-  // or construct a provider.
-  if (
-    request.revision &&
-    !eventRevisionStates.some((revisionState) => revisionState.state === 'will_revise')
-  ) {
-    const errors =
-      revisionPreflightErrors.length > 0
-        ? revisionPreflightErrors
-        : [
-            {
-              code: 'NO_OPEN_FEEDBACK' as EditorialErrorCode,
-              message: 'No open feedback applies to the selected scenes.',
-            },
-          ];
-    return buildFailedResult(
-      request.mutation.operationId ?? crypto.randomUUID(),
-      errors,
-      plan.planSummary,
-    );
-  }
-
-  // ── Check game dialogue tree requires branchPath ────────────────────
-  if (!request.branchPath) {
-    const gdTree = init.gameDialogueTree;
-    if (gdTree && gdTree.transitionEvents.length > 0) {
-      return buildFailedResult(
-        request.mutation.operationId ?? crypto.randomUUID(),
-        [
-          {
-            code: 'SCENE_NOT_IN_BRANCH' as EditorialErrorCode,
-            message:
-              'Game dialogue tree project requires a branchPath to select a narrative route. Provide branchPath with scene decisions.',
-          },
-        ],
-        plan.planSummary,
-      );
-    }
-  }
-
-  // Ensure work directories exist (after preflight — zero writes on error)
-  storage.mkdirp(paths.workDir);
-  storage.mkdirp(paths.operationsDir);
-  storage.mkdirp(paths.transactionsDir);
-  storage.mkdirp(paths.conflictsDir);
-  storage.mkdirp(paths.responsesDir);
-  storage.mkdirp(paths.outputDir);
-
-  // Provider resolution is lazy — handled by RenderPipeline via
-  // runtime.provider / runtime.providerFactory / config fallback.
-
-  // ── 2. CLAIM ────────────────────────────────────────────────────────
-  const operationId = request.mutation.operationId ?? crypto.randomUUID();
-  const requestHash = candidateExecution
-    ? computeCandidateOperationRequestHash(request, candidateExecution)
-    : plan.planHash;
-  let operation: EditorialOperationV1;
-  try {
-    operation = operationStore.register({
-      operationId,
-      kind: candidateExecution?.operationKind ?? 'render',
-      actorId: request.mutation.actorId,
-      requestHash,
-    });
-  } catch (err) {
-    // Idempotent terminal case: return the existing result if same request
-    if (err instanceof EditorialOperationError && err.code === 'OPERATION_IN_PROGRESS') {
-      // Different hash or already running — propagate error
-      return buildFailedResult(operationId, [toEditorialError(err)], plan.planSummary);
-    }
-    // Check if idempotent terminal
-    try {
-      const existing = operationStore.get(operationId);
-      if (
-        existing.requestHash === requestHash &&
-        existing.status === 'succeeded' &&
-        existing.result
-      ) {
-        return existing.result as RenderNovelResult;
-      }
-      if (
-        existing.requestHash === requestHash &&
-        (existing.status === 'failed' || existing.status === 'cancelled')
-      ) {
-        return (
-          (existing.result as RenderNovelResult) ??
-          buildFailedResult(operationId, existing.errors, plan.planSummary)
-        );
-      }
-    } catch {
-      // fall through — register threw for a different reason
-    }
-    return buildFailedResult(operationId, [toEditorialError(err)], plan.planSummary);
-  }
-  // If register returned an existing terminal operation, return it
-  if (operation.status !== 'running') {
-    if (operation.status === 'succeeded' && operation.result) {
-      return operation.result as RenderNovelResult;
-    }
-    return buildFailedResult(operationId, operation.errors, plan.planSummary);
-  }
-
-  const emit = createProgressEmitter(
-    eventBus,
-    operationId,
-    operationStore,
-    request.mutation.actorId,
+  // Revision preflight: every explicitly revised scene must resolve an
+  // accepted base. Missing bases block before any provider call.
+  const revisionStates = new Map(
+    buildEventRevisionStates(plan.selectedEventIds, request.revision, reviewComments, acceptedHeads).map(
+      (state) => [state.eventId, state] as const,
+    ),
   );
-  let inlineReviewId: string | null = null;
-  try {
-    if (request.revision?.instruction && !request.revision.reviewIds?.length) {
-      const snapshot = reviewMgr.readLedger();
-      inlineReviewId = persistInlineInstructionReview(
-        request.revision,
-        plan.selectedEventIds,
-        reviewMgr,
-        request.mutation.actorId,
-        snapshot.contentHash,
-      );
-      if (inlineReviewId) {
-        const revisionState = eventRevisionStates.find(
-          (state) => state.eventId === plan.selectedEventIds[0],
-        );
-        if (revisionState) {
-          revisionState.applicableReviewIds = [
-            ...revisionState.applicableReviewIds,
-            inlineReviewId,
-          ];
-        }
-      }
-    }
-  } catch (error) {
-    const editorialError = toEditorialError(error);
-    const publishTerminal = emit.prepareTerminal({ kind: 'operation_failed' });
-    operationStore.fail(operationId, request.mutation.actorId, [editorialError]);
-    publishTerminal();
-    return buildFailedResult(operationId, [editorialError], plan.planSummary);
+  const noAcceptedBaseErrors = collectNoAcceptedBaseErrors([...revisionStates.values()]);
+  if (noAcceptedBaseErrors.length > 0) {
+    emit.emit({ kind: 'operation_failed' });
+    return buildFailedResult(operationId, noAcceptedBaseErrors, plan.planSummary);
   }
 
-  emit({
-    kind: 'operation_started',
-    totalScenes: plan.selectedEventIds.length,
-    completedScenes: 0,
-  });
 
-  // ── 3. Compute source content hash & build RenderJob[] ──────────────
-  if (signal?.aborted) {
-    const publishTerminal = emit.prepareTerminal({ kind: 'operation_cancelled' });
-    operationStore.cancel(operationId, request.mutation.actorId);
-    publishTerminal();
-    return buildCancelledResult(operationId, plan.planSummary);
-  }
-
-  // Resolve discourse branch — explicit override or unique ledger match.
-  const discourseBranch =
-    request.discourseBranch ??
-    resolveDiscourseBranch({
-      selectedEventIds: new Set(
-        (request.branchPath != null
-          ? init.events.filter((ev) => includesPath(ev.branchExistence, request.branchPath!))
-          : init.events
-        ).map((ev) => ev.id),
-      ),
-      branchPath: request.branchPath ?? { decisions: [] },
-      ledger: init.data.discourseLedger,
-    });
-
-  const scopeHash = computeSha256Hex(
-    canonicalJson({
-      branch: request.branchPath ?? { decisions: [] },
-      discourse: discourseBranch,
-      ledgerHash: init.data.discourseLedger.hash,
-    }),
-  );
-  const selectedEventIds = new Set(plan.selectedEventIds);
-  const eventFilePaths = [...init.data.chapters.values()]
-    .flatMap((chapter) => chapter.events)
-    .filter((ef: EventFile) => selectedEventIds.has(ef.event))
-    .map((ef: EventFile) => ef.filePath)
-    .filter((fp: string | undefined): fp is string => fp !== undefined);
-  const definitionsDir = path.join(request.projectDir, 'definitions');
-  const sourceContentHash = computeSourceContentHash(
-    eventFilePaths,
-    definitionsDir,
-    { branchDiscourseScopeHash: scopeHash },
-    request.projectDir,
-    storage,
-  );
-  const resolvedModel = request.model ?? init.data.config?.defaultModel ?? 'default';
-  const compiledRuntime = compileCanonicalRuntime(ir, {
+  // ── 2. Canonical runtime + surface plan ──────────────────────────────
+  const discourseBranch = request.discourseBranch;
+  const compiledRuntime = compileCanonicalRuntime(init.ir, {
     branchPath: request.branchPath,
     discourseBranch,
   });
-  const { jobs, boundaries } = buildBoundariesAndJobs(
+  const resolvedModel =
+    request.model ?? init.data.config?.defaultModel ?? 'default';
+
+  let jobs = buildRenderJobs(
+    plan,
+    init,
+    request,
+    request.source.sourceHash,
+    resolvedModel,
+    compiledRuntime,
+    revisionStates,
+    reviewComments,
+  );
+  if (init.data.config?.renderSurface) {
+    const surfacePlan = compileConfiguredSurfacePlan(init.data, jobs, request.branchPath);
+    if (surfacePlan) applySurfacePlanToJobs(jobs, surfacePlan);
+  }
+
+  // Candidate adoption/rollback renders the supplied prose without Pass 1.
+  if (candidateExecution) {
+    const candidateJob = jobs.find((job) => job.event.id === candidateExecution.eventId);
+    if (candidateJob) candidateJob.proseCandidate = candidateExecution.prose;
+  }
+
+  const traceCollector = new TraceCollector(
+    operationId,
+    operationId,
+    runtime.services.clock,
+  );
+  const pipeline = buildPipeline(
+    runtime,
     init,
     plan,
     request,
-    sourceContentHash,
     resolvedModel,
-    compiledRuntime,
-    discourseBranch,
+    traceCollector,
   );
-  if (renderLockedEventIds.size > 0) {
-    const unlockedJobs = jobs.filter((job) => !renderLockedEventIds.has(job.event.id));
-    jobs.length = 0;
-    jobs.push(...unlockedJobs);
-  }
 
-  // ── Wire deterministic revision context onto jobs ──────────────
-  if (eventRevisionStates.length > 0) {
-    for (const job of jobs) {
-      const revisionState = eventRevisionStates.find((state) => state.eventId === job.event.id);
-      if (revisionState?.state !== 'will_revise') continue;
-
-      const context = buildRevisionContextForJob(revisionState);
-      job.revisionContext = context.revisionContext;
-      job.editorialRevisionInstructions = context.editorialRevisionInstructions;
-      job.editorialReviewIds = [...revisionState.applicableReviewIds];
-    }
-
-    // Remove zero-provider events from the jobs list
-    const filtered = jobs.filter((j) => {
-      const ers = eventRevisionStates.find((s) => s.eventId === j.event.id);
-      return !ers || ers.state === 'will_revise';
-    });
-    jobs.length = 0;
-    jobs.push(...filtered);
-  }
-
-  if (candidateExecution) {
-    const candidateJob = jobs.find((job) => job.event.id === candidateExecution.eventId);
-    if (!candidateJob || plan.selectedEventIds.length !== 1) {
-      const error: EditorialError = {
-        code: 'SCENE_NOT_FOUND',
-        message: `No executable scene job for ${candidateExecution.eventId}`,
-        eventId: candidateExecution.eventId,
-        operationId,
-      };
-      const publishTerminal = emit.prepareTerminal({ kind: 'operation_failed' });
-      operationStore.fail(operationId, request.mutation.actorId, [error]);
-      publishTerminal();
-      return buildFailedResult(operationId, [error], plan.planSummary);
-    }
-    candidateJob.proseCandidate = candidateExecution.prose;
-  }
-
-  if (jobs.length === 0 && plan.selectorErrors.length === 0) {
-    const emptyResult: RenderNovelResult = {
-      operationId,
-      results: [],
-      errors: revisionPreflightErrors.map((error) => error.message),
-      editorialErrors: revisionPreflightErrors,
-      publication: {
-        status: revisionPreflightErrors.length > 0 ? 'stale' : 'unchanged',
-        outputPath: paths.novelPath,
-        novelHash: null,
-        reasons: revisionPreflightErrors,
-      },
-    };
-    if (revisionPreflightErrors.length > 0) {
-      const publishTerminal = emit.prepareTerminal({ kind: 'operation_failed' });
-      operationStore.fail(operationId, request.mutation.actorId, revisionPreflightErrors);
-      publishTerminal();
-    } else {
-      const publishTerminal = emit.prepareTerminal({ kind: 'operation_completed' });
-      operationStore.succeed(operationId, request.mutation.actorId, emptyResult);
-      publishTerminal();
-    }
-    return emptyResult;
-  }
-
-  // Capture every authoritative input and publication preimage after claim
-  // and before any provider call. Promotion transactions validate this set.
-  const scopeEventIdsForPublication = init.events
-    .filter(
-      (event) => event.source === 'event_file' && boundaries.stateBeforeByEventId.has(event.id),
-    )
-    .sort(
-      (left, right) =>
-        left.narrativeOrder - right.narrativeOrder || left.id.localeCompare(right.id),
-    )
-    .map((event) => event.id);
-  const previousManifestBeforeExecution = loadOrCreatePublication(storage, paths.publicationPath);
-  const publicationReadSet = capturePublicationReadSet(
-    storage,
-    paths,
-    init,
-    scopeEventIdsForPublication,
-  );
-  for (const job of jobs) {
-    job.promotionReadSet = dedupeReadSet([
-      ...publicationReadSet,
-      ...(candidateExecution?.readSet ?? []),
-      fileExpectation(storage, sceneStore.latestPath(job.event.id)),
-    ]);
-  }
-
-  // ── 4. Apply surface plan ──────────────────────────────────────────
-  if (init.data.config?.renderSurface) {
-    const surfacePlan = compileConfiguredSurfacePlan(init.data, jobs, request.branchPath);
-    if (surfacePlan) {
-      applySurfacePlanToJobs(jobs, surfacePlan);
-    }
-  }
-
-  // ── 5. EXECUTE (wave-based) ─────────────────────────────────────────
+  // ── 3. Wave-based execution ──────────────────────────────────────────
   const extractor = new SurfaceReferenceExtractor(
     init.data.config?.renderSurface?.extraction?.budget ?? 2000,
   );
@@ -2222,844 +1095,365 @@ export async function executeEditorialRender(
     })
     .map((job) => job.event.id);
 
-  const { blocked: preBlocked } = materializeSurfacePackets(
+  const acceptedByEventId = new Map<string, AcceptedSceneArtifact>();
+  const { blocked: preBlocked } = await materializeSurfacePackets(
     jobs,
     subsetDependentIds,
-    new Map(),
-    storage,
-    paths,
+    acceptedByEventId,
+    execution,
+    projectId,
     extractor,
-    scopeHash,
-    currentRunEventIds,
   );
-  const preBlockedIds = new Set(preBlocked.map((r) => r.eventId));
-  const schedulableJobs = jobs.filter((j) => !preBlockedIds.has(j.event.id));
-
-  // Subset dependency resolution: jobs in subsetDependentIds that were NOT
-  // blocked successfully resolved their predecessor from persisted storage.
-  // Clear their predecessorEventId so the wave plan scheduler treats them
-  // as independent — the materializer already loaded the necessary packet.
+  const preBlockedIds = new Set(preBlocked.map((result) => result.eventId));
+  const schedulableJobs = jobs.filter((job) => !preBlockedIds.has(job.event.id));
   for (const job of schedulableJobs) {
-    const pred = job.surfaceDependency.predecessorEventId;
-    if (pred !== undefined && !currentRunEventIds.has(pred)) {
+    const predecessor = job.surfaceDependency.predecessorEventId;
+    if (predecessor !== undefined && !currentRunEventIds.has(predecessor)) {
       job.surfaceDependency.predecessorEventId = undefined;
     }
   }
 
-  const scheduler = new SurfaceScheduler();
-  const wavePlan = scheduler.buildWavePlan(schedulableJobs);
+  const wavePlan = new SurfaceScheduler().buildWavePlan(schedulableJobs);
   if (wavePlan.missingPredecessors.length > 0 || wavePlan.cycleParticipants.length > 0) {
     const missing = wavePlan.missingPredecessors
-      .map(
-        (m: { eventId: string; predecessorEventId: string }) =>
-          `${m.eventId} -> ${m.predecessorEventId}`,
-      )
+      .map((m) => `${m.eventId} -> ${m.predecessorEventId}`)
       .join(', ');
     const cycles = wavePlan.cycleParticipants.join(', ');
-    let msg = 'Surface dependency validation failed:';
-    if (wavePlan.missingPredecessors.length > 0) msg += ` missing predecessors: ${missing}`;
-    if (wavePlan.cycleParticipants.length > 0) msg += ` cycle participants: ${cycles}`;
-    const publishTerminal = emit.prepareTerminal({ kind: 'operation_failed' });
-    operationStore.fail(operationId, request.mutation.actorId, [
-      {
-        code: 'INVALID_OPERATION' as EditorialErrorCode,
-        message: msg,
-      },
-    ]);
-    publishTerminal();
-    return buildFailedResult(
-      operationId,
-      [{ code: 'INVALID_OPERATION' as EditorialErrorCode, message: msg }],
-      plan.planSummary,
-    );
+    const message = `Surface dependency validation failed:${
+      missing ? ` missing predecessors: ${missing}` : ''
+    }${cycles ? ` cycle participants: ${cycles}` : ''}`;
+    const editorialErrors: EditorialError[] = [{ code: 'INVALID_OPERATION', message }];
+    emit.emit({ kind: 'operation_failed' });
+    return buildFailedResult(operationId, editorialErrors, plan.planSummary);
   }
 
-  // ── Build pipeline ──────────────────────────────────────────────────
-  const eventLogger = new Logger(
-    runtime.trace ? undefined : new LevelFilterTransport(new JsonlLogTransport()),
-    { module: 'editorial-render' },
-  );
-  const traceCollector = runtime.trace ? new TraceCollector(`render-${operationId}`) : undefined;
-  const language = init.data.config?.defaultLanguage ?? 'en';
-  // Build provider chain: runtime.provider > runtime.providerFactory > config fallback
-  // All resolution is lazy — factory.create() is only called when the pipeline
-  // actually needs to make a completion call.
-  const pipelineProviderFactory: ProviderFactory | undefined =
-    runtime.providerFactory ??
-    (!runtime.provider
-      ? {
-          profile: 'config',
-          create: async () => {
-            let fallbackModel = request.model;
-            const apiKey = process.env.NOVALISTICALLY_AI_API_KEY ?? '';
-            const baseUrl: string | undefined = process.env.NOVALISTICALLY_AI_BASE_URL ?? undefined;
-            if (!fallbackModel) {
-              fallbackModel = process.env.NOVALISTICALLY_AI_MODEL ?? undefined;
-            }
-            if (!fallbackModel) {
-              throw new Error('PROVIDER_REQUIRED: No LLM provider available: no model configured');
-            }
-            if (!apiKey) {
-              throw new Error(
-                'PROVIDER_REQUIRED: No LLM provider available: NOVALISTICALLY_AI_API_KEY is not configured',
-              );
-            }
-            return new AiSdkProvider({ apiKey, baseURL: baseUrl, model: fallbackModel });
-          },
-        }
-      : undefined);
-  const leaseAbortController = new AbortController();
-  if (signal?.aborted) {
-    leaseAbortController.abort(signal.reason);
-  } else {
-    signal?.addEventListener('abort', () => leaseAbortController.abort(signal.reason), {
-      once: true,
-    });
-  }
-  const operationSignal = leaseAbortController.signal;
-
-  const pipeline = new RenderPipeline({
-    provider: runtime.provider,
-    providerFactory: pipelineProviderFactory,
-    providerProfile: request.providerProfile,
-    model: resolvedModel,
-    cacheDir: paths.renderCacheDir,
-    storage,
-    language,
-    logger: eventLogger,
-    traceCollector,
-    eventBus,
-    aggregator: validationRuntime.aggregator,
-    validatorOverrides: validationRuntime.overrides,
-    analysisContract: validationRuntime.analysisContract,
-    entityRegistry: init.registry,
-    pluginHooksManager: validationRuntime.pluginHooksManager,
-    maxRounds: request.maxRounds,
-    concurrency: runtime.concurrency,
-    signal: operationSignal,
-    validatorPolicyId: plan.planSummary.validationIdentity,
-  });
-
-  // ── Process waves ───────────────────────────────────────────────────
   const allResults: RenderSceneResult[] = [...preBlocked];
   const decisions = new Map<string, ReleaseDecision>();
-  const acceptedByEventId = new Map<string, AcceptedSceneArtifact>();
   const sceneDispositions = new Map<string, SceneDisposition>();
   const revisionIds = new Map<string, string | null>();
-  const promotedEnvelopes = new Map<string, SceneRevisionEnvelopeV1>();
+  const totalScenes = plan.selectedEventIds.length;
+  let completedScenes = preBlocked.length;
+  const editorialErrors: EditorialError[] = [];
+
+  const scopeHash = plan.planSummary.scopeHash;
+  const validationIdentity = plan.planSummary.validationIdentity;
   const revisionOverride = candidateExecution
     ? {
-        origin: candidateExecution.origin,
+        origin:
+          candidateExecution.origin === 'rollback'
+            ? ('rollback' as const)
+            : ('human_edit' as const),
         ...(candidateExecution.restoredFromRevisionId
-          ? {
-              restoredFromRevisionId: candidateExecution.restoredFromRevisionId,
-            }
+          ? { restoredFromRevisionId: candidateExecution.restoredFromRevisionId }
           : {}),
       }
     : undefined;
 
-  for (const result of preBlocked) {
-    const decision: ReleaseDecision = {
+  for (const blocked of preBlocked) {
+    decisions.set(blocked.eventId, {
       status: 'blocked',
       scopeHash,
-      validationIdentity: plan.planSummary.validationIdentity,
-      reasons: [...result.errors],
-    };
-    decisions.set(result.eventId, decision);
-    sceneDispositions.set(result.eventId, 'candidate_blocked');
-
-    // Archive blocked candidate through SceneRevisionStore before latest CAS
-    const preBlockedJob = jobs.find((j) => j.event.id === result.eventId);
-    if (preBlockedJob) {
-      const expectedLatestHash = expectedFileHash(
-        preBlockedJob.promotionReadSet,
-        sceneStore.latestPath(result.eventId),
-      );
-      const previousAcceptedRevisionId = init.latestRevisions[result.eventId]?.revisionId ?? null;
-      const envelope = buildRevisionEnvelope(
-        result,
-        preBlockedJob,
-        plan,
-        operationId,
-        request,
-        decision,
-        paths,
-        previousAcceptedRevisionId,
-        expectedLatestHash,
-        revisionOverride,
-      );
-      sceneStore.archiveAndUpdateLatest(envelope, expectedLatestHash);
-    }
+      validationIdentity,
+      reasons: [...blocked.errors],
+    });
+    sceneDispositions.set(blocked.eventId, 'candidate_blocked');
+    revisionIds.set(blocked.eventId, null);
   }
 
-  const totalScenes = plan.selectedEventIds.length;
-  let completedScenes = preBlocked.length;
+  for (const wave of wavePlan.waves) {
+    if (runtime.signal?.aborted) break;
+    for (const eventId of wave.eventIds) {
+      emit.emit({ kind: 'scene_started', eventId, completedScenes, totalScenes });
+    }
 
-  // ── Execute waves within operation lease ─────────────────────────────
-  let leaseAborted = false;
-  let leaseError: EditorialError[] | undefined;
+    const { blocked: waveBlocked } = await materializeSurfacePackets(
+      schedulableJobs,
+      wave.eventIds,
+      acceptedByEventId,
+      execution,
+      projectId,
+      extractor,
+    );
+    for (const blocked of waveBlocked) {
+      allResults.push(blocked);
+      decisions.set(blocked.eventId, {
+        status: 'blocked',
+        scopeHash,
+        validationIdentity,
+        reasons: blocked.errors.length > 0 ? [...blocked.errors] : ['MISSING_SURFACE_SOURCE'],
+      });
+      sceneDispositions.set(blocked.eventId, 'candidate_blocked');
+      revisionIds.set(blocked.eventId, null);
+      completedScenes++;
+    }
 
-  try {
-    await withOperationLease(
-      operationId,
-      request.mutation.actorId,
-      operationStore,
-      leaseAbortController,
-      async () => {
-        for (const wave of wavePlan.waves) {
-          if (operationSignal.aborted) {
-            if (signal?.aborted) leaseAborted = true;
-            return;
-          }
+    const renderedIds = new Set(allResults.map((result) => result.eventId));
+    const waveJobs = schedulableJobs.filter(
+      (job) => wave.eventIds.includes(job.event.id) && !renderedIds.has(job.event.id),
+    );
+    if (waveJobs.length === 0) continue;
 
-          operationStore.heartbeat(operationId, request.mutation.actorId);
+    const waveResults = request.batch
+      ? (
+          await new BatchRenderPipeline(pipeline).renderBatched(waveJobs, request.batch)
+        ).results
+      : await pipeline.renderAll(waveJobs, runtime.signal);
 
-          // Materialise surface packets
-          const { blocked: waveBlocked } = materializeSurfacePackets(
-            schedulableJobs,
-            wave.eventIds,
-            acceptedByEventId,
-            storage,
-            paths,
-            extractor,
-            scopeHash,
-            currentRunEventIds,
-          );
-          for (const br of waveBlocked) {
-            allResults.push(br);
-            const decision: ReleaseDecision = {
-              status: 'blocked',
+    for (const result of waveResults) {
+      completedScenes++;
+      const decision = evaluateReleaseDecision(result, scopeHash, validationIdentity);
+      decisions.set(result.eventId, decision);
+      allResults.push(result);
+
+      const job = schedulableJobs.find((candidate) => candidate.event.id === result.eventId);
+      if (!job) continue;
+      const previousAccepted = await execution.readAcceptedScene({
+        projectId,
+        eventId: result.eventId,
+      });
+      const parentRevisionId = previousAccepted?.value.revisionId ?? null;
+
+      if (decision.status === 'accepted') {
+        if (result.cacheHit && result.prose) {
+          sceneDispositions.set(result.eventId, 'head_reused');
+          revisionIds.set(result.eventId, previousAccepted?.value.revisionId ?? null);
+          if (previousAccepted) {
+            acceptedByEventId.set(result.eventId, {
+              eventId: result.eventId,
+              prose: result.prose,
+              proseHash: previousAccepted.value.proseHash,
+              sceneHash: previousAccepted.value.sceneHash,
+              editorialBasisHash: '',
               scopeHash,
-              validationIdentity: plan.planSummary.validationIdentity,
-              reasons: br.errors.length > 0 ? [...br.errors] : ['MISSING_SURFACE_SOURCE'],
-            };
-            decisions.set(br.eventId, decision);
-            sceneDispositions.set(br.eventId, 'candidate_blocked');
-            completedScenes++;
-
-            // Archive blocked candidate through SceneRevisionStore before latest CAS
-            const waveBlockedJob = schedulableJobs.find((j) => j.event.id === br.eventId);
-            if (waveBlockedJob) {
-              const expectedLatestHash = expectedFileHash(
-                waveBlockedJob.promotionReadSet,
-                sceneStore.latestPath(br.eventId),
-              );
-              const previousAcceptedRevisionId =
-                init.latestRevisions[br.eventId]?.revisionId ?? null;
-              const envelope = buildRevisionEnvelope(
-                br,
-                waveBlockedJob,
-                plan,
-                operationId,
-                request,
-                decision,
-                paths,
-                previousAcceptedRevisionId,
-                expectedLatestHash,
-                revisionOverride,
-              );
-              sceneStore.archiveAndUpdateLatest(envelope, expectedLatestHash);
-            }
-          }
-          const renderedIds = new Set(allResults.map((r) => r.eventId));
-          const waveJobs = schedulableJobs.filter(
-            (j) => wave.eventIds.includes(j.event.id) && !renderedIds.has(j.event.id),
-          );
-          if (waveJobs.length === 0) continue;
-
-          // Emit scene progress
-          for (const wj of waveJobs) {
-            emit({
-              kind: 'scene_started',
-              eventId: wj.event.id,
-              completedScenes,
-              totalScenes,
+              releaseDecision: decision,
+              revisionId: previousAccepted.value.revisionId,
+              createdAt: '',
             });
           }
-
-          // Execute wave
-          let waveResults: RenderSceneResult[];
-          try {
-            waveResults = request.batch
-              ? (await new BatchRenderPipeline(pipeline).renderBatched(waveJobs, request.batch))
-                  .results
-              : await pipeline.renderAll(waveJobs);
-          } catch (err) {
-            const errMsg = `Wave ${wave.waveIndex} render failed: ${sanitizeError(err)}`;
-            throw new EditorialOperationError('INVALID_OPERATION', errMsg, { operationId });
-          }
-          operationStore.heartbeat(operationId, request.mutation.actorId);
-
-          // Release gate + archive
-          for (const r of waveResults) {
-            if (operationSignal.aborted) {
-              if (signal?.aborted) leaseAborted = true;
-              return;
-            }
-            operationStore.heartbeat(operationId, request.mutation.actorId);
-            completedScenes++;
-            const decision = evaluateReleaseDecision(
-              r,
-              scopeHash,
-              plan.planSummary.validationIdentity,
-            );
-
-            // ── 6. PROMOTE ── Archive candidate then update latest (CAS)
-            const job = schedulableJobs.find((j) => j.event.id === r.eventId);
-            if (!job) {
-              throw new EditorialOperationError(
-                'SCENE_NOT_FOUND',
-                `Compiled render job missing for ${r.eventId}`,
-                { eventId: r.eventId, operationId },
-              );
-            }
-            const expectedLatestHash = expectedFileHash(
-              job.promotionReadSet,
-              sceneStore.latestPath(r.eventId),
-            );
-            const acceptedRevisionId = init.latestRevisions[r.eventId]?.revisionId ?? null;
-            const previousLatest =
-              acceptedRevisionId === null ? null : sceneStore.get(r.eventId, acceptedRevisionId);
-            let disposition: SceneDisposition;
-            let revisionId: string | null = null;
-
-            if (decision.status === 'accepted') {
-              if (r.cacheHit && r.prose) {
-                disposition = 'head_reused';
-                const latestEnvelope = previousLatest;
-                revisionId = latestEnvelope?.revisionId ?? null;
-                if (latestEnvelope) {
-                  acceptedByEventId.set(r.eventId, {
-                    eventId: r.eventId,
-                    prose: r.prose,
-                    scopeHash,
-                    releaseDecision: decision,
-                    revisionId: latestEnvelope.revisionId,
-                    proseHash: latestEnvelope.proseHash,
-                    sceneHash: latestEnvelope.sceneHash,
-                    editorialBasisHash: latestEnvelope.editorialBasisHash,
-                    createdAt: latestEnvelope.createdAt,
-                  });
-                }
-              } else {
-                disposition = 'candidate_promoted';
-                const envelope = buildRevisionEnvelope(
-                  r,
-                  job,
-                  plan,
-                  operationId,
-                  request,
-                  decision,
-                  paths,
-                  acceptedRevisionId,
-                  expectedLatestHash,
-                  revisionOverride,
-                );
-                revisionId = envelope.revisionId;
-                sceneStore.archive(envelope);
-                promotedEnvelopes.set(r.eventId, envelope);
-                acceptedByEventId.set(r.eventId, {
-                  eventId: r.eventId,
-                  prose: r.prose,
-                  scopeHash,
-                  releaseDecision: decision,
-                  revisionId: envelope.revisionId,
-                  proseHash: envelope.proseHash,
-                  sceneHash: envelope.sceneHash,
-                  editorialBasisHash: envelope.editorialBasisHash,
-                  createdAt: envelope.createdAt,
-                });
-              }
-            } else if (decision.status === 'pending_waiver') {
-              disposition = 'candidate_pending_waiver';
-              const waiverEnvelope = buildRevisionEnvelope(
-                r,
-                job,
-                plan,
-                operationId,
-                request,
-                decision,
-                paths,
-                acceptedRevisionId,
-                expectedLatestHash,
-                revisionOverride,
-              );
-              revisionId = waiverEnvelope.revisionId;
-              sceneStore.archiveAndUpdateLatest(waiverEnvelope, expectedLatestHash);
-            } else {
-              disposition = 'candidate_blocked';
-              const blockedEnvelope = buildRevisionEnvelope(
-                r,
-                job,
-                plan,
-                operationId,
-                request,
-                decision,
-                paths,
-                acceptedRevisionId,
-                expectedLatestHash,
-                revisionOverride,
-              );
-              revisionId = blockedEnvelope.revisionId;
-              sceneStore.archiveAndUpdateLatest(blockedEnvelope, expectedLatestHash);
-            }
-            operationStore.heartbeat(operationId, request.mutation.actorId);
-            decisions.set(r.eventId, decision);
-            sceneDispositions.set(r.eventId, disposition);
-            revisionIds.set(r.eventId, revisionId);
-            allResults.push(r);
-
-            emit({
+        } else {
+          const promotion = await promoteAccepted(
+            execution,
+            projectId,
+            request.source.sourceHash,
+            result,
+            job,
+            plan,
+            operationId,
+            request,
+            decision,
+            parentRevisionId,
+            previousAccepted?.revision ?? null,
+          );
+          if (promotion.kind === 'committed') {
+            sceneDispositions.set(result.eventId, 'candidate_promoted');
+            revisionIds.set(result.eventId, promotion.revisionId);
+            acceptedByEventId.set(result.eventId, {
+              eventId: result.eventId,
+              prose: result.prose,
+              proseHash: promotion.envelope.proseHash,
+              sceneHash: promotion.envelope.sceneHash,
+              editorialBasisHash: promotion.envelope.editorialBasisHash,
+              scopeHash: promotion.envelope.scopeHash,
+              releaseDecision: decision,
+              revisionId: promotion.revisionId,
+              createdAt: promotion.envelope.createdAt,
+            });
+            emit.emit({
               kind: 'candidate_archived',
-              eventId: r.eventId,
-              disposition,
+              eventId: result.eventId,
               completedScenes,
               totalScenes,
+              phase: 'promotion',
+              disposition: 'candidate_promoted',
+            });
+          } else {
+            // The accepted head moved between the read and the CAS: this
+            // candidate is stale. Never report promotion/current and never
+            // feed later surface packets from the contested candidate.
+            const conflictMessage = `ACCEPTED_HEAD_CONFLICT: accepted scene ${result.eventId} changed concurrently; candidate not promoted`;
+            editorialErrors.push({
+              code: 'STORAGE_CONFLICT',
+              message: conflictMessage,
+              eventId: result.eventId,
+            });
+            sceneDispositions.set(result.eventId, 'candidate_stale');
+            revisionIds.set(result.eventId, null);
+            decisions.set(result.eventId, {
+              status: 'blocked',
+              scopeHash,
+              validationIdentity,
+              reasons: [...result.errors, conflictMessage],
+            });
+            emit.emit({
+              kind: 'candidate_archived',
+              eventId: result.eventId,
+              completedScenes,
+              totalScenes,
+              phase: 'promotion',
+              disposition: 'candidate_stale',
             });
           }
         }
-      },
-    );
-  } catch (err) {
-    // Pipeline crash or lost ownership during lease
-    leaseError = [{ code: 'INVALID_OPERATION' as EditorialErrorCode, message: sanitizeError(err) }];
-  }
-
-  // ── Lease ended — heartbeat stopped, now handle result ───────────────
-  if (leaseError) {
-    const publishTerminal = emit.prepareTerminal({ kind: 'operation_failed' });
-    operationStore.fail(operationId, request.mutation.actorId, leaseError);
-    publishTerminal();
-    return buildFailedResult(operationId, leaseError, plan.planSummary);
-  }
-  if (leaseAborted) {
-    const publishTerminal = emit.prepareTerminal({ kind: 'operation_cancelled' });
-    operationStore.cancel(operationId, request.mutation.actorId);
-    publishTerminal();
-    return buildCancelledResult(operationId, plan.planSummary);
-  }
-
-  const promotedRevisionIds = new Map<string, string>();
-  for (const [eventId, revisionId] of revisionIds) {
-    if (sceneDispositions.get(eventId) === 'candidate_promoted' && revisionId) {
-      promotedRevisionIds.set(eventId, revisionId);
-    }
-  }
-
-  // ── Reorder results to match job order ──────────────────────────────
-  const resultByEventId = new Map(allResults.map((r) => [r.eventId, r]));
-  const orderedResults = jobs
-    .map((j) => resultByEventId.get(j.event.id))
-    .filter((r): r is RenderSceneResult => r !== undefined);
-
-  // ── 7. PUBLISH ──────────────────────────────────────────────────────
-  const accepted = orderedResults.filter(
-    (result) => decisions.get(result.eventId)?.status === 'accepted',
-  );
-  const unsuccessful = orderedResults.filter(
-    (result) => decisions.get(result.eventId)?.status !== 'accepted',
-  );
-  const editorialErrors: EditorialError[] = [
-    ...unsuccessful.map((result) => ({
-      code: 'PUBLICATION_INCOMPLETE' as EditorialErrorCode,
-      message: `Scene ${result.eventId} was not accepted: ${(
-        decisions.get(result.eventId)?.reasons ?? result.errors
-      ).join(', ')}`,
-      eventId: result.eventId,
-      operationId,
-    })),
-    ...revisionPreflightErrors,
-  ];
-
-  const scopeNarrativeEvents = init.events
-    .filter(
-      (event) => event.source === 'event_file' && boundaries.stateBeforeByEventId.has(event.id),
-    )
-    .sort(
-      (left, right) =>
-        left.narrativeOrder - right.narrativeOrder || left.id.localeCompare(right.id),
-    );
-  const scopeEvents: ScopeEventData[] = scopeNarrativeEvents.map((event) => ({
-    eventId: event.id,
-    narrativeOrder: event.narrativeOrder,
-    threadProgress: event.threadProgress,
-    foreshadowing: event.foreshadowing,
-    relationshipEffects: event.relationshipEffects.map((effect) => ({
-      membershipAfter: effect.membershipAfter,
-      dimensionSet: effect.dimensionSet,
-      provenance: effect.provenance,
-    })),
-    ruleEffects: event.ruleEffects,
-  }));
-  const scopeEventById = new Map(scopeEvents.map((event) => [event.eventId, event]));
-  const publishCandidates: PromoteCandidateInput[] = [];
-  for (const result of accepted) {
-    const job = jobs.find((candidate) => candidate.event.id === result.eventId);
-    const event = scopeEventById.get(result.eventId);
-    const revisionId = revisionIds.get(result.eventId);
-    if (!job || !event || !revisionId) {
-      editorialErrors.push({
-        code: 'PUBLICATION_INCOMPLETE',
-        message: `Accepted scene ${result.eventId} has no verified head`,
-        eventId: result.eventId,
-        operationId,
-      });
-      continue;
-    }
-    const envelope = sceneStore.get(result.eventId, revisionId);
-    const materializedScene = job.gameDialogue
-      ? appendPlayerChoicesBlock(envelope.prose, job.gameDialogue.choices)
-      : envelope.prose;
-    const candidateProseSource = candidateExecution
-      ? candidateExecution.lockAfter
-        ? 'human_locked'
-        : 'human_edited'
-      : 'llm';
-    const editAction = candidateExecution
-      ? candidateExecution.origin === 'rollback'
-        ? 'rollback'
-        : 'human_adopted'
-      : request.revision
-        ? 'llm_revised'
-        : 'llm_generated';
-    const head: VerifiedHeadData = {
-      revisionId: envelope.revisionId,
-      proseHash: envelope.proseHash,
-      prose: envelope.prose,
-      sceneHash: envelope.sceneHash,
-      editorialBasisHash: envelope.editorialBasisHash,
-      scopeHash: envelope.scopeHash,
-      validationIdentity: envelope.validationIdentity,
-      proseSource: candidateProseSource,
-      modelUsed: envelope.modelUsed,
-      renderedAt: envelope.createdAt,
-      wordCount: materializedScene.split(/\s+/).filter(Boolean).length,
-      editHistory: [
-        {
-          action: editAction,
-          actor_id: request.mutation.actorId,
-          operation_id: operationId,
-          timestamp: envelope.createdAt,
-          revision_id: envelope.revisionId,
-          review_ids: [...envelope.reviewIds],
-          ...(candidateExecution?.note ? { note: candidateExecution.note } : {}),
-        },
-      ],
-      playerChoices: job.gameDialogue?.choices,
-      branchExistence: job.event.branchExistence ?? { type: 'all' },
-    };
-    publishCandidates.push({
-      promote: sceneDispositions.get(result.eventId) === 'candidate_promoted',
-      latestEnvelope: promotedEnvelopes.get(result.eventId),
-      ...(candidateExecution?.lockAfter
-        ? {
-            lock: {
-              actorId: request.mutation.actorId,
-              lockedAt: envelope.createdAt,
-            },
-          }
-        : {}),
-      readSet: job.promotionReadSet,
-      eventId: result.eventId,
-      chapterNumber: job.chapter,
-      head,
-      event,
-      scene: {
-        prose: materializedScene,
-        renderRequest:
-          result.requestRecords.length > 0
-            ? {
-                eventId: result.eventId,
-                chapter: job.chapter,
-                logicalDisclosureSummary: job.logicalDisclosureSummary,
-                surfaceReferencePacket: job.surfaceReferencePacket,
-                requests: result.requestRecords,
-              }
-            : undefined,
-      },
-    });
-  }
-
-  // Add unchanged accepted heads needed to publish the complete branch scope.
-  for (const event of scopeEvents) {
-    if (publishCandidates.some((candidate) => candidate.eventId === event.eventId)) {
-      continue;
-    }
-    const chapterNumber = init.chapterByEventId[event.eventId] ?? 1;
-    const sceneDir = path.join(
-      paths.scenesDir,
-      `chapter-${String(chapterNumber).padStart(2, '0')}`,
-    );
-    const metadataPath = path.join(sceneDir, `${event.eventId}.yaml`);
-    const scenePath = path.join(sceneDir, `${event.eventId}.md`);
-    const metadataRaw = storage.readOptional(metadataPath);
-    const sceneContent = storage.readOptional(scenePath);
-    if (metadataRaw === null || sceneContent === null) continue;
-    try {
-      const metadata = sceneMetadataV1Schema.parse(YAML.parse(metadataRaw));
-      const scopeCompatible =
-        metadata.scope_hash === scopeHash ||
-        Boolean(
-          request.branchPath &&
-            includesPath(metadata.branch_existence as BranchSet, request.branchPath),
+      } else {
+        sceneDispositions.set(result.eventId, 'candidate_blocked');
+        revisionIds.set(result.eventId, null);
+        const blockedEnvelope = buildRevisionEnvelope(
+          result,
+          job,
+          plan,
+          operationId,
+          request,
+          decision,
+          parentRevisionId,
+          revisionOverride,
         );
-      if (
-        metadata.event !== event.eventId ||
-        !scopeCompatible ||
-        computeContentHash(sceneContent) !== metadata.scene_hash
-      ) {
-        continue;
-      }
-      const envelope = sceneStore.get(event.eventId, metadata.revision_id);
-      if (
-        envelope.releaseDecision.status !== 'accepted' ||
-        envelope.scopeHash !== metadata.scope_hash ||
-        envelope.proseHash !== metadata.prose_hash ||
-        envelope.sceneHash !== metadata.scene_hash ||
-        envelope.editorialBasisHash !== metadata.editorial_basis_hash
-      ) {
-        continue;
-      }
-      publishCandidates.push({
-        promote: false,
-        eventId: event.eventId,
-        chapterNumber,
-        event,
-        head: {
-          revisionId: envelope.revisionId,
-          proseHash: envelope.proseHash,
-          prose: envelope.prose,
-          sceneHash: envelope.sceneHash,
-          editorialBasisHash: envelope.editorialBasisHash,
-          scopeHash: envelope.scopeHash,
-          validationIdentity: envelope.validationIdentity,
-          proseSource: metadata.prose_source,
-          modelUsed: metadata.model_used,
-          renderedAt: metadata.rendered_at,
-          wordCount: metadata.word_count,
-          editHistory: metadata.edit_history,
-          playerChoices: metadata.player_choices,
-          branchExistence: metadata.branch_existence as BranchSet,
-        },
-        scene: { prose: sceneContent },
-      });
-    } catch {
-      // Malformed or inconsistent heads are excluded; finalization stays stale.
-    }
-  }
-
-  const chapterMetadata = new Map<number, { title: string }>();
-  for (const [chapterNumber, chapter] of init.data.chapters) {
-    chapterMetadata.set(chapterNumber, {
-      title: chapter.metadata?.title ?? `Chapter ${chapterNumber}`,
-    });
-  }
-  const hasCompleteScope =
-    scopeEvents.length > 0 &&
-    scopeEvents.every((event) =>
-      publishCandidates.some((candidate) => candidate.eventId === event.eventId),
-    ) &&
-    editorialErrors.length === 0;
-  if (!hasCompleteScope && editorialErrors.length === 0) {
-    editorialErrors.push({
-      code: 'PUBLICATION_INCOMPLETE',
-      message: 'Not every branch-required scene has a verified current head',
-      operationId,
-    });
-  }
-  const sceneSeq = compiledRuntime.graphs.discourseGraph.sceneSequence;
-  const novelContent = hasCompleteScope
-    ? buildNovelDocument(
-        publishCandidates,
-        chapterMetadata,
-        init.data.config?.title ?? 'Untitled',
-        sceneSeq,
-      )
-    : null;
-  // The operation lease updates publication.json while rendering. Re-read its
-  // authoritative preimage immediately before the final publication CAS.
-  const publicationRawAtPublish = storage.readOptional(paths.publicationPath);
-  const previousManifestAtPublish = loadOrCreatePublication(storage, paths.publicationPath);
-  const publicationReadSetAtPublish = dedupeReadSet([
-    ...publicationReadSet.filter(
-      (expectation) => expectation.kind !== 'file' || expectation.path !== paths.publicationPath,
-    ),
-    fileExpectation(storage, paths.publicationPath),
-  ]);
-  let publication: PublicationResult;
-  try {
-    publication = new EditorialPublisher(coordinator, paths).publish({
-      scope: {
-        projectDir: request.projectDir,
-        branchScopeHash: scopeHash,
-        scopeEventIds: scopeEvents.map((event) => event.eventId),
-        scopeEvents,
-        mutationContext: request.mutation,
-      },
-      candidates: publishCandidates,
-      previousManifest: previousManifestAtPublish,
-      previousManifestHash:
-        publicationRawAtPublish === null ? null : computeContentHash(publicationRawAtPublish),
-      novelContent,
-      novelHash: novelContent === null ? null : computeContentHash(novelContent),
-      reasons: editorialErrors,
-      readSet: publicationReadSetAtPublish,
-    });
-  } catch (error) {
-    const publicationErrors =
-      error instanceof PublicationError ? [...error.reasons] : [toEditorialError(error)];
-    if (publicationErrors.some((item) => item.code === 'PUBLICATION_CONTENT_CONFLICT')) {
-      const conflictedNovel = storage.readOptional(paths.novelPath);
-      if (conflictedNovel !== null) {
-        const conflictPath = path.join(paths.conflictsDir, `novel-${operationId}.md`);
-        coordinator.commit({
-          transactionId: `${operationId}-novel-conflict`,
-          readSet: [
-            fileExpectation(storage, paths.novelPath),
-            { kind: 'file', path: conflictPath, expectedHash: null },
-          ],
-          writes: [
-            {
-              type: 'put',
-              path: conflictPath,
-              content: conflictedNovel,
-              expectedHash: null,
-            },
-          ],
+        await execution.compareAndSwapSceneRevision({
+          projectId,
+          eventId: result.eventId,
+          revisionId: blockedEnvelope.revisionId,
+          expectedVersion: null,
+          value: {
+            version: 1,
+            projectId,
+            eventId: result.eventId,
+            revisionId: blockedEnvelope.revisionId,
+            parentRevisionId,
+            sourceHash: request.source.sourceHash,
+            value: blockedEnvelope as unknown as JsonValue,
+          },
         });
       }
     }
-    for (const [eventId] of promotedRevisionIds) {
-      sceneDispositions.set(eventId, 'candidate_stale');
-    }
-    const failedResults = orderedResults.map((result) =>
-      mapSceneResult(
-        result,
-        decisions.get(result.eventId) ?? null,
-        init.chapterByEventId[result.eventId] ?? 1,
-        revisionIds.get(result.eventId) ?? null,
-        sceneDispositions.get(result.eventId) ?? 'candidate_blocked',
-        language,
-      ),
-    );
-    const failedPublication: PublicationResult = {
-      status: 'stale',
-      outputPath: paths.novelPath,
-      novelHash: previousManifestBeforeExecution.novel_hash,
-      reasons: publicationErrors,
-    };
-    const failedResult: RenderNovelResult = {
-      operationId,
-      results: failedResults,
-      errors: publicationErrors.map((item) => item.message),
-      editorialErrors: publicationErrors,
-      publication: failedPublication,
-    };
-    const publishTerminal = emit.prepareTerminal({
-      kind: 'operation_failed',
-      completedScenes,
-      totalScenes,
-    });
-    operationStore.fail(operationId, request.mutation.actorId, publicationErrors);
-    publishTerminal();
-    return failedResult;
-  }
-  if (eventRevisionStates.length > 0) {
-    applySceneLineReviews(promotedRevisionIds, eventRevisionStates, reviewMgr, operationId);
-  }
-  for (const [eventId] of promotedRevisionIds) {
-    emit({
-      kind: 'scene_promoted',
-      eventId,
-      disposition: 'candidate_promoted',
-      completedScenes,
-      totalScenes,
-      phase: 'promotion',
-    });
   }
 
-  emit({
-    kind: 'publication_updated',
-    completedScenes: publishCandidates.length,
-    totalScenes,
-  });
-
-  // ── Map results ─────────────────────────────────────────────────────
+  // ── 4. Publish summary + operation record ───────────────────────────
+  const orderedResults = [...allResults].sort(
+    (left, right) =>
+      (init.chapterByEventId[left.eventId] ?? 0) - (init.chapterByEventId[right.eventId] ?? 0) ||
+      (init.events.find((event) => event.id === left.eventId)?.narrativeOrder ?? 0) -
+        (init.events.find((event) => event.id === right.eventId)?.narrativeOrder ?? 0) ||
+      left.eventId.localeCompare(right.eventId),
+  );
   const mappedResults = orderedResults.map((result) =>
     mapSceneResult(
       result,
       decisions.get(result.eventId) ?? null,
-      init.chapterByEventId[result.eventId] ?? 1,
       revisionIds.get(result.eventId) ?? null,
       sceneDispositions.get(result.eventId) ?? 'candidate_blocked',
-      language,
     ),
   );
-
-  // Finalize operation
-  const operationSucceeded = unsuccessful.length === 0 && publication.status === 'current';
+  const publication = buildPublication(
+    plan.selectedEventIds,
+    decisions,
+    editorialErrors,
+  );
   const resultErrors = editorialErrors.map((error) => error.message);
-  const finalResult: RenderNovelResult = {
+  const operationSucceeded =
+    publication.status === 'current' &&
+    mappedResults.every((result) => result.released);
+
+  const completedAt = runtime.services.clock.now();
+  await execution.compareAndSwapOperation({
+    projectId,
+    operationId,
+    expectedVersion: null,
+    value: {
+      version: 1,
+      projectId,
+      operationId,
+      value: {
+        version: 1,
+        operationId,
+        kind: candidateExecution?.operationKind ?? 'render',
+        actorId: request.mutation.actorId,
+        requestHash: candidateExecution
+          ? computeCandidateOperationRequestHash(request, candidateExecution)
+          : plan.planHash,
+        status: operationSucceeded ? 'succeeded' : 'failed',
+        startedAt: completedAt,
+        heartbeatAt: completedAt,
+        leaseExpiresAt: completedAt,
+        result: mappedResults,
+        errors: resultErrors.map((message) => ({ code: 'INVALID_OPERATION', message })),
+      } as unknown as JsonValue,
+    },
+  });
+  await persistTrace(execution, projectId, operationId, traceCollector);
+  emit.emit({
+    kind: operationSucceeded ? 'operation_completed' : 'operation_failed',
+    completedScenes,
+    totalScenes,
+  });
+
+  return {
     operationId,
     results: mappedResults,
     errors: resultErrors,
     editorialErrors,
     publication,
   };
-  const persistedResult: RenderNovelResult | SceneActionResult =
-    candidateExecution && mappedResults.length > 0
-      ? {
-          operationId,
-          eventId: candidateExecution.eventId,
-          revisionId: mappedResults[0]?.revisionId ?? null,
-          proseHash: mappedResults[0]?.revisionId
-            ? sceneStore.get(candidateExecution.eventId, mappedResults[0].revisionId).proseHash
-            : null,
-          sceneHash: mappedResults[0]?.revisionId
-            ? sceneStore.get(candidateExecution.eventId, mappedResults[0].revisionId).sceneHash
-            : null,
-          proseSource: mappedResults[0]?.promoted
-            ? candidateExecution.lockAfter
-              ? 'human_locked'
-              : 'human_edited'
-            : null,
-          locked: Boolean(mappedResults[0]?.promoted && candidateExecution.lockAfter),
-          released: mappedResults[0]?.released ?? false,
-          promoted: mappedResults[0]?.promoted ?? false,
-          releaseDecision: mappedResults[0]?.releaseDecision ?? null,
-          publication,
-          editorialErrors,
-        }
-      : finalResult;
-  const publishTerminal = emit.prepareTerminal({
-    kind: operationSucceeded ? 'operation_completed' : 'operation_failed',
-    completedScenes,
-    totalScenes,
-  });
-  if (operationSucceeded) {
-    // Complete-scope feedback is addressed only when every selected scene
-    // produced a new accepted head and canonical publication succeeded.
-    if (eventRevisionStates.length > 0) {
-      applyChapterNovelReviews(
-        promotedRevisionIds,
-        eventRevisionStates,
-        reviewMgr,
-        operationId,
-        request.selector,
-        plan.selectedEventIds,
-      );
-    }
-    operationStore.succeed(operationId, request.mutation.actorId, persistedResult);
-  } else {
-    operationStore.fail(operationId, request.mutation.actorId, editorialErrors);
-  }
-  publishTerminal();
+}
 
-  return finalResult;
+function buildPipeline(
+  runtime: EditorialRuntime,
+  init: ProjectInitialization,
+  plan: EditorialCompileOutput,
+  request: Omit<EditorialRenderRequestV1, 'mutation'>,
+  resolvedModel: string,
+  traceCollector: TraceCollector,
+): RenderPipeline {
+  assertRuntime(runtime);
+  const overrides = { ...(init.data.config?.validatorOverrides ?? {}) };
+  const aggregator = new ResultAggregator([...createBuiltInValidators()], init.entityTypes);
+  const options: RenderPipelineOptions = {
+    provider: runtime.provider ?? (runtime.providerFactory ? undefined : runtime.services.llm),
+    providerFactory: runtime.providerFactory,
+    providerProfile: request.providerProfile,
+    model: resolvedModel,
+    runtimeServices: runtime.services,
+    signal: runtime.signal,
+    concurrency: runtime.concurrency,
+    eventBus: runtime.eventBus,
+    traceCollector,
+    aggregator,
+    validatorOverrides: overrides,
+    analysisContract: aggregator.getAnalysisContract(overrides),
+    entities: init.registry,
+    maxRounds: request.maxRounds,
+    validatorPolicyId: plan.planSummary.validationIdentity,
+  };
+  return new RenderPipeline(options);
+}
+
+async function persistTrace(
+  execution: CoreExecutionRepository,
+  projectId: string,
+  operationId: string,
+  traceCollector: TraceCollector,
+): Promise<void> {
+  const current = await execution.readTrace({ projectId, operationId });
+  const result = await execution.compareAndSwapTrace({
+    projectId,
+    operationId,
+    expectedVersion: current?.revision ?? null,
+    value: {
+      version: 1,
+      projectId,
+      operationId,
+      value: {
+        format: 'jsonl',
+        traceId: traceCollector.traceId,
+        content: traceCollector.toJsonLines(),
+      },
+    },
+  });
+  if (result.kind === 'conflict') {
+    throw new Error(`TRACE_PERSISTENCE_CONFLICT: ${operationId}`);
+  }
 }
 
 // ============================================================================
-// previewEditorialRun — Compile-only preview (replaces old dryRun)
+// previewEditorialRun — compile + prompt assembly only
 // ============================================================================
 
 export interface PreviewResult {
@@ -3078,934 +1472,218 @@ export interface PreviewResult {
   errors: string[];
   editorialErrors: EditorialError[];
 }
-/**
- * Preview an editorial render: compile the plan and assemble prompts without
- * executing any provider calls or writing any storage artifacts.
- * Two successive previews with identical input always produce deep-equal output.
- * Zero storage writes, zero provider calls.
- */
+
 export async function previewEditorialRun(
   request: Omit<EditorialRenderRequestV1, 'mutation'>,
   runtime: EditorialRuntime,
 ): Promise<PreviewResult> {
-  const storage = runtime.storage ?? new FsStorage();
-
-  // Resolve configured paths from project config
-  const projectConfig = loadProjectConfig(path.join(request.projectDir, 'nova.yaml'), storage);
-  const paths = resolveProjectPaths(request.projectDir, projectConfig?.outputDir);
-  const coordinator = new ProjectTransactionCoordinator(storage, paths);
-
-  // One canonical IR load per request; preview shares the exact kernel path
-  // (loadCanonicalProject + compileCanonicalRuntime) with full rendering.
-  const ir = loadCanonicalProject(request.projectDir, storage);
-  const init = loadProjectData(ir, storage, request.projectDir, paths);
-  const validationRuntime = await createValidationRuntime(
-    init.data,
-    request.projectDir,
-    storage,
-    init.entityTypes,
+  assertRuntime(runtime);
+  const init = initialize(request.source);
+  const projectId = init.data.config?.project ?? 'default-project';
+  const reviewComments = await new ReviewManager(runtime.services.execution, projectId).getComments();
+  const preflight = preflightSelector(request.selector, init.catalog);
+  const acceptedHeads = await resolveAcceptedHeads(
+    runtime.services.execution,
+    projectId,
+    preflight.eventIds,
   );
-  const reviewComments = loadReviewComments(storage, coordinator, paths);
-  const requiresProviderByEventId = computeRequiresProviderByEventId(
-    init.events,
-    request,
-    init.data,
+  const plan = compileEditorialRun(
+    buildCompileInput(init, request, reviewComments, buildLatestRevisions(preflight.eventIds, acceptedHeads)),
   );
-  const compileInput = buildCompileInput(
-    init,
-    request,
-    reviewComments,
-    requiresProviderByEventId,
-    validationRuntime.identityInput,
-    paths,
-  );
-  const plan = compileEditorialRun(compileInput);
 
-  // Check selector errors
+  const scenes = plan.scenes.map((scene) => ({
+    eventId: scene.eventId,
+    state: scene.state,
+    editorialBasisHash: scene.editorialBasisHash,
+  }));
+  const editorialErrors = plan.selectorErrors.map((error) => ({
+    code: error.code as EditorialErrorCode,
+    message: error.message,
+    ...(error.eventId ? { eventId: error.eventId } : {}),
+  }));
   if (plan.selectorErrors.length > 0) {
     return {
       planHash: plan.planHash,
       planSummary: plan.planSummary,
       selectedEventIds: plan.selectedEventIds,
-      scenes: plan.scenes.map((s) => ({
-        eventId: s.eventId,
-        state: s.state,
-        editorialBasisHash: s.editorialBasisHash,
-      })),
+      scenes,
       prompts: [],
-      errors: plan.selectorErrors.map((e) => e.message),
-      editorialErrors: plan.selectorErrors.map((e) => ({
-        code: e.code as EditorialErrorCode,
-        message: e.message,
-        ...(e.eventId ? { eventId: e.eventId } : {}),
-      })),
+      errors: plan.selectorErrors.map((error) => error.message),
+      editorialErrors,
     };
   }
 
-  // Build prompts for each job
-  const prompts: PreviewResult['prompts'] = [];
-  const resolvedModel = request.model ?? init.data.config?.defaultModel ?? 'preview-model';
-
-  // Build all jobs once (not inside the loop — the per-iteration rebuild in
-  // the previous version produced N copies of each prompt for N compile jobs).
-  // Resolve discourse branch — explicit override or unique ledger match.
-  const discourseBranch =
-    request.discourseBranch ??
-    resolveDiscourseBranch({
-      selectedEventIds: new Set(
-        (request.branchPath != null
-          ? init.events.filter((ev) => includesPath(ev.branchExistence, request.branchPath!))
-          : init.events
-        ).map((ev) => ev.id),
-      ),
-      branchPath: request.branchPath ?? { decisions: [] },
-      ledger: init.data.discourseLedger,
-    });
-
-  const scopeHash = computeSha256Hex(
-    canonicalJson({
-      branch: request.branchPath ?? { decisions: [] },
-      discourse: discourseBranch,
-      ledgerHash: init.data.discourseLedger.hash,
-    }),
+  const revisionStates = new Map(
+    buildEventRevisionStates(plan.selectedEventIds, request.revision, reviewComments, acceptedHeads).map(
+      (state) => [state.eventId, state] as const,
+    ),
   );
-  // Build the single canonical runtime for the preview branch/discourse route.
-  const previewRuntime = compileCanonicalRuntime(ir, {
-    branchPath: request.branchPath,
-    discourseBranch,
-  });
+  const noAcceptedBaseErrors = collectNoAcceptedBaseErrors([...revisionStates.values()]);
+  if (noAcceptedBaseErrors.length > 0) {
+    return {
+      planHash: plan.planHash,
+      planSummary: plan.planSummary,
+      selectedEventIds: plan.selectedEventIds,
+      scenes,
+      prompts: [],
+      errors: noAcceptedBaseErrors.map((error) => error.message),
+      editorialErrors: noAcceptedBaseErrors,
+    };
+  }
 
-  const allEventFilePaths = [...init.data.chapters.values()]
-    .flatMap((chapter) => chapter.events)
-    .filter((ef: EventFile) => plan.selectedEventIds.includes(ef.event))
-    .map((ef: EventFile) => ef.filePath)
-    .filter((fp: string | undefined): fp is string => fp !== undefined);
-  const previewJobs = buildRenderJobs(
+  const compiledRuntime = compileCanonicalRuntime(init.ir, {
+    branchPath: request.branchPath,
+    discourseBranch: request.discourseBranch,
+  });
+  const resolvedModel = request.model ?? init.data.config?.defaultModel ?? 'preview-model';
+  const jobs = buildRenderJobs(
     plan,
     init,
     request,
-    computeSourceContentHash(
-      allEventFilePaths,
-      path.join(request.projectDir, 'definitions'),
-      { branchDiscourseScopeHash: scopeHash },
-      request.projectDir,
-      storage,
-    ),
+    request.source.sourceHash,
     resolvedModel,
-    previewRuntime,
+    compiledRuntime,
+    revisionStates,
+    reviewComments,
   );
-
-  for (const compileJob of plan.jobs) {
-    if (!compileJob.requiresProvider) continue;
-    const ev = init.events.find((e) => e.id === compileJob.eventId);
-    if (!ev) continue;
-    const job = previewJobs.find((j) => j.event.id === compileJob.eventId);
-    if (!job) continue;
-
-    const assembler = new PromptAssembler();
+  let pass1TemplateText: string | undefined;
+  try {
+    const template = await runtime.services.promptTemplates.get({
+      name: PASS1_PROMPT_TEMPLATE_NAME,
+    });
+    pass1TemplateText = template?.template;
+  } catch {
+    // A failing catalog falls back to the built-in template, mirroring Pass 1.
+  }
+  const assembler = new PromptAssembler(pass1TemplateText);
+  const prompts: PreviewResult['prompts'] = [];
+  for (const job of jobs) {
     const assembled = assembler.assemble(job.context, {
-      targetLengthWords: ev.styleGuidance?.targetWordCount ?? 400,
-      styleGuidance: ev.styleGuidance,
+      targetLengthWords: job.event.styleGuidance?.targetWordCount ?? 400,
+      styleGuidance: job.event.styleGuidance,
       language: init.data.config?.defaultLanguage ?? 'en',
       logicalDisclosureSummary: job.logicalDisclosureSummary,
       surfaceReferencePacket: job.surfaceReferencePacket,
+      previousAcceptedProse: job.revisionContext?.baseProse,
+      editorialRevisionInstructions: job.editorialRevisionInstructions,
     });
-    prompts.push({
-      eventId: ev.id,
-      userPrompt: assembled.userPrompt,
-    });
+    prompts.push({ eventId: job.event.id, userPrompt: assembled.userPrompt });
   }
 
   return {
     planHash: plan.planHash,
     planSummary: plan.planSummary,
     selectedEventIds: plan.selectedEventIds,
-    scenes: plan.scenes.map((s) => ({
-      eventId: s.eventId,
-      state: s.state,
-      editorialBasisHash: s.editorialBasisHash,
-    })),
+    scenes,
     prompts,
-    errors: plan.selectorErrors.map((e) => e.message),
-    editorialErrors: plan.selectorErrors.map((e) => ({
-      code: e.code as EditorialErrorCode,
-      message: e.message,
-      ...(e.eventId ? { eventId: e.eventId } : {}),
-    })),
+    errors: [],
+    editorialErrors: [],
   };
 }
 
 // ============================================================================
-// executeEditorialTreeRender — Game dialogue tree as one top-level operation
+// executeEditorialTreeRender — game dialogue tree as one top-level operation
 // ============================================================================
 
-/**
- * Render a game dialogue tree as one top-level operation.
- *
- * Compiles the game dialogue tree, renders each node via
- * executeEditorialRender, and assembles the final tree when all nodes pass.
- * No recursive public render call, no novel publication until all nodes output.
- */
+function toRecordShapedGameDialogueTree(
+  tree: CompiledGameDialogueTree | null,
+): RenderGameDialogueTreeResult['tree'] {
+  if (!tree) {
+    return { eventScopes: {}, representativePathByEventId: {}, choicesByEventId: {} };
+  }
+  return {
+    eventScopes: Object.fromEntries(tree.eventScopes),
+    representativePathByEventId: Object.fromEntries(tree.representativePathByEventId),
+    choicesByEventId: Object.fromEntries(
+      [...tree.choicesByEventId.entries()].map(([eventId, choices]) => [eventId, [...choices]]),
+    ),
+  };
+}
+
 export async function executeEditorialTreeRender(
   request: RenderGameDialogueTreeRequestV1,
   runtime: EditorialRuntime,
 ): Promise<RenderGameDialogueTreeResult> {
-  const storage = runtime.storage ?? new FsStorage();
-
-  // Load project config first to resolve configured output directory
-  const projectConfig = loadProjectConfig(path.join(request.projectDir, 'nova.yaml'), storage);
-  const paths = resolveProjectPaths(request.projectDir, projectConfig?.outputDir);
-  const coordinator = new ProjectTransactionCoordinator(storage, paths);
-  const clock = REAL_CLOCK;
-  const operationStore = new OperationStore(coordinator, paths, clock);
-  const signal = runtime.signal;
-
-  const operationId = request.mutation.operationId ?? crypto.randomUUID();
-
-  if (signal?.aborted) {
-    return {
-      operationId,
-      tree: { eventScopes: {}, representativePathByEventId: {}, choicesByEventId: {} },
-      results: [],
-      errors: ['Operation cancelled before start'],
-      editorialErrors: [{ code: 'OPERATION_CANCELLED', message: 'Cancelled before start' }],
-      outputPath: undefined,
-      publication: { status: 'stale', outputPath: paths.novelPath, novelHash: null, reasons: [] },
-    };
-  }
-  // Load project — one canonical IR load for the whole tree; every game
-  // leaf below only compiles its own branch/discourse route.
-  const ir = loadCanonicalProject(request.projectDir, storage);
-  const data = ir.data;
-  const init = loadProjectData(ir, storage, request.projectDir, paths);
-  const validationRuntime = await createValidationRuntime(
-    data,
-    request.projectDir,
-    storage,
-    ir.entityTypes,
-  );
-  const contentEvents = init.events.filter((event) => event.source === 'event_file');
-
-  // Compiled game dialogue tree from the canonical kernel (null when the
-  // project has no event-local choices).
-  const tree = ir.gameDialogueTree;
-
+  const init = initialize(request.source);
+  const tree = init.ir.gameDialogueTree;
   if (!tree) {
+    const result = await executeEditorialRender(request, runtime);
     return {
-      operationId,
-      tree: { eventScopes: {}, representativePathByEventId: {}, choicesByEventId: {} },
-      results: [],
-      errors: ['No event-local choices found; render-tree requires a game dialogue tree'],
-      editorialErrors: [{ code: 'INVALID_OPERATION', message: 'No game dialogue tree found' }],
-      outputPath: undefined,
-      publication: { status: 'stale', outputPath: paths.novelPath, novelHash: null, reasons: [] },
-    };
-  }
-  // Validate every content event has a representative path
-  const missingRepPath = contentEvents.filter((ev) => !tree.representativePathByEventId.has(ev.id));
-  if (missingRepPath.length > 0) {
-    return {
-      operationId,
-      tree: {
-        eventScopes: Object.fromEntries(tree.eventScopes),
-        representativePathByEventId: Object.fromEntries(tree.representativePathByEventId),
-        choicesByEventId: Object.fromEntries(
-          Array.from(tree.choicesByEventId).map(([k, v]) => [k, [...v]]),
-        ),
-      },
-      results: [],
-      errors: [
-        `Tree events missing representative path: ${missingRepPath.map((e) => e.id).join(', ')}`,
-      ],
-      editorialErrors: [
-        { code: 'INVALID_OPERATION', message: 'Missing representative path for tree events' },
-      ],
-      outputPath: undefined,
-      publication: { status: 'stale', outputPath: paths.novelPath, novelHash: null, reasons: [] },
+      operationId: result.operationId,
+      tree: toRecordShapedGameDialogueTree(null),
+      results: result.results,
+      errors: result.errors,
+      editorialErrors: result.editorialErrors,
+      publication: result.publication,
     };
   }
 
-  // Guard: no renderSurface
-  if (data.config?.renderSurface) {
-    return {
-      operationId,
-      tree: {
-        eventScopes: Object.fromEntries(tree.eventScopes),
-        representativePathByEventId: Object.fromEntries(tree.representativePathByEventId),
-        choicesByEventId: Object.fromEntries(
-          Array.from(tree.choicesByEventId).map(([k, v]) => [k, [...v]]),
-        ),
-      },
-      results: [],
-      errors: ['render-tree does not support renderSurface scheduling.'],
-      editorialErrors: [
-        { code: 'INVALID_OPERATION', message: 'renderSurface not supported for tree render' },
-      ],
-      outputPath: undefined,
-      publication: { status: 'stale', outputPath: paths.novelPath, novelHash: null, reasons: [] },
-    };
-  }
-
-  // Claim operation
-  const requestHash = computeSha256Hex(
-    canonicalJson({ ...request, mutation: { operationId, actorId: request.mutation.actorId } }),
-  );
-  try {
-    operationStore.register({
-      operationId,
-      kind: 'render_tree',
-      actorId: request.mutation.actorId,
-      requestHash,
-    });
-  } catch (err) {
-    return {
-      operationId,
-      tree: {
-        eventScopes: Object.fromEntries(tree.eventScopes),
-        representativePathByEventId: Object.fromEntries(tree.representativePathByEventId),
-        choicesByEventId: Object.fromEntries(
-          Array.from(tree.choicesByEventId).map(([k, v]) => [k, [...v]]),
-        ),
-      },
-      results: [],
-      errors: [`Failed to register operation: ${(err as Error).message}`],
-      editorialErrors: [toEditorialError(err)],
-      outputPath: undefined,
-      publication: { status: 'stale', outputPath: paths.novelPath, novelHash: null, reasons: [] },
-    };
-  }
-  // Provider resolution is lazy — handled by each RenderPipeline instance via
-  // runtime.provider / runtime.providerFactory / config fallback.
-
-  // Create shared pipeline and store
-  const sceneStore = new SceneRevisionStore(coordinator, paths);
-  const eventBus = runtime.eventBus;
-  const language = 'en';
-  const eventLogger = new Logger(
-    runtime.trace ? undefined : new LevelFilterTransport(new JsonlLogTransport()),
-    { module: 'editorial-tree-render' },
-  );
-  const traceCollector = runtime.trace
-    ? new TraceCollector(`tree-render-${operationId}`)
-    : undefined;
-
-  const scopeEventIds = contentEvents
-    .filter((ev) => tree.representativePathByEventId.has(ev.id))
-    .sort(
-      (left, right) =>
-        left.narrativeOrder - right.narrativeOrder || left.id.localeCompare(right.id),
-    )
-    .map((ev) => ev.id);
-  const treeScopeInit = {
-    data,
-    chapterByEventId: init.chapterByEventId,
-  };
-  const publicationRawBeforeExecution = storage.readOptional(paths.publicationPath);
-  const previousManifestBeforeExecution = loadOrCreatePublication(storage, paths.publicationPath);
-  const publicationReadSet = capturePublicationReadSet(
-    storage,
-    paths,
-    treeScopeInit,
-    scopeEventIds,
-  );
-
-  // Post-loop tracking for publication
-  const decisions = new Map<string, ReleaseDecision>();
-  const dialogueTreeOutputPath = path.join(request.projectDir, 'output', 'dialogue-tree.md');
-  publicationReadSet.push(fileExpectation(storage, dialogueTreeOutputPath));
-  const sceneDispositions = new Map<string, SceneDisposition>();
-  const revisionIds = new Map<string, string | null>();
-  const acceptedPromotedEnvs = new Map<string, SceneRevisionEnvelopeV1>();
-  const allRenderJobs = new Map<string, RenderJob>();
-
-  const allResults: RenderNovelSceneResult[] = [];
+  const renderedEventIds = new Set<string>();
+  const results: RenderNovelSceneResult[] = [];
   const errors: string[] = [];
+  const editorialErrors: EditorialError[] = [];
+  let publication: PublicationResult | null = null;
 
-  // ── Execute event processing within operation lease ─────────────────
-  let treeAborted = false;
-
-  const treeLeaseAbortController = new AbortController();
-  if (signal?.aborted) {
-    treeLeaseAbortController.abort(signal.reason);
-  } else {
-    signal?.addEventListener('abort', () => treeLeaseAbortController.abort(signal.reason), {
-      once: true,
-    });
-  }
-
-  try {
-    await withOperationLease(
-      operationId,
-      request.mutation.actorId,
-      operationStore,
-      treeLeaseAbortController,
-      async () => {
-        // ── Pre-compute leaf-route discourse branches for dedup ────────
-        // Enumerate leaf paths and resolve their discourse branch.
-        // Shared events (e.g. E0) that appear under multiple branches with
-        // the same discourse context are deduplicated.
-        const leafRouteDedup = new Map<string, BranchPath>();
-        for (const leafPath of tree.leafPaths) {
-          const routeEventIds = contentEvents
-            .filter((event) =>
-              includesPath(tree.eventScopes.get(event.id) ?? event.branchExistence, leafPath),
-            )
-            .map((event) => event.id);
-          const discourseBranch = resolveDiscourseBranch({
-            selectedEventIds: new Set(routeEventIds),
-            branchPath: leafPath,
-            ledger: data.discourseLedger,
-          });
-          for (const eventId of routeEventIds) {
-            const key = `${eventId}\x00${discourseBranch}`;
-            if (!leafRouteDedup.has(key)) {
-              leafRouteDedup.set(key, leafPath);
-            }
-          }
-        }
-
-        for (const [dedupKey, branchPath] of leafRouteDedup) {
-          const nullIdx = dedupKey.indexOf('\x00');
-          const eventId = dedupKey.slice(0, nullIdx);
-          const discourseBranch = dedupKey.slice(nullIdx + 1);
-
-          if (treeLeaseAbortController.signal.aborted) {
-            if (signal?.aborted) treeAborted = true;
-            return;
-          }
-
-          operationStore.heartbeat(operationId, request.mutation.actorId);
-
-          const ev = contentEvents.find((e) => e.id === eventId);
-          if (!ev) {
-            errors.push(`Event '${eventId}' not found for dedup key '${dedupKey}'`);
-            continue;
-          }
-
-          try {
-            // ── 1. Build scene request with explicit discourse branch ─────────
-            const sceneRequest: EditorialRenderRequestV1 = {
-              version: 1,
-              projectDir: request.projectDir,
-              selector: { type: 'events', eventIds: [ev.id] },
-              mutation: request.mutation,
-              model: request.model,
-              providerProfile: request.providerProfile,
-              branchPath,
-              discourseBranch, // explicit — avoids re-resolution in buildBoundariesAndJobs
-              waivers: request.waivers,
-              maxRounds: request.maxRounds,
-            };
-
-            // ── 2. Compile this leaf's route only (project already loaded) ───
-            const reviewComments = loadReviewComments(storage, coordinator, paths);
-            const requiresProviderByEventId = computeRequiresProviderByEventId(
-              init.events,
-              sceneRequest,
-              init.data,
-            );
-
-            // ── 3. Compile scene plan ────────────────────────────────────────
-            const compileInput = buildCompileInput(
-              init,
-              sceneRequest,
-              reviewComments,
-              requiresProviderByEventId,
-              validationRuntime.identityInput,
-              paths,
-            );
-            const plan = compileEditorialRun(compileInput);
-
-            if (plan.selectorErrors.length > 0) {
-              for (const se of plan.selectorErrors) {
-                errors.push(`${ev.id}: ${se.message}`);
-              }
-              continue;
-            }
-
-            // Provider check is lazy — RenderPipeline handles missing provider
-            // as per-scene PROVIDER_REQUIRED during real completion calls.
-
-            // ── 5. Build source hash & render jobs ───────────────────────────
-            const resolvedModel = request.model ?? init.data.config?.defaultModel ?? 'default';
-            const eventFilePaths = [...init.data.chapters.values()]
-              .flatMap((chapter) => chapter.events)
-              .filter((ef: EventFile) => ef.event === ev.id)
-              .map((ef: EventFile) => ef.filePath)
-              .filter((fp: string | undefined): fp is string => fp !== undefined);
-            const definitionsDir = path.join(request.projectDir, 'definitions');
-            // Use pre-computed discourse branch (no re-resolution needed).
-            const scopeHash = computeSha256Hex(
-              canonicalJson({
-                branch: branchPath ?? { decisions: [] },
-                discourse: discourseBranch,
-                ledgerHash: init.data.discourseLedger.hash,
-              }),
-            );
-            const sourceContentHash = computeSourceContentHash(
-              eventFilePaths,
-              definitionsDir,
-              { branchDiscourseScopeHash: scopeHash },
-              request.projectDir,
-              storage,
-            );
-            const leafRuntime = compileCanonicalRuntime(ir, {
-              branchPath,
-              discourseBranch,
-            });
-            const { jobs } = buildBoundariesAndJobs(
-              init,
-              plan,
-              sceneRequest,
-              sourceContentHash,
-              resolvedModel,
-              leafRuntime,
-              discourseBranch,
-            );
-
-            if (jobs.length === 0) {
-              // No work needed — cache hit, head reused, etc.
-              continue;
-            }
-
-            // Attach tree-wide publication read set to each job
-            for (const job of jobs) {
-              job.promotionReadSet = dedupeReadSet([
-                ...publicationReadSet,
-                fileExpectation(storage, sceneStore.latestPath(job.event.id)),
-              ]);
-              allRenderJobs.set(job.event.id, job);
-            }
-
-            // ── 6. Execute pipeline ──────────────────────────────────────────
-            // Build provider chain for this node: runtime.provider > runtime.providerFactory > config fallback
-            const nodeProviderFactory: ProviderFactory | undefined =
-              runtime.providerFactory ??
-              (!runtime.provider
-                ? {
-                    profile: 'config',
-                    create: async () => {
-                      let fallbackModel = request.model;
-                      const apiKey = process.env.NOVALISTICALLY_AI_API_KEY ?? '';
-                      const baseUrl: string | undefined =
-                        process.env.NOVALISTICALLY_AI_BASE_URL ?? undefined;
-                      if (!fallbackModel) {
-                        fallbackModel = process.env.NOVALISTICALLY_AI_MODEL ?? undefined;
-                      }
-                      if (!fallbackModel) {
-                        throw new Error(
-                          'PROVIDER_REQUIRED: No LLM provider available: no model configured',
-                        );
-                      }
-                      if (!apiKey) {
-                        throw new Error(
-                          'PROVIDER_REQUIRED: No LLM provider available: NOVALISTICALLY_AI_API_KEY is not configured',
-                        );
-                      }
-                      return new AiSdkProvider({ apiKey, baseURL: baseUrl, model: fallbackModel });
-                    },
-                  }
-                : undefined);
-            const pipeline = new RenderPipeline({
-              provider: runtime.provider,
-              providerFactory: nodeProviderFactory,
-              providerProfile: request.providerProfile,
-              model: resolvedModel,
-              cacheDir: paths.renderCacheDir,
-              storage,
-              language,
-              logger: eventLogger,
-              traceCollector,
-              eventBus,
-              aggregator: validationRuntime.aggregator,
-              validatorOverrides: validationRuntime.overrides,
-              analysisContract: validationRuntime.analysisContract,
-              entityRegistry: init.registry,
-              pluginHooksManager: validationRuntime.pluginHooksManager,
-              maxRounds: request.maxRounds,
-              concurrency: runtime.concurrency,
-              signal: treeLeaseAbortController.signal,
-              validatorPolicyId: plan.planSummary.validationIdentity,
-            });
-
-            const waveResults = await pipeline.renderAll(jobs);
-
-            // ── 7. Evaluate, archive, promote ────────────────────────────────
-            for (const r of waveResults) {
-              const decision = evaluateReleaseDecision(
-                r,
-                scopeHash,
-                plan.planSummary.validationIdentity,
-              );
-
-              let disposition: SceneDisposition;
-              let revisionId: string | null = null;
-
-              if (decision.status === 'accepted') {
-                if (r.cacheHit && r.prose) {
-                  disposition = 'head_reused';
-                  const acceptedRevisionId = init.latestRevisions[r.eventId]?.revisionId ?? null;
-                  revisionId = acceptedRevisionId;
-                } else {
-                  disposition = 'candidate_promoted';
-                  const job = jobs.find((j) => j.event.id === r.eventId);
-                  if (job) {
-                    const expectedLatestHash = expectedFileHash(
-                      job.promotionReadSet,
-                      sceneStore.latestPath(r.eventId),
-                    );
-                    const previousAcceptedRevisionId =
-                      init.latestRevisions[r.eventId]?.revisionId ?? null;
-                    const envelope = buildRevisionEnvelope(
-                      r,
-                      job,
-                      plan,
-                      operationId,
-                      sceneRequest,
-                      decision,
-                      paths,
-                      previousAcceptedRevisionId,
-                      expectedLatestHash,
-                    );
-                    revisionId = envelope.revisionId;
-                    sceneStore.archive(envelope);
-                    acceptedPromotedEnvs.set(r.eventId, envelope);
-                  }
-                }
-              } else if (decision.status === 'pending_waiver') {
-                disposition = 'candidate_pending_waiver';
-                const bjob = allRenderJobs.get(r.eventId);
-                if (bjob) {
-                  const expHash = expectedFileHash(
-                    bjob.promotionReadSet,
-                    sceneStore.latestPath(r.eventId),
-                  );
-                  const previousAcceptedRevisionId =
-                    init.latestRevisions[r.eventId]?.revisionId ?? null;
-                  const envelope = buildRevisionEnvelope(
-                    r,
-                    bjob,
-                    plan,
-                    operationId,
-                    sceneRequest,
-                    decision,
-                    paths,
-                    previousAcceptedRevisionId,
-                    expHash,
-                  );
-                  sceneStore.archiveAndUpdateLatest(envelope, expHash);
-                }
-              } else {
-                disposition = 'candidate_blocked';
-                const bjob = allRenderJobs.get(r.eventId);
-                if (bjob) {
-                  const expHash = expectedFileHash(
-                    bjob.promotionReadSet,
-                    sceneStore.latestPath(r.eventId),
-                  );
-                  const previousAcceptedRevisionId =
-                    init.latestRevisions[r.eventId]?.revisionId ?? null;
-                  const envelope = buildRevisionEnvelope(
-                    r,
-                    bjob,
-                    plan,
-                    operationId,
-                    sceneRequest,
-                    decision,
-                    paths,
-                    previousAcceptedRevisionId,
-                    expHash,
-                  );
-                  sceneStore.archiveAndUpdateLatest(envelope, expHash);
-                }
-              }
-
-              decisions.set(r.eventId, decision);
-              sceneDispositions.set(r.eventId, disposition);
-              revisionIds.set(r.eventId, revisionId);
-
-              const chapter = init.chapterByEventId[r.eventId] ?? 1;
-              const mappedResult = mapSceneResult(
-                r,
-                decision,
-                chapter,
-                revisionId,
-                disposition,
-                language,
-              );
-              allResults.push(mappedResult);
-
-              if (decision.status !== 'accepted') {
-                errors.push(`${r.eventId}: ${(decision.reasons ?? r.errors).join(', ')}`);
-              }
-            }
-          } catch (err) {
-            errors.push(`${ev.id}: ${sanitizeError(err)}`);
-          }
-        }
-      },
-    );
-  } catch (err) {
-    errors.push(`Tree render lease error: ${sanitizeError(err)}`);
-  }
-
-  // ── Lease ended — heartbeat stopped, handle abort ──────────────────
-  if (treeAborted) {
-    operationStore.cancel(operationId, request.mutation.actorId);
-    return buildTreeResult(tree, allResults, errors, operationId, paths);
-  }
-
-  // ── Publish tree-wide via EditorialPublisher ────────────────────────
-  const resultByEventId = new Map(allResults.map((r) => [r.eventId, r]));
-  const orderedResults = contentEvents
-    .filter((ev) => tree.representativePathByEventId.has(ev.id))
-    .map((ev) => resultByEventId.get(ev.id))
-    .filter((r): r is RenderNovelSceneResult => r !== undefined);
-
-  const accepted = orderedResults.filter(
-    (result) => decisions.get(result.eventId)?.status === 'accepted',
-  );
-  const unsuccessful = orderedResults.filter(
-    (result) => decisions.get(result.eventId)?.status !== 'accepted',
-  );
-  const editorialErrors: EditorialError[] = unsuccessful.map((result) => ({
-    code: 'PUBLICATION_INCOMPLETE' as EditorialErrorCode,
-    message: `Scene ${result.eventId} was not accepted: ${(
-      decisions.get(result.eventId)?.reasons ?? result.errors
-    ).join(', ')}`,
-    eventId: result.eventId,
-    operationId,
-  }));
-
-  // Build scope events from tree
-  const scopeNarrativeEvents = contentEvents
-    .filter((ev) => tree.representativePathByEventId.has(ev.id))
-    .sort(
-      (left, right) =>
-        left.narrativeOrder - right.narrativeOrder || left.id.localeCompare(right.id),
-    );
-  const scopeEvents: ScopeEventData[] = scopeNarrativeEvents.map((event) => ({
-    eventId: event.id,
-    narrativeOrder: event.narrativeOrder,
-    threadProgress: event.threadProgress,
-    foreshadowing: event.foreshadowing,
-    relationshipEffects: event.relationshipEffects.map((effect) => ({
-      membershipAfter: effect.membershipAfter,
-      dimensionSet: effect.dimensionSet,
-      provenance: effect.provenance,
-    })),
-    ruleEffects: event.ruleEffects,
-  }));
-  const scopeEventById = new Map(scopeEvents.map((event) => [event.eventId, event]));
-
-  // Build publish candidates from accepted results
-  const publishCandidates: PromoteCandidateInput[] = [];
-  for (const result of accepted) {
-    const eventId = result.eventId;
-    const event = scopeEventById.get(eventId);
-    const revisionId = revisionIds.get(eventId);
-    const disposition = sceneDispositions.get(eventId);
-    if (!event || !revisionId) {
-      editorialErrors.push({
-        code: 'PUBLICATION_INCOMPLETE',
-        message: `Accepted scene ${eventId} has no verified head`,
-        eventId,
-        operationId,
-      });
-      continue;
-    }
-    const envelope = sceneStore.get(eventId, revisionId);
-    const job = allRenderJobs.get(eventId);
-    const materializedScene = job?.gameDialogue
-      ? appendPlayerChoicesBlock(envelope.prose, job.gameDialogue.choices)
-      : envelope.prose;
-    const head: VerifiedHeadData = {
-      revisionId: envelope.revisionId,
-      proseHash: envelope.proseHash,
-      prose: envelope.prose,
-      sceneHash: envelope.sceneHash,
-      editorialBasisHash: envelope.editorialBasisHash,
-      scopeHash: envelope.scopeHash,
-      validationIdentity: envelope.validationIdentity,
-      proseSource: 'llm',
-      modelUsed: envelope.modelUsed,
-      renderedAt: envelope.createdAt,
-      wordCount: materializedScene.split(/\s+/).filter(Boolean).length,
-      editHistory: [
-        {
-          action: 'llm_generated',
-          actor_id: request.mutation.actorId,
-          operation_id: operationId,
-          timestamp: envelope.createdAt,
-          revision_id: envelope.revisionId,
-          review_ids: [...envelope.reviewIds],
-        },
-      ],
-      playerChoices: job?.gameDialogue?.choices,
-      branchExistence: tree.eventScopes.get(eventId) ?? { type: 'all' },
-    };
-    publishCandidates.push({
-      promote: disposition === 'candidate_promoted',
-      latestEnvelope:
-        disposition === 'candidate_promoted' ? acceptedPromotedEnvs.get(eventId) : undefined,
-      readSet: job?.promotionReadSet,
-      eventId,
-      chapterNumber: init.chapterByEventId[eventId] ?? 1,
-      head,
-      event,
-      scene: {
-        prose: materializedScene,
-      },
-    });
-  }
-
-  let treeComplete =
-    accepted.length === scopeEventIds.length &&
-    editorialErrors.length === 0 &&
-    scopeEventIds.length > 0;
-  const assembled = treeComplete
-    ? assembleGameDialogueTree({
-        projectDir: request.projectDir,
-        storage,
-        tree,
-        eventsById: new Map(contentEvents.map((event) => [event.id, event])),
-        chapterByEventId: new Map(Object.entries(init.chapterByEventId)),
-        responsesDir: paths.responsesDir,
-        sceneContents: new Map(
-          publishCandidates.map((candidate) => [candidate.eventId, candidate.scene.prose]),
-        ),
+  for (const [index, branchPath] of tree.leafPaths.entries()) {
+    const scopedEventIds = init.events
+      .filter((event) => {
+        const scope = tree.eventScopes.get(event.id);
+        return (
+          scope?.type === 'all' ||
+          (scope?.type === 'paths' &&
+            scope.paths.some((path) => canonicalJson(path) === canonicalJson(branchPath)))
+        );
       })
-    : null;
-  if (treeComplete && assembled === null) {
-    editorialErrors.push({
-      code: 'PUBLICATION_INCOMPLETE',
-      message: 'Dialogue tree could not be assembled from verified scene heads',
-      operationId,
+      .map((event) => event.id);
+    const eventIds = scopedEventIds.filter((eventId) => !renderedEventIds.has(eventId));
+    if (eventIds.length === 0) continue;
+
+    const discourseBranch = resolveDiscourseBranch({
+      selectedEventIds: new Set(scopedEventIds),
+      branchPath,
+      ledger: init.ir.data.discourseLedger,
     });
-    treeComplete = false;
-  }
-  const publication = new EditorialPublisher(coordinator, paths).publish({
-    scope: {
-      projectDir: request.projectDir,
-      branchScopeHash: computeSha256Hex(
-        canonicalJson({
-          branch: { decisions: [] },
-          discourse: 'main',
-          ledgerHash: data.discourseLedger.hash,
-        }),
-      ),
-      scopeEventIds: scopeEvents.map((event) => event.eventId),
-      scopeEvents,
-      mutationContext: request.mutation,
-    },
-    candidates: publishCandidates,
-    previousManifest: previousManifestBeforeExecution,
-    previousManifestHash:
-      publicationRawBeforeExecution === null
-        ? null
-        : computeContentHash(publicationRawBeforeExecution),
-    novelContent: null,
-    novelHash: null,
-    reasons: editorialErrors,
-    readSet: publicationReadSet,
-    publicationMode: 'tree',
-    additionalWrites: assembled
-      ? [
-          {
-            type: 'put',
-            path: dialogueTreeOutputPath,
-            content: assembled.markdown,
-            expectedHash: null,
-          },
-        ]
-      : [],
-    outputPath: dialogueTreeOutputPath,
-  });
-  treeComplete = treeComplete && publication.status === 'current';
-  const outputPath = treeComplete ? dialogueTreeOutputPath : undefined;
-
-  const result: RenderGameDialogueTreeResult = {
-    operationId,
-    tree: {
-      eventScopes: Object.fromEntries(tree.eventScopes),
-      representativePathByEventId: Object.fromEntries(tree.representativePathByEventId),
-      choicesByEventId: Object.fromEntries(
-        Array.from(tree.choicesByEventId).map(([k, v]) => [k, [...v]]),
-      ),
-    },
-    results: orderedResults,
-    errors,
-    editorialErrors,
-    ...(treeComplete && assembled ? { dialogueTree: assembled.markdown } : {}),
-    outputPath,
-    publication,
-  };
-
-  if (treeComplete) {
-    operationStore.succeed(
-      operationId,
-      request.mutation.actorId,
-      result satisfies RenderGameDialogueTreeResult,
-    );
-  } else {
-    operationStore.fail(operationId, request.mutation.actorId, editorialErrors);
+    const routeRequest: EditorialRenderRequestV1 = {
+      ...request,
+      selector: { type: 'events', eventIds },
+      branchPath,
+      discourseBranch,
+      mutation: {
+        ...request.mutation,
+        operationId:
+          index === 0
+            ? request.mutation.operationId
+            : treeRouteOperationId(request.mutation.operationId, index),
+      },
+    };
+    const routeResult = await executeEditorialRender(routeRequest, runtime);
+    for (const scene of routeResult.results) {
+      if (renderedEventIds.has(scene.eventId)) continue;
+      renderedEventIds.add(scene.eventId);
+      results.push(scene);
+    }
+    errors.push(...routeResult.errors);
+    editorialErrors.push(...routeResult.editorialErrors);
+    publication = routeResult.publication;
   }
 
-  return result;
-}
-
-// ============================================================================
-// Internal helpers
-// ============================================================================
-function buildCancelledResult(
-  operationId: string,
-  _planSummary?: EditorialPlanSummaryV1,
-): RenderNovelResult {
   return {
-    operationId,
-    results: [],
-    errors: ['Operation cancelled'],
-    editorialErrors: [{ code: 'OPERATION_CANCELLED', message: 'Cancelled' }],
-    publication: { status: 'stale', outputPath: '', novelHash: null, reasons: [] },
-  };
-}
-
-function buildFailedResult(
-  operationId: string,
-  editorialErrors: EditorialError[],
-  _planSummary?: EditorialPlanSummaryV1,
-): RenderNovelResult {
-  return {
-    operationId,
-    results: [],
-    errors: editorialErrors.map((e) => e.message),
-    editorialErrors,
-    publication: { status: 'stale', outputPath: '', novelHash: null, reasons: [] },
-  };
-}
-
-function buildTreeResult(
-  tree: CompiledGameDialogueTree,
-  results: RenderNovelSceneResult[],
-  errors: string[],
-  operationId: string,
-  paths: ProjectPaths,
-): RenderGameDialogueTreeResult {
-  const eventScopes: Record<string, BranchSet> =
-    'eventScopes' in tree ? (tree.eventScopes as unknown as Record<string, BranchSet>) : {};
-  return {
-    operationId,
-    tree: {
-      eventScopes,
-      representativePathByEventId: Object.fromEntries(tree.representativePathByEventId),
-      choicesByEventId: Object.fromEntries(
-        Array.from(tree.choicesByEventId).map(([k, v]) => [k, [...v]]),
-      ),
-    },
+    operationId: request.mutation.operationId,
+    tree: toRecordShapedGameDialogueTree(tree),
     results,
     errors,
-    editorialErrors: [],
-    outputPath: undefined,
-    publication: { status: 'stale', outputPath: paths.novelPath, novelHash: null, reasons: [] },
+    editorialErrors,
+    publication:
+      publication ?? {
+        status: 'unchanged',
+        outputPath: '',
+        novelHash: null,
+        reasons: [],
+      },
   };
+}
+
+function treeRouteOperationId(operationId: string, routeIndex: number): string {
+  const hash = sha256(`${operationId}:${routeIndex}`);
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
 }

@@ -1,21 +1,22 @@
 // ============================================================================
 // Regression Benchmarks — Run zhu-fu (祝福) fixture through full pipeline
 // ============================================================================
-
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import {
-  ContextCompiler,
-  FsStorage,
-  type InMemoryEntityRegistry,
-  initializeProject,
+  compileProject,
   type NarrativeEvent,
-  ResultAggregator,
   type StoryBoundaries,
   type ValidationIssue,
   type WorldState,
-  writeValidationReport,
 } from '@novalistically/core';
+import { FileProjectSourceLoader } from '@novalistically/node-host';
+import {
+  ContextCompiler,
+  type PipelineRunResult,
+  ReportWriter,
+  ResultAggregator,
+} from '@novalistically/core/tooling';
 import { computeNCED, type PerValidatorBreakdown, type SeverityLevelCED } from './consistency.js';
 import type { ApprovedReferenceSet, ValidatorIssueIdentity } from './reference.js';
 import { collectReferenceIssueIdentities, loadApprovedReferences } from './reference.js';
@@ -57,13 +58,11 @@ export interface RegressionResults {
  */
 export function validateFixtureIssues(fixturePath?: string): ValidationIssue[] {
   const p = fixturePath ?? path.resolve(__dirname, '..', '..', '..', 'fixtures', 'zhu-fu');
-  const { events, registry, runtime } = initializeProject(p, new FsStorage());
-  const results = new ResultAggregator().validateAll(
-    events,
-    runtime.boundaries.finalState,
-    registry,
-    { stateBeforeByEventId: runtime.boundaries.stateBeforeByEventId },
-  );
+  const compilation = compileProject(new FileProjectSourceLoader().load(p));
+  const events = [...compilation.events];
+  const entities = compilation.entities;
+  const boundaries = compilation.boundaries;
+  const results = new ResultAggregator().validateAll(events, boundaries.finalState, entities);
   return [...results.values()].flatMap((result) => [
     ...result.errors,
     ...result.warnings,
@@ -91,8 +90,7 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
   const startTime = Date.now();
   const stages: RegressionStageResult[] = [];
 
-  // Shared state populated from the single canonical kernel load
-  let registry!: InMemoryEntityRegistry;
+  let entities!: Parameters<ContextCompiler['compile']>[2];
   let allEvents: NarrativeEvent[] = [];
   let boundaries!: StoryBoundaries;
   let stateBeforeByEventId = new Map<string, WorldState>();
@@ -123,23 +121,17 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
     }
   }
 
-  // ── 1. Load canonical project (entities, events, DAG, replayed state) ─
   await mark(
     'Load entities',
     async () => {
-      const project = initializeProject(p, new FsStorage());
-      registry = project.registry;
-      allEvents = project.events;
-      boundaries = project.runtime.boundaries;
-      stateBeforeByEventId = boundaries.stateBeforeByEventId;
+      const project = compileProject(new FileProjectSourceLoader().load(p));
+      entities = project.entities;
+      allEvents = [...project.events];
+      boundaries = project.boundaries;
       state = boundaries.finalState;
+      stateBeforeByEventId = boundaries.stateBeforeByEventId;
     },
-    () => {
-      const chars = registry.findByKind('character').length;
-      const locs = registry.findByKind('location').length;
-      const rules = registry.findByKind('rule').length;
-      return `Characters: ${chars}, Locations: ${locs}, Rules: ${rules}`;
-    },
+    () => `Total entities: ${entities.getAll().length}`,
   );
 
   // ── 2. Load events (canonical authored events) ────────────────────────
@@ -178,8 +170,8 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
     'Run validators',
     async () => {
       const aggregator = new ResultAggregator();
-      const results = aggregator.validateAll(allEvents, state, registry, { stateBeforeByEventId });
-      if (results.size === 0 && allEvents.length > 0) {
+      const results = aggregator.validateAll(allEvents, state, entities, { stateBeforeByEventId });
+      if (results.size === 0) {
         throw new Error('Aggregator returned empty results');
       }
       // Collect all L1 issues
@@ -233,10 +225,9 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
         const stateBefore = stateBeforeByEventId.get(eventId);
         if (!stateBefore) continue;
 
-        const result = aggregator.validateRender(ref.prose, event, stateBefore, ref.analysis);
+        const result = aggregator.validatePost(ref.prose, event, stateBefore, ref.analysis);
         allL2Issues.push(...result.errors, ...result.warnings, ...result.infos);
       }
-
       collectedL2Issues = allL2Issues;
 
       // Collect actual issue identities and compare against approved manifest
@@ -304,13 +295,27 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
   await mark(
     'Write validation report',
     async () => {
-      const storage = new FsStorage();
-      reportPath = writeValidationReport(storage, p, {
+      // Bench host boundary: the report markdown is generated by Core's pure
+      // ReportWriter and persisted with ordinary Node fs mechanics.
+      const runResult: PipelineRunResult = {
         projectName: fixtureName,
         generatedAt: new Date().toISOString(),
+        passed: collectedL1Issues.length === 0 && collectedL2Issues.length === 0,
         l1Issues: collectedL1Issues,
         l2Issues: collectedL2Issues,
-      });
+        results: [],
+        renderStatus: { ready: [], blocked: [], waiting: [], completed: [] },
+        threads: [],
+        blockers: [],
+        nextActions: [],
+        guidance: '',
+        errors: [],
+      };
+      const markdown = new ReportWriter(runResult).toMarkdown();
+      const outDir = path.join(p, 'output');
+      fs.mkdirSync(outDir, { recursive: true });
+      reportPath = path.join(outDir, 'validation.md');
+      fs.writeFileSync(reportPath, markdown);
     },
     () => reportPath,
   );
@@ -324,7 +329,7 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
       if (!lastEvent) throw new Error('No narrative events to compile context for');
       const stateBefore = stateBeforeByEventId.get(lastEvent.id);
       if (!stateBefore) throw new Error(`Missing state boundary for ${lastEvent.id}`);
-      const contextPkg = compiler.compile(lastEvent, stateBefore, registry);
+      const contextPkg = compiler.compile(lastEvent, stateBefore, entities);
       if (
         !contextPkg.systemContext ||
         !contextPkg.sceneSpec ||
@@ -344,8 +349,8 @@ export async function runRegressionBench(fixturePath?: string): Promise<Regressi
       if (!lastEvent) return 'No narrative event';
       const stateBefore = stateBeforeByEventId.get(lastEvent.id);
       if (!stateBefore) return `Missing state boundary for ${lastEvent.id}`;
-      const contextPkg = compiler.compile(lastEvent, stateBefore, registry);
-      return `Chars: ${contextPkg.characterSnapshots.length}, Rels: ${contextPkg.relationshipContext.length}, Facts: ${contextPkg.worldFacts.length}, Threads: ${contextPkg.activeThreads.length}`;
+      const contextPkg = compiler.compile(lastEvent, stateBefore, entities);
+      return `Context: ${contextPkg.characterSnapshots.length} character snapshots`;
     },
   );
 

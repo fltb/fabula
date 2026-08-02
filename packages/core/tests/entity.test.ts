@@ -3,7 +3,6 @@
 // ============================================================================
 
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
   compareStoryCoordinates,
@@ -21,23 +20,23 @@ import type {
   StoryCoordinate,
   TimeAnchor,
 } from '../src/types/index.js';
+import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
 
-// ─── Fixture path ───────────────────────────────────────────────────────────−
-const FIXTURE_PATH = path.resolve(
-  __dirname, // packages/core/tests
-  '..', // packages/core
-  '..', // packages
-  '..', // root
-  'fixtures',
-  'arcane-aftermath',
+// ─── Immutable fixture snapshot ────────────────────────────────────────────
+// The version-controlled arcane-aftermath fixture is materialized once into a
+// ProjectSourceSnapshotV1; EntityMapper reads only the snapshot documents.
+const SNAPSHOT = materializeFixtureSnapshot(
+  path.resolve(import.meta.dirname, '..', '..', '..', 'fixtures', 'arcane-aftermath'),
 );
+
+
 
 // ============================================================================
 // 1. EntityMapper.loadProject()
 // ============================================================================
 
 describe('EntityMapper.loadProject()', () => {
-  const mapper = new EntityMapper(FIXTURE_PATH);
+  const mapper = new EntityMapper(SNAPSHOT);
   const data = mapper.loadProject();
 
   it('should load nova.yaml config', () => {
@@ -87,7 +86,7 @@ describe('EntityMapper.loadProject()', () => {
     const threads = wis.threads;
     expect(Array.isArray(threads)).toBe(true);
     expect(threads.length).toBeGreaterThanOrEqual(3);
-    const threadIds = threads.map((t: any) => t.id);
+    const threadIds = threads.map((t) => (t as { id: string }).id);
     expect(threadIds).toContain('T1');
     expect(threadIds).toContain('T2');
     expect(threadIds).toContain('T3');
@@ -152,7 +151,7 @@ describe('EntityMapper.loadProject()', () => {
 // ============================================================================
 
 describe('EntityMapper.loadAllEvents()', () => {
-  const mapper = new EntityMapper(FIXTURE_PATH);
+  const mapper = new EntityMapper(SNAPSHOT);
   const projectData = mapper.loadProject();
 
   it('returns only authored events — initial facts are separate state inputs', () => {
@@ -293,7 +292,7 @@ describe('EntityMapper.loadAllEvents()', () => {
 // ============================================================================
 
 describe('EntityMapper.mapToNarrativeEvent()', () => {
-  const mapper = new EntityMapper(FIXTURE_PATH);
+  const mapper = new EntityMapper(SNAPSHOT);
 
   it('should map preconditions to Fact objects', () => {
     const eventFile: EventFile = {
@@ -1402,13 +1401,13 @@ describe('compareStoryCoordinates()', () => {
 // ============================================================================
 
 describe('EntityMapper — edge cases', () => {
-  it('rejects a non-existent project path with ConfigError', () => {
-    const mapper = new EntityMapper('/nonexistent/path');
+  it('rejects a snapshot without required YAML with ConfigError', () => {
+    const mapper = new EntityMapper({ version: 1, documents: [], sourceHash: 'empty' });
     expect(() => mapper.loadProject()).toThrow('Required YAML file is missing');
   });
 
   it('mapToNarrativeEvent should handle empty arrays', () => {
-    const mapper = new EntityMapper(FIXTURE_PATH);
+    const mapper = new EntityMapper(SNAPSHOT);
     const eventFile: EventFile = {
       event: 'minimal',
       narrativeOrder: 1,
@@ -1433,8 +1432,8 @@ describe('EntityMapper — edge cases', () => {
   });
 
   it('should handle missing definition directories', () => {
-    // Create a minimal fixture path with only nova.yaml
-    const mapper = new EntityMapper(FIXTURE_PATH);
+    // Full fixture snapshot — loadProject handles all definition directories
+    const mapper = new EntityMapper(SNAPSHOT);
     // This should not throw since code handles missing dirs
     expect(() => mapper.loadProject()).not.toThrow();
   });
@@ -1443,7 +1442,7 @@ describe('EntityMapper — edge cases', () => {
 describe('InMemoryEntityRegistry — edge cases', () => {
   it('loads entities from already-loaded ProjectData (no project re-read)', () => {
     const registry = new InMemoryEntityRegistry();
-    const data = new EntityMapper(FIXTURE_PATH).loadProject();
+    const data = new EntityMapper(SNAPSHOT).loadProject();
     expect(() => registry.load(data)).not.toThrow();
     expect(registry.getAll().length).toBeGreaterThan(0);
   });

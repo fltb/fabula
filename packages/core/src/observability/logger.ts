@@ -1,3 +1,5 @@
+import type { Clock } from '../ports/runtime-services.ts';
+
 export interface LogContext {
   module: string;
   eventId?: string;
@@ -42,9 +44,17 @@ export class MemoryLogTransport implements LogTransport {
   }
 }
 
+/**
+ * Serializes entries as JSONL and forwards each line to an explicitly
+ * injected sink. Core never chooses an output destination itself: the
+ * default sink discards, and hosts that want emission (for example a
+ * Node stderr writer in the node-host package) supply their own sink.
+ */
 export class JsonlLogTransport implements LogTransport {
+  constructor(private readonly sink: (line: string) => void = () => {}) {}
+
   write(entry: LogEntry): void {
-    process.stderr.write(`${JSON.stringify(entry)}\n`);
+    this.sink(`${JSON.stringify(entry)}\n`);
   }
 }
 
@@ -66,14 +76,33 @@ export class LevelFilterTransport implements LogTransport {
   }
 }
 
+/**
+ * Deterministic placeholder clock. Core never reads the host clock on
+ * its own authority; hosts MUST inject a real Clock when wall-clock
+ * timestamps are wanted. Without one, every entry carries this fixed
+ * sentinel timestamp.
+ */
+const FALLBACK_CLOCK: Clock = { now: () => '1970-01-01T00:00:00.000Z' };
+
 export class Logger {
+  private readonly transport: LogTransport;
+  private readonly context: LogContext;
+  private readonly clock: Clock;
+
   constructor(
-    private readonly transport: LogTransport = new JsonlLogTransport(),
-    private readonly context: LogContext = { module: 'core' },
-  ) {}
+    transport?: LogTransport,
+    context: LogContext = { module: 'core' },
+    clock?: Clock,
+  ) {
+    // Default transport is non-emitting: logging only happens where a
+    // host explicitly injects one.
+    this.transport = transport ?? new JsonlLogTransport();
+    this.context = context;
+    this.clock = clock ?? FALLBACK_CLOCK;
+  }
 
   child(context: Partial<LogContext>): Logger {
-    return new Logger(this.transport, sanitizeContext({ ...this.context, ...context }));
+    return new Logger(this.transport, sanitizeContext({ ...this.context, ...context }), this.clock);
   }
 
   debug(message: string, context: Partial<LogContext> = {}): void {
@@ -91,7 +120,7 @@ export class Logger {
 
   private write(level: LogLevel, message: string, context: Partial<LogContext>): void {
     this.transport.write({
-      timestamp: new Date().toISOString(),
+      timestamp: this.clock.now(),
       level,
       message,
       context: sanitizeContext({ ...this.context, ...context }),
@@ -99,4 +128,9 @@ export class Logger {
   }
 }
 
+/**
+ * Default non-emitting logger. Core never writes to host stderr on its
+ * own authority; hosts attach a transport (or an injected sink) when
+ * logs should reach a destination.
+ */
 export const logger = new Logger();

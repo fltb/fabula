@@ -46,7 +46,13 @@ export function buildStoryOrderIndex(
         phase: 'story-order',
       });
     }
-    const successors = copied.get(predecessor)!;
+    const successors = copied.get(predecessor);
+    if (successors === undefined) {
+      throw new DagProviderError(`Unknown predecessor '${predecessor}' in story graph`, {
+        eventId: predecessor,
+        phase: 'story-order',
+      });
+    }
     for (const dependent of dependents) {
       if (!nodeIds.has(dependent)) {
         throw new DagProviderError(`Unknown dependent '${dependent}' in story graph`, {
@@ -73,11 +79,23 @@ export function buildStoryOrderIndex(
   const orderedAll: string[] = [];
 
   while (ready.length > 0) {
-    const current = ready.shift()!;
+    const current = ready.shift();
+    if (current === undefined) {
+      throw new DagProviderError('Story graph ready queue unexpectedly emptied', {
+        phase: 'story-order',
+      });
+    }
     orderedAll.push(current);
     for (const dependent of copied.get(current) ?? []) {
-      const targetAncestors = ancestors.get(dependent)!;
-      for (const ancestor of ancestors.get(current)!) targetAncestors.add(ancestor);
+      const targetAncestors = ancestors.get(dependent);
+      const currentAncestors = ancestors.get(current);
+      if (targetAncestors === undefined || currentAncestors === undefined) {
+        throw new DagProviderError('Story graph ancestor index is incomplete', {
+          eventId: targetAncestors === undefined ? dependent : current,
+          phase: 'story-order',
+        });
+      }
+      for (const ancestor of currentAncestors) targetAncestors.add(ancestor);
       targetAncestors.add(current);
 
       const remaining = (inDegree.get(dependent) ?? 0) - 1;

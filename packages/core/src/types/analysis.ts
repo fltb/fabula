@@ -2,13 +2,7 @@
 // Analysis Result Type — Structure for LLM Pass 2 JSON output
 // ============================================================================
 //
-// The render pipeline's second LLM pass produces structured analysis JSON.
-// This type mirrors the schema requested in the Pass 2 prompt
-// (ai/prompts/render-analysis.ts).
-//
-// Validators receive this as an OPTIONAL parameter in validateRender().
-// Over time, validators should migrate from prose-regex checks to
-// structured analysis checks.
+// Analysis payload types used by Pass 2 validators.
 //
 // Pass 2 is an external measurement, NOT story-world knowledge:
 // - `AnalysisResult.analysis` keeps the existing dynamic domain payload.

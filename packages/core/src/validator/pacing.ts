@@ -90,7 +90,7 @@ export class PacingValidator implements Validator {
         narrativeChecks,
         (check) => {
           // Catalog-driven: check if attribute is a pacing-related narrative attribute
-          const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+          const entityKind = input.entities?.resolve(check.entityId)?.kind;
           if (
             entityKind &&
             getAttributeSemanticRole(input.entityTypeCatalog, entityKind, check.attribute) ===

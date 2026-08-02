@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { compileGameDialogueTree } from '../../src/branch/game-dialogue-tree.ts';
 import { loadCanonicalProject } from '../../src/entity/project-runtime.ts';
@@ -7,7 +8,7 @@ import { eventFileSchema } from '../../src/schemas/event.ts';
 import { compileStoryRuntimeGraph } from '../../src/state/graph-adapter.ts';
 import { ReplayEngine } from '../../src/state/replay.ts';
 import { compileStoryBoundaries } from '../../src/state/story-boundaries.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import { materializeFixtureSnapshot } from '../fixtures/fixture-snapshots.ts';
 import type { Fact, TimeAnchor } from '../../src/types/entity.ts';
 import type {
   BranchPath,
@@ -158,194 +159,6 @@ function defaultContext(): TemporalContext {
 
 const PROJECT_DIR = '/game-dialogue-tree';
 
-function setupGameDialogueProject(storage: MemoryStorage): void {
-  storage.write(
-    `${PROJECT_DIR}/nova.yaml`,
-    ['project: game-dialogue-tree', 'title: Game Dialogue Tree', 'author: Test Author'].join('\n'),
-  );
-  storage.write(
-    `${PROJECT_DIR}/definitions/state_initial.yaml`,
-    [
-      'info:',
-      '  currentEra: beginning',
-      '  politicalSituation: stable',
-      'timeAnchors:',
-      '  - { id: day_0, at: "day 0", description: "Day 0" }',
-      '  - { id: day_1, at: "day 1", description: "Day 1" }',
-      'threads: []',
-      'worldFacts: []',
-    ].join('\n'),
-  );
-  storage.write(
-    `${PROJECT_DIR}/definitions/entity-types.yaml`,
-    [
-      'types:',
-      '  character:',
-      '    typeId: character',
-      '    kind: character',
-      '    attributes:',
-      '      lifecycle:',
-      '        attributeId: lifecycle',
-      '        valueType: string',
-      '        requiredAt: introduction',
-      '        writePolicy: lifecycle_managed',
-      '        allowedLifecycleStates:',
-      '          - active',
-      '          - inactive',
-      '          - retired',
-      '        unsetAllowed: false',
-      '      chose_hunt:',
-      '        attributeId: chose_hunt',
-      '        valueType: boolean',
-      '        requiredAt: never',
-      '        writePolicy: mutable',
-      '        unsetAllowed: true',
-      '      traits:',
-      '        attributeId: traits',
-      '        valueType: string_list',
-      '        requiredAt: never',
-      '        writePolicy: immutable',
-      '        unsetAllowed: true',
-      '    lifecyclePolicy:',
-      '      allowedTransitions:',
-      '        - - active',
-      '          - inactive',
-      '        - - active',
-      '          - retired',
-      '        - - inactive',
-      '          - active',
-      '        - - inactive',
-      '          - retired',
-      '    referenceCapabilities:',
-      '      defaultEligibility: live',
-      '    typedInvariants: []',
-    ].join('\n'),
-  );
-  storage.write(
-    `${PROJECT_DIR}/definitions/characters/hero.yaml`,
-    [
-      'id: hero',
-      'name: "Hero"',
-      'type: character',
-      'description: "The protagonist who chooses whether to hunt."',
-      'traits: []',
-      'initialState: {}',
-    ].join('\n'),
-  );
-  storage.write(
-    `${PROJECT_DIR}/definitions/characters/narrator.yaml`,
-    [
-      'id: narrator',
-      'name: "Narrator"',
-      'type: character',
-      'description: "The omniscient narrator who presents the offer."',
-      'traits: []',
-      'initialState: {}',
-    ].join('\n'),
-  );
-  storage.write(
-    `${PROJECT_DIR}/definitions/discourse-ledger.yaml`,
-    [
-      'id: game_dialogue_tree_test_ledger',
-      'chapters:',
-      '  - branch: accept_hunt',
-      '    chapter: 1',
-      '    sceneIds:',
-      '      - E0',
-      '      - E1a',
-      '  - branch: refuse_hunt',
-      '    chapter: 1',
-      '    sceneIds:',
-      '      - E0',
-      '      - E1b',
-      'entries: []',
-    ].join('\n'),
-  );
-  storage.write(
-    `${PROJECT_DIR}/chapters/chapter_01/_chapter.yaml`,
-    [
-      'chapter: 1',
-      'title: Chapter One',
-      'summary: Branches begin.',
-      'intent: Present a choice.',
-      'plannedScenes: 3',
-    ].join('\n'),
-  );
-  storage.write(
-    `${PROJECT_DIR}/chapters/chapter_01/E0.yaml`,
-    [
-      'event: E0',
-      'narrativeOrder: 0',
-      'title: The offer',
-      'storyTime: day_0',
-      'pov:',
-      '  character: narrator',
-      '  type: omniscient',
-      'sceneBrief: The player receives an offer.',
-      'beats:',
-      '  - "The player receives an offer."',
-      'preconditions: []',
-      'expectedPostconditions: []',
-      'choices:',
-      '  - id: accept_hunt',
-      '    label: Accept the hunt',
-      '    description: Enter the jungle.',
-      '    targetEvent: E1a',
-      '    effects:',
-      '      - entity: hero',
-      '        attribute: chose_hunt',
-      '        value: true',
-      '  - id: refuse_hunt',
-      '    label: Refuse the hunt',
-      '    description: Remain in the chateau.',
-      '    targetEvent: E1b',
-      '    effects:',
-      '      - entity: hero',
-      '        attribute: chose_hunt',
-      '        value: false',
-    ].join('\n'),
-  );
-  storage.write(
-    `${PROJECT_DIR}/chapters/chapter_01/E1a.yaml`,
-    [
-      'event: E1a',
-      'narrativeOrder: 1',
-      'title: The jungle',
-      'storyTime: day_1',
-      'pov:',
-      '  character: hero',
-      '  type: third_person_limited',
-      'sceneBrief: The hunt begins.',
-      'beats:',
-      '  - "The hunt begins."',
-      'preconditions:',
-      '  - entity: hero',
-      '    attribute: chose_hunt',
-      '    value: true',
-      'expectedPostconditions: []',
-    ].join('\n'),
-  );
-  storage.write(
-    `${PROJECT_DIR}/chapters/chapter_01/E1b.yaml`,
-    [
-      'event: E1b',
-      'narrativeOrder: 1',
-      'title: The chateau',
-      'storyTime: day_1',
-      'pov:',
-      '  character: hero',
-      '  type: third_person_limited',
-      'sceneBrief: The hero refuses.',
-      'beats:',
-      '  - "The hero refuses."',
-      'preconditions:',
-      '  - entity: hero',
-      '    attribute: chose_hunt',
-      '    value: false',
-      'expectedPostconditions: []',
-    ].join('\n'),
-  );
-}
 
 function event(
   id: string,
@@ -682,9 +495,11 @@ describe('game dialogue replay integration', () => {
   };
 
   it('maps scopes and replays each selected transition before its target', () => {
-    const storage = new MemoryStorage();
-    setupGameDialogueProject(storage);
-    const ir = loadCanonicalProject(PROJECT_DIR, storage);
+    const ir = loadCanonicalProject(
+      materializeFixtureSnapshot(
+        path.resolve(import.meta.dirname, '..', '..', '..', '..', 'fixtures', 'game-dialogue-tree'),
+      ),
+    );
     // Runtime events: authored events + branch-choice transitions composed by
     // the canonical kernel (no genesis event exists in the current contract).
     const events = ir.runtimeEvents;

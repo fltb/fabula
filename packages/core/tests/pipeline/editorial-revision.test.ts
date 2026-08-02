@@ -24,8 +24,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MockProvider } from '../../src/ai/providers/mock.ts';
 import { RenderPipeline } from '../../src/pipeline/render.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+
 import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
+import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 
 // Mock schemas/index to break a pre-existing circular dependency
 // between schemas/editorial.ts ← schemas/analysis.ts → validator/index.ts
@@ -180,7 +181,6 @@ describe('RenderPipeline — provider exclusivity', () => {
   it('throws when both provider and providerFactory are provided', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const provider = new MockProvider({ responses: ['prose', SAMPLE_PASS2] });
     const factory: ProviderFactory = {
@@ -194,8 +194,7 @@ describe('RenderPipeline — provider exclusivity', () => {
           provider,
           providerFactory: factory,
           model: 'test-model',
-          cacheDir: '/tmp/test-cache',
-          storage: new MemoryStorage(),
+          runtimeServices: createRuntimeServices().services,
           validatorPolicyId: 'test-policy-v1',
         }),
     ).toThrow('PROVIDER_REQUIRED');
@@ -204,14 +203,12 @@ describe('RenderPipeline — provider exclusivity', () => {
   it('accepts provider without providerFactory', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const provider = new MockProvider({ responses: ['prose', SAMPLE_PASS2] });
     const pipeline = new mod.RenderPipeline({
       provider,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       validatorPolicyId: 'test-policy-v1',
     });
     expect(pipeline).toBeInstanceOf(mod.RenderPipeline);
@@ -220,7 +217,6 @@ describe('RenderPipeline — provider exclusivity', () => {
   it('accepts providerFactory without provider', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const factory: ProviderFactory = {
       profile: 'test-profile',
@@ -229,8 +225,7 @@ describe('RenderPipeline — provider exclusivity', () => {
     const pipeline = new mod.RenderPipeline({
       providerFactory: factory,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       validatorPolicyId: 'test-policy-v1',
     });
     expect(pipeline).toBeInstanceOf(mod.RenderPipeline);
@@ -245,17 +240,15 @@ describe('RenderPipeline — lazy provider creation', () => {
   it('cache-only avoids calling factory.create()', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     // Populate cache
-    const storage = new MemoryStorage();
+    const runtimeServices = createRuntimeServices().services;
     const populateProvider = new MockProvider({ responses: ['prose', SAMPLE_PASS2] });
     const populatePipeline = new mod.RenderPipeline({
       provider: populateProvider,
       model: 'test-model',
       providerProfile: 'test-profile',
-      cacheDir: '/tmp/test-cache',
-      storage,
+      runtimeServices,
       skipCache: false,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -272,8 +265,7 @@ describe('RenderPipeline — lazy provider creation', () => {
       providerFactory: factory,
       model: 'test-model',
       providerProfile: 'test-profile',
-      cacheDir: '/tmp/test-cache',
-      storage,
+      runtimeServices,
       skipCache: false,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -286,7 +278,6 @@ describe('RenderPipeline — lazy provider creation', () => {
   it('factory creates once when cache misses', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const factoryCreate = vi.fn<() => Promise<MockProvider>>();
     // Use generator so MockProvider returns fresh-prose on every Pass 1 call,
@@ -308,8 +299,7 @@ describe('RenderPipeline — lazy provider creation', () => {
     const pipeline = new mod.RenderPipeline({
       providerFactory: factory,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       skipCache: true,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -334,12 +324,10 @@ describe('RenderPipeline — lazy provider creation', () => {
 describe('RenderPipeline — PROVIDER_REQUIRED', () => {
   it('fails with PROVIDER_REQUIRED when no provider/factory and render needs real call', async () => {
     const mod = await import('../../src/pipeline/render.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const pipeline = new mod.RenderPipeline({
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       skipCache: true,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -353,12 +341,10 @@ describe('RenderPipeline — PROVIDER_REQUIRED', () => {
 
   it('can construct without provider when cache-only is known to hit', async () => {
     const mod = await import('../../src/pipeline/render.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const pipeline = new mod.RenderPipeline({
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       validatorPolicyId: 'test-policy-v1',
     });
     expect(pipeline).toBeInstanceOf(mod.RenderPipeline);
@@ -373,16 +359,14 @@ describe('RenderPipeline — revision context', () => {
   it('bypasses cache when revisionContext is present', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     // Populate cache first
-    const storage = new MemoryStorage();
+    const runtimeServices = createRuntimeServices().services;
     const populateProvider = new MockProvider({ responses: ['cached-prose', SAMPLE_PASS2] });
     const populatePipeline = new mod.RenderPipeline({
       provider: populateProvider,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage,
+      runtimeServices,
       skipCache: false,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -393,8 +377,7 @@ describe('RenderPipeline — revision context', () => {
     const revisionPipeline = new mod.RenderPipeline({
       provider: revisionProvider,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage,
+      runtimeServices,
       skipCache: false,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -414,9 +397,8 @@ describe('RenderPipeline — revision context', () => {
   it('canonical YAML/context priority is explicit in revision prompt sections', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
-    const storage = new MemoryStorage();
+    const runtimeServices = createRuntimeServices().services;
     let capturedUserPrompt = '';
 
     const provider = new MockProvider({
@@ -443,8 +425,7 @@ describe('RenderPipeline — revision context', () => {
     const pipeline = new mod.RenderPipeline({
       provider,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage,
+      runtimeServices,
       skipCache: true,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -472,12 +453,12 @@ describe('RenderPipeline — revision context', () => {
         return SAMPLE_PASS2;
       },
     });
-    const storage = new MemoryStorage();
+    const runtime = createRuntimeServices();
+    const cachePut = vi.spyOn(runtime.renderCache, 'put');
     const pipeline = new RenderPipeline({
       provider,
       model: 'test-model',
-      cacheDir: '/tmp/manual-candidate-cache',
-      storage,
+      runtimeServices: runtime.services,
       skipCache: false,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -492,7 +473,7 @@ describe('RenderPipeline — revision context', () => {
     });
     expect(requests.some((request) => request.taskType === 'pass1')).toBe(false);
     expect(requests.some((request) => request.taskType === 'pass2')).toBe(true);
-    expect(storage.exists('/tmp/manual-candidate-cache')).toBe(false);
+    expect(cachePut).not.toHaveBeenCalled();
   });
 });
 
@@ -504,7 +485,6 @@ describe('RenderPipeline — AbortSignal propagation', () => {
   it('passes signal into every CompletionRequest in Pass 1', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const controller = new AbortController();
     const capturedRequests: CompletionRequest[] = [];
@@ -519,8 +499,7 @@ describe('RenderPipeline — AbortSignal propagation', () => {
     const pipeline = new mod.RenderPipeline({
       provider,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       skipCache: true,
       signal: controller.signal,
       validatorPolicyId: 'test-policy-v1',
@@ -536,7 +515,6 @@ describe('RenderPipeline — AbortSignal propagation', () => {
   it('passes signal into Pass 2 requests', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const controller = new AbortController();
     const capturedRequests: CompletionRequest[] = [];
@@ -554,8 +532,7 @@ describe('RenderPipeline — AbortSignal propagation', () => {
     const pipeline = new mod.RenderPipeline({
       provider,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       skipCache: true,
       signal: controller.signal,
       validatorPolicyId: 'test-policy-v1',
@@ -571,7 +548,6 @@ describe('RenderPipeline — AbortSignal propagation', () => {
   it('per-call signal overrides pipeline-level signal', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const pipelineController = new AbortController();
     const perCallController = new AbortController();
@@ -590,8 +566,7 @@ describe('RenderPipeline — AbortSignal propagation', () => {
     const pipeline = new mod.RenderPipeline({
       provider,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       skipCache: true,
       signal: pipelineController.signal,
       validatorPolicyId: 'test-policy-v1',
@@ -827,17 +802,15 @@ describe('RenderPipeline — mixed cache hit/miss lazy creation', () => {
   it('all-hit with no provider/factory succeeds from cache', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     // Populate cache with a provider
-    const storage = new MemoryStorage();
+    const runtimeServices = createRuntimeServices().services;
     const populateProvider = new MockProvider({ responses: ['cached-prose', SAMPLE_PASS2] });
     const populatePipeline = new mod.RenderPipeline({
       provider: populateProvider,
       model: 'test-model',
       providerProfile: 'test-profile',
-      cacheDir: '/tmp/test-cache',
-      storage,
+      runtimeServices,
       skipCache: false,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -847,8 +820,7 @@ describe('RenderPipeline — mixed cache hit/miss lazy creation', () => {
     const cachedPipeline = new mod.RenderPipeline({
       model: 'test-model',
       providerProfile: 'test-profile',
-      cacheDir: '/tmp/test-cache',
-      storage,
+      runtimeServices,
       skipCache: false,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -861,17 +833,15 @@ describe('RenderPipeline — mixed cache hit/miss lazy creation', () => {
   it('mixed hit/miss creates factory once for the miss', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     // Populate cache for one event ID
-    const storage = new MemoryStorage();
+    const runtimeServices = createRuntimeServices().services;
     const populateProvider = new MockProvider({ responses: ['cached-prose', SAMPLE_PASS2] });
     const populatePipeline = new mod.RenderPipeline({
       provider: populateProvider,
       model: 'test-model',
       providerProfile: 'test-profile',
-      cacheDir: '/tmp/test-cache',
-      storage,
+      runtimeServices,
       skipCache: false,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -895,8 +865,7 @@ describe('RenderPipeline — mixed cache hit/miss lazy creation', () => {
       providerFactory: factory,
       model: 'test-model',
       providerProfile: 'test-profile',
-      cacheDir: '/tmp/test-cache',
-      storage,
+      runtimeServices,
       skipCache: false,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -931,12 +900,10 @@ describe('RenderPipeline — mixed cache hit/miss lazy creation', () => {
 describe('RenderPipeline — PROVIDER_REQUIRED non-retryable', () => {
   it('breaks retry loop on PROVIDER_REQUIRED without additional attempts', async () => {
     const mod = await import('../../src/pipeline/render.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const pipeline = new mod.RenderPipeline({
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       skipCache: true,
       validatorPolicyId: 'test-policy-v1',
     });
@@ -958,7 +925,6 @@ describe('RenderPipeline — signal in each provider phase', () => {
   it('passes signal into double-run verification request', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const controller = new AbortController();
     const capturedSignals: Array<AbortSignal | undefined> = [];
@@ -974,8 +940,7 @@ describe('RenderPipeline — signal in each provider phase', () => {
     const pipeline = new mod.RenderPipeline({
       provider,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       skipCache: true,
       signal: controller.signal,
       doubleRunVerification: true,
@@ -1007,7 +972,6 @@ describe('RenderPipeline — no calls after abort', () => {
   it('returns cancelled result with zero provider calls when signal already aborted', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const controller = new AbortController();
     controller.abort();
@@ -1016,8 +980,7 @@ describe('RenderPipeline — no calls after abort', () => {
     const pipeline = new mod.RenderPipeline({
       provider,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       skipCache: true,
       signal: controller.signal,
       validatorPolicyId: 'test-policy-v1',
@@ -1037,7 +1000,6 @@ describe('RenderPipeline — no calls after abort', () => {
   it('stops rendering mid-retry when abort signal fires', async () => {
     const mod = await import('../../src/pipeline/render.ts');
     const { MockProvider } = await import('../../src/ai/providers/mock.ts');
-    const { MemoryStorage } = await import('../../src/storage/memory-storage.ts');
 
     const controller = new AbortController();
     const callCounts: string[] = [];
@@ -1056,8 +1018,7 @@ describe('RenderPipeline — no calls after abort', () => {
     const pipeline = new mod.RenderPipeline({
       provider,
       model: 'test-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices().services,
       skipCache: true,
       signal: controller.signal,
       validatorPolicyId: 'test-policy-v1',

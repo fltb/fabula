@@ -1,26 +1,19 @@
 // ============================================================================
-// Plugin System — Plugin Loader
+// Plugin registry — pure manifest conflict and registration semantics.
+//
+// Host code discovers manifests and loads JavaScript modules, then passes the
+// resulting values and hooks to this registry. Core never receives paths,
+// storage adapters, or dynamic module-loading authority.
 // ============================================================================
 
-import * as path from 'node:path';
-import { pathToFileURL } from 'node:url';
-import * as yaml from 'yaml';
-import { logger } from '../observability/logger.ts';
-import type { Storage } from '../storage/types.js';
 import type { ArbitrationStrategy, PluginManifest } from '../types/index.js';
 import { detectConflicts } from './conflicts.js';
 import { resolveConflict } from './resolve.js';
-import type { ConflictReport, PluginHooks, ResolutionResult } from './types.js';
+import type { ConflictReport, ResolutionResult } from './types.js';
 
 export class PluginLoader {
-  private plugins: Map<string, PluginManifest> = new Map();
-  private storage: Storage;
+  private readonly plugins = new Map<string, PluginManifest>();
 
-  constructor(storage: Storage) {
-    this.storage = storage;
-  }
-
-  /** Register a plugin manifest */
   register(manifest: PluginManifest): void {
     if (this.plugins.has(manifest.name)) {
       throw new Error(`Plugin "${manifest.name}" is already registered`);
@@ -28,94 +21,31 @@ export class PluginLoader {
     this.plugins.set(manifest.name, manifest);
   }
 
-  /** Get a registered plugin */
   get(name: string): PluginManifest | undefined {
     return this.plugins.get(name);
   }
 
-  /** List all registered plugins */
   list(): PluginManifest[] {
     return [...this.plugins.values()];
   }
 
-  /** Unregister a plugin by name */
   unregister(name: string): boolean {
     return this.plugins.delete(name);
   }
 
-  /** Clear all registered plugins */
   clear(): void {
     this.plugins.clear();
   }
 
-  /** Detect conflicts between registered plugins */
   detectConflicts(): ConflictReport[] {
     return detectConflicts(this.list());
   }
 
-  /**
-   * Resolve a conflict between two plugins using the given strategy.
-   */
   resolveConflict(
     pluginA: string,
     pluginB: string,
     strategy: ArbitrationStrategy,
   ): ResolutionResult {
     return resolveConflict(this.plugins, pluginA, pluginB, strategy);
-  }
-
-  /** Load plugins from a directory, returning collected lifecycle hooks */
-  async loadFromDirectory(dirPath: string): Promise<PluginHooks[]> {
-    const hooks: PluginHooks[] = [];
-    try {
-      const entries = this.storage.list(dirPath);
-      if (!entries || entries.length === 0) return hooks;
-
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const pluginDir = path.join(dirPath, entry.name);
-        const manifestPath = path.join(pluginDir, 'manifest.yaml');
-
-        try {
-          const manifestContent = this.storage.readOptional(manifestPath);
-          if (!manifestContent) continue;
-
-          const manifest = yaml.parse(manifestContent) as PluginManifest;
-          if (!manifest || !manifest.name) {
-            logger.warn('Plugin manifest is invalid', { module: 'plugin', path: manifestPath });
-            continue;
-          }
-
-          this.register(manifest);
-          logger.info('Plugin loaded', { module: 'plugin', version: manifest.version });
-
-          // Attempt to load plugin code (optional — index.js may not exist)
-          const indexPath = path.join(pluginDir, 'index.js');
-          const indexContent = this.storage.readOptional(indexPath);
-          if (indexContent !== null) {
-            try {
-              const mod = await import(pathToFileURL(indexPath).href);
-              if (mod.hooks && typeof mod.hooks === 'object' && mod.hooks.name) {
-                hooks.push(mod.hooks as PluginHooks);
-              }
-            } catch (importErr) {
-              logger.warn('Plugin code failed to load', {
-                module: 'plugin',
-                path: indexPath,
-                error: String(importErr),
-              });
-            }
-          }
-        } catch {
-          logger.warn('Plugin failed to load', { module: 'plugin', path: pluginDir });
-        }
-      }
-    } catch (err) {
-      // Directory may not exist yet — not an error
-      if ((err as { code?: string }).code !== 'ENOENT') {
-        throw err;
-      }
-    }
-    return hooks;
   }
 }

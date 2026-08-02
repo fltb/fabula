@@ -3,17 +3,19 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   type AnalysisResult,
-  expectedOutcomeManifestSchema,
-  FsStorage,
-  initializeProject,
+  compileProject,
   type ProjectData,
+  type ValidationIssue,
+  type Validator,
+} from '@novalistically/core';
+import { FileProjectSourceLoader } from '@novalistically/node-host';
+import {
+  expectedOutcomeManifestSchema,
   provenanceManifestSchema,
   ReferenceFormatError,
   ResultAggregator,
   responseReferenceSchema,
-  type ValidationIssue,
-  type Validator,
-} from '@novalistically/core';
+} from '@novalistically/core/tooling';
 
 /** Patterns that look like secrets in metadata values. */
 const SECRET_VALUE_PATTERN =
@@ -654,17 +656,19 @@ export function loadApprovedReferences(referenceDir: string): ApprovedReferenceS
 }
 
 /**
- * Collect the deterministic six-field issue identities from L1 (validate)
- * and L2 (validateRender) for every E0–E6 reference entry.
+ * Collect the deterministic six-field issue identities from pre-render
+ * and post-render validation for every E0–E6 reference entry.
  * Returns a deduplicated, lexicographically-sorted array.
  */
 export function collectReferenceIssueIdentities(
   fixturePath: string,
   references: ReadonlyMap<string, ApprovedReference>,
 ): ValidatorIssueIdentity[] {
-  // ── 1. Load canonical project (authored events, registry, runtime) ──
-  const { data, events, registry, runtime } = initializeProject(fixturePath, new FsStorage());
-  const stateBeforeByEventId = runtime.boundaries.stateBeforeByEventId;
+  // ── 1. Load canonical project (authored events, entities, boundaries) ──
+  const compilation = compileProject(new FileProjectSourceLoader().load(fixturePath));
+  const { data, entities } = compilation;
+  const stateBeforeByEventId = compilation.boundaries.stateBeforeByEventId;
+  const events = [...compilation.events];
   const aggregator = new ResultAggregator();
 
   // Build chapter-by-event lookup
@@ -686,18 +690,18 @@ export function collectReferenceIssueIdentities(
 
     const chapter = chapterByEventId.get(eventId) ?? 1;
 
-    // L1: validate
-    const l1Result = aggregator.validate(event, stateBefore, registry, events, chapter);
+    // Pre-render validation.
+    const l1Result = aggregator.validatePre(event, stateBefore, entities, events, chapter);
     const l1Issues = [...l1Result.errors, ...l1Result.warnings, ...l1Result.infos];
 
-    // L2: validateRender
-    const l2Result = aggregator.validateRender(
+    // Post-render validation.
+    const l2Result = aggregator.validatePost(
       ref.prose,
       event,
       stateBefore,
       ref.analysis,
       undefined,
-      registry,
+      entities,
       chapter,
     );
     const l2Issues = [...l2Result.errors, ...l2Result.warnings, ...l2Result.infos];

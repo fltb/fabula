@@ -17,7 +17,6 @@ import type {
 
 export interface PipelineRunResult {
   projectName: string;
-  projectDir: string;
   generatedAt: string;
 
   /** Overall validation passed/failed */
@@ -172,7 +171,7 @@ export class ReportWriter {
       );
       lines.push(
         ...issueTableRows(
-          r.l1Issues.sort((a, b) => {
+          [...r.l1Issues].sort((a, b) => {
             if (a.severity !== b.severity) {
               const order = { error: 0, warning: 1, info: 2 };
               return order[a.severity] - order[b.severity];
@@ -195,7 +194,7 @@ export class ReportWriter {
       );
       lines.push(
         ...issueTableRows(
-          r.l2Issues.sort((a, b) => {
+          [...r.l2Issues].sort((a, b) => {
             if (a.severity !== b.severity) {
               const order = { error: 0, warning: 1, info: 2 };
               return order[a.severity] - order[b.severity];
@@ -273,7 +272,6 @@ export class ReportWriter {
   toJSON(): object {
     return {
       projectName: this.result.projectName,
-      projectDir: this.result.projectDir,
       generatedAt: this.result.generatedAt,
       passed: this.result.passed,
       validation: {

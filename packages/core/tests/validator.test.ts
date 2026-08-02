@@ -87,7 +87,7 @@ function buildPreInput(
     event,
     worldState: defaultState,
     events: [event],
-    entityRegistry: defaultRegistry,
+    entities: defaultRegistry,
     entityTypeCatalog: TEST_CATALOG,
     chapter: 1,
     queryState: (_entityId: string, _attribute: string) => undefined,
@@ -337,7 +337,7 @@ describe('CharacterStateValidator', () => {
       ],
     });
     const input = buildPreInput(event, {
-      entityRegistry: registry,
+      entities: registry,
       queryState: (_id, _attr) => {
         if (_attr === 'status') return 'dead';
         if (_attr === 'alive') return false;
@@ -370,7 +370,7 @@ describe('CharacterStateValidator', () => {
       ],
     });
     const input = buildPreInput(event, {
-      entityRegistry: registry,
+      entities: registry,
       queryState: (_id, _attr) => {
         if (_id === 'jinx' && _attr === 'condition') return 'injured';
         return undefined;
@@ -400,7 +400,7 @@ describe('CharacterStateValidator', () => {
       participants: { entities: ['vi'] },
     });
     const input = buildPreInput(event, {
-      entityRegistry: registry,
+      entities: registry,
       queryState: (_id, _attr) => {
         if (_attr === 'status') return 'dead';
         if (_attr === 'alive') return false;
@@ -431,7 +431,7 @@ describe('CharacterStateValidator', () => {
       prose: 'vi walked into the room and spoke to the group.',
       analysis: null,
       chapter: 3,
-      entityRegistry: new InMemoryEntityRegistry(),
+      entities: new InMemoryEntityRegistry(),
       entityTypeCatalog: TEST_CATALOG,
     };
 
@@ -747,7 +747,7 @@ describe('CausalityValidator', () => {
       prose: 'Jinx looked around the dark room, searching for an exit.',
       analysis: null,
       chapter: 3,
-      entityRegistry: registry,
+      entities: registry,
       entityTypeCatalog: TEST_CATALOG,
     };
 
@@ -789,7 +789,7 @@ describe('CausalityValidator', () => {
       prose: 'Jinx walked through the streets of Piltover.',
       analysis: null,
       chapter: 3,
-      entityRegistry: registry,
+      entities: registry,
       entityTypeCatalog: TEST_CATALOG,
     };
 
@@ -866,7 +866,7 @@ describe('POVValidator', () => {
   it('should error when POV character does not exist in registry', () => {
     const registry = new InMemoryEntityRegistry();
     const event = makeEvent({ pov: { character: 'nonexistent', type: 'first_person' } });
-    const input = buildPreInput(event, { entityRegistry: registry });
+    const input = buildPreInput(event, { entities: registry });
 
     const issues = validator.validatePre(input);
     const errorIssues = issues.filter(
@@ -883,7 +883,7 @@ describe('POVValidator', () => {
       pov: { character: 'jinx', type: 'third_person_limited' },
       participants: { entities: ['vi'] }, // jinx is not a participant
     });
-    const input = buildPreInput(event, { entityRegistry: registry });
+    const input = buildPreInput(event, { entities: registry });
 
     const issues = validator.validatePre(input);
     const warnIssues = issues.filter(
@@ -899,7 +899,7 @@ describe('POVValidator', () => {
     const event = makeEvent({
       pov: { character: 'narrator', type: 'omniscient' },
     });
-    const input = buildPreInput(event, { entityRegistry: registry });
+    const input = buildPreInput(event, { entities: registry });
 
     const issues = validator.validatePre(input);
     const infoIssues = issues.filter(
@@ -915,7 +915,7 @@ describe('POVValidator', () => {
       pov: { character: 'jinx', type: 'third_person_limited' },
       participants: { entities: ['jinx'] },
     });
-    const input = buildPreInput(event, { entityRegistry: registry });
+    const input = buildPreInput(event, { entities: registry });
 
     const issues = validator.validatePre(input);
     expect(issues).toHaveLength(0);
@@ -1252,7 +1252,7 @@ describe('ReachabilityValidator', () => {
 // ============================================================================
 
 describe('ResultAggregator', () => {
-  it('validate() should run all validators and separate errors/warnings/infos', () => {
+  it('validatePre() should run all validators and separate errors/warnings/infos', () => {
     const registry = new InMemoryEntityRegistry();
     registerCharacter(registry, 'jinx');
     const event = makeEvent({
@@ -1281,7 +1281,7 @@ describe('ResultAggregator', () => {
     };
 
     const aggregator = new ResultAggregator();
-    const result = aggregator.validate(event, state, registry, [event], 1);
+    const result = aggregator.validatePre(event, state, registry, [event], 1);
 
     expect(result).toHaveProperty('passed');
     expect(result).toHaveProperty('errors');
@@ -1352,7 +1352,7 @@ describe('ResultAggregator', () => {
     };
 
     const aggregator = new ResultAggregator();
-    const result = aggregator.validate(event, state, registry, [event], 1);
+    const result = aggregator.validatePre(event, state, registry, [event], 1);
 
     expect(result.passed).toBe(true);
   });
@@ -1377,7 +1377,7 @@ describe('ResultAggregator', () => {
     const aggregator = new ResultAggregator();
 
     // Test 'off' override
-    const resultOff = aggregator.validate(event, state, registry, [event], 1, {
+    const resultOff = aggregator.validatePre(event, state, registry, [event], 1, {
       overrides: { timeline: 'off' },
     });
     const timelineIssuesOff = [
@@ -1388,7 +1388,7 @@ describe('ResultAggregator', () => {
     expect(timelineIssuesOff).toHaveLength(0);
 
     // Test 'error' override (upgrade warning to error)
-    const resultError = aggregator.validate(event, state, registry, [event], 1, {
+    const resultError = aggregator.validatePre(event, state, registry, [event], 1, {
       overrides: { timeline: 'error' },
     });
     const timelineIssuesError = resultError.errors.filter((i) => i.validator === 'timeline');
@@ -1649,7 +1649,7 @@ describe('Validator Edge Cases', () => {
         ],
       });
       const input = buildPreInput(event, {
-        entityRegistry: registry,
+        entities: registry,
         queryState: () => 'destroyed',
       });
 
@@ -1670,7 +1670,7 @@ describe('Validator Edge Cases', () => {
         pov: { character: 'jinx', type: 'first_person' },
         participants: { entities: ['vi'] },
       });
-      const input = buildPreInput(event, { entityRegistry: registry });
+      const input = buildPreInput(event, { entities: registry });
 
       const issues = validator.validatePre(input);
       const warnIssues = issues.filter(

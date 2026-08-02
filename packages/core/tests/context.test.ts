@@ -3,12 +3,10 @@
 // ============================================================================
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import {
-  ContextAssembler,
-  ContextCompiler,
-  InMemoryEntityRegistry,
-  RelevanceEngine,
-} from '../src/index.js';
+import { ContextAssembler } from '../src/context/assembler.js';
+import { ContextCompiler } from '../src/context/compiler.js';
+import { RelevanceEngine } from '../src/context/relevance.js';
+import { InMemoryEntityRegistry } from '../src/entity/registry.js';
 import type {
   Entity,
   NarrativeEvent,
@@ -174,7 +172,7 @@ describe('RelevanceEngine', () => {
     const context: RelevanceContext = {
       currentEvent: event,
       worldState: state,
-      entityRegistry: registry,
+      entities: registry,
       recentEntities: [],
       activeThreads: [],
     };
@@ -197,7 +195,7 @@ describe('RelevanceEngine', () => {
     const context: RelevanceContext = {
       currentEvent: event,
       worldState: state,
-      entityRegistry: registry,
+      entities: registry,
       recentEntities: [],
       activeThreads: [],
     };
@@ -215,7 +213,7 @@ describe('RelevanceEngine', () => {
     const context: RelevanceContext = {
       currentEvent: event,
       worldState: state,
-      entityRegistry: registry,
+      entities: registry,
       recentEntities: ['alice'],
       activeThreads: [],
     };
@@ -265,7 +263,7 @@ describe('RelevanceEngine', () => {
     const context: RelevanceContext = {
       currentEvent: event,
       worldState: state,
-      entityRegistry: registry,
+      entities: registry,
       recentEntities: [],
       activeThreads: [],
     };

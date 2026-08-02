@@ -6,17 +6,20 @@
 //   2. Model/profile affects plan/request but not editorial basis
 //   3. Source/review/waiver/validator changes affect required identities
 //   4. Invalid selection is side‑effect free
+//   5. Plans are pure semantic intents — no host paths, read sets, or
+//      prepared writes
 //
 // All tests are deterministic — no storage, no clock, no providers.
+// Compile input is the immutable ProjectSourceSnapshotV1 (sorted logical
+// documents + content SHA‑256 hashes); the output is a plan of semantic
+// render intents with no filesystem expectations.
 // ============================================================================
 
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
-  type CompiledSceneInfo,
   compileBranchContracts,
   compileEditorialRun,
-  compileReadSet,
   type EditorialCompileInput,
   preflightRevision,
 } from '../../src/editorial/compiler.ts';
@@ -34,16 +37,24 @@ import {
 } from '../../src/editorial/identity.ts';
 import type { SceneCatalog } from '../../src/editorial/selector.ts';
 import { preflightSelector } from '../../src/editorial/selector.ts';
+import type { ProjectSourceSnapshotV1, SourceDocumentV1 } from '../../src/contracts/source.ts';
 import type { BranchPath } from '../../src/types/branch.ts';
-import type { EditorialError, SceneSelector } from '../../src/types/editorial.ts';
-import type { ReviewComment, ReviewLineBasis } from '../../src/types/review.ts';
+import type { SceneSelector } from '../../src/types/editorial.ts';
+import type { ReviewComment } from '../../src/types/review.ts';
 
 // ============================================================================
 // Deterministic helpers
 // ============================================================================
 
-function sha256Hex(): string {
-  return crypto.randomBytes(32).toString('hex');
+function sha256Hex(value: string): string {
+  return crypto.createHash('sha256').update(value, 'utf-8').digest('hex');
+}
+
+let opaqueCounter = 0;
+/** Deterministic opaque hash — distinct per call, stable across runs. */
+function opaqueHash(): string {
+  opaqueCounter += 1;
+  return sha256Hex(`opaque:${opaqueCounter}`);
 }
 
 // ============================================================================
@@ -72,23 +83,69 @@ const EVENT_CONTENTS: Record<string, string> = {
   E005: 'id: E005\nevent: The End\n',
 };
 
+/** Logical POSIX path of each event's authoring document. */
+const EVENT_DOCUMENT_PATHS: Record<string, string> = {
+  E001: 'chapters/chapter_01/E001.yaml',
+  E002: 'chapters/chapter_01/E002.yaml',
+  E003: 'chapters/chapter_02/E003.yaml',
+  E004: 'chapters/chapter_02/E004.yaml',
+  E005: 'chapters/chapter_03/E005.yaml',
+};
+
 const SOURCE_DOCUMENTS: Record<string, string> = {
+  'nova.yaml': 'project: compiler-test\ntitle: Compiler Test\ndefaultLanguage: en\n',
   'definitions/characters/alice.yaml': 'name: Alice\nage: 30\n',
   'definitions/locations/forest.yaml': 'name: Enchanted Forest\ndanger: moderate\n',
 };
 
-const SOURCE_HEAD_HASH = sha256Hex();
+/** Merge definitions and event documents into one logical document map. */
+function defaultDocuments(options?: {
+  eventContents?: Record<string, string>;
+  sourceDocuments?: Record<string, string>;
+}): Record<string, string> {
+  const documents: Record<string, string> = {
+    ...(options?.sourceDocuments ?? SOURCE_DOCUMENTS),
+  };
+  for (const [eventId, content] of Object.entries(options?.eventContents ?? EVENT_CONTENTS)) {
+    documents[EVENT_DOCUMENT_PATHS[eventId]] = content;
+  }
+  return documents;
+}
+
+/**
+ * Local immutable snapshot fixture: sorted logical documents, per‑document
+ * content SHA‑256, and a single content‑derived sourceHash. No host paths,
+ * revisions, actors, or timestamps.
+ */
+function buildSnapshot(documents: Record<string, string> = defaultDocuments()): ProjectSourceSnapshotV1 {
+  const sorted = Object.entries(documents).sort(([a], [b]) => a.localeCompare(b));
+  const sourceDocuments: SourceDocumentV1[] = sorted.map(([logicalPath, content]) => ({
+    version: 1,
+    logicalPath,
+    content,
+    contentHash: sha256Hex(content),
+    parseResult: { status: 'parsed', value: { value: content } },
+    diagnostics: [],
+  }));
+  return {
+    version: 1,
+    documents: sourceDocuments,
+    sourceHash: sha256Hex(sourceDocuments.map((d) => `${d.logicalPath}\0${d.content}`).join('')),
+  };
+}
+
+const SNAPSHOT = buildSnapshot();
 
 const LATEST_REVISIONS: Record<string, { revisionId: string; proseHash: string } | null> = {
-  E001: { revisionId: 'rev-e001-v1', proseHash: sha256Hex() },
-  E002: { revisionId: 'rev-e002-v1', proseHash: sha256Hex() },
+  E001: { revisionId: 'rev-e001-v1', proseHash: opaqueHash() },
+  E002: { revisionId: 'rev-e002-v1', proseHash: opaqueHash() },
   E003: null,
   E004: null,
   E005: null,
 };
 
 const VALIDATION_INPUT: ValidationIdentityInput = {
-  analysisContractHash: sha256Hex(),
+  analysisContractHash: opaqueHash(),
   builtInValidatorImplementationVersion: '1',
   effectiveOverrides: {},
   validators: [
@@ -147,9 +204,15 @@ function defaultCompileInput(
     requestOverrides?: Partial<EditorialCompileInput['request']>;
   },
 ): EditorialCompileInput {
+  const eventContents = overrides?.eventContents ?? EVENT_CONTENTS;
+  const sourceDocumentContents = overrides?.sourceDocumentContents ?? SOURCE_DOCUMENTS;
+  const source =
+    overrides?.source ??
+    buildSnapshot(defaultDocuments({ eventContents, sourceDocuments: sourceDocumentContents }));
+
   const request: EditorialCompileInput['request'] = {
     version: 1,
-    projectDir: '/test-project',
+    source,
     selector: undefined,
     revision: undefined,
     model: undefined,
@@ -164,17 +227,15 @@ function defaultCompileInput(
 
   return {
     request,
+    source,
     catalog: CATALOG,
-    eventContents: EVENT_CONTENTS,
-    sourceDocumentContents: SOURCE_DOCUMENTS,
-    sourceHeadHash: SOURCE_HEAD_HASH,
+    eventContents,
+    sourceDocumentContents,
     latestRevisions: LATEST_REVISIONS,
     validation: VALIDATION_INPUT,
     reviewComments: REVIEWS,
     chapterByEventId: CHAPTER_BY_EVENT,
     requiresProviderByEventId: REQUIRES_PROVIDER,
-    responsesDir: '/test-project/.nova/responses',
-    sourceHeadPath: '/test-project/.nova/work/source-head.json',
     ...overrides,
   };
 }
@@ -362,7 +423,7 @@ describe('identity', () => {
       expect(h1).toBe(h2);
     });
 
-    it('changes when source head hash changes', () => {
+    it('changes when source hash changes', () => {
       const h1 = computeEditorialBasisHash('E001', BRANCH_PATH, 'old-hash', 'rev1', 'prose1');
       const h2 = computeEditorialBasisHash('E001', BRANCH_PATH, 'new-hash', 'rev1', 'prose1');
       expect(h1).not.toBe(h2);
@@ -372,7 +433,7 @@ describe('identity', () => {
       const basis = computeEditorialBasisHash(
         'E001',
         BRANCH_PATH,
-        SOURCE_HEAD_HASH,
+        SNAPSHOT.sourceHash,
         'rev1',
         'prose1',
       );
@@ -381,7 +442,7 @@ describe('identity', () => {
       const basis2 = computeEditorialBasisHash(
         'E001',
         BRANCH_PATH,
-        SOURCE_HEAD_HASH,
+        SNAPSHOT.sourceHash,
         'rev1',
         'prose1',
       );
@@ -399,7 +460,7 @@ describe('identity', () => {
     it('changes when the analysis contract changes', () => {
       const changed = {
         ...VALIDATION_INPUT,
-        analysisContractHash: sha256Hex(),
+        analysisContractHash: opaqueHash(),
       };
       expect(computeValidationIdentity(VALIDATION_INPUT)).not.toBe(
         computeValidationIdentity(changed),
@@ -433,7 +494,7 @@ describe('identity', () => {
         name: 'my-plugin',
         version: '1.0.0',
         validators: [{ name: 'CustomValidator', version: '1.0.0' }],
-        promptHookIdentity: sha256Hex(),
+        promptHookIdentity: opaqueHash(),
       };
       const base: ValidationIdentityInput = { ...VALIDATION_INPUT, plugins: [plugin] };
       const changedVersion: ValidationIdentityInput = {
@@ -451,7 +512,7 @@ describe('identity', () => {
       };
       const changedHook: ValidationIdentityInput = {
         ...base,
-        plugins: [{ ...plugin, promptHookIdentity: sha256Hex() }],
+        plugins: [{ ...plugin, promptHookIdentity: opaqueHash() }],
       };
 
       expect(computeValidationIdentity(base)).not.toBe(computeValidationIdentity(changedVersion));
@@ -464,13 +525,13 @@ describe('identity', () => {
         name: 'a-plugin',
         version: '1',
         validators: [{ name: 'AValidator', version: '1' }],
-        promptHookIdentity: sha256Hex(),
+        promptHookIdentity: opaqueHash(),
       };
       const pluginB = {
         name: 'b-plugin',
         version: '1',
         validators: [{ name: 'BValidator', version: '1' }],
-        promptHookIdentity: sha256Hex(),
+        promptHookIdentity: opaqueHash(),
       };
       const left: ValidationIdentityInput = {
         ...VALIDATION_INPUT,
@@ -557,8 +618,8 @@ describe('identity', () => {
 
     it('planHash is stable for identical scenes in same order', () => {
       const scenes = [
-        makeIdentity({ eventId: 'E001', sourceHash: sha256Hex() }),
-        makeIdentity({ eventId: 'E002', sourceHash: sha256Hex() }),
+        makeIdentity({ eventId: 'E001', sourceHash: opaqueHash() }),
+        makeIdentity({ eventId: 'E002', sourceHash: opaqueHash() }),
       ];
       const h1 = computePlanHash(basePlanInput({ selectedEventIds: ['E001', 'E002'], scenes }));
       const h2 = computePlanHash(basePlanInput({ selectedEventIds: ['E001', 'E002'], scenes }));
@@ -637,70 +698,83 @@ describe('compileBranchContracts', () => {
 });
 
 // ============================================================================
-// Read Set Tests
+// Semantic Plan Purity Tests — no host paths, read sets, or prepared writes
 // ============================================================================
 
-describe('compileReadSet', () => {
-  it('includes source head and response files at configured paths', () => {
-    const readSet = compileReadSet(
-      '/proj/.nova/work/source-head.json',
-      '/proj/.nova/responses',
-      'source-hash',
-      ['E001', 'E002'],
-    );
-    expect(readSet).toHaveLength(3); // source head + 2 events
-    expect(readSet[0]).toEqual({
-      kind: 'file',
-      path: '/proj/.nova/work/source-head.json',
-      expectedHash: 'source-hash',
-    });
-    expect(readSet[1]).toEqual({
-      kind: 'file',
-      path: '/proj/.nova/responses/E001.json',
-      expectedHash: null,
-    });
-    expect(readSet[2]).toEqual({
-      kind: 'file',
-      path: '/proj/.nova/responses/E002.json',
-      expectedHash: null,
-    });
+describe('semantic plan purity', () => {
+  it('compile output contains no read set, prepared writes, or host paths', () => {
+    const output = compileEditorialRun(defaultCompileInput());
+    // Deleted compatibility surface must not reappear on the output.
+    expect('readSet' in output).toBe(false);
+    expect('preparedExternalChanges' in output).toBe(false);
+    expect('jobs' in output).toBe(false);
+
+    const serialized = JSON.stringify(output);
+    expect(serialized).not.toContain('.nova');
+    expect(serialized).not.toContain('source-head');
+    expect(serialized).not.toContain('/responses');
+    expect(serialized).not.toContain('/test-project');
   });
 
-  it('uses custom source head path', () => {
-    const readSet = compileReadSet(
-      '/custom/work/path/source-head.json',
-      '/proj/.nova/responses',
-      'hash',
-      ['E001'],
-    );
-    expect(readSet[0].path).toBe('/custom/work/path/source-head.json');
+  it('compile input carries no host paths or read-set configuration', () => {
+    const input = defaultCompileInput();
+    expect('projectDir' in input.request).toBe(false);
+    expect('sourceHeadPath' in input.request).toBe(false);
+    expect('responsesDir' in input.request).toBe(false);
+
+    const serialized = JSON.stringify(input);
+    expect(serialized).not.toContain('.nova');
+    expect(serialized).not.toContain('source-head');
+    expect(serialized).not.toContain('/test-project');
   });
 
-  it('uses custom responses directory', () => {
-    const readSet = compileReadSet(
-      '/proj/.nova/work/source-head.json',
-      '/custom/path/responses',
-      'hash',
-      ['E001'],
-    );
-    expect(readSet).toHaveLength(2); // source head + 1 event
-    expect(readSet[1]).toEqual({
-      kind: 'file',
-      path: '/custom/path/responses/E001.json',
-      expectedHash: null,
-    });
+  it('render intents are semantic — identity and kind only, no file expectations', () => {
+    const output = compileEditorialRun(defaultCompileInput());
+    expect(output.intents.length).toBeGreaterThan(0);
+    for (const intent of output.intents) {
+      expect(Object.keys(intent).sort()).toEqual(
+        ['eventId', 'identities', 'jobId', 'kind', 'requiresProvider'].sort(),
+      );
+      const serialized = JSON.stringify(intent);
+      expect(serialized).not.toContain('.nova');
+      expect(serialized).not.toContain('source-head');
+      expect(serialized).not.toContain('/');
+      expect(serialized).not.toContain('expectedHash');
+    }
   });
 
-  it('is deterministic', () => {
-    const a = compileReadSet('/proj/.nova/work/source-head.json', '/proj/.nova/responses', 'hash', [
-      'E001',
-      'E002',
-    ]);
-    const b = compileReadSet('/proj/.nova/work/source-head.json', '/proj/.nova/responses', 'hash', [
-      'E001',
-      'E002',
-    ]);
-    expect(a).toEqual(b);
+  it('planSummary.sourceHash is the snapshot content hash — not a persistence head', () => {
+    const input = defaultCompileInput();
+    const output = compileEditorialRun(input);
+    expect(output.planSummary.sourceHash).toBe(input.source.sourceHash);
+    expect(output.planSummary.sourceHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('sourceHash is content identity — sorted documents, no host metadata', () => {
+    const documents = defaultDocuments();
+    const entries = Object.entries(documents);
+    const forward = buildSnapshot(Object.fromEntries(entries));
+    const backward = buildSnapshot(Object.fromEntries([...entries].reverse()));
+
+    expect(forward.documents.map((d) => d.logicalPath)).toEqual(
+      backward.documents.map((d) => d.logicalPath),
+    );
+    expect(forward.sourceHash).toBe(backward.sourceHash);
+
+    const serialized = JSON.stringify(forward);
+    expect(serialized).not.toContain('.nova');
+    expect(serialized).not.toContain('source-head');
+    expect(serialized).not.toContain('/test-project');
+  });
+
+  it('identical bytes with different provenance produce identical plans', () => {
+    const documents = defaultDocuments();
+    const a = defaultCompileInput();
+    // Same documents rebuilt into a fresh snapshot (e.g. a different host/provenance).
+    const b = defaultCompileInput({ source: buildSnapshot(documents) });
+
+    expect(b.source.sourceHash).toBe(a.source.sourceHash);
+    expect(compileEditorialRun(a)).toEqual(compileEditorialRun(b));
   });
 });
 
@@ -760,7 +834,6 @@ describe('compileEditorialRun', () => {
   it('source changes affect sourceHash and editorialBasisHash', () => {
     const base = defaultCompileInput();
     const modified = defaultCompileInput({
-      sourceHeadHash: 'different-source-head',
       eventContents: { ...EVENT_CONTENTS, E001: 'id: E001\nevent: Modified\n' },
     });
 
@@ -776,10 +849,10 @@ describe('compileEditorialRun', () => {
 
   it('revision basis changes affect editorialBasisHash', () => {
     const baseRev: Record<string, { revisionId: string; proseHash: string } | null> = {
-      E001: { revisionId: 'old-rev', proseHash: sha256Hex() },
+      E001: { revisionId: 'old-rev', proseHash: opaqueHash() },
     };
     const newRev: Record<string, { revisionId: string; proseHash: string } | null> = {
-      E001: { revisionId: 'new-rev', proseHash: sha256Hex() },
+      E001: { revisionId: 'new-rev', proseHash: opaqueHash() },
     };
 
     const outputA = compileEditorialRun(defaultCompileInput({ latestRevisions: baseRev }));
@@ -916,6 +989,7 @@ describe('compileEditorialRun', () => {
     expect(output.selectorErrors).toHaveLength(1);
     expect(output.selectorErrors[0].code).toBe('INVALID_REVIEW_SELECTION');
   });
+
   it('completely invalid selector (all unknown) still produces valid plan shape', () => {
     const input = defaultCompileInput({
       requestOverrides: {
@@ -932,57 +1006,22 @@ describe('compileEditorialRun', () => {
     expect(output.selectorErrors[1].eventId).toBe('E888');
     expect(output.selectedEventIds).toHaveLength(0);
     expect(output.scenes).toHaveLength(0);
-    expect(output.jobs).toHaveLength(0);
+    expect(output.intents).toHaveLength(0);
     expect(output.planHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
   // ── Additional structural tests ──────────────────────────────────────────
 
-  it('builds correct jobs for scenes needing providers', () => {
+  it('builds correct intents for scenes needing providers', () => {
     const input = defaultCompileInput({
       requiresProviderByEventId: { E001: true, E002: false, E003: true, E004: false, E005: true },
     });
     const output = compileEditorialRun(input);
-    const jobEventIds = output.jobs.map((j) => j.eventId);
-    expect(jobEventIds).toEqual(['E001', 'E003', 'E005']);
+    const intentEventIds = output.intents.map((j) => j.eventId);
+    expect(intentEventIds).toEqual(['E001', 'E003', 'E005']);
   });
 
-  it('readSet uses configured sourceHeadPath and responsesDir', () => {
-    const output = compileEditorialRun(defaultCompileInput());
-    // 5 events → source head + 5 response files
-    expect(output.readSet).toHaveLength(6);
-    expect(output.readSet[0]).toEqual({
-      kind: 'file',
-      path: '/test-project/.nova/work/source-head.json',
-      expectedHash: SOURCE_HEAD_HASH,
-    });
-  });
-
-  it('uses configured responsesDir from compile input', () => {
-    const output = compileEditorialRun(defaultCompileInput({ responsesDir: '/custom/responses' }));
-    // 5 events → source head + 5 response files
-    expect(output.readSet).toHaveLength(6);
-    // First response file uses custom directory
-    expect(output.readSet[1]).toEqual({
-      kind: 'file',
-      path: '/custom/responses/E001.json',
-      expectedHash: null,
-    });
-  });
-
-  it('uses configured sourceHeadPath from compile input', () => {
-    const output = compileEditorialRun(
-      defaultCompileInput({ sourceHeadPath: '/custom/source-head.json' }),
-    );
-    expect(output.readSet).toHaveLength(6);
-    expect(output.readSet[0]).toEqual({
-      kind: 'file',
-      path: '/custom/source-head.json',
-      expectedHash: SOURCE_HEAD_HASH,
-    });
-  });
-
-  it('invalid review selection blocks all scenes and produces zero jobs', () => {
+  it('invalid review selection blocks all scenes and produces zero intents', () => {
     const output = compileEditorialRun(
       defaultCompileInput({
         requestOverrides: { revision: { reviewIds: ['nonexistent-review'] } },
@@ -996,23 +1035,31 @@ describe('compileEditorialRun', () => {
     for (const scene of output.scenes) {
       expect(scene.state).toBe('preflight_failed');
     }
-    // Zero render jobs
-    expect(output.jobs).toHaveLength(0);
-    // readSet is still generated (source head + response files)
-    expect(output.readSet).toHaveLength(6);
-    // Zero prepared external changes (dry run)
-    expect(output.preparedExternalChanges).toHaveLength(0);
+    // Zero semantic render intents
+    expect(output.intents).toHaveLength(0);
+    // The plan is still a valid immutable shape with no file read-set.
+    expect(output.planHash).toMatch(/^[a-f0-9]{64}$/);
+    expect('readSet' in output).toBe(false);
   });
 
-  it('preparedExternalChanges is empty (dry‑run compile)', () => {
+  it('compile emits only semantic render intents — no prepared writes', () => {
     const output = compileEditorialRun(defaultCompileInput());
-    expect(output.preparedExternalChanges).toEqual([]);
+    expect('preparedExternalChanges' in output).toBe(false);
+    expect('readSet' in output).toBe(false);
+    // Render intents carry identity only.
+    for (const intent of output.intents) {
+      expect(Object.keys(intent).sort()).toEqual(
+        ['eventId', 'identities', 'jobId', 'kind', 'requiresProvider'].sort(),
+      );
+    }
   });
 
   it('planSummary conforms to EditorialPlanSummaryV1 shape with deterministic scene identities', () => {
-    const output = compileEditorialRun(defaultCompileInput());
+    const input = defaultCompileInput();
+    const output = compileEditorialRun(input);
     expect(output.planSummary.version).toBe(1);
     expect(output.planSummary.planHash).toBe(output.planHash);
+    expect(output.planSummary.sourceHash).toBe(input.source.sourceHash);
     expect(output.planSummary.selectedEventIds).toEqual(['E001', 'E002', 'E003', 'E004', 'E005']);
     expect(output.planSummary.scenes).toHaveLength(5);
     const expectedEventIds = ['E001', 'E002', 'E003', 'E004', 'E005'];
@@ -1021,6 +1068,7 @@ describe('compileEditorialRun', () => {
       expect(s.editorialBasisHash).toMatch(/^[a-f0-9]{64}$/);
     });
   });
+
   it('batch config affects planHash', () => {
     const noBatch = compileEditorialRun(defaultCompileInput());
     const withBatch = compileEditorialRun(

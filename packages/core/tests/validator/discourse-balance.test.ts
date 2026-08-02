@@ -37,7 +37,11 @@ function makeInput(event: NarrativeEvent, events: NarrativeEvent[]): PreRenderIn
       rules: {},
       facts: [],
     },
-    entityRegistry: { entities: {} } as any,
+    entities: {
+      resolve: () => null,
+      findByKind: () => [],
+      getAll: () => [],
+    },
     chapter: 1,
     queryState: () => undefined,
     getKnowledge: () => ({

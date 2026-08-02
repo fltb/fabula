@@ -1,63 +1,20 @@
-// ============================================================================
-// Release-Aware Assembly — canonical and custom novel assembly from
-// publication-manifest revision IDs, immutable envelopes, and materialised
-// scene hashes.  Every scene is validated against its accepted revision
-// envelope before assembly.
-// ============================================================================
-
-import * as path from 'node:path';
-import { parse as parseYaml } from 'yaml';
+import type { CoreExecutionRepository } from '../ports/execution-repository.ts';
 import { includesPath } from '../branch/set.ts';
-import { EditorialOperationError, PublicationError } from '../editorial/errors.ts';
-import { OperationStore } from '../editorial/operation-store.ts';
-import { type ProjectPaths, resolveProjectPaths } from '../editorial/paths.ts';
-import {
-  buildNovelDocument,
-  EditorialPublisher,
-  type PromoteCandidateInput,
-  type ScopeEventData,
-  type VerifiedHeadData,
-} from '../editorial/publisher.ts';
-import { SceneRevisionStore } from '../editorial/scene-store.ts';
-import { ProjectTransactionCoordinator, stableJson } from '../editorial/transaction.ts';
-import { loadProjectConfig } from '../entity/index.ts';
-import type { CanonicalProjectIR } from '../entity/project-runtime.ts';
-import { compileCanonicalRuntime, loadCanonicalProject } from '../entity/project-runtime.ts';
-import { canonicalJson, computeSha256Hex } from '../render/scene-contract.ts';
-import {
-  editorialOperationV1Schema,
-  publicationManifestV1Schema,
-  sceneMetadataV1Schema,
-} from '../schemas/editorial.ts';
-import { resolveDiscourseBranch } from '../state/discourse-sequence.ts';
-import { computeContentHash } from '../storage/hash.ts';
-import type { Storage, TransactionReadExpectation } from '../storage/types.ts';
-import type { BranchPath, BranchSet } from '../types/branch.ts';
+import type { BranchPath, BranchSet, Condition } from '../types/branch.ts';
 import type {
   AssembleRequestV1,
   EditorialAssembleResult,
   EditorialError,
-  EditorialErrorCode,
-  EditorialOperationV1,
   PublicationManifestV1,
-  SceneEditHistoryEntryV1,
   SceneProseSource,
   SceneRevisionEnvelopeV1,
 } from '../types/editorial.ts';
+import { PublicationError } from '../editorial/errors.ts';
+import { sha256 } from '../cache/pure-sha256.ts';
+import { buildNovelDocument, type PromoteCandidateInput, type VerifiedHeadData } from './publication-model.ts';
 import type { GameDialogueChoice } from '../types/index.ts';
-import { loadChapterMetadata } from './chapter.ts';
-
-// ─── Error Helpers ──────────────────────────────────────────────────────────
-
-function assembleError(
-  code: EditorialErrorCode,
-  message: string,
-  meta?: Record<string, string>,
-): EditorialError {
-  return { code, message, ...meta };
-}
-
-// ─── Head Validation ────────────────────────────────────────────────────────
+import type { JsonObject } from '../contracts/json.ts';
+import type { ChapterMetadata } from '../types/chapter.ts';
 
 export interface VerifiedAssemblyScene {
   eventId: string;
@@ -67,260 +24,182 @@ export interface VerifiedAssemblyScene {
   prose: string;
   branchExistence: BranchSet;
   playerChoices?: readonly GameDialogueChoice[];
-  proseSource: SceneProseSource;
+  proseSource: 'llm' | 'human_edited' | 'human_locked';
   modelUsed?: string;
   renderedAt: string;
   wordCount: number;
-  editHistory: readonly SceneEditHistoryEntryV1[];
+  editHistory: readonly never[];
 }
 
-/**
- * Determine whether a BranchSet includes a given branch path (all branches,
- * a specific path in the set, etc.).  Returns `true` for `type: 'all'`,
- * and for `type: 'paths'` when the branch path matches any entry.
- * Complex `condition` and `except` types default to `true` (inclusive).
- */
-function isEventInBranch(branchExistence: BranchSet, branchPath: BranchPath): boolean {
-  switch (branchExistence.type) {
-    case 'all':
-      return true;
-    case 'paths':
-      return branchExistence.paths.some((p) => {
-        if (p.decisions.length !== branchPath.decisions.length) return false;
-        return p.decisions.every((d, i) => {
-          const bd = branchPath.decisions[i];
-          return bd && d.atEventId === bd.atEventId && d.choiceId === bd.choiceId;
-        });
+export interface AssemblySemanticInput {
+  readonly projectId: string;
+  readonly sourceHash: string;
+  readonly manifest: PublicationManifestV1;
+  readonly revisions: ReadonlyMap<string, SceneRevisionEnvelopeV1>;
+  readonly scenes: ReadonlyMap<string, { prose: string; chapterNumber: number; metadata: JsonObject }>;
+  readonly discourseSequence: readonly { sceneId: string; sequence: number; chapter: number }[];
+  readonly chapterTitles?: ReadonlyMap<number, ChapterMetadata>;
+}
+
+function error(code: EditorialError['code'], message: string, eventId?: string): EditorialError {
+  return { code, message, ...(eventId ? { eventId } : {}) };
+}
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function toGameDialogueChoices(value: JsonObject['player_choices']): GameDialogueChoice[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const choices: GameDialogueChoice[] = [];
+  for (const candidate of value) {
+    if (!isJsonObject(candidate) || typeof candidate.id !== 'string' || typeof candidate.label !== 'string' || typeof candidate.description !== 'string' || typeof candidate.targetEvent !== 'string' || !Array.isArray(candidate.effects)) return undefined;
+    const effects: GameDialogueChoice['effects'] = [];
+    for (const effect of candidate.effects) {
+      if (!isJsonObject(effect) || typeof effect.entity !== 'string' || typeof effect.attribute !== 'string') return undefined;
+      if (effect.narrativeHint !== undefined && typeof effect.narrativeHint !== 'string') return undefined;
+      if (effect.confidence !== undefined && (typeof effect.confidence !== 'number' || !Number.isFinite(effect.confidence))) return undefined;
+      if (effect.operation !== undefined && effect.operation !== 'set' && effect.operation !== 'unset') return undefined;
+      effects.push({
+        entity: effect.entity,
+        attribute: effect.attribute,
+        ...(effect.value !== undefined ? { value: effect.value } : {}),
+        ...(effect.narrativeHint !== undefined ? { narrativeHint: effect.narrativeHint } : {}),
+        ...(effect.confidence !== undefined ? { confidence: effect.confidence } : {}),
+        ...(effect.operation !== undefined ? { operation: effect.operation } : {}),
       });
-    case 'except':
-      // except branches: the event exists on all branches except those listed
-      return !isEventInBranch(branchExistence.branches, branchPath);
-    case 'condition':
-      // Condition-based sets: conservatively include (would need runtime evaluation)
-      return true;
+    }
+    choices.push({ id: candidate.id, label: candidate.label, description: candidate.description, targetEvent: candidate.targetEvent, effects });
   }
+  return choices;
 }
 
-function authoredRequiredEvents(
-  projectDir: string,
-  storage: Storage,
-  branchPath?: BranchPath,
-): {
-  events: Map<string, number>;
-  errors: EditorialError[];
-  /** Canonical project IR — authored events, compiled game tree, ledger. */
-  ir: CanonicalProjectIR;
-} {
-  const ir = loadCanonicalProject(projectDir, storage);
-  const tree = ir.gameDialogueTree;
-  if (tree && tree.choicesByEventId.size > 0 && !branchPath) {
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+const toSceneProseSource = (value: unknown): SceneProseSource =>
+  value === 'human_edited' || value === 'human_locked' ? value : 'llm';
+
+const toCondition = (value: unknown): Condition | undefined => {
+  if (!isJsonObject(value)) return undefined;
+  if (value.type === 'and' || value.type === 'or') {
+    if (!Array.isArray(value.conditions)) return undefined;
+    const conditions = value.conditions.map(toCondition);
+    if (conditions.some((condition) => condition === undefined)) return undefined;
+    return { type: value.type, conditions: conditions.filter((condition): condition is Condition => condition !== undefined) };
+  }
+  if (
+    value.type !== 'equals' &&
+    value.type !== 'not_equals' &&
+    value.type !== 'greater_than' &&
+    value.type !== 'less_than' &&
+    value.type !== 'contains'
+  ) {
+    return undefined;
+  }
+  if (value.field !== undefined && typeof value.field !== 'string') return undefined;
+  return {
+    type: value.type,
+    ...(value.field === undefined ? {} : { field: value.field }),
+    ...(value.value === undefined ? {} : { value: value.value }),
+  };
+};
+
+const toBranchPath = (value: unknown): BranchPath | undefined => {
+  if (!isJsonObject(value) || !Array.isArray(value.decisions)) return undefined;
+  const decisions = [];
+  for (const candidate of value.decisions) {
+    if (
+      !isJsonObject(candidate) ||
+      typeof candidate.atEventId !== 'string' ||
+      typeof candidate.choiceId !== 'string' ||
+      !isFiniteNumber(candidate.narrativeOrder)
+    ) {
+      return undefined;
+    }
+    decisions.push({
+      atEventId: candidate.atEventId,
+      choiceId: candidate.choiceId,
+      narrativeOrder: candidate.narrativeOrder,
+    });
+  }
+  return { decisions };
+};
+
+const toBranchSet = (value: unknown): BranchSet | undefined => {
+  if (!isJsonObject(value)) return undefined;
+  if (value.type === 'all') return { type: 'all' };
+  if (value.type === 'paths' && Array.isArray(value.paths)) {
+    const paths = value.paths.map(toBranchPath);
+    if (paths.some((path) => path === undefined)) return undefined;
     return {
-      events: new Map(),
-      errors: [
-        {
-          code: 'SCENE_NOT_IN_BRANCH',
-          message: 'A complete branch path is required to assemble a game-dialogue project',
-        },
-      ],
-      ir,
+      type: 'paths',
+      paths: paths.filter((path): path is BranchPath => path !== undefined),
     };
   }
-  const required = new Map<string, number>();
-  for (const event of ir.authoredEvents) {
-    if (event.source !== 'event_file') continue;
-    const scope = tree?.eventScopes.get(event.id) ?? event.branchExistence;
-    const included = branchPath ? includesPath(scope, branchPath) : scope.type === 'all';
-    if (included) required.set(event.id, event.narrativeOrder);
+  if (value.type === 'condition') {
+    const condition = toCondition(value.condition);
+    return condition ? { type: 'condition', condition } : undefined;
   }
-  return { events: required, errors: [], ir };
-}
+  if (value.type === 'except') {
+    const branches = toBranchSet(value.branches);
+    return branches ? { type: 'except', branches } : undefined;
+  }
+  return undefined;
+};
 
-/**
- * Validate that every event in the manifest's revision_ids has an accepted
- * revision envelope whose hashes match the materialised scene on disk.
- *
- * When a `branchPath` is supplied, only events belonging to that branch are
- * validated; off-branch events are silently skipped.  This ensures that
- * off-branch bad siblings do not block the selected branch's assembly.
- *
- * @param manifest    The current publication manifest.
- * @param sceneStore  Revision store for envelope lookup.
- * @param storage     Storage backend.
- * @param paths       Project paths.
- * @param branchPath  Optional branch filter — off-branch events are skipped.
- * @returns Validated scenes keyed by eventId, or a set of errors.
- */
-export function validateManifestHeads(
+export async function validateManifestHeads(
   manifest: PublicationManifestV1,
-  sceneStore: SceneRevisionStore,
-  storage: Storage,
-  paths: ProjectPaths,
+  repository: CoreExecutionRepository,
+  input: AssemblySemanticInput,
   branchPath?: BranchPath | null,
   requiredEvents?: ReadonlyMap<string, number>,
-): { scenes: Map<string, VerifiedAssemblyScene>; errors: EditorialError[] } {
+): Promise<{ scenes: Map<string, VerifiedAssemblyScene>; errors: EditorialError[] }> {
   const scenes = new Map<string, VerifiedAssemblyScene>();
   const errors: EditorialError[] = [];
-
-  const eventEntries = requiredEvents
-    ? [...requiredEvents].map(([eventId]) => [eventId, manifest.revision_ids[eventId]] as const)
-    : Object.entries(manifest.revision_ids);
-  for (const [eventId, revisionId] of eventEntries) {
+  const entries = requiredEvents ? [...requiredEvents.keys()] : Object.keys(manifest.revision_ids);
+  for (const eventId of entries) {
+    const revisionId = manifest.revision_ids[eventId];
     if (!revisionId) {
-      errors.push(
-        assembleError(
-          'PUBLICATION_INCOMPLETE',
-          `Required event ${eventId} has no published revision`,
-          { eventId },
-        ),
-      );
+      errors.push(error('PUBLICATION_INCOMPLETE', `Required event ${eventId} has no published revision`, eventId));
       continue;
     }
-    // ── 0. Determine branch membership from scene metadata ──────
-    let offBranch = false;
-    const chapterDir = findChapterDir(storage, paths.scenesDir, eventId);
-    if (chapterDir !== null) {
-      const metadataPath = path.join(chapterDir, `${eventId}.yaml`);
-      const metadataRaw = storage.readOptional(metadataPath);
-      if (metadataRaw !== null && branchPath) {
-        try {
-          const parsed = parseYaml(metadataRaw);
-          const metadata = sceneMetadataV1Schema.parse(parsed);
-          const be = metadata.branch_existence as BranchSet;
-          offBranch = !isEventInBranch(be, branchPath);
-        } catch {
-          // Cannot parse metadata — proceed with validation (will catch errors below)
-        }
-      }
-    }
-
-    if (offBranch) {
-      // Off-branch events are silently skipped — they do not block the branch.
+    const scene = input.scenes.get(eventId);
+    const envelope = input.revisions.get(eventId);
+    if (!scene || !envelope) {
+      errors.push(error('SCENE_NOT_FOUND', `Scene ${eventId} is not present in the materialized source`, eventId));
       continue;
     }
-
-    // ── 1. Read the envelope ──────────────────────────────────────
-    let envelope: SceneRevisionEnvelopeV1;
-    try {
-      envelope = sceneStore.get(eventId, revisionId);
-    } catch {
-      errors.push(
-        assembleError(
-          'REVISION_NOT_FOUND',
-          `Revision ${revisionId} for event ${eventId} not found`,
-          { eventId },
-        ),
-      );
+    if (
+      envelope.revisionId !== revisionId ||
+      envelope.releaseDecision.status !== 'accepted' ||
+      !envelope.released
+    ) {
+      errors.push(error('REVISION_BLOCKED', `Revision ${revisionId} for event ${eventId} is not accepted`, eventId));
       continue;
     }
-
-    // ── 2. Must be accepted ───────────────────────────────────────
-    if (envelope.releaseDecision.status !== 'accepted' || !envelope.released) {
-      errors.push(
-        assembleError(
-          'REVISION_BLOCKED',
-          `Revision ${revisionId} for event ${eventId} is not accepted (${envelope.releaseDecision.status})`,
-          { eventId },
-        ),
-      );
+    const accepted = await repository.resolveAcceptedArtifact({
+      projectId: input.projectId,
+      eventId,
+    });
+    if (
+      accepted === null ||
+      accepted.sourceHash !== input.sourceHash ||
+      accepted.revisionId !== envelope.revisionId ||
+      accepted.prose !== envelope.prose ||
+      accepted.proseHash !== envelope.proseHash ||
+      accepted.sceneHash !== envelope.sceneHash
+    ) {
+      errors.push(error('REVISION_STALE', `Accepted artifact for event ${eventId} no longer matches its manifest head`, eventId));
       continue;
     }
-
-    // ── 3. Read materialised scene file ───────────────────────────
-    if (chapterDir === null) {
-      errors.push(
-        assembleError('SCENE_NOT_FOUND', `Scene directory for event ${eventId} not found`, {
-          eventId,
-        }),
-      );
+    if (sha256(scene.prose) !== envelope.sceneHash) {
+      errors.push(error('PUBLICATION_CONTENT_CONFLICT', `Scene hash mismatch for event ${eventId}`, eventId));
       continue;
     }
-
-    const scenePath = path.join(chapterDir, `${eventId}.md`);
-    const sceneContent = storage.readOptional(scenePath);
-    if (sceneContent === null) {
-      errors.push(
-        assembleError(
-          'SCENE_NOT_FOUND',
-          `Scene file for event ${eventId} not found at ${scenePath}`,
-          { eventId },
-        ),
-      );
-      continue;
-    }
-
-    const actualSceneHash = computeContentHash(sceneContent);
-    if (actualSceneHash !== envelope.sceneHash) {
-      errors.push(
-        assembleError(
-          'PUBLICATION_CONTENT_CONFLICT',
-          `Scene hash mismatch for event ${eventId}: expected ${envelope.sceneHash}, got ${actualSceneHash}`,
-          { eventId },
-        ),
-      );
-      continue;
-    }
-
-    // ── 4. Read metadata for prose source and chapter info ──────
-    const metadataPath = path.join(chapterDir, `${eventId}.yaml`);
-    const metadataRaw = storage.readOptional(metadataPath);
-    let chapterNumber = 1;
-    let branchExistence: BranchSet = { type: 'all' };
-    let playerChoices: readonly GameDialogueChoice[] | undefined;
-    let proseSource: SceneProseSource = 'llm';
-    let modelUsed: string | undefined;
-    let renderedAt = envelope.createdAt;
-    let wordCount = 0;
-    let editHistory: readonly SceneEditHistoryEntryV1[] = [];
-
-    if (metadataRaw === null) {
-      errors.push(
-        assembleError('PUBLICATION_INCOMPLETE', `Scene metadata for event ${eventId} is missing`, {
-          eventId,
-          path: metadataPath,
-        }),
-      );
-      continue;
-    }
-    try {
-      const parsed = parseYaml(metadataRaw);
-      const metadata = sceneMetadataV1Schema.parse(parsed);
-      if (
-        metadata.event !== eventId ||
-        metadata.revision_id !== envelope.revisionId ||
-        metadata.prose_hash !== envelope.proseHash ||
-        metadata.scene_hash !== envelope.sceneHash ||
-        metadata.editorial_basis_hash !== envelope.editorialBasisHash ||
-        metadata.scope_hash !== envelope.scopeHash ||
-        metadata.validation_identity !== envelope.validationIdentity
-      ) {
-        errors.push(
-          assembleError(
-            'REVISION_STALE',
-            `Scene metadata for event ${eventId} does not match its immutable revision`,
-            { eventId, path: metadataPath },
-          ),
-        );
-        continue;
-      }
-      chapterNumber = extractChapterNumber(chapterDir);
-      branchExistence = metadata.branch_existence as BranchSet;
-      playerChoices = metadata.player_choices;
-      proseSource = metadata.prose_source;
-      modelUsed = metadata.model_used;
-      renderedAt = metadata.rendered_at;
-      wordCount = metadata.word_count;
-      editHistory = metadata.edit_history;
-    } catch {
-      errors.push(
-        assembleError('REVISION_STALE', `Scene metadata for event ${eventId} is malformed`, {
-          eventId,
-          path: metadataPath,
-        }),
-      );
-      continue;
-    }
-
-    // ── 5. Build verified head data ───────────────────────────────
+    const metadata = scene.metadata;
+    const branchExistence: BranchSet = toBranchSet(metadata.branch_existence) ?? { type: 'all' };
+    if (branchPath && !includesPath(branchExistence, branchPath)) continue;
     const head: VerifiedHeadData = {
       revisionId: envelope.revisionId,
       proseHash: envelope.proseHash,
@@ -329,612 +208,102 @@ export function validateManifestHeads(
       editorialBasisHash: envelope.editorialBasisHash,
       scopeHash: envelope.scopeHash,
       validationIdentity: envelope.validationIdentity,
-      proseSource,
-      modelUsed,
-      renderedAt,
-      wordCount,
-      editHistory,
-      playerChoices,
+      proseSource: toSceneProseSource(metadata.prose_source),
+      ...(typeof metadata.model_used === 'string' ? { modelUsed: metadata.model_used } : {}),
+      renderedAt: typeof metadata.rendered_at === 'string' ? metadata.rendered_at : envelope.createdAt,
+      wordCount: isFiniteNumber(metadata.word_count) ? metadata.word_count : 0,
+      editHistory: [],
+      playerChoices: toGameDialogueChoices(metadata.player_choices),
       branchExistence,
     };
-
     scenes.set(eventId, {
       eventId,
-      chapterNumber,
-      narrativeOrder: requiredEvents?.get(eventId) ?? 0,
+      chapterNumber: scene.chapterNumber,
+      narrativeOrder:
+        requiredEvents?.get(eventId) ??
+        (isFiniteNumber(metadata.narrative_order) ? metadata.narrative_order : 0),
       head,
-      prose: sceneContent,
+      prose: scene.prose,
       branchExistence,
-      playerChoices,
-      proseSource,
-      modelUsed,
-      renderedAt,
-      wordCount,
-      editHistory,
+      proseSource: head.proseSource,
+      modelUsed: head.modelUsed,
+      renderedAt: head.renderedAt,
+      wordCount: head.wordCount,
+      editHistory: [],
     });
   }
-
   return { scenes, errors };
 }
 
-/**
- * Find the chapter directory for a given event ID by scanning scenes/.
- */
-function findChapterDir(storage: Storage, scenesDir: string, eventId: string): string | null {
-  if (!storage.exists(scenesDir)) return null;
-  for (const entry of storage.list(scenesDir)) {
-    if (!entry.isDirectory()) continue;
-    const candidatePath = path.join(scenesDir, entry.name);
-    const scenePath = path.join(candidatePath, `${eventId}.md`);
-    if (storage.exists(scenePath)) return candidatePath;
-  }
-  return null;
-}
-
-function extractChapterNumber(chapterDir: string): number {
-  const match = path.basename(chapterDir).match(/chapter-(\d+)/i);
-  return match ? parseInt(match[1], 10) : 1;
-}
-
-// ─── Scope Event Data Builder ───────────────────────────────────────────────
-
-function buildScopeEventData(eventId: string, narrativeOrder: number): ScopeEventData {
-  return {
-    eventId,
-    narrativeOrder,
-    threadProgress: [],
-    foreshadowing: [],
-    relationshipEffects: [],
-    ruleEffects: [],
-  };
-}
-
-// ─── Release Assembly ───────────────────────────────────────────────────────
-
-/**
- * Canonical novel assembly from the publication manifest's revision IDs.
- *
- * 1. Validates every required head exists, is accepted, and matches its
- *    materialised scene hash.
- * 2. Reads the current publication manifest.
- * 3. Builds the novel document from validated scenes.
- * 4. Compares the canonical novel file's current bytes against the manifest.
- * 5. Commits the new novel (and updated manifest) via
- *    EditorialPublisher (which uses ProjectTransactionCoordinator).
- *
- * Missing, unreleased, hash-mismatched, or untracked heads cause the entire
- * assembly to fail closed.  Off-branch bad siblings do not block the
- * selected branch.
- */
-export function canonicalAssemble(
+async function assemble(
+  input: AssemblySemanticInput,
   request: AssembleRequestV1,
-  storage: Storage,
-  runtime?: { clock?: { now(): number } },
-): EditorialAssembleResult {
-  const config = loadProjectConfig(path.join(request.projectDir, 'nova.yaml'), storage);
-  const paths = resolveProjectPaths(request.projectDir, config?.outputDir);
-  const coordinator = new ProjectTransactionCoordinator(storage, paths);
-  const sceneStore = new SceneRevisionStore(coordinator, paths);
-  const workerId = request.mutation.actorId;
-  const operationStore = new OperationStore(
-    coordinator,
-    paths,
-    runtime?.clock ?? { now: () => Date.now() },
-  );
-
-  const operationId = request.mutation.operationId;
-
-  // ── 0. Load publication manifest ───────────────────────────────
-  let manifestRaw = storage.readOptional(paths.publicationPath);
-  let manifest: PublicationManifestV1 =
-    manifestRaw !== null
-      ? (publicationManifestV1Schema.parse(JSON.parse(manifestRaw)) as PublicationManifestV1)
-      : {
-          version: 1,
-          status: 'stale',
-          branch_scope_hash: '',
-          novel_hash: null,
-          revision_ids: {},
-          last_assembled_at: null,
-          reasons: [],
-        };
-
-  // ── 1. Load required events and ledger ─────────────────────────
-  const required = authoredRequiredEvents(request.projectDir, storage, request.branchPath);
-  const branch =
-    request.discourseBranch ??
-    resolveDiscourseBranch({
-      selectedEventIds: new Set(required.events.keys()),
-      branchPath: request.branchPath ?? { decisions: [] },
-      ledger: required.ir.data.discourseLedger,
-    });
-
-  // ── 1b. Verify scope hash matches manifest (fail closed on ledger/discourse change) ─
-  const computedScopeHash = computeSha256Hex(
-    canonicalJson({
-      branch: request.branchPath ?? { decisions: [] },
-      discourse: branch,
-      ledgerHash: required.ir.data.discourseLedger.hash,
-    }),
-  );
-  if (manifest.branch_scope_hash && manifest.branch_scope_hash !== computedScopeHash) {
-    const err: EditorialError = {
-      code: 'PUBLICATION_INCOMPLETE',
-      message:
-        `Scope hash mismatch — ledger/discourse branch changed since last publication. ` +
-        `Expected "${computedScopeHash}" but manifest has "${manifest.branch_scope_hash}". ` +
-        `Run "render" to produce scenes compatible with the current scope.`,
-    };
-    throw new PublicationError('Assembly scope mismatch', [err]);
-  }
-
-  // ── 2. Compute request hash (scope+branch+ledger aware) ────────
-  const requestHash = computeContentHash(
-    stableJson({
-      kind: 'canonicalAssemble',
-      projectDir: request.projectDir,
-      branchPath: request.branchPath,
-      discourseBranch: branch,
-      ledgerHash: required.ir.data.discourseLedger.hash,
-    }),
-  );
-
-  // ── 3. Register operation ──────────────────────────────────────
-  const operation = operationStore.register({
-    operationId,
-    kind: 'assemble',
-    actorId: request.mutation.actorId,
-    requestHash,
-  });
-  if (operation.status === 'succeeded' && operation.result !== null) {
-    return operation.result as EditorialAssembleResult;
-  }
-  // Operation registration owns publication.json while active. Re-read the
-  // active manifest so validation and the final publication CAS share its
-  // current preimage.
-  manifestRaw = storage.readOptional(paths.publicationPath);
-  if (manifestRaw === null) {
-    throw new PublicationError(
-      'Assembly operation did not materialize its active publication manifest',
-      [
-        {
-          code: 'PUBLICATION_INCOMPLETE',
-          message: 'Missing active publication manifest after assembly operation registration',
-        },
-      ],
-    );
-  }
-  manifest = publicationManifestV1Schema.parse(JSON.parse(manifestRaw)) as PublicationManifestV1;
-  const { scenes: validatedScenes, errors: validationErrors } = validateManifestHeads(
-    manifest,
-    sceneStore,
-    storage,
-    paths,
+  repository: CoreExecutionRepository,
+): Promise<EditorialAssembleResult> {
+  const { scenes, errors } = await validateManifestHeads(
+    input.manifest,
+    repository,
+    input,
     request.branchPath,
-    required.events,
   );
-  const headErrors = [...required.errors, ...validationErrors];
-  if (headErrors.length > 0) {
-    operationStore.fail(operationId, workerId, headErrors);
-    throw new PublicationError('Canonical assembly inputs are incomplete', headErrors);
-  }
-
-  // ── 3. Scope events: all events in manifest ────────────────────
-  const scopeEvents = buildScopeEvents(manifest, validatedScenes);
-  const scopeEventIds = scopeEvents.map((e) => e.eventId);
-
-  if (scopeEventIds.length === 0) {
-    const errors: EditorialError[] = [
-      {
-        code: 'PUBLICATION_INCOMPLETE',
-        message: 'No scenes to assemble — publication manifest has no tracked revision IDs',
-      },
-    ];
-    operationStore.fail(operationId, workerId, errors);
-    throw new PublicationError('Canonical assembly inputs are incomplete', errors);
-  }
-
-  // ── 4. Build publication read set ──────────────────────────────
-  const publicationReadSet = captureAssemblyReadSet(storage, paths, validatedScenes);
-
-  // ── 5. Build candidates ────────────────────────────────────────
-  const candidates = buildAssemblyCandidates(manifest, validatedScenes);
-
-  // ── 6. Load chapter metadata ───────────────────────────────────
-  const chapterMetas = loadChapterMetadata(request.projectDir, storage);
-  const chapterTitleMap = new Map<number, { title: string }>();
-  for (const [ch, meta] of chapterMetas) {
-    chapterTitleMap.set(ch, { title: meta.title || `Chapter ${ch}` });
-  }
-
-  // ── 6b. Compile discourse scene sequence from the canonical runtime ──
-  const sceneSequence = compileCanonicalRuntime(required.ir, {
-    branchPath: request.branchPath,
-    discourseBranch: branch,
-  }).graphs.discourseGraph.sceneSequence;
-
-  // ── 7. Build novel document ────────────────────────────────────
-  const novelContent = buildNovelDocument(
-    candidates,
-    chapterTitleMap,
-    request.title ?? 'Untitled',
-    sceneSequence,
-  );
-  const novelHash = computeContentHash(novelContent);
-
-  // ── 8. Check for direct edit on canonical novel ────────────────
-  const currentNovelRaw = storage.readOptional(paths.novelPath);
-  const currentNovelHash = currentNovelRaw === null ? null : computeContentHash(currentNovelRaw);
-  if (currentNovelHash !== manifest.novel_hash) {
-    const errors: EditorialError[] = [
-      {
-        code: 'PUBLICATION_CONTENT_CONFLICT',
-        message: 'Canonical novel bytes do not match the publication manifest',
-        path: paths.novelPath,
-        operationId,
-      },
-    ];
-    if (currentNovelRaw !== null) {
-      const conflictPath = path.join(paths.conflictsDir, `novel-${operationId}.md`);
-      coordinator.commit({
-        transactionId: `${operationId}-novel-conflict`,
-        readSet: [
-          {
-            kind: 'file',
-            path: paths.novelPath,
-            expectedHash: currentNovelHash,
-          },
-          { kind: 'file', path: conflictPath, expectedHash: null },
-        ],
-        writes: [
-          {
-            type: 'put',
-            path: conflictPath,
-            content: currentNovelRaw,
-            expectedHash: null,
-          },
-        ],
-      });
-    }
-    operationStore.fail(operationId, workerId, errors);
-    throw new PublicationError('Canonical novel has untracked edits', errors);
-  }
-
-  // ── 9. Publish via EditorialPublisher ──────────────────────────
-  const previousManifestHash = manifestRaw !== null ? computeContentHash(manifestRaw) : null;
-  const publisher = new EditorialPublisher(coordinator, paths);
-  const publication = publisher.publish({
-    scope: {
-      projectDir: request.projectDir,
-      branchScopeHash: manifest.branch_scope_hash,
-      scopeEventIds,
-      scopeEvents,
-      mutationContext: request.mutation,
-    },
-    candidates,
-    previousManifest: manifest,
-    previousManifestHash,
-    novelContent,
-    novelHash,
-    reasons: [],
-    readSet: publicationReadSet,
-  });
-
-  // ── 10. Finalize operation ─────────────────────────────────────
-  const result: EditorialAssembleResult = {
-    operationId,
-    markdown: novelContent,
-    wordCount: countNovelWords(novelContent),
-    sceneCount: candidates.length,
-    publication,
-  };
-  operationStore.succeed(operationId, workerId, result);
-  return result;
-}
-
-// ─── Custom Assembly ─────────────────────────────────────────────────────────
-
-/**
- * Custom (non-canonical) novel assembly.  Validates the same publication
- * manifest heads but writes only to the custom output path, never touching
- * the canonical novel, manifest, or derived data.
- *
- * A terminal `assemble` operation is recorded so the custom output is
- * traceable.  Custom output/title never mutate canonical files.
- */
-export function customAssemble(
-  request: AssembleRequestV1,
-  storage: Storage,
-  runtime?: { clock?: { now(): number } },
-): EditorialAssembleResult {
-  const config = loadProjectConfig(path.join(request.projectDir, 'nova.yaml'), storage);
-  const paths = resolveProjectPaths(request.projectDir, config?.outputDir);
-  const coordinator = new ProjectTransactionCoordinator(storage, paths);
-  const sceneStore = new SceneRevisionStore(coordinator, paths);
-  const operationId = request.mutation.operationId;
-  const operationPath = path.join(paths.operationsDir, `${operationId}.json`);
-
-  // ── 0. Load publication manifest ───────────────────────────────
-  const manifestRaw = storage.readOptional(paths.publicationPath);
-  const manifest =
-    manifestRaw === null
-      ? {
-          version: 1 as const,
-          status: 'stale' as const,
-          branch_scope_hash: '',
-          novel_hash: null,
-          revision_ids: {},
-          last_assembled_at: null,
-          reasons: [],
-        }
-      : (publicationManifestV1Schema.parse(JSON.parse(manifestRaw)) as PublicationManifestV1);
-
-  // ── 1. Load required events and ledger ─────────────────────────
-  const required = authoredRequiredEvents(request.projectDir, storage, request.branchPath);
-  const branch =
-    request.discourseBranch ??
-    resolveDiscourseBranch({
-      selectedEventIds: new Set(required.events.keys()),
-      branchPath: request.branchPath ?? { decisions: [] },
-      ledger: required.ir.data.discourseLedger,
-    });
-
-  // ── 1b. Verify scope hash matches manifest (fail closed on ledger/discourse change) ─
-  const computedScopeHash = computeSha256Hex(
-    canonicalJson({
-      branch: request.branchPath ?? { decisions: [] },
-      discourse: branch,
-      ledgerHash: required.ir.data.discourseLedger.hash,
-    }),
-  );
-  if (manifest.branch_scope_hash && manifest.branch_scope_hash !== computedScopeHash) {
-    throw new PublicationError('Assembly scope mismatch', [
-      {
-        code: 'PUBLICATION_INCOMPLETE',
-        message:
-          `Scope hash mismatch — ledger/discourse branch changed since last publication. ` +
-          `Expected "${computedScopeHash}" but manifest has "${manifest.branch_scope_hash}". ` +
-          `Run "render" to produce scenes compatible with the current scope.`,
-      },
-    ]);
-  }
-
-  // ── 2. Compute request hash (scope+branch+ledger aware) ────────
-  const requestHash = computeContentHash(
-    stableJson({
-      kind: 'customAssemble',
-      projectDir: request.projectDir,
-      branchPath: request.branchPath,
-      discourseBranch: branch,
-      ledgerHash: required.ir.data.discourseLedger.hash,
-      outputPath: request.outputPath,
-      title: request.title,
-    }),
-  );
-
-  const existingRaw = storage.readOptional(operationPath);
-  if (existingRaw !== null) {
-    const existing = editorialOperationV1Schema.parse(
-      JSON.parse(existingRaw),
-    ) as EditorialOperationV1;
-    if (
-      existing.requestHash === requestHash &&
-      existing.status === 'succeeded' &&
-      existing.result !== null
-    ) {
-      return existing.result as EditorialAssembleResult;
-    }
-    throw new EditorialOperationError(
-      'INVALID_OPERATION',
-      `Operation ${operationId} already exists with a different request`,
-      { operationId },
-    );
-  }
-  const { scenes: validatedScenes, errors: validationErrors } = validateManifestHeads(
-    manifest,
-    sceneStore,
-    storage,
-    paths,
-    request.branchPath,
-    required.events,
-  );
-  const errors = [...required.errors, ...validationErrors];
-  if (required.events.size === 0 && errors.length === 0) {
-    errors.push({
-      code: 'PUBLICATION_INCOMPLETE',
-      message: 'No branch-required scenes are available for assembly',
-    });
-  }
-  if (errors.length > 0) {
-    const now = new Date(runtime?.clock?.now() ?? Date.now()).toISOString();
-    const failed: EditorialOperationV1 = {
-      version: 1,
-      operationId,
-      kind: 'assemble',
-      actorId: request.mutation.actorId,
-      requestHash,
-      status: 'failed',
-      startedAt: now,
-      heartbeatAt: now,
-      leaseExpiresAt: now,
-      completedAt: now,
-      result: null,
-      errors,
-    };
-    coordinator.commit({
-      transactionId: operationId,
-      readSet: [{ kind: 'file', path: operationPath, expectedHash: null }],
-      writes: [
-        {
-          type: 'put',
-          path: operationPath,
-          content: stableJson(failed),
-          expectedHash: null,
-        },
-      ],
-    });
-    throw new PublicationError('Custom assembly inputs are incomplete', errors);
-  }
-
-  const candidates = buildAssemblyCandidates(manifest, validatedScenes);
-  const chapterTitleMap = new Map<number, { title: string }>();
-  for (const [chapter, metadata] of loadChapterMetadata(request.projectDir, storage)) {
-    chapterTitleMap.set(chapter, {
-      title: metadata.title || `Chapter ${chapter}`,
-    });
-  }
-  const sceneSequence = compileCanonicalRuntime(required.ir, {
-    branchPath: request.branchPath,
-    discourseBranch: branch,
-  }).graphs.discourseGraph.sceneSequence;
-  const novelContent = buildNovelDocument(
-    candidates,
-    chapterTitleMap,
-    request.title ?? 'Untitled',
-    sceneSequence,
-  );
-  const resolvedOutputPath = request.outputPath ?? path.join(paths.outputDir, 'custom-novel.md');
-  if (
-    resolvedOutputPath === paths.novelPath ||
-    resolvedOutputPath === paths.publicationPath ||
-    resolvedOutputPath.startsWith(`${paths.workDir}${path.sep}`)
-  ) {
-    throw new EditorialOperationError(
-      'INVALID_OPERATION',
-      'Custom output path must not target canonical editorial artifacts',
-      { path: resolvedOutputPath, operationId },
-    );
-  }
-  const result: EditorialAssembleResult = {
-    operationId,
-    markdown: novelContent,
-    wordCount: countNovelWords(novelContent),
-    sceneCount: candidates.length,
-    publication: {
-      status: 'unchanged',
-      outputPath: resolvedOutputPath,
-      novelHash: computeContentHash(novelContent),
-      reasons: [],
-    },
-  };
-  const now = new Date(runtime?.clock?.now() ?? Date.now()).toISOString();
-  const operation: EditorialOperationV1 = {
-    version: 1,
-    operationId,
-    kind: 'assemble',
-    actorId: request.mutation.actorId,
-    requestHash,
-    status: 'succeeded',
-    startedAt: now,
-    heartbeatAt: now,
-    leaseExpiresAt: now,
-    completedAt: now,
-    result,
-    errors: [],
-  };
-  coordinator.commit({
-    transactionId: operationId,
-    readSet: [
-      ...captureAssemblyReadSet(storage, paths, validatedScenes),
-      {
-        kind: 'file',
-        path: resolvedOutputPath,
-        expectedHash:
-          storage.readOptional(resolvedOutputPath) === null
-            ? null
-            : computeContentHash(storage.read(resolvedOutputPath)),
-      },
-      { kind: 'file', path: operationPath, expectedHash: null },
-    ],
-    writes: [
-      {
-        type: 'put',
-        path: resolvedOutputPath,
-        content: novelContent,
-        expectedHash:
-          storage.readOptional(resolvedOutputPath) === null
-            ? null
-            : computeContentHash(storage.read(resolvedOutputPath)),
-      },
-      {
-        type: 'put',
-        path: operationPath,
-        content: stableJson(operation),
-        expectedHash: null,
-      },
-    ],
-  });
-  return result;
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function buildScopeEvents(
-  manifest: PublicationManifestV1,
-  scenes: Map<string, VerifiedAssemblyScene>,
-): ScopeEventData[] {
-  const result: ScopeEventData[] = [];
-  for (const [eventId] of Object.entries(manifest.revision_ids)) {
-    const vs = scenes.get(eventId);
-    if (!vs) continue;
-    result.push(buildScopeEventData(vs.eventId, vs.narrativeOrder));
-  }
-  return result;
-}
-
-function buildAssemblyCandidates(
-  _manifest: PublicationManifestV1,
-  scenes: ReadonlyMap<string, VerifiedAssemblyScene>,
-): PromoteCandidateInput[] {
-  return [...scenes.values()].map((scene) => ({
-    promote: false,
+  if (errors.length) throw new PublicationError('Assembly inputs are incomplete', errors);
+  const ordered = input.discourseSequence
+    .map((entry) => scenes.get(entry.sceneId))
+    .filter((scene): scene is VerifiedAssemblyScene => scene !== undefined);
+  const candidates: PromoteCandidateInput[] = ordered.map((scene) => ({
     eventId: scene.eventId,
     chapterNumber: scene.chapterNumber,
     head: scene.head,
-    event: buildScopeEventData(scene.eventId, scene.narrativeOrder),
+    event: {
+      eventId: scene.eventId,
+      narrativeOrder: scene.narrativeOrder,
+      threadProgress: [],
+      foreshadowing: [],
+      relationshipEffects: [],
+      ruleEffects: [],
+    },
     scene: { prose: scene.prose },
   }));
-}
-
-function captureAssemblyReadSet(
-  storage: Storage,
-  paths: ProjectPaths,
-  scenes: ReadonlyMap<string, VerifiedAssemblyScene> = new Map(),
-): TransactionReadExpectation[] {
-  const expectations: TransactionReadExpectation[] = [];
-  const add = (filePath: string): void => {
-    const content = storage.readOptional(filePath);
-    expectations.push({
-      kind: 'file',
-      path: filePath,
-      expectedHash: content !== null ? computeContentHash(content) : null,
-    });
+  const titles = new Map<number, { title: string }>();
+  for (const [chapter, metadata] of input.chapterTitles ?? []) {
+    titles.set(chapter, { title: metadata.title });
+  }
+  const markdown = buildNovelDocument(
+    candidates,
+    titles,
+    request.title ?? 'Untitled',
+    input.discourseSequence.map((entry) => ({
+      sceneId: entry.sceneId,
+      sequence: entry.sequence,
+      chapter: entry.chapter,
+    })),
+  );
+  return {
+    operationId: request.mutation.operationId,
+    markdown,
+    wordCount: markdown.split(/\s+/).filter(Boolean).length,
+    sceneCount: candidates.length,
+    publication: {
+      status: 'current',
+      outputPath: '',
+      novelHash: sha256(markdown),
+      reasons: [],
+    },
   };
-  add(paths.publicationPath);
-  add(paths.novelPath);
-  add(paths.sourceHeadPath);
-  for (const name of ['threads.yaml', 'foreshadowing.yaml', 'relationships.yaml', 'rules.yaml']) {
-    add(path.join(paths.derivedDir, name));
-  }
-  for (const scene of scenes.values()) {
-    const chapterDir = path.join(
-      paths.scenesDir,
-      `chapter-${String(scene.chapterNumber).padStart(2, '0')}`,
-    );
-    add(path.join(chapterDir, `${scene.eventId}.md`));
-    add(path.join(chapterDir, `${scene.eventId}.yaml`));
-    add(path.join(paths.sceneRevisionsDir, scene.eventId, `${scene.head.revisionId}.json`));
-  }
-  return expectations;
 }
 
-function countNovelWords(markdown: string): number {
-  // Strip markdown headings, separators, and count remaining words
-  const text = markdown
-    .replace(/^#+\s+.*$/gm, '')
-    .replace(/^---+$/gm, '')
-    .replace(/^>.*$/gm, '')
-    .trim();
-  if (!text) return 0;
-  return text.split(/\s+/).filter(Boolean).length;
+export function canonicalAssemble(
+  request: AssembleRequestV1,
+  input: AssemblySemanticInput,
+  repository: CoreExecutionRepository,
+): Promise<EditorialAssembleResult> {
+  return assemble(input, request, repository);
+}
+
+export function customAssemble(
+  request: AssembleRequestV1,
+  input: AssemblySemanticInput,
+  repository: CoreExecutionRepository,
+): Promise<EditorialAssembleResult> {
+  return assemble(input, request, repository);
 }

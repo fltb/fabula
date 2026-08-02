@@ -10,12 +10,15 @@
 // Additionally, E1b.yaml has a YAML duplicate-key error, so only E1a is loaded.
 // ============================================================================
 
-import * as fs from 'node:fs';
-import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-const FIXTURE_PATH = path.resolve(__dirname, '../../../fixtures/arcane-aftermath');
+// The version-controlled arcane-aftermath fixture is materialized once into a
+// ProjectSourceSnapshotV1; EntityMapper reads only the snapshot documents.
+const SNAPSHOT = materializeFixtureSnapshot(
+  path.resolve(import.meta.dirname, '..', '..', '..', 'fixtures', 'arcane-aftermath'),
+);
+import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
 
 import { z } from 'zod';
 import { assembleNovel, countWords } from '../src/assembler/index.js';
@@ -64,6 +67,10 @@ function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
     ...overrides,
   };
 }
+
+/** Shared fixture load for the 1. Full Pipeline suite (assigned in beforeAll). */
+let mapper: EntityMapper;
+let projectData: ProjectData;
 
 /**
  * Explicit catalog context for replay-backed tests: declares the fixture
@@ -171,16 +178,12 @@ const BASELINE_INITIAL_FACTS: Fact[] = [
 const BASELINE_REPLAY_OPTIONS = { initialFacts: BASELINE_INITIAL_FACTS };
 
 // ─── 1. Full pipeline: load → validate → state → assemble ─────────────────────
-
 describe('1. Full Pipeline', () => {
-  let mapper: EntityMapper;
-  let projectData: ProjectData;
-
   beforeAll(() => {
-    expect(fs.existsSync(FIXTURE_PATH)).toBe(true);
-    mapper = new EntityMapper(FIXTURE_PATH);
+    mapper = new EntityMapper(SNAPSHOT);
     projectData = mapper.loadProject();
   });
+
 
   it('1a. EntityMapper loads the fixture project data', () => {
     // ── Project config ───────────────────────────────────────────
@@ -242,7 +245,7 @@ describe('1. Full Pipeline', () => {
 
   it('1b. InMemoryEntityRegistry.load() loads all fixture entities from ProjectData', () => {
     const registry = new InMemoryEntityRegistry();
-    const data = new EntityMapper(FIXTURE_PATH).loadProject();
+    const data = new EntityMapper(SNAPSHOT).loadProject();
     expect(() => registry.load(data)).not.toThrow();
 
     // All entities load correctly now that fixture YAMLs use camelCase
@@ -286,14 +289,7 @@ describe('1. Full Pipeline', () => {
   });
 
   it('1d. StateManager commits events and produces world state', () => {
-    const snapDir = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-snap-'));
-    const sm = new StateManager(
-      snapDir,
-      TEST_CATALOG_CONTEXT,
-      20,
-      undefined,
-      BASELINE_REPLAY_OPTIONS,
-    );
+    const sm = new StateManager(TEST_CATALOG_CONTEXT, 20, BASELINE_REPLAY_OPTIONS);
 
     const e1a = makeEvent({
       id: 'E1a',
@@ -389,33 +385,13 @@ describe('1. Full Pipeline', () => {
     expect(state.entities['seraphine']?.['detected_anomaly']).toBe(true);
     expect(state.entities['camille']?.['case_status']).toBe('accepted');
 
-    // EventStore.saveToDisk / loadFromDisk round-trip
-    sm.saveToDisk(snapDir);
-    expect(fs.existsSync(path.join(snapDir, 'event_log.jsonl'))).toBe(true);
-
-    const sm2 = new StateManager(
-      fs.mkdtempSync(path.join(tmpdir(), 'novalistically-snap-')),
-      TEST_CATALOG_CONTEXT,
-      20,
-      undefined,
-      BASELINE_REPLAY_OPTIONS,
-    );
-    sm2.loadFromDisk(snapDir);
-    expect(sm2.eventStore.count).toBe(2);
-
-    fs.rmSync(snapDir, { recursive: true, force: true });
-    fs.rmSync((sm2 as any).snapshotEngine.snapshotsDir, { recursive: true, force: true });
+    // Persistence round-trip and recovery are covered by the semantic state
+    // repository suites (state.test.ts / memory-contract-repositories.test.ts);
+    // StateManager itself is a pure in-memory coordinator.
   });
 
   it('1e. ResultAggregator runs validators with no errors', () => {
-    const snapDir = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-snap-'));
-    const sm = new StateManager(
-      snapDir,
-      TEST_CATALOG_CONTEXT,
-      20,
-      undefined,
-      BASELINE_REPLAY_OPTIONS,
-    );
+    const sm = new StateManager(TEST_CATALOG_CONTEXT, 20, BASELINE_REPLAY_OPTIONS);
 
     const evt1 = makeEvent({
       id: 'E1a',
@@ -533,7 +509,7 @@ describe('1. Full Pipeline', () => {
       event,
       worldState: state,
       events,
-      entityRegistry: registry,
+      entities: registry,
       chapter: 1,
       queryState: () => undefined,
       getKnowledge: () => ({
@@ -557,7 +533,7 @@ describe('1. Full Pipeline', () => {
 
 describe('2. Entity Completeness', () => {
   it('2a. Characters have their traits loaded from YAML', () => {
-    const data = new EntityMapper(FIXTURE_PATH).loadProject();
+    const data = new EntityMapper(SNAPSHOT).loadProject();
 
     // Camille
     const camille = data.characters.find((c: any) => c.id === 'camille') as any;
@@ -584,7 +560,7 @@ describe('2. Entity Completeness', () => {
   });
 
   it('2b. Locations have descriptions and initial state', () => {
-    const data = new EntityMapper(FIXTURE_PATH).loadProject();
+    const data = new EntityMapper(SNAPSHOT).loadProject();
 
     const hq = data.locations.find((l: any) => l.id === 'piltover_enforcer_headquarters') as any;
     expect(hq).toBeDefined();
@@ -605,14 +581,14 @@ describe('2. Entity Completeness', () => {
 
 describe('3. Event Integrity', () => {
   it('3a. E1a has narrativeOrder = 1', () => {
-    const data = new EntityMapper(FIXTURE_PATH).loadProject();
+    const data = new EntityMapper(SNAPSHOT).loadProject();
     const ch1 = data.chapters.get(1)!;
     const e1a = ch1.events[0] as any;
     expect(e1a.narrativeOrder).toBe(1);
   });
 
   it('3b. E1a has proper POV assignment (seraphine, third_person_limited)', () => {
-    const data = new EntityMapper(FIXTURE_PATH).loadProject();
+    const data = new EntityMapper(SNAPSHOT).loadProject();
     const ch1 = data.chapters.get(1)!;
     const e1a = ch1.events[0] as any;
     expect(e1a.pov.character).toBe('seraphine');
@@ -621,7 +597,7 @@ describe('3. Event Integrity', () => {
 
   it('3c. Scene type is valid (linear)', () => {
     const validTypes = ['linear', 'flashback', 'flashforward', 'dream', 'parallel'];
-    const data = new EntityMapper(FIXTURE_PATH).loadProject();
+    const data = new EntityMapper(SNAPSHOT).loadProject();
     const ch1 = data.chapters.get(1)!;
     for (const evt of ch1.events) {
       expect(validTypes).toContain((evt as any).sceneType);
@@ -629,7 +605,7 @@ describe('3. Event Integrity', () => {
   });
 
   it('3d. Preconditions reference known fixture entities', () => {
-    const data = new EntityMapper(FIXTURE_PATH).loadProject();
+    const data = new EntityMapper(SNAPSHOT).loadProject();
     const ch1 = data.chapters.get(1)!;
     const e1a = ch1.events[0] as any;
     expect(e1a.preconditions).toBeDefined();
@@ -650,17 +626,12 @@ describe('3. Event Integrity', () => {
 // ─── 4. State Transitions ────────────────────────────────────────────────────
 
 describe('4. State Transitions', () => {
-  let snapDir: string;
   let sm: StateManager;
 
   beforeAll(() => {
-    snapDir = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-snap-'));
-    sm = new StateManager(snapDir, TEST_CATALOG_CONTEXT, 20, undefined, BASELINE_REPLAY_OPTIONS);
+    sm = new StateManager(TEST_CATALOG_CONTEXT, 20, BASELINE_REPLAY_OPTIONS);
   });
 
-  afterAll(() => {
-    fs.rmSync(snapDir, { recursive: true, force: true });
-  });
 
   it('4a. After E1a: seraphine has detected anomaly', () => {
     const e1a = makeEvent({
@@ -713,14 +684,7 @@ describe('4. State Transitions', () => {
   });
 
   it('4c. Thread T1, T2, T3 have progress after events', () => {
-    const snapDir2 = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-snap-'));
-    const sm2 = new StateManager(
-      snapDir2,
-      TEST_CATALOG_CONTEXT,
-      20,
-      undefined,
-      BASELINE_REPLAY_OPTIONS,
-    );
+    const sm2 = new StateManager(TEST_CATALOG_CONTEXT, 20, BASELINE_REPLAY_OPTIONS);
 
     const opening = makeEvent({ id: 'E0', narrativeOrder: 0 });
     const e1a = makeEvent({
@@ -774,8 +738,6 @@ describe('4. State Transitions', () => {
       milestoneStates: {},
       semanticStateHash: 'h4x3zs9',
     });
-
-    fs.rmSync(snapDir2, { recursive: true, force: true });
   });
 
   it('4d. ReplayEngine reconstucts state at specific narrative orders', () => {
@@ -1000,8 +962,7 @@ describe('5. ISS Calculation', () => {
     ];
 
     const iss = calculateISS({
-      projectDir: FIXTURE_PATH,
-      entityRegistry: registry,
+      entities: registry,
       events,
       threads,
       rules,
@@ -1014,8 +975,7 @@ describe('5. ISS Calculation', () => {
 
   it('5b. Has 6 dimensions with correct names', () => {
     const iss = calculateISS({
-      projectDir: FIXTURE_PATH,
-      entityRegistry: registry,
+      entities: registry,
       events: [makeEvent({ id: 'E0', narrativeOrder: 0 }), makeEvent({ narrativeOrder: 1 })],
       threads: [{ id: 'T1', name: 'Test' }],
       rules: [],
@@ -1032,8 +992,7 @@ describe('5. ISS Calculation', () => {
 
   it('5c. Each dimension has valid score, max, threshold, and status', () => {
     const iss = calculateISS({
-      projectDir: FIXTURE_PATH,
-      entityRegistry: registry,
+      entities: registry,
       events: [makeEvent({ id: 'E0', narrativeOrder: 0 }), makeEvent({ narrativeOrder: 1 })],
       threads: [{ id: 'T1', name: 'Test' }],
       rules: [],
@@ -1079,7 +1038,7 @@ describe('5. ISS Calculation', () => {
       }),
     ];
     const antiPatterns = detectAntiPatterns({
-      entityRegistry: registry,
+      entities: registry,
       events,
       threads: [
         { id: 'T1', name: 'Hextech Weapon Smuggling' },
@@ -1104,15 +1063,18 @@ describe('5. ISS Calculation', () => {
 // ─── 6. Assembler with Empty Scenes Directory ─────────────────────────────────
 
 describe('6. Assembler with Empty Scenes Directory', () => {
-  afterAll(() => {
-    const outputPath = path.join(FIXTURE_PATH, 'output', 'novel.md');
-    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-  });
-
   it('6a. assembly rejects empty scenes directory', () => {
-    expect(() => assembleNovel({ projectDir: FIXTURE_PATH, title: 'Arcane Aftermath' })).toThrow(
-      /scene/i,
-    );
+    expect(() =>
+      assembleNovel({
+        source: {
+          snapshot: SNAPSHOT,
+          scenes: new Map(),
+          discourseSequence: [],
+          projectTitle: 'Arcane Aftermath',
+        },
+        title: 'Arcane Aftermath',
+      }),
+    ).toThrow(/scene/i);
   });
 
   it('6b. countWords utility works correctly', () => {
@@ -1123,18 +1085,16 @@ describe('6. Assembler with Empty Scenes Directory', () => {
   });
 
   it('6c. assembly rejects truly empty project', () => {
-    const emptyDir = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-empty-'));
-    fs.mkdirSync(path.join(emptyDir, 'scenes'), { recursive: true });
-    fs.mkdirSync(path.join(emptyDir, 'chapters'), { recursive: true });
-    fs.writeFileSync(
-      path.join(emptyDir, 'nova.yaml'),
-      'project: empty\ntitle: "Empty"\nauthor: "Test"\n',
-      'utf-8',
+    // An empty snapshot — no scenes, no discourse sequence — must be rejected.
+    const emptySource = {
+      snapshot: { version: 1 as const, documents: [], sourceHash: 'empty' },
+      scenes: new Map<string, never>(),
+      discourseSequence: [],
+      projectTitle: 'Empty',
+    };
+    expect(() => assembleNovel({ source: emptySource, title: 'Empty' })).toThrow(
+      /scene|chapter/i,
     );
-
-    expect(() => assembleNovel({ projectDir: emptyDir, title: 'Empty' })).toThrow(/scene|chapter/i);
-
-    fs.rmSync(emptyDir, { recursive: true, force: true });
   });
 });
 
@@ -1349,23 +1309,10 @@ describe('7. Context Compilation', () => {
 // ─── 8. Cross-cutting: Full Pipeline Smoke Test ─────────────────────────────
 
 describe('8. Cross-cutting Pipeline Smoke Test', () => {
-  let snapDir: string;
-
-  beforeAll(() => {
-    snapDir = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-smoke-'));
-  });
-
-  afterAll(() => {
-    const outputPath = path.join(FIXTURE_PATH, 'output', 'novel.md');
-    if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
-    try {
-      fs.rmSync(snapDir, { recursive: true, force: true });
-    } catch {}
-  });
 
   it('8a. End-to-end: load → registry → state → validate → ISS → assembler → context', () => {
     // 1. LOAD
-    const mapper = new EntityMapper(FIXTURE_PATH);
+    const mapper = new EntityMapper(SNAPSHOT);
     const data = mapper.loadProject();
     expect(data.config).not.toBeNull();
     expect(data.chapters.size).toBe(1);
@@ -1392,13 +1339,7 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
     });
 
     // 3. STATE
-    const sm = new StateManager(
-      snapDir,
-      TEST_CATALOG_CONTEXT,
-      20,
-      undefined,
-      BASELINE_REPLAY_OPTIONS,
-    );
+    const sm = new StateManager(TEST_CATALOG_CONTEXT, 20, BASELINE_REPLAY_OPTIONS);
     const e1a = makeEvent({
       id: 'E1a',
       narrativeOrder: 1,
@@ -1455,8 +1396,7 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
 
     // 5. ISS
     const iss = calculateISS({
-      projectDir: FIXTURE_PATH,
-      entityRegistry: registry,
+      entities: registry,
       events,
       threads: [
         { id: 'T1', name: 'Hextech Weapon Smuggling' },
@@ -1488,9 +1428,17 @@ describe('8. Cross-cutting Pipeline Smoke Test', () => {
     expect(iss.overall).toBeGreaterThanOrEqual(0);
 
     // 6. ASSEMBLER
-    expect(() => assembleNovel({ projectDir: FIXTURE_PATH, title: 'Smoke Test' })).toThrow(
-      /scene/i,
-    );
+    expect(() =>
+      assembleNovel({
+        source: {
+          snapshot: SNAPSHOT,
+          scenes: new Map(),
+          discourseSequence: [],
+          projectTitle: 'Smoke Test',
+        },
+        title: 'Smoke Test',
+      }),
+    ).toThrow(/scene/i);
 
     // 7. CONTEXT
     const ctx = new ContextCompiler().compile(e1a, state, registry);

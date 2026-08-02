@@ -18,6 +18,7 @@ export type {
 } from './render.ts';
 export {
   evaluateProseCandidate,
+  PASS1_PROMPT_TEMPLATE_NAME,
   PASS2_REFERENCE_POLICY_VERSION,
   PASS2_SAMPLING_CONFIG,
   RenderPipeline,

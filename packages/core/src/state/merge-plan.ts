@@ -6,10 +6,22 @@
 
 import type { BranchPath, MergePlan, MergePolicy, StorySnapshot } from '../types/index.js';
 
-// ─── Helper: generate a merge timestamp ──────────────────────────────────────
+// ─── Helper: derive a deterministic merge provenance fingerprint ────────────
 
-function nowISO(): string {
-  return new Date().toISOString();
+function deterministicMergeStamp(params: CompileMergePlanParams, source: string): string {
+  const policyEntries = Object.entries(params.policies)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([domain, policy]) => [domain, policy]);
+  return shortHash(
+    JSON.stringify({
+      incomingSnapshotHashes: params.incomingSnapshotHashes,
+      mergeNode: params.mergeNode,
+      effectiveCoordinate: params.effectiveCoordinate,
+      policies: policyEntries,
+      sourceBranch: params.sourceBranch,
+      source,
+    }),
+  );
 }
 
 // ─── Helper: compute a simple hash for provenance ├───────────────────────────
@@ -78,7 +90,7 @@ export function compileMergePlan(params: CompileMergePlanParams): MergePlan {
     policies,
     provenance: {
       sourceBranch,
-      mergeTimestamp: nowISO(),
+      mergeTimestamp: deterministicMergeStamp(params, source),
       source,
     },
   };

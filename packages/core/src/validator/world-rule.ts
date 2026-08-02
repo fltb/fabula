@@ -57,7 +57,7 @@ export class WorldRuleValidator implements Validator {
     // Check postconditions: flag changes to immutable attributes (world rule contradiction)
     // Mutable attributes like marital_status (semanticRole: 'lifecycle') can change freely.
     for (const pc of event.postconditions) {
-      const entity = input.entityRegistry.resolve(pc.entityId);
+      const entity = input.entities.resolve(pc.entityId);
       if (!entity) continue;
       const writePolicy = getAttributeWritePolicy(
         input.entityTypeCatalog,

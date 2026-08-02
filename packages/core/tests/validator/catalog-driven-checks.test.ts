@@ -173,7 +173,7 @@ function makeInput(overrides: Partial<PreRenderInput>): PreRenderInput {
       facts: [],
     },
     events: [],
-    entityRegistry: makeRegistry([]),
+    entities: makeRegistry([]),
     entityTypeCatalog: CATALOG,
     chapter: 1,
     queryState: () => undefined,
@@ -271,7 +271,7 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
       ],
     });
 
-    const input = makeInput({ event, events: [event], entityRegistry: registry });
+    const input = makeInput({ event, events: [event], entities: registry });
 
     const issues = validator.validatePre(input);
     // marital_status is mutable/lifecycle — changing it is NOT a world rule violation
@@ -301,7 +301,7 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
       ],
     });
 
-    const input = makeInput({ event, events: [event], entityRegistry: registry });
+    const input = makeInput({ event, events: [event], entities: registry });
 
     const issues = validator.validatePre(input);
     // gender is immutable — changing it IS a world rule violation
@@ -330,7 +330,7 @@ describe('WorldRuleValidator — catalog-driven immutable check (zhu-fu fix)', (
       ],
     });
 
-    const input = makeInput({ event, events: [event], entityRegistry: registry });
+    const input = makeInput({ event, events: [event], entities: registry });
 
     const issues = validator.validatePre(input);
     expect(issues.filter((i) => i.validator === 'world_rule')).toHaveLength(0);
@@ -373,7 +373,7 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
       event,
       worldState,
       events: [event],
-      entityRegistry: registry,
+      entities: registry,
       queryState: (id: string, attr: string) => worldState.entities[id]?.[attr],
     });
 
@@ -415,7 +415,7 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
       event,
       worldState,
       events: [event],
-      entityRegistry: registry,
+      entities: registry,
       queryState: (id: string, attr: string) => worldState.entities[id]?.[attr],
     });
 
@@ -457,7 +457,7 @@ describe('CharacterStateValidator — catalog-driven lifecycle check', () => {
       event,
       worldState,
       events: [event],
-      entityRegistry: registry,
+      entities: registry,
       queryState: (id: string, attr: string) => worldState.entities[id]?.[attr],
     });
 

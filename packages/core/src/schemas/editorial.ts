@@ -2,6 +2,8 @@ import { z } from 'zod';
 import { analysisResultSchema } from './analysis.ts';
 import { gameDialogueChoicesSchema } from './game-dialogue.ts';
 import { reviewCommentSchema } from './review.ts';
+import { projectSourceSnapshotV1Schema } from './core-contracts.ts';
+import type { EditorialRenderRequestV1, RenderGameDialogueTreeRequestV1 } from '../types/editorial.ts';
 
 const nonEmptyString = z.string().trim().min(1);
 const contentHashSchema = z.string().regex(/^[a-f0-9]{64}$/);
@@ -229,42 +231,6 @@ export const sceneRevisionEnvelopeV1Schema = z
   })
   .strict();
 
-const sourceRevisionDocumentV1Schema = z
-  .object({
-    path: nonEmptyString,
-    beforeHash: contentHashSchema.nullable(),
-    afterHash: contentHashSchema.nullable(),
-    beforeContent: z.string().nullable(),
-    afterContent: z.string().nullable(),
-  })
-  .strict();
-
-export const sourceRevisionV1Schema = z
-  .object({
-    version: z.literal(1),
-    revisionId: uuidSchema,
-    parentRevisionId: uuidSchema.nullable(),
-    operationId: uuidSchema,
-    actorId: nonEmptyString,
-    origin: z.enum(['api_edit', 'external_edit']),
-    note: z.string().optional(),
-    projectBeforeHash: contentHashSchema,
-    projectAfterHash: contentHashSchema,
-    changeSetHash: contentHashSchema,
-    documents: z.array(sourceRevisionDocumentV1Schema).min(1),
-    affectedEventIds: z.array(nonEmptyString),
-    createdAt: isoDateSchema,
-  })
-  .strict();
-
-export const sourceHeadV1Schema = z
-  .object({
-    version: z.literal(1),
-    revisionId: uuidSchema.nullable(),
-    projectSourceHash: contentHashSchema,
-    documents: z.record(z.string(), contentHashSchema),
-  })
-  .strict();
 
 const sceneEditHistoryEntryV1Schema = z
   .object({
@@ -348,10 +314,10 @@ const waiverRecordSchema = z
   })
   .strict();
 
-export const editorialRenderRequestV1Schema = z
+const editorialRenderRequestV1Schema = z
   .object({
     version: z.literal(1),
-    projectDir: nonEmptyString,
+    source: projectSourceSnapshotV1Schema,
     selector: sceneSelectorSchema.optional(),
     revision: revisionRequestSchema.optional(),
     mutation: editorialMutationContextSchema,
@@ -360,82 +326,19 @@ export const editorialRenderRequestV1Schema = z
     branchPath: branchPathV1Schema.optional(),
     discourseBranch: nonEmptyString.optional(),
     waivers: z.array(waiverRecordSchema).optional(),
-    batch: z
-      .object({
-        batchSize: z.number().int().positive().optional(),
-        windowSize: z.number().int().positive().optional(),
-        failFast: z.boolean().optional(),
-      })
-      .strict()
-      .optional(),
+    batch: z.object({ batchSize: z.number().int().positive().optional(), windowSize: z.number().int().positive().optional(), failFast: z.boolean().optional() }).strict().optional(),
     maxRounds: z.number().int().positive().optional(),
   })
-  .strict();
+  .strict() satisfies z.ZodType<EditorialRenderRequestV1>;
+
+export { editorialRenderRequestV1Schema };
 
 /**
- * Strict schema for preview requests — same as editorialRenderRequestV1Schema
- * but without the required `mutation` field. Preview does not need a mutation
- * context because it performs no writes.
+ * Strict schema for preview requests without mutation context.
  */
-export const editorialPreviewRequestV1Schema = z
-  .object({
-    version: z.literal(1),
-    projectDir: nonEmptyString,
-    selector: sceneSelectorSchema.optional(),
-    revision: revisionRequestSchema.optional(),
-    model: nonEmptyString.optional(),
-    providerProfile: nonEmptyString.optional(),
-    branchPath: branchPathV1Schema.optional(),
-    discourseBranch: nonEmptyString.optional(),
-    waivers: z.array(waiverRecordSchema).optional(),
-    batch: z
-      .object({
-        batchSize: z.number().int().positive().optional(),
-        windowSize: z.number().int().positive().optional(),
-        failFast: z.boolean().optional(),
-      })
-      .strict()
-      .optional(),
-    maxRounds: z.number().int().positive().optional(),
-  })
-  .strict();
+export const editorialPreviewRequestV1Schema = editorialRenderRequestV1Schema.omit({ mutation: true }).strict() satisfies z.ZodType<Omit<EditorialRenderRequestV1, 'mutation'>>;
 
-/**
- * Strict schema for game dialogue tree render requests — same as
- * editorialRenderRequestV1Schema but without selector, revision, branchPath,
- * or discourseBranch (mirrors the RenderGameDialogueTreeRequestV1 type).
- */
-export const renderGameDialogueTreeRequestV1Schema = z
-  .object({
-    version: z.literal(1),
-    projectDir: nonEmptyString,
-    mutation: editorialMutationContextSchema,
-    model: nonEmptyString.optional(),
-    providerProfile: nonEmptyString.optional(),
-    waivers: z.array(waiverRecordSchema).optional(),
-    batch: z
-      .object({
-        batchSize: z.number().int().positive().optional(),
-        windowSize: z.number().int().positive().optional(),
-        failFast: z.boolean().optional(),
-      })
-      .strict()
-      .optional(),
-    maxRounds: z.number().int().positive().optional(),
-  })
-  .strict();
-
-export const editorialScopedRequestV1Schema = z
-  .object({
-    version: z.literal(1),
-    projectDir: nonEmptyString,
-    model: nonEmptyString.optional(),
-    providerProfile: nonEmptyString.optional(),
-    branchPath: branchPathV1Schema.optional(),
-    discourseBranch: nonEmptyString.optional(),
-    waivers: z.array(waiverRecordSchema).optional(),
-  })
-  .strict();
+export const renderGameDialogueTreeRequestV1Schema = editorialRenderRequestV1Schema.omit({ selector: true, revision: true, branchPath: true, discourseBranch: true }).strict() satisfies z.ZodType<RenderGameDialogueTreeRequestV1>;
 
 export const sourceDocumentChangeSchema = z.discriminatedUnion('type', [
   z
@@ -600,8 +503,7 @@ const treeResultSchema = z
 const sourceResultSchema = z
   .object({
     operationId: uuidSchema,
-    sourceRevisionId: uuidSchema,
-    projectSourceHash: contentHashSchema,
+    sourceHash: contentHashSchema,
     changedDocuments: z.array(
       z
         .object({
@@ -614,7 +516,6 @@ const sourceResultSchema = z
     publication: publicationResultSchema,
   })
   .strict();
-
 const sceneActionResultSchema = z
   .object({
     operationId: uuidSchema,
@@ -653,7 +554,6 @@ export const editorialOperationV1Schema = z
       'adopt_scene',
       'rollback_scene',
       'assemble',
-      'apply_source',
       'set_scene_lock',
       'add_review',
       'replace_review',
@@ -689,13 +589,11 @@ export const editorialOperationV1Schema = z
           ? treeResultSchema
           : value.kind === 'assemble'
             ? assembleResultSchema
-            : value.kind === 'apply_source'
-              ? sourceResultSchema
-              : value.kind === 'add_review' ||
-                  value.kind === 'replace_review' ||
-                  value.kind === 'update_review'
-                ? reviewCommentSchema
-                : sceneActionResultSchema;
+            : value.kind === 'add_review' ||
+                value.kind === 'replace_review' ||
+                value.kind === 'update_review'
+              ? reviewCommentSchema
+              : sceneActionResultSchema;
     const parsed = schema.safeParse(value.result);
     if (!parsed.success) {
       context.addIssue({

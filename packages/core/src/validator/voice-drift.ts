@@ -35,7 +35,7 @@ export class VoiceDriftDetector implements Validator {
           if (!check.attribute.startsWith('voice_')) return false;
 
           // Catalog validation: if entity kind is known, verify the attribute is a narrative attribute
-          const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+          const entityKind = input.entities?.resolve(check.entityId)?.kind;
           if (entityKind) {
             const role = getAttributeSemanticRole(
               input.entityTypeCatalog,

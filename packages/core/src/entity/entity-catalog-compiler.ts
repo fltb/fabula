@@ -15,14 +15,15 @@
 import { z } from 'zod';
 import { ConfigError } from '../errors.ts';
 import type {
-  AttributeDefinition,
   AttributeDefinitionSource,
   AttributeValueType,
   EntityTypeCatalog,
   EntityTypeCatalogSource,
-  EntityTypeDefinition,
   EntityTypeDefinitionSource,
-} from '../types/index.js';
+  RuntimeAttributeDefinition,
+  RuntimeEntityTypeCatalog,
+  RuntimeEntityTypeDefinition,
+} from '../types/entity-catalog.js';
 
 /** Internal runtime catalog version — cache identity only, not author-facing. */
 const RUNTIME_CATALOG_VERSION = 1;
@@ -47,10 +48,10 @@ function buildValueSchema(valueType: AttributeValueType): z.ZodTypeAny {
       return z.record(z.string(), z.string());
   }
 }
-
-function compileAttribute(source: AttributeDefinitionSource): AttributeDefinition {
+function compileAttribute(source: AttributeDefinitionSource): RuntimeAttributeDefinition {
   return {
     attributeId: source.attributeId,
+    valueType: source.valueType,
     valueSchema: buildValueSchema(source.valueType),
     requiredAt: source.requiredAt,
     writePolicy: source.writePolicy,
@@ -60,9 +61,8 @@ function compileAttribute(source: AttributeDefinitionSource): AttributeDefinitio
     typedReferenceConstraint: source.typedReferenceConstraint,
   };
 }
-
-function compileType(source: EntityTypeDefinitionSource): EntityTypeDefinition {
-  const attributes: Record<string, AttributeDefinition> = {};
+function compileType(source: EntityTypeDefinitionSource): RuntimeEntityTypeDefinition {
+  const attributes: Record<string, RuntimeAttributeDefinition> = {};
   for (const [attributeId, attributeSource] of Object.entries(source.attributes)) {
     attributes[attributeId] = compileAttribute(attributeSource);
   }
@@ -86,8 +86,10 @@ function compileType(source: EntityTypeDefinitionSource): EntityTypeDefinition {
  *
  * @throws ConfigError on any invariant violation.
  */
-export function compileEntityTypeCatalog(source: EntityTypeCatalogSource): EntityTypeCatalog {
-  const types: Record<string, EntityTypeDefinition> = {};
+export function compileEntityTypeCatalog(
+  source: EntityTypeCatalogSource,
+): RuntimeEntityTypeCatalog {
+  const types: Record<string, RuntimeEntityTypeDefinition> = {};
   for (const [typeId, typeSource] of Object.entries(source.types)) {
     if (typeSource.typeId !== typeId) {
       throw new ConfigError(
@@ -112,4 +114,22 @@ export function compileEntityTypeCatalog(source: EntityTypeCatalogSource): Entit
     types[typeId] = compileType(typeSource);
   }
   return { types, version: RUNTIME_CATALOG_VERSION };
+}
+
+export function toPublicEntityTypeCatalog(runtime: RuntimeEntityTypeCatalog): EntityTypeCatalog {
+  const types = Object.fromEntries(
+    Object.entries(runtime.types).map(([typeId, type]) => [
+      typeId,
+      {
+        ...type,
+        attributes: Object.fromEntries(
+          Object.entries(type.attributes).map(([attributeId, attribute]) => {
+            const { valueSchema: _valueSchema, ...publicAttribute } = attribute;
+            return [attributeId, publicAttribute];
+          }),
+        ),
+      },
+    ]),
+  );
+  return { types, version: runtime.version };
 }

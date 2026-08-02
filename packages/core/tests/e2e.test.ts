@@ -8,31 +8,35 @@
 // ============================================================================
 
 import * as fs from 'node:fs';
-import { tmpdir } from 'node:os';
 import * as path from 'node:path';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 
 const FIXTURE_PATH = path.resolve('fixtures/arcane-aftermath');
 
-import {
-  buildSceneRenderPrompt,
-  buildThreadStatusPrompt,
-  ContextCompiler,
-  EntityMapper,
-  InMemoryEntityRegistry,
-  LLMError,
-  MockProvider,
-  ReplayEngine,
-  StateManager,
-} from '../src/index.js';
+import { buildSceneRenderPrompt } from '../src/ai/prompts/scene-render.js';
+import { buildThreadStatusPrompt } from '../src/ai/prompts/thread-status.js';
+import { MockProvider } from '../src/ai/providers/mock.js';
+import { LLMError } from '../src/ai/types.js';
+import { ContextCompiler } from '../src/context/compiler.js';
+import { EntityMapper } from '../src/entity/mapper.js';
+import { InMemoryEntityRegistry } from '../src/entity/registry.js';
+import { StateManager } from '../src/state/manager.js';
+import { ReplayEngine } from '../src/state/replay.js';
 import type {
   CompletionResponse,
+  EntityCatalogContext,
   NarrativeEvent,
   ProjectData,
   SceneRenderInput,
   StyleGuidance,
   WorldState,
 } from '../src/types/index.js';
+
+/** Empty catalog pair for the standalone StateManager/ReplayEngine smoke path. */
+const EMPTY_CATALOG_CONTEXT: EntityCatalogContext = {
+  entityDeclarationCatalog: { declarations: {}, version: 1 },
+  entityTypeCatalog: { types: {}, version: 1 },
+};
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -97,7 +101,6 @@ describe('1. Full Pipeline with MockProvider', () => {
   let registry: InMemoryEntityRegistry;
   let allEvents: NarrativeEvent[];
   let e1aEvent: NarrativeEvent;
-  let snapDir: string;
   let sm: StateManager;
 
   beforeAll(() => {
@@ -154,8 +157,7 @@ describe('1. Full Pipeline with MockProvider', () => {
   });
 
   it('1c. commits events to StateManager and produces world state', () => {
-    snapDir = fs.mkdtempSync(path.join(tmpdir(), 'novalistically-e2e-'));
-    sm = new StateManager(snapDir);
+    sm = new StateManager(EMPTY_CATALOG_CONTEXT);
 
     // Commit genesis + E1a
     const genesis = makeGenesisEvent();
@@ -303,16 +305,6 @@ describe('1. Full Pipeline with MockProvider', () => {
     expect(mock.callCount).toBe(1);
   });
 
-  // Cleanup
-  afterEach(() => {
-    if (snapDir && fs.existsSync(snapDir)) {
-      try {
-        fs.rmSync(snapDir, { recursive: true, force: true });
-      } catch {
-        // ignore
-      }
-    }
-  });
 });
 
 // ─── 2. LLMError Class Behavior ──────────────────────────────────────────────

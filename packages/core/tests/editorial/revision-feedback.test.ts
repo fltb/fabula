@@ -1,152 +1,29 @@
+// ============================================================================
+// Editorial revision feedback — semantic repository-backed tests
+//
+// Feedback ordering and identity are pure value semantics (sortReviewFeedback
+// and reviewFeedbackProjection); line-basis staleness, accepted-artifact
+// resolution, and review applications run against MemoryExecutionRepository
+// records with an explicit project ID.  No storage, coordinator, or
+// ledger-path assumptions appear.
+// ============================================================================
+
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import YAML from 'yaml';
-import {
-  ProjectTransactionCoordinator,
-  resolveProjectPaths,
-  SceneRevisionStore,
-} from '../../src/editorial/index.ts';
-import {
-  applyChapterNovelReviews,
-  applySceneLineReviews,
-  buildEventRevisionStates,
-  type EventRevisionState,
-} from '../../src/editorial/render-service.ts';
+import { reviewFeedbackProjection, sortReviewFeedback } from '../../src/editorial/compiler.ts';
+import { buildEventRevisionStates, composeRevisionDirective } from '../../src/editorial/render-service.ts';
+import { addReviewComment } from '../../src/editorial/review-facade.ts';
 import { ReviewManager } from '../../src/review/manager.ts';
-import { computeContentHash } from '../../src/storage/hash.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
-import type {
-  AnalysisResult,
-  ReviewComment,
-  SceneRevisionEnvelopeV1,
-  ValidationResult,
-} from '../../src/types/index.ts';
-import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
+import { MemoryExecutionRepository } from '../../src/testing/memory-repositories.ts';
+import type { AcceptedSceneRecord } from '../../src/ports/execution-repository.ts';
+import type { EditorialRuntime, RevisionRequest } from '../../src/types/editorial.ts';
+import type { NewReviewComment, ReviewApplicationV1, ReviewComment } from '../../src/types/index.ts';
 
-const PROJECT = '/revision-feedback-project';
+const PROJECT_ID = 'revision-feedback-project';
 const NOW = '2026-07-28T00:00:00.000Z';
 
-function hash(value = crypto.randomUUID()): string {
-  return computeContentHash(value);
-}
-function analysis(eventId: string, prose: string): AnalysisResult {
-  const payload: Record<string, unknown> = {
-    postconditions: { covered: [], dropped: [] },
-    preconditions: { violated: [] },
-    pov: { consistent: true, leaks: [] },
-    inventedDetails: [],
-    quality: {
-      proseScore: 8,
-      maxScore: 10,
-      strengths: ['clear'],
-      weaknesses: [],
-      estimatedWordCount: 20,
-    },
-    threadProgressAchieved: [],
-    foreshadowingDeployed: [],
-    narrativeChecks: [],
-    appearanceChecks: [],
-    characterReferences: [],
-    tenseDetected: 'past',
-    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-    ruleChecks: [],
-    knowledgeChecks: [],
-  };
-  return {
-    eventId,
-    protocol: makeProtocol(prose),
-    observations: makeObservations(payload, prose),
-    analysis: payload,
-  };
-}
-
-function validation(): ValidationResult {
-  return { passed: true, errors: [], warnings: [], infos: [] };
-}
-
-function envelope(
-  eventId: string,
-  revisionId: string,
-  prose: string,
-  status: 'accepted' | 'blocked' = 'accepted',
-): SceneRevisionEnvelopeV1 {
-  const scopeHash = hash(`scope:${eventId}`);
-  const proseHash = computeContentHash(prose);
-  return {
-    version: 1,
-    revisionId,
-    parentRevisionId: null,
-    operationId: crypto.randomUUID(),
-    planHash: hash(),
-    actorId: 'editor',
-    eventId,
-    origin: 'llm_draft',
-    prose,
-    proseHash,
-    sceneHash: proseHash,
-    editorialBasisHash: hash(`basis:${eventId}`),
-    scopeHash,
-    validationIdentity: 'validator-v1',
-    modelUsed: 'mock',
-    feedbackHash: null,
-    reviewIds: [],
-    analysis: status === 'accepted' ? analysis(eventId, prose) : null,
-    validation: status === 'accepted' ? validation() : null,
-    releaseDecision: {
-      status,
-      scopeHash,
-      validationIdentity: 'validator-v1',
-      reasons: status === 'accepted' ? [] : ['blocked'],
-    },
-    released: status === 'accepted',
-    cacheHit: false,
-    errors: status === 'accepted' ? [] : ['blocked'],
-    llmPass1: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-    llmPass2:
-      status === 'accepted' ? { promptTokens: 1, completionTokens: 1, totalTokens: 2 } : null,
-    attempts: 1,
-    needsReview: status !== 'accepted',
-    promptHash: hash(),
-    providerCalls: [],
-    promotionReadSet: [],
-    requestRecords: [],
-    createdAt: NOW,
-  };
-}
-
-function seedAcceptedHead(
-  storage: MemoryStorage,
-  eventId: string,
-  chapter = 1,
-  prose = `${eventId} accepted prose`,
-): { envelope: SceneRevisionEnvelopeV1; store: SceneRevisionStore } {
-  const paths = resolveProjectPaths(PROJECT);
-  const coordinator = new ProjectTransactionCoordinator(storage, paths);
-  const store = new SceneRevisionStore(coordinator, paths);
-  const accepted = envelope(eventId, crypto.randomUUID(), prose);
-  store.archiveAndUpdateLatest(accepted, null);
-  storage.write(
-    `${paths.scenesDir}/chapter-${String(chapter).padStart(2, '0')}/${eventId}.yaml`,
-    YAML.stringify({
-      schema_version: 1,
-      event: eventId,
-      narrative_order: chapter,
-      revision_id: accepted.revisionId,
-      prose_source: 'llm',
-      prose_hash: accepted.proseHash,
-      scene_hash: accepted.sceneHash,
-      editorial_basis_hash: accepted.editorialBasisHash,
-      scope_hash: accepted.scopeHash,
-      validation_identity: accepted.validationIdentity,
-      model_used: accepted.modelUsed,
-      rendered_at: NOW,
-      word_count: prose.split(/\s+/).length,
-      text_count_version: 1,
-      edit_history: [],
-      branch_existence: { type: 'all' },
-    }),
-  );
-  return { envelope: accepted, store };
+function hash(value: string): string {
+  return crypto.createHash('sha256').update(value).digest('hex');
 }
 
 function comment(
@@ -169,23 +46,31 @@ function comment(
   };
 }
 
-function state(eventId: string, reviewIds: readonly string[]): EventRevisionState {
+function acceptedScene(
+  eventId: string,
+  prose: string,
+  revisionId: string,
+  sourceHash: string,
+): AcceptedSceneRecord {
   return {
+    version: 1,
+    projectId: PROJECT_ID,
     eventId,
-    state: 'will_revise',
-    applicableReviewIds: reviewIds,
-    feedbackHashes: [],
-    editorialRevisionInstructions: 'feedback: []',
-    baseRevisionId: crypto.randomUUID(),
-    baseProse: 'base',
-    baseProseHash: hash('base'),
+    sourceHash,
+    revisionId,
+    prose,
+    proseHash: hash(prose),
+    sceneHash: hash(prose),
   };
 }
 
+/** Minimal EditorialRuntime carrying only the semantic execution repository. */
+function runtime(execution: MemoryExecutionRepository): EditorialRuntime {
+  return { services: { execution } } as unknown as EditorialRuntime;
+}
+
 describe('editorial revision feedback', () => {
-  it('orders auto-selected feedback by scope, creation time, and ID', () => {
-    const storage = new MemoryStorage();
-    seedAcceptedHead(storage, 'E1');
+  it('orders feedback by scope, creation time, then immutable ID', () => {
     const reviews = [
       comment(
         'rev_line',
@@ -193,10 +78,7 @@ describe('editorial revision feedback', () => {
           type: 'line',
           id: 'E1',
           lineRange: [1, 1],
-          lineBasis: {
-            revisionId: '',
-            proseHash: '',
-          },
+          lineBasis: { revisionId: crypto.randomUUID(), proseHash: hash('prose') },
         },
         '2026-07-28T00:04:00.000Z',
       ),
@@ -205,26 +87,8 @@ describe('editorial revision feedback', () => {
       comment('rev_chapter', { type: 'chapter', id: 'chapter:1' }, '2026-07-28T00:02:00.000Z'),
       comment('rev_scene_a', { type: 'scene', id: 'E1' }, '2026-07-28T00:01:00.000Z'),
     ];
-    const accepted = new SceneRevisionStore(
-      new ProjectTransactionCoordinator(storage, resolveProjectPaths(PROJECT)),
-      resolveProjectPaths(PROJECT),
-    ).getLatest('E1')!;
-    reviews[0].target.lineBasis = {
-      revisionId: accepted.revisionId,
-      proseHash: accepted.proseHash,
-    };
 
-    const [result] = buildEventRevisionStates(
-      ['E1'],
-      {},
-      reviews,
-      storage,
-      resolveProjectPaths(PROJECT),
-      { E1: 1 },
-    );
-
-    expect(result.state).toBe('will_revise');
-    expect(result.applicableReviewIds).toEqual([
+    expect(sortReviewFeedback(reviews).map((review) => review.id)).toEqual([
       'rev_novel',
       'rev_chapter',
       'rev_scene_a',
@@ -233,9 +97,100 @@ describe('editorial revision feedback', () => {
     ]);
   });
 
+  it('builds event revision states from event-scoped feedback', () => {
+    const reviews = [
+      comment('rev_scene_b', { type: 'scene', id: 'E1' }, '2026-07-28T00:03:00.000Z'),
+      comment('rev_scene_a', { type: 'scene', id: 'E1' }, '2026-07-28T00:01:00.000Z'),
+      comment('rev_other', { type: 'scene', id: 'E2' }, '2026-07-28T00:02:00.000Z'),
+      comment(
+        'rev_line',
+        {
+          type: 'line',
+          id: 'E1',
+          lineRange: [1, 1],
+          lineBasis: { revisionId: crypto.randomUUID(), proseHash: hash('prose') },
+        },
+        '2026-07-28T00:04:00.000Z',
+      ),
+    ];
+    const request: RevisionRequest = { reviewIds: ['rev_scene_a', 'rev_scene_b', 'rev_line'] };
+
+    const [result] = buildEventRevisionStates(['E1'], request, reviews);
+    expect(result.state).toBe('will_revise');
+    expect(result.applicableReviewIds).toEqual(['rev_scene_a', 'rev_scene_b', 'rev_line']);
+  });
+
+  it('leaves events without a revision request untouched', () => {
+    const [result] = buildEventRevisionStates(['E1'], undefined, []);
+    expect(result.state).toBe('no_revision_needed');
+    expect(result.applicableReviewIds).toEqual([]);
+  });
+
+  it('resolves the accepted head into the event revision state', () => {
+    const accepted = new Map([
+      [
+        'E1',
+        {
+          revisionId: 'rev-accepted-1',
+          proseHash: hash('E1 accepted prose'),
+          prose: 'E1 accepted prose',
+        },
+      ],
+    ]);
+    const request: RevisionRequest = { reviewIds: ['rev_scene_a'] };
+    const reviews = [comment('rev_scene_a', { type: 'scene', id: 'E1' }, NOW)];
+
+    const [result] = buildEventRevisionStates(['E1'], request, reviews, accepted);
+    expect(result.state).toBe('will_revise');
+    expect(result.baseRevisionId).toBe('rev-accepted-1');
+    expect(result.baseProse).toBe('E1 accepted prose');
+    expect(result.baseProseHash).toBe(hash('E1 accepted prose'));
+  });
+
+  it('keeps base fields null when a revised event has no accepted head', () => {
+    const request: RevisionRequest = { instruction: 'Rewrite.' };
+    const [result] = buildEventRevisionStates(['E1'], request, [], new Map());
+    expect(result.state).toBe('will_revise');
+    expect(result.baseRevisionId).toBeNull();
+    expect(result.baseProse).toBeNull();
+    expect(result.baseProseHash).toBeNull();
+  });
+
+  it('composes the revision directive deterministically: instruction first, then canonical feedback order', () => {
+    const reviews = [
+      comment(
+        'rev_line',
+        {
+          type: 'line',
+          id: 'E1',
+          lineRange: [1, 1],
+          lineBasis: { revisionId: 'r', proseHash: hash('prose') },
+        },
+        '2026-07-28T00:04:00.000Z',
+        '  Fix the line.  ',
+      ),
+      comment('rev_scene', { type: 'scene', id: 'E1' }, '2026-07-28T00:01:00.000Z', 'Tighten the scene.'),
+      comment('rev_novel', { type: 'novel', id: 'novel' }, '2026-07-28T00:02:00.000Z', '  '),
+    ];
+
+    const directive = composeRevisionDirective('Rewrite in a colder register.', reviews);
+    expect(directive).toBe(
+      [
+        'Rewrite in a colder register.',
+        '[rev_scene] Tighten the scene.',
+        '[rev_line] Fix the line.',
+      ].join('\n'),
+    );
+    // Whitespace-only review content contributes nothing; same inputs => same output.
+    expect(composeRevisionDirective('Rewrite in a colder register.', reviews)).toBe(directive);
+  });
+
+  it('returns undefined when neither instruction nor review content is present', () => {
+    expect(composeRevisionDirective(undefined, [])).toBeUndefined();
+    expect(composeRevisionDirective('  ', [comment('rev_x', { type: 'scene', id: 'E1' }, NOW, '  ')])).toBeUndefined();
+  });
+
   it('ignores lifecycle and time in an individual feedback hash', () => {
-    const storage = new MemoryStorage();
-    seedAcceptedHead(storage, 'E1');
     const base = comment(
       'rev_scene',
       { type: 'scene', id: 'E1' },
@@ -255,114 +210,114 @@ describe('editorial revision feedback', () => {
         },
       ],
     };
-    const args = [storage, resolveProjectPaths(PROJECT), { E1: 1 }] as const;
-    const first = buildEventRevisionStates(['E1'], {}, [base], ...args)[0];
-    const second = buildEventRevisionStates(['E1'], {}, [changedIncidentalFields], ...args)[0];
-    expect(second.feedbackHashes).toEqual(first.feedbackHashes);
+
+    expect(reviewFeedbackProjection(changedIncidentalFields)).toEqual(reviewFeedbackProjection(base));
+    expect(reviewFeedbackProjection(base).trimmedContent).toBe('Tighten this paragraph.');
   });
 
-  it('checks both revision ID and prose hash for line review staleness', () => {
-    const storage = new MemoryStorage();
-    const { envelope: accepted } = seedAcceptedHead(storage, 'E1');
-    const review = comment(
+  it('keeps line basis inside the feedback projection', () => {
+    const lineReview = comment(
       'rev_line',
       {
         type: 'line',
         id: 'E1',
-        lineRange: [1, 1],
-        lineBasis: {
-          revisionId: crypto.randomUUID(),
-          proseHash: accepted.proseHash,
-        },
+        lineRange: [1, 3],
+        lineBasis: { revisionId: crypto.randomUUID(), proseHash: hash('prose') },
       },
       NOW,
     );
 
-    const [result] = buildEventRevisionStates(
-      ['E1'],
-      { reviewIds: [review.id] },
-      [review],
-      storage,
-      resolveProjectPaths(PROJECT),
-      { E1: 1 },
-    );
-    expect(result.state).toBe('revision_stale');
+    const projection = reviewFeedbackProjection(lineReview);
+    expect(projection.target).toEqual({
+      type: 'line',
+      id: 'E1',
+      lineRange: [1, 3],
+      lineBasis: {
+        revisionId: lineReview.target.lineBasis!.revisionId,
+        proseHash: lineReview.target.lineBasis!.proseHash,
+      },
+    });
   });
 
-  it('uses the materialized accepted head when latest candidate is blocked', () => {
-    const storage = new MemoryStorage();
-    const { store } = seedAcceptedHead(storage, 'E1');
-    const blocked = envelope('E1', crypto.randomUUID(), 'blocked candidate', 'blocked');
-    store.archiveAndUpdateLatest(blocked, store.latestHash('E1'));
-    const review = comment('rev_scene', { type: 'scene', id: 'E1' }, NOW);
+  it('checks both revision ID and prose hash for line review staleness', async () => {
+    const execution = new MemoryExecutionRepository();
+    const revisionId = crypto.randomUUID();
+    await execution.compareAndSwapAcceptedScene({
+      projectId: PROJECT_ID,
+      eventId: 'E1',
+      expectedVersion: null,
+      value: acceptedScene('E1', 'line one\nline two', revisionId, hash('source')),
+    });
+    const line = (basisRevisionId: string, proseHash: string): NewReviewComment => ({
+      target: {
+        type: 'line',
+        id: 'E1',
+        lineRange: [1, 1],
+        lineBasis: { revisionId: basisRevisionId, proseHash },
+      },
+      severity: 'blocking',
+      category: 'plot_logic',
+      content: 'Fix line',
+    });
+    const mutation = { operationId: crypto.randomUUID(), actorId: 'reviewer' };
 
-    const [result] = buildEventRevisionStates(
-      ['E1'],
-      { reviewIds: [review.id] },
-      [review],
-      storage,
-      resolveProjectPaths(PROJECT),
-      { E1: 1 },
+    const added = await addReviewComment(
+      { projectId: PROJECT_ID, mutation, input: line(revisionId, hash('line one\nline two')) },
+      runtime(execution),
     );
-    expect(result.state).toBe('will_revise');
-    expect(result.baseProse).toBe('E1 accepted prose');
+    expect(added.id).toMatch(/^rev_/);
+
+    // Same prose hash but a different revision ID is stale.
+    await expect(
+      addReviewComment(
+        { projectId: PROJECT_ID, mutation, input: line(crypto.randomUUID(), hash('line one\nline two')) },
+        runtime(execution),
+      ),
+    ).rejects.toMatchObject({ code: 'REVISION_STALE' });
+
+    // Same revision ID but a different prose hash is stale.
+    await expect(
+      addReviewComment(
+        { projectId: PROJECT_ID, mutation, input: line(revisionId, hash('other prose')) },
+        runtime(execution),
+      ),
+    ).rejects.toMatchObject({ code: 'REVISION_STALE' });
   });
 
-  it('distinguishes a current lock from a stale lock', () => {
-    const storage = new MemoryStorage();
-    const { envelope: accepted } = seedAcceptedHead(storage, 'E1');
-    const paths = resolveProjectPaths(PROJECT);
-    const review = comment('rev_scene', { type: 'scene', id: 'E1' }, NOW);
-    const lockPath = `${paths.workDir}/locks/E1.lock`;
-    storage.write(
-      lockPath,
-      JSON.stringify({
-        revisionId: accepted.revisionId,
-        proseHash: accepted.proseHash,
-        lockedAt: NOW,
-        actorId: 'editor',
-      }),
-    );
-
-    const current = buildEventRevisionStates(
-      ['E1'],
-      { reviewIds: [review.id] },
-      [review],
-      storage,
-      paths,
-      { E1: 1 },
-    )[0];
-    expect(current.state).toBe('skipped_by_lock');
-
-    storage.write(
-      lockPath,
-      JSON.stringify({
+  it('resolves the materialized accepted head even when a blocked candidate is recorded', async () => {
+    const execution = new MemoryExecutionRepository();
+    const acceptedRevisionId = crypto.randomUUID();
+    await execution.compareAndSwapAcceptedScene({
+      projectId: PROJECT_ID,
+      eventId: 'E1',
+      expectedVersion: null,
+      value: acceptedScene('E1', 'E1 accepted prose', acceptedRevisionId, hash('source')),
+    });
+    await execution.compareAndSwapSceneRevision({
+      projectId: PROJECT_ID,
+      eventId: 'E1',
+      revisionId: crypto.randomUUID(),
+      expectedVersion: null,
+      value: {
+        version: 1,
+        projectId: PROJECT_ID,
+        eventId: 'E1',
         revisionId: crypto.randomUUID(),
-        proseHash: accepted.proseHash,
-        lockedAt: NOW,
-        actorId: 'editor',
-      }),
-    );
-    const stale = buildEventRevisionStates(
-      ['E1'],
-      { reviewIds: [review.id] },
-      [review],
-      storage,
-      paths,
-      { E1: 1 },
-    )[0];
-    expect(stale.state).toBe('lock_stale');
+        parentRevisionId: acceptedRevisionId,
+        sourceHash: hash('source'),
+        value: { status: 'blocked' },
+      },
+    });
+
+    const artifact = await execution.resolveAcceptedArtifact({ projectId: PROJECT_ID, eventId: 'E1' });
+    expect(artifact?.prose).toBe('E1 accepted prose');
+    expect(artifact?.revisionId).toBe(acceptedRevisionId);
   });
 
-  it('applies scene and line feedback only to newly promoted revision IDs', () => {
-    const storage = new MemoryStorage();
-    const paths = resolveProjectPaths(PROJECT);
-    const manager = new ReviewManager(
-      storage,
-      new ProjectTransactionCoordinator(storage, paths),
-      paths.reviewLedgerPath,
-    );
-    const sceneReview = manager.addReviewComment(
+  it('applies scene and line feedback with the promoted revision ID', async () => {
+    const execution = new MemoryExecutionRepository();
+    const manager = new ReviewManager(execution, PROJECT_ID);
+    const sceneReview = await manager.addReviewComment(
       {
         target: { type: 'scene', id: 'E1' },
         severity: 'suggestion',
@@ -371,7 +326,7 @@ describe('editorial revision feedback', () => {
       },
       'reviewer',
     );
-    const lineReview = manager.addReviewComment(
+    const lineReview = await manager.addReviewComment(
       {
         target: {
           type: 'line',
@@ -389,14 +344,17 @@ describe('editorial revision feedback', () => {
     );
     const promotedRevisionId = crypto.randomUUID();
 
-    applySceneLineReviews(
-      new Map([['E1', promotedRevisionId]]),
-      [state('E1', [sceneReview.id, lineReview.id])],
-      manager,
-      crypto.randomUUID(),
+    const applied = await manager.applyComments(
+      [sceneReview.id, lineReview.id],
+      {
+        eventId: 'E1',
+        revisionId: promotedRevisionId,
+        operationId: crypto.randomUUID(),
+        appliedAt: NOW,
+      },
+      new Set([sceneReview.id, lineReview.id]),
     );
 
-    const applied = manager.getComments();
     expect(applied.map((entry) => entry.status)).toEqual(['addressed', 'addressed']);
     expect(applied.map((entry) => entry.applications[0].revisionId)).toEqual([
       promotedRevisionId,
@@ -404,15 +362,10 @@ describe('editorial revision feedback', () => {
     ]);
   });
 
-  it('addresses chapter and novel feedback only for their complete selector scope', () => {
-    const storage = new MemoryStorage();
-    const paths = resolveProjectPaths(PROJECT);
-    const manager = new ReviewManager(
-      storage,
-      new ProjectTransactionCoordinator(storage, paths),
-      paths.reviewLedgerPath,
-    );
-    const chapterReview = manager.addReviewComment(
+  it('addresses chapter and novel feedback only for their complete selector scope', async () => {
+    const execution = new MemoryExecutionRepository();
+    const manager = new ReviewManager(execution, PROJECT_ID);
+    const chapterReview = await manager.addReviewComment(
       {
         target: { type: 'chapter', id: 'chapter:1' },
         severity: 'suggestion',
@@ -421,7 +374,7 @@ describe('editorial revision feedback', () => {
       },
       'reviewer',
     );
-    const novelReview = manager.addReviewComment(
+    const novelReview = await manager.addReviewComment(
       {
         target: { type: 'novel', id: 'novel' },
         severity: 'suggestion',
@@ -430,34 +383,36 @@ describe('editorial revision feedback', () => {
       },
       'reviewer',
     );
-    const states = [
-      state('E1', [chapterReview.id, novelReview.id]),
-      state('E2', [chapterReview.id, novelReview.id]),
-    ];
-    const promoted = new Map([
-      ['E1', crypto.randomUUID()],
-      ['E2', crypto.randomUUID()],
-    ]);
+    const application = (eventId: string): ReviewApplicationV1 => ({
+      eventId,
+      revisionId: crypto.randomUUID(),
+      operationId: crypto.randomUUID(),
+      appliedAt: NOW,
+    });
 
-    applyChapterNovelReviews(
-      promoted,
-      states,
-      manager,
-      crypto.randomUUID(),
-      { type: 'chapter', chapter: 1 },
-      ['E1', 'E2'],
-    );
-    let comments = manager.getComments();
-    expect(comments.find((entry) => entry.id === chapterReview.id)?.status).toBe('addressed');
+    // Incomplete chapter scope: only E1 of chapter:1 has been promoted — the
+    // application is recorded but the comment stays open.
+    await manager.applyComments([chapterReview.id], application('E1'), new Set());
+    let comments = await manager.getComments();
+    expect(comments.find((entry) => entry.id === chapterReview.id)?.status).toBe('open');
     expect(comments.find((entry) => entry.id === novelReview.id)?.status).toBe('open');
 
-    applyChapterNovelReviews(promoted, states, manager, crypto.randomUUID(), { type: 'all' }, [
-      'E1',
-      'E2',
-    ]);
-    comments = manager.getComments();
+    // Chapter scope complete (E1 + E2): chapter feedback addressed; the novel
+    // feedback is untouched until its all-project scope is covered.
+    await manager.applyComments([chapterReview.id], application('E2'), new Set([chapterReview.id]));
+    comments = await manager.getComments();
+    expect(comments.find((entry) => entry.id === chapterReview.id)?.status).toBe('addressed');
     const novel = comments.find((entry) => entry.id === novelReview.id)!;
-    expect(novel.status).toBe('addressed');
-    expect(novel.applications.map((application) => application.eventId)).toEqual(['E1', 'E2']);
+    expect(novel.status).toBe('open');
+    expect(novel.applications).toEqual([]);
+
+    // Full novel scope promoted (E1 + E2): novel feedback addressed with one
+    // application per event.
+    await manager.applyComments([novelReview.id], application('E1'), new Set([novelReview.id]));
+    await manager.applyComments([novelReview.id], application('E2'), new Set([novelReview.id]));
+    comments = await manager.getComments();
+    const addressedNovel = comments.find((entry) => entry.id === novelReview.id)!;
+    expect(addressedNovel.status).toBe('addressed');
+    expect(addressedNovel.applications.map((entry) => entry.eventId)).toEqual(['E1', 'E2']);
   });
 });

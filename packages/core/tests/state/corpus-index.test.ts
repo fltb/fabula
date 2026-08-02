@@ -2,7 +2,7 @@
 // Novalistically — CORPUS-2: Work Index, Anchors & Source Manifests — Tests
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   CandidateEventIndex,
   ChapterLocation,
@@ -161,11 +161,23 @@ const sampleFreezeInput: FreezeInput = {
 // ═════════════════════════════════════════════════════════════════════════════
 
 describe('freezeWorkIndex', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it('produces a valid WorkIndex with correct metadata', () => {
     const index = freezeWorkIndex(sampleFreezeInput, '1.0.0');
     expect(index.workId).toBe('dream-of-red-chamber');
     expect(index.version).toBe('1.0.0');
-    expect(index.frozenAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+  it('is clock-independent: identical inputs freeze to a deep-equal index', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2025-01-01T00:00:00Z'));
+    const first = freezeWorkIndex(sampleFreezeInput, '1.0.0');
+
+    vi.setSystemTime(new Date('2026-06-15T12:00:00Z'));
+    const second = freezeWorkIndex(sampleFreezeInput, '1.0.0');
+
+    expect(second).toEqual(first);
   });
 
   it('returns frozen copies of arrays (immutable)', () => {

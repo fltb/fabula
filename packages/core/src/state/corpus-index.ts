@@ -189,8 +189,6 @@ export interface WorkIndex {
   workId: string;
   /** Semantic version of this index */
   version: string;
-  /** ISO date when this index was frozen */
-  frozenAt: string;
   /** Source manifest for provenance */
   manifest: SourceManifest;
   /** Character anchors */
@@ -275,18 +273,17 @@ export interface FreezeInput {
 /**
  * Freeze a work index — creates a versioned, immutable snapshot.
  * The `version` is derived from the manifest schema & adapter versions.
- * The `frozenAt` timestamp is set to the current ISO date.
+ * The freeze is content-derived and clock-independent: identical inputs
+ * always produce an identical index.
  *
  * @param input  - The manifest and all anchor/candidate data
  * @param version - Semantic version for this index freeze
  * @returns A frozen WorkIndex
  */
 export function freezeWorkIndex(input: FreezeInput, version: string): WorkIndex {
-  const now = new Date().toISOString().slice(0, 10);
   return {
     workId: input.manifest.workId,
     version,
-    frozenAt: now,
     manifest: { ...input.manifest, chapters: [...input.manifest.chapters] },
     characters: [...input.characters],
     locations: [...input.locations],

@@ -187,7 +187,10 @@ export class BatchRenderPipeline {
       if (externalSignal?.aborted || this.controller.signal.aborted) {
         throw { batchIndex, error: 'Batch cancelled before start — abort signal received' };
       }
-      const batch = batches[batchIndex]!;
+      const batch = batches[batchIndex];
+      if (!batch) {
+        throw { batchIndex, error: `Batch ${batchIndex} is unavailable` };
+      }
       if (config.onBeforeBatch) {
         await config.onBeforeBatch(batch, batchIndex);
       }

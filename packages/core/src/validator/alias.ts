@@ -64,8 +64,8 @@ export class AliasValidator implements Validator {
       }
 
       // Fallback: check entity registry directly when worldState lacks aliases
-      if (input.entityRegistry) {
-        const registryEntity = input.entityRegistry.resolve(entityId);
+      if (input.entities) {
+        const registryEntity = input.entities.resolve(entityId);
         if (registryEntity) {
           const regAliases = registryEntity.state[aliasAttrId];
           if (Array.isArray(regAliases)) {

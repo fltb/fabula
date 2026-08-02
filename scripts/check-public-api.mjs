@@ -3,284 +3,386 @@
 // public-api checker — validates that the declared public API surface
 // (public-api.manifest.json) matches the actual source exports.
 //
-// Checks per package:
-//   1. Every declared value export exists in the entry source.
-//   2. Every declared type export exists in the entry source.
-//   3. Every value export in the entry source is declared (no drift).
-//   4. Every type export in the entry source is declared (no drift).
-//   5. Declared typeBarrel files exist and export types.
-//   6. Declared bin entries reference real files.
+// Export resolution uses the TypeScript Compiler API with the repository's
+// tsconfig module-resolution settings, so `export *` and `export type *`
+// barrels are followed recursively and each re-export keeps its
+// value-capable vs. type-only classification at the exporting statement.
 //
+// Checks per manifest entry (every package entry point):
+//   1. The entry declares `source`, `dist`, and `stability`.
+//   2. The source file exists and is part of a TypeScript program.
+//   3. Every allowlisted value export exists as a runtime export in source.
+//   4. Every allowlisted type export exists as a declaration-only export.
+//   5. Every runtime export in source is allowlisted (no drift).
+//   6. Every declaration-only export in source is allowlisted — including
+//      wildcard (`export type *`) barrels, which the previous regex checker
+//      silently skipped.
+//   7. Declared bin entries reference real files.
+//
+// Exact equality per entry: the source value set must equal the allowlist
+// value set and the source type set must equal the allowlist type set.
 // Fail-fast: any drift exits non-zero.
+//
+// The module is importable for tests: `resolveEntryExports()`,
+// `verifyManifest()`, and `main()` are exported. Running the file directly
+// executes `main()`.
 // ============================================================================
 
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, extname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import ts from 'typescript';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = join(__dirname, '..');
 
-// ── utilities ────────────────────────────────────────────────────────────────
+/** Repository root, resolved from this file's location. */
+export const repoRoot = join(__dirname, '..');
 
-function err(msg) {
-  console.error(`  ERROR: ${msg}`);
-  return false;
-}
+/** Stability semantics: core = general narrative-engine contract, scoped =
+ * importable current surface without a compatibility guarantee, non-contract =
+ * tooling/testing symbols. Semantic metadata, not a version policy. */
+const STABILITY_VALUES = new Set(['core', 'scoped', 'non-contract']);
 
-function ok(msg) {
-  console.log(`  OK: ${msg}`);
-  return true;
-}
+// ── export surface resolution (TypeScript Compiler API) ─────────────────────
 
-// ── export parsing ───────────────────────────────────────────────────────────
+const DEFAULT_COMPILER_OPTIONS = {
+  module: ts.ModuleKind.NodeNext,
+  moduleResolution: ts.ModuleResolutionKind.NodeNext,
+  target: ts.ScriptTarget.ES2022,
+  strict: true,
+  allowImportingTsExtensions: true,
+  skipLibCheck: true,
+  resolveJsonModule: true,
+};
 
 /**
- * Extract named exports from a source string.
- * Returns { values: Set<string>, types: Set<string> } covering every
- * top-level export statement found.
+ * Load compiler options for the entry file: nearest `tsconfig.json` walked up
+ * from the entry's directory (mirroring the repository's module resolution).
+ * Falls back to NodeNext defaults when no tsconfig is present.
  */
-function parseNamedExports(source, filePath) {
-  const values = new Set();
-  const types = new Set();
+function loadCompilerOptions(entryPath) {
+  const tsconfigPath = ts.findConfigFile(dirname(entryPath), ts.sys.fileExists, 'tsconfig.json');
+  if (!tsconfigPath) return { ...DEFAULT_COMPILER_OPTIONS };
+  const read = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
+  if (read.error) return { ...DEFAULT_COMPILER_OPTIONS };
+  const parsed = ts.parseJsonConfigFileContent(read.config, ts.sys, dirname(tsconfigPath));
+  return { ...parsed.options };
+}
+
+/** Resolve an import specifier from `fromFile` to an on-disk source file. */
+function resolveModuleFile(specifier, fromFile, compilerOptions) {
+  const result = ts.resolveModuleName(specifier, fromFile, compilerOptions, ts.sys);
+  const fileName = result.resolvedModule?.resolvedFileName;
+  return fileName && existsSync(fileName) ? fileName : null;
+}
+
+function addBindingNames(name, target) {
+  if (ts.isIdentifier(name)) {
+    target.add(name.text);
+  } else if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
+    for (const element of name.elements) {
+      if (ts.isOmittedExpression(element)) continue;
+      if (ts.isBindingElement(element)) addBindingNames(element.name, target);
+      else addBindingNames(element, target);
+    }
+  }
+}
+
+/**
+ * Recursively resolve the named export surface of a TypeScript entry file.
+ *
+ * Returns `{ values, types, errors }`:
+ * - `values`: runtime (value-capable) exports — functions, classes, enums,
+ *   variables, namespaces, and re-exports through value `export *`.
+ * - `types`: declaration-only exports — interfaces, type aliases, and any
+ *   name re-exported through `export type` / `export type *` (which converts
+ *   value-capable names to type-only, matching TS re-export semantics).
+ *
+ * Both are `Set<string>` of the *exported* names (aliases applied).
+ */
+export function resolveEntryExports(entryPath) {
+  const compilerOptions = loadCompilerOptions(entryPath);
+  const program = ts.createProgram([entryPath], compilerOptions);
+  const checker = program.getTypeChecker();
   const errors = [];
+  const memo = new Map();
+  const visiting = new Set();
 
-  const lines = source.split('\n');
+  const normalize = (filePath) => filePath.replaceAll('\\', '/');
 
-  // We work line by line building up multi-line export blocks
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i];
-    const trimmed = line.trim();
-
-    // ── export { ... } from '...'  (named value re-export) ──
-    if (/^export\s*\{/.test(trimmed) && !/^export\s+type\s*\{/.test(trimmed)) {
-      let block = trimmed;
-      while (!block.includes('}') && i + 1 < lines.length) {
-        i++;
-        block += ' ' + lines[i].trim();
+  /**
+   * Resolve a named export specifier's local symbol through the TypeChecker.
+   * Returns the resolved symbol, or null when the exported name does not
+   * resolve to a declared symbol (in the current file or the target module).
+   * An unresolved re-export aliases to a transient symbol with no
+   * declarations — that is exactly the broken surface the checker must reject.
+   */
+  const resolveSpecifierSymbol = (specifier) => {
+    const localName = specifier.propertyName ?? specifier.name;
+    try {
+      let symbol = checker.getSymbolAtLocation(localName) ?? null;
+      if (!symbol) return null;
+      if (symbol.flags & ts.SymbolFlags.Alias) {
+        symbol = checker.getAliasedSymbol(symbol);
       }
-      const m = block.match(/^export\s*\{\s*([^}]+)\s*\}\s*(from\s+['"][^'"]+['"]\s*)?;?$/);
-      if (m) {
-        const names = m[1]
-          .split(',')
-          .map((n) => n.trim())
-          .filter(Boolean);
-        for (const n of names) {
-          // Handle `A as B` → actual name is B
-          const parts = n.split(/\s+as\s+/i);
-          const name = parts[parts.length - 1].trim();
-          // Handle `type A` or `type { A }` mixed inline type markers
-          if (n.startsWith('type ')) {
-            types.add(
-              n
-                .replace(/^type\s+/, '')
-                .replace(/\s+as\s+/i, ' ')
-                .split(/\s+as\s+/i)
-                .pop()
-                .trim(),
-            );
-          } else if (n.match(/^\s*type\s+/)) {
-            // another form of inline type marker
-          } else {
-            values.add(name);
+      if (!symbol.declarations || symbol.declarations.length === 0) return null;
+      return symbol;
+    } catch {
+      return null;
+    }
+  };
+
+  const collect = (filePath) => {
+    const normalized = normalize(filePath);
+    // each file's own declarations are still collected on first visit.
+    if (visiting.has(normalized)) return { values: new Set(), types: new Set() };
+    visiting.add(normalized);
+
+    const values = new Set();
+    const types = new Set();
+    const sourceFile = program.getSourceFile(normalized);
+    if (!sourceFile) {
+      errors.push(`${normalized}: source file not part of the TypeScript program`);
+      visiting.delete(normalized);
+      const empty = { values, types };
+      memo.set(normalized, empty);
+      return empty;
+    }
+
+    for (const statement of sourceFile.statements) {
+      // ── export { ... } / export type { ... } / export * as ns from ──
+      if (ts.isExportDeclaration(statement)) {
+        const clause = statement.exportClause;
+        if (clause) {
+          if (ts.isNamespaceExport(clause)) {
+            values.add(clause.name.text);
+            continue;
           }
+          const declarationTypeOnly = statement.isTypeOnly;
+          for (const specifier of clause.elements) {
+            const exportedName = specifier.name.text;
+            // A named re-export must resolve to a declared symbol; a specifier
+            // pointing at a name the target does not export is a broken
+            // surface and must fail verification, not silently pass.
+            const symbol = resolveSpecifierSymbol(specifier);
+            if (symbol === null) {
+              errors.push(
+                `${normalized}: export '${exportedName}' does not resolve to a declared symbol`,
+              );
+              continue;
+            }
+            if (specifier.isTypeOnly || declarationTypeOnly) {
+              types.add(exportedName);
+            } else {
+              values.add(exportedName);
+            }
+          }
+          continue;
         }
+        // ── export * from / export type * from ──
+        if (statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)) {
+          const target = resolveModuleFile(
+            statement.moduleSpecifier.text,
+            sourceFile.fileName,
+            compilerOptions,
+          );
+          if (!target) {
+            errors.push(
+              `${normalized}: cannot resolve re-export '${statement.moduleSpecifier.text}'`,
+            );
+            continue;
+          }
+          const sub = collect(target);
+          if (statement.isTypeOnly) {
+            // `export type *` re-exports only the type side of every name.
+            for (const value of sub.values) types.add(value);
+            for (const typeName of sub.types) types.add(typeName);
+          } else {
+            for (const value of sub.values) values.add(value);
+            for (const typeName of sub.types) types.add(typeName);
+          }
+          continue;
+        }
+        // ExportDeclaration with neither clause nor module specifier is malformed.
+        errors.push(`${normalized}: malformed export declaration`);
+        continue;
+      }
+
+      // ── export default — not part of the named export surface ──
+      if (ts.isExportAssignment(statement)) continue;
+
+      // ── exported declarations ──
+      const isExported = statement.modifiers?.some(
+        (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+      );
+      if (!isExported) continue;
+
+      if (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) {
+        if (statement.name) types.add(statement.name.text);
+      } else if (ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) {
+        if (statement.name) values.add(statement.name.text);
+      } else if (ts.isEnumDeclaration(statement)) {
+        if (statement.name) values.add(statement.name.text);
+      } else if (ts.isVariableStatement(statement)) {
+        for (const declaration of statement.declarationList.declarations) {
+          addBindingNames(declaration.name, values);
+        }
+      } else if (ts.isModuleDeclaration(statement) && ts.isIdentifier(statement.name)) {
+        // `export namespace Foo` — a value-capable namespace.
+        values.add(statement.name.text);
+      }
+    }
+
+    visiting.delete(normalized);
+    const result = { values, types };
+    memo.set(normalized, result);
+    return result;
+  };
+
+  const entry = collect(entryPath);
+  return { values: entry.values, types: entry.types, errors };
+}
+
+// ── manifest verification ────────────────────────────────────────────────────
+
+/**
+ * Verify a manifest against the actual source surfaces.
+ * Returns `{ problems, okMessages }`; `problems` is non-empty on any drift.
+ * `root` is the directory manifest paths are relative to (defaults to the
+ * repository root; tests pass a temporary fixture root).
+ */
+export function verifyManifest(manifest, root = repoRoot) {
+  const problems = [];
+  const okMessages = [];
+  const packages = manifest.packages ?? {};
+
+  for (const [pkgName, cfg] of Object.entries(packages)) {
+    const entries = cfg.entries;
+    if (!entries || typeof entries !== 'object') {
+      problems.push(`${pkgName}: missing 'entries' object`);
+      continue;
+    }
+
+    for (const [entryName, entry] of Object.entries(entries)) {
+      const label = `${pkgName}${entryName}`;
+      if (!entry || typeof entry !== 'object') {
+        problems.push(`${label}: manifest entry is not an object`);
+        continue;
+      }
+      if (!entry.stability) {
+        problems.push(`${label}: manifest entry missing 'stability'`);
+        continue;
+      }
+      if (!STABILITY_VALUES.has(entry.stability)) {
+        problems.push(
+          `${label}: invalid stability '${entry.stability}' (expected core | scoped | non-contract)`,
+        );
+        continue;
+      }
+      if (!entry.source) {
+        problems.push(`${label}: manifest entry missing 'source'`);
+        continue;
+      }
+      const sourcePath = join(root, entry.source);
+      if (!existsSync(sourcePath)) {
+        problems.push(`${label}: source entry ${entry.source} not found`);
+        continue;
+      }
+      if (!entry.dist) {
+        problems.push(`${label}: manifest entry missing 'dist'`);
+        continue;
+      }
+
+      const resolved = resolveEntryExports(sourcePath);
+      for (const error of resolved.errors) {
+        problems.push(`${label}: ${error}`);
+      }
+
+      const manifestValues = new Set(entry.values ?? []);
+      const manifestTypes = new Set(entry.types ?? []);
+
+      // 1. Declared values that exist in source
+      for (const name of manifestValues) {
+        if (!resolved.values.has(name)) {
+          problems.push(`${label}: declared value "${name}" not found in entry source`);
+        }
+      }
+
+      // 2. Declared types that exist in source
+      for (const name of manifestTypes) {
+        if (!resolved.types.has(name)) {
+          problems.push(`${label}: declared type "${name}" not found in entry source`);
+        }
+      }
+
+      // 3. Actual values not allowlisted
+      for (const name of resolved.values) {
+        if (!manifestValues.has(name)) {
+          problems.push(
+            `${label}: undeclared value export "${name}" in source (add to manifest or make internal)`,
+          );
+        }
+      }
+
+      // 4. Actual types not allowlisted — includes `export type *` barrels,
+      //    which the previous regex checker skipped entirely.
+      for (const name of resolved.types) {
+        if (!manifestTypes.has(name)) {
+          problems.push(
+            `${label}: undeclared type export "${name}" in source (add to manifest or make internal)`,
+          );
+        }
+      }
+
+      if (resolved.values.size === 0 && resolved.types.size === 0) {
+        okMessages.push(`${label}: no declared exports (pass-through verification)`);
       } else {
-        errors.push(`Could not parse export block at line ${i + 1}: ${block.slice(0, 80)}`);
+        okMessages.push(
+          `${label}: ${resolved.values.size} values, ${resolved.types.size} types verified`,
+        );
       }
-      i++;
-      continue;
     }
 
-    // ── export type { ... } from '...'  (named type re-export) ──
-    // Also catches `export type { A, B }` without from clause
-    if (/^export\s+type\s*\{/.test(trimmed)) {
-      let block = trimmed;
-      while (!block.includes('}') && i + 1 < lines.length) {
-        i++;
-        block += ' ' + lines[i].trim();
-      }
-      const m = block.match(/^export\s+type\s*\{\s*([^}]+)\s*\}\s*(from\s+['"][^'"]+['"]\s*)?;?$/);
-      if (m) {
-        const names = m[1]
-          .split(',')
-          .map((n) => n.trim())
-          .filter(Boolean);
-        for (const n of names) {
-          // Handle `A as B` → actual name is B
-          const parts = n.split(/\s+as\s+/i);
-          types.add(parts[parts.length - 1].trim());
+    // Bin entries reference real files (package-level field)
+    const bin = cfg.bin;
+    if (bin) {
+      for (const [binName, binPath] of Object.entries(bin)) {
+        if (!existsSync(join(root, binPath))) {
+          problems.push(`${pkgName}: bin "${binName}" target ${binPath} not found`);
+        } else {
+          okMessages.push(`${pkgName}: bin "${binName}" → ${binPath}`);
         }
       }
-      i++;
-      continue;
     }
-
-    // ── export type * from '...'  (type barrel re-export) ──
-    // We don't collect individual names from these — the manifest uses
-    // typeBarrels to declare them. We just note existence.
-    // However, individual declared types that are re-exported through a
-    // barrel are verified via resolveTypeFromBarrel() in the main loop.
-    if (/^export\s+type\s*\*\s*from/.test(trimmed)) {
-      // tracked via typeBarrels, skip
-      i++;
-      continue;
-    }
-
-    // ── export * from '...'  (star value re-export) ──
-    if (/^export\s*\*\s*from/.test(trimmed) && !/^export\s+type\s*\*/.test(trimmed)) {
-      // capture all exports from the target file — but for a manifest
-      // check this is tricky because we'd need full resolution.
-      // In this codebase only ai/index.ts uses export *, so we resolve it.
-      const m = trimmed.match(/export\s*\*\s*from\s+['"]([^'"]+)['"]\s*;?$/);
-      if (m) {
-        const resolved = resolveStarExports(m[1], dirname(filePath));
-        for (const name of resolved.values) values.add(name);
-        for (const name of resolved.types) types.add(name);
-      }
-      i++;
-      continue;
-    }
-
-    // ── export function name(… / export async function name(… ──
-    {
-      const m = trimmed.match(/^export\s+(async\s+)?function\s+(\w+)/);
-      if (m) {
-        values.add(m[2]);
-        i++;
-        continue;
-      }
-    }
-
-    // ── export class name ──
-    {
-      const m = trimmed.match(/^export\s+class\s+(\w+)/);
-      if (m) {
-        values.add(m[1]);
-        i++;
-        continue;
-      }
-    }
-
-    // ── export const/let/var name ──
-    {
-      const m = trimmed.match(/^export\s+(const|let|var)\s+(\w+)/);
-      if (m) {
-        values.add(m[2]);
-        i++;
-        continue;
-      }
-    }
-
-    // ── export type name = … (type alias) ──
-    {
-      const m = trimmed.match(/^export\s+type\s+(\w+)\s*=/);
-      if (m) {
-        types.add(m[1]);
-        i++;
-        continue;
-      }
-    }
-
-    // ── export interface name ──
-    {
-      const m = trimmed.match(/^export\s+interface\s+(\w+)/);
-      if (m) {
-        types.add(m[1]);
-        i++;
-        continue;
-      }
-    }
-
-    i++;
   }
 
-  return { values, types, errors };
+  // ── Cross-package check: every workspace package is declared ──
+  const rootPkgPath = join(root, 'package.json');
+  if (existsSync(rootPkgPath)) {
+    const rootPkg = JSON.parse(readFileSync(rootPkgPath, 'utf-8'));
+    for (const ws of rootPkg.workspaces ?? []) {
+      if (!ws.includes('*')) continue;
+      const wsDir = dirname(ws);
+      for (const entry of readdirSync(join(root, wsDir))) {
+        const pkgJsonPath = join(root, wsDir, entry, 'package.json');
+        if (!existsSync(pkgJsonPath)) continue;
+        const pkgName = JSON.parse(readFileSync(pkgJsonPath, 'utf-8')).name;
+        if (pkgName && !packages[pkgName]) {
+          problems.push(
+            `workspace package "${pkgName}" (${wsDir}/${entry}) is not declared in the manifest`,
+          );
+        }
+      }
+    }
+  }
+
+  return { problems, okMessages };
 }
 
-/**
- * Handle `export * from './path'` — read the target file and return
- * all its named exports (at one level, no deep chaining).
- */
-function resolveStarExports(relPath, baseDir) {
-  const targetPath = join(baseDir, relPath);
-  let content;
-  let resolved;
-  try {
-    // resolve extension: try .ts, .js, .mjs, then exact
-    resolved = targetPath;
-    if (!existsSync(resolved)) {
-      // if import used .js but source is .ts, try swapping extension
-      if (relPath.endsWith('.js')) {
-        const tsPath = targetPath.replace(/\.js$/, '.ts');
-        if (existsSync(tsPath)) {
-          resolved = tsPath;
-        }
-      }
-    }
-    if (!existsSync(resolved)) {
-      for (const ext of ['.ts', '.js', '.mjs', '']) {
-        const candidate = targetPath + ext;
-        if (existsSync(candidate)) {
-          resolved = candidate;
-          break;
-        }
-        // also try /index.ts etc.
-        if (ext === '' && existsSync(join(targetPath, 'index.ts'))) {
-          resolved = join(targetPath, 'index.ts');
-          break;
-        }
-        if (ext === '' && existsSync(join(targetPath, 'index.js'))) {
-          resolved = join(targetPath, 'index.js');
-          break;
-        }
-      }
-    }
-    content = readFileSync(resolved, 'utf-8');
-  } catch {
-    return { values: new Set(), types: new Set() };
-  }
-  return parseNamedExports(content, resolved);
-}
+// ── CLI main ─────────────────────────────────────────────────────────────────
 
-/**
- * Check whether a type name is exported from any of the given typeBarrel files.
- */
-function resolveTypeFromBarrel(name, barrelPaths) {
-  for (const relPath of barrelPaths) {
-    const abs = join(root, relPath);
-    if (!existsSync(abs)) continue;
-    const source = readFileSync(abs, 'utf-8');
-    const { types } = parseNamedExports(source, abs);
-    if (types.has(name)) return true;
-  }
-  return false;
-}
-
-/**
- * Verify that a typeBarrel file exists and its first export is a type export.
- */
-function checkTypeBarrel(relPath) {
-  const abs = join(root, relPath);
-  if (!existsSync(abs)) {
-    return `typeBarrel file not found: ${relPath}`;
-  }
-  const content = readFileSync(abs, 'utf-8');
-  const firstNonBlank = content
-    .split('\n')
-    .map((l) => l.trim())
-    .find((l) => l && !l.startsWith('//') && !l.startsWith('/*') && !l.startsWith('*'));
-  if (!firstNonBlank || !firstNonBlank.startsWith('export type')) {
-    return `typeBarrel file ${relPath} does not start with type exports`;
-  }
-  return null; // ok
-}
-
-// ── main ─────────────────────────────────────────────────────────────────────
-
-function main() {
-  const manifestPath = join(root, 'public-api.manifest.json');
+export function main() {
+  const manifestPath = join(repoRoot, 'public-api.manifest.json');
   if (!existsSync(manifestPath)) {
     console.error('FATAL: public-api.manifest.json not found at root');
     process.exit(1);
@@ -292,133 +394,19 @@ function main() {
     process.exit(1);
   }
 
-  let allOk = true;
-  const packages = manifest.packages;
-
   console.log('═══════════════════════════════════════════════');
   console.log('  Public API Manifest Check');
   console.log('═══════════════════════════════════════════════\n');
 
-  for (const [pkgName, cfg] of Object.entries(packages)) {
-    console.log(`── package: ${pkgName} ──`);
+  const { problems, okMessages } = verifyManifest(manifest, repoRoot);
+  let allOk = problems.length === 0;
 
-    const entryAbs = join(root, cfg.entry);
-    if (!existsSync(entryAbs)) {
-      allOk = err(`${pkgName}: entry file ${cfg.entry} not found`);
-      continue;
-    }
-
-    const source = readFileSync(entryAbs, 'utf-8');
-    const {
-      values: actualValues,
-      types: actualTypes,
-      errors: parseErrors,
-    } = parseNamedExports(source, entryAbs);
-
-    if (parseErrors.length > 0) {
-      for (const pe of parseErrors) {
-        allOk = err(`${pkgName}: ${pe}`);
-      }
-    }
-
-    // Check value exports
-    const manifestValues = new Set(cfg.values || []);
-    const manifestTypes = new Set(cfg.types || []);
-    const barrels = cfg.typeBarrels || [];
-
-    // 1. Declared values that exist in source
-    for (const name of manifestValues) {
-      if (!actualValues.has(name)) {
-        allOk = err(`${pkgName}: declared value "${name}" not found in entry source`);
-      }
-    }
-
-    // 2. Declared types that exist in source
-    //    (with fallback to typeBarrel resolution)
-    for (const name of manifestTypes) {
-      if (!actualTypes.has(name) && !resolveTypeFromBarrel(name, barrels)) {
-        allOk = err(`${pkgName}: declared type "${name}" not found in entry source`);
-      }
-    }
-
-    // 3. Actual values not in manifest
-    for (const name of actualValues) {
-      if (!manifestValues.has(name)) {
-        allOk = err(
-          `${pkgName}: undeclared value export "${name}" in source (add to manifest or make internal)`,
-        );
-      }
-    }
-
-    // 4. Actual types not in manifest
-    for (const name of actualTypes) {
-      if (!manifestTypes.has(name)) {
-        allOk = err(
-          `${pkgName}: undeclared type export "${name}" in source (add to manifest or make internal)`,
-        );
-      }
-    }
-
-    // 5. Check typeBarrels exist and are type-only
-    for (const barrel of barrels) {
-      const barrelErr = checkTypeBarrel(barrel);
-      if (barrelErr) {
-        allOk = err(`${pkgName}: ${barrelErr}`);
-      } else {
-        ok(`${pkgName}: typeBarrel ${barrel} verified`);
-      }
-    }
-
-    // 6. Check bin entries reference real files
-    const bin = cfg.bin;
-    if (bin) {
-      for (const [binName, binPath] of Object.entries(bin)) {
-        const absBin = join(root, binPath);
-        if (!existsSync(absBin)) {
-          allOk = err(`${pkgName}: bin "${binName}" target ${binPath} not found`);
-        } else {
-          ok(`${pkgName}: bin "${binName}" → ${binPath}`);
-        }
-      }
-    }
-
-    if (manifestValues.size === 0 && manifestTypes.size === 0) {
-      ok(`${pkgName}: no declared exports (pass-through verification)`);
-    } else {
-      ok(`${pkgName}: ${manifestValues.size} values, ${manifestTypes.size} types verified`);
-    }
-
-    console.log('');
+  for (const message of okMessages) {
+    console.log(`  OK: ${message}`);
   }
-
-  // ── Cross-package checks ──────────────────────────────────────────────
-  console.log('── cross-package checks ──');
-
-  // Verify all workspace packages are covered
-  const rootPkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf-8'));
-  const workspaces = rootPkg.workspaces || [];
-  const pkgDirs = [];
-  for (const ws of workspaces) {
-    // handle glob patterns like packages/*
-    if (ws.includes('*')) {
-      const dir = dirname(ws);
-      const entries = readdirSync(join(root, dir));
-      for (const e of entries) {
-        const pkgPath = join(root, dir, e, 'package.json');
-        if (existsSync(pkgPath)) {
-          pkgDirs.push(join(dir, e));
-        }
-      }
-    }
-  }
-
-  // check each workspace package has a manifest entry
-  for (const pkgDir of pkgDirs) {
-    const pkgJson = JSON.parse(readFileSync(join(root, pkgDir, 'package.json'), 'utf-8'));
-    const pkgName = pkgJson.name;
-    if (pkgName && !packages[pkgName]) {
-      allOk = err(`workspace package "${pkgName}" (${pkgDir}) is not declared in the manifest`);
-    }
+  for (const problem of problems) {
+    console.error(`  ERROR: ${problem}`);
+    allOk = false;
   }
 
   console.log('');
@@ -433,7 +421,8 @@ function main() {
   process.exit(allOk ? 0 : 1);
 }
 
-// ── Need readdirSync for cross-package checks ──
-import { readdirSync } from 'node:fs';
-
-main();
+const isDirectRun =
+  process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectRun) {
+  main();
+}

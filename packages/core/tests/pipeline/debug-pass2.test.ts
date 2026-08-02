@@ -4,7 +4,7 @@ import { MockProvider } from '../../src/ai/providers/mock.ts';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
 import type { Pass2RejectionCategory, RenderJob } from '../../src/pipeline/render.ts';
 import { RenderPipeline } from '../../src/pipeline/render.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import { createRuntimeServices } from '../fixtures/runtime-services.ts';
 import type {
   ContextPackage,
   KnowledgeBoundary,
@@ -116,6 +116,7 @@ function makeJob(id: string): RenderJob {
       facts: [],
     },
     context: makeContext(id),
+    sourceContentHash: 'source-debug',
     graphHash: 'a00',
     chapter: 1,
     contract: {
@@ -147,8 +148,7 @@ function makePipeline(opts: MockProviderOptions = {}) {
     pipeline: new RenderPipeline({
       provider,
       model: 'mock-model',
-      cacheDir: '/tmp/test-cache',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices({ provider }).services,
       skipCache: true,
       maxRetries: 3,
       validatorPolicyId: 'test-policy-v1',
@@ -167,8 +167,7 @@ function makePipelineWithAggregator(entry: MockPass2Entry) {
   return new RenderPipeline({
     provider,
     model: 'mock-pass2',
-    cacheDir: '/tmp/test-cache',
-    storage: new MemoryStorage(),
+    runtimeServices: createRuntimeServices({ provider }).services,
     skipCache: true,
     maxRetries: 1,
     aggregator,

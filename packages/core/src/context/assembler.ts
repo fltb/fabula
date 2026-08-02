@@ -6,7 +6,7 @@ import type {
   CharacterSnapshot,
   ContextPackage,
   EntityId,
-  EntityRegistry,
+  EntityLookup,
   KnowledgeBoundary,
   LogicalConsequence,
   NarrativeEvent,
@@ -39,7 +39,7 @@ export class ContextAssembler {
   assemble(
     event: NarrativeEvent,
     state: WorldState,
-    entityRegistry: EntityRegistry,
+    entities: EntityLookup,
     volumeSummary = '',
     systemContext?: SystemContext,
     activeThreadIds?: string[],
@@ -47,7 +47,7 @@ export class ContextAssembler {
     const context: RelevanceContext = {
       currentEvent: event,
       worldState: state,
-      entityRegistry,
+      entities,
       recentEntities: this.recentEntities,
       activeThreads: activeThreadIds ?? [],
     };
@@ -69,21 +69,21 @@ export class ContextAssembler {
     const sceneSpec = this._buildSceneSpec(event);
 
     // L3: Character Snapshots (relevant characters only)
-    const characterSnapshots = this._buildCharacterSnapshots(event, entityRegistry, state, scores);
+    const characterSnapshots = this._buildCharacterSnapshots(event, entities, state, scores);
     // L3a: Merge resolvable on-screen cast characters not already selected
     if (event.cast?.onScreen) {
       for (const charId of event.cast.onScreen) {
         if (characterSnapshots.some((cs) => cs.id === charId)) continue;
-        const entity = entityRegistry.resolve(charId);
-        if (!entity || entity.kind !== 'character') continue;
+        const entity = entities.resolve(charId);
+        if (entity?.kind !== 'character') continue;
         characterSnapshots.push({
           id: entity.id,
           name: entity.name,
           currentState: state.entities[entity.id] ?? entity.state,
-          traits: (entity.state['traits'] as string[]) ?? [],
-          voiceNotes: (entity.state['voice_notes'] as string) ?? '',
-          archetype: entity.state['archetype'] as string | undefined,
-          appearance: entity.state['appearance'] as Record<string, string> | undefined,
+          traits: (entity.state.traits as string[]) ?? [],
+          voiceNotes: (entity.state.voice_notes as string) ?? '',
+          archetype: entity.state.archetype as string | undefined,
+          appearance: entity.state.appearance as Record<string, string> | undefined,
         });
       }
     }
@@ -101,7 +101,7 @@ export class ContextAssembler {
     const activeThreads = this._buildThreadStatus(event, state);
 
     // Active World Rules
-    const activeRules = this._buildActiveRules(state, entityRegistry);
+    const activeRules = this._buildActiveRules(state, entities);
 
     // Track recent entities for recency penalty in next call
     this.recentEntities = [...event.participants.entities, ...this.recentEntities].slice(0, 10);
@@ -144,7 +144,7 @@ export class ContextAssembler {
 
   private _buildCharacterSnapshots(
     event: NarrativeEvent,
-    registry: EntityRegistry,
+    entities: EntityLookup,
     state: WorldState,
     scores: RelevanceScore[],
   ): CharacterSnapshot[] {
@@ -152,25 +152,25 @@ export class ContextAssembler {
     const seen = new Set<string>();
 
     // Always include POV character first
-    const povEntity = registry.resolve(event.pov.character);
+    const povEntity = entities.resolve(event.pov.character);
     if (povEntity && povEntity.kind === 'character') {
       seen.add(povEntity.id);
       snapshots.push({
         id: povEntity.id,
         name: povEntity.name,
         currentState: state.entities[povEntity.id] ?? {},
-        traits: (povEntity.state['traits'] as string[]) ?? [],
-        voiceNotes: (povEntity.state['voice_notes'] as string) ?? '',
-        archetype: povEntity.state['archetype'] as string | undefined,
-        appearance: povEntity.state['appearance'] as Record<string, string> | undefined,
+        traits: (povEntity.state.traits as string[]) ?? [],
+        voiceNotes: (povEntity.state.voice_notes as string) ?? '',
+        archetype: povEntity.state.archetype as string | undefined,
+        appearance: povEntity.state.appearance as Record<string, string> | undefined,
       });
     }
 
     // Add other relevant characters by score
     for (const score of scores) {
       if (seen.has(score.entity)) continue;
-      const entity = registry.resolve(score.entity);
-      if (!entity || entity.kind !== 'character') continue;
+      const entity = entities.resolve(score.entity);
+      if (entity?.kind !== 'character') continue;
       if (score.score < 0.2) continue;
       seen.add(entity.id);
 
@@ -178,10 +178,10 @@ export class ContextAssembler {
         id: entity.id,
         name: entity.name,
         currentState: state.entities[entity.id] ?? entity.state,
-        traits: (entity.state['traits'] as string[]) ?? [],
-        voiceNotes: (entity.state['voice_notes'] as string) ?? '',
-        archetype: entity.state['archetype'] as string | undefined,
-        appearance: entity.state['appearance'] as Record<string, string> | undefined,
+        traits: (entity.state.traits as string[]) ?? [],
+        voiceNotes: (entity.state.voice_notes as string) ?? '',
+        archetype: entity.state.archetype as string | undefined,
+        appearance: entity.state.appearance as Record<string, string> | undefined,
       });
     }
 
@@ -263,22 +263,22 @@ export class ContextAssembler {
     });
   }
 
-  private _buildActiveRules(state: WorldState, registry: EntityRegistry): RuleDefinition[] {
+  private _buildActiveRules(state: WorldState, entities: EntityLookup): RuleDefinition[] {
     const activeRules: RuleDefinition[] = [];
     for (const [ruleId, ruleState] of Object.entries(state.rules)) {
       // Rule is active if enabled and not nullified
       if (ruleState.activation === 'enabled' && ruleState.effectiveness !== 'nullified') {
-        const entity = registry.resolve(ruleId);
+        const entity = entities.resolve(ruleId);
         if (entity) {
           activeRules.push({
             ruleId,
-            name: (entity.state['name'] as string) ?? ruleId,
-            statement: (entity.state['statement'] as string) ?? '',
-            category: (entity.state['category'] as string) ?? 'unknown',
-            type: (entity.state['type'] as string) ?? 'unknown',
+            name: (entity.state.name as string) ?? ruleId,
+            statement: (entity.state.statement as string) ?? '',
+            category: (entity.state.category as string) ?? 'unknown',
+            type: (entity.state.type as string) ?? 'unknown',
             logicalConsequences:
-              (entity.state['logicalConsequences'] as LogicalConsequence[] | undefined) ?? [],
-            evidenceChain: (entity.state['evidenceChain'] as RuleEffectEntry[] | undefined) ?? [],
+              (entity.state.logicalConsequences as LogicalConsequence[] | undefined) ?? [],
+            evidenceChain: (entity.state.evidenceChain as RuleEffectEntry[] | undefined) ?? [],
           });
         }
       }

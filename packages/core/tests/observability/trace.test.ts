@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { TraceCollector } from '../../src/observability/trace.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+const trace = (jobId: string, traceId = jobId) =>
+  new TraceCollector(jobId, traceId, { now: () => '2026-08-02T00:00:00.000Z' });
 
 describe('TraceCollector', () => {
   it('writes safe JSONL traces with job and event correlation', () => {
-    const traces = new TraceCollector('run-1');
+    const traces = trace('run-1');
     traces.record({ spanId: 'pass1-E0', eventId: 'E0', phase: 'pass1', state: 'start' });
     traces.record({
       spanId: 'pass1-E0',
@@ -13,11 +14,8 @@ describe('TraceCollector', () => {
       state: 'end',
       durationMs: 9,
     });
-    const storage = new MemoryStorage();
-    traces.write(storage, '/project');
-
-    const lines = storage
-      .read('/project/.nova/traces/run-1.jsonl')
+    const lines = traces
+      .toJsonLines()
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line));
@@ -32,7 +30,7 @@ describe('TraceCollector', () => {
   });
 
   it('produces valid span nesting with matching start/end spanIds', () => {
-    const traces = new TraceCollector('job-1', 'trace-1');
+    const traces = trace('job-1', 'trace-1');
     // Pipeline span
     traces.record({ spanId: 'E0', eventId: 'E0', phase: 'pipeline', state: 'start' });
     // Cache span (nested)
@@ -88,7 +86,7 @@ describe('TraceCollector', () => {
   });
 
   it('covers all trace phase event types', () => {
-    const traces = new TraceCollector('job-types');
+    const traces = trace('job-types');
     const phases = [
       'pipeline',
       'context',
@@ -115,13 +113,10 @@ describe('TraceCollector', () => {
   });
 
   it('flush output produces valid JSONL with empty trailing newline', () => {
-    const traces = new TraceCollector('run-flush');
+    const traces = trace('run-flush');
     traces.record({ spanId: 'E1', eventId: 'E1', phase: 'pipeline', state: 'start' });
     traces.record({ spanId: 'E1', eventId: 'E1', phase: 'pipeline', state: 'end', durationMs: 5 });
-    const storage = new MemoryStorage();
-    traces.write(storage, '/project');
-
-    const raw = storage.read('/project/.nova/traces/run-flush.jsonl');
+    const raw = traces.toJsonLines();
     expect(raw).toBeTruthy();
     // Must end with newline
     expect(raw.endsWith('\n')).toBe(true);
@@ -141,19 +136,17 @@ describe('TraceCollector', () => {
   });
 
   it('handles empty trace gracefully', () => {
-    const traces = new TraceCollector('empty-job');
+    const traces = trace('empty-job');
     const events = traces.snapshot();
     expect(events).toHaveLength(0);
 
-    const storage = new MemoryStorage();
-    traces.write(storage, '/project');
-    const raw = storage.read('/project/.nova/traces/empty-job.jsonl');
+    const raw = traces.toJsonLines();
     // Empty traces may write empty file or just newline
     expect(raw).toBeDefined();
   });
 
   it('records error events with code', () => {
-    const traces = new TraceCollector('err-job');
+    const traces = trace('err-job');
     traces.record({
       spanId: 'E0:cache',
       eventId: 'E0',
@@ -168,7 +161,7 @@ describe('TraceCollector', () => {
   });
 
   it('supports multiple events in the same job', () => {
-    const traces = new TraceCollector('multi-event');
+    const traces = trace('multi-event');
     traces.record({ spanId: 'E0', eventId: 'E0', phase: 'pipeline', state: 'start' });
     traces.record({
       spanId: 'E0',
@@ -191,5 +184,48 @@ describe('TraceCollector', () => {
     const e1Events = events.filter((e) => e.eventId === 'E1');
     expect(e0Events).toHaveLength(2);
     expect(e1Events).toHaveLength(2);
+  });
+
+  it('records the injected clock timestamp verbatim for every event', () => {
+    const stamps = ['2001-02-03T04:05:06.000Z', '2002-03-04T05:06:07.000Z', '2003-04-05T06:07:08.000Z'];
+    let i = 0;
+    const traces = new TraceCollector('job-seq', 'trace-seq', {
+      now: () => stamps[i++] ?? '2004-05-06T07:08:09.000Z',
+    });
+    traces.record({ spanId: 's1', phase: 'pipeline', state: 'start' });
+    traces.record({ spanId: 's2', phase: 'pass1', state: 'start' });
+    traces.record({ spanId: 's2', phase: 'pass1', state: 'end', durationMs: 5 });
+    const events = traces.snapshot();
+    expect(events.map((e) => e.timestamp)).toEqual(stamps);
+    const lines = traces.toJsonLines().trim().split('\n');
+    expect(lines[0]).toContain('2001-02-03T04:05:06.000Z');
+    expect(lines[1]).toContain('2002-03-04T05:06:07.000Z');
+  });
+
+  it('propagates injected traceId and jobId unchanged, including error events', () => {
+    const traces = new TraceCollector('job-42', 'trace-abc', {
+      now: () => '2005-06-07T08:09:10.000Z',
+    });
+    traces.record({ spanId: 's', phase: 'pass2', state: 'start' });
+    traces.record({ spanId: 's', phase: 'pass2', state: 'error', code: 'PROVIDER_ERROR' });
+    const events = traces.snapshot();
+    expect(events).toHaveLength(2);
+    for (const event of events) {
+      expect(event.jobId).toBe('job-42');
+      expect(event.traceId).toBe('trace-abc');
+      expect(event.timestamp).toBe('2005-06-07T08:09:10.000Z');
+    }
+    expect(events[1]).toMatchObject({ state: 'error', code: 'PROVIDER_ERROR' });
+  });
+
+  it('keeps collectors with different injected clocks independent', () => {
+    const early = new TraceCollector('job-a', 'trace-a', { now: () => '2001-01-01T00:00:00.000Z' });
+    const late = new TraceCollector('job-b', 'trace-b', { now: () => '2002-02-02T00:00:00.000Z' });
+    early.record({ spanId: 's', phase: 'pipeline', state: 'start' });
+    late.record({ spanId: 's', phase: 'pipeline', state: 'start' });
+    expect(early.snapshot()[0].timestamp).toBe('2001-01-01T00:00:00.000Z');
+    expect(late.snapshot()[0].timestamp).toBe('2002-02-02T00:00:00.000Z');
+    expect(early.toJsonLines()).not.toContain('2002');
+    expect(late.toJsonLines()).not.toContain('2001');
   });
 });

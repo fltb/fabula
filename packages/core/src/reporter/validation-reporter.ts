@@ -1,11 +1,11 @@
 // ============================================================================
-// Validation Report Writer — Human-readable output/validation.md
+// Validation Report Formatter — pure markdown construction.
+//
+// Hosts choose whether and where to persist the resulting document.
 // ============================================================================
 
-import * as path from 'node:path';
 import type { PipelineRunResult } from '../report/writer.js';
 import { ReportWriter } from '../report/writer.js';
-import type { Storage } from '../storage/types.ts';
 import type { ValidationIssue } from '../types/validator.js';
 
 export interface ValidationReport {
@@ -15,15 +15,9 @@ export interface ValidationReport {
   l2Issues: ValidationIssue[]; // post-render issues
 }
 
-export function writeValidationReport(
-  storage: Storage,
-  projectDir: string,
-  report: ValidationReport,
-): string {
-  // Build a PipelineRunResult from the ValidationReport and delegate to ReportWriter
+export function formatValidationReport(report: ValidationReport): string {
   const runResult: PipelineRunResult = {
     projectName: report.projectName,
-    projectDir,
     generatedAt: report.generatedAt,
     passed: report.l1Issues.length === 0 && report.l2Issues.length === 0,
     l1Issues: report.l1Issues,
@@ -36,11 +30,5 @@ export function writeValidationReport(
     guidance: '',
     errors: [],
   };
-  const markdown = new ReportWriter(runResult).toMarkdown();
-
-  const outDir = path.join(projectDir, 'output');
-  storage.mkdirp(outDir);
-  const outPath = path.join(outDir, 'validation.md');
-  storage.write(outPath, markdown);
-  return outPath;
+  return new ReportWriter(runResult).toMarkdown();
 }

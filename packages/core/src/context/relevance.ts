@@ -30,15 +30,15 @@ export class RelevanceEngine {
    * recencyPenalty, threadSaturation.
    */
   scoreEntities(context: RelevanceContext): RelevanceScore[] {
-    const { currentEvent, worldState, entityRegistry, recentEntities } = context;
-    const entities = entityRegistry.getAll();
+    const { currentEvent, worldState, entities, recentEntities } = context;
+    const allEntities = entities.getAll();
     const scores: RelevanceScore[] = [];
 
     const sceneParticipants = new Set(currentEvent.participants.entities);
     const sceneThreads = new Set(currentEvent.threadProgress.map((tp) => tp.thread));
 
-    for (const entity of entities) {
-      const role = entity.state['role'] as string | undefined;
+    for (const entity of allEntities) {
+      const role = entity.state.role as string | undefined;
       const importanceBonus = IMPORTANCE_BONUS[role ?? 'background'] ?? 0;
 
       const basis = {
@@ -75,8 +75,7 @@ export class RelevanceEngine {
   /** Entity is directly participating in this scene → high relevance */
   private _participationScore(entity: Entity, sceneParticipants: Set<EntityId>): number {
     if (sceneParticipants.has(entity.id)) return 1.0;
-    if (entity.state['location'] && sceneParticipants.has(entity.state['location'] as string))
-      return 0.6;
+    if (entity.state.location && sceneParticipants.has(entity.state.location as string)) return 0.6;
     return 0.0;
   }
 
@@ -96,8 +95,8 @@ export class RelevanceEngine {
     let score = 0;
 
     // Same location as POV character or participants
-    const povLocation = state.entities[event.pov.character]?.['location'];
-    const entityLocation = entity.state['location'];
+    const povLocation = state.entities[event.pov.character]?.location;
+    const entityLocation = entity.state.location;
 
     if (povLocation && entityLocation && povLocation === entityLocation) {
       score += 0.4;
@@ -105,7 +104,7 @@ export class RelevanceEngine {
 
     // Check if entity location matches any scene participant's location
     for (const participant of event.participants.entities) {
-      const pLoc = state.entities[participant]?.['location'];
+      const pLoc = state.entities[participant]?.location;
       if (pLoc && entityLocation && pLoc === entityLocation) {
         score += 0.3;
         break;

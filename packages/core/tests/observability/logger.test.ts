@@ -184,31 +184,63 @@ describe('Logger', () => {
       expect(transport.entries[0].context.durationMs).toBe(100);
     });
 
-    it('JsonlLogTransport writes JSON to stderr', () => {
-      const writeMock = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      const transport = new JsonlLogTransport();
+    it('JsonlLogTransport routes serialized entries to its injected sink', () => {
+      const lines: string[] = [];
+      const transport = new JsonlLogTransport((line) => lines.push(line));
       const logger = new Logger(transport, { module: 'test' });
       logger.info('jsonl test', { eventId: 'E0' });
 
-      expect(writeMock).toHaveBeenCalledTimes(1);
-      const output = writeMock.mock.calls[0][0] as string;
-      const parsed = JSON.parse(output);
+      expect(lines).toHaveLength(1);
+      const parsed = JSON.parse(lines[0]);
       expect(parsed.level).toBe('info');
       expect(parsed.message).toBe('jsonl test');
       expect(parsed.context.module).toBe('test');
       expect(parsed.context.eventId).toBe('E0');
+    });
 
+    it('JsonlLogTransport emits newline-delimited JSON to its injected sink', () => {
+      const lines: string[] = [];
+      const transport = new JsonlLogTransport((line) => lines.push(line));
+      const logger = new Logger(transport, { module: 'test' });
+      logger.info('line');
+
+      expect(lines).toHaveLength(1);
+      expect(lines[0].endsWith('\n')).toBe(true);
+      expect(lines[0].split('\n')).toHaveLength(2);
+      expect(() => JSON.parse(lines[0].trimEnd())).not.toThrow();
+    });
+
+    it('JsonlLogTransport defaults to non-emission rather than stderr', () => {
+      const writeMock = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+      const logger = new Logger(new JsonlLogTransport(), { module: 'test' });
+      logger.info('no host output');
+
+      expect(writeMock).not.toHaveBeenCalled();
       writeMock.mockRestore();
     });
 
-    it('JsonlLogTransport writes newline-terminated JSON', () => {
-      const writeMock = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-      const transport = new JsonlLogTransport();
-      const logger = new Logger(transport, { module: 'test' });
-      logger.info('line');
-      const output = writeMock.mock.calls[0][0] as string;
-      expect(output.endsWith('\n')).toBe(true);
-      writeMock.mockRestore();
+    it('transport can be replaced with an independently injected transport', () => {
+      const memTransport = new MemoryLogTransport();
+      const firstLines: string[] = [];
+      const secondLines: string[] = [];
+      const firstLogger = new Logger(memTransport, { module: 'mem' });
+      firstLogger.info('mem');
+
+      const jsonLogger = new Logger(new JsonlLogTransport((line) => firstLines.push(line)), {
+        module: 'json',
+      });
+      jsonLogger.info('json');
+      const replacementLogger = new Logger(new JsonlLogTransport((line) => secondLines.push(line)), {
+        module: 'replacement',
+      });
+      replacementLogger.info('replacement');
+
+      expect(memTransport.entries).toHaveLength(1);
+      expect(memTransport.entries[0].message).toBe('mem');
+      expect(firstLines).toHaveLength(1);
+      expect(JSON.parse(firstLines[0]).context.module).toBe('json');
+      expect(secondLines).toHaveLength(1);
+      expect(JSON.parse(secondLines[0]).context.module).toBe('replacement');
     });
 
     it('different transports are independent', () => {
@@ -226,23 +258,6 @@ describe('Logger', () => {
       expect(transportB.entries[0].context.module).toBe('b');
     });
 
-    it('transport can be swapped at construction', () => {
-      const memTransport = new MemoryLogTransport();
-      const jsonTransport = new JsonlLogTransport();
-      const writeMock = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-
-      const memLogger = new Logger(memTransport, { module: 'mem' });
-      memLogger.info('mem');
-
-      const jsonLogger = new Logger(jsonTransport, { module: 'json' });
-      jsonLogger.info('json');
-
-      expect(memTransport.entries).toHaveLength(1);
-      expect(memTransport.entries[0].message).toBe('mem');
-      expect(writeMock).toHaveBeenCalledTimes(1);
-
-      writeMock.mockRestore();
-    });
   });
 
   describe('error handling', () => {

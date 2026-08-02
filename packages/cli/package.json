@@ -14,8 +14,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@novalistically/bench": "*",
     "@novalistically/core": "*",
+    "@novalistically/node-host": "*",
     "commander": "^13.1.0"
   },
   "devDependencies": {

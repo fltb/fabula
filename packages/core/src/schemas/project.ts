@@ -34,7 +34,6 @@ export const projectConfigSchema = z
       .optional(),
     snapshotInterval: z.number().optional(),
     concurrency: z.number().int().positive().optional(),
-    outputDir: z.string().optional(),
     defaultSceneTextTarget: z.number().int().positive().optional(),
     cacheEnabled: z.boolean().optional(),
     styleProfile: z
@@ -53,7 +52,6 @@ export const projectConfigSchema = z
     plugins: z
       .object({
         enabled: z.boolean(),
-        directory: z.string().optional(),
       })
       .strict()
       .optional(),

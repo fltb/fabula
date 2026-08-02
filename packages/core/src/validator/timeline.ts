@@ -108,7 +108,7 @@ export class TimelineValidator implements Validator {
           // Catalog-driven: check if attribute has temporal semanticRole
           // time_period is the primary attribute; also accept any catalog temporal attrs
           if (check.attribute !== 'time_period') {
-            const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+            const entityKind = input.entities?.resolve(check.entityId)?.kind;
             if (
               !entityKind ||
               getAttributeSemanticRole(input.entityTypeCatalog, entityKind, check.attribute) !==

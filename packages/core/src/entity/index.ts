@@ -15,9 +15,11 @@ export {
   parseStoryTimestamp,
   resolveTemporalContext,
 } from './timestamp.js';
-export type { ProjectData } from './types.js';
+export type { CompileProjectOptions, ProjectCompilation, ProjectData } from './types.js';
 export {
   loadProjectConfig,
   readYamlFile,
   readYamlFilesInDir,
 } from './yaml-loader.js';
+export { analyzeSource } from './source-analysis.js';
+export type { SourceAnalysisOptions } from './source-analysis.js';

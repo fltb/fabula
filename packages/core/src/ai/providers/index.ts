@@ -2,7 +2,6 @@
 // AI Provider — Providers Index
 // ============================================================================
 
-export { AiSdkProvider, type AiSdkProviderOptions } from './ai-sdk.ts';
 export { MockProvider, type MockProviderOptions } from './mock.ts';
 export {
   type MockPass2Entry,

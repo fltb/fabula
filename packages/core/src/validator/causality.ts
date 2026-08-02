@@ -102,7 +102,7 @@ export class CausalityValidator implements Validator {
       // Skip narrativeHint-only preconditions (deferred to Pass 2)
       if (pc.value === undefined) continue;
 
-      const entityKind = input.entityRegistry?.resolve(pc.entityId)?.kind;
+      const entityKind = input.entities?.resolve(pc.entityId)?.kind;
       if (
         entityKind &&
         getAttributeSemanticRole(input.entityTypeCatalog, entityKind, pc.attribute) === 'location'

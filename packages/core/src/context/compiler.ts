@@ -5,7 +5,7 @@
 import type { CompiledDiscourseRenderContext } from '../state/discourse-context.js';
 import type {
   ContextPackage,
-  EntityRegistry,
+  EntityLookup,
   NarrativeEvent,
   NarratorProfile,
   ResolvedNarrativeTechniqueContract,
@@ -28,7 +28,7 @@ export class ContextCompiler {
   compile(
     event: NarrativeEvent,
     state: WorldState,
-    entityRegistry: EntityRegistry,
+    entities: EntityLookup,
     options?: {
       volumeSummary?: string;
       systemContext?: SystemContext;
@@ -45,7 +45,7 @@ export class ContextCompiler {
     const pkg = this.assembler.assemble(
       event,
       state,
-      entityRegistry,
+      entities,
       options?.volumeSummary ?? '',
       options?.systemContext,
       options?.activeThreadIds,

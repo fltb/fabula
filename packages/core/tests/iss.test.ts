@@ -87,8 +87,7 @@ describe('calculateISS', () => {
     const rules: RuleDefinition[] = [];
 
     const result = calculateISS({
-      projectDir: '/test',
-      entityRegistry: registry,
+      entities: registry,
       events,
       threads,
       rules,
@@ -106,8 +105,7 @@ describe('calculateISS', () => {
     const rules: RuleDefinition[] = [];
 
     const result = calculateISS({
-      projectDir: '/test',
-      entityRegistry: registry,
+      entities: registry,
       events,
       threads,
       rules,
@@ -130,8 +128,7 @@ describe('calculateISS', () => {
     const rules: RuleDefinition[] = [];
 
     const result = calculateISS({
-      projectDir: '/test',
-      entityRegistry: registry,
+      entities: registry,
       events,
       threads,
       rules,
@@ -159,8 +156,7 @@ describe('calculateISS', () => {
     ];
 
     const result = calculateISS({
-      projectDir: '/test',
-      entityRegistry: registry,
+      entities: registry,
       events,
       threads,
       rules,
@@ -193,8 +189,7 @@ describe('calculateISS', () => {
     const rules: RuleDefinition[] = [];
 
     const result = calculateISS({
-      projectDir: '/test',
-      entityRegistry: registry,
+      entities: registry,
       events,
       threads,
       rules,
@@ -214,8 +209,7 @@ describe('detectAntiPatterns', () => {
     const rules: RuleDefinition[] = [];
 
     const issues = detectAntiPatterns({
-      projectDir: '/test',
-      entityRegistry: registry,
+      entities: registry,
       events,
       threads,
       rules,
@@ -232,8 +226,7 @@ describe('detectAntiPatterns', () => {
     const rules: RuleDefinition[] = [];
 
     const issues = detectAntiPatterns({
-      projectDir: '/test',
-      entityRegistry: registry,
+      entities: registry,
       events,
       threads,
       rules,
@@ -259,7 +252,7 @@ describe('validateStrict', () => {
 
     const issues = validateStrict({
       events,
-      entityRegistry: registry,
+      entities: registry,
       threads,
       rules,
     });
@@ -278,7 +271,7 @@ describe('validateStrict', () => {
 
     const issues = validateStrict({
       events,
-      entityRegistry: registry,
+      entities: registry,
       threads,
       rules,
     });
@@ -300,7 +293,7 @@ describe('validateStrict', () => {
 
     const issues = validateStrict({
       events,
-      entityRegistry: registry,
+      entities: registry,
       threads,
       rules,
     });
@@ -319,7 +312,7 @@ describe('validateStrict', () => {
 
     const issues = validateStrict({
       events,
-      entityRegistry: registry,
+      entities: registry,
       threads,
       rules,
     });
@@ -348,7 +341,7 @@ describe('validateStrict', () => {
 
     const issues = validateStrict({
       events,
-      entityRegistry: registry,
+      entities: registry,
       threads,
       rules,
     });
@@ -383,7 +376,7 @@ describe('validateStrict', () => {
 
     const issues = validateStrict({
       events,
-      entityRegistry: registry,
+      entities: registry,
       threads,
       rules,
     });

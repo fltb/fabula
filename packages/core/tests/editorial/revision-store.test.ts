@@ -1,36 +1,42 @@
 // ============================================================================
-// SceneRevisionStore & SourceRevisionStore — V1 round-trip tests
+// Scene revision persistence — semantic CoreExecutionRepository tests
 //
-// All tests use MemoryStorage, configured ProjectTransactionCoordinator, and
-// deterministic data. No live LLM, filesystem, or network access.
+// Revisions are immutable JSON-safe SceneRevisionEnvelopeV1 records archived
+// through CoreExecutionRepository compare-and-swap; the accepted scene is a
+// separate semantic record that CAS-advances between revision IDs. No live
+// LLM, filesystem, host paths, or network access.
 // ============================================================================
 
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { getSceneRevision } from '../../src/editorial/facade.ts';
+import { sceneRevisionEnvelopeV1Schema } from '../../src/schemas/editorial.ts';
 import {
-  ProjectTransactionCoordinator,
-  resolveProjectPaths,
-  SceneRevisionStore,
-  SourceRevisionStore,
-  stableJson,
-} from '../../src/editorial/index.ts';
-import type { ProjectPaths } from '../../src/editorial/paths.ts';
-import { ConfigError, StorageConflictError } from '../../src/errors.ts';
-import { computeContentHash } from '../../src/storage/hash.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+  MemoryExecutionRepository,
+  MemoryRenderCacheRepository,
+  MemoryStateLogRepository,
+  MemoryStateSnapshotRepository,
+} from '../../src/testing/memory-repositories.ts';
+import type { JsonValue } from '../../src/contracts/json.js';
+import type {
+  CoreExecutionRepository,
+  SceneRevisionRecord,
+} from '../../src/ports/execution-repository.ts';
 import type {
   AnalysisResult,
+  EditorialRuntime,
   SceneRevisionEnvelopeV1,
-  SourceHeadV1,
-  SourceRevisionV1,
   ValidationResult,
 } from '../../src/types/editorial.ts';
 import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+const PROJECT_ID = 'test-project';
+const SOURCE_HASH = 'a'.repeat(64);
 const TEST_EVENT_ID = 'E-test-001';
 const TEST_ACTOR = 'test-actor';
+const BASE_ISO = '2026-07-28T00:00:00.000Z';
 
 function sha256Hex(): string {
   return crypto.randomBytes(32).toString('hex');
@@ -40,12 +46,8 @@ function uuid(): string {
   return crypto.randomUUID();
 }
 
-function makePaths(): ProjectPaths {
-  return resolveProjectPaths('/test-project');
-}
-
-function makeCoordinator(storage: MemoryStorage): ProjectTransactionCoordinator {
-  return new ProjectTransactionCoordinator(storage, makePaths());
+function hash(value: string): string {
+  return crypto.createHash('sha256').update(value).digest('hex');
 }
 
 function analysisResult(eventId: string, prose: string): AnalysisResult {
@@ -95,7 +97,7 @@ function makeSceneEnvelope(
     prose: string;
   },
 ): SceneRevisionEnvelopeV1 {
-  const proseHash = computeContentHash(overrides.prose);
+  const proseHash = hash(overrides.prose);
   return {
     version: 1,
     parentRevisionId: null,
@@ -130,722 +132,369 @@ function makeSceneEnvelope(
     providerCalls: [],
     promotionReadSet: [],
     requestRecords: [],
-    createdAt: '2026-07-28T00:00:00.000Z',
+    createdAt: BASE_ISO,
     ...overrides,
   };
 }
 
-function makeSourceRevision(
-  overrides: Partial<SourceRevisionV1> & { revisionId: string },
-): SourceRevisionV1 {
+function makeRepository(): CoreExecutionRepository {
+  return new MemoryExecutionRepository();
+}
+
+function revisionRecord(envelope: SceneRevisionEnvelopeV1): SceneRevisionRecord {
   return {
     version: 1,
-    parentRevisionId: null,
-    operationId: uuid(),
-    actorId: TEST_ACTOR,
-    origin: 'api_edit',
-    note: 'test revision',
-    projectBeforeHash: sha256Hex(),
-    projectAfterHash: sha256Hex(),
-    changeSetHash: sha256Hex(),
-    documents: [
-      {
-        path: 'definitions/characters/alice.yaml',
-        beforeHash: null,
-        afterHash: sha256Hex(),
-        beforeContent: null,
-        afterContent: 'name: Alice\nage: 30\n',
-      },
-    ],
-    affectedEventIds: [TEST_EVENT_ID],
-    createdAt: '2026-07-28T00:00:00.000Z',
-    ...overrides,
+    projectId: PROJECT_ID,
+    eventId: envelope.eventId,
+    revisionId: envelope.revisionId,
+    parentRevisionId: envelope.parentRevisionId,
+    sourceHash: SOURCE_HASH,
+    value: envelope as unknown as JsonValue,
   };
 }
 
-function makeSourceHead(
-  revisionId: string | null,
-  docHashes?: Record<string, string>,
-): SourceHeadV1 {
+/** Archive a revision with create-once CAS; throws if the revision already exists. */
+async function archive(
+  repository: CoreExecutionRepository,
+  envelope: SceneRevisionEnvelopeV1,
+): Promise<number> {
+  const result = await repository.compareAndSwapSceneRevision({
+    projectId: PROJECT_ID,
+    eventId: envelope.eventId,
+    revisionId: envelope.revisionId,
+    expectedVersion: null,
+    value: revisionRecord(envelope),
+  });
+  if (result.kind === 'conflict') {
+    throw new Error(`conflict archiving revision ${envelope.revisionId}`);
+  }
+  return result.version;
+}
+
+/** Advance the accepted scene to the given envelope with an expected-version CAS. */
+async function promoteAccepted(
+  repository: CoreExecutionRepository,
+  envelope: SceneRevisionEnvelopeV1,
+  expectedVersion: number | null,
+): Promise<number> {
+  const result = await repository.compareAndSwapAcceptedScene({
+    projectId: PROJECT_ID,
+    eventId: envelope.eventId,
+    expectedVersion,
+    value: {
+      version: 1,
+      projectId: PROJECT_ID,
+      eventId: envelope.eventId,
+      sourceHash: SOURCE_HASH,
+      revisionId: envelope.revisionId,
+      prose: envelope.prose,
+      proseHash: envelope.proseHash,
+      sceneHash: envelope.sceneHash,
+    },
+  });
+  if (result.kind === 'conflict') {
+    throw new Error(`conflict promoting revision ${envelope.revisionId}`);
+  }
+  return result.version;
+}
+
+function runtimeWith(execution: CoreExecutionRepository): EditorialRuntime {
   return {
-    version: 1,
+    services: {
+      execution,
+      renderCache: new MemoryRenderCacheRepository(),
+      stateLog: new MemoryStateLogRepository(),
+      stateSnapshots: new MemoryStateSnapshotRepository(),
+      promptTemplates: { get: async () => null },
+      clock: { now: () => BASE_ISO },
+      ids: { next: () => uuid() },
+      llm: {} as never,
+    },
+  };
+}
+
+async function readEnvelope(
+  repository: CoreExecutionRepository,
+  revisionId: string,
+): Promise<SceneRevisionEnvelopeV1 | null> {
+  const record = await repository.readSceneRevision({
+    projectId: PROJECT_ID,
+    eventId: TEST_EVENT_ID,
     revisionId,
-    projectSourceHash: sha256Hex(),
-    documents: docHashes ?? {},
-  };
+  });
+  return record ? (record.value.value as unknown as SceneRevisionEnvelopeV1) : null;
 }
 
-// ─── SceneRevisionStore Tests ───────────────────────────────────────────────
+// ─── Scene revision archive tests ───────────────────────────────────────────
 
-describe('SceneRevisionStore', () => {
-  describe('archive (create-only)', () => {
-    it('archives a new revision and reads it back', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-      const revUuid = uuid();
-      const envelope = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: revUuid,
-        prose: 'Scene revision prose content.',
-      });
-
-      const revPath = store.archive(envelope);
-      expect(revPath).toContain(revUuid);
-
-      const loaded = store.get(TEST_EVENT_ID, revUuid);
-      expect(loaded.revisionId).toBe(revUuid);
-      expect(loaded.prose).toBe('Scene revision prose content.');
+describe('scene revision archive (create-once via CAS)', () => {
+  it('archives a new revision and reads it back', async () => {
+    const repository = makeRepository();
+    const revUuid = uuid();
+    const envelope = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: revUuid,
+      prose: 'Scene revision prose content.',
     });
 
-    it('rejects duplicate UUID (create-once via CAS)', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-      const revUuid = uuid();
-      const envelope = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: revUuid,
-        prose: 'First revision.',
-      });
+    const version = await archive(repository, envelope);
+    expect(version).toBe(1);
 
-      store.archive(envelope);
-
-      const dup = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: revUuid,
-        prose: 'Duplicate revision.',
-      });
-      expect(() => store.archive(dup)).toThrow(StorageConflictError);
-    });
+    const loaded = await readEnvelope(repository, revUuid);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.revisionId).toBe(revUuid);
+    expect(loaded!.prose).toBe('Scene revision prose content.');
+    // Stored value stays JSON-safe and schema-clean after the repository round-trip.
+    expect(sceneRevisionEnvelopeV1Schema.safeParse(loaded).success).toBe(true);
   });
 
-  describe('immutable revision vs latest separation', () => {
-    it('archived revision persists even after latest is updated with a new revision', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-      const uuid1 = uuid();
-      const uuid2 = uuid();
-
-      const env1 = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid1,
-        prose: 'Version 1.',
-      });
-      store.archiveAndUpdateLatest(env1, null);
-      const latestHash1 = store.latestHash(TEST_EVENT_ID);
-
-      const env2 = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid2,
-        prose: 'Version 2.',
-      });
-      store.archiveAndUpdateLatest(env2, latestHash1);
-
-      // Revision 1 still readable from archive
-      const loaded1 = store.get(TEST_EVENT_ID, uuid1);
-      expect(loaded1.revisionId).toBe(uuid1);
-      expect(loaded1.prose).toBe('Version 1.');
-
-      // Latest points to revision 2
-      const latest = store.getLatest(TEST_EVENT_ID);
-      expect(latest).not.toBeNull();
-      expect(latest!.revisionId).toBe(uuid2);
-      expect(latest!.prose).toBe('Version 2.');
+  it('rejects duplicate revisionId (create-once via CAS)', async () => {
+    const repository = makeRepository();
+    const revUuid = uuid();
+    const envelope = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: revUuid,
+      prose: 'First revision.',
     });
-  });
+    await archive(repository, envelope);
 
-  describe('blocked latest does not imply head', () => {
-    it('stores a blocked release as latest, previous revision remains archived', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-      const uuid1 = uuid();
-      const uuid2 = uuid();
-
-      const env1 = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid1,
-        prose: 'Accepted version.',
-      });
-      store.archiveAndUpdateLatest(env1, null);
-      const latestHash1 = store.latestHash(TEST_EVENT_ID);
-
-      const env2 = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid2,
-        prose: 'Blocked version.',
-        releaseDecision: {
-          status: 'blocked',
-          scopeHash: sha256Hex(),
-          validationIdentity: 'test-validator-v1',
-          reasons: ['Content rejected by gate'],
-        },
-        released: false,
-      });
-      store.archiveAndUpdateLatest(env2, latestHash1);
-
-      // Latest is now the blocked revision
-      const latest = store.getLatest(TEST_EVENT_ID);
-      expect(latest).not.toBeNull();
-      expect(latest!.revisionId).toBe(uuid2);
-      expect(latest!.releaseDecision.status).toBe('blocked');
-      expect(latest!.released).toBe(false);
-
-      // Revision 1 still readable from archive
-      const loaded1 = store.get(TEST_EVENT_ID, uuid1);
-      expect(loaded1.prose).toBe('Accepted version.');
-
-      // Both revisions appear in list
-      const all = store.list(TEST_EVENT_ID);
-      expect(all).toHaveLength(2);
+    const dup = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: revUuid,
+      prose: 'Duplicate revision.',
     });
-  });
-
-  describe('latest CAS conflict leaves immutable revision readable', () => {
-    it('archive succeeds but concurrent latest update fails, archived revision persists', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-      const uuid1 = uuid();
-      const uuid2 = uuid();
-
-      const env1 = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid1,
-        prose: 'Base revision.',
-      });
-      store.archiveAndUpdateLatest(env1, null);
-
-      // Archive a new revision
-      const env2 = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid2,
-        prose: 'New revision.',
-      });
-      store.archive(env2);
-
-      // updateLatest with stale expectedHash fails
-      expect(() => store.updateLatest(env2, 'stalehash')).toThrow(StorageConflictError);
-
-      // Archived revision is still readable
-      const loaded = store.get(TEST_EVENT_ID, uuid2);
-      expect(loaded.revisionId).toBe(uuid2);
-      expect(loaded.prose).toBe('New revision.');
-
-      // Latest still points to original
-      const latest = store.getLatest(TEST_EVENT_ID);
-      expect(latest).not.toBeNull();
-      expect(latest!.revisionId).toBe(uuid1);
+    const result = await repository.compareAndSwapSceneRevision({
+      projectId: PROJECT_ID,
+      eventId: TEST_EVENT_ID,
+      revisionId: revUuid,
+      expectedVersion: null,
+      value: revisionRecord(dup),
     });
-  });
+    expect(result.kind).toBe('conflict');
 
-  describe('malformed envelope rejected', () => {
-    it('throws ZodError when revisionId is not a UUID', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-
-      const envelope = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: 'not-a-uuid',
-        prose: 'Bad UUID.',
-      });
-
-      expect(() => store.archive(envelope)).toThrow();
-    });
-
-    it('throws ConfigError when proseHash does not match prose', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-
-      const envelope = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid(),
-        prose: 'Some prose.',
-      });
-      // Override the correct hash with a wrong one using type coercion
-      const bad = {
-        ...envelope,
-        proseHash: '0000000000000000000000000000000000000000000000000000000000000000',
-      };
-
-      expect(() => store.archive(bad)).toThrow(ConfigError);
-      expect(() => store.archive(bad)).toThrow(/proseHash does not match prose/);
-    });
-
-    it('throws ConfigError when release.status=accepted but released=false', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-
-      const envelope = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid(),
-        prose: 'Inconsistent release.',
-        released: false,
-      });
-
-      expect(() => store.archive(envelope)).toThrow(ConfigError);
-      expect(() => store.archive(envelope)).toThrow(/release fields are inconsistent/);
-    });
-
-    it('throws ConfigError when released=true but analysis is null', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-
-      const envelope = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid(),
-        prose: 'Missing analysis.',
-        analysis: null,
-      });
-
-      expect(() => store.archive(envelope)).toThrow(ConfigError);
-      expect(() => store.archive(envelope)).toThrow(/release fields are inconsistent/);
-    });
-
-    it('throws ConfigError when release.status=blocked but released=true', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-
-      const envelope = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid(),
-        prose: 'Inconsistent blocked.',
-        releaseDecision: {
-          status: 'blocked',
-          scopeHash: sha256Hex(),
-          validationIdentity: 'test-validator-v1',
-          reasons: ['Blocked'],
-        },
-        released: true,
-      });
-
-      expect(() => store.archive(envelope)).toThrow(ConfigError);
-      expect(() => store.archive(envelope)).toThrow(/release fields are inconsistent/);
-    });
-
-    it('throws ConfigError when envelope JSON is malformed on read', () => {
-      const storage = new MemoryStorage();
-      const paths = makePaths();
-      const store = new SceneRevisionStore(makeCoordinator(storage), paths);
-      const revUuid = uuid();
-
-      const revPath = store.revisionPath(TEST_EVENT_ID, revUuid);
-      storage.mkdirp(paths.sceneRevisionsDir + '/' + TEST_EVENT_ID);
-      storage.write(revPath, '{not valid json}');
-
-      expect(() => store.get(TEST_EVENT_ID, revUuid)).toThrow(ConfigError);
-    });
-  });
-
-  describe('get — nonexistent revision throws', () => {
-    it('throws EditorialOperationError for unknown revision', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-
-      expect(() => store.get(TEST_EVENT_ID, uuid())).toThrow('Scene revision not found');
-    });
-  });
-
-  describe('getLatest — returns null when no latest', () => {
-    it('returns null when no latest file exists', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-
-      const latest = store.getLatest(TEST_EVENT_ID);
-      expect(latest).toBeNull();
-    });
-  });
-
-  describe('latestHash', () => {
-    it('returns null when no latest file exists', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-
-      expect(store.latestHash(TEST_EVENT_ID)).toBeNull();
-    });
-
-    it('returns a content hash after writing latest', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-      const revUuid = uuid();
-      const envelope = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: revUuid,
-        prose: 'Hash check.',
-      });
-
-      store.archiveAndUpdateLatest(envelope, null);
-      const hash = store.latestHash(TEST_EVENT_ID);
-      expect(hash).toBeTruthy();
-      expect(hash).toMatch(/^[a-f0-9]{64}$/);
-    });
-  });
-
-  describe('list — sorted by createdAt then revisionId', () => {
-    it('returns revisions sorted chronologically', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-
-      const uuid1 = uuid();
-      const uuid2 = uuid();
-      const uuid3 = uuid();
-
-      const env3 = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid3,
-        prose: 'Third (oldest timestamp).',
-        createdAt: '2026-07-28T00:00:01.000Z',
-      });
-      store.archive(env3);
-
-      const env1 = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid1,
-        prose: 'First (latest timestamp).',
-        createdAt: '2026-07-28T00:00:03.000Z',
-      });
-      store.archive(env1);
-
-      const env2 = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: uuid2,
-        prose: 'Second (middle timestamp).',
-        createdAt: '2026-07-28T00:00:02.000Z',
-      });
-      store.archive(env2);
-
-      const all = store.list(TEST_EVENT_ID);
-      expect(all).toHaveLength(3);
-      expect(all[0].revisionId).toBe(uuid3);
-      expect(all[1].revisionId).toBe(uuid2);
-      expect(all[2].revisionId).toBe(uuid1);
-    });
-
-    it('returns empty array for event with no revisions', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-
-      expect(store.list(TEST_EVENT_ID)).toEqual([]);
-    });
-  });
-
-  describe('archiveAndUpdateLatest', () => {
-    it('archives revision and updates latest atomically', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-      const revUuid = uuid();
-      const envelope = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: revUuid,
-        prose: 'Atomic archive+latest.',
-      });
-
-      store.archiveAndUpdateLatest(envelope, null);
-
-      const loaded = store.get(TEST_EVENT_ID, revUuid);
-      expect(loaded.revisionId).toBe(revUuid);
-
-      const latest = store.getLatest(TEST_EVENT_ID);
-      expect(latest).not.toBeNull();
-      expect(latest!.revisionId).toBe(revUuid);
-    });
-  });
-
-  describe('separate archive then updateLatest', () => {
-    it('updateLatest succeeds after archive', () => {
-      const storage = new MemoryStorage();
-      const store = new SceneRevisionStore(makeCoordinator(storage), makePaths());
-      const revUuid = uuid();
-      const envelope = makeSceneEnvelope({
-        eventId: TEST_EVENT_ID,
-        revisionId: revUuid,
-        prose: 'Separate steps.',
-      });
-
-      store.archive(envelope);
-      store.updateLatest(envelope, null);
-
-      const latest = store.getLatest(TEST_EVENT_ID);
-      expect(latest).not.toBeNull();
-      expect(latest!.revisionId).toBe(revUuid);
-    });
+    // The original immutable revision is unaffected.
+    const loaded = await readEnvelope(repository, revUuid);
+    expect(loaded!.prose).toBe('First revision.');
   });
 });
 
-// ─── SourceRevisionStore Tests ───────────────────────────────────────────────
+describe('immutable revision vs accepted scene separation', () => {
+  it('archived revision persists even after the accepted scene advances', async () => {
+    const repository = makeRepository();
+    const uuid1 = uuid();
+    const uuid2 = uuid();
 
-describe('SourceRevisionStore', () => {
-  describe('save (create-only)', () => {
-    it('saves a new source revision and head, reads both back', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-      const revUuid = uuid();
-      const revision = makeSourceRevision({ revisionId: revUuid });
-      const head = makeSourceHead(revUuid);
-
-      store.save(revision, head, null);
-
-      const loaded = store.get(revUuid);
-      expect(loaded.revisionId).toBe(revUuid);
-      expect(loaded.origin).toBe('api_edit');
-      expect(loaded.documents).toHaveLength(1);
-      expect(loaded.documents[0].path).toBe('definitions/characters/alice.yaml');
-
-      const loadedHead = store.getHead();
-      expect(loadedHead).not.toBeNull();
-      expect(loadedHead!.revisionId).toBe(revUuid);
+    const env1 = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: uuid1,
+      prose: 'Version 1.',
     });
+    await archive(repository, env1);
+    const acceptedVersion1 = await promoteAccepted(repository, env1, null);
 
-    it('rejects duplicate UUID (create-once via CAS)', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-      const revUuid = uuid();
-      const revision = makeSourceRevision({ revisionId: revUuid });
-      const head = makeSourceHead(revUuid);
-
-      store.save(revision, head, null);
-
-      const dupRevision = makeSourceRevision({ revisionId: revUuid, note: 'duplicate' });
-      const dupHead = makeSourceHead(revUuid);
-      expect(() => store.save(dupRevision, dupHead, null)).toThrow(StorageConflictError);
+    const env2 = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: uuid2,
+      prose: 'Version 2.',
     });
+    await archive(repository, env2);
+    await promoteAccepted(repository, env2, acceptedVersion1);
+
+    // Revision 1 is still readable from the archive.
+    const loaded1 = await readEnvelope(repository, uuid1);
+    expect(loaded1).not.toBeNull();
+    expect(loaded1!.revisionId).toBe(uuid1);
+    expect(loaded1!.prose).toBe('Version 1.');
+
+    // The accepted scene and resolved artifact point to revision 2.
+    const accepted = await repository.readAcceptedScene({
+      projectId: PROJECT_ID,
+      eventId: TEST_EVENT_ID,
+    });
+    expect(accepted).not.toBeNull();
+    expect(accepted!.value.revisionId).toBe(uuid2);
+
+    const artifact = await repository.resolveAcceptedArtifact({
+      projectId: PROJECT_ID,
+      eventId: TEST_EVENT_ID,
+    });
+    expect(artifact).not.toBeNull();
+    expect(artifact!.revisionId).toBe(uuid2);
+    expect(artifact!.prose).toBe('Version 2.');
   });
+});
 
-  describe('immutable revision vs head separation', () => {
-    it('archived revision persists even after head is updated with a new revision', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-      const uuid1 = uuid();
-      const uuid2 = uuid();
+describe('blocked revision does not displace the accepted scene', () => {
+  it('archives a blocked revision while the accepted scene keeps the accepted one', async () => {
+    const repository = makeRepository();
+    const uuid1 = uuid();
+    const uuid2 = uuid();
 
-      const docHash1 = sha256Hex();
-      const docHash2 = sha256Hex();
+    const env1 = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: uuid1,
+      prose: 'Accepted version.',
+    });
+    await archive(repository, env1);
+    await promoteAccepted(repository, env1, null);
 
-      const rev1 = makeSourceRevision({
-        revisionId: uuid1,
-        documents: [
-          {
-            path: 'definitions/characters/alice.yaml',
-            beforeHash: null,
-            afterHash: docHash1,
-            beforeContent: null,
-            afterContent: 'name: Alice\nage: 30\n',
-          },
-        ],
-      });
-      const head1 = makeSourceHead(uuid1, { 'definitions/characters/alice.yaml': docHash1 });
-      store.save(rev1, head1, null);
-      const headHash1 = store.headHash();
+    const env2 = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: uuid2,
+      prose: 'Blocked version.',
+      releaseDecision: {
+        status: 'blocked',
+        scopeHash: sha256Hex(),
+        validationIdentity: 'test-validator-v1',
+        reasons: ['Content rejected by gate'],
+      },
+      released: false,
+    });
+    await archive(repository, env2);
 
-      const rev2 = makeSourceRevision({
+    // Both revisions remain archived.
+    const loaded1 = await readEnvelope(repository, uuid1);
+    const loaded2 = await readEnvelope(repository, uuid2);
+    expect(loaded1!.prose).toBe('Accepted version.');
+    expect(loaded2!.releaseDecision.status).toBe('blocked');
+    expect(loaded2!.released).toBe(false);
+
+    // The accepted scene still resolves to the accepted revision.
+    const accepted = await repository.readAcceptedScene({
+      projectId: PROJECT_ID,
+      eventId: TEST_EVENT_ID,
+    });
+    expect(accepted!.value.revisionId).toBe(uuid1);
+    const artifact = await repository.resolveAcceptedArtifact({
+      projectId: PROJECT_ID,
+      eventId: TEST_EVENT_ID,
+    });
+    expect(artifact!.prose).toBe('Accepted version.');
+  });
+});
+
+describe('accepted-scene CAS conflict leaves immutable revision readable', () => {
+  it('stale expected version conflicts without losing the archived revision', async () => {
+    const repository = makeRepository();
+    const uuid1 = uuid();
+    const uuid2 = uuid();
+
+    const env1 = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: uuid1,
+      prose: 'Base revision.',
+    });
+    await archive(repository, env1);
+    await promoteAccepted(repository, env1, null);
+
+    const env2 = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: uuid2,
+      prose: 'New revision.',
+    });
+    await archive(repository, env2);
+
+    // Another worker already advanced the accepted scene (version 1); a stale
+    // expected version must conflict instead of clobbering it.
+    const stale = await repository.compareAndSwapAcceptedScene({
+      projectId: PROJECT_ID,
+      eventId: TEST_EVENT_ID,
+      expectedVersion: 0,
+      value: {
+        version: 1,
+        projectId: PROJECT_ID,
+        eventId: TEST_EVENT_ID,
+        sourceHash: SOURCE_HASH,
         revisionId: uuid2,
-        documents: [
-          {
-            path: 'definitions/characters/alice.yaml',
-            beforeHash: docHash1,
-            afterHash: docHash2,
-            beforeContent: 'name: Alice\nage: 30\n',
-            afterContent: 'name: Alice\nage: 31\n',
-          },
-        ],
-        parentRevisionId: uuid1,
-      });
-      const head2 = makeSourceHead(uuid2, { 'definitions/characters/alice.yaml': docHash2 });
-      store.save(rev2, head2, headHash1);
-
-      // Revision 1 is still readable
-      const loaded1 = store.get(uuid1);
-      expect(loaded1.revisionId).toBe(uuid1);
-      expect(loaded1.documents[0].afterContent).toBe('name: Alice\nage: 30\n');
-
-      // Head points to revision 2
-      const loadedHead = store.getHead();
-      expect(loadedHead).not.toBeNull();
-      expect(loadedHead!.revisionId).toBe(uuid2);
+        prose: env2.prose,
+        proseHash: env2.proseHash,
+        sceneHash: env2.sceneHash,
+      },
     });
+    expect(stale.kind).toBe('conflict');
+
+    // The archived revision remains readable and the accepted scene is intact.
+    const loaded = await readEnvelope(repository, uuid2);
+    expect(loaded).not.toBeNull();
+    expect(loaded!.revisionId).toBe(uuid2);
+    const accepted = await repository.readAcceptedScene({
+      projectId: PROJECT_ID,
+      eventId: TEST_EVENT_ID,
+    });
+    expect(accepted!.value.revisionId).toBe(uuid1);
+  });
+});
+
+describe('facade reads and error contract', () => {
+  it('reads an archived revision through getSceneRevision', async () => {
+    const repository = makeRepository();
+    const revUuid = uuid();
+    const envelope = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: revUuid,
+      prose: 'Facade read.',
+    });
+    await archive(repository, envelope);
+
+    const loaded = await getSceneRevision(
+      { projectId: PROJECT_ID, eventId: TEST_EVENT_ID, revisionId: revUuid },
+      runtimeWith(repository),
+    );
+    expect(loaded.revisionId).toBe(revUuid);
+    expect(loaded.prose).toBe('Facade read.');
   });
 
-  describe('head CAS conflict', () => {
-    it('save fails on stale head hash', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-      const uuid1 = uuid();
-      const uuid2 = uuid();
-
-      const rev1 = makeSourceRevision({ revisionId: uuid1 });
-      const head1 = makeSourceHead(uuid1);
-      store.save(rev1, head1, null);
-
-      const rev2 = makeSourceRevision({ revisionId: uuid2 });
-      const head2 = makeSourceHead(uuid2);
-      expect(() => store.save(rev2, head2, 'staleheadhash')).toThrow(StorageConflictError);
-    });
+  it('throws REVISION_NOT_FOUND for an unknown revision', async () => {
+    const repository = makeRepository();
+    await expect(
+      getSceneRevision(
+        { projectId: PROJECT_ID, eventId: TEST_EVENT_ID, revisionId: uuid() },
+        runtimeWith(repository),
+      ),
+    ).rejects.toThrow('was not found');
   });
 
-  describe('schema validation', () => {
-    it('throws ConfigError when head revisionId does not match saved revision', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-      const revUuid = uuid();
-      const revision = makeSourceRevision({ revisionId: revUuid });
-      const head = makeSourceHead(uuid()); // different UUID
+  it('requires an explicit semantic runtime', async () => {
+    await expect(
+      getSceneRevision({ projectId: PROJECT_ID, eventId: TEST_EVENT_ID, revisionId: uuid() }),
+    ).rejects.toThrow('CoreExecutionRepository is required');
+  });
+});
 
-      expect(() => store.save(revision, head, null)).toThrow(ConfigError);
-      expect(() => store.save(revision, head, null)).toThrow(/head revisionId must identify/);
+describe('malformed envelope rejected at the schema boundary', () => {
+  it('rejects a revisionId that is not a UUID', () => {
+    const envelope = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: 'not-a-uuid',
+      prose: 'Bad UUID.',
     });
-
-    it('throws ConfigError when revision JSON is malformed on read', () => {
-      const storage = new MemoryStorage();
-      const paths = makePaths();
-      const store = new SourceRevisionStore(makeCoordinator(storage), paths);
-      const revUuid = uuid();
-      const revPath = store.revisionPath(revUuid);
-
-      storage.mkdirp(paths.sourceRevisionsDir);
-      storage.write(revPath, '{not valid json}');
-
-      expect(() => store.get(revUuid)).toThrow(ConfigError);
-    });
-
-    it('throws ConfigError when head JSON is malformed', () => {
-      const storage = new MemoryStorage();
-      const paths = makePaths();
-      const store = new SourceRevisionStore(makeCoordinator(storage), paths);
-
-      storage.mkdirp(paths.sourceRevisionsDir);
-      storage.write(paths.sourceHeadPath, '{not valid json}');
-
-      expect(() => store.getHead()).toThrow(ConfigError);
-    });
+    expect(sceneRevisionEnvelopeV1Schema.safeParse(envelope).success).toBe(false);
   });
 
-  describe('get — nonexistent revision throws', () => {
-    it('throws EditorialOperationError for unknown revision', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-
-      expect(() => store.get(uuid())).toThrow('Source revision not found');
+  it('accepts a consistent envelope and rejects stray fields', () => {
+    const envelope = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: uuid(),
+      prose: 'Clean envelope.',
     });
+    expect(sceneRevisionEnvelopeV1Schema.safeParse(envelope).success).toBe(true);
+
+    const stray = { ...envelope, unexpectedField: true };
+    expect(sceneRevisionEnvelopeV1Schema.safeParse(stray).success).toBe(false);
   });
 
-  describe('getHead — returns null when no head', () => {
-    it('returns null when no head file exists', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-
-      expect(store.getHead()).toBeNull();
+  it('keeps prose content-hash identity intact through the repository', async () => {
+    const repository = makeRepository();
+    const revUuid = uuid();
+    const envelope = makeSceneEnvelope({
+      eventId: TEST_EVENT_ID,
+      revisionId: revUuid,
+      prose: 'Hash-consistent prose.',
     });
-  });
+    await archive(repository, envelope);
 
-  describe('headHash', () => {
-    it('returns null when no head file exists', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-
-      expect(store.headHash()).toBeNull();
-    });
-
-    it('returns a content hash after saving head', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-      const revUuid = uuid();
-      const revision = makeSourceRevision({ revisionId: revUuid });
-      const head = makeSourceHead(revUuid);
-      store.save(revision, head, null);
-
-      const hash = store.headHash();
-      expect(hash).toBeTruthy();
-      expect(hash).toMatch(/^[a-f0-9]{64}$/);
-    });
-  });
-
-  describe('list — sorted by createdAt then revisionId', () => {
-    it('returns revisions sorted chronologically', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-
-      const uuid1 = uuid();
-      const uuid2 = uuid();
-      const uuid3 = uuid();
-
-      const rev3 = makeSourceRevision({
-        revisionId: uuid3,
-        createdAt: '2026-07-28T00:00:01.000Z',
-      });
-      store.save(rev3, makeSourceHead(uuid3), null);
-      const headHash3 = store.headHash();
-
-      const rev1 = makeSourceRevision({
-        revisionId: uuid1,
-        createdAt: '2026-07-28T00:00:03.000Z',
-      });
-      store.save(rev1, makeSourceHead(uuid1), headHash3);
-      const headHash1 = store.headHash();
-
-      const rev2 = makeSourceRevision({
-        revisionId: uuid2,
-        createdAt: '2026-07-28T00:00:02.000Z',
-      });
-      store.save(rev2, makeSourceHead(uuid2), headHash1);
-
-      const all = store.list();
-      expect(all).toHaveLength(3);
-      expect(all[0].revisionId).toBe(uuid3);
-      expect(all[1].revisionId).toBe(uuid2);
-      expect(all[2].revisionId).toBe(uuid1);
-    });
-
-    it('returns empty array when no revisions exist', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-
-      expect(store.list()).toEqual([]);
-    });
-  });
-
-  describe('list with pathFilter', () => {
-    it('filters revisions by document path', () => {
-      const storage = new MemoryStorage();
-      const store = new SourceRevisionStore(makeCoordinator(storage), makePaths());
-
-      const uuid1 = uuid();
-      const rev1 = makeSourceRevision({
-        revisionId: uuid1,
-        documents: [
-          {
-            path: 'definitions/characters/alice.yaml',
-            beforeHash: null,
-            afterHash: sha256Hex(),
-            beforeContent: null,
-            afterContent: 'name: Alice\n',
-          },
-        ],
-      });
-      store.save(rev1, makeSourceHead(uuid1), null);
-      const headHash1 = store.headHash();
-
-      const uuid2 = uuid();
-      const rev2 = makeSourceRevision({
-        revisionId: uuid2,
-        documents: [
-          {
-            path: 'definitions/locations/room.yaml',
-            beforeHash: null,
-            afterHash: sha256Hex(),
-            beforeContent: null,
-            afterContent: 'name: Room\n',
-          },
-        ],
-      });
-      store.save(rev2, makeSourceHead(uuid2), headHash1);
-
-      const aliceRevisions = store.list('definitions/characters/alice.yaml');
-      expect(aliceRevisions).toHaveLength(1);
-      expect(aliceRevisions[0].revisionId).toBe(uuid1);
-
-      const roomRevisions = store.list('definitions/locations/room.yaml');
-      expect(roomRevisions).toHaveLength(1);
-      expect(roomRevisions[0].revisionId).toBe(uuid2);
-
-      const noMatch = store.list('definitions/characters/bob.yaml');
-      expect(noMatch).toHaveLength(0);
-    });
+    const loaded = await readEnvelope(repository, revUuid);
+    expect(loaded!.proseHash).toBe(hash(loaded!.prose));
+    expect(loaded!.sceneHash).toBeTruthy();
   });
 });

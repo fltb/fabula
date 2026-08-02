@@ -4,7 +4,7 @@ import { plannedDiscourseLedgerSourceSchema } from '../../src/schemas/discourse.
 import { eventFileSchema } from '../../src/schemas/event.ts';
 import { compileDiscourseBoundaries } from '../../src/state/discourse-context.ts';
 import { compilePlannedDiscourseLedger } from '../../src/state/discourse-ledger.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import type { ProjectSourceSnapshotV1 } from '../../src/contracts/source.ts';
 import type { PlannedDiscourseLedgerSource } from '../../src/types/discourse.ts';
 import type { NarrativeEvent } from '../../src/types/event.ts';
 
@@ -236,9 +236,13 @@ describe('planned discourse ledger compilation', () => {
   it('reports a missing ledger as a configuration error at the YAML boundary', () => {
     expect(() =>
       readYamlFile({
-        filePath: '/project/definitions/discourse-ledger.yaml',
+        logicalPath: 'definitions/discourse-ledger.yaml',
         schema: plannedDiscourseLedgerSourceSchema,
-        storage: new MemoryStorage(),
+        snapshot: {
+          version: 1,
+          documents: [],
+          sourceHash: 'a'.repeat(64),
+        } satisfies ProjectSourceSnapshotV1,
       }),
     ).toThrow('Required YAML file is missing');
   });

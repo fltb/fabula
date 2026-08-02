@@ -158,10 +158,21 @@ export function compileGameDialogueTree(
       phase: 'game_dialogue_tree',
     });
   }
-  const root = roots[0]!;
+  const root = roots[0];
+  if (!root) {
+    throw new ConfigError('Game dialogue tree requires exactly one root; found 0', {
+      phase: 'game_dialogue_tree',
+    });
+  }
 
   const buildNode = (eventId: string): TreeNode => {
-    const event = eventById.get(eventId)!;
+    const event = eventById.get(eventId);
+    if (!event) {
+      throw new ConfigError(`Game dialogue tree references missing event '${eventId}'`, {
+        eventId,
+        phase: 'game_dialogue_tree',
+      });
+    }
     return {
       event,
       children: (childIdsByEventId.get(eventId) ?? []).map(buildNode),
@@ -176,7 +187,13 @@ export function compileGameDialogueTree(
   };
   markReachable(rootNode);
   if (reachable.size !== events.length) {
-    const unreachable = events.find((event) => !reachable.has(event.id))!;
+    const unreachable = events.find((event) => !reachable.has(event.id));
+    if (!unreachable) {
+      throw new ConfigError(`Game dialogue tree reachability invariant failed from '${root.id}'`, {
+        eventId: root.id,
+        phase: 'game_dialogue_tree',
+      });
+    }
     throw new ConfigError(
       `Game dialogue event '${unreachable.id}' is unreachable from '${root.id}'`,
       {
@@ -199,7 +216,14 @@ export function compileGameDialogueTree(
 
     const descendantPaths: BranchPath[] = [];
     for (const [index, child] of node.children.entries()) {
-      const choice = node.event.choices![index]!;
+      const choices = node.event.choices;
+      const choice = choices?.[index];
+      if (!choice) {
+        throw new ConfigError(
+          `Game dialogue event '${node.event.id}' is missing choice at child index ${index}`,
+          { eventId: node.event.id, phase: 'game_dialogue_tree' },
+        );
+      }
       const choicePath: BranchPath = {
         decisions: [
           ...path.decisions,
@@ -213,7 +237,14 @@ export function compileGameDialogueTree(
       descendantPaths.push(...visitLeaves(child, choicePath));
     }
     descendantPathsByEventId.set(node.event.id, descendantPaths);
-    representativePathByEventId.set(node.event.id, descendantPaths[0]!);
+    const representativePath = descendantPaths[0];
+    if (!representativePath) {
+      throw new ConfigError(`Game dialogue event '${node.event.id}' has no descendant paths`, {
+        eventId: node.event.id,
+        phase: 'game_dialogue_tree',
+      });
+    }
+    representativePathByEventId.set(node.event.id, representativePath);
     return descendantPaths;
   };
   visitLeaves(rootNode, { decisions: [] });
@@ -224,7 +255,16 @@ export function compileGameDialogueTree(
       event.id,
       event.id === root.id
         ? { type: 'all' }
-        : { type: 'paths', paths: descendantPathsByEventId.get(event.id)! },
+        : (() => {
+            const paths = descendantPathsByEventId.get(event.id);
+            if (!paths) {
+              throw new ConfigError(`Game dialogue event '${event.id}' has no branch scope`, {
+                eventId: event.id,
+                phase: 'game_dialogue_tree',
+              });
+            }
+            return { type: 'paths', paths };
+          })(),
     );
   }
 
@@ -235,7 +275,13 @@ export function compileGameDialogueTree(
     if (!choices) return;
     choicesByEventId.set(node.event.id, choices);
     for (const choice of choices) {
-      const targetScope = eventScopes.get(choice.targetEvent)!;
+      const targetScope = eventScopes.get(choice.targetEvent);
+      if (!targetScope) {
+        throw new ConfigError(
+          `Choice '${choice.id}' in '${node.event.id}' has no target branch scope`,
+          { eventId: node.event.id, phase: 'game_dialogue_tree' },
+        );
+      }
       transitionEvents.push(makeTransitionEvent(node.event, choice, targetScope));
     }
     for (const child of node.children) emitTransitions(child);

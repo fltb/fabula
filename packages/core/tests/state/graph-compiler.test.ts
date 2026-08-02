@@ -16,7 +16,7 @@
 // 13. snapshot/full replay/cache invalidation
 // ============================================================================
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type CompileNode, compileGraph } from '../../src/state/graph-compiler.ts';
 import type {
   DiscourseGraph,
@@ -1194,6 +1194,9 @@ describe('GraphCompiler', () => {
 
   // ─── Category 13: snapshot/full replay/cache invalidation ─────────────────
   describe('13. snapshot/full replay/cache invalidation', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
     it('produces cache entries with all required fields', () => {
       const nodes: CompileNode[] = [
         storyNode('evt1', 'day_1', [
@@ -1253,6 +1256,26 @@ describe('GraphCompiler', () => {
       const result2 = compileGraph(nodes);
       expect(result1.storyGraphs[0].hash).toBe(result2.storyGraphs[0].hash);
       expect(result1.cache[0].outputHashes).toEqual(result2.cache[0].outputHashes);
+    });
+
+    it('produces byte-identical results independent of wall clock', () => {
+      const nodes: CompileNode[] = [
+        storyNode('evt1', 'day_1', [
+          { effectId: 'o1', canonicalKey: 'entity:char/hero/name', value: 'Aria' },
+        ]),
+        storyNode('evt2', 'day_2', [
+          { effectId: 'o2', canonicalKey: 'entity:char/hero/name', value: 'Aria the Brave' },
+        ]),
+      ];
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2024-01-01T00:00:00.000Z'));
+      const early = compileGraph(nodes);
+      vi.setSystemTime(new Date('2026-08-02T03:04:05.000Z'));
+      const late = compileGraph(nodes);
+      // The full result — including cache-entry metadata — must be identical
+      // regardless of wall clock.
+      expect(late).toEqual(early);
+      vi.useRealTimers();
     });
 
     it('coordinate-only change invalidates cache hash', () => {

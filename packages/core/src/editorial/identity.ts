@@ -2,11 +2,11 @@
 // Editorial Identity — Pure hash computations for scene provenance,
 // validation identity, and immutable plan identity.
 //
-// None of these functions touch storage, clock, actors, or providers.
+// None of these functions touch I/O, clock, actors, or providers.
 // They are deterministic — identical inputs always produce identical outputs.
 // ============================================================================
 
-import * as crypto from 'node:crypto';
+import { sha256 } from '../cache/pure-sha256.ts';
 import type { BranchPath } from '../types/branch.ts';
 import type { SceneSelector } from '../types/editorial.ts';
 
@@ -24,21 +24,15 @@ export function canonicalJson(value: unknown): string {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
-    return '[' + value.map(canonicalJson).join(',') + ']';
+    return `[${value.map(canonicalJson).join(',')}]`;
   }
   const obj = value as Record<string, unknown>;
   const keys = Object.keys(obj)
     .filter((k) => obj[k] !== undefined)
     .sort();
-  return '{' + keys.map((k) => JSON.stringify(k) + ':' + canonicalJson(obj[k])).join(',') + '}';
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
 }
 
-/**
- * SHA‑256 hex digest — deterministic cryptographic identity.
- */
-function sha256(input: string): string {
-  return crypto.createHash('sha256').update(input, 'utf-8').digest('hex');
-}
 
 // ─── Scene Hashing ───────────────────────────────────────────────────────────
 
@@ -65,29 +59,15 @@ export function computeScopeHash(eventId: string, branchPath: BranchPath | undef
 }
 
 /**
- * Editorial basis hash — provider‑free: covers the event, branch path,
- * source head hash, and the current revision basis (latest revision id
- * and its prose hash) without any LLM/analysis/validation artifacts.
- *
- * Two compiles that differ only in model/profile/credentials will produce
- * the same editorial basis hash for every scene.
- */
+ * Editorial basis covers content identity, branch, and revision basis. */
 export function computeEditorialBasisHash(
   eventId: string,
   branchPath: BranchPath | undefined,
-  sourceHeadHash: string | null,
+  sourceHash: string | null,
   latestRevisionId: string | null,
   latestProseHash: string | null,
 ): string {
-  return sha256(
-    canonicalJson({
-      eventId,
-      branchPath: branchPath ?? null,
-      sourceHeadHash,
-      latestRevisionId,
-      latestProseHash,
-    }),
-  );
+  return sha256(canonicalJson({ eventId, branchPath: branchPath ?? null, sourceHash, latestRevisionId, latestProseHash }));
 }
 
 // ─── Validation Identity ─────────────────────────────────────────────────────

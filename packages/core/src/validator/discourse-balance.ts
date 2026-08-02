@@ -98,7 +98,7 @@ export class DiscourseBalanceValidator implements Validator {
         narrativeChecks,
         (check) => {
           // Catalog-driven: verify attribute is a narrative attribute
-          const entityKind = input.entityRegistry?.resolve(check.entityId)?.kind;
+          const entityKind = input.entities?.resolve(check.entityId)?.kind;
           if (entityKind) {
             const role = getAttributeSemanticRole(
               input.entityTypeCatalog,

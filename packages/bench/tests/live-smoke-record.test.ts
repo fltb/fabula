@@ -2,13 +2,10 @@
 // Live smoke record builder — focused tests
 // ============================================================================
 
-import type { ProviderCallLedgerEntry, RenderNovelResult } from '@novalistically/core';
-import {
-  AuthError,
-  liveSmokeRecordSchema,
-  PipelineError,
-  sanitizeError,
-} from '@novalistically/core';
+import { NovalisticallyError, sanitizeError } from '@novalistically/core';
+import type { RenderNovelResult } from '@novalistically/core/editorial';
+import type { ProviderCallLedgerEntry } from '@novalistically/core/tooling';
+import { liveSmokeRecordSchema } from '@novalistically/core/tooling';
 import { describe, expect, it } from 'vitest';
 import { buildLiveSmokeRecord } from '../src/live-smoke.js';
 
@@ -697,14 +694,16 @@ describe('sanitizeError — redacts secret-like content', () => {
   });
 
   it('preserves NovalisticallyError codes', () => {
-    const err = new AuthError('Invalid credentials', { path: '/auth' });
+    const err = new NovalisticallyError('PROVIDER_AUTH', 'Invalid credentials', { path: '/auth' });
     const result = sanitizeError(err);
     expect(result).toContain('[PROVIDER_AUTH]');
     expect(result).toContain('Invalid credentials');
   });
 
-  it('preserves PipelineError codes', () => {
-    const err = new PipelineError('Scene render timed out', { eventId: 'E3' });
+  it('preserves supplied NovalisticallyError codes', () => {
+    const err = new NovalisticallyError('PIPELINE_FAILURE', 'Scene render timed out', {
+      eventId: 'E3',
+    });
     const result = sanitizeError(err);
     expect(result).toContain('[PIPELINE_FAILURE]');
     expect(result).toContain('Scene render timed out');

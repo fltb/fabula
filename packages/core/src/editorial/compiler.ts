@@ -1,9 +1,10 @@
+// Core compiler consumes immutable source snapshots and emits semantic intents only.
 // ============================================================================
 // Editorial Compiler — Pure transformation of editorial requests into
 // immutable execution plans.
 //
 // The compiler is a pure function: it takes readonly data + the request and
-// returns a fully-described plan.  No storage access, no clock, no provider
+// returns a fully-described plan.  No I/O access, no clock, no provider
 // creation, no writes.
 //
 // Pipeline stages (all side‑effect free):
@@ -13,12 +14,12 @@
 //                              validationIdentity
 //   4. Branch contracts     → story, discourse, surface contracts
 //   5. Plan hash            → immutable plan identifier
-//   6. Read set & jobs      → what reads to verify, what work to execute
+//   6. Jobs                → semantic execution intents
 // ============================================================================
 
-import type { StorageWrite, TransactionReadExpectation } from '../storage/types.ts';
+import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
 import type { BranchPath } from '../types/branch.ts';
-import type { EditorialError, EditorialPlanSummaryV1, SceneSelector } from '../types/editorial.ts';
+import type { EditorialError, EditorialPlanSummaryV1, EditorialRenderRequestV1, SceneSelector } from '../types/editorial.ts';
 import type { ReviewComment } from '../types/review.ts';
 import {
   type CompiledSceneIdentity,
@@ -39,66 +40,19 @@ import { preflightSelector } from './selector.ts';
 
 /**
  * Everything the compiler needs to produce a plan.
- * This is the entire compile‑time contract — no storage reference.
+ * This is the entire compile‑time contract — no I/O reference.
  */
 export interface EditorialCompileInput {
-  /** The editorial request (version, projectDir, selector, revision, model, etc.). */
-  readonly request: {
-    readonly version: 1;
-    readonly projectDir: string;
-    readonly selector?: SceneSelector;
-    readonly revision?: {
-      readonly reviewIds?: readonly string[];
-      readonly instruction?: string;
-    };
-    readonly model?: string;
-    readonly providerProfile?: string;
-    readonly branchPath?: BranchPath;
-    readonly discourseBranch?: string;
-    readonly waivers?: ReadonlyArray<{
-      readonly gateId: string;
-      readonly signedBy: string;
-      readonly signedAt: string;
-      readonly reason: string;
-    }>;
-    readonly batch?: {
-      readonly batchSize?: number;
-      readonly windowSize?: number;
-      readonly failFast?: boolean;
-    };
-    readonly maxRounds?: number;
-  };
-  /** Branch‑scoped event catalog (all authored events reachable on this branch). */
+  readonly request: Omit<EditorialRenderRequestV1, 'mutation'>;
+  readonly source: ProjectSourceSnapshotV1;
   readonly catalog: SceneCatalog;
-  /**
-   * Per‑event source content and document contents for source hash computation.
-   * Key = eventId, value = full serialized event content (e.g. YAML source).
-   */
   readonly eventContents: Record<string, string>;
-  /**
-   * Source document contents for hash computation.
-   * Key = source document path, value = full content.
-   */
   readonly sourceDocumentContents: Record<string, string>;
-  /** Current source head hash (projectSourceHash from SourceHeadV1). */
-  readonly sourceHeadHash: string | null;
-  /**
-   * Per‑event latest revision metadata (if any).
-   * Key = eventId, value = { revisionId, proseHash } or null.
-   */
   readonly latestRevisions: Record<string, { revisionId: string; proseHash: string } | null>;
-  /** Validation identity input — determines which validators are active. */
   readonly validation: ValidationIdentityInput;
-  /** Current review ledger comments (for revision preflight). */
   readonly reviewComments: readonly ReviewComment[];
-  /** Chapter number for each eventId (for revision applicability checks). */
   readonly chapterByEventId: Record<string, number>;
-  /** Whether each eventId requires an LLM provider call. */
   readonly requiresProviderByEventId: Record<string, boolean>;
-  /** Response files directory (formerly hardcoded as `${projectDir}/.nova/responses`). */
-  readonly responsesDir: string;
-  /** Path to the source-head file (formerly hardcoded as `${projectDir}/.nova/work/source-head.json`). */
-  readonly sourceHeadPath: string;
 }
 
 // ============================================================================
@@ -169,33 +123,15 @@ export interface BranchContracts {
   };
 }
 
-/** Top‑level compiler output. */
+/** Top-level compiler output. */
 export interface EditorialCompileOutput {
-  /** Immutable plan hash (excludes actor/operation/time/credentials/runtime). */
   readonly planHash: string;
-  /** Plan summary conforming to the v1 API. */
   readonly planSummary: EditorialPlanSummaryV1;
-  /** Resolved event ids (deduplicated, narrative‑order sorted). */
   readonly selectedEventIds: readonly string[];
-  /** Per‑scene compile info. */
   readonly scenes: readonly CompiledSceneInfo[];
-  /** Branch contracts (story, discourse, surface). */
   readonly branchContracts: BranchContracts;
-  /** Selector preflight result (errors only). */
   readonly selectorErrors: readonly EditorialError[];
-  /** Jobs to execute. */
-  readonly jobs: readonly EditorialCompileJob[];
-  /**
-   * Read set — the set of files/directories that must be verified
-   * (via expected hashes) before the plan can be executed.
-   */
-  readonly readSet: readonly TransactionReadExpectation[];
-  /**
-   * Prepared external changes — StorageWrites that the caller MUST apply
-   * as part of this compile (e.g. review application records, operation
-   * journals).  The array is empty for a pure dry‑run compile.
-   */
-  readonly preparedExternalChanges: readonly StorageWrite[];
+  readonly intents: readonly EditorialCompileJob[];
 }
 
 // ============================================================================
@@ -409,41 +345,6 @@ export function compileBranchContracts(
 }
 
 // ============================================================================
-// Read Set Compilation
-// ============================================================================
-
-/**
- * Build the read set — the set of storage expectations that must hold
- * before the plan can be executed.  Pure — no storage access.
- */
-export function compileReadSet(
-  sourceHeadPath: string,
-  responsesDir: string,
-  sourceHeadHash: string | null,
-  eventIds: readonly string[],
-): readonly TransactionReadExpectation[] {
-  const readSet: TransactionReadExpectation[] = [];
-
-  // Source head file expectation.
-  readSet.push({
-    kind: 'file',
-    path: sourceHeadPath,
-    expectedHash: sourceHeadHash,
-  });
-
-  // Scene response files for each event.
-  for (const eventId of eventIds) {
-    readSet.push({
-      kind: 'file',
-      path: `${responsesDir}/${eventId}.json`,
-      expectedHash: null, // may not exist yet
-    });
-  }
-
-  return Object.freeze(readSet);
-}
-
-// ============================================================================
 // Compile Editorial Run — main entry point
 // ============================================================================
 
@@ -456,9 +357,9 @@ export function compileReadSet(
  *   3. Per‑scene identities   → compute all hashes
  *   4. Branch contracts       → story / discourse / surface
  *   5. Plan hash              → immutable identity
- *   6. Read set & jobs        → execution scaffolding
+ *   6. Jobs                 → semantic execution intents
  *
- * The function is PURE — no storage, no clock, no providers.
+ * The function is PURE — no I/O, no clock, no providers.
  * Two identical inputs ALWAYS produce two identical outputs (deep‑equal
  * and planHash‑equal).
  */
@@ -509,7 +410,7 @@ export function compileEditorialRun(input: EditorialCompileInput): EditorialComp
     const editorialBasisHash = computeEditorialBasisHash(
       eventId,
       input.request.branchPath,
-      input.sourceHeadHash,
+      input.source.sourceHash,
       latestRev?.revisionId ?? null,
       latestRev?.proseHash ?? null,
     );
@@ -600,21 +501,16 @@ export function compileEditorialRun(input: EditorialCompileInput): EditorialComp
     maxRounds: input.request.maxRounds,
   });
 
-  // ── 6. Read set & jobs ─────────────────────────────────────────────
+  // ── 6. Jobs ─────────────────────────────────────────────
 
-  const readSet = compileReadSet(
-    input.sourceHeadPath,
-    input.responsesDir,
-    input.sourceHeadHash,
-    selectedEventIds,
-  );
+  // Semantic intents contain no filesystem access or prepared writes.
 
   // ── Plan summary ──────────────────────────────────────────────────
 
   const planSummary: EditorialPlanSummaryV1 = {
     version: 1,
     planHash,
-    projectSourceHash: input.sourceHeadHash ?? '',
+    sourceHash: input.source.sourceHash,
     scopeHash: sceneIdentities.length > 0 ? sceneIdentities[0].scopeHash : '',
     validationIdentity,
     selectedEventIds: [...selectedEventIds],
@@ -633,8 +529,6 @@ export function compileEditorialRun(input: EditorialCompileInput): EditorialComp
     scenes: Object.freeze(scenes),
     branchContracts,
     selectorErrors: preflightErrors,
-    jobs: Object.freeze(jobs),
-    readSet,
-    preparedExternalChanges: Object.freeze([]),
+    intents: Object.freeze(jobs),
   };
 }

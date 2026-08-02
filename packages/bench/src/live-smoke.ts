@@ -5,8 +5,9 @@
 
 import { createHash } from 'node:crypto';
 import { arch, cpus, platform } from 'node:os';
-import type { RenderNovelResult } from '@novalistically/core';
-import { liveSmokeRecordSchema, sanitizeError } from '@novalistically/core';
+import { sanitizeError } from '@novalistically/core';
+import type { RenderNovelResult } from '@novalistically/core/editorial';
+import { liveSmokeRecordSchema } from '@novalistically/core/tooling';
 
 // ============================================================================
 // Types

@@ -2,38 +2,25 @@
 // Novalistically — Impact Analysis Tests (D10)
 // ============================================================================
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { analyzeProjectImpact } from '../src/api.js';
+import type { ProjectSourceSnapshotV1 } from '../src/contracts/source.ts';
+import { createSourceSnapshot } from './fixtures/source-snapshot.ts';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function createProjectDir(name: string): string {
-  const dir = mkdtempSync(join(tmpdir(), `nova-impact-${name}-`));
-  // nova.yaml
-  writeFileSync(join(dir, 'nova.yaml'), 'project: test\ntitle: "Test"\nauthor: "Tester"\n');
-  // definitions
-  mkdirSync(join(dir, 'definitions'), { recursive: true });
-  writeFileSync(
-    join(dir, 'definitions', 'state_initial.yaml'),
-    `info:
-  currentEra: modern
-  politicalSituation: stable
-threads: []
-worldFacts: []
-`,
-  );
-  // entity-types.yaml (required — EntityMapper.loadProject reads it via
-  // readYamlFile). Strict versionless catalog covering exactly the types and
-  // attributes the generated events reference: narrator.location/knowledge,
-  // hero.location/status.
-  writeFileSync(
-    join(dir, 'definitions', 'entity-types.yaml'),
-    [
+/**
+ * Build an immutable source snapshot with the canonical project skeleton plus
+ * the given event documents (`{ logicalPath: content }`). No storage, no
+ * project directory — only ProjectSourceSnapshotV1 values.
+ */
+function project(events: Record<string, string> = {}): ProjectSourceSnapshotV1 {
+  const base: Record<string, string> = {
+    'nova.yaml': 'project: test\ntitle: "Test"\nauthor: "Tester"\n',
+    'definitions/state_initial.yaml': 'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n',
+    'definitions/entity-types.yaml': [
       'types:',
       '  narrator:',
       '    typeId: narrator',
@@ -78,18 +65,9 @@ worldFacts: []
       '      defaultEligibility: live',
       '    typedInvariants: []',
     ].join('\n'),
-  );
-  // chapters
-  mkdirSync(join(dir, 'chapters', 'chapter_01'), { recursive: true });
-  // _chapter.yaml
-  writeFileSync(
-    join(dir, 'chapters', 'chapter_01', '_chapter.yaml'),
-    'chapter: 1\ntitle: "Chapter 1"\nsummary: "Test"\nintent: "Test intent"\nplannedScenes: 5\n',
-  );
-  // discourse-ledger.yaml (mandatory reader-order source)
-  writeFileSync(
-    join(dir, 'definitions', 'discourse-ledger.yaml'),
-    [
+    'chapters/chapter_01/_chapter.yaml':
+      'chapter: 1\ntitle: "Chapter 1"\nsummary: "Test"\nintent: "Test intent"\nplannedScenes: 5\n',
+    'definitions/discourse-ledger.yaml': [
       'id: impact-ledger',
       'chapters:',
       '  - branch: main',
@@ -100,16 +78,8 @@ worldFacts: []
       '      - E2',
       'entries: []',
     ].join('\n'),
-  );
-  return dir;
-}
-
-function writeEvent(dir: string, filename: string, content: string): void {
-  writeFileSync(join(dir, 'chapters', 'chapter_01', filename), content);
-}
-
-function cleanupDir(dir: string): void {
-  rmSync(dir, { recursive: true, force: true });
+  };
+  return createSourceSnapshot({ ...base, ...events });
 }
 
 // ---------------------------------------------------------------------------
@@ -192,253 +162,189 @@ expectedPostconditions:
 describe('analyzeProjectImpact', () => {
   // ── Green: only narrativeOrder changed ─────────────────────────────────
   it('should classify as green when only narrativeOrder changes', () => {
-    const oldDir = createProjectDir('green-old');
-    const newDir = createProjectDir('green-new');
-
     // Same event except narrativeOrder differs
-    const eventYaml = baseE0Yaml();
-    writeEvent(oldDir, 'E0.yaml', eventYaml);
-    writeEvent(newDir, 'E0.yaml', eventYaml.replace('narrativeOrder: 1', 'narrativeOrder: 2'));
+    const oldSnapshot = project({ 'chapters/chapter_01/E0.yaml': baseE0Yaml() });
+    const newSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml().replace('narrativeOrder: 1', 'narrativeOrder: 2'),
+    });
 
-    try {
-      const result = analyzeProjectImpact(oldDir, newDir);
-      expect(result.events).toHaveProperty('E0');
-      expect(result.events.E0).toBe('green');
-    } finally {
-      cleanupDir(oldDir);
-      cleanupDir(newDir);
-    }
+    const result = analyzeProjectImpact(oldSnapshot, newSnapshot);
+    expect(result.events).toHaveProperty('E0');
+    expect(result.events.E0).toBe('green');
   });
 
   // ── Yellow: event description changed ──────────────────────────────────
   it('should classify as yellow when event data changes but pre/post remain same', () => {
-    const oldDir = createProjectDir('yellow-old');
-    const newDir = createProjectDir('yellow-new');
-
-    writeEvent(oldDir, 'E0.yaml', baseE0Yaml());
+    const oldSnapshot = project({ 'chapters/chapter_01/E0.yaml': baseE0Yaml() });
     // Change title and sceneBrief only
-    writeEvent(
-      newDir,
-      'E0.yaml',
-      baseE0Yaml()
+    const newSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml()
         .replace('title: "Original Title"', 'title: "Updated Title"')
         .replace('sceneBrief: "Original brief"', 'sceneBrief: "Updated brief"'),
-    );
+    });
 
-    try {
-      const result = analyzeProjectImpact(oldDir, newDir);
-      expect(result.events).toHaveProperty('E0');
-      expect(result.events.E0).toBe('yellow');
-    } finally {
-      cleanupDir(oldDir);
-      cleanupDir(newDir);
-    }
+    const result = analyzeProjectImpact(oldSnapshot, newSnapshot);
+    expect(result.events).toHaveProperty('E0');
+    expect(result.events.E0).toBe('yellow');
   });
 
   // ── Red: precondition changed ──────────────────────────────────────────
   it('should classify as red when a precondition changes', () => {
-    const oldDir = createProjectDir('red-pre-old');
-    const newDir = createProjectDir('red-pre-new');
-
-    writeEvent(oldDir, 'E0.yaml', baseE0Yaml());
+    const oldSnapshot = project({ 'chapters/chapter_01/E0.yaml': baseE0Yaml() });
     // Change precondition value
-    writeEvent(newDir, 'E0.yaml', baseE0Yaml().replace('value: town', 'value: village'));
+    const newSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml().replace('value: town', 'value: village'),
+    });
 
-    try {
-      const result = analyzeProjectImpact(oldDir, newDir);
-      expect(result.events).toHaveProperty('E0');
-      expect(result.events.E0).toBe('red');
-    } finally {
-      cleanupDir(oldDir);
-      cleanupDir(newDir);
-    }
+    const result = analyzeProjectImpact(oldSnapshot, newSnapshot);
+    expect(result.events).toHaveProperty('E0');
+    expect(result.events.E0).toBe('red');
   });
 
   // ── Red: postcondition changed ─────────────────────────────────────────
   it('should classify as red when a postcondition changes', () => {
-    const oldDir = createProjectDir('red-post-old');
-    const newDir = createProjectDir('red-post-new');
-
-    writeEvent(oldDir, 'E0.yaml', baseE0Yaml());
+    const oldSnapshot = project({ 'chapters/chapter_01/E0.yaml': baseE0Yaml() });
     // Change postcondition value
-    writeEvent(
-      newDir,
-      'E0.yaml',
-      baseE0Yaml().replace('value: met_character', 'value: met_stranger'),
-    );
+    const newSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml().replace(
+        'value: met_character',
+        'value: met_stranger',
+      ),
+    });
 
-    try {
-      const result = analyzeProjectImpact(oldDir, newDir);
-      expect(result.events).toHaveProperty('E0');
-      expect(result.events.E0).toBe('red');
-    } finally {
-      cleanupDir(oldDir);
-      cleanupDir(newDir);
-    }
+    const result = analyzeProjectImpact(oldSnapshot, newSnapshot);
+    expect(result.events).toHaveProperty('E0');
+    expect(result.events.E0).toBe('red');
   });
 
   // ── Downstream detection ───────────────────────────────────────────────
   it('should detect downstream events when postcondition changes affect other events', () => {
-    const oldDir = createProjectDir('down-old');
-    const newDir = createProjectDir('down-new');
-
     // Old: E0 sets narrator.knowledge=met_character, E1 preconditions on it
-    writeEvent(oldDir, 'E0.yaml', baseE0Yaml());
-    writeEvent(oldDir, 'E1.yaml', baseE1Yaml());
+    const oldSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml(),
+      'chapters/chapter_01/E1.yaml': baseE1Yaml(),
+    });
 
     // New: E0 postcondition changes, so E1 (which preconditions on
     // narrator.knowledge) should be flagged as downstream
-    writeEvent(
-      newDir,
-      'E0.yaml',
-      baseE0Yaml().replace('value: met_character', 'value: met_stranger'),
-    );
-    writeEvent(newDir, 'E1.yaml', baseE1Yaml());
+    const newSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml().replace(
+        'value: met_character',
+        'value: met_stranger',
+      ),
+      'chapters/chapter_01/E1.yaml': baseE1Yaml(),
+    });
 
-    try {
-      const result = analyzeProjectImpact(oldDir, newDir);
-      // E0 should be red (postcondition changed)
-      expect(result.events.E0).toBe('red');
-      // E1 should be in the downstream of E0 because E1's precondition
-      // references narrator.knowledge which E0's postcondition changed
-      expect(result.downstream).toHaveProperty('E0');
-      expect(result.downstream.E0).toContain('E1');
-    } finally {
-      cleanupDir(oldDir);
-      cleanupDir(newDir);
-    }
+    const result = analyzeProjectImpact(oldSnapshot, newSnapshot);
+    // E0 should be red (postcondition changed)
+    expect(result.events.E0).toBe('red');
+    // E1 should be in the downstream of E0 because E1's precondition
+    // references narrator.knowledge which E0's postcondition changed
+    expect(result.downstream).toHaveProperty('E0');
+    expect(result.downstream.E0).toContain('E1');
   });
 
   // ── Multiple events, mixed levels ──────────────────────────────────────
   it('should classify multiple events with different impact levels', () => {
-    const oldDir = createProjectDir('mixed-old');
-    const newDir = createProjectDir('mixed-new');
-
     // E0: postcondition changes → Red
-    writeEvent(oldDir, 'E0.yaml', baseE0Yaml());
-    writeEvent(
-      newDir,
-      'E0.yaml',
-      baseE0Yaml().replace('value: met_character', 'value: met_stranger'),
-    );
+    const oldSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml(),
+      'chapters/chapter_01/E1.yaml': baseE1Yaml(),
+      'chapters/chapter_01/E2.yaml': baseE2Yaml(),
+    });
+    const newSnapshot = project({
+      // E0: postcondition changes → Red
+      'chapters/chapter_01/E0.yaml': baseE0Yaml().replace(
+        'value: met_character',
+        'value: met_stranger',
+      ),
+      // E1: title changes → Yellow
+      'chapters/chapter_01/E1.yaml': baseE1Yaml().replace(
+        'title: "Event One"',
+        'title: "Revised One"',
+      ),
+      // E2: narrativeOrder changes → Green
+      'chapters/chapter_01/E2.yaml': baseE2Yaml().replace('narrativeOrder: 3', 'narrativeOrder: 4'),
+    });
 
-    // E1: title changes → Yellow
-    writeEvent(oldDir, 'E1.yaml', baseE1Yaml());
-    writeEvent(
-      newDir,
-      'E1.yaml',
-      baseE1Yaml().replace('title: "Event One"', 'title: "Revised One"'),
-    );
-
-    // E2: narrativeOrder changes → Green
-    writeEvent(oldDir, 'E2.yaml', baseE2Yaml());
-    writeEvent(newDir, 'E2.yaml', baseE2Yaml().replace('narrativeOrder: 3', 'narrativeOrder: 4'));
-
-    try {
-      const result = analyzeProjectImpact(oldDir, newDir);
-      expect(result.events.E0).toBe('red');
-      expect(result.events.E1).toBe('yellow');
-      expect(result.events.E2).toBe('green');
-    } finally {
-      cleanupDir(oldDir);
-      cleanupDir(newDir);
-    }
+    const result = analyzeProjectImpact(oldSnapshot, newSnapshot);
+    expect(result.events.E0).toBe('red');
+    expect(result.events.E1).toBe('yellow');
+    expect(result.events.E2).toBe('green');
   });
 
   // ── Empty diff: no changes ─────────────────────────────────────────────
   it('should produce empty result when projects are identical', () => {
-    const oldDir = createProjectDir('empty-old');
-    const newDir = createProjectDir('empty-new');
+    const oldSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml(),
+      'chapters/chapter_01/E1.yaml': baseE1Yaml(),
+    });
+    const newSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml(),
+      'chapters/chapter_01/E1.yaml': baseE1Yaml(),
+    });
 
-    writeEvent(oldDir, 'E0.yaml', baseE0Yaml());
-    writeEvent(newDir, 'E0.yaml', baseE0Yaml());
-
-    writeEvent(oldDir, 'E1.yaml', baseE1Yaml());
-    writeEvent(newDir, 'E1.yaml', baseE1Yaml());
-
-    try {
-      const result = analyzeProjectImpact(oldDir, newDir);
-      // No changes → no event should be classified
-      expect(Object.keys(result.events).length).toBe(0);
-      expect(Object.keys(result.downstream).length).toBe(0);
-    } finally {
-      cleanupDir(oldDir);
-      cleanupDir(newDir);
-    }
+    const result = analyzeProjectImpact(oldSnapshot, newSnapshot);
+    // No changes → no event should be classified
+    expect(Object.keys(result.events).length).toBe(0);
+    expect(Object.keys(result.downstream).length).toBe(0);
   });
 
   // ── Event added in new version ─────────────────────────────────────────
   it('should classify added events as red', () => {
-    const oldDir = createProjectDir('add-old');
-    const newDir = createProjectDir('add-new');
-
-    writeEvent(oldDir, 'E0.yaml', baseE0Yaml());
-    writeEvent(newDir, 'E0.yaml', baseE0Yaml());
+    const oldSnapshot = project({ 'chapters/chapter_01/E0.yaml': baseE0Yaml() });
     // E1 only in new version
-    writeEvent(newDir, 'E1.yaml', baseE1Yaml());
+    const newSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml(),
+      'chapters/chapter_01/E1.yaml': baseE1Yaml(),
+    });
 
-    try {
-      const result = analyzeProjectImpact(oldDir, newDir);
-      expect(result.events.E1).toBe('red');
-    } finally {
-      cleanupDir(oldDir);
-      cleanupDir(newDir);
-    }
+    const result = analyzeProjectImpact(oldSnapshot, newSnapshot);
+    expect(result.events.E1).toBe('red');
   });
 
   // ── Event removed from new version ─────────────────────────────────────
   it('should classify removed events as red', () => {
-    const oldDir = createProjectDir('remove-old');
-    const newDir = createProjectDir('remove-new');
-
-    writeEvent(oldDir, 'E0.yaml', baseE0Yaml());
-    writeEvent(oldDir, 'E1.yaml', baseE1Yaml());
-    writeEvent(newDir, 'E0.yaml', baseE0Yaml());
+    const oldSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml(),
+      'chapters/chapter_01/E1.yaml': baseE1Yaml(),
+    });
     // E1 not in new version
+    const newSnapshot = project({ 'chapters/chapter_01/E0.yaml': baseE0Yaml() });
 
-    try {
-      const result = analyzeProjectImpact(oldDir, newDir);
-      expect(result.events.E1).toBe('red');
-    } finally {
-      cleanupDir(oldDir);
-      cleanupDir(newDir);
-    }
+    const result = analyzeProjectImpact(oldSnapshot, newSnapshot);
+    expect(result.events.E1).toBe('red');
   });
 
   // ── Downstream: chain E0→E1→E2 affected ───────────────────────────────
   it('should detect downstream events in a chain', () => {
-    const oldDir = createProjectDir('chain-old');
-    const newDir = createProjectDir('chain-new');
-
     // Chain: E0 sets narrator.knowledge=met_character
     //        E1 preconditions on narrator.knowledge and sets hero.location=forest
     //        E2 preconditions on hero.location
-    writeEvent(oldDir, 'E0.yaml', baseE0Yaml());
-    writeEvent(oldDir, 'E1.yaml', baseE1Yaml());
-    writeEvent(oldDir, 'E2.yaml', baseE2Yaml());
+    const oldSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml(),
+      'chapters/chapter_01/E1.yaml': baseE1Yaml(),
+      'chapters/chapter_01/E2.yaml': baseE2Yaml(),
+    });
 
     // Change E0's postcondition → E1 and E2 should be downstream
-    writeEvent(
-      newDir,
-      'E0.yaml',
-      baseE0Yaml().replace('value: met_character', 'value: met_stranger'),
-    );
-    writeEvent(newDir, 'E1.yaml', baseE1Yaml());
-    writeEvent(newDir, 'E2.yaml', baseE2Yaml());
+    const newSnapshot = project({
+      'chapters/chapter_01/E0.yaml': baseE0Yaml().replace(
+        'value: met_character',
+        'value: met_stranger',
+      ),
+      'chapters/chapter_01/E1.yaml': baseE1Yaml(),
+      'chapters/chapter_01/E2.yaml': baseE2Yaml(),
+    });
 
-    try {
-      const result = analyzeProjectImpact(oldDir, newDir);
-      expect(result.events.E0).toBe('red');
-      expect(result.downstream.E0).toBeDefined();
+    const result = analyzeProjectImpact(oldSnapshot, newSnapshot);
+    expect(result.events.E0).toBe('red');
+    expect(result.downstream.E0).toBeDefined();
 
-      // E1 preconditions on narrator.knowledge → downstream
-      expect(result.downstream.E0).toContain('E1');
-      // E2 does NOT directly precondition on narrator.knowledge,
-      // so it shouldn't be in E0's direct downstream
-      expect(result.downstream.E0).not.toContain('E2');
-    } finally {
-      cleanupDir(oldDir);
-      cleanupDir(newDir);
-    }
+    // E1 preconditions on narrator.knowledge → downstream
+    expect(result.downstream.E0).toContain('E1');
+    // E2 does NOT directly precondition on narrator.knowledge,
+    // so it shouldn't be in E0's direct downstream
+    expect(result.downstream.E0).not.toContain('E2');
   });
 });

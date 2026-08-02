@@ -10,10 +10,9 @@
 //       is excluded from all waves and reported in cycleParticipants.
 //   §3: Missing predecessor — predecessorEventId not found in the job set
 //       is a hard validation failure; reported in missingPredecessors.
-//   §4: AcceptedArtifactResolver reads persisted response files from
-//       .nova/responses/{eventId}.json and reconstructs
-//       AcceptedSceneArtifact only when releaseDecision.status is
-//       'accepted'.  Never uses filename patterns or prose conventions.
+//   §4: AcceptedArtifactResolver reads accepted scene envelopes through the
+//       semantic execution repository. Cache entries and Host file layout are
+//       never consulted for authoritative predecessor prose.
 //
 // Binding constraints (RENDER-SURFACE-1):
 //   - SurfaceScheduler NEVER reads LLM output, modifies YAML/logic/
@@ -24,9 +23,8 @@
 //     by group ID, story time, or filename.
 // ============================================================================
 
+import type { CoreExecutionRepository } from '../ports/execution-repository.ts';
 import { sceneRevisionEnvelopeV1Schema } from '../schemas/editorial.ts';
-import type { Storage } from '../storage/index.ts';
-import type { SceneRevisionEnvelopeV1 } from '../types/editorial.ts';
 import type { AcceptedSceneArtifact } from '../types/render-surface.ts';
 import type { RenderJob } from './render.ts';
 
@@ -171,7 +169,11 @@ export class SurfaceScheduler {
         chain.push(current);
         chainSet.add(current);
         globallyVisited.add(current);
-        current = byId.get(current)!.surfaceDependency.predecessorEventId;
+        const currentJob = byId.get(current);
+        if (currentJob === undefined) {
+          break;
+        }
+        current = currentJob.surfaceDependency.predecessorEventId;
       }
 
       // If current is in the current chain, we found a cycle.
@@ -254,130 +256,46 @@ export class SurfaceScheduler {
 }
 
 // ============================================================================
-// AcceptedArtifactResolver — Typed predecessor material from persisted
-// response files, keyed by event ID (never filename/prose convention).
+// AcceptedArtifactResolver — typed predecessor material from the semantic
+// execution repository, keyed by event ID rather than Host persistence layout.
 // ============================================================================
-
-/**
- * Resolves persisted accepted-scene artifacts from `.nova/responses/`
- * storage.  Only artifacts whose `releaseDecision.status` is `'accepted'`
- * are returned; all others (blocked, pending_waiver, missing) yield null.
- */
 export class AcceptedArtifactResolver {
-  private readonly storage: Storage;
-  private readonly headDir: string;
-  private readonly archiveDir: string;
-
-  constructor(storage: Storage, headDir: string, archiveDir: string) {
-    this.storage = storage;
-    this.headDir = headDir;
-    this.archiveDir = archiveDir;
-  }
+  constructor(
+    private readonly execution: CoreExecutionRepository,
+    private readonly projectId: string,
+  ) {}
 
   /**
-   * Resolve a single event's accepted artifact.
-   *
-   * Resolution flow:
-   *  1. Read head pointer from `{headDir}/{eventId}.json` → `{ revisionId, proseHash }`
-   *  2. If head pointer has both revisionId and proseHash, load the full
-   *     SceneRevisionEnvelopeV1 from `{archiveDir}/{eventId}/{revisionId}.json`
-   *  3. Validate internal consistency: envelope scopeHash must match
-   *     releaseDecision.scopeHash; envelope proseHash must match head proseHash.
-   *  4. If requestedScopeHash is provided, validate envelope scopeHash matches it.
-   *  5. Validate sceneHash and editorialBasisHash are non-empty.
-   *
-   * Backward-compatible inline prose is NOT supported — the head pointer MUST
-   * contain revisionId + proseHash.  Legacy migration is handled by workspace
-   * inspection, not the scheduler.
-   *
-   * @param eventId  The event/scene identifier.
-   * @param requestedScopeHash  If provided, the envelope's scopeHash must match.
-   * @returns AcceptedSceneArtifact if found and accepted, or null if the
-   *          response file is missing, malformed, scopes differ, or not accepted.
+   * Resolve an accepted scene from the semantic repository. The record and
+   * its revision envelope must agree on every identity-bearing field before
+   * the prose may become a surface predecessor.
    */
-  resolve(eventId: string, requestedScopeHash?: string): AcceptedSceneArtifact | null {
-    const headPath = [this.headDir, `${eventId}.json`].join('/');
-
-    let headRaw: string;
-    try {
-      const maybe = this.storage.readOptional(headPath);
-      if (maybe === null) return null;
-      headRaw = maybe;
-    } catch {
-      return null;
-    }
-
-    let head: Record<string, unknown>;
-    try {
-      head = JSON.parse(headRaw) as Record<string, unknown>;
-    } catch {
-      return null;
-    }
-
-    const revisionId = typeof head.revisionId === 'string' ? head.revisionId : null;
-    const proseHash = typeof head.proseHash === 'string' ? head.proseHash : null;
-
-    // Head pointer must contain both revisionId and proseHash
-    if (revisionId === null || proseHash === null) return null;
-
-    return this.resolveFromArchive(eventId, revisionId, proseHash, requestedScopeHash);
-  }
-
-  /**
-   * Resolve full artifact from archive envelope, validating consistency.
-   *
-   * Validates:
-   *  - releaseDecision is present and status is 'accepted'
-   *  - envelope scopeHash matches releaseDecision scopeHash (internal consistency)
-   *  - envelope proseHash matches the head pointer proseHash
-   *  - sceneHash and editorialBasisHash are non-empty
-   *  - if requestedScopeHash is provided, envelope scopeHash must match it
-   */
-  private resolveFromArchive(
+  async resolve(
     eventId: string,
-    revisionId: string,
-    proseHash: string,
     requestedScopeHash?: string,
-  ): AcceptedSceneArtifact | null {
-    const archivePath = [this.archiveDir, eventId, `${revisionId}.json`].join('/');
-
-    let raw: string;
-    try {
-      const maybe = this.storage.readOptional(archivePath);
-      if (maybe === null) return null;
-      raw = maybe;
-    } catch {
+  ): Promise<AcceptedSceneArtifact | null> {
+    const accepted = await this.execution.readAcceptedScene({
+      projectId: this.projectId,
+      eventId,
+    });
+    if (accepted === null) return null;
+    const parsed = sceneRevisionEnvelopeV1Schema.safeParse(accepted.value.value);
+    if (!parsed.success) return null;
+    const envelope = parsed.data;
+    if (
+      envelope.eventId !== eventId ||
+      envelope.revisionId !== accepted.value.revisionId ||
+      envelope.prose !== accepted.value.prose ||
+      envelope.proseHash !== accepted.value.proseHash ||
+      envelope.sceneHash !== accepted.value.sceneHash ||
+      envelope.releaseDecision.status !== 'accepted' ||
+      envelope.scopeHash !== envelope.releaseDecision.scopeHash ||
+      !envelope.sceneHash ||
+      !envelope.editorialBasisHash ||
+      (requestedScopeHash !== undefined && envelope.scopeHash !== requestedScopeHash)
+    ) {
       return null;
     }
-
-    let envelope: SceneRevisionEnvelopeV1;
-    try {
-      const parsed = sceneRevisionEnvelopeV1Schema.safeParse(JSON.parse(raw));
-      if (!parsed.success) return null;
-      envelope = parsed.data as SceneRevisionEnvelopeV1;
-    } catch {
-      return null;
-    }
-
-    // Validate release decision status
-    if (typeof envelope.releaseDecision !== 'object' || envelope.releaseDecision === null)
-      return null;
-    if (envelope.releaseDecision.status !== 'accepted') return null;
-
-    // Mismatched scope → missing-source failure (internal consistency check)
-    if (envelope.scopeHash !== envelope.releaseDecision.scopeHash) return null;
-
-    // Verify proseHash matches head pointer
-    if (envelope.proseHash !== proseHash) return null;
-
-    // Verify required hashes are present
-    if (!envelope.sceneHash || typeof envelope.sceneHash !== 'string') return null;
-    if (!envelope.editorialBasisHash || typeof envelope.editorialBasisHash !== 'string')
-      return null;
-
-    // If a requested scopeHash is provided, enforce exact match
-    if (requestedScopeHash !== undefined && envelope.scopeHash !== requestedScopeHash) return null;
-
     return {
       eventId: envelope.eventId,
       revisionId: envelope.revisionId,
@@ -391,24 +309,17 @@ export class AcceptedArtifactResolver {
     };
   }
 
-  /**
-   * Batch-resolve multiple event IDs.
-   * Only accepted artifacts are included in the result map.
-   *
-   * @param eventIds  Event/scene identifiers to resolve.
-   * @param requestedScopeHash  If provided, only accept artifacts whose scopeHash matches.
-   * @returns Map of eventId → AcceptedSceneArtifact for accepted results.
-   */
-  resolveAll(
+  /** Resolve all accepted artifacts concurrently while retaining input order. */
+  async resolveAll(
     eventIds: readonly string[],
     requestedScopeHash?: string,
-  ): Map<string, AcceptedSceneArtifact> {
+  ): Promise<Map<string, AcceptedSceneArtifact>> {
+    const resolved = await Promise.all(
+      eventIds.map(async (eventId) => [eventId, await this.resolve(eventId, requestedScopeHash)] as const),
+    );
     const results = new Map<string, AcceptedSceneArtifact>();
-    for (const eventId of eventIds) {
-      const artifact = this.resolve(eventId, requestedScopeHash);
-      if (artifact !== null) {
-        results.set(eventId, artifact);
-      }
+    for (const [eventId, artifact] of resolved) {
+      if (artifact !== null) results.set(eventId, artifact);
     }
     return results;
   }

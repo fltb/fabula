@@ -15,6 +15,9 @@ import * as fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
+import { createRuntimeServices } from './fixtures/runtime-services.ts';
+import type { ProjectSourceSnapshotV1 } from '../src/contracts/source.ts';
 import { previewEditorialRun, renderNovel } from '../src/api.ts';
 import { ContextCompiler } from '../src/context/compiler.ts';
 import { InMemoryEntityRegistry } from '../src/entity/registry.ts';
@@ -39,6 +42,8 @@ import type {
   ThreadRunId,
   WorldState,
 } from '../src/types/index.ts';
+
+const previewRuntime = { services: createRuntimeServices().services };
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -642,8 +647,8 @@ describe('compileDiscourseBoundaries strict preflight', () => {
 // 2. API-level: renderNovel validation guards
 // ═════════════════════════════════════════════════════════════════════════════
 //
-// These tests create a minimal on-disk project so renderNovel can run
-// through initializeProject and reach the discourse-branch validation.
+// These tests create a minimal on-disk project so renderNovel can compile the
+// canonical project and reach the discourse-branch validation.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const PROJECT_YAML = [
@@ -810,13 +815,13 @@ const SINGLE_BRANCH_ENTRIES = [
  * Returns the project path and a cleanup function.
  */
 function setupMinimalProject(discourseLedgerYaml: string): {
-  projectDir: string;
+  source: ProjectSourceSnapshotV1;
   cleanup: () => void;
 } {
   const projectDir = fs.mkdtempSync(path.join(tmpdir(), 'discourse-branch-test-'));
   const defsDir = path.join(projectDir, 'definitions');
   const assertionsDir = path.join(defsDir, 'assertions');
-  const chaptersDir = path.join(projectDir, 'chapters', 'chapter_1');
+  const chaptersDir = path.join(projectDir, 'chapters', 'chapter_01');
 
   fs.mkdirSync(assertionsDir, { recursive: true });
   fs.mkdirSync(chaptersDir, { recursive: true });
@@ -867,7 +872,7 @@ function setupMinimalProject(discourseLedgerYaml: string): {
   fs.writeFileSync(path.join(assertionsDir, 'alt-secret.yaml'), altAssertionYaml);
 
   return {
-    projectDir,
+    source: materializeFixtureSnapshot(projectDir),
     cleanup: () => fs.rmSync(projectDir, { recursive: true, force: true }),
   };
 }
@@ -880,19 +885,19 @@ function makeMinimalBranchPath(): BranchPath {
 
 describe('renderNovel discourse-branch validation', () => {
   it('succeeds with multi-branch ledger + branchPath + explicit discourseBranch', async () => {
-    const { projectDir, cleanup } = setupMinimalProject(
+    const { source, cleanup } = setupMinimalProject(
       makeDiscourseLedgerYamlMultiBranch(MULTI_BRANCH_ENTRIES),
     );
     try {
       const result = await previewEditorialRun(
         {
           version: 1,
-          projectDir,
+          source,
           selector: { type: 'all' },
           branchPath: makeMinimalBranchPath(),
           discourseBranch: 'main',
         },
-        {},
+        previewRuntime,
       );
 
       // No discourse-branch validation in preview — succeeds with scenes
@@ -904,7 +909,7 @@ describe('renderNovel discourse-branch validation', () => {
   });
 
   it('rejects explicit discourseBranch not found in ledger chapters (strict preflight)', async () => {
-    const { projectDir, cleanup } = setupMinimalProject(
+    const { source, cleanup } = setupMinimalProject(
       makeDiscourseLedgerYaml(SINGLE_BRANCH_ENTRIES),
     );
     try {
@@ -912,11 +917,11 @@ describe('renderNovel discourse-branch validation', () => {
         previewEditorialRun(
           {
             version: 1,
-            projectDir,
+            source,
             selector: { type: 'all' },
             discourseBranch: 'nonexistent',
           },
-          {},
+          previewRuntime,
         ),
       ).rejects.toThrow();
     } finally {
@@ -928,7 +933,7 @@ describe('renderNovel discourse-branch validation', () => {
     // Project without definitions/discourse-ledger.yaml — must fail preflight
     const projectDir = fs.mkdtempSync(path.join(tmpdir(), 'discourse-branch-test-'));
     const defsDir = path.join(projectDir, 'definitions');
-    const chaptersDir = path.join(projectDir, 'chapters', 'chapter_1');
+    const chaptersDir = path.join(projectDir, 'chapters', 'chapter_01');
     fs.mkdirSync(defsDir, { recursive: true });
     fs.mkdirSync(chaptersDir, { recursive: true });
     fs.writeFileSync(path.join(projectDir, 'nova.yaml'), PROJECT_YAML);
@@ -936,17 +941,18 @@ describe('renderNovel discourse-branch validation', () => {
     fs.writeFileSync(path.join(defsDir, 'entity-types.yaml'), ENTITY_TYPES_YAML);
     fs.writeFileSync(path.join(chaptersDir, '_chapter.yaml'), CHAPTER_YAML);
     fs.writeFileSync(path.join(chaptersDir, 'E1.yaml'), EVENT_YAML);
+    const source = materializeFixtureSnapshot(projectDir);
 
     try {
       await expect(
         previewEditorialRun(
           {
             version: 1,
-            projectDir,
+            source,
             selector: { type: 'all' },
             discourseBranch: 'main',
           },
-          {},
+          previewRuntime,
         ),
       ).rejects.toThrow();
     } finally {
@@ -955,18 +961,18 @@ describe('renderNovel discourse-branch validation', () => {
   });
 
   it('succeeds with explicit valid discourseBranch (no error)', async () => {
-    const { projectDir, cleanup } = setupMinimalProject(
+    const { source, cleanup } = setupMinimalProject(
       makeDiscourseLedgerYaml(SINGLE_BRANCH_ENTRIES),
     );
     try {
       const result = await previewEditorialRun(
         {
           version: 1,
-          projectDir,
+          source,
           selector: { type: 'all' },
           discourseBranch: 'main',
         },
-        {},
+        previewRuntime,
       );
 
       expect(result.errors).toHaveLength(0);

@@ -39,9 +39,9 @@ export const requiredAtSchema = z.enum(['introduction', 'activation', 'never']);
 export const attributeDefinitionSchema = z
   .object({
     attributeId: z.string(),
+    valueType: z.enum(['string', 'number', 'boolean', 'string_list', 'string_map']),
     valueSchema: z.custom<z.ZodTypeAny>((val) => val instanceof z.ZodType),
     requiredAt: requiredAtSchema,
-    writePolicy: writePolicySchema,
     allowedLifecycleStates: z.array(entityRuntimeStateSchema).optional(),
     unsetAllowed: z.boolean(),
     semanticRole: z.string().optional(),

@@ -1,73 +1,110 @@
-import fs from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import YAML from 'yaml';
 import type { VariantIssueResult } from '../../bench/src/variants.ts';
 import { runVariantBench } from '../../bench/src/variants.ts';
+import type { ProjectSourceSnapshotV1 } from '../src/contracts/source.ts';
+import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
+import { sourceEntryMap } from './fixtures/source-snapshot.ts';
 
 // ============================================================
 // P1b: zhu-fu-variants test suite
 // ============================================================
 
-const ROOT = path.resolve(__dirname, '..', '..', '..');
+const ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 
-function loadYaml(filePath: string) {
-  return YAML.parse(fs.readFileSync(filePath, 'utf-8'));
+/** Parse one logical document's YAML from an immutable fixture snapshot. */
+function loadYamlFrom(snapshot: ProjectSourceSnapshotV1, logicalPath: string): unknown {
+  const entries = sourceEntryMap(snapshot);
+  const content = entries[logicalPath];
+  if (content === undefined) throw new Error(`Missing document ${logicalPath}`);
+  return YAML.parse(content);
+}
+
+/** List authored event file names under a chapter dir within a snapshot. */
+function eventFilesIn(snapshot: ProjectSourceSnapshotV1, chapterDir: string): string[] {
+  return Object.keys(sourceEntryMap(snapshot))
+    .filter(
+      (logicalPath) =>
+        logicalPath.startsWith(`${chapterDir}/`) &&
+        /^E.*\.ya?ml$/i.test(logicalPath.split('/').pop() ?? ''),
+    )
+    .map((logicalPath) => logicalPath.split('/').pop() as string);
+}
+
+/** List YAML file names at a fixture snapshot root. */
+function yamlFilesIn(snapshot: ProjectSourceSnapshotV1): string[] {
+  return Object.keys(sourceEntryMap(snapshot)).filter((logicalPath) =>
+    /\.ya?ml$/i.test(logicalPath),
+  );
 }
 
 // ----- branch-A: honest answer variant -----
 describe('zhu-fu-variants / branch-A (honest answer)', () => {
-  const baseDir = path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'branch-A');
-  const chapterDir = path.join(baseDir, 'chapters', 'chapter_01');
+  const BRANCH_A = materializeFixtureSnapshot(
+    path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'branch-A'),
+  );
 
   it('should load project config (nova.yaml)', () => {
-    const nova = loadYaml(path.join(baseDir, 'nova.yaml'));
+    const nova = loadYamlFrom(BRANCH_A, 'nova.yaml') as Record<string, unknown>;
     expect(nova.project).toBe('zhu-fu-branch-a');
     expect(nova.genre).toBe('literary');
     expect(nova.tense).toBe('past');
-    expect(nova.title).toContain('分支A');
-    expect(nova.synopsis).toContain('诚实地');
+    expect(String(nova.title)).toContain('分支A');
+    expect(String(nova.synopsis)).toContain('诚实地');
   });
 
   it('should load E0 with honest answer narrative', () => {
-    const e0 = loadYaml(path.join(chapterDir, 'E0_encounter.yaml'));
+    const e0 = loadYamlFrom(BRANCH_A, 'chapters/chapter_01/E0_encounter.yaml') as Record<
+      string,
+      unknown
+    >;
     expect(e0.event).toBe('E0');
-    expect(e0.sceneBrief).toContain('诚实地告诉');
-    expect(e0.sceneBrief).toContain('就像灯灭');
+    expect(String(e0.sceneBrief)).toContain('诚实地告诉');
+    expect(String(e0.sceneBrief)).toContain('就像灯灭');
 
     // Check postconditions reflect honesty, not guilt
-    const knowledgePost = e0.expectedPostconditions.find(
-      (p: any) => p.entity === 'narrator' && p.attribute === 'knowledge',
+    const posts = (e0.expectedPostconditions as Array<Record<string, unknown>>) ?? [];
+    const knowledgePost = posts.find(
+      (p) => p.entity === 'narrator' && p.attribute === 'knowledge',
     );
-    expect(knowledgePost.value).toBe('gave_honest_answer_to_xianglins_wife');
+    expect(knowledgePost?.value).toBe('gave_honest_answer_to_xianglins_wife');
 
-    const emotionalPost = e0.expectedPostconditions.find(
-      (p: any) => p.entity === 'narrator' && p.attribute === 'emotionalState',
+    const emotionalPost = posts.find(
+      (p) => p.entity === 'narrator' && p.attribute === 'emotionalState',
     );
-    expect(emotionalPost.value).toBe('truthful_but_uncertain');
+    expect(emotionalPost?.value).toBe('truthful_but_uncertain');
   });
 
   it('should load E1 with different emotional resolution', () => {
-    const e1 = loadYaml(path.join(chapterDir, 'E1_death_news.yaml'));
+    const e1 = loadYamlFrom(BRANCH_A, 'chapters/chapter_01/E1_death_news.yaml') as Record<
+      string,
+      unknown
+    >;
     expect(e1.event).toBe('E1');
-    expect(e1.sceneBrief).toContain('愤怒');
+    expect(String(e1.sceneBrief)).toContain('愤怒');
 
-    const emotionalPost = e1.expectedPostconditions.find(
-      (p: any) => p.entity === 'narrator' && p.attribute === 'emotionalState',
+    const posts = (e1.expectedPostconditions as Array<Record<string, unknown>>) ?? [];
+    const emotionalPost = posts.find(
+      (p) => p.entity === 'narrator' && p.attribute === 'emotionalState',
     );
-    expect(emotionalPost.value).toBe('melancholy_but_not_guilty');
+    expect(emotionalPost?.value).toBe('melancholy_but_not_guilty');
   });
 
   it('should have 7 event files', () => {
-    const files = fs
-      .readdirSync(chapterDir)
-      .filter((f) => f.startsWith('E') && f.endsWith('.yaml'));
+    const files = eventFilesIn(BRANCH_A, 'chapters/chapter_01');
     expect(files.length).toBe(7);
   });
 
   it('should have E2-E6 as copies from base (unchanged flashback)', () => {
-    const e2b = loadYaml(path.join(chapterDir, 'E2_first_arrival.yaml'));
-    const e3b = loadYaml(path.join(chapterDir, 'E3_kidnapping.yaml'));
+    const e2b = loadYamlFrom(BRANCH_A, 'chapters/chapter_01/E2_first_arrival.yaml') as Record<
+      string,
+      unknown
+    >;
+    const e3b = loadYamlFrom(BRANCH_A, 'chapters/chapter_01/E3_kidnapping.yaml') as Record<
+      string,
+      unknown
+    >;
     expect(e2b.event).toBe('E2');
     expect(e3b.event).toBe('E3');
     expect(e2b.sceneType).toBe('flashback');
@@ -77,67 +114,78 @@ describe('zhu-fu-variants / branch-A (honest answer)', () => {
 
 // ----- branch-B: He Laoliu survives -----
 describe('zhu-fu-variants / branch-B (He Laoliu survives)', () => {
-  const baseDir = path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'branch-B');
-  const chapterDir = path.join(baseDir, 'chapters', 'chapter_01');
+  const BRANCH_B = materializeFixtureSnapshot(
+    path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'branch-B'),
+  );
 
   it('should load project config (nova.yaml)', () => {
-    const nova = loadYaml(path.join(baseDir, 'nova.yaml'));
+    const nova = loadYamlFrom(BRANCH_B, 'nova.yaml') as Record<string, unknown>;
     expect(nova.project).toBe('zhu-fu-branch-b');
     expect(nova.genre).toBe('literary');
     expect(nova.tense).toBe('past');
-    expect(nova.title).toContain('分支B');
-    expect(nova.synopsis).toContain('贺老六挺过');
+    expect(String(nova.title)).toContain('分支B');
+    expect(String(nova.synopsis)).toContain('贺老六挺过');
   });
 
   it('should load E4 with He Laoliu survival', () => {
-    const e4 = loadYaml(path.join(chapterDir, 'E4_survival.yaml'));
+    const e4 = loadYamlFrom(BRANCH_B, 'chapters/chapter_01/E4_survival.yaml') as Record<
+      string,
+      unknown
+    >;
     expect(e4.event).toBe('E4');
-    expect(e4.sceneBrief).toContain('睁开了眼睛');
-    expect(e4.sceneBrief).toContain('活过来了');
+    expect(String(e4.sceneBrief)).toContain('睁开了眼睛');
+    expect(String(e4.sceneBrief)).toContain('活过来了');
 
-    const heLaoliuStatus = e4.expectedPostconditions.find(
-      (p: any) => p.entity === 'he_laoliu' && p.attribute === 'status',
+    const posts = (e4.expectedPostconditions as Array<Record<string, unknown>>) ?? [];
+    const heLaoliuStatus = posts.find(
+      (p) => p.entity === 'he_laoliu' && p.attribute === 'status',
     );
-    expect(heLaoliuStatus.value).toBe('alive');
+    expect(heLaoliuStatus?.value).toBe('alive');
 
-    const locationPost = e4.expectedPostconditions.find(
-      (p: any) => p.entity === 'xianglins_wife' && p.attribute === 'location',
+    const locationPost = posts.find(
+      (p) => p.entity === 'xianglins_wife' && p.attribute === 'location',
     );
-    expect(locationPost.value).toBe('he_family_hollow');
+    expect(locationPost?.value).toBe('he_family_hollow');
   });
 
   it('should load E5 with quiet years narrative', () => {
-    const e5 = loadYaml(path.join(chapterDir, 'E5_quiet_years.yaml'));
+    const e5 = loadYamlFrom(BRANCH_B, 'chapters/chapter_01/E5_quiet_years.yaml') as Record<
+      string,
+      unknown
+    >;
     expect(e5.event).toBe('E5');
-    expect(e5.sceneBrief).toContain('阿毛长成了');
-    expect(e5.sceneBrief).toContain('春丫头');
+    expect(String(e5.sceneBrief)).toContain('阿毛长成了');
+    expect(String(e5.sceneBrief)).toContain('春丫头');
 
-    const hasSecondChild = e5.expectedPostconditions.find(
-      (p: any) => p.entity === 'xianglins_wife' && p.attribute === 'has_second_child',
+    const posts = (e5.expectedPostconditions as Array<Record<string, unknown>>) ?? [];
+    const hasSecondChild = posts.find(
+      (p) => p.entity === 'xianglins_wife' && p.attribute === 'has_second_child',
     );
-    expect(hasSecondChild.value).toBe(true);
+    expect(hasSecondChild?.value).toBe(true);
   });
 
   it('should load E6 with natural death resolution', () => {
-    const e6 = loadYaml(path.join(chapterDir, 'E6_old_age.yaml'));
+    const e6 = loadYamlFrom(BRANCH_B, 'chapters/chapter_01/E6_old_age.yaml') as Record<
+      string,
+      unknown
+    >;
     expect(e6.event).toBe('E6');
-    expect(e6.sceneBrief).toContain('灶上还有粥');
+    expect(String(e6.sceneBrief)).toContain('灶上还有粥');
 
-    const heDeathCause = e6.expectedPostconditions.find(
-      (p: any) => p.entity === 'he_laoliu' && p.attribute === 'cause_of_death',
+    const posts = (e6.expectedPostconditions as Array<Record<string, unknown>>) ?? [];
+    const heDeathCause = posts.find(
+      (p) => p.entity === 'he_laoliu' && p.attribute === 'cause_of_death',
     );
-    expect(heDeathCause.value).toBe('old_age');
+    expect(heDeathCause?.value).toBe('old_age');
 
-    const xlDeathLocation = e6.expectedPostconditions.find(
-      (p: any) => p.entity === 'xianglins_wife' && p.attribute === 'death_location',
+    const xlDeathLocation = posts.find(
+      (p) => p.entity === 'xianglins_wife' && p.attribute === 'death_location',
     );
-    expect(xlDeathLocation.value).toBe('own_home_he_family_hollow');
+    expect(xlDeathLocation?.value).toBe('own_home_he_family_hollow');
   });
 
   it('should have 7 event files (E0-E3 from base, E4-E6 new)', () => {
-    const files = fs
-      .readdirSync(chapterDir)
-      .filter((f) => f.startsWith('E') && f.endsWith('.yaml'));
+    const files = eventFilesIn(BRANCH_B, 'chapters/chapter_01');
     expect(files.length).toBe(7);
     expect(files).toContain('E0_encounter.yaml');
     expect(files).toContain('E4_survival.yaml');
@@ -150,33 +198,42 @@ describe('zhu-fu-variants / branch-B (He Laoliu survives)', () => {
   });
 
   it('should have E0-E3 unchanged from base fixture', () => {
-    const e0 = loadYaml(path.join(chapterDir, 'E0_encounter.yaml'));
-    const e1 = loadYaml(path.join(chapterDir, 'E1_death_news.yaml'));
+    const e0 = loadYamlFrom(BRANCH_B, 'chapters/chapter_01/E0_encounter.yaml') as Record<
+      string,
+      unknown
+    >;
+    const e1 = loadYamlFrom(BRANCH_B, 'chapters/chapter_01/E1_death_news.yaml') as Record<
+      string,
+      unknown
+    >;
     expect(e0.event).toBe('E0');
-    expect(e0.sceneBrief).toContain('说不清'); // original evasion
+    expect(String(e0.sceneBrief)).toContain('说不清'); // original evasion
     expect(e1.event).toBe('E1');
-    expect(e1.sceneBrief).toContain('谬种');
+    expect(String(e1.sceneBrief)).toContain('谬种');
   });
 });
 
 // ----- error-injection: 28 intentionally broken YAML files -----
 describe('zhu-fu-variants / error-injection (28 files)', () => {
-  const eiDir = path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'error-injection');
+  const ERROR_INJECTION = materializeFixtureSnapshot(
+    path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'error-injection'),
+  );
 
   it('should have exactly 28 error-injection files', () => {
-    const files = fs.readdirSync(eiDir).filter((f) => f.endsWith('.yaml'));
+    const files = yamlFilesIn(ERROR_INJECTION);
     expect(files.length).toBe(28);
   });
 
   it('each file should have valid injected array', () => {
-    const files = fs.readdirSync(eiDir).filter((f) => f.endsWith('.yaml'));
+    const files = yamlFilesIn(ERROR_INJECTION);
     for (const file of files) {
-      const data = loadYaml(path.join(eiDir, file));
+      const data = loadYamlFrom(ERROR_INJECTION, file) as Record<string, unknown>;
       expect(data.injected).toBeDefined();
       expect(Array.isArray(data.injected)).toBe(true);
-      expect(data.injected.length).toBeGreaterThanOrEqual(1);
+      const injected = (data.injected as Array<Record<string, unknown>>) ?? [];
+      expect(injected.length).toBeGreaterThanOrEqual(1);
 
-      for (const entry of data.injected) {
+      for (const entry of injected) {
         expect(entry.entityId).toBeDefined();
         expect(entry.attribute).toBeDefined();
         expect(entry.expectedValidator).toBeDefined();
@@ -188,12 +245,13 @@ describe('zhu-fu-variants / error-injection (28 files)', () => {
   });
 
   it('should target multiple validators (coverage check)', () => {
-    const files = fs.readdirSync(eiDir).filter((f) => f.endsWith('.yaml'));
+    const files = yamlFilesIn(ERROR_INJECTION);
     const validators = new Set<string>();
     for (const file of files) {
-      const data = loadYaml(path.join(eiDir, file));
-      for (const entry of data.injected) {
-        validators.add(entry.expectedValidator);
+      const data = loadYamlFrom(ERROR_INJECTION, file) as Record<string, unknown>;
+      const injected = (data.injected as Array<Record<string, unknown>>) ?? [];
+      for (const entry of injected) {
+        validators.add(String(entry.expectedValidator));
       }
     }
     expect(validators.size).toBeGreaterThanOrEqual(15);
@@ -204,31 +262,38 @@ describe('zhu-fu-variants / error-injection (28 files)', () => {
   });
 
   it('should have the specified 001_timeline_order error', () => {
-    const data = loadYaml(path.join(eiDir, '001_timeline_order.yaml'));
-    expect(data.injected[0].entityId).toBe('E3');
-    expect(data.injected[0].attribute).toBe('narrationTime');
-    expect(data.injected[0].expectedValidator).toBe('timeline');
-    expect(data.injected[0].expectedSeverity).toBe('warning');
+    const data = loadYamlFrom(ERROR_INJECTION, '001_timeline_order.yaml') as Record<
+      string,
+      unknown
+    >;
+    const injected = (data.injected as Array<Record<string, unknown>>) ?? [];
+    expect(injected[0]?.entityId).toBe('E3');
+    expect(injected[0]?.attribute).toBe('narrationTime');
+    expect(injected[0]?.expectedValidator).toBe('timeline');
+    expect(injected[0]?.expectedSeverity).toBe('warning');
   });
 });
 
 // ----- extreme-damage: 5 robustness boundary tests -----
 describe('zhu-fu-variants / extreme-damage (5 files)', () => {
-  const edDir = path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'extreme-damage');
+  const EXTREME_DAMAGE = materializeFixtureSnapshot(
+    path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'extreme-damage'),
+  );
 
   it('should have exactly 5 extreme-damage files', () => {
-    const files = fs.readdirSync(edDir).filter((f) => f.endsWith('.yaml'));
+    const files = yamlFilesIn(EXTREME_DAMAGE);
     expect(files.length).toBe(5);
   });
 
   it('each file should have valid injected array', () => {
-    const files = fs.readdirSync(edDir).filter((f) => f.endsWith('.yaml'));
+    const files = yamlFilesIn(EXTREME_DAMAGE);
     for (const file of files) {
-      const data = loadYaml(path.join(edDir, file));
+      const data = loadYamlFrom(EXTREME_DAMAGE, file) as Record<string, unknown>;
       expect(data.injected).toBeDefined();
       expect(Array.isArray(data.injected)).toBe(true);
+      const injected = (data.injected as Array<Record<string, unknown>>) ?? [];
 
-      for (const entry of data.injected) {
+      for (const entry of injected) {
         expect(entry.entityId).toBeDefined();
         expect(entry.attribute).toBeDefined();
         expect(entry.expectedValidator).toBeDefined();
@@ -240,12 +305,13 @@ describe('zhu-fu-variants / extreme-damage (5 files)', () => {
   });
 
   it('should target CausalityValidator and ReachabilityValidator', () => {
-    const files = fs.readdirSync(edDir).filter((f) => f.endsWith('.yaml'));
+    const files = yamlFilesIn(EXTREME_DAMAGE);
     const validators = new Set<string>();
     for (const file of files) {
-      const data = loadYaml(path.join(edDir, file));
-      for (const entry of data.injected) {
-        validators.add(entry.expectedValidator);
+      const data = loadYamlFrom(EXTREME_DAMAGE, file) as Record<string, unknown>;
+      const injected = (data.injected as Array<Record<string, unknown>>) ?? [];
+      for (const entry of injected) {
+        validators.add(String(entry.expectedValidator));
       }
     }
     expect(validators.has('causality')).toBe(true);
@@ -253,19 +319,23 @@ describe('zhu-fu-variants / extreme-damage (5 files)', () => {
   });
 
   it('should have circular dependency test file', () => {
-    const data = loadYaml(path.join(edDir, '003_circular_dependency.yaml'));
-    expect(data.injected[0].description.toLowerCase()).toContain('circular');
-    expect(data.injected[0].expectedValidator).toBe('causality');
+    const data = loadYamlFrom(EXTREME_DAMAGE, '003_circular_dependency.yaml') as Record<
+      string,
+      unknown
+    >;
+    const injected = (data.injected as Array<Record<string, unknown>>) ?? [];
+    expect(String(injected[0]?.description).toLowerCase()).toContain('circular');
+    expect(injected[0]?.expectedValidator).toBe('causality');
   });
 
   it('should have missing state provider test file', () => {
-    const data = loadYaml(path.join(edDir, '004_missing_state_provider.yaml'));
-    expect(data.injected).toHaveLength(2);
-    expect(
-      data.injected.every(
-        (entry: { expectedValidator?: unknown }) => entry.expectedValidator === 'reachability',
-      ),
-    ).toBe(true);
+    const data = loadYamlFrom(EXTREME_DAMAGE, '004_missing_state_provider.yaml') as Record<
+      string,
+      unknown
+    >;
+    const injected = (data.injected as Array<Record<string, unknown>>) ?? [];
+    expect(injected).toHaveLength(2);
+    expect(injected.every((entry) => entry.expectedValidator === 'reachability')).toBe(true);
   });
 });
 
@@ -543,7 +613,7 @@ describe('zhu-fu-variants / validation result contracts', () => {
     expect(fileResults.length).toBeGreaterThan(0);
     for (const result of fileResults) {
       // The alias validator consumes mockAnalysis (characterReferences)
-      // via validateRender; it must fire with the expected severity.
+      // via validatePost; it must fire with the expected severity.
       expect(result.matched).toBe(true);
       const aliasIssues = result.actualIssues.filter((i) => i.validator === 'alias');
       expect(aliasIssues.length).toBeGreaterThan(0);
@@ -558,7 +628,7 @@ describe('zhu-fu-variants / validation result contracts', () => {
     expect(fileResults.length).toBeGreaterThan(0);
     for (const result of fileResults) {
       // The voice_drift validator consumes mockAnalysis (narrativeChecks)
-      // via validateRender; it must fire with the expected severity.
+      // via validatePost; it must fire with the expected severity.
       expect(result.matched).toBe(true);
       const driftIssues = result.actualIssues.filter((i) => i.validator === 'voice_drift');
       expect(driftIssues.length).toBeGreaterThan(0);
@@ -566,32 +636,25 @@ describe('zhu-fu-variants / validation result contracts', () => {
     }
   });
 });
+import { EntityMapper } from '../src/entity/mapper.ts';
+import { loadCanonicalProject } from '../src/entity/project-runtime.ts';
+import { InMemoryEntityRegistry } from '../src/entity/registry.ts';
+import type {
+  AnalysisResult,
+  EntityRegistry,
+  EntityTypeCatalog,
+  WorldState,
+} from '../src/types/index.ts';
+import { ResultAggregator } from '../src/validator/aggregator.ts';
+import { createBuiltInValidators } from '../src/validator/builtins.ts';
 
-// ============================================================================
-// Registry field availability — prove that character definition top-level
-// fields (aliases, gender, appearance, age, profession) survive into registry
-// and seeded world state so validators can access them.
-// ============================================================================
-
-import {
-  type AnalysisResult,
-  EntityMapper,
-  type EntityRegistry,
-  type EntityTypeCatalog,
-  FsStorage,
-  InMemoryEntityRegistry,
-  initializeProject,
-  ResultAggregator,
-  type WorldState,
-} from '../src/index.ts';
+const ZHU_FU_SNAPSHOT = materializeFixtureSnapshot(path.join(ROOT, 'fixtures', 'zhu-fu'));
 
 describe('zhu-fu-variants / registry field availability', () => {
-  const FIXTURE = path.resolve(ROOT, 'fixtures', 'zhu-fu');
-
   let registry: EntityRegistry;
   beforeAll(() => {
     // Current contract: registry.load receives ProjectData (never a path).
-    const data = new EntityMapper(FIXTURE).loadProject();
+    const data = new EntityMapper(ZHU_FU_SNAPSHOT).loadProject();
     registry = new InMemoryEntityRegistry();
     registry.load(data);
   });
@@ -647,16 +710,14 @@ describe('zhu-fu-variants / registry field availability', () => {
 });
 
 describe('zhu-fu-variants / alias validator issue emission', () => {
-  const FIXTURE = path.resolve(ROOT, 'fixtures', 'zhu-fu');
-
   let registry: EntityRegistry;
   let entityTypeCatalog: EntityTypeCatalog;
   beforeAll(() => {
     // Current contract: validators receive the compiled project catalog for
     // semantic-role lookups (aliases carries semanticRole 'identity').
-    const { registry: loadedRegistry, entityTypes } = initializeProject(FIXTURE, new FsStorage());
-    registry = loadedRegistry;
-    entityTypeCatalog = entityTypes;
+    const ir = loadCanonicalProject(ZHU_FU_SNAPSHOT);
+    registry = ir.registry;
+    entityTypeCatalog = ir.entityTypes;
   });
   it('AliasValidator emits issue for name not in known aliases when registry is seeded', () => {
     // Build a minimal event and state matching the 024_alias_inconsistency fixture
@@ -727,14 +788,8 @@ describe('zhu-fu-variants / alias validator issue emission', () => {
       },
     };
 
-    const aggregator = new ResultAggregator(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      entityTypeCatalog,
-    );
-    const result = aggregator.validateRender('', event, state, mockAnalysis, undefined, registry);
+    const aggregator = new ResultAggregator(createBuiltInValidators(), entityTypeCatalog);
+    const result = aggregator.validatePost('', event, state, mockAnalysis, undefined, registry);
 
     // The alias validator should fire for "祥林家的" — not in known aliases
     const aliasIssues = result.warnings.filter((i) => i.validator === 'alias');
@@ -744,16 +799,14 @@ describe('zhu-fu-variants / alias validator issue emission', () => {
 });
 
 describe('zhu-fu-variants / pronoun validator issue emission', () => {
-  const FIXTURE = path.resolve(ROOT, 'fixtures', 'zhu-fu');
-
   let registry: EntityRegistry;
   let entityTypeCatalog: EntityTypeCatalog;
   beforeAll(() => {
     // Current contract: validators receive the compiled project catalog for
     // semantic-role lookups (pronoun_consistency is a narrative attribute).
-    const { registry: loadedRegistry, entityTypes } = initializeProject(FIXTURE, new FsStorage());
-    registry = loadedRegistry;
-    entityTypeCatalog = entityTypes;
+    const ir = loadCanonicalProject(ZHU_FU_SNAPSHOT);
+    registry = ir.registry;
+    entityTypeCatalog = ir.entityTypes;
   });
 
   it('PronounValidator emits issue for gender-mismatched pronouns via Pass 2 narrativeChecks', () => {
@@ -829,21 +882,8 @@ describe('zhu-fu-variants / pronoun validator issue emission', () => {
       },
     };
 
-    const aggregator = new ResultAggregator(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      entityTypeCatalog,
-    );
-    const result = aggregator.validateRender(
-      prose,
-      event,
-      state,
-      mockAnalysis,
-      undefined,
-      registry,
-    );
+    const aggregator = new ResultAggregator(createBuiltInValidators(), entityTypeCatalog);
+    const result = aggregator.validatePost(prose, event, state, mockAnalysis, undefined, registry);
 
     // The pronoun validator should fire via Pass 2 narrativeChecks
     const pronounIssues = result.errors.filter((i) => i.validator === 'pronoun');
@@ -1009,7 +1049,7 @@ describe('zhu-fu-variants / gate: malformed reference rejection', () => {
 });
 
 // ----- Gate: Event-level Missing-Provenance Rejection -----
-import { provenanceManifestSchema } from '@novalistically/core';
+import { provenanceManifestSchema } from '../src/schemas/contracts.ts';
 
 describe('zhu-fu-variants / gate: missing-provenance rejection', () => {
   it('accepts a valid generated provenance entry', () => {

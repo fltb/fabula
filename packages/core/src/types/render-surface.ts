@@ -604,10 +604,9 @@ export interface AutoGroupConfig {
 /**
  * SurfacePlanProposal — a suggested grouping from suggest mode.
  *
- * The planner's effective plan in suggest mode is always default-parallel;
- * the proposal preserves any suggested serial groups/lanes for a later
- * API caller to persist (e.g. to `.nova/render-plans/{branch}.suggestion.json`)
- * without duplicating planner algorithms.
+ * The planner's effective plan in suggest mode is always default-parallel.
+ * A Host may persist suggested serial groups and lanes without duplicating
+ * planner algorithms.
  *
  * The proposal hash is deterministic and excludes wall-clock fields.
  */

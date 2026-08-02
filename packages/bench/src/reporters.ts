@@ -2,9 +2,9 @@
 // Benchmark Reporters — Markdown + JSON output
 // ============================================================================
 
+import { mkdirSync, writeFileSync } from 'node:fs';
 import * as path from 'node:path';
-import type { Storage, ValidationIssue } from '@novalistically/core';
-import { FsStorage } from '@novalistically/core';
+import type { ValidationIssue } from '@novalistically/core';
 import type { PerValidatorBreakdown, SeverityLevelCED } from './consistency.js';
 
 export interface BenchMeasurement {
@@ -347,17 +347,16 @@ export function toMarkdown(results: BenchResults): string {
 
 const RESULTS_DIR = new URL('../../../output/bench/', import.meta.url).pathname;
 
-export function writeResults(results: BenchResults, storage?: Storage): string {
-  const st = storage ?? new FsStorage();
+export function writeResults(results: BenchResults): string {
   const ts = results.timestamp.replace(/[:.]/g, '-').replace(/T/, '_').replace(/Z/, '');
   const basePath = path.join(RESULTS_DIR, ts);
 
-  st.mkdirp(RESULTS_DIR);
+  mkdirSync(RESULTS_DIR, { recursive: true });
   const jsonPath = `${basePath}.json`;
-  st.write(jsonPath, toJson(results));
+  writeFileSync(jsonPath, toJson(results));
 
   const mdPath = `${basePath}.md`;
-  st.write(mdPath, toMarkdown(results));
+  writeFileSync(mdPath, toMarkdown(results));
 
   console.log(`[Reporters] Written ${jsonPath}`);
   console.log(`[Reporters] Written ${mdPath}`);

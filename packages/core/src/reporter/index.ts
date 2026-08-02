@@ -2,4 +2,4 @@
 // Reporter — Barrelled exports
 // ============================================================================
 
-export { type ValidationReport, writeValidationReport } from './validation-reporter.js';
+export { type ValidationReport, formatValidationReport } from './validation-reporter.js';

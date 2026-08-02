@@ -15,5 +15,5 @@ export type {
   ProviderRegistry,
   ResolutionResult,
 } from './types.js';
-export type { PluginValidator } from './validator-registry.js';
+export type { ValidatorRegistrar } from './validator-registry.js';
 export { ValidatorRegistry } from './validator-registry.js';

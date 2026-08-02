@@ -9,7 +9,7 @@ describe('built ESM package boundaries', () => {
   it('starts the built CLI on Node ESM without bundled CommonJS YAML', () => {
     const cli = readFileSync(resolve(root, 'packages/cli/dist/index.js'), 'utf8');
     const bench = readFileSync(resolve(root, 'packages/bench/dist/index.js'), 'utf8');
-    expect(cli).toContain('@novalistically/bench');
+    expect(cli).not.toContain('@novalistically/bench');
     expect(bench).toMatch(/from ['"]yaml['"]/);
     expect(cli).not.toContain('Dynamic require');
     expect(bench).not.toContain('Dynamic require');

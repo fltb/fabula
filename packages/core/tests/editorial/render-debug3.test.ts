@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import type { AnalysisResult } from '../../src/index.ts';
+import type { AnalysisResult } from '../../src/types/analysis.ts';
 import { ResultAggregator } from '../../src/validator/index.ts';
 import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 

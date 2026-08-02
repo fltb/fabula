@@ -95,7 +95,7 @@ function makeEmptyState(
 /** Compute deterministic hash from sorted assertion IDs. */
 function computeCatalogHash(assertions: Record<string, NarratorAssertion>): string {
   const ids = Object.keys(assertions).sort();
-  return simpleHash(ids.join(',') + '|' + ids.length);
+  return simpleHash(`${ids.join(',')}|${ids.length}`);
 }
 
 /** Build state at-or-before cursor, handling the -1 pre-disclosure sentinel. */
@@ -473,7 +473,13 @@ export function compileDiscourseBoundaries(
 
   let latestActionPosition = -1;
   for (const sceneId of sceneIds) {
-    const event = eventById.get(sceneId)!;
+    const event = eventById.get(sceneId);
+    if (event === undefined) {
+      throw new ConfigError(
+        `Discourse scene sequence references unknown event "${sceneId}" on branch "${branch}".`,
+        { phase: 'discourse-context', eventId: sceneId },
+      );
+    }
     const sceneEntries = entriesByScene.get(sceneId);
     const interval = actionIntervals.get(sceneId);
     let stateBefore: DiscourseState;

@@ -4,42 +4,41 @@
 
 import * as os from 'node:os';
 import type {
-  AttributeDefinition,
-  EntityCatalogContext,
-  EntityDeclaration,
   EntityDeclarationCatalog,
   EntityKind,
   EntityTypeCatalog,
-  EntityTypeDefinition,
   Fact,
+  LayeredCacheKey,
   NarrativeEvent,
   RelationshipTransaction,
+  RenderCacheRecord,
 } from '@novalistically/core';
+import { InMemoryEntityRegistry, MemoryRenderCacheRepository } from '@novalistically/core/testing';
 import {
-  BranchMergeValidator,
-  CausalityValidator,
-  CharacterStateValidator,
   ContextCompiler,
   calculateISS,
   compileStoryRuntimeGraph,
   computeEvidenceHash,
-  FactualDetailValidator,
-  ForeshadowingValidator,
+  createBuiltInValidators,
   getCachedRender,
-  InMemoryEntityRegistry,
-  KnowledgeValidator,
-  MemoryStorage,
-  POVValidator,
-  ReachabilityValidator,
   ReplayEngine,
   ResultAggregator,
   setCachedRender,
-  TimelineValidator,
-  VoiceDriftDetector,
-  WorldRuleValidator,
-} from '@novalistically/core';
+} from '@novalistically/core/tooling';
 import { z } from 'zod';
 import { makePreInput } from './context-helper.js';
+
+type CatalogAttribute = EntityTypeCatalog['types'][string]['attributes'][string];
+type CatalogType = EntityTypeCatalog['types'][string];
+type CatalogDeclaration = EntityDeclarationCatalog['declarations'][string];
+type RuntimeCatalogAttribute = CatalogAttribute & { valueSchema: z.ZodTypeAny };
+type RuntimeCatalogType = Omit<CatalogType, 'attributes'> & {
+  attributes: Record<string, RuntimeCatalogAttribute>;
+};
+type CatalogContext = {
+  entityDeclarationCatalog: EntityDeclarationCatalog;
+  entityTypeCatalog: { types: Record<string, RuntimeCatalogType>; version: number };
+};
 
 export interface PerfMeasurement {
   name: string;
@@ -236,15 +235,14 @@ function makeSyntheticEntities(registry: InMemoryEntityRegistry): void {
 
 // ─── Synthetic Catalog Context — the one shared catalog pair ───────────────
 //
-// This benchmark is explicitly synthetic and lower-level: it never loads a
-// project through the kernel. Instead every synthetic entity and attribute is
-// declared up front so replay's write gate (validateCatalogWrite) accepts the
-// corpus, and the same context object is threaded to ReplayEngine /
-// ResultAggregator / story-boundary compilation.
-
-function syntheticAttribute(attributeId: string, valueSchema: z.ZodTypeAny): AttributeDefinition {
+function syntheticAttribute(
+  attributeId: string,
+  valueSchema: z.ZodTypeAny,
+): RuntimeCatalogAttribute {
+  const valueType = valueSchema === z.boolean() ? 'boolean' : 'string';
   return {
     attributeId,
+    valueType,
     valueSchema,
     requiredAt: 'never',
     writePolicy: 'mutable',
@@ -252,7 +250,7 @@ function syntheticAttribute(attributeId: string, valueSchema: z.ZodTypeAny): Att
   };
 }
 
-const characterType: EntityTypeDefinition = {
+const characterType: RuntimeCatalogType = {
   typeRef: { typeId: 'character', schemaVersion: 1 },
   kind: 'character',
   attributes: {
@@ -271,7 +269,7 @@ const characterType: EntityTypeDefinition = {
   typedInvariants: [],
 };
 
-const locationType: EntityTypeDefinition = {
+const locationType: RuntimeCatalogType = {
   typeRef: { typeId: 'location', schemaVersion: 1 },
   kind: 'location',
   attributes: {
@@ -289,7 +287,7 @@ const locationType: EntityTypeDefinition = {
   typedInvariants: [],
 };
 
-const syntheticEntityTypeCatalog: EntityTypeCatalog = {
+const syntheticEntityTypeCatalog: CatalogContext['entityTypeCatalog'] = {
   types: {
     character: characterType,
     location: locationType,
@@ -302,7 +300,7 @@ function syntheticDeclaration(
   kind: EntityKind,
   name: string,
   definitionFile: string,
-): EntityDeclaration {
+): CatalogDeclaration {
   return {
     entityId,
     typeRef: { typeId: kind, schemaVersion: 1 },
@@ -336,7 +334,8 @@ const syntheticEntityDeclarationCatalog: EntityDeclarationCatalog = {
 };
 
 /** The one shared catalog pair for every synthetic replay in this file. */
-const syntheticCatalogContext: EntityCatalogContext = {
+
+const syntheticCatalogContext: CatalogContext = {
   entityDeclarationCatalog: syntheticEntityDeclarationCatalog,
   entityTypeCatalog: syntheticEntityTypeCatalog,
 };
@@ -393,121 +392,98 @@ function timeIt(fn: () => void, iterations = 10): { meanMs: number; hz: number; 
 export async function runPerformanceBench(): Promise<PerfResults> {
   const measurements: PerfMeasurement[] = [];
   const raw: Record<string, { hz: number; meanMs: number; samples: number }> = {};
-
   for (const scale of ['10', '100', '1000']) {
-    const n = parseInt(scale, 10);
+    const n = Number.parseInt(scale, 10);
+    const iters = 10;
     eventCounter = 0;
-
-    // Build synthetic events (no genesis event — the corpus is ordinary events)
     const events: NarrativeEvent[] = [];
-    for (let i = 0; i < n; i++) {
-      events.push(makeSyntheticEvent());
-    }
-
-    // Build registry
+    for (let i = 0; i < n; i++) events.push(makeSyntheticEvent());
     const registry = new InMemoryEntityRegistry();
     makeSyntheticEntities(registry);
-
-    // Build state via replay over the shared synthetic catalog
-    const replay = new ReplayEngine(syntheticCatalogContext);
+    const replay = new ReplayEngine(syntheticCatalogContext as never);
     const state = replay.replay(events, { initialFacts: syntheticInitialFacts });
-
-    // Instantiate all validators once
-    const timelineVal = new TimelineValidator();
-    const charStateVal = new CharacterStateValidator();
-    const knowledgeVal = new KnowledgeValidator();
-    const worldRuleVal = new WorldRuleValidator();
-    const causalityVal = new CausalityValidator();
-    const foreshadowVal = new ForeshadowingValidator();
-    const povVal = new POVValidator();
-    const factualVal = new FactualDetailValidator();
-    const voiceVal = new VoiceDriftDetector();
-    const branchVal = new BranchMergeValidator();
-    const reachVal = new ReachabilityValidator();
-    const aggregator = new ResultAggregator(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      syntheticCatalogContext.entityTypeCatalog,
+    const validators = createBuiltInValidators().filter((v) =>
+      new Set([
+        'timeline',
+        'character_state',
+        'knowledge',
+        'world_rule',
+        'causality',
+        'foreshadowing',
+        'pov',
+        'factual_detail',
+        'voice_drift',
+        'branch_merge',
+        'reachability',
+      ]).has(v.name),
     );
+    const [
+      timelineVal,
+      charStateVal,
+      knowledgeVal,
+      worldRuleVal,
+      causalityVal,
+      foreshowVal,
+      povVal,
+      factualVal,
+      voiceVal,
+      branchVal,
+      reachVal,
+    ] = validators;
+    const aggregator = new ResultAggregator(validators, syntheticCatalogContext.entityTypeCatalog);
     const compiler = new ContextCompiler();
-
+    const validatorTiming = timeIt(() => {
+      for (const event of events) {
+        const input = makePreInput(event, state, registry, events);
+        timelineVal?.validatePre?.(input);
+        charStateVal?.validatePre?.(input);
+        knowledgeVal?.validatePre?.(input);
+        worldRuleVal?.validatePre?.(input);
+        causalityVal?.validatePre?.(input);
+        foreshowVal?.validatePre?.(input);
+        povVal?.validatePre?.(input);
+        factualVal?.validatePre?.(input);
+        voiceVal?.validatePre?.(input);
+        branchVal?.validatePre?.(input);
+        reachVal?.validatePre?.(input);
+      }
+    }, iters);
+    const validatorName = `Run all validators (N=${scale})`;
+    measurements.push({ name: validatorName, ...validatorTiming, scale });
+    raw[validatorName] = validatorTiming;
+    const aggregatorTiming = timeIt(() => {
+      aggregator.validateAll(events, state, registry);
+    }, iters);
+    const aggregatorName = `ResultAggregator (N=${scale})`;
+    measurements.push({ name: aggregatorName, ...aggregatorTiming, scale });
+    raw[aggregatorName] = aggregatorTiming;
+    const issTiming = timeIt(() => {
+      calculateISS({
+        entities: registry,
+        events,
+        threads: THREADS.map((id) => ({ id, name: id })),
+        rules: [],
+      });
+    }, iters);
+    const issName = `Calculate ISS (N=${scale})`;
+    measurements.push({ name: issName, ...issTiming, scale });
+    raw[issName] = issTiming;
+    const replayTiming = timeIt(() => {
+      replay.replay(events, { initialFacts: syntheticInitialFacts });
+    }, iters);
+    const replayName = `Replay state (N=${scale})`;
+    measurements.push({ name: replayName, ...replayTiming, scale });
+    raw[replayName] = replayTiming;
     const lastEvent = events[events.length - 1];
-
-    // Number of timing iterations per scale
-    const iters = n >= 1000 ? 3 : n >= 100 ? 5 : 10;
-
-    // a. Run all validators
-    {
-      const r = timeIt(() => {
-        for (const event of events) {
-          const input = makePreInput(event, state, registry, events);
-          timelineVal.validatePre(input);
-          charStateVal.validatePre(input);
-          knowledgeVal.validatePre(input);
-          worldRuleVal.validatePre(input);
-          causalityVal.validatePre(input);
-          foreshadowVal.validatePre(input);
-          povVal.validatePre(input);
-          factualVal.validatePre(input);
-          voiceVal.validatePre(input);
-          branchVal.validatePre(input);
-          reachVal.validatePre(input);
-        }
-      }, iters);
-      const name = `Run all validators (N=${scale})`;
-      measurements.push({ name, ...r, scale });
-      raw[name] = r;
-    }
-
-    // b. ResultAggregator
-    {
-      const r = timeIt(() => {
-        aggregator.validateAll(events, state, registry);
-      }, iters);
-      const name = `ResultAggregator (N=${scale})`;
-      measurements.push({ name, ...r, scale });
-      raw[name] = r;
-    }
-
-    // c. Calculate ISS
-    {
-      const r = timeIt(() => {
-        calculateISS({
-          projectDir: '/dev/null',
-          entityRegistry: registry,
-          events,
-          threads: THREADS.map((id) => ({ id, name: id })),
-          rules: [],
-        });
-      }, iters);
-      const name = `Calculate ISS (N=${scale})`;
-      measurements.push({ name, ...r, scale });
-      raw[name] = r;
-    }
-
-    // d. Replay state over the synthetic corpus
-    {
-      const r = timeIt(() => {
-        replay.replay(events, { initialFacts: syntheticInitialFacts });
-      }, iters);
-      const name = `Replay state (N=${scale})`;
-      measurements.push({ name, ...r, scale });
-      raw[name] = r;
-    }
-
-    // e. Compile context for last event
     if (lastEvent) {
-      const r = timeIt(() => {
+      const contextTiming = timeIt(() => {
         compiler.compile(lastEvent, state, registry);
       }, iters);
-      const name = `Compile context (N=${scale})`;
-      measurements.push({ name, ...r, scale });
-      raw[name] = r;
+      const contextName = `Compile context (N=${scale})`;
+      measurements.push({ name: contextName, ...contextTiming, scale });
+      raw[contextName] = contextTiming;
     }
   }
-
   return { measurements, raw };
 }
 
@@ -584,7 +560,7 @@ export function runOfflineCorePathBench(): PerfResults {
       makeSyntheticEntities(r);
     }, ITERATIONS);
 
-    allSamples['load'] = samples;
+    allSamples.load = samples;
     const sorted = [...samples].sort((a, b) => a - b);
     const meanMs = calcMean(samples);
     stages.push({
@@ -607,7 +583,7 @@ export function runOfflineCorePathBench(): PerfResults {
         branchPath: { decisions: [] },
       });
     }, ITERATIONS);
-    allSamples['compile'] = samples;
+    allSamples.compile = samples;
     const sorted = [...samples].sort((a, b) => a - b);
     const meanMs = calcMean(samples);
     stages.push({
@@ -620,12 +596,12 @@ export function runOfflineCorePathBench(): PerfResults {
   }
 
   // 3. replay — ReplayEngine.replay
-  const replay = new ReplayEngine(syntheticCatalogContext);
+  const replay = new ReplayEngine(syntheticCatalogContext as never);
   {
     const samples = collectSamples(() => {
       replay.replay(events, { initialFacts: syntheticInitialFacts });
     }, ITERATIONS);
-    allSamples['replay'] = samples;
+    allSamples.replay = samples;
     const sorted = [...samples].sort((a, b) => a - b);
     const meanMs = calcMean(samples);
     stages.push({
@@ -646,7 +622,7 @@ export function runOfflineCorePathBench(): PerfResults {
         compiler.compile(event, state, registry);
       }
     }, ITERATIONS);
-    allSamples['context'] = samples;
+    allSamples.context = samples;
     const sorted = [...samples].sort((a, b) => a - b);
     const meanMs = calcMean(samples);
     stages.push({
@@ -659,18 +635,12 @@ export function runOfflineCorePathBench(): PerfResults {
   }
 
   // 5. validate — ResultAggregator.validateAll (pre-render only)
-  const aggregator = new ResultAggregator(
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    syntheticCatalogContext.entityTypeCatalog,
-  );
+  const aggregator = new ResultAggregator(undefined, syntheticCatalogContext.entityTypeCatalog);
   {
     const samples = collectSamples(() => {
       aggregator.validateAll(events, state, registry);
     }, ITERATIONS);
-    allSamples['validate'] = samples;
+    allSamples.validate = samples;
     const sorted = [...samples].sort((a, b) => a - b);
     const meanMs = calcMean(samples);
     stages.push({
@@ -686,14 +656,13 @@ export function runOfflineCorePathBench(): PerfResults {
   {
     const samples = collectSamples(() => {
       calculateISS({
-        projectDir: '/dev/null',
-        entityRegistry: registry,
+        entities: registry,
         events,
         threads: THREADS.map((id) => ({ id, name: id })),
         rules: [],
       });
     }, ITERATIONS);
-    allSamples['assembly'] = samples;
+    allSamples.assembly = samples;
     const sorted = [...samples].sort((a, b) => a - b);
     const meanMs = calcMean(samples);
     stages.push({
@@ -747,15 +716,20 @@ export function runOfflineCorePathBench(): PerfResults {
  * Cold run: all cache misses; warm run: all cache hits.
  * Reports cacheHits, cacheMisses, totalAttempts, elapsedMs, hitRate, speedup.
  */
-export function runCacheBench(): { coldRun: CacheStats; warmRun: CacheStats; speedup: number } {
+export async function runCacheBench(): Promise<{
+  coldRun: CacheStats;
+  warmRun: CacheStats;
+  speedup: number;
+}> {
   const N = 100;
   eventCounter = 0;
   const events: NarrativeEvent[] = [];
   for (let i = 0; i < N; i++) events.push(makeSyntheticEvent());
 
-  const storage = new MemoryStorage();
-  const cacheDir = '/bench-cache/';
-  storage.mkdirp(cacheDir);
+  // Semantic in-memory render-cache repository — Core owns cache identity,
+  // this benchmark exercises hit/miss behavior without host persistence.
+  const repository = new MemoryRenderCacheRepository();
+  const sourceHash = 'b'.repeat(64);
 
   // Pre-compute evidence hashes for all events
   const evidenceHashes = new Map<string, string>();
@@ -764,19 +738,23 @@ export function runCacheBench(): { coldRun: CacheStats; warmRun: CacheStats; spe
     evidenceHashes.set(event.id, hash);
   }
 
+  const keyFor = (event: NarrativeEvent, label: 'cold' | 'warm'): LayeredCacheKey => ({
+    version: 1,
+    sourceHash,
+    layers: { bench: label, eventId: event.id },
+  });
+
   // ── Cold run — populate nothing, all cache misses ──────────────────────
   const coldStart = performance.now();
   let coldHits = 0;
   let coldMisses = 0;
   for (const event of events) {
-    const cacheKey = `bench-cold-key-${event.id}`;
-    const cached = getCachedRender(
-      cacheDir,
-      event.id,
-      cacheKey,
-      storage,
-      evidenceHashes.get(event.id),
-    );
+    const key = keyFor(event, 'cold');
+    const cached = await getCachedRender(repository, {
+      key,
+      eventId: event.id,
+      evidenceHash: evidenceHashes.get(event.id),
+    });
     if (cached) coldHits++;
     else coldMisses++;
   }
@@ -784,15 +762,19 @@ export function runCacheBench(): { coldRun: CacheStats; warmRun: CacheStats; spe
 
   // ── Warm run — populate cache first, all hits ─────────────────────────
   for (const event of events) {
-    const cacheKey = `bench-warm-key-${event.id}`;
-    setCachedRender(
-      cacheDir,
-      event.id,
-      cacheKey,
-      { rendered: `scene-${event.id}`, timestamp: Date.now() },
-      storage,
-      evidenceHashes.get(event.id),
-    );
+    const key = keyFor(event, 'warm');
+    const evidenceHash = computeEvidenceHash(event.id, event.preconditions, event.postconditions);
+    const record: RenderCacheRecord = {
+      version: 1,
+      key,
+      recordHash: 'c'.repeat(64),
+      output: {
+        prose: `scene-${event.id}`,
+        analysis: {},
+        evidenceHash,
+      },
+    };
+    await setCachedRender(repository, key, record);
   }
 
   const warmStart = performance.now();
@@ -800,14 +782,12 @@ export function runCacheBench(): { coldRun: CacheStats; warmRun: CacheStats; spe
   let warmMisses = 0;
   const totalEvents = events.length;
   for (const event of events) {
-    const cacheKey = `bench-warm-key-${event.id}`;
-    const cached = getCachedRender(
-      cacheDir,
-      event.id,
-      cacheKey,
-      storage,
-      evidenceHashes.get(event.id),
-    );
+    const key = keyFor(event, 'warm');
+    const cached = await getCachedRender(repository, {
+      key,
+      eventId: event.id,
+      evidenceHash: evidenceHashes.get(event.id),
+    });
     if (cached) warmHits++;
     else warmMisses++;
   }
@@ -851,15 +831,9 @@ export function runPoolEfficiencyBench(): PoolEfficiencyResult[] {
   for (let i = 0; i < N; i++) events.push(makeSyntheticEvent());
   const registry = new InMemoryEntityRegistry();
   makeSyntheticEntities(registry);
-  const replayEngine = new ReplayEngine(syntheticCatalogContext);
+  const replayEngine = new ReplayEngine(syntheticCatalogContext as never);
   const state = replayEngine.replay(events, { initialFacts: syntheticInitialFacts });
-  const aggregator = new ResultAggregator(
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    syntheticCatalogContext.entityTypeCatalog,
-  );
+  const aggregator = new ResultAggregator(undefined, syntheticCatalogContext.entityTypeCatalog);
 
   const poolSizes = [1, 2, 5, 10];
   const results: PoolEfficiencyResult[] = [];
@@ -918,7 +892,7 @@ export function runPoolEfficiencyBench(): PoolEfficiencyResult[] {
  */
 export async function runFullOfflineBench(): Promise<PerfResults> {
   const core = runOfflineCorePathBench();
-  const cacheResult = runCacheBench();
+  const cacheResult = await runCacheBench();
   const poolResult = runPoolEfficiencyBench();
 
   return {

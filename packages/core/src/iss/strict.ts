@@ -19,12 +19,12 @@ import { isPlaceholderValue, type StrictValidationContext } from './types.js';
  */
 export function validateStrict(context: StrictValidationContext): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
-  const { entityRegistry, events, rules, threads } = context;
+  const { entities, events, rules, threads } = context;
 
   // ═══ 1. Characters must have ≥ 3 verifiable traits ═══
-  const characters = entityRegistry.findByKind('character');
+  const characters = entities.findByKind('character');
   for (const char of characters) {
-    const traits = char.state?.['traits'] as unknown as string[] | undefined;
+    const traits = char.state?.traits as unknown as string[] | undefined;
     const traitCount = traits ? traits.length : 0;
     if (traitCount < 3) {
       issues.push({

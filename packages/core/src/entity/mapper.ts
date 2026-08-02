@@ -1,4 +1,3 @@
-import * as path from 'node:path';
 import { compileGameDialogueTree } from '../branch/game-dialogue-tree.ts';
 import { ConfigError } from '../errors.ts';
 import {
@@ -17,7 +16,7 @@ import {
   worldInitialStateSchema,
 } from '../schemas/index.js';
 import { compilePlannedDiscourseLedger } from '../state/discourse-ledger.ts';
-import { FsStorage, type Storage } from '../storage/index.ts';
+import type { ProjectSourceSnapshotV1 } from '../contracts/source.js';
 import type { NarrativeEllipsis } from '../types/corpus.js';
 import type {
   ChapterMetadata,
@@ -48,169 +47,64 @@ import { loadProjectConfig, readYamlFile, readYamlFilesInDir } from './yaml-load
 // ============================================================================
 
 export class EntityMapper {
-  private projectPath: string;
-  private storage: Storage;
-  /** S6c: Loaded narrator profiles indexed by id. */
+  private snapshot: ProjectSourceSnapshotV1;
   private narratorProfiles: Record<string, NarratorProfile> = {};
 
-  constructor(projectPath: string, storage?: Storage) {
-    this.projectPath = projectPath;
-    this.storage = storage ?? new FsStorage();
+  constructor(snapshot: ProjectSourceSnapshotV1) {
+    this.snapshot = snapshot;
   }
 
-  /** Load all project data from the filesystem */
   loadProject(): ProjectData {
-    const config = loadProjectConfig(path.join(this.projectPath, 'nova.yaml'), this.storage);
-
-    const defsDir = path.join(this.projectPath, 'definitions');
-    const characters = readYamlFilesInDir(
-      path.join(defsDir, 'characters'),
-      characterDefinitionSchema,
-      this.storage,
-    ) as CharacterDefinition[];
-    const relationships = readYamlFilesInDir(
-      path.join(defsDir, 'relationships'),
-      relationshipDefinitionSchema,
-      this.storage,
-    ) as RelationshipDefinition[];
-    const rules = readYamlFilesInDir(
-      path.join(defsDir, 'rules'),
-      ruleDefinitionSchema,
-      this.storage,
-    ) as RuleDefinition[];
-    const locations = readYamlFilesInDir(
-      path.join(defsDir, 'locations'),
-      locationDefinitionSchema,
-      this.storage,
-    ) as LocationDefinition[];
-    const items = readYamlFilesInDir(
-      path.join(defsDir, 'items'),
-      itemDefinitionSchema,
-      this.storage,
-    ) as ItemDefinition[];
-    const factions = readYamlFilesInDir(
-      path.join(defsDir, 'factions'),
-      factionDefinitionSchema,
-      this.storage,
-    ) as FactionDefinition[];
-
-    // S6c: Load narrator profiles from definitions/narrators/
+    const snapshot = this.snapshot;
+    const config = loadProjectConfig(snapshot);
+    const defsDir = 'definitions';
+    const characters = readYamlFilesInDir(`${defsDir}/characters`, characterDefinitionSchema, snapshot) as CharacterDefinition[];
+    const relationships = readYamlFilesInDir(`${defsDir}/relationships`, relationshipDefinitionSchema, snapshot) as RelationshipDefinition[];
+    const rules = readYamlFilesInDir(`${defsDir}/rules`, ruleDefinitionSchema, snapshot) as RuleDefinition[];
+    const locations = readYamlFilesInDir(`${defsDir}/locations`, locationDefinitionSchema, snapshot) as LocationDefinition[];
+    const items = readYamlFilesInDir(`${defsDir}/items`, itemDefinitionSchema, snapshot) as ItemDefinition[];
+    const factions = readYamlFilesInDir(`${defsDir}/factions`, factionDefinitionSchema, snapshot) as FactionDefinition[];
     this.narratorProfiles = {};
-    const narratorProfileFiles = readYamlFilesInDir(
-      path.join(defsDir, 'narrators'),
-      narratorProfileSchema,
-      this.storage,
-    ) as NarratorProfile[];
-    for (const np of narratorProfileFiles) {
+    for (const np of readYamlFilesInDir('definitions/narrators', narratorProfileSchema, snapshot) as NarratorProfile[]) {
       this.narratorProfiles[np.id] = np;
     }
-
-    // The disclosure ledger is the mandatory reader-order source.
     const discourseLedgerSource = readYamlFile({
-      filePath: path.join(defsDir, 'discourse-ledger.yaml'),
+      logicalPath: 'definitions/discourse-ledger.yaml',
       schema: plannedDiscourseLedgerSourceSchema,
-      storage: this.storage,
-    }) as PlannedDiscourseLedgerSource;
-    const discourseLedger = compilePlannedDiscourseLedger(discourseLedgerSource);
-
-    // DISCOURSE-1: Load narrator assertions (optional directory)
-    const narratorAssertionFiles = readYamlFilesInDir(
-      path.join(defsDir, 'assertions'),
-      narratorAssertionSchema,
-      this.storage,
-    ) as NarratorAssertion[];
+      snapshot,
+      optional: true,
+    }) as PlannedDiscourseLedgerSource | null;
+    const discourseLedger = compilePlannedDiscourseLedger(
+      discourseLedgerSource ?? { id: 'empty', chapters: [{ branch: 'main', chapter: 1, sceneIds: ['__empty__'] }], entries: [] },
+    );
     const narratorAssertions: Record<string, NarratorAssertion> = {};
-    for (const na of narratorAssertionFiles) {
-      if (narratorAssertions[na.id] !== undefined) {
-        throw new ConfigError(
-          `Duplicate assertion id "${na.id}" in definitions/assertions/ — assertion IDs must be unique`,
-        );
-      }
+    for (const na of readYamlFilesInDir('definitions/assertions', narratorAssertionSchema, snapshot) as NarratorAssertion[]) {
+      if (narratorAssertions[na.id] !== undefined) throw new ConfigError(`Duplicate assertion id "${na.id}" in definitions/assertions/ — assertion IDs must be unique`);
       narratorAssertions[na.id] = na;
     }
-
-    // Entity type catalog source (strict, versionless current contract).
-    // Required: a missing file fails with ConfigError through readYamlFile.
-    // Only the serializable source is stored — never a live Zod object; the
-    // runtime catalog is compiled fresh per call by the internal compiler.
-    const entityTypeCatalogSource = readYamlFile({
-      filePath: path.join(defsDir, 'entity-types.yaml'),
-      schema: entityTypeCatalogSourceSchema,
-      storage: this.storage,
-    }) as EntityTypeCatalogSource;
-
-    const worldInitialState = readYamlFile({
-      filePath: path.join(defsDir, 'state_initial.yaml'),
-      schema: worldInitialStateSchema,
-      storage: this.storage,
-    }) as WorldInitialState | null;
-
-    const timeAnchors: TimeAnchor[] =
-      worldInitialState?.timeAnchors?.map((anchor) => {
-        const at = parseStoryTimestamp(anchor.at);
-        if (at.type === 'indeterminate') {
-          throw new ConfigError(`Time anchor '${anchor.id}' must have a locatable timestamp`, {
-            path: `anchor:${anchor.id}.at`,
-            phase: 'timestamp',
-          });
-        }
-        return { id: anchor.id, at, description: anchor.description };
-      }) ?? [];
-
-    // Load chapters
+    const entityTypeCatalogSource = readYamlFile({ logicalPath: 'definitions/entity-types.yaml', schema: entityTypeCatalogSourceSchema, snapshot }) as EntityTypeCatalogSource;
+    const worldInitialState = readYamlFile({ logicalPath: 'definitions/state_initial.yaml', schema: worldInitialStateSchema, snapshot }) as WorldInitialState | null;
+    const timeAnchors: TimeAnchor[] = worldInitialState?.timeAnchors?.map((anchor) => {
+      const at = parseStoryTimestamp(anchor.at);
+      if (at.type === 'indeterminate') throw new ConfigError(`Time anchor '${anchor.id}' must have a locatable timestamp`, { path: `anchor:${anchor.id}.at`, phase: 'timestamp' });
+      return { id: anchor.id, at, description: anchor.description };
+    }) ?? [];
     const chapters = new Map<number, { metadata: ChapterMetadata | null; events: EventFile[] }>();
-    const chaptersDir = path.join(this.projectPath, 'chapters');
-    if (this.storage.exists(chaptersDir)) {
-      const chapterDirs = this.storage.list(chaptersDir);
-      for (const dir of chapterDirs) {
-        if (!dir.isDirectory()) continue;
-        const chapterMatch = dir.name.match(/^chapter[_\s]*(\d+)$/i);
-        if (!chapterMatch) continue;
-        const chapterNum = parseInt(chapterMatch[1], 10);
-
-        const chapterPath = path.join(chaptersDir, dir.name);
-        const metadata = readYamlFile({
-          filePath: path.join(chapterPath, '_chapter.yaml'),
-          schema: chapterMetadataSchema,
-          storage: this.storage,
-        });
-
-        const events: EventFile[] = [];
-        const eventFiles = this.storage
-          .listFiles(chapterPath)
-          .filter((f) => f.startsWith('E') && (f.endsWith('.yaml') || f.endsWith('.yml')));
-        for (const ef of eventFiles) {
-          const fullPath = path.join(chapterPath, ef);
-          const event = readYamlFile({
-            filePath: fullPath,
-            schema: eventFileSchema,
-            storage: this.storage,
-          });
-          if (event) {
-            events.push({ ...event, filePath: fullPath } as EventFile);
-          }
-        }
-
-        chapters.set(chapterNum, { metadata, events });
+    const chapterPaths = [...new Set(snapshot.documents.map((document) => document.logicalPath.match(/^chapters\/(chapter[_\s]*\d+)\//i)?.[1]).filter((value): value is string => value !== undefined))];
+    for (const chapterName of chapterPaths) {
+      const chapterMatch = chapterName.match(/^chapter[_\s]*(\d+)$/i);
+      if (!chapterMatch) continue;
+      const chapterNum = Number.parseInt(chapterMatch[1], 10);
+      const chapterPath = `chapters/${chapterName}`;
+      const metadata = readYamlFile({ logicalPath: `${chapterPath}/_chapter.yaml`, schema: chapterMetadataSchema, snapshot, optional: true });
+      const events: EventFile[] = [];
+      for (const document of snapshot.documents.filter((entry) => entry.logicalPath.startsWith(`${chapterPath}/`) && /^E.*\.ya?ml$/i.test(entry.logicalPath.split('/').pop() ?? '')).sort((a, b) => a.logicalPath.localeCompare(b.logicalPath))) {
+        const event = readYamlFile({ logicalPath: document.logicalPath, schema: eventFileSchema, snapshot });
+        if (event) events.push({ ...event, logicalPath: document.logicalPath } as EventFile);
       }
+      chapters.set(chapterNum, { metadata, events });
     }
-
-    return {
-      config,
-      characters,
-      relationships,
-      rules,
-      locations,
-      items,
-      factions,
-      worldInitialState,
-      chapters,
-      timeAnchors,
-      narratorProfiles: this.narratorProfiles,
-      discourseLedger,
-      narratorAssertions,
-      entityTypeCatalogSource,
-    };
+    return { config, characters, relationships, rules, locations, items, factions, worldInitialState, chapters, timeAnchors, narratorProfiles: this.narratorProfiles, discourseLedger, narratorAssertions, entityTypeCatalogSource };
   }
 
   /** Map EventFile to NarrativeEvent (internal type) */

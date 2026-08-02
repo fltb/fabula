@@ -15,12 +15,21 @@ const outdir = join(root, 'dist');
 if (!existsSync(outdir)) mkdirSync(outdir, { recursive: true });
 
 const result = await build({
-  entryPoints: [join(root, 'src/index.ts')],
+  entryPoints: [
+    join(root, 'src/index.ts'),
+    join(root, 'src/source.ts'),
+    join(root, 'src/schema.ts'),
+    join(root, 'src/extensions.ts'),
+    join(root, 'src/editorial.ts'),
+    join(root, 'src/tooling.ts'),
+    join(root, 'src/testing.ts'),
+  ],
   bundle: true,
   platform: 'node',
-  target: 'node24',
+  target: 'node26',
   format: 'esm',
-  outfile: join(outdir, 'index.js'),
+  outdir,
+  entryNames: '[name]',
   sourcemap: true,
   metafile: true,
   external: [
@@ -46,4 +55,4 @@ const meta = {
 };
 writeFileSync(metaPath, JSON.stringify(meta, null, 2));
 console.log('📊 Metafile written to', metaPath);
-console.log('✅ Core bundle built to', join(outdir, 'index.js'));
+console.log('✅ Core bundles built to', outdir);

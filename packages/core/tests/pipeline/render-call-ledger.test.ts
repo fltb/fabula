@@ -17,7 +17,7 @@ import type {
   RenderJob,
 } from '../../src/pipeline/render.ts';
 import { RenderPipeline } from '../../src/pipeline/render.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import { MemoryRenderCacheRepository } from '../../src/testing/memory-repositories.ts';
 import type {
   ContextPackage,
   KnowledgeBoundary,
@@ -162,42 +162,40 @@ function makeJob(id: string): RenderJob {
   };
 }
 
-/** Build a pipeline with a MockProvider, skipping cache. */
+/** Build a pipeline with an explicit in-memory semantic cache repository. */
 function makePipeline(opts: MockProviderOptions = {}) {
   const provider = new MockProvider(opts);
-  const storage = new MemoryStorage();
+  const renderCache = new MemoryRenderCacheRepository();
+  const runtimeServices = { renderCache };
   const pipeline = new RenderPipeline({
     provider,
     model: 'mock-model',
-    cacheDir: '/tmp/test-cache',
-    storage,
+    runtimeServices,
     skipCache: true,
     maxRetries: 3,
     validatorPolicyId: 'test-policy-v1',
   });
-  return { pipeline, provider, storage };
+  return { pipeline, provider, renderCache };
 }
 
-/**
- * Build a pipeline WITH a ResultAggregator so getCombinedValidationSchema()
- * is exercised, using MockPass2Provider for predictable Pass 2 analysis.
- */
+/** Build a pipeline WITH a ResultAggregator so dynamic analysis schema is exercised. */
 function makePipelineWithAggregator(entry: MockPass2Entry) {
   const provider = new MockPass2Provider({ entries: { test: entry } });
   const aggregator = new ResultAggregator();
-  const storage = new MemoryStorage();
+  const renderCache = new MemoryRenderCacheRepository();
+  const runtimeServices = { renderCache };
   const pipeline = new RenderPipeline({
     provider,
     model: 'mock-pass2',
-    cacheDir: '/tmp/test-cache',
-    storage,
+    runtimeServices,
     skipCache: true,
     maxRetries: 1,
     aggregator,
     validatorPolicyId: 'test-policy-v1',
   });
-  return { pipeline, provider, storage };
+  return { pipeline, provider, renderCache };
 }
+
 
 describe('dynamic schema path with aggregator', () => {
   it('parses analysis with dynamic schema from aggregator', async () => {
@@ -388,54 +386,26 @@ describe('RenderPipeline provider call ledger', () => {
   // ── Pass2 provider failure ─────────────────────────────────────────
 
   it('records valid requestHash on Pass2 provider throw', async () => {
-    const { pipeline } = makePipeline({
-      // failOnCall: 2 makes the second provider call (Pass2 first attempt) throw
-      failOnCall: 2,
-      failMessage: 'Pass2 connection lost',
-      responses: ['Some prose.', VALID_ANALYSIS_JSON],
-    });
-
+    const { pipeline } = makePipeline({ failOnCall: 2, failMessage: 'Pass2 connection lost', responses: ['Some prose.', VALID_ANALYSIS_JSON] });
     const result = await pipeline.renderScene(makeJob('evt_p2_fail'));
     const entries = result.providerCalls;
-
-    // Two entries: pass1 success + pass2 failure
     expect(entries).toHaveLength(2);
-
-    // Pass 1 — success
     expectValidEntry(entries[0], { phase: 'pass1', attempt: 1, outcome: 'success', seed: null });
-    expect(entries[0].failureReason).toBeUndefined();
-
-    // Pass 2 — failure with valid 64-hex requestHash
     expectValidEntry(entries[1], { phase: 'pass2', attempt: 1, outcome: 'failure', seed: 42 });
     expect(entries[1].failureReason).toBe('Pass2 connection lost');
     expect(entries[1].requestHash).toMatch(/^[0-9a-f]{64}$/);
-
-    // Overall result — analysis is null, promptHash is still valid
     expect(result.analysis).toBeNull();
     expect(result.promptHash).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  // ── Cache hit yields empty ledger ──────────────────────────────────
-
   it('returns empty providerCalls on cache hit', async () => {
-    const storage = new MemoryStorage();
+    const renderCache = new MemoryRenderCacheRepository();
     const provider = new MockProvider({ responses: ['prose', VALID_ANALYSIS_JSON] });
-    const pipeline = new RenderPipeline({
-      provider,
-      model: 'mock-model',
-      cacheDir: '/tmp/test-cache',
-      storage,
-      skipCache: false,
-      maxRetries: 3,
-      validatorPolicyId: 'test-policy-v1',
-    });
-
-    // First render populates the cache — a miss with provider calls
+    const runtimeServices = { renderCache };
+    const pipeline = new RenderPipeline({ provider, model: 'mock-model', runtimeServices, skipCache: false, maxRetries: 3, validatorPolicyId: 'test-policy-v1' });
     const miss = await pipeline.renderScene(makeJob('evt_cache_check'));
     expect(miss.cacheHit).toBe(false);
     expect(miss.providerCalls.length).toBeGreaterThan(0);
-
-    // Second render with the same cache — a hit with zero provider calls
     const hit = await pipeline.renderScene(makeJob('evt_cache_check'));
     expect(hit.cacheHit).toBe(true);
     expect(hit.providerCalls).toEqual([]);
@@ -797,35 +767,14 @@ describe('RenderPipeline provider call ledger', () => {
     // The timeout is a hard failure, not retried without material mutation
   });
   it('cache hit returns providerCalls: [] not null or partial analysis', async () => {
-    const storage = new MemoryStorage();
-
-    // Populate the cache with a fully rendered scene
+    const renderCache = new MemoryRenderCacheRepository();
     const populateProvider = new MockProvider({ responses: ['prose.', VALID_ANALYSIS_JSON] });
-    const populatePipeline = new RenderPipeline({
-      provider: populateProvider,
-      model: 'mock-model',
-      providerProfile: 'mock-provider',
-      cacheDir: '/tmp/test-cache',
-      storage,
-      skipCache: false,
-      maxRetries: 3,
-      validatorPolicyId: 'test-policy-v1',
-    });
+    const populateServices = { renderCache };
+    const populatePipeline = new RenderPipeline({ provider: populateProvider, model: 'mock-model', providerProfile: 'mock-provider', runtimeServices: populateServices, skipCache: false, maxRetries: 3, validatorPolicyId: 'test-policy-v1' });
     const miss = await populatePipeline.renderScene(makeJob('evt_cache_hit'));
     expect(miss.cacheHit).toBe(false);
     expect(miss.analysis).not.toBeNull();
-
-    // A fresh pipeline with no provider re-parses the persisted cache fixture
-    // under the current contract — a hit is complete, never partial.
-    const cachedPipeline = new RenderPipeline({
-      model: 'mock-model',
-      providerProfile: 'mock-provider',
-      cacheDir: '/tmp/test-cache',
-      storage,
-      skipCache: false,
-      maxRetries: 3,
-      validatorPolicyId: 'test-policy-v1',
-    });
+    const cachedPipeline = new RenderPipeline({ model: 'mock-model', providerProfile: 'mock-provider', runtimeServices: { renderCache }, skipCache: false, maxRetries: 3, validatorPolicyId: 'test-policy-v1' });
     const hit = await cachedPipeline.renderScene(makeJob('evt_cache_hit'));
     expect(hit.cacheHit).toBe(true);
     expect(hit.analysis).not.toBeNull();

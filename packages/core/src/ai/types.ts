@@ -50,10 +50,6 @@ export interface CompletionResponse {
 export interface LLMProvider {
   readonly name: string;
   complete(request: CompletionRequest): Promise<CompletionResponse>;
-  completeStream?(
-    request: CompletionRequest,
-    onChunk: (chunk: string) => void,
-  ): Promise<CompletionResponse>;
 }
 
 // ——— Error Types ———

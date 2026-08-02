@@ -1,39 +1,135 @@
 // ============================================================================
-// Output Writer — write render results to PROJECT.md-compliant file layout
+// Render Output Intents — pure JSON-safe construction of render outputs
 // ============================================================================
-// Each render sits in:
-//   scenes/chapter-NN/{eventId}.md                — prose
-//   scenes/chapter-NN/{eventId}.yaml               — metadata (prose_source, edit_history)
-//   scenes/chapter-NN/{eventId}_render_request.yaml — context package sent to LLM
-//   .nova/derived/threads.yaml                     — thread progress tracking
-//   .nova/derived/foreshadowing.yaml               — foreshadowing state tracking
-//   .nova/derived/relationships.yaml               — relationship evolution tracking
-//   .nova/derived/rules.yaml                       — rule evidence chain
+// Core never writes files: it builds semantic output intents/values that a
+// Host serializes and persists. Every emitted payload is JSON-safe — optional
+// logical/surface data and render-request records are normalized to explicit
+// values (null / JSON-safe projections) with no undefined fields. Derived data
+// keeps the shape consumed by editorial publishing and assembly consumers.
 // ============================================================================
 
-import * as path from 'node:path';
-import YAML from 'yaml';
 import { countNarrativeText, NARRATIVE_TEXT_COUNT_VERSION } from '../assembler/count.ts';
-import { ProjectTransactionCoordinator, resolveProjectPaths } from '../editorial/index.js';
-import { computeFileHash } from '../storage/hash.ts';
-import type { Storage } from '../storage/index.js';
-import type { StorageWrite } from '../storage/types.ts';
+import type { Message } from '../ai/types.ts';
+import type { JsonValue } from '../contracts/json.ts';
+import type { BranchSet, Condition } from '../types/branch.ts';
 import type { GameDialogueChoice } from '../types/index.ts';
-import type { RenderJob, RenderSceneResult } from './render.js';
+import type { RenderJob, RenderRequestRecord, RenderSceneResult } from './render.js';
+
+/** JSON-safe projection of a provider request record for an output intent. */
+export interface RenderRequestRecordOutputV1 {
+  phase: 'pass1' | 'pass2';
+  attempt: number;
+  requestHash: string;
+  messages: readonly Message[];
+  /** Normalized: absent response content becomes explicit null. */
+  responseContent: string | null;
+}
+
+/** JSON-safe context package sent with a render (Host-persisted artifact). */
+export interface RenderRequestOutputV1 {
+  eventId: string;
+  chapter: number;
+  /** Normalized: optional logical disclosure summary becomes explicit null. */
+  logicalDisclosureSummary: string | null;
+  /** Normalized: optional surface reference packet becomes explicit null. */
+  surfaceReferencePacket: JsonValue | null;
+  requests: readonly RenderRequestRecordOutputV1[];
+}
 
 export interface OutputEntry {
   eventId: string;
   chapterNumber: number;
   prose: string;
-  metadata: Record<string, unknown>;
-  renderRequest?: Record<string, unknown>;
+  metadata: Record<string, JsonValue>;
+  renderRequest?: RenderRequestOutputV1;
 }
 
+/**
+ * Derived reference data (threads / foreshadowing / relationships / rules).
+ * Shape is shared with editorial publishing and assembly consumers; Core emits
+ * explicit JSON-safe values without undefined fields.
+ */
 export interface DerivedData {
   threads: Record<string, unknown>;
   foreshadowing: Array<Record<string, unknown>>;
   relationships: Array<Record<string, unknown>>;
   rules: Array<Record<string, unknown>>;
+}
+
+/** Semantic render output intents produced for Host-side persistence. */
+export interface RenderOutputs {
+  entries: OutputEntry[];
+  derived: DerivedData;
+}
+
+/** Convert any runtime value into a JSON-safe value, dropping undefined
+ *  object fields and non-JSON primitives. */
+function toJsonSafeValue(value: unknown): JsonValue {
+  if (
+    value === null ||
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean'
+  ) {
+    return value;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => toJsonSafeValue(item));
+  }
+  if (typeof value === 'object') {
+    const object: Record<string, JsonValue> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+      if (item === undefined) continue;
+      object[key] = toJsonSafeValue(item);
+    }
+    return object;
+  }
+  return null;
+}
+
+/** JSON-safe representation of a branch existence condition (no undefined). */
+function branchSetToJsonValue(branchSet: BranchSet): JsonValue {
+  switch (branchSet.type) {
+    case 'all':
+      return { type: 'all' };
+    case 'paths':
+      return {
+        type: 'paths',
+        paths: branchSet.paths.map((branchPath) => ({
+          decisions: branchPath.decisions.map((decision) => ({
+            atEventId: decision.atEventId,
+            choiceId: decision.choiceId,
+            narrativeOrder: decision.narrativeOrder,
+          })),
+        })),
+      };
+    case 'condition':
+      return { type: 'condition', condition: conditionToJsonValue(branchSet.condition) };
+    case 'except':
+      return { type: 'except', branches: branchSetToJsonValue(branchSet.branches) };
+  }
+}
+
+function conditionToJsonValue(condition: Condition): JsonValue {
+  const json: Record<string, JsonValue> = { type: condition.type };
+  if (condition.field !== undefined) json.field = condition.field;
+  if (condition.value !== undefined) json.value = toJsonSafeValue(condition.value);
+  if (condition.conditions !== undefined) {
+    json.conditions = condition.conditions.map(conditionToJsonValue);
+  }
+  return json;
+}
+
+function toJsonSafeRenderRequestRecord(
+  record: RenderRequestRecord,
+): RenderRequestRecordOutputV1 {
+  return {
+    phase: record.phase,
+    attempt: record.attempt,
+    requestHash: record.requestHash,
+    messages: record.messages,
+    responseContent: record.responseContent ?? null,
+  };
 }
 
 function yamlScalar(value: string): string {
@@ -67,8 +163,13 @@ export function appendPlayerChoicesBlock(
  * Collect derived reference data from rendered events.
  * Extracts thread progress, foreshadowing entries, relationship effects,
  * and rule effects from each event that has a corresponding render result.
+ * Emits explicit JSON-safe values: absent relationship state is omitted
+ * rather than written as an undefined field.
  */
-function collectAllReferenceFiles(jobs: RenderJob[], results: RenderSceneResult[]): DerivedData {
+function collectAllReferenceFiles(
+  jobs: RenderJob[],
+  results: RenderSceneResult[],
+): DerivedData {
   const resultMap = new Map(results.map((r) => [r.eventId, r]));
   const threads: Record<string, unknown> = {};
   const foreshadowing: Array<Record<string, unknown>> = [];
@@ -98,24 +199,24 @@ function collectAllReferenceFiles(jobs: RenderJob[], results: RenderSceneResult[
       });
     }
 
-    // Relationship effects — derive participants, direction, type, intensity from transaction
+    // Relationship effects — derive participants, direction, type, intensity
     for (const re of event.relationshipEffects) {
       const participants = re.membershipAfter.map((m) => m.entityId);
       const directionDim = re.dimensionSet?.find((d) => d.dimensionId === 'direction');
       const typeDim = re.dimensionSet?.find((d) => d.dimensionId === 'type');
       const intensityDim = re.dimensionSet?.find((d) => d.dimensionId === 'intensity');
-      relationships.push({
+      const entry: Record<string, unknown> = {
         participants: participants.length >= 2 ? [participants[0], participants[1]] : [],
         effect: re.provenance?.replace('compat:RelationshipChange:', '') ?? 'change',
         direction: (directionDim?.value as string) ?? '',
-        newState:
-          typeDim || intensityDim
-            ? {
-                type: (typeDim?.value as string) ?? '',
-                intensity: (intensityDim?.value as number) ?? 0,
-              }
-            : undefined,
-      });
+      };
+      if (typeDim || intensityDim) {
+        entry.newState = {
+          type: (typeDim?.value as string) ?? '',
+          intensity: (intensityDim?.value as number) ?? 0,
+        };
+      }
+      relationships.push(entry);
     }
 
     // Rule effects — each entry carries the rule as key
@@ -132,84 +233,41 @@ function collectAllReferenceFiles(jobs: RenderJob[], results: RenderSceneResult[
   return { threads, foreshadowing, relationships, rules };
 }
 
-/**
- * Write render outputs to PROJECT.md-compliant directory layout.
- * Uses ProjectTransactionCoordinator for atomic commits with CAS writes.
- */
-function writeRenderOutputs(
-  st: Storage,
-  projectDir: string,
-  entries: OutputEntry[],
-  derived: DerivedData,
-): void {
-  const paths = resolveProjectPaths(projectDir);
-  const coordinator = new ProjectTransactionCoordinator(st, paths);
-
-  const writes: StorageWrite[] = [];
-
-  for (const entry of entries) {
-    const sceneDir = path.posix.join(
-      projectDir,
-      'scenes',
-      `chapter-${String(entry.chapterNumber).padStart(2, '0')}`,
+/** Build JSON-safe scene metadata for an output entry. */
+function buildEntryMetadata(
+  job: RenderJob,
+  result: RenderSceneResult,
+): Record<string, JsonValue> {
+  const metadata: Record<string, JsonValue> = {
+    schema_version: 1,
+    event: job.event.id,
+    narrative_order: job.event.narrativeOrder,
+    prose_source: result.cacheHit ? 'cache' : 'llm',
+    word_count: countNarrativeText(result.prose, 'zh'),
+    text_count_version: NARRATIVE_TEXT_COUNT_VERSION,
+    rendered_at: new Date(result.renderStart).toISOString(),
+    edit_history: result.cacheHit
+      ? []
+      : [{ action: 'llm_generated', timestamp: new Date().toISOString() }],
+    branch_existence: branchSetToJsonValue(job.event.branchExistence ?? { type: 'all' }),
+  };
+  if (job.gameDialogue) {
+    metadata.player_choices = job.gameDialogue.choices.map((choice) =>
+      toJsonSafeValue(choice),
     );
-    const mdPath = path.posix.join(sceneDir, `${entry.eventId}.md`);
-    writes.push({
-      type: 'put',
-      path: mdPath,
-      content: entry.prose,
-      expectedHash: computeFileHash(st, mdPath),
-    });
-
-    const yamlPath = path.posix.join(sceneDir, `${entry.eventId}.yaml`);
-    writes.push({
-      type: 'put',
-      path: yamlPath,
-      content: YAML.stringify(entry.metadata, { lineWidth: 120 }) + '\n',
-      expectedHash: computeFileHash(st, yamlPath),
-    });
-
-    if (entry.renderRequest) {
-      const reqPath = path.posix.join(sceneDir, `${entry.eventId}_render_request.yaml`);
-      writes.push({
-        type: 'put',
-        path: reqPath,
-        content: YAML.stringify(entry.renderRequest, { lineWidth: 120 }) + '\n',
-        expectedHash: computeFileHash(st, reqPath),
-      });
-    }
   }
-
-  const derivedDir = path.posix.join(projectDir, '.nova', 'derived');
-  const derivedFiles = [
-    { name: 'threads.yaml', data: derived.threads },
-    { name: 'foreshadowing.yaml', data: derived.foreshadowing },
-    { name: 'relationships.yaml', data: derived.relationships },
-    { name: 'rules.yaml', data: derived.rules },
-  ] as const;
-  for (const df of derivedFiles) {
-    const dfPath = path.posix.join(derivedDir, df.name);
-    writes.push({
-      type: 'put',
-      path: dfPath,
-      content: YAML.stringify(df.data, { lineWidth: 120 }),
-      expectedHash: computeFileHash(st, dfPath),
-    });
-  }
-
-  coordinator.commit({ writes });
+  return metadata;
 }
 
 /**
- * Convenience: build OutputEntry[] + DerivedData from pipeline jobs + results,
- * then write everything. Returns the entries and data (for inspection).
+ * Build pure JSON-safe render output intents from pipeline jobs + results.
+ * File writing is owned by the Host; Core returns the semantic entries and
+ * derived data for inspection and persistence.
  */
 export function buildAndWriteOutputs(
-  st: Storage,
-  projectDir: string,
   jobs: RenderJob[],
   results: RenderSceneResult[],
-): { entries: OutputEntry[]; derived: DerivedData } {
+): RenderOutputs {
   const resultMap = new Map(results.map((r) => [r.eventId, r]));
 
   const entries: OutputEntry[] = [];
@@ -220,42 +278,30 @@ export function buildAndWriteOutputs(
 
     // Cache hits deliberately carry no request record: old cache metadata
     // cannot be promoted into a fabricated provider request artifact.
+    const requestRecords = r.requestRecords.map(toJsonSafeRenderRequestRecord);
     entries.push({
       eventId: job.event.id,
       chapterNumber: job.chapter,
       prose: job.gameDialogue
         ? appendPlayerChoicesBlock(r.prose, job.gameDialogue.choices)
         : r.prose,
-      metadata: {
-        schema_version: 1,
-        event: job.event.id,
-        narrative_order: job.event.narrativeOrder,
-        prose_source: r.cacheHit ? 'cache' : 'llm',
-        word_count: countNarrativeText(r.prose, 'zh'),
-        text_count_version: NARRATIVE_TEXT_COUNT_VERSION,
-        rendered_at: new Date(r.renderStart).toISOString(),
-        edit_history: r.cacheHit
-          ? []
-          : [{ action: 'llm_generated', timestamp: new Date().toISOString() }],
-        branch_existence: job.event.branchExistence ?? { type: 'all' },
-        ...(job.gameDialogue ? { player_choices: job.gameDialogue.choices } : {}),
-      },
+      metadata: buildEntryMetadata(job, r),
       renderRequest:
-        r.requestRecords.length > 0
+        requestRecords.length > 0
           ? {
               eventId: job.event.id,
               chapter: job.chapter,
-              logicalDisclosureSummary: job.logicalDisclosureSummary,
-              surfaceReferencePacket: job.surfaceReferencePacket,
-              requests: r.requestRecords,
+              logicalDisclosureSummary: job.logicalDisclosureSummary ?? null,
+              surfaceReferencePacket: job.surfaceReferencePacket
+                ? toJsonSafeValue(job.surfaceReferencePacket)
+                : null,
+              requests: requestRecords,
             }
           : undefined,
     });
   }
 
   const derived = collectAllReferenceFiles(jobs, results);
-
-  writeRenderOutputs(st, projectDir, entries, derived);
 
   return { entries, derived };
 }

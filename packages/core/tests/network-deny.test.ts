@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs';
+
 import http from 'node:http';
 import http2 from 'node:http2';
 import https from 'node:https';
 import net from 'node:net';
 import tls from 'node:tls';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { NetworkDeniedError } from '../src/errors.ts';
+import { JsonlLogTransport, Logger, logger } from '../src/observability/logger.ts';
 
 describe('default offline test sentinel', () => {
   it('rejects fetch', async () => {
@@ -50,5 +53,56 @@ describe('default offline test sentinel', () => {
     expect(process.env.SKIP_NETWORK).toBeUndefined();
     expect(process.env.NETWORK_ENABLED).toBeUndefined();
     expect(process.env.VITEST).toBe('true');
+  });
+});
+
+describe('Core observability boundary', () => {
+  it('default logger never writes to stderr', () => {
+    const writeMock = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    try {
+      logger.warn('boundary warning', { module: 'test' });
+      logger.error('boundary error', { module: 'test' });
+      new Logger().info('unconfigured logger', { module: 'test' });
+      expect(writeMock).not.toHaveBeenCalled();
+    } finally {
+      writeMock.mockRestore();
+    }
+  });
+
+  it('JSONL transport emits only through an injected sink', () => {
+    const writeMock = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    const lines: string[] = [];
+    try {
+      new JsonlLogTransport().write({
+        timestamp: '2026-08-02T00:00:00.000Z',
+        level: 'info',
+        message: 'dropped',
+        context: { module: 'test' },
+      });
+      expect(writeMock).not.toHaveBeenCalled();
+
+      const sinkTransport = new JsonlLogTransport((line) => lines.push(line));
+      new Logger(sinkTransport, { module: 'test' }).info('routed', { eventId: 'E0' });
+      expect(writeMock).not.toHaveBeenCalled();
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines[0])).toMatchObject({
+        level: 'info',
+        message: 'routed',
+        context: { module: 'test', eventId: 'E0' },
+      });
+    } finally {
+      writeMock.mockRestore();
+    }
+  });
+
+  it('observability production sources hold no host clock, env, or stderr authority', () => {
+    const dir = new URL('../src/observability/', import.meta.url);
+    for (const name of ['logger.ts', 'trace.ts']) {
+      const source = readFileSync(new URL(name, dir), 'utf8');
+      expect(source).not.toMatch(/\bprocess\.(?:stderr|env)\b/);
+      expect(source).not.toMatch(/\bDate\.now\(/);
+      expect(source).not.toMatch(/\bnew Date\(/);
+      expect(source).not.toMatch(/\brandomUUID\(/);
+    }
   });
 });

@@ -10,12 +10,9 @@
 //      authoritative dimension with one exclusive: true.
 // ============================================================================
 
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 // ——— AI / Mock ———
 import { MockPass2Provider } from '../src/ai/providers/mock-pass2.ts';
-// ——— Project loading ———
-import { initializeProject, validateNovel } from '../src/api.js';
 // ——— Context ———
 import { ContextCompiler } from '../src/context/index.js';
 import { compileEntityTypeCatalog } from '../src/entity/entity-catalog-compiler.js';
@@ -43,9 +40,6 @@ import type {
 import { applyNarrativeEvent } from '../src/state/event-application.js';
 import { applyRelationshipTransaction } from '../src/state/relationship-replay.js';
 import { emptyWorldState } from '../src/state/story-boundaries.js';
-// ——— Storage ———
-import { FsStorage } from '../src/storage/fs-storage.ts';
-import { MemoryStorage } from '../src/storage/memory-storage.ts';
 import type {
   CompiledSceneContract,
   EntityCatalogContext,
@@ -61,21 +55,17 @@ import type {
 import { convertRelationshipChange } from '../src/types/relationship.js';
 // ——— Validation ———
 import { ResultAggregator } from '../src/validator/aggregator.ts';
+import { createBuiltInValidators } from '../src/validator/builtins.ts';
 import { makeAnalysisResult } from './fixtures/mock-pass2-helpers.ts';
-
-// ——— Fixture paths ———
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const PLUGIN_CHECK_DIR = path.join(ROOT, 'fixtures', 'zhu-fu-variants', 'plugin-check');
+import { createRuntimeServices } from './fixtures/runtime-services.ts';
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
-/** Create a minimal PluginContext for test use. */
-function makePluginContext(projectDir: string, storage: MemoryStorage | FsStorage): PluginContext {
+/** Create a minimal host-neutral PluginContext for test use. */
+function makePluginContext(): PluginContext {
   return {
-    projectDir,
-    storage,
     log: new Logger(undefined, { module: 'test' }),
   };
 }
@@ -178,74 +168,6 @@ const REL_CATALOG_CONTEXT: EntityCatalogContext = {
   }),
 };
 
-// ============================================================================
-// 1. Real plugin-check fixture — valence-guard validation
-// ============================================================================
-
-describe('plugin activation — real fixture validation', () => {
-  it('loads valence-guard from plugin-check and reports missing emotionalValence on E1', async () => {
-    // ── Load the project ──────────────────────────────────────────────
-    const fsStorage = new FsStorage();
-    const { events, registry, state } = initializeProject(PLUGIN_CHECK_DIR, fsStorage);
-    const e1 = events.find((ev) => ev.id === 'E1');
-    const e0 = events.find((ev) => ev.id === 'E0');
-    expect(e1).toBeDefined();
-    expect(e0).toBeDefined();
-    // E1 must not have emotionalValence (fixture invariant)
-    expect((e1 as Record<string, unknown>).emotionalValence).toBeUndefined();
-    // E0 does have it
-    expect((e0 as Record<string, unknown>).emotionalValence).toBe('unsettling_encounter_guilt');
-
-    // ── Load plugins from the real fixture directory ──────────────────
-    const loader = new PluginLoader(fsStorage);
-    const hooks = await loader.loadFromDirectory(path.join(PLUGIN_CHECK_DIR, 'plugins'));
-    expect(hooks).toHaveLength(1);
-    expect(hooks[0].name).toBe('valence-guard');
-
-    // ── Wire the plugin through PluginHooksManager → ValidatorRegistry ─
-    const validatorRegistry = new ValidatorRegistry();
-    const hooksManager = new PluginHooksManager(
-      makePluginContext(PLUGIN_CHECK_DIR, fsStorage),
-      validatorRegistry,
-      dummyProviderRegistry,
-    );
-    hooksManager.register(hooks[0]);
-    await hooksManager.initialize();
-
-    // After initialize(), the valence-guard plugin should have registered
-    // its validator in the ValidatorRegistry.
-    expect(validatorRegistry.validators).toHaveLength(1);
-    expect(validatorRegistry.validators[0].name).toBe('valence-guard');
-
-    // ── Run validation through the real activation chain ──────────────
-    // (validateNovel activates plugins from nova.yaml and compiles proper
-    // per-event pre-state boundaries — hand-running validateAll against the
-    // empty initial WorldState would fail core validators spuriously.)
-    const { results } = await validateNovel(PLUGIN_CHECK_DIR);
-
-    // ── Assert: E1 fails with valence-guard error ─────────────────────
-    const e1Result = results.get('E1');
-    expect(e1Result).toBeDefined();
-    expect(e1Result!.passed).toBe(false);
-
-    // Locate the valence-guard issue among the errors
-    const valenceError = e1Result!.errors.find((issue) => issue.validator === 'valence-guard');
-    expect(valenceError).toBeDefined();
-
-    // Assert specific value shape (not just "failed")
-    expect(valenceError!.message).toContain('emotionalValence');
-    // The plugin computes event identity from ctx.currentEvent.event
-    expect(valenceError!.event).toBe('E1');
-    expect(valenceError!.severity).toBe('error');
-    expect(valenceError!.fixAction).toBe('add_field');
-
-    // ── Assert: E0 passes (has emotionalValence) ──────────────────────
-    const e0Result = results.get('E0');
-    expect(e0Result).toBeDefined();
-    expect(e0Result!.passed).toBe(true);
-    expect(e0Result!.errors).toHaveLength(0);
-  });
-});
 
 // ============================================================================
 // 2. RenderPipeline with PluginHooksManager + MockPass2Provider
@@ -254,7 +176,6 @@ describe('plugin activation — real fixture validation', () => {
 describe('plugin activation — render with hooks', () => {
   it('runs plugin hooks without error and preserves normal pipeline failures', async () => {
     // ── Shared setup ─────────────────────────────────────────────────
-    const storage = new MemoryStorage();
     const callLog: string[] = [];
 
     const observerHook: PluginHooks = {
@@ -269,7 +190,7 @@ describe('plugin activation — render with hooks', () => {
 
     const validatorRegistry = new ValidatorRegistry();
     const hooksManager = new PluginHooksManager(
-      makePluginContext(PLUGIN_CHECK_DIR, storage),
+      makePluginContext(),
       validatorRegistry,
       dummyProviderRegistry,
     );
@@ -284,8 +205,7 @@ describe('plugin activation — render with hooks', () => {
     const pipeline = new RenderPipeline({
       provider,
       model: 'mock-pass2',
-      cacheDir: '/tmp/test-cache',
-      storage,
+      runtimeServices: createRuntimeServices({ provider }).services,
       skipCache: true,
       maxRetries: 1,
       aggregator,
@@ -359,9 +279,9 @@ describe('plugin activation — render with hooks', () => {
           rules: {},
           facts: [],
         },
-        { resolve: () => undefined, getByKind: () => [], getAll: () => [] } as never,
         new InMemoryEntityRegistry(),
       ),
+      sourceContentHash: 'source-plugin-hooks',
       chapter: 1,
       contract: {
         sceneId: 'E0',
@@ -409,8 +329,7 @@ describe('plugin activation — render with hooks', () => {
     const badPipeline = new RenderPipeline({
       provider: badProvider,
       model: 'mock-pass2',
-      cacheDir: '/tmp/test-cache-bad',
-      storage: new MemoryStorage(),
+      runtimeServices: createRuntimeServices({ provider: badProvider }).services,
       skipCache: true,
       maxRetries: 1,
       aggregator: new ResultAggregator(),
@@ -475,8 +394,7 @@ describe('plugin activation — conflict detection', () => {
     };
 
     // Use MemoryStorage as a lightweight tpm fs for the loader
-    const storage = new MemoryStorage();
-    const loader = new PluginLoader(storage);
+    const loader = new PluginLoader();
     loader.register(manifestA);
     loader.register(manifestB);
 
@@ -522,8 +440,7 @@ describe('plugin activation — conflict detection', () => {
       observes: { eventTypes: [], stateDomains: [] },
     };
 
-    const storage = new MemoryStorage();
-    const loader = new PluginLoader(storage);
+    const loader = new PluginLoader();
     loader.register(a);
     loader.register(b);
 

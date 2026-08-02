@@ -107,14 +107,15 @@ export class PluginHooksManager {
         await hook.onLoad(this.context);
       }
       const validatorsBefore = new Set(
-        this.validatorRegistry.validators.map((validator) => validator.name),
+        this.validatorRegistry.list().map((validator) => validator.name),
       );
       if (hook.registerValidators) {
         hook.registerValidators(this.validatorRegistry);
       }
       this.validatorNamesByPlugin.set(
         hook.name,
-        this.validatorRegistry.validators
+        this.validatorRegistry
+          .list()
           .map((validator) => validator.name)
           .filter((name) => !validatorsBefore.has(name))
           .sort(),

@@ -18,12 +18,12 @@ const result = await build({
   entryPoints: [join(root, 'src/index.ts'), join(root, 'src/mcp-server.ts')],
   bundle: true,
   platform: 'node',
-  target: 'node24',
+  target: 'node26',
   format: 'esm',
   outdir,
   sourcemap: true,
   metafile: true,
-  external: ['node:*', 'commander', '@novalistically/core', '@novalistically/bench'],
+  external: ['node:*', 'commander', '@novalistically/core', '@novalistically/node-host'],
   logLevel: 'info',
 });
 

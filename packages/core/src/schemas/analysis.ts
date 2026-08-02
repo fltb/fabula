@@ -28,6 +28,26 @@ import type { ValidationKey } from '../types/discourse.js';
 import { analysisContentSchema } from '../validator/index.js';
 import { validationKeySchema } from './discourse.js';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Cache repositories preserve opaque plugin analysis fields, so they validate
+ * only the invariant AnalysisResult envelope. The active pipeline contract
+ * performs the full schema validation before a record becomes cacheable.
+ */
+export function hasAnalysisResultShape(value: unknown): value is Record<string, unknown> {
+  return isRecord(value)
+    && typeof value.eventId === 'string'
+    && value.eventId.length > 0
+    && isRecord(value.protocol)
+    && Object.keys(value.protocol).length > 0
+    && isRecord(value.observations)
+    && isRecord(value.analysis)
+    && Object.keys(value.analysis).length > 0;
+}
+
 // ── Observation schemas ───────────────────────────────────────────────────────
 
 /**

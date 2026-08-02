@@ -25,7 +25,7 @@ export class CharacterStateValidator implements Validator {
     const issues: ValidationIssue[] = [];
 
     for (const pc of input.event.preconditions) {
-      const entity = input.entityRegistry.resolve(pc.entityId);
+      const entity = input.entities.resolve(pc.entityId);
       if (!entity || entity.kind !== 'character') continue;
 
       // Catalog-driven: check all lifecycle attributes for death/cessation signals
@@ -76,7 +76,7 @@ export class CharacterStateValidator implements Validator {
           (check) => {
             if (check.attribute !== 'character_state') {
               // Catalog-driven: check if this is a lifecycle attribute via semanticRole
-              const entity = input.entityRegistry?.resolve(check.entityId);
+              const entity = input.entities?.resolve(check.entityId);
               if (
                 entity &&
                 getAttributeSemanticRole(input.entityTypeCatalog, entity.kind, check.attribute) !==

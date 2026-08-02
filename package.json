@@ -11,16 +11,16 @@
     "packages/*"
   ],
   "scripts": {
-    "build": "npm run build:types && npm run build:js",
-    "build:types": "tsc -b packages/core packages/bench packages/cli",
-    "build:js": "node packages/core/build.mjs && node packages/bench/build.mjs && node packages/cli/build.mjs",
+    "build": "node scripts/clean-build-output.mjs && npm run build:types && npm run build:js",
+    "build:types": "tsc -b packages/core --force && tsc -b packages/node-host --force && tsc -b packages/bench packages/cli packages/workbench --force",
+    "build:js": "node packages/core/build.mjs && node packages/node-host/build.mjs && node packages/bench/build.mjs && node packages/cli/build.mjs && npm run -w @novalistically/workbench build",
     "smoke:stage1:live": "node packages/bench/scripts/generate-reference.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "bench": "npm run -w @novalistically/bench bench",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "typecheck": "tsc -b packages/core packages/bench packages/cli",
+    "typecheck": "tsc -b packages/core --force && tsc -b packages/node-host --force && tsc -b packages/bench packages/cli packages/workbench --force",
     "typecheck:dead-code": "tsc -b packages/core/tsconfig.dead-code.json packages/bench/tsconfig.dead-code.json packages/cli/tsconfig.dead-code.json",
     "bundle-check": "node scripts/bundle-check.mjs",
     "dead-code:knip": "node scripts/check-public-api.mjs"

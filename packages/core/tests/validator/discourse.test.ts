@@ -64,14 +64,9 @@ function makePreInput(event: NarrativeEvent, events: NarrativeEvent[]): PreRende
       rules: {},
       facts: [],
     },
-    entityRegistry: {
-      load: () => {},
+    entities: {
       resolve: () => null,
       findByKind: () => [],
-      findByAttribute: () => [],
-      resolveRefs: () => new Map(),
-      register: () => {},
-      updateState: () => {},
       getAll: () => [],
     },
     chapter: 1,

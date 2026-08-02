@@ -2,7 +2,21 @@ import { createHash, randomUUID } from 'node:crypto';
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { liveSmokeRecordSchema, renderNovel } from '@novalistically/core';
+import type {
+  CoreRuntimeServices,
+  IdGenerator,
+  LLMProvider,
+  PromptTemplateCatalog,
+} from '@novalistically/core';
+import { renderNovel } from '@novalistically/core/editorial';
+import {
+  MemoryExecutionRepository,
+  MemoryRenderCacheRepository,
+  MemoryStateLogRepository,
+  MemoryStateSnapshotRepository,
+} from '@novalistically/core/testing';
+import { liveSmokeRecordSchema } from '@novalistically/core/tooling';
+import { FileProjectSourceLoader } from '@novalistically/node-host';
 import { describe, expect, it } from 'vitest';
 import { loadApprovedReferences } from '../src/reference.ts';
 
@@ -914,19 +928,44 @@ describe('credential absence (offline)', () => {
     cpSync(resolve(__dirname, '../../../fixtures/zhu-fu'), projectDir, { recursive: true });
     rmSync(join(projectDir, '.nova'), { recursive: true, force: true });
     try {
+      // Explicit semantic runtime with an unavailable provider — the bench
+      // never constructs provider credentials; the pipeline must fail closed
+      // with PROVIDER_REQUIRED before any real LLM call.
+      const unavailableProvider: LLMProvider = {
+        name: 'unavailable',
+        complete: async () => {
+          throw new Error('PROVIDER_REQUIRED: No provider or providerFactory configured');
+        },
+      };
+      const ids: IdGenerator = { next: () => randomUUID() };
+      const promptTemplates: PromptTemplateCatalog = { get: async () => null };
+      const services: CoreRuntimeServices = {
+        execution: new MemoryExecutionRepository(),
+        renderCache: new MemoryRenderCacheRepository(),
+        stateLog: new MemoryStateLogRepository(),
+        stateSnapshots: new MemoryStateSnapshotRepository(),
+        promptTemplates,
+        clock: { now: () => new Date().toISOString() },
+        ids,
+        llm: unavailableProvider,
+      };
+
+      const source = new FileProjectSourceLoader().load(projectDir);
       const result = await renderNovel(
         {
           version: 1,
-          projectDir,
+          source,
           model: 'test-model',
           selector: { type: 'all' },
           mutation: { operationId: randomUUID(), actorId: 'test' },
         },
-        {},
+        { services },
       );
-      expect(Array.isArray(result.errors)).toBe(true);
-      expect(result.errors.length).toBeGreaterThan(0);
-      expect(result.errors[0]).toContain('No LLM provider available');
+      const allErrors = [
+        ...result.errors,
+        ...result.results.flatMap((r) => r.errors ?? []),
+      ];
+      expect(allErrors.some((error) => error.includes('PROVIDER_REQUIRED'))).toBe(true);
     } finally {
       if (previousApiKey === undefined) {
         delete process.env.NOVALISTICALLY_AI_API_KEY;

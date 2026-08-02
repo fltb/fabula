@@ -189,3 +189,16 @@ export interface EntityRegistry {
   updateState: (id: EntityId, state: Record<string, unknown>) => void;
   getAll: () => Entity[];
 }
+// ——— Read-only Entity Lookup (public contract) ———
+
+/**
+ * Read-only capability boundary over the entity model for the general
+ * narrative-engine contract. Exposes only resolution and listing — no load,
+ * register, or state mutation. Validators and consumers receive this surface
+ * instead of the mutable registry.
+ */
+export interface EntityLookup {
+  resolve(id: EntityId): Entity | null;
+  findByKind(kind: EntityKind): readonly Entity[];
+  getAll(): readonly Entity[];
+}

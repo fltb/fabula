@@ -3,9 +3,7 @@
 // ============================================================================
 
 import type { LLMProvider } from '../ai/types.ts';
-import type { Logger } from '../observability/logger.ts';
-import type { Storage } from '../storage/types.js';
-import type { ValidatorRegistry } from './validator-registry.js';
+import type { ValidatorRegistrar } from './validator-registry.js';
 
 // ——— Conflict Detection ———
 
@@ -18,16 +16,40 @@ export interface ConflictReport {
 
 export type ResolutionResult = string | null;
 
+// ——— Plugin Logger ———
+
+/**
+ * Structural logging surface provided to plugins.
+ * Implemented structurally by the core Logger — plugins receive a read-only
+ * view with no transport or child-logger access.
+ */
+export interface PluginLogger {
+  debug(
+    message: string,
+    context?: Readonly<Record<string, boolean | number | string | undefined>>,
+  ): void;
+  info(
+    message: string,
+    context?: Readonly<Record<string, boolean | number | string | undefined>>,
+  ): void;
+  warn(
+    message: string,
+    context?: Readonly<Record<string, boolean | number | string | undefined>>,
+  ): void;
+  error(
+    message: string,
+    context?: Readonly<Record<string, boolean | number | string | undefined>>,
+  ): void;
+}
+
 // ——— Plugin Context ———
 
 /**
- * Read-only context provided to plugin lifecycle hooks.
- * Plugins have read-only access — no mutation of core state.
+ * Read-only lifecycle context. Host filesystem and project location never
+ * cross this boundary; hooks receive only a scoped logging capability.
  */
 export interface PluginContext {
-  readonly projectDir: string;
-  readonly storage: Storage;
-  readonly log: Logger;
+  readonly log: PluginLogger;
 }
 
 // ——— Provider Registry ———
@@ -97,10 +119,10 @@ export interface PluginHooks {
   onUnload?(ctx: PluginContext): Promise<void>;
 
   /**
-   * Register custom validators with the ValidatorRegistry.
+   * Register custom validators with the ValidatorRegistrar.
    * Called during plugin initialization.
    */
-  registerValidators?(registry: ValidatorRegistry): void;
+  registerValidators?(registrar: ValidatorRegistrar): void;
 
   /**
    * Register a custom LLM provider.

@@ -4,17 +4,14 @@
 
 import { z } from 'zod';
 import { ConfigError } from '../errors.ts';
-import type { TraceCollector } from '../observability/trace.ts';
-import type { PluginValidator } from '../plugin/validator-registry.js';
 import { canonicalJson, computeSha256Hex } from '../render/scene-contract.ts';
-import type { EventStore } from '../state/event-store.js';
 import type {
   AnalysisBlockRequirement,
   AnalysisObservation,
   AnalysisResult,
   ContextPackage,
   EntityId,
-  EntityRegistry,
+  EntityLookup,
   EntityTypeCatalog,
   NarrativeEvent,
   ObservationRef,
@@ -26,41 +23,14 @@ import type {
   Validator,
   WorldState,
 } from '../types/index.js';
-import { AliasValidator } from './alias.js';
-import { AnachronyConsistencyValidator } from './anachrony-consistency.js';
-import { AppearanceValidator } from './appearance.js';
-import { buildContext, makeIssue } from './base.js';
-import { BranchMergeValidator } from './branch-merge.js';
-import { CausalityValidator } from './causality.js';
-import { CharacterStateValidator } from './character-state.js';
-import { ChecklistValidator } from './checklist.js';
-import { ConflictValidator } from './conflict.js';
-import { DiscourseValidator } from './discourse.js';
-import { DiscourseBalanceValidator } from './discourse-balance.js';
-import { DurationConsistencyValidator } from './duration-consistency.js';
-import { FactualDetailValidator } from './factual-detail.js';
-import { FocalizationConsistencyValidator } from './focalization-consistency.js';
-import { ForeshadowingValidator } from './foreshadowing.js';
-import { FrequencyConsistencyValidator } from './frequency-consistency.js';
-import { KnowledgeValidator } from './knowledge.js';
-import { NarrativeTechniqueValidator } from './narrative-technique.js';
-import { PacingValidator } from './pacing.js';
-import { POVValidator } from './pov.js';
-import { PronounValidator } from './pronoun.js';
-import { QualityValidator } from './quality.js';
-import { ReachabilityValidator } from './reachability.js';
-import { TenseConsistencyValidator } from './tense-consistency.js';
-import { ThreadProgressValidator } from './thread-progress.js';
-import { TimelineValidator } from './timeline.js';
-import { VoiceConsistencyValidator } from './voice-consistency.js';
-import { VoiceDriftDetector } from './voice-drift.js';
-import { WorldRuleValidator } from './world-rule.js';
+import { makeIssue } from './base.js';
+import { createBuiltInValidators } from './builtins.js';
 // ============================================================================
 // AnalysisContract — Deterministic validation contract from enabled validators
 // ============================================================================
 
 /**
- * A deterministic contract derived from all enabled builtin + plugin validators.
+ * A deterministic contract derived from all enabled validators.
  * Returned by {@link ResultAggregator.getAnalysisContract}.
  * The `hash` covers requirements and schema shape for cache identity.
  */
@@ -75,92 +45,38 @@ export interface AnalysisContract {
 
 export class ResultAggregator {
   private validators: Validator[];
-  private pluginValidators: PluginValidator[];
-  private eventStore?: EventStore;
-  private traceCollector?: TraceCollector;
   private entityTypeCatalog?: EntityTypeCatalog;
-  constructor(
-    customValidators?: Validator[],
-    pluginValidators?: PluginValidator[],
-    eventStore?: EventStore,
-    traceCollector?: TraceCollector,
-    entityTypeCatalog?: EntityTypeCatalog,
-  ) {
-    this.eventStore = eventStore;
-    this.traceCollector = traceCollector;
+  constructor(customValidators?: readonly Validator[], entityTypeCatalog?: EntityTypeCatalog) {
     this.entityTypeCatalog = entityTypeCatalog;
-    this.validators = customValidators ?? [
-      new TimelineValidator(),
-      new CharacterStateValidator(),
-      new KnowledgeValidator(),
-      new WorldRuleValidator(),
-      new CausalityValidator(),
-      new ForeshadowingValidator(),
-      new POVValidator(),
-      new FactualDetailValidator(),
-      new VoiceDriftDetector(),
-      new BranchMergeValidator(),
-      new ReachabilityValidator(),
-      new PacingValidator(),
-      new TenseConsistencyValidator(),
-      new DiscourseBalanceValidator(),
-      new AliasValidator(),
-      new PronounValidator(),
-      new AppearanceValidator(),
-      new ConflictValidator(),
-      new QualityValidator(),
-      new ThreadProgressValidator(),
-      new DurationConsistencyValidator(),
-      new FrequencyConsistencyValidator(),
-      new VoiceConsistencyValidator(),
-      new AnachronyConsistencyValidator(),
-      new FocalizationConsistencyValidator(),
-      new DiscourseValidator(),
-      new ChecklistValidator(),
-      new NarrativeTechniqueValidator(),
-    ];
-    this.pluginValidators = pluginValidators ?? [];
-  }
-
-  /**
-   * Register additional plugin validators after construction.
-   */
-  addPluginValidators(validators: PluginValidator[]): void {
-    this.pluginValidators = [...this.pluginValidators, ...validators];
+    this.validators = customValidators ? [...customValidators] : createBuiltInValidators();
   }
 
   /**
    * Compute a deterministic identity for the active validator set.
-   * Returns a SHA-256 hash of sorted builtin + plugin validator names.
+   * Returns a SHA-256 hash of sorted validator names.
    * Changes when validators are added/removed or their severity overrides change.
    */
   getValidatorIdentity(): string {
-    const names = [
-      ...this.validators.map((v) => v.name),
-      ...this.pluginValidators.map((v) => v.name),
-    ].sort();
+    const names = this.validators.map((v) => v.name).sort();
     return computeSha256Hex(canonicalJson({ validators: names }));
   }
 
-  /** Deterministic built-in and plugin validator identities for provenance. */
+  /** Deterministic validator identities for provenance. */
   listValidatorIdentities(builtInVersion: string): Array<{ name: string; version: string }> {
-    return [
-      ...this.validators.map((validator) => ({
-        name: validator.name,
-        version: builtInVersion,
-      })),
-      ...this.pluginValidators.map((validator) => ({
-        name: validator.name,
-        version: validator.version ?? builtInVersion,
-      })),
-    ].sort(
-      (left, right) =>
-        left.name.localeCompare(right.name) || left.version.localeCompare(right.version),
-    );
+    return this.validators
+      .map((validator) => {
+        // Validator does not declare `version`; plugin-authored validators may carry one.
+        const withVersion = validator as Validator & { version?: string };
+        return { name: validator.name, version: withVersion.version ?? builtInVersion };
+      })
+      .sort(
+        (left, right) =>
+          left.name.localeCompare(right.name) || left.version.localeCompare(right.version),
+      );
   }
 
   /**
-   * Run all validators' validatePost/validateRender against rendered prose.
+   * Run all validators' validatePost against rendered prose.
    * Optionally accepts parsed AnalysisResult from LLM Pass 2.
    *
    * Pass 2 integration:
@@ -178,13 +94,13 @@ export class ResultAggregator {
    *    `AnalysisResult.analysis`. Invalid references are rejected (fail closed
    *    as `compiler_invariant` errors).
    */
-  validateRender(
+  validatePost(
     prose: string,
     event: NarrativeEvent,
     state: WorldState,
     analysis?: AnalysisResult,
     overrides?: Record<string, 'off' | 'warning' | 'error'>,
-    registry?: EntityRegistry,
+    entities?: EntityLookup,
     chapter: number = 1,
     context?: ContextPackage,
   ): ValidationResult {
@@ -214,23 +130,10 @@ export class ResultAggregator {
       const uncertain = collectUncertainFields(validator);
       if (uncertain.length > 0) uncertainFieldsByValidator.set(validator.name, uncertain);
     }
-    for (const plugin of this.pluginValidators) {
-      const uncertain = collectUncertainFields(plugin);
-      if (uncertain.length > 0) uncertainFieldsByValidator.set(plugin.name, uncertain);
-    }
 
     for (const validator of this.validators) {
       const override = overrides?.[validator.name];
       if (override === 'off') continue;
-
-      const valSpanId = `${event.id}:validator:${validator.name}`;
-      const startTime = Date.now();
-      this.traceCollector?.record({
-        phase: 'validator',
-        state: 'start',
-        spanId: valSpanId,
-        eventId: event.id,
-      });
 
       const uncertainFields = uncertainFieldsByValidator.get(validator.name);
       if (uncertainFields && uncertainFields.length > 0) {
@@ -252,7 +155,7 @@ export class ResultAggregator {
           prose,
           analysis: analysis ?? null,
           chapter: chapterValue,
-          entityRegistry: registry,
+          entities,
           entityTypeCatalog: this.entityTypeCatalog,
           context,
         };
@@ -261,70 +164,6 @@ export class ResultAggregator {
           this.applySeverityOverride(issue, override);
           allIssues.push(issue);
         }
-      } else if (validator.validateRender) {
-        // Old path fallback: validateRender
-        const issues = validator.validateRender(prose, event, state, analysis);
-        for (const issue of issues) {
-          this.applySeverityOverride(issue, override);
-          allIssues.push(issue);
-        }
-      }
-
-      this.traceCollector?.record({
-        phase: 'validator',
-        state: 'end',
-        spanId: valSpanId,
-        eventId: event.id,
-        durationMs: Date.now() - startTime,
-      });
-    }
-
-    // Plugin validators with validatePost
-    for (const plugin of this.pluginValidators) {
-      const override = overrides?.[plugin.name];
-      if (override === 'off') continue;
-      if (!plugin.validatePost) continue;
-
-      const uncertainFields = uncertainFieldsByValidator.get(plugin.name);
-      if (uncertainFields && uncertainFields.length > 0) {
-        for (const field of uncertainFields) {
-          const observation = observations[field];
-          if (observation !== undefined && observation.disposition !== 'produced') {
-            const issue = this.makeUncertaintyIssue(plugin.name, event.id, field, observation);
-            this.applySeverityOverride(issue, override);
-            allIssues.push(issue);
-          }
-        }
-        continue;
-      }
-
-      try {
-        const input: PostRenderInput = {
-          event,
-          worldState: state,
-          prose,
-          analysis: analysis ?? null,
-          chapter: chapterValue,
-          entityRegistry: registry,
-          entityTypeCatalog: this.entityTypeCatalog,
-        };
-        const issues = plugin.validatePost(input);
-        for (const issue of issues) {
-          this.applySeverityOverride(issue, override);
-          allIssues.push(issue);
-        }
-      } catch (err) {
-        allIssues.push(
-          makeIssue(
-            this.constructor.name,
-            event.id,
-            'system',
-            'error',
-            `Plugin "${plugin.name}" validatePost failed: ${(err as Error).message}`,
-            'Check the plugin implementation.',
-            'manual',
-          ),
-        );
       }
     }
 
@@ -406,7 +245,7 @@ export class ResultAggregator {
     // Single-requirement validators with a non-array (single-object) field get
     // the field reference auto-filled for findings lacking an explicit ref.
     const autoFillField = new Map<string, string>();
-    for (const v of [...this.validators, ...this.pluginValidators]) {
+    for (const v of this.validators) {
       let requirements: AnalysisBlockRequirement[] = [];
       try {
         requirements = v.getAnalysisRequirements?.() ?? [];
@@ -456,10 +295,10 @@ export class ResultAggregator {
   /**
    * Run all validators against an event.
    */
-  validate(
+  validatePre(
     event: NarrativeEvent,
     state: WorldState,
-    registry: EntityRegistry,
+    entities: EntityLookup,
     events: NarrativeEvent[],
     chapter: number,
     options: ValidationRunOptions = {},
@@ -472,24 +311,13 @@ export class ResultAggregator {
       const override = overrides?.[validator.name];
       if (override === 'off') continue;
 
-      const valSpanId = `${event.id}:validator:${validator.name}`;
-      const startTime = Date.now();
-      this.traceCollector?.record({
-        phase: 'validator',
-        state: 'start',
-        spanId: valSpanId,
-        eventId: event.id,
-      });
-
-      // New path: validatePre
       if (validator.validatePre) {
         const input: PreRenderInput = {
           event,
           worldState: state,
           events,
-          entityRegistry: registry,
+          entities,
           chapter,
-          eventStore: this.eventStore,
           entityTypeCatalog: this.entityTypeCatalog,
           queryState: (entityId: EntityId, attr: string) => state.entities[entityId]?.[attr],
           getKnowledge: (_characterId: EntityId) =>
@@ -505,62 +333,6 @@ export class ResultAggregator {
             issue.severity = 'warning';
           }
           allIssues.push(issue);
-        }
-        this.traceCollector?.record({
-          phase: 'validator',
-          state: 'end',
-          spanId: valSpanId,
-          eventId: event.id,
-          durationMs: Date.now() - startTime,
-        });
-        continue;
-      }
-
-      // Old path fallback: validate
-      if (validator.validate) {
-        const context = buildContext(event, state, registry, events, chapter);
-        const issues = validator.validate(event, context);
-
-        // Apply severity override
-        for (const issue of issues) {
-          if (override === 'error') {
-            issue.severity = 'error';
-          } else if (override === 'warning') {
-            issue.severity = issue.severity === 'error' ? 'error' : 'warning';
-          }
-          allIssues.push(issue);
-        }
-      }
-
-      this.traceCollector?.record({
-        phase: 'validator',
-        state: 'end',
-        spanId: valSpanId,
-        eventId: event.id,
-        durationMs: Date.now() - startTime,
-      });
-    }
-
-    // Run plugin validators (still use ValidatorContext)
-    if (this.pluginValidators.length > 0) {
-      const context = buildContext(event, state, registry, events, chapter);
-      for (const pv of this.pluginValidators) {
-        try {
-          const result = pv.validate(context);
-          for (const issue of result.errors) allIssues.push(issue as unknown as ValidationIssue);
-          for (const issue of result.warnings) allIssues.push(issue as unknown as ValidationIssue);
-        } catch (err) {
-          allIssues.push(
-            makeIssue(
-              this.constructor.name,
-              event.id,
-              'system',
-              'error',
-              `Plugin validator "${pv.name}" failed: ${(err as Error).message}`,
-              'Check the plugin implementation.',
-              'manual',
-            ),
-          );
         }
       }
     }
@@ -583,7 +355,7 @@ export class ResultAggregator {
   validateAll(
     events: NarrativeEvent[],
     state: WorldState,
-    registry: EntityRegistry,
+    entities: EntityLookup,
     options: ValidationRunOptions = {},
   ): Map<string, ValidationResult> {
     const { overrides, stateBeforeByEventId, story } = options;
@@ -592,7 +364,7 @@ export class ResultAggregator {
     for (const event of events) {
       const chapter = Math.max(1, Math.ceil(event.narrativeOrder / 3));
       const eventState = stateBeforeByEventId?.get(event.id) ?? state;
-      const result = this.validate(event, eventState, registry, events, chapter, {
+      const result = this.validatePre(event, eventState, entities, events, chapter, {
         overrides,
         story,
       });
@@ -631,8 +403,8 @@ export class ResultAggregator {
   }
 
   /**
-   * Build a runtime Zod schema from all validator analysis blocks,
-   * including plugin validators. Use this for Pass 2 JSON validation.
+   * Build a runtime Zod schema from all validator analysis blocks.
+   * Use this for Pass 2 JSON validation.
    * Delegates to getAnalysisContract() for deterministic merged output.
    */
   getCombinedValidationSchema(): z.ZodObject<Record<string, z.ZodTypeAny>> {
@@ -640,8 +412,8 @@ export class ResultAggregator {
   }
 
   /**
-   * Get a deterministic analysis contract from all enabled builtin + plugin
-   * validators, excluding any validator whose override is 'off'.
+   * Get a deterministic analysis contract from all enabled validators,
+   * excluding any validator whose override is 'off'.
    *
    * Returns merged requirements, combined validation schema, and a SHA-256
    * fingerprint of the contract for cache identity.
@@ -653,16 +425,10 @@ export class ResultAggregator {
   getAnalysisContract(overrides?: Record<string, 'off' | 'warning' | 'error'>): AnalysisContract {
     // ── Filter enabled validators ────────────────────────────────
     const enabledValidators = this.validators.filter((v) => overrides?.[v.name] !== 'off');
-    const enabledPluginValidators = this.pluginValidators.filter(
-      (v) => overrides?.[v.name] !== 'off',
-    );
 
     // ── Collect raw requirements from all enabled validators ──────
     const raw: AnalysisBlockRequirement[] = [];
     for (const v of enabledValidators) {
-      if (v.getAnalysisRequirements) raw.push(...v.getAnalysisRequirements());
-    }
-    for (const v of enabledPluginValidators) {
       if (v.getAnalysisRequirements) raw.push(...v.getAnalysisRequirements());
     }
 
@@ -704,12 +470,7 @@ export class ResultAggregator {
     // ── Build combined schema, detecting top-level field conflicts ──
     const shape: Record<string, z.ZodTypeAny> = {};
     const fieldSources = new Map<string, string>();
-    const pluginNames = new Set(enabledPluginValidators.map((p) => p.name));
-    const allEnabled: Array<Validator | PluginValidator> = [
-      ...enabledValidators,
-      ...enabledPluginValidators,
-    ];
-    for (const v of allEnabled) {
+    for (const v of enabledValidators) {
       if (v.getAnalysisRequirements) {
         for (const req of v.getAnalysisRequirements()) {
           const tf = req.field.includes('.') ? req.field.split('.')[0] : req.field;
@@ -726,10 +487,11 @@ export class ResultAggregator {
             }
           } else {
             fieldSources.set(tf, v.name);
-            // Plugin fields without validatePost consumer are optional
-            // (they declare analysis needs but can't post-consume them)
-            const isPluginWithoutPost = pluginNames.has(v.name) && !('validatePost' in v);
-            shape[tf] = isPluginWithoutPost ? req.schema.optional() : req.schema;
+            // A validator that declares an analysis need but has no
+            // validatePost consumer cannot verify the payload — keep its
+            // top-level field optional (existing plugin behavior).
+            const isWithoutPost = !('validatePost' in v);
+            shape[tf] = isWithoutPost ? req.schema.optional() : req.schema;
           }
         }
       }

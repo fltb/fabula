@@ -9,6 +9,30 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./source": {
+      "import": "./dist/source.js",
+      "types": "./dist/source.d.ts"
+    },
+    "./schema": {
+      "import": "./dist/schema.js",
+      "types": "./dist/schema.d.ts"
+    },
+    "./extensions": {
+      "import": "./dist/extensions.js",
+      "types": "./dist/extensions.d.ts"
+    },
+    "./editorial": {
+      "import": "./dist/editorial.js",
+      "types": "./dist/editorial.d.ts"
+    },
+    "./tooling": {
+      "import": "./dist/tooling.js",
+      "types": "./dist/tooling.d.ts"
+    },
+    "./testing": {
+      "import": "./dist/testing.js",
+      "types": "./dist/testing.d.ts"
     }
   },
   "scripts": {

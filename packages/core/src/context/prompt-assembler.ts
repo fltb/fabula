@@ -2,7 +2,6 @@
 // PromptAssembler — Assembles LLM prompts from templates + context
 // ============================================================================
 
-import { readFileSync } from 'node:fs';
 import type { Message } from '../ai/types.ts';
 import type { PromptDecoration } from '../plugin/types.ts';
 import type { ContextPackage, GameDialogueChoice, StyleGuidance } from '../types/index.ts';
@@ -18,12 +17,12 @@ export class PromptAssembler {
   private scribeSystemPrompt: string;
   private scribeInstructions: string;
 
-  constructor(templatePath?: string) {
-    // In production, loads from templatePath
-    // For now, use the built-in prompt as default
-    if (templatePath) {
-      const template = readFileSync(templatePath, 'utf-8');
-      const parsed = this.parseTemplate(template);
+  constructor(templateText?: string) {
+    // Pure text-based template: callers resolve any stored template through the
+    // injected PromptTemplateCatalog and pass its `template` text here. Core
+    // never reads template files or accepts template paths.
+    if (templateText) {
+      const parsed = this.parseTemplate(templateText);
       this.scribeSystemPrompt = parsed.systemPrompt;
       this.scribeInstructions = parsed.instructions;
     } else {

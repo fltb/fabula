@@ -48,8 +48,6 @@ export type CoverageStrata = (typeof COVERAGE_STRATA)[number];
 export interface SelectionPlan {
   /** Canonical work identifier, e.g. 'dream-of-red-chamber' */
   workId: string;
-  /** ISO date when this plan was frozen */
-  frozenAt: string;
   /** Selection algorithm identifier */
   algorithm: string;
   /** Deterministic seed for stratified random selection */
@@ -177,7 +175,6 @@ export function planSelection(
 
   return {
     workId: effectiveWorkId,
-    frozenAt: new Date().toISOString(),
     algorithm: 'stratified_random',
     seed,
     formula: DEFAULT_SELECTION_FORMULA,

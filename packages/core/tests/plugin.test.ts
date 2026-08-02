@@ -9,7 +9,7 @@ import {
   resolveConflict,
   ValidatorRegistry,
 } from '../src/plugin/index.js';
-import type { PluginManifest } from '../src/types/index.js';
+import type { PluginManifest, Validator } from '../src/types/index.js';
 import * as realSwearFilter from './plugins/swear-filter/index.js';
 
 // ============================================================================
@@ -159,35 +159,31 @@ describe('resolveConflict', () => {
 // ============================================================================
 
 describe('ValidatorRegistry', () => {
-  it('should register a validator', () => {
+  it('list returns the exact registered validators in order', () => {
     const registry = new ValidatorRegistry();
-    const validator = {
-      name: 'test-validator',
-      validate: () => ({ passed: true, errors: [], warnings: [], infos: [] }),
+    const first: Validator = {
+      name: 'first-validator',
+      category: 'prose_quality',
+      validatePre: () => [],
     };
-    expect(() => registry.register(validator)).not.toThrow();
-  });
+    const second: Validator = {
+      name: 'second-validator',
+      category: 'worldbuilding',
+      validatePre: () => [],
+    };
 
-  it('runAll invokes each registered validator', () => {
-    const registry = new ValidatorRegistry();
-    let called = false;
-    const validator = {
-      name: 'test-validator',
-      validate: () => {
-        called = true;
-        return { passed: true, errors: [], warnings: [], infos: [] };
-      },
-    };
-    registry.register(validator);
-    const results = registry.runAll({} as any);
-    expect(called).toBe(true);
-    expect(results).toHaveLength(1);
-    expect(results[0].passed).toBe(true);
+    registry.register(first);
+    registry.register(second);
+
+    const validators = registry.list();
+    expect(validators).toEqual([first, second]);
+    expect(validators[0]).toBe(first);
+    expect(validators[1]).toBe(second);
   });
 
   it('empty registry returns empty array', () => {
     const registry = new ValidatorRegistry();
-    expect(registry.runAll({} as any)).toEqual([]);
+    expect(registry.list()).toEqual([]);
   });
 });
 

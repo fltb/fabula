@@ -3,7 +3,7 @@
 // ============================================================================
 
 import type {
-  EntityRegistry,
+  EntityLookup,
   ISSDimension,
   ISSGap,
   ISSSnapshot,
@@ -30,7 +30,7 @@ function scoreToStatus(score: number, threshold: number): 'green' | 'yellow' | '
  * check whether it has a registered definition in the entity registry.
  */
 function calcEntityReferenceCompleteness(
-  registry: EntityRegistry,
+  entities: EntityLookup,
   events: NarrativeEvent[],
 ): ISSDimension {
   const MAX = 20;
@@ -64,7 +64,7 @@ function calcEntityReferenceCompleteness(
   const gaps: ISSGap[] = [];
 
   for (const id of referencedIds) {
-    const entity = registry.resolve(id);
+    const entity = entities.resolve(id);
     if (entity !== null) {
       definedCount++;
     } else {
@@ -347,13 +347,13 @@ function calcForeshadowCoverage(events: NarrativeEvent[]): ISSDimension {
  * dimension breakdowns including gaps.
  */
 export function calculateISS(options: ISSOptions): ISSSnapshot {
-  const { entityRegistry, events, threads, rules } = options;
+  const { entities, events, threads, rules } = options;
 
   // Sort events once and share across dimensions that need ordering
   const sortedEvents = [...events].sort((a, b) => a.narrativeOrder - b.narrativeOrder);
 
   const dimensions: ISSDimension[] = [
-    calcEntityReferenceCompleteness(entityRegistry, events),
+    calcEntityReferenceCompleteness(entities, events),
     calcRuleExecutability(rules),
     calcPreconditionDepth(sortedEvents),
     calcPostconditionSpecificity(events),

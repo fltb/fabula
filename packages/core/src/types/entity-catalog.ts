@@ -17,15 +17,22 @@ export type WritePolicy = 'immutable' | 'write_once' | 'mutable' | 'lifecycle_ma
 
 export type RequiredAt = 'introduction' | 'activation' | 'never';
 
+export type AttributeValueType = 'string' | 'number' | 'boolean' | 'string_list' | 'string_map';
+
 export interface AttributeDefinition {
   attributeId: string;
-  valueSchema: z.ZodTypeAny;
+  valueType: AttributeValueType;
   requiredAt: RequiredAt;
   writePolicy: WritePolicy;
   allowedLifecycleStates?: EntityRuntimeState[];
   unsetAllowed: boolean;
   semanticRole?: string;
   typedReferenceConstraint?: { targetKind: EntityKind; targetTypeId?: string };
+}
+
+/** Package-private runtime attribute definition retaining executable validation. */
+export interface RuntimeAttributeDefinition extends AttributeDefinition {
+  valueSchema: z.ZodTypeAny;
 }
 
 // ——— Entity Type Definition ———
@@ -42,6 +49,16 @@ export interface EntityTypeDefinition {
     defaultEligibility: 'identity' | 'live' | 'historical';
   };
   typedInvariants: Array<{ id: string; description: string }>;
+}
+
+/** Package-private runtime entity definition retaining executable validators. */
+export interface RuntimeEntityTypeDefinition extends Omit<EntityTypeDefinition, 'attributes'> {
+  attributes: Record<string, RuntimeAttributeDefinition>;
+}
+
+export interface RuntimeEntityTypeCatalog {
+  types: Record<string, RuntimeEntityTypeDefinition>;
+  version: number;
 }
 
 // ——— Entity Declaration ———
@@ -79,7 +96,7 @@ export interface EntityDeclarationCatalog {
  */
 export interface EntityCatalogContext {
   entityDeclarationCatalog: EntityDeclarationCatalog;
-  entityTypeCatalog: EntityTypeCatalog;
+  entityTypeCatalog: RuntimeEntityTypeCatalog;
 }
 
 // ——— Author-facing Catalog Source (versionless) ———
@@ -89,12 +106,8 @@ export interface EntityCatalogContext {
 // unions, nullables, `any` escape hatches, or version-negotiation fields.
 // The runtime EntityTypeRef.schemaVersion / catalog version never appear here.
 
-export type AttributeValueType = 'string' | 'number' | 'boolean' | 'string_list' | 'string_map';
-
-/** Author-facing attribute declaration; `valueType` replaces runtime `valueSchema`. */
-export interface AttributeDefinitionSource extends Omit<AttributeDefinition, 'valueSchema'> {
-  valueType: AttributeValueType;
-}
+/** Author-facing attribute declaration. */
+export interface AttributeDefinitionSource extends AttributeDefinition {}
 
 /** Author-facing entity type declaration; `typeId` replaces `typeRef` (no schemaVersion). */
 export interface EntityTypeDefinitionSource

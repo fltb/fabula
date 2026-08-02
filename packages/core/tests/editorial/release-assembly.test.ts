@@ -1,238 +1,192 @@
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { AnalysisResult } from '../../src/index.ts';
-import {
-  assembleCanonicalNovel,
-  assembleCustomNovel,
-  MemoryStorage,
-  MockPass2Provider,
-  PublicationError,
-  renderNovel,
-  resolveProjectPaths,
-} from '../../src/index.ts';
-import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
+import { canonicalAssemble, type AssemblySemanticInput } from '../../src/assembler/release-assembly.ts';
+import { PublicationError } from '../../src/editorial/errors.ts';
+import { MemoryExecutionRepository } from '../../src/testing/memory-repositories.ts';
+import type { PublicationManifestV1, SceneRevisionEnvelopeV1 } from '../../src/types/editorial.ts';
 
-const PROJECT = '/release-assembly-project';
+const hash = (value: string): string => crypto.createHash('sha256').update(value).digest('hex');
 
-function seedProject(storage: MemoryStorage): void {
-  storage.write(
-    `${PROJECT}/nova.yaml`,
-    'project: release-assembly\ntitle: "Release Assembly"\nauthor: "Tester"\ndefaultModel: mock-pass2\n',
-  );
-  storage.write(
-    `${PROJECT}/definitions/state_initial.yaml`,
-    'info:\n  currentEra: modern\n  politicalSituation: stable\nthreads: []\nworldFacts: []\n',
-  );
-  storage.write(
-    `${PROJECT}/definitions/entity-types.yaml`,
-    [
-      'types:',
-      '  character:',
-      '    typeId: character',
-      '    kind: character',
-      '    attributes:',
-      '      lifecycle:',
-      '        attributeId: lifecycle',
-      '        valueType: string',
-      '        requiredAt: introduction',
-      '        writePolicy: lifecycle_managed',
-      '        allowedLifecycleStates: [active, inactive, retired]',
-      '        unsetAllowed: false',
-      '        semanticRole: lifecycle',
-      '      traits:',
-      '        attributeId: traits',
-      '        valueType: string_list',
-      '        requiredAt: never',
-      '        writePolicy: mutable',
-      '        unsetAllowed: true',
-      '    lifecyclePolicy:',
-      '      allowedTransitions:',
-      '        - [active, inactive]',
-      '        - [active, retired]',
-      '        - [inactive, active]',
-      '        - [inactive, retired]',
-      '    referenceCapabilities:',
-      '      defaultEligibility: live',
-      '    typedInvariants: []',
-    ].join('\n'),
-  );
-  storage.write(
-    `${PROJECT}/definitions/characters/alice.yaml`,
-    'id: alice\nname: "Alice"\ntype: human\ndescription: "Protagonist"\ninitialState: {}\ntraits: []\n',
-  );
-  storage.write(
-    `${PROJECT}/chapters/chapter_01/_chapter.yaml`,
-    'chapter: 1\ntitle: "Opening"\nsummary: "Alice begins."\nintent: "Setup"\nplannedScenes: 1\n',
-  );
-  storage.write(
-    `${PROJECT}/chapters/chapter_01/E001.yaml`,
-    'event: E001\nnarrativeOrder: 1\ntitle: "Opening"\nintroduces:\n  - type: character\n    id: alice\n    initialState: {}\nstoryTime: "day 1"\nsceneBrief: "Alice begins."\nbeats:\n  - "Alice begins."\npov:\n  character: alice\n  type: third_person_limited\npreconditions: []\nexpectedPostconditions: []\n',
-  );
-
-  // Mandatory discourse ledger (DISCOURSE-2)
-  storage.write(
-    `${PROJECT}/definitions/discourse-ledger.yaml`,
-    [
-      'id: release-assembly-test',
-      'chapters:',
-      '  - branch: main',
-      '    chapter: 1',
-      '    sceneIds:',
-      '      - E001',
-      'entries: []',
-    ].join('\n'),
-  );
-}
-
-function analysis(): AnalysisResult {
-  const payload: Record<string, unknown> = {
-    postconditions: { covered: [], dropped: [] },
-    preconditions: { violated: [] },
-    pov: { consistent: true, leaks: [] },
-    inventedDetails: [],
-    quality: {
-      proseScore: 8,
-      maxScore: 10,
-      strengths: ['clear'],
-      weaknesses: [],
-      estimatedWordCount: 80,
-    },
-    threadProgressAchieved: [],
-    foreshadowingDeployed: [],
-    narrativeChecks: [],
-    appearanceChecks: [],
-    characterReferences: [],
-    tenseDetected: 'past',
-    conflictAnalysis: { primaryType: 'none', resolutionAchieved: true },
-    ruleChecks: [],
-    knowledgeChecks: [],
-    checklistResults: [],
-  };
-  const prose = 'Alice entered quietly and closed the door behind her.';
+const sourceHash = 'release-source-hash';
+const prose = 'Alice entered quietly and closed the door behind her.';
+const revisionId = '00000000-0000-4000-8000-000000000001';
+function envelope(status: 'accepted' | 'blocked' = 'accepted', sceneProse = prose): SceneRevisionEnvelopeV1 {
+  const sceneHash = hash(sceneProse);
+  const proseHash = hash(sceneProse);
   return {
-    eventId: 'E001',
-    protocol: makeProtocol(prose),
-    observations: makeObservations(payload, prose),
-    analysis: payload,
+    version: 1,
+    revisionId,
+    parentRevisionId: null,
+    operationId: '00000000-0000-4000-8000-000000000002',
+    planHash: 'plan-hash',
+    actorId: 'renderer',
+    origin: 'llm_draft',
+    proseHash,
+    sceneHash,
+    editorialBasisHash: 'editorial-basis',
+    scopeHash: 'scope-hash',
+    validationIdentity: 'validator-v1',
+    feedbackHash: null,
+    reviewIds: [],
+    analysis: null,
+    validation: null,
+    releaseDecision: { status, scopeHash: 'scope-hash', validationIdentity: 'validator-v1', reasons: [] },
+    released: status === 'accepted',
+    cacheHit: false,
+    errors: [],
+    llmPass1: null,
+    llmPass2: null,
+    attempts: 1,
+    needsReview: false,
+    promptHash: 'prompt-hash',
+    providerCalls: [],
+    promotionReadSet: [],
+    requestRecords: [],
+    createdAt: '2026-07-28T00:00:00.000Z',
   };
 }
 
-async function renderAccepted(storage: MemoryStorage): Promise<void> {
-  const result = await renderNovel(
-    {
+function input(revision: SceneRevisionEnvelopeV1 = envelope()): AssemblySemanticInput {
+  return {
+    projectId: 'release-assembly-project',
+    sourceHash,
+    manifest: {
       version: 1,
-      projectDir: PROJECT,
-      selector: { type: 'all' },
-      mutation: { operationId: crypto.randomUUID(), actorId: 'renderer' },
-      model: 'mock-pass2',
-    },
-    {
-      storage,
-      provider: new MockPass2Provider({
-        entries: {
-          E001: {
-            prose: 'Alice entered quietly and closed the door behind her.',
-            analysis: analysis(),
-          },
-        },
-      }),
-    },
-  );
-  expect(result.publication.status).toBe('current');
+      status: 'current',
+      branch_scope_hash: 'branch-scope',
+      novel_hash: null,
+      revision_ids: { E001: revisionId },
+      last_assembled_at: null,
+      reasons: [],
+    } satisfies PublicationManifestV1,
+    revisions: new Map([['E001', revision]]),
+    scenes: new Map([['E001', { prose, chapterNumber: 1, metadata: { prose_source: 'llm', word_count: 9, rendered_at: '2026-07-28T00:00:00.000Z' } }]]),
+    discourseSequence: [{ sceneId: 'E001', sequence: 0, chapter: 1 }],
+    chapterTitles: new Map([[1, { chapter: 1, title: 'Opening', summary: '', intent: '', plannedScenes: 1 }]]),
+  };
 }
 
-describe('release-aware assembly facade', () => {
-  it('assembles canonical output from strict accepted heads', async () => {
-    const storage = new MemoryStorage();
-    seedProject(storage);
-    await renderAccepted(storage);
+const request = (title?: string) => ({
+  version: 1 as const,
+  mutation: { operationId: crypto.randomUUID(), actorId: 'assembler' },
+  ...(title ? { title } : {}),
+});
 
-    const result = assembleCanonicalNovel(
-      {
+async function repositoryFor(input: AssemblySemanticInput): Promise<MemoryExecutionRepository> {
+  const repository = new MemoryExecutionRepository();
+  for (const [eventId, revision] of input.revisions) {
+    await repository.compareAndSwapAcceptedScene({
+      projectId: input.projectId,
+      eventId,
+      expectedVersion: null,
+      value: {
         version: 1,
-        projectDir: PROJECT,
-        mutation: { operationId: crypto.randomUUID(), actorId: 'assembler' },
-        title: 'Canonical Title',
+        projectId: input.projectId,
+        eventId,
+        sourceHash: input.sourceHash,
+        revisionId: revision.revisionId,
+        prose: revision.prose,
+        proseHash: revision.proseHash,
+        sceneHash: revision.sceneHash,
       },
-      { storage },
-    );
+    });
+  }
+  return repository;
+}
 
+describe('release-aware pure assembly', () => {
+  it('assembles ordered output from accepted semantic heads', async () => {
+    const semantic = input();
+    const result = await canonicalAssemble(
+      request('Canonical Title'),
+      semantic,
+      await repositoryFor(semantic),
+    );
     expect(result.publication.status).toBe('current');
     expect(result.sceneCount).toBe(1);
-    expect(storage.read(`${PROJECT}/output/novel.md`)).toBe(result.markdown);
     expect(result.markdown).toContain('# Canonical Title');
+    expect(result.markdown).toContain('## Chapter 1: Opening');
+    expect(result.markdown).toContain(prose);
   });
 
-  it('preserves direct novel edits and writes conflict evidence', async () => {
-    const storage = new MemoryStorage();
-    seedProject(storage);
-    await renderAccepted(storage);
-    const paths = resolveProjectPaths(PROJECT);
-    const edited = 'User edited canonical bytes.\n';
-    storage.write(paths.novelPath, edited);
-    const operationId = crypto.randomUUID();
-
-    expect(() =>
-      assembleCanonicalNovel(
-        {
-          version: 1,
-          projectDir: PROJECT,
-          mutation: { operationId, actorId: 'assembler' },
-        },
-        { storage },
-      ),
-    ).toThrow(PublicationError);
-
-    expect(storage.read(paths.novelPath)).toBe(edited);
-    expect(storage.read(`${paths.conflictsDir}/novel-${operationId}.md`)).toBe(edited);
+  it('preserves discourse and chapter ordering for multiple accepted heads', async () => {
+    const first = envelope();
+    const second = { ...envelope(), revisionId: '00000000-0000-4000-8000-000000000003' };
+    const semantic = {
+      ...input(first),
+      manifest: { ...input(first).manifest, revision_ids: { E001: first.revisionId, E002: second.revisionId } },
+      revisions: new Map([['E001', first], ['E002', second]]),
+      scenes: new Map([
+        ['E001', { prose, chapterNumber: 1, metadata: { prose_source: 'llm', rendered_at: '2026-07-28T00:00:00.000Z' } }],
+        ['E002', { prose, chapterNumber: 2, metadata: { prose_source: 'llm', rendered_at: '2026-07-28T00:00:00.000Z' } }],
+      ]),
+      discourseSequence: [{ sceneId: 'E001', sequence: 0, chapter: 1 }, { sceneId: 'E002', sequence: 1, chapter: 2 }],
+    } satisfies AssemblySemanticInput;
+    const result = await canonicalAssemble(request(), semantic, await repositoryFor(semantic));
+    expect(result.markdown.indexOf(prose)).toBeLessThan(result.markdown.lastIndexOf(prose));
+    expect(result.sceneCount).toBe(2);
   });
 
-  it('writes custom output and terminal operation without changing canonical files', async () => {
-    const storage = new MemoryStorage();
-    seedProject(storage);
-    await renderAccepted(storage);
-    const paths = resolveProjectPaths(PROJECT);
-    const canonicalNovel = storage.read(paths.novelPath);
-    const canonicalManifest = storage.read(paths.publicationPath);
-    const operationId = crypto.randomUUID();
-    const customPath = `${PROJECT}/exports/editor-copy.md`;
+  it('fails closed when an accepted head is blocked', async () => {
+    const semantic = input(envelope('blocked'));
+    await expect(
+      canonicalAssemble(request(), semantic, new MemoryExecutionRepository()),
+    ).rejects.toThrow(PublicationError);
+  });
 
-    const result = assembleCustomNovel(
-      {
+  it('fails closed when scene content does not match the accepted envelope', async () => {
+    const semantic = {
+      ...input(),
+      scenes: new Map([['E001', { prose: 'Tampered.', chapterNumber: 1, metadata: {} }]]),
+    } satisfies AssemblySemanticInput;
+    await expect(
+      canonicalAssemble(request(), semantic, await repositoryFor(input())),
+    ).rejects.toThrow(PublicationError);
+  });
+
+  it('rejects assembly when the accepted artifact was compiled from stale source bytes', async () => {
+    const semantic = input();
+    const repository = await repositoryFor(semantic);
+    // Re-store the accepted head under a different source hash, simulating an
+    // accepted artifact that no longer matches the assembly input snapshot.
+    const current = await repository.readAcceptedScene({
+      projectId: semantic.projectId,
+      eventId: 'E001',
+    });
+    await repository.compareAndSwapAcceptedScene({
+      projectId: semantic.projectId,
+      eventId: 'E001',
+      expectedVersion: current?.revision ?? null,
+      value: {
         version: 1,
-        projectDir: PROJECT,
-        mutation: { operationId, actorId: 'assembler' },
-        outputPath: customPath,
-        title: 'Editor Copy',
+        projectId: semantic.projectId,
+        eventId: 'E001',
+        sourceHash: 'different-source-hash',
+        revisionId,
+        prose,
+        proseHash: hash(prose),
+        sceneHash: hash(prose),
       },
-      { storage },
+    });
+    const error = await canonicalAssemble(request(), semantic, repository).catch(
+      (caught: unknown) => caught,
     );
-
-    expect(result.publication.status).toBe('unchanged');
-    expect(storage.read(customPath)).toBe(result.markdown);
-    expect(storage.read(paths.novelPath)).toBe(canonicalNovel);
-    expect(storage.read(paths.publicationPath)).toBe(canonicalManifest);
-    expect(JSON.parse(storage.read(`${paths.operationsDir}/${operationId}.json`)).status).toBe(
-      'succeeded',
+    expect(error).toBeInstanceOf(PublicationError);
+    expect((error as PublicationError).reasons.map((reason) => reason.code)).toContain(
+      'REVISION_STALE',
     );
   });
 
-  it('fails closed when a required accepted metadata head is missing', async () => {
-    const storage = new MemoryStorage();
-    seedProject(storage);
-    await renderAccepted(storage);
-    storage.remove(`${PROJECT}/scenes/chapter-01/E001.yaml`);
-
-    expect(() =>
-      assembleCustomNovel(
-        {
-          version: 1,
-          projectDir: PROJECT,
-          mutation: { operationId: crypto.randomUUID(), actorId: 'assembler' },
-          outputPath: `${PROJECT}/exports/invalid.md`,
-        },
-        { storage },
-      ),
-    ).toThrow(PublicationError);
+  it('rejects assembly when the accepted artifact is missing from the repository', async () => {
+    const semantic = input();
+    const error = await canonicalAssemble(
+      request(),
+      semantic,
+      new MemoryExecutionRepository(),
+    ).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(PublicationError);
+    expect((error as PublicationError).reasons.map((reason) => reason.code)).toContain(
+      'REVISION_STALE',
+    );
   });
 });

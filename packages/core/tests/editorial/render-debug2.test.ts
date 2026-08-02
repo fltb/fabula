@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import type { AnalysisResult } from '../../src/index.ts';
+import { expect, it } from 'vitest';
 import { parseAnalysisJSONWithErrors } from '../../src/schemas/analysis.ts';
+import type { AnalysisResult } from '../../src/types/analysis.ts';
 import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 
 function analysis(): AnalysisResult {

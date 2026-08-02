@@ -38,7 +38,11 @@ function makeInput(event: NarrativeEvent, extraEvents: NarrativeEvent[] = []): P
       rules: {},
       facts: [],
     },
-    entityRegistry: { entities: {} } as any,
+    entities: {
+      resolve: () => null,
+      findByKind: () => [],
+      getAll: () => [],
+    },
     chapter: 1,
     queryState: () => undefined,
     getKnowledge: () => ({

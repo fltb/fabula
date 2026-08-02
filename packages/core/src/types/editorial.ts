@@ -1,6 +1,7 @@
 import type { CompletionResponse, LLMProvider, Message } from '../ai/types.ts';
+import type { CoreRuntimeServices } from '../ports/runtime-services.ts';
+import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
 import type { TypedEventBus } from '../event-bus.ts';
-import type { Storage, TransactionReadExpectation } from '../storage/types.ts';
 import type { AnalysisResult } from './analysis.ts';
 import type { BranchPath, BranchSet } from './branch.ts';
 import type { GameDialogueChoice } from './game-dialogue.ts';
@@ -62,41 +63,11 @@ export interface SceneRevisionEnvelopeV1 {
   promptHash: string;
   pass2Rejection?: 'empty' | 'parse' | 'validation';
   providerCalls: ProviderCallLedgerEntryV1[];
-  promotionReadSet: TransactionReadExpectation[];
+  promotionReadSet: readonly unknown[];
   requestRecords: RenderRequestRecordV1[];
   createdAt: string;
 }
 
-export interface SourceRevisionDocumentV1 {
-  path: string;
-  beforeHash: string | null;
-  afterHash: string | null;
-  beforeContent: string | null;
-  afterContent: string | null;
-}
-
-export interface SourceRevisionV1 {
-  version: 1;
-  revisionId: string;
-  parentRevisionId: string | null;
-  operationId: string;
-  actorId: string;
-  origin: 'api_edit' | 'external_edit';
-  note?: string;
-  projectBeforeHash: string;
-  projectAfterHash: string;
-  changeSetHash: string;
-  documents: SourceRevisionDocumentV1[];
-  affectedEventIds: string[];
-  createdAt: string;
-}
-
-export interface SourceHeadV1 {
-  version: 1;
-  revisionId: string | null;
-  projectSourceHash: string;
-  documents: Record<string, string>;
-}
 
 export interface SceneEditHistoryEntryV1 {
   action: 'llm_generated' | 'llm_revised' | 'human_adopted' | 'locked' | 'unlocked' | 'rollback';
@@ -160,7 +131,7 @@ export interface ProviderFactory {
 }
 
 export interface EditorialRuntime {
-  storage?: Storage;
+  services?: CoreRuntimeServices;
   provider?: LLMProvider;
   providerFactory?: ProviderFactory;
   signal?: AbortSignal;
@@ -171,7 +142,7 @@ export interface EditorialRuntime {
 
 export interface EditorialRenderRequestV1 {
   version: 1;
-  projectDir: string;
+  source: ProjectSourceSnapshotV1;
   selector?: SceneSelector;
   revision?: RevisionRequest;
   mutation: EditorialMutationContext;
@@ -183,7 +154,6 @@ export interface EditorialRenderRequestV1 {
   batch?: { batchSize?: number; windowSize?: number; failFast?: boolean };
   maxRounds?: number;
 }
-
 export type RenderGameDialogueTreeRequestV1 = Omit<
   EditorialRenderRequestV1,
   'selector' | 'revision' | 'branchPath' | 'discourseBranch'
@@ -300,7 +270,6 @@ export type EditorialOperationKind =
   | 'adopt_scene'
   | 'rollback_scene'
   | 'assemble'
-  | 'apply_source'
   | 'set_scene_lock'
   | 'add_review'
   | 'replace_review'
@@ -394,8 +363,6 @@ export interface SourceDocumentV1 {
   contentHash: string;
   parsedValue: unknown | null;
   diagnostics: EditorialError[];
-  sourceRevisionId: string | null;
-  tracked: boolean;
 }
 
 export type SourceDocumentChange =
@@ -425,8 +392,7 @@ export interface SourceChangePreviewV1 {
 
 export interface SourceChangeResultV1 {
   operationId: string;
-  sourceRevisionId: string;
-  projectSourceHash: string;
+  sourceHash: string;
   changedDocuments: Array<{ path: string; contentHash: string | null }>;
   affectedEventIds: string[];
   publication: PublicationResult;
@@ -434,7 +400,6 @@ export interface SourceChangeResultV1 {
 
 export interface EditorialScopedRequestV1 {
   version: 1;
-  projectDir: string;
   model?: string;
   providerProfile?: string;
   branchPath?: BranchPath;
@@ -504,7 +469,6 @@ export interface SceneActionResult {
 
 export interface AssembleRequestV1 {
   version: 1;
-  projectDir: string;
   mutation: EditorialMutationContext;
   outputPath?: string;
   title?: string;
@@ -516,7 +480,7 @@ export interface AssembleRequestV1 {
 export interface EditorialPlanSummaryV1 {
   version: 1;
   planHash: string;
-  projectSourceHash: string;
+  sourceHash: string;
   scopeHash: string;
   validationIdentity: string;
   selectedEventIds: string[];
@@ -537,8 +501,7 @@ export interface EditorialPlanSummaryV1 {
 
 export interface EditorialWorkspaceSnapshotV1 {
   version: 1;
-  projectSourceHash: string;
-  sourceTracked: boolean;
+  sourceHash: string;
   publication: PublicationManifestV1;
   scenes: SceneInspection[];
   reviewSummary: { open: number; addressed: number; blocking: number };

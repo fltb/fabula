@@ -39,7 +39,7 @@ import { narratorAssertionSchema } from '../../src/schemas/discourse.ts';
 import { compilePlannedDiscourseLedger } from '../../src/state/discourse-ledger.ts';
 import { replayDiscourseState } from '../../src/state/discourse-replay.ts';
 import { computeReferenceIndex } from '../../src/state/reference-index.ts';
-import { MemoryStorage } from '../../src/storage/memory-storage.ts';
+import { MemoryRenderCacheRepository } from '../../src/testing/memory-repositories.ts';
 import type {
   AnalysisObservation,
   AnalysisResult,
@@ -286,8 +286,16 @@ function buildPipeline(entry: MockPass2Entry, maxRetries = 1): RenderPipeline {
   return new RenderPipeline({
     provider,
     model: 'mock-pass2',
-    cacheDir: '/tmp/test-cache',
-    storage: new MemoryStorage(),
+    runtimeServices: {
+      execution: {} as never,
+      renderCache: new MemoryRenderCacheRepository(),
+      stateLog: {} as never,
+      stateSnapshots: {} as never,
+      promptTemplates: { get: async () => null },
+      clock: { now: () => '2025-01-01T00:00:00.000Z' },
+      ids: { next: () => 'test-id' },
+      llm: provider,
+    },
     skipCache: true,
     maxRetries,
     aggregator,
@@ -804,7 +812,7 @@ describe('Pass 2 isolation from knowledge/state', () => {
 
       const parse = parseAnalysisJSON(JSON.stringify(result), undefined, result.protocol, PROSE);
       expect(parse).not.toBeNull();
-      const validation = aggregator.validateRender(PROSE, event, world, parse);
+      const validation = aggregator.validatePost(PROSE, event, world, parse);
       expect(validation).toBeDefined();
 
       const after = bundleSnapshot(world, discourse, ledger, catalog);
@@ -949,7 +957,7 @@ describe('disposition semantics', () => {
     };
 
     for (const result of [makeAllAbstainedResult(PROSE), makeAmbiguousResult(PROSE)]) {
-      const validation = aggregator.validateRender(PROSE, event, world, result);
+      const validation = aggregator.validatePost(PROSE, event, world, result);
       expect(validation.errors).toEqual([]);
       expect(validation.warnings.length).toBeGreaterThan(0);
       for (const warning of validation.warnings) {
@@ -1004,7 +1012,7 @@ describe('disposition semantics', () => {
       facts: [],
     };
     const result = makeAllAbstainedResult(PROSE);
-    const validation = aggregator.validateRender(PROSE, event, world, result, { pov: 'error' });
+    const validation = aggregator.validatePost(PROSE, event, world, result, { pov: 'error' });
     const povIssue = validation.errors.find((e) => e.validator === 'pov');
     expect(povIssue).toBeDefined();
     expect(povIssue!.kind).toBe('analysis_uncertainty');

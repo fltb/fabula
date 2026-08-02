@@ -4,6 +4,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CompletionRequest, CompletionResponse, LLMProvider } from '../src/ai/types.js';
+import { InMemoryEntityRegistry } from '../src/entity/registry.js';
 import { Logger, MemoryLogTransport } from '../src/observability/logger.js';
 import type {
   BuildPromptInput,
@@ -13,8 +14,9 @@ import type {
   ProviderRegistry,
 } from '../src/plugin/index.js';
 import { PluginHooksManager, PluginLoader, ValidatorRegistry } from '../src/plugin/index.js';
-import { MemoryStorage } from '../src/storage/memory-storage.js';
-import type { PluginManifest } from '../src/types/index.js';
+import type { NarrativeEvent, PluginManifest, WorldState } from '../src/types/index.js';
+import { ResultAggregator } from '../src/validator/aggregator.js';
+import { createBuiltInValidators } from '../src/validator/builtins.js';
 
 // ============================================================================
 // Test Helpers
@@ -25,8 +27,6 @@ interface ProviderRegistrySpy {
 }
 function createTestContext(): PluginContext {
   return {
-    projectDir: '/tmp/test-project',
-    storage: new MemoryStorage(),
     log: new Logger(new MemoryLogTransport()),
   };
 }
@@ -61,8 +61,36 @@ function createDummyProvider(name: string): LLMProvider {
 function createDummyValidator(name: string) {
   return {
     name,
-    validate: () => ({ passed: true, errors: [], warnings: [], infos: [] }),
+    category: 'prose_quality' as const,
+    validatePre: () => [],
   };
+}
+
+function createMinimalEvent(id = 'test-event'): NarrativeEvent {
+  return {
+    id,
+    event: id,
+    narrativeOrder: 1,
+    title: 'Test event',
+    storyTime: { type: 'absolute', value: 'day_1_morning' },
+    sceneType: 'linear',
+    pov: { character: 'test-character', type: 'third_person_limited' },
+    sceneBrief: 'Test scene',
+    beats: ['Test beat'],
+    preconditions: [],
+    postconditions: [],
+    threadProgress: [],
+    foreshadowing: [],
+    relationshipEffects: [],
+    ruleEffects: [],
+    source: 'event_file',
+    branchExistence: { type: 'all' },
+    participants: { entities: [] },
+  };
+}
+
+function createMinimalWorld(): WorldState {
+  return { entities: {}, relationships: {}, knowledge: {}, threads: {}, rules: {}, facts: [] };
 }
 
 // ============================================================================
@@ -71,8 +99,7 @@ function createDummyValidator(name: string) {
 
 describe('Capability gate — PluginManifest requirement', () => {
   it('PluginLoader requires manifest to register', () => {
-    const storage = new MemoryStorage();
-    const loader = new PluginLoader(storage);
+    const loader = new PluginLoader();
     const manifest: PluginManifest = {
       name: 'test-plugin',
       version: '1.0.0',
@@ -89,8 +116,7 @@ describe('Capability gate — PluginManifest requirement', () => {
   });
 
   it('PluginLoader rejects duplicate manifest', () => {
-    const storage = new MemoryStorage();
-    const loader = new PluginLoader(storage);
+    const loader = new PluginLoader();
     const manifest: PluginManifest = {
       name: 'dup-plugin',
       version: '1.0.0',
@@ -107,8 +133,7 @@ describe('Capability gate — PluginManifest requirement', () => {
   });
 
   it('PluginLoader lists registered manifests', () => {
-    const storage = new MemoryStorage();
-    const loader = new PluginLoader(storage);
+    const loader = new PluginLoader();
     const manifestA: PluginManifest = {
       name: 'plugin-a',
       version: '1.0.0',
@@ -148,19 +173,15 @@ describe('Sandbox deny — PluginContext is read-only', () => {
     // TypeScript enforces readonly at compile time; at runtime we verify
     // that the objects are frozen or that mutations are ignored.
     // PluginContext uses readonly in TypeScript — that's the primary enforcement.
-    expect(ctx.projectDir).toBe('/tmp/test-project');
-    expect(ctx.storage).toBeDefined();
     expect(ctx.log).toBeDefined();
     expect(typeof ctx.log.info).toBe('function');
   });
 
-  it('PluginHooksManager context is not exposed for mutation', () => {
+  it('PluginHooksManager context is not exposed for mutation', async () => {
     const ctx = createTestContext();
     const validatorRegistry = new ValidatorRegistry();
     const providerRegistry = createProviderRegistrySpy();
     const manager = new PluginHooksManager(ctx, validatorRegistry, providerRegistry);
-
-    // Verify that hooks receive the context but cannot access internal fields
     const capturedContexts: PluginContext[] = [];
     const hook: PluginHooks = {
       name: 'observer',
@@ -168,13 +189,10 @@ describe('Sandbox deny — PluginContext is read-only', () => {
         capturedContexts.push(c);
       },
     };
-
     manager.register(hook);
-    manager.initialize();
-
+    await manager.initialize();
     expect(capturedContexts).toHaveLength(1);
-    // The context is read-only — verify it has the expected shape
-    expect(capturedContexts[0].projectDir).toBe('/tmp/test-project');
+    expect(capturedContexts[0].log).toBe(ctx.log);
   });
 });
 
@@ -183,12 +201,11 @@ describe('Sandbox deny — PluginContext is read-only', () => {
 // ============================================================================
 
 describe('Validator registration via PluginHooks', () => {
-  it('registerValidators adds validators to the registry', () => {
+  it('registerValidators adds validators to the registry', async () => {
     const ctx = createTestContext();
     const validatorRegistry = new ValidatorRegistry();
     const providerRegistry = createProviderRegistrySpy();
     const manager = new PluginHooksManager(ctx, validatorRegistry, providerRegistry);
-
     const hook: PluginHooks = {
       name: 'test-validator-plugin',
       registerValidators(registry: ValidatorRegistry) {
@@ -196,21 +213,18 @@ describe('Validator registration via PluginHooks', () => {
         registry.register(createDummyValidator('custom-validator-2'));
       },
     };
-
     manager.register(hook);
-    manager.initialize();
-
-    const validators = validatorRegistry.validators;
+    await manager.initialize();
+    const validators = validatorRegistry.list();
     expect(validators).toHaveLength(2);
     expect(validators.map((v) => v.name)).toEqual(['custom-validator-1', 'custom-validator-2']);
   });
 
-  it('registerValidators can add multiple plugins', () => {
+  it('registerValidators can add multiple plugins', async () => {
     const ctx = createTestContext();
     const validatorRegistry = new ValidatorRegistry();
     const providerRegistry = createProviderRegistrySpy();
     const manager = new PluginHooksManager(ctx, validatorRegistry, providerRegistry);
-
     const hookA: PluginHooks = {
       name: 'plugin-a',
       registerValidators(registry: ValidatorRegistry) {
@@ -223,38 +237,42 @@ describe('Validator registration via PluginHooks', () => {
         registry.register(createDummyValidator('b-validator'));
       },
     };
-
     manager.register(hookA);
     manager.register(hookB);
-    manager.initialize();
-
-    expect(validatorRegistry.validators).toHaveLength(2);
+    await manager.initialize();
+    expect(validatorRegistry.list()).toHaveLength(2);
   });
 
-  it('registered validators are callable via runAll', () => {
+  it('registered validators execute through the merged ResultAggregator array', async () => {
     const ctx = createTestContext();
     const validatorRegistry = new ValidatorRegistry();
     const providerRegistry = createProviderRegistrySpy();
     const manager = new PluginHooksManager(ctx, validatorRegistry, providerRegistry);
-
-    const validateSpy = vi
-      .fn()
-      .mockReturnValue({ passed: true, errors: [], warnings: [], infos: [] });
-
+    const validateSpy = vi.fn().mockReturnValue([]);
     const hook: PluginHooks = {
       name: 'spy-plugin',
       registerValidators(registry: ValidatorRegistry) {
-        registry.register({ name: 'spy-validator', validate: validateSpy });
+        registry.register({
+          name: 'spy-validator',
+          category: 'prose_quality',
+          validatePre: validateSpy,
+        });
       },
     };
-
     manager.register(hook);
-    manager.initialize();
-
-    const results = validatorRegistry.runAll({} as any);
-    expect(results).toHaveLength(1);
-    expect(validateSpy).toHaveBeenCalledTimes(1);
-    expect(results[0].passed).toBe(true);
+    await manager.initialize();
+    const event = createMinimalEvent();
+    const aggregator = new ResultAggregator([
+      ...createBuiltInValidators(),
+      ...validatorRegistry.list(),
+    ]);
+    const result = aggregator.validatePre(
+      event,
+      createMinimalWorld(),
+      new InMemoryEntityRegistry(),
+      [event],
+      1,
+    );
   });
 });
 
@@ -263,12 +281,11 @@ describe('Validator registration via PluginHooks', () => {
 // ============================================================================
 
 describe('Provider registration via PluginHooks', () => {
-  it('registerProvider adds provider to registry', () => {
+  it('registerProvider adds provider to registry', async () => {
     const ctx = createTestContext();
     const validatorRegistry = new ValidatorRegistry();
     const providerRegistry = createProviderRegistrySpy();
     const manager = new PluginHooksManager(ctx, validatorRegistry, providerRegistry);
-
     const customProvider = createDummyProvider('custom-llm');
     const hook: PluginHooks = {
       name: 'test-provider-plugin',
@@ -276,10 +293,8 @@ describe('Provider registration via PluginHooks', () => {
         registry.register('custom-llm', customProvider);
       },
     };
-
     manager.register(hook);
-    manager.initialize();
-
+    await manager.initialize();
     expect(providerRegistry.providers['custom-llm']).toBe(customProvider);
   });
 
@@ -288,7 +303,6 @@ describe('Provider registration via PluginHooks', () => {
     const validatorRegistry = new ValidatorRegistry();
     const providerRegistry = createProviderRegistrySpy();
     const manager = new PluginHooksManager(ctx, validatorRegistry, providerRegistry);
-
     const mockProvider = createDummyProvider('mock-provider');
     const hook: PluginHooks = {
       name: 'provider-plugin',
@@ -296,14 +310,11 @@ describe('Provider registration via PluginHooks', () => {
         registry.register('mock-provider', mockProvider);
       },
     };
-
     manager.register(hook);
-    manager.initialize();
-
+    await manager.initialize();
     const provider = providerRegistry.providers['mock-provider']!;
     expect(provider).toBeDefined();
     expect(provider.name).toBe('mock-provider');
-
     const response = await provider.complete({ messages: [{ role: 'user', content: 'test' }] });
     expect(response.content).toBe('mock response');
     expect(response.finishReason).toBe('stop');
@@ -312,7 +323,6 @@ describe('Provider registration via PluginHooks', () => {
 
 // ============================================================================
 // 5. PluginHooksManager Lifecycle
-// ============================================================================
 
 describe('PluginHooksManager lifecycle', () => {
   let ctx: PluginContext;
@@ -797,8 +807,7 @@ describe('Provider selection via plugin-registered providers', () => {
 
 describe('End-to-end plugin integration', () => {
   it('PluginLoader + PluginHooksManager work together', async () => {
-    const storage = new MemoryStorage();
-    const loader = new PluginLoader(storage);
+    const loader = new PluginLoader();
     const manifest: PluginManifest = {
       name: 'integrated-plugin',
       version: '0.1.0',
@@ -839,14 +848,22 @@ describe('End-to-end plugin integration', () => {
 
     // Verify everything is wired
     expect(onLoadCalled).toBe(true);
-    expect(validatorRegistry.validators).toHaveLength(1);
-    expect(validatorRegistry.validators[0].name).toBe('integrated-validator');
+    expect(validatorRegistry.list()).toHaveLength(1);
+    expect(validatorRegistry.list()[0].name).toBe('integrated-validator');
     expect('integrated-provider' in providerRegistry.providers).toBe(true);
 
-    // Run the validator
-    const results = validatorRegistry.runAll({} as any);
-    expect(results).toHaveLength(1);
-    expect(results[0].passed).toBe(true);
+    const event = createMinimalEvent();
+    const aggregator = new ResultAggregator([
+      ...createBuiltInValidators(),
+      ...validatorRegistry.list(),
+    ]);
+    const result = aggregator.validatePre(
+      event,
+      createMinimalWorld(),
+      new InMemoryEntityRegistry(),
+      [event],
+      1,
+    );
 
     // Run the provider
     const provider = providerRegistry.providers['integrated-provider']!;

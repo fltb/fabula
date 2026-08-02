@@ -12,7 +12,6 @@ import type { Blocker, NextAction, StatusReport, ThreadSnapshot } from '../src/t
 function makeSampleResult(overrides?: Partial<PipelineRunResult>): PipelineRunResult {
   return {
     projectName: 'test-project',
-    projectDir: '/tmp/test-project',
     generatedAt: '2026-07-22T12:00:00.000Z',
     passed: false,
     l1Issues: [
@@ -133,7 +132,6 @@ function makeSampleResult(overrides?: Partial<PipelineRunResult>): PipelineRunRe
 function makeEmptyResult(): PipelineRunResult {
   return {
     projectName: 'empty-project',
-    projectDir: '/tmp/empty-project',
     generatedAt: '2026-07-22T12:00:00.000Z',
     passed: true,
     l1Issues: [],
@@ -215,8 +213,8 @@ describe('ReportWriter', () => {
       const json = new ReportWriter(makeSampleResult()).toJSON() as Record<string, unknown>;
 
       expect(json).toHaveProperty('projectName', 'test-project');
-      expect(json).toHaveProperty('projectDir');
       expect(json).toHaveProperty('generatedAt');
+      expect(json).not.toHaveProperty('projectDir');
       expect(json).toHaveProperty('passed', false);
       expect(json).toHaveProperty('validation');
       expect(json).toHaveProperty('iss');

@@ -1,5 +1,5 @@
 // ============================================================================
-// ResultAggregator — integration tests for validateRender/validatePost flow
+// ResultAggregator — integration tests for validatePost flow
 // ============================================================================
 
 import { describe, expect, it, vi } from 'vitest';
@@ -90,13 +90,13 @@ function spyPostValidator(): {
 
 // ——— tests ———
 
-describe('ResultAggregator.validateRender', () => {
-  it('passes entityRegistry to validatePost when registry is provided', () => {
+describe('ResultAggregator.validatePost', () => {
+  it('passes entities to validatePost when registry is provided', () => {
     const { validator, received } = spyPostValidator();
     const aggregator = new ResultAggregator([validator]);
     const registry = stubRegistry();
 
-    aggregator.validateRender(
+    aggregator.validatePost(
       'Some prose.',
       makeEvent(),
       makeWorldState(),
@@ -106,17 +106,17 @@ describe('ResultAggregator.validateRender', () => {
     );
 
     expect(received).toHaveLength(1);
-    expect(received[0].entityRegistry).toBe(registry);
+    expect(received[0].entities).toBe(registry);
   });
 
-  it('passes entityRegistry as undefined when no registry is provided', () => {
+  it('passes entities as undefined when no registry is provided', () => {
     const { validator, received } = spyPostValidator();
     const aggregator = new ResultAggregator([validator]);
 
-    aggregator.validateRender('Some prose.', makeEvent(), makeWorldState());
+    aggregator.validatePost('Some prose.', makeEvent(), makeWorldState());
 
     expect(received).toHaveLength(1);
-    expect(received[0].entityRegistry).toBeUndefined();
+    expect(received[0].entities).toBeUndefined();
   });
 
   it('calls validatePost exactly once per validator', () => {
@@ -124,7 +124,7 @@ describe('ResultAggregator.validateRender', () => {
     const v2 = spyPostValidator();
     const aggregator = new ResultAggregator([v1.validator, v2.validator]);
 
-    aggregator.validateRender('Prose.', makeEvent(), makeWorldState());
+    aggregator.validatePost('Prose.', makeEvent(), makeWorldState());
 
     expect(v1.received).toHaveLength(1);
     expect(v2.received).toHaveLength(1);
@@ -176,7 +176,7 @@ describe('ResultAggregator.validateRender', () => {
 
     const aggregator = new ResultAggregator([validator]);
 
-    const result = aggregator.validateRender('Prose.', makeEvent(), makeWorldState(), undefined, {
+    const result = aggregator.validatePost('Prose.', makeEvent(), makeWorldState(), undefined, {
       OverrideTester: 'error',
     });
 
@@ -231,7 +231,7 @@ describe('ResultAggregator.validateRender', () => {
     };
 
     const aggregator = new ResultAggregator([validator]);
-    const result = aggregator.validateRender('Prose.', makeEvent(), makeWorldState());
+    const result = aggregator.validatePost('Prose.', makeEvent(), makeWorldState());
 
     expect(result.passed).toBe(false);
     expect(result.errors).toHaveLength(1);
@@ -243,35 +243,35 @@ describe('ResultAggregator.validateRender', () => {
     const { validator, received } = spyPostValidator();
     const aggregator = new ResultAggregator([validator]);
 
-    aggregator.validateRender('Prose.', makeEvent(), makeWorldState(), undefined, {
+    aggregator.validatePost('Prose.', makeEvent(), makeWorldState(), undefined, {
       SpyPostValidator: 'off',
     });
 
     expect(received).toHaveLength(0);
   });
 
-  it('preserves existing validateRender (old-path) validators', () => {
-    let oldPathCalled = false;
-    const oldValidator = {
-      name: 'OldPathValidator',
+  it('runs validators that implement validatePost', () => {
+    let postCalled = false;
+    const postValidator = {
+      name: 'PostPathValidator',
       category: 'characterization' as const,
-      validateRender: (_prose: string, _event: NarrativeEvent, _state: WorldState) => {
-        oldPathCalled = true;
+      validatePost: (_input: PostRenderInput) => {
+        postCalled = true;
         return [] as ValidationIssue[];
       },
     };
-    const aggregator = new ResultAggregator([oldValidator]);
+    const aggregator = new ResultAggregator([postValidator]);
 
-    aggregator.validateRender('Prose.', makeEvent(), makeWorldState());
+    aggregator.validatePost('Prose.', makeEvent(), makeWorldState());
 
-    expect(oldPathCalled).toBe(true);
+    expect(postCalled).toBe(true);
   });
 
   it('passes explicit chapter value to validatePost PostRenderInput', () => {
     const { validator, received } = spyPostValidator();
     const aggregator = new ResultAggregator([validator]);
 
-    aggregator.validateRender(
+    aggregator.validatePost(
       'Some prose.',
       makeEvent(),
       makeWorldState(),
@@ -289,7 +289,7 @@ describe('ResultAggregator.validateRender', () => {
     const { validator, received } = spyPostValidator();
     const aggregator = new ResultAggregator([validator]);
 
-    aggregator.validateRender('Some prose.', makeEvent(), makeWorldState());
+    aggregator.validatePost('Some prose.', makeEvent(), makeWorldState());
 
     expect(received).toHaveLength(1);
     expect(received[0].chapter).toBe(1);

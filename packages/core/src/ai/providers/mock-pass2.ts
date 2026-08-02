@@ -6,8 +6,6 @@
 // pre-written AnalysisResult JSON (Pass 2). Enables integration testing
 // of post-render validators without real LLM calls.
 
-import fs from 'node:fs';
-import path from 'node:path';
 import type { AnalysisResult } from '../../types/analysis.ts';
 import { extractExpectedProtocol } from '../prompts/render-analysis.ts';
 import type { CompletionRequest, CompletionResponse, LLMProvider, Message } from '../types.ts';
@@ -20,11 +18,9 @@ export interface MockPass2Entry {
 }
 
 export interface MockPass2Options {
-  /** Map of eventId → {prose, analysis}. Takes priority over referenceDir. */
+  /** Deterministic eventId → prose and Pass 2 analysis fixtures. */
   entries?: Record<string, MockPass2Entry>;
-  /** Directory containing reference/*.json files. Loaded as fallback. */
-  referenceDir?: string;
-  /** Simulated latency in ms */
+  /** Simulated latency in milliseconds. */
   latencyMs?: number;
 }
 
@@ -34,63 +30,12 @@ export class MockPass2Provider implements LLMProvider {
   readonly name = 'mock-pass2';
   private entries: Map<string, MockPass2Entry>;
   private latencyMs: number;
-  private referenceDir: string | undefined;
-  private referenceLoaded = false;
 
   constructor(options: MockPass2Options = {}) {
-    this.entries = new Map();
+    this.entries = new Map(Object.entries(options.entries ?? {}));
     this.latencyMs = options.latencyMs ?? 0;
-    this.referenceDir = options.referenceDir;
-
-    // Load inline entries
-    if (options.entries) {
-      for (const [eventId, entry] of Object.entries(options.entries)) {
-        this.entries.set(eventId, entry);
-      }
-    }
   }
 
-  /**
-   * Load reference files from the configured referenceDir.
-   * Looks for `<eventId>.json` files inside `referenceDir/`.
-   * Each file should contain a full MockPass2Entry JSON object
-   * (with `prose` and `analysis` fields).
-   */
-  loadReferenceDir(dir?: string): void {
-    const baseDir = dir ?? this.referenceDir;
-    if (!baseDir) {
-      throw new Error(
-        'MockPass2Provider: no referenceDir configured. Pass a directory or use entries.',
-      );
-    }
-
-    const refDir = path.resolve(baseDir);
-    if (!fs.existsSync(refDir)) {
-      throw new Error(`MockPass2Provider: reference directory does not exist: ${refDir}`);
-    }
-
-    const files = fs.readdirSync(refDir).filter((file) => file.endsWith('.json'));
-    for (const file of files) {
-      const filePath = path.join(refDir, file);
-      const data = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as MockPass2Entry;
-      const eventId = path.basename(file, '.json');
-
-      // Validate the entry shape
-      if (typeof data.prose !== 'string' || !data.analysis) {
-        throw new Error(
-          `MockPass2Provider: invalid reference file ${filePath} — ` +
-            'expected { prose: string, analysis: AnalysisResult }',
-        );
-      }
-
-      // Only set if not already provided via inline entries
-      if (!this.entries.has(eventId)) {
-        this.entries.set(eventId, data);
-      }
-    }
-
-    this.referenceLoaded = true;
-  }
 
   /** Returns true if the given request appears to be a Pass 2 (analysis) request. */
   static isPass2Request(request: CompletionRequest): boolean {
@@ -98,10 +43,6 @@ export class MockPass2Provider implements LLMProvider {
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
-    // Auto-load reference directory on first call if not yet loaded
-    if (!this.referenceLoaded && this.referenceDir) {
-      this.loadReferenceDir();
-    }
 
     const isPass2 = MockPass2Provider.isPass2Request(request);
 

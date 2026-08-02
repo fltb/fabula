@@ -5,18 +5,14 @@
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { EntityMapper } from '../src/entity/index.js';
+import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
 
-const FIXTURE_PATH = path.resolve(
-  __dirname, // packages/core/tests
-  '..', // packages/core
-  '..', // packages
-  '..', // root
-  'fixtures',
-  'zhu-fu',
+const SNAPSHOT = materializeFixtureSnapshot(
+  path.resolve(import.meta.dirname, '..', '..', '..', 'fixtures', 'zhu-fu'),
 );
 
 describe('zhu-fu fixture — loadProject', () => {
-  const mapper = new EntityMapper(FIXTURE_PATH);
+  const mapper = new EntityMapper(SNAPSHOT);
 
   it('loads project config with genre, synopsis, tense', () => {
     const data = mapper.loadProject();
@@ -68,7 +64,7 @@ describe('zhu-fu fixture — loadProject', () => {
 });
 
 describe('zhu-fu fixture — loadAllEvents', () => {
-  const mapper = new EntityMapper(FIXTURE_PATH);
+  const mapper = new EntityMapper(SNAPSHOT);
   const data = mapper.loadProject();
 
   it('loads 7 authored events with no genesis', () => {

@@ -377,7 +377,10 @@ export class AuthoringManifest {
           path: entry.path,
         };
       }
-      if (claim) {
+      // The adopt proof exists only to introduce a scene that is not yet
+      // author-owned; a scene already tracked at the expected head is an
+      // ordinary edit and must not be gated on claim validity.
+      if (claim && !inHead) {
         const claimResult = validateAdoptClaim(claim);
         if (!claimResult.ok) {
           return {

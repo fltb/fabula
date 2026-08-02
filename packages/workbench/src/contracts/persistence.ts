@@ -127,6 +127,31 @@ export interface GitSubmissionJournal {
   receiptHash?: string; diagnostic?: string; updatedAt: string;
 }
 export interface GitSubmissionReceipt { submitId: string; projectId: string; commit: string; sourceHash: string; receiptHash: string; acceptedAt: string }
+/**
+ * Non-secret Git baseline provenance returned by Workbench bootstrap/reopen of
+ * the fixed authoring ref. Carries only public commit identity (ref, commit,
+ * tree, message, paths); never credentials, provider keys or other secrets.
+ * `status` distinguishes the baseline created by this call from one that
+ * already existed at the fixed ref (idempotent reopen).
+ */
+export interface GitBaselineRecord {
+  readonly projectId: string;
+  readonly status: 'created' | 'reopened';
+  /** Fixed authoring ref, e.g. `refs/heads/workbench`. */
+  readonly ref: string;
+  /** Full commit object id at the ref. */
+  readonly commit: string;
+  /** Full tree object id of the ref head. */
+  readonly tree: string;
+  /** Commits reachable from the ref (1 immediately after first bootstrap). */
+  readonly commitCount: number;
+  /** Committer timestamp of the ref head (ISO 8601). */
+  readonly committedAt: string;
+  /** Ref head commit message (non-secret provenance). */
+  readonly message: string;
+  /** Tree paths at the ref head, sorted. */
+  readonly entries: readonly string[];
+}
 export interface UiPreferences { userId: string; values: Record<string, string | number | boolean | null>; updatedAt: string }
 
 export type PersistenceOperation =

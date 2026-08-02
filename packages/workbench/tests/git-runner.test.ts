@@ -261,6 +261,32 @@ describe('authoring preconditions (divergence safeguards)', () => {
     expect(config?.ok).toBe(true); // per-invocation -c core.autocrlf=false still wins
     expect(preflight.checks.find((c) => c.condition === 'isolation-clean')?.ok).toBe(false);
   });
+  it('fails closed on external replace refs and never honors them', async () => {
+    const dir = temp('wb-preflight-replace-');
+    const runner = new ControlledGitRunner();
+    await initRepo(runner, dir);
+    const original = await seedCommit(runner, dir);
+    const tree = (await runner.runStrict({ args: ['write-tree'], cwd: dir })).stdout.trim();
+    const replacement = (
+      await runner.runStrict({ args: ['commit-tree', tree, '-m', 'replaced content'], cwd: dir })
+    ).stdout.trim();
+    await runner.runStrict({
+      args: ['update-ref', `refs/replace/${original}`, replacement],
+      cwd: dir,
+    });
+    // The controlled boundary ignores refs/replace/*: the original object is
+    // still what the runner resolves, never the substituted one.
+    const content = await runner.runStrict({ args: ['cat-file', 'commit', original], cwd: dir });
+    expect(content.stdout).toContain('seed');
+    // Every SHA-based check still passes; only the replace-ref isolation check
+    // detects the external substitution and fails closed.
+    const preflight = await runner.preflightRepository({ cwd: dir, expectedHead: original });
+    expect(preflight.checks.find((c) => c.condition === 'expected-head-match')?.ok).toBe(true);
+    expect(preflight.checks.find((c) => c.condition === 'isolation-clean')?.ok).toBe(false);
+    await expect(runner.requireAuthoringPreconditions({ cwd: dir })).rejects.toBeInstanceOf(
+      GitIsolationError,
+    );
+  });
 });
 
 describe('controlled invocation guards', () => {
@@ -294,6 +320,12 @@ describe('controlled invocation guards', () => {
     ).rejects.toMatchObject({ code: 'git-env-rejected' });
     await expect(
       runner.run({ args: ['rev-parse', 'HEAD'], env: { GIT_CONFIG_GLOBAL: '/evil/gitconfig' } }),
+    ).rejects.toMatchObject({ code: 'git-env-rejected' });
+    await expect(
+      runner.run({ args: ['rev-parse', 'HEAD'], env: { GIT_REDIRECT_STDERR: '/evil/trace' } }),
+    ).rejects.toMatchObject({ code: 'git-env-rejected' });
+    await expect(
+      runner.run({ args: ['rev-parse', 'HEAD'], env: { GIT_TRACE2_EVENT: '/evil/trace' } }),
     ).rejects.toMatchObject({ code: 'git-env-rejected' });
   });
 

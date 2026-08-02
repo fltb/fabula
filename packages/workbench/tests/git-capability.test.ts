@@ -1,7 +1,14 @@
+import { spawn } from 'node:child_process';
 import { access, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import * as gitHost from '../src/host/git/index.js';
+import type {
+  SubmitJournalPort as BarrelSubmitJournalPort,
+  SubmitRecoveryOutcome as BarrelSubmitRecoveryOutcome,
+  SubmitRecoveryProbe as BarrelSubmitRecoveryProbe,
+} from '../src/host/git/index.js';
 import {
   GitCapabilityError,
   probeGitCapability,
@@ -24,6 +31,23 @@ import {
   type SubmitRecoveryProbe,
 } from '../src/host/git/recovery.js';
 import type { GitSubmissionJournal, GitSubmissionReceipt } from '../src/contracts/persistence.js';
+
+
+describe('Git Host barrel', () => {
+  it('exposes Host composition primitives without browser or persistence internals', () => {
+    expect(gitHost.WORKBENCH_AUTHORING_REF).toBe('refs/heads/workbench');
+    expect(gitHost.SUBMIT_PHASE_COMPLETE).toBeDefined();
+    expect(gitHost.SUBMIT_PHASE_STALE).toBeDefined();
+    expect(gitHost.SUBMIT_PHASE_CONFLICT).toBeDefined();
+    expect(gitHost.SubmitRecovery).toBeDefined();
+    expect(gitHost.resolveSubmitRecovery).toBeDefined();
+    expect(gitHost.normalizeSubmitJournal).toBeDefined();
+    expect(gitHost.receiptFromRecord).toBeDefined();
+    expect(gitHost).not.toHaveProperty('ProviderCredentialStore');
+    expect(gitHost).not.toHaveProperty('PersistenceWorkerClient');
+    expect(gitHost).not.toHaveProperty('PersistencePayloads');
+  });
+});
 
 /** A runner that executes git without any of the controlled flags or environment. */
 class UncontrolledGitRunner implements GitCommandRunner {

@@ -208,6 +208,16 @@ describe('AuthoringManifest adopt-scene proof', () => {
     expect(manifest.checkEntry({ path: 'scenes/scene-one.md', bytes: utf8(PROSE) }).ok).toBe(true);
   });
 
+  it('does not gate tracked scenes on the validity of a carried adopt claim', () => {
+    const manifest = new AuthoringManifest({
+      pathsInHead: new Set(['scenes/scene-one.md']),
+      adoptClaims: new Map([
+        ['scene-one', claim({ eventId: 'stale-event', revisionId: '', proseHash: '0'.repeat(64) })],
+      ]),
+    });
+    expect(manifest.checkEntry({ path: 'scenes/scene-one.md', bytes: utf8(PROSE) }).ok).toBe(true);
+  });
+
   it('accepts a new scene whose bytes match the verified claim', () => {
     const manifest = new AuthoringManifest({ adoptClaims: new Map([['scene-one', claim()]]) });
     expect(manifest.checkEntry({ path: 'scenes/scene-one.md', bytes: utf8(PROSE) }).ok).toBe(true);

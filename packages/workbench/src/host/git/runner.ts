@@ -4,9 +4,11 @@
  * Git is the Workbench Host's authoring-history engine and is only ever invoked
  * through this runner: a fixed binary, a minimal environment, and per-invocation
  * `-c` configuration that neutralize project/user hooks, external filters and
- * attribute-driven byte rewriting. Arguments are passed as an argv array and are
- * never interpolated into a shell; no user, browser, MCP or Agent input ever
- * reaches a shell through this boundary.
+ * attribute-driven byte rewriting. Replace refs (`refs/replace/*`) are never
+ * honored and system-wide attributes are disabled, so object substitution and
+ * byte rewriting stay deterministic. Arguments are passed as an argv array and
+ * are never interpolated into a shell; no user, browser, MCP or Agent input
+ * ever reaches a shell through this boundary.
  *
  * The runner is intentionally dumb and deterministic: it never throws for a
  * nonzero exit (callers inspect `exitCode`), it rejects only on spawn failure
@@ -15,8 +17,9 @@
  * Before any authoring mutation callers run `requireAuthoringPreconditions`
  * to fail closed on repository divergence (external dirty state, moved or
  * missing fixed ref, detached checkout, external commits) and on unsafe
- * isolation (byte-rewriting config/attributes/filters, or a capability
- * mismatch where the controlled environment is not effective). `run` itself
+ * isolation (byte-rewriting config/attributes/filters or replace refs, or a
+ * capability mismatch where the controlled environment is not effective).
+ * `run` itself
  * rejects arguments and environment overrides that could re-expose hooks,
  * filters, aliases, pagers or an external repository, so user-controlled
  * input can never weaken the controlled boundary.
@@ -265,6 +268,8 @@ const PROTECTED_ENV: Record<string, true> = {
   GIT_EDITOR: true,
   GIT_SEQUENCE_EDITOR: true,
   GIT_PAGER: true,
+  GIT_REDIRECT_STDERR: true,
+  GIT_REDIRECT_STDOUT: true,
   GIT_EXTERNAL_DIFF: true,
   GIT_TERMINAL_PROMPT: true,
   GIT_PROTOCOL_FROM_USER: true,
@@ -303,7 +308,11 @@ function assertControlledEnv(env: Readonly<Record<string, string>> | undefined):
   const rejected: string[] = [];
   for (const key of Object.keys(env)) {
     if (ALLOWED_GIT_ENV[key] === true) continue;
-    if (PROTECTED_ENV[key] === true || /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(key)) {
+    if (
+      PROTECTED_ENV[key] === true ||
+      /^GIT_CONFIG_(KEY|VALUE)_\d+$/.test(key) ||
+      /^GIT_TRACE/.test(key)
+    ) {
       rejected.push(key);
     }
   }
@@ -364,6 +373,10 @@ export class ControlledGitRunner implements GitCommandRunner {
     writeFileSync(this.emptyConfigPath, '');
     writeFileSync(this.emptyAttributesPath, '');
     this.controlledArgs = [
+      // Replace refs (refs/replace/*) can silently substitute objects; the
+      // authoring boundary never honors them, and preflight additionally
+      // fails closed when an external process has created any.
+      '--no-replace-objects',
       '-c',
       `core.hooksPath=${this.hooklessDir}`,
       '-c',
@@ -385,6 +398,7 @@ export class ControlledGitRunner implements GitCommandRunner {
       LC_ALL: 'C',
       LANG: 'C',
       GIT_CONFIG_NOSYSTEM: '1',
+      GIT_ATTR_NOSYSTEM: '1',
       GIT_CONFIG_GLOBAL: this.emptyConfigPath,
       GIT_TERMINAL_PROMPT: '0',
       GIT_EDITOR: 'true',
@@ -590,6 +604,10 @@ export class ControlledGitRunner implements GitCommandRunner {
         const key = line.split(/\s+/, 1)[0];
         if (key && isUnsafeConfigKey(key)) findings.push(`config ${key}`);
       }
+    }
+    const replaceRefs = await run(['for-each-ref', '--format=%(refname)', 'refs/replace']);
+    if (replaceRefs.exitCode === 0 && trimOut(replaceRefs).length > 0) {
+      findings.push(`replace-refs ${trimOut(replaceRefs).split('\n').join(', ')}`);
     }
     if (repoRoot) {
       for (const attributesPath of [

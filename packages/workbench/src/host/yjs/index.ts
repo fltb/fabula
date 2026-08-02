@@ -21,9 +21,12 @@ export type {
   YjsPersistencePort,
   YjsScopeResolution,
   YjsServiceFailureReason,
+  YjsWorkingDocumentCore,
+  YjsWorkingDocumentCoreOptions,
 } from './gateway.js';
 export {
   createSessionAuthPort,
   createYjsGateway,
   createYjsPersistencePort,
+  createYjsWorkingDocumentCore,
 } from './gateway.js';

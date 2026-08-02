@@ -53,3 +53,51 @@ export interface SourceStudioStateV1 {
   readonly working: SourceStudioWorkingLayerV1;
   readonly generatedAt: string;
 }
+
+/** One working-layer read the host derives from the production document store. */
+export interface SourceStudioWorkingDocumentView {
+  readonly documentId: string;
+  readonly kind: 'prose' | 'raw-yaml';
+  /** True when the Host currently holds a live working document for this key. */
+  readonly available: boolean;
+}
+
+/**
+ * Host-side derivation of the safe working-layer view. Takes ONLY the
+ * descriptor facts the production document store exposes and maps them onto
+ * the browser-safe contract; the derivation itself never sees raw document
+ * bytes, state vectors, or filesystem paths, so they cannot leak through it.
+ */
+export function deriveSourceStudioWorkingLayer(input: {
+  readonly projectId: string;
+  readonly documents: readonly SourceStudioWorkingDocumentView[];
+}): SourceStudioWorkingLayerV1 {
+  return {
+    documents: input.documents.map((document) => ({
+      projectId: input.projectId,
+      documentId: document.documentId,
+      kind: document.kind,
+      available: document.available,
+    })),
+  };
+}
+
+/** Host-side derivation of the complete Source Studio read. */
+export function deriveSourceStudioState(input: {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly accepted: ProjectSessionProjectionV1 | null;
+  readonly documents: readonly SourceStudioWorkingDocumentView[];
+  readonly generatedAt: string;
+}): SourceStudioStateV1 {
+  return {
+    version: input.version,
+    projectId: input.projectId,
+    accepted: input.accepted,
+    working: deriveSourceStudioWorkingLayer({
+      projectId: input.projectId,
+      documents: input.documents,
+    }),
+    generatedAt: input.generatedAt,
+  };
+}

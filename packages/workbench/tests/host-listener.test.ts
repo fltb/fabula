@@ -86,7 +86,7 @@ describe('Host listener lifecycle', () => {
   });
 
   it('binds LAN only when explicitly enabled', async () => {
-    const { listener, handle } = await startTracked({ host: 'lan', lan: true });
+    const { listener, handle } = await startTracked({ host: 'lan', lan: true, port: 0 });
     expect(handle.mode).toBe('lan');
     expect(handle.host).toBe('0.0.0.0');
     expect(handle.address).toMatchObject({ address: '0.0.0.0' });
@@ -138,6 +138,7 @@ describe('Host listener HTTP surface', () => {
       mutations: [{ method: 'POST', path: '/api/scenes', kind: 'mutation', guarded: true }],
       mcp: [],
       reads: [],
+      setup: [],
     });
     const handle = await listener.start();
     const res = await listener.app.request('/status');
@@ -556,6 +557,7 @@ describe('Host listener upgrade seam', () => {
     const wss = new WebSocketServer({ noServer: true });
     let handled = 0;
     const { listener, handle } = await startTracked({
+      port: 0,
       upgrade: {
         handle: (request, socket, head) => {
           handled += 1;
@@ -580,6 +582,7 @@ describe('Host listener upgrade seam', () => {
     const events: string[] = [];
     let wss: WebSocketServer | null = null;
     const { listener, handle: first } = await startTracked({
+      port: 0,
       upgrade: {
         open: () => {
           events.push('open');
@@ -621,6 +624,7 @@ describe('Host listener upgrade seam', () => {
     const order: string[] = [];
     const wss = new WebSocketServer({ noServer: true });
     const { listener, handle } = await startTracked({
+      port: 0,
       upgrade: {
         handle: (request, socket, head) => {
           wss.handleUpgrade(request, socket, head, (ws) => {
@@ -648,6 +652,7 @@ describe('Host listener upgrade seam', () => {
 
   it('destroys the socket when the seam handler throws', async () => {
     const { listener, handle } = await startTracked({
+      port: 0,
       upgrade: {
         handle: () => {
           throw new Error('boom');

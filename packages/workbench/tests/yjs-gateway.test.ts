@@ -789,6 +789,7 @@ describe('Yjs gateway shutdown closure', () => {
 
   it('close() waits for an in-flight persist, fails closed, and never resurrects a runtime', async () => {
     const persistGate = deferred<WorkingDocumentState>();
+    const persistStarted = deferred<void>();
     const base = fakePersistence();
     const { gateway, session } = createGatewayFixture({
       persistence: {
@@ -798,6 +799,7 @@ describe('Yjs gateway shutdown closure', () => {
             operation: 'persist',
             key: stateKey(input.projectId, input.documentId),
           });
+          persistStarted.resolve();
           return persistGate.promise;
         },
       },
@@ -807,10 +809,7 @@ describe('Yjs gateway shutdown closure', () => {
     if (!bound.ok) return;
 
     const applying = bound.connection.applyUpdate(workingUpdate('chapter one'));
-    // Let the update slot reach the persist await.
-    await Promise.resolve();
-    await Promise.resolve();
-    await Promise.resolve();
+    await persistStarted.promise;
     expect(base.calls.filter((call) => call.operation === 'persist')).toHaveLength(1);
 
     let closed = false;

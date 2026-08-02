@@ -1,38 +1,48 @@
 /**
  * Host-only MCP authentication boundary.
  *
- * Every external MCP request must derive its identity from two server-side
- * sources and nothing else:
+ * Every external MCP request must derive its identity from server-side
+ * sources and nothing else. Two mutually exclusive modes:
  *
- *   1. a live, nonexpired Host session (`x-fabula-session`), looked up through
- *      an injected session store, and
- *   2. an opaque capability token (`Authorization: Bearer`), validated by the
- *      shared AgentCapabilityService at the exact project and requested scopes.
+ *   1. Browser mode — a live, nonexpired Host session (`x-fabula-session`),
+ *      looked up through an injected session store, plus an opaque capability
+ *      token (`Authorization: Bearer`), validated by the shared
+ *      AgentCapabilityService at the exact project and requested scopes. The
+ *      grant bound to the token must name the same user as the live session;
+ *      any mismatch is a typed `USER_MISMATCH` denial.
+ *   2. Device mode — an owner-paired one-time device credential (no session
+ *      header at all), verified against the durable hash-only verifier store
+ *      through the injected device pairing service. Device identity is
+ *      separate from browser sessions; the actor is the issuing owner,
+ *      resolved server-side, and the credential's persisted scope set is the
+ *      grant.
  *
- * The grant bound to the token must name the same user as the live session;
- * any mismatch is a typed `USER_MISMATCH` denial. On success the port returns
- * only safe server-derived caller fields (sessionId, userId, and the secret-
- * free grant projection) — never the token, its digest, or any caller-chosen
+ * On success the port returns only safe server-derived caller fields
+ * (sessionId or device identity, userId, and the secret-free grant
+ * projection) — never the token, its digest, or any caller-chosen
  * actor/project/scope. Failure codes are typed and nonsecret; the HTTP status
  * mapping (401 vs 403) is exposed for the transport via
  * {@link mcpAuthFailureStatus}.
  */
-
 import type {
   AgentCapabilityFailureCode,
   AgentCapabilityGrant,
   AgentCapabilityService,
 } from '../agent/index.js';
 import type { LocalAuthService } from '../auth/index.js';
+import type { AuthUserRecord } from '../../contracts/persistence.js';
+import type { McpDevicePairingService } from './device-pairing.js';
 
 /** Server-derived identity for one authorized MCP request. No token, no digest. */
 export interface McpAuthorizedCaller {
-  /** The live session id that authenticated this request. */
-  readonly sessionId: string;
-  /** The session user; equals `grant.userId` by construction (USER_MISMATCH otherwise). */
+  /** The live session id that authenticated this request; null for device callers. */
+  readonly sessionId: string | null;
+  /** The session user (or the issuing owner for devices); equals `grant.userId` by construction. */
   readonly userId: string;
-  /** The validated capability grant: actor/project/scopes/version/expiry truth. */
+  /** The validated grant: actor/project/scopes/version/expiry truth. */
   readonly grant: AgentCapabilityGrant;
+  /** Present for device-credential callers; browser callers carry no device identity. */
+  readonly device?: { readonly deviceId: string; readonly clientLabel: string };
 }
 
 /**
@@ -58,9 +68,9 @@ export interface McpAuthFailure {
 }
 
 export interface McpAuthorizeInput {
-  /** Session id from the `x-fabula-session` header. */
-  readonly sessionId: string;
-  /** Opaque capability token from the `Authorization: Bearer` header. */
+  /** Session id from the `x-fabula-session` header; null for device credentials. */
+  readonly sessionId: string | null;
+  /** Opaque capability token or owner-paired device credential. */
   readonly token: string;
   /** Exact project the request targets; never caller-chosen beyond the route. */
   readonly projectId: string;
@@ -79,13 +89,17 @@ export interface McpAuthorizationPort {
 
 export interface McpAuthorizationPortOptions {
   /**
-   * Session lookup; a missing row means the session never existed or was
-   * revoked (revocation deletes the row), and an expired row is rejected
-   * here. Mirrors the Yjs `SessionAuthPortOptions` contract.
+   * Session lookup for browser mode; a missing row means the session never
+   * existed or was revoked (revocation deletes the row), and an expired row
+   * is rejected here. Mirrors the Yjs `SessionAuthPortOptions` contract.
    */
   readonly sessions: Pick<LocalAuthService, 'getSession'>;
   /** Shared AgentCapabilityService; validates the opaque token at project/scopes. */
   readonly capabilities: Pick<AgentCapabilityService, 'validate'>;
+  /** Durable device-credential verification for device mode (owner-paired). */
+  readonly devices?: Pick<McpDevicePairingService, 'verifyCredential'>;
+  /** Server-side owner resolution for device mode; the actor is never caller-chosen. */
+  readonly owner?: { readonly loadOwner: () => Promise<AuthUserRecord | null> };
   /** Timestamp source for session expiry checks; defaults to the host clock. */
   readonly now?: () => string;
 }
@@ -144,9 +158,12 @@ function mapCapabilityFailure(code: AgentCapabilityFailureCode): McpAuthFailureC
 }
 
 /**
- * Default MCP authorization port over the Host session store and the shared
- * AgentCapabilityService. Fails closed on malformed input (missing session,
- * empty token, empty scopes) and on any session/grant mismatch.
+ * Default MCP authorization port over the Host session store, the shared
+ * AgentCapabilityService, and the durable device verifier. Browser mode
+ * requires a live session plus a matching capability token; device mode
+ * verifies an owner-paired credential against the durable hash-only store and
+ * derives the actor from the issuing owner. Fails closed on malformed input
+ * (missing session, empty token, empty scopes) and on any mismatch.
  */
 export function createMcpAuthorizationPort(
   options: McpAuthorizationPortOptions,
@@ -155,9 +172,6 @@ export function createMcpAuthorizationPort(
   return {
     async authorize(input: McpAuthorizeInput): Promise<McpAuthorizationResult> {
       const { sessionId, token, projectId, scopes } = input;
-      if (typeof sessionId !== 'string' || sessionId.length === 0) {
-        return { ok: false, failure: failure('SESSION_NOT_FOUND') };
-      }
       if (typeof token !== 'string' || token.length === 0) {
         return { ok: false, failure: failure('TOKEN_INVALID') };
       }
@@ -168,6 +182,39 @@ export function createMcpAuthorizationPort(
         return { ok: false, failure: failure('SCOPE_MISMATCH') };
       }
 
+      if (sessionId === null) {
+        // Device mode: the credential is its own grant; no browser session.
+        if (options.devices === undefined || options.owner === undefined) {
+          return { ok: false, failure: failure('TOKEN_INVALID') };
+        }
+        const verified = await options.devices.verifyCredential({ credential: token, scopes });
+        if (!verified.ok) return { ok: false, failure: failure(verified.code) };
+        const owner = await options.owner.loadOwner();
+        if (owner === null) return { ok: false, failure: failure('TOKEN_INVALID') };
+        return {
+          ok: true,
+          caller: {
+            sessionId: null,
+            userId: owner.userId,
+            grant: {
+              capabilityId: `device:${verified.device.deviceId}`,
+              userId: owner.userId,
+              projectId,
+              scopes: verified.device.scope,
+              version: 1,
+              expiresAt: verified.device.expiresAt,
+            },
+            device: {
+              deviceId: verified.device.deviceId,
+              clientLabel: verified.device.clientLabel,
+            },
+          },
+        };
+      }
+
+      if (sessionId.length === 0) {
+        return { ok: false, failure: failure('SESSION_NOT_FOUND') };
+      }
       const session = await options.sessions.getSession(sessionId);
       if (session === null) return { ok: false, failure: failure('SESSION_NOT_FOUND') };
       if (session.expiresAt <= now()) return { ok: false, failure: failure('SESSION_EXPIRED') };

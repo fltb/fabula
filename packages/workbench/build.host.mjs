@@ -21,6 +21,12 @@ const result = await build({
     resolve(root, 'src/host/mcp/index.ts'),
     // Host process entry: runnable `start:host` target (node dist/host/host/main.js).
     resolve(root, 'src/host/main.ts'),
+    // Persistence worker entry: real worker_threads target spawned by the
+    // Host launch (`new Worker(entry, { workerData })`). The worker module
+    // owns DatabaseSync/Kysely; the Host thread only talks typed RPC over
+    // the worker's implicit parent port. Emitted at
+    // dist/host/persistence/worker.js (outbase = src).
+    resolve(root, 'src/persistence/worker.ts'),
   ],
   // Bundle the complete Workbench-internal module graph (host/, persistence/
   // clients, contracts/) into each emitted entry: relative imports are

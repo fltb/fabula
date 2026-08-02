@@ -18,21 +18,25 @@ import type { IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 import { createAdaptorServer, type ServerType } from '@hono/node-server';
+import { BROWSER_SETUP_BASE_PATH } from '../contracts/configuration.js';
 import { type Context, type Handler, Hono, type MiddlewareHandler } from 'hono';
 
 export type HostListenerMode = 'loopback' | 'lan' | 'unix';
 export type EffectiveProtocol = 'http' | 'https';
 export type HostHttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export type MutationHttpMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-export type HostEndpointKind = 'health' | 'status' | 'mutation' | 'mcp' | 'read';
+export type HostEndpointKind = 'health' | 'status' | 'mutation' | 'mcp' | 'read' | 'setup';
 
 export const DEFAULT_HOST_LISTENER_PORT = 8787;
 export const DEFAULT_HOST_HEALTH_PATH = '/health';
 export const HOST_STATUS_PATH = '/status';
-export const MUTATION_METHODS: readonly MutationHttpMethod[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
+/** Methods accepted by the pre-start setup route seam. */
+export type SetupHttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 /** Methods mounted for each MCP transport route: streamable HTTP negotiation plus JSON-RPC. */
 export const MCP_METHODS: readonly HostHttpMethod[] = ['GET', 'POST', 'DELETE'];
+/** Methods accepted by guarded mutation routes. */
+export const MUTATION_METHODS: readonly MutationHttpMethod[] = ['POST', 'PUT', 'PATCH', 'DELETE'];
 
 /** Host/Origin values that never expose the listener on the network. */
 export function isLoopbackHost(host: string): boolean {
@@ -128,13 +132,14 @@ export interface HostEndpoint {
   /** True for allowlist-guarded routes (mutation and MCP). */
   readonly guarded: boolean;
 }
-
 export interface HostEndpointProjection {
   readonly health: HostEndpoint;
   readonly status: HostEndpoint;
   readonly mutations: readonly HostEndpoint[];
   readonly mcp: readonly HostEndpoint[];
   readonly reads: readonly HostEndpoint[];
+  /** Pre-start setup wizard routes (unguarded by design; loopback-gated by the surface). */
+  readonly setup: readonly HostEndpoint[];
 }
 
 export interface HostHealthPayload {
@@ -210,10 +215,18 @@ export interface HostListener {
    * before `start()`.
    */
   registerReadRoute(path: string, handler: Handler<HostListenerEnv>): void;
-  /** Register one unguarded static GET/HEAD route before start. */
+  /**
+   * Register a pre-start-only setup wizard route. The path MUST live under
+   * the setup base path (`/api/v1/setup/*`); the seam is intentionally not
+   * allowlist-guarded — the setup surface itself enforces unconfigured +
+   * loopback at request time. Registration must happen before `start()`.
+   */
+  registerSetupRoute(method: SetupHttpMethod, path: string, handler: Handler<HostListenerEnv>): void;
+  /** Register an unguarded static route; only Host static composition uses it. */
   registerPublicStaticRoute(path: string, handler: Handler<HostListenerEnv>): void;
-  /** Register one explicit unauthenticated auth POST under `/api/v1/auth/`. */
+  /** Register exactly one public auth POST route. */
   registerPublicAuthPostRoute(path: string, handler: Handler<HostListenerEnv>): void;
+  /** Evaluate the configured host/origin mutation allowlist. */
   isMutationAllowed(host: string | undefined, origin: string | undefined): boolean;
 }
 
@@ -541,6 +554,7 @@ class HostListenerImpl implements HostListener {
   private readonly mutationEndpoints: HostEndpoint[] = [];
   private readonly mcpEndpoints: HostEndpoint[] = [];
   private readonly readEndpoints: HostEndpoint[] = [];
+  private readonly setupEndpoints: HostEndpoint[] = [];
 
   constructor(config: HostListenerConfig) {
     this.config = { ...config };
@@ -664,7 +678,34 @@ class HostListenerImpl implements HostListener {
       mutations: [...this.mutationEndpoints],
       mcp: [...this.mcpEndpoints],
       reads: [...this.readEndpoints],
+      setup: [...this.setupEndpoints],
     };
+  }
+
+  registerSetupRoute(
+    method: SetupHttpMethod,
+    path: string,
+    handler: Handler<HostListenerEnv>,
+  ): void {
+    if (!(['GET', 'POST', 'PUT', 'DELETE'] as readonly string[]).includes(method)) {
+      throw new HostListenerError(
+        `setup routes require one of GET, POST, PUT, DELETE; got ${JSON.stringify(method)}`,
+      );
+    }
+    if (
+      typeof path !== 'string' ||
+      path.length === 0 ||
+      (path !== BROWSER_SETUP_BASE_PATH && !path.startsWith(`${BROWSER_SETUP_BASE_PATH}/`))
+    ) {
+      throw new HostListenerError(
+        `setup routes are limited to ${BROWSER_SETUP_BASE_PATH}/*; got ${JSON.stringify(path)}`,
+      );
+    }
+    if (this.state.running) {
+      throw new HostListenerStateError('setup routes must be registered before start()');
+    }
+    this.setupEndpoints.push({ method, path, kind: 'setup', guarded: false });
+    this.app.on(method, path, handler);
   }
 
   registerMutationRoute(

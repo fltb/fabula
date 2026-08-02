@@ -1,0 +1,261 @@
+/**
+ * Topology-limited authoring-tree filesystem observer.
+ *
+ * The observer is the watcher side of the AuthoringCoordinator: it debounces
+ * filesystem change hints, performs a FULL re-read of the authoring tree
+ * through the injected {@link AuthoringTreeLoader} (a
+ * `FileProjectSourceLoader` adapter over the allowed authoring-manifest
+ * topology — `.git`, `.nova`, cache, output and Host staging are excluded),
+ * stages the re-read content into a private content-addressed candidate
+ * store, and emits external candidates.
+ *
+ * Boundary rules (never violated here):
+ *
+ *  - The observer ONLY produces external candidates. It never refreshes the
+ *    accepted session source, never writes files, never touches Git, and
+ *    never accepts or commits anything. There is no write surface at all.
+ *  - A filesystem event is only a hint: the observer debounces, then always
+ *    performs a full re-read before emitting, so a torn/partial write cannot
+ *    produce a candidate from half-written bytes.
+ *  - Identical re-reads (same tree hash) are suppressed: no re-stage, no
+ *    re-emit. Self-write alignment is suppressed by the coordinator, which
+ *    compares the observed tree hash against the accepted source identity.
+ *  - No filesystem path ever leaves this module; emitted snapshots carry only
+ *    manifest-relative logical paths, content, and hashes.
+ */
+
+import { FileProjectSourceLoader } from '@novalistically/node-host';
+import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
+import type { AuthoringDiagnosticV1 } from '../../contracts/authoring.js';
+import type { AuthoringTreeLoader, AuthoringTreeSnapshot } from './types.js';
+
+// ─── Content-addressed candidate staging ────────────────────────────────────
+
+/** One staged external candidate: full manifest entries keyed by candidate hash. */
+export interface AuthoringCandidateBundle {
+  readonly projectId: string;
+  readonly candidateHash: string;
+  readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
+}
+
+/**
+ * Private content-addressed staging for external candidates. SQLite and the
+ * browser contract only ever see hashes/metadata; the raw entries live here
+ * (a Host-private staging directory in production wiring; the in-memory
+ * default is for tests). The store never exposes paths to any surface.
+ */
+export interface AuthoringCandidateStore {
+  put(bundle: AuthoringCandidateBundle): Promise<void>;
+  get(input: {
+    readonly projectId: string;
+    readonly candidateHash: string;
+  }): Promise<AuthoringCandidateBundle | null>;
+  delete(input: {
+    readonly projectId: string;
+    readonly candidateHash: string;
+  }): Promise<void>;
+}
+
+/** In-memory content-addressed staging (tests and un-wired hosts). */
+export function createInMemoryCandidateStore(): AuthoringCandidateStore {
+  const bundles = new Map<string, AuthoringCandidateBundle>();
+  return {
+    async put(bundle) {
+      bundles.set(`${bundle.projectId}\u0000${bundle.candidateHash}`, bundle);
+    },
+    async get(input) {
+      return bundles.get(`${input.projectId}\u0000${input.candidateHash}`) ?? null;
+    },
+    async delete(input) {
+      bundles.delete(`${input.projectId}\u0000${input.candidateHash}`);
+    },
+  };
+}
+
+// ─── Tree loader adapter ─────────────────────────────────────────────────────
+
+/** One full authoring-tree re-read through the allowed topology loader. */
+export function createFileTreeLoader(
+  projectRoot: string,
+  options: { readonly now?: () => string } = {},
+): AuthoringTreeLoader {
+  if (typeof projectRoot !== 'string' || projectRoot.length === 0) {
+    throw new TypeError('createFileTreeLoader requires a non-empty projectRoot');
+  }
+  const loader = new FileProjectSourceLoader();
+  const now = options.now ?? (() => new Date().toISOString());
+  return {
+    async loadTree(input): Promise<AuthoringTreeSnapshot> {
+      const snapshot = loader.load(projectRoot);
+      return {
+        projectId: input.projectId,
+        treeHash: snapshot.sourceHash,
+        entries: snapshot.documents.map((document) => ({
+          logicalPath: document.logicalPath,
+          content: document.content,
+        })),
+        diagnostics: collectTreeDiagnostics(snapshot),
+        observedAt: now(),
+      };
+    },
+  };
+}
+
+function collectTreeDiagnostics(
+  snapshot: ProjectSourceSnapshotV1,
+): readonly AuthoringDiagnosticV1[] {
+  const diagnostics: AuthoringDiagnosticV1[] = [];
+  for (const document of snapshot.documents) {
+    for (const diagnostic of document.diagnostics) {
+      diagnostics.push({
+        code: diagnostic.code,
+        severity: diagnostic.severity,
+        message: diagnostic.message,
+        logicalPath: diagnostic.logicalPath,
+      });
+    }
+    if (document.parseResult.status !== 'parsed') {
+      diagnostics.push({
+        code: 'source.parse_failed',
+        severity: 'error',
+        message: `Document "${document.logicalPath}" did not parse`,
+        logicalPath: document.logicalPath,
+      });
+    }
+  }
+  return diagnostics;
+}
+
+// ─── Observer ────────────────────────────────────────────────────────────────
+
+export interface AuthoringFilesystemObserverOptions {
+  readonly projectId: string;
+  /**
+   * Full re-read of the allowed authoring tree. The wiring supplies a
+   * `createFileTreeLoader` adapter over the resolved project root; tests
+   * inject deterministic fakes. The observer itself never resolves paths.
+   */
+  readonly loader: AuthoringTreeLoader;
+  /** Private content-addressed staging for emitted candidates. */
+  readonly staging: AuthoringCandidateStore;
+  /** Debounce window for filesystem hints; defaults to 150ms. */
+  readonly debounceMs?: number;
+  /** Timestamp source; defaults to the host clock. */
+  readonly now?: () => string;
+}
+
+export interface AuthoringFilesystemObserver {
+  readonly projectId: string;
+  /**
+   * Filesystem change hint. The event is only a hint: the observer debounces
+   * and then performs a full re-read. Resolves with the re-read snapshot
+   * after the debounced load completes (or the in-flight load, when one is
+   * already running).
+   */
+  notify(input?: { readonly hintPaths?: readonly string[] }): Promise<AuthoringTreeSnapshot>;
+  /** Immediate full re-read without debounce, staging, or emission. */
+  loadTree(): Promise<AuthoringTreeSnapshot>;
+  /** External candidate emission; fires only when the tree hash changed. */
+  onCandidate(listener: (snapshot: AuthoringTreeSnapshot) => void): () => void;
+  /** Cancel pending debounces; no further loads or emissions. */
+  dispose(): void;
+}
+
+interface NotifyWaiter {
+  resolve(snapshot: AuthoringTreeSnapshot): void;
+  reject(error: unknown): void;
+}
+
+function createAuthoringFilesystemObserverImpl(
+  options: AuthoringFilesystemObserverOptions,
+): AuthoringFilesystemObserver {
+  const { projectId, loader, staging } = options;
+  if (typeof projectId !== 'string' || projectId.length === 0) {
+    throw new TypeError('AuthoringFilesystemObserver requires a non-empty projectId');
+  }
+  if (loader === null || typeof loader !== 'object' || typeof loader.loadTree !== 'function') {
+    throw new TypeError('AuthoringFilesystemObserver requires an injected AuthoringTreeLoader');
+  }
+  if (staging === null || typeof staging !== 'object' || typeof staging.put !== 'function') {
+    throw new TypeError('AuthoringFilesystemObserver requires an injected AuthoringCandidateStore');
+  }
+  const debounceMs = Math.max(0, options.debounceMs ?? 150);
+  const candidateListeners = new Set<(snapshot: AuthoringTreeSnapshot) => void>();
+  const waiters: NotifyWaiter[] = [];
+  /** Last tree hash the observer emitted (or loaded); identical re-reads are suppressed. */
+  let lastTreeHash: string | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let flushing: Promise<void> | null = null;
+  let disposed = false;
+
+  async function loadSnapshot(): Promise<AuthoringTreeSnapshot> {
+    return loader.loadTree({ projectId });
+  }
+
+  /** Debounced full re-read → stage → emit; resolves all pending waiters. */
+  async function flush(): Promise<void> {
+    let snapshot: AuthoringTreeSnapshot;
+    try {
+      snapshot = await loadSnapshot();
+      if (snapshot.treeHash !== lastTreeHash) {
+        await staging.put({
+          projectId,
+          candidateHash: snapshot.treeHash,
+          entries: snapshot.entries,
+        });
+        lastTreeHash = snapshot.treeHash;
+        for (const listener of candidateListeners) listener(snapshot);
+      }
+      for (const waiter of waiters.splice(0)) waiter.resolve(snapshot);
+    } catch (error) {
+      for (const waiter of waiters.splice(0)) waiter.reject(error);
+    }
+  }
+
+  return {
+    projectId,
+    async notify(input = {}) {
+      if (disposed) {
+        throw new Error('AuthoringFilesystemObserver is disposed');
+      }
+      if (timer === null) {
+        timer = setTimeout(() => {
+          timer = null;
+          flushing ??= flush().finally(() => {
+            flushing = null;
+          });
+        }, debounceMs);
+      }
+      return new Promise<AuthoringTreeSnapshot>((resolve, reject) => {
+        waiters.push({ resolve, reject });
+      });
+    },
+    async loadTree() {
+      return loadSnapshot();
+    },
+    onCandidate(listener) {
+      candidateListeners.add(listener);
+      return () => {
+        candidateListeners.delete(listener);
+      };
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      candidateListeners.clear();
+      for (const waiter of waiters.splice(0)) {
+        waiter.reject(new Error('AuthoringFilesystemObserver is disposed'));
+      }
+    },
+  };
+}
+
+/** Create one topology-limited authoring-tree observer. */
+export function createAuthoringFilesystemObserver(
+  options: AuthoringFilesystemObserverOptions,
+): AuthoringFilesystemObserver {
+  return createAuthoringFilesystemObserverImpl(options);
+}
+

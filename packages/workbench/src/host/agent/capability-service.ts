@@ -3,27 +3,34 @@
  * revocation, and audit-effect construction for opaque capability tokens.
  *
  * Capabilities are opaque, versioned, revocable server-side grants:
- * - Issue generates a fresh 256-bit token and persists ONLY the grant metadata
- *   (`CapabilityState`) plus an in-process SHA-256 digest of the token. The raw
- *   token never reaches persistence, audit records, or the browser.
+ * - Issue generates a fresh 256-bit token and persists the grant metadata
+ *   (`CapabilityState`) plus a durable, hash-only verifier row (the SHA-256
+ *   digest of the token, keyed `capability:<capabilityId>:v<version>` in the
+ *   shared verifier table). The raw token never reaches persistence, audit
+ *   records, or the browser, and the digest is never returned by any result.
  * - Validate takes a client-presented token plus the project/scopes an effect
- *   needs and re-loads the persisted grant on every call. Each validate checks
- *   the server-held token digest, then the persisted row's existence, version,
- *   revocation, expiry, project, and scope.
+ *   needs, resolves the token's digest through the durable verifier store,
+ *   and re-loads the persisted grant on every call. Each validate checks the
+ *   verifier row's existence, then the persisted row's version, revocation,
+ *   expiry, project, and scope. Because the digest registry is durable, a
+ *   Host restart keeps outstanding tokens valid — the verifier row carries
+ *   only the hash, never the token.
  * - Callers can never choose the actor or the granted permissions: issue,
  *   validate, and checkGrant reject unknown input fields (e.g. `actorId`,
  *   `permissions`) outright, and the persisted row is the only source of
  *   actor/scope truth.
- * - The token digest registry is deliberately process-held: a Host restart
- *   invalidates every outstanding token (fail closed) because the durable
- *   capabilities row has no digest column and this layer owns no SQL. Durable
- *   grant metadata still round-trips through the existing typed capability
- *   persistence operations (`upsertCapability`/`loadCapability`/
- *   `revokeCapability`); this module never touches the persistence worker
- *   internals directly.
+ * - Grant metadata and digests round-trip exclusively through the typed
+ *   capability and device-verifier persistence operations
+ *   (`upsertCapability`/`loadCapability`/`revokeCapability` and
+ *   `createDeviceVerifier`/`loadDeviceVerifierByTokenHash`/`revokeDeviceVerifier`);
+ *   this module never touches the persistence worker internals directly.
  */
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import type { CapabilityState } from '../../contracts/persistence.js';
+import type {
+  CapabilityState,
+  DeviceVerifierReadState,
+  DeviceVerifierRecord,
+} from '../../contracts/persistence.js';
 import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
 
 /** How many random bytes make up the opaque token secret (256 bits). */
@@ -32,11 +39,14 @@ export const CAPABILITY_TOKEN_BYTES = 32;
 export const CAPABILITY_TOKEN_PREFIX = 'fc_';
 export const DEFAULT_CAPABILITY_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** Persistent-grant domain operations this service is allowed to use. */
 export interface CapabilityPersistence {
   upsertCapability(state: CapabilityState): Promise<CapabilityState>;
   loadCapability(input: { capabilityId: string }): Promise<CapabilityState | null>;
   revokeCapability(input: { capabilityId: string; reason?: string }): Promise<{ revoked: true }>;
+  /** Durable, hash-only token-digest registry shared with MCP device verifiers. */
+  createVerifier(record: DeviceVerifierRecord): Promise<DeviceVerifierReadState>;
+  loadVerifierByTokenHash(input: { tokenHash: string }): Promise<DeviceVerifierReadState | null>;
+  revokeVerifier(input: { deviceId: string; revokedAt: string }): Promise<{ revoked: true }>;
 }
 
 /** Typed domain adapter over the persistence worker; keeps SQL out of this layer. */
@@ -47,6 +57,10 @@ export function createCapabilityPersistence(
     upsertCapability: (state) => client.request('upsertCapability', state),
     loadCapability: (input) => client.request('loadCapability', input),
     revokeCapability: (input) => client.request('revokeCapability', input),
+    createVerifier: (record) => client.request('createDeviceVerifier', record),
+    loadVerifierByTokenHash: (input) =>
+      client.request('loadDeviceVerifierByTokenHash', input),
+    revokeVerifier: (input) => client.request('revokeDeviceVerifier', input),
   };
 }
 
@@ -171,19 +185,33 @@ export function buildAuditEffect(input: AuditEffectInput): AgentAuditEffect {
   };
 }
 
+/** Verifier-row key binding one capability grant to its token digest. */
+function capabilityVerifierKey(capabilityId: string, version: number): string {
+  return `capability:${capabilityId}:v${version}`;
+}
+
+/** Inverts {@link capabilityVerifierKey}; null for any non-capability row. */
+function parseCapabilityVerifierKey(
+  deviceId: string,
+): { readonly capabilityId: string; readonly version: number } | null {
+  const match = /^capability:([^:]+):v(\d+)$/.exec(deviceId);
+  if (match === null) return null;
+  return { capabilityId: match[1], version: Number(match[2]) };
+}
+
 /**
  * Issuance, validation, revocation, and per-effect gating for opaque Agent
  * capability tokens over typed capability persistence operations. Construct
- * once per Host process: this service holds the in-process token digest
- * registry and must be shared, never rebuilt per request.
+ * once per Host process and share it: every validate/checkGrant re-loads the
+ * durable grant and the hash-only verifier row, so a revocation, version
+ * bump, or expiry stops the next authorize/effect at its next checkpoint —
+ * even after a Host restart, because the digest registry is durable.
  */
 export class AgentCapabilityService {
   readonly #persistence: CapabilityPersistence;
   readonly #now: () => number;
   readonly #newId: () => string;
   readonly #ttlMs: number;
-  /** Server-held token digests (sha256 hex of the opaque token) -> issued grant binding. */
-  readonly #digests = new Map<string, { capabilityId: string; version: number }>();
 
   constructor(options: AgentCapabilityServiceOptions) {
     this.#persistence = options.persistence;
@@ -223,17 +251,24 @@ export class AgentCapabilityService {
       expiresAt: new Date(at + ttlMs).toISOString(),
     };
     await this.#persistence.upsertCapability(state);
-    this.#digests.set(createHash('sha256').update(token, 'utf8').digest('hex'), {
-      capabilityId: state.capabilityId,
-      version: state.version,
+    // Durable, hash-only digest registry: the token itself never persists;
+    // the verifier row is keyed by the issued grant so a restart can still
+    // resolve the token and re-check the persisted grant row.
+    await this.#persistence.createVerifier({
+      deviceId: capabilityVerifierKey(state.capabilityId, state.version),
+      tokenHash: createHash('sha256').update(token, 'utf8').digest('hex'),
+      scope: state.scope,
+      expiresAt: state.expiresAt,
+      clientLabel: 'capability grant',
+      createdAt: new Date(at).toISOString(),
     });
     return { token, grant: this.#project(state) };
   }
 
   /**
-   * Validates a client-presented token against the server-held digest and the
-   * current persisted grant (existence, version, revocation, expiry, project,
-   * scope). Called before every effect that consumes a client token.
+   * Validates a client-presented token against the durable hash-only verifier
+   * and the current persisted grant (existence, version, revocation, expiry,
+   * project, scope). Called before every effect that consumes a client token.
    */
   async validate(input: ValidateCapabilityInput): Promise<AgentCapabilityValidationResult> {
     this.#rejectUnknownKeys(input, VALIDATE_FIELDS, 'validate');
@@ -243,11 +278,17 @@ export class AgentCapabilityService {
     if (input.scopes.length === 0) {
       throw new CapabilityInputError('At least one requested scope is required.');
     }
-    const entry = this.#digests.get(createHash('sha256').update(input.token, 'utf8').digest('hex'));
-    if (!entry) return { ok: false, failure: failure('INVALID_TOKEN') };
-    const state = await this.#persistence.loadCapability({ capabilityId: entry.capabilityId });
+    const verifier = await this.#persistence.loadVerifierByTokenHash({
+      tokenHash: createHash('sha256').update(input.token, 'utf8').digest('hex'),
+    });
+    if (verifier === null) return { ok: false, failure: failure('INVALID_TOKEN') };
+    const binding = parseCapabilityVerifierKey(verifier.deviceId);
+    if (binding === null) return { ok: false, failure: failure('INVALID_TOKEN') };
+    const state = await this.#persistence.loadCapability({ capabilityId: binding.capabilityId });
     if (state == null) return { ok: false, failure: failure('NOT_FOUND') };
-    if (state.version !== entry.version) return { ok: false, failure: failure('VERSION_MISMATCH') };
+    if (state.version !== binding.version) {
+      return { ok: false, failure: failure('VERSION_MISMATCH') };
+    }
     if (state.revokedAt != null) return { ok: false, failure: failure('REVOKED') };
     if (new Date(state.expiresAt).getTime() <= this.#now())
       return { ok: false, failure: failure('EXPIRED') };

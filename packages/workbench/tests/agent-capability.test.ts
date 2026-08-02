@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -302,23 +303,39 @@ describe('AgentCapabilityService over the real persistence worker', () => {
     });
   });
 
-  it('invalidates outstanding tokens when the process-held digest registry is lost (fail closed)', async () => {
-    const { token } = await service.issue({
+  it('keeps outstanding tokens valid across a Host restart through the durable hash-only verifier store', async () => {
+    const { token, grant } = await service.issue({
       userId: 'u1',
       projectId: 'p1',
       scopes: ['edit:prose'],
     });
-    // A fresh service over the same durable store simulates a Host restart.
+    // The digest registry is durable: a fresh service over the same store
+    // (a Host restart) still resolves the token by its SHA-256 hash.
     const restarted = new AgentCapabilityService({
       persistence: createCapabilityPersistence(harness.client),
       now: () => now,
     });
     await expect(
       restarted.validate({ token, projectId: 'p1', scopes: ['edit:prose'] }),
-    ).resolves.toMatchObject({
-      ok: false,
-      failure: { code: 'INVALID_TOKEN' },
+    ).resolves.toEqual({ ok: true, grant });
+
+    // The verifier row is hash-only: no read result ever contains the raw
+    // token, its digest, or the binding key it is stored under.
+    const rows = await harness.client.request('listDeviceVerifiers', undefined);
+    const capabilityRows = rows.filter((row) => row.deviceId.startsWith('capability:'));
+    expect(capabilityRows).toHaveLength(1);
+    expect(capabilityRows[0].deviceId).toBe(`capability:${grant.capabilityId}:v1`);
+    expect(JSON.stringify(capabilityRows[0])).not.toContain(token);
+    expect(Object.keys(capabilityRows[0])).not.toContain('tokenHash');
+    // The stored digest itself is never returned either (sha256 of the token).
+    const digest = createHash('sha256').update(token, 'utf8').digest('hex');
+    expect(JSON.stringify(capabilityRows[0])).not.toContain(digest);
+    const byHash = await harness.client.request('loadDeviceVerifierByTokenHash', {
+      tokenHash: digest,
     });
+    expect(byHash?.deviceId).toBe(`capability:${grant.capabilityId}:v1`);
+    expect(Object.keys(byHash ?? {})).not.toContain('tokenHash');
+    expect(JSON.stringify(byHash)).not.toContain(token);
   });
 
   it('builds equivalent secret-free audit metadata from a validated grant', async () => {

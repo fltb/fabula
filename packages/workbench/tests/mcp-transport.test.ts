@@ -75,6 +75,7 @@ function registry(definitions: readonly McpToolDefinition[]): McpToolRegistry {
   return {
     projectId: PROJECT_ID,
     session: {} as McpToolRegistry['session'],
+    availableScopes: [...new Set(definitions.flatMap((definition) => definition.requiredScopes))],
     list: (scopes) =>
       definitions.filter((definition) =>
         definition.requiredScopes.every((scope) => scopes.includes(scope)),
@@ -339,5 +340,95 @@ describe('MCP Streamable HTTP endpoint', () => {
         })
       ).status,
     ).toBe(403);
+  });
+
+  it('serves discovery and calls for an owner-paired device credential without a session header', async () => {
+    const deviceCaller: McpAuthorizedCaller = {
+      ...caller,
+      sessionId: null,
+      grant: { ...caller.grant, scopes: [MCP_READ_SCOPE] },
+      device: { deviceId: 'device-1', clientLabel: 'editor-laptop' },
+    };
+    const seen: Parameters<McpAuthorizationPort['authorize']>[0][] = [];
+    const endpoint = createMcpStreamableEndpoint({
+      registry: registry([tool('nova_status', [MCP_READ_SCOPE])]),
+      authorization: authorization(async (input) => {
+        seen.push(input);
+        expect(input.sessionId).toBeNull();
+        expect(input.token).toBe('wbd_device-credential');
+        return { ok: true, caller: deviceCaller };
+      }),
+    });
+
+    const request = new Request('http://workbench.test/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+        authorization: `${MCP_CAPABILITY_SCHEME} wbd_device-credential`,
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'nova_status', arguments: {} },
+      }),
+    });
+    const response = await endpoint.handle(request);
+    const payload = (await response.json()) as {
+      result?: { content?: Array<{ text: string }> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(seen.map((call) => call.scopes)).toEqual([[MCP_READ_SCOPE], [MCP_READ_SCOPE]]);
+    expect(JSON.parse(payload.result?.content?.[0]?.text ?? '{}')).toEqual({
+      name: 'nova_status',
+      input: {},
+    });
+  });
+
+  it('discovers author-scoped tools for a device whose grant covers only mcp:author', async () => {
+    const authorGrant = {
+      ...caller,
+      sessionId: null as string | null,
+      grant: { ...caller.grant, scopes: ['mcp:author'] as string[] },
+    };
+    const calls: Parameters<McpAuthorizationPort['authorize']>[0][] = [];
+    const endpoint = createMcpStreamableEndpoint({
+      registry: registry([
+        tool('nova_status', [MCP_READ_SCOPE]),
+        tool('nova_render', [MCP_RENDER_SCOPE]),
+        tool('nova_authoring_status', ['mcp:author']),
+      ]),
+      authorization: authorization(async (input) => {
+        calls.push(input);
+        if (!input.scopes.includes('mcp:author')) {
+          return { ok: false, failure: { code: 'SCOPE_MISMATCH', message: 'not granted' } };
+        }
+        return { ok: true, caller: authorGrant };
+      }),
+    });
+
+    const response = await endpoint.handle(
+      new Request('http://workbench.test/mcp', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json, text/event-stream',
+          authorization: `${MCP_CAPABILITY_SCHEME} wbd_author-device`,
+        },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
+      }),
+    );
+    const payload = (await response.json()) as {
+      result?: { tools?: Array<{ name: string }> };
+    };
+
+    expect(response.status).toBe(200);
+    expect(payload.result?.tools).toEqual([
+      expect.objectContaining({ name: 'nova_authoring_status' }),
+    ]);
+    // Discovery walked the finite scope union: read/render first, author last.
+    expect(calls.map((call) => call.scopes)).toEqual([['mcp:read'], ['mcp:render'], ['mcp:author']]);
   });
 });

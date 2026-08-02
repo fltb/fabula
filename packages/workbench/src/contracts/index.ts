@@ -141,5 +141,6 @@ export type { SceneAdoptionViewV1 } from './scene.js';
 export type {
   SourceStudioDocumentDescriptorV1,
   SourceStudioStateV1,
+  SourceStudioWorkingDocumentView,
   SourceStudioWorkingLayerV1,
 } from './source-studio.js';

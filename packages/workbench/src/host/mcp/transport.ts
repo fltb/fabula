@@ -32,7 +32,7 @@ export interface CreateMcpStreamableEndpointOptions {
 }
 
 interface PresentedCredentials {
-  readonly sessionId: string;
+  readonly sessionId: string | null;
   readonly token: string;
 }
 
@@ -50,7 +50,7 @@ function responseJson(status: number, value: unknown): Response {
 function extractCredentials(request: Request): PresentedCredentials | null {
   const sessionId = request.headers.get(MCP_SESSION_HEADER);
   const authorization = request.headers.get('authorization');
-  if (sessionId === null || sessionId.length === 0 || authorization === null) return null;
+  if (sessionId === '' || authorization === null) return null;
   const prefix = `${MCP_CAPABILITY_SCHEME} `;
   // The scheme is case-insensitive per RFC 9110, but the credential must be
   // exactly one non-empty token: extra tokens or other material are rejected.
@@ -107,20 +107,28 @@ async function authorizeDiscovery(
   authorization: McpAuthorizationPort,
   credentials: PresentedCredentials,
   projectId: string,
+  scopes: readonly string[],
 ): Promise<McpAuthorizationResult> {
-  const read = await authorization.authorize({
-    sessionId: credentials.sessionId,
-    token: credentials.token,
-    projectId,
-    scopes: [MCP_READ_SCOPE],
-  });
-  if (read.ok || read.failure.code !== 'SCOPE_MISMATCH') return read;
-  return authorization.authorize({
-    sessionId: credentials.sessionId,
-    token: credentials.token,
-    projectId,
-    scopes: [MCP_RENDER_SCOPE],
-  });
+  let last: McpAuthorizationResult | null = null;
+  for (const scope of scopes) {
+    const result = await authorization.authorize({
+      sessionId: credentials.sessionId,
+      token: credentials.token,
+      projectId,
+      scopes: [scope],
+    });
+    if (result.ok || result.failure.code !== 'SCOPE_MISMATCH') return result;
+    last = result;
+  }
+  return (
+    last ?? {
+      ok: false,
+      failure: {
+        code: 'SCOPE_MISMATCH',
+        message: 'The presented credential does not cover any discoverable MCP scope.',
+      },
+    }
+  );
 }
 
 function authorizationFailure(status: 401 | 403, code: string): Response {
@@ -164,7 +172,12 @@ export function createMcpStreamableEndpoint(
               projectId: registry.projectId,
               scopes: selected.requiredScopes,
             })
-          : await authorizeDiscovery(authorization, credentials, registry.projectId);
+          : await authorizeDiscovery(
+              authorization,
+              credentials,
+              registry.projectId,
+              registry.availableScopes ?? [MCP_READ_SCOPE, MCP_RENDER_SCOPE],
+            );
       if (!discovery.ok) {
         return authorizationFailure(
           mcpAuthFailureStatus(discovery.failure.code),

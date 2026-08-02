@@ -1,4 +1,11 @@
 #!/usr/bin/env node
+// Workbench development start: resolves the environment file once, in
+// priority order — WORKBENCH_ENV_FILE, then the working-directory .env, then
+// the monorepo-root .env — and keeps fixture/mock/loopback bootstrap
+// defaults whenever the corresponding variable is unset. dotenv never
+// overrides variables already present in the shell, so shell values always
+// win. The Host configuration service decides whether dotenv values only
+// pre-fill initial setup or force an import (WORKBENCH_CONFIG_IMPORT=1).
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -9,11 +16,17 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDir, '..'); // packages/workbench
 const repoRoot = resolve(root, '../..'); // monorepo root
 
+// Priority: WORKBENCH_ENV_FILE (exclusive when set) → cwd/.env → repo-root
+// .env. Later files never override earlier ones (dotenv first-wins within the
+// array) and missing files are skipped.
 const envFile = process.env.WORKBENCH_ENV_FILE;
 if (envFile) {
-  dotenv.config({ path: envFile });
+  if (existsSync(envFile)) {
+    dotenv.config({ path: envFile });
+  } else {
+    console.warn(`[workbench dev] WORKBENCH_ENV_FILE not found; ignoring: ${envFile}`);
+  }
 } else {
-  // cwd wins over the monorepo root; shell variables always win over dotenv.
   dotenv.config({ path: [resolve(process.cwd(), '.env'), resolve(repoRoot, '.env')] });
 }
 

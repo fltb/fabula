@@ -55,6 +55,7 @@ export interface AuthoringTreeSnapshot {
   readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
   readonly diagnostics: readonly {
     readonly code: string;
+    readonly severity: 'error' | 'warning' | 'info';
     readonly message: string;
     readonly logicalPath: string | null;
   }[];
@@ -91,10 +92,11 @@ export interface AuthoringSessionOperationPort {
       readonly operationId: string;
       readonly now: () => string;
     }) => Promise<unknown> | unknown;
-  }): Promise<{
-    readonly status: 'completed' | 'denied' | 'failed';
-    readonly operationId: string;
-  }>;
+  }): Promise<
+    | { readonly status: 'completed'; readonly operationId: string }
+    | { readonly status: 'denied'; readonly operationId: string; readonly reason: string }
+    | { readonly status: 'failed'; readonly operationId: string; readonly message: string }
+  >;
 }
 
 // ─── Git submit ─────────────────────────────────────────────────────────────
@@ -201,6 +203,12 @@ export interface AuthoringCoordinator {
   readonly projectId: string;
   /** Current browser-safe authoring state. */
   getState(): AuthoringStateV1;
+  /** Recent operation receipts for the browser/MCP operation center. */
+  listOperations(): readonly AuthoringOperationReceiptV1[];
+  /** One operation receipt, or null when the id is unknown. */
+  getOperation(operationId: string): AuthoringOperationReceiptV1 | null;
+  /** Whether authoring conflicts/recovery require agents to pause. */
+  isAgentPaused(): boolean;
   /**
    * Watcher notification. The event is only a hint: the coordinator debounces
    * and then performs a full {@link AuthoringTreeLoader.loadTree} re-read

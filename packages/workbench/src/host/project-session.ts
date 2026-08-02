@@ -295,7 +295,19 @@ export interface ProjectSession {
    * candidate with the current `sourceHash` is a memoized no-op.
    */
   refreshSource(candidate: ProjectSourceSnapshotV1): SourceRefreshResult;
-  /** Immutable presence update; returns the new projection. */
+  /**
+   * Host-internal serial adoption hook (NOT a public write interface).
+   *
+   * The AuthoringCoordinator's capability-gated queued operations call this
+   * to refresh the accepted projection after a Git receipt; it runs the
+   * exact same valid-compiled gate as {@link refreshSource} and adopts
+   * inside the serialized operation queue. External writers never see it:
+   * the call FAILS CLOSED with a rejected result when it is not invoked from
+   * inside an in-flight queued operation, so adoption can never race or
+   * bypass the capability gate and serialization.
+   */
+  adoptSourceWithinOperation(candidate: ProjectSourceSnapshotV1): SourceRefreshResult;
+  /** Update human/Agent presence; Host-internal transport surfaces call this. */
   updatePresence(update: PresenceUpdate): ProjectSessionProjectionV1;
   /**
    * Enqueue an operation. Operations run strictly serially in enqueue order;
@@ -431,6 +443,8 @@ class ProjectSessionImpl implements ProjectSession {
   #inFlight = 0;
   /** Advances whenever the human-presence entry set changes (see {@link updatePresence}). */
   #presenceGeneration = 0;
+  /** True while a queued operation's effect runs (the serial adoption gate). */
+  #inQueue = false;
 
   constructor(options: CreateProjectSessionOptions) {
     if (typeof options.projectId !== 'string' || options.projectId.length === 0) {
@@ -518,15 +532,37 @@ class ProjectSessionImpl implements ProjectSession {
     return this.#inFlight > 0;
   }
 
-  get presenceGeneration(): number {
-    return this.#presenceGeneration;
-  }
-
   get hasHumanPresence(): boolean {
     return this.#presence.some((entry) => HUMAN_PRESENCE_SURFACES.includes(entry.surface));
   }
 
+  get presenceGeneration(): number {
+    return this.#presenceGeneration;
+  }
   refreshSource(candidate: ProjectSourceSnapshotV1): SourceRefreshResult {
+    return this.#evaluateCandidate(candidate);
+  }
+
+  adoptSourceWithinOperation(candidate: ProjectSourceSnapshotV1): SourceRefreshResult {
+    if (!this.#inQueue) {
+      return {
+        status: 'rejected',
+        projection: this.#projection,
+        diagnostics: deepFreeze([
+          {
+            code: 'adoption.outside_queue',
+            severity: 'error' as const,
+            message: 'adoptSourceWithinOperation must run inside the session operation queue',
+            logicalPath: null,
+          },
+        ]),
+      };
+    }
+    return this.#evaluateCandidate(candidate);
+  }
+
+  /** Shared valid-compiled gate: unchanged → adopt → reject, exactly as documented. */
+  #evaluateCandidate(candidate: ProjectSourceSnapshotV1): SourceRefreshResult {
     const current = this.#accepted;
     if (current !== null && candidate.sourceHash === current.sourceHash) {
       return { status: 'unchanged', projection: this.#projection };
@@ -627,12 +663,19 @@ class ProjectSessionImpl implements ProjectSession {
       scopes: check.grant.scopes,
     };
     try {
-      const result = await operation.run(context);
+      this.#inQueue = true;
+      let result: TResult;
+      try {
+        result = await operation.run(context);
+      } finally {
+        this.#inQueue = false;
+      }
       await this.#recordAudit(
         this.#effectAudit(operation, check.grant, operationId, 'completed', at()),
       );
       return { status: 'completed', operationId, result };
     } catch (error) {
+      this.#inQueue = false;
       const errorCode = errorCodeOf(error);
       await this.#recordAudit(
         this.#effectAudit(operation, check.grant, operationId, 'failed', at(), errorCode),
@@ -694,6 +737,8 @@ export interface ProjectSessionRegistry {
   create(options: CreateProjectSessionOptions): ProjectSession;
   /** Get the existing session for a project id, or create it (singleton open). */
   open(options: CreateProjectSessionOptions): ProjectSession;
+  /** Register a preconstructed session; rejects a duplicate project id. */
+  register(session: ProjectSession): ProjectSession;
   remove(projectId: string): boolean;
   list(): readonly ProjectSession[];
 }
@@ -717,6 +762,13 @@ export function createProjectSessionRegistry(): ProjectSessionRegistry {
       return sessions.get(projectId) ?? null;
     },
     create,
+    register(session) {
+      if (sessions.has(session.projectId)) {
+        throw new ProjectSessionExistsError(session.projectId);
+      }
+      sessions.set(session.projectId, session);
+      return session;
+    },
     open(options) {
       return sessions.get(options.projectId) ?? create(options);
     },

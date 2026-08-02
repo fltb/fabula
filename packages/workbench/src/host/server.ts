@@ -15,6 +15,7 @@ import type {
   HostListenerStatus,
   HostUpgradeListener,
   MutationHttpMethod,
+  SetupHttpMethod,
 } from './listener.js';
 import { createHostListener, HostListenerStateError } from './listener.js';
 import { DEFAULT_MCP_STREAMABLE_PATH, type McpStreamableEndpoint } from './mcp/index.js';
@@ -49,8 +50,8 @@ export type {
   MutationAllowlist,
   MutationHttpMethod,
   RequestProtocol,
+  SetupHttpMethod,
 } from './listener.js';
-export { createHostListener } from './listener.js';
 export type {
   SessionAuthPortOptions,
   YjsApplyFailureReason,
@@ -149,6 +150,12 @@ export interface HostServer {
   registerPublicStaticRoute(path: string, handler: Handler<HostListenerEnv>): void;
   /** Register one explicit unauthenticated auth POST before start. */
   registerPublicAuthPostRoute(path: string, handler: Handler<HostListenerEnv>): void;
+  /** Register one pre-start-only setup wizard route under `/api/v1/setup/*`. */
+  registerSetupRoute(
+    method: SetupHttpMethod,
+    path: string,
+    handler: Handler<HostListenerEnv>,
+  ): void;
   isMutationAllowed(host: string | undefined, origin: string | undefined): boolean;
 }
 
@@ -649,6 +656,7 @@ export function createHostServer(options: HostServerOptions = {}): HostServer {
     registerPublicStaticRoute: (path, handler) => listener.registerPublicStaticRoute(path, handler),
     registerPublicAuthPostRoute: (path, handler) =>
       listener.registerPublicAuthPostRoute(path, handler),
+    registerSetupRoute: (method, path, handler) => listener.registerSetupRoute(method, path, handler),
     isMutationAllowed: (host, origin) => listener.isMutationAllowed(host, origin),
   };
 }

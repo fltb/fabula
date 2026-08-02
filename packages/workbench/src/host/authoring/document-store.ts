@@ -1,0 +1,597 @@
+/**
+ * Production Yjs working-document store: the Host-internal Agent document
+ * port, the authoring materializer, and the coordinator's window into the
+ * working layer — all over ONE shared per-key working-document core.
+ *
+ * The store NEVER holds a second CRDT or store: it binds the same
+ * {@link YjsWorkingDocumentCore} instance the browser Yjs gateway binds, so
+ * browser updates, Agent scoped updates, and MCP writes all merge onto the
+ * same canonical in-memory document per exact project/document key and the
+ * same typed persisted state (`loadWorkingDocument` / `persistYjsUpdate`).
+ *
+ * Responsibilities:
+ *
+ *  - `AgentDocumentPort`: `load`, atomic `applyScopedUpdate` (state-vector
+ *    CAS + human-presence generation guard + compensating-update derivation)
+ *    and conditional `applyCompensatingUpdate`. A moved document or a human
+ *    presence transition rejects the mutation and applies nothing; a revert
+ *    only ever compensates the exact effect's changes, never a whole-document
+ *    rewind.
+ *  - Document identity: the per-project catalog maps `documentId` →
+ *    manifest-relative `logicalPath` + kind. Catalog documents are seeded
+ *    from the accepted source snapshot (`seedFromAccepted`) and never carry
+ *    filesystem paths; the materializer resolves working-or-accepted content
+ *    for a submit/reconcile candidate.
+ *  - Working-layer identity: `workspaceDigest()` is the stable sorted
+ *    `logicalPath + state-vector-hash` summary — the submit precondition —
+ *    and `isWorkingDirty()` compares materialized working content against
+ *    the accepted snapshot. Neither ever leaks document bytes.
+ *
+ * Working documents are full-text: the working state IS the current document
+ * text (prose or raw YAML). Materialization therefore merges working content
+ * over the accepted base; a document with no working state falls back to its
+ * accepted content. Rebase after an acceptance only re-bases the accepted
+ * identity — live working content is never blanked, because it already
+ * contains everything the accepted source has.
+ */
+
+import { createHash } from 'node:crypto';
+import * as Y from 'yjs';
+import { computeSourceDocumentHash, compareLogicalPaths } from '@novalistically/core/source';
+import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
+import type { WorkingDocumentState, YjsDocumentKey } from '../../contracts/persistence.js';
+import {
+  AUTHORING_CONTRACT_VERSION,
+  type AuthoringDocumentDigestV1,
+  type AuthoringWorkspaceDigestV1,
+} from '../../contracts/authoring.js';
+import type { AuthoringDocumentMaterializer } from './types.js';
+import type { YjsWorkingDocumentCore } from '../yjs/gateway.js';
+import type { AgentAppliedTicket, AgentDocumentPort } from '../agent/edit-service.js';
+
+/** The Yjs text type every working document uses (prose and raw YAML alike). */
+export const WORKING_TEXT_TYPE = 'prose';
+
+/** Typed failure thrown by the document store; the Agent service maps `code` to a failed effect. */
+export class AuthoringDocumentStoreError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'AuthoringDocumentStoreError';
+    this.code = code;
+  }
+}
+
+/** One catalog entry: exact document identity plus the accepted content base. */
+export interface AuthoringDocumentDescriptor {
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly logicalPath: string;
+  readonly kind: 'prose' | 'raw-yaml';
+  /** True when the Host currently holds a live working document for this key. */
+  readonly available: boolean;
+}
+
+export interface AuthoringWorkingDocumentStoreOptions {
+  readonly projectId: string;
+  /** Shared per-key working-document core — the SAME instance the browser gateway binds. */
+  readonly core: YjsWorkingDocumentCore;
+  /** Timestamp source; defaults to the host clock. */
+  readonly now?: () => string;
+  /**
+   * Live human-presence generation accessor (wired from the bound
+   * ProjectSession). The atomic mutation guard rejects an effect when the
+   * generation moved between the caller's observation and the mutation.
+   */
+  readonly presenceGeneration?: () => number;
+}
+
+/** What changed in the working layer, delivered after every successful persist. */
+export interface AuthoringWorkingLayerChange {
+  readonly workingDirty: boolean;
+  readonly workspaceDigest: string | null;
+}
+
+/**
+ * The production working-document store. Implements the Phase-0
+ * {@link AuthoringDocumentMaterializer} (logical path resolution +
+ * materialization) plus the `AgentDocumentPort` and the coordinator-facing
+ * catalog/digest surface. All mutation enters the shared core's per-key
+ * serialized sections; nothing here touches files, Git, or the accepted
+ * Core projection.
+ */
+export interface AuthoringWorkingDocumentStore
+  extends AuthoringDocumentMaterializer,
+    AgentDocumentPort {
+  readonly projectId: string;
+  /** Seed/rebase the document catalog from the accepted source snapshot. */
+  seedFromAccepted(snapshot: ProjectSourceSnapshotV1 | null): void;
+  /** Register one extra working document (e.g. an adopted scene) not in the accepted snapshot. */
+  registerDocument(input: {
+    readonly documentId: string;
+    readonly logicalPath: string;
+    readonly kind: 'prose' | 'raw-yaml';
+  }): void;
+  /** All catalog descriptors in stable logical-path order. */
+  descriptors(): readonly AuthoringDocumentDescriptor[];
+  /** One catalog descriptor, or null for an unknown document id. */
+  descriptor(documentId: string): AuthoringDocumentDescriptor | null;
+  /** Accepted (base) content for a logical path, or null when not in the accepted snapshot. */
+  acceptedContent(logicalPath: string): string | null;
+  /** Accepted (base) content hash for a logical path, or null when not in the accepted snapshot. */
+  acceptedContentHash(logicalPath: string): string | null;
+  /** Logical paths of the accepted snapshot, stable order. */
+  acceptedPaths(): readonly string[];
+  /** True when the working layer differs from the accepted source. */
+  isWorkingDirty(): Promise<boolean>;
+  /** Current stable workspace digest, or null when the catalog is empty. */
+  workspaceDigest(): Promise<AuthoringWorkspaceDigestV1 | null>;
+  /** Materialize one document's working text; null when it has no working state. */
+  materializeDocument(documentId: string): Promise<string | null>;
+  /** Per-document working content hash; null when the document has no working state. */
+  workingContentHash(documentId: string): Promise<string | null>;
+  /**
+   * Working-layer change notification. Fires after every successful persist
+   * (browser or Agent origin) with the recomputed dirty flag and digest.
+   */
+  onChange(listener: (change: AuthoringWorkingLayerChange) => void): () => void;
+  /** Drop in-memory state (the shared core's docs stay for the gateway). */
+  dispose(): void;
+}
+
+function sha256Hex(buffer: Uint8Array): string {
+  return createHash('sha256').update(buffer).digest('hex');
+}
+
+function vectorsEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index += 1) {
+    if (a[index] !== b[index]) return false;
+  }
+  return true;
+}
+
+/** SHA-256 of the empty Yjs state vector — the digest identity of a clean document. */
+const EMPTY_STATE_VECTOR_HASH = sha256Hex(Y.encodeStateVector(new Y.Doc()));
+
+function textOf(update: Uint8Array): string {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, update);
+  return doc.getText(WORKING_TEXT_TYPE).toString();
+}
+
+/**
+ * Compensating (inverse) update: a full-state update of a scratch document
+ * whose text has been restored to the pre-effect content. Applying it to a
+ * live document whose state equals the post-effect state (the revert CAS
+ * guarantees this) yields exactly the pre-effect content; Yjs skips ops the
+ * live document already covers. The restore is a common-prefix/suffix
+ * replacement — correct, never a whole-document rewind, and never a minimal
+ * diff.
+ */
+function computeCompensatingUpdate(before: Y.Doc, after: Y.Doc): Uint8Array {
+  const beforeText = before.getText(WORKING_TEXT_TYPE).toString();
+  const afterText = after.getText(WORKING_TEXT_TYPE).toString();
+  if (beforeText === afterText) return new Uint8Array();
+  const scratch = new Y.Doc();
+  Y.applyUpdate(scratch, Y.encodeStateAsUpdate(after));
+  const text = scratch.getText(WORKING_TEXT_TYPE);
+  const current = text.toString();
+  let prefix = 0;
+  const maxPrefix = Math.min(current.length, beforeText.length);
+  while (prefix < maxPrefix && current[prefix] === beforeText[prefix]) prefix += 1;
+  let suffix = 0;
+  const maxSuffix = Math.min(current.length, beforeText.length) - prefix;
+  while (
+    suffix < maxSuffix &&
+    current[current.length - 1 - suffix] === beforeText[beforeText.length - 1 - suffix]
+  ) {
+    suffix += 1;
+  }
+  const currentMiddle = current.length - prefix - suffix;
+  const targetMiddle = beforeText.length - prefix - suffix;
+  if (currentMiddle > 0) text.delete(prefix, currentMiddle);
+  if (targetMiddle > 0) text.insert(prefix, beforeText.slice(prefix, prefix + targetMiddle));
+  return Y.encodeStateAsUpdate(scratch);
+}
+
+interface CatalogEntry {
+  readonly documentId: string;
+  readonly logicalPath: string;
+  readonly kind: 'prose' | 'raw-yaml';
+}
+
+function createAuthoringDocumentStoreImpl(
+  options: AuthoringWorkingDocumentStoreOptions,
+): AuthoringWorkingDocumentStore {
+  const { projectId, core } = options;
+  if (typeof projectId !== 'string' || projectId.length === 0) {
+    throw new TypeError('AuthoringWorkingDocumentStore requires a non-empty projectId');
+  }
+  if (core === null || typeof core !== 'object' || typeof core.enqueue !== 'function') {
+    throw new TypeError('AuthoringWorkingDocumentStore requires an injected YjsWorkingDocumentCore');
+  }
+  const now = options.now ?? (() => new Date().toISOString());
+  const presenceGeneration = options.presenceGeneration ?? (() => 0);
+  /** documentId → catalog entry (accepted seed + registered extras). */
+  const catalog = new Map<string, CatalogEntry>();
+  /** logicalPath → accepted base content hash (from the last accepted snapshot). */
+  const acceptedContentHashes = new Map<string, string>();
+  /** logicalPath → accepted base content (from the last accepted snapshot). */
+  const acceptedContents = new Map<string, string>();
+  /** documentIds with persisted or in-memory working state. */
+  const knownWorking = new Set<string>();
+  const changeListeners = new Set<(change: AuthoringWorkingLayerChange) => void>();
+  let disposed = false;
+
+  const keyOf = (documentId: string): YjsDocumentKey => ({ projectId, documentId });
+
+  /** Materialize one document's working text from its persisted state; null when clean. */
+  async function materializeWorkingText(documentId: string): Promise<string | null> {
+    const state = await core.load(keyOf(documentId));
+    if (state === null) return null;
+    return textOf(state.update);
+  }
+
+  async function workingContentHashOf(documentId: string): Promise<string | null> {
+    const text = await materializeWorkingText(documentId);
+    return text === null ? null : computeSourceDocumentHash(text);
+  }
+
+  async function recomputeAndNotify(): Promise<void> {
+    if (disposed) return;
+    const dirty = await isWorkingDirty();
+    const digest = await computeWorkspaceDigest();
+    const change: AuthoringWorkingLayerChange = {
+      workingDirty: dirty,
+      workspaceDigest: digest === null ? null : digest.digest,
+    };
+    for (const listener of changeListeners) listener(change);
+  }
+
+  async function computeWorkspaceDigest(): Promise<AuthoringWorkspaceDigestV1 | null> {
+    const entries = [...catalog.values()].sort((a, b) =>
+      compareLogicalPaths(a.logicalPath, b.logicalPath),
+    );
+    if (entries.length === 0) return null;
+    const documents: AuthoringDocumentDigestV1[] = [];
+    for (const entry of entries) {
+      const state = await core.load(keyOf(entry.documentId));
+      documents.push({
+        logicalPath: entry.logicalPath,
+        stateVectorHash: state === null ? EMPTY_STATE_VECTOR_HASH : sha256Hex(state.stateVector),
+      });
+    }
+    const digest = sha256Hex(
+      Buffer.from(
+        documents
+          .map((document) => `${document.logicalPath}\u0000${document.stateVectorHash}\u0000`)
+          .join(''),
+        'utf8',
+      ),
+    );
+    return {
+      version: AUTHORING_CONTRACT_VERSION,
+      projectId,
+      documents,
+      digest,
+      generatedAt: now(),
+    };
+  }
+
+  async function isWorkingDirty(): Promise<boolean> {
+    for (const entry of catalog.values()) {
+      const working = await materializeWorkingText(entry.documentId);
+      if (working === null) continue;
+      const accepted = acceptedContentHashes.get(entry.logicalPath);
+      if (accepted === undefined || computeSourceDocumentHash(working) !== accepted) return true;
+    }
+    return false;
+  }
+
+  // The working layer changed through ANY writer (browser gateway or this
+  // store): refresh the known-working set and notify change listeners.
+  const unsubscribePersist = core.onPersist((key) => {
+    if (key.projectId !== projectId) return;
+    knownWorking.add(key.documentId);
+    void recomputeAndNotify();
+  });
+
+  return {
+    projectId,
+
+    // ── Catalog / accepted base ──────────────────────────────────────────
+
+    seedFromAccepted(snapshot) {
+      if (snapshot === null) {
+        acceptedContentHashes.clear();
+        acceptedContents.clear();
+        return;
+      }
+      for (const document of snapshot.documents) {
+        const existing = catalog.get(document.logicalPath);
+        if (existing === undefined) {
+          catalog.set(document.logicalPath, {
+            documentId: document.logicalPath,
+            logicalPath: document.logicalPath,
+            kind: 'raw-yaml',
+          });
+        }
+        acceptedContentHashes.set(document.logicalPath, document.contentHash);
+        acceptedContents.set(document.logicalPath, document.content);
+      }
+    },
+
+    registerDocument(input) {
+      if (typeof input.documentId !== 'string' || input.documentId.length === 0) {
+        throw new TypeError('registerDocument requires a non-empty documentId');
+      }
+      if (typeof input.logicalPath !== 'string' || input.logicalPath.length === 0) {
+        throw new TypeError('registerDocument requires a non-empty logicalPath');
+      }
+      catalog.set(input.documentId, {
+        documentId: input.documentId,
+        logicalPath: input.logicalPath,
+        kind: input.kind,
+      });
+    },
+
+    descriptors() {
+      return [...catalog.values()]
+        .sort((a, b) => compareLogicalPaths(a.logicalPath, b.logicalPath))
+        .map((entry) => ({
+          projectId,
+          documentId: entry.documentId,
+          logicalPath: entry.logicalPath,
+          kind: entry.kind,
+          available: core.peek(keyOf(entry.documentId)) !== null || knownWorking.has(entry.documentId),
+        }));
+    },
+
+    descriptor(documentId) {
+      const entry = catalog.get(documentId);
+      if (entry === undefined) return null;
+      return {
+        projectId,
+        documentId: entry.documentId,
+        logicalPath: entry.logicalPath,
+        kind: entry.kind,
+        available: core.peek(keyOf(documentId)) !== null || knownWorking.has(documentId),
+      };
+    },
+
+    acceptedContent(logicalPath) {
+      return acceptedContents.get(logicalPath) ?? null;
+    },
+
+    acceptedContentHash(logicalPath) {
+      return acceptedContentHashes.get(logicalPath) ?? null;
+    },
+
+    acceptedPaths() {
+      return [...acceptedContentHashes.keys()].sort(compareLogicalPaths);
+    },
+
+    isWorkingDirty,
+    workspaceDigest: computeWorkspaceDigest,
+    materializeDocument: materializeWorkingText,
+    workingContentHash: workingContentHashOf,
+
+    // ── Materializer (Phase-0 port) ──────────────────────────────────────
+
+    logicalPath(key) {
+      return catalog.get(key.documentId)?.logicalPath ?? null;
+    },
+
+    async materialize(input) {
+      if (input.projectId !== projectId) {
+        throw new AuthoringDocumentStoreError(
+          'document.invalid_project',
+          `Materializer project "${input.projectId}" does not match the store project "${projectId}"`,
+        );
+      }
+      const entries: { logicalPath: string; content: string }[] = [];
+      for (const requested of input.documents) {
+        const entry = catalog.get(requested.documentId);
+        if (entry === undefined || entry.logicalPath !== requested.logicalPath) {
+          throw new AuthoringDocumentStoreError(
+            'document.invalid_key',
+            `Unknown working document ${JSON.stringify(requested.documentId)} for logical path ${JSON.stringify(requested.logicalPath)}`,
+          );
+        }
+        const working = await materializeWorkingText(requested.documentId);
+        if (working !== null) {
+          entries.push({ logicalPath: requested.logicalPath, content: working });
+          continue;
+        }
+        const accepted = acceptedContents.get(requested.logicalPath);
+        if (accepted === undefined) {
+          throw new AuthoringDocumentStoreError(
+            'document.unknown_base',
+            `No accepted base for working document ${JSON.stringify(requested.documentId)}`,
+          );
+        }
+        entries.push({ logicalPath: requested.logicalPath, content: accepted });
+      }
+      entries.sort((a, b) => compareLogicalPaths(a.logicalPath, b.logicalPath));
+      return { entries };
+    },
+
+    // ── AgentDocumentPort ────────────────────────────────────────────────
+
+    async load(key) {
+      if (key.projectId !== projectId) return null;
+      const state = await core.load(key);
+      if (state !== null) knownWorking.add(key.documentId);
+      return state;
+    },
+
+    async applyScopedUpdate(input) {
+      if (input.projectId !== projectId) {
+        throw new AuthoringDocumentStoreError(
+          'document.invalid_project',
+          `Scoped update project "${input.projectId}" does not match the store project "${projectId}"`,
+        );
+      }
+      if (typeof input.documentId !== 'string' || input.documentId.length === 0) {
+        throw new AuthoringDocumentStoreError(
+          'document.invalid_key',
+          'applyScopedUpdate requires a non-empty documentId',
+        );
+      }
+      if (!(input.expectedBaseVector instanceof Uint8Array) || !(input.update instanceof Uint8Array)) {
+        throw new AuthoringDocumentStoreError(
+          'document.invalid_key',
+          'applyScopedUpdate requires expectedBaseVector and update as Uint8Array',
+        );
+      }
+      const key = keyOf(input.documentId);
+      return core.enqueue(key, async () => {
+        if (core.closed) {
+          throw new AuthoringDocumentStoreError('document.store_closed', 'Document store is closed');
+        }
+        const created = await core.getOrCreate(key);
+        if (created === null) {
+          throw new AuthoringDocumentStoreError(
+            'document.storage_unavailable',
+            'Working document storage is unavailable',
+          );
+        }
+        const liveVector = Y.encodeStateVector(created.doc);
+        if (!vectorsEqual(liveVector, input.expectedBaseVector)) {
+          return { ok: false as const, reason: 'stale-vector' as const, liveStateVector: liveVector };
+        }
+        // Atomic human-presence generation guard: a human that started or
+        // stopped editing between the caller's observation and this mutation
+        // rejects the effect without applying anything.
+        if (presenceGeneration() !== input.expectedHumanPresenceGeneration) {
+          return {
+            ok: false as const,
+            reason: 'human-presence-changed' as const,
+            liveStateVector: liveVector,
+          };
+        }
+        // Apply onto a scratch copy: a corrupt update must never advance the
+        // canonical document.
+        const merged = new Y.Doc();
+        try {
+          Y.applyUpdate(merged, Y.encodeStateAsUpdate(created.doc));
+          Y.applyUpdate(merged, input.update);
+        } catch {
+          throw new AuthoringDocumentStoreError(
+            'document.update_invalid',
+            'Scoped agent update failed Yjs validation',
+          );
+        }
+        let state: WorkingDocumentState;
+        try {
+          state = await core.persist(key, merged);
+        } catch {
+          throw new AuthoringDocumentStoreError(
+            'document.storage_unavailable',
+            'Working document persistence failed',
+          );
+        }
+        knownWorking.add(input.documentId);
+        const ticket: AgentAppliedTicket = {
+          stateVector: Y.encodeStateVector(merged),
+          update: Y.encodeStateAsUpdate(merged),
+          compensatingUpdate: computeCompensatingUpdate(created.doc, merged),
+        };
+        return { ok: true as const, ticket };
+      });
+    },
+
+    async applyCompensatingUpdate(input) {
+      if (input.projectId !== projectId) {
+        throw new AuthoringDocumentStoreError(
+          'document.invalid_project',
+          `Compensating update project "${input.projectId}" does not match the store project "${projectId}"`,
+        );
+      }
+      if (typeof input.documentId !== 'string' || input.documentId.length === 0) {
+        throw new AuthoringDocumentStoreError(
+          'document.invalid_key',
+          'applyCompensatingUpdate requires a non-empty documentId',
+        );
+      }
+      if (!(input.expectedVector instanceof Uint8Array) || !(input.compensatingUpdate instanceof Uint8Array)) {
+        throw new AuthoringDocumentStoreError(
+          'document.invalid_key',
+          'applyCompensatingUpdate requires expectedVector and compensatingUpdate as Uint8Array',
+        );
+      }
+      const key = keyOf(input.documentId);
+      return core.enqueue(key, async () => {
+        if (core.closed) {
+          throw new AuthoringDocumentStoreError('document.store_closed', 'Document store is closed');
+        }
+        const created = await core.getOrCreate(key);
+        if (created === null) {
+          throw new AuthoringDocumentStoreError(
+            'document.storage_unavailable',
+            'Working document storage is unavailable',
+          );
+        }
+        const liveVector = Y.encodeStateVector(created.doc);
+        if (!vectorsEqual(liveVector, input.expectedVector)) {
+          return { ok: false as const, reason: 'stale-vector' as const, liveStateVector: liveVector };
+        }
+        if (presenceGeneration() !== input.expectedHumanPresenceGeneration) {
+          return {
+            ok: false as const,
+            reason: 'human-presence-changed' as const,
+            liveStateVector: liveVector,
+          };
+        }
+        const merged = new Y.Doc();
+        try {
+          Y.applyUpdate(merged, Y.encodeStateAsUpdate(created.doc));
+          Y.applyUpdate(merged, input.compensatingUpdate);
+        } catch {
+          throw new AuthoringDocumentStoreError(
+            'document.update_invalid',
+            'Compensating update failed Yjs validation',
+          );
+        }
+        try {
+          await core.persist(key, merged);
+        } catch {
+          throw new AuthoringDocumentStoreError(
+            'document.storage_unavailable',
+            'Working document persistence failed',
+          );
+        }
+        return { ok: true as const, stateVector: Y.encodeStateVector(merged) };
+      });
+    },
+
+    // ── Change notification / lifecycle ───────────────────────────────────
+
+    onChange(listener) {
+      changeListeners.add(listener);
+      return () => {
+        changeListeners.delete(listener);
+      };
+    },
+
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      unsubscribePersist();
+      changeListeners.clear();
+      knownWorking.clear();
+    },
+  };
+}
+
+/**
+ * Create one production working-document store over a shared per-key core.
+ * Fails closed on malformed options: a store without the shared core or a
+ * project identity could never merge with the browser gateway.
+ */
+export function createAuthoringDocumentStore(
+  options: AuthoringWorkingDocumentStoreOptions,
+): AuthoringWorkingDocumentStore {
+  return createAuthoringDocumentStoreImpl(options);
+}

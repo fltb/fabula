@@ -524,16 +524,27 @@ function inputFor(name: string): McpJsonSchemaV1 {
       ['sceneSelector'],
     );
   }
-  if (name.startsWith('nova_revision_')) {
+  if (name === 'nova_revision_list') {
+    return schema({ version: authoringVersion, cursor }, ['version']);
+  }
+  if (name === 'nova_revision_get') {
+    return schema({ version: authoringVersion, revisionId: string }, ['version', 'revisionId']);
+  }
+  if (name === 'nova_revision_diff') {
+    return schema(
+      { version: authoringVersion, fromRevisionId: string, toRevisionId: string },
+      ['version', 'fromRevisionId', 'toRevisionId'],
+    );
+  }
+  if (name === 'nova_revision_restore') {
     return schema(
       {
         version: authoringVersion,
         revisionId: string,
-        fromRevisionId: string,
-        toRevisionId: string,
-        expectedAcceptedRevisionId: string,
+        expectedAcceptedRevisionId: nullableString,
+        expectedSourceHash: nullableString,
       },
-      ['version'],
+      ['version', 'revisionId'],
     );
   }
   if (name === 'nova_reference_list') {
@@ -731,6 +742,9 @@ const project = [
   'nova_render',
   'nova_revise',
   'nova_render_tree',
+  'nova_revision_list',
+  'nova_revision_get',
+  'nova_revision_diff',
 ].map((name) =>
   descriptor(
     name,
@@ -751,9 +765,6 @@ const authoringNames = [
   'nova_operation_get',
   'nova_authoring_conflict_read',
   'nova_conflict_resolve',
-  'nova_revision_list',
-  'nova_revision_get',
-  'nova_revision_diff',
   'nova_revision_restore',
 ] as const;
 const submitToolNames = new Set<string>([

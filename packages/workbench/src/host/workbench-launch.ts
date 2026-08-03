@@ -966,6 +966,7 @@ export async function startWorkbench(
               if (projectAuthoring === undefined) return null;
               return createProjectSessionMcpRegistry(session, {
                 family: 'project',
+                revision: projectAuthoring.revision,
                 coordinator: createMcpAuthoringCoordinatorPort({
                   session,
                   coordinator: projectAuthoring.coordinator,

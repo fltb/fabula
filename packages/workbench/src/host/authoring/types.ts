@@ -22,7 +22,7 @@ import type {
   AuthoringOperationReceiptV1,
   AuthoringStateV1,
 } from '../../contracts/authoring.js';
-import type { GitSubmissionReceipt, YjsDocumentKey } from '../../contracts/persistence.js';
+import type { YjsDocumentKey } from '../../contracts/persistence.js';
 
 // ─── Document materialization ───────────────────────────────────────────────
 
@@ -99,46 +99,244 @@ export interface AuthoringSessionOperationPort {
   >;
 }
 
-// ─── Git submit ─────────────────────────────────────────────────────────────
+// ─── Native revision operation phases ───────────────────────────────────────
 
-/** Typed submit outcome from the Git authoring service (exact-once journal). */
-export type AuthoringGitSubmitOutcome =
-  | { readonly status: 'accepted'; readonly receipt: GitSubmissionReceipt }
-  | { readonly status: 'stale'; readonly reason: string }
-  | { readonly status: 'conflict'; readonly reason: string }
-  | { readonly status: 'invalid'; readonly code: string; readonly reason: string };
+/** Immutable operation phases for the native revision backend. */
+export type AuthoringNativeOperationPhase =
+  | 'prepared'
+  | 'accepted'
+  | 'materializing'
+  | 'materialized'
+  | 'completed'
+  | 'stale'
+  | 'conflict'
+  | 'recovery-required';
+
+// ─── Native revision backend ────────────────────────────────────────────────
+
+/** Per-path content hash entry for materialization tracking. */
+export interface AuthoringPathHashEntry {
+  readonly logicalPath: string;
+  readonly hash: string;
+}
+
+/** Result of a source view materializer inspect call. */
+export interface AuthoringSourceViewInspectResult {
+  readonly projectId: string;
+  /** SHA-256 of the entire approved tree (same as ProjectSourceSnapshotV1.sourceHash). */
+  readonly treeHash: string;
+  /** Per-path content hashes in stable logical-path order. */
+  readonly perPathHashes: readonly AuthoringPathHashEntry[];
+  /** Current materialized revision ID, or null when never materialized. */
+  readonly materializedRevisionId: string | null;
+}
+
+/** Outcome of a source view materializer materialize call. */
+export type AuthoringMaterializeOutcome =
+  | { readonly status: 'completed'; readonly treeHash: string }
+  | { readonly status: 'external-candidate'; readonly reason: string }
+  | { readonly status: 'recovery-required'; readonly reason: string };
 
 /**
- * The only Git authoring acceptance path (an adapter over
- * `GitAuthoringSubmitService`). The adapter owns manifest validation, the
- * isolated index, the fixed-ref CAS and the durable journal; the coordinator
- * supplies the byte-exact candidate and the expected identities.
+ * Backend-neutral seam for the native revision backend.
+ * Replaces the previous Git-only AuthoringGitSubmitPort.
+ * Every submit/restore is a CAS operation keyed by expected revision identity
+ * and source hash; duplicate operationId calls replay the recorded result.
  */
-export interface AuthoringGitSubmitPort {
+export interface AuthoringRevisionPort {
+  /** Load the current accepted revision metadata, or null if none exists. */
+  loadAccepted(projectId: string): Promise<{
+    readonly revisionId: string;
+    readonly sourceHash: string;
+    readonly bundleHash: string;
+  } | null>;
+
+  /**
+   * Submit a new candidate revision. The operation is exact-once: a duplicate
+   * operationId replays the recorded result without re-executing.
+   */
   submit(input: {
     readonly projectId: string;
-    /** Stable submit id used as the exact-once journal key. */
-    readonly submitId: string;
-    /** Fixed Git ref head the submit must still build on (CAS old value). */
-    readonly expectedGitHead: string;
-    /** Stable workspace digest the submit must still confirm against. */
-    readonly expectedWorkspaceDigest: string;
-    /** Manifest-approved candidate entries (UTF-8 source text). */
-    readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
-    /** Non-secret content hash of the candidate source. */
-    readonly sourceHash: string;
-    readonly message: string;
-    /** Authenticated actor; recorded in commit trailers, never caller-chosen. */
+    readonly candidate: {
+      readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
+      readonly sourceHash: string;
+      readonly bundleHash: string;
+    };
+    readonly expectedRevisionId: string | null;
+    readonly expectedSourceHash: string | null;
+    readonly operationId: string;
     readonly actorId: string;
-    /** Optional capability under which the actor submitted. */
-    readonly capabilityId?: string;
-    /**
-     * Host-internal flag for accepting a filesystem candidate. The Git
-     * adapter requires the complete candidate to byte-match the dirty primary
-     * before it may replace the ordinary primary-clean preflight.
-     */
-    readonly externalReconciliation?: boolean;
-  }): Promise<AuthoringGitSubmitOutcome>;
+  }): Promise<
+    | { readonly status: 'accepted'; readonly revisionId: string; readonly receiptHash: string }
+    | { readonly status: 'stale'; readonly reason: string }
+    | { readonly status: 'conflict'; readonly reason: string }
+    | { readonly status: 'invalid'; readonly code: string; readonly reason: string }
+  >;
+
+  /**
+   * Run recovery after a crash or restart. Returns the recovery outcome:
+   * completed when the accepted head is intact, recovery-required when
+   * external edits or corruption are detected, stale when a moved head was
+   * found, or initial-load when no native head exists and the portable YAML
+   * tree was loaded as a baseline.
+   */
+  recover(projectId: string): Promise<
+    | { readonly status: 'completed'; readonly revisionId: string; readonly materializedRevisionId: string }
+    | { readonly status: 'recovery-required'; readonly reason: string }
+    | { readonly status: 'stale'; readonly reason: string }
+    | { readonly status: 'initial-load'; readonly revisionId: string; readonly sourceHash: string }
+  >;
+
+  /** List revisions, oldest first. Cursor is opaque. */
+  list(
+    projectId: string,
+    cursor?: string,
+  ): Promise<{
+    readonly revisions: readonly {
+      readonly revisionId: string;
+      readonly sourceHash: string;
+      readonly bundleHash: string;
+      readonly createdAt: string;
+      readonly acceptedAt: string;
+    }[];
+    readonly nextCursor?: string;
+  }>;
+
+  /** Read one project-scoped immutable revision metadata record. */
+  get(
+    projectId: string,
+    revisionId: string,
+  ): Promise<{
+    readonly revisionId: string;
+    readonly sourceHash: string;
+    readonly bundleHash: string;
+    readonly createdAt: string;
+    readonly acceptedAt: string;
+  } | null>;
+
+  /** Compute the diff between two revisions. */
+  diff(
+    projectId: string,
+    fromRevisionId: string,
+    toRevisionId: string,
+  ): Promise<{
+    readonly changes: readonly {
+      readonly logicalPath: string;
+      readonly beforeHash: string | null;
+      readonly afterHash: string | null;
+    }[];
+  }>;
+
+  /**
+   * Restore a previous revision as a new child revision. Never moves the
+   * native head backward; always creates a forward revision whose content
+   * matches the restored revision.
+   */
+  restore(input: {
+    readonly projectId: string;
+    readonly revisionId: string;
+    readonly expectedAcceptedRevisionId: string | null;
+    readonly expectedSourceHash: string | null;
+    readonly operationId: string;
+    readonly actorId: string;
+  }): Promise<
+    | { readonly status: 'accepted'; readonly revisionId: string; readonly receiptHash: string }
+    | { readonly status: 'stale'; readonly reason: string }
+    | { readonly status: 'conflict'; readonly reason: string }
+    | { readonly status: 'invalid'; readonly code: string; readonly reason: string }
+  >;
+}
+
+/**
+ * Immutable content-addressed bundle store for native revision source
+ * revisions. Stored under
+ * `$WORKBENCH_HOME/projects/<projectId>/source-revisions/objects/sha256/<first-two>/<full-hash>`.
+ * Bundles are write-once, read-many. Storage is file-based and survives
+ * restarts.
+ */
+export interface AuthoringRevisionContentStore {
+  /** Persist an immutable bundle. Idempotent for the same bundleHash. */
+  put(input: {
+    readonly projectId: string;
+    readonly bundleHash: string;
+    readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
+  }): Promise<void>;
+
+  /** Retrieve a previously stored bundle, or null when missing. */
+  get(input: {
+    readonly projectId: string;
+    readonly bundleHash: string;
+  }): Promise<{
+    readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
+  } | null>;
+}
+
+/**
+ * Approved-tree materializer with expected-revision CAS.
+ *
+ * Materializes a complete bundle of approved source entries to the project
+ * filesystem tree under the shared root directory lock. Only touches paths
+ * approved by the neutral authoring manifest; explicitly deletes approved
+ * paths omitted from the target bundle; preserves references/, .nova/, .git/,
+ * output/, caches, and unrelated files. Verifies the resulting tree through
+ * FileProjectSourceLoader.
+ */
+export interface AuthoringSourceViewMaterializer {
+  /**
+   * Inspect the current approved tree and return the tree hash, per-path
+   * hashes, and current materialized revision ID. Never mutates files.
+   */
+  inspect(projectId: string): Promise<AuthoringSourceViewInspectResult>;
+
+  /**
+   * Materialize a complete bundle onto the approved project tree.
+   *
+   * Before any write, acquires the shared per-root write lock, re-inspects
+   * the tree, and verifies that expectedMaterializedRevisionId and
+   * expectedTreeHash match. On mismatch, returns external-candidate without
+   * writing. On success, writes all entries, deletes omitted approved paths,
+   * verifies through FileProjectSourceLoader, and returns completed.
+   */
+  materialize(input: {
+    readonly projectId: string;
+    readonly expectedMaterializedRevisionId: string | null;
+    readonly expectedTreeHash: string;
+    readonly bundle: {
+      readonly bundleHash: string;
+      readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
+    };
+  }): Promise<AuthoringMaterializeOutcome>;
+}
+
+/**
+ * Optional post-acceptance revision mirror adapter (e.g., Git best-effort).
+ * Its external IDs never cross the native revision CAS or Core source
+ * contracts. The mirror is best-effort: failure records an audit event but
+ * does not roll back the native revision.
+ */
+export interface AuthoringRevisionMirror {
+  /** Probe whether the mirror backend is available for this project. */
+  probe(projectId: string): Promise<{ readonly available: boolean; readonly reason?: string }>;
+
+  /** Export an accepted revision to the mirror. */
+  export(input: {
+    readonly projectId: string;
+    readonly revisionId: string;
+    readonly bundle: {
+      readonly bundleHash: string;
+      readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
+    };
+  }): Promise<
+    | { readonly status: 'exported'; readonly externalId: string }
+    | { readonly status: 'failed'; readonly diagnostic: string }
+  >;
+
+  /** Inspect the current mirror state for this project. */
+  inspect(projectId: string): Promise<{
+    readonly status: 'active' | 'disabled' | 'failed';
+    readonly externalHeadId?: string;
+    readonly diagnostic?: string;
+  }>;
 }
 
 // ─── Event publishing ───────────────────────────────────────────────────────
@@ -160,8 +358,8 @@ export type AuthoringCoordinatorEvent =
   | {
       readonly type: 'submit-receipt';
       readonly projectId: string;
-      readonly submitId: string;
-      readonly gitReceiptHash: string;
+      readonly operationId: string;
+      readonly receiptHash: string;
       readonly acceptedSourceHash: string;
       readonly at: string;
     };
@@ -242,7 +440,8 @@ export interface AuthoringCoordinatorOptions {
   readonly materializer: AuthoringDocumentMaterializer;
   readonly treeLoader: AuthoringTreeLoader;
   readonly sessions: AuthoringSessionOperationPort;
-  readonly git: AuthoringGitSubmitPort;
+  readonly revision: AuthoringRevisionPort;
+  readonly sourceViewMaterializer: AuthoringSourceViewMaterializer;
   readonly events: AuthoringEventPublisher;
   readonly now?: () => string;
 }

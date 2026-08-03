@@ -14,6 +14,7 @@
  * (nonsecret), never thrown.
  */
 
+import { randomUUID } from 'node:crypto';
 import {
   getProjectStatus,
   type JsonValue,
@@ -73,6 +74,7 @@ import {
   type ConfigOperationReceiptV1,
   type WorkbenchConfigurationV1,
 } from '../../contracts/configuration.js';
+import type { AuthoringRevisionPort } from '../authoring/types.js';
 import type { ProjectSession, SessionOperationResult } from '../project-session.js';
 import type { McpAuthorizedCaller } from './auth.js';
 
@@ -170,6 +172,8 @@ export interface McpToolRegistry {
 
 export interface McpAuthoringCoordinatorPort {
   readonly projectId: string;
+  /** Native revision seam; absent projects fail closed for revision tools. */
+  readonly revision?: AuthoringRevisionPort;
   getState(): AuthoringStateV1;
   getDocument(
     input: McpAuthoringDocumentGetInputV1,
@@ -231,6 +235,8 @@ export interface McpRegistryOptions {
   readonly render?: McpRenderFunction;
   /** Author/submit coordinator port; when absent the authoring tools fail closed. */
   readonly coordinator?: McpAuthoringCoordinatorPort;
+  /** Native immutable revision service for this project; absent fails closed. */
+  readonly revision?: AuthoringRevisionPort;
   /** Owner configuration port; when absent the admin tools fail closed. */
   readonly admin?: McpAdminConfigurationPort;
   /**
@@ -489,6 +495,28 @@ function authoringAsyncResult(
     return mcpToolError(outcome.failure.code, outcome.failure.message);
   }
   return mcpToolOk(outcome);
+}
+type NativeRevisionRestoreOutcome = Awaited<ReturnType<AuthoringRevisionPort['restore']>>;
+
+function nativeRevisionResult(
+  outcome: NativeRevisionRestoreOutcome,
+  version: number,
+): McpToolResult {
+  if (outcome.status === 'accepted') {
+    return mcpToolOk({
+      version,
+      status: outcome.status,
+      revisionId: outcome.revisionId,
+      receiptHash: outcome.receiptHash,
+    });
+  }
+  if (outcome.status === 'stale') {
+    return mcpToolError('WORKSPACE_STALE', outcome.reason);
+  }
+  if (outcome.status === 'conflict') {
+    return mcpToolError('CONFLICT_REQUIRES_RESOLUTION', outcome.reason);
+  }
+  return mcpToolError(outcome.code, outcome.reason);
 }
 
 function stringList(
@@ -1030,6 +1058,94 @@ export function createProjectSessionMcpRegistry(
           candidateHash: candidateHash.value,
         };
         return authoringAsyncResult(await coordinator.resolveConflict(request, caller));
+      },
+    },
+    {
+      ...toolMetadata('nova_revision_list'),
+      run: async (_caller, input) => {
+        const parsed = parseToolInput(input, ['version', 'cursor']);
+        if (!parsed.ok) return parsed.result;
+        const revision = options.revision;
+        if (revision === undefined) return NO_AUTHORING_COORDINATOR;
+        let cursor: string | undefined;
+        try {
+          cursor = optionalString(parsed.value, 'cursor');
+        } catch (error) {
+          return invalidInput(error instanceof Error ? error.message : 'cursor must be a string.');
+        }
+        return mcpToolOk({
+          version: AUTHORING_CONTRACT_VERSION,
+          ...(await revision.list(session.projectId, cursor)),
+        });
+      },
+    },
+    {
+      ...toolMetadata('nova_revision_get'),
+      run: async (_caller, input) => {
+        const parsed = parseToolInput(input, ['version', 'revisionId']);
+        if (!parsed.ok) return parsed.result;
+        const revision = options.revision;
+        if (revision === undefined) return NO_AUTHORING_COORDINATOR;
+        const revisionId = requiredString(parsed.value, 'revisionId');
+        if (!revisionId.ok) return revisionId.result;
+        const record = await revision.get(session.projectId, revisionId.value);
+        return record === null
+          ? mcpToolError('REVISION_NOT_FOUND', 'The requested native revision does not exist.')
+          : mcpToolOk({ version: AUTHORING_CONTRACT_VERSION, revision: record });
+      },
+    },
+    {
+      ...toolMetadata('nova_revision_diff'),
+      run: async (_caller, input) => {
+        const parsed = parseToolInput(input, ['version', 'fromRevisionId', 'toRevisionId']);
+        if (!parsed.ok) return parsed.result;
+        const revision = options.revision;
+        if (revision === undefined) return NO_AUTHORING_COORDINATOR;
+        const from = requiredString(parsed.value, 'fromRevisionId');
+        const to = requiredString(parsed.value, 'toRevisionId');
+        if (!from.ok) return from.result;
+        if (!to.ok) return to.result;
+        return mcpToolOk({
+          version: AUTHORING_CONTRACT_VERSION,
+          ...(await revision.diff(session.projectId, from.value, to.value)),
+        });
+      },
+    },
+    {
+      ...toolMetadata('nova_revision_restore'),
+      run: async (caller, input) => {
+        const parsed = parseToolInput(input, [
+          'version',
+          'revisionId',
+          'expectedAcceptedRevisionId',
+          'expectedSourceHash',
+        ]);
+        if (!parsed.ok) return parsed.result;
+        const revision = options.revision;
+        if (revision === undefined) return NO_AUTHORING_COORDINATOR;
+        const revisionId = requiredString(parsed.value, 'revisionId');
+        if (!revisionId.ok) return revisionId.result;
+        const expectedRevision =
+          parsed.value.expectedAcceptedRevisionId === undefined
+            ? { ok: true as const, value: null }
+            : nullableStringField(parsed.value, 'expectedAcceptedRevisionId');
+        const expectedSource =
+          parsed.value.expectedSourceHash === undefined
+            ? { ok: true as const, value: null }
+            : nullableStringField(parsed.value, 'expectedSourceHash');
+        if (!expectedRevision.ok) return expectedRevision.result;
+        if (!expectedSource.ok) return expectedSource.result;
+        return nativeRevisionResult(
+          await revision.restore({
+            projectId: session.projectId,
+            revisionId: revisionId.value,
+            expectedAcceptedRevisionId: expectedRevision.value,
+            expectedSourceHash: expectedSource.value,
+            operationId: `mcp-revision-restore-${randomUUID()}`,
+            actorId: caller.userId,
+          }),
+          AUTHORING_CONTRACT_VERSION,
+        );
       },
     },
     {

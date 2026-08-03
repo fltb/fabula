@@ -59,6 +59,7 @@ import type {
   SessionOperation,
   SessionOperationResult,
 } from '../src/host/project-session.js';
+import type { AuthoringRevisionPort } from '../src/host/authoring/types.js';
 import { ProjectAccessService } from '../src/host/project-access-service.js';
 
 import { createRealPersistence, type RealPersistenceHarness } from './helpers/real-persistence.js';
@@ -898,10 +899,13 @@ describe('createProjectSessionMcpRegistry', () => {
       'nova_source_preview',
       'nova_entity_get',
       'nova_entity_list',
+      'nova_revision_list',
+      'nova_revision_get',
+      'nova_revision_diff',
     ]);
 
     const all = registry.list([MCP_READ_SCOPE, MCP_RENDER_SCOPE]).map((tool) => tool.name);
-    expect(all).toHaveLength(8);
+    expect(all).toHaveLength(11);
     expect(all).toContain('nova_render');
 
     // A render-only grant exposes only the render tool.
@@ -1463,6 +1467,7 @@ describe('createProjectSessionMcpRegistry', () => {
       MCP_TOOL_OPERATION_GET,
       'nova_authoring_conflict_read',
       MCP_TOOL_CONFLICT_RESOLVE,
+      'nova_revision_restore',
     ]);
     expect(registry.list([MCP_ADMIN_SCOPE]).map((tool) => tool.name)).toEqual([
       MCP_TOOL_ADMIN_CONFIG_PREVIEW,
@@ -1719,6 +1724,46 @@ describe('createProjectSessionMcpRegistry', () => {
     expect(document.data).toMatchObject({
       documentId: 'doc-1',
       logicalPath: 'nova.yaml',
+    });
+  });
+
+  it('binds project-scoped native revision reads and forward restore', async () => {
+    const { session } = fakeSession({ source: FIXTURE });
+    let restoreInput: Parameters<AuthoringRevisionPort['restore']>[0] | null = null;
+    const revision: AuthoringRevisionPort = {
+      loadAccepted: async () => ({ revisionId: 'head-1', sourceHash: 'source-1', bundleHash: 'bundle-1' }),
+      submit: async () => ({ status: 'accepted', revisionId: 'child-1', receiptHash: 'receipt-child' }),
+      recover: async () => ({ status: 'completed', revisionId: 'head-1', materializedRevisionId: 'head-1' }),
+      list: async () => ({
+        revisions: [{ revisionId: 'rev-1', sourceHash: 'source-1', bundleHash: 'bundle-1', createdAt: '2026-08-02T00:00:00.000Z', acceptedAt: '2026-08-02T00:00:00.000Z' }],
+      }),
+      get: async (_projectId, revisionId) => revisionId === 'rev-1'
+        ? { revisionId, sourceHash: 'source-1', bundleHash: 'bundle-1', createdAt: '2026-08-02T00:00:00.000Z', acceptedAt: '2026-08-02T00:00:00.000Z' }
+        : null,
+      diff: async () => ({ changes: [{ logicalPath: 'nova.yaml', beforeHash: 'before', afterHash: 'after' }] }),
+      restore: async (input) => {
+        restoreInput = input;
+        return { status: 'accepted', revisionId: 'child-1', receiptHash: 'receipt-child' };
+      },
+    };
+    const registry = createProjectSessionMcpRegistry(session, { revision });
+    const reader = callerFor(grantWith({ userId: 'u1', projectId: 'p1', scopes: [MCP_READ_SCOPE] }));
+    const maintainer = callerFor(grantWith({ userId: 'u1', projectId: 'p1', scopes: [MCP_SUBMIT_SCOPE] }));
+    await expect(registry.run('nova_revision_list', reader, { version: 2 })).resolves.toMatchObject({ ok: true });
+    await expect(registry.run('nova_revision_get', reader, { version: 2, revisionId: 'rev-1' })).resolves.toMatchObject({ ok: true });
+    await expect(registry.run('nova_revision_diff', reader, { version: 2, fromRevisionId: 'rev-1', toRevisionId: 'head-1' })).resolves.toMatchObject({ ok: true });
+    await expect(registry.run('nova_revision_restore', maintainer, {
+      version: 2,
+      revisionId: 'rev-1',
+      expectedAcceptedRevisionId: 'head-1',
+      expectedSourceHash: 'source-1',
+    })).resolves.toMatchObject({ ok: true, data: { revisionId: 'child-1' } });
+    expect(restoreInput).toMatchObject({
+      projectId: 'p1',
+      revisionId: 'rev-1',
+      expectedAcceptedRevisionId: 'head-1',
+      expectedSourceHash: 'source-1',
+      actorId: 'u1',
     });
   });
 

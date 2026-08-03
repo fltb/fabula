@@ -173,13 +173,13 @@ class SupervisorControlParser {
           build === null ||
           Array.isArray(build) ||
           buildKeys !== 'buildId,packageId,protocolVersion,version' ||
-          (build as Record<string, unknown>).version !== 1 ||
-          typeof (build as Record<string, unknown>).packageId !== 'string' ||
+          (build as unknown as Record<string, unknown>).version !== 1 ||
+          typeof (build as unknown as Record<string, unknown>).packageId !== 'string' ||
           frame.build.packageId.length === 0 ||
           frame.build.packageId.length > 256 ||
-          typeof (build as Record<string, unknown>).buildId !== 'string' ||
+          typeof (build as unknown as Record<string, unknown>).buildId !== 'string' ||
           !/^[A-Za-z0-9._-]{1,128}$/.test(frame.build.buildId) ||
-          (build as Record<string, unknown>).protocolVersion !== HOST_PROTOCOL_VERSION_V1 ||
+          (build as unknown as Record<string, unknown>).protocolVersion !== HOST_PROTOCOL_VERSION_V1 ||
           typeof frame.pid !== 'number' ||
           !Number.isInteger(frame.pid) ||
           frame.pid < 1 ||

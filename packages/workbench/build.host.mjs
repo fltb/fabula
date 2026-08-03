@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, relative, resolve } from 'node:path';
+import { arch, platform } from 'node:os';
 import { build } from 'esbuild';
 
 const root = dirname(new URL(import.meta.url).pathname);
@@ -56,6 +58,51 @@ writeFileSync(
       inputs: result.metafile.inputs,
       outputs: result.metafile.outputs,
       warnings: result.warnings,
+    },
+    null,
+    2,
+  ),
+);
+const outputFiles = Object.keys(result.metafile.outputs)
+  .map((outputPath) => relative(outdir, outputPath).split('\\').join('/'))
+  .filter((outputPath) => outputPath.length > 0);
+const entryPoints = {
+  contracts: 'contracts/index.js',
+  host: 'host/main.js',
+  mcp: 'host/mcp/index.js',
+  'persistence-worker': 'persistence/worker.js',
+};
+const entryByPath = new Map(Object.entries(entryPoints).map(([name, outputPath]) => [outputPath, name]));
+const outputs = outputFiles.map((path) => {
+  const bytes = readFileSync(resolve(outdir, path));
+  return {
+    path,
+    hash: createHash('sha256').update(bytes).digest('hex'),
+    size: statSync(resolve(outdir, path)).size,
+    ...(entryByPath.has(path) ? { entryPointFor: entryByPath.get(path) } : {}),
+  };
+});
+const buildId = /^[A-Za-z0-9._-]{1,128}$/.test(process.env.WORKBENCH_BUILD_ID ?? '')
+  ? process.env.WORKBENCH_BUILD_ID
+  : 'development';
+writeFileSync(
+  resolve(outdir, 'artifact-manifest.json'),
+  JSON.stringify(
+    {
+      version: 1,
+      manifestId: randomUUID(),
+      build: {
+        version: 1,
+        packageId: '@novalistically/workbench',
+        buildId,
+        protocolVersion: 1,
+        nodeVersion: process.versions.node,
+        platform: platform(),
+        arch: arch(),
+      },
+      buildTimestamp: new Date().toISOString(),
+      outputRoot: outdir,
+      outputs,
     },
     null,
     2,

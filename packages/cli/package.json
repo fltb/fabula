@@ -16,6 +16,7 @@
   "dependencies": {
     "@novalistically/core": "*",
     "@novalistically/node-host": "*",
+    "@novalistically/workbench-protocol": "*",
     "commander": "^13.1.0"
   },
   "devDependencies": {

@@ -1,9 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { lstatSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import type { ProjectSourceSnapshotV1, SourceChangeV1 } from '@novalistically/core';
 import { computeSourceDocumentHash } from '@novalistically/core/source';
-import { isMissing, prepareDirectory, withDirectoryLock } from '../execution/types.js';
+import {
+  ProjectWriteCoordinator,
+  type ProjectAuthorityTokenV1,
+} from '../authority/project-write-coordinator.js';
+import { isMissing } from '../execution/types.js';
 import { FileProjectSourceLoaderImpl } from './file-project-source-loader.js';
 import {
   type FileProjectSourceLoader as FileProjectSourceLoaderContract,
@@ -14,6 +18,10 @@ import {
   SourcePathError,
 } from './types.js';
 
+export interface FileProjectSourceWriterAuthorityOptions {
+  readonly coordinator?: ProjectWriteCoordinator;
+  readonly authorityToken?: ProjectAuthorityTokenV1;
+}
 const approved = (path: string): boolean =>
   [
     'nova.yaml',
@@ -70,18 +78,22 @@ function validateChangeInput(change: SourceChangeV1): void {
 
 function contained(root: string, target: string): void {
   const rel = relative(root, target);
-  if (
-    rel === '..' ||
-    rel.startsWith(`..${sep}`) ||
-    (resolve(target) !== target && rel.startsWith('..'))
-  )
-    throw new SourcePathError(`Path escapes project root: ${target}`);
+  if (rel === '..' || rel.startsWith(`..${sep}`) || (rel !== '' && rel.startsWith('..'))) {
+    throw new SourcePathError(`Source path escapes project root: ${target}`);
+  }
 }
 
 export class FileProjectSourceWriter implements FileProjectSourceWriterContract {
   private readonly loader: FileProjectSourceLoaderContract;
-  constructor(options: FileProjectSourceWriterOptions = {}) {
+  private readonly coordinator?: ProjectWriteCoordinator;
+  private readonly authorityToken?: ProjectAuthorityTokenV1;
+
+  constructor(
+    options: FileProjectSourceWriterOptions & FileProjectSourceWriterAuthorityOptions = {},
+  ) {
     this.loader = options.loader ?? new FileProjectSourceLoaderImpl();
+    this.coordinator = options.coordinator;
+    this.authorityToken = options.authorityToken;
   }
 
   async apply(
@@ -89,12 +101,17 @@ export class FileProjectSourceWriter implements FileProjectSourceWriterContract 
     expectedSourceHash: string,
     changes: readonly SourceChangeV1[],
   ): Promise<ProjectSourceSnapshotV1> {
-    const root = resolve(projectRoot);
-    const lockDirectory = join(root, '.nova', 'locks');
-    await prepareDirectory(root, lockDirectory);
-    return withDirectoryLock(root, lockDirectory, () =>
-      this.applyLocked(root, expectedSourceHash, changes),
-    );
+    const root = realpathSync(resolve(projectRoot));
+    const coordinator =
+      this.coordinator ??
+      new ProjectWriteCoordinator(root, this.authorityToken?.projectId);
+    if (coordinator.projectRoot !== root) {
+      throw new SourcePathError('Source writer coordinator root does not match project root');
+    }
+    const operation = () => this.applyLocked(root, expectedSourceHash, changes);
+    return this.authorityToken
+      ? coordinator.withWorkbenchMutation(this.authorityToken, operation)
+      : coordinator.withStandaloneMutation(operation);
   }
 
   private applyLocked(

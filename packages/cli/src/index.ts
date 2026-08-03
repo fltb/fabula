@@ -11,6 +11,7 @@ import {
   showEntity,
   validateNovel,
 } from '@novalistically/core';
+import { computeSourceDocumentHash } from '@novalistically/core/source';
 import {
   type EditorialRenderRequestV1,
   type EditorialRuntime,
@@ -36,6 +37,12 @@ import {
 } from '@novalistically/node-host';
 import { Command } from 'commander';
 import { resolveRoute } from './route.ts';
+import {
+  createWorkbenchClient,
+  resolveWorkbenchMode,
+  WorkbenchClientError,
+  type WorkbenchClient,
+} from './workbench-client.ts';
 
 const sourceLoader = new FileProjectSourceLoader();
 const sourceWriter = new FileProjectSourceWriter({ loader: sourceLoader });
@@ -51,6 +58,20 @@ function ensureProjectDir(): string {
 function loadSource(projectDir: string) {
   return sourceLoader.load(projectDir);
 }
+function remoteClient(): WorkbenchClient | null {
+  const options = program.opts<{
+    readonly mode?: string;
+    readonly project?: string;
+    readonly host?: string;
+  }>();
+  const mode = resolveWorkbenchMode({
+    mode: options.mode,
+    projectId: options.project,
+    host: options.host,
+  });
+  return mode.mode === 'standalone' ? null : createWorkbenchClient(mode);
+}
+
 
 function parseBranchPath(raw: string | undefined): BranchPath | undefined {
   if (raw === undefined) return undefined;
@@ -101,13 +122,34 @@ function printResult(value: unknown, json: boolean): void {
 }
 
 const program = new Command();
-program.name('nova').description('Novalistically Node Host CLI').version('0.1.0');
+program
+  .name('nova')
+  .description('Novalistically Node Host CLI')
+  .version('0.1.0')
+  .option('--mode <mode>', 'standalone or via-workbench')
+  .option('--project <projectId>', 'Workbench project ID for via-workbench mode')
+  .option('--host <url>', 'Workbench Host base URL');
 
 program
   .command('validate')
   .option('--event <eventId>')
   .option('--json')
   .action(async (options: { event?: string; json?: boolean }) => {
+    const client = remoteClient();
+    if (client !== null) {
+      const result = (await client.validate()) as Record<string, unknown>;
+      if (options.event !== undefined && result.results !== undefined && typeof result.results === 'object' && result.results !== null) {
+        const event = (result.results as Record<string, unknown>)[options.event];
+        if (event === undefined) throw new Error(`Event "${options.event}" not found.`);
+        printResult(event, options.json ?? false);
+        if (typeof event === 'object' && event !== null && 'passed' in event && event.passed === false)
+          process.exitCode = 1;
+        return;
+      }
+      printResult(result, options.json ?? false);
+      if (result.passed === false) process.exitCode = 1;
+      return;
+    }
     const result = await validateNovel(loadSource(ensureProjectDir()));
     if (options.event) {
       const event = result.results.get(options.event);
@@ -126,21 +168,34 @@ program
 program
   .command('status')
   .option('--json')
-  .action((options: { json?: boolean }) => {
-    printResult(getProjectStatus(loadSource(ensureProjectDir())), options.json ?? false);
+  .action(async (options: { json?: boolean }) => {
+    const client = remoteClient();
+    printResult(
+      client === null ? getProjectStatus(loadSource(ensureProjectDir())) : await client.status(),
+      options.json ?? false,
+    );
   });
 
 const entity = program.command('entity').description('Inspect compiled entities');
 entity
   .command('list [kind]')
   .option('--json')
-  .action((kind: string | undefined, options: { json?: boolean }) => {
-    printResult(listEntities(loadSource(ensureProjectDir()), kind), options.json ?? false);
+  .action(async (kind: string | undefined, options: { json?: boolean }) => {
+    const client = remoteClient();
+    printResult(
+      client === null ? listEntities(loadSource(ensureProjectDir()), kind) : await client.entityList(kind === undefined ? {} : { kind }),
+      options.json ?? false,
+    );
   });
 entity
   .command('show <id>')
   .option('--json')
-  .action((id: string, options: { json?: boolean }) => {
+  .action(async (id: string, options: { json?: boolean }) => {
+    const client = remoteClient();
+    if (client !== null) {
+      printResult(await client.entityGet({ entityId: id }), options.json ?? false);
+      return;
+    }
     const value = showEntity(loadSource(ensureProjectDir()), id);
     if (!value) throw new Error(`Entity "${id}" not found.`);
     printResult(value, options.json ?? false);
@@ -149,7 +204,12 @@ entity
 program
   .command('graph')
   .option('--format <format>', 'dot or mermaid', 'dot')
-  .action((options: { format: 'dot' | 'mermaid' }) => {
+  .action(async (options: { format: 'dot' | 'mermaid' }) => {
+    const client = remoteClient();
+    if (client !== null) {
+      printResult(await client.graph(), true);
+      return;
+    }
     const graph = inspectProjectGraph(loadSource(ensureProjectDir()));
     const events = graph.events.map((event) => ({ eventId: event.id, label: event.title }));
     console.log(
@@ -158,11 +218,15 @@ program
         : exportDAGtoDOT(graph.adjacency, events),
     );
   });
-
 const source = program
   .command('source')
   .description('Inspect and apply host-CAS authoring source changes');
-source.command('list').action(() => {
+source.command('list').action(async () => {
+  const client = remoteClient();
+  if (client !== null) {
+    printResult(await client.sourceList(), true);
+    return;
+  }
   const snapshot = loadSource(ensureProjectDir());
   printResult(
     snapshot.documents.map((document) => ({
@@ -173,41 +237,110 @@ source.command('list').action(() => {
     true,
   );
 });
-source.command('show <logicalPath>').action((logicalPath: string) => {
+source.command('show <logicalPath>').action(async (logicalPath: string) => {
+  const client = remoteClient();
+  if (client !== null) {
+    const document = (await client.sourceGet({ logicalPath })) as { readonly content?: unknown };
+    if (typeof document.content !== 'string') throw new Error(`Source document "${logicalPath}" not found.`);
+    process.stdout.write(document.content);
+    return;
+  }
   const document = loadSource(ensureProjectDir()).documents.find(
     (candidate) => candidate.logicalPath === logicalPath,
   );
   if (!document) throw new Error(`Source document "${logicalPath}" not found.`);
   process.stdout.write(document.content);
 });
+
 source
   .command('preview <logicalPath> <contentFile>')
-  .action((logicalPath: string, contentFile: string) => {
+  .action(async (logicalPath: string, contentFile: string) => {
+    const client = remoteClient();
+    const afterContent = readFileSync(contentFile, 'utf8');
+    if (client !== null) {
+      const previous = (await client.sourceGet({ logicalPath })) as {
+        readonly content?: unknown;
+        readonly contentHash?: unknown;
+      };
+      const change = {
+        logicalPath,
+        beforeContent: typeof previous.content === 'string' ? previous.content : null,
+        beforeHash: typeof previous.contentHash === 'string' ? previous.contentHash : null,
+        afterContent,
+        afterHash: computeSourceDocumentHash(afterContent),
+      };
+      printResult(await client.sourcePreview({ changes: [change] }), true);
+      return;
+    }
     const snapshot = loadSource(ensureProjectDir());
     const previous = snapshot.documents.find((document) => document.logicalPath === logicalPath);
-    const afterContent = readFileSync(contentFile, 'utf8');
     const change: SourceChangeV1 = {
       logicalPath,
       beforeContent: previous?.content ?? null,
       beforeHash: previous?.contentHash ?? null,
       afterContent,
-      afterHash: null,
+      afterHash: computeSourceDocumentHash(afterContent),
     };
     printResult(previewSourceChange(snapshot, [change]), true);
   });
+
 source
   .command('apply <logicalPath> <contentFile>')
   .action(async (logicalPath: string, contentFile: string) => {
+    const client = remoteClient();
+    const afterContent = readFileSync(contentFile, 'utf8');
+    if (client !== null) {
+      const listing = (await client.authoringDocumentList()) as {
+        readonly documents?: readonly { readonly documentId: string; readonly logicalPath: string }[];
+        readonly workspaceDigest?: unknown;
+      };
+      const descriptor = listing.documents?.find((document) => document.logicalPath === logicalPath);
+      if (descriptor === undefined || typeof listing.workspaceDigest !== 'string') {
+        throw new WorkbenchClientError({
+          status: 409,
+          code: 'AUTHORING_DOCUMENT_NOT_FOUND',
+          message: `Workbench authoring document "${logicalPath}" is unavailable.`,
+        });
+      }
+      const document = (await client.authoringDocumentRead({
+        version: 2,
+        documentId: descriptor.documentId,
+      })) as {
+        readonly stateVectorHash?: unknown;
+        readonly acceptedSourceHash?: unknown;
+      };
+      if (
+        typeof document.stateVectorHash !== 'string' ||
+        (document.acceptedSourceHash !== null && typeof document.acceptedSourceHash !== 'string')
+      ) {
+        throw new WorkbenchClientError({
+          status: 502,
+          code: 'INVALID_HOST_RESPONSE',
+          message: 'Workbench returned an invalid authoring document projection.',
+        });
+      }
+      printResult(
+        await client.authoringDocumentEdit({
+          version: 2,
+          documentId: descriptor.documentId,
+          expectedWorkspaceDigest: listing.workspaceDigest,
+          expectedAcceptedSourceHash: document.acceptedSourceHash as string | null,
+          expectedStateVectorHash: document.stateVectorHash,
+          replacementText: afterContent,
+        }),
+        true,
+      );
+      return;
+    }
     const projectDir = ensureProjectDir();
     const snapshot = loadSource(projectDir);
     const previous = snapshot.documents.find((document) => document.logicalPath === logicalPath);
-    const afterContent = readFileSync(contentFile, 'utf8');
     const change: SourceChangeV1 = {
       logicalPath,
       beforeContent: previous?.content ?? null,
       beforeHash: previous?.contentHash ?? null,
       afterContent,
-      afterHash: null,
+      afterHash: computeSourceDocumentHash(afterContent),
     };
     const analysis = previewSourceChange(snapshot, [change]);
     if (analysis.diagnostics.some((diagnostic) => diagnostic.severity === 'error')) {
@@ -233,6 +366,21 @@ async function render(
     revision?: string;
   },
 ): Promise<void> {
+  const client = remoteClient();
+  if (client !== null) {
+    if (input.dryRun) {
+      throw new WorkbenchClientError({
+        status: 400,
+        code: 'UNSUPPORTED_MODE',
+        message: '--dry-run is only available in standalone mode.',
+      });
+    }
+    const result = input.revision === undefined
+      ? await client.render({ sceneSelector: selector(input) })
+      : await client.revise({ sceneSelector: selector(input) });
+    printResult(result, input.json ?? false);
+    return;
+  }
   const branchPath = parseBranchPath(input.branchPath);
   const llm = provider(input);
   const request: EditorialRenderRequestV1 = {
@@ -267,7 +415,7 @@ program
   .option('--dry-run')
   .option('--json')
   .action(async (eventId: string | undefined, options) => {
-    await render(ensureProjectDir(), { ...options, eventId });
+    await render(remoteClient() === null ? ensureProjectDir() : process.cwd(), { ...options, eventId });
   });
 
 program
@@ -281,7 +429,11 @@ program
   .option('--discourse-branch <name>')
   .option('--json')
   .action(async (eventId: string | undefined, options) => {
-    await render(ensureProjectDir(), { ...options, eventId, revision: options.instruction });
+    await render(remoteClient() === null ? ensureProjectDir() : process.cwd(), {
+      ...options,
+      eventId,
+      revision: options.instruction,
+    });
   });
 
 program
@@ -290,6 +442,14 @@ program
   .requiredOption('--reference-dir <directory>')
   .option('--json')
   .action(async (options: { provider: string; referenceDir: string; json?: boolean }) => {
+    const client = remoteClient();
+    if (client !== null) {
+      printResult(
+        await client.renderTree({ sceneSelector: { type: 'all' } }),
+        options.json ?? false,
+      );
+      return;
+    }
     const projectDir = ensureProjectDir();
     const llm = provider(options);
     const request: RenderGameDialogueTreeRequestV1 = {
@@ -308,6 +468,13 @@ project
   .command('init <name>')
   .description('Create a minimal valid authoring topology without Git history')
   .action((name: string) => {
+    if (remoteClient() !== null) {
+      throw new WorkbenchClientError({
+        status: 400,
+        code: 'UNSUPPORTED_MODE',
+        message: 'project init is only available in standalone mode.',
+      });
+    }
     const root = path.resolve(process.cwd(), name);
     mkdirSync(path.join(root, 'definitions'), { recursive: true });
     mkdirSync(path.join(root, 'definitions', 'characters'), { recursive: true });
@@ -345,5 +512,10 @@ project
 
 program.parseAsync().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
+  process.exitCode =
+    error instanceof WorkbenchClientError
+      ? error.exitCode
+      : error instanceof TypeError
+        ? 2
+        : 1;
 });

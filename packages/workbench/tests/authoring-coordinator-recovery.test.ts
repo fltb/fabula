@@ -48,9 +48,46 @@ function assembly(
         return { status: 'completed', operationId: 'op-1' };
       },
     },
-    git: {
+    revision: {
+      async loadAccepted() {
+        return null;
+      },
       async submit() {
         throw new Error('not used by restoration');
+      },
+      async recover() {
+        throw new Error('not used by restoration');
+      },
+      async list() {
+        return { revisions: [] };
+      },
+      async get() {
+        return null;
+      },
+      async diff() {
+        return { changes: [] };
+      },
+      async restore() {
+        throw new Error('not used by restoration');
+      },
+    },
+    sourceViewMaterializer: {
+      async inspect() {
+        return {
+          projectId: 'project-a',
+          treeHash: '',
+          perPathHashes: [],
+          materializedRevisionId: null,
+        };
+      },
+      async materialize() {
+        return { status: 'recovery-required' as const, reason: 'not used by restoration' };
+      },
+    },
+    revisionContentStore: {
+      async put() {},
+      async get() {
+        return null;
       },
     },
     events: { publish() {} },

@@ -60,11 +60,12 @@ function diagnosticsFor(session: ProjectSession, candidate: ProjectSourceSnapsho
 }
 
 function hashBundle(entries: readonly { readonly logicalPath: string; readonly content: string }[]): string {
-  const canonical = [...entries]
-    .sort((a, b) => compareLogicalPaths(a.logicalPath, b.logicalPath))
-    .map((entry) => `${JSON.stringify(entry.logicalPath)}:${JSON.stringify(entry.content)}`)
-    .join(',');
-  return createHash('sha256').update(`[${canonical}]`, 'utf8').digest('hex');
+  const canonical = JSON.stringify({
+    entries: [...entries]
+      .sort((left, right) => left.logicalPath < right.logicalPath ? -1 : left.logicalPath > right.logicalPath ? 1 : 0)
+      .map((entry) => ({ logicalPath: entry.logicalPath, content: entry.content })),
+  });
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
 }
 
 function createNativeRevisionPort(options: {

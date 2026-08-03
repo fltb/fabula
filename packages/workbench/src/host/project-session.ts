@@ -38,57 +38,20 @@ import {
   buildAuditEffect,
 } from './agent/index.js';
 import type { ProjectCoreRuntime } from './core-runtime.js';
-
-// ─── Browser-safe projection DTOs (re-exported through contracts/index.ts) ──
-
-export interface ProjectSourceDiagnosticV1 {
-  readonly code: string;
-  readonly severity: 'error' | 'warning' | 'info';
-  readonly message: string;
-  readonly logicalPath: string | null;
-}
-
-export type SessionPresenceSurface = 'browser' | 'mcp' | 'yjs' | 'agent';
-
-export interface ProjectPresenceV1 {
-  readonly actorId: string;
-  readonly surface: SessionPresenceSurface;
-  readonly since: string;
-}
-
-export type PresenceUpdate =
-  | {
-      readonly kind: 'join';
-      readonly actorId: string;
-      readonly surface: SessionPresenceSurface;
-      readonly at: string;
-    }
-  | {
-      readonly kind: 'leave';
-      readonly actorId: string;
-      readonly surface: SessionPresenceSurface;
-      readonly at: string;
-    };
-
-/** Immutable browser-safe view of one project session's accepted state. */
-export interface ProjectSessionProjectionV1 {
-  readonly version: 1;
-  readonly projectId: string;
-  /** Monotonic projection revision; bumped by every accepted change. */
-  readonly revision: number;
-  /** Content identity of the accepted source; null before the first accepted load. */
-  readonly sourceHash: string | null;
-  readonly documents: number;
-  readonly events: number;
-  readonly rendered: number;
-  readonly pending: number;
-  readonly blocked: number;
-  readonly errorCount: number;
-  readonly warningCount: number;
-  readonly diagnostics: readonly ProjectSourceDiagnosticV1[];
-  readonly presence: readonly ProjectPresenceV1[];
-  readonly generatedAt: string;
-}
+import type {
+  PresenceUpdateV1,
+  ProjectPresenceV1,
+  ProjectSessionProjectionV1,
+  ProjectSourceDiagnosticV1,
+  SessionPresenceSurfaceV1,
+} from '@novalistically/workbench-protocol';
+export type {
+  PresenceUpdateV1,
+  ProjectPresenceV1,
+  ProjectSessionProjectionV1,
+  ProjectSourceDiagnosticV1,
+  SessionPresenceSurfaceV1,
+} from '@novalistically/workbench-protocol';
 
 // ─── Projection derivation ──────────────────────────────────────────────────
 
@@ -308,7 +271,7 @@ export interface ProjectSession {
    */
   adoptSourceWithinOperation(candidate: ProjectSourceSnapshotV1): SourceRefreshResult;
   /** Update human/Agent presence; Host-internal transport surfaces call this. */
-  updatePresence(update: PresenceUpdate): ProjectSessionProjectionV1;
+  updatePresence(update: PresenceUpdateV1): ProjectSessionProjectionV1;
   /**
    * Enqueue an operation. Operations run strictly serially in enqueue order;
    * the capability gate is checked inside the serialized slot, immediately
@@ -370,7 +333,7 @@ function isCompilableSource(snapshot: ProjectSourceSnapshotV1): boolean {
 }
 
 /** Presence surfaces that represent a live human, as opposed to internal Agents. */
-const HUMAN_PRESENCE_SURFACES: readonly SessionPresenceSurface[] = ['browser', 'mcp', 'yjs'];
+const HUMAN_PRESENCE_SURFACES: readonly SessionPresenceSurfaceV1[] = ['browser', 'mcp', 'yjs'];
 
 function presenceEntriesEqual(
   a: readonly ProjectPresenceV1[],
@@ -390,7 +353,7 @@ function presenceEntriesEqual(
 
 function applyPresenceUpdate(
   current: readonly ProjectPresenceV1[],
-  update: PresenceUpdate,
+  update: PresenceUpdateV1,
 ): readonly ProjectPresenceV1[] {
   if (update.kind === 'leave') {
     const next = current.filter(
@@ -592,7 +555,7 @@ class ProjectSessionImpl implements ProjectSession {
     return { status: 'accepted', projection: this.#projection };
   }
 
-  updatePresence(update: PresenceUpdate): ProjectSessionProjectionV1 {
+  updatePresence(update: PresenceUpdateV1): ProjectSessionProjectionV1 {
     const presence = applyPresenceUpdate(this.#presence, update);
     if (presence === this.#presence) {
       // Leaving an absent entry changes nothing: same projection, same revision.

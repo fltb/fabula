@@ -27,6 +27,7 @@ import type {
   PersistenceResults,
   ProjectMembershipState,
   ProjectMembershipMutationResult,
+  RevokeInviteResult,
   RevisionMirrorExportRecord,
   SourceHeadCasResult,
   SourceHeadRecord,
@@ -622,6 +623,9 @@ const KNOWN_PAYLOAD_FIELDS: Record<PersistenceOperation, readonly string[]> = {
   createInvite: ['inviteId', 'projectId', 'role', 'expiresAt', 'consumedAt'],
   consumeInvite: ['inviteId', 'consumedAt'],
   listInvites: ['projectId'],
+  revokeInvite: ['inviteId'],
+  loadConfigurationOperation: ['operationId'],
+  loadAudit: ['auditId'],
   loadProjectMembership: ['userId', 'projectId'],
   listProjectMemberships: ['projectId'],
   upsertProjectMembership: ['userId', 'projectId', 'role', 'at'],
@@ -1209,6 +1213,22 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
           .all(...(x.projectId ? [x.projectId] : [])) as Record<string, unknown>[];
         return rows.map(mapInviteRow);
       }
+      case 'revokeInvite': {
+        const x = p as PersistencePayloads['revokeInvite'];
+        if (typeof x.inviteId !== 'string' || x.inviteId.length === 0 || x.inviteId.length > 256) {
+          throw { code: 'INVALID_INPUT', message: 'inviteId must be a non-empty identifier.', retryable: false };
+        }
+        const deleted = db
+          .prepare('DELETE FROM invites WHERE invite_id=? AND consumed_at IS NULL')
+          .run(x.inviteId);
+        if (Number(deleted.changes) === 1) return { status: 'revoked' } satisfies RevokeInviteResult;
+        const row = db.prepare('SELECT consumed_at FROM invites WHERE invite_id=?').get(x.inviteId) as
+          | Record<string, unknown>
+          | undefined;
+        return row === undefined
+          ? ({ status: 'not-found' } satisfies RevokeInviteResult)
+          : ({ status: 'already-consumed' } satisfies RevokeInviteResult);
+      }
       case 'loadProjectMembership': {
         const x = p as PersistencePayloads['loadProjectMembership'];
         const userId = requireMembershipIdentifier(x.userId, 'userId');
@@ -1590,6 +1610,13 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
           .all(x.limit) as Record<string, unknown>[];
         return rows.map(mapConfigurationOperationRow);
       }
+      case 'loadConfigurationOperation': {
+        const x = p as PersistencePayloads['loadConfigurationOperation'];
+        const row = db
+          .prepare('SELECT * FROM configuration_operations WHERE operation_id=?')
+          .get(x.operationId) as Record<string, unknown> | undefined;
+        return row ? mapConfigurationOperationRow(row) : null;
+      }
       case 'saveAuthoringState': {
         const x = p as PersistencePayloads['saveAuthoringState'];
         db.prepare(
@@ -1666,6 +1693,13 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
           .prepare(`SELECT * FROM audit_log${where} ORDER BY at DESC, audit_id LIMIT ?`)
           .all(...args, String(x.limit)) as Record<string, unknown>[];
         return rows.map(mapAuditRow);
+      }
+      case 'loadAudit': {
+        const x = p as PersistencePayloads['loadAudit'];
+        const row = db.prepare('SELECT * FROM audit_log WHERE audit_id=?').get(x.auditId) as
+          | Record<string, unknown>
+          | undefined;
+        return row ? mapAuditRow(row) : null;
       }
       case 'createDeviceVerifier': {
         const x = p as PersistencePayloads['createDeviceVerifier'];

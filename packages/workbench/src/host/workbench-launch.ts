@@ -44,10 +44,16 @@ import {
 } from '../contracts/browser-api.js';
 import type {
   ConfigChangeRequestV1,
+  ConfigOperationReceiptV1,
   WorkbenchConfigurationV1,
+  WorkbenchDeviceSafeViewV1,
+  WorkbenchInviteSafeViewV1,
   WorkbenchProjectConfigurationV1,
+  WorkbenchProjectSafeViewV1,
 } from '../contracts/configuration.js';
 import type {
+  InviteState,
+  McpDeviceVerifierReadState,
   PersistenceOperation,
   PersistencePayloads,
   PersistenceResults,
@@ -84,7 +90,10 @@ import {
 } from './browser-authoring-api.js';
 import { createBrowserPrincipalResolver } from './browser-read-api.js';
 import { ConfigurationFileStore } from './configuration-file-store.js';
-import { ConfigurationChangeService } from './configuration-service.js';
+import {
+  ConfigurationChangeService,
+  type ActiveConfiguration,
+} from './configuration-service.js';
 import { createProjectCoreRuntime } from './core-runtime.js';
 import {
   createDeviceVerifierPersistence,
@@ -98,19 +107,23 @@ import {
   createMcpDevicePairingService,
   createMcpStreamableEndpoint,
   createProjectSessionMcpRegistry,
-  type McpAdminConfigurationPort,
+  type McpAdminPort,
+  type McpDevicePairingService,
 } from './mcp/index.js';
 import {
   createProjectAccessService,
   type ProjectAccessRequiredRole,
 } from './project-access-service.js';
-import { createProjectMembershipService } from './project-membership-service.js';
+import {
+  createProjectMembershipService,
+  type DurableProjectMembershipService,
+} from './project-membership-service.js';
 import { createProjectSession, createProjectSessionRegistry } from './project-session.js';
 import { HostProviderError, HostProviderFactory } from './provider-factory.js';
 import { createProviderCredentialStore } from './providers/index.js';
 import { createHostServer, type HostServer, type HostServerOptions } from './server.js';
-import { createSetupApi, createSetupStatusBuilder } from './setup-api.js';
-import { createWorkbenchRuntime } from './workbench-runtime.js';
+import { createSetupApi, createSetupStatusBuilder, type SetupStatusBuilder } from './setup-api.js';
+import { createWorkbenchRuntime, type WorkbenchRuntime } from './workbench-runtime.js';
 import {
   createSessionAuthPort,
   createYjsPersistencePort,
@@ -623,12 +636,13 @@ export async function startWorkbench(
           ]);
     const memberships = createProjectMembershipService(persistence.client);
     const projectAccess = createProjectAccessService({
-      projects: () =>
-        configuredProjects.map((project) => ({
+      projects: async () => {
+        const active = await configurationService.readActive();
+        return (active?.configuration.projects ?? configuredProjects).map((project) => ({
           projectId: project.projectId,
           displayName: project.displayName,
-        })),
-      memberships,
+        }));
+      },
       ownerUserId: async () => (await persistence.client.request('loadOwner', undefined))?.userId ?? null,
       isOpen: (projectId) => sessions.get(projectId) !== null,
     });
@@ -886,48 +900,28 @@ export async function startWorkbench(
     const devices = createMcpDevicePairingService({
       persistence: createDeviceVerifierPersistence(persistence.client),
     });
+    const setupStatus = createSetupStatusBuilder({
+      configuration: configurationService,
+      credentials: credentialStore,
+      auth,
+      listenerMode: () => hostServer.status().mode,
+      runtime: runtimeLifecycle,
+    });
     const defaultProjectId =
       activeConfiguration?.defaultProjectId ?? configuredProjects[0]?.projectId ?? null;
     const defaultSession = defaultProjectId === null ? null : sessions.get(defaultProjectId);
     const adminSession =
       defaultSession ??
       (configuredProjects.length > 0 ? sessions.get(configuredProjects[0].projectId) : null);
-    const adminConfiguration: McpAdminConfigurationPort = {
-      async preview(request: ConfigChangeRequestV1) {
-        const active = await configurationService.readActive();
-        if (active?.revision !== request.expectedRevision) {
-          return {
-            status: 'stale' as const,
-            activeRevision: active?.revision ?? null,
-            candidateRevision: null,
-            changedFields: ['configuration'],
-            diagnostics: [{ code: 'CONFIG_STALE', message: 'Configuration revision changed.' }],
-          };
-        }
-        const validation = await configurationService.validateCandidate(request.configuration);
-        return validation.ok
-          ? {
-              status: 'applied' as const,
-              activeRevision: active?.revision ?? null,
-              candidateRevision: validation.revision,
-              changedFields: [],
-              diagnostics: [],
-            }
-          : {
-              status: 'invalid' as const,
-              activeRevision: active?.revision ?? null,
-              candidateRevision: null,
-              changedFields: [],
-              diagnostics: [...validation.diagnostics],
-            };
-      },
-      apply: (request: ConfigChangeRequestV1) =>
-        configurationService.apply({
-          candidate: request.configuration,
-          expectedRevision: request.expectedRevision,
-          origin: 'mcp',
-        }),
-    };
+    const adminConfiguration: McpAdminPort = createLaunchAdminPort({
+      configuration: configurationService,
+      runtime: runtimeLifecycle,
+      memberships,
+      auth,
+      devices,
+      persistence: persistence.client,
+      status: setupStatus,
+    });
     const mcpAuthorization = createMcpAuthorizationPort({
       sessions: auth,
       access: projectAccess,
@@ -1006,13 +1000,6 @@ export async function startWorkbench(
       ...(mcp === undefined ? {} : { mcp }),
     });
     host = hostServer;
-    const setupStatus = createSetupStatusBuilder({
-      configuration: configurationService,
-      credentials: credentialStore,
-      auth,
-      listenerMode: () => hostServer.status().mode,
-      runtime: runtimeLifecycle,
-    });
     createSetupApi({
       configuration: configurationService,
       credentials: credentialStore,
@@ -1150,4 +1137,591 @@ export async function startWorkbench(
     await persistence.dispose();
     throw error;
   }
+}
+
+// ─── Owner MCP admin port (production launch wiring) ─────────────────────────
+
+/** Dependencies shared by every owner-admin MCP tool in the production launch. */
+export interface LaunchAdminPortOptions {
+  readonly configuration: ConfigurationChangeService;
+  readonly runtime: WorkbenchRuntime;
+  readonly memberships: DurableProjectMembershipService;
+  readonly auth: LocalAuthService;
+  readonly devices: McpDevicePairingService;
+  readonly persistence: PersistenceWorkerClient;
+  readonly status: SetupStatusBuilder;
+}
+
+function adminFailure(code: string, message: string): { readonly error: { readonly code: string; readonly message: string } } {
+  return { error: { code, message } };
+}
+
+/** Extract the typed `{ code, message }` from a persistence worker failure. */
+/** Read the `code` property off an unknown error shape, or undefined. */
+function errorCode(error: unknown): string | undefined {
+  if (typeof error === 'object' && error !== null && 'code' in error) {
+    const code = error.code;
+    return typeof code === 'string' ? code : undefined;
+  }
+  return undefined;
+}
+
+/** Extract the typed `{ code, message }` from a persistence worker failure. */
+function persistenceFailure(
+  error: unknown,
+  fallbackCode: string,
+  fallbackMessage: string,
+): { readonly code: string; readonly message: string } {
+  if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
+    const code = error.code;
+    const message = error.message;
+    if (typeof code === 'string' && typeof message === 'string') {
+      return { code, message };
+    }
+  }
+  return { code: fallbackCode, message: fallbackMessage };
+}
+
+function inviteSafeView(invite: InviteState): WorkbenchInviteSafeViewV1 {
+  return {
+    inviteId: invite.inviteId,
+    projectId: invite.projectId ?? null,
+    role: invite.role,
+    expiresAt: invite.expiresAt,
+    consumedAt: invite.consumedAt ?? null,
+  };
+}
+
+function deviceSafeView(device: McpDeviceVerifierReadState): WorkbenchDeviceSafeViewV1 {
+  return {
+    deviceId: device.deviceId,
+    scopes: [...device.scopes],
+    createdAt: device.createdAt,
+    expiresAt: device.expiresAt,
+    revokedAt: device.revokedAt ?? null,
+  };
+}
+
+/**
+ * Build the version-1 configuration candidate over the given project list,
+ * mirroring the owner dashboard's explicit field construction: only the
+ * fields the V1 shape accepts are carried over, never extras like
+ * `referenceLimits` or `revisionMirror`.
+ */
+function v1Candidate(
+  projects: readonly WorkbenchProjectConfigurationV1[],
+  active: ActiveConfiguration | null,
+  defaultProjectId: string | null = active?.configuration.defaultProjectId ?? null,
+): WorkbenchConfigurationV1 {
+  return {
+    version: 1,
+    projects,
+    defaultProjectId,
+    provider: active?.configuration.provider ?? null,
+    network:
+      active?.configuration.network ?? {
+        mode: 'loopback',
+        port: 8787,
+        allowedHosts: [],
+        allowedOrigins: [],
+        unixSocket: null,
+      },
+  };
+}
+
+/**
+ * Real owner-admin MCP port used by the production launch. Every registry
+ * handler method is wired to the normal configuration CAS, the runtime
+ * lifecycle, durable memberships, invites, devices, and typed persistence
+ * worker calls; none of them is a placeholder or no-op. Where a persistence
+ * operation cannot express the action, a narrow typed operation is added
+ * rather than faking success.
+ */
+export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdminPort {
+  const { configuration, runtime, memberships, auth, devices, persistence, status } = options;
+
+  /** The project list currently registered in the active configuration. */
+  async function configuredProjects(): Promise<readonly WorkbenchProjectConfigurationV1[]> {
+    const active = await configuration.readActive();
+    return (active?.configuration.projects ?? []).map((project) => ({
+      projectId: project.projectId,
+      displayName: project.displayName,
+      root: project.root,
+    }));
+  }
+
+  /** Safe project view (no root path) for a configured project, or null. */
+  async function projectView(
+    projectId: string,
+  ): Promise<WorkbenchProjectSafeViewV1 | null> {
+    const active = await configuration.readActive();
+    if (active === null) return null;
+    const project = active.configuration.projects.find((entry) => entry.projectId === projectId);
+    if (project === undefined) return null;
+    return {
+      projectId: project.projectId,
+      displayName: project.displayName,
+      validation: 'valid',
+      open: runtime.isOpen(project.projectId),
+      defaultProject: project.projectId === active.configuration.defaultProjectId,
+    };
+  }
+
+  return {
+    // ── Configuration ───────────────────────────────────────────────────────
+    preview: async (request: ConfigChangeRequestV1) => {
+      const active = await configuration.readActive();
+      if (active?.revision !== request.expectedRevision) {
+        return {
+          status: 'stale' as const,
+          activeRevision: active?.revision ?? null,
+          candidateRevision: null,
+          changedFields: ['configuration'],
+          diagnostics: [{ code: 'CONFIG_STALE', message: 'Configuration revision changed.' }],
+        };
+      }
+      const validation = await configuration.validateCandidate(request.configuration);
+      return validation.ok
+        ? {
+            status: 'applied' as const,
+            activeRevision: active?.revision ?? null,
+            candidateRevision: validation.revision,
+            changedFields: [],
+            diagnostics: [],
+          }
+        : {
+            status: 'invalid' as const,
+            activeRevision: active?.revision ?? null,
+            candidateRevision: null,
+            changedFields: [],
+            diagnostics: [...validation.diagnostics],
+          };
+    },
+    apply: (request: ConfigChangeRequestV1) =>
+      configuration.apply({
+        candidate: request.configuration,
+        expectedRevision: request.expectedRevision,
+        origin: 'mcp',
+      }),
+    get: async () => ({ version: 1, status: await status.build() }),
+
+    // ── Projects ────────────────────────────────────────────────────────────
+    projectList: async () => ({
+      version: 1,
+      projects: (await status.build()).projects,
+    }),
+    projectValidate: async (input) => {
+      const active = await configuration.readActive();
+      const candidate = v1Candidate(
+        [
+          ...(await configuredProjects()),
+          { projectId: input.projectId, displayName: input.displayName, root: input.root },
+        ],
+        active,
+      );
+      const result = await configuration.validateCandidate(candidate);
+      if (!result.ok) {
+        const first = result.diagnostics[0];
+        return {
+          version: 1,
+          projectId: input.projectId,
+          validation: 'invalid',
+          code: first?.code ?? 'CONFIG_INVALID',
+          diagnostics: [...result.diagnostics],
+        };
+      }
+      return { version: 1, projectId: input.projectId, validation: 'valid' };
+    },
+    projectCreate: async (input) => {
+      const active = await configuration.readActive();
+      const projects = await configuredProjects();
+      const candidate = v1Candidate(
+        projects.some((project) => project.projectId === input.projectId)
+          ? projects
+          : [
+              ...projects,
+              { projectId: input.projectId, displayName: input.displayName, root: input.root },
+            ],
+        active,
+      );
+      const receipt: ConfigOperationReceiptV1 = await configuration.apply({
+        candidate,
+        expectedRevision: active?.revision ?? null,
+        origin: 'mcp',
+      });
+      return { version: 1, project: await projectView(input.projectId), receipt };
+    },
+    projectUpdate: async (input) => {
+      const active = await configuration.readActive();
+      const projects = await configuredProjects();
+      if (!projects.some((project) => project.projectId === input.projectId)) {
+        return {
+          version: 1,
+          projectId: input.projectId,
+          project: null,
+          ...adminFailure(
+            'PROJECT_NOT_FOUND',
+            `Project "${input.projectId}" is not registered.`,
+          ),
+        };
+      }
+      const candidate = v1Candidate(
+        projects.map((project) =>
+          project.projectId === input.projectId
+            ? { projectId: input.projectId, displayName: input.displayName, root: input.root }
+            : project,
+        ),
+        active,
+      );
+      const receipt: ConfigOperationReceiptV1 = await configuration.apply({
+        candidate,
+        expectedRevision: active?.revision ?? null,
+        origin: 'mcp',
+      });
+      return { version: 1, project: await projectView(input.projectId), receipt };
+    },
+    projectDelete: async (input) => {
+      const active = await configuration.readActive();
+      const projects = await configuredProjects();
+      if (!projects.some((project) => project.projectId === input.projectId)) {
+        return {
+          version: 1,
+          projectId: input.projectId,
+          ...adminFailure(
+            'PROJECT_NOT_FOUND',
+            `Project "${input.projectId}" is not registered.`,
+          ),
+        };
+      }
+      let closedRuntime = false;
+      try {
+        if (runtime.isOpen(input.projectId)) {
+          closedRuntime = await runtime.close(input.projectId);
+        }
+      } catch (error) {
+        if (errorCode(error) === 'PROJECT_BUSY') {
+          return {
+            version: 1,
+            projectId: input.projectId,
+            ...adminFailure(
+              'PROJECT_BUSY',
+              `Project "${input.projectId}" is busy; close it before removal.`,
+            ),
+          };
+        }
+        throw error;
+      }
+      const restoreClosedRuntime = async (): Promise<void> => {
+        if (!closedRuntime) return;
+        const activeAfter = await configuration.readActive();
+        const projectToRestore = activeAfter?.configuration.projects.find(
+          (project) => project.projectId === input.projectId,
+        );
+        if (projectToRestore !== undefined) {
+          await runtime.open({
+            projectId: projectToRestore.projectId,
+            displayName: projectToRestore.displayName,
+            root: projectToRestore.root,
+          });
+        }
+      };
+      let receipt: ConfigOperationReceiptV1;
+      try {
+        receipt = await configuration.apply({
+          candidate: v1Candidate(
+            projects.filter((project) => project.projectId !== input.projectId),
+            active,
+            active?.configuration.defaultProjectId === input.projectId
+              ? (projects.find((project) => project.projectId !== input.projectId)?.projectId ?? null)
+              : undefined,
+          ),
+          expectedRevision: active?.revision ?? null,
+          origin: 'mcp',
+        });
+      } catch {
+        await restoreClosedRuntime().catch(() => undefined);
+        return {
+          version: 1,
+          projectId: input.projectId,
+          ...adminFailure(
+            'INTERNAL',
+            `The configuration change for project "${input.projectId}" failed; its runtime was restored.`,
+          ),
+        };
+      }
+      if (receipt.status === 'stale' || receipt.status === 'invalid') {
+        await restoreClosedRuntime().catch(() => undefined);
+      }
+      if (receipt.status === 'stale') {
+        return {
+          version: 1,
+          projectId: input.projectId,
+          ...adminFailure('CONFIG_STALE', 'The configuration changed; re-read and retry.'),
+        };
+      }
+      if (receipt.status === 'invalid') {
+        const first = receipt.diagnostics[0];
+        return {
+          version: 1,
+          projectId: input.projectId,
+          ...adminFailure(
+            first?.code ?? 'CONFIG_INVALID',
+            first?.message ?? 'The configuration change was rejected.',
+          ),
+        };
+      }
+      return { version: 1, projectId: input.projectId, removed: true, receipt };
+    },
+    projectOpen: async (input) => {
+      const active = await configuration.readActive();
+      const project = active?.configuration.projects.find(
+        (entry) => entry.projectId === input.projectId,
+      );
+      if (project === undefined) {
+        return {
+          version: 1,
+          projectId: input.projectId,
+          open: false,
+          ...adminFailure(
+            'PROJECT_NOT_FOUND',
+            `Project "${input.projectId}" is not registered.`,
+          ),
+        };
+      }
+      await runtime.open({
+        projectId: project.projectId,
+        displayName: project.displayName,
+        root: project.root,
+      });
+      return { version: 1, open: true, project: await projectView(input.projectId) };
+    },
+    projectClose: async (input) => {
+      try {
+        const closed = await runtime.close(input.projectId);
+        if (!closed) {
+          return {
+            version: 1,
+            projectId: input.projectId,
+            open: false,
+            ...adminFailure(
+              'PROJECT_NOT_FOUND',
+              `Project "${input.projectId}" is not open.`,
+            ),
+          };
+        }
+      } catch (error) {
+        if (errorCode(error) === 'PROJECT_BUSY') {
+          return {
+            version: 1,
+            projectId: input.projectId,
+            open: true,
+            ...adminFailure(
+              'PROJECT_BUSY',
+              `Project "${input.projectId}" is busy and cannot be closed.`,
+            ),
+          };
+        }
+        throw error;
+      }
+      return { version: 1, projectId: input.projectId, open: false };
+    },
+    projectRecover: async (input) => {
+      // Recover the complete runtime bundle for a configured project whose
+      // session is missing (e.g. after a rejected configuration change
+      // closed it): reopening is the runtime recovery action.
+      const active = await configuration.readActive();
+      const project = active?.configuration.projects.find(
+        (entry) => entry.projectId === input.projectId,
+      );
+      if (project === undefined) {
+        return {
+          version: 1,
+          projectId: input.projectId,
+          ...adminFailure(
+            'PROJECT_NOT_FOUND',
+            `Project "${input.projectId}" is not registered.`,
+          ),
+        };
+      }
+      if (!runtime.isOpen(input.projectId)) {
+        await runtime.open({
+          projectId: project.projectId,
+          displayName: project.displayName,
+          root: project.root,
+        });
+      }
+      return { version: 1, project: await projectView(input.projectId) };
+    },
+
+    // ── Memberships ─────────────────────────────────────────────────────────
+    membershipList: async (input) => ({
+      version: 1,
+      memberships: [
+        ...(await memberships.list(
+          input.projectId === undefined ? {} : { projectId: input.projectId },
+        )),
+      ],
+    }),
+    membershipUpsert: async (input) => {
+      if (input.role === undefined) {
+        return { version: 1, ...adminFailure('INVALID_INPUT', 'role is required.') };
+      }
+      try {
+        const membership = await memberships.upsert({
+          userId: input.userId,
+          projectId: input.projectId,
+          role: input.role,
+        });
+        return { version: 1, membership };
+      } catch (error) {
+        const failure = persistenceFailure(
+          error,
+          'MEMBERSHIP_UPDATE_FAILED',
+          'The membership could not be updated.',
+        );
+        return { version: 1, ...adminFailure(failure.code, failure.message) };
+      }
+    },
+    membershipRevoke: async (input) => {
+      try {
+        await memberships.revoke({ userId: input.userId, projectId: input.projectId });
+        return { version: 1, userId: input.userId, projectId: input.projectId, revoked: true };
+      } catch (error) {
+        const failure = persistenceFailure(
+          error,
+          'MEMBERSHIP_REVOKE_FAILED',
+          'The membership could not be revoked.',
+        );
+        return { version: 1, ...adminFailure(failure.code, failure.message) };
+      }
+    },
+
+    // ── Invites ─────────────────────────────────────────────────────────────
+    inviteList: async (input) => ({
+      version: 1,
+      invites: (
+        await persistence.request(
+          'listInvites',
+          input.projectId === undefined ? {} : { projectId: input.projectId },
+        )
+      ).map(inviteSafeView),
+    }),
+    inviteCreate: async (input) => {
+      const active = await configuration.readActive();
+      if (!active?.configuration.projects.some((project) => project.projectId === input.projectId)) {
+        return {
+          version: 1,
+          ...adminFailure('PROJECT_NOT_FOUND', 'The project is not registered.'),
+        };
+      }
+      const invite = await auth.createInvite({
+        projectId: input.projectId,
+        role: input.role,
+        ttlMs: input.ttlMs,
+      });
+      return { version: 1, invite: inviteSafeView(invite) };
+    },
+    inviteRevoke: async (input) => {
+      const result = await persistence.request('revokeInvite', { inviteId: input.inviteId });
+      if (result.status === 'revoked') {
+        return { version: 1, inviteId: input.inviteId, revoked: true };
+      }
+      return {
+        version: 1,
+        inviteId: input.inviteId,
+        revoked: false,
+        ...adminFailure(
+          result.status === 'not-found' ? 'INVITE_NOT_FOUND' : 'INVITE_ALREADY_CONSUMED',
+          result.status === 'not-found'
+            ? 'The invite does not exist.'
+            : 'The invite has already been consumed.',
+        ),
+      };
+    },
+
+    // ── Devices ─────────────────────────────────────────────────────────────
+    deviceList: async () => ({
+      version: 1,
+      devices: (await devices.listDevices()).map(deviceSafeView),
+    }),
+    devicePairBegin: async (input) => {
+      const owner = await persistence.request('loadOwner', undefined);
+      if (owner === null) {
+        return {
+          version: 1,
+          ...adminFailure('OWNER_NOT_FOUND', 'No owner account exists; devices cannot be paired.'),
+        };
+      }
+      const kind = input.kind ?? (input.projectId === undefined ? 'admin' : 'project');
+      if (kind === 'admin' && (input.projectId !== undefined || input.role !== undefined)) {
+        return {
+          version: 1,
+          ...adminFailure('INVALID_INPUT', 'admin device pairing cannot carry projectId or role.'),
+        };
+      }
+      if (kind === 'project') {
+        if (input.projectId === undefined) {
+          return {
+            version: 1,
+            ...adminFailure('INVALID_INPUT', 'project device pairing requires projectId.'),
+          };
+        }
+        const pairing = await devices.createPairing({
+          ownerUserId: owner.userId,
+          kind: 'project',
+          projectId: input.projectId,
+          ...(input.role === undefined ? {} : { role: input.role }),
+          ...(input.ttlMs === undefined ? {} : { ttlMs: input.ttlMs }),
+        });
+        return { version: 1, pairingCode: pairing.pairingCode, expiresAt: pairing.expiresAt };
+      }
+      const pairing = await devices.createPairing({
+        ownerUserId: owner.userId,
+        kind: 'admin',
+        ...(input.ttlMs === undefined ? {} : { ttlMs: input.ttlMs }),
+      });
+      return { version: 1, pairingCode: pairing.pairingCode, expiresAt: pairing.expiresAt };
+    },
+    deviceRevoke: async (input) => {
+      await devices.revoke(input.deviceId);
+      return { version: 1, deviceId: input.deviceId, revoked: true };
+    },
+
+    // ── Operations ──────────────────────────────────────────────────────────
+    operationList: async (input) => {
+      const limit = input.limit ?? 50;
+      const [configurationOperations, audit] = await Promise.all([
+        persistence.request('listConfigurationOperations', { limit }),
+        persistence.request('listAudit', { limit }),
+      ]);
+      return { version: 1, configuration: configurationOperations, audit };
+    },
+    operationGet: async (input) => {
+      const handle = input.operationHandle;
+      const [configurationOperation, audit, checkpoint, submission, revisionOperation] =
+        await Promise.all([
+          persistence.request('loadConfigurationOperation', { operationId: handle }),
+          persistence.request('loadAudit', { auditId: handle }),
+          persistence.request('loadOperationCheckpoint', { operationId: handle }),
+          persistence.request('loadGitSubmission', { submitId: handle }),
+          persistence.request('loadSourceRevisionOperation', { operationId: handle }),
+        ]);
+      if (configurationOperation !== null) {
+        return { version: 1, operationHandle: handle, kind: 'configuration', operation: configurationOperation };
+      }
+      if (audit !== null) {
+        return { version: 1, operationHandle: handle, kind: 'audit', operation: audit };
+      }
+      if (checkpoint !== null) {
+        return { version: 1, operationHandle: handle, kind: 'checkpoint', operation: checkpoint };
+      }
+      if (submission !== null) {
+        return { version: 1, operationHandle: handle, kind: 'submission', operation: submission };
+      }
+      if (revisionOperation !== null) {
+        return { version: 1, operationHandle: handle, kind: 'revision', operation: revisionOperation };
+      }
+      return { version: 1, operationHandle: handle, kind: null, operation: null };
+    },
+  };
 }

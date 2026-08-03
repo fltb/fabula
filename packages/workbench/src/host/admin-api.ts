@@ -560,7 +560,7 @@ function projectDeleteHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     if (receipt.status === 'invalid') {
       const first = receipt.diagnostics[0];
       return adminError(
-        (first?.code ?? 'CONFIG_INVALID') as WorkbenchAdminErrorCode,
+        'CONFIG_INVALID',
         first?.message ?? 'The configuration change was rejected.',
       );
     }

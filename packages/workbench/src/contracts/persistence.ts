@@ -45,6 +45,15 @@ export interface InviteState {
   expiresAt: string;
   consumedAt?: string;
 }
+/**
+ * Typed outcome of revoking an invite. The row is deleted only while it is
+ * still unconsumed; an unknown or already-consumed invite is a typed failure,
+ * never a silent success.
+ */
+export type RevokeInviteResult =
+  | { status: 'revoked' }
+  | { status: 'not-found' }
+  | { status: 'already-consumed' };
 export interface CapabilityState {
   capabilityId: string;
   userId: string;
@@ -568,6 +577,9 @@ export interface PersistencePayloads {
   createInvite: InviteState;
   consumeInvite: { inviteId: string; consumedAt: string };
   listInvites: { projectId?: string };
+  revokeInvite: { inviteId: string };
+  loadConfigurationOperation: { operationId: string };
+  loadAudit: { auditId: string };
   loadProjectMembership: LoadProjectMembershipInput;
   listProjectMemberships: ListProjectMembershipsInput;
   upsertProjectMembership: UpsertProjectMembershipInput;
@@ -641,6 +653,9 @@ export interface PersistenceResults {
   createInvite: InviteState;
   consumeInvite: ConsumeInviteResult;
   listInvites: InviteState[];
+  revokeInvite: RevokeInviteResult;
+  loadConfigurationOperation: ConfigurationOperationRecord | null;
+  loadAudit: AuditRecord | null;
   loadProjectMembership: ProjectMembershipState | null;
   listProjectMemberships: ProjectMembershipState[];
   upsertProjectMembership: ProjectMembershipMutationResult;

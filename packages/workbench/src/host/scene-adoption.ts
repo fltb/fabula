@@ -11,7 +11,7 @@ import {
   type AuthoringEntry,
   adoptClaimFromEnvelope,
   sceneBytesMatchClaim,
-} from './git/manifest.js';
+} from './authoring/manifest.js';
 
 export type SceneAdoptionFailureCode =
   | 'REVISION_NOT_FOUND'

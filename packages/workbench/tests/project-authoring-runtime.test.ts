@@ -122,7 +122,7 @@ describe('project authoring runtime', () => {
           status: 'completed',
           acceptedSourceHash: session.source?.sourceHash,
         });
-        expect(receipt.gitCommit).toMatch(/^[0-9a-f]{40}$/);
+        expect(receipt.revisionId).toMatch(/^[0-9a-f-]{36}$/);
         expect(session.source?.sourceHash).not.toBe(source.sourceHash);
         expect(readFileSync(join(root, 'nova.yaml'), 'utf8')).toContain(
           'Runtime Reconciled Fixture',

@@ -1,23 +1,18 @@
 /**
- * AuthoringManifest — the only source of truth for what may enter an authoring
- * commit. Git staging is performed exclusively from a validated manifest; no
- * `git add -A` or any other bulk staging path ever reaches the authoring
- * repository.
- *
- * The manifest is pure: no filesystem, no git, no shell. It validates logical
- * repository paths and raw bytes. Paths use forward slashes only; any
+ * AuthoringManifest — the only source of truth for what may enter the authoring
+ * tree. The manifest is pure: no filesystem, no git, no shell. It validates
+ * logical project paths and raw bytes. Paths use forward slashes only; any
  * absolute, traversal, hidden, runtime (`.nova/**`), Git-internal (`.git/**`)
  * or otherwise non-authoring path is rejected with a structured
  * {@link ManifestValidationError}. Every entry's bytes must be valid UTF-8
- * with LF-only line endings so Git never has to guess about line endings.
+ * with LF-only line endings.
  *
  * Adopted scenes (`scenes/<eventId>.md`) are the only non-YAML authoring
- * content and the only conditional one: a scene path is allowed when it is
- * already tracked at the expected Git head, or when the request carries a
- * host-verified {@link AdoptSceneClaim} whose eventId matches the path and
- * whose prose hash matches the entry bytes exactly. A single manifest may not
- * list the same logical path twice — ambiguity is rejected, never resolved by
- * last-write-wins.
+ * content and the only conditional one: a scene path is allowed only when the
+ * request carries a host-verified {@link AdoptSceneClaim} whose eventId matches
+ * the path and whose prose hash matches the entry bytes exactly. A single
+ * manifest may not list the same logical path twice — ambiguity is rejected,
+ * never resolved by last-write-wins.
  */
 
 import { createHash } from 'node:crypto';
@@ -57,15 +52,15 @@ export type AuthoringEntryKind =
   | 'chapter-yaml'
   | 'scene-md';
 
-/** Git entry modes understood by the manifest. */
+/** Entry modes understood by the manifest. */
 export type AuthoringMode = 'blob' | 'executable' | 'symlink' | 'gitlink';
 
 export interface AuthoringEntry {
-  /** Logical, forward-slash-separated repository path. */
+  /** Logical, forward-slash-separated project path. */
   readonly path: string;
   /** Raw file bytes; must be valid UTF-8 with LF-only line endings. */
   readonly bytes: Uint8Array;
-  /** Optional git mode. Symlinks and gitlinks are always rejected. */
+  /** Optional entry mode. Symlinks and gitlinks are always rejected. */
   readonly mode?: AuthoringMode;
 }
 
@@ -347,18 +342,14 @@ export type ManifestCheck =
     };
 
 export interface AuthoringManifestOptions {
-  /** Logical paths already tracked at the expected Git head; scenes present here need no proof. */
-  readonly pathsInHead?: ReadonlySet<string>;
   /** Host-verified adopt claims keyed by event id for newly introduced scenes. */
   readonly adoptClaims?: ReadonlyMap<string, AdoptSceneClaim>;
 }
 
 export class AuthoringManifest {
-  private readonly pathsInHead: ReadonlySet<string>;
   private readonly adoptClaims: ReadonlyMap<string, AdoptSceneClaim>;
 
   constructor(options: AuthoringManifestOptions = {}) {
-    this.pathsInHead = options.pathsInHead ?? new Set();
     this.adoptClaims = options.adoptClaims ?? new Map();
   }
 
@@ -372,44 +363,38 @@ export class AuthoringManifest {
       const sceneMatch = SCENE_FILE_PATTERN.exec(entry.path);
       const eventId = sceneMatch?.[1] ?? '';
       const claim = this.adoptClaims.get(eventId);
-      const inHead = this.pathsInHead.has(entry.path);
-      if (!inHead && !claim) {
+      if (!claim) {
         return {
           ok: false,
           code: 'adopt-scene-unproven',
-          message: `Scene ${entry.path} is neither tracked at the expected head nor backed by a verified adopt claim`,
+          message: `Scene ${entry.path} is not backed by a verified adopt claim`,
           path: entry.path,
         };
       }
-      // The adopt proof exists only to introduce a scene that is not yet
-      // author-owned; a scene already tracked at the expected head is an
-      // ordinary edit and must not be gated on claim validity.
-      if (claim && !inHead) {
-        const claimResult = validateAdoptClaim(claim);
-        if (!claimResult.ok) {
-          return {
-            ok: false,
-            code: 'adopt-claim-invalid',
-            message: claimResult.message,
-            path: entry.path,
-          };
-        }
-        if (claimResult.eventId !== eventId) {
-          return {
-            ok: false,
-            code: 'adopt-claim-event-mismatch',
-            message: `Adopt claim eventId ${claimResult.eventId} does not match scene path ${entry.path}`,
-            path: entry.path,
-          };
-        }
-        if (!inHead && !sceneBytesMatchClaim(entry.bytes, claim)) {
-          return {
-            ok: false,
-            code: 'adopt-scene-content-mismatch',
-            message: `Scene ${entry.path} bytes do not match the accepted revision prose (${claim.revisionId})`,
-            path: entry.path,
-          };
-        }
+      const claimResult = validateAdoptClaim(claim);
+      if (!claimResult.ok) {
+        return {
+          ok: false,
+          code: 'adopt-claim-invalid',
+          message: claimResult.message,
+          path: entry.path,
+        };
+      }
+      if (claimResult.eventId !== eventId) {
+        return {
+          ok: false,
+          code: 'adopt-claim-event-mismatch',
+          message: `Adopt claim eventId ${claimResult.eventId} does not match scene path ${entry.path}`,
+          path: entry.path,
+        };
+      }
+      if (!sceneBytesMatchClaim(entry.bytes, claim)) {
+        return {
+          ok: false,
+          code: 'adopt-scene-content-mismatch',
+          message: `Scene ${entry.path} bytes do not match the accepted revision prose (${claim.revisionId})`,
+          path: entry.path,
+        };
       }
     }
     const bytesResult = validateAuthoringBytes(entry.bytes);

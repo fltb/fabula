@@ -39,7 +39,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync 
 import { join, resolve } from 'node:path';
 import type { GitBaselineRecord } from '../../contracts/persistence.js';
 import { type GitCapability, requireGitCapability } from './capability.js';
-import { type AuthoringEntry, AuthoringManifest } from './manifest.js';
+import { type AuthoringEntry, AuthoringManifest } from '../authoring/manifest.js';
 import {
   ControlledGitRunner,
   GitHostError,

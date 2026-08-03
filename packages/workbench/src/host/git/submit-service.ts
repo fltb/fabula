@@ -36,6 +36,8 @@
  * message, the journal or the receipt.
  */
 
+import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
+import type { AuthoringRevisionMirror } from '../authoring/types.js';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -49,7 +51,7 @@ import {
   AuthoringManifest,
   classifyAuthoringPath,
   ManifestValidationError,
-} from './manifest.js';
+} from '../authoring/manifest.js';
 import {
   normalizeSubmitJournal,
   receiptFromRecord,
@@ -239,6 +241,142 @@ function computeReceiptHash(
   return createHash('sha256')
     .update(`${submitId}\0${projectId}\0${commit}\0${sourceHash}`)
     .digest('hex');
+}
+/**
+ * Build an authoring tree entirely through a temporary index. The caller owns
+ * the acceptance/CAS policy; this helper never stages the primary index or
+ * writes the primary worktree.
+ */
+async function writeManifestTreeWithRunner(
+  runner: ControlledGitRunner,
+  projectRoot: string,
+  entries: readonly AuthoringEntry[],
+  expectedGitHead: string,
+  removeMissingBaselineEntries: boolean,
+): Promise<string> {
+  const scratch = mkdtempSync(join(runner.scratchDir, 'workbench-submit-'));
+  try {
+    const indexEnv = { GIT_INDEX_FILE: join(scratch, 'index') };
+    await runner.runStrict({ args: ['read-tree', expectedGitHead], cwd: projectRoot, env: indexEnv });
+    if (removeMissingBaselineEntries) {
+      const candidatePaths = new Set(entries.map((entry) => entry.path));
+      const baseline = await runner.runStrict({ args: ['ls-tree', '-r', '--name-only', expectedGitHead], cwd: projectRoot });
+      for (const path of baseline.stdout.split('\n').map((item) => item.trim()).filter((item) => item.length > 0)) {
+        if (!candidatePaths.has(path)) await runner.runStrict({ args: ['update-index', '--force-remove', '--', path], cwd: projectRoot, env: indexEnv });
+      }
+    }
+    for (let index = 0; index < entries.length; index += 1) {
+      const item = entries[index];
+      const blobFile = join(scratch, `blob-${index}`);
+      writeFileSync(blobFile, item.bytes);
+      const blob = (await runner.runStrict({ args: ['hash-object', '-w', '--no-filters', blobFile], cwd: projectRoot })).stdout.trim();
+      const mode = item.mode === 'executable' ? '100755' : '100644';
+      await runner.runStrict({ args: ['update-index', '--add', '--cacheinfo', `${mode},${blob},${item.path}`], cwd: projectRoot, env: indexEnv });
+    }
+    return (await runner.runStrict({ args: ['write-tree'], cwd: projectRoot, env: indexEnv })).stdout.trim();
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
+
+export interface GitRevisionMirrorOptions {
+  readonly runner: ControlledGitRunner;
+  readonly projectRoot: string;
+  readonly persistence: PersistenceWorkerClient;
+  readonly ref?: string;
+  readonly now?: () => string;
+}
+
+/** Best-effort Git mirror. It only mutates Git after its caller's native acceptance event. */
+export function createGitRevisionMirror(options: GitRevisionMirrorOptions): AuthoringRevisionMirror {
+  const root = resolve(options.projectRoot);
+  const ref = options.ref ?? WORKBENCH_AUTHORING_REF;
+  const now = options.now ?? (() => new Date().toISOString());
+  const backend = 'git-best-effort';
+
+  const checkpoint = async (input: {
+    readonly projectId: string;
+    readonly revisionId: string;
+    readonly state: 'pending' | 'exported' | 'failed';
+    readonly externalId?: string;
+    readonly diagnostic?: string;
+  }): Promise<void> => {
+    await options.persistence.request('checkpointRevisionMirrorExport', {
+      projectId: input.projectId,
+      revisionId: input.revisionId,
+      backend,
+      state: input.state,
+      ...(input.externalId === undefined ? {} : { externalId: input.externalId }),
+      ...(input.diagnostic === undefined ? {} : { diagnostic: input.diagnostic }),
+      updatedAt: now(),
+    });
+  };
+  const fail = async (projectId: string, revisionId: string, diagnostic: string): Promise<{ status: 'failed'; diagnostic: string }> => {
+    await options.persistence.request('createRevisionMirrorExport', {
+      projectId,
+      revisionId,
+      backend,
+      state: 'pending',
+      updatedAt: now(),
+    }).catch(() => undefined);
+    await checkpoint({ projectId, revisionId, state: 'failed', diagnostic }).catch(() => undefined);
+    return { status: 'failed', diagnostic };
+  };
+
+  return {
+    async probe() {
+      const result = await options.runner.run({ args: ['rev-parse', '--verify', '--quiet', ref], cwd: root });
+      return result.exitCode === 0
+        ? { available: true }
+        : { available: false, reason: 'the configured authoring ref is unavailable' };
+    },
+    async export(input) {
+      const previous = await options.persistence.request('loadRevisionMirrorExport', {
+        projectId: input.projectId,
+        revisionId: input.revisionId,
+        backend,
+      });
+      if (previous?.state === 'exported' && previous.externalId !== undefined) {
+        return { status: 'exported', externalId: previous.externalId };
+      }
+      await options.persistence.request('createRevisionMirrorExport', {
+        projectId: input.projectId,
+        revisionId: input.revisionId,
+        backend,
+        state: 'pending',
+        updatedAt: now(),
+      });
+      try {
+        const headResult = await options.runner.run({ args: ['rev-parse', '--verify', '--quiet', ref], cwd: root });
+        const expectedHead = headResult.stdout.trim();
+        if (headResult.exitCode !== 0 || expectedHead.length === 0) {
+          return fail(input.projectId, input.revisionId, 'the configured authoring ref is unavailable');
+        }
+        const manifest = new AuthoringManifest();
+        const entries: AuthoringEntry[] = input.bundle.entries.map((entry) => ({
+          path: entry.logicalPath,
+          bytes: Buffer.from(entry.content, 'utf8'),
+        }));
+        manifest.validate(entries);
+        const tree = await writeManifestTreeWithRunner(options.runner, root, entries, expectedHead, true);
+        const commit = (await options.runner.runStrict({
+          args: ['commit-tree', tree, '-p', expectedHead, '-m', `chore(workbench): mirror revision ${input.revisionId}`],
+          cwd: root,
+        })).stdout.trim();
+        const cas = await options.runner.run({ args: ['update-ref', ref, commit, expectedHead], cwd: root });
+        if (cas.exitCode !== 0) return fail(input.projectId, input.revisionId, `mirror ref CAS failed: ${cas.stderr.trim()}`);
+        await checkpoint({ projectId: input.projectId, revisionId: input.revisionId, state: 'exported', externalId: commit });
+        return { status: 'exported', externalId: commit };
+      } catch (error) {
+        return fail(input.projectId, input.revisionId, error instanceof Error ? error.message : 'Git mirror export failed');
+      }
+    },
+    async inspect() {
+      const result = await options.runner.run({ args: ['rev-parse', '--verify', '--quiet', ref], cwd: root });
+      if (result.exitCode !== 0) return { status: 'failed', diagnostic: 'the configured authoring ref is unavailable' };
+      return { status: 'active', externalHeadId: result.stdout.trim() };
+    },
+  };
 }
 
 export class GitAuthoringSubmitService {
@@ -842,39 +980,13 @@ export class GitAuthoringSubmitService {
     expectedGitHead: string,
     removeMissingBaselineEntries: boolean,
   ): Promise<string> {
-    const scratch = mkdtempSync(join(this.#runner.scratchDir, 'workbench-submit-'));
-    try {
-      const indexEnv = { GIT_INDEX_FILE: join(scratch, 'index') };
-      await this.#strict(['read-tree', expectedGitHead], indexEnv);
-      if (removeMissingBaselineEntries) {
-        const candidatePaths = new Set(entries.map((entry) => entry.path));
-        const baseline = await this.#strict(['ls-tree', '-r', '--name-only', expectedGitHead]);
-        for (const path of baseline.stdout
-          .split('\n')
-          .map((item) => item.trim())
-          .filter((item) => item.length > 0)) {
-          if (!candidatePaths.has(path)) {
-            await this.#strict(['update-index', '--force-remove', '--', path], indexEnv);
-          }
-        }
-      }
-      for (let index = 0; index < entries.length; index += 1) {
-        const item = entries[index];
-        const blobFile = join(scratch, `blob-${index}`);
-        writeFileSync(blobFile, item.bytes);
-        const blob = (
-          await this.#strict(['hash-object', '-w', '--no-filters', blobFile])
-        ).stdout.trim();
-        const mode = item.mode === 'executable' ? '100755' : '100644';
-        await this.#strict(
-          ['update-index', '--add', '--cacheinfo', `${mode},${blob},${item.path}`],
-          indexEnv,
-        );
-      }
-      return (await this.#strict(['write-tree'], indexEnv)).stdout.trim();
-    } finally {
-      rmSync(scratch, { recursive: true, force: true });
-    }
+    return writeManifestTreeWithRunner(
+      this.#runner,
+      this.#root,
+      entries,
+      expectedGitHead,
+      removeMissingBaselineEntries,
+    );
   }
 
   /** Commit the tree on the expected head with sanitized non-secret trailers. */

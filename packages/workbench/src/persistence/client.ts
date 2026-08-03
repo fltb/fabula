@@ -15,7 +15,7 @@ export class PersistenceClient {
   #sequence = 0;
   readonly #pending = new Map<
     string,
-    { resolve: (value: unknown) => void; reject: (error: unknown) => void }
+    { resolve(value: unknown): void; reject(error: unknown): void }
   >();
   constructor(port: PersistenceMessagePort) {
     this.#port = port;
@@ -35,7 +35,7 @@ export class PersistenceClient {
     signal?: AbortSignal,
   ): Promise<PersistenceResults[O]> {
     const correlationId = `p${++this.#sequence}`;
-    const { promise, resolve, reject } = Promise.withResolvers<unknown>();
+    const { promise, resolve, reject } = Promise.withResolvers<PersistenceResults[O]>();
     const abort = () => {
       if (this.#pending.delete(correlationId))
         reject({
@@ -50,13 +50,13 @@ export class PersistenceClient {
         message: 'Persistence task aborted before its next task boundary',
         retryable: false,
       });
-      return promise as Promise<PersistenceResults[O]>;
+      return promise;
     }
     this.#pending.set(correlationId, { resolve, reject });
     signal?.addEventListener('abort', abort, { once: true });
     const request: PersistenceRequest<O> = { correlationId, operation, payload };
     this.#port.postMessage(request);
-    return promise as Promise<PersistenceResults[O]>;
+    return promise;
   }
   dispose(): void {
     this.#port.removeEventListener?.('message', this.#onMessage);

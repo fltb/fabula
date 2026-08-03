@@ -1,6 +1,6 @@
 import { type FSWatcher, watch } from 'node:fs';
 import { isAbsolute } from 'node:path';
-import { classifyAuthoringPath, ENTITY_DIRECTORIES } from '../git/manifest.js';
+import { classifyAuthoringPath, ENTITY_DIRECTORIES } from './manifest.js';
 
 /** Handle for one recursive host-owned authoring-tree watcher. */
 export interface ProjectAuthoringTreeWatcher {

@@ -16,6 +16,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { MockProvider } from '@novalistically/core/testing';
 import { build } from 'esbuild';
 import { afterAll, describe, expect, it, vi } from 'vitest';
+import { MCP_ADMIN_SCOPE } from '../src/contracts/configuration.js';
 import { serializeConfigurationYaml } from '../src/host/configuration-file-store.js';
 import { HostProviderError, HostProviderFactory } from '../src/host/provider-factory.js';
 import { XdgCredentialFileStore } from '../src/host/providers/index.js';
@@ -46,7 +47,7 @@ afterAll(() => {
 let workerBundlePromise: Promise<string> | undefined;
 function workerBundle(): Promise<string> {
   workerBundlePromise ??= (async () => {
-    const bundleDir = mkdtempSync(join(packageRoot, '.nova', 'worker-bundle-'));
+    const bundleDir = mkdtempSync(join(packageRoot, 'worker-bundle-'));
     ownedDirs.push(bundleDir);
     await build({
       entryPoints: [resolve(packageRoot, 'src/persistence/worker.ts')],
@@ -70,6 +71,57 @@ function databaseReleased(databasePath: string): boolean {
   db.close();
   return true;
 }
+type AdminMcpResponse = {
+  readonly result?: {
+    readonly content?: readonly [{ readonly type: string; readonly text: string }];
+    readonly tools?: readonly { readonly name: string }[];
+    readonly isError?: boolean;
+  };
+};
+
+type AdminMcpToolResult = {
+  readonly isError: boolean;
+  readonly body: unknown;
+};
+
+async function postAdminMcp(
+  endpoint: string,
+  credential: string,
+  method: string,
+  params: Record<string, unknown>,
+): Promise<AdminMcpResponse> {
+  const response = await fetch(`${endpoint}/mcp/admin`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      accept: 'application/json, text/event-stream',
+      authorization: `Bearer ${credential}`,
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+  });
+  expect(response.status).toBe(200);
+  return (await response.json()) as AdminMcpResponse;
+}
+
+async function callAdminMcpTool(
+  endpoint: string,
+  credential: string,
+  name: string,
+  arguments_: Record<string, unknown>,
+): Promise<AdminMcpToolResult> {
+  const payload = await postAdminMcp(endpoint, credential, 'tools/call', {
+    name,
+    arguments: arguments_,
+  });
+  const content = payload.result?.content?.[0];
+  expect(content?.type).toBe('text');
+  expect(typeof content?.text).toBe('string');
+  return {
+    isError: payload.result?.isError === true,
+    body: JSON.parse(content?.text ?? ''),
+  };
+}
+
 
 /** Crash the worker deterministically: its database parent directory is missing. */
 function crashingDatabasePath(): string {
@@ -389,6 +441,21 @@ describe('startWorkbench setup runtime', () => {
       cp(fixtureRoot, rootA, { recursive: true }),
       cp(fixtureRoot, rootB, { recursive: true }),
     ]);
+    await Promise.all(
+      [
+        [rootA, 'project-a'],
+        [rootB, 'project-b'],
+      ].map(async ([root, projectId]) => {
+        const novaPath = join(root, 'nova.yaml');
+        await writeFile(
+          novaPath,
+          (await readFile(novaPath, 'utf8')).replace(
+            /^project: workbench-authoring$/m,
+            `project: ${projectId}`,
+          ),
+        );
+      }),
+    );
     const configuration = {
       version: 1 as const,
       projects: [
@@ -451,7 +518,7 @@ describe('startWorkbench setup runtime', () => {
         });
         expect(state.status).toBe(200);
         expect((await state.json()) as { phase: string }).toMatchObject({
-          phase: 'external-pending',
+          phase: 'recovery-required',
         });
       });
 
@@ -483,13 +550,245 @@ describe('startWorkbench setup runtime', () => {
         method: 'DELETE',
         headers,
       });
-      expect(removed.status).toBe(200);
+      expect(await removed.json()).toMatchObject({
+        removed: true,
+        receipt: { status: 'restart-required' },
+      });
+      expect(await readFile(join(hostHome, 'config', 'workbench.yaml'), 'utf8')).not.toContain(
+        'project-b',
+      );
       const remaining = await fetch(`${handle.endpoint}/api/v1/projects`, { headers });
       expect(
         ((await remaining.json()) as { projects: { projectId: string }[] }).projects.map(
           (project) => project.projectId,
         ),
       ).toEqual(['project-a']);
+    } finally {
+      await handle.close();
+    }
+  });
+  it('mounts the production admin MCP adapter with owner-paired authentication', async () => {
+    const hostHome = newTempDir('fabula-launch-admin-mcp-');
+    const assetsRoot = join(hostHome, 'assets');
+    await mkdir(assetsRoot, { recursive: true });
+    await writeFile(join(assetsRoot, 'index.html'), '<!doctype html><title>wb</title>');
+    const fixtureRoot = resolve(packageRoot, '..', '..', 'fixtures', 'workbench-authoring');
+    const projectRoot = join(newTempDir('fabula-launch-admin-project-'), 'launch-project');
+    await cp(fixtureRoot, projectRoot, { recursive: true });
+    const configuration = {
+      version: 1 as const,
+      projects: [
+        {
+          projectId: 'launch-project',
+          displayName: 'Launch Project',
+          root: projectRoot,
+        },
+      ],
+      defaultProjectId: 'launch-project',
+      provider: null,
+      network: {
+        mode: 'loopback' as const,
+        port: 0,
+        allowedHosts: [],
+        allowedOrigins: [],
+        unixSocket: null,
+      },
+    };
+    await mkdir(join(hostHome, 'config'), { recursive: true });
+    await writeFile(
+      join(hostHome, 'config', 'workbench.yaml'),
+      serializeConfigurationYaml(configuration),
+      'utf8',
+    );
+
+    const handle = await startWorkbench({
+      mode: 'workbench',
+      provider: 'mock',
+      allowMockProvider: true,
+      hostHome,
+      databasePath: join(hostHome, 'workbench.sqlite'),
+      assetsRoot,
+      allowBootstrap: true,
+      persistenceWorkerEntry: await workerBundle(),
+      workerTerminationTimeoutMs: 2_000,
+      host: 'loopback',
+      port: 0,
+    });
+    try {
+      expect(handle.projectId).toBe('launch-project');
+      expect(handle.host.endpoints().mcp).toEqual(
+        expect.arrayContaining([
+          { method: 'GET', path: '/mcp/admin', kind: 'mcp', guarded: true },
+          { method: 'POST', path: '/mcp/admin', kind: 'mcp', guarded: true },
+          { method: 'DELETE', path: '/mcp/admin', kind: 'mcp', guarded: true },
+        ]),
+      );
+
+      // Browser owner bootstrap is the server-derived authority used only to
+      // issue and claim an admin MCP device credential.
+      const bootstrap = await fetch(`${handle.endpoint}/api/v1/auth/bootstrap`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ password: 'a-strong-owner-password', displayName: 'Owner' }),
+      });
+      expect(bootstrap.status).toBe(200);
+      const owner = (await bootstrap.json()) as { sessionId: string; userId: string };
+      const ownerHeaders = { 'x-fabula-session': owner.sessionId };
+      const issue = await fetch(`${handle.endpoint}/api/v1/admin/mcp-devices/issue`, {
+        method: 'POST',
+        headers: { ...ownerHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({ version: 1, kind: 'admin', ttlMs: 60_000 }),
+      });
+      expect(issue.status).toBe(200);
+      const pairing = (await issue.json()) as { pairingCode: string };
+      const claim = await fetch(`${handle.endpoint}/api/v1/admin/mcp-devices`, {
+        method: 'POST',
+        headers: { ...ownerHeaders, 'content-type': 'application/json' },
+        body: JSON.stringify({
+          pairingCode: pairing.pairingCode,
+          label: 'launch-admin-mcp',
+          scopes: [MCP_ADMIN_SCOPE],
+          version: 1,
+          ttlMs: 60_000,
+        }),
+      });
+      expect(claim.status).toBe(200);
+      const claimed = (await claim.json()) as { credential: string };
+      const adminCredential = claimed.credential;
+
+      const discovery = await postAdminMcp(handle.endpoint, adminCredential, 'tools/list', {});
+      const toolNames = discovery.result?.tools?.map((tool) => tool.name) ?? [];
+      expect(toolNames).toEqual(
+        expect.arrayContaining([
+          'nova_admin_config_get',
+          'nova_admin_project_list',
+          'nova_admin_membership_upsert',
+          'nova_admin_invite_create',
+          'nova_admin_device_pair_begin',
+          'nova_admin_operation_list',
+        ]),
+      );
+      expect(toolNames.every((name) => name.startsWith('nova_admin_'))).toBe(true);
+
+      const config = await callAdminMcpTool(
+        handle.endpoint,
+        adminCredential,
+        'nova_admin_config_get',
+        {},
+      );
+      expect(config).toMatchObject({
+        isError: false,
+        body: {
+          version: 1,
+          status: expect.objectContaining({
+            configurationPresent: true,
+            ownerCreated: true,
+          }),
+        },
+      });
+
+      const projects = await callAdminMcpTool(
+        handle.endpoint,
+        adminCredential,
+        'nova_admin_project_list',
+        { version: 1 },
+      );
+      expect(projects).toMatchObject({
+        isError: false,
+        body: {
+          version: 1,
+          projects: [
+            expect.objectContaining({
+              projectId: 'launch-project',
+              displayName: 'Launch Project',
+              open: true,
+              defaultProject: true,
+            }),
+          ],
+        },
+      });
+
+      const membership = await callAdminMcpTool(
+        handle.endpoint,
+        adminCredential,
+        'nova_admin_membership_upsert',
+        {
+          version: 1,
+          userId: owner.userId,
+          projectId: 'launch-project',
+          role: 'reader',
+        },
+      );
+      expect(membership).toMatchObject({
+        isError: false,
+        body: {
+          version: 1,
+          membership: {
+            userId: owner.userId,
+            projectId: 'launch-project',
+            role: 'reader',
+          },
+        },
+      });
+
+      const invite = await callAdminMcpTool(
+        handle.endpoint,
+        adminCredential,
+        'nova_admin_invite_create',
+        { version: 1, projectId: 'launch-project', role: 'reader', ttlMs: 60_000 },
+      );
+      expect(invite).toMatchObject({
+        isError: false,
+        body: {
+          version: 1,
+          invite: {
+            projectId: 'launch-project',
+            role: 'reader',
+            consumedAt: null,
+          },
+        },
+      });
+
+      const pairingBegin = await callAdminMcpTool(
+        handle.endpoint,
+        adminCredential,
+        'nova_admin_device_pair_begin',
+        { version: 1, kind: 'admin', ttlMs: 60_000 },
+      );
+      expect(pairingBegin).toMatchObject({
+        isError: false,
+        body: { version: 1, expiresAt: expect.any(String) },
+      });
+      expect(pairingBegin.body).not.toHaveProperty('pairingCode');
+
+      const operations = await callAdminMcpTool(
+        handle.endpoint,
+        adminCredential,
+        'nova_admin_operation_list',
+        { version: 1, limit: 10 },
+      );
+      expect(operations).toMatchObject({
+        isError: false,
+        body: {
+          version: 1,
+          configuration: expect.any(Array),
+          audit: expect.any(Array),
+        },
+      });
+
+      // Invalid input is rejected by the mounted production registry before
+      // the adapter runs, with a typed nonsecret error and no side effect.
+      const invalid = await callAdminMcpTool(
+        handle.endpoint,
+        adminCredential,
+        'nova_admin_device_pair_begin',
+        { version: 1, kind: 'project' },
+      );
+      expect(invalid.isError).toBe(true);
+      expect(invalid.body).toEqual({
+        code: 'INVALID_INPUT',
+        message: 'project device pairing requires projectId.',
+      });
     } finally {
       await handle.close();
     }

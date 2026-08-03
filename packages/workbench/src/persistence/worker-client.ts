@@ -49,7 +49,7 @@ export class PersistenceWorkerClient {
         message: 'Persistence task aborted before its next task boundary',
         retryable: false,
       });
-    return new Promise((resolve, reject) => {
+    return new Promise<PersistenceResults[O]>((resolve, reject) => {
       const abort = (): void => {
         if (this.#pending.delete(correlationId))
           reject({
@@ -62,7 +62,7 @@ export class PersistenceWorkerClient {
       signal?.addEventListener('abort', abort, { once: true });
       const request: PersistenceRequest<O> = { correlationId, operation, payload };
       this.#port.postMessage(request);
-    }) as Promise<PersistenceResults[O]>;
+    });
   }
   dispose(): void {
     this.#port.removeEventListener?.('message', this.#onMessage);

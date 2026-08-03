@@ -14,6 +14,9 @@ import type {
   PasswordHashRecord,
   SessionState,
 } from '../../contracts/persistence.js';
+import { PROJECT_ACCESS_ROLES } from '../../contracts/configuration.js';
+import type { ProjectAccessRole } from '../../contracts/configuration.js';
+
 import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
 import { type BackoffPolicy, backoffDelayMs, DEFAULT_BACKOFF_POLICY } from './backoff.js';
 import {
@@ -218,13 +221,24 @@ export class LocalAuthService {
     await this.#persistence.revokeSession({ sessionId, reason });
   }
 
-  async createInvite(input: { projectId?: string; ttlMs?: number } = {}): Promise<InviteState> {
+  async createInvite(input: {
+    projectId: string;
+    role: ProjectAccessRole;
+    ttlMs?: number;
+  }): Promise<InviteState> {
+    if (
+      typeof input.projectId !== 'string' ||
+      input.projectId.length === 0 ||
+      !(PROJECT_ACCESS_ROLES as readonly string[]).includes(input.role)
+    ) {
+      throw new TypeError('An invite requires a projectId and a canonical project role.');
+    }
     const at = this.#now();
     const ttlMs = input.ttlMs ?? this.#inviteTtlMs;
     return this.#persistence.createInvite({
       inviteId: this.#newId(),
-      ...(input.projectId ? { projectId: input.projectId } : {}),
-      role: 'user',
+      projectId: input.projectId,
+      role: input.role,
       expiresAt: new Date(at + ttlMs).toISOString(),
     });
   }

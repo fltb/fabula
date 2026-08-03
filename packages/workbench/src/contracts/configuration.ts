@@ -22,6 +22,35 @@
  */
 
 import { BROWSER_API_BASE_PATH } from './browser-api.js';
+/** Canonical project membership roles. Owner is a Host identity override, not a membership role. */
+export const PROJECT_ACCESS_ROLES = ['reader', 'author', 'maintainer'] as const;
+export type ProjectAccessRole = (typeof PROJECT_ACCESS_ROLES)[number];
+
+/** Canonical hierarchy and MCP scope grants for every project role. */
+export const PROJECT_ACCESS_ROLE_GRANTS = {
+  reader: { rank: 1, scopes: ['mcp:read', 'mcp:render'] },
+  author: { rank: 2, scopes: ['mcp:read', 'mcp:render', 'mcp:author'] },
+  maintainer: {
+    rank: 3,
+    scopes: ['mcp:read', 'mcp:render', 'mcp:author', 'mcp:submit'],
+  },
+} as const satisfies Readonly<
+  Record<ProjectAccessRole, { readonly rank: number; readonly scopes: readonly string[] }>
+>;
+
+/** Canonical Host configuration additions introduced by the V2 source contract. */
+export type {
+  WorkbenchConfigurationInput,
+  WorkbenchConfigurationV2,
+  WorkbenchProjectConfigurationV2,
+  WorkbenchReferenceLimitsV2,
+  WorkbenchRevisionMirrorConfigurationV2,
+} from '@novalistically/workbench-protocol';
+export {
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+  normalizeWorkbenchConfiguration,
+  WORKBENCH_CONFIGURATION_VERSION_V2,
+} from '@novalistically/workbench-protocol';
 
 /** Version of the Workbench configuration contract. */
 export const WORKBENCH_CONFIGURATION_VERSION = 1 as const;
@@ -169,7 +198,7 @@ export interface WorkbenchNetworkReadViewV1 {
   readonly allowedOrigins: readonly string[];
   /** True when the listener is configured to bind a unix socket (path never leaves the Host). */
   readonly unixSocket: boolean;
-  /** True while the running listener already honors this policy. */
+  /** True while the running listener already honors the configured policy. */
   readonly listenerActive: boolean;
   /** True when applying this policy requires a controlled restart. */
   readonly restartRequired: boolean;
@@ -182,7 +211,6 @@ export interface WorkbenchNetworkReadViewV1 {
  */
 export interface WorkbenchDeviceSafeViewV1 {
   readonly deviceId: string;
-  readonly label: string;
   readonly scopes: readonly string[];
   readonly createdAt: string;
   readonly expiresAt: string;
@@ -193,7 +221,7 @@ export interface WorkbenchDeviceSafeViewV1 {
 export interface WorkbenchInviteSafeViewV1 {
   readonly inviteId: string;
   readonly projectId: string | null;
-  readonly role: string;
+  readonly role: ProjectAccessRole;
   readonly expiresAt: string;
   readonly consumedAt: string | null;
 }
@@ -259,8 +287,8 @@ export interface AdminNetworkUpdateRequestV1 {
 /** Invite creation from the dashboard. No redemption secret crosses this boundary. */
 export interface AdminInviteCreateRequestV1 {
   readonly version: WorkbenchConfigurationVersion;
-  readonly projectId?: string;
-  readonly role: string;
+  readonly projectId: string;
+  readonly role: ProjectAccessRole;
   readonly ttlMs: number;
 }
 

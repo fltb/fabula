@@ -110,7 +110,10 @@ class BrowserAgentApi {
 
   constructor(readonly options: BrowserAgentApiOptions) {}
 
-  async #project(c: Context<HostListenerEnv>): Promise<
+  async #project(
+    c: Context<HostListenerEnv>,
+    requiredRole: 'reader' | 'author' = 'reader',
+  ): Promise<
     | { readonly principal: BrowserSessionPrincipalV1; readonly project: BrowserAgentProject }
     | Response
   > {
@@ -120,7 +123,13 @@ class BrowserAgentApi {
     if (typeof projectId !== 'string' || projectId.length === 0) {
       return error('PROJECT_NOT_FOUND', 404);
     }
-    if (!(await this.options.authorization.canAccessProject(authenticated.principal.userId, projectId))) {
+    if (
+      !(await this.options.authorization.canAccessProject(
+        authenticated.principal.userId,
+        projectId,
+        requiredRole,
+      ))
+    ) {
       return error('PROJECT_NOT_FOUND', 404);
     }
     const projects = await this.options.catalog.listProjects(authenticated.principal);
@@ -131,7 +140,7 @@ class BrowserAgentApi {
 
   proposal(): Handler<HostListenerEnv> {
     return async (c) => {
-      const access = await this.#project(c);
+      const access = await this.#project(c, 'reader');
       if (access instanceof Response) return access;
       const body: unknown = await c.req.raw.json().catch(() => null);
       if (!isRecord(body) || Object.keys(body).some((key) => key !== 'version' && key !== 'context' && key !== 'instruction')) {
@@ -203,7 +212,7 @@ class BrowserAgentApi {
 
   apply(): Handler<HostListenerEnv> {
     return async (c) => {
-      const access = await this.#project(c);
+      const access = await this.#project(c, 'author');
       if (access instanceof Response) return access;
       const body: unknown = await c.req.raw.json().catch(() => null);
       if (!isRecord(body) || Object.keys(body).some((key) => key !== 'version' && key !== 'context' && key !== 'proposal')) {
@@ -262,6 +271,7 @@ class BrowserAgentApi {
       return json({ status: 'failed', errorCode: applied.status === 'denied' ? 'SUBMIT_BLOCKED' : applied.errorCode } satisfies AgentApplyResponseV1, 422);
     };
   }
+
 }
 
 export function createBrowserAgentApi(options: BrowserAgentApiOptions): BrowserAgentApiSurface {

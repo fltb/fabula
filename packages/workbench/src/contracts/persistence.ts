@@ -1,11 +1,14 @@
+import type { ProjectAccessRole } from './configuration.js';
+
 /**
  * Persistence worker wire protocol (host-internal).
  * The browser-facing surface is `contracts/index.ts`, which re-exports only
  * non-secret domain DTOs. This module carries host-only state such as password
  * hash records and the typed operation map; never import it from client code.
- * Version 2 of the schema adds configuration operation/audit/recovery
- * metadata, authoring coordination metadata, the append-only audit log, MCP
- * device token verifiers, and the dashboard queries over sessions/devices.
+ * Version 2 adds configuration operation/audit/recovery metadata, authoring
+ * coordination metadata, the append-only audit log, MCP device token
+ * verifiers, and the dashboard queries over sessions/devices. Version 4 adds
+ * durable project membership rows and isolated verifier stores.
  * The worker never stores `workbench.yaml` contents and never stores secrets:
  * provider keys live in the credential store, and device verifiers persist
  * only the SHA-256 hash of the one-time credential (the raw credential is
@@ -38,7 +41,7 @@ export interface SessionState {
 export interface InviteState {
   inviteId: string;
   projectId?: string;
-  role: string;
+  role: ProjectAccessRole;
   expiresAt: string;
   consumedAt?: string;
 }
@@ -139,6 +142,43 @@ export interface ProjectRegistryEntry {
   createdAt: string;
   updatedAt: string;
 }
+/** Durable, host-safe project ACL row. Revoked rows are never returned by active reads. */
+export interface ProjectMembershipState {
+  userId: string;
+  projectId: string;
+  role: ProjectAccessRole;
+  createdAt: string;
+  revision: number;
+  revokedAt?: string;
+  /** Current user capability generation, included for invalidation-aware admin reads. */
+  capabilityVersion: number;
+}
+export interface LoadProjectMembershipInput {
+  userId: string;
+  projectId: string;
+}
+export interface ListProjectMembershipsInput {
+  projectId?: string;
+}
+export interface UpsertProjectMembershipInput {
+  userId: string;
+  projectId: string;
+  role: ProjectAccessRole;
+  /** Host timestamp; omitted callers use the worker clock. */
+  at?: string;
+}
+export interface RevokeProjectMembershipInput {
+  userId: string;
+  projectId: string;
+  /** Host timestamp; omitted callers use the worker clock. */
+  at?: string;
+}
+export interface ProjectMembershipMutationResult {
+  membership: ProjectMembershipState | null;
+  capabilityVersion: number;
+  revokedCapabilities: number;
+}
+
 export interface OperationCheckpoint {
   operationId: string;
   checkpoint: string;
@@ -332,18 +372,12 @@ export interface AuditRecord {
   detail?: string;
 }
 
-// ─── V2: MCP device token verifier ──────────────────────────────────────────
+// ─── V2: verifier stores ─────────────────────────────────────────────────────
 
-/**
- * Durable MCP device verifier row. The worker stores ONLY the SHA-256 hash
- * of the one-time device credential plus scope/expiry/label/revocation — the
- * raw credential is shown once at pairing and never persisted. `tokenHash`
- * must never be returned by any result; reads map to
- * {@link DeviceVerifierReadState}.
- */
-export interface DeviceVerifierRecord {
+/** Capability verifier row. Capability metadata is intentionally separate from MCP devices. */
+export interface CapabilityVerifierRecord {
   deviceId: string;
-  /** SHA-256 hex of the one-time device credential. Stored, never returned. */
+  /** SHA-256 hex of the opaque capability token. Stored, never returned. */
   tokenHash: string;
   scope: string[];
   expiresAt: string;
@@ -352,53 +386,169 @@ export interface DeviceVerifierRecord {
   createdAt: string;
 }
 
-/** Safe read projection of a device verifier: `tokenHash` is deliberately absent. */
-export type DeviceVerifierReadState = Omit<DeviceVerifierRecord, 'tokenHash'>;
+/** Safe capability-verifier projection; `tokenHash` is deliberately absent. */
+export type CapabilityVerifierReadState = Omit<CapabilityVerifierRecord, 'tokenHash'>;
 
-export type PersistenceOperation =
-  | 'persistYjsUpdate'
-  | 'loadWorkingDocument'
-  | 'getAuthState'
-  | 'bootstrapOwner'
-  | 'acceptInviteUser'
-  | 'loadUser'
-  | 'loadOwner'
-  | 'resetOwnerPassword'
-  | 'recordAuthFailure'
-  | 'loadAuthBackoff'
-  | 'clearAuthBackoff'
-  | 'createSession'
-  | 'loadSession'
-  | 'revokeSession'
-  | 'createInvite'
-  | 'consumeInvite'
-  | 'listInvites'
-  | 'upsertCapability'
-  | 'loadCapability'
-  | 'revokeCapability'
-  | 'listProjects'
-  | 'getProject'
-  | 'upsertProject'
-  | 'removeProject'
-  | 'checkpointOperation'
-  | 'loadOperationCheckpoint'
-  | 'beginGitSubmission'
-  | 'checkpointGitSubmission'
-  | 'completeGitSubmission'
-  | 'loadGitSubmission'
-  | 'loadUiPreferences'
-  | 'saveUiPreferences'
-  | 'createConfigurationOperation'
-  | 'listConfigurationOperations'
-  | 'saveAuthoringState'
-  | 'loadAuthoringState'
-  | 'appendAudit'
-  | 'listAudit'
-  | 'createDeviceVerifier'
-  | 'loadDeviceVerifierByTokenHash'
-  | 'listDeviceVerifiers'
-  | 'revokeDeviceVerifier'
-  | 'listSessions';
+/**
+ * MCP device verifier row mapped to the migration-4 durable columns.
+ *
+ * `clientLabel` and `role` are deliberately not fields here: labels are
+ * one-time claim metadata and role is pairing policy, neither of which is
+ * persisted by `mcp_device_verifiers`.
+ */
+export interface McpDeviceVerifierRecord {
+  deviceId: string;
+  /** SHA-256 hex of the opaque device credential; persisted as `verifier`. */
+  tokenHash: string;
+  kind: 'project' | 'admin';
+  projectId?: string;
+  ownerUserId: string;
+  scopes: string[];
+  grantRevision: number;
+  expiresAt: string;
+  revokedAt?: string;
+  createdAt: string;
+}
+
+/** Safe MCP device projection; the verifier digest is deliberately absent. */
+export type McpDeviceVerifierReadState = Omit<McpDeviceVerifierRecord, 'tokenHash'>;
+
+/** Backward-compatible names for capability-only callers. */
+export type DeviceVerifierRecord = CapabilityVerifierRecord;
+export type DeviceVerifierReadState = CapabilityVerifierReadState;
+
+/** Physical verifier table selected by a persistence operation. */
+export type DeviceVerifierStore = 'capability' | 'mcp';
+
+// ─── V3: native immutable source revisions ─────────────────────────────────
+
+export const NATIVE_REVISION_PHASE_VALUES = [
+  'prepared',
+  'accepted',
+  'materializing',
+  'materialized',
+  'completed',
+  'stale',
+  'conflict',
+  'recovery-required',
+] as const;
+export type NativeRevisionPhase = (typeof NATIVE_REVISION_PHASE_VALUES)[number];
+export const NATIVE_REVISION_TERMINAL_PHASE_VALUES = [
+  'completed',
+  'stale',
+  'conflict',
+  'recovery-required',
+] as const;
+export type NativeRevisionTerminalPhase =
+  (typeof NATIVE_REVISION_TERMINAL_PHASE_VALUES)[number];
+export type WorkingDocumentPhase = 'active' | 'tombstone';
+export type MaterializationEntryState = 'pending' | 'applied' | 'external';
+export type RevisionMirrorExportState = 'pending' | 'exported' | 'failed';
+
+export interface SourceRevisionRecord {
+  revisionId: string;
+  projectId: string;
+  parentRevisionId?: string;
+  operationId: string;
+  sourceHash: string;
+  bundleHash: string;
+  actorId: string;
+  origin: string;
+  createdAt: string;
+  acceptedAt?: string;
+}
+export interface SourceRevisionOperationRecord {
+  operationId: string;
+  projectId: string;
+  expectedRevisionId?: string;
+  expectedSourceHash?: string;
+  revisionId?: string;
+  phase: NativeRevisionPhase;
+  receiptHash?: string;
+  diagnostic?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface SourceRevisionReceipt {
+  operationId: string;
+  projectId: string;
+  revisionId?: string;
+  sourceHash?: string;
+  bundleHash?: string;
+  phase: NativeRevisionTerminalPhase;
+  receiptHash: string;
+  acceptedAt: string;
+}
+export interface SourceHeadRecord {
+  projectId: string;
+  acceptedRevisionId?: string;
+  acceptedSourceHash?: string;
+  materializedRevisionId?: string;
+  materializedSourceHash?: string;
+  updatedAt: string;
+}
+export interface SourceHeadCasInput {
+  projectId: string;
+  expectedAcceptedRevisionId?: string;
+  expectedAcceptedSourceHash?: string;
+  acceptedRevisionId: string;
+  acceptedSourceHash: string;
+  updatedAt: string;
+}
+export interface SourceHeadCasResult {
+  applied: boolean;
+  head: SourceHeadRecord;
+}
+export interface SourceMaterializationRecord {
+  projectId: string;
+  revisionId: string;
+  phase: NativeRevisionPhase;
+  expectedViewSourceHash: string;
+  targetSourceHash: string;
+  treeHash: string;
+  attempt: number;
+  diagnostic?: string;
+  updatedAt: string;
+}
+export interface SourceMaterializationEntryRecord {
+  projectId: string;
+  revisionId: string;
+  logicalPath: string;
+  oldHash?: string;
+  targetHash?: string;
+  appliedHash?: string;
+  state: MaterializationEntryState;
+}
+export interface AuthoringWorkingDocumentRecord {
+  projectId: string;
+  documentId: string;
+  logicalPath: string;
+  kind: string;
+  state: WorkingDocumentPhase;
+  baseRevisionId?: string;
+  catalogRevision: number;
+  updatedAt: string;
+}
+export interface RevisionMirrorExportRecord {
+  projectId: string;
+  revisionId: string;
+  backend: string;
+  state: RevisionMirrorExportState;
+  externalId?: string;
+  diagnostic?: string;
+  updatedAt: string;
+}
+
+type PersistenceOperationKeyParity =
+  [Exclude<keyof PersistencePayloads, keyof PersistenceResults>,
+   Exclude<keyof PersistenceResults, keyof PersistencePayloads>] extends [never, never]
+    ? true
+    : false;
+type AssertPersistenceOperationKeyParity<T extends true> = T;
+/** Operation keys shared by the payload and result maps. */
+export type PersistenceOperation = AssertPersistenceOperationKeyParity<PersistenceOperationKeyParity> extends true
+  ? keyof PersistencePayloads & keyof PersistenceResults
+  : never;
 
 export interface PersistencePayloads {
   persistYjsUpdate: PersistYjsUpdateInput;
@@ -418,11 +568,18 @@ export interface PersistencePayloads {
   createInvite: InviteState;
   consumeInvite: { inviteId: string; consumedAt: string };
   listInvites: { projectId?: string };
+  loadProjectMembership: LoadProjectMembershipInput;
+  listProjectMemberships: ListProjectMembershipsInput;
+  upsertProjectMembership: UpsertProjectMembershipInput;
+  revokeProjectMembership: RevokeProjectMembershipInput;
   upsertCapability: CapabilityState;
   loadCapability: { capabilityId: string };
   revokeCapability: { capabilityId: string; reason?: string };
-  listProjects: undefined;
   getProject: { projectId: string };
+  listProjects: undefined;
+  createDeviceVerifier:
+    | (CapabilityVerifierRecord & { store: 'capability' })
+    | (McpDeviceVerifierRecord & { store: 'mcp' });
   upsertProject: ProjectRegistryEntry;
   removeProject: { projectId: string };
   checkpointOperation: OperationCheckpoint;
@@ -439,11 +596,31 @@ export interface PersistencePayloads {
   loadAuthoringState: { projectId: string };
   appendAudit: AuditRecord;
   listAudit: { limit: number; surface?: AuditSurface; projectId?: string };
-  createDeviceVerifier: DeviceVerifierRecord;
-  loadDeviceVerifierByTokenHash: { tokenHash: string };
-  listDeviceVerifiers: undefined;
-  revokeDeviceVerifier: { deviceId: string; revokedAt: string };
+  loadDeviceVerifierByTokenHash: { tokenHash: string; store: DeviceVerifierStore };
+  listDeviceVerifiers: { store: DeviceVerifierStore };
+  revokeDeviceVerifier: { deviceId: string; revokedAt: string; store: DeviceVerifierStore };
   listSessions: { userId?: string };
+  // ─── V3: native revision operations ───────────────────────────────────────
+  createSourceRevision: SourceRevisionRecord;
+  getSourceRevision: { revisionId: string };
+  listSourceRevisions: { projectId: string; cursor?: string; limit?: number };
+  createSourceRevisionOperation: SourceRevisionOperationRecord;
+  checkpointSourceRevisionOperation: SourceRevisionOperationRecord;
+  replaySourceRevisionReceipt: { operationId: string };
+  loadSourceRevisionOperation: { operationId: string };
+  getSourceHead: { projectId: string };
+  casSourceHead: SourceHeadCasInput;
+  createSourceMaterialization: SourceMaterializationRecord;
+  checkpointSourceMaterialization: SourceMaterializationRecord;
+  loadSourceMaterialization: { projectId: string; revisionId: string };
+  loadSourceMaterializationEntries: { projectId: string; revisionId: string };
+  upsertAuthoringWorkingDocument: AuthoringWorkingDocumentRecord;
+  loadAuthoringWorkingDocument: { projectId: string; documentId: string };
+  listAuthoringWorkingDocuments: { projectId: string };
+  deleteAuthoringWorkingDocument: { projectId: string; documentId: string };
+  createRevisionMirrorExport: RevisionMirrorExportRecord;
+  checkpointRevisionMirrorExport: RevisionMirrorExportRecord;
+  loadRevisionMirrorExport: { projectId: string; revisionId: string; backend: string };
 }
 
 export interface PersistenceResults {
@@ -464,13 +641,20 @@ export interface PersistenceResults {
   createInvite: InviteState;
   consumeInvite: ConsumeInviteResult;
   listInvites: InviteState[];
+  loadProjectMembership: ProjectMembershipState | null;
+  listProjectMemberships: ProjectMembershipState[];
+  upsertProjectMembership: ProjectMembershipMutationResult;
+  revokeProjectMembership: ProjectMembershipMutationResult;
   upsertCapability: CapabilityState;
   loadCapability: CapabilityState | null;
   revokeCapability: { revoked: true };
   listProjects: ProjectRegistryEntry[];
-  getProject: ProjectRegistryEntry | null;
   upsertProject: ProjectRegistryEntry;
   removeProject: { removed: true };
+  createDeviceVerifier: CapabilityVerifierReadState | McpDeviceVerifierReadState;
+  getProject: ProjectRegistryEntry | null;
+  loadDeviceVerifierByTokenHash: CapabilityVerifierReadState | McpDeviceVerifierReadState | null;
+  listDeviceVerifiers: (CapabilityVerifierReadState | McpDeviceVerifierReadState)[];
   checkpointOperation: OperationCheckpoint;
   loadOperationCheckpoint: OperationCheckpoint | null;
   beginGitSubmission: GitSubmissionJournal;
@@ -485,11 +669,29 @@ export interface PersistenceResults {
   loadAuthoringState: AuthoringStateRecord | null;
   appendAudit: AuditRecord;
   listAudit: AuditRecord[];
-  createDeviceVerifier: DeviceVerifierReadState;
-  loadDeviceVerifierByTokenHash: DeviceVerifierReadState | null;
-  listDeviceVerifiers: DeviceVerifierReadState[];
   revokeDeviceVerifier: { revoked: true };
   listSessions: SessionState[];
+  // ─── V3: native revision operation results ────────────────────────────────
+  createSourceRevision: SourceRevisionRecord;
+  getSourceRevision: SourceRevisionRecord | null;
+  listSourceRevisions: SourceRevisionRecord[];
+  createSourceRevisionOperation: SourceRevisionOperationRecord;
+  checkpointSourceRevisionOperation: SourceRevisionOperationRecord;
+  replaySourceRevisionReceipt: SourceRevisionReceipt | null;
+  loadSourceRevisionOperation: SourceRevisionOperationRecord | null;
+  getSourceHead: SourceHeadRecord | null;
+  casSourceHead: SourceHeadCasResult;
+  createSourceMaterialization: SourceMaterializationRecord;
+  checkpointSourceMaterialization: SourceMaterializationRecord;
+  loadSourceMaterialization: SourceMaterializationRecord | null;
+  loadSourceMaterializationEntries: SourceMaterializationEntryRecord[];
+  upsertAuthoringWorkingDocument: AuthoringWorkingDocumentRecord;
+  loadAuthoringWorkingDocument: AuthoringWorkingDocumentRecord | null;
+  listAuthoringWorkingDocuments: AuthoringWorkingDocumentRecord[];
+  deleteAuthoringWorkingDocument: { removed: true };
+  createRevisionMirrorExport: RevisionMirrorExportRecord;
+  checkpointRevisionMirrorExport: RevisionMirrorExportRecord;
+  loadRevisionMirrorExport: RevisionMirrorExportRecord | null;
 }
 
 export interface PersistenceError {

@@ -6,8 +6,9 @@
  * - Issue generates a fresh 256-bit token and persists the grant metadata
  *   (`CapabilityState`) plus a durable, hash-only verifier row (the SHA-256
  *   digest of the token, keyed `capability:<capabilityId>:v<version>` in the
- *   shared verifier table). The raw token never reaches persistence, audit
- *   records, or the browser, and the digest is never returned by any result.
+ *   capability verifier store). The raw token never reaches persistence,
+ *   audit records, or the browser, and the digest is never returned by any
+ *   result.
  * - Validate takes a client-presented token plus the project/scopes an effect
  *   needs, resolves the token's digest through the durable verifier store,
  *   and re-loads the persisted grant on every call. Each validate checks the
@@ -28,8 +29,9 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type {
   CapabilityState,
-  DeviceVerifierReadState,
-  DeviceVerifierRecord,
+  CapabilityVerifierReadState,
+  CapabilityVerifierRecord,
+  McpDeviceVerifierReadState,
 } from '../../contracts/persistence.js';
 import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
 
@@ -43,10 +45,31 @@ export interface CapabilityPersistence {
   upsertCapability(state: CapabilityState): Promise<CapabilityState>;
   loadCapability(input: { capabilityId: string }): Promise<CapabilityState | null>;
   revokeCapability(input: { capabilityId: string; reason?: string }): Promise<{ revoked: true }>;
-  /** Durable, hash-only token-digest registry shared with MCP device verifiers. */
-  createVerifier(record: DeviceVerifierRecord): Promise<DeviceVerifierReadState>;
-  loadVerifierByTokenHash(input: { tokenHash: string }): Promise<DeviceVerifierReadState | null>;
+  /** Durable, hash-only capability token-digest registry. */
+  createVerifier(record: CapabilityVerifierRecord): Promise<CapabilityVerifierReadState>;
+  loadVerifierByTokenHash(input: { tokenHash: string }): Promise<CapabilityVerifierReadState | null>;
   revokeVerifier(input: { deviceId: string; revokedAt: string }): Promise<{ revoked: true }>;
+}
+
+function isCapabilityVerifierReadState(
+  value: CapabilityVerifierReadState | McpDeviceVerifierReadState,
+): value is CapabilityVerifierReadState {
+  return 'scope' in value && !('scopes' in value) && !('kind' in value);
+}
+
+function requireCapabilityVerifierReadState(
+  value: CapabilityVerifierReadState | McpDeviceVerifierReadState,
+): CapabilityVerifierReadState {
+  if (!isCapabilityVerifierReadState(value)) {
+    throw new Error('Persistence returned an MCP verifier for a capability store request.');
+  }
+  return value;
+}
+
+function requireCapabilityVerifierReadStateOrNull(
+  value: CapabilityVerifierReadState | McpDeviceVerifierReadState | null,
+): CapabilityVerifierReadState | null {
+  return value === null ? null : requireCapabilityVerifierReadState(value);
 }
 
 /** Typed domain adapter over the persistence worker; keeps SQL out of this layer. */
@@ -57,10 +80,16 @@ export function createCapabilityPersistence(
     upsertCapability: (state) => client.request('upsertCapability', state),
     loadCapability: (input) => client.request('loadCapability', input),
     revokeCapability: (input) => client.request('revokeCapability', input),
-    createVerifier: (record) => client.request('createDeviceVerifier', record),
-    loadVerifierByTokenHash: (input) =>
-      client.request('loadDeviceVerifierByTokenHash', input),
-    revokeVerifier: (input) => client.request('revokeDeviceVerifier', input),
+    createVerifier: async (record) =>
+      requireCapabilityVerifierReadState(
+        await client.request('createDeviceVerifier', { ...record, store: 'capability' }),
+      ),
+    loadVerifierByTokenHash: async (input) =>
+      requireCapabilityVerifierReadStateOrNull(
+        await client.request('loadDeviceVerifierByTokenHash', { ...input, store: 'capability' }),
+      ),
+    revokeVerifier: (input) =>
+      client.request('revokeDeviceVerifier', { ...input, store: 'capability' }),
   };
 }
 

@@ -39,6 +39,8 @@ import {
   BROWSER_PROJECT_SOURCE_PATH,
   type SourceStudioStateV1,
 } from '../contracts/source-studio.js';
+import type { ProjectAccessRequiredRole, ProjectAccessService } from './project-access-service.js';
+
 import type { LocalAuthService } from './auth/service.js';
 import type { HostListenerEnv } from './listener.js';
 
@@ -109,7 +111,7 @@ export function createBrowserPrincipalResolver(
  * Denial is 403 before any project data is loaded.
  */
 export interface BrowserProjectAuthorization {
-  canAccessProject(userId: string, projectId: string): boolean | Promise<boolean>;
+  canAccessProject(userId: string, projectId: string, requiredRole?: ProjectAccessRequiredRole): boolean | Promise<boolean>;
 }
 
 /**
@@ -158,12 +160,15 @@ export interface BrowserSourceStudioSource {
 /** All injected ports of the browser read surface. */
 export interface BrowserReadApiOptions {
   readonly principal: BrowserPrincipalResolver;
+  /** Shared ACL/lifecycle service. When present it is the authoritative gate. */
+  readonly access?: Pick<ProjectAccessService, 'authorize' | 'listProjects'>;
   readonly authorization: BrowserProjectAuthorization;
   readonly catalog: BrowserProjectCatalog;
   readonly overview: BrowserProjectOverviewSource;
   readonly graph: BrowserGraphProjector;
   readonly source: BrowserSourceStudioSource;
 }
+
 
 /** One GET route the surface exposes, mounted through the guarded read seam. */
 export interface BrowserReadRoute {
@@ -387,8 +392,27 @@ async function projectIsListed(
   principal: BrowserSessionPrincipalV1,
   projectId: string,
 ): Promise<boolean> {
-  const projects = await api.options.catalog.listProjects(principal);
+  const projects = api.options.access !== undefined
+    ? await api.options.access.listProjects(principal)
+    : await api.options.catalog.listProjects(principal);
   return projects.some((project) => project.projectId === projectId);
+}
+
+async function canAccess(
+  api: BrowserReadApiImpl,
+  principal: BrowserSessionPrincipalV1,
+  projectId: string,
+): Promise<boolean> {
+  if (api.options.access !== undefined) {
+    return (
+      await api.options.access.authorize({
+        userId: principal.userId,
+        projectId,
+        requiredRole: 'reader',
+      })
+    ).ok;
+  }
+  return await api.options.authorization.canAccessProject(principal.userId, projectId);
 }
 
 function overviewHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
@@ -399,7 +423,7 @@ function overviewHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
     if (projectId === undefined || projectId.length === 0) {
       return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
     }
-    if (!(await api.options.authorization.canAccessProject(principal.userId, projectId))) {
+    if (!(await canAccess(api, principal, projectId))) {
       return c.json(
         {
           error: {
@@ -445,7 +469,7 @@ function graphsHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
     if (projectId === undefined || projectId.length === 0) {
       return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
     }
-    if (!(await api.options.authorization.canAccessProject(principal.userId, projectId))) {
+    if (!(await canAccess(api, principal, projectId))) {
       return c.json(
         {
           error: {
@@ -500,7 +524,7 @@ function sourceStudioHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> 
     if (projectId === undefined || projectId.length === 0) {
       return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
     }
-    if (!(await api.options.authorization.canAccessProject(principal.userId, projectId))) {
+    if (!(await canAccess(api, principal, projectId))) {
       return c.json(
         {
           error: {

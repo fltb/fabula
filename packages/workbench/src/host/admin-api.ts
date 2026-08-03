@@ -36,15 +36,19 @@ import {
   WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchAdminErrorCode,
   type WorkbenchAdminOverviewV1,
+  type WorkbenchConfigurationV2,
   type WorkbenchConfigurationV1,
   type WorkbenchDeviceSafeViewV1,
   type WorkbenchInviteSafeViewV1,
   type WorkbenchProjectSafeViewV1,
 } from '../contracts/configuration.js';
+import { PROJECT_ACCESS_ROLES } from '../contracts/configuration.js';
+import type { ProjectAccessRole } from '../contracts/configuration.js';
+
 import type {
   AuditRecord,
   ConfigurationOperationRecord,
-  DeviceVerifierReadState,
+  McpDeviceVerifierReadState,
 } from '../contracts/persistence.js';
 import type { LocalAuthService } from './auth/index.js';
 import type { BrowserPrincipalResolver } from './browser-read-api.js';
@@ -75,6 +79,8 @@ export const BROWSER_ADMIN_PROVIDER_CREDENTIAL_PATH = `${BROWSER_ADMIN_PROVIDER_
 export const BROWSER_ADMIN_SESSIONS_PATH = `${BROWSER_ADMIN_BASE_PATH}/sessions`;
 /** `POST /api/v1/admin/mcp-devices/issue` — issue a one-time pairing code. */
 export const BROWSER_ADMIN_DEVICES_ISSUE_PATH = `${BROWSER_ADMIN_DEVICES_PATH}/issue`;
+/** `GET /api/v1/admin/memberships` — owner-only project membership list. */
+export const BROWSER_ADMIN_MEMBERSHIPS_PATH = `${BROWSER_ADMIN_BASE_PATH}/memberships`;
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
 
@@ -119,27 +125,61 @@ function parseRequest(
   }
   return body;
 }
+function isProjectAccessRole(value: unknown): value is ProjectAccessRole {
+  return (
+    typeof value === 'string' &&
+    (PROJECT_ACCESS_ROLES as readonly string[]).includes(value)
+  );
+}
 
-// ─── Injected ports ──────────────────────────────────────────────────────────
 
-/** MCP device pairing port; structurally identical to the 1D `McpDevicePairingService`. */
+/** MCP device pairing port; structurally identical to the 1D pairing service. */
 export interface McpDeviceAdminPort {
-  createPairing(input: {
-    ownerUserId: string;
-    ttlMs?: number;
-  }): Promise<{ pairingCode: string; expiresAt: string }>;
+  createPairing(
+    input:
+      | {
+          ownerUserId: string;
+          kind: 'project';
+          projectId: string;
+          role?: ProjectAccessRole;
+          ttlMs?: number;
+        }
+      | {
+          ownerUserId: string;
+          kind: 'admin';
+          projectId?: never;
+          role?: never;
+          ttlMs?: number;
+        },
+  ): Promise<{ pairingCode: string; expiresAt: string }>;
   claim(input: {
     pairingCode: string;
     label: string;
     scopes: readonly string[];
     ttlMs: number;
   }): Promise<McpDeviceClaimResult>;
-  listDevices(): Promise<DeviceVerifierReadState[]>;
+  listDevices(): Promise<McpDeviceVerifierReadState[]>;
   revoke(deviceId: string, revokedAt?: string): Promise<void>;
 }
 
+export interface MembershipAdminPort {
+  list(input?: { projectId?: string }): Promise<readonly {
+    userId: string;
+    projectId: string;
+    role: ProjectAccessRole;
+    capabilityVersion?: number;
+  }[]>;
+  upsert(input: { userId: string; projectId: string; role: ProjectAccessRole }): Promise<{
+    userId: string;
+    projectId: string;
+    role: ProjectAccessRole;
+    capabilityVersion?: number;
+  }>;
+  revoke(input: { userId: string; projectId: string }): Promise<void>;
+}
+
 export type McpDeviceClaimResult =
-  | { ok: true; credential: string; device: DeviceVerifierReadState }
+  | { ok: true; credential: string; label: string; device: McpDeviceVerifierReadState }
   | {
       ok: false;
       code:
@@ -179,6 +219,8 @@ export interface AdminApiOptions {
   readonly auth: LocalAuthService;
   readonly credentials: ProviderCredentialStore;
   readonly devices: McpDeviceAdminPort;
+  /** Owner-only membership administration; absent only for legacy wiring. */
+  readonly memberships?: MembershipAdminPort;
   readonly operations: OperationsAdminPort;
   readonly runtime: RuntimeAdminPort;
   readonly status: SetupStatusBuilder;
@@ -199,11 +241,10 @@ export interface AdminApiSurface {
   register(host: HostServer): void;
 }
 
-function deviceSafeView(device: DeviceVerifierReadState): WorkbenchDeviceSafeViewV1 {
+function deviceSafeView(device: McpDeviceVerifierReadState): WorkbenchDeviceSafeViewV1 {
   return {
     deviceId: device.deviceId,
-    label: device.clientLabel,
-    scopes: [...device.scope],
+    scopes: [...device.scopes],
     createdAt: device.createdAt,
     expiresAt: device.expiresAt,
     revokedAt: device.revokedAt ?? null,
@@ -213,7 +254,7 @@ function deviceSafeView(device: DeviceVerifierReadState): WorkbenchDeviceSafeVie
 function inviteSafeView(invite: {
   inviteId: string;
   projectId?: string;
-  role: string;
+  role: ProjectAccessRole;
   expiresAt: string;
   consumedAt?: string;
 }): WorkbenchInviteSafeViewV1 {
@@ -259,7 +300,7 @@ class AdminApiImpl {
 
   /** Load the current configuration or return a typed CONFIG_INVALID response. */
   async requireConfiguration(): Promise<
-    | { ok: true; active: { configuration: WorkbenchConfigurationV1; revision: string } }
+    | { ok: true; active: { configuration: WorkbenchConfigurationV2; revision: string } }
     | { ok: false; response: Response }
   > {
     const active = await this.options.configuration.readActive();
@@ -338,7 +379,7 @@ function projectValidateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
 
 async function applyProjectChange(
   api: AdminApiImpl,
-  mutate: (current: WorkbenchConfigurationV1) => WorkbenchConfigurationV1,
+  mutate: (current: WorkbenchConfigurationV2) => WorkbenchConfigurationV2,
   projectId: string,
   actorId: string,
 ): Promise<Response> {
@@ -398,7 +439,7 @@ function projectCreateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
         if (current.projects.some((project) => project.projectId === projectId)) return current;
         return {
           ...current,
-          projects: [...current.projects, { projectId, displayName, root }],
+          projects: [...current.projects, { projectId, displayName, root, revisionMirror: { mode: 'disabled' } }],
           defaultProjectId: current.defaultProjectId ?? projectId,
         };
       },
@@ -758,30 +799,27 @@ function inviteCreateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     if (parsed === null) {
       return adminError('UNKNOWN_FIELD', 'invites accepts only projectId, role, ttlMs.');
     }
-    if (parsed.role !== 'user') {
-      return adminError('INVITE_INVALID', 'invites only support the "user" role.');
+    const role = parsed.role;
+    if (!isProjectAccessRole(role)) {
+      return adminError(
+        'INVITE_INVALID',
+        'invites require one of the reader, author or maintainer project roles.',
+      );
     }
     const ttlMs = parsed.ttlMs;
     if (typeof ttlMs !== 'number' || !Number.isFinite(ttlMs) || ttlMs <= 0) {
       return adminError('INVITE_INVALID', 'ttlMs must be a positive number of milliseconds.');
     }
-    const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : undefined;
-    if (parsed.projectId !== undefined && projectId === undefined) {
-      return adminError('INVITE_INVALID', 'projectId must be a string when present.');
+    if (typeof parsed.projectId !== 'string' || parsed.projectId.length === 0) {
+      return adminError('INVITE_INVALID', 'projectId is required.');
     }
-    if (projectId !== undefined) {
-      const loaded = await api.requireConfiguration();
-      if (!loaded.ok) return loaded.response;
-      if (
-        !loaded.active.configuration.projects.some((project) => project.projectId === projectId)
-      ) {
-        return adminError('PROJECT_NOT_FOUND', `Project "${projectId}" is not registered.`);
-      }
+    const projectId = parsed.projectId;
+    const loaded = await api.requireConfiguration();
+    if (!loaded.ok) return loaded.response;
+    if (!loaded.active.configuration.projects.some((project) => project.projectId === projectId)) {
+      return adminError('PROJECT_NOT_FOUND', 'The project is not registered.');
     }
-    const invite = await api.options.auth.createInvite({
-      ...(projectId !== undefined ? { projectId } : {}),
-      ttlMs,
-    });
+    const invite = await api.options.auth.createInvite({ projectId, role, ttlMs });
     return json({ version: WORKBENCH_CONFIGURATION_VERSION, invite: inviteSafeView(invite) });
   };
 }
@@ -817,7 +855,52 @@ function devicesIssueHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
   return async (c) => {
     const owner = await api.requireOwner(c);
     if (owner instanceof Response) return owner;
-    const pairing = await api.options.devices.createPairing({ ownerUserId: owner.userId });
+    const body = await c.req.raw.json().catch(() => null);
+    const parsed = parseRequest(body, ['kind', 'projectId', 'role', 'ttlMs']);
+    if (parsed === null) {
+      return adminError('UNKNOWN_FIELD', 'device issue accepts only kind, projectId, role, ttlMs.');
+    }
+    const kind = parsed.kind;
+    const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : undefined;
+    const role = isProjectAccessRole(parsed.role) ? parsed.role : undefined;
+    if (kind !== 'project' && kind !== 'admin') {
+      return adminError('CREDENTIAL_INVALID', 'kind must be project or admin.');
+    }
+    if (
+      (kind === 'project' && (typeof projectId !== 'string' || projectId.length === 0)) ||
+      (kind === 'project' && parsed.role !== undefined && role === undefined) ||
+      (kind === 'admin' && (projectId !== undefined || parsed.role !== undefined))
+    ) {
+      return adminError('CREDENTIAL_INVALID', 'The device binding is invalid.');
+    }
+    if (kind === 'project') {
+      const loaded = await api.requireConfiguration();
+      if (!loaded.ok) return loaded.response;
+      if (!loaded.active.configuration.projects.some((project) => project.projectId === projectId)) {
+        return adminError('PROJECT_NOT_FOUND', 'The project is not registered.');
+      }
+    }
+    const ttlMs = parsed.ttlMs;
+    if (
+      ttlMs !== undefined &&
+      (typeof ttlMs !== 'number' || !Number.isFinite(ttlMs) || ttlMs <= 0)
+    ) {
+      return adminError('CREDENTIAL_INVALID', 'ttlMs must be a positive number of milliseconds.');
+    }
+    const pairing =
+      kind === 'project'
+        ? await api.options.devices.createPairing({
+            ownerUserId: owner.userId,
+            kind: 'project',
+            projectId: projectId as string,
+            ...(role === undefined ? {} : { role }),
+            ...(typeof ttlMs === 'number' ? { ttlMs } : {}),
+          })
+        : await api.options.devices.createPairing({
+            ownerUserId: owner.userId,
+            kind: 'admin',
+            ...(typeof ttlMs === 'number' ? { ttlMs } : {}),
+          });
     return json({
       version: WORKBENCH_CONFIGURATION_VERSION,
       pairingCode: pairing.pairingCode,
@@ -872,6 +955,7 @@ function devicesClaimHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     return json({
       version: WORKBENCH_CONFIGURATION_VERSION,
       credential: result.credential,
+      label: result.label,
       device: deviceSafeView(result.device),
     });
   };
@@ -892,6 +976,95 @@ function devicesRevokeHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     }
     await api.options.devices.revoke(deviceId, api.options.now?.() ?? new Date().toISOString());
     return json({ version: WORKBENCH_CONFIGURATION_VERSION, deviceId, revoked: true });
+  };
+}
+
+function membershipsListHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const memberships = api.options.memberships;
+    if (memberships === undefined) return adminError('INTERNAL', 'Membership service unavailable.');
+    const projectId = c.req.query('projectId');
+    const listed = await memberships.list(projectId === undefined ? undefined : { projectId });
+    return json({ version: WORKBENCH_CONFIGURATION_VERSION, memberships: listed });
+  };
+}
+
+function membershipUpsertHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const memberships = api.options.memberships;
+    if (memberships === undefined) return adminError('INTERNAL', 'Membership service unavailable.');
+    const body = await c.req.raw.json().catch(() => null);
+    const parsed = parseRequest(body, ['userId', 'projectId', 'role']);
+    const role = parsed?.role;
+    if (
+      parsed === null ||
+      typeof parsed.userId !== 'string' ||
+      parsed.userId.length === 0 ||
+      typeof parsed.projectId !== 'string' ||
+      parsed.projectId.length === 0 ||
+      !isProjectAccessRole(role)
+    ) {
+      return adminError('INVITE_INVALID', 'userId, projectId and role are required.');
+    }
+    try {
+      const membership = await memberships.upsert({
+        userId: parsed.userId,
+        projectId: parsed.projectId,
+        role,
+      });
+      return json({ version: WORKBENCH_CONFIGURATION_VERSION, membership });
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === 'PROJECT_NOT_FOUND') {
+        return adminError('PROJECT_NOT_FOUND', 'The project is not registered.');
+      }
+      if (code === 'USER_NOT_FOUND' || code === 'INVALID_INPUT') {
+        return adminError('INVITE_INVALID', 'The membership identity or role is invalid.');
+      }
+      throw error;
+    }
+  };
+}
+
+function membershipRevokeHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const owner = await api.requireOwner(c);
+    if (owner instanceof Response) return owner;
+    const memberships = api.options.memberships;
+    if (memberships === undefined) return adminError('INTERNAL', 'Membership service unavailable.');
+    const body = await c.req.raw.json().catch(() => null);
+    const parsed = parseRequest(body, ['userId', 'projectId']);
+    if (
+      parsed === null ||
+      typeof parsed.userId !== 'string' ||
+      parsed.userId.length === 0 ||
+      typeof parsed.projectId !== 'string' ||
+      parsed.projectId.length === 0
+    ) {
+      return adminError('INVITE_INVALID', 'userId and projectId are required.');
+    }
+    try {
+      await memberships.revoke({ userId: parsed.userId, projectId: parsed.projectId });
+      return json({
+        version: WORKBENCH_CONFIGURATION_VERSION,
+        userId: parsed.userId,
+        projectId: parsed.projectId,
+        revoked: true,
+      });
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === 'PROJECT_NOT_FOUND') {
+        return adminError('PROJECT_NOT_FOUND', 'The project is not registered.');
+      }
+      if (code === 'USER_NOT_FOUND' || code === 'INVALID_INPUT') {
+        return adminError('INVITE_INVALID', 'The membership identity is invalid.');
+      }
+      throw error;
+    }
   };
 }
 
@@ -923,6 +1096,7 @@ export function createAdminApi(options: AdminApiOptions): AdminApiSurface {
     { path: BROWSER_ADMIN_OVERVIEW_PATH, handler: overviewHandler(api) },
     { path: BROWSER_ADMIN_OPERATIONS_PATH, handler: operationsHandler(api) },
     { path: BROWSER_ADMIN_DEVICES_PATH, handler: devicesListHandler(api) },
+    { path: BROWSER_ADMIN_MEMBERSHIPS_PATH, handler: membershipsListHandler(api) },
   ];
   const mutations: readonly {
     readonly method: MutationHttpMethod;
@@ -960,6 +1134,8 @@ export function createAdminApi(options: AdminApiOptions): AdminApiSurface {
       handler: credentialClearHandler(api),
     },
     { method: 'POST', path: BROWSER_ADMIN_INVITES_PATH, handler: inviteCreateHandler(api) },
+    { method: 'PUT', path: BROWSER_ADMIN_MEMBERSHIPS_PATH, handler: membershipUpsertHandler(api) },
+    { method: 'DELETE', path: BROWSER_ADMIN_MEMBERSHIPS_PATH, handler: membershipRevokeHandler(api) },
     {
       method: 'DELETE',
       path: `${BROWSER_ADMIN_SESSIONS_PATH}/:sessionId`,

@@ -31,13 +31,19 @@ import { Worker } from 'node:worker_threads';
 import type { LLMProvider } from '@novalistically/core';
 import { MockProvider } from '@novalistically/core/testing';
 import { createFileCoreRuntimeServices, FileProjectSourceLoader } from '@novalistically/node-host';
-import type { AuthoringActivityEventV1 } from '../contracts/authoring.js';
+import {
+  normalizeWorkbenchConfiguration,
+  type WorkbenchConfigurationInput,
+  type WorkbenchProjectConfigurationV2,
+} from '@novalistically/workbench-protocol';
+import { AUTHORING_CONTRACT_VERSION, type AuthoringActivityEventV1 } from '../contracts/authoring.js';
 import {
   BROWSER_API_VERSION,
   type BrowserProjectSummaryV1,
   type BrowserSessionPrincipalV1,
 } from '../contracts/browser-api.js';
 import type {
+  ConfigChangeRequestV1,
   WorkbenchConfigurationV1,
   WorkbenchProjectConfigurationV1,
 } from '../contracts/configuration.js';
@@ -70,6 +76,7 @@ import {
   type ProjectAuthoringTreeWatcher,
 } from './authoring/project-tree-watcher.js';
 import type { AuthoringCoordinatorEvent } from './authoring/types.js';
+import { projectCanonicalGraphRuntime } from './graph-projection.js';
 import { type BrowserAgentProject, createBrowserAgentApi } from './browser-agent-api.js';
 import {
   type BrowserAuthoringEventSource,
@@ -79,14 +86,25 @@ import { createBrowserPrincipalResolver } from './browser-read-api.js';
 import { ConfigurationFileStore } from './configuration-file-store.js';
 import { ConfigurationChangeService } from './configuration-service.js';
 import { createProjectCoreRuntime } from './core-runtime.js';
-import { projectCanonicalGraphRuntime } from './graph-projection.js';
 import {
   createDeviceVerifierPersistence,
+  MCP_ADMIN_SCOPE,
+  MCP_AUTHOR_SCOPE,
+  MCP_READ_SCOPE,
+  MCP_RENDER_SCOPE,
+  MCP_SUBMIT_SCOPE,
+  createAdminMcpRegistry,
   createMcpAuthorizationPort,
   createMcpDevicePairingService,
   createMcpStreamableEndpoint,
   createProjectSessionMcpRegistry,
+  type McpAdminConfigurationPort,
 } from './mcp/index.js';
+import {
+  createProjectAccessService,
+  type ProjectAccessRequiredRole,
+} from './project-access-service.js';
+import { createProjectMembershipService } from './project-membership-service.js';
 import { createProjectSession, createProjectSessionRegistry } from './project-session.js';
 import { HostProviderError, HostProviderFactory } from './provider-factory.js';
 import { createProviderCredentialStore } from './providers/index.js';
@@ -137,8 +155,7 @@ export interface WorkbenchLaunchConfig extends HostServerOptions {
  * itself in Phase 1A.
  */
 export interface WorkbenchConfigurationSeam {
-  /** Load the validated Phase-0 configuration DTO; null while unconfigured. */
-  load(): Promise<WorkbenchConfigurationV1 | null>;
+  load(): Promise<(WorkbenchConfigurationV1 | WorkbenchConfigurationInput) | null>;
 }
 
 export interface WorkbenchLaunchHandle {
@@ -220,6 +237,7 @@ async function staticHandler(request: Request, assetsRoot: string): Promise<Resp
     path === '/health' ||
     path === '/status' ||
     path === '/mcp' ||
+    path.startsWith('/mcp/') ||
     path === '/yjs' ||
     path.startsWith('/api/')
   ) {
@@ -575,7 +593,11 @@ export async function startWorkbench(
       },
     });
     const storedConfiguration = await configurationService.readActive().catch(() => null);
-    const activeConfiguration = configuration ?? storedConfiguration?.configuration ?? null;
+    const activeConfigurationInput = configuration ?? storedConfiguration?.configuration ?? null;
+    const activeConfiguration =
+      activeConfigurationInput === null
+        ? null
+        : normalizeWorkbenchConfiguration(activeConfigurationInput as WorkbenchConfigurationInput);
 
     // Host-only provider construction: the API key is read exclusively from
     // the credential store and passed as an explicit AI SDK option; the
@@ -587,7 +609,7 @@ export async function startWorkbench(
       override:
         config.providerOverride ?? (config.provider === 'mock' ? new MockProvider() : undefined),
     });
-    const configuredProjects: readonly WorkbenchProjectConfigurationV1[] =
+    const configuredProjects: readonly WorkbenchProjectConfigurationV2[] =
       activeConfiguration?.projects ??
       (config.projectRoot === undefined
         ? []
@@ -596,8 +618,21 @@ export async function startWorkbench(
               projectId: config.projectId ?? basename(config.projectRoot),
               displayName: config.displayName ?? basename(config.projectRoot),
               root: config.projectRoot,
+              revisionMirror: { mode: 'disabled' },
             },
           ]);
+    const memberships = createProjectMembershipService(persistence.client);
+    const projectAccess = createProjectAccessService({
+      projects: () =>
+        configuredProjects.map((project) => ({
+          projectId: project.projectId,
+          displayName: project.displayName,
+        })),
+      memberships,
+      ownerUserId: async () => (await persistence.client.request('loadOwner', undefined))?.userId ?? null,
+      isOpen: (projectId) => sessions.get(projectId) !== null,
+    });
+
     const providerReady =
       config.providerOverride !== undefined ||
       config.provider === 'mock' ||
@@ -614,6 +649,9 @@ export async function startWorkbench(
     const runtimeProvider = providerReady ? await provider.create() : unavailableProvider;
     const audit = createAgentDurableAudit({ client: persistence.client });
     const projectConfiguration = new Map<string, WorkbenchProjectConfigurationV1>();
+    const revisionMirrors = new Map(
+      configuredProjects.map((project) => [project.projectId, project.revisionMirror] as const),
+    );
     const yjsPersistence = createYjsPersistencePort(persistence.client);
     const yjsCore = createYjsWorkingDocumentCore({ persistence: yjsPersistence });
     const authoring = new Map<string, ProjectAuthoringRuntime>();
@@ -640,7 +678,7 @@ export async function startWorkbench(
     const publishAuthoringEvent = (event: AuthoringCoordinatorEvent): void => {
       const subscribers = listeners.get(event.projectId);
       if (subscribers === undefined || event.type === 'submit-receipt') return;
-      const safe: AuthoringActivityEventV1 = { ...event, version: 1 };
+      const safe: AuthoringActivityEventV1 = { ...event, version: AUTHORING_CONTRACT_VERSION };
       for (const listener of subscribers) listener(safe);
     };
     const agentTasks = providerReady ? new AgentTaskService({ provider: runtimeProvider }) : null;
@@ -656,7 +694,10 @@ export async function startWorkbench(
         const source = new FileProjectSourceLoader().load(project.root);
         const coreRuntime = createProjectCoreRuntime({
           projectId: project.projectId,
-          services: createFileCoreRuntimeServices(project.root, { provider: runtimeProvider }),
+          services: createFileCoreRuntimeServices(project.root, {
+            provider: runtimeProvider,
+            artifactRoot: join(config.hostHome, 'projects', project.projectId, 'runtime'),
+          }),
         });
         const session = createProjectSession({
           projectId: project.projectId,
@@ -681,6 +722,7 @@ export async function startWorkbench(
           projectRoot: project.root,
           hostStagingRoot: join(config.hostHome, 'staging', project.projectId),
           session,
+          revisionMirror: revisionMirrors.get(project.projectId) ?? { mode: 'disabled' },
           capabilities,
           persistence: persistence.client,
           yjsCore,
@@ -755,36 +797,21 @@ export async function startWorkbench(
     };
     const principal = createBrowserPrincipalResolver({ sessions: auth, users });
     const authorization = {
-      canAccessProject: async (_userId: string, projectId: string) =>
-        sessions.get(projectId) !== null,
+      canAccessProject: (
+        userId: string,
+        projectId: string,
+        requiredRole: ProjectAccessRequiredRole = 'reader',
+      ) => projectAccess.canAccessProject(userId, projectId, requiredRole),
     };
     const catalog = {
-      listProjects: async (
-        _principal: BrowserSessionPrincipalV1,
-      ): Promise<readonly BrowserProjectSummaryV1[]> => {
-        const rows = await persistence.client.request('listProjects', undefined);
-        const active = await configurationService.readActive();
-        const configuredIds = new Set(
-          (active?.configuration.projects ?? configuredProjects).map(
-            (project) => project.projectId,
-          ),
-        );
-        return rows
-          .filter((row) => configuredIds.has(row.projectId))
-          .map((row) => ({
-            version: BROWSER_API_VERSION,
-            projectId: row.projectId,
-            displayName: row.displayName,
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-            open: sessions.get(row.projectId) !== null,
-          }));
-      },
+      listProjects: (current: BrowserSessionPrincipalV1): Promise<readonly BrowserProjectSummaryV1[]> =>
+        projectAccess.listProjects(current),
     };
     const browser: HostServerOptions['browser'] =
       configuredProjects.length === 0
         ? undefined
         : {
+            access: projectAccess,
             principal,
             authorization,
             catalog,
@@ -862,70 +889,113 @@ export async function startWorkbench(
     const defaultProjectId =
       activeConfiguration?.defaultProjectId ?? configuredProjects[0]?.projectId ?? null;
     const defaultSession = defaultProjectId === null ? null : sessions.get(defaultProjectId);
-    const defaultAuthoring =
-      defaultProjectId === null ? undefined : authoring.get(defaultProjectId);
-    const mcp =
-      defaultSession === null || defaultAuthoring === undefined
-        ? undefined
-        : {
-            endpoint: createMcpStreamableEndpoint({
-              registry: createProjectSessionMcpRegistry(defaultSession, {
+    const adminSession =
+      defaultSession ??
+      (configuredProjects.length > 0 ? sessions.get(configuredProjects[0].projectId) : null);
+    const adminConfiguration: McpAdminConfigurationPort = {
+      async preview(request: ConfigChangeRequestV1) {
+        const active = await configurationService.readActive();
+        if (active?.revision !== request.expectedRevision) {
+          return {
+            status: 'stale' as const,
+            activeRevision: active?.revision ?? null,
+            candidateRevision: null,
+            changedFields: ['configuration'],
+            diagnostics: [{ code: 'CONFIG_STALE', message: 'Configuration revision changed.' }],
+          };
+        }
+        const validation = await configurationService.validateCandidate(request.configuration);
+        return validation.ok
+          ? {
+              status: 'applied' as const,
+              activeRevision: active?.revision ?? null,
+              candidateRevision: validation.revision,
+              changedFields: [],
+              diagnostics: [],
+            }
+          : {
+              status: 'invalid' as const,
+              activeRevision: active?.revision ?? null,
+              candidateRevision: null,
+              changedFields: [],
+              diagnostics: [...validation.diagnostics],
+            };
+      },
+      apply: (request: ConfigChangeRequestV1) =>
+        configurationService.apply({
+          candidate: request.configuration,
+          expectedRevision: request.expectedRevision,
+          origin: 'mcp',
+        }),
+    };
+    const mcpAuthorization = createMcpAuthorizationPort({
+      sessions: auth,
+      access: projectAccess,
+      capabilities,
+      devices,
+      owner: {
+        loadOwner: () => persistence.client.request('loadOwner', undefined),
+      },
+    });
+    const projectEndpoint =
+      configuredProjects.length === 0
+        ? null
+        : createMcpStreamableEndpoint({
+            route: 'project',
+            authorization: mcpAuthorization,
+            availableScopes: [MCP_READ_SCOPE, MCP_RENDER_SCOPE, MCP_AUTHOR_SCOPE, MCP_SUBMIT_SCOPE],
+            projectIdResolver: (request) => {
+              const pathname = new URL(request.url).pathname;
+              const prefix = '/mcp/projects/';
+              if (!pathname.startsWith(prefix)) return null;
+              const encoded = pathname.slice(prefix.length);
+              if (encoded.length === 0 || encoded.includes('/')) return null;
+              try {
+                const projectId = decodeURIComponent(encoded);
+                return projectId.length === 0 || projectId.includes('/') ? null : projectId;
+              } catch {
+                return null;
+              }
+            },
+            resolveRegistry: async (_request, projectId) => {
+              // Lifecycle and ACL are gates before this callback is reached;
+              // check open state before touching authoring or registry state.
+              const session = sessions.get(projectId);
+              if (session === null) return null;
+              const projectAuthoring = authoring.get(projectId);
+              if (projectAuthoring === undefined) return null;
+              return createProjectSessionMcpRegistry(session, {
+                family: 'project',
                 coordinator: createMcpAuthoringCoordinatorPort({
-                  session: defaultSession,
-                  coordinator: defaultAuthoring.coordinator,
-                  documents: defaultAuthoring.documents,
+                  session,
+                  coordinator: projectAuthoring.coordinator,
+                  documents: projectAuthoring.documents,
                   capabilities,
                 }),
-                admin: {
-                  async preview(request) {
-                    const active = await configurationService.readActive();
-                    if (active?.revision !== request.expectedRevision) {
-                      return {
-                        status: 'stale',
-                        activeRevision: active?.revision ?? null,
-                        candidateRevision: null,
-                        changedFields: ['configuration'],
-                        diagnostics: [
-                          { code: 'CONFIG_STALE', message: 'Configuration revision changed.' },
-                        ],
-                      };
-                    }
-                    const validation = await configurationService.validateCandidate(
-                      request.configuration,
-                    );
-                    return validation.ok
-                      ? {
-                          status: 'applied',
-                          activeRevision: active?.revision ?? null,
-                          candidateRevision: validation.revision,
-                          changedFields: [],
-                          diagnostics: [],
-                        }
-                      : {
-                          status: 'invalid',
-                          activeRevision: active?.revision ?? null,
-                          candidateRevision: null,
-                          changedFields: [],
-                          diagnostics: [...validation.diagnostics],
-                        };
-                  },
-                  apply: (request) =>
-                    configurationService.apply({
-                      candidate: request.configuration,
-                      expectedRevision: request.expectedRevision,
-                      origin: 'mcp',
-                    }),
-                },
-              }),
-              authorization: createMcpAuthorizationPort({
-                sessions: auth,
-                capabilities,
-                devices,
-                owner: {
-                  loadOwner: () => persistence.client.request('loadOwner', undefined),
-                },
-              }),
-            }),
+              });
+            },
+          });
+    const adminEndpoint =
+      adminSession === null
+        ? null
+        : createMcpStreamableEndpoint({
+            route: 'admin',
+            projectId: adminSession.projectId,
+            authorization: mcpAuthorization,
+            availableScopes: [MCP_ADMIN_SCOPE],
+            registry: createAdminMcpRegistry(adminSession, { admin: adminConfiguration }),
+          });
+    const mcp =
+      projectEndpoint === null
+        ? adminEndpoint === null
+          ? undefined
+          : { endpoint: adminEndpoint, path: '/mcp/admin' }
+        : {
+            endpoint: projectEndpoint,
+            path: '/mcp/projects/:projectId',
+            ...(adminEndpoint === null
+              ? {}
+              : { routes: [{ path: '/mcp/admin', endpoint: adminEndpoint }] }),
           };
 
     const hostServer = createHostServer({
@@ -966,6 +1036,7 @@ export async function startWorkbench(
         listDevices: () => devices.listDevices(),
         revoke: (deviceId, revokedAt) => devices.revoke(deviceId, revokedAt),
       },
+      memberships,
       operations: {
         async list({ limit }) {
           const [configuration, audit] = await Promise.all([
@@ -995,6 +1066,7 @@ export async function startWorkbench(
     if (configuredProjects.length > 0) {
       createBrowserAuthoringApi({
         principal,
+        access: projectAccess,
         authorization,
         catalog,
         coordinators: {

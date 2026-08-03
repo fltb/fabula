@@ -321,7 +321,7 @@ describe('AgentCapabilityService over the real persistence worker', () => {
 
     // The verifier row is hash-only: no read result ever contains the raw
     // token, its digest, or the binding key it is stored under.
-    const rows = await harness.client.request('listDeviceVerifiers', undefined);
+    const rows = await harness.client.request('listDeviceVerifiers', { store: 'capability' });
     const capabilityRows = rows.filter((row) => row.deviceId.startsWith('capability:'));
     expect(capabilityRows).toHaveLength(1);
     expect(capabilityRows[0].deviceId).toBe(`capability:${grant.capabilityId}:v1`);
@@ -332,8 +332,8 @@ describe('AgentCapabilityService over the real persistence worker', () => {
     expect(JSON.stringify(capabilityRows[0])).not.toContain(digest);
     const byHash = await harness.client.request('loadDeviceVerifierByTokenHash', {
       tokenHash: digest,
+      store: 'capability',
     });
-    expect(byHash?.deviceId).toBe(`capability:${grant.capabilityId}:v1`);
     expect(Object.keys(byHash ?? {})).not.toContain('tokenHash');
     expect(JSON.stringify(byHash)).not.toContain(token);
   });

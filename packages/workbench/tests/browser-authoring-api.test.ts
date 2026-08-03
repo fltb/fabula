@@ -1,13 +1,15 @@
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthoringCoordinator } from '../src/host/authoring/types.js';
-import type { AuthoringOperationReceiptV1, AuthoringStateV1 } from '../src/contracts/authoring.js';
+import { AUTHORING_CONTRACT_VERSION, type AuthoringOperationReceiptV1, type AuthoringStateV1 } from '../src/contracts/authoring.js';
 import type { BrowserSessionPrincipalV1 } from '../src/contracts/browser-api.js';
+import { BROWSER_SESSION_HEADER } from '../src/contracts/browser-api.js';
 import type { HostServer } from '../src/host/server.js';
 import {
   createBrowserAuthoringApi,
   type BrowserAuthoringApiOptions,
 } from '../src/host/browser-authoring-api.js';
+import { createProjectAccessService } from '../src/host/project-access-service.js';
 
 const principal: BrowserSessionPrincipalV1 = {
   version: 1,
@@ -19,7 +21,7 @@ const principal: BrowserSessionPrincipalV1 = {
 };
 
 const state: AuthoringStateV1 = {
-  version: 1,
+  version: AUTHORING_CONTRACT_VERSION,
   projectId: 'proj-a',
   phase: 'working-dirty',
   acceptedSourceHash: 'accepted-hash',
@@ -34,7 +36,7 @@ const state: AuthoringStateV1 = {
 };
 
 const receipt: AuthoringOperationReceiptV1 = {
-  version: 1,
+  version: AUTHORING_CONTRACT_VERSION,
   operationId: 'op-1',
   projectId: 'proj-a',
   kind: 'submit',
@@ -48,9 +50,17 @@ const receipt: AuthoringOperationReceiptV1 = {
   updatedAt: '2099-01-01T00:00:00.000Z',
 };
 
-function harness() {
+function harness(input: {
+  readonly principal?: BrowserSessionPrincipalV1;
+  readonly access?: BrowserAuthoringApiOptions['access'];
+} = {}) {
+  const currentPrincipal = input.principal ?? principal;
   const submit = vi.fn(async () => receipt);
   const reconcile = vi.fn(async () => ({ ...receipt, kind: 'reconcile-external' as const }));
+  const resolveCapability = vi.fn(async () => ({
+    capabilityId: 'server-capability',
+    scopes: ['authoring:submit'],
+  }));
   const coordinator = {
     projectId: 'proj-a',
     getState: () => state,
@@ -64,7 +74,8 @@ function harness() {
     dispose: async () => undefined,
   } satisfies AuthoringCoordinator;
   const options: BrowserAuthoringApiOptions = {
-    principal: { resolve: async () => ({ ok: true, principal }) },
+    principal: { resolve: async () => ({ ok: true, principal: currentPrincipal }) },
+    ...(input.access === undefined ? {} : { access: input.access }),
     authorization: { canAccessProject: () => true },
     catalog: {
       listProjects: async () => [
@@ -72,16 +83,14 @@ function harness() {
           version: 1,
           projectId: 'proj-a',
           displayName: 'Project A',
-          createdAt: principal.expiresAt,
-          updatedAt: principal.expiresAt,
+          createdAt: currentPrincipal.expiresAt,
+          updatedAt: currentPrincipal.expiresAt,
           open: true,
         },
       ],
     },
     coordinators: { get: () => coordinator },
-    capabilities: {
-      resolve: async () => ({ capabilityId: 'server-capability', scopes: ['authoring:submit'] }),
-    },
+    capabilities: { resolve: resolveCapability },
     now: () => '2099-01-01T00:00:00.000Z',
   };
   const registered = {
@@ -100,7 +109,7 @@ function harness() {
   const app = new Hono();
   for (const [path, handler] of registered.reads) app.get(path, handler as never);
   for (const [path, handler] of registered.mutations) app.post(path, handler as never);
-  return { app, submit, reconcile };
+  return { app, submit, reconcile, resolveCapability };
 }
 
 describe('browser authoring API', () => {
@@ -110,7 +119,7 @@ describe('browser authoring API', () => {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        version: 1,
+        version: AUTHORING_CONTRACT_VERSION,
         projectId: 'proj-a',
         expectedAcceptedSourceHash: 'accepted-hash',
         expectedWorkspaceDigest: 'workspace-hash',
@@ -130,7 +139,7 @@ describe('browser authoring API', () => {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        version: 1,
+        version: AUTHORING_CONTRACT_VERSION,
         projectId: 'proj-a',
         expectedAcceptedSourceHash: 'accepted-hash',
         expectedWorkspaceDigest: 'workspace-hash',
@@ -144,5 +153,55 @@ describe('browser authoring API', () => {
       capabilityId: 'server-capability',
       capabilityScopes: ['authoring:submit'],
     });
+  });
+  it('keeps reader status access while denying authoring mutation and submit', async () => {
+    const reader: BrowserSessionPrincipalV1 = {
+      ...principal,
+      userId: 'reader-1',
+      role: 'user',
+      displayName: 'Reader',
+    };
+    const access = createProjectAccessService({
+      projects: [{ projectId: 'proj-a', displayName: 'Project A', open: true }],
+      memberships: [{ projectId: 'proj-a', userId: 'reader-1', role: 'reader' }],
+    });
+    const { app, submit, reconcile, resolveCapability } = harness({ principal: reader, access });
+
+    const stateResponse = await app.request('/api/v1/projects/proj-a/authoring/state');
+    expect(stateResponse.status).toBe(200);
+
+    const ticketResponse = await app.request(
+      '/api/v1/projects/proj-a/source/doc-1/yjs-ticket',
+      { headers: { [BROWSER_SESSION_HEADER]: 'reader-session' } },
+    );
+    expect(ticketResponse.status).toBe(403);
+
+    const submitResponse = await app.request('/api/v1/projects/proj-a/authoring/submit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        version: AUTHORING_CONTRACT_VERSION,
+        projectId: 'proj-a',
+        expectedAcceptedSourceHash: 'accepted-hash',
+        expectedWorkspaceDigest: 'workspace-hash',
+      }),
+    });
+    expect(submitResponse.status).toBe(403);
+
+    const reconcileResponse = await app.request('/api/v1/projects/proj-a/authoring/reconcile', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        version: AUTHORING_CONTRACT_VERSION,
+        projectId: 'proj-a',
+        choice: 'keep-working',
+        candidateHash: null,
+        expectedAcceptedSourceHash: 'accepted-hash',
+      }),
+    });
+    expect(reconcileResponse.status).toBe(403);
+    expect(submit).not.toHaveBeenCalled();
+    expect(reconcile).not.toHaveBeenCalled();
+    expect(resolveCapability).not.toHaveBeenCalled();
   });
 });

@@ -39,7 +39,12 @@ describe('McpDevicePairingService over the real persistence worker', () => {
   });
 
   it('claims a pairing exactly once and returns a one-time opaque credential', async () => {
-    const pairing = await devices.createPairing({ ownerUserId: OWNER });
+    const pairing = await devices.createPairing({
+      ownerUserId: OWNER,
+      kind: 'project',
+      projectId: 'p1',
+      role: 'reader',
+    });
     expect(pairing.pairingCode).toMatch(/^wbp_[A-Za-z0-9_-]{32}$/);
 
     const claimed = await devices.claim({
@@ -54,12 +59,16 @@ describe('McpDevicePairingService over the real persistence worker', () => {
     expect(claimed.credential).not.toContain(pairing.pairingCode);
     expect(claimed.device).toEqual({
       deviceId: 'device-1',
-      scope: ['mcp:read'],
+      kind: 'project',
+      projectId: 'p1',
+      ownerUserId: OWNER,
+      scopes: ['mcp:read'],
+      grantRevision: 1,
       expiresAt: new Date(now + 60_000).toISOString(),
-      clientLabel: 'editor-laptop',
       createdAt: new Date(now).toISOString(),
-      revokedAt: undefined,
     });
+    // The claim label is transient metadata, never part of the persisted DTO.
+    expect(claimed.label).toBe('editor-laptop');
     // The safe view never carries the credential or its hash.
     expect(Object.keys(claimed.device)).not.toContain('tokenHash');
     expect(JSON.stringify(claimed.device)).not.toContain(claimed.credential);
@@ -78,7 +87,12 @@ describe('McpDevicePairingService over the real persistence worker', () => {
   });
 
   it('verifies the credential only for covered scopes and rejects unknown, revoked, and expired credentials', async () => {
-    const pairing = await devices.createPairing({ ownerUserId: OWNER });
+    const pairing = await devices.createPairing({
+      ownerUserId: OWNER,
+      kind: 'project',
+      projectId: 'p1',
+      role: 'reader',
+    });
     const claimed = await devices.claim({
       pairingCode: pairing.pairingCode,
       clientLabel: 'cli',
@@ -88,24 +102,46 @@ describe('McpDevicePairingService over the real persistence worker', () => {
     if (!claimed.ok) throw new Error('claim failed');
 
     await expect(
-      devices.verifyCredential({ credential: claimed.credential, scopes: ['mcp:read'] }),
+      devices.verifyCredential({
+        credential: claimed.credential,
+        scopes: ['mcp:read'],
+        projectId: 'p1',
+        route: 'project',
+      }),
     ).resolves.toMatchObject({ ok: true, device: { deviceId: 'device-1' } });
     await expect(
       devices.verifyCredential({
         credential: claimed.credential,
         scopes: ['mcp:read', 'mcp:submit'],
+        projectId: 'p1',
+        route: 'project',
       }),
     ).resolves.toEqual({ ok: false, code: 'SCOPE_MISMATCH' });
     await expect(
-      devices.verifyCredential({ credential: 'wbd_unknown', scopes: ['mcp:read'] }),
+      devices.verifyCredential({
+        credential: 'wbd_unknown',
+        scopes: ['mcp:read'],
+        projectId: 'p1',
+        route: 'project',
+      }),
     ).resolves.toEqual({ ok: false, code: 'TOKEN_INVALID' });
 
     await devices.revoke('device-1');
     await expect(
-      devices.verifyCredential({ credential: claimed.credential, scopes: ['mcp:read'] }),
+      devices.verifyCredential({
+        credential: claimed.credential,
+        scopes: ['mcp:read'],
+        projectId: 'p1',
+        route: 'project',
+      }),
     ).resolves.toEqual({ ok: false, code: 'TOKEN_REVOKED' });
 
-    const expiring = await devices.createPairing({ ownerUserId: OWNER });
+    const expiring = await devices.createPairing({
+      ownerUserId: OWNER,
+      kind: 'project',
+      projectId: 'p1',
+      role: 'reader',
+    });
     const short = await devices.claim({
       pairingCode: expiring.pairingCode,
       clientLabel: 'short-lived',
@@ -115,12 +151,22 @@ describe('McpDevicePairingService over the real persistence worker', () => {
     if (!short.ok) throw new Error('claim failed');
     now += 1001;
     await expect(
-      devices.verifyCredential({ credential: short.credential, scopes: ['mcp:read'] }),
+      devices.verifyCredential({
+        credential: short.credential,
+        scopes: ['mcp:read'],
+        projectId: 'p1',
+        route: 'project',
+      }),
     ).resolves.toEqual({ ok: false, code: 'TOKEN_EXPIRED' });
   });
 
   it('enforces least-scope pairing and rejects malformed claims without side effects', async () => {
-    const pairing = await devices.createPairing({ ownerUserId: OWNER });
+    const pairing = await devices.createPairing({
+      ownerUserId: OWNER,
+      kind: 'project',
+      projectId: 'p1',
+      role: 'reader',
+    });
 
     // Unknown scopes, empty scopes, over-long labels, and unbounded lifetimes fail closed.
     await expect(
@@ -166,25 +212,41 @@ describe('McpDevicePairingService over the real persistence worker', () => {
     expect(claimed.ok).toBe(true);
     if (!claimed.ok) return;
     // Scopes are deduplicated into a stable least-scope set.
-    expect(claimed.device.scope).toEqual(['mcp:read', 'mcp:render']);
+    expect(claimed.device.scopes).toEqual(['mcp:read', 'mcp:render']);
   });
 
   it('only the owner may pair, and owner pairings may carry mcp:admin', async () => {
-    await expect(devices.createPairing({ ownerUserId: '' })).rejects.toBeInstanceOf(
-      DevicePairingInputError,
-    );
     await expect(
-      devices.createPairing({ ownerUserId: OWNER, ttlMs: 0 }),
+      devices.createPairing({
+        ownerUserId: '',
+        kind: 'project',
+        projectId: 'p1',
+        role: 'reader',
+      }),
     ).rejects.toBeInstanceOf(DevicePairingInputError);
     await expect(
       devices.createPairing({
         ownerUserId: OWNER,
-        ttlMs: 60_000,
+        kind: 'project',
+        projectId: 'p1',
+        role: 'reader',
+        ttlMs: 0,
+      }),
+    ).rejects.toBeInstanceOf(DevicePairingInputError);
+    await expect(
+      devices.createPairing({
+        ownerUserId: OWNER,
+        kind: 'project',
+        projectId: 'p1',
         role: 'admin',
+        ttlMs: 60_000,
       } as never),
     ).rejects.toBeInstanceOf(DevicePairingInputError);
 
-    const pairing = await devices.createPairing({ ownerUserId: OWNER });
+    const pairing = await devices.createPairing({
+      ownerUserId: OWNER,
+      kind: 'admin',
+    });
     const claimed = await devices.claim({
       pairingCode: pairing.pairingCode,
       clientLabel: 'owner-mcp',
@@ -194,16 +256,38 @@ describe('McpDevicePairingService over the real persistence worker', () => {
     expect(claimed.ok).toBe(true);
     if (!claimed.ok) return;
     await expect(
-      devices.verifyCredential({ credential: claimed.credential, scopes: ['mcp:admin'] }),
+      devices.verifyCredential({
+        credential: claimed.credential,
+        scopes: ['mcp:admin'],
+        route: 'admin',
+      }),
     ).resolves.toMatchObject({ ok: true });
+    await expect(
+      devices.verifyCredential({
+        credential: claimed.credential,
+        scopes: ['mcp:admin'],
+        projectId: 'p1',
+        route: 'project',
+      }),
+    ).resolves.toEqual({ ok: false, code: 'ADMIN_ROUTE_REQUIRED' });
     // mcp:admin can never substitute for author or submit scopes.
     await expect(
-      devices.verifyCredential({ credential: claimed.credential, scopes: ['mcp:submit'] }),
-    ).resolves.toEqual({ ok: false, code: 'SCOPE_MISMATCH' });
+      devices.verifyCredential({
+        credential: claimed.credential,
+        scopes: ['mcp:submit'],
+        route: 'admin',
+      }),
+    ).resolves.toEqual({ ok: false, code: 'ADMIN_ROUTE_REQUIRED' });
   });
 
   it('expires unclaimed pairing codes without creating a verifier', async () => {
-    const pairing = await devices.createPairing({ ownerUserId: OWNER, ttlMs: 1000 });
+    const pairing = await devices.createPairing({
+      ownerUserId: OWNER,
+      kind: 'project',
+      projectId: 'p1',
+      role: 'reader',
+      ttlMs: 1000,
+    });
     now += 1001;
     await expect(
       devices.claim({
@@ -217,7 +301,12 @@ describe('McpDevicePairingService over the real persistence worker', () => {
   });
 
   it('survives a Host restart for issued devices while burning unclaimed pairing codes', async () => {
-    const pairing = await devices.createPairing({ ownerUserId: OWNER });
+    const pairing = await devices.createPairing({
+      ownerUserId: OWNER,
+      kind: 'project',
+      projectId: 'p1',
+      role: 'author',
+    });
     const claimed = await devices.claim({
       pairingCode: pairing.pairingCode,
       clientLabel: 'restart-safe',
@@ -225,7 +314,12 @@ describe('McpDevicePairingService over the real persistence worker', () => {
       ttlMs: 60_000,
     });
     if (!claimed.ok) throw new Error('claim failed');
-    const pending = await devices.createPairing({ ownerUserId: OWNER });
+    const pending = await devices.createPairing({
+      ownerUserId: OWNER,
+      kind: 'project',
+      projectId: 'p1',
+      role: 'reader',
+    });
 
     await harness.dispose();
     harness = createRealPersistence(harness.databasePath);
@@ -238,7 +332,12 @@ describe('McpDevicePairingService over the real persistence worker', () => {
 
     // The issued credential verifies from the durable hash-only row alone.
     await expect(
-      restarted.verifyCredential({ credential: claimed.credential, scopes: ['mcp:author'] }),
+      restarted.verifyCredential({
+        credential: claimed.credential,
+        scopes: ['mcp:author'],
+        projectId: 'p1',
+        route: 'project',
+      }),
     ).resolves.toMatchObject({ ok: true, device: { deviceId: 'device-1' } });
     const listed = await restarted.listDevices();
     expect(listed).toHaveLength(1);
@@ -268,12 +367,22 @@ describe('McpDevicePairingService over the real persistence worker', () => {
     });
     // A capability token is not a device credential...
     await expect(
-      devices.verifyCredential({ credential: token, scopes: ['mcp:read'] }),
+      devices.verifyCredential({
+        credential: token,
+        scopes: ['mcp:read'],
+        projectId: 'p1',
+        route: 'project',
+      }),
     ).resolves.toEqual({ ok: false, code: 'TOKEN_INVALID' });
     // ...and capability rows never surface in device listings.
     expect(await devices.listDevices()).toEqual([]);
 
-    const pairing = await devices.createPairing({ ownerUserId: OWNER });
+    const pairing = await devices.createPairing({
+      ownerUserId: OWNER,
+      kind: 'project',
+      projectId: 'p1',
+      role: 'reader',
+    });
     const claimed = await devices.claim({
       pairingCode: pairing.pairingCode,
       clientLabel: 'cli',
@@ -291,9 +400,21 @@ describe('McpDevicePairingService over the real persistence worker', () => {
     // The verifier row stores only the SHA-256 hash of the credential.
     const stored = await harness.client.request('loadDeviceVerifierByTokenHash', {
       tokenHash: createHash('sha256').update(claimed.credential, 'utf8').digest('hex'),
+      store: 'mcp',
     });
-    expect(stored?.deviceId).toBe('device-1');
+    expect(stored).toEqual({
+      deviceId: 'device-1',
+      kind: 'project',
+      projectId: 'p1',
+      ownerUserId: OWNER,
+      scopes: ['mcp:read'],
+      grantRevision: 1,
+      expiresAt: new Date(now + 60_000).toISOString(),
+      createdAt: new Date(now).toISOString(),
+    });
     expect(Object.keys(stored ?? {})).not.toContain('tokenHash');
+    expect(Object.keys(stored ?? {})).not.toContain('clientLabel');
+    expect(Object.keys(stored ?? {})).not.toContain('role');
     expect(JSON.stringify(stored)).not.toContain(claimed.credential);
   });
 });

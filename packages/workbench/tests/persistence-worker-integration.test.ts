@@ -31,7 +31,7 @@ describe('real persistence worker initialization', () => {
         const migrations = db
           .prepare('SELECT version FROM schema_migrations ORDER BY version')
           .all() as { version: number }[];
-        expect(migrations.map((m) => m.version)).toEqual([1, 2]);
+        expect(migrations.map((m) => m.version)).toEqual([1, 2, 3, 4]);
         const v2Tables = db
           .prepare(
             "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('configuration_operations', 'authoring_state', 'audit_log', 'device_verifiers') ORDER BY name",
@@ -223,7 +223,8 @@ describe('real persistence worker initialization', () => {
       // Invite consumption is single-use and expiry-aware at the wire level.
       await harness.client.request('createInvite', {
         inviteId: 'inv-1',
-        role: 'user',
+        projectId: 'proj-1',
+        role: 'reader',
         expiresAt: '2026-01-02T00:00:00.000Z',
       });
       await expect(
@@ -240,7 +241,8 @@ describe('real persistence worker initialization', () => {
       ).resolves.toEqual({ status: 'already-consumed' });
       await harness.client.request('createInvite', {
         inviteId: 'inv-expired',
-        role: 'user',
+        projectId: 'proj-1',
+        role: 'reader',
         expiresAt: '2026-01-01T00:00:00.000Z',
       });
       await expect(
@@ -363,7 +365,8 @@ describe('real persistence worker initialization', () => {
       });
       await harness.client.request('createInvite', {
         inviteId: 'inv-atomic',
-        role: 'user',
+        projectId: 'proj-1',
+        role: 'reader',
         expiresAt: '2026-02-01T00:00:00.000Z',
       });
 
@@ -397,6 +400,303 @@ describe('real persistence worker initialization', () => {
           consumedAt: '2026-01-01T12:00:01.000Z',
         }),
       ).resolves.toMatchObject({ status: 'accepted' });
+    } finally {
+      await harness.dispose();
+    }
+  });
+});
+
+describe('real persistence worker project memberships', () => {
+  it('persists canonical roles, active-only reads, revisions, and capability/session invalidation', async () => {
+    const harness = createRealPersistence();
+    try {
+      const projectA = {
+        projectId: 'project-a',
+        displayName: 'Project A',
+        rootLabel: 'project-a-root',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      };
+      const projectB = {
+        projectId: 'project-b',
+        displayName: 'Project B',
+        rootLabel: 'project-b-root',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      };
+      await harness.client.request('upsertProject', projectA);
+      await harness.client.request('upsertProject', projectB);
+      await harness.client.request('createInvite', {
+        inviteId: 'membership-seed-invite',
+        projectId: projectB.projectId,
+        role: 'reader',
+        expiresAt: '2026-02-01T00:00:00.000Z',
+      });
+      await expect(
+        harness.client.request('acceptInviteUser', {
+          inviteId: 'membership-seed-invite',
+          consumedAt: '2026-01-01T00:00:00.000Z',
+          userId: 'member-1',
+          displayName: 'Member',
+          passwordHash: {
+            version: 1,
+            algorithm: 'argon2id',
+            saltBase64: 'c2FsdA==',
+            hashBase64: 'aGFzaA==',
+            memory: 64,
+            passes: 3,
+            parallelism: 1,
+            tagLength: 32,
+          },
+          capabilityVersion: 1,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          session: {
+            sessionId: 'member-session',
+            userId: 'member-1',
+            expiresAt: '2026-02-01T00:00:00.000Z',
+            capabilityVersion: 1,
+          },
+        }),
+      ).resolves.toMatchObject({ status: 'accepted' });
+
+      await expect(
+        harness.client.request('loadProjectMembership', {
+          userId: 'member-1',
+          projectId: projectA.projectId,
+        }),
+      ).resolves.toBeNull();
+      await expect(
+        harness.client.request('listProjectMemberships', { projectId: projectA.projectId }),
+      ).resolves.toEqual([]);
+      await expect(harness.client.request('listProjectMemberships', {})).resolves.toMatchObject([
+        {
+          userId: 'member-1',
+          projectId: projectB.projectId,
+          role: 'reader',
+          revision: 1,
+          capabilityVersion: 1,
+        },
+      ]);
+
+      await harness.client.request('upsertCapability', {
+        capabilityId: 'capability-a-initial',
+        userId: 'member-1',
+        projectId: projectA.projectId,
+        scope: ['project:read'],
+        version: 1,
+        expiresAt: '2026-02-01T00:00:00.000Z',
+      });
+      await harness.client.request('upsertCapability', {
+        capabilityId: 'capability-b',
+        userId: 'member-1',
+        projectId: projectB.projectId,
+        scope: ['project:read'],
+        version: 1,
+        expiresAt: '2026-02-01T00:00:00.000Z',
+      });
+
+      // The worker validates identities and roles before mutating membership state.
+      const untypedClient = harness.client as unknown as {
+        request(operation: string, payload: unknown): Promise<unknown>;
+      };
+      await expect(
+        untypedClient.request('upsertProjectMembership', {
+          userId: 'member-1',
+          projectId: projectA.projectId,
+          role: 'owner',
+        }),
+      ).rejects.toMatchObject({ code: 'INVALID_INPUT', retryable: false });
+      await expect(
+        untypedClient.request('loadProjectMembership', { userId: '', projectId: projectA.projectId }),
+      ).rejects.toMatchObject({ code: 'INVALID_INPUT', retryable: false });
+      await expect(
+        untypedClient.request('listProjectMemberships', { projectId: '' }),
+      ).rejects.toMatchObject({ code: 'INVALID_INPUT', retryable: false });
+      await expect(
+        harness.client.request('upsertProjectMembership', {
+          userId: 'missing-user',
+          projectId: projectA.projectId,
+          role: 'reader',
+          at: '2026-01-01T00:00:01.000Z',
+        }),
+      ).rejects.toMatchObject({ code: 'USER_NOT_FOUND', retryable: false });
+      await expect(
+        harness.client.request('upsertProjectMembership', {
+          userId: 'member-1',
+          projectId: 'missing-project',
+          role: 'reader',
+          at: '2026-01-01T00:00:02.000Z',
+        }),
+      ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND', retryable: false });
+
+      const first = await harness.client.request('upsertProjectMembership', {
+        userId: 'member-1',
+        projectId: projectA.projectId,
+        role: 'reader',
+        at: '2026-01-01T00:01:00.000Z',
+      });
+      expect(first).toMatchObject({
+        capabilityVersion: 2,
+        revokedCapabilities: 1,
+        membership: {
+          userId: 'member-1',
+          projectId: projectA.projectId,
+          role: 'reader',
+          createdAt: '2026-01-01T00:01:00.000Z',
+          revision: 1,
+          capabilityVersion: 2,
+        },
+      });
+      await expect(
+        harness.client.request('loadSession', { sessionId: 'member-session' }),
+      ).resolves.toMatchObject({ userId: 'member-1', capabilityVersion: 2 });
+      await expect(
+        harness.client.request('loadCapability', { capabilityId: 'capability-a-initial' }),
+      ).resolves.toMatchObject({
+        userId: 'member-1',
+        projectId: projectA.projectId,
+        revokedAt: '2026-01-01T00:01:00.000Z',
+      });
+      await expect(
+        harness.client.request('loadCapability', { capabilityId: 'capability-b' }),
+      ).resolves.toMatchObject({ userId: 'member-1', projectId: projectB.projectId });
+      await expect(
+        harness.client.request('loadProjectMembership', {
+          userId: 'member-1',
+          projectId: projectA.projectId,
+        }),
+      ).resolves.toMatchObject({ role: 'reader', revision: 1, capabilityVersion: 2 });
+
+      await harness.client.request('upsertCapability', {
+        capabilityId: 'capability-a-second',
+        userId: 'member-1',
+        projectId: projectA.projectId,
+        scope: ['project:write'],
+        version: 2,
+        expiresAt: '2026-02-01T00:00:00.000Z',
+      });
+      const second = await harness.client.request('upsertProjectMembership', {
+        userId: 'member-1',
+        projectId: projectA.projectId,
+        role: 'maintainer',
+        at: '2026-01-01T00:02:00.000Z',
+      });
+      expect(second).toMatchObject({
+        capabilityVersion: 3,
+        revokedCapabilities: 1,
+        membership: {
+          role: 'maintainer',
+          createdAt: '2026-01-01T00:01:00.000Z',
+          revision: 2,
+          capabilityVersion: 3,
+        },
+      });
+      await expect(
+        harness.client.request('loadSession', { sessionId: 'member-session' }),
+      ).resolves.toMatchObject({ capabilityVersion: 3 });
+      await expect(
+        harness.client.request('loadCapability', { capabilityId: 'capability-a-second' }),
+      ).resolves.toMatchObject({ revokedAt: '2026-01-01T00:02:00.000Z' });
+      await expect(
+        harness.client.request('listProjectMemberships', { projectId: projectA.projectId }),
+      ).resolves.toMatchObject([
+        { projectId: projectA.projectId, role: 'maintainer', revision: 2, capabilityVersion: 3 },
+      ]);
+
+      await harness.client.request('upsertCapability', {
+        capabilityId: 'capability-a-third',
+        userId: 'member-1',
+        projectId: projectA.projectId,
+        scope: ['project:maintain'],
+        version: 3,
+        expiresAt: '2026-02-01T00:00:00.000Z',
+      });
+      const revoked = await harness.client.request('revokeProjectMembership', {
+        userId: 'member-1',
+        projectId: projectA.projectId,
+        at: '2026-01-01T00:03:00.000Z',
+      });
+      expect(revoked).toMatchObject({
+        capabilityVersion: 4,
+        revokedCapabilities: 1,
+        membership: {
+          role: 'maintainer',
+          revision: 3,
+          revokedAt: '2026-01-01T00:03:00.000Z',
+          capabilityVersion: 4,
+        },
+      });
+      await expect(
+        harness.client.request('loadProjectMembership', {
+          userId: 'member-1',
+          projectId: projectA.projectId,
+        }),
+      ).resolves.toBeNull();
+      await expect(
+        harness.client.request('listProjectMemberships', { projectId: projectA.projectId }),
+      ).resolves.toEqual([]);
+      await expect(
+        harness.client.request('listProjectMemberships', {}),
+      ).resolves.toEqual([
+        {
+          userId: 'member-1',
+          projectId: projectB.projectId,
+          role: 'reader',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          revision: 1,
+          capabilityVersion: 4,
+        },
+      ]);
+      await expect(
+        harness.client.request('loadSession', { sessionId: 'member-session' }),
+      ).resolves.toMatchObject({ capabilityVersion: 4 });
+      await expect(
+        harness.client.request('loadCapability', { capabilityId: 'capability-a-third' }),
+      ).resolves.toMatchObject({ revokedAt: '2026-01-01T00:03:00.000Z' });
+      const unaffectedCapability = await harness.client.request('loadCapability', {
+        capabilityId: 'capability-b',
+      });
+      expect(unaffectedCapability).toMatchObject({ projectId: projectB.projectId });
+      expect(unaffectedCapability).not.toHaveProperty('revokedAt');
+
+      // Re-adding a revoked row increments its revision and accepts the final
+      // canonical role, while restoring it to active reads.
+      const reactivated = await harness.client.request('upsertProjectMembership', {
+        userId: 'member-1',
+        projectId: projectA.projectId,
+        role: 'author',
+        at: '2026-01-01T00:04:00.000Z',
+      });
+      expect(reactivated).toMatchObject({
+        capabilityVersion: 5,
+        revokedCapabilities: 0,
+        membership: {
+          role: 'author',
+          revision: 4,
+          capabilityVersion: 5,
+        },
+      });
+      await expect(
+        harness.client.request('loadProjectMembership', {
+          userId: 'member-1',
+          projectId: projectA.projectId,
+        }),
+      ).resolves.toMatchObject({ role: 'author', revision: 4, capabilityVersion: 5 });
+
+      await expect(
+        harness.client.request('revokeProjectMembership', {
+          userId: 'missing-user',
+          projectId: projectA.projectId,
+          at: '2026-01-01T00:05:00.000Z',
+        }),
+      ).rejects.toMatchObject({ code: 'USER_NOT_FOUND', retryable: false });
+      await expect(
+        harness.client.request('revokeProjectMembership', {
+          userId: 'member-1',
+          projectId: 'missing-project',
+          at: '2026-01-01T00:05:00.000Z',
+        }),
+      ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND', retryable: false });
     } finally {
       await harness.dispose();
     }

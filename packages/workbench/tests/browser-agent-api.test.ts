@@ -180,6 +180,7 @@ async function createFixture(
   options: {
     principalOk?: boolean;
     canAccessProject?: boolean;
+    projectRole?: 'reader' | 'author';
     inCatalog?: boolean;
     projectReady?: boolean;
     humanEditing?: boolean;
@@ -277,7 +278,9 @@ async function createFixture(
         : { ok: true as const, principal },
   };
   const authorization: BrowserProjectAuthorization = {
-    canAccessProject: () => options.canAccessProject !== false,
+    canAccessProject: (_userId, _projectId, requiredRole = 'reader') =>
+      options.canAccessProject !== false &&
+      ((options.projectRole ?? 'author') === 'author' || requiredRole === 'reader'),
   };
   const catalog: BrowserProjectCatalog = {
     listProjects: async () =>
@@ -597,6 +600,26 @@ describe('browser Agent proposal surface', () => {
 // ─── Apply surface ───────────────────────────────────────────────────────────
 
 describe('browser Agent apply surface', () => {
+  it('allows reader proposals but denies apply before issuing a capability', async () => {
+    const h = await createFixture({ projectRole: 'reader' });
+    activeHarness = h;
+    const context = await makeContext(h.documents);
+    const proposed = await post(
+      h.app,
+      '/api/v1/projects/proj-a/agent/proposals',
+      proposalBody(context),
+    );
+    expect(proposed.status).toBe(200);
+
+    const response = await post(
+      h.app,
+      '/api/v1/projects/proj-a/agent/proposals/sg-1/apply',
+      applyBody(context, 'sg-1'),
+    );
+    expect(response.status).toBe(404);
+    expect(h.issueCapability).not.toHaveBeenCalled();
+    expect(await h.documents.materializeDocument(DOCUMENT_ID)).toBe(DOC_TEXT);
+  });
   it('rejects an apply for an unknown suggestion before any capability or effect', async () => {
     const h = await createFixture();
     activeHarness = h;
@@ -657,7 +680,7 @@ describe('browser Agent apply surface', () => {
   });
 
   it('applies a stored proposal through the server capability and consumes it', async () => {
-    const h = await createFixture();
+    const h = await createFixture({ projectRole: 'author' });
     activeHarness = h;
     const context = await makeContext(h.documents);
     const proposed = await post(

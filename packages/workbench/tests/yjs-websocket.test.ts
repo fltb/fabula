@@ -12,12 +12,16 @@ import {
   type HostServer,
   parseYjsSyncFrame,
   type YjsAuthPort,
-  type YjsConnectionRequest,
   type YjsDenialReason,
   type YjsGateway,
   type YjsPersistencePort,
   type YjsSyncFrame,
 } from '../src/host/server.js';
+import {
+  createYjsTicketService,
+  type YjsTicketService,
+} from '../src/host/yjs/index.js';
+type YjsAuthRequest = Parameters<YjsAuthPort['resolve']>[0];
 
 const USER_ID = 'user-1';
 
@@ -34,42 +38,61 @@ afterEach(async () => {
 
 const stateKey = (projectId: string, documentId: string): string =>
   `${projectId}\u0000${documentId}`;
-
-/** Always-accepting auth port; the actor is a fixed server-side user. */
-function allowAllAuth(): YjsAuthPort {
+/** Resolve one ticket exactly once, retaining only its opaque binding lifecycle. */
+function ticketAuth(tickets: YjsTicketService, allowedProject?: string): YjsAuthPort {
   return {
-    async resolve(request: YjsConnectionRequest) {
-      return {
-        ok: true,
-        scope: {
-          sessionId: request.sessionId,
-          userId: USER_ID,
-          projectId: request.projectId,
-          documentId: request.documentId,
-        },
-      };
+    async resolve(request: YjsAuthRequest) {
+      if ('ticket' in request) {
+        const binding = tickets.consume(request.ticket);
+        if (binding === null) return { ok: false, reason: 'UNAUTHENTICATED' };
+        if (
+          (allowedProject !== undefined && request.projectId !== allowedProject) ||
+          binding.projectId !== request.projectId
+        ) {
+          tickets.release(binding.bindingId);
+          return { ok: false, reason: 'PROJECT_MISMATCH' };
+        }
+        if (binding.documentId !== request.documentId) {
+          tickets.release(binding.bindingId);
+          return { ok: false, reason: 'INVALID_DOCUMENT' };
+        }
+        return {
+          ok: true,
+          scope: {
+            bindingId: binding.bindingId,
+            userId: binding.userId,
+            capabilityVersion: binding.capabilityVersion,
+            projectId: binding.projectId,
+            documentId: binding.documentId,
+          },
+        };
+      }
+      const binding = tickets.get(request.bindingId);
+      if (
+        binding === null ||
+        binding.userId !== request.userId ||
+        binding.capabilityVersion !== request.capabilityVersion ||
+        binding.projectId !== request.projectId ||
+        binding.documentId !== request.documentId
+      ) {
+        return { ok: false, reason: 'UNAUTHENTICATED' };
+      }
+      return { ok: true, scope: request };
+    },
+    release(scope): void {
+      tickets.release(scope.bindingId);
     },
   };
 }
 
-/** Accept only one project; anything else is a session/project mismatch. */
-function projectScopedAuth(allowedProject: string): YjsAuthPort {
-  return {
-    async resolve(request: YjsConnectionRequest) {
-      if (request.projectId !== allowedProject) {
-        return { ok: false, reason: 'PROJECT_MISMATCH' };
-      }
-      return {
-        ok: true,
-        scope: {
-          sessionId: request.sessionId,
-          userId: USER_ID,
-          projectId: request.projectId,
-          documentId: request.documentId,
-        },
-      };
-    },
-  };
+/** Always-accepting auth port backed by the fixture's one-time ticket store. */
+function allowAllAuth(tickets: YjsTicketService): YjsAuthPort {
+  return ticketAuth(tickets);
+}
+
+/** Accept only one project; anything else is a project mismatch. */
+function projectScopedAuth(allowedProject: string, tickets: YjsTicketService): YjsAuthPort {
+  return ticketAuth(tickets, allowedProject);
 }
 
 function denyingAuth(reason: YjsDenialReason): YjsAuthPort {
@@ -104,22 +127,31 @@ interface ServerFixture {
   readonly server: HostServer;
   readonly gateway: YjsGateway;
   readonly persistence: YjsPersistencePort & { states: Map<string, WorkingDocumentState> };
+  readonly tickets: YjsTicketService;
   readonly port: number;
   readonly close: () => Promise<void>;
 }
 
 async function createFixture(
-  options: { auth?: YjsAuthPort; persistence?: YjsPersistencePort } = {},
+  options: {
+    auth?: YjsAuthPort | ((tickets: YjsTicketService) => YjsAuthPort);
+    persistence?: YjsPersistencePort;
+  } = {},
 ): Promise<ServerFixture> {
   const persistence = (options.persistence ?? fakePersistence()) as YjsPersistencePort & {
     states: Map<string, WorkingDocumentState>;
   };
+  const tickets = createYjsTicketService();
+  const auth =
+    typeof options.auth === 'function'
+      ? options.auth(tickets)
+      : (options.auth ?? allowAllAuth(tickets));
   const server = createHostServer({
     port: 0,
     yjs: {
       persistence,
       sessions: { size: 0, get: () => null } as unknown as ProjectSessionRegistry,
-      auth: options.auth ?? allowAllAuth(),
+      auth,
     },
   });
   const handle = await server.start();
@@ -128,6 +160,7 @@ async function createFixture(
     server,
     gateway: requireYjsGateway(server),
     persistence,
+    tickets,
     port: handle.port,
     close: () => server.close(),
   };
@@ -154,6 +187,21 @@ function requireSyncFrame(frame: Uint8Array): YjsSyncFrame {
 function upgradeUrl(port: number, params: Record<string, string>): string {
   const query = new URLSearchParams(params).toString();
   return `ws://127.0.0.1:${port}${HOST_YJS_UPGRADE_PATH}?${query}`;
+}
+
+function ticketUrl(
+  fixture: ServerFixture,
+  projectId: string,
+  documentId: string,
+): string {
+  const ticket = fixture.tickets.mint({
+    sessionId: 'session-1',
+    userId: USER_ID,
+    capabilityVersion: 1,
+    projectId,
+    documentId,
+  });
+  return upgradeUrl(fixture.port, { ticket, project: projectId, document: documentId });
 }
 
 function toUint8Array(data: RawData): Uint8Array {
@@ -272,11 +320,7 @@ describe('Host Yjs WebSocket upgrade integration', () => {
     const fixture = await createFixture();
     trackClose(() => fixture.close());
     const client = new SocketClient(
-      upgradeUrl(fixture.port, {
-        session: 'session-1',
-        project: 'project-a',
-        document: 'definitions/characters.yaml',
-      }),
+      ticketUrl(fixture, 'project-a', 'definitions/characters.yaml'),
     );
     await client.open();
     try {
@@ -300,22 +344,43 @@ describe('Host Yjs WebSocket upgrade integration', () => {
     await fixture.close();
   });
 
-  it('reconnects into the persisted state', async () => {
+  it('consumes one-time tickets and releases their connection lifecycle', async () => {
     const fixture = await createFixture();
     trackClose(() => fixture.close());
+    const ticket = fixture.tickets.mint({
+      sessionId: 'session-1',
+      userId: USER_ID,
+      capabilityVersion: 1,
+      projectId: 'project-a',
+      documentId: 'definitions/characters.yaml',
+    });
     const url = upgradeUrl(fixture.port, {
-      session: 'session-1',
+      ticket,
       project: 'project-a',
       document: 'definitions/characters.yaml',
     });
     const first = new SocketClient(url);
+    await first.open();
+    await first.close();
+    await vi.waitFor(() => expect(fixture.gateway.size).toBe(0));
+    const replay = new SocketClient(url);
+    await expect(replay.open()).rejects.toThrow('upgrade rejected with HTTP 401');
+    await fixture.close();
+  });
+
+  it('reconnects into the persisted state', async () => {
+
+    const fixture = await createFixture();
+    trackClose(() => fixture.close());
+    const url = (): string => ticketUrl(fixture, 'project-a', 'definitions/characters.yaml');
+    const first = new SocketClient(url());
     await first.open();
     first.send(encodeYjsSyncStep2(updateWithText('hello')));
     await first.nextSync();
     await first.close();
     await vi.waitFor(() => expect(fixture.gateway.size).toBe(0));
 
-    const second = new SocketClient(url);
+    const second = new SocketClient(url());
     await second.open();
     try {
       // The hydrated persisted state is pushed immediately on connect and
@@ -331,12 +396,7 @@ describe('Host Yjs WebSocket upgrade integration', () => {
   it('broadcasts an accepted update to live peers on the exact same document', async () => {
     const fixture = await createFixture();
     trackClose(() => fixture.close());
-    const url = (documentId: string): string =>
-      upgradeUrl(fixture.port, {
-        session: 'session-1',
-        project: 'project-a',
-        document: documentId,
-      });
+    const url = (documentId: string): string => ticketUrl(fixture, 'project-a', documentId);
     // Alice and Bob share one document; Carol is on a different document of
     // the same project and must never hear the shared document's updates.
     const alice = new SocketClient(url('definitions/characters.yaml'));
@@ -394,12 +454,7 @@ describe('Host Yjs WebSocket upgrade integration', () => {
   it('accepts standard messageYjsUpdate frames (sync subtype 2) through the canonical path', async () => {
     const fixture = await createFixture();
     trackClose(() => fixture.close());
-    const url = (documentId: string): string =>
-      upgradeUrl(fixture.port, {
-        session: 'session-1',
-        project: 'project-a',
-        document: documentId,
-      });
+    const url = (documentId: string): string => ticketUrl(fixture, 'project-a', documentId);
     // Alice and Bob share one document; Carol is on a different document and
     // must never hear the shared document's updates.
     const alice = new SocketClient(url('definitions/characters.yaml'));
@@ -440,21 +495,30 @@ describe('Host Yjs WebSocket upgrade integration', () => {
 
   it('reopens the Yjs surface after close so a later start accepts exactly one authenticated upgrade', async () => {
     const persistence = fakePersistence();
+    const tickets = createYjsTicketService();
     const server = createHostServer({
       port: 0,
       yjs: {
         persistence,
         sessions: { size: 0, get: () => null } as unknown as ProjectSessionRegistry,
-        auth: allowAllAuth(),
+        auth: allowAllAuth(tickets),
       },
     });
     trackClose(() => server.close());
-    const url = (port: number): string =>
-      upgradeUrl(port, {
-        session: 'session-1',
+    const url = (port: number): string => {
+      const ticket = tickets.mint({
+        sessionId: 'session-1',
+        userId: USER_ID,
+        capabilityVersion: 1,
+        projectId: 'project-a',
+        documentId: 'definitions/characters.yaml',
+      });
+      return upgradeUrl(port, {
+        ticket,
         project: 'project-a',
         document: 'definitions/characters.yaml',
       });
+    };
 
     const firstHandle = await server.start();
     if (firstHandle.port === null) throw new Error('listener did not bind a TCP port');
@@ -506,7 +570,7 @@ describe('Host Yjs WebSocket upgrade integration', () => {
     trackClose(() => fixture.close());
     const client = new SocketClient(
       upgradeUrl(fixture.port, {
-        session: 'unknown',
+        ticket: 'unknown-ticket',
         project: 'project-a',
         document: 'definitions/characters.yaml',
       }),
@@ -516,12 +580,21 @@ describe('Host Yjs WebSocket upgrade integration', () => {
     await fixture.close();
   });
 
-  it('rejects upgrades for a project the session cannot access', async () => {
-    const fixture = await createFixture({ auth: projectScopedAuth('project-a') });
+  it('rejects upgrades for a project the ticket cannot access', async () => {
+    const fixture = await createFixture({
+      auth: (tickets) => projectScopedAuth('project-a', tickets),
+    });
     trackClose(() => fixture.close());
+    const ticket = fixture.tickets.mint({
+      sessionId: 'session-1',
+      userId: USER_ID,
+      capabilityVersion: 1,
+      projectId: 'project-a',
+      documentId: 'definitions/characters.yaml',
+    });
     const client = new SocketClient(
       upgradeUrl(fixture.port, {
-        session: 'session-1',
+        ticket,
         project: 'project-b',
         document: 'definitions/characters.yaml',
       }),
@@ -534,27 +607,29 @@ describe('Host Yjs WebSocket upgrade integration', () => {
   it('rejects malformed scope and unknown upgrade paths', async () => {
     const fixture = await createFixture();
     trackClose(() => fixture.close());
+    const missingTicket = new SocketClient(
+      upgradeUrl(fixture.port, {
+        project: 'project-a',
+        document: 'definitions/characters.yaml',
+      }),
+    );
+    await expect(missingTicket.open()).rejects.toThrow('upgrade rejected with HTTP 401');
     const missingDocument = new SocketClient(
-      upgradeUrl(fixture.port, { session: 'session-1', project: 'project-a' }),
+      upgradeUrl(fixture.port, { ticket: 'malformed-ticket', project: 'project-a' }),
     );
     await expect(missingDocument.open()).rejects.toThrow('upgrade rejected with HTTP 400');
     const wrongPath = new SocketClient(
-      `ws://127.0.0.1:${fixture.port}/other?session=s&project=p&document=d`,
+      `ws://127.0.0.1:${fixture.port}/other?ticket=malformed&project=p&document=d`,
     );
     await expect(wrongPath.open()).rejects.toThrow('upgrade rejected with HTTP 404');
     expect(fixture.gateway.size).toBe(0);
     await fixture.close();
   });
-
   it('closes every socket and the ws server when the Host closes', async () => {
     const fixture = await createFixture();
     trackClose(() => fixture.close());
     const client = new SocketClient(
-      upgradeUrl(fixture.port, {
-        session: 'session-1',
-        project: 'project-a',
-        document: 'definitions/characters.yaml',
-      }),
+      ticketUrl(fixture, 'project-a', 'definitions/characters.yaml'),
     );
     await client.open();
     const { promise: closed, resolve: resolveClosed } = Promise.withResolvers<void>();
@@ -564,6 +639,7 @@ describe('Host Yjs WebSocket upgrade integration', () => {
     expect(fixture.gateway.size).toBe(0);
     expect(fixture.server.status().running).toBe(false);
   });
+
 
   it('speaks the exact y-websocket wire format', () => {
     const update = updateWithText('wire');

@@ -4,6 +4,8 @@ export interface PersistenceColumn {
   type: 'text' | 'integer' | 'blob' | 'json';
   nullable?: boolean;
   primaryKey?: boolean;
+  /** A source-constant enum constraint, rendered by the worker migration engine. */
+  values?: readonly string[];
 }
 export interface PersistenceTable {
   name: string;
@@ -11,10 +13,40 @@ export interface PersistenceTable {
   /** Table-level composite primary key; used instead of inline column PRIMARY KEY flags. */
   primaryKey?: readonly string[];
 }
+export interface PersistenceFilter {
+  column: string;
+  equals?: string;
+  isNotNull?: boolean;
+}
+export type PersistenceMigrationStep =
+  | { kind: 'create-table'; table: PersistenceTable }
+  | {
+      kind: 'rebuild-table';
+      table: PersistenceTable;
+      copy: { from: string; columns: readonly string[]; filter?: PersistenceFilter };
+    }
+  | {
+      kind: 'create-index';
+      name: string;
+      table: string;
+      columns: readonly string[];
+      unique?: boolean;
+      filter?: PersistenceFilter;
+    }
+  | {
+      kind: 'virtual-table';
+      name: string;
+      using: 'fts5';
+      columns: readonly string[];
+      options?: readonly string[];
+    }
+  | { kind: 'copy-capability-verifiers' };
 export interface PersistenceMigration {
   version: number;
   description: string;
-  tables: readonly PersistenceTable[];
+  /** Kept for the v1/v2 source descriptors; new migrations use ordered steps. */
+  tables?: readonly PersistenceTable[];
+  steps?: readonly PersistenceMigrationStep[];
 }
 
 export const persistenceSchema: readonly PersistenceMigration[] = [
@@ -194,6 +226,226 @@ export const persistenceSchema: readonly PersistenceMigration[] = [
           { name: 'created_at', type: 'text' },
         ],
       },
+    ],
+  },
+  {
+    version: 3,
+    description: 'Native immutable source revisions and materialization journal',
+    steps: [
+      {
+        kind: 'create-table',
+        table: {
+          name: 'source_revisions',
+          columns: [
+            { name: 'revision_id', type: 'text', primaryKey: true },
+            { name: 'project_id', type: 'text' },
+            { name: 'parent_revision_id', type: 'text', nullable: true },
+            { name: 'operation_id', type: 'text' },
+            { name: 'source_hash', type: 'text' },
+            { name: 'bundle_hash', type: 'text' },
+            { name: 'actor_id', type: 'text' },
+            { name: 'origin', type: 'text' },
+            { name: 'created_at', type: 'text' },
+            { name: 'accepted_at', type: 'text', nullable: true },
+          ],
+        },
+      },
+      {
+        kind: 'create-table',
+        table: {
+          name: 'source_revision_operations',
+          columns: [
+            { name: 'operation_id', type: 'text', primaryKey: true },
+            { name: 'project_id', type: 'text' },
+            { name: 'expected_revision_id', type: 'text', nullable: true },
+            { name: 'expected_source_hash', type: 'text', nullable: true },
+            { name: 'revision_id', type: 'text', nullable: true },
+            {
+              name: 'phase',
+              type: 'text',
+              values: [
+                'prepared',
+                'accepted',
+                'materializing',
+                'materialized',
+                'completed',
+                'stale',
+                'conflict',
+                'recovery-required',
+              ],
+            },
+            { name: 'receipt_hash', type: 'text', nullable: true },
+            { name: 'diagnostic', type: 'text', nullable: true },
+            { name: 'created_at', type: 'text' },
+            { name: 'updated_at', type: 'text' },
+          ],
+        },
+      },
+      {
+        kind: 'create-table',
+        table: {
+          name: 'source_heads',
+          columns: [
+            { name: 'project_id', type: 'text', primaryKey: true },
+            { name: 'accepted_revision_id', type: 'text', nullable: true },
+            { name: 'accepted_source_hash', type: 'text', nullable: true },
+            { name: 'materialized_revision_id', type: 'text', nullable: true },
+            { name: 'materialized_source_hash', type: 'text', nullable: true },
+            { name: 'updated_at', type: 'text' },
+          ],
+        },
+      },
+      {
+        kind: 'create-table',
+        table: {
+          name: 'source_materializations',
+          primaryKey: ['project_id', 'revision_id'],
+          columns: [
+            { name: 'project_id', type: 'text' },
+            { name: 'revision_id', type: 'text' },
+            {
+              name: 'phase',
+              type: 'text',
+              values: [
+                'prepared',
+                'accepted',
+                'materializing',
+                'materialized',
+                'completed',
+                'stale',
+                'conflict',
+                'recovery-required',
+              ],
+            },
+            { name: 'expected_view_source_hash', type: 'text' },
+            { name: 'target_source_hash', type: 'text' },
+            { name: 'tree_hash', type: 'text' },
+            { name: 'attempt', type: 'integer' },
+            { name: 'diagnostic', type: 'text', nullable: true },
+            { name: 'updated_at', type: 'text' },
+          ],
+        },
+      },
+      {
+        kind: 'create-table',
+        table: {
+          name: 'source_materialization_entries',
+          primaryKey: ['project_id', 'revision_id', 'logical_path'],
+          columns: [
+            { name: 'project_id', type: 'text' },
+            { name: 'revision_id', type: 'text' },
+            { name: 'logical_path', type: 'text' },
+            { name: 'old_hash', type: 'text', nullable: true },
+            { name: 'target_hash', type: 'text', nullable: true },
+            { name: 'applied_hash', type: 'text', nullable: true },
+            { name: 'state', type: 'text' },
+          ],
+        },
+      },
+      {
+        kind: 'create-table',
+        table: {
+          name: 'authoring_working_documents',
+          primaryKey: ['project_id', 'document_id'],
+          columns: [
+            { name: 'project_id', type: 'text' },
+            { name: 'document_id', type: 'text' },
+            { name: 'logical_path', type: 'text' },
+            { name: 'kind', type: 'text' },
+            { name: 'state', type: 'text', values: ['active', 'tombstone'] },
+            { name: 'base_revision_id', type: 'text', nullable: true },
+            { name: 'catalog_revision', type: 'integer' },
+            { name: 'updated_at', type: 'text' },
+          ],
+        },
+      },
+      {
+        kind: 'create-index',
+        name: 'authoring_working_documents_active_path',
+        table: 'authoring_working_documents',
+        unique: true,
+        columns: ['project_id', 'logical_path'],
+        filter: { column: 'state', equals: 'active' },
+      },
+      {
+        kind: 'create-table',
+        table: {
+          name: 'revision_mirror_exports',
+          primaryKey: ['project_id', 'revision_id', 'backend'],
+          columns: [
+            { name: 'project_id', type: 'text' },
+            { name: 'revision_id', type: 'text' },
+            { name: 'backend', type: 'text' },
+            { name: 'state', type: 'text' },
+            { name: 'external_id', type: 'text', nullable: true },
+            { name: 'diagnostic', type: 'text', nullable: true },
+            { name: 'updated_at', type: 'text' },
+          ],
+        },
+      },
+    ],
+  },
+  {
+    version: 4,
+    description: 'Project memberships and isolated capability/MCP verifier stores',
+    steps: [
+      {
+        kind: 'create-table',
+        table: {
+          name: 'project_memberships',
+          primaryKey: ['user_id', 'project_id'],
+          columns: [
+            { name: 'user_id', type: 'text' },
+            { name: 'project_id', type: 'text' },
+            {
+              name: 'role',
+              type: 'text',
+              values: ['reader', 'author', 'maintainer'],
+            },
+            { name: 'created_at', type: 'text' },
+            { name: 'revoked_at', type: 'text', nullable: true },
+            { name: 'revision', type: 'integer' },
+          ],
+        },
+      },
+      {
+        kind: 'create-table',
+        table: {
+          name: 'capability_verifiers',
+          columns: [
+            { name: 'device_id', type: 'text', primaryKey: true },
+            { name: 'token_hash', type: 'text' },
+            { name: 'scope', type: 'json' },
+            { name: 'expires_at', type: 'text' },
+            { name: 'client_label', type: 'text' },
+            { name: 'revoked_at', type: 'text', nullable: true },
+            { name: 'created_at', type: 'text' },
+          ],
+        },
+      },
+      {
+        kind: 'create-table',
+        table: {
+          name: 'mcp_device_verifiers',
+          columns: [
+            { name: 'device_id', type: 'text', primaryKey: true },
+            { name: 'verifier', type: 'text' },
+            {
+              name: 'kind',
+              type: 'text',
+              values: ['project', 'admin'],
+            },
+            { name: 'project_id', type: 'text', nullable: true },
+            { name: 'owner_user_id', type: 'text' },
+            { name: 'scopes', type: 'json' },
+            { name: 'grant_revision', type: 'integer' },
+            { name: 'expires_at', type: 'text' },
+            { name: 'revoked_at', type: 'text', nullable: true },
+            { name: 'created_at', type: 'text' },
+          ],
+        },
+      },
+      { kind: 'copy-capability-verifiers' },
     ],
   },
 ];

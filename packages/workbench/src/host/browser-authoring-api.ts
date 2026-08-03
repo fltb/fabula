@@ -13,6 +13,16 @@
  */
 
 import type { Context, Handler } from 'hono';
+import type { BrowserSessionPrincipalV1 } from '../contracts/browser-api.js';
+import type { AuthoringCoordinator } from './authoring/types.js';
+import type {
+  BrowserPrincipalResolver,
+  BrowserProjectAuthorization,
+  BrowserProjectCatalog,
+} from './browser-read-api.js';
+import type { ProjectAccessRequiredRole, ProjectAccessService } from './project-access-service.js';
+import type { HostListenerEnv, MutationHttpMethod } from './listener.js';
+import type { HostServer } from './server.js';
 import {
   AUTHORING_CONTRACT_VERSION,
   BROWSER_AUTHORING_EVENTS_PATH,
@@ -32,17 +42,11 @@ import {
   type BrowserAuthoringSubmitRequestV1,
   type BrowserAuthoringSubmitResultV1,
 } from '../contracts/authoring.js';
-import {
-  type BrowserSessionPrincipalV1,
-} from '../contracts/browser-api.js';
-import type { HostListenerEnv, MutationHttpMethod } from './listener.js';
-import type { AuthoringCoordinator } from './authoring/types.js';
-import type {
-  BrowserPrincipalResolver,
-  BrowserProjectAuthorization,
-  BrowserProjectCatalog,
-} from './browser-read-api.js';
-import type { HostServer } from './server.js';
+import { BROWSER_API_BASE_PATH, BROWSER_SESSION_HEADER } from '../contracts/browser-api.js';
+import { getYjsTicketService, type YjsTicketService } from './yjs/index.js';
+/** `GET /api/v1/projects/:projectId/source/:documentId/yjs-ticket`. */
+export const BROWSER_YJS_TICKET_PATH =
+  `${BROWSER_API_BASE_PATH}/projects/:projectId/source/:documentId/yjs-ticket`;
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
 const EVENT_HEADERS = {
@@ -85,14 +89,17 @@ export interface BrowserAuthoringCapabilityResolver {
 export interface BrowserAuthoringCoordinatorRegistry {
   get(projectId: string): AuthoringCoordinator | null | Promise<AuthoringCoordinator | null>;
 }
-
 export interface BrowserAuthoringApiOptions {
   readonly principal: BrowserPrincipalResolver;
+  /** Shared ACL/lifecycle service; when present it is the authoritative role gate. */
+  readonly access?: Pick<ProjectAccessService, 'authorize'>;
   readonly authorization: BrowserProjectAuthorization;
   readonly catalog: BrowserProjectCatalog;
   readonly coordinators: BrowserAuthoringCoordinatorRegistry;
   readonly capabilities?: BrowserAuthoringCapabilityResolver | null;
   readonly events?: BrowserAuthoringEventSource | null;
+  /** One-time ticket store shared with the Yjs gateway. */
+  readonly yjsTickets?: YjsTicketService | null;
   readonly now?: () => string;
 }
 
@@ -231,7 +238,10 @@ type AccessResult =
 class BrowserAuthoringApiImpl {
   constructor(readonly options: BrowserAuthoringApiOptions) {}
 
-  async access(c: Context<HostListenerEnv>): Promise<AccessResult> {
+  async access(
+    c: Context<HostListenerEnv>,
+    requiredRole: ProjectAccessRequiredRole = 'reader',
+  ): Promise<AccessResult> {
     const resolution = await this.options.principal.resolve(c.req.raw);
     if (!resolution.ok) {
       return {
@@ -251,7 +261,20 @@ class BrowserAuthoringApiImpl {
         response: authoringError('PROJECT_NOT_FOUND', 'A project id is required.'),
       };
     }
-    if (!(await this.options.authorization.canAccessProject(resolution.principal.userId, projectId))) {
+    const authorized = this.options.access === undefined
+      ? await this.options.authorization.canAccessProject(
+        resolution.principal.userId,
+        projectId,
+        requiredRole,
+      )
+      : (
+        await this.options.access.authorize({
+          userId: resolution.principal.userId,
+          projectId,
+          requiredRole,
+        })
+      ).ok;
+    if (!authorized) {
       return {
         ok: false,
         response: authoringError('FORBIDDEN', 'The session is not authorized for this project.'),
@@ -305,9 +328,33 @@ class BrowserAuthoringApiImpl {
   }
 }
 
+function yjsTicketHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const access = await api.access(c, 'author');
+    if (!access.ok) return access.response;
+    const documentId = c.req.param('documentId');
+    if (!nonEmptyString(documentId)) {
+      return authoringError('INVALID_INPUT', 'A document id is required.');
+    }
+    const sessionId = c.req.raw.headers.get(BROWSER_SESSION_HEADER);
+    if (!nonEmptyString(sessionId)) {
+      return authoringError('UNAUTHORIZED', 'The session is missing or unknown.');
+    }
+    const tickets = api.options.yjsTickets ?? getYjsTicketService();
+    const ticket = tickets.mint({
+      sessionId,
+      userId: access.principal.userId,
+      capabilityVersion: access.principal.capabilityVersion,
+      projectId: access.projectId,
+      documentId,
+    });
+    return json({ ticket, expiresInMs: 30_000 });
+  };
+}
+
 function stateHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
   return async (c) => {
-    const access = await api.access(c);
+    const access = await api.access(c, 'reader');
     if (!access.ok) return access.response;
     return json(access.coordinator.getState());
   };
@@ -315,7 +362,7 @@ function stateHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
 
 function operationsHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
   return async (c) => {
-    const access = await api.access(c);
+    const access = await api.access(c, 'reader');
     if (!access.ok) return access.response;
     return json({
       version: AUTHORING_CONTRACT_VERSION,
@@ -328,7 +375,7 @@ function operationsHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEn
 
 function operationHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
   return async (c) => {
-    const access = await api.access(c);
+    const access = await api.access(c, 'reader');
     if (!access.ok) return access.response;
     const operationId = c.req.param('operationId');
     if (!nonEmptyString(operationId)) {
@@ -343,7 +390,7 @@ function operationHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv
 
 function submitHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
   return async (c) => {
-    const access = await api.access(c);
+    const access = await api.access(c, 'maintainer');
     if (!access.ok) return access.response;
     const parsed = parseStrictObject(
       await readJson(c),
@@ -391,7 +438,7 @@ function submitHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
 
 function reconcileHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
   return async (c) => {
-    const access = await api.access(c);
+    const access = await api.access(c, 'maintainer');
     if (!access.ok) return access.response;
     const parsed = parseStrictObject(await readJson(c), [
       'version',
@@ -446,7 +493,7 @@ function eventFrame(event: AuthoringActivityEventV1): Uint8Array {
 
 function eventsHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
   return async (c) => {
-    const access = await api.access(c);
+    const access = await api.access(c, 'reader');
     if (!access.ok) return access.response;
     const source = api.options.events;
     if (source === undefined || source === null) {
@@ -501,6 +548,7 @@ export function createBrowserAuthoringApi(
 ): BrowserAuthoringApiSurface {
   const api = new BrowserAuthoringApiImpl(options);
   const reads: readonly { readonly path: string; readonly handler: Handler<HostListenerEnv> }[] = [
+    { path: BROWSER_YJS_TICKET_PATH, handler: yjsTicketHandler(api) },
     { path: BROWSER_AUTHORING_STATE_PATH, handler: stateHandler(api) },
     { path: BROWSER_AUTHORING_OPERATIONS_PATH, handler: operationsHandler(api) },
     { path: BROWSER_AUTHORING_OPERATION_PATH, handler: operationHandler(api) },

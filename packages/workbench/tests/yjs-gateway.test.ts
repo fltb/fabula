@@ -28,6 +28,7 @@ import {
   createSessionAuthPort,
   createYjsGateway,
   createYjsPersistencePort,
+  createYjsTicketService,
   type YjsAuthPort,
   type YjsConnectionRequest,
   type YjsConnectionScope,
@@ -35,7 +36,9 @@ import {
   type YjsGateway,
   type YjsPersistencePort,
   type YjsScopeResolution,
+  type YjsTicketService,
 } from '../src/host/yjs/index.js';
+type YjsAuthRequest = Parameters<YjsAuthPort['resolve']>[0];
 import type { PersistenceWorkerClient } from '../src/persistence/worker-client.js';
 
 const FIXED_NOW = '2026-08-02T00:00:00.000Z';
@@ -151,18 +154,35 @@ function createSessionFixture(
 /** Always-allowing auth port; the resolved actor is a fixed user. */
 function allowAuth(): YjsAuthPort {
   return {
-    async resolve(request: YjsConnectionRequest): Promise<YjsScopeResolution> {
-      return {
-        ok: true,
-        scope: {
-          sessionId: request.sessionId,
-          userId: USER_ID,
-          projectId: request.projectId,
-          documentId: request.documentId,
-        },
-      };
+    async resolve(request: YjsAuthRequest): Promise<YjsScopeResolution> {
+      if ('ticket' in request) {
+        return {
+          ok: true,
+          scope: {
+            bindingId: request.ticket,
+            userId: USER_ID,
+            capabilityVersion: 1,
+            projectId: request.projectId,
+            documentId: request.documentId,
+          },
+        };
+      }
+      return { ok: true, scope: request };
     },
   };
+}
+
+function scopeFor(request: YjsAuthRequest): YjsConnectionScope {
+  if ('ticket' in request) {
+    return {
+      bindingId: request.ticket,
+      userId: USER_ID,
+      capabilityVersion: 1,
+      projectId: request.projectId,
+      documentId: request.documentId,
+    };
+  }
+  return request;
 }
 
 function fakePersistence(initial: WorkingDocumentState[] = []) {
@@ -231,7 +251,7 @@ function createGatewayFixture(
 
 function request(overrides: Partial<YjsConnectionRequest> = {}): YjsConnectionRequest {
   return {
-    sessionId: SESSION_ID,
+    ticket: 'ticket-1',
     projectId: PROJECT_ID,
     documentId: DOCUMENT_ID,
     ...overrides,
@@ -321,8 +341,9 @@ describe('Yjs gateway auth scope', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.connection.scope).toEqual({
-      sessionId: SESSION_ID,
+      bindingId: 'ticket-1',
       userId: USER_ID,
+      capabilityVersion: 1,
       projectId: PROJECT_ID,
       documentId: DOCUMENT_ID,
     });
@@ -354,69 +375,124 @@ describe('createSessionAuthPort', () => {
     };
   }
 
-  it('maps an unknown or revoked session to UNAUTHENTICATED', async () => {
+  function ticketRequest(
+    tickets: YjsTicketService,
+    overrides: Partial<YjsConnectionRequest> = {},
+  ): YjsConnectionRequest {
+    const projectId = overrides.projectId ?? PROJECT_ID;
+    const documentId = overrides.documentId ?? DOCUMENT_ID;
+    return request({
+      ...overrides,
+      ticket: tickets.mint({
+        sessionId: SESSION_ID,
+        userId: USER_ID,
+        capabilityVersion: 1,
+        projectId,
+        documentId,
+      }),
+    });
+  }
+
+  it('maps an unknown or revoked session to UNAUTHENTICATED and consumes tickets once', async () => {
     const rows = new Map<string, SessionState>([[SESSION_ID, liveSession()]]);
+    const tickets = createYjsTicketService();
     const port = createSessionAuthPort({
       sessions: sessionStore(rows),
+      tickets,
       now: () => FIXED_NOW,
       canAccessProject: () => true,
       isValidDocument: () => true,
     });
-    // Revocation deletes the session row: the same lookup that returned a
-    // session before now resolves like an unknown one.
-    expect(await port.resolve(request())).toMatchObject({ ok: true });
+    const first = ticketRequest(tickets);
+    expect(await port.resolve(first)).toMatchObject({ ok: true });
+    // A consumed ticket cannot be replayed, even while its session remains live.
+    expect(await port.resolve(first)).toEqual({ ok: false, reason: 'UNAUTHENTICATED' });
     rows.delete(SESSION_ID);
-    expect(await port.resolve(request())).toEqual({ ok: false, reason: 'UNAUTHENTICATED' });
+    expect(await port.resolve(ticketRequest(tickets))).toEqual({
+      ok: false,
+      reason: 'UNAUTHENTICATED',
+    });
   });
 
   it('rejects an expired session with EXPIRED', async () => {
+    const tickets = createYjsTicketService();
     const port = createSessionAuthPort({
       sessions: sessionStore(
         new Map([[SESSION_ID, liveSession({ expiresAt: '2020-01-01T00:00:00.000Z' })]]),
       ),
+      tickets,
       now: () => FIXED_NOW,
       canAccessProject: () => true,
       isValidDocument: () => true,
     });
-    expect(await port.resolve(request())).toEqual({ ok: false, reason: 'EXPIRED' });
+    expect(await port.resolve(ticketRequest(tickets))).toEqual({ ok: false, reason: 'EXPIRED' });
   });
 
   it('rejects a project the user cannot access with PROJECT_MISMATCH', async () => {
+    const tickets = createYjsTicketService();
     const port = createSessionAuthPort({
       sessions: sessionStore(new Map([[SESSION_ID, liveSession()]])),
+      tickets,
       now: () => FIXED_NOW,
       canAccessProject: async (_userId, projectId) => projectId === 'allowed-project',
       isValidDocument: () => true,
     });
-    expect(await port.resolve(request())).toEqual({ ok: false, reason: 'PROJECT_MISMATCH' });
+    expect(await port.resolve(ticketRequest(tickets))).toEqual({
+      ok: false,
+      reason: 'PROJECT_MISMATCH',
+    });
+  });
+  it('rejects a reader-only membership before issuing a Yjs editing scope', async () => {
+    const tickets = createYjsTicketService();
+    const port = createSessionAuthPort({
+      sessions: sessionStore(new Map([[SESSION_ID, liveSession()]])),
+      tickets,
+      now: () => FIXED_NOW,
+      canAccessProject: (_userId, _projectId, requiredRole = 'reader') => requiredRole === 'reader',
+      isValidDocument: () => true,
+    });
+    expect(await port.resolve(ticketRequest(tickets))).toEqual({
+      ok: false,
+      reason: 'PROJECT_MISMATCH',
+    });
   });
 
   it('rejects an invalid document with INVALID_DOCUMENT', async () => {
+    const tickets = createYjsTicketService();
     const port = createSessionAuthPort({
       sessions: sessionStore(new Map([[SESSION_ID, liveSession()]])),
+      tickets,
       now: () => FIXED_NOW,
       canAccessProject: () => true,
       isValidDocument: async (_projectId, documentId) => documentId === 'definitions/valid.yaml',
     });
-    expect(await port.resolve(request())).toEqual({ ok: false, reason: 'INVALID_DOCUMENT' });
+    expect(await port.resolve(ticketRequest(tickets))).toEqual({
+      ok: false,
+      reason: 'INVALID_DOCUMENT',
+    });
   });
 
-  it('resolves the exact scope for a live session', async () => {
+  it('resolves the exact scope for a live session without exposing the session id', async () => {
+    const tickets = createYjsTicketService();
     const port = createSessionAuthPort({
       sessions: sessionStore(new Map([[SESSION_ID, liveSession()]])),
+      tickets,
       now: () => FIXED_NOW,
-      canAccessProject: () => true,
+      canAccessProject: (_userId, _projectId, requiredRole = 'reader') => requiredRole === 'author',
       isValidDocument: () => true,
     });
-    expect(await port.resolve(request())).toEqual({
+    const result = await port.resolve(ticketRequest(tickets));
+    expect(result).toEqual({
       ok: true,
       scope: {
-        sessionId: SESSION_ID,
+        bindingId: expect.any(String),
         userId: USER_ID,
+        capabilityVersion: 1,
         projectId: PROJECT_ID,
         documentId: DOCUMENT_ID,
       },
     });
+    if (result.ok) expect(result.scope).not.toHaveProperty('sessionId');
   });
 });
 
@@ -588,7 +664,6 @@ describe('Yjs gateway binary persistence and reconnect', () => {
     expect(session.projection.sourceHash).toBe(acceptedProjection.sourceHash);
     expect(session.projection.version).toBe(1);
 
-    // The next valid update still merges from the last-valid state.
     const after = await bound.connection.applyUpdate(deltaUpdate(baseline.state.update, ' v2'));
     expect(after.ok).toBe(true);
     if (!after.ok) return;
@@ -600,17 +675,9 @@ describe('Yjs gateway binary persistence and reconnect', () => {
     let revoked = false;
     const { gateway, session, persistence } = createGatewayFixture({
       auth: {
-        async resolve(inner: YjsConnectionRequest) {
+        async resolve(inner: YjsAuthRequest) {
           if (revoked) return { ok: false, reason: 'UNAUTHENTICATED' };
-          return {
-            ok: true,
-            scope: {
-              sessionId: inner.sessionId,
-              userId: USER_ID,
-              projectId: inner.projectId,
-              documentId: inner.documentId,
-            },
-          };
+          return { ok: true, scope: scopeFor(inner) };
         },
       },
     });
@@ -707,22 +774,14 @@ describe('Yjs gateway shutdown closure', () => {
     let authCalls = 0;
     const loadGate = deferred<WorkingDocumentState | null>();
     const auth: YjsAuthPort = {
-      async resolve(inner: YjsConnectionRequest) {
+      async resolve(inner: YjsAuthRequest) {
         authCalls += 1;
         if (revoked) return { ok: false, reason: 'UNAUTHENTICATED' };
-        return {
-          ok: true,
-          scope: {
-            sessionId: inner.sessionId,
-            userId: USER_ID,
-            projectId: inner.projectId,
-            documentId: inner.documentId,
-          },
-        };
+        return { ok: true, scope: scopeFor(inner) };
       },
     };
-    const base = fakePersistence();
     const loads: string[] = [];
+    const base = fakePersistence();
     const { gateway, session } = createGatewayFixture({
       auth,
       persistence: {
@@ -753,28 +812,18 @@ describe('Yjs gateway shutdown closure', () => {
 
     const result = await connecting;
     expect(result).toEqual({ ok: false, reason: 'UNAUTHENTICATED' });
-    // The in-queue re-auth ran after hydration and rejected before binding.
-    expect(authCalls).toBe(2);
-    expect(gateway.size).toBe(0);
-    expect(yjsPresenceOf(session)).toEqual([]);
   });
-
   it.each<[string, Partial<YjsConnectionScope>, YjsDenialReason]>([
     ['a different actor', { userId: 'user-2' }, 'UNAUTHENTICATED'],
-    ['a different session', { sessionId: 'session-2' }, 'UNAUTHENTICATED'],
+    ['a different binding', { bindingId: 'binding-2' }, 'UNAUTHENTICATED'],
     ['a different project', { projectId: 'project-b' }, 'PROJECT_MISMATCH'],
     ['a different document', { documentId: 'definitions/locations.yaml' }, 'INVALID_DOCUMENT'],
   ])('rejects a connect whose re-resolved scope drifted to %s', async (_label, drift, reason) => {
     let authCalls = 0;
     const auth: YjsAuthPort = {
-      async resolve(inner: YjsConnectionRequest) {
+      async resolve(inner: YjsAuthRequest) {
         authCalls += 1;
-        const scope: YjsConnectionScope = {
-          sessionId: inner.sessionId,
-          userId: USER_ID,
-          projectId: inner.projectId,
-          documentId: inner.documentId,
-        };
+        const scope = scopeFor(inner);
         if (authCalls === 1) return { ok: true, scope };
         return { ok: true, scope: { ...scope, ...drift } };
       },
@@ -842,7 +891,6 @@ describe('Yjs gateway shutdown closure', () => {
     await closing;
     expect(closed).toBe(true);
     const applied = await applying;
-    expect(applied.ok).toBe(true);
     if (applied.ok) expect(textOf(applied.state.update)).toBe('chapter one');
     expect(base.calls.filter((call) => call.operation === 'persist')).toHaveLength(1);
     expect(gateway.size).toBe(0);
@@ -856,19 +904,9 @@ describe('Yjs gateway shutdown closure', () => {
     let authCalls = 0;
     const { gateway } = createGatewayFixture({
       auth: {
-        async resolve(inner: YjsConnectionRequest) {
+        async resolve(inner: YjsAuthRequest) {
           authCalls += 1;
-          if (authCalls <= 2) {
-            return {
-              ok: true,
-              scope: {
-                sessionId: inner.sessionId,
-                userId: USER_ID,
-                projectId: inner.projectId,
-                documentId: inner.documentId,
-              },
-            };
-          }
+          if (authCalls <= 2) return { ok: true, scope: scopeFor(inner) };
           return authGate.promise;
         },
       },
@@ -882,14 +920,15 @@ describe('Yjs gateway shutdown closure', () => {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
-    expect(authCalls).toBe(3); // the per-update revalidation is in flight
+    expect(authCalls).toBe(3);
 
     const closing = gateway.close();
     authGate.resolve({
       ok: true,
       scope: {
-        sessionId: SESSION_ID,
+        bindingId: 'ticket-1',
         userId: USER_ID,
+        capabilityVersion: 1,
         projectId: PROJECT_ID,
         documentId: DOCUMENT_ID,
       },

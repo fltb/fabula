@@ -38,6 +38,7 @@
  * slice) calls; the gateway itself is transport-agnostic and fully
  * deterministic under injected auth/session adapters.
  */
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import * as Y from 'yjs';
 
 import type {
@@ -47,11 +48,118 @@ import type {
 } from '../../contracts/persistence.js';
 import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
 import type { LocalAuthService } from '../auth/service.js';
+import type { ProjectAccessRequiredRole } from '../project-access-service.js';
 import type { ProjectSessionProjectionV1, ProjectSessionRegistry } from '../project-session.js';
+/**
+ * Typed persistence surface used by the Yjs working-document core.
+ * Implementations must route these operations through the Host persistence
+ * worker; the gateway never reaches storage directly.
+ */
+export interface YjsPersistencePort {
+  loadWorkingDocument(key: YjsDocumentKey): Promise<WorkingDocumentState | null>;
+  persistYjsUpdate(input: PersistYjsUpdateInput): Promise<WorkingDocumentState>;
+}
 
-/** One Yjs connection request as presented by the transport layer. */
-export interface YjsConnectionRequest {
+/** Adapt the typed persistence worker client to the Yjs persistence port. */
+export function createYjsPersistencePort(
+  client: PersistenceWorkerClient,
+): YjsPersistencePort {
+  return {
+    loadWorkingDocument(key) {
+      return client.request('loadWorkingDocument', key);
+    },
+    persistYjsUpdate(input) {
+      return client.request('persistYjsUpdate', input);
+    },
+  };
+}
+
+const YJS_TICKET_TTL_MS = 30_000;
+
+export interface YjsTicketBinding {
+  readonly bindingId: string;
+  /** Host-only session lookup key; never returned by transport or DTO. */
   readonly sessionId: string;
+  readonly userId: string;
+  readonly capabilityVersion: number;
+  readonly projectId: string;
+  readonly documentId: string;
+  readonly expiresAt: number;
+}
+/**
+ * Host-only one-time ticket store. Only the SHA-256 digest of a presented
+ * ticket is retained; after consumption, callers retain an opaque binding id.
+ */
+export interface YjsTicketService {
+  mint(input: {
+    readonly sessionId: string;
+    readonly userId: string;
+    readonly capabilityVersion: number;
+    readonly projectId: string;
+    readonly documentId: string;
+    readonly now?: number;
+  }): string;
+  consume(ticket: string, now?: number): YjsTicketBinding | null;
+  get(bindingId: string): YjsTicketBinding | null;
+  release(bindingId: string): void;
+}
+
+function ticketDigest(ticket: string): string {
+  return createHash('sha256').update(ticket, 'utf8').digest('hex');
+}
+
+export function createYjsTicketService(): YjsTicketService {
+  const tickets = new Map<string, YjsTicketBinding>();
+  const bindings = new Map<string, YjsTicketBinding>();
+  return {
+    mint(input): string {
+      const ticket = randomBytes(32).toString('base64url');
+      const record: YjsTicketBinding = {
+        bindingId: randomUUID(),
+        sessionId: input.sessionId,
+        userId: input.userId,
+        capabilityVersion: input.capabilityVersion,
+        projectId: input.projectId,
+        documentId: input.documentId,
+        expiresAt: (input.now ?? Date.now()) + YJS_TICKET_TTL_MS,
+      };
+      tickets.set(ticketDigest(ticket), record);
+      return ticket;
+    },
+    consume(ticket, now = Date.now()): YjsTicketBinding | null {
+      if (typeof ticket !== 'string' || ticket.length === 0) return null;
+      const digest = ticketDigest(ticket);
+      const record = tickets.get(digest);
+      // Delete before any validation so a failed/expired presentation cannot
+      // be replayed and the raw ticket never survives consumption.
+      tickets.delete(digest);
+      if (record === undefined || record.expiresAt <= now) return null;
+      bindings.set(record.bindingId, record);
+      return record;
+    },
+    get(bindingId) {
+      const record = bindings.get(bindingId);
+      if (record === undefined || record.expiresAt <= Date.now()) {
+        if (record !== undefined) bindings.delete(bindingId);
+        return null;
+      }
+      return record;
+    },
+    release(bindingId): void {
+      bindings.delete(bindingId);
+    },
+  };
+}
+/** Access the process-wide ticket service used by default Host wiring. */
+export function getYjsTicketService(): YjsTicketService {
+  return defaultYjsTickets;
+}
+
+const defaultYjsTickets = createYjsTicketService();
+
+/** One Yjs connection request presented by the ticketed transport. */
+export interface YjsConnectionRequest {
+  readonly ticket: string;
   readonly projectId: string;
   readonly documentId: string;
 }
@@ -71,13 +179,14 @@ export type YjsConnectFailureReason = YjsDenialReason | 'STORAGE_UNAVAILABLE' | 
 export type YjsApplyFailureReason = YjsDenialReason | YjsServiceFailureReason | 'INVALID_UPDATE';
 
 /**
- * Exact server-resolved scope bound to one Yjs connection. The transport
- * never chooses the actor or any permission: the session determines the
- * actor, and the requested project/document are validated against it.
+ * Exact server-resolved scope bound to one Yjs connection. The raw ticket and
+ * reusable session credential are never retained here; only the opaque binding
+ * id is carried by the gateway connection.
  */
 export interface YjsConnectionScope {
-  readonly sessionId: string;
+  readonly bindingId: string;
   readonly userId: string;
+  readonly capabilityVersion: number;
   readonly projectId: string;
   readonly documentId: string;
 }
@@ -86,75 +195,106 @@ export type YjsScopeResolution =
   | { readonly ok: true; readonly scope: YjsConnectionScope }
   | { readonly ok: false; readonly reason: YjsDenialReason };
 
+export type YjsAuthRequest = YjsConnectionRequest | YjsConnectionScope;
+
 /**
- * Injected session-authentication port. The gateway consumes only this
- * boundary; Host wiring supplies it (see {@link createSessionAuthPort}), and
- * tests inject deterministic fakes.
+ * Injected session-authentication port. Initial resolution consumes a
+ * one-time ticket; subsequent resolutions accept only the opaque binding.
  */
 export interface YjsAuthPort {
-  resolve(request: YjsConnectionRequest): Promise<YjsScopeResolution>;
+  resolve(request: YjsAuthRequest): Promise<YjsScopeResolution>;
+  /** Release an opaque binding once its socket disconnects. */
+  release?(scope: YjsConnectionScope): void;
 }
 
 export interface SessionAuthPortOptions {
   /** Session lookup; a missing row means the session never existed or was revoked. */
   readonly sessions: Pick<LocalAuthService, 'getSession'>;
+  /** Shared one-time ticket store; defaults to the Host process store. */
+  readonly tickets?: YjsTicketService;
   /** Timestamp source for expiry checks; defaults to the host clock. */
   readonly now?: () => string;
-  /** True when the authenticated user may access the requested project. */
-  readonly canAccessProject: (userId: string, projectId: string) => boolean | Promise<boolean>;
+  /** True when the authenticated user may access the requested project at the required role. */
+  readonly canAccessProject: (
+    userId: string,
+    projectId: string,
+    requiredRole?: ProjectAccessRequiredRole,
+  ) => boolean | Promise<boolean>;
   /** True when the document id is a valid working document of the project. */
   readonly isValidDocument: (projectId: string, documentId: string) => boolean | Promise<boolean>;
 }
 
 /**
- * Default auth port over the Host session store. Revoked sessions are deleted
- * from the store, so they resolve exactly like unknown sessions:
- * `UNAUTHENTICATED`. Expired sessions still have a row and are rejected here
- * with `EXPIRED`; project/document scope is resolved only for a live session.
+ * Default auth port over the Host session store. Ticket consumption is atomic;
+ * every update rechecks session expiry, capability version, ACL and document.
  */
 export function createSessionAuthPort(options: SessionAuthPortOptions): YjsAuthPort {
   const now = options.now ?? (() => new Date().toISOString());
+  const tickets = options.tickets ?? defaultYjsTickets;
   return {
-    async resolve(request: YjsConnectionRequest): Promise<YjsScopeResolution> {
-      const session = await options.sessions.getSession(request.sessionId);
-      if (session === null) return { ok: false, reason: 'UNAUTHENTICATED' };
-      if (session.expiresAt <= now()) return { ok: false, reason: 'EXPIRED' };
-      if (!(await options.canAccessProject(session.userId, request.projectId))) {
+    async resolve(request: YjsAuthRequest): Promise<YjsScopeResolution> {
+      let record: YjsTicketBinding | null;
+      if ('ticket' in request) {
+        const ticket = tickets.consume(request.ticket);
+        if (ticket === null) return { ok: false, reason: 'UNAUTHENTICATED' };
+        if (ticket.projectId !== request.projectId) {
+          tickets.release(ticket.bindingId);
+          return { ok: false, reason: 'PROJECT_MISMATCH' };
+        }
+        if (ticket.documentId !== request.documentId) {
+          tickets.release(ticket.bindingId);
+          return { ok: false, reason: 'INVALID_DOCUMENT' };
+        }
+        record = ticket;
+      } else {
+        record = tickets.get(request.bindingId);
+        if (
+          record === null ||
+          record.userId !== request.userId ||
+          record.capabilityVersion !== request.capabilityVersion ||
+          record.projectId !== request.projectId ||
+          record.documentId !== request.documentId
+        ) {
+          return { ok: false, reason: 'UNAUTHENTICATED' };
+        }
+      }
+      const session = await options.sessions.getSession(record.sessionId);
+      if (session === null) {
+        tickets.release(record.bindingId);
+        return { ok: false, reason: 'UNAUTHENTICATED' };
+      }
+      if (session.expiresAt <= now()) {
+        tickets.release(record.bindingId);
+        return { ok: false, reason: 'EXPIRED' };
+      }
+      if (session.capabilityVersion !== record.capabilityVersion) {
+        tickets.release(record.bindingId);
+        return { ok: false, reason: 'UNAUTHENTICATED' };
+      }
+      if (!(await options.canAccessProject(record.userId, record.projectId, 'author'))) {
+        tickets.release(record.bindingId);
         return { ok: false, reason: 'PROJECT_MISMATCH' };
       }
-      if (!(await options.isValidDocument(request.projectId, request.documentId))) {
+      if (!(await options.isValidDocument(record.projectId, record.documentId))) {
+        tickets.release(record.bindingId);
         return { ok: false, reason: 'INVALID_DOCUMENT' };
       }
       return {
         ok: true,
         scope: {
-          sessionId: session.sessionId,
-          userId: session.userId,
-          projectId: request.projectId,
-          documentId: request.documentId,
+          bindingId: record.bindingId,
+          userId: record.userId,
+          capabilityVersion: record.capabilityVersion,
+          projectId: record.projectId,
+          documentId: record.documentId,
         },
       };
     },
+    release(scope): void {
+      tickets.release(scope.bindingId);
+    },
   };
 }
-
-/**
- * Typed Yjs persistence port. The gateway never sees SQL, the database
- * driver, or the worker plumbing — only these two domain operations.
- */
-export interface YjsPersistencePort {
-  loadWorkingDocument(key: YjsDocumentKey): Promise<WorkingDocumentState | null>;
-  persistYjsUpdate(input: PersistYjsUpdateInput): Promise<WorkingDocumentState>;
-}
-
-/** Domain adapter over the persistence worker client; typed operations only. */
-export function createYjsPersistencePort(client: PersistenceWorkerClient): YjsPersistencePort {
-  return {
-    loadWorkingDocument: (key) => client.request('loadWorkingDocument', key),
-    persistYjsUpdate: (input) => client.request('persistYjsUpdate', input),
-  };
-}
-
 // ─── Shared per-key working-document core ────────────────────────────────────
 
 const SCOPE_SEPARATOR = '\u0000';
@@ -505,15 +645,18 @@ export function createYjsGateway(options: YjsGatewayOptions): YjsGateway {
 
   /**
    * Denial reason when the post-hydration re-resolution drifted from the
-   * scope resolved before queueing. The transport authenticated against the
-   * pre-queue scope; binding to a different actor/project/document would let
-   * a changed session row redirect a live request, so any drift rejects.
+   * scope resolved before queueing. Binding and capability identity must not
+   * change while hydration is in flight.
    */
   const scopeDriftReason = (
     expected: YjsConnectionScope,
     actual: YjsConnectionScope,
   ): YjsDenialReason | null => {
-    if (expected.sessionId !== actual.sessionId || expected.userId !== actual.userId) {
+    if (
+      expected.bindingId !== actual.bindingId ||
+      expected.userId !== actual.userId ||
+      expected.capabilityVersion !== actual.capabilityVersion
+    ) {
       return 'UNAUTHENTICATED';
     }
     if (expected.projectId !== actual.projectId) return 'PROJECT_MISMATCH';
@@ -611,6 +754,7 @@ export function createYjsGateway(options: YjsGatewayOptions): YjsGateway {
       this.#closed = true;
       connections.delete(this);
       core.release(keyOf(this.scope), this);
+      auth.release?.(this.scope);
       leavePresence(this.scope);
       return sessions.get(this.scope.projectId)?.projection ?? null;
     }
@@ -646,13 +790,13 @@ export function createYjsGateway(options: YjsGatewayOptions): YjsGateway {
             reason: core.closed ? 'CONNECTION_CLOSED' : 'STORAGE_UNAVAILABLE',
           };
         }
-        // Fail closed if shutdown landed during hydration.
+        // Ticket already consumed; binding revalidation follows.
         if (core.closed) return { ok: false, reason: 'CONNECTION_CLOSED' };
         // Re-authenticate after hydration, immediately before binding: a
         // session revoked/expired while the persisted state was loading, or
         // a scope that drifted under the live request, must not bind or
         // disclose any working state.
-        const revalidated = await auth.resolve(request);
+        const revalidated = await auth.resolve(scope);
         if (!revalidated.ok) return { ok: false, reason: revalidated.reason };
         const drift = scopeDriftReason(scope, revalidated.scope);
         if (drift !== null) return { ok: false, reason: drift };

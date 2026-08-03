@@ -149,3 +149,70 @@ describe('SourceStudio working layer disclosure', () => {
     expect(screen.getByText('idle')).toBeInTheDocument();
   });
 });
+describe('SourceStudio native history controls', () => {
+  it('reads revision details/diffs and restores with server-owned CAS identities', async () => {
+    const getRevision = vi.fn();
+    const diffRevisions = vi.fn();
+    const restoreRevision = vi.fn();
+    const user = userEvent.setup();
+    render(() => (
+      <SourceStudio
+        state={state}
+        authoring={{
+          version: 2,
+          projectId: 'proj-a',
+          phase: 'clean',
+          acceptedRevisionId: 'head-2',
+          acceptedSourceHash: 'source-2',
+          pendingOperationId: null,
+          workingDirty: false,
+          workspaceDigest: 'workspace-2',
+          externalCandidate: null,
+          conflicts: [],
+          diagnostics: [],
+          canSubmit: false,
+          submitBlockReason: 'not-dirty',
+          generatedAt: state.generatedAt,
+        }}
+        revisionHistory={{
+          version: 2,
+          projectId: 'proj-a',
+          revisions: [
+            {
+              version: 2,
+              revisionId: 'head-1',
+              sourceHash: 'source-1',
+              createdAt: state.generatedAt,
+              acceptedAt: state.generatedAt,
+            },
+            {
+              version: 2,
+              revisionId: 'head-2',
+              sourceHash: 'source-2',
+              createdAt: state.generatedAt,
+              acceptedAt: state.generatedAt,
+            },
+          ],
+          generatedAt: state.generatedAt,
+        }}
+        onGetRevision={getRevision}
+        onDiffRevisions={diffRevisions}
+        onRestoreRevision={restoreRevision}
+      />
+    ));
+    await user.click(screen.getAllByRole('button', { name: 'View revision' })[0] as HTMLElement);
+    await user.click(
+      screen.getByRole('button', { name: 'Compare with previous revision' }),
+    );
+    await user.click(screen.getAllByRole('button', { name: 'Restore revision' })[1] as HTMLElement);
+    expect(getRevision).toHaveBeenCalledWith('head-1');
+    expect(diffRevisions).toHaveBeenCalledWith('head-1', 'head-2');
+    expect(restoreRevision).toHaveBeenCalledWith({
+      version: 2,
+      projectId: 'proj-a',
+      revisionId: 'head-2',
+      expectedAcceptedRevisionId: 'head-2',
+      expectedSourceHash: 'source-2',
+    });
+  });
+});

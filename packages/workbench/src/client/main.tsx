@@ -5,6 +5,10 @@ import { render } from 'solid-js/web';
 import type {
   BrowserAuthoringReconcileRequestV1,
   BrowserAuthoringSubmitRequestV1,
+  BrowserAuthoringRevisionDiffV1,
+  BrowserAuthoringRevisionListV1,
+  BrowserAuthoringRevisionRestoreRequestV1,
+  BrowserAuthoringRevisionV1,
   BrowserGraphRouteSelectorV1,
   BrowserProjectSummaryV1,
   BrowserSessionPrincipalV1,
@@ -317,6 +321,9 @@ function WorkspaceRoute(props: {
   >(null);
   const [workspace, setWorkspace] = createSignal<RuntimeWorkspace | null>(null);
   const [authoring, setAuthoring] = createSignal<ProjectEventClientSnapshot | null>(null);
+  const [revisionHistory, setRevisionHistory] = createSignal<BrowserAuthoringRevisionListV1 | null>(null);
+  const [selectedRevision, setSelectedRevision] = createSignal<BrowserAuthoringRevisionV1 | null>(null);
+  const [revisionDiff, setRevisionDiff] = createSignal<BrowserAuthoringRevisionDiffV1 | null>(null);
   const [yjsStatus, setYjsStatus] = createSignal<
     Record<string, 'idle' | 'connecting' | 'connected' | 'disconnected' | 'unavailable'>
   >({});
@@ -344,9 +351,15 @@ function WorkspaceRoute(props: {
     setPending(true);
     setError(null);
     try {
-      const nextWorkspace = await props.client.projects.loadWorkspace(projectId, selector);
+      const [nextWorkspace, nextHistory] = await Promise.all([
+        props.client.projects.loadWorkspace(projectId, selector),
+        props.client.authoring.listRevisions(projectId),
+      ]);
       if (generation !== loadGeneration) return;
       setWorkspace(nextWorkspace);
+      setRevisionHistory(nextHistory);
+      setSelectedRevision(null);
+      setRevisionDiff(null);
       const nextEvents = createProjectEventClient({
         projectId,
         client: props.client.authoring,
@@ -374,6 +387,27 @@ function WorkspaceRoute(props: {
   };
   const reconcileAuthoring = async (request: BrowserAuthoringReconcileRequestV1): Promise<void> => {
     await props.client.authoring.reconcile(request);
+  };
+  const listAuthoringRevisions = async (): Promise<void> => {
+    setRevisionHistory(await props.client.authoring.listRevisions(props.projectId));
+  };
+  const getAuthoringRevision = async (revisionId: string): Promise<void> => {
+    const result = await props.client.authoring.getRevision(props.projectId, revisionId);
+    setSelectedRevision(result.revision);
+  };
+  const diffAuthoringRevisions = async (
+    fromRevisionId: string,
+    toRevisionId: string,
+  ): Promise<void> => {
+    setRevisionDiff(
+      await props.client.authoring.diffRevisions(props.projectId, fromRevisionId, toRevisionId),
+    );
+  };
+  const restoreAuthoringRevision = async (
+    request: BrowserAuthoringRevisionRestoreRequestV1,
+  ): Promise<void> => {
+    await props.client.authoring.restoreRevision(request);
+    await load();
   };
   const updateYjsStatus = (
     descriptor: SourceStudioDocumentDescriptorV1,
@@ -403,6 +437,13 @@ function WorkspaceRoute(props: {
           sourceStudio={current().source}
           authoringState={authoring()?.state}
           authoringOperations={authoring()?.operations}
+          authoringRevisionHistory={revisionHistory()}
+          authoringRevision={selectedRevision()}
+          authoringRevisionDiff={revisionDiff()}
+          onListAuthoringRevisions={listAuthoringRevisions}
+          onGetAuthoringRevision={getAuthoringRevision}
+          onDiffAuthoringRevisions={diffAuthoringRevisions}
+          onRestoreAuthoringRevision={restoreAuthoringRevision}
           sourceSessionId={props.client.auth.getSessionId()}
           sourceYjsStatus={yjsStatus()}
           onSubmitAuthoring={submitAuthoring}

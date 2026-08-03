@@ -1060,6 +1060,9 @@ export async function startWorkbench(
         coordinators: {
           get: (projectId) => authoring.get(projectId)?.coordinator ?? null,
         },
+        revision: {
+          get: (projectId) => authoring.get(projectId)?.revision ?? null,
+        },
         capabilities: {
           async resolve(input) {
             const issued = await capabilities.issue({

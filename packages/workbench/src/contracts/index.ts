@@ -10,12 +10,12 @@
  */
 
 export type {
-  PresenceUpdate,
+  PresenceUpdateV1,
   ProjectPresenceV1,
   ProjectSessionProjectionV1,
   ProjectSourceDiagnosticV1,
-  SessionPresenceSurface,
-} from '../host/project-session.js';
+  SessionPresenceSurfaceV1,
+} from '@novalistically/workbench-protocol';
 export type {
   AdminDevicePairRequestV1,
   AdminInviteCreateRequestV1,
@@ -58,6 +58,12 @@ export type {
   AuthoringSubmitBlockReasonV1,
   AuthoringSubmitReceiptV1,
   AuthoringWorkspaceDigestV1,
+  BrowserAuthoringRevisionChangeV1,
+  BrowserAuthoringRevisionDiffV1,
+  BrowserAuthoringRevisionListV1,
+  BrowserAuthoringRevisionRestoreRequestV1,
+  BrowserAuthoringRevisionRestoreResultV1,
+  BrowserAuthoringRevisionV1,
   BrowserAuthoringReconcileRequestV1,
   BrowserAuthoringReconcileResultV1,
   BrowserAuthoringSubmitRequestV1,

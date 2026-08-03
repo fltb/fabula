@@ -11,10 +11,14 @@
  * candidate and presence projections. It never serializes source bytes or Yjs
  * updates.
  */
-
+import { randomUUID } from 'node:crypto';
 import type { Context, Handler } from 'hono';
 import type { BrowserSessionPrincipalV1 } from '../contracts/browser-api.js';
-import type { AuthoringCoordinator } from './authoring/types.js';
+import type {
+  AuthoringCoordinator,
+  AuthoringRevisionPort,
+  AuthoringRevisionSummary,
+} from './authoring/types.js';
 import type {
   BrowserPrincipalResolver,
   BrowserProjectAuthorization,
@@ -29,6 +33,10 @@ import {
   BROWSER_AUTHORING_OPERATION_PATH,
   BROWSER_AUTHORING_OPERATIONS_PATH,
   BROWSER_AUTHORING_RECONCILE_PATH,
+  BROWSER_AUTHORING_REVISION_DIFF_PATH,
+  BROWSER_AUTHORING_REVISION_PATH,
+  BROWSER_AUTHORING_REVISION_RESTORE_PATH,
+  BROWSER_AUTHORING_REVISIONS_PATH,
   BROWSER_AUTHORING_STATE_PATH,
   BROWSER_AUTHORING_SUBMIT_PATH,
   type AuthoringActivityEventV1,
@@ -37,6 +45,11 @@ import {
   type AuthoringReconcileChoiceV1,
   type AuthoringStateV1,
   type AuthoringSubmitReceiptV1,
+  type BrowserAuthoringRevisionDiffV1,
+  type BrowserAuthoringRevisionListV1,
+  type BrowserAuthoringRevisionRestoreRequestV1,
+  type BrowserAuthoringRevisionRestoreResultV1,
+  type BrowserAuthoringRevisionV1,
   type BrowserAuthoringReconcileRequestV1,
   type BrowserAuthoringReconcileResultV1,
   type BrowserAuthoringSubmitRequestV1,
@@ -63,12 +76,17 @@ export interface BrowserAuthoringOperationsV1 {
   readonly generatedAt: string;
 }
 
+/** Project-scoped native revision service resolved by the Host. */
+export interface BrowserAuthoringRevisionRegistry {
+  get(projectId: string): AuthoringRevisionPort | null | Promise<AuthoringRevisionPort | null>;
+}
+
+
 /** Safe operation stream source. Implementations own subscription lifecycle. */
 export interface BrowserAuthoringEventSource {
   subscribe(projectId: string, listener: (event: AuthoringActivityEventV1) => void): () => void;
 }
-
-export type BrowserAuthoringCapabilityKind = 'submit' | 'reconcile';
+export type BrowserAuthoringCapabilityKind = 'submit' | 'reconcile' | 'restore';
 
 /**
  * Resolves a server-owned capability for one browser effect. The browser never
@@ -96,6 +114,8 @@ export interface BrowserAuthoringApiOptions {
   readonly authorization: BrowserProjectAuthorization;
   readonly catalog: BrowserProjectCatalog;
   readonly coordinators: BrowserAuthoringCoordinatorRegistry;
+  /** Native immutable revision service, resolved only after project access. */
+  readonly revision?: BrowserAuthoringRevisionRegistry | null;
   readonly capabilities?: BrowserAuthoringCapabilityResolver | null;
   readonly events?: BrowserAuthoringEventSource | null;
   /** One-time ticket store shared with the Yjs gateway. */
@@ -115,6 +135,7 @@ export type BrowserAuthoringErrorCode =
   | 'UNKNOWN_FIELD'
   | 'INVALID_INPUT'
   | 'OPERATION_NOT_FOUND'
+  | 'REVISION_NOT_FOUND'
   | 'AUTHORING_UNAVAILABLE'
   | 'INTERNAL'
   | AuthoringFailureCodeV1;
@@ -127,6 +148,7 @@ const ERROR_STATUS: Readonly<Record<BrowserAuthoringErrorCode, number>> = {
   UNKNOWN_FIELD: 400,
   INVALID_INPUT: 400,
   OPERATION_NOT_FOUND: 404,
+  REVISION_NOT_FOUND: 404,
   AUTHORING_UNAVAILABLE: 503,
   INTERNAL: 500,
   WORKSPACE_STALE: 409,
@@ -388,6 +410,179 @@ function operationHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv
   };
 }
 
+function revisionService(
+  api: BrowserAuthoringApiImpl,
+  access: Extract<AccessResult, { readonly ok: true }>,
+): AuthoringRevisionPort | Response {
+  const registry = api.options.revision;
+  if (registry === undefined || registry === null) {
+    return authoringError('AUTHORING_UNAVAILABLE', 'Native revision history is unavailable.');
+  }
+  const revision = registry.get(access.projectId);
+  if (revision instanceof Promise) {
+    throw new Error('Asynchronous revision registries must be resolved by the Host before registration.');
+  }
+  return revision === null
+    ? authoringError('PROJECT_NOT_READY', 'Native revision history is not ready for this project.')
+    : revision;
+}
+
+
+function revisionMetadata(revision: AuthoringRevisionSummary): BrowserAuthoringRevisionV1 {
+  return {
+    version: AUTHORING_CONTRACT_VERSION,
+    revisionId: revision.revisionId,
+    sourceHash: revision.sourceHash,
+    createdAt: revision.createdAt,
+    acceptedAt: revision.acceptedAt,
+  };
+}
+function revisionListHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const access = await api.access(c, 'reader');
+    if (!access.ok) return access.response;
+    const service = revisionService(api, access);
+    if (service instanceof Response) return service;
+    const cursor = c.req.query('cursor');
+    if (cursor !== undefined && !nonEmptyString(cursor)) {
+      return authoringError('INVALID_INPUT', 'cursor must be a non-empty opaque value.');
+    }
+    try {
+      const result = await service.list(access.projectId, cursor);
+      return json({
+        version: AUTHORING_CONTRACT_VERSION,
+        projectId: access.projectId,
+        revisions: result.revisions.map(revisionMetadata),
+        ...(result.nextCursor === undefined ? {} : { nextCursor: result.nextCursor }),
+        generatedAt: api.options.now?.() ?? new Date().toISOString(),
+      } satisfies BrowserAuthoringRevisionListV1);
+    } catch {
+      return authoringError('INTERNAL', 'The Host could not read native revision history.');
+    }
+  };
+}
+
+function revisionGetHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const access = await api.access(c, 'reader');
+    if (!access.ok) return access.response;
+    const service = revisionService(api, access);
+    if (service instanceof Response) return service;
+    const revisionId = c.req.param('revisionId');
+    if (!nonEmptyString(revisionId)) {
+      return authoringError('REVISION_NOT_FOUND', 'A revision id is required.');
+    }
+    try {
+      const revision = await service.get(access.projectId, revisionId);
+      return revision === null
+        ? authoringError('REVISION_NOT_FOUND', 'The requested native revision does not exist.')
+        : json({
+            version: AUTHORING_CONTRACT_VERSION,
+            projectId: access.projectId,
+            revision: revisionMetadata(revision),
+            generatedAt: api.options.now?.() ?? new Date().toISOString(),
+          });
+    } catch {
+      return authoringError('INTERNAL', 'The Host could not read the native revision.');
+    }
+  };
+}
+
+function revisionDiffHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const access = await api.access(c, 'reader');
+    if (!access.ok) return access.response;
+    const service = revisionService(api, access);
+    if (service instanceof Response) return service;
+    const fromRevisionId = c.req.query('fromRevisionId');
+    const toRevisionId = c.req.query('toRevisionId');
+    if (!nonEmptyString(fromRevisionId) || !nonEmptyString(toRevisionId)) {
+      return authoringError('INVALID_INPUT', 'fromRevisionId and toRevisionId are required.');
+    }
+    try {
+      // Verify both ids through the project-scoped service before computing a
+      // diff, so a cross-project id can never influence the response.
+      const [from, to] = await Promise.all([
+        service.get(access.projectId, fromRevisionId),
+        service.get(access.projectId, toRevisionId),
+      ]);
+      if (from === null || to === null) {
+        return authoringError('REVISION_NOT_FOUND', 'The requested native revision does not exist.');
+      }
+      const result = await service.diff(access.projectId, fromRevisionId, toRevisionId);
+      return json({
+        version: AUTHORING_CONTRACT_VERSION,
+        projectId: access.projectId,
+        fromRevisionId,
+        toRevisionId,
+        changes: result.changes,
+        generatedAt: api.options.now?.() ?? new Date().toISOString(),
+      } satisfies BrowserAuthoringRevisionDiffV1);
+    } catch {
+      return authoringError('INTERNAL', 'The Host could not compute the native revision diff.');
+    }
+  };
+}
+
+function revisionRestoreHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const access = await api.access(c, 'maintainer');
+    if (!access.ok) return access.response;
+    const parsed = parseStrictObject(
+      await readJson(c),
+      ['version', 'projectId', 'revisionId'],
+      ['expectedAcceptedRevisionId', 'expectedSourceHash'],
+    );
+    if (!parsed.ok) return authoringError(parsed.code, parsed.message);
+    const body = parsed.value;
+    if (body.projectId !== access.projectId) {
+      return authoringError('INVALID_INPUT', 'The request project does not match its route.');
+    }
+    if (!nonEmptyString(body.revisionId)) {
+      return authoringError('REVISION_NOT_FOUND', 'A revision id is required.');
+    }
+    const expectedAcceptedRevisionId =
+      body.expectedAcceptedRevisionId === undefined ? null : body.expectedAcceptedRevisionId;
+    const expectedSourceHash = body.expectedSourceHash === undefined ? null : body.expectedSourceHash;
+    if (!optionalHash(expectedAcceptedRevisionId) || !optionalHash(expectedSourceHash)) {
+      return authoringError('INVALID_INPUT', 'Restore CAS fields must be strings or null.');
+    }
+    const service = revisionService(api, access);
+    if (service instanceof Response) return service;
+    const grant = await api.capability(access, 'restore');
+    if (grant instanceof Response) return grant;
+    try {
+      const outcome = await service.restore({
+        projectId: access.projectId,
+        revisionId: body.revisionId,
+        expectedAcceptedRevisionId,
+        expectedSourceHash,
+        operationId: `browser-revision-restore-${randomUUID()}`,
+        actorId: access.principal.userId,
+      });
+      if (outcome.status === 'accepted') {
+        return json({
+          version: AUTHORING_CONTRACT_VERSION,
+          status: outcome.status,
+          revisionId: outcome.revisionId,
+          receiptHash: outcome.receiptHash,
+        } satisfies BrowserAuthoringRevisionRestoreResultV1);
+      }
+      if (outcome.status === 'stale') {
+        return authoringError('WORKSPACE_STALE', outcome.reason);
+      }
+      if (outcome.status === 'conflict') {
+        return authoringError('CONFLICT_REQUIRES_RESOLUTION', outcome.reason);
+      }
+      return outcome.code === 'REVISION_NOT_FOUND'
+        ? authoringError('REVISION_NOT_FOUND', outcome.reason)
+        : authoringError('INTERNAL', outcome.reason);
+    } catch {
+      return authoringError('INTERNAL', 'The Host could not restore the native revision.');
+    }
+  };
+}
+
 function submitHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
   return async (c) => {
     const access = await api.access(c, 'maintainer');
@@ -539,10 +734,6 @@ function eventsHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
   };
 }
 
-/**
- * Build the standalone guarded browser authoring surface. Phase 3 Host
- * composition calls `register(host)` before the listener starts.
- */
 export function createBrowserAuthoringApi(
   options: BrowserAuthoringApiOptions,
 ): BrowserAuthoringApiSurface {
@@ -552,6 +743,9 @@ export function createBrowserAuthoringApi(
     { path: BROWSER_AUTHORING_STATE_PATH, handler: stateHandler(api) },
     { path: BROWSER_AUTHORING_OPERATIONS_PATH, handler: operationsHandler(api) },
     { path: BROWSER_AUTHORING_OPERATION_PATH, handler: operationHandler(api) },
+    { path: BROWSER_AUTHORING_REVISIONS_PATH, handler: revisionListHandler(api) },
+    { path: BROWSER_AUTHORING_REVISION_DIFF_PATH, handler: revisionDiffHandler(api) },
+    { path: BROWSER_AUTHORING_REVISION_PATH, handler: revisionGetHandler(api) },
     { path: BROWSER_AUTHORING_EVENTS_PATH, handler: eventsHandler(api) },
   ];
   const mutations: readonly {
@@ -561,6 +755,11 @@ export function createBrowserAuthoringApi(
   }[] = [
     { method: 'POST', path: BROWSER_AUTHORING_SUBMIT_PATH, handler: submitHandler(api) },
     { method: 'POST', path: BROWSER_AUTHORING_RECONCILE_PATH, handler: reconcileHandler(api) },
+    {
+      method: 'POST',
+      path: BROWSER_AUTHORING_REVISION_RESTORE_PATH,
+      handler: revisionRestoreHandler(api),
+    },
   ];
   return {
     register(host: HostServer): void {

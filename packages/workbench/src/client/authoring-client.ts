@@ -4,6 +4,10 @@ import {
   BROWSER_AUTHORING_OPERATION_PATH,
   BROWSER_AUTHORING_OPERATIONS_PATH,
   BROWSER_AUTHORING_RECONCILE_PATH,
+  BROWSER_AUTHORING_REVISION_DIFF_PATH,
+  BROWSER_AUTHORING_REVISION_PATH,
+  BROWSER_AUTHORING_REVISION_RESTORE_PATH,
+  BROWSER_AUTHORING_REVISIONS_PATH,
   BROWSER_AUTHORING_STATE_PATH,
   BROWSER_AUTHORING_SUBMIT_PATH,
   type AuthoringActivityEventV1,
@@ -12,6 +16,11 @@ import {
   type AuthoringStateV1,
   type BrowserAuthoringReconcileRequestV1,
   type BrowserAuthoringReconcileResultV1,
+  type BrowserAuthoringRevisionDiffV1,
+  type BrowserAuthoringRevisionListV1,
+  type BrowserAuthoringRevisionRestoreRequestV1,
+  type BrowserAuthoringRevisionRestoreResultV1,
+  type BrowserAuthoringRevisionV1,
   type BrowserAuthoringSubmitRequestV1,
   type BrowserAuthoringSubmitResultV1,
 } from '../contracts/authoring.js';
@@ -37,7 +46,6 @@ export class BrowserAuthoringApiError extends Error {
     this.code = code;
   }
 }
-
 export interface AuthoringEventSubscription {
   /** Resolves once the stream response is authenticated and readable. */
   readonly ready: Promise<void>;
@@ -49,6 +57,21 @@ export interface BrowserAuthoringClient {
   getState(projectId: string): Promise<AuthoringStateV1>;
   listOperations(projectId: string): Promise<BrowserAuthoringOperationsV1>;
   getOperation(projectId: string, operationId: string): Promise<AuthoringOperationReceiptV1>;
+  listRevisions(projectId: string, cursor?: string): Promise<BrowserAuthoringRevisionListV1>;
+  getRevision(projectId: string, revisionId: string): Promise<{
+    readonly version: typeof AUTHORING_CONTRACT_VERSION;
+    readonly projectId: string;
+    readonly revision: BrowserAuthoringRevisionV1;
+    readonly generatedAt: string;
+  }>;
+  diffRevisions(
+    projectId: string,
+    fromRevisionId: string,
+    toRevisionId: string,
+  ): Promise<BrowserAuthoringRevisionDiffV1>;
+  restoreRevision(
+    request: BrowserAuthoringRevisionRestoreRequestV1,
+  ): Promise<BrowserAuthoringRevisionRestoreResultV1>;
   submit(request: BrowserAuthoringSubmitRequestV1): Promise<BrowserAuthoringSubmitResultV1>;
   reconcile(request: BrowserAuthoringReconcileRequestV1): Promise<BrowserAuthoringReconcileResultV1>;
   subscribeEvents(
@@ -193,6 +216,35 @@ export function createBrowserAuthoringClient(
           encodeURIComponent(operationId),
         ),
       ),
+    listRevisions: (projectId, cursor) => {
+      const path = pathFor(BROWSER_AUTHORING_REVISIONS_PATH, projectId);
+      return get<BrowserAuthoringRevisionListV1>(
+        cursor === undefined ? path : `${path}?cursor=${encodeURIComponent(cursor)}`,
+      );
+    },
+    getRevision: (projectId, revisionId) =>
+      get<{
+        readonly version: typeof AUTHORING_CONTRACT_VERSION;
+        readonly projectId: string;
+        readonly revision: BrowserAuthoringRevisionV1;
+        readonly generatedAt: string;
+      }>(
+        pathFor(BROWSER_AUTHORING_REVISION_PATH, projectId).replace(
+          ':revisionId',
+          encodeURIComponent(revisionId),
+        ),
+      ),
+    diffRevisions: (projectId, fromRevisionId, toRevisionId) => {
+      const path = pathFor(BROWSER_AUTHORING_REVISION_DIFF_PATH, projectId);
+      return get<BrowserAuthoringRevisionDiffV1>(
+        `${path}?fromRevisionId=${encodeURIComponent(fromRevisionId)}&toRevisionId=${encodeURIComponent(toRevisionId)}`,
+      );
+    },
+    restoreRevision: (request) =>
+      post<BrowserAuthoringRevisionRestoreResultV1>(
+        pathFor(BROWSER_AUTHORING_REVISION_RESTORE_PATH, request.projectId),
+        request,
+      ),
     submit: (request) =>
       post<BrowserAuthoringSubmitResultV1>(
         pathFor(BROWSER_AUTHORING_SUBMIT_PATH, request.projectId),
@@ -295,6 +347,11 @@ export type {
   AuthoringStateV1,
   BrowserAuthoringReconcileRequestV1,
   BrowserAuthoringReconcileResultV1,
+  BrowserAuthoringRevisionDiffV1,
+  BrowserAuthoringRevisionListV1,
+  BrowserAuthoringRevisionRestoreRequestV1,
+  BrowserAuthoringRevisionRestoreResultV1,
+  BrowserAuthoringRevisionV1,
   BrowserAuthoringSubmitRequestV1,
   BrowserAuthoringSubmitResultV1,
   BrowserFetch,

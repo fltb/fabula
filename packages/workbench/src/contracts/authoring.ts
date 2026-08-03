@@ -318,6 +318,76 @@ export const BROWSER_AUTHORING_OPERATIONS_PATH = `${BROWSER_AUTHORING_BASE_PATH}
 export const BROWSER_AUTHORING_OPERATION_PATH = `${BROWSER_AUTHORING_BASE_PATH}/operations/:operationId`;
 /** `GET .../authoring/events` — guarded activity stream. */
 export const BROWSER_AUTHORING_EVENTS_PATH = `${BROWSER_AUTHORING_BASE_PATH}/events`;
+/** `GET .../authoring/revisions` — native revision history metadata. */
+export const BROWSER_AUTHORING_REVISIONS_PATH = `${BROWSER_AUTHORING_BASE_PATH}/revisions`;
+/** `GET .../authoring/revisions/:revisionId` — one native revision metadata record. */
+export const BROWSER_AUTHORING_REVISION_PATH =
+  `${BROWSER_AUTHORING_REVISIONS_PATH}/:revisionId`;
+/** `GET .../authoring/revisions/diff` — hash-only native revision diff. */
+export const BROWSER_AUTHORING_REVISION_DIFF_PATH =
+  `${BROWSER_AUTHORING_REVISIONS_PATH}/diff`;
+/** `POST .../authoring/revisions/restore` — restore as a new native revision. */
+export const BROWSER_AUTHORING_REVISION_RESTORE_PATH =
+  `${BROWSER_AUTHORING_REVISIONS_PATH}/restore`;
+
+/** Safe native revision metadata; bundle storage and actor details stay Host-only. */
+export interface BrowserAuthoringRevisionV1 {
+  readonly version: AuthoringContractVersion;
+  readonly revisionId: string;
+  readonly sourceHash: string;
+  readonly createdAt: string;
+  readonly acceptedAt: string;
+}
+
+/** Native revision history list; `nextCursor` is opaque to the browser. */
+export interface BrowserAuthoringRevisionListV1 {
+  readonly version: AuthoringContractVersion;
+  readonly projectId: string;
+  readonly revisions: readonly BrowserAuthoringRevisionV1[];
+  readonly nextCursor?: string;
+  readonly generatedAt: string;
+}
+
+/** One hash-only changed logical path between two native revisions. */
+export interface BrowserAuthoringRevisionChangeV1 {
+  readonly logicalPath: string;
+  readonly beforeHash: string | null;
+  readonly afterHash: string | null;
+}
+
+/** Hash-only native revision diff; no source bytes or storage identities. */
+export interface BrowserAuthoringRevisionDiffV1 {
+  readonly version: AuthoringContractVersion;
+  readonly projectId: string;
+  readonly fromRevisionId: string;
+  readonly toRevisionId: string;
+  readonly changes: readonly BrowserAuthoringRevisionChangeV1[];
+  readonly generatedAt: string;
+}
+
+/** Explicit restore request; both expected identities are server-checked CAS fields. */
+export interface BrowserAuthoringRevisionRestoreRequestV1 {
+  readonly version: AuthoringContractVersion;
+  readonly projectId: string;
+  readonly revisionId: string;
+  readonly expectedAcceptedRevisionId: string | null;
+  readonly expectedSourceHash: string | null;
+}
+
+/** Immediate result of a native restore request. */
+export type BrowserAuthoringRevisionRestoreResultV1 =
+  | {
+      readonly version: AuthoringContractVersion;
+      readonly status: 'accepted';
+      readonly revisionId: string;
+      readonly receiptHash: string;
+    }
+  | {
+      readonly version: AuthoringContractVersion;
+      readonly status: 'rejected';
+      readonly failure: AuthoringFailureV1;
+    };
+
 
 // ─── Strict MCP authoring tool I/O ──────────────────────────────────────────
 

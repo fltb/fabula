@@ -5,6 +5,10 @@ import type {
   AuthoringOperationReceiptV1,
   AuthoringStateV1,
   BrowserAuthoringReconcileRequestV1,
+  BrowserAuthoringRevisionDiffV1,
+  BrowserAuthoringRevisionListV1,
+  BrowserAuthoringRevisionRestoreRequestV1,
+  BrowserAuthoringRevisionV1,
   BrowserAuthoringSubmitRequestV1,
   BrowserProjectOverviewV1,
   SceneAdoptionViewV1,
@@ -54,6 +58,18 @@ export interface AppProps {
   readonly overview?: BrowserProjectOverviewV1 | null;
   /** Canonical graph view supplied only by the authenticated Host read client. */
   readonly graphProjection?: WorkbenchGraphProjectionV1 | null;
+  readonly authoringRevisionHistory?: BrowserAuthoringRevisionListV1 | null;
+  readonly authoringRevision?: BrowserAuthoringRevisionV1 | null;
+  readonly authoringRevisionDiff?: BrowserAuthoringRevisionDiffV1 | null;
+  readonly onListAuthoringRevisions?: () => void | Promise<void>;
+  readonly onGetAuthoringRevision?: (revisionId: string) => void | Promise<void>;
+  readonly onDiffAuthoringRevisions?: (
+    fromRevisionId: string,
+    toRevisionId: string,
+  ) => void | Promise<void>;
+  readonly onRestoreAuthoringRevision?: (
+    request: BrowserAuthoringRevisionRestoreRequestV1,
+  ) => void | Promise<void>;
   /** Host-derived Source Studio state; working edits stay noncanonical until Host submission. */
   readonly sourceStudio?: SourceStudioStateV1 | null;
   readonly authoringState?: AuthoringStateV1 | null;
@@ -108,6 +124,18 @@ interface WorkspaceProps {
   readonly sourceStudio?: SourceStudioStateV1 | null;
   readonly authoringState?: AuthoringStateV1 | null;
   readonly authoringOperations?: readonly AuthoringOperationReceiptV1[];
+  readonly authoringRevisionHistory?: BrowserAuthoringRevisionListV1 | null;
+  readonly authoringRevision?: BrowserAuthoringRevisionV1 | null;
+  readonly authoringRevisionDiff?: BrowserAuthoringRevisionDiffV1 | null;
+  readonly onListAuthoringRevisions?: () => void | Promise<void>;
+  readonly onGetAuthoringRevision?: (revisionId: string) => void | Promise<void>;
+  readonly onDiffAuthoringRevisions?: (
+    fromRevisionId: string,
+    toRevisionId: string,
+  ) => void | Promise<void>;
+  readonly onRestoreAuthoringRevision?: (
+    request: BrowserAuthoringRevisionRestoreRequestV1,
+  ) => void | Promise<void>;
   readonly sourceSessionId?: string | null;
   readonly selectedSourceDocumentId?: string | null;
   readonly sourceYjsStatus?: Readonly<Record<string, SourceStudioYjsStatus>>;
@@ -264,21 +292,10 @@ export function Workspace(props: WorkspaceProps) {
         </div>
         <div class="state-copy">
           <p class="region-kicker">Projection status</p>
-          <h2>{copy().title}</h2>
-          <p>{copy().description}</p>
+          <p>
+            {copy().description}
+          </p>
         </div>
-      </section>
-
-      <section class="projection-boundary" aria-labelledby="projection-boundary-heading">
-        <div>
-          <p class="region-kicker">Data boundary</p>
-          <h2 id="projection-boundary-heading">Compiler-owned views only</h2>
-        </div>
-        <p>
-          This shell never infers story nodes, scene order, graph edges, route scope, or branch data
-          from prose. Those values appear only when the authenticated Host supplies a canonical
-          projection.
-        </p>
       </section>
 
       <Show when={props.hostStatus === 'ready' && props.activeView === 'project-home'}>
@@ -295,6 +312,13 @@ export function Workspace(props: WorkspaceProps) {
           state={props.sourceStudio ?? null}
           authoring={props.authoringState}
           operations={props.authoringOperations}
+          revisionHistory={props.authoringRevisionHistory}
+          selectedRevision={props.authoringRevision}
+          revisionDiff={props.authoringRevisionDiff}
+          onListRevisions={props.onListAuthoringRevisions}
+          onGetRevision={props.onGetAuthoringRevision}
+          onDiffRevisions={props.onDiffAuthoringRevisions}
+          onRestoreRevision={props.onRestoreAuthoringRevision}
           sessionId={props.sourceSessionId}
           selectedDocumentId={props.selectedSourceDocumentId}
           onSelectDocument={props.onConnectSourceYjs}

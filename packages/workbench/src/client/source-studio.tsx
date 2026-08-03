@@ -4,6 +4,10 @@ import type {
   AuthoringReconcileChoiceV1,
   AuthoringStateV1,
   BrowserAuthoringReconcileRequestV1,
+  BrowserAuthoringRevisionDiffV1,
+  BrowserAuthoringRevisionListV1,
+  BrowserAuthoringRevisionRestoreRequestV1,
+  BrowserAuthoringRevisionV1,
   BrowserAuthoringSubmitRequestV1,
   SourceStudioDocumentDescriptorV1,
   SourceStudioStateV1,
@@ -27,6 +31,21 @@ export interface SourceStudioProps {
   readonly authoring?: AuthoringStateV1 | null;
   /** Recent safe coordinator receipts for the Operation Center. */
   readonly operations?: readonly AuthoringOperationReceiptV1[];
+  /** Host-derived native revision history; no source bytes or Git metadata. */
+  readonly revisionHistory?: BrowserAuthoringRevisionListV1 | null;
+  /** Selected revision metadata returned by an explicit history read. */
+  readonly selectedRevision?: BrowserAuthoringRevisionV1 | null;
+  /** Hash-only diff returned by an explicit history read. */
+  readonly revisionDiff?: BrowserAuthoringRevisionDiffV1 | null;
+  readonly onListRevisions?: () => void | Promise<void>;
+  readonly onGetRevision?: (revisionId: string) => void | Promise<void>;
+  readonly onDiffRevisions?: (
+    fromRevisionId: string,
+    toRevisionId: string,
+  ) => void | Promise<void>;
+  readonly onRestoreRevision?: (
+    request: BrowserAuthoringRevisionRestoreRequestV1,
+  ) => void | Promise<void>;
   /** Working-layer connection status per document id; absent entries read as `idle`. */
   readonly yjsStatus?: Readonly<Record<string, SourceStudioYjsStatus>>;
   /** Explicit Host connect handler; absent = no connect action is offered. */
@@ -113,8 +132,9 @@ export function SourceStudio(props: SourceStudioProps) {
       return null;
     }
     return {
-      version: 1,
+      version: 2,
       projectId: state.projectId,
+      expectedAcceptedRevisionId: authoring.acceptedRevisionId,
       expectedAcceptedSourceHash: authoring.acceptedSourceHash,
       expectedWorkspaceDigest: authoring.workspaceDigest,
     };
@@ -129,11 +149,24 @@ export function SourceStudio(props: SourceStudioProps) {
     const candidateHash = authoring.externalCandidate?.candidateHash ?? null;
     if (choice !== 'keep-working' && candidateHash === null) return null;
     return {
-      version: 1,
+      version: 2,
       projectId: state.projectId,
       choice,
       candidateHash,
+      expectedAcceptedRevisionId: authoring.acceptedRevisionId,
       expectedAcceptedSourceHash: authoring.acceptedSourceHash,
+    };
+  };
+
+  const restoreRequest = (revisionId: string): BrowserAuthoringRevisionRestoreRequestV1 | null => {
+    const state = props.state;
+    if (state === null || props.onRestoreRevision === undefined) return null;
+    return {
+      version: 2,
+      projectId: state.projectId,
+      revisionId,
+      expectedAcceptedRevisionId: props.authoring?.acceptedRevisionId ?? null,
+      expectedSourceHash: props.authoring?.acceptedSourceHash ?? null,
     };
   };
 
@@ -514,6 +547,124 @@ export function SourceStudio(props: SourceStudioProps) {
                     )}
                   </For>
                 </ul>
+              </Show>
+            </section>
+            <section class="revision-history border-t border-[var(--wb-border)] pt-5" aria-labelledby="revision-history-heading">
+              <div class="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p class="region-kicker">Native history</p>
+                  <h3 id="revision-history-heading">Accepted revision history</h3>
+                  <p class="screen-note">
+                    Native revision identities are Host authority. Git mirrors, if configured, are
+                    never used for acceptance or restore decisions.
+                  </p>
+                </div>
+                <Show when={props.onListRevisions !== undefined}>
+                  <button type="button" onClick={() => void props.onListRevisions?.()}>
+                    Refresh revision history
+                  </button>
+                </Show>
+              </div>
+              <Show
+                when={(props.revisionHistory?.revisions.length ?? 0) > 0}
+                fallback={<p class="screen-note">No native revisions are available for this project.</p>}
+              >
+                <ol class="grid gap-2" aria-label="Native revision history">
+                  <For each={props.revisionHistory?.revisions ?? []}>
+                    {(revision, index) => (
+                      <li class="grid gap-2 border border-[var(--wb-border)] px-3 py-2">
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                          <span>
+                            <strong>Revision {index() + 1}</strong>
+                            <code class="ml-2">{revision.revisionId}</code>
+                          </span>
+                          <time class="screen-note" dateTime={revision.acceptedAt}>
+                            {revision.acceptedAt}
+                          </time>
+                        </div>
+                        <span class="screen-note">
+                          Native source identity: <code>{revision.sourceHash}</code>
+                        </span>
+                        <div class="flex flex-wrap gap-2">
+                          <Show when={props.onGetRevision !== undefined}>
+                            <button
+                              type="button"
+                              onClick={() => void props.onGetRevision?.(revision.revisionId)}
+                            >
+                              View revision
+                            </button>
+                          </Show>
+                          <Show when={index() > 0 && props.onDiffRevisions !== undefined}>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void props.onDiffRevisions?.(
+                                  props.revisionHistory?.revisions[index() - 1]?.revisionId ?? '',
+                                  revision.revisionId,
+                                )
+                              }
+                            >
+                              Compare with previous revision
+                            </button>
+                          </Show>
+                          <Show when={props.onRestoreRevision !== undefined}>
+                            <button
+                              type="button"
+                              disabled={props.authoring?.phase === 'submitting'}
+                              onClick={() => {
+                                const request = restoreRequest(revision.revisionId);
+                                if (request !== null) void props.onRestoreRevision?.(request);
+                              }}
+                            >
+                              Restore revision
+                            </button>
+                          </Show>
+                        </div>
+                      </li>
+                    )}
+                  </For>
+                </ol>
+              </Show>
+              <Show when={props.selectedRevision}>
+                {(revision) => (
+                  <dl class="projection-metrics" aria-label="Selected native revision">
+                    <div>
+                      <dt>Selected revision</dt>
+                      <dd><code>{revision().revisionId}</code></dd>
+                    </div>
+                    <div>
+                      <dt>Accepted at</dt>
+                      <dd>{revision().acceptedAt}</dd>
+                    </div>
+                  </dl>
+                )}
+              </Show>
+              <Show when={props.revisionDiff}>
+                {(diff) => (
+                  <div class="grid gap-2" aria-label="Native revision diff">
+                    <p class="screen-note">
+                      Diff {diff().fromRevisionId} → {diff().toRevisionId}
+                    </p>
+                    <Show
+                      when={diff().changes.length > 0}
+                      fallback={<p class="screen-note">The selected revisions have no changed paths.</p>}
+                    >
+                      <ul class="diagnostic-list">
+                        <For each={diff().changes}>
+                          {(change) => (
+                            <li>
+                              <code>{change.logicalPath}</code>
+                              <span class="screen-note">
+                                {' '}
+                                {change.beforeHash === null ? 'added' : change.afterHash === null ? 'removed' : 'changed'}
+                              </span>
+                            </li>
+                          )}
+                        </For>
+                      </ul>
+                    </Show>
+                  </div>
+                )}
               </Show>
             </section>
           </>

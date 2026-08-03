@@ -187,45 +187,22 @@ export interface AuthoringRevisionPort {
     | { readonly status: 'initial-load'; readonly revisionId: string; readonly sourceHash: string }
   >;
 
+
   /** List revisions, oldest first. Cursor is opaque. */
-  list(
-    projectId: string,
-    cursor?: string,
-  ): Promise<{
-    readonly revisions: readonly {
-      readonly revisionId: string;
-      readonly sourceHash: string;
-      readonly bundleHash: string;
-      readonly createdAt: string;
-      readonly acceptedAt: string;
-    }[];
+  list(projectId: string, cursor?: string): Promise<{
+    readonly revisions: readonly AuthoringRevisionSummary[];
     readonly nextCursor?: string;
   }>;
 
   /** Read one project-scoped immutable revision metadata record. */
-  get(
-    projectId: string,
-    revisionId: string,
-  ): Promise<{
-    readonly revisionId: string;
-    readonly sourceHash: string;
-    readonly bundleHash: string;
-    readonly createdAt: string;
-    readonly acceptedAt: string;
-  } | null>;
+  get(projectId: string, revisionId: string): Promise<AuthoringRevisionSummary | null>;
 
   /** Compute the diff between two revisions. */
   diff(
     projectId: string,
     fromRevisionId: string,
     toRevisionId: string,
-  ): Promise<{
-    readonly changes: readonly {
-      readonly logicalPath: string;
-      readonly beforeHash: string | null;
-      readonly afterHash: string | null;
-    }[];
-  }>;
+  ): Promise<{ readonly changes: readonly AuthoringRevisionChange[] }>;
 
   /**
    * Restore a previous revision as a new child revision. Never moves the
@@ -245,6 +222,22 @@ export interface AuthoringRevisionPort {
     | { readonly status: 'conflict'; readonly reason: string }
     | { readonly status: 'invalid'; readonly code: string; readonly reason: string }
   >;
+}
+
+/** Safe revision metadata returned by the native revision backend. */
+export interface AuthoringRevisionSummary {
+  readonly revisionId: string;
+  readonly sourceHash: string;
+  readonly bundleHash: string;
+  readonly createdAt: string;
+  readonly acceptedAt: string;
+}
+
+/** Hash-only path change between two native revisions. */
+export interface AuthoringRevisionChange {
+  readonly logicalPath: string;
+  readonly beforeHash: string | null;
+  readonly afterHash: string | null;
 }
 
 /**

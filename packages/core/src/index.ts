@@ -153,3 +153,18 @@ export type {
   ValidationRunOptions,
   Validator,
 } from './types/index.js';
+export {
+  DeterministicReferenceExtractor,
+  ReferenceExtractionError,
+  buildReferencePacket,
+  extractReferenceChunks,
+} from './reference.ts';
+export type {
+  BuildReferencePacketOptionsV1,
+  ProjectReferencePacketV1,
+  ReferenceChunkV1,
+  ReferenceCitationV1,
+  ReferenceExtractionInputV1,
+  ReferenceExtractorOptionsV1,
+  ReferenceExtractorV1,
+} from './reference.ts';

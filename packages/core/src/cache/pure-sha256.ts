@@ -19,7 +19,11 @@ function rightRotate(value: number, amount: number): number {
 
 /** SHA-256 for UTF-8 text, with no runtime or platform crypto dependency. */
 export function sha256(input: string): string {
-  const bytes = new TextEncoder().encode(input);
+  return sha256Bytes(new TextEncoder().encode(input));
+}
+
+/** SHA-256 for arbitrary bytes, with no runtime or platform crypto dependency. */
+export function sha256Bytes(bytes: Uint8Array): string {
   const bitLength = bytes.length * 8;
   const paddedLength = (bytes.length + 9 + 63) & ~63;
   const padded = new Uint8Array(paddedLength);

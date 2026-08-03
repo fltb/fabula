@@ -26,10 +26,28 @@ import {
 } from '@novalistically/core';
 import {
   AUTHORING_DOCUMENT_LIMITS_V1,
+  REFERENCE_MCP_LIMITS_V1,
   type McpJsonSchemaProperty,
   type McpJsonSchemaV1,
   MCP_TOOL_CATALOG_V1,
+  type McpReferenceChunkGetInputV1,
+  type McpReferenceContentReadInputV1,
+  type McpReferenceDeleteInputV1,
+  type McpReferenceGetInputV1,
+  type McpReferenceImportBeginInputV1,
+  type McpReferenceImportChunkInputV1,
+  type McpReferenceImportCommitInputV1,
+  type McpReferenceJobGetInputV1,
+  type McpReferenceListInputV1,
+  type McpReferencePort,
+  type McpReferenceRetryInputV1,
+  type McpReferenceSearchInputV1,
   type McpToolDescriptorV1,
+  type ReferenceChunkV1,
+  type ReferenceContentV1,
+  type ReferenceItemV1,
+  type ReferenceJobV1,
+  type ReferenceRangeV1,
 } from '@novalistically/workbench-protocol';
 import {
   type EditorialRenderRequestV1,
@@ -108,9 +126,12 @@ function toolMetadata(name: string): Pick<
 
 /** Exact capability scopes for MCP tools, sourced from the protocol catalog. */
 export const MCP_READ_SCOPE = toolScope('nova_status');
+const REFERENCE_MCP_CONTRACT_VERSION = 1 as const;
 export const MCP_RENDER_SCOPE = toolScope('nova_render');
 export const MCP_AUTHOR_SCOPE = toolScope('nova_authoring_status');
 export const MCP_SUBMIT_SCOPE = toolScope('nova_authoring_submit');
+export const MCP_REFERENCE_READ_SCOPE = toolScope('nova_reference_list');
+export const MCP_REFERENCE_WRITE_SCOPE = toolScope('nova_reference_import_begin');
 export const MCP_ADMIN_SCOPE = toolScope('nova_admin_config_apply');
 
 // Protocol-owned strict JSON Schema; the registry only executes handlers.
@@ -313,6 +334,8 @@ export type McpRenderFunction = (
 
 export interface McpRegistryOptions {
   /** Render implementation seam; tests inject a recording stub. */
+  /** Project-scoped reference catalog; absent tools fail closed. */
+  readonly reference?: McpReferencePort;
   readonly render?: McpRenderFunction;
   /** Author/submit coordinator port; when absent the authoring tools fail closed. */
   readonly coordinator?: McpAuthoringCoordinatorPort;
@@ -530,6 +553,10 @@ const NO_ADMIN_SERVICE = mcpToolError(
   'NO_ADMIN_SERVICE',
   'The requested owner administration service is not available for this Host.',
 );
+const NO_REFERENCE_PORT = mcpToolError(
+  'REFERENCE_UNAVAILABLE',
+  'The reference catalog is not available for this project.',
+);
 
 function parseAdminVersionedInput(
   input: unknown,
@@ -646,8 +673,181 @@ function parseToolInput(
   return parsed;
 }
 
+function parseReferenceInput(
+  input: unknown,
+  allowed: readonly string[],
+): { readonly ok: true; readonly value: Record<string, unknown> } | { readonly ok: false; readonly result: McpToolResult } {
+  const parsed = parseObject(input, 'Input must be an object.');
+  if (!parsed.ok) return parsed;
+  const unknown = rejectUnknownKeys(parsed.value, allowed);
+  if (unknown) return { ok: false, result: unknown };
+  if (parsed.value.version !== REFERENCE_MCP_CONTRACT_VERSION) {
+    return { ok: false, result: invalidInput(`version must be ${REFERENCE_MCP_CONTRACT_VERSION}.`) };
+  }
+  return parsed;
+}
+
+function referenceString(
+  value: Record<string, unknown>,
+  key: string,
+  maxLength: number,
+  required = true,
+): { readonly ok: true; readonly value: string | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+  const candidate = value[key];
+  if (candidate === undefined && !required) return { ok: true, value: undefined };
+  if (typeof candidate !== 'string' || (required && candidate.length === 0) || candidate.length > maxLength) {
+    return { ok: false, result: invalidInput(`${key} must be ${required ? 'a non-empty ' : 'a '}string of at most ${maxLength} characters.`) };
+  }
+  return { ok: true, value: candidate };
+}
+
+function referenceInteger(
+  value: Record<string, unknown>,
+  key: string,
+  minimum: number,
+  maximum: number,
+  required = true,
+): { readonly ok: true; readonly value: number | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+  const candidate = value[key];
+  if (candidate === undefined && !required) return { ok: true, value: undefined };
+  if (typeof candidate !== 'number' || !Number.isSafeInteger(candidate) || candidate < minimum || candidate > maximum) {
+    return { ok: false, result: invalidInput(`${key} must be an integer between ${minimum} and ${maximum}.`) };
+  }
+  return { ok: true, value: candidate };
+}
+
+function referenceStringList(
+  value: Record<string, unknown>,
+  key: string,
+  maxLength: number,
+  maxCount: number,
+): { readonly ok: true; readonly value: string[] | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+  const candidate = value[key];
+  if (candidate === undefined) return { ok: true, value: undefined };
+  if (!Array.isArray(candidate) || candidate.length > maxCount) {
+    return { ok: false, result: invalidInput(`${key} must be an array of at most ${maxCount} strings.`) };
+  }
+  if (!candidate.every((entry) => typeof entry === 'string' && entry.length > 0 && entry.length <= maxLength)) {
+    return { ok: false, result: invalidInput(`${key} entries must be non-empty strings of at most ${maxLength} characters.`) };
+  }
+  return { ok: true, value: candidate as string[] };
+}
+
+function safeObject(value: unknown, label: string): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} is not an object`);
+  return value as Record<string, unknown>;
+}
+
+function safeText(value: unknown, label: string, allowNull = false): string | null {
+  if ((value === null || value === undefined) && allowNull) return null;
+  if (typeof value !== 'string' || value.length === 0) throw new Error(`${label} is invalid`);
+  return value;
+}
+
+function safeHash(value: unknown, label: string): string {
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) throw new Error(`${label} is invalid`);
+  return value;
+}
+
+function safeReferenceItem(value: unknown): ReferenceItemV1 {
+  const item = safeObject(value, 'Reference item');
+  const authors = item.authors;
+  const tags = item.tags;
+  if (!Array.isArray(authors) || !authors.every((entry) => typeof entry === 'string')) throw new Error('Reference authors are invalid');
+  if (!Array.isArray(tags) || !tags.every((entry) => typeof entry === 'string')) throw new Error('Reference tags are invalid');
+  const byteLength = item.byteLength;
+  if (typeof byteLength !== 'number' || !Number.isSafeInteger(byteLength) || byteLength < 0 || byteLength > REFERENCE_MCP_LIMITS_V1.maxReferenceBytes) {
+    throw new Error('Reference byteLength is invalid');
+  }
+  return {
+    version: 1,
+    referenceId: safeText(item.referenceId, 'referenceId')!,
+    displayName: safeText(item.displayName, 'displayName')!,
+    originalName: safeText(item.originalName, 'originalName')!,
+    mediaType: safeText(item.mediaType, 'mediaType')!,
+    contentHash: safeHash(item.contentHash, 'contentHash'),
+    byteLength,
+    title: safeText(item.title, 'title', true),
+    authors: [...authors],
+    sourceUrl: safeText(item.sourceUrl, 'sourceUrl', true),
+    license: safeText(item.license, 'license', true),
+    tags: [...tags],
+    createdAt: safeText(item.createdAt, 'createdAt')!,
+    updatedAt: safeText(item.updatedAt, 'updatedAt')!,
+  };
+}
+
+function safeReferenceJob(value: unknown): ReferenceJobV1 {
+  const job = safeObject(value, 'Reference job');
+  const message = safeText(job.errorMessage, 'errorMessage', true);
+  const redactPath = (text: string | null): string | null => {
+    if (text === null) return null;
+    return text
+      .split(/[ \t\r\n]+/)
+      .map((part) => (part.includes('/') || part.includes('\\') ? '[redacted-path]' : part))
+      .join(' ');
+  };
+  return {
+    version: 1,
+    jobId: safeText(job.jobId, 'jobId')!,
+    operation: job.operation as ReferenceJobV1['operation'],
+    status: job.status as ReferenceJobV1['status'],
+    referenceId: safeText(job.referenceId, 'referenceId', true),
+    bytesReceived: job.bytesReceived as number,
+    totalBytes: job.totalBytes as number | null,
+    contentHash: job.contentHash === null ? null : safeHash(job.contentHash, 'contentHash'),
+    errorCode: safeText(job.errorCode, 'errorCode', true),
+    errorMessage: redactPath(message),
+    createdAt: safeText(job.createdAt, 'createdAt')!,
+    updatedAt: safeText(job.updatedAt, 'updatedAt')!,
+  };
+}
+
+function safeReferenceRange(value: unknown): ReferenceRangeV1 {
+  const range = safeObject(value, 'Reference range');
+  if (typeof range.offset !== 'number' || typeof range.length !== 'number') throw new Error('Reference range is invalid');
+  return { version: 1, offset: range.offset, length: range.length };
+}
+
+function safeReferenceContent(value: unknown): ReferenceContentV1 {
+  const content = safeObject(value, 'Reference content');
+  const dataBase64 = safeText(content.dataBase64, 'dataBase64')!;
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(dataBase64) || dataBase64.length > REFERENCE_MCP_LIMITS_V1.maxChunkBase64Length) {
+    throw new Error('Reference content encoding is invalid');
+  }
+  return {
+    version: 1,
+    referenceId: safeText(content.referenceId, 'referenceId')!,
+    mediaType: safeText(content.mediaType, 'mediaType')!,
+    contentHash: safeHash(content.contentHash, 'contentHash'),
+    byteLength: content.byteLength as number,
+    range: safeReferenceRange(content.range),
+    dataBase64,
+    nextOffset: content.nextOffset as number | null,
+  };
+}
+
 
 /** Strict `string | null` field; null only when explicitly allowed. */
+
+function safeReferenceChunk(value: unknown): ReferenceChunkV1 {
+  const chunk = safeObject(value, 'Reference chunk');
+  const quote = safeText(chunk.quote, 'quote', true);
+  const locator = safeText(chunk.locator, 'locator')!;
+  if (locator.includes('/') || locator.includes('\\')) throw new Error('Reference locator contains a path');
+  return {
+    version: 1,
+    referenceId: safeText(chunk.referenceId, 'referenceId')!,
+    chunkId: safeText(chunk.chunkId, 'chunkId')!,
+    ordinal: chunk.ordinal as number,
+    range: safeReferenceRange(chunk.range),
+    byteLength: chunk.byteLength as number,
+    contentHash: safeHash(chunk.contentHash, 'contentHash'),
+    chunkHash: safeHash(chunk.chunkHash, 'chunkHash'),
+    locator,
+    quote,
+  };
+}
 function nullableStringField(
   value: Record<string, unknown>,
   key: string,
@@ -1002,6 +1202,244 @@ export function createProjectSessionMcpRegistry(
             ),
         });
         return mapOperationResult(operation);
+      },
+    },
+    {
+      ...toolMetadata('nova_reference_list'),
+      run: async (_caller, input) => {
+        const parsed = parseReferenceInput(input, ['version', 'pageSize', 'cursor']);
+        if (!parsed.ok) return parsed.result;
+        const pageSize = referenceInteger(parsed.value, 'pageSize', 1, REFERENCE_MCP_LIMITS_V1.maxPageSize, false);
+        const cursor = referenceString(parsed.value, 'cursor', REFERENCE_MCP_LIMITS_V1.maxCursorLength, false);
+        if (!pageSize.ok) return pageSize.result;
+        if (!cursor.ok) return cursor.result;
+        const reference = options.reference;
+        if (reference === undefined) return NO_REFERENCE_PORT;
+        const result = await reference.list({
+          version: REFERENCE_MCP_CONTRACT_VERSION,
+          ...(pageSize.value === undefined ? {} : { pageSize: pageSize.value }),
+          ...(cursor.value === undefined ? {} : { cursor: cursor.value }),
+        });
+        return mcpToolOk({
+          version: REFERENCE_MCP_CONTRACT_VERSION,
+          items: result.items.map(safeReferenceItem),
+          nextCursor: result.nextCursor ?? null,
+        });
+      },
+    },
+    {
+      ...toolMetadata('nova_reference_get'),
+      run: async (_caller, input) => {
+        const parsed = parseReferenceInput(input, ['version', 'referenceId']);
+        if (!parsed.ok) return parsed.result;
+        const referenceId = referenceString(parsed.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        if (!referenceId.ok) return referenceId.result;
+        const reference = options.reference;
+        if (reference === undefined) return NO_REFERENCE_PORT;
+        const result = await reference.get({ version: 1, referenceId: referenceId.value! });
+        return result === null
+          ? mcpToolError('REFERENCE_NOT_FOUND', 'The requested reference does not exist.')
+          : mcpToolOk({ version: 1, item: safeReferenceItem(result.item) });
+      },
+    },
+    {
+      ...toolMetadata('nova_reference_search'),
+      run: async (_caller, input) => {
+        const parsed = parseReferenceInput(input, ['version', 'query', 'pageSize', 'cursor', 'filters']);
+        if (!parsed.ok) return parsed.result;
+        const query = referenceString(parsed.value, 'query', REFERENCE_MCP_LIMITS_V1.maxQueryLength);
+        const pageSize = referenceInteger(parsed.value, 'pageSize', 1, REFERENCE_MCP_LIMITS_V1.maxPageSize, false);
+        const cursor = referenceString(parsed.value, 'cursor', REFERENCE_MCP_LIMITS_V1.maxCursorLength, false);
+        if (!query.ok) return query.result;
+        if (!pageSize.ok) return pageSize.result;
+        if (!cursor.ok) return cursor.result;
+        let filters: McpReferenceSearchInputV1['filters'];
+        if (parsed.value.filters !== undefined) {
+          const filterRecord = parseObject(parsed.value.filters, 'filters must be an object.');
+          if (!filterRecord.ok) return filterRecord.result;
+          const unknown = rejectUnknownKeys(filterRecord.value, ['referenceId', 'mediaType', 'tag']);
+          if (unknown) return unknown;
+          const referenceId = referenceString(filterRecord.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength, false);
+          const mediaType = referenceString(filterRecord.value, 'mediaType', REFERENCE_MCP_LIMITS_V1.maxMediaTypeLength, false);
+          const tag = referenceString(filterRecord.value, 'tag', REFERENCE_MCP_LIMITS_V1.maxTagLength, false);
+          if (!referenceId.ok) return referenceId.result;
+          if (!mediaType.ok) return mediaType.result;
+          if (!tag.ok) return tag.result;
+          filters = {
+            ...(referenceId.value === undefined ? {} : { referenceId: referenceId.value }),
+            ...(mediaType.value === undefined ? {} : { mediaType: mediaType.value }),
+            ...(tag.value === undefined ? {} : { tag: tag.value }),
+          };
+        }
+        const reference = options.reference;
+        if (reference === undefined) return NO_REFERENCE_PORT;
+        const result = await reference.search({
+          version: 1,
+          query: query.value!,
+          ...(pageSize.value === undefined ? {} : { pageSize: pageSize.value }),
+          ...(cursor.value === undefined ? {} : { cursor: cursor.value }),
+          ...(filters === undefined ? {} : { filters }),
+        });
+        return mcpToolOk({
+          version: 1,
+          items: result.items.map(safeReferenceItem),
+          nextCursor: result.nextCursor ?? null,
+        });
+      },
+    },
+    {
+      ...toolMetadata('nova_reference_chunk_get'),
+      run: async (_caller, input) => {
+        const parsed = parseReferenceInput(input, ['version', 'referenceId', 'chunkId']);
+        if (!parsed.ok) return parsed.result;
+        const referenceId = referenceString(parsed.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const chunkId = referenceString(parsed.value, 'chunkId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        if (!referenceId.ok) return referenceId.result;
+        if (!chunkId.ok) return chunkId.result;
+        const reference = options.reference;
+        if (reference === undefined) return NO_REFERENCE_PORT;
+        const result = await reference.getChunk({ version: 1, referenceId: referenceId.value!, chunkId: chunkId.value! });
+        return result === null
+          ? mcpToolError('REFERENCE_CHUNK_NOT_FOUND', 'The requested reference chunk does not exist.')
+          : mcpToolOk({ version: 1, chunk: safeReferenceChunk(result.chunk) });
+      },
+    },
+    {
+      ...toolMetadata('nova_reference_content_read'),
+      run: async (_caller, input) => {
+        const parsed = parseReferenceInput(input, ['version', 'referenceId', 'offset', 'limit']);
+        if (!parsed.ok) return parsed.result;
+        const referenceId = referenceString(parsed.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const offset = referenceInteger(parsed.value, 'offset', 0, REFERENCE_MCP_LIMITS_V1.maxOffset);
+        const limit = referenceInteger(parsed.value, 'limit', 1, REFERENCE_MCP_LIMITS_V1.maxRangeBytes);
+        if (!referenceId.ok) return referenceId.result;
+        if (!offset.ok) return offset.result;
+        if (!limit.ok) return limit.result;
+        const reference = options.reference;
+        if (reference === undefined) return NO_REFERENCE_PORT;
+        const result = await reference.readContent({ version: 1, referenceId: referenceId.value!, offset: offset.value!, limit: limit.value! });
+        return mcpToolOk({ version: 1, content: safeReferenceContent(result.content) });
+      },
+    },
+    {
+      ...toolMetadata('nova_reference_import_begin'),
+      run: async (_caller, input) => {
+        const parsed = parseReferenceInput(input, [
+          'version', 'referenceId', 'originalName', 'displayName', 'mediaType', 'byteLength', 'contentHash',
+          'title', 'authors', 'sourceUrl', 'license', 'tags', 'idempotencyKey',
+        ]);
+        if (!parsed.ok) return parsed.result;
+        const referenceId = referenceString(parsed.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const originalName = referenceString(parsed.value, 'originalName', REFERENCE_MCP_LIMITS_V1.maxNameLength);
+        const displayName = referenceString(parsed.value, 'displayName', REFERENCE_MCP_LIMITS_V1.maxNameLength, false);
+        const mediaType = referenceString(parsed.value, 'mediaType', REFERENCE_MCP_LIMITS_V1.maxMediaTypeLength);
+        const contentHash = referenceString(parsed.value, 'contentHash', 64);
+        const idempotencyKey = referenceString(parsed.value, 'idempotencyKey', REFERENCE_MCP_LIMITS_V1.maxIdempotencyKeyLength);
+        const byteLength = referenceInteger(parsed.value, 'byteLength', 0, REFERENCE_MCP_LIMITS_V1.maxReferenceBytes);
+        const title = referenceString(parsed.value, 'title', REFERENCE_MCP_LIMITS_V1.maxMetadataTextLength, false);
+        const sourceUrl = referenceString(parsed.value, 'sourceUrl', REFERENCE_MCP_LIMITS_V1.maxMetadataTextLength, false);
+        const license = referenceString(parsed.value, 'license', REFERENCE_MCP_LIMITS_V1.maxMetadataTextLength, false);
+        const authors = referenceStringList(parsed.value, 'authors', REFERENCE_MCP_LIMITS_V1.maxAuthorLength, REFERENCE_MCP_LIMITS_V1.maxAuthorCount);
+        const tags = referenceStringList(parsed.value, 'tags', REFERENCE_MCP_LIMITS_V1.maxTagLength, REFERENCE_MCP_LIMITS_V1.maxTagCount);
+        if (!referenceId.ok) return referenceId.result; if (!originalName.ok) return originalName.result;
+        if (!displayName.ok) return displayName.result; if (!mediaType.ok) return mediaType.result;
+        if (!contentHash.ok) return contentHash.result; if (!idempotencyKey.ok) return idempotencyKey.result;
+        if (!byteLength.ok) return byteLength.result;
+        if (!title.ok) return title.result; if (!sourceUrl.ok) return sourceUrl.result; if (!license.ok) return license.result;
+        if (!authors.ok) return authors.result; if (!tags.ok) return tags.result;
+        const reference = options.reference;
+        if (reference === undefined) return NO_REFERENCE_PORT;
+        const result = await reference.importBegin({
+          version: 1,
+          referenceId: referenceId.value!,
+          originalName: originalName.value!,
+          ...(displayName.value === undefined ? {} : { displayName: displayName.value }),
+          mediaType: mediaType.value!,
+          byteLength: byteLength.value!,
+          contentHash: contentHash.value!,
+          ...(title.value === undefined ? {} : { title: title.value }),
+          ...(authors.value === undefined ? {} : { authors: authors.value }),
+          ...(sourceUrl.value === undefined ? {} : { sourceUrl: sourceUrl.value }),
+          ...(license.value === undefined ? {} : { license: license.value }),
+          ...(tags.value === undefined ? {} : { tags: tags.value }),
+          idempotencyKey: idempotencyKey.value!,
+        });
+        return mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
+      },
+    },
+    {
+      ...toolMetadata('nova_reference_import_chunk'),
+      run: async (_caller, input) => {
+        const parsed = parseReferenceInput(input, ['version', 'jobId', 'offset', 'byteLength', 'chunkHash', 'dataBase64']);
+        if (!parsed.ok) return parsed.result;
+        const jobId = referenceString(parsed.value, 'jobId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const chunkHash = referenceString(parsed.value, 'chunkHash', 64);
+        const dataBase64 = referenceString(parsed.value, 'dataBase64', REFERENCE_MCP_LIMITS_V1.maxChunkBase64Length);
+        const offset = referenceInteger(parsed.value, 'offset', 0, REFERENCE_MCP_LIMITS_V1.maxOffset);
+        const byteLength = referenceInteger(parsed.value, 'byteLength', 1, REFERENCE_MCP_LIMITS_V1.maxChunkBytes);
+        if (!jobId.ok) return jobId.result; if (!chunkHash.ok) return chunkHash.result;
+        if (!dataBase64.ok) return dataBase64.result; if (!offset.ok) return offset.result;
+        if (!byteLength.ok) return byteLength.result;
+        const reference = options.reference;
+        if (reference === undefined) return NO_REFERENCE_PORT;
+        const result = await reference.importChunk({
+          version: 1, jobId: jobId.value!, offset: offset.value!, byteLength: byteLength.value!,
+          chunkHash: chunkHash.value!, dataBase64: dataBase64.value!,
+        });
+        return mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
+      },
+    },
+    {
+      ...toolMetadata('nova_reference_import_commit'),
+      run: async (_caller, input) => {
+        const parsed = parseReferenceInput(input, ['version', 'jobId', 'contentHash']);
+        if (!parsed.ok) return parsed.result;
+        const jobId = referenceString(parsed.value, 'jobId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const contentHash = referenceString(parsed.value, 'contentHash', 64);
+        if (!jobId.ok) return jobId.result; if (!contentHash.ok) return contentHash.result;
+        const reference = options.reference;
+        if (reference === undefined) return NO_REFERENCE_PORT;
+        const result = await reference.importCommit({ version: 1, jobId: jobId.value!, contentHash: contentHash.value! });
+        return mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
+      },
+    },
+    {
+      ...toolMetadata('nova_reference_job_get'),
+      run: async (_caller, input) => {
+        const parsed = parseReferenceInput(input, ['version', 'jobId']);
+        if (!parsed.ok) return parsed.result;
+        const jobId = referenceString(parsed.value, 'jobId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        if (!jobId.ok) return jobId.result;
+        const reference = options.reference;
+        if (reference === undefined) return NO_REFERENCE_PORT;
+        const result = await reference.jobGet({ version: 1, jobId: jobId.value! });
+        return result === null ? mcpToolError('REFERENCE_JOB_NOT_FOUND', 'The requested reference job does not exist.') : mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
+      },
+    },
+    {
+      ...toolMetadata('nova_reference_retry'),
+      run: async (_caller, input) => {
+        const parsed = parseReferenceInput(input, ['version', 'jobId']);
+        if (!parsed.ok) return parsed.result;
+        const jobId = referenceString(parsed.value, 'jobId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        if (!jobId.ok) return jobId.result;
+        const reference = options.reference;
+        if (reference === undefined) return NO_REFERENCE_PORT;
+        const result = await reference.retry({ version: 1, jobId: jobId.value! });
+        return mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
+      },
+    },
+    {
+      ...toolMetadata('nova_reference_delete'),
+      run: async (_caller, input) => {
+        const parsed = parseReferenceInput(input, ['version', 'referenceId']);
+        if (!parsed.ok) return parsed.result;
+        const referenceId = referenceString(parsed.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        if (!referenceId.ok) return referenceId.result;
+        const reference = options.reference;
+        if (reference === undefined) return NO_REFERENCE_PORT;
+        const result = await reference.delete({ version: 1, referenceId: referenceId.value! });
+        return mcpToolOk({ version: 1, job: safeReferenceJob(result.job), deletedReferenceId: result.deletedReferenceId });
       },
     },
     {

@@ -70,8 +70,10 @@ import {
   type McpAuthoringConflictReadOutputV1,
 } from '../../contracts/authoring.js';
 import {
+  PROJECT_ACCESS_ROLES,
   type ConfigChangeRequestV1,
   type ConfigOperationReceiptV1,
+  type ProjectAccessRole,
   type WorkbenchConfigurationV1,
 } from '../../contracts/configuration.js';
 import type { AuthoringRevisionPort } from '../authoring/types.js';
@@ -220,8 +222,87 @@ export interface McpAuthoringCoordinatorPort {
 }
 /** Owner-scoped configuration surface for `nova_admin_config_*` (revision CAS). */
 export interface McpAdminConfigurationPort {
+  /** Safe active configuration view; never includes roots, credentials, or tokens. */
+  get?: (input: { readonly version: 1 }) => Promise<unknown>;
   preview(input: ConfigChangeRequestV1): Promise<ConfigOperationReceiptV1>;
   apply(input: ConfigChangeRequestV1): Promise<ConfigOperationReceiptV1>;
+}
+
+export interface McpAdminProjectSaveInput {
+  readonly version: 1;
+  readonly projectId: string;
+  readonly displayName: string;
+  readonly root: string;
+}
+export interface McpAdminProjectIdInput {
+  readonly version: 1;
+  readonly projectId: string;
+}
+export interface McpAdminMembershipListInput {
+  readonly version: 1;
+  readonly projectId?: string;
+}
+export interface McpAdminMembershipInput {
+  readonly version: 1;
+  readonly userId: string;
+  readonly projectId: string;
+  readonly role?: ProjectAccessRole;
+}
+export interface McpAdminInviteListInput {
+  readonly version: 1;
+  readonly projectId?: string;
+}
+export interface McpAdminInviteCreateInput {
+  readonly version: 1;
+  readonly projectId: string;
+  readonly role: ProjectAccessRole;
+  readonly ttlMs: number;
+}
+export interface McpAdminInviteRevokeInput {
+  readonly version: 1;
+  readonly inviteId: string;
+}
+export interface McpAdminDevicePairInput {
+  readonly version: 1;
+  readonly kind?: 'project' | 'admin';
+  readonly projectId?: string;
+  readonly role?: ProjectAccessRole;
+  readonly ttlMs?: number;
+}
+export interface McpAdminDeviceRevokeInput {
+  readonly version: 1;
+  readonly deviceId: string;
+}
+export interface McpAdminOperationListInput {
+  readonly version: 1;
+  readonly limit?: number;
+}
+export interface McpAdminOperationGetInput {
+  readonly version: 1;
+  readonly operationHandle: string;
+}
+
+/** Narrow owner-admin service seams; every method is optional for fail-closed legacy wiring. */
+export interface McpAdminPort extends McpAdminConfigurationPort {
+  projectList?: (input: { readonly version: 1 }) => Promise<unknown>;
+  projectValidate?: (input: McpAdminProjectSaveInput) => Promise<unknown>;
+  projectCreate?: (input: McpAdminProjectSaveInput) => Promise<unknown>;
+  projectUpdate?: (input: McpAdminProjectSaveInput) => Promise<unknown>;
+  projectDelete?: (input: McpAdminProjectIdInput) => Promise<unknown>;
+  projectOpen?: (input: McpAdminProjectIdInput) => Promise<unknown>;
+  projectClose?: (input: McpAdminProjectIdInput) => Promise<unknown>;
+  projectRecover?: (input: McpAdminProjectIdInput) => Promise<unknown>;
+  membershipList?: (input: McpAdminMembershipListInput) => Promise<unknown>;
+  membershipUpsert?: (input: McpAdminMembershipInput) => Promise<unknown>;
+  membershipRevoke?: (input: McpAdminMembershipInput) => Promise<unknown>;
+  inviteList?: (input: McpAdminInviteListInput) => Promise<unknown>;
+  inviteCreate?: (input: McpAdminInviteCreateInput) => Promise<unknown>;
+  inviteRevoke?: (input: McpAdminInviteRevokeInput) => Promise<unknown>;
+  deviceList?: (input: { readonly version: 1 }) => Promise<unknown>;
+  devicePairBegin?: (input: McpAdminDevicePairInput) => Promise<unknown>;
+  deviceRevoke?: (input: McpAdminDeviceRevokeInput) => Promise<unknown>;
+  operationList?: (input: McpAdminOperationListInput) => Promise<unknown>;
+  operationGet?: (input: McpAdminOperationGetInput) => Promise<unknown>;
 }
 
 /** Injected render implementation; defaults to Core `renderNovel` over session services. */
@@ -237,8 +318,8 @@ export interface McpRegistryOptions {
   readonly coordinator?: McpAuthoringCoordinatorPort;
   /** Native immutable revision service for this project; absent fails closed. */
   readonly revision?: AuthoringRevisionPort;
-  /** Owner configuration port; when absent the admin tools fail closed. */
-  readonly admin?: McpAdminConfigurationPort;
+  /** Owner admin service ports; missing individual methods fail closed. */
+  readonly admin?: McpAdminPort;
   /**
    * Select the descriptor family exposed by this registry. The legacy
    * `all` default is retained for direct callers; Host routes always choose
@@ -445,12 +526,112 @@ const NO_ADMIN_CONFIGURATION = mcpToolError(
   'NO_ADMIN_CONFIGURATION',
   'The owner configuration service is not available for this Host.',
 );
+const NO_ADMIN_SERVICE = mcpToolError(
+  'NO_ADMIN_SERVICE',
+  'The requested owner administration service is not available for this Host.',
+);
 
-/**
- * Strict authoring MCP input gate: the input must be an object with no
- * unknown keys and `version` exactly 2. Nothing else (no actor, path, token,
- * Git head, or raw Yjs payload) is accepted anywhere in a request.
- */
+function parseAdminVersionedInput(
+  input: unknown,
+  allowed: readonly string[],
+): { readonly ok: true; readonly value: Record<string, unknown> } | { readonly ok: false; readonly result: McpToolResult } {
+  const parsed = parseObject(input, 'Input must be an object.');
+  if (!parsed.ok) return parsed;
+  const unknown = rejectUnknownKeys(parsed.value, allowed);
+  if (unknown) return { ok: false, result: unknown };
+  if (parsed.value.version !== CONFIG_CONTRACT_VERSION) {
+    return { ok: false, result: invalidInput('admin request version must be 1.') };
+  }
+  return parsed;
+}
+
+function adminString(
+  value: Record<string, unknown>,
+  key: string,
+  maxLength = 4096,
+): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly result: McpToolResult } {
+  const result = requiredString(value, key);
+  if (!result.ok) return result;
+  if (result.value.length > maxLength) {
+    return { ok: false, result: invalidInput(`${key} exceeds the bounded length.`) };
+  }
+  return result;
+}
+
+function adminOptionalString(
+  value: Record<string, unknown>,
+  key: string,
+  maxLength = 4096,
+): { readonly ok: true; readonly value: string | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+  const candidate = value[key];
+  if (candidate === undefined) return { ok: true, value: undefined };
+  if (typeof candidate !== 'string' || candidate.length === 0 || candidate.length > maxLength) {
+    return { ok: false, result: invalidInput(`${key} must be a bounded non-empty string when present.`) };
+  }
+  return { ok: true, value: candidate };
+}
+
+function adminRole(
+  value: Record<string, unknown>,
+  key = 'role',
+): { readonly ok: true; readonly value: ProjectAccessRole } | { readonly ok: false; readonly result: McpToolResult } {
+  const candidate = value[key];
+  if (typeof candidate !== 'string' || !(PROJECT_ACCESS_ROLES as readonly string[]).includes(candidate)) {
+    return { ok: false, result: invalidInput(`${key} must be reader, author, or maintainer.`) };
+  }
+  return { ok: true, value: candidate as ProjectAccessRole };
+}
+
+function adminOptionalRole(
+  value: Record<string, unknown>,
+): { readonly ok: true; readonly value: ProjectAccessRole | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+  if (value.role === undefined) return { ok: true, value: undefined };
+  return adminRole(value);
+}
+
+function adminInteger(
+  value: Record<string, unknown>,
+  key: string,
+  minimum: number,
+  maximum: number,
+  required = true,
+): { readonly ok: true; readonly value: number | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+  const candidate = value[key];
+  if (candidate === undefined && !required) return { ok: true, value: undefined };
+  if (
+    typeof candidate !== 'number' ||
+    !Number.isInteger(candidate) ||
+    candidate < minimum ||
+    candidate > maximum
+  ) {
+    return { ok: false, result: invalidInput(`${key} must be a bounded integer.`) };
+  }
+  return { ok: true, value: candidate };
+}
+
+function parseAdminProjectSave(
+  input: unknown,
+): { readonly ok: true; readonly value: McpAdminProjectSaveInput } | { readonly ok: false; readonly result: McpToolResult } {
+  const parsed = parseAdminVersionedInput(input, ['version', 'projectId', 'displayName', 'root']);
+  if (!parsed.ok) return parsed;
+  const projectId = adminString(parsed.value, 'projectId');
+  const displayName = adminString(parsed.value, 'displayName');
+  const root = adminString(parsed.value, 'root');
+  if (!projectId.ok) return projectId;
+  if (!displayName.ok) return displayName;
+  if (!root.ok) return root;
+  return { ok: true, value: { version: 1, projectId: projectId.value, displayName: displayName.value, root: root.value } };
+}
+
+function parseAdminProjectId(
+  input: unknown,
+): { readonly ok: true; readonly value: McpAdminProjectIdInput } | { readonly ok: false; readonly result: McpToolResult } {
+  const parsed = parseAdminVersionedInput(input, ['version', 'projectId']);
+  if (!parsed.ok) return parsed;
+  const projectId = adminString(parsed.value, 'projectId');
+  if (!projectId.ok) return projectId;
+  return { ok: true, value: { version: 1, projectId: projectId.value } };
+}
 function parseToolInput(
   input: unknown,
   allowed: readonly string[],
@@ -1146,6 +1327,266 @@ export function createProjectSessionMcpRegistry(
           }),
           AUTHORING_CONTRACT_VERSION,
         );
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_config_get'),
+      run: async (_caller, input) => {
+        const parsed = parseObject(input, 'Input must be an object.');
+        if (!parsed.ok) return parsed.result;
+        const unknown = rejectUnknownKeys(parsed.value, []);
+        if (unknown) return unknown;
+        const admin = options.admin;
+        if (admin?.get === undefined) return NO_ADMIN_CONFIGURATION;
+        return mcpToolOk(await admin.get({ version: 1 }));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_project_list'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version']);
+        if (!parsed.ok) return parsed.result;
+        const method = options.admin?.projectList;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1 }));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_project_validate'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminProjectSave(input);
+        if (!parsed.ok) return parsed.result;
+        const method = options.admin?.projectValidate;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method(parsed.value));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_project_create'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminProjectSave(input);
+        if (!parsed.ok) return parsed.result;
+        const method = options.admin?.projectCreate;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method(parsed.value));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_project_update'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminProjectSave(input);
+        if (!parsed.ok) return parsed.result;
+        const method = options.admin?.projectUpdate;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method(parsed.value));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_project_delete'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminProjectId(input);
+        if (!parsed.ok) return parsed.result;
+        const method = options.admin?.projectDelete;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method(parsed.value));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_project_open'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminProjectId(input);
+        if (!parsed.ok) return parsed.result;
+        const method = options.admin?.projectOpen;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method(parsed.value));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_project_close'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminProjectId(input);
+        if (!parsed.ok) return parsed.result;
+        const method = options.admin?.projectClose;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method(parsed.value));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_project_recover'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminProjectId(input);
+        if (!parsed.ok) return parsed.result;
+        const method = options.admin?.projectRecover;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method(parsed.value));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_membership_list'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version', 'projectId']);
+        if (!parsed.ok) return parsed.result;
+        const projectId = adminOptionalString(parsed.value, 'projectId');
+        if (!projectId.ok) return projectId.result;
+        const method = options.admin?.membershipList;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1, ...(projectId.value === undefined ? {} : { projectId: projectId.value }) }));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_membership_upsert'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version', 'userId', 'projectId', 'role']);
+        if (!parsed.ok) return parsed.result;
+        const userId = adminString(parsed.value, 'userId');
+        const projectId = adminString(parsed.value, 'projectId');
+        const role = adminRole(parsed.value);
+        if (!userId.ok) return userId.result;
+        if (!projectId.ok) return projectId.result;
+        if (!role.ok) return role.result;
+        const method = options.admin?.membershipUpsert;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1, userId: userId.value, projectId: projectId.value, role: role.value }));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_membership_revoke'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version', 'userId', 'projectId']);
+        if (!parsed.ok) return parsed.result;
+        const userId = adminString(parsed.value, 'userId');
+        const projectId = adminString(parsed.value, 'projectId');
+        if (!userId.ok) return userId.result;
+        if (!projectId.ok) return projectId.result;
+        const method = options.admin?.membershipRevoke;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1, userId: userId.value, projectId: projectId.value }));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_invite_list'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version', 'projectId']);
+        if (!parsed.ok) return parsed.result;
+        const projectId = adminOptionalString(parsed.value, 'projectId');
+        if (!projectId.ok) return projectId.result;
+        const method = options.admin?.inviteList;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1, ...(projectId.value === undefined ? {} : { projectId: projectId.value }) }));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_invite_create'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version', 'projectId', 'role', 'ttlMs']);
+        if (!parsed.ok) return parsed.result;
+        const projectId = adminString(parsed.value, 'projectId');
+        const role = adminRole(parsed.value);
+        const ttlMs = adminInteger(parsed.value, 'ttlMs', 1, 30 * 24 * 60 * 60 * 1000);
+        if (!projectId.ok) return projectId.result;
+        if (!role.ok) return role.result;
+        if (!ttlMs.ok || ttlMs.value === undefined) return ttlMs.ok ? invalidInput('ttlMs is required.') : ttlMs.result;
+        const method = options.admin?.inviteCreate;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1, projectId: projectId.value, role: role.value, ttlMs: ttlMs.value }));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_invite_revoke'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version', 'inviteId']);
+        if (!parsed.ok) return parsed.result;
+        const inviteId = adminString(parsed.value, 'inviteId');
+        if (!inviteId.ok) return inviteId.result;
+        const method = options.admin?.inviteRevoke;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1, inviteId: inviteId.value }));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_device_list'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version']);
+        if (!parsed.ok) return parsed.result;
+        const method = options.admin?.deviceList;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1 }));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_device_pair_begin'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version', 'kind', 'projectId', 'role', 'ttlMs']);
+        if (!parsed.ok) return parsed.result;
+        const kind = parsed.value.kind;
+        if (kind !== undefined && kind !== 'project' && kind !== 'admin') return invalidInput('kind must be project or admin.');
+        const projectId = adminOptionalString(parsed.value, 'projectId');
+        const role = adminOptionalRole(parsed.value);
+        const ttlMs = adminInteger(parsed.value, 'ttlMs', 1, 30 * 24 * 60 * 60 * 1000, false);
+        if (!projectId.ok) return projectId.result;
+        if (!role.ok) return role.result;
+        if (!ttlMs.ok) return ttlMs.result;
+        const resolvedKind = kind ?? (projectId.value === undefined ? 'admin' : 'project');
+        if (resolvedKind === 'admin' && (projectId.value !== undefined || role.value !== undefined)) {
+          return invalidInput('admin device pairing cannot carry projectId or role.');
+        }
+        if (resolvedKind === 'project' && projectId.value === undefined) {
+          return invalidInput('project device pairing requires projectId.');
+        }
+        const method = options.admin?.devicePairBegin;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        const result = await method({
+          version: 1,
+          kind: resolvedKind,
+          ...(projectId.value === undefined ? {} : { projectId: projectId.value }),
+          ...(role.value === undefined ? {} : { role: role.value }),
+          ...(ttlMs.value === undefined ? {} : { ttlMs: ttlMs.value }),
+        });
+        if (typeof result === 'object' && result !== null && !Array.isArray(result)) {
+          const safe = { ...(result as Record<string, unknown>) };
+          delete safe.pairingCode;
+          delete safe.credential;
+          delete safe.token;
+          delete safe.tokenHash;
+          return mcpToolOk(safe);
+        }
+        return mcpToolOk(result);
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_device_revoke'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version', 'deviceId']);
+        if (!parsed.ok) return parsed.result;
+        const deviceId = adminString(parsed.value, 'deviceId');
+        if (!deviceId.ok) return deviceId.result;
+        const method = options.admin?.deviceRevoke;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1, deviceId: deviceId.value }));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_operation_list'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version', 'limit']);
+        if (!parsed.ok) return parsed.result;
+        const limit = adminInteger(parsed.value, 'limit', 1, 100, false);
+        if (!limit.ok) return limit.result;
+        const method = options.admin?.operationList;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1, ...(limit.value === undefined ? {} : { limit: limit.value }) }));
+      },
+    },
+    {
+      ...toolMetadata('nova_admin_operation_get'),
+      run: async (_caller, input) => {
+        const parsed = parseAdminVersionedInput(input, ['version', 'operationHandle']);
+        if (!parsed.ok) return parsed.result;
+        const operationHandle = adminString(parsed.value, 'operationHandle');
+        if (!operationHandle.ok) return operationHandle.result;
+        const method = options.admin?.operationGet;
+        if (method === undefined) return NO_ADMIN_SERVICE;
+        return mcpToolOk(await method({ version: 1, operationHandle: operationHandle.value }));
       },
     },
     {

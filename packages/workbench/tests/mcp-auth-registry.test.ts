@@ -44,6 +44,7 @@ import {
   type McpJsonInputSchema,
   type McpJsonSchemaProperty,
   type McpToolResult,
+  type McpAdminPort,
 } from '../src/host/mcp/registry.js';
 import type {
   AuthoringStateV1,
@@ -1470,6 +1471,26 @@ describe('createProjectSessionMcpRegistry', () => {
       'nova_revision_restore',
     ]);
     expect(registry.list([MCP_ADMIN_SCOPE]).map((tool) => tool.name)).toEqual([
+      'nova_admin_config_get',
+      'nova_admin_project_list',
+      'nova_admin_project_validate',
+      'nova_admin_project_create',
+      'nova_admin_project_update',
+      'nova_admin_project_delete',
+      'nova_admin_project_open',
+      'nova_admin_project_close',
+      'nova_admin_project_recover',
+      'nova_admin_membership_list',
+      'nova_admin_membership_upsert',
+      'nova_admin_membership_revoke',
+      'nova_admin_invite_list',
+      'nova_admin_invite_create',
+      'nova_admin_invite_revoke',
+      'nova_admin_device_list',
+      'nova_admin_device_pair_begin',
+      'nova_admin_device_revoke',
+      'nova_admin_operation_list',
+      'nova_admin_operation_get',
       MCP_TOOL_ADMIN_CONFIG_PREVIEW,
       MCP_TOOL_ADMIN_CONFIG_APPLY,
     ]);
@@ -1785,6 +1806,7 @@ describe('createProjectSessionMcpRegistry', () => {
       grantWith({ userId: 'u1', projectId: 'p1', scopes: [MCP_ADMIN_SCOPE] }),
     );
 
+
     const preview = await registry.run(MCP_TOOL_ADMIN_CONFIG_PREVIEW, caller, FAKE_CONFIG_REQUEST);
     expect(preview.ok).toBe(true);
     if (!preview.ok) return;
@@ -1798,5 +1820,52 @@ describe('createProjectSessionMcpRegistry', () => {
     expect(seen).toHaveLength(2);
     expect(seen[0]).toEqual({ surface: 'preview', input: FAKE_CONFIG_REQUEST });
     expect(seen[1]).toMatchObject({ surface: 'apply' });
+  });
+  it('routes every owner-admin family through its injected service port', async () => {
+    const { session } = fakeSession({ source: FIXTURE });
+    const calls: string[] = [];
+    const admin: McpAdminPort = {
+      get: async () => ({ version: 1, configuration: null }),
+      preview: async () => FAKE_RECEIPT_OK,
+      apply: async () => FAKE_RECEIPT_OK,
+      projectList: async () => ({ projects: [] }),
+      projectValidate: async () => ({ valid: true }),
+      projectCreate: async () => ({ created: true }),
+      projectUpdate: async () => ({ updated: true }),
+      projectDelete: async () => ({ deleted: true }),
+      projectOpen: async () => ({ open: true }),
+      projectClose: async () => ({ open: false }),
+      projectRecover: async () => ({ recovered: true }),
+      membershipList: async () => ({ memberships: [] }),
+      membershipUpsert: async () => ({ membership: null }),
+      membershipRevoke: async () => ({ revoked: true }),
+      inviteList: async () => ({ invites: [] }),
+      inviteCreate: async () => ({ invite: null }),
+      inviteRevoke: async () => ({ revoked: true }),
+      deviceList: async () => ({ devices: [] }),
+      devicePairBegin: async () => ({ pairingCode: 'pair', expiresAt: '2099-01-01T00:00:00.000Z' }),
+      deviceRevoke: async () => ({ revoked: true }),
+      operationList: async () => ({ operations: [] }),
+      operationGet: async () => ({ operation: null }),
+    };
+    const registry = createProjectSessionMcpRegistry(session, { family: 'admin', admin });
+    const caller = callerFor(grantWith({ userId: 'owner-1', projectId: 'p1', scopes: [MCP_ADMIN_SCOPE] }));
+    const invoke = async (name: string, input: unknown) => {
+      const result = await registry.run(name, caller, input);
+      expect(result.ok).toBe(true);
+      calls.push(name);
+    };
+    await invoke('nova_admin_config_get', {});
+    await invoke('nova_admin_project_list', { version: 1 });
+    await invoke('nova_admin_project_create', { version: 1, projectId: 'p2', displayName: 'Project Two', root: '/srv/p2' });
+    await invoke('nova_admin_membership_upsert', { version: 1, userId: 'u2', projectId: 'p1', role: 'author' });
+    await invoke('nova_admin_invite_create', { version: 1, projectId: 'p1', role: 'reader', ttlMs: 3600000 });
+    await invoke('nova_admin_device_pair_begin', { version: 1, kind: 'project', projectId: 'p1', role: 'reader', ttlMs: 3600000 });
+    await invoke('nova_admin_operation_list', { version: 1, limit: 10 });
+    expect(calls).toHaveLength(7);
+    await expect(registry.run('nova_admin_project_open', caller, { version: 1, projectId: 7 })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'INVALID_INPUT' },
+    });
   });
 });

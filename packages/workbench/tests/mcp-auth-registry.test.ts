@@ -1,4 +1,5 @@
 import { readdirSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
@@ -13,22 +14,22 @@ import type {
 } from '@novalistically/core/editorial';
 import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { AgentCapabilityGrant, AgentCapabilityService } from '../src/host/agent/index.js';
 import {
-  AgentCapabilityService as CapabilityService,
+  AgentCapabilityService,
   createCapabilityPersistence,
+  type AgentCapabilityGrant,
 } from '../src/host/agent/index.js';
 import {
-  createMcpDevicePairingService,
   createDeviceVerifierPersistence,
+  createMcpDevicePairingService,
   type McpDevicePairingService,
-} from '../src/host/mcp/device-pairing.js';
-import { createHash } from 'node:crypto';
+} from '../src/host/mcp/index.js';
 import {
   createMcpAuthorizationPort,
   MCP_AUTH_FAILURE_STATUS,
   type McpAuthFailureCode,
-  type McpAuthorizationPort,
+  type McpAuthorizeInput,
+  type McpAuthorizationResult,
   mcpAuthFailureStatus,
 } from '../src/host/mcp/auth.js';
 import {
@@ -38,14 +39,6 @@ import {
   MCP_READ_SCOPE,
   MCP_RENDER_SCOPE,
   MCP_SUBMIT_SCOPE,
-  MCP_TOOL_ADMIN_CONFIG_APPLY,
-  MCP_TOOL_ADMIN_CONFIG_PREVIEW,
-  MCP_TOOL_AUTHORING_APPLY,
-  MCP_TOOL_AUTHORING_DOCUMENT_GET,
-  MCP_TOOL_AUTHORING_STATUS,
-  MCP_TOOL_AUTHORING_SUBMIT,
-  MCP_TOOL_CONFLICT_RESOLVE,
-  MCP_TOOL_OPERATION_GET,
   type McpAdminConfigurationPort,
   type McpAuthoringCoordinatorPort,
   type McpJsonInputSchema,
@@ -66,7 +59,17 @@ import type {
   SessionOperation,
   SessionOperationResult,
 } from '../src/host/project-session.js';
+import { ProjectAccessService } from '../src/host/project-access-service.js';
+
 import { createRealPersistence, type RealPersistenceHarness } from './helpers/real-persistence.js';
+const MCP_TOOL_AUTHORING_STATUS = 'nova_authoring_status';
+const MCP_TOOL_AUTHORING_DOCUMENT_READ = 'nova_authoring_document_read';
+const MCP_TOOL_AUTHORING_DOCUMENT_EDIT = 'nova_authoring_document_edit';
+const MCP_TOOL_AUTHORING_SUBMIT = 'nova_authoring_submit';
+const MCP_TOOL_OPERATION_GET = 'nova_operation_get';
+const MCP_TOOL_CONFLICT_RESOLVE = 'nova_conflict_resolve';
+const MCP_TOOL_ADMIN_CONFIG_PREVIEW = 'nova_admin_config_preview';
+const MCP_TOOL_ADMIN_CONFIG_APPLY = 'nova_admin_config_apply';
 
 // ─── Real compilable project snapshot (zhu-fu fixture) ───────────────────────
 
@@ -215,10 +218,12 @@ function expectError(result: McpToolResult, code: string): void {
 // ─── Scoped authoring/admin tool doubles ─────────────────────────────────────
 
 const FAKE_AUTHORING_STATE: AuthoringStateV1 = {
-  version: 1,
+  version: 2,
   projectId: 'p1',
   phase: 'clean',
+  acceptedRevisionId: null,
   acceptedSourceHash: null,
+  pendingOperationId: null,
   workingDirty: false,
   workspaceDigest: null,
   externalCandidate: null,
@@ -230,15 +235,16 @@ const FAKE_AUTHORING_STATE: AuthoringStateV1 = {
 };
 
 const FAKE_RECEIPT = {
-  version: 1,
+  version: 2,
   operationId: 'op-1',
   projectId: 'p1',
   kind: 'submit' as const,
   status: 'queued' as const,
   acceptedSourceHash: null,
-  workspaceDigest: 'wd-1',
-  gitSubmitId: null,
-  gitReceiptHash: null,
+  acceptedRevisionId: null,
+  pendingOperationId: null,
+  revisionId: null,
+  receiptHash: null,
   errorCode: null,
   createdAt: '2026-08-02T00:00:00.000Z',
   updatedAt: '2026-08-02T00:00:00.000Z',
@@ -251,7 +257,7 @@ function fakeCoordinator(
     projectId: 'p1',
     getState: () => FAKE_AUTHORING_STATE,
     getDocument: async () => ({
-      version: 1,
+      version: 2,
       projectId: 'p1',
       documentId: 'doc-1',
       logicalPath: 'nova.yaml',
@@ -260,8 +266,26 @@ function fakeCoordinator(
       acceptedSourceHash: 'ash-1',
     }),
     apply: async () => ({ status: 'applied', workspaceDigest: 'wd-2', stateVectorHash: 'svh-2' }),
+    readDocument: async () => ({
+      version: 2,
+      documentId: 'doc-1',
+      logicalPath: 'nova.yaml',
+      offset: 0,
+      limit: 64,
+      content: 'document text',
+      totalLength: 13,
+      contentHash: 'content-hash',
+      stateVectorHash: 'svh-1',
+      workspaceDigest: 'wd-1',
+      acceptedSourceHash: 'ash-1',
+    }),
+    editDocument: async () => ({
+      status: 'applied',
+      workspaceDigest: 'wd-2',
+      stateVectorHash: 'svh-2',
+    }),
     submit: async () => ({ status: 'queued', receipt: FAKE_RECEIPT }),
-    getOperation: async () => ({ version: 1, operationId: 'op-1', receipt: FAKE_RECEIPT }),
+    getOperation: async () => ({ version: 2, operationId: 'op-1', receipt: FAKE_RECEIPT }),
     resolveConflict: async () => ({ status: 'completed', receipt: FAKE_RECEIPT }),
     ...overrides,
   };
@@ -304,17 +328,21 @@ function fakeAdmin(
 }
 
 // ─── McpAuthorizationPort over real persistence ──────────────────────────────
+type FixtureMcpAuthorizeInput = Omit<McpAuthorizeInput, 'route'> & {
+  readonly route?: McpAuthorizeInput['route'];
+};
+
 
 describe('McpAuthorizationPort', () => {
   let harness: RealPersistenceHarness;
   let now: number;
   let capabilities: AgentCapabilityService;
-  let authorize: McpAuthorizationPort['authorize'];
+  let authorize: (input: FixtureMcpAuthorizeInput) => Promise<McpAuthorizationResult>;
 
   beforeEach(() => {
     harness = createRealPersistence();
     now = Date.parse('2026-08-02T00:00:00.000Z');
-    capabilities = new CapabilityService({
+    capabilities = new AgentCapabilityService({
       persistence: createCapabilityPersistence(harness.client),
       now: () => now,
     });
@@ -322,10 +350,22 @@ describe('McpAuthorizationPort', () => {
       sessions: {
         getSession: async (sessionId) => harness.client.request('loadSession', { sessionId }),
       },
+      access: new ProjectAccessService({
+        projects: [
+          { projectId: 'p1', displayName: 'Project 1' },
+          { projectId: 'p2', displayName: 'Project 2' },
+        ],
+        memberships: [
+          { projectId: 'p1', userId: 'u1', role: 'reader' },
+          { projectId: 'p1', userId: 'u2', role: 'reader' },
+          { projectId: 'p2', userId: 'u1', role: 'reader' },
+          { projectId: 'p2', userId: 'u2', role: 'reader' },
+        ],
+      }),
       capabilities,
       now: () => new Date(now).toISOString(),
     });
-    authorize = (input) => port.authorize(input);
+    authorize = (input) => port.authorize({ ...input, route: input.route ?? 'project' });
   });
 
   afterEach(async () => {
@@ -345,7 +385,6 @@ describe('McpAuthorizationPort', () => {
     });
     return sessionId;
   }
-
   it('authorizes a live session with a matching capability token and returns only server-derived fields', async () => {
     const sessionId = await createSession('u1');
     const issued = await capabilities.issue({
@@ -360,12 +399,11 @@ describe('McpAuthorizationPort', () => {
       projectId: 'p1',
       scopes: [MCP_READ_SCOPE],
     });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
     expect(result.caller).toEqual({
       sessionId,
       userId: 'u1',
+      role: 'reader',
+      projectGrant: { projectId: 'p1', role: 'reader' },
       grant: issued.grant,
     });
     // The caller projection never carries the opaque token or its digest.
@@ -528,11 +566,96 @@ describe('McpAuthorizationPort', () => {
       USER_MISMATCH: 403,
       PROJECT_MISMATCH: 403,
       SCOPE_MISMATCH: 403,
+      INSUFFICIENT_ROLE: 403,
+      ADMIN_ROUTE_REQUIRED: 403,
     };
     for (const [code, status] of Object.entries(expected)) {
       expect(MCP_AUTH_FAILURE_STATUS[code as McpAuthFailureCode]).toBe(status);
       expect(mcpAuthFailureStatus(code as McpAuthFailureCode)).toBe(status);
     }
+  });
+
+  it('rejects a reader\'s mcp:author capability with INSUFFICIENT_ROLE', async () => {
+    const sessionId = await createSession('u1');
+    const issued = await capabilities.issue({
+      userId: 'u1',
+      projectId: 'p1',
+      scopes: [MCP_AUTHOR_SCOPE],
+    });
+
+    const result = await authorize({
+      sessionId,
+      token: issued.token,
+      projectId: 'p1',
+      scopes: [MCP_AUTHOR_SCOPE],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('rejects a reader\'s mcp:submit capability with INSUFFICIENT_ROLE', async () => {
+    const sessionId = await createSession('u1');
+    const issued = await capabilities.issue({
+      userId: 'u1',
+      projectId: 'p1',
+      scopes: [MCP_SUBMIT_SCOPE],
+    });
+
+    const result = await authorize({
+      sessionId,
+      token: issued.token,
+      projectId: 'p1',
+      scopes: [MCP_SUBMIT_SCOPE],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.code).toBe('INSUFFICIENT_ROLE');
+  });
+
+  it('accepts a reader\'s mcp:read capability', async () => {
+    const sessionId = await createSession('u1');
+    const issued = await capabilities.issue({
+      userId: 'u1',
+      projectId: 'p1',
+      scopes: [MCP_READ_SCOPE],
+    });
+
+    const result = await authorize({
+      sessionId,
+      token: issued.token,
+      projectId: 'p1',
+      scopes: [MCP_READ_SCOPE],
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it('rejects unknown scopes with SCOPE_MISMATCH', async () => {
+    const sessionId = await createSession('u1');
+
+    const result = await authorize({
+      sessionId,
+      token: 'fc_any',
+      projectId: 'p1',
+      scopes: ['mcp:unknown'],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.code).toBe('SCOPE_MISMATCH');
+  });
+
+  it('rejects admin scope on project route with browser session', async () => {
+    const sessionId = await createSession('u1');
+
+    const result = await authorize({
+      sessionId,
+      token: 'fc_any',
+      projectId: 'p1',
+      scopes: [MCP_ADMIN_SCOPE],
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.failure.code).toBe('ADMIN_ROUTE_REQUIRED');
   });
 });
 
@@ -554,7 +677,7 @@ describe('McpAuthorizationPort device mode', () => {
       now: () => now,
       newId: () => `device-${++deviceSequence}`,
     });
-    capabilities = new CapabilityService({
+    capabilities = new AgentCapabilityService({
       persistence: createCapabilityPersistence(harness.client),
       now: () => now,
     });
@@ -564,8 +687,17 @@ describe('McpAuthorizationPort device mode', () => {
     await harness.dispose();
   });
 
-  async function pairedDevice(scopes: string[], ttlMs = 60_000): Promise<string> {
-    const pairing = await devices.createPairing({ ownerUserId: 'owner-1' });
+  async function pairedDevice(
+    scopes: string[],
+    ttlMs = 60_000,
+    kind: 'project' | 'admin' = 'project',
+    projectId = 'p1',
+  ): Promise<string> {
+    const pairing = await devices.createPairing({
+      ownerUserId: 'owner-1',
+      kind,
+      ...(kind === 'project' ? { projectId, role: 'maintainer' as const } : {}),
+    });
     const claimed = await devices.claim({
       pairingCode: pairing.pairingCode,
       clientLabel: 'editor-laptop',
@@ -577,10 +709,18 @@ describe('McpAuthorizationPort device mode', () => {
   }
 
   function port(overrides: Partial<Parameters<typeof createMcpAuthorizationPort>[0]> = {}) {
-    return createMcpAuthorizationPort({
+    const authorization = createMcpAuthorizationPort({
       sessions: {
         getSession: async () => null,
       },
+      access: new ProjectAccessService({
+        projects: [
+          { projectId: 'p1', displayName: 'Project 1' },
+          { projectId: 'p2', displayName: 'Project 2' },
+          { projectId: 'admin', displayName: 'Project Admin' },
+        ],
+        ownerUserId: 'owner-1',
+      }),
       capabilities,
       devices,
       owner: {
@@ -596,6 +736,10 @@ describe('McpAuthorizationPort device mode', () => {
       now: () => new Date(now).toISOString(),
       ...overrides,
     });
+    return {
+      authorize: (input: FixtureMcpAuthorizeInput) =>
+        authorization.authorize({ ...input, route: input.route ?? 'project' }),
+    };
   }
 
   it('authorizes an owner-paired device credential without any browser session', async () => {
@@ -612,6 +756,8 @@ describe('McpAuthorizationPort device mode', () => {
     expect(result.caller).toEqual({
       sessionId: null,
       userId: 'owner-1',
+      role: 'owner',
+      projectGrant: { projectId: 'p1', role: 'owner' },
       grant: {
         capabilityId: 'device:device-1',
         userId: 'owner-1',
@@ -620,13 +766,26 @@ describe('McpAuthorizationPort device mode', () => {
         version: 1,
         expiresAt: new Date(now + 60_000).toISOString(),
       },
-      device: { deviceId: 'device-1', clientLabel: 'editor-laptop' },
+      device: { deviceId: 'device-1' },
     });
     // No token or digest ever reaches the caller projection.
     expect(JSON.stringify(result.caller)).not.toContain(credential);
     expect(JSON.stringify(result.caller)).not.toContain(
       createHash('sha256').update(credential, 'utf8').digest('hex'),
     );
+  });
+
+  it('treats a project id named admin as a project route', async () => {
+    const credential = await pairedDevice([MCP_READ_SCOPE], 60_000, 'project', 'admin');
+    const result = await port().authorize({
+      sessionId: null,
+      token: credential,
+      projectId: 'admin',
+      route: 'project',
+      scopes: [MCP_READ_SCOPE],
+    });
+
+    expect(result.ok).toBe(true);
   });
 
   it('rejects revoked, expired, wrong-scope, and unknown device credentials', async () => {
@@ -710,7 +869,13 @@ describe('McpAuthorizationPort device mode', () => {
       owner: { loadOwner: async () => null },
     });
     await expect(
-      withoutDevices.authorize({ sessionId: null, token: credential, projectId: 'p1', scopes: [MCP_READ_SCOPE] }),
+      withoutDevices.authorize({
+        sessionId: null,
+        token: credential,
+        projectId: 'p1',
+        route: 'project',
+        scopes: [MCP_READ_SCOPE],
+      }),
     ).resolves.toMatchObject({ ok: false, failure: { code: 'TOKEN_INVALID' } });
   });
 });
@@ -1285,13 +1450,18 @@ describe('createProjectSessionMcpRegistry', () => {
     });
 
     expect(registry.list([MCP_AUTHOR_SCOPE]).map((tool) => tool.name)).toEqual([
+      'nova_authoring_document_list',
       MCP_TOOL_AUTHORING_STATUS,
-      MCP_TOOL_AUTHORING_DOCUMENT_GET,
-      MCP_TOOL_AUTHORING_APPLY,
+      MCP_TOOL_AUTHORING_DOCUMENT_READ,
+      MCP_TOOL_AUTHORING_DOCUMENT_EDIT,
+      'nova_authoring_document_create',
+      'nova_authoring_document_move',
+      'nova_authoring_document_delete',
     ]);
     expect(registry.list([MCP_SUBMIT_SCOPE]).map((tool) => tool.name)).toEqual([
       MCP_TOOL_AUTHORING_SUBMIT,
       MCP_TOOL_OPERATION_GET,
+      'nova_authoring_conflict_read',
       MCP_TOOL_CONFLICT_RESOLVE,
     ]);
     expect(registry.list([MCP_ADMIN_SCOPE]).map((tool) => tool.name)).toEqual([
@@ -1319,19 +1489,18 @@ describe('createProjectSessionMcpRegistry', () => {
     // author cannot submit/resolve; submit cannot author; admin cannot do either.
     expectError(
       await registry.run(MCP_TOOL_AUTHORING_SUBMIT, authorOnly, {
-        version: 1,
-        projectId: 'p1',
+        version: 2,
         expectedWorkspaceDigest: 'wd-1',
       }),
       'SCOPE_MISMATCH',
     );
     expectError(
-      await registry.run(MCP_TOOL_AUTHORING_APPLY, submitOnly, {
-        version: 1,
-        projectId: 'p1',
+      await registry.run(MCP_TOOL_AUTHORING_DOCUMENT_EDIT, submitOnly, {
+        version: 2,
         documentId: 'doc-1',
         expectedWorkspaceDigest: 'wd-1',
         expectedAcceptedSourceHash: null,
+        expectedStateVectorHash: 'vector-1',
         replacementText: 'x',
       }),
       'SCOPE_MISMATCH',
@@ -1341,7 +1510,7 @@ describe('createProjectSessionMcpRegistry', () => {
       'SCOPE_MISMATCH',
     );
     expectError(
-      await registry.run(MCP_TOOL_AUTHORING_STATUS, adminOnly, { version: 1, projectId: 'p1' }),
+      await registry.run(MCP_TOOL_AUTHORING_STATUS, adminOnly, { version: 2 }),
       'SCOPE_MISMATCH',
     );
   });
@@ -1360,13 +1529,12 @@ describe('createProjectSessionMcpRegistry', () => {
     );
 
     expectError(
-      await registry.run(MCP_TOOL_AUTHORING_STATUS, authorOnly, { version: 1, projectId: 'p1' }),
+      await registry.run(MCP_TOOL_AUTHORING_STATUS, authorOnly, { version: 2 }),
       'PROJECT_NOT_READY',
     );
     expectError(
       await registry.run(MCP_TOOL_AUTHORING_SUBMIT, submitOnly, {
-        version: 1,
-        projectId: 'p1',
+        version: 2,
         expectedWorkspaceDigest: 'wd-1',
       }),
       'PROJECT_NOT_READY',
@@ -1395,10 +1563,10 @@ describe('createProjectSessionMcpRegistry', () => {
       }),
     );
 
-    // No actorId, Git head, path, token, or raw Yjs field may smuggle through.
+    // No actorId, path, token, or raw Yjs field may smuggle through.
     expectError(
-      await registry.run(MCP_TOOL_AUTHORING_APPLY, caller, {
-        version: 1,
+      await registry.run(MCP_TOOL_AUTHORING_DOCUMENT_EDIT, caller, {
+        version: 2,
         projectId: 'p1',
         documentId: 'doc-1',
         expectedWorkspaceDigest: 'wd-1',
@@ -1409,39 +1577,33 @@ describe('createProjectSessionMcpRegistry', () => {
       'UNKNOWN_FIELD',
     );
     expectError(
-      await registry.run(MCP_TOOL_AUTHORING_STATUS, caller, {
-        version: 1,
-        projectId: 'p1',
-        gitHead: 'deadbeef',
+      await registry.run(MCP_TOOL_AUTHORING_STATUS, caller, { version: 1 }),
+      'INVALID_INPUT',
+    );
+    expectError(
+      await registry.run(MCP_TOOL_AUTHORING_DOCUMENT_READ, caller, {
+        version: 2,
+        projectId: 'p-other',
+        documentId: 'doc-1',
+        offset: 0,
+        limit: 1,
       }),
       'UNKNOWN_FIELD',
     );
     expectError(
-      await registry.run(MCP_TOOL_AUTHORING_STATUS, caller, { version: 2, projectId: 'p1' }),
-      'INVALID_INPUT',
-    );
-    expectError(
-      await registry.run(MCP_TOOL_AUTHORING_STATUS, caller, {
-        version: 1,
-        projectId: 'p-other',
-      }),
-      'PROJECT_NOT_FOUND',
-    );
-    expectError(
-      await registry.run(MCP_TOOL_AUTHORING_APPLY, caller, {
-        version: 1,
-        projectId: 'p1',
+      await registry.run(MCP_TOOL_AUTHORING_DOCUMENT_EDIT, caller, {
+        version: 2,
         documentId: 'doc-1',
         expectedWorkspaceDigest: 'wd-1',
         expectedAcceptedSourceHash: 7,
+        expectedStateVectorHash: 'vector-1',
         replacementText: 'x',
       }),
       'INVALID_INPUT',
     );
     expectError(
       await registry.run(MCP_TOOL_CONFLICT_RESOLVE, caller, {
-        version: 1,
-        projectId: 'p1',
+        version: 2,
         choice: 'merge-everything',
         candidateHash: null,
       }),
@@ -1473,7 +1635,7 @@ describe('createProjectSessionMcpRegistry', () => {
     const applied: McpAuthoringApplyOutputV1[] = [];
     const submitted: McpAuthoringSubmitOutputV1[] = [];
     const coordinator = fakeCoordinator({
-      apply: async (input) => {
+      editDocument: async (input) => {
         applied.push({
           status: 'stale',
           failure: { code: 'WORKSPACE_STALE', message: 'The workspace digest moved.' },
@@ -1495,12 +1657,12 @@ describe('createProjectSessionMcpRegistry', () => {
     );
 
     // A stale digest is a typed failure; the coordinator CAS is authoritative.
-    const applyResult = await registry.run(MCP_TOOL_AUTHORING_APPLY, caller, {
-      version: 1,
-      projectId: 'p1',
+    const applyResult = await registry.run(MCP_TOOL_AUTHORING_DOCUMENT_EDIT, caller, {
+      version: 2,
       documentId: 'doc-1',
       expectedWorkspaceDigest: 'wd-stale',
       expectedAcceptedSourceHash: 'ash-1',
+      expectedStateVectorHash: 'vector-1',
       replacementText: 'new text',
     });
     expectError(applyResult, 'WORKSPACE_STALE');
@@ -1508,8 +1670,7 @@ describe('createProjectSessionMcpRegistry', () => {
     expect(applied[0].status).toBe('stale');
 
     const submitResult = await registry.run(MCP_TOOL_AUTHORING_SUBMIT, caller, {
-      version: 1,
-      projectId: 'p1',
+      version: 2,
       expectedWorkspaceDigest: 'wd-stale',
     });
     expectError(submitResult, 'SUBMIT_BLOCKED');
@@ -1518,8 +1679,8 @@ describe('createProjectSessionMcpRegistry', () => {
 
     // Queued/status/document reads flow through unchanged.
     const queued = await registry.run(MCP_TOOL_OPERATION_GET, caller, {
-      version: 1,
-      operationId: 'op-1',
+      version: 2,
+      operationHandle: 'op-1',
     });
     expect(queued.ok).toBe(true);
     if (!queued.ok) return;
@@ -1536,29 +1697,28 @@ describe('createProjectSessionMcpRegistry', () => {
     );
 
     const status = await registry.run(MCP_TOOL_AUTHORING_STATUS, caller, {
-      version: 1,
-      projectId: 'p1',
+      version: 2,
     });
     expect(status.ok).toBe(true);
     if (!status.ok) return;
     expect(status.data).toEqual({
-      version: 1,
+      version: 2,
       projectId: 'p1',
       state: FAKE_AUTHORING_STATE,
       generatedAt: FAKE_AUTHORING_STATE.generatedAt,
     });
 
-    const document = await registry.run(MCP_TOOL_AUTHORING_DOCUMENT_GET, caller, {
-      version: 1,
-      projectId: 'p1',
+    const document = await registry.run(MCP_TOOL_AUTHORING_DOCUMENT_READ, caller, {
+      version: 2,
       documentId: 'doc-1',
+      offset: 0,
+      limit: 64,
     });
     expect(document.ok).toBe(true);
     if (!document.ok) return;
     expect(document.data).toMatchObject({
       documentId: 'doc-1',
       logicalPath: 'nova.yaml',
-      available: true,
     });
   });
 

@@ -1,18 +1,30 @@
 import { createHash } from 'node:crypto';
 import * as Y from 'yjs';
-import type {
-  AuthoringFailureV1,
-  McpAuthoringApplyInputV1,
-  McpAuthoringApplyOutputV1,
-  McpAuthoringDocumentGetInputV1,
-  McpAuthoringDocumentGetOutputV1,
-  McpAuthoringSubmitInputV1,
-  McpAuthoringSubmitOutputV1,
-  McpConflictResolveInputV1,
-  McpConflictResolveOutputV1,
-  McpOperationGetInputV1,
-  McpOperationGetOutputV1,
+import {
+  AUTHORING_CONTRACT_VERSION,
+  type AuthoringFailureV1,
+  type McpAuthoringApplyInputV1,
+  type McpAuthoringApplyOutputV1,
+  type McpAuthoringDocumentGetInputV1,
+  type McpAuthoringDocumentGetOutputV1,
+  type McpAuthoringSubmitInputV1,
+  type McpAuthoringSubmitOutputV1,
+  type McpConflictResolveInputV1,
+  type McpConflictResolveOutputV1,
+  type McpOperationGetInputV1,
+  type McpOperationGetOutputV1,
+  type McpAuthoringDocumentListInputV1,
+  type McpAuthoringDocumentListOutputV1,
+  type McpAuthoringDocumentReadInputV1,
+  type McpAuthoringDocumentReadOutputV1,
+  type McpAuthoringDocumentEditInputV1,
+  type McpAuthoringDocumentCreateInputV1,
+  type McpAuthoringDocumentMoveInputV1,
+  type McpAuthoringDocumentDeleteInputV1,
+  type McpAuthoringDocumentMutationOutputV1,
+  type McpAuthoringConflictReadOutputV1,
 } from '../../contracts/authoring.js';
+import { AUTHORING_DOCUMENT_LIMITS_V1 } from '@novalistically/workbench-protocol';
 import type { AgentCapabilityService } from '../agent/capability-service.js';
 import type { McpAuthorizedCaller } from '../mcp/auth.js';
 import type { McpAuthoringCoordinatorPort } from '../mcp/registry.js';
@@ -23,19 +35,33 @@ import type { AuthoringCoordinator } from './types.js';
 function sha256(value: Uint8Array): string {
   return createHash('sha256').update(value).digest('hex');
 }
-
 function failure(code: AuthoringFailureV1['code'], message: string): AuthoringFailureV1 {
   return { code, message };
 }
 
-function replaceTextUpdate(current: Uint8Array | null, replacementText: string): Uint8Array {
+function applyTextUpdate(
+  current: Uint8Array | null,
+  replacementText: string | undefined,
+  edits: readonly { readonly start: number; readonly end: number; readonly replacementText: string }[] | undefined,
+): Uint8Array {
   const doc = new Y.Doc();
   if (current !== null) Y.applyUpdate(doc, current);
   const text = doc.getText(WORKING_TEXT_TYPE);
-  const length = text.length;
-  if (length > 0) text.delete(0, length);
-  if (replacementText.length > 0) text.insert(0, replacementText);
+  if (replacementText !== undefined) {
+    if (text.length > 0) text.delete(0, text.length);
+    if (replacementText.length > 0) text.insert(0, replacementText);
+  } else if (edits !== undefined) {
+    for (let index = edits.length - 1; index >= 0; index -= 1) {
+      const edit = edits[index];
+      text.delete(edit.start, edit.end - edit.start);
+      if (edit.replacementText.length > 0) text.insert(edit.start, edit.replacementText);
+    }
+  }
   return Y.encodeStateAsUpdate(doc);
+}
+
+function emptyDocumentStateVectorHash(): string {
+  return sha256(Y.encodeStateVector(new Y.Doc()));
 }
 
 /**
@@ -57,10 +83,182 @@ export function createMcpAuthoringCoordinatorPort(options: {
       projectId: session.projectId,
       scopes,
     });
+  const lifecycle = async (
+    kind: string,
+    input: {
+      readonly expectedAcceptedSourceHash: string | null;
+      readonly expectedWorkspaceDigest: string;
+    },
+    caller: McpAuthorizedCaller,
+    run: (operationId: string) => Promise<McpAuthoringDocumentMutationOutputV1>,
+  ): Promise<McpAuthoringDocumentMutationOutputV1 | AuthoringFailureV1> => {
+    const grant = await issue(caller, ['mcp:author']);
+    let output: McpAuthoringDocumentMutationOutputV1 | AuthoringFailureV1 =
+      failure('INTERNAL', 'The document mutation did not run.');
+    const result = await session.enqueueOperation({
+      kind,
+      capabilityId: grant.grant.capabilityId,
+      scope: ['mcp:author'],
+      run: async (context) => {
+        const state = coordinator.getState();
+        if (state.acceptedSourceHash !== input.expectedAcceptedSourceHash) {
+          output = failure('ACCEPTED_HASH_MISMATCH', 'The accepted source changed; re-read before mutating.');
+          return;
+        }
+        const digest = await documents.workspaceDigest();
+        if (digest?.digest !== input.expectedWorkspaceDigest) {
+          output = failure('WORKSPACE_STALE', 'The working layer changed; re-read before mutating.');
+          return;
+        }
+        try {
+          output = await run(context.operationId);
+        } catch (error) {
+          output = failure(
+            error instanceof Error && 'code' in error && typeof error.code === 'string'
+              ? (error.code as AuthoringFailureV1['code'])
+              : 'INTERNAL',
+            error instanceof Error ? error.message : 'The document mutation failed.',
+          );
+        }
+      },
+    });
+    if (result.status === 'denied') return failure('SUBMIT_BLOCKED', 'The authoring capability is no longer valid.');
+    if (result.status === 'failed') return failure('INTERNAL', 'The Host could not apply the document mutation.');
+    return output;
+  };
 
   return {
     projectId: session.projectId,
     getState: () => coordinator.getState(),
+    async listDocuments(_input: McpAuthoringDocumentListInputV1) {
+      const digest = await documents.workspaceDigest();
+      const response: McpAuthoringDocumentListOutputV1 = {
+        version: AUTHORING_CONTRACT_VERSION,
+        documents: documents.descriptors().map((descriptor) => ({
+          documentId: descriptor.documentId,
+          logicalPath: descriptor.logicalPath,
+          kind: descriptor.kind,
+          state: descriptor.state,
+          available: descriptor.available,
+        })),
+        workspaceDigest: digest?.digest ?? null,
+      };
+      return response;
+    },
+
+    async readDocument(input: McpAuthoringDocumentReadInputV1) {
+      const descriptor = documents.descriptor(input.documentId);
+      if (descriptor === null || descriptor.state === 'tombstone') {
+        return failure('DOCUMENT_NOT_FOUND', 'The working document is unavailable.');
+      }
+      const state = await documents.load({ projectId: session.projectId, documentId: input.documentId });
+      let content: string;
+      let stateVectorHash: string;
+      if (state === null) {
+        content = documents.acceptedContent(descriptor.logicalPath) ?? '';
+        stateVectorHash = emptyDocumentStateVectorHash();
+      } else {
+        const doc = new Y.Doc();
+        Y.applyUpdate(doc, state.update);
+        content = doc.getText(WORKING_TEXT_TYPE).toString();
+        stateVectorHash = sha256(state.stateVector);
+      }
+      const offset = input.offset ?? 0;
+      const limit = Math.min(
+        input.limit ?? AUTHORING_DOCUMENT_LIMITS_V1.defaultReadCharacters,
+        AUTHORING_DOCUMENT_LIMITS_V1.maxReadCharacters,
+      );
+      const digest = await documents.workspaceDigest();
+      const response: McpAuthoringDocumentReadOutputV1 = {
+        version: AUTHORING_CONTRACT_VERSION,
+        documentId: input.documentId,
+        logicalPath: descriptor.logicalPath,
+        offset,
+        limit,
+        content: content.slice(offset, offset + limit),
+        totalLength: content.length,
+        contentHash: sha256(new TextEncoder().encode(content)),
+        stateVectorHash,
+        workspaceDigest: digest?.digest ?? null,
+        acceptedSourceHash: coordinator.getState().acceptedSourceHash,
+      };
+      return response;
+    },
+
+    async editDocument(input: McpAuthoringDocumentEditInputV1, caller: McpAuthorizedCaller) {
+      const descriptor = documents.descriptor(input.documentId);
+      if (descriptor === null || descriptor.state === 'tombstone') {
+        return { status: 'rejected', failure: failure('DOCUMENT_NOT_FOUND', 'The working document is unavailable.') };
+      }
+      if ((input.replacementText === undefined) === (input.edits === undefined)) {
+        return { status: 'rejected', failure: failure('INVALID_INPUT', 'Provide exactly one of replacementText or edits.') };
+      }
+      if (input.edits !== undefined) {
+        let previousEnd = 0;
+        for (const edit of input.edits) {
+          if (!Number.isInteger(edit.start) || !Number.isInteger(edit.end) || edit.start < previousEnd || edit.end < edit.start) {
+            return { status: 'rejected', failure: failure('INVALID_INPUT', 'edits must be sorted, non-overlapping spans.') };
+          }
+          previousEnd = edit.end;
+        }
+      }
+      return this.apply({
+        version: AUTHORING_CONTRACT_VERSION,
+        projectId: session.projectId,
+        documentId: input.documentId,
+        expectedWorkspaceDigest: input.expectedWorkspaceDigest,
+        expectedAcceptedSourceHash: input.expectedAcceptedSourceHash,
+        expectedStateVectorHash: input.expectedStateVectorHash,
+        ...(input.replacementText === undefined ? {} : { replacementText: input.replacementText }),
+        ...(input.edits === undefined ? {} : { edits: input.edits }),
+      }, caller);
+    },
+
+    async createDocument(input: McpAuthoringDocumentCreateInputV1, caller: McpAuthorizedCaller) {
+      return lifecycle('mcp.authoring.document.create', input, caller, async (operationId) => {
+        const descriptor = await documents.createDocument({
+          documentId: session.runtime.services.ids.next({ kind: 'working_document' }),
+          logicalPath: input.logicalPath,
+          kind: input.kind ?? 'raw-yaml',
+        });
+        await coordinator.refreshWorkingState();
+        const digest = await documents.workspaceDigest();
+        return {
+          status: 'applied',
+          operationId,
+          documentId: descriptor.documentId,
+          logicalPath: descriptor.logicalPath,
+          workspaceDigest: digest?.digest ?? '',
+        };
+      });
+    },
+
+    async moveDocument(input: McpAuthoringDocumentMoveInputV1, caller: McpAuthorizedCaller) {
+      return lifecycle('mcp.authoring.document.move', input, caller, async (operationId) => {
+        const descriptor = await documents.moveDocument({ documentId: input.documentId, logicalPath: input.logicalPath });
+        await coordinator.refreshWorkingState();
+        const digest = await documents.workspaceDigest();
+        return { status: 'applied', operationId, documentId: descriptor.documentId, logicalPath: descriptor.logicalPath, workspaceDigest: digest?.digest ?? '' };
+      });
+    },
+
+    async deleteDocument(input: McpAuthoringDocumentDeleteInputV1, caller: McpAuthorizedCaller) {
+      return lifecycle('mcp.authoring.document.delete', input, caller, async (operationId) => {
+        const descriptor = await documents.deleteDocument(input.documentId);
+        await coordinator.refreshWorkingState();
+        const digest = await documents.workspaceDigest();
+        return { status: 'applied', operationId, documentId: descriptor.documentId, logicalPath: descriptor.logicalPath, workspaceDigest: digest?.digest ?? '' };
+      });
+    },
+
+    async readConflict(_input: McpAuthoringDocumentListInputV1) {
+      const state = coordinator.getState();
+      return {
+        version: AUTHORING_CONTRACT_VERSION,
+        conflicts: state.conflicts,
+        workspaceDigest: state.workspaceDigest,
+      } satisfies McpAuthoringConflictReadOutputV1;
+    },
 
     async getDocument(input: McpAuthoringDocumentGetInputV1) {
       const descriptor = documents.descriptor(input.documentId);
@@ -71,7 +269,7 @@ export function createMcpAuthoringCoordinatorPort(options: {
         documentId: input.documentId,
       });
       const response: McpAuthoringDocumentGetOutputV1 = {
-        version: 1,
+        version: AUTHORING_CONTRACT_VERSION,
         projectId: session.projectId,
         documentId: input.documentId,
         logicalPath: descriptor.logicalPath,
@@ -126,12 +324,22 @@ export function createMcpAuthoringCoordinatorPort(options: {
             projectId: session.projectId,
             documentId: input.documentId,
           });
+          if (
+            input.expectedStateVectorHash !== undefined &&
+            sha256(live?.stateVector ?? new Uint8Array()) !== input.expectedStateVectorHash
+          ) {
+            output = {
+              status: 'stale',
+              failure: failure('WORKSPACE_STALE', 'The working document changed; re-read before applying.'),
+            };
+            return;
+          }
           const applied = await documents.applyScopedUpdate({
             projectId: session.projectId,
             documentId: input.documentId,
             expectedBaseVector: live?.stateVector ?? new Uint8Array(),
             expectedHumanPresenceGeneration: session.presenceGeneration,
-            update: replaceTextUpdate(live?.update ?? null, input.replacementText),
+            update: applyTextUpdate(live?.update ?? null, input.replacementText, input.edits),
           });
           if (!applied.ok) {
             output = {
@@ -180,21 +388,21 @@ export function createMcpAuthoringCoordinatorPort(options: {
       });
       if (
         receipt.status === 'completed' &&
-        typeof receipt.gitSubmitId === 'string' &&
-        typeof receipt.gitCommit === 'string' &&
+        typeof receipt.operationId === 'string' &&
+        typeof receipt.revisionId === 'string' &&
         typeof receipt.acceptedSourceHash === 'string' &&
-        typeof receipt.gitReceiptHash === 'string'
+        typeof receipt.receiptHash === 'string'
       ) {
         return {
           status: 'completed',
           receipt,
           submit: {
-            version: 1,
+            version: AUTHORING_CONTRACT_VERSION,
             projectId: receipt.projectId,
-            submitId: receipt.gitSubmitId,
-            gitCommit: receipt.gitCommit,
+            operationId: receipt.operationId,
+            revisionId: receipt.revisionId,
             acceptedSourceHash: receipt.acceptedSourceHash,
-            gitReceiptHash: receipt.gitReceiptHash,
+            receiptHash: receipt.receiptHash,
             acceptedAt: receipt.updatedAt,
           },
         } satisfies McpAuthoringSubmitOutputV1;
@@ -213,13 +421,12 @@ export function createMcpAuthoringCoordinatorPort(options: {
 
     async getOperation(input: McpOperationGetInputV1) {
       const response: McpOperationGetOutputV1 = {
-        version: 1,
+        version: AUTHORING_CONTRACT_VERSION,
         operationId: input.operationId,
         receipt: coordinator.getOperation(input.operationId),
       };
       return response;
     },
-
     async resolveConflict(input: McpConflictResolveInputV1, caller: McpAuthorizedCaller) {
       const grant = await issue(caller, ['mcp:submit']);
       const receipt = await coordinator.reconcileExternal({

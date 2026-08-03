@@ -39,7 +39,12 @@ import { createHash } from 'node:crypto';
 import * as Y from 'yjs';
 import { computeSourceDocumentHash, compareLogicalPaths } from '@novalistically/core/source';
 import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
-import type { WorkingDocumentState, YjsDocumentKey } from '../../contracts/persistence.js';
+import type {
+  AuthoringWorkingDocumentRecord,
+  WorkingDocumentPhase,
+  WorkingDocumentState,
+  YjsDocumentKey,
+} from '../../contracts/persistence.js';
 import {
   AUTHORING_CONTRACT_VERSION,
   type AuthoringDocumentDigestV1,
@@ -48,6 +53,7 @@ import {
 import type { AuthoringDocumentMaterializer } from './types.js';
 import type { YjsWorkingDocumentCore } from '../yjs/gateway.js';
 import type { AgentAppliedTicket, AgentDocumentPort } from '../agent/edit-service.js';
+import { classifyAuthoringPath, ROOT_AUTHORING_FILES } from './manifest.js';
 
 /** The Yjs text type every working document uses (prose and raw YAML alike). */
 export const WORKING_TEXT_TYPE = 'prose';
@@ -68,14 +74,23 @@ export interface AuthoringDocumentDescriptor {
   readonly documentId: string;
   readonly logicalPath: string;
   readonly kind: 'prose' | 'raw-yaml';
+  readonly state: WorkingDocumentPhase;
   /** True when the Host currently holds a live working document for this key. */
   readonly available: boolean;
+}
+
+/** Optional durable catalog seam. Implementations route to the persistence worker. */
+export interface AuthoringDocumentCatalogPort {
+  list(projectId: string): Promise<readonly AuthoringWorkingDocumentRecord[]>;
+  upsert(record: AuthoringWorkingDocumentRecord): Promise<AuthoringWorkingDocumentRecord>;
 }
 
 export interface AuthoringWorkingDocumentStoreOptions {
   readonly projectId: string;
   /** Shared per-key working-document core — the SAME instance the browser gateway binds. */
   readonly core: YjsWorkingDocumentCore;
+  /** Durable catalog metadata; omitted only for isolated in-memory callers. */
+  readonly catalog?: AuthoringDocumentCatalogPort;
   /** Timestamp source; defaults to the host clock. */
   readonly now?: () => string;
   /**
@@ -112,6 +127,18 @@ export interface AuthoringWorkingDocumentStore
     readonly logicalPath: string;
     readonly kind: 'prose' | 'raw-yaml';
   }): void;
+  createDocument(input: {
+    readonly documentId?: string;
+    readonly logicalPath: string;
+    readonly kind: 'prose' | 'raw-yaml';
+  }): Promise<AuthoringDocumentDescriptor>;
+  /** Move one active document to another manifest-admitted logical path. */
+  moveDocument(input: {
+    readonly documentId: string;
+    readonly logicalPath: string;
+  }): Promise<AuthoringDocumentDescriptor>;
+  /** Mark one document as a reversible tombstone. */
+  deleteDocument(documentId: string): Promise<AuthoringDocumentDescriptor>;
   /** All catalog descriptors in stable logical-path order. */
   descriptors(): readonly AuthoringDocumentDescriptor[];
   /** One catalog descriptor, or null for an unknown document id. */
@@ -197,10 +224,11 @@ function computeCompensatingUpdate(before: Y.Doc, after: Y.Doc): Uint8Array {
 
 interface CatalogEntry {
   readonly documentId: string;
-  readonly logicalPath: string;
+  logicalPath: string;
   readonly kind: 'prose' | 'raw-yaml';
+  state: WorkingDocumentPhase;
+  catalogRevision: number;
 }
-
 function createAuthoringDocumentStoreImpl(
   options: AuthoringWorkingDocumentStoreOptions,
 ): AuthoringWorkingDocumentStore {
@@ -213,6 +241,7 @@ function createAuthoringDocumentStoreImpl(
   }
   const now = options.now ?? (() => new Date().toISOString());
   const presenceGeneration = options.presenceGeneration ?? (() => 0);
+  const catalogPort = options.catalog;
   /** documentId → catalog entry (accepted seed + registered extras). */
   const catalog = new Map<string, CatalogEntry>();
   /** logicalPath → accepted base content hash (from the last accepted snapshot). */
@@ -223,8 +252,49 @@ function createAuthoringDocumentStoreImpl(
   const knownWorking = new Set<string>();
   const changeListeners = new Set<(change: AuthoringWorkingLayerChange) => void>();
   let disposed = false;
-
+  let catalogLoaded = false;
   const keyOf = (documentId: string): YjsDocumentKey => ({ projectId, documentId });
+  async function ensureCatalogLoaded(): Promise<void> {
+    if (catalogLoaded) return;
+    catalogLoaded = true;
+    if (catalogPort === undefined) return;
+    let records: readonly AuthoringWorkingDocumentRecord[];
+    try {
+      records = await catalogPort.list(projectId);
+    } catch {
+      throw new AuthoringDocumentStoreError(
+        'document.catalog_unavailable',
+        'Working document catalog is unavailable',
+      );
+    }
+    for (const record of records) {
+      if (record.projectId !== projectId || record.documentId.length === 0 || record.logicalPath.length === 0) {
+        continue;
+      }
+      catalog.set(record.documentId, {
+        documentId: record.documentId,
+        logicalPath: record.logicalPath,
+        kind: record.kind === 'prose' ? 'prose' : 'raw-yaml',
+        state: record.state === 'tombstone' ? 'tombstone' : 'active',
+        catalogRevision: Number.isInteger(record.catalogRevision) && record.catalogRevision > 0
+          ? record.catalogRevision
+          : 1,
+      });
+    }
+  }
+
+  async function persistCatalog(entry: CatalogEntry): Promise<void> {
+    if (catalogPort === undefined) return;
+    await catalogPort.upsert({
+      projectId,
+      documentId: entry.documentId,
+      logicalPath: entry.logicalPath,
+      kind: entry.kind,
+      state: entry.state,
+      catalogRevision: entry.catalogRevision,
+      updatedAt: now(),
+    });
+  }
 
   /** Materialize one document's working text from its persisted state; null when clean. */
   async function materializeWorkingText(documentId: string): Promise<string | null> {
@@ -264,8 +334,11 @@ function createAuthoringDocumentStoreImpl(
     }
     const digest = sha256Hex(
       Buffer.from(
-        documents
-          .map((document) => `${document.logicalPath}\u0000${document.stateVectorHash}\u0000`)
+        entries
+          .map((entry, index) => {
+            const document = documents[index];
+            return `${document.logicalPath}\u0000${document.stateVectorHash}\u0000${entry.state}\u0000`;
+          })
           .join(''),
         'utf8',
       ),
@@ -281,6 +354,10 @@ function createAuthoringDocumentStoreImpl(
 
   async function isWorkingDirty(): Promise<boolean> {
     for (const entry of catalog.values()) {
+      if (entry.state === 'tombstone') {
+        if (acceptedContentHashes.has(entry.logicalPath)) return true;
+        continue;
+      }
       const working = await materializeWorkingText(entry.documentId);
       if (working === null) continue;
       const accepted = acceptedContentHashes.get(entry.logicalPath);
@@ -288,6 +365,7 @@ function createAuthoringDocumentStoreImpl(
     }
     return false;
   }
+
 
   // The working layer changed through ANY writer (browser gateway or this
   // store): refresh the known-working set and notify change listeners.
@@ -303,6 +381,7 @@ function createAuthoringDocumentStoreImpl(
     // ── Catalog / accepted base ──────────────────────────────────────────
 
     async seedFromAccepted(snapshot) {
+      await ensureCatalogLoaded();
       if (snapshot === null) {
         acceptedContentHashes.clear();
         acceptedContents.clear();
@@ -314,43 +393,45 @@ function createAuthoringDocumentStoreImpl(
         acceptedContentHashes.delete(logicalPath);
         acceptedContents.delete(logicalPath);
         for (const [documentId, entry] of catalog) {
-          if (entry.logicalPath === logicalPath) catalog.delete(documentId);
+          if (entry.logicalPath === logicalPath && entry.state !== 'tombstone') catalog.delete(documentId);
         }
       }
       for (const document of snapshot.documents) {
-        const existing = catalog.get(document.logicalPath);
+        const existing = [...catalog.values()].find((entry) => entry.logicalPath === document.logicalPath);
         if (existing === undefined) {
-          catalog.set(document.logicalPath, {
+          const entry: CatalogEntry = {
             documentId: document.logicalPath,
             logicalPath: document.logicalPath,
             kind: 'raw-yaml',
-          });
+            state: 'active',
+            catalogRevision: 1,
+          };
+          catalog.set(entry.documentId, entry);
         }
         acceptedContentHashes.set(document.logicalPath, document.contentHash);
         acceptedContents.set(document.logicalPath, document.content);
       }
       for (const entry of catalog.values()) {
+        if (entry.state === 'tombstone') continue;
         const accepted = acceptedContents.get(entry.logicalPath);
-        if (accepted === undefined) continue;
-        const key = keyOf(entry.documentId);
-        await core.enqueue(key, async () => {
-          const created = await core.getOrCreate(key);
-          if (created === null) {
-            throw new AuthoringDocumentStoreError(
-              'document.storage_unavailable',
-              'Working document storage is unavailable',
-            );
-          }
-          // A persisted Yjs state is a real working-layer decision, including
-          // an intentional empty document. Only a never-seen document inherits
-          // the accepted text, so acceptance never overwrites newer edits.
-          if (created.stored !== null) return;
-          const text = created.doc.getText(WORKING_TEXT_TYPE);
-          if (text.length > 0) return;
-          if (accepted.length > 0) text.insert(0, accepted);
-          await core.persist(key, created.doc);
-          knownWorking.add(entry.documentId);
-        });
+        if (accepted !== undefined) {
+          const key = keyOf(entry.documentId);
+          await core.enqueue(key, async () => {
+            const created = await core.getOrCreate(key);
+            if (created === null) {
+              throw new AuthoringDocumentStoreError(
+                'document.storage_unavailable',
+                'Working document storage is unavailable',
+              );
+            }
+            if (created.stored !== null) return;
+            const text = created.doc.getText(WORKING_TEXT_TYPE);
+            if (text.length === 0 && accepted.length > 0) text.insert(0, accepted);
+            await core.persist(key, created.doc);
+            knownWorking.add(entry.documentId);
+          });
+        }
+        await persistCatalog(entry);
       }
     },
 
@@ -361,12 +442,91 @@ function createAuthoringDocumentStoreImpl(
       if (typeof input.logicalPath !== 'string' || input.logicalPath.length === 0) {
         throw new TypeError('registerDocument requires a non-empty logicalPath');
       }
-      catalog.set(input.documentId, {
+      const entry: CatalogEntry = {
         documentId: input.documentId,
         logicalPath: input.logicalPath,
         kind: input.kind,
-      });
+        state: 'active',
+        catalogRevision: 1,
+      };
+      catalog.set(input.documentId, entry);
+      void persistCatalog(entry);
     },
+
+    async createDocument(input) {
+      const classification = classifyAuthoringPath(input.logicalPath);
+      if (!classification.ok) {
+        throw new AuthoringDocumentStoreError('document.invalid_path', classification.message);
+      }
+      const existing = [...catalog.values()].find((entry) => entry.logicalPath === input.logicalPath);
+      if (existing !== undefined) {
+        if (existing.state === 'tombstone') {
+          existing.state = 'active';
+          existing.catalogRevision += 1;
+          await persistCatalog(existing);
+          return this.descriptor(existing.documentId) as AuthoringDocumentDescriptor;
+        }
+        throw new AuthoringDocumentStoreError('document.already_exists', 'A working document already uses that logical path.');
+      }
+      const documentId = typeof input.documentId === 'string' && input.documentId.length > 0
+        ? input.documentId
+        : `document-${catalog.size + 1}`;
+      if (catalog.has(documentId)) {
+        throw new AuthoringDocumentStoreError('document.already_exists', 'The allocated document identity already exists.');
+      }
+      const entry: CatalogEntry = {
+        documentId,
+        logicalPath: input.logicalPath,
+        kind: classification.kind === 'scene-md' ? 'prose' : input.kind,
+        state: 'active',
+        catalogRevision: 1,
+      };
+      catalog.set(documentId, entry);
+      const key = keyOf(documentId);
+      await core.enqueue(key, async () => {
+        const created = await core.getOrCreate(key);
+        if (created === null) throw new AuthoringDocumentStoreError('document.storage_unavailable', 'Working document storage is unavailable');
+        if (created.stored === null) await core.persist(key, created.doc);
+      });
+      await persistCatalog(entry);
+      return this.descriptor(documentId) as AuthoringDocumentDescriptor;
+    },
+
+    async moveDocument(input) {
+      const classification = classifyAuthoringPath(input.logicalPath);
+      if (!classification.ok) {
+        throw new AuthoringDocumentStoreError('document.invalid_path', classification.message);
+      }
+      const entry = catalog.get(input.documentId);
+      if (entry === undefined || entry.state !== 'active') {
+        throw new AuthoringDocumentStoreError('document.not_found', 'The working document is unavailable.');
+      }
+      const existing = [...catalog.values()].find(
+        (candidate) => candidate.state === 'active' && candidate.logicalPath === input.logicalPath,
+      );
+      if (existing !== undefined && existing.documentId !== input.documentId) {
+        throw new AuthoringDocumentStoreError('document.already_exists', 'A working document already uses that logical path.');
+      }
+      entry.logicalPath = input.logicalPath;
+      entry.catalogRevision += 1;
+      await persistCatalog(entry);
+      return this.descriptor(input.documentId) as AuthoringDocumentDescriptor;
+    },
+
+    async deleteDocument(documentId) {
+      const entry = catalog.get(documentId);
+      if (entry === undefined || entry.state !== 'active') {
+        throw new AuthoringDocumentStoreError('document.not_found', 'The working document is unavailable.');
+      }
+      if ((ROOT_AUTHORING_FILES as readonly string[]).includes(entry.logicalPath)) {
+        throw new AuthoringDocumentStoreError('document.required', 'Required authoring documents cannot be deleted.');
+      }
+      entry.state = 'tombstone';
+      entry.catalogRevision += 1;
+      await persistCatalog(entry);
+      return this.descriptor(documentId) as AuthoringDocumentDescriptor;
+    },
+
 
     descriptors() {
       return [...catalog.values()]
@@ -376,7 +536,9 @@ function createAuthoringDocumentStoreImpl(
           documentId: entry.documentId,
           logicalPath: entry.logicalPath,
           kind: entry.kind,
-          available: core.peek(keyOf(entry.documentId)) !== null || knownWorking.has(entry.documentId),
+          state: entry.state,
+          available: entry.state === 'active' &&
+            (core.peek(keyOf(entry.documentId)) !== null || knownWorking.has(entry.documentId)),
         }));
     },
 
@@ -388,10 +550,11 @@ function createAuthoringDocumentStoreImpl(
         documentId: entry.documentId,
         logicalPath: entry.logicalPath,
         kind: entry.kind,
-        available: core.peek(keyOf(documentId)) !== null || knownWorking.has(documentId),
+        state: entry.state,
+        available: entry.state === 'active' &&
+          (core.peek(keyOf(documentId)) !== null || knownWorking.has(documentId)),
       };
     },
-
     acceptedContent(logicalPath) {
       return acceptedContents.get(logicalPath) ?? null;
     },
@@ -431,6 +594,7 @@ function createAuthoringDocumentStoreImpl(
             `Unknown working document ${JSON.stringify(requested.documentId)} for logical path ${JSON.stringify(requested.logicalPath)}`,
           );
         }
+        if (entry.state === 'tombstone') continue;
         const working = await materializeWorkingText(requested.documentId);
         if (working !== null) {
           entries.push({ logicalPath: requested.logicalPath, content: working });

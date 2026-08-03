@@ -3,7 +3,7 @@ import type { CoreRuntimeServices, ProjectCompilation } from '@novalistically/co
 import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
 import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
 import * as Y from 'yjs';
-import type { AuthoringOperationReceiptV1, AuthoringStateV1 } from '../src/contracts/authoring.js';
+import { AUTHORING_CONTRACT_VERSION, type AuthoringOperationReceiptV1, type AuthoringStateV1 } from '../src/contracts/authoring.js';
 import type { WorkingDocumentState } from '../src/contracts/index.js';
 import {
   type AgentCapabilityGrant,
@@ -144,10 +144,12 @@ class RecordingCapabilityService extends AgentCapabilityService {
 
 function authoringState(acceptedSourceHash: string): AuthoringStateV1 {
   return {
-    version: 1,
+    version: AUTHORING_CONTRACT_VERSION,
     projectId: PROJECT_ID,
     phase: 'working-dirty',
+    acceptedRevisionId: null,
     acceptedSourceHash,
+    pendingOperationId: null,
     workingDirty: true,
     workspaceDigest: 'workspace-digest',
     externalCandidate: null,
@@ -163,22 +165,23 @@ function receipt(
   overrides: Partial<AuthoringOperationReceiptV1> = {},
 ): AuthoringOperationReceiptV1 {
   return {
-    version: 1,
+    version: AUTHORING_CONTRACT_VERSION,
     operationId: 'op-1',
     projectId: PROJECT_ID,
     kind: 'submit',
     status: 'completed',
     acceptedSourceHash: 'accepted-after',
-    workspaceDigest: 'workspace-after',
-    gitSubmitId: 'submit-1',
-    gitCommit: 'a'.repeat(40),
-    gitReceiptHash: 'receipt-1',
+    acceptedRevisionId: 'revision-before',
+    pendingOperationId: null,
+    revisionId: 'revision-1',
+    receiptHash: 'receipt-1',
     errorCode: null,
     createdAt: FIXED_NOW,
     updatedAt: FIXED_NOW,
     ...overrides,
   };
 }
+
 
 // ─── Harness ─────────────────────────────────────────────────────────────────
 
@@ -485,12 +488,12 @@ describe('MCP authoring coordinator port', () => {
     const live = await h.documents.load({ projectId: PROJECT_ID, documentId: DOCUMENT_ID });
     if (live === null) throw new Error('expected seeded working state');
     const result = await h.port.getDocument({
-      version: 1,
+      version: 2,
       projectId: PROJECT_ID,
       documentId: DOCUMENT_ID,
     });
     expect(result).toEqual({
-      version: 1,
+      version: 2,
       projectId: PROJECT_ID,
       documentId: DOCUMENT_ID,
       logicalPath: DOCUMENT_ID,
@@ -517,10 +520,10 @@ describe('MCP authoring coordinator port', () => {
   it('derives the actor and mcp:submit capability for submit and forwards the CAS fields', async () => {
     const completed = receipt({
       status: 'completed',
-      gitSubmitId: 'submit-1',
-      gitCommit: 'b'.repeat(40),
+      operationId: 'op-1',
+      revisionId: 'revision-1',
       acceptedSourceHash: 'accepted-after',
-      gitReceiptHash: 'receipt-1',
+      receiptHash: 'receipt-1',
     });
     const h = await createHarness({ submitResult: completed });
     activeHarness = h;
@@ -553,12 +556,12 @@ describe('MCP authoring coordinator port', () => {
       status: 'completed',
       receipt: completed,
       submit: {
-        version: 1,
+        version: 2,
         projectId: PROJECT_ID,
-        submitId: 'submit-1',
-        gitCommit: 'b'.repeat(40),
+        operationId: 'op-1',
+        revisionId: 'revision-1',
         acceptedSourceHash: 'accepted-after',
-        gitReceiptHash: 'receipt-1',
+        receiptHash: 'receipt-1',
         acceptedAt: FIXED_NOW,
       },
     });

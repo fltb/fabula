@@ -20,7 +20,7 @@
 import { BROWSER_API_BASE_PATH } from './browser-api.js';
 
 /** Version of the authoring coordination contract. */
-export const AUTHORING_CONTRACT_VERSION = 1 as const;
+export const AUTHORING_CONTRACT_VERSION = 2 as const;
 export type AuthoringContractVersion = typeof AUTHORING_CONTRACT_VERSION;
 
 // ─── Workspace digest ───────────────────────────────────────────────────────
@@ -121,18 +121,27 @@ export interface AuthoringStateV1 {
   readonly version: AuthoringContractVersion;
   readonly projectId: string;
   readonly phase: AuthoringPhaseV1;
-  /** Accepted last-valid source identity; null before the first accepted load. */
+  /** Accepted native revision identity; null before the first baseline. */
+  readonly acceptedRevisionId: string | null;
   readonly acceptedSourceHash: string | null;
-  /** True when the Yjs working layer differs from the accepted source. */
+  /** Operation currently crossing the native CAS/materialization boundary. */
+  readonly pendingOperationId: string | null;
   readonly workingDirty: boolean;
-  /** Current workspace digest, or null when no working documents exist. */
   readonly workspaceDigest: string | null;
   readonly externalCandidate: AuthoringExternalCandidateV1 | null;
   readonly conflicts: readonly AuthoringConflictV1[];
   readonly diagnostics: readonly AuthoringDiagnosticV1[];
   readonly canSubmit: boolean;
   readonly submitBlockReason: AuthoringSubmitBlockReasonV1;
+  readonly mirrorStatus?: AuthoringMirrorStatusV2;
   readonly generatedAt: string;
+}
+
+/** Optional post-acceptance mirror status; never part of source authority. */
+export interface AuthoringMirrorStatusV2 {
+  readonly status: 'active' | 'disabled' | 'failed';
+  readonly externalHeadId?: string;
+  readonly diagnostic?: string;
 }
 
 // ─── Operation receipts ─────────────────────────────────────────────────────
@@ -149,7 +158,7 @@ export type AuthoringOperationStatusV1 =
   | 'stale'
   | 'conflict';
 
-/** Secret-free receipt of one async authoring operation. */
+/** Secret-free receipt of one async native revision operation. */
 export interface AuthoringOperationReceiptV1 {
   readonly version: AuthoringContractVersion;
   readonly operationId: string;
@@ -157,28 +166,23 @@ export interface AuthoringOperationReceiptV1 {
   readonly kind: AuthoringOperationKindV1;
   readonly status: AuthoringOperationStatusV1;
   readonly acceptedSourceHash: string | null;
-  readonly workspaceDigest: string | null;
-  /** Fixed-ref Git submit id when the operation ran a submit. */
-  readonly gitSubmitId: string | null;
-  /** Fixed-ref commit object accepted by this operation, when available. */
-  readonly gitCommit?: string | null;
-  /** Durable Git receipt hash when the operation accepted a submit. */
-  readonly gitReceiptHash: string | null;
+  readonly acceptedRevisionId: string | null;
+  readonly pendingOperationId: string | null;
+  readonly revisionId: string | null;
+  readonly receiptHash: string | null;
   readonly errorCode: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
 }
 
-/** Durable Git authoring receipt projection (non-secret). */
+/** Durable native revision receipt projection (non-secret). */
 export interface AuthoringSubmitReceiptV1 {
   readonly version: AuthoringContractVersion;
   readonly projectId: string;
-  readonly submitId: string;
-  /** Full accepted Git commit object id. */
-  readonly gitCommit: string;
-  /** Verified accepted source hash after reload. */
+  readonly operationId: string;
+  readonly revisionId: string;
   readonly acceptedSourceHash: string;
-  readonly gitReceiptHash: string;
+  readonly receiptHash: string;
   readonly acceptedAt: string;
 }
 
@@ -205,15 +209,13 @@ export interface AuthoringFailureV1 {
   readonly message: string;
 }
 
-// ─── Browser submit / reconcile surface ─────────────────────────────────────
-
-/** Explicit browser submit request (Ctrl/Cmd+S is the only save-to-Git path). */
+/** Explicit browser submit request. */
 export interface BrowserAuthoringSubmitRequestV1 {
   readonly version: AuthoringContractVersion;
   readonly projectId: string;
-  /** CAS on the accepted source; moved projection rejects before any work. */
+  /** CAS on the accepted native revision and source identity. */
+  readonly expectedAcceptedRevisionId: string | null;
   readonly expectedAcceptedSourceHash: string | null;
-  /** CAS on the working layer; a changed digest is `WORKSPACE_STALE`. */
   readonly expectedWorkspaceDigest: string;
   readonly message?: string;
 }
@@ -229,8 +231,8 @@ export interface BrowserAuthoringReconcileRequestV1 {
   readonly version: AuthoringContractVersion;
   readonly projectId: string;
   readonly choice: AuthoringReconcileChoiceV1;
-  /** Required for accept-external/apply-proposed-disjoint-merge: exact candidate hash. */
   readonly candidateHash: string | null;
+  readonly expectedAcceptedRevisionId: string | null;
   readonly expectedAcceptedSourceHash: string | null;
 }
 
@@ -344,6 +346,111 @@ export interface McpAuthoringStatusOutputV1 {
   readonly state: AuthoringStateV1;
   readonly generatedAt: string;
 }
+/** Bounded MCP working-document descriptor; logical paths are manifest paths, never host paths. */
+export interface McpAuthoringDocumentDescriptorV1 {
+  readonly documentId: string;
+  readonly logicalPath: string;
+  readonly kind: 'prose' | 'raw-yaml';
+  readonly state: 'active' | 'tombstone';
+  readonly available: boolean;
+}
+
+/** `nova_authoring_document_list` input. */
+export interface McpAuthoringDocumentListInputV1 {
+  readonly version: AuthoringContractVersion;
+}
+/** `nova_authoring_document_list` output. */
+export interface McpAuthoringDocumentListOutputV1 {
+  readonly version: AuthoringContractVersion;
+  readonly documents: readonly McpAuthoringDocumentDescriptorV1[];
+  readonly workspaceDigest: string | null;
+}
+
+/** `nova_authoring_document_read` input; content is bounded by offset/limit. */
+export interface McpAuthoringDocumentReadInputV1 {
+  readonly version: AuthoringContractVersion;
+  readonly documentId: string;
+  readonly offset?: number;
+  readonly limit?: number;
+}
+/** `nova_authoring_document_read` output; no Yjs bytes are exposed. */
+export interface McpAuthoringDocumentReadOutputV1 {
+  readonly version: AuthoringContractVersion;
+  readonly documentId: string;
+  readonly logicalPath: string;
+  readonly offset: number;
+  readonly limit: number;
+  readonly content: string;
+  readonly totalLength: number;
+  readonly contentHash: string;
+  readonly stateVectorHash: string;
+  readonly workspaceDigest: string | null;
+  readonly acceptedSourceHash: string | null;
+}
+
+/** One sorted, non-overlapping character replacement span. */
+export interface McpAuthoringDocumentEditSpanV1 {
+  readonly start: number;
+  readonly end: number;
+  readonly replacementText: string;
+}
+/** `nova_authoring_document_edit` input. */
+export interface McpAuthoringDocumentEditInputV1 {
+  readonly version: AuthoringContractVersion;
+  readonly documentId: string;
+  readonly expectedWorkspaceDigest: string;
+  readonly expectedAcceptedSourceHash: string | null;
+  readonly expectedStateVectorHash: string;
+  readonly replacementText?: string;
+  readonly edits?: readonly McpAuthoringDocumentEditSpanV1[];
+}
+/** Successful document edit result. */
+export interface McpAuthoringDocumentEditOutputV1 {
+  readonly status: 'applied';
+  readonly documentId: string;
+  readonly workspaceDigest: string;
+  readonly stateVectorHash: string;
+}
+
+/** `nova_authoring_document_create` input. */
+export interface McpAuthoringDocumentCreateInputV1 {
+  readonly version: AuthoringContractVersion;
+  readonly logicalPath: string;
+  readonly kind?: 'prose' | 'raw-yaml';
+  readonly expectedWorkspaceDigest: string;
+  readonly expectedAcceptedSourceHash: string | null;
+}
+/** `nova_authoring_document_move` input. */
+export interface McpAuthoringDocumentMoveInputV1 {
+  readonly version: AuthoringContractVersion;
+  readonly documentId: string;
+  readonly logicalPath: string;
+  readonly expectedWorkspaceDigest: string;
+  readonly expectedAcceptedSourceHash: string | null;
+}
+/** `nova_authoring_document_delete` input. */
+export interface McpAuthoringDocumentDeleteInputV1 {
+  readonly version: AuthoringContractVersion;
+  readonly documentId: string;
+  readonly expectedWorkspaceDigest: string;
+  readonly expectedAcceptedSourceHash: string | null;
+}
+/** Lifecycle result; operation identity is Host allocated. */
+export interface McpAuthoringDocumentMutationOutputV1 {
+  readonly status: 'applied';
+  readonly operationId: string;
+  readonly documentId: string;
+  readonly logicalPath: string;
+  readonly workspaceDigest: string;
+}
+
+/** `nova_authoring_conflict_read` output. */
+export interface McpAuthoringConflictReadOutputV1 {
+  readonly version: AuthoringContractVersion;
+  readonly conflicts: readonly AuthoringConflictV1[];
+  readonly workspaceDigest: string | null;
+}
+
 
 /** `nova_authoring_document_get` input. */
 export interface McpAuthoringDocumentGetInputV1 {
@@ -374,8 +481,10 @@ export interface McpAuthoringApplyInputV1 {
   readonly documentId: string;
   readonly expectedWorkspaceDigest: string;
   readonly expectedAcceptedSourceHash: string | null;
+  readonly expectedStateVectorHash?: string;
   /** Full replacement text for the working document; never a patch or partial edit. */
-  readonly replacementText: string;
+  readonly replacementText?: string;
+  readonly edits?: readonly McpAuthoringDocumentEditSpanV1[];
 }
 /** `nova_authoring_apply` output. */
 export type McpAuthoringApplyOutputV1 =

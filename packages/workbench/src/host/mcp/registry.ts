@@ -24,6 +24,13 @@ import {
   validateNovel,
 } from '@novalistically/core';
 import {
+  AUTHORING_DOCUMENT_LIMITS_V1,
+  type McpJsonSchemaProperty,
+  type McpJsonSchemaV1,
+  MCP_TOOL_CATALOG_V1,
+  type McpToolDescriptorV1,
+} from '@novalistically/workbench-protocol';
+import {
   type EditorialRenderRequestV1,
   type EditorialRuntime,
   getSourceDocument,
@@ -35,14 +42,7 @@ import {
   type SourceChangeV1,
 } from '@novalistically/core/editorial';
 import {
-  MCP_AUTHOR_SCOPE,
-  MCP_SUBMIT_SCOPE,
-  MCP_TOOL_AUTHORING_APPLY,
-  MCP_TOOL_AUTHORING_DOCUMENT_GET,
-  MCP_TOOL_AUTHORING_STATUS,
-  MCP_TOOL_AUTHORING_SUBMIT,
-  MCP_TOOL_CONFLICT_RESOLVE,
-  MCP_TOOL_OPERATION_GET,
+  AUTHORING_CONTRACT_VERSION,
   type AuthoringStateV1,
   type AuthoringFailureV1,
   type McpAuthoringApplyInputV1,
@@ -57,11 +57,18 @@ import {
   type McpConflictResolveOutputV1,
   type McpOperationGetInputV1,
   type McpOperationGetOutputV1,
+  type McpAuthoringDocumentListInputV1,
+  type McpAuthoringDocumentListOutputV1,
+  type McpAuthoringDocumentReadInputV1,
+  type McpAuthoringDocumentReadOutputV1,
+  type McpAuthoringDocumentEditInputV1,
+  type McpAuthoringDocumentCreateInputV1,
+  type McpAuthoringDocumentMoveInputV1,
+  type McpAuthoringDocumentDeleteInputV1,
+  type McpAuthoringDocumentMutationOutputV1,
+  type McpAuthoringConflictReadOutputV1,
 } from '../../contracts/authoring.js';
 import {
-  MCP_ADMIN_SCOPE,
-  MCP_TOOL_ADMIN_CONFIG_APPLY,
-  MCP_TOOL_ADMIN_CONFIG_PREVIEW,
   type ConfigChangeRequestV1,
   type ConfigOperationReceiptV1,
   type WorkbenchConfigurationV1,
@@ -69,63 +76,42 @@ import {
 import type { ProjectSession, SessionOperationResult } from '../project-session.js';
 import type { McpAuthorizedCaller } from './auth.js';
 
-/** Exact capability scopes for MCP tools. */
-export const MCP_READ_SCOPE = 'mcp:read' as const;
-export const MCP_RENDER_SCOPE = 'mcp:render' as const;
-// `mcp:author`, `mcp:submit`, and `mcp:admin` are imported from the
-// contracts above and re-exported through this module so every MCP surface
-// consumes one canonical scope vocabulary.
-export { MCP_AUTHOR_SCOPE, MCP_SUBMIT_SCOPE } from '../../contracts/authoring.js';
-export { MCP_ADMIN_SCOPE } from '../../contracts/configuration.js';
-export {
-  MCP_TOOL_AUTHORING_APPLY,
-  MCP_TOOL_AUTHORING_DOCUMENT_GET,
-  MCP_TOOL_AUTHORING_STATUS,
-  MCP_TOOL_AUTHORING_SUBMIT,
-  MCP_TOOL_CONFLICT_RESOLVE,
-  MCP_TOOL_OPERATION_GET,
-} from '../../contracts/authoring.js';
-export {
-  MCP_TOOL_ADMIN_CONFIG_APPLY,
-  MCP_TOOL_ADMIN_CONFIG_PREVIEW,
-} from '../../contracts/configuration.js';
-
-// ─── Plain JSON input schemas (no zod) ───────────────────────────────────────
-
-export interface McpJsonSchemaProperty {
-  readonly type?:
-    | 'string'
-    | 'number'
-    | 'boolean'
-    | 'object'
-    | 'array'
-    | 'null'
-    | readonly ('string' | 'number' | 'boolean' | 'object' | 'array' | 'null')[];
-  readonly description?: string;
-  readonly enum?: readonly unknown[];
-  readonly items?: McpJsonSchemaProperty;
-  readonly properties?: Readonly<Record<string, McpJsonSchemaProperty>>;
-  readonly required?: readonly string[];
-  readonly additionalProperties?: boolean;
-  /** Standard JSON-Schema numeric bound; mirrors Core's positive-integer rule. */
-  readonly minimum?: number;
-  /** Standard JSON-Schema numeric bound; mirrors Core's integer rule. */
-  readonly multipleOf?: number;
-  /** Standard JSON-Schema array bound; mirrors Core's `.min(1)`. */
-  readonly minItems?: number;
-  /** Standard JSON-Schema string bound; mirrors Core's non-empty string rule. */
-  readonly minLength?: number;
-  /** Standard JSON-Schema array uniqueness; mirrors Core's uniqueness refinement. */
-  readonly uniqueItems?: boolean;
+function toolDescriptor(name: string): McpToolDescriptorV1 {
+  const descriptor = MCP_TOOL_CATALOG_V1.find((candidate) => candidate.name === name);
+  if (descriptor === undefined) {
+    throw new Error(`MCP tool is missing from the protocol catalog: ${name}`);
+  }
+  return descriptor;
+}
+function toolScope(name: string): string {
+  const [scope] = toolDescriptor(name).scopes;
+  if (scope === undefined) throw new Error(`MCP tool has no scope in the protocol catalog: ${name}`);
+  return scope;
 }
 
-export interface McpJsonInputSchema {
-  readonly type: 'object';
-  readonly description?: string;
-  readonly properties: Readonly<Record<string, McpJsonSchemaProperty>>;
-  readonly required?: readonly string[];
-  readonly additionalProperties?: boolean;
+function toolMetadata(name: string): Pick<
+  McpToolDefinition,
+  'name' | 'description' | 'requiredScopes' | 'inputSchema'
+> {
+  const descriptor = toolDescriptor(name);
+  return {
+    name: descriptor.name,
+    description: descriptor.description,
+    requiredScopes: descriptor.scopes,
+    inputSchema: descriptor.inputSchema,
+  };
 }
+
+/** Exact capability scopes for MCP tools, sourced from the protocol catalog. */
+export const MCP_READ_SCOPE = toolScope('nova_status');
+export const MCP_RENDER_SCOPE = toolScope('nova_render');
+export const MCP_AUTHOR_SCOPE = toolScope('nova_authoring_status');
+export const MCP_SUBMIT_SCOPE = toolScope('nova_authoring_submit');
+export const MCP_ADMIN_SCOPE = toolScope('nova_admin_config_apply');
+
+// Protocol-owned strict JSON Schema; the registry only executes handlers.
+export type McpJsonInputSchema = McpJsonSchemaV1;
+export type { McpJsonSchemaProperty };
 
 // ─── Tool result contract ────────────────────────────────────────────────────
 
@@ -182,12 +168,6 @@ export interface McpToolRegistry {
   run(name: string, caller: McpAuthorizedCaller, input: unknown): Promise<McpToolResult>;
 }
 
-/**
- * Narrow per-project authoring surface the `mcp:author`/`mcp:submit` tools
- * consume. The integration wires a Phase-1 coordinator adapter
- * (`host/authoring/types.ts`) that performs typed stale-vector CAS — a stale
- * or conflicting digest is a typed failure, never last-writer-wins.
- */
 export interface McpAuthoringCoordinatorPort {
   readonly projectId: string;
   getState(): AuthoringStateV1;
@@ -198,6 +178,32 @@ export interface McpAuthoringCoordinatorPort {
     input: McpAuthoringApplyInputV1,
     caller: McpAuthorizedCaller,
   ): Promise<McpAuthoringApplyOutputV1>;
+  /** Canonical bounded working-document list/read/edit/lifecycle seams. */
+  listDocuments?: (
+    input: McpAuthoringDocumentListInputV1,
+  ) => Promise<McpAuthoringDocumentListOutputV1 | AuthoringFailureV1>;
+  readDocument?: (
+    input: McpAuthoringDocumentReadInputV1,
+  ) => Promise<McpAuthoringDocumentReadOutputV1 | AuthoringFailureV1>;
+  editDocument?: (
+    input: McpAuthoringDocumentEditInputV1,
+    caller: McpAuthorizedCaller,
+  ) => Promise<McpAuthoringApplyOutputV1>;
+  createDocument?: (
+    input: McpAuthoringDocumentCreateInputV1,
+    caller: McpAuthorizedCaller,
+  ) => Promise<McpAuthoringDocumentMutationOutputV1 | AuthoringFailureV1>;
+  moveDocument?: (
+    input: McpAuthoringDocumentMoveInputV1,
+    caller: McpAuthorizedCaller,
+  ) => Promise<McpAuthoringDocumentMutationOutputV1 | AuthoringFailureV1>;
+  deleteDocument?: (
+    input: McpAuthoringDocumentDeleteInputV1,
+    caller: McpAuthorizedCaller,
+  ) => Promise<McpAuthoringDocumentMutationOutputV1 | AuthoringFailureV1>;
+  readConflict?: (
+    input: McpAuthoringDocumentListInputV1,
+  ) => Promise<McpAuthoringConflictReadOutputV1 | AuthoringFailureV1>;
   submit(
     input: McpAuthoringSubmitInputV1,
     caller: McpAuthorizedCaller,
@@ -208,7 +214,6 @@ export interface McpAuthoringCoordinatorPort {
     caller: McpAuthorizedCaller,
   ): Promise<McpConflictResolveOutputV1>;
 }
-
 /** Owner-scoped configuration surface for `nova_admin_config_*` (revision CAS). */
 export interface McpAdminConfigurationPort {
   preview(input: ConfigChangeRequestV1): Promise<ConfigOperationReceiptV1>;
@@ -228,6 +233,12 @@ export interface McpRegistryOptions {
   readonly coordinator?: McpAuthoringCoordinatorPort;
   /** Owner configuration port; when absent the admin tools fail closed. */
   readonly admin?: McpAdminConfigurationPort;
+  /**
+   * Select the descriptor family exposed by this registry. The legacy
+   * `all` default is retained for direct callers; Host routes always choose
+   * an explicit family so project and admin discovery cannot overlap.
+   */
+  readonly family?: 'all' | 'project' | 'admin';
 }
 /** Reject unknown keys so client payloads can never smuggle server-only fields. */
 function rejectUnknownKeys(
@@ -292,6 +303,21 @@ function optionalString(value: Record<string, unknown>, key: string): string | u
     throw new InputShapeError(`${key} must be a string when present.`);
   }
   return candidate;
+}
+
+function boundedString(
+  value: Record<string, unknown>,
+  key: string,
+  maxLength: number,
+): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly result: McpToolResult } {
+  const candidate = value[key];
+  if (typeof candidate !== 'string' || candidate.length > maxLength) {
+    return {
+      ok: false,
+      result: invalidInput(`${key} must be a string of at most ${maxLength} characters.`),
+    };
+  }
+  return { ok: true, value: candidate };
 }
 
 /** Internal signal for validation failures discovered mid-parse; normalized by the caller. */
@@ -400,8 +426,10 @@ function mapOperationResult<T>(result: SessionOperationResult<T>): McpToolResult
 
 // ─── Authoring/admin input parsing (strict, fail closed) ────────────────────
 
-/** The one accepted version for every scoped authoring/admin tool input. */
-const SCOPED_CONTRACT_VERSION = 1;
+/** The one accepted version for authoring MCP tool inputs. */
+const AUTHORING_MCP_CONTRACT_VERSION = AUTHORING_CONTRACT_VERSION;
+/** Configuration MCP retains its dedicated version-1 DTO contract. */
+const CONFIG_CONTRACT_VERSION = 1;
 
 const NO_AUTHORING_COORDINATOR = mcpToolError(
   'PROJECT_NOT_READY',
@@ -413,10 +441,9 @@ const NO_ADMIN_CONFIGURATION = mcpToolError(
 );
 
 /**
- * Strict tool-input gate shared by the scoped authoring/admin tools: the
- * input must be an object with no unknown keys and `version` exactly 1.
- * Nothing else (no actor, path, token, Git head, or raw Yjs payload) is
- * accepted anywhere in a request.
+ * Strict authoring MCP input gate: the input must be an object with no
+ * unknown keys and `version` exactly 2. Nothing else (no actor, path, token,
+ * Git head, or raw Yjs payload) is accepted anywhere in a request.
  */
 function parseToolInput(
   input: unknown,
@@ -426,27 +453,12 @@ function parseToolInput(
   if (!parsed.ok) return parsed;
   const unknown = rejectUnknownKeys(parsed.value, allowed);
   if (unknown) return { ok: false, result: unknown };
-  if (parsed.value.version !== SCOPED_CONTRACT_VERSION) {
-    return { ok: false, result: invalidInput(`version must be ${SCOPED_CONTRACT_VERSION}.`) };
+  if (parsed.value.version !== AUTHORING_MCP_CONTRACT_VERSION) {
+    return { ok: false, result: invalidInput(`version must be ${AUTHORING_MCP_CONTRACT_VERSION}.`) };
   }
   return parsed;
 }
 
-/** The request project must be the open session project; never caller-chosen. */
-function requireOpenProject(
-  value: Record<string, unknown>,
-  openProjectId: string,
-): McpToolResult | null {
-  const projectId = requiredString(value, 'projectId');
-  if (!projectId.ok) return projectId.result;
-  if (projectId.value !== openProjectId) {
-    return mcpToolError(
-      'PROJECT_NOT_FOUND',
-      `No open authoring project with id "${projectId.value}".`,
-    );
-  }
-  return null;
-}
 
 /** Strict `string | null` field; null only when explicitly allowed. */
 function nullableStringField(
@@ -504,7 +516,7 @@ function parseConfigChangeRequest(
 ): { readonly ok: true; readonly value: ConfigChangeRequestV1 } | { readonly ok: false; readonly result: McpToolResult } {
   const unknown = rejectUnknownKeys(value, ['version', 'expectedRevision', 'configuration']);
   if (unknown) return { ok: false, result: unknown };
-  if (value.version !== SCOPED_CONTRACT_VERSION) {
+  if (value.version !== CONFIG_CONTRACT_VERSION) {
     return { ok: false, result: invalidInput('configuration request version must be 1.') };
   }
   const expectedRevision = value.expectedRevision;
@@ -518,7 +530,7 @@ function parseConfigChangeRequest(
   if (!configuration.ok) return configuration;
   return {
     ok: true,
-    value: { version: 1, expectedRevision, configuration: configuration.value },
+    value: { version: CONFIG_CONTRACT_VERSION, expectedRevision, configuration: configuration.value },
   };
 }
 
@@ -533,7 +545,7 @@ function parseConfiguration(
     'network',
   ]);
   if (unknown) return { ok: false, result: unknown };
-  if (value.version !== SCOPED_CONTRACT_VERSION) {
+  if (value.version !== CONFIG_CONTRACT_VERSION) {
     return { ok: false, result: invalidInput('configuration version must be 1.') };
   }
   if (!Array.isArray(value.projects)) {
@@ -605,7 +617,7 @@ function parseConfiguration(
   return {
     ok: true,
     value: {
-      version: 1,
+      version: CONFIG_CONTRACT_VERSION,
       projects,
       defaultProjectId,
       provider: parsedProvider,
@@ -620,243 +632,6 @@ function parseConfiguration(
   };
 }
 
-const NO_INPUT_SCHEMA: McpJsonInputSchema = {
-  type: 'object',
-  properties: {},
-  additionalProperties: false,
-};
-
-// ─── Tool definitions ────────────────────────────────────────────────────────
-
-const SCENE_SELECTOR_SCHEMA: McpJsonSchemaProperty = {
-  type: 'object',
-  description: 'Which scenes to render: all, one chapter, or explicit event ids.',
-  properties: {
-    type: { type: 'string', enum: ['all', 'chapter', 'events'], description: 'Selection mode.' },
-    chapter: {
-      type: 'number',
-      description: 'Chapter number (positive integer); required when type is "chapter".',
-      minimum: 1,
-      multipleOf: 1,
-    },
-    eventIds: {
-      type: 'array',
-      items: { type: 'string', minLength: 1, description: 'Non-empty event id.' },
-      minItems: 1,
-      uniqueItems: true,
-      description: 'Unique non-empty event ids; required when type is "events".',
-    },
-  },
-  required: ['type'],
-  additionalProperties: false,
-};
-
-const SOURCE_CHANGE_SCHEMA: McpJsonSchemaProperty = {
-  type: 'object',
-  description: 'One proposed source change; the analysis is preview-only.',
-  properties: {
-    logicalPath: { type: 'string', description: 'Logical POSIX path of the document.' },
-    beforeContent: {
-      type: ['string', 'null'],
-      description: 'Current content; null for a new document.',
-    },
-    beforeHash: {
-      type: ['string', 'null'],
-      description: 'Current content hash; null for a new document.',
-    },
-    afterContent: {
-      type: ['string', 'null'],
-      description: 'Proposed content; null for a deletion.',
-    },
-    afterHash: {
-      type: ['string', 'null'],
-      description: 'Proposed content hash; null for a deletion.',
-    },
-  },
-  required: ['logicalPath'],
-  additionalProperties: false,
-};
-
-const CONTRACT_VERSION_PROPERTY: McpJsonSchemaProperty = {
-  type: 'number',
-  enum: [1],
-  description: 'Authoring contract version; must be 1.',
-};
-
-const PROJECT_ID_PROPERTY: McpJsonSchemaProperty = {
-  type: 'string',
-  minLength: 1,
-  description: 'Open project id (server-derived; must match the registry project).',
-};
-
-const AUTHORING_STATUS_SCHEMA: McpJsonInputSchema = {
-  type: 'object',
-  description: 'Current authoring state of the open project.',
-  properties: {
-    version: CONTRACT_VERSION_PROPERTY,
-    projectId: PROJECT_ID_PROPERTY,
-  },
-  required: ['version', 'projectId'],
-  additionalProperties: false,
-};
-
-const AUTHORING_DOCUMENT_GET_SCHEMA: McpJsonInputSchema = {
-  type: 'object',
-  description: 'One working document identity and hashes (never document bytes).',
-  properties: {
-    version: CONTRACT_VERSION_PROPERTY,
-    projectId: PROJECT_ID_PROPERTY,
-    documentId: { type: 'string', minLength: 1, description: 'Working document id.' },
-  },
-  required: ['version', 'projectId', 'documentId'],
-  additionalProperties: false,
-};
-
-const AUTHORING_APPLY_SCHEMA: McpJsonInputSchema = {
-  type: 'object',
-  description:
-    'Full-replacement write to one working document, CAS-bound to the workspace digest; a stale digest is a typed failure.',
-  properties: {
-    version: CONTRACT_VERSION_PROPERTY,
-    projectId: PROJECT_ID_PROPERTY,
-    documentId: { type: 'string', minLength: 1, description: 'Working document id.' },
-    expectedWorkspaceDigest: {
-      type: 'string',
-      minLength: 1,
-      description: 'Workspace digest the write must build on.',
-    },
-    expectedAcceptedSourceHash: {
-      type: ['string', 'null'],
-      description: 'Accepted source hash the write must build on; null before first accepted load.',
-    },
-    replacementText: { type: 'string', description: 'Full replacement text for the document.' },
-  },
-  required: [
-    'version',
-    'projectId',
-    'documentId',
-    'expectedWorkspaceDigest',
-    'expectedAcceptedSourceHash',
-    'replacementText',
-  ],
-  additionalProperties: false,
-};
-
-const AUTHORING_SUBMIT_SCHEMA: McpJsonInputSchema = {
-  type: 'object',
-  description: 'Explicit submit of the working layer; the workspace digest CAS is required.',
-  properties: {
-    version: CONTRACT_VERSION_PROPERTY,
-    projectId: PROJECT_ID_PROPERTY,
-    expectedWorkspaceDigest: {
-      type: 'string',
-      minLength: 1,
-      description: 'Workspace digest the submit must confirm against.',
-    },
-    message: { type: 'string', description: 'Optional submit message.' },
-  },
-  required: ['version', 'projectId', 'expectedWorkspaceDigest'],
-  additionalProperties: false,
-};
-
-const OPERATION_GET_SCHEMA: McpJsonInputSchema = {
-  type: 'object',
-  description: 'One authoring operation receipt by id.',
-  properties: {
-    version: CONTRACT_VERSION_PROPERTY,
-    operationId: { type: 'string', minLength: 1, description: 'Authoring operation id.' },
-  },
-  required: ['version', 'operationId'],
-  additionalProperties: false,
-};
-
-const CONFLICT_RESOLVE_SCHEMA: McpJsonInputSchema = {
-  type: 'object',
-  description: 'Resolve an external candidate / working-vs-external conflict with a predefined choice.',
-  properties: {
-    version: CONTRACT_VERSION_PROPERTY,
-    projectId: PROJECT_ID_PROPERTY,
-    choice: {
-      type: 'string',
-      enum: ['keep-working', 'accept-external', 'apply-proposed-disjoint-merge'],
-      description: 'Predefined resolution choice.',
-    },
-    candidateHash: {
-      type: ['string', 'null'],
-      description: 'External candidate hash; required for accept-external / disjoint-merge.',
-    },
-  },
-  required: ['version', 'projectId', 'choice', 'candidateHash'],
-  additionalProperties: false,
-};
-
-const CONFIGURATION_SCHEMA: McpJsonSchemaProperty = {
-  type: 'object',
-  description: 'Versioned, secret-free Host configuration.',
-  properties: {
-    version: CONTRACT_VERSION_PROPERTY,
-    projects: {
-      type: 'array',
-      description: 'Registered projects.',
-      items: {
-        type: 'object',
-        properties: {
-          projectId: { type: 'string', minLength: 1, description: 'Project id.' },
-          displayName: { type: 'string', minLength: 1, description: 'Display label.' },
-          root: {
-            type: 'string',
-            minLength: 1,
-            description: 'Absolute project root; Host-only input, never echoed.',
-          },
-        },
-        required: ['projectId', 'displayName', 'root'],
-        additionalProperties: false,
-      },
-    },
-    defaultProjectId: { type: ['string', 'null'], description: 'Default project id or null.' },
-    provider: {
-      type: ['object', 'null'],
-      description: 'AI provider endpoint/model; never an API key.',
-      properties: {
-        kind: { type: 'string', enum: ['ai-sdk'], description: 'Provider kind.' },
-        baseUrl: { type: ['string', 'null'], description: 'Provider base URL or null.' },
-        model: { type: ['string', 'null'], description: 'Model profile or null.' },
-      },
-      required: ['kind', 'baseUrl', 'model'],
-      additionalProperties: false,
-    },
-    network: {
-      type: 'object',
-      description: 'HTTP listener policy.',
-      properties: {
-        mode: { type: 'string', enum: ['loopback', 'lan', 'unix'], description: 'Listener mode.' },
-        port: { type: 'number', minimum: 1, multipleOf: 1, description: 'Listener port.' },
-        allowedHosts: { type: 'array', items: { type: 'string' }, description: 'Allowed Host headers.' },
-        allowedOrigins: { type: 'array', items: { type: 'string' }, description: 'Allowed origins.' },
-        unixSocket: { type: ['string', 'null'], description: 'Unix socket path; Host-only.' },
-      },
-      required: ['mode', 'port', 'allowedHosts', 'allowedOrigins', 'unixSocket'],
-      additionalProperties: false,
-    },
-  },
-  required: ['version', 'projects', 'defaultProjectId', 'provider', 'network'],
-  additionalProperties: false,
-};
-
-const ADMIN_CONFIG_REQUEST_SCHEMA: McpJsonInputSchema = {
-  type: 'object',
-  description: 'Versioned configuration change with revision CAS; no secrets, no tokens.',
-  properties: {
-    version: CONTRACT_VERSION_PROPERTY,
-    expectedRevision: {
-      type: ['string', 'null'],
-      description: 'Current content-hash revision; null only for first setup/import.',
-    },
-    configuration: CONFIGURATION_SCHEMA,
-  },
-  required: ['version', 'expectedRevision', 'configuration'],
-  additionalProperties: false,
-};
 
 /**
  * Build the canonical Workbench MCP tool registry over one ProjectSession.
@@ -871,11 +646,7 @@ export function createProjectSessionMcpRegistry(
     options.render ?? ((request, runtime) => renderNovel(request, runtime));
   const definitions: readonly McpToolDefinition[] = [
     {
-      name: 'nova_status',
-      description:
-        'Project status over the accepted session source: per-event render state and the session projection.',
-      requiredScopes: [MCP_READ_SCOPE],
-      inputSchema: NO_INPUT_SCHEMA,
+      ...toolMetadata('nova_status'),
       run: async () => {
         const source = session.source;
         return mcpToolOk({
@@ -885,11 +656,7 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: 'nova_validate',
-      description:
-        'Validate the accepted session source: built-in validation results and ISS score.',
-      requiredScopes: [MCP_READ_SCOPE],
-      inputSchema: NO_INPUT_SCHEMA,
+      ...toolMetadata('nova_validate'),
       run: async () => {
         const source = session.source;
         if (source === null) return NO_ACCEPTED_SOURCE;
@@ -897,10 +664,7 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: 'nova_source_list',
-      description: 'List the canonical source documents of the accepted session source.',
-      requiredScopes: [MCP_READ_SCOPE],
-      inputSchema: NO_INPUT_SCHEMA,
+      ...toolMetadata('nova_source_list'),
       run: async () => {
         const source = session.source;
         if (source === null) return NO_ACCEPTED_SOURCE;
@@ -908,23 +672,7 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: 'nova_source_get',
-      description:
-        'Read one canonical source document from the accepted session source by logical path.',
-      requiredScopes: [MCP_READ_SCOPE],
-      inputSchema: {
-        type: 'object',
-        description: 'Resolve one document of the accepted source.',
-        properties: {
-          logicalPath: {
-            type: 'string',
-            description:
-              'Logical POSIX path of the document, e.g. chapters/chapter_01/_chapter.yaml.',
-          },
-        },
-        required: ['logicalPath'],
-        additionalProperties: false,
-      },
+      ...toolMetadata('nova_source_get'),
       run: async (_caller, input) => {
         const source = session.source;
         if (source === null) return NO_ACCEPTED_SOURCE;
@@ -950,23 +698,7 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: 'nova_source_preview',
-      description:
-        'Preview the analysis of proposed source changes against the accepted session source; nothing is persisted.',
-      requiredScopes: [MCP_READ_SCOPE],
-      inputSchema: {
-        type: 'object',
-        description: 'Analyze candidate source changes.',
-        properties: {
-          changes: {
-            type: 'array',
-            description: 'Proposed changes; preview-only analysis.',
-            items: SOURCE_CHANGE_SCHEMA,
-          },
-        },
-        required: ['changes'],
-        additionalProperties: false,
-      },
+      ...toolMetadata('nova_source_preview'),
       run: async (_caller, input) => {
         const source = session.source;
         if (source === null) return NO_ACCEPTED_SOURCE;
@@ -989,21 +721,7 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: 'nova_entity_get',
-      description: 'Read one entity definition and runtime state from the accepted session source.',
-      requiredScopes: [MCP_READ_SCOPE],
-      inputSchema: {
-        type: 'object',
-        description: 'Resolve one entity by id.',
-        properties: {
-          entityId: {
-            type: 'string',
-            description: 'Entity id, e.g. the protagonist character id.',
-          },
-        },
-        required: ['entityId'],
-        additionalProperties: false,
-      },
+      ...toolMetadata('nova_entity_get'),
       run: async (_caller, input) => {
         const source = session.source;
         if (source === null) return NO_ACCEPTED_SOURCE;
@@ -1017,17 +735,7 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: 'nova_entity_list',
-      description: 'List entities from the accepted session source, optionally filtered by kind.',
-      requiredScopes: [MCP_READ_SCOPE],
-      inputSchema: {
-        type: 'object',
-        description: 'List entities of the accepted source.',
-        properties: {
-          kind: { type: 'string', description: 'Optional entity kind filter.' },
-        },
-        additionalProperties: false,
-      },
+      ...toolMetadata('nova_entity_list'),
       run: async (_caller, input) => {
         const source = session.source;
         if (source === null) return NO_ACCEPTED_SOURCE;
@@ -1045,23 +753,7 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: 'nova_render',
-      description:
-        'Render scenes through the session operation queue. The operation actor and id are server-derived; client-supplied actorId/operationId are rejected.',
-      requiredScopes: [MCP_RENDER_SCOPE],
-      inputSchema: {
-        type: 'object',
-        description: 'Render request; identity fields are never accepted from the client.',
-        properties: {
-          sceneSelector: {
-            ...SCENE_SELECTOR_SCHEMA,
-            description: 'Which scenes to render.',
-          },
-          model: { type: 'string', description: 'Optional model profile override.' },
-        },
-        required: ['sceneSelector'],
-        additionalProperties: false,
-      },
+      ...toolMetadata('nova_render'),
       run: async (caller, input) => {
         const parsed = parseObject(input, 'Input must be an object.');
         if (!parsed.ok) return parsed.result;
@@ -1104,21 +796,26 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: MCP_TOOL_AUTHORING_STATUS,
-      description:
-        'Current authoring state of the open project: phase, accepted/working hashes, conflicts, submit gating.',
-      requiredScopes: [MCP_AUTHOR_SCOPE],
-      inputSchema: AUTHORING_STATUS_SCHEMA,
+      ...toolMetadata('nova_authoring_document_list'),
       run: async (_caller, input) => {
-        const parsed = parseToolInput(input, ['version', 'projectId']);
+        const parsed = parseToolInput(input, ['version']);
         if (!parsed.ok) return parsed.result;
-        const project = requireOpenProject(parsed.value, session.projectId);
-        if (project !== null) return project;
+        const coordinator = options.coordinator;
+        if (coordinator?.listDocuments === undefined) return NO_AUTHORING_COORDINATOR;
+        const result = await coordinator.listDocuments({ version: AUTHORING_CONTRACT_VERSION });
+        return 'code' in result ? mcpToolError(result.code, result.message) : mcpToolOk(result);
+      },
+    },
+    {
+      ...toolMetadata('nova_authoring_status'),
+      run: async (_caller, input) => {
+        const parsed = parseToolInput(input, ['version']);
+        if (!parsed.ok) return parsed.result;
         const coordinator = options.coordinator;
         if (coordinator === undefined) return NO_AUTHORING_COORDINATOR;
         const state = coordinator.getState();
         const output: McpAuthoringStatusOutputV1 = {
-          version: 1,
+          version: AUTHORING_CONTRACT_VERSION,
           projectId: session.projectId,
           state,
           generatedAt: state.generatedAt,
@@ -1127,85 +824,129 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: MCP_TOOL_AUTHORING_DOCUMENT_GET,
-      description:
-        'One working document identity and hashes from the coordinator; never document bytes.',
-      requiredScopes: [MCP_AUTHOR_SCOPE],
-      inputSchema: AUTHORING_DOCUMENT_GET_SCHEMA,
+      ...toolMetadata('nova_authoring_document_read'),
       run: async (_caller, input) => {
-        const parsed = parseToolInput(input, ['version', 'projectId', 'documentId']);
+        const parsed = parseToolInput(input, ['version', 'documentId', 'offset', 'limit']);
         if (!parsed.ok) return parsed.result;
-        const project = requireOpenProject(parsed.value, session.projectId);
-        if (project !== null) return project;
         const coordinator = options.coordinator;
-        if (coordinator === undefined) return NO_AUTHORING_COORDINATOR;
+        if (coordinator?.readDocument === undefined) return NO_AUTHORING_COORDINATOR;
         const documentId = requiredString(parsed.value, 'documentId');
         if (!documentId.ok) return documentId.result;
-        const request: McpAuthoringDocumentGetInputV1 = {
-          version: 1,
-          projectId: session.projectId,
+        const offset = parsed.value.offset;
+        const limit = parsed.value.limit;
+        if (offset !== undefined && (!Number.isInteger(offset) || (offset as number) < 0)) return invalidInput('offset must be a non-negative integer.');
+        if (limit !== undefined && (!Number.isInteger(limit) || (limit as number) < 1 || (limit as number) > AUTHORING_DOCUMENT_LIMITS_V1.maxReadCharacters)) return invalidInput('limit is outside the bounded read range.');
+        const result = await coordinator.readDocument({
+          version: AUTHORING_CONTRACT_VERSION,
           documentId: documentId.value,
-        };
-        const result = await coordinator.getDocument(request);
-        if ('code' in result) return mcpToolError(result.code, result.message);
-        return mcpToolOk(result);
+          ...(offset === undefined ? {} : { offset: offset as number }),
+          ...(limit === undefined ? {} : { limit: limit as number }),
+        });
+        return 'code' in result ? mcpToolError(result.code, result.message) : mcpToolOk(result);
       },
     },
     {
-      name: MCP_TOOL_AUTHORING_APPLY,
-      description:
-        'Full-replacement write to one working document, CAS-bound to the workspace digest and accepted source hash; a stale/conflicting digest is a typed failure, never last-writer-wins.',
-      requiredScopes: [MCP_AUTHOR_SCOPE],
-      inputSchema: AUTHORING_APPLY_SCHEMA,
+      ...toolMetadata('nova_authoring_document_edit'),
       run: async (caller, input) => {
-        const parsed = parseToolInput(input, [
-          'version',
-          'projectId',
-          'documentId',
-          'expectedWorkspaceDigest',
-          'expectedAcceptedSourceHash',
-          'replacementText',
-        ]);
+        const parsed = parseToolInput(input, ['version', 'documentId', 'expectedWorkspaceDigest', 'expectedAcceptedSourceHash', 'expectedStateVectorHash', 'replacementText', 'edits']);
         if (!parsed.ok) return parsed.result;
-        const project = requireOpenProject(parsed.value, session.projectId);
-        if (project !== null) return project;
         const coordinator = options.coordinator;
-        if (coordinator === undefined) return NO_AUTHORING_COORDINATOR;
+        if (coordinator?.editDocument === undefined) return NO_AUTHORING_COORDINATOR;
         const documentId = requiredString(parsed.value, 'documentId');
-        if (!documentId.ok) return documentId.result;
         const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
-        if (!digest.ok) return digest.result;
+        const vector = requiredString(parsed.value, 'expectedStateVectorHash');
+        if (!documentId.ok) return documentId.result; if (!digest.ok) return digest.result; if (!vector.ok) return vector.result;
         const expectedAccepted = nullableStringField(parsed.value, 'expectedAcceptedSourceHash');
         if (!expectedAccepted.ok) return expectedAccepted.result;
-        const replacement = requiredString(parsed.value, 'replacementText');
-        if (!replacement.ok) return replacement.result;
-        const request: McpAuthoringApplyInputV1 = {
-          version: 1,
-          projectId: session.projectId,
+        const replacement = parsed.value.replacementText;
+        const editsValue = parsed.value.edits;
+        if ((replacement === undefined) === (editsValue === undefined)) return invalidInput('Provide exactly one of replacementText or edits.');
+        if (replacement !== undefined && (typeof replacement !== 'string' || new TextEncoder().encode(replacement).byteLength > AUTHORING_DOCUMENT_LIMITS_V1.maxEditBytes)) return invalidInput('replacementText exceeds the edit limit.');
+        let edits: Array<{ readonly start: number; readonly end: number; readonly replacementText: string }> | undefined;
+        if (editsValue !== undefined) {
+          if (!Array.isArray(editsValue) || editsValue.length === 0) return invalidInput('edits must be a non-empty array.');
+          let previousEnd = 0; let bytes = 0; edits = [];
+          for (const raw of editsValue) {
+            const item = parseObject(raw, 'each edit must be an object.');
+            if (!item.ok) return item.result;
+            const unknown = rejectUnknownKeys(item.value, ['start', 'end', 'replacementText']);
+            if (unknown) return unknown;
+            const start = item.value.start; const end = item.value.end; const text = item.value.replacementText;
+            if (!Number.isInteger(start) || !Number.isInteger(end) || (start as number) < previousEnd || (end as number) < (start as number) || typeof text !== 'string') return invalidInput('edits must be sorted, non-overlapping spans.');
+            bytes += new TextEncoder().encode(text).byteLength;
+            if (bytes > AUTHORING_DOCUMENT_LIMITS_V1.maxEditBytes) return invalidInput('edits exceed the edit limit.');
+            previousEnd = end as number;
+            edits.push({ start: start as number, end: end as number, replacementText: text });
+          }
+        }
+        const result = await coordinator.editDocument({
+          version: AUTHORING_CONTRACT_VERSION,
           documentId: documentId.value,
           expectedWorkspaceDigest: digest.value,
           expectedAcceptedSourceHash: expectedAccepted.value,
-          replacementText: replacement.value,
-        };
-        return authoringApplyResult(await coordinator.apply(request, caller));
+          expectedStateVectorHash: vector.value,
+          ...(replacement === undefined ? {} : { replacementText: replacement as string }),
+          ...(edits === undefined ? {} : { edits }),
+        }, caller);
+        return authoringApplyResult(result);
       },
     },
     {
-      name: MCP_TOOL_AUTHORING_SUBMIT,
-      description:
-        'Explicit submit of the working layer through the coordinator; the workspace digest CAS is required.',
-      requiredScopes: [MCP_SUBMIT_SCOPE],
-      inputSchema: AUTHORING_SUBMIT_SCHEMA,
+      ...toolMetadata('nova_authoring_document_create'),
+      run: async (caller, input) => {
+        const parsed = parseToolInput(input, ['version', 'logicalPath', 'kind', 'expectedWorkspaceDigest', 'expectedAcceptedSourceHash']);
+        if (!parsed.ok) return parsed.result;
+        const coordinator = options.coordinator;
+        if (coordinator?.createDocument === undefined) return NO_AUTHORING_COORDINATOR;
+        const path = requiredString(parsed.value, 'logicalPath'); const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
+        if (!path.ok) return path.result; if (!digest.ok) return digest.result;
+        const accepted = nullableStringField(parsed.value, 'expectedAcceptedSourceHash');
+        if (!accepted.ok) return accepted.result;
+        const kind = parsed.value.kind;
+        if (kind !== undefined && kind !== 'prose' && kind !== 'raw-yaml') return invalidInput('kind must be prose or raw-yaml.');
+        const result = await coordinator.createDocument({ version: AUTHORING_CONTRACT_VERSION, logicalPath: path.value, expectedWorkspaceDigest: digest.value, expectedAcceptedSourceHash: accepted.value, ...(kind === undefined ? {} : { kind }) }, caller);
+        return 'code' in result ? mcpToolError(result.code, result.message) : mcpToolOk(result);
+      },
+    },
+    {
+      ...toolMetadata('nova_authoring_document_move'),
+      run: async (caller, input) => {
+        const parsed = parseToolInput(input, ['version', 'documentId', 'logicalPath', 'expectedWorkspaceDigest', 'expectedAcceptedSourceHash']);
+        if (!parsed.ok) return parsed.result;
+        const coordinator = options.coordinator;
+        if (coordinator?.moveDocument === undefined) return NO_AUTHORING_COORDINATOR;
+        const id = requiredString(parsed.value, 'documentId'); const path = requiredString(parsed.value, 'logicalPath'); const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
+        if (!id.ok) return id.result; if (!path.ok) return path.result; if (!digest.ok) return digest.result;
+        const accepted = nullableStringField(parsed.value, 'expectedAcceptedSourceHash');
+        if (!accepted.ok) return accepted.result;
+        const result = await coordinator.moveDocument({ version: AUTHORING_CONTRACT_VERSION, documentId: id.value, logicalPath: path.value, expectedWorkspaceDigest: digest.value, expectedAcceptedSourceHash: accepted.value }, caller);
+        return 'code' in result ? mcpToolError(result.code, result.message) : mcpToolOk(result);
+      },
+    },
+    {
+      ...toolMetadata('nova_authoring_document_delete'),
+      run: async (caller, input) => {
+        const parsed = parseToolInput(input, ['version', 'documentId', 'expectedWorkspaceDigest', 'expectedAcceptedSourceHash']);
+        if (!parsed.ok) return parsed.result;
+        const coordinator = options.coordinator;
+        if (coordinator?.deleteDocument === undefined) return NO_AUTHORING_COORDINATOR;
+        const id = requiredString(parsed.value, 'documentId'); const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
+        if (!id.ok) return id.result; if (!digest.ok) return digest.result;
+        const accepted = nullableStringField(parsed.value, 'expectedAcceptedSourceHash');
+        if (!accepted.ok) return accepted.result;
+        const result = await coordinator.deleteDocument({ version: AUTHORING_CONTRACT_VERSION, documentId: id.value, expectedWorkspaceDigest: digest.value, expectedAcceptedSourceHash: accepted.value }, caller);
+        return 'code' in result ? mcpToolError(result.code, result.message) : mcpToolOk(result);
+      },
+    },
+    {
+      ...toolMetadata('nova_authoring_submit'),
       run: async (caller, input) => {
         const parsed = parseToolInput(input, [
           'version',
-          'projectId',
           'expectedWorkspaceDigest',
           'message',
         ]);
         if (!parsed.ok) return parsed.result;
-        const project = requireOpenProject(parsed.value, session.projectId);
-        if (project !== null) return project;
         const coordinator = options.coordinator;
         if (coordinator === undefined) return NO_AUTHORING_COORDINATOR;
         const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
@@ -1216,8 +957,14 @@ export function createProjectSessionMcpRegistry(
         } catch (error) {
           return mcpToolError('INVALID_INPUT', (error as Error).message);
         }
+        if (
+          message !== undefined &&
+          message.length > 4096
+        ) {
+          return invalidInput('message must be at most 4096 characters.');
+        }
         const request: McpAuthoringSubmitInputV1 = {
-          version: 1,
+          version: AUTHORING_CONTRACT_VERSION,
           projectId: session.projectId,
           expectedWorkspaceDigest: digest.value,
           ...(message !== undefined ? { message } : {}),
@@ -1226,40 +973,44 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: MCP_TOOL_OPERATION_GET,
-      description: 'One authoring operation receipt by id; never executes anything.',
-      requiredScopes: [MCP_SUBMIT_SCOPE],
-      inputSchema: OPERATION_GET_SCHEMA,
+      ...toolMetadata('nova_operation_get'),
       run: async (_caller, input) => {
-        const parsed = parseToolInput(input, ['version', 'operationId']);
+        const parsed = parseToolInput(input, ['version', 'operationHandle']);
         if (!parsed.ok) return parsed.result;
         const coordinator = options.coordinator;
         if (coordinator === undefined) return NO_AUTHORING_COORDINATOR;
-        const operationId = requiredString(parsed.value, 'operationId');
-        if (!operationId.ok) return operationId.result;
+        const operationHandle = requiredString(parsed.value, 'operationHandle');
+        if (!operationHandle.ok) return operationHandle.result;
         const request: McpOperationGetInputV1 = {
-          version: 1,
-          operationId: operationId.value,
+          version: AUTHORING_CONTRACT_VERSION,
+          operationId: operationHandle.value,
         };
         return mcpToolOk(await coordinator.getOperation(request));
       },
     },
     {
-      name: MCP_TOOL_CONFLICT_RESOLVE,
-      description:
-        'Resolve an external candidate or working-vs-external conflict with a predefined choice.',
-      requiredScopes: [MCP_SUBMIT_SCOPE],
-      inputSchema: CONFLICT_RESOLVE_SCHEMA,
+      ...toolMetadata('nova_authoring_conflict_read'),
+      run: async (_caller, input) => {
+        const parsed = parseToolInput(input, ['version']);
+        if (!parsed.ok) return parsed.result;
+        const coordinator = options.coordinator;
+        if (coordinator === undefined || coordinator.readConflict === undefined) {
+          return NO_AUTHORING_COORDINATOR;
+        }
+        return mcpToolOk(
+          await coordinator.readConflict({ version: AUTHORING_CONTRACT_VERSION }),
+        );
+      },
+    },
+    {
+      ...toolMetadata('nova_conflict_resolve'),
       run: async (caller, input) => {
         const parsed = parseToolInput(input, [
           'version',
-          'projectId',
           'choice',
           'candidateHash',
         ]);
         if (!parsed.ok) return parsed.result;
-        const project = requireOpenProject(parsed.value, session.projectId);
-        if (project !== null) return project;
         const coordinator = options.coordinator;
         if (coordinator === undefined) return NO_AUTHORING_COORDINATOR;
         const choice = parsed.value.choice;
@@ -1273,7 +1024,7 @@ export function createProjectSessionMcpRegistry(
         const candidateHash = nullableStringField(parsed.value, 'candidateHash');
         if (!candidateHash.ok) return candidateHash.result;
         const request: McpConflictResolveInputV1 = {
-          version: 1,
+          version: AUTHORING_CONTRACT_VERSION,
           projectId: session.projectId,
           choice,
           candidateHash: candidateHash.value,
@@ -1282,11 +1033,7 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: MCP_TOOL_ADMIN_CONFIG_PREVIEW,
-      description:
-        'Owner-only: preview a versioned configuration change (revision CAS). No secrets, no tokens, no paths in the result.',
-      requiredScopes: [MCP_ADMIN_SCOPE],
-      inputSchema: ADMIN_CONFIG_REQUEST_SCHEMA,
+      ...toolMetadata('nova_admin_config_preview'),
       run: async (_caller, input) => {
         const parsed = parseObject(input, 'Input must be an object.');
         if (!parsed.ok) return parsed.result;
@@ -1298,11 +1045,7 @@ export function createProjectSessionMcpRegistry(
       },
     },
     {
-      name: MCP_TOOL_ADMIN_CONFIG_APPLY,
-      description:
-        'Owner-only: apply a versioned configuration change under a revision CAS; stale revisions are typed failures.',
-      requiredScopes: [MCP_ADMIN_SCOPE],
-      inputSchema: ADMIN_CONFIG_REQUEST_SCHEMA,
+      ...toolMetadata('nova_admin_config_apply'),
       run: async (_caller, input) => {
         const parsed = parseObject(input, 'Input must be an object.');
         if (!parsed.ok) return parsed.result;
@@ -1315,14 +1058,20 @@ export function createProjectSessionMcpRegistry(
     },
   ];
 
-  const byName = new Map(definitions.map((definition) => [definition.name, definition]));
+  const selectedDefinitions =
+    options.family === 'admin'
+      ? definitions.filter((definition) => definition.name.startsWith('nova_admin_'))
+      : options.family === 'project'
+        ? definitions.filter((definition) => !definition.name.startsWith('nova_admin_'))
+        : definitions;
+  const byName = new Map(selectedDefinitions.map((definition) => [definition.name, definition]));
 
   return {
     projectId: session.projectId,
     session,
-    availableScopes: [...new Set(definitions.flatMap((definition) => definition.requiredScopes))],
+    availableScopes: [...new Set(selectedDefinitions.flatMap((definition) => definition.requiredScopes))],
     list(permittedScopes) {
-      return definitions.filter((definition) =>
+      return selectedDefinitions.filter((definition) =>
         definition.requiredScopes.every((scope) => permittedScopes.includes(scope)),
       );
     },
@@ -1347,4 +1096,12 @@ export function createProjectSessionMcpRegistry(
       }
     },
   };
+}
+
+/** Build the admin-only descriptor registry; project tools are never listed. */
+export function createAdminMcpRegistry(
+  session: ProjectSession,
+  options: Omit<McpRegistryOptions, 'family'> = {},
+): McpToolRegistry {
+  return createProjectSessionMcpRegistry(session, { ...options, family: 'admin' });
 }

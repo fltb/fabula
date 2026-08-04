@@ -12,10 +12,14 @@ describe('Core public runtime contract', () => {
     const root = await import(rootUrl);
 
     expect(Object.keys(root).sort()).toEqual([
+      'DeterministicReferenceExtractor',
       'LLMError',
       'NovalisticallyError',
+      'ReferenceExtractionError',
+      'buildReferencePacket',
       'compareFact',
       'compileProject',
+      'extractReferenceChunks',
       'getProjectStatus',
       'listEntities',
       'resolveTemporalContext',

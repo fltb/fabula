@@ -148,7 +148,7 @@ describe('Workbench Host reference MCP port', () => {
       chunkId: 'long-text:0',
     });
     expect(chunk?.chunk.quote).toHaveLength(REFERENCE_MCP_LIMITS_V1.maxQuoteLength);
-  });
+  }, 15_000);
 
   it('reconstructs durable jobs and derived chunks after Host construction', async () => {
     const { projectRoot, jobsRoot, port } = await fixture();

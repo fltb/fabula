@@ -20,19 +20,21 @@ Node Host: FileProjectSourceLoader ───────► ProjectSourceSnapsho
 CLI / Bench                              注入的 execution/cache/report 端口
 
 Workbench Host
-  ├─ Local Auth + ProjectSession + browser read surface
+  ├─ Local Auth + project-scoped ProjectSession + browser read surface
   ├─ Yjs：在线工作层；不是已接受 source
-  ├─ SQLite worker：会话、能力、工作层与提交 journal
-  └─ Host-only Git：受控 AuthoringManifest、固定 ref CAS、恢复 journal
+  ├─ SQLite worker：membership、capability、native revision 与 reference metadata
+  ├─ Native revision content store：唯一 acceptance/CAS authority
+  ├─ Reference library：内容寻址对象与 bounded extracted chunks
+  └─ Optional controlled Git mirror：仅导出已经接受的 native revision
         │
         ▼
-Workbench Browser：仅消费版本化、无秘密的 contracts DTO；
+Workbench Browser / typed CLI / MCP：仅消费版本化、无秘密 DTO；
 不推断项目、图、路由或 authoring source。
 ```
 
-Git authoring 是 Workbench Host 的可注入边界，而非 Core 版本历史。Git bootstrap/submit
-测试直接构造 Host Git 服务；Host 启动时是否暴露某个 surface 取决于显式注入的配置，未配置
-时保持 fail-closed。Yjs 更新只有在 Host 验证并提交后才会产生新的已接受 source。
+MCP render requests are session-bound and capability-gated in the serialized operation queue. A caller may select bounded `{ referenceId, chunkId }` pairs only with `mcp:reference:read`; the Host resolves their quotes after the queue has revalidated the capability and passes a non-authoritative packet to Core. The packet identity is the bound project session, never a client path or actor field.
+
+Native immutable revisions are the authoring acceptance model. Git is no longer a bootstrap, submit, receipt, or recovery authority. When configured, `ControlledGitRunner` mirrors an accepted native bundle to `refs/heads/workbench` best-effort; a mirror failure is recorded but cannot roll back acceptance. Yjs updates produce a new accepted source only after Host validation and native revision CAS.
 
 Core 的渲染路径仍为：snapshot → `EntityMapper` → 因果图与事件重放 →
 `ContextCompiler` → Pass 1 prose → Pass 2 analysis → validators → assembly 计算。Pass 2

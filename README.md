@@ -11,10 +11,9 @@ Fabula is a narrative-engineering system: structured author YAML becomes canonic
 | Packages | `@novalistically/core`, `@novalistically/node-host`, `@novalistically/bench`, `@novalistically/cli`, `@novalistically/workbench` |
 | Validation | 28 built-in validators; GreyLine is explicit opt-in |
 | Pass 2 | A 20-field static analysis-content schema, validated separately from Pass 1 prose |
-| Root tests | 2,881 passing tests |
-| Workbench | Host: 367 passing tests; Client: 36 passing tests |
-| Checks | typecheck, build, bundle, and public-API checks pass; lint has zero errors |
-
+| Tests | Run `npm test`; counts are intentionally recorded only in `docs/current-state.md` when a full gate is rerun |
+| Workbench | Project-scoped Host, native immutable revisions, browser authoring, typed CLI and MCP routes |
+| Checks | `typecheck`, `build`, `bundle-check`, and `typecheck:dead-code` have targeted verification; consult current state for full-gate evidence |
 Test counts and implementation detail evolve. Consult [docs/current-state.md](docs/current-state.md) before relying on them for planning or review.
 
 ## System boundary
@@ -32,8 +31,8 @@ flowchart LR
 - **Core** is deterministic and pure: it owns narrative semantics, schemas, graphs, prompts, render coordination, and validator contracts. It performs no filesystem, Git, SQLite, process, or provider I/O.
 - **Node Host** owns snapshot storage, provider execution, operations, cache materialization, and diagnostics.
 - **CLI** owns the `commander` command and Host-bound MCP entry points over Node Host adapters.
-- **Workbench Host** owns collaborative editing, Yjs, SQLite, authentication, scoped agent capabilities, and Git-backed authoring history.
-- Git is Workbench authoring history only. It is not a Core revision model.
+- **Workbench Host** owns collaborative editing, Yjs, SQLite, authentication, scoped agent capabilities, native revision acceptance, and optional best-effort Git mirroring.
+- Git may mirror an accepted native revision but never decides authoring acceptance or recovery.
 
 See [docs/architecture.md](docs/architecture.md) and [docs/reference/wiring.md](docs/reference/wiring.md) for the complete boundary and runtime flow.
 

@@ -1,6 +1,6 @@
 # Workbench Host 运行、配置与作者提交
 
-Workbench 是作者笔记本上的本机 Host。它拥有项目文件、Git、SQLite、Yjs 工作层、提供商凭据和能力令牌；浏览器、MCP 客户端与 Agent 只使用版本化的无秘密 DTO。Core 不读取这些资源，也不把 Git 提交当作 Core revision。
+Workbench 是作者笔记本上的本机 Host。它拥有项目文件、SQLite、Yjs 工作层、提供商凭据和能力令牌；浏览器、MCP 客户端与 Agent 只使用版本化的无秘密 DTO。Native immutable revision 是 authoring acceptance authority；可选 Git 仅镜像已接受 revision，Core 不读取这些资源。
 
 ## 启动边界
 
@@ -18,7 +18,7 @@ WORKBENCH_PORT=8790 WORKBENCH_VITE_PORT=5174 \
   fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench dev
 ```
 
-`WORKBENCH_PROJECT_ROOT` 是兼容旧的单项目启动预填项，不是作者历史或多项目配置来源。未显式指定时，开发脚本会把演示 fixture 复制到临时外部目录后再 bootstrap；退出时清理该副本。显式项目根不能是嵌套在外部仓库中的 fixture：受控 Git bootstrap 会拒绝这种路径。
+`WORKBENCH_PROJECT_ROOT` 是兼容旧的单项目启动预填项，不是作者历史或多项目配置来源。未显式指定时，开发脚本会把演示 fixture 复制到临时外部目录；退出时清理该副本。配置验证要求 `nova.yaml.project` 与 configured `projectId` 完全一致。
 
 生产先构建，再运行已打包的 Host：
 
@@ -50,38 +50,36 @@ fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench start:workbench
 
 | 身份 | 含义 | 用途 |
 | --- | --- | --- |
-| accepted source hash | 已接受逻辑 source bytes 的 SHA-256 | 提交 CAS 和 Core 语义边界 |
+| native revision id / accepted source hash | Host immutable revision 与 source 内容身份 | acceptance CAS、restore 与 recovery |
 | workspace digest | 在线 Yjs 工作层摘要 | 工作编辑 CAS |
 | observed filesystem hash | Host 观察到的手工文件候选 | 外部协调输入 |
-| Git commit / submitId | Host 受控作者历史和幂等提交 | 只用于 Git receipt/recovery |
+| Git mirror commit | 可选 best-effort mirror 的外部 ID | 从不决定 acceptance 或 recovery |
 
 浏览器、MCP 和 Agent 的写入顺序相同：
 
-1. 服务器解析认证主体、项目权限与短期能力；调用方不能提交 actor、Git handle、路径或凭据。
+1. 服务器解析认证主体、project membership 与短期 capability；调用方不能提交 actor、路径或凭据。
 2. 编辑进入共享 Yjs 工作层；它不是已接受 source。
-3. `AuthoringCoordinator` 在项目 session 队列中重新核对 accepted hash、workspace digest、文档向量与能力。
-4. Core 编译完整候选；通过后 `ControlledGitRunner` 以显式 `AuthoringManifest`、临时 index、`commit-tree` 和固定 ref CAS 创建提交。
-5. receipt 记录 submitId、Git commit（可用时）、accepted hash 和错误码。`.nova/**`、cache、responses、journals、Yjs、SQLite、output 与 derived 工件永不进入作者提交。
+3. `AuthoringCoordinator` 在 project session queue 中重新核对 accepted revision、source hash、workspace digest、文档向量与 capability。
+4. Core 编译完整候选；通过后 native revision content store 与 revision-head CAS 接受完整 bundle。
+5. 可选 Git mirror 仅在 acceptance 后导出；失败写入 mirror 状态但绝不撤销 revision。`.nova/**`、cache、responses、journals、Yjs、SQLite、output 与 derived 工件永不进入 authoring bundle。
 
 Agent 先产生 Host 保存的提议，直到用户显式 apply 才会申请服务器能力并排入 session。人在编辑时，Agent 生成或应用会暂停；向量过期必须重新规划。
 
 ## 外部文件协调与冲突处理
 
-当 Host 观察到项目根上的手工编辑时，它将完整候选存入 Host 私有 staging，不会直接 `git add`。只有下列条件同时满足，才能执行 external reconciliation：
+当 Host 观察到项目根上的手工编辑时，它将完整候选存入 Host 私有 staging，不会直接改写 accepted revision。只有下列条件同时满足，才能执行 external reconciliation：
 
-- primary 工作树相对受控 ref 无 staged、rename/copy、未知路径或非 authoring 改动；
 - 候选 manifest 完整且有效；
 - 每个 authoring 路径的字节与候选完全一致；
 - 候选遗漏的 baseline authoring 路径显式删除；
-- 接受前再次核验候选、工作树和固定 ref CAS。
+- 接受前再次核验候选、working digest 与 native revision-head CAS。
 
 否则 Host 保留手工内容并报告 conflict；它绝不 reset、覆盖或部分接纳 primary 工作树。恢复步骤：
 
-1. 在 Browser Source Studio 或 MCP 读取当前 accepted hash、workspace digest、operation receipt 和 external candidate 状态。
-2. 保留需要的手工文本到新的 working 编辑，或在项目外备份；不要用 Git 命令绕过运行中的 Host。
-3. 解决 unknown/staged/non-authoring 文件、字节差异或无效 YAML，使项目根只留下完整候选。
-4. 用最新的 expected accepted hash 和 workspace digest 提交 reconcile；CAS stale 时先重新读取再重试。
-5. 仅在 Host 停止时才允许人工 Git 操作。重启后先让 Host bootstrap/observe，再继续提交。
+1. 在 Browser Source Studio 或 MCP 读取当前 accepted revision/source hash、workspace digest、operation receipt 和 external candidate 状态。
+2. 保留需要的手工文本到新的 working 编辑，或在项目外备份；不要绕过运行中的 Host 修改 accepted revision。
+3. 修复 YAML/source 诊断并基于最新 accepted identity 提交 reconcile；CAS stale 时先重新读取再重试。
+4. Git mirror 可在 Host 停止时人工检查，但它不是 recovery 前提。
 
 ## 操作错误参考
 
@@ -103,8 +101,8 @@ Agent 先产生 Host 保存的提议，直到用户显式 apply 才会申请服�
 
 - Host：`npm run -w @novalistically/workbench test:host` 与 `typecheck:host`。
 - Client：`npm run -w @novalistically/workbench test:client` 与 `typecheck:client`。
-- 受控 Git：`tests/git-submit-service.test.ts`、`tests/project-authoring-runtime.test.ts`。
-- 多项目启动/关闭/重开：`tests/launch-phase1a.test.ts`。
-- Browser 与 MCP/Agent authoring boundary：`tests/browser-agent-api.test.ts`、`tests/mcp-adapter.test.ts`。
+- Native revision、restore 与 recovery：`tests/authoring-coordinator-recovery.test.ts`、`tests/host-startup.test.ts`。
+- Optional Git mirror boundary：`tests/git-runner.test.ts`、`tests/git-manifest.test.ts`。
+- Browser 与 MCP/Agent authoring boundary：`tests/browser-agent-api.test.ts`、`tests/mcp-auth-registry.test.ts`。
 
 这些检查验证 Host 合约；live provider 输出仍需由部署环境的凭据和项目 source 决定。

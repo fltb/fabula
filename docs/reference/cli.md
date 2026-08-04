@@ -36,6 +36,12 @@ npx nova --help        # 或全局链接
 | `revise [eventId]` | 修订渲染（`renderNovel()` + `revision`）。选择器同 `render`；`--instruction <text>` 内联修订指令。 |
 | `render-tree` | 通过 `renderGameDialogueTree()` 渲染所有 event-local game-tree node 一次，返回 `RenderGameDialogueTreeResult`（compiled tree、逐 scene 结果与 publication）。`--provider mock-pass2` 与 `--reference-dir` 必填；`--json`。有错误或有 scene 未 release 时退出码为 1。 |
 
+## Workbench authority mode
+
+`--mode standalone`（默认）使用 Node Host adapters。写入 source 时它会先检查 Workbench authority lease，已运行的 Host 会拒绝直接写入。`--mode via-workbench --project <id> --host <url>` requires an opaque device credential and sends every operation to `/mcp/projects/<id>`; it does not load project files or provider credentials locally.
+
+Typed `WorkbenchClient.render()` may include `referenceChunks: readonly { referenceId; chunkId }[]`. These are selectors, not quotes or object paths. The Host requires `mcp:reference:read`, revalidates the queued capability, resolves the chunks inside the operation, and supplies Core a bounded non-authoritative packet.
+
 ## MCP 服务器
 
 `packages/cli/src/mcp-server.ts` 提供 **Host-bound 的 MCP 工具注册**：`createHostBoundMcpTools(context)` 返回 8 个显式工具（`readonly HostBoundMcpTool[]`）。CLI 侧注册不拥有路径、存储、凭据或传输；调用方（Host，如 Workbench）注入 `HostBoundMcpContext` 并负责提供已认证的传输：

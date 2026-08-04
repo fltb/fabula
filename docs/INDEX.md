@@ -4,7 +4,7 @@ Novalistically 是一个叙事工程系统：结构化 YAML 定义 → 事件溯
 
 ## 当前状态
 
-源码核验的现状基线见 **[当前系统状态](./current-state.md)**（2026-08-02）。当前源码优先于历史计划与设计文档；历史记录保留其日期与证据并链接到该页，不重写历史。
+源码核验的现状基线见 **[当前系统状态](./current-state.md)**。current implementation checkpoints and their verification scope are stated there; current source wins over historical plans and design docs.
 
 ## 我想...
 
@@ -25,9 +25,9 @@ Novalistically 是一个叙事工程系统：结构化 YAML 定义 → 事件溯
 - **[竞品分析](./reference/competitive-analysis.md)** — Novalistically 与其他叙事引擎（Novel Studio、Sudowrite、Novel-OS 等）在上下文编译、场景连续性、验证体系上的对比与独创性分析
 - **[AI 提供商](./reference/ai-providers.md)** — AiSdkProvider（Vercel AI SDK）、MockPass2Provider（测试夹具）、配置、自动检测
 - **[基准系统](./reference/bench.md)** — 回归（在 祝福 上的 L1+L2）、变体（错误注入 + 极端破坏）、性能（N=10/100/1000）、一致性（N-CED、S-CED、Pipeline F1）、外部数据集
-- **[CLI 和 MCP](./reference/cli.md)** — CLI 命令（`nova render`、`nova validate`、`nova status`）、MCP 服务器
+- **[CLI 和 MCP](./reference/cli.md)** — standalone/via-workbench authority modes, typed project-scoped client, CLI commands and MCP server
+- **[Workbench Host](./reference/workbench-host.md)** — native revision authority, optional Git mirror, reference library, startup, configuration and recovery
 - **[程序化 API](./reference/api.md)** — `renderNovel()`、`validateNovel()`、`diffEvent()`、`analyzeProjectImpact()` 及所有其他可导入的 API 函数
-- **[Workbench Host](./reference/workbench-host.md)** — 本机 Host 启动、多项目 YAML、凭据边界、Yjs/Git 作者提交、外部文件协调与 operation 错误恢复
 - **[报告输出](./reference/reporter.md)** — 验证报告和基准报告的输出格式（JSON + Markdown）
 
 ## 指南

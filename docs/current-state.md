@@ -1,7 +1,7 @@
 # 当前系统状态（源码核验）
 
-**时间**：2026-08-02 19:05 CST  
-**核验基线**：`main` 的 `18d3e38`（基线 lint 技术债修复后）  
+**时间**：2026-08-04 CST
+**当前实现检查点**：`main` 的 `5c73aab`（native revisions、project-scoped MCP reference packet 与 optional Git mirror；全量门禁需在后续基线重跑）
 **权威顺序**：当前源码、package manifests、可复现门禁结果；本页优先于历史计划、阶段报告和归档设计。
 
 > 本页描述已经由源码或门禁证明的现状，不把设计目标、未接线类型或历史测量当作已交付能力。历史文档应保留其当时的证据与日期，并链接到本页，而不应改写历史。
@@ -16,9 +16,9 @@
 | `npm run build` | 通过 |
 | `npm run bundle-check` | 通过 |
 | `node scripts/check-public-api.mjs` | 通过 |
-| `npm run lint -- --max-diagnostics=2000` | 0 errors；630 warnings；236 infos |
+| `npm run lint -- --max-diagnostics=2000` | 已执行；当前工作树基线仍有 232 errors，未以全仓格式化掩盖。受影响的 MCP/CLI/协议文件已通过定向 Biome 检查。 |
 
-Warnings 与 infos 不是通过状态的一部分；它们必须以各规则的严重级别和运行时语义分别处理，不能被误记为零问题或零错误。
+Lint 基线需要独立修复；它不是已通过门禁，不能宣传为零错误。
 
 ## 包与依赖边界
 
@@ -26,11 +26,11 @@ Warnings 与 infos 不是通过状态的一部分；它们必须以各规则的�
 
 | 包 | 已核验职责 |
 |---|---|
-| `@novalistically/core` | 纯叙事语义：不可变 source snapshot 分析、实体/图/状态计算、上下文、渲染编排、验证、组装意图。仅依赖 `yaml`、`zod`；不持有项目目录、Git、SQLite、凭据或浏览器传输。 |
-| `@novalistically/node-host` | Node 适配器：文件 source loader/writer、execution/state/cache/report repositories、AI SDK provider 与插件运行时。 |
+| `@novalistically/core` | 纯叙事语义：不可变 source-snapshot 分析、实体/图/状态计算、上下文、render 编排、验证、组装意图；也定义 bounded non-authoritative reference packets。仅依赖 `yaml` 和 `zod`。 |
+| `@novalistically/node-host` | Node 适配器：filesystem source loader/writer、execution/state/cache/report repositories、AI SDK provider、plugin runtime 和可移植 reference object store。 |
 | `@novalistically/bench` | 通过 Core 与 Node Host 运行回归、变体和性能基准；不是 Core 依赖。 |
-| `@novalistically/cli` | `commander` CLI 与 Host-bound MCP 入口；加载 source snapshot 并注入运行时服务，不把文件系统/Git 带回 Core。 |
-| `@novalistically/workbench` | 私有的本机 Host 与浏览器客户端。Host 持有本地认证、Yjs、SQLite worker、凭据、ProjectSession 与受控 Git authoring；浏览器只消费无秘密 DTO。 |
+| `@novalistically/cli` | `commander` CLI 与 typed Workbench MCP client；standalone 写入受 Host authority lease 保护，via-workbench 操作只走项目 scoped 的 authenticated Host route。 |
+| `@novalistically/workbench` | 私有 native Host + browser client。Host 持有本地认证、Yjs、SQLite worker、ProjectSession、native immutable revisions 和 project-scoped reference library；浏览器只消费 secret-free DTO。可选 Git 仅镜像已接受 revision，不参与 authoring acceptance。 |
 
 包关系不是一个可推导的线性链。Core 不依赖工作区包；Node Host 提供适配器；Bench、CLI 和 Workbench 按各自 manifest 直接选择 Core/Node Host 能力。
 

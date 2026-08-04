@@ -15,10 +15,10 @@ Five workspace packages, not a derivable linear chain:
 - **`@novalistically/core`** — pure narrative semantics: immutable source-snapshot analysis, entity/graph/state computation, context, render orchestration, validation, assembly intent. Depends only on `yaml` and `zod`. It does not hold project directories, Git, SQLite, credentials, or browser transports, and it does not write `scenes/`, `.nova/`, or derived files.
 - **`@novalistically/node-host`** — Node adapters: filesystem source loader/writer, execution/state/cache/report repositories, AI SDK provider, plugin runtime. It is the filesystem boundary for CLI and Bench.
 - **`@novalistically/bench`** — regression, variant, and performance benchmarks running through Core and Node Host. Never a Core dependency.
-- **`@novalistically/cli`** — `commander` CLI and Host-bound MCP entry. Loads source snapshots at the Host boundary and injects runtime services; never brings filesystem/Git behavior back into Core.
-- **`@novalistically/workbench`** — private native Host + browser client. Host owns local auth, Yjs, SQLite worker, credentials, ProjectSession, and controlled Git authoring; the browser consumes secret-free DTOs.
+- **`@novalistically/cli`** — `commander` CLI and typed Workbench MCP client. Standalone mutation checks the Host authority lease; via-workbench operations are authenticated project-scoped Host calls and never load project files or credentials locally.
+- **`@novalistically/workbench`** — private native Host + browser client. Host owns local auth, Yjs, SQLite worker, credentials, ProjectSession, native immutable revision acceptance, and project-scoped reference storage; the browser consumes secret-free DTOs. Controlled Git is optional best-effort mirroring after native acceptance, never authoring authority.
 
-Core input is `ProjectSourceSnapshotV1` plus injected semantic ports; source hashes represent content, not Git history. Only Node Host and Workbench Host own files and authoring Git; Workbench commits only an explicit `AuthoringManifest` and never includes `.nova/**`, caches, responses, journals, Yjs, SQLite, output, or derived artifacts.
+Core input is `ProjectSourceSnapshotV1` plus injected semantic ports; source hashes represent content, not Git history. Node Host and Workbench Host own files. Workbench native revision content is the authoring acceptance model; bundles contain only explicit `AuthoringManifest` entries and never include `.nova/**`, caches, responses, journals, Yjs, SQLite, output, or derived artifacts.
 
 ## Source Snapshot Topology
 
@@ -61,6 +61,8 @@ Run a single test: `npx vitest run packages/core/tests/validator/`. The core E2E
 ## CLI
 
 Host-bound commands: `project init`, `validate`, `status`, `entity`, `graph`, `source`, `render`, `revise`, and `render-tree`. The CLI does not read `.env` automatically. Workbench launch commands and environment configuration are documented in the root README; `start:listener` is the bare smoke listener, while `start:workbench` is the composed entry.
+
+For `via-workbench`, `WorkbenchClient.render()` may send bounded `referenceChunks` selectors. They require `mcp:reference:read`; the Host resolves them only inside the serialized, freshly capability-validated render operation and passes Core a non-authoritative packet scoped to the bound project.
 
 ## Workbench startup
 

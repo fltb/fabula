@@ -1,7 +1,7 @@
 import type { WorkbenchRevisionMirrorConfigurationV2 } from '@novalistically/workbench-protocol';
 import { createHash, randomUUID } from 'node:crypto';
 import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
-import { buildSourceSnapshot, compareLogicalPaths, computeSourceDocumentHash } from '@novalistically/core/source';
+import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
 import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
 import type { AgentCapabilityService } from '../agent/capability-service.js';
 import type { ProjectSession } from '../project-session.js';

@@ -4,6 +4,7 @@ import * as path from 'node:path';
 import { tmpdir } from 'node:os';
 import {
   DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+  REFERENCE_MCP_LIMITS_V1,
   type McpReferencePort,
 } from '@novalistically/workbench-protocol';
 import { createWorkbenchReferencePort } from '../src/host/mcp/reference-port.js';
@@ -126,6 +127,27 @@ describe('Workbench Host reference MCP port', () => {
     const chunk = await port.getChunk({ version: 1, referenceId: 'binary', chunkId: 'binary:0' });
     expect(chunk?.chunk.quote).toBeNull();
     expect(chunk?.chunk.range).toEqual({ version: 1, offset: 0, length: bytes.byteLength });
+  });
+
+  it('caps text chunk quotes to the MCP protocol maximum', async () => {
+    const { projectRoot, jobsRoot } = await fixture();
+    const port = createWorkbenchReferencePort({
+      projectId: 'project-a',
+      projectRoot,
+      jobsRoot,
+      referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+    });
+    await importBytes(
+      port,
+      'long-text',
+      new TextEncoder().encode('a'.repeat(REFERENCE_MCP_LIMITS_V1.maxQuoteLength + 1)),
+    );
+    const chunk = await port.getChunk({
+      version: 1,
+      referenceId: 'long-text',
+      chunkId: 'long-text:0',
+    });
+    expect(chunk?.chunk.quote).toHaveLength(REFERENCE_MCP_LIMITS_V1.maxQuoteLength);
   });
 
   it('reconstructs durable jobs and derived chunks after Host construction', async () => {

@@ -1,9 +1,9 @@
 import {
   CLI_EXIT_CODES_V1,
   MCP_TOOL_CATALOG_V1,
-  WORKBENCH_DEVICE_CREDENTIAL_ENV,
   type McpToolDescriptorV1,
   type NovaViaWorkbenchModeV1,
+  WORKBENCH_DEVICE_CREDENTIAL_ENV,
 } from '@novalistically/workbench-protocol';
 
 /** The Host MCP endpoint speaks standard JSON-RPC 2.0 over Streamable HTTP. */
@@ -81,7 +81,11 @@ export class WorkbenchClientError extends Error {
 
 /** Map typed Host/MCP failures onto the shared CLI exit-code contract. */
 export function exitCodeForWorkbenchError(status: number, code: string): number {
-  if (status === 401 || status === 403 || /AUTH|TOKEN|SESSION|SCOPE|FORBIDDEN|UNAUTHORIZED/i.test(code)) {
+  if (
+    status === 401 ||
+    status === 403 ||
+    /AUTH|TOKEN|SESSION|SCOPE|FORBIDDEN|UNAUTHORIZED/i.test(code)
+  ) {
     return CLI_EXIT_CODES_V1.authenticationOrAuthorization;
   }
   if (
@@ -120,7 +124,8 @@ function textPayload(value: unknown): unknown {
 
 function hostUrl(host: string): string {
   const normalized = host.trim().replace(/\/+$/, '');
-  if (!/^https?:\/\//i.test(normalized)) throw new TypeError('Workbench host must be an HTTP(S) URL.');
+  if (!/^https?:\/\//i.test(normalized))
+    throw new TypeError('Workbench host must be an HTTP(S) URL.');
   return normalized;
 }
 
@@ -209,14 +214,20 @@ export class WorkbenchClient {
     const body: unknown = await response.json().catch(() => null);
     if (!response.ok) {
       const envelope = isObject(body) && isObject(body.error) ? body.error : null;
-      const code = envelope && typeof envelope.code === 'string' ? envelope.code : `HTTP_${response.status}`;
-      const message = envelope && typeof envelope.message === 'string'
-        ? envelope.message
-        : `Workbench Host returned HTTP ${response.status}.`;
+      const code =
+        envelope && typeof envelope.code === 'string' ? envelope.code : `HTTP_${response.status}`;
+      const message =
+        envelope && typeof envelope.message === 'string'
+          ? envelope.message
+          : `Workbench Host returned HTTP ${response.status}.`;
       throw new WorkbenchClientError({ status: response.status, code, message });
     }
     if (!isObject(body) || body.jsonrpc !== WORKBENCH_MCP_JSONRPC_VERSION) {
-      throw new WorkbenchClientError({ status: 502, code: 'INVALID_HOST_RESPONSE', message: 'Workbench Host returned an invalid JSON-RPC response.' });
+      throw new WorkbenchClientError({
+        status: 502,
+        code: 'INVALID_HOST_RESPONSE',
+        message: 'Workbench Host returned an invalid JSON-RPC response.',
+      });
     }
     const envelope = body as unknown as WorkbenchMcpResponseV1;
     if (envelope.error !== undefined) {
@@ -227,7 +238,11 @@ export class WorkbenchClient {
       });
     }
     if (envelope.result === undefined) {
-      throw new WorkbenchClientError({ status: 502, code: 'INVALID_HOST_RESPONSE', message: 'Workbench Host returned no MCP result.' });
+      throw new WorkbenchClientError({
+        status: 502,
+        code: 'INVALID_HOST_RESPONSE',
+        message: 'Workbench Host returned no MCP result.',
+      });
     }
     const payload = textPayload(envelope.result);
     if (envelope.result.isError) {
@@ -236,12 +251,11 @@ export class WorkbenchClient {
       const message =
         typeof failure.message === 'string' ? failure.message : 'Workbench operation failed.';
       const operationId = typeof failure.operationId === 'string' ? failure.operationId : undefined;
-      const status =
-        /INVALID|NOT_FOUND|NO_ACCEPTED_SOURCE/.test(code)
-          ? 400
-          : /CONFLICT|STALE|CAS|MISMATCH/.test(code)
-            ? 409
-            : 500;
+      const status = /INVALID|NOT_FOUND|NO_ACCEPTED_SOURCE/.test(code)
+        ? 400
+        : /CONFLICT|STALE|CAS|MISMATCH/.test(code)
+          ? 409
+          : 500;
       throw new WorkbenchClientError({ status, code, message, operationId });
     }
     return payload;
@@ -370,7 +384,12 @@ export function workbenchCredential(
 
 export function createWorkbenchClient(
   mode: NovaViaWorkbenchModeV1,
-  options: { readonly credential?: string; readonly sessionId?: string; readonly fetch?: typeof globalThis.fetch; readonly env?: Readonly<Record<string, string | undefined>> } = {},
+  options: {
+    readonly credential?: string;
+    readonly sessionId?: string;
+    readonly fetch?: typeof globalThis.fetch;
+    readonly env?: Readonly<Record<string, string | undefined>>;
+  } = {},
 ): WorkbenchClient {
   return new WorkbenchClient({
     host: mode.host,

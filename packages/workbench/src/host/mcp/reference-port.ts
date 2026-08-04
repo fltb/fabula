@@ -376,7 +376,10 @@ export function createWorkbenchReferencePort(
           }
         : { chunkBytes: configuredExtractionChunkBytes }),
       maxChunks: Math.max(1, limits.maxChunksPerProject),
-      maxQuoteLength: limits.maxChunkCharacters,
+      maxQuoteLength: Math.min(
+        limits.maxChunkCharacters,
+        REFERENCE_MCP_LIMITS_V1.maxQuoteLength,
+      ),
     });
   const ensureEnabled = (): void => {
     if (!limits.enabled) throw new ReferencePortInputError('Reference library is disabled', 'REFERENCE_DISABLED');

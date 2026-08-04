@@ -11,7 +11,6 @@ import {
   showEntity,
   validateNovel,
 } from '@novalistically/core';
-import { computeSourceDocumentHash } from '@novalistically/core/source';
 import {
   type EditorialRenderRequestV1,
   type EditorialRuntime,
@@ -23,6 +22,7 @@ import {
   type SceneSelector,
   type SourceChangeV1,
 } from '@novalistically/core/editorial';
+import { computeSourceDocumentHash } from '@novalistically/core/source';
 import {
   exportDAGtoDOT,
   exportDAGtoMermaid,
@@ -40,8 +40,8 @@ import { resolveRoute } from './route.ts';
 import {
   createWorkbenchClient,
   resolveWorkbenchMode,
-  WorkbenchClientError,
   type WorkbenchClient,
+  WorkbenchClientError,
 } from './workbench-client.ts';
 
 const sourceLoader = new FileProjectSourceLoader();
@@ -71,7 +71,6 @@ function remoteClient(): WorkbenchClient | null {
   });
   return mode.mode === 'standalone' ? null : createWorkbenchClient(mode);
 }
-
 
 function parseBranchPath(raw: string | undefined): BranchPath | undefined {
   if (raw === undefined) return undefined;
@@ -138,11 +137,21 @@ program
     const client = remoteClient();
     if (client !== null) {
       const result = (await client.validate()) as Record<string, unknown>;
-      if (options.event !== undefined && result.results !== undefined && typeof result.results === 'object' && result.results !== null) {
+      if (
+        options.event !== undefined &&
+        result.results !== undefined &&
+        typeof result.results === 'object' &&
+        result.results !== null
+      ) {
         const event = (result.results as Record<string, unknown>)[options.event];
         if (event === undefined) throw new Error(`Event "${options.event}" not found.`);
         printResult(event, options.json ?? false);
-        if (typeof event === 'object' && event !== null && 'passed' in event && event.passed === false)
+        if (
+          typeof event === 'object' &&
+          event !== null &&
+          'passed' in event &&
+          event.passed === false
+        )
           process.exitCode = 1;
         return;
       }
@@ -183,7 +192,9 @@ entity
   .action(async (kind: string | undefined, options: { json?: boolean }) => {
     const client = remoteClient();
     printResult(
-      client === null ? listEntities(loadSource(ensureProjectDir()), kind) : await client.entityList(kind === undefined ? {} : { kind }),
+      client === null
+        ? listEntities(loadSource(ensureProjectDir()), kind)
+        : await client.entityList(kind === undefined ? {} : { kind }),
       options.json ?? false,
     );
   });
@@ -241,7 +252,8 @@ source.command('show <logicalPath>').action(async (logicalPath: string) => {
   const client = remoteClient();
   if (client !== null) {
     const document = (await client.sourceGet({ logicalPath })) as { readonly content?: unknown };
-    if (typeof document.content !== 'string') throw new Error(`Source document "${logicalPath}" not found.`);
+    if (typeof document.content !== 'string')
+      throw new Error(`Source document "${logicalPath}" not found.`);
     process.stdout.write(document.content);
     return;
   }
@@ -291,10 +303,15 @@ source
     const afterContent = readFileSync(contentFile, 'utf8');
     if (client !== null) {
       const listing = (await client.authoringDocumentList()) as {
-        readonly documents?: readonly { readonly documentId: string; readonly logicalPath: string }[];
+        readonly documents?: readonly {
+          readonly documentId: string;
+          readonly logicalPath: string;
+        }[];
         readonly workspaceDigest?: unknown;
       };
-      const descriptor = listing.documents?.find((document) => document.logicalPath === logicalPath);
+      const descriptor = listing.documents?.find(
+        (document) => document.logicalPath === logicalPath,
+      );
       if (descriptor === undefined || typeof listing.workspaceDigest !== 'string') {
         throw new WorkbenchClientError({
           status: 409,
@@ -375,9 +392,10 @@ async function render(
         message: '--dry-run is only available in standalone mode.',
       });
     }
-    const result = input.revision === undefined
-      ? await client.render({ sceneSelector: selector(input) })
-      : await client.revise({ sceneSelector: selector(input) });
+    const result =
+      input.revision === undefined
+        ? await client.render({ sceneSelector: selector(input) })
+        : await client.revise({ sceneSelector: selector(input) });
     printResult(result, input.json ?? false);
     return;
   }
@@ -415,7 +433,10 @@ program
   .option('--dry-run')
   .option('--json')
   .action(async (eventId: string | undefined, options) => {
-    await render(remoteClient() === null ? ensureProjectDir() : process.cwd(), { ...options, eventId });
+    await render(remoteClient() === null ? ensureProjectDir() : process.cwd(), {
+      ...options,
+      eventId,
+    });
   });
 
 program
@@ -513,9 +534,5 @@ project
 program.parseAsync().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : String(error));
   process.exitCode =
-    error instanceof WorkbenchClientError
-      ? error.exitCode
-      : error instanceof TypeError
-        ? 2
-        : 1;
+    error instanceof WorkbenchClientError ? error.exitCode : error instanceof TypeError ? 2 : 1;
 });

@@ -1,4 +1,3 @@
-import { type McpJsonSchemaV1, MCP_TOOL_CATALOG_V1, type McpToolDescriptorV1 } from '@novalistically/workbench-protocol';
 import {
   getProjectStatus,
   listEntities,
@@ -15,6 +14,11 @@ import {
   type SceneSelector,
   type SourceChangeV1,
 } from '@novalistically/core/editorial';
+import {
+  MCP_TOOL_CATALOG_V1,
+  type McpJsonSchemaV1,
+  type McpToolDescriptorV1,
+} from '@novalistically/workbench-protocol';
 
 /**
  * CLI's optional MCP registry is host-bound: callers supply an already-open
@@ -52,10 +56,9 @@ function toolDescriptor(name: string): McpToolDescriptorV1 {
   return descriptor;
 }
 
-function toolMetadata(name: string): Pick<
-  HostBoundMcpTool,
-  'name' | 'description' | 'requiredScopes' | 'inputSchema'
-> {
+function toolMetadata(
+  name: string,
+): Pick<HostBoundMcpTool, 'name' | 'description' | 'requiredScopes' | 'inputSchema'> {
   const descriptor = toolDescriptor(name);
   return {
     name: descriptor.name,

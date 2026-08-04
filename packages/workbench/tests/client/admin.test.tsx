@@ -8,6 +8,7 @@ import {
   type AdminFetch,
 } from '../../src/client/admin/admin-client';
 import { AdminShell } from '../../src/client/admin/AdminShell';
+import { AccessDevicesPage } from '../../src/client/admin/AccessDevicesPage';
 import { ProviderPage } from '../../src/client/admin/ProviderPage';
 import { SystemPage } from '../../src/client/admin/SystemPage';
 
@@ -46,6 +47,23 @@ const overview: WorkbenchAdminOverviewV1 = {
   openProjects: 0,
   restartRequired: false,
   generatedAt: '2026-08-03T00:00:00.000Z',
+};
+
+const inviteOverview: WorkbenchAdminOverviewV1 = {
+  ...overview,
+  setup: {
+    ...overview.setup,
+    projects: [
+      {
+        projectId: 'p-1',
+        displayName: 'One',
+        validation: 'valid',
+        open: false,
+        defaultProject: true,
+      },
+    ],
+    defaultProjectId: 'p-1',
+  },
 };
 
 const json = (value: unknown, status = 200): Response =>
@@ -99,6 +117,39 @@ describe('owner admin surfaces', () => {
     expect(screen.getByRole('heading', { name: 'Owner authorization required' })).toBeInTheDocument();
     expect(screen.getByText(/only the owner can view or change Host administration/i)).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('requires a project and sends the canonical reader role for invites', async () => {
+    const user = userEvent.setup();
+    const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
+    const fetch: AdminFetch = async (input, init) => {
+      calls.push({ input, init });
+      if (String(input) === '/api/v1/admin/mcp-devices') return json({ version: 1, devices: [] });
+      return json({
+        version: 1,
+        invite: {
+          inviteId: 'invite-1',
+          projectId: 'p-1',
+          role: 'reader',
+          expiresAt: '2026-08-04T00:00:00.000Z',
+          consumedAt: null,
+        },
+      });
+    };
+    const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
+    render(() => <AccessDevicesPage overview={inviteOverview} client={client} authorization="owner" />);
+
+    const createButton = screen.getByRole('button', { name: 'Create invite' });
+    expect(createButton).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: /Choose invite project/i }));
+    await user.click(await screen.findByRole('option', { name: 'One' }));
+    await user.click(createButton);
+    await screen.findByText('Invite created');
+
+    const request = calls.find((call) => String(call.input) === '/api/v1/admin/invites');
+    const body = String(request?.init?.body ?? '');
+    expect(JSON.parse(body)).toEqual({ version: 1, projectId: 'p-1', role: 'reader', ttlMs: 86400000 });
+    expect(body).not.toMatch(/"role":"(?:user|owner)"/);
   });
 
   it('keeps config-source status explicitly unavailable instead of deriving it', () => {

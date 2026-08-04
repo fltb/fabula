@@ -140,22 +140,32 @@ describe('Workbench named navigation', () => {
 describe('Workbench Host availability states', () => {
   it('shows an honest unavailable state by default and supports an empty Host response', () => {
     const unavailable = render(() => <App />);
-    expect(screen.getByRole('heading', { name: 'Host is unavailable' })).toBeInTheDocument();
-    expect(screen.getByText(/read API is not configured/i)).toBeInTheDocument();
+    const unavailableWorkspace = screen.getByTestId('workspace-state');
+    expect(within(unavailableWorkspace).getByText(/read API is not configured/i)).toBeInTheDocument();
+    expect(unavailableWorkspace.closest('main')?.querySelector('.host-status')).toHaveTextContent(
+      'Host unavailable',
+    );
     unavailable.unmount();
 
     render(() => <App hostStatus="empty" />);
-    expect(screen.getByRole('heading', { name: 'No project is open' })).toBeInTheDocument();
-    expect(screen.getByText(/returned no project projection/i)).toBeInTheDocument();
+    const emptyWorkspace = screen.getByTestId('workspace-state');
+    expect(emptyWorkspace.closest('main')?.querySelector('.host-status')).toHaveTextContent(
+      'No project open',
+    );
+    expect(within(emptyWorkspace).getByText(/returned no project projection/i)).toBeInTheDocument();
   });
 
   it('reacts when the authenticated Host projection status changes', () => {
     const [status, setStatus] = createSignal<HostStatus>('loading');
     render(() => <App hostStatus={status()} />);
 
-    expect(screen.getByRole('heading', { name: 'Loading Host projection' })).toBeInTheDocument();
+    const workspace = screen.getByTestId('workspace-state');
+    expect(workspace).toHaveAttribute('aria-busy', 'true');
+    expect(workspace.closest('main')?.querySelector('.host-status')).toHaveTextContent('Loading');
     setStatus('ready');
-    expect(screen.getByRole('heading', { name: 'Projection ready' })).toBeInTheDocument();
+    expect(workspace.closest('main')?.querySelector('.host-status')).toHaveTextContent(
+      'Host connected',
+    );
   });
 });
 
@@ -257,10 +267,12 @@ describe('Workbench Host projections', () => {
           generatedAt: '2026-08-02T00:00:00.000Z',
         }}
         authoringState={{
-          version: 1,
+          version: 2,
           projectId: 'project-a',
           phase: 'working-dirty',
+          acceptedRevisionId: null,
           acceptedSourceHash: 'accepted-hash',
+          pendingOperationId: null,
           workingDirty: true,
           workspaceDigest: 'workspace-hash',
           externalCandidate: null,
@@ -272,15 +284,16 @@ describe('Workbench Host projections', () => {
         }}
         authoringOperations={[
           {
-            version: 1,
+            version: 2,
             operationId: 'operation-1',
             projectId: 'project-a',
             kind: 'submit',
             status: 'queued',
             acceptedSourceHash: 'accepted-hash',
-            workspaceDigest: 'workspace-hash',
-            gitSubmitId: null,
-            gitReceiptHash: null,
+            acceptedRevisionId: null,
+            pendingOperationId: null,
+            revisionId: null,
+            receiptHash: null,
             errorCode: null,
             createdAt: '2026-08-02T00:00:00.000Z',
             updatedAt: '2026-08-02T00:00:00.000Z',
@@ -292,8 +305,9 @@ describe('Workbench Host projections', () => {
 
     await user.click(screen.getByRole('button', { name: 'Submit working layer' }));
     expect(submit).toHaveBeenCalledWith({
-      version: 1,
+      version: 2,
       projectId: 'project-a',
+      expectedAcceptedRevisionId: null,
       expectedAcceptedSourceHash: 'accepted-hash',
       expectedWorkspaceDigest: 'workspace-hash',
     });

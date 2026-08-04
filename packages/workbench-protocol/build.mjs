@@ -1,2 +1,14 @@
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { build } from 'esbuild';
-await build({ entryPoints: ['src/index.ts'], outdir: 'dist', bundle: true, format: 'esm', platform: 'neutral', target: 'es2024', sourcemap: true });
+
+const packageRoot = dirname(fileURLToPath(import.meta.url));
+await build({
+  entryPoints: [join(packageRoot, 'src/index.ts')],
+  outdir: join(packageRoot, 'dist'),
+  bundle: true,
+  format: 'esm',
+  platform: 'neutral',
+  target: 'es2024',
+  sourcemap: true,
+});

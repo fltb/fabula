@@ -3,6 +3,7 @@ import { Checkbox } from '@kobalte/core/checkbox';
 import { Combobox } from '@kobalte/core/combobox';
 import { For, Show, createEffect, createSignal, onMount } from 'solid-js';
 import type { WorkbenchAdminOverviewV1, WorkbenchDeviceSafeViewV1, WorkbenchInviteSafeViewV1 } from '../../contracts/index.js';
+import { PROJECT_ACCESS_ROLES, type ProjectAccessRole } from '../../contracts/configuration.js';
 import type { AdminAuthorizationState, AdminClient } from './admin-client';
 
 const PANEL =
@@ -16,6 +17,7 @@ const SECONDARY_BUTTON =
 const DANGER_BUTTON =
   'inline-flex min-h-[2.5rem] items-center justify-center rounded-[var(--wb-radius-sm)] border border-[var(--wb-error-border)] bg-[var(--wb-error-surface)] px-[var(--wb-space-3)] text-sm font-semibold text-[var(--wb-danger)] transition-colors hover:border-[var(--wb-danger)] disabled:cursor-not-allowed disabled:opacity-50';
 const SCOPES = ['mcp:read', 'mcp:render', 'mcp:author', 'mcp:submit', 'mcp:admin'] as const;
+const INVITE_ROLE_OPTIONS = PROJECT_ACCESS_ROLES.map((role) => [role, role[0].toUpperCase() + role.slice(1)] as const);
 
 type ProjectOption = { readonly projectId: string; readonly displayName: string };
 
@@ -39,6 +41,7 @@ function errorMessage(error: unknown): string {
 export function AccessDevicesPage(props: AccessDevicesPageProps) {
   const [devices, setDevices] = createSignal<readonly WorkbenchDeviceSafeViewV1[]>(props.devices ?? []);
   const [projectId, setProjectId] = createSignal('');
+  const [inviteRole, setInviteRole] = createSignal<ProjectAccessRole>('reader');
   const [inviteTtl, setInviteTtl] = createSignal('86400000');
   const [invite, setInvite] = createSignal<WorkbenchInviteSafeViewV1 | null>(null);
   const [pairingCode, setPairingCode] = createSignal('');
@@ -58,10 +61,7 @@ export function AccessDevicesPage(props: AccessDevicesPageProps) {
   });
 
   const authorized = () => canMutate(props);
-  const projectOptions = () => [
-    { projectId: '', displayName: 'All projects' },
-    ...(props.overview?.setup.projects.map(({ projectId: id, displayName }) => ({ projectId: id, displayName })) ?? []),
-  ];
+  const projectOptions = () => props.overview?.setup.projects.map(({ projectId: id, displayName }) => ({ projectId: id, displayName })) ?? [];
 
   const run = async (operation: () => Promise<void>) => {
     if (!authorized() || busy()) return;
@@ -87,20 +87,29 @@ export function AccessDevicesPage(props: AccessDevicesPageProps) {
 
   const createInvite = () => {
     void run(async () => {
+      const selectedProjectId = projectId().trim();
+      if (!selectedProjectId) throw new Error('A project must be selected before creating an invite.');
       const response = await props.client?.createInvite({
-        ...(projectId() ? { projectId: projectId() } : {}),
-        role: 'user',
+        projectId: selectedProjectId,
+        role: inviteRole(),
         ttlMs: Number(inviteTtl()),
       });
       if (!response) throw new Error('The owner client is unavailable.');
       setInvite(response.invite);
-      setMessage('Invite created. Only safe role, project label, expiry, and consumption state are shown.');
+      setMessage('Invite created. Only the safe project, role, expiry, and consumption state are shown.');
     });
   };
 
   const issuePairing = () => {
     void run(async () => {
-      const response = await props.client?.issueDevicePairing();
+      const selectedProjectId = projectId().trim();
+      if (!selectedProjectId) throw new Error('A project must be selected before issuing a device pairing.');
+      const response = await props.client?.issueDevicePairing({
+        kind: 'project',
+        projectId: selectedProjectId,
+        role: inviteRole(),
+        ttlMs: Number(deviceTtl()),
+      });
       if (!response) throw new Error('The owner client is unavailable.');
       setPairingCode(response.pairingCode);
       setPairingExpiresAt(response.expiresAt);
@@ -178,8 +187,8 @@ export function AccessDevicesPage(props: AccessDevicesPageProps) {
       <section class="grid gap-[var(--wb-space-6)] lg:grid-cols-2">
         <section class={PANEL} aria-labelledby="invite-heading">
           <p class="text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">Browser access</p>
-          <h3 id="invite-heading" class="mt-[var(--wb-space-1)] text-lg font-semibold text-[var(--wb-ink)]">Create user invite</h3>
-          <p class="mt-[var(--wb-space-2)] text-xs leading-5 text-[var(--wb-muted)]">The Host currently issues the fixed user role. No redemption secret is returned to this page.</p>
+          <h3 id="invite-heading" class="mt-[var(--wb-space-1)] text-lg font-semibold text-[var(--wb-ink)]">Create project invite</h3>
+          <p class="mt-[var(--wb-space-2)] text-xs leading-5 text-[var(--wb-muted)]">Select a project and canonical access role. No redemption secret is returned to this page.</p>
           <form class="mt-[var(--wb-space-5)] grid gap-[var(--wb-space-4)]" onSubmit={(event) => { event.preventDefault(); createInvite(); }}>
             <Combobox<ProjectOption>
               multiple={false}
@@ -189,19 +198,20 @@ export function AccessDevicesPage(props: AccessDevicesPageProps) {
               optionLabel="displayName"
               value={projectOptions().find((project) => project.projectId === projectId()) ?? null}
               onChange={(next) => setProjectId(next?.projectId ?? '')}
-              placeholder="Any project"
+              placeholder="Choose a project"
               disabled={!authorized() || busy()}
               itemComponent={(itemProps) => <Combobox.Item item={itemProps.item}><Combobox.ItemLabel>{itemProps.item.rawValue.displayName}</Combobox.ItemLabel></Combobox.Item>}
             >
-              <Combobox.Label class="text-xs font-bold uppercase tracking-[0.06em] text-[var(--wb-muted)]">Project scope (optional)</Combobox.Label>
-              <Combobox.Control class={`${INPUT} mt-2`}><Combobox.Input /><Combobox.Trigger aria-label="Choose invite project">⌄</Combobox.Trigger></Combobox.Control>
+              <Combobox.Label class="text-xs font-bold uppercase tracking-[0.06em] text-[var(--wb-muted)]">Project scope</Combobox.Label>
+              <Combobox.Control class={`${INPUT} mt-2`}><Combobox.Input required /><Combobox.Trigger aria-label="Choose invite project">⌄</Combobox.Trigger></Combobox.Control>
               <Combobox.Portal><Combobox.Content class="z-50 mt-1 rounded-[var(--wb-radius-sm)] border border-[var(--wb-border)] bg-[var(--wb-surface)] p-[var(--wb-space-2)] shadow-[var(--wb-shadow-panel)]"><Combobox.Listbox class="grid max-h-60 gap-1 overflow-auto" /></Combobox.Content></Combobox.Portal>
             </Combobox>
+            <SelectField label="Access role" value={inviteRole()} onChange={(next) => setInviteRole(next as ProjectAccessRole)} disabled={!authorized() || busy()} options={INVITE_ROLE_OPTIONS} />
             <SelectField label="Invite lifetime" value={inviteTtl()} onChange={setInviteTtl} disabled={!authorized() || busy()} options={[['3600000', '1 hour'], ['86400000', '24 hours'], ['604800000', '7 days']]} />
-            <button class={BUTTON} type="submit" disabled={!authorized() || busy()}>{busy() ? 'Creating…' : 'Create invite'}</button>
+            <button class={BUTTON} type="submit" disabled={!authorized() || busy() || !projectId()}>{busy() ? 'Creating…' : 'Create invite'}</button>
           </form>
           <Show when={invite()}>
-            {(created) => <div class="mt-[var(--wb-space-5)] rounded-[var(--wb-radius-sm)] border border-[var(--wb-ready-border)] bg-[var(--wb-ready-surface)] p-[var(--wb-space-4)]" aria-live="polite"><p class="font-semibold text-[var(--wb-success)]">Invite created</p><dl class="mt-3 grid gap-2 text-xs text-[var(--wb-ink-soft)]"><SafeField label="Invite id" value={created().inviteId} /><SafeField label="Role" value={created().role} /><SafeField label="Expires" value={created().expiresAt} /></dl></div>}
+            {(created) => <div class="mt-[var(--wb-space-5)] rounded-[var(--wb-radius-sm)] border border-[var(--wb-ready-border)] bg-[var(--wb-ready-surface)] p-[var(--wb-space-4)]" aria-live="polite"><p class="font-semibold text-[var(--wb-success)]">Invite created</p><dl class="mt-3 grid gap-2 text-xs text-[var(--wb-ink-soft)]"><SafeField label="Invite id" value={created().inviteId} /><SafeField label="Project" value={created().projectId ?? 'unknown'} /><SafeField label="Role" value={created().role} /><SafeField label="Expires" value={created().expiresAt} /></dl></div>}
           </Show>
         </section>
 
@@ -228,7 +238,7 @@ export function AccessDevicesPage(props: AccessDevicesPageProps) {
       <section class={PANEL} aria-labelledby="device-list-heading">
         <div class="flex flex-wrap items-end justify-between gap-[var(--wb-space-3)]"><div><p class="text-xs font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">Safe device registry</p><h3 id="device-list-heading" class="mt-[var(--wb-space-1)] text-lg font-semibold text-[var(--wb-ink)]">Paired MCP devices</h3></div><button class={SECONDARY_BUTTON} type="button" onClick={refreshDevices} disabled={!props.client || props.authorization === 'user' || props.authorization === 'unauthorized'}>Refresh list</button></div>
         <Show when={devices().length > 0} fallback={<p class="mt-[var(--wb-space-4)] text-sm leading-6 text-[var(--wb-muted)]">No devices are paired. Device credentials never appear in this list.</p>}>
-          <ul class="mt-[var(--wb-space-4)] grid gap-[var(--wb-space-3)]"><For each={devices()}>{(device) => <li class={`${PANEL} flex flex-wrap items-center justify-between gap-[var(--wb-space-4)]`}><div class="grid gap-1"><span class="font-semibold text-[var(--wb-ink)]">{device.label}</span><span class="text-xs text-[var(--wb-muted)]">{device.deviceId} · {device.scopes.join(', ')} · expires {device.expiresAt}</span><Show when={device.revokedAt}><span class="text-xs font-semibold text-[var(--wb-danger)]">Revoked {device.revokedAt}</span></Show></div><button class={DANGER_BUTTON} type="button" onClick={() => setConfirmDeviceId(device.deviceId)} disabled={!authorized() || busy() || device.revokedAt !== null}>Revoke device</button></li>}</For></ul>
+          <ul class="mt-[var(--wb-space-4)] grid gap-[var(--wb-space-3)]"><For each={devices()}>{(device) => <li class={`${PANEL} flex flex-wrap items-center justify-between gap-[var(--wb-space-4)]`}><div class="grid gap-1"><span class="font-semibold text-[var(--wb-ink)]">MCP device</span><span class="text-xs text-[var(--wb-muted)]">{device.deviceId} · {device.scopes.join(', ')} · expires {device.expiresAt}</span><Show when={device.revokedAt}><span class="text-xs font-semibold text-[var(--wb-danger)]">Revoked {device.revokedAt}</span></Show></div><button class={DANGER_BUTTON} type="button" onClick={() => setConfirmDeviceId(device.deviceId)} disabled={!authorized() || busy() || device.revokedAt !== null}>Revoke device</button></li>}</For></ul>
         </Show>
       </section>
 

@@ -41,6 +41,7 @@ import type {
   CoreRuntimeServices,
   PromptTemplateCatalog,
 } from '../ports/runtime-services.ts';
+import type { ProjectReferencePacketV1 } from '../reference.ts';
 import { parseAnalysisJSON, parseAnalysisJSONWithErrors } from '../schemas/analysis.ts';
 import { type StyleProfile, StyleResolver, toStyleNotes } from '../style/index.ts';
 import type { ValidationKey } from '../types/discourse.ts';
@@ -58,7 +59,6 @@ import type {
   ValidationResult,
   WorldState,
 } from '../types/index.ts';
-import type { ProjectReferencePacketV1 } from '../reference.ts';
 import { compareAnalysisBlocks } from '../util/compare-analysis.ts';
 import { ConcurrencyPool } from '../util/pool.ts';
 import type { AnalysisContract, ResultAggregator } from '../validator/aggregator.ts';
@@ -474,9 +474,7 @@ export class RenderPipeline {
         ? [job.surfaceReferencePacket.sourceProseHash]
         : [],
       extractorVersion: '1',
-      referencePacketHash: job.referencePacket
-        ? sha256Canonical(job.referencePacket)
-        : undefined,
+      referencePacketHash: job.referencePacket ? sha256Canonical(job.referencePacket) : undefined,
     });
     const cacheKey = sha256Canonical({ logical: logicalKeyStr, surface: surfaceKeyStr });
     const cacheDiagnostics: CacheDiagnostics[] = [];

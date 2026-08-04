@@ -321,14 +321,11 @@ export const BROWSER_AUTHORING_EVENTS_PATH = `${BROWSER_AUTHORING_BASE_PATH}/eve
 /** `GET .../authoring/revisions` — native revision history metadata. */
 export const BROWSER_AUTHORING_REVISIONS_PATH = `${BROWSER_AUTHORING_BASE_PATH}/revisions`;
 /** `GET .../authoring/revisions/:revisionId` — one native revision metadata record. */
-export const BROWSER_AUTHORING_REVISION_PATH =
-  `${BROWSER_AUTHORING_REVISIONS_PATH}/:revisionId`;
+export const BROWSER_AUTHORING_REVISION_PATH = `${BROWSER_AUTHORING_REVISIONS_PATH}/:revisionId`;
 /** `GET .../authoring/revisions/diff` — hash-only native revision diff. */
-export const BROWSER_AUTHORING_REVISION_DIFF_PATH =
-  `${BROWSER_AUTHORING_REVISIONS_PATH}/diff`;
+export const BROWSER_AUTHORING_REVISION_DIFF_PATH = `${BROWSER_AUTHORING_REVISIONS_PATH}/diff`;
 /** `POST .../authoring/revisions/restore` — restore as a new native revision. */
-export const BROWSER_AUTHORING_REVISION_RESTORE_PATH =
-  `${BROWSER_AUTHORING_REVISIONS_PATH}/restore`;
+export const BROWSER_AUTHORING_REVISION_RESTORE_PATH = `${BROWSER_AUTHORING_REVISIONS_PATH}/restore`;
 
 /** Safe native revision metadata; bundle storage and actor details stay Host-only. */
 export interface BrowserAuthoringRevisionV1 {
@@ -387,7 +384,6 @@ export type BrowserAuthoringRevisionRestoreResultV1 =
       readonly status: 'rejected';
       readonly failure: AuthoringFailureV1;
     };
-
 
 // ─── Strict MCP authoring tool I/O ──────────────────────────────────────────
 
@@ -520,7 +516,6 @@ export interface McpAuthoringConflictReadOutputV1 {
   readonly conflicts: readonly AuthoringConflictV1[];
   readonly workspaceDigest: string | null;
 }
-
 
 /** `nova_authoring_document_get` input. */
 export interface McpAuthoringDocumentGetInputV1 {

@@ -1,5 +1,5 @@
-import { defineConfig } from 'vitest/config';
 import { resolve } from 'node:path';
+import { defineConfig } from 'vitest/config';
 
 // Workbench Host tests exercise real loopback listeners (WebSocket upgrades,
 // HTTP) and the persistence worker, so they must NOT load the Core

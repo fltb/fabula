@@ -1,19 +1,20 @@
 import { createHash } from 'node:crypto';
-import * as Y from 'yjs';
 import type { Context, Handler } from 'hono';
+import * as Y from 'yjs';
 import {
   AGENT_CLIENT_CONTRACT_VERSION,
+  type AgentApplyResponseV1,
+  type AgentProposalResponseV1,
   BROWSER_AGENT_APPLY_PATH,
   BROWSER_AGENT_PROPOSAL_PATH,
-  type AgentApplyRequestV1,
-  type AgentApplyResponseV1,
-  type AgentProposalRequestV1,
-  type AgentProposalResponseV1,
 } from '../client/agent-client.js';
 import type { EditorAssistantContextV1 } from '../client/editor-assistant-contract.js';
 import type { BrowserSessionPrincipalV1 } from '../contracts/browser-api.js';
 import type { AgentSuggestionService, AgentSuggestionV1 } from './agent/suggestion-service.js';
-import { WORKING_TEXT_TYPE, type AuthoringWorkingDocumentStore } from './authoring/document-store.js';
+import {
+  type AuthoringWorkingDocumentStore,
+  WORKING_TEXT_TYPE,
+} from './authoring/document-store.js';
 import type {
   BrowserPrincipalResolver,
   BrowserProjectAuthorization,
@@ -65,7 +66,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function validContext(value: unknown, projectId: string): value is EditorAssistantContextV1 {
   if (!isRecord(value) || value.version !== 1 || value.projectId !== projectId) return false;
   if (typeof value.documentId !== 'string' || value.documentId.length === 0) return false;
-  if (typeof value.baseVector !== 'string' || !/^[a-f0-9]{64}$/.test(value.baseVector)) return false;
+  if (typeof value.baseVector !== 'string' || !/^[a-f0-9]{64}$/.test(value.baseVector))
+    return false;
   if (!isRecord(value.selection)) return false;
   const from = value.selection.from;
   const to = value.selection.to;
@@ -79,7 +81,10 @@ function validContext(value: unknown, projectId: string): value is EditorAssista
   );
 }
 
-function safeDocumentText(project: BrowserAgentProject, documentId: string): Promise<string | null> {
+function safeDocumentText(
+  project: BrowserAgentProject,
+  documentId: string,
+): Promise<string | null> {
   const descriptor = project.documents.descriptor(documentId);
   if (descriptor === null) return Promise.resolve(null);
   return project.documents
@@ -106,7 +111,10 @@ function vectorHash(vector: Uint8Array | null): string | null {
 }
 
 class BrowserAgentApi {
-  readonly #suggestions = new Map<string, { readonly suggestion: AgentSuggestionV1; readonly documentText: string }>();
+  readonly #suggestions = new Map<
+    string,
+    { readonly suggestion: AgentSuggestionV1; readonly documentText: string }
+  >();
 
   constructor(readonly options: BrowserAgentApiOptions) {}
 
@@ -133,9 +141,12 @@ class BrowserAgentApi {
       return error('PROJECT_NOT_FOUND', 404);
     }
     const projects = await this.options.catalog.listProjects(authenticated.principal);
-    if (!projects.some((project) => project.projectId === projectId)) return error('PROJECT_NOT_FOUND', 404);
+    if (!projects.some((project) => project.projectId === projectId))
+      return error('PROJECT_NOT_FOUND', 404);
     const project = await this.options.projects.get(projectId);
-    return project === null ? error('PROJECT_NOT_READY', 409) : { principal: authenticated.principal, project };
+    return project === null
+      ? error('PROJECT_NOT_READY', 409)
+      : { principal: authenticated.principal, project };
   }
 
   proposal(): Handler<HostListenerEnv> {
@@ -143,10 +154,20 @@ class BrowserAgentApi {
       const access = await this.#project(c, 'reader');
       if (access instanceof Response) return access;
       const body: unknown = await c.req.raw.json().catch(() => null);
-      if (!isRecord(body) || Object.keys(body).some((key) => key !== 'version' && key !== 'context' && key !== 'instruction')) {
+      if (
+        !isRecord(body) ||
+        Object.keys(body).some(
+          (key) => key !== 'version' && key !== 'context' && key !== 'instruction',
+        )
+      ) {
         return error('INVALID_INPUT', 400);
       }
-      if (body.version !== AGENT_CLIENT_CONTRACT_VERSION || !validContext(body.context, access.project.projectId) || typeof body.instruction !== 'string' || body.instruction.length === 0) {
+      if (
+        body.version !== AGENT_CLIENT_CONTRACT_VERSION ||
+        !validContext(body.context, access.project.projectId) ||
+        typeof body.instruction !== 'string' ||
+        body.instruction.length === 0
+      ) {
         return error('INVALID_INPUT', 400);
       }
       const context = body.context;
@@ -186,7 +207,9 @@ class BrowserAgentApi {
             suggestionId: generated.suggestion.suggestionId,
             projectId: generated.suggestion.projectId,
             documentId: generated.suggestion.documentId,
-            ...(generated.suggestion.sceneId === undefined ? {} : { sceneId: generated.suggestion.sceneId }),
+            ...(generated.suggestion.sceneId === undefined
+              ? {}
+              : { sceneId: generated.suggestion.sceneId }),
             baseVector: context.baseVector,
             baseTextHash: generated.suggestion.baseTextHash,
             selection: generated.suggestion.selection,
@@ -196,7 +219,11 @@ class BrowserAgentApi {
         } satisfies AgentProposalResponseV1);
       }
       if (generated.status === 'paused') {
-        return json({ status: 'paused', reason: 'human-presence', replanRequired: true } satisfies AgentProposalResponseV1);
+        return json({
+          status: 'paused',
+          reason: 'human-presence',
+          replanRequired: true,
+        } satisfies AgentProposalResponseV1);
       }
       if (generated.status === 'stale') {
         return json({
@@ -206,7 +233,10 @@ class BrowserAgentApi {
           currentVector: digest?.digest ?? vectorHash(generated.liveStateVector),
         } satisfies AgentProposalResponseV1);
       }
-      return json({ status: 'failed', errorCode: generated.errorCode } satisfies AgentProposalResponseV1, 422);
+      return json(
+        { status: 'failed', errorCode: generated.errorCode } satisfies AgentProposalResponseV1,
+        422,
+      );
     };
   }
 
@@ -215,10 +245,20 @@ class BrowserAgentApi {
       const access = await this.#project(c, 'author');
       if (access instanceof Response) return access;
       const body: unknown = await c.req.raw.json().catch(() => null);
-      if (!isRecord(body) || Object.keys(body).some((key) => key !== 'version' && key !== 'context' && key !== 'proposal')) {
+      if (
+        !isRecord(body) ||
+        Object.keys(body).some(
+          (key) => key !== 'version' && key !== 'context' && key !== 'proposal',
+        )
+      ) {
         return error('INVALID_INPUT', 400);
       }
-      if (body.version !== AGENT_CLIENT_CONTRACT_VERSION || !validContext(body.context, access.project.projectId) || !isRecord(body.proposal) || typeof body.proposal.suggestionId !== 'string') {
+      if (
+        body.version !== AGENT_CLIENT_CONTRACT_VERSION ||
+        !validContext(body.context, access.project.projectId) ||
+        !isRecord(body.proposal) ||
+        typeof body.proposal.suggestionId !== 'string'
+      ) {
         return error('INVALID_INPUT', 400);
       }
       const context = body.context;
@@ -228,16 +268,27 @@ class BrowserAgentApi {
         stored.suggestion.projectId !== context.projectId ||
         stored.suggestion.documentId !== context.documentId
       ) {
-        return json({ status: 'stale', reason: 'context-changed', replanRequired: true, currentVector: null } satisfies AgentApplyResponseV1, 409);
+        return json(
+          {
+            status: 'stale',
+            reason: 'context-changed',
+            replanRequired: true,
+            currentVector: null,
+          } satisfies AgentApplyResponseV1,
+          409,
+        );
       }
       const digest = await access.project.documents.workspaceDigest();
       if (digest === null || digest.digest !== context.baseVector) {
-        return json({
-          status: 'stale',
-          reason: 'stale-vector',
-          replanRequired: true,
-          currentVector: digest?.digest ?? null,
-        } satisfies AgentApplyResponseV1, 409);
+        return json(
+          {
+            status: 'stale',
+            reason: 'stale-vector',
+            replanRequired: true,
+            currentVector: digest?.digest ?? null,
+          } satisfies AgentApplyResponseV1,
+          409,
+        );
       }
       const grant = await access.project.issueCapability({ principal: access.principal });
       const applied = await access.project.suggestions.applySuggestion({
@@ -255,34 +306,57 @@ class BrowserAgentApi {
       });
       if (applied.status === 'applied') {
         this.#suggestions.delete(stored.suggestion.suggestionId);
-        return json({ status: 'applied', suggestionId: stored.suggestion.suggestionId } satisfies AgentApplyResponseV1);
+        return json({
+          status: 'applied',
+          suggestionId: stored.suggestion.suggestionId,
+        } satisfies AgentApplyResponseV1);
       }
       if (applied.status === 'paused') {
-        return json({ status: 'paused', reason: 'human-presence', replanRequired: true } satisfies AgentApplyResponseV1, 409);
+        return json(
+          {
+            status: 'paused',
+            reason: 'human-presence',
+            replanRequired: true,
+          } satisfies AgentApplyResponseV1,
+          409,
+        );
       }
       if (applied.status === 'conflict') {
-        return json({
-          status: 'stale',
-          reason: 'stale-vector',
-          replanRequired: true,
-          currentVector: digest?.digest ?? vectorHash(applied.liveStateVector),
-        } satisfies AgentApplyResponseV1, 409);
+        return json(
+          {
+            status: 'stale',
+            reason: 'stale-vector',
+            replanRequired: true,
+            currentVector: digest?.digest ?? vectorHash(applied.liveStateVector),
+          } satisfies AgentApplyResponseV1,
+          409,
+        );
       }
-      return json({ status: 'failed', errorCode: applied.status === 'denied' ? 'SUBMIT_BLOCKED' : applied.errorCode } satisfies AgentApplyResponseV1, 422);
+      return json(
+        {
+          status: 'failed',
+          errorCode: applied.status === 'denied' ? 'SUBMIT_BLOCKED' : applied.errorCode,
+        } satisfies AgentApplyResponseV1,
+        422,
+      );
     };
   }
-
 }
 
 export function createBrowserAgentApi(options: BrowserAgentApiOptions): BrowserAgentApiSurface {
   const api = new BrowserAgentApi(options);
-  const mutations: readonly { readonly method: MutationHttpMethod; readonly path: string; readonly handler: Handler<HostListenerEnv> }[] = [
+  const mutations: readonly {
+    readonly method: MutationHttpMethod;
+    readonly path: string;
+    readonly handler: Handler<HostListenerEnv>;
+  }[] = [
     { method: 'POST', path: BROWSER_AGENT_PROPOSAL_PATH, handler: api.proposal() },
     { method: 'POST', path: BROWSER_AGENT_APPLY_PATH, handler: api.apply() },
   ];
   return {
     register(host) {
-      for (const route of mutations) host.registerMutationRoute(route.method, route.path, route.handler);
+      for (const route of mutations)
+        host.registerMutationRoute(route.method, route.path, route.handler);
     },
   };
 }

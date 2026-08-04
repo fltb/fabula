@@ -201,9 +201,7 @@ describe('SourceStudio native history controls', () => {
       />
     ));
     await user.click(screen.getAllByRole('button', { name: 'View revision' })[0] as HTMLElement);
-    await user.click(
-      screen.getByRole('button', { name: 'Compare with previous revision' }),
-    );
+    await user.click(screen.getByRole('button', { name: 'Compare with previous revision' }));
     await user.click(screen.getAllByRole('button', { name: 'Restore revision' })[1] as HTMLElement);
     expect(getRevision).toHaveBeenCalledWith('head-1');
     expect(diffRevisions).toHaveBeenCalledWith('head-1', 'head-2');

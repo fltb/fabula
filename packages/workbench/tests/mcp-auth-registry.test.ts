@@ -1780,14 +1780,14 @@ describe('createProjectSessionMcpRegistry', () => {
     const applied: McpAuthoringApplyOutputV1[] = [];
     const submitted: McpAuthoringSubmitOutputV1[] = [];
     const coordinator = fakeCoordinator({
-      editDocument: async (input) => {
+      editDocument: async (_input) => {
         applied.push({
           status: 'stale',
           failure: { code: 'WORKSPACE_STALE', message: 'The workspace digest moved.' },
         });
         return applied[applied.length - 1];
       },
-      submit: async (input) => {
+      submit: async (_input) => {
         submitted.push({
           status: 'rejected',
           failure: { code: 'SUBMIT_BLOCKED', message: 'blocked' },

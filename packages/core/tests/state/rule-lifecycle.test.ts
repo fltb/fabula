@@ -266,7 +266,7 @@ describe('Rule lifecycle — backward compat (convertLegacyRuleEffect)', () => {
     );
     expect(tx.operation).toBe('add_exception');
     expect(tx.exception).toBeDefined();
-    expect(tx.exception!.effect.type).toBe('exempt');
+    expect(tx.exception?.effect.type).toBe('exempt');
   });
 
   it('should convert nullify to set_effectiveness:nullified', () => {

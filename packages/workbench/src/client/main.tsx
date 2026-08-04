@@ -4,11 +4,11 @@ import { createSignal, Match, onCleanup, onMount, Show, Switch } from 'solid-js'
 import { render } from 'solid-js/web';
 import type {
   BrowserAuthoringReconcileRequestV1,
-  BrowserAuthoringSubmitRequestV1,
   BrowserAuthoringRevisionDiffV1,
   BrowserAuthoringRevisionListV1,
   BrowserAuthoringRevisionRestoreRequestV1,
   BrowserAuthoringRevisionV1,
+  BrowserAuthoringSubmitRequestV1,
   BrowserGraphRouteSelectorV1,
   BrowserProjectSummaryV1,
   BrowserSessionPrincipalV1,
@@ -321,8 +321,12 @@ function WorkspaceRoute(props: {
   >(null);
   const [workspace, setWorkspace] = createSignal<RuntimeWorkspace | null>(null);
   const [authoring, setAuthoring] = createSignal<ProjectEventClientSnapshot | null>(null);
-  const [revisionHistory, setRevisionHistory] = createSignal<BrowserAuthoringRevisionListV1 | null>(null);
-  const [selectedRevision, setSelectedRevision] = createSignal<BrowserAuthoringRevisionV1 | null>(null);
+  const [revisionHistory, setRevisionHistory] = createSignal<BrowserAuthoringRevisionListV1 | null>(
+    null,
+  );
+  const [selectedRevision, setSelectedRevision] = createSignal<BrowserAuthoringRevisionV1 | null>(
+    null,
+  );
   const [revisionDiff, setRevisionDiff] = createSignal<BrowserAuthoringRevisionDiffV1 | null>(null);
   const [yjsStatus, setYjsStatus] = createSignal<
     Record<string, 'idle' | 'connecting' | 'connected' | 'disconnected' | 'unavailable'>

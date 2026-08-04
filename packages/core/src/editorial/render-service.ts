@@ -52,12 +52,12 @@ import type {
   CoreExecutionRepository,
 } from '../ports/execution-repository.ts';
 import type { Clock, IdGenerator } from '../ports/runtime-services.ts';
+import { buildReferencePacket } from '../reference.ts';
 import { canonicalJson, compileSceneContract, computeSha256Hex } from '../render/scene-contract.ts';
 import { SurfacePlanner } from '../render/surface-planner.ts';
 import { ReviewManager } from '../review/manager.ts';
 import { resolveDiscourseBranch } from '../state/discourse-sequence.ts';
 import type { CompiledNarrativeRuntime } from '../state/narrative-runtime.ts';
-import { buildReferencePacket } from '../reference.ts';
 import { LogicalDisclosureSummaryCompiler, SurfaceReferenceExtractor } from '../summary/index.ts';
 import type { BranchPath } from '../types/branch.ts';
 import type { SystemContext } from '../types/context.ts';
@@ -242,7 +242,10 @@ function buildRenderJobs(
               `Reference packet belongs to ${request.referencePacket?.projectId}, not ${projectId}.`,
             );
           })()
-        : buildReferencePacket(request.referencePacket.projectId, request.referencePacket.citations);
+        : buildReferencePacket(
+            request.referencePacket.projectId,
+            request.referencePacket.citations,
+          );
   const boundaries = runtime.boundaries;
   const discourseContextByEventId = runtime.discourseContextsByEventId;
   const techniquesByEventId = runtime.graphs.techniquesByEventId;

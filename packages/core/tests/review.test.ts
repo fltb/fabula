@@ -163,7 +163,8 @@ describe('ReviewManager', () => {
         reviewId: LEDGER_REVIEW_ID,
       });
       expect(record).not.toBeNull();
-      const parsed = reviewLedgerV1Schema.parse(record!.value.value);
+      if (!record) throw new Error('Expected persisted review record fixture');
+      const parsed = reviewLedgerV1Schema.parse(record.value.value);
       expect(parsed.version).toBe(1);
       expect(parsed.comments).toHaveLength(1);
       expect(parsed.comments[0].id).toBe(comment.id);
@@ -255,7 +256,9 @@ describe('ReviewManager', () => {
       );
       // Resolve c2 so we have a mix of statuses
       const all = await manager.getComments();
-      const c2 = all.find((c) => c.content === 'c2')!;
+      const c2 = all.find((c) => c.content === 'c2');
+      expect(c2).toBeDefined();
+      if (!c2) throw new Error('Expected c2 review comment fixture');
       await manager.updateReviewComment(c2.id, 'resolve', 'actor');
     });
 
@@ -375,7 +378,9 @@ describe('ReviewManager', () => {
 
     it('does not return resolved, wontfix, addressed, or superseded comments', async () => {
       const all = await manager.getComments();
-      const scene = all.find((c) => c.content === 'scene-E1')!;
+      const scene = all.find((c) => c.content === 'scene-E1');
+      expect(scene).toBeDefined();
+      if (!scene) throw new Error('Expected scene review comment fixture');
       await manager.updateReviewComment(scene.id, 'resolve', 'a');
 
       const applicable = await manager.getApplicableOpenComments('E1', 2);
@@ -384,7 +389,9 @@ describe('ReviewManager', () => {
 
     it('ignores a novel comment when it is resolved', async () => {
       const all = await manager.getComments();
-      const novel = all.find((c) => c.content === 'novel-global')!;
+      const novel = all.find((c) => c.content === 'novel-global');
+      expect(novel).toBeDefined();
+      if (!novel) throw new Error('Expected novel review comment fixture');
       await manager.updateReviewComment(novel.id, 'resolve', 'a');
 
       const applicable = await manager.getApplicableOpenComments('E1', 2);
@@ -627,7 +634,10 @@ describe('ReviewManager', () => {
       // Establish a ledger
       await manager.addReviewComment(newComment(), 'a');
       const snapshot = await manager.readLedger();
-      const staleHash = snapshot.contentHash!;
+      expect(snapshot.contentHash).toBeDefined();
+      if (snapshot.contentHash === undefined)
+        throw new Error('Expected review ledger hash fixture');
+      const staleHash = snapshot.contentHash;
 
       // Replace the ledger externally — different content, different hash
       const external: ReviewLedgerV1 = {
@@ -672,7 +682,7 @@ describe('ReviewManager', () => {
       const snapshot = await manager.readLedger();
 
       const c2 = await manager.addReviewComment(newComment(), 'b', {
-        expectedLedgerHash: snapshot.contentHash!,
+        expectedLedgerHash: snapshot.contentHash,
       });
       expect(c2).toBeTruthy();
       expect(await manager.getComments()).toHaveLength(2);
@@ -708,13 +718,17 @@ describe('ReviewManager', () => {
       expect(updated).toHaveLength(2);
 
       // c1 — addressed
-      const c1Result = updated.find((c) => c.id === c1.id)!;
+      const c1Result = updated.find((c) => c.id === c1.id);
+      expect(c1Result).toBeDefined();
+      if (!c1Result) throw new Error('Expected addressed review comment fixture');
       expect(c1Result.status).toBe('addressed');
       expect(c1Result.applications).toHaveLength(1);
       expect(c1Result.applications[0].eventId).toBe('E1');
 
       // c2 — still open, but has the application
-      const c2Result = updated.find((c) => c.id === c2.id)!;
+      const c2Result = updated.find((c) => c.id === c2.id);
+      expect(c2Result).toBeDefined();
+      if (!c2Result) throw new Error('Expected open review comment fixture');
       expect(c2Result.status).toBe('open');
       expect(c2Result.applications).toHaveLength(1);
     });
@@ -734,7 +748,9 @@ describe('ReviewManager', () => {
       await manager.applyComments([c1.id], app2, new Set([c1.id]));
 
       const comments = await manager.getComments();
-      const updated = comments.find((c) => c.id === c1.id)!;
+      const updated = comments.find((c) => c.id === c1.id);
+      expect(updated).toBeDefined();
+      if (!updated) throw new Error('Expected updated review comment fixture');
       expect(updated.applications).toHaveLength(2);
       expect(updated.applications[0].eventId).toBe('E1');
       expect(updated.applications[1].eventId).toBe('E2');
@@ -778,7 +794,7 @@ describe('ReviewManager', () => {
 
   describe('getSummary', () => {
     it('reports correct counts across statuses', async () => {
-      const blocking = await manager.addReviewComment(
+      const _blocking = await manager.addReviewComment(
         {
           target: { type: 'scene', id: 'E1' },
           severity: 'blocking',
@@ -902,10 +918,14 @@ describe('ReviewManager', () => {
           newComment({ content: 'deterministic replacement' }),
           'b',
         );
-        const open = (await manager.getComments()).find((c) => c.status === 'open')!;
+        const open = (await manager.getComments()).find((c) => c.status === 'open');
+        expect(open).toBeDefined();
+        if (!open) throw new Error('Expected open deterministic review comment fixture');
         await manager.updateReviewComment(open.id, 'resolve', 'c');
         const record = await repo.readReview({ projectId: PROJECT_ID, reviewId: LEDGER_REVIEW_ID });
-        return record!.value.value;
+        expect(record).not.toBeNull();
+        if (!record) throw new Error('Expected deterministic review record fixture');
+        return record.value.value;
       };
       expect(await run()).toEqual(await run());
     });

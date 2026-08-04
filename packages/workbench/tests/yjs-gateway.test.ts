@@ -38,7 +38,9 @@ import {
   type YjsScopeResolution,
   type YjsTicketService,
 } from '../src/host/yjs/index.js';
+
 type YjsAuthRequest = Parameters<YjsAuthPort['resolve']>[0];
+
 import type { PersistenceWorkerClient } from '../src/persistence/worker-client.js';
 
 const FIXED_NOW = '2026-08-02T00:00:00.000Z';
@@ -782,7 +784,7 @@ describe('Yjs gateway shutdown closure', () => {
     };
     const loads: string[] = [];
     const base = fakePersistence();
-    const { gateway, session } = createGatewayFixture({
+    const { gateway } = createGatewayFixture({
       auth,
       persistence: {
         ...base.port,

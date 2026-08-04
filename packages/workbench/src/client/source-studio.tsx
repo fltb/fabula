@@ -39,10 +39,7 @@ export interface SourceStudioProps {
   readonly revisionDiff?: BrowserAuthoringRevisionDiffV1 | null;
   readonly onListRevisions?: () => void | Promise<void>;
   readonly onGetRevision?: (revisionId: string) => void | Promise<void>;
-  readonly onDiffRevisions?: (
-    fromRevisionId: string,
-    toRevisionId: string,
-  ) => void | Promise<void>;
+  readonly onDiffRevisions?: (fromRevisionId: string, toRevisionId: string) => void | Promise<void>;
   readonly onRestoreRevision?: (
     request: BrowserAuthoringRevisionRestoreRequestV1,
   ) => void | Promise<void>;
@@ -56,9 +53,7 @@ export interface SourceStudioProps {
    */
   readonly onSubmit?: (descriptor: SourceStudioDocumentDescriptorV1) => void;
   /** Explicit versioned submit command; no actor/capability/root/head fields. */
-  readonly onSubmitAuthoring?: (
-    request: BrowserAuthoringSubmitRequestV1,
-  ) => void | Promise<void>;
+  readonly onSubmitAuthoring?: (request: BrowserAuthoringSubmitRequestV1) => void | Promise<void>;
   /** Explicit external-candidate/conflict choice routed to the coordinator. */
   readonly onReconcileAuthoring?: (
     request: BrowserAuthoringReconcileRequestV1,
@@ -171,7 +166,10 @@ export function SourceStudio(props: SourceStudioProps) {
   };
 
   return (
-    <section class="source-studio flex min-h-0 flex-col gap-6" aria-labelledby="source-studio-heading">
+    <section
+      class="source-studio flex min-h-0 flex-col gap-6"
+      aria-labelledby="source-studio-heading"
+    >
       <header class="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p class="region-kicker">Source Studio</p>
@@ -225,7 +223,10 @@ export function SourceStudio(props: SourceStudioProps) {
       >
         {(state) => (
           <>
-            <section class="accepted-source border-b border-[var(--wb-border)] pb-5" aria-labelledby="accepted-source-heading">
+            <section
+              class="accepted-source border-b border-[var(--wb-border)] pb-5"
+              aria-labelledby="accepted-source-heading"
+            >
               <header>
                 <h3 id="accepted-source-heading">Accepted source — last valid projection</h3>
                 <p class="screen-note">
@@ -307,7 +308,9 @@ export function SourceStudio(props: SourceStudioProps) {
                   <div class="workspace-state workspace-state-ready">
                     <p class="region-kicker">Accepted identity</p>
                     <h3>{authoring().acceptedSourceHash ?? 'No accepted source yet'}</h3>
-                    <p class="screen-note">Last-valid source hash; this does not change while you type.</p>
+                    <p class="screen-note">
+                      Last-valid source hash; this does not change while you type.
+                    </p>
                   </div>
                   <div
                     class="workspace-state"
@@ -326,7 +329,10 @@ export function SourceStudio(props: SourceStudioProps) {
               )}
             </Show>
 
-            <section class="working-layer flex min-h-0 flex-col gap-4" aria-labelledby="working-layer-heading">
+            <section
+              class="working-layer flex min-h-0 flex-col gap-4"
+              aria-labelledby="working-layer-heading"
+            >
               <header>
                 <h3 id="working-layer-heading">
                   Working layer (Yjs) — online-only, not accepted source
@@ -360,7 +366,9 @@ export function SourceStudio(props: SourceStudioProps) {
                                 <span class="document-status">
                                   {descriptor.available ? 'available' : 'unavailable'}
                                 </span>
-                                <span class="document-status">{statusOf(descriptor.documentId)}</span>
+                                <span class="document-status">
+                                  {statusOf(descriptor.documentId)}
+                                </span>
                               </span>
                             }
                           >
@@ -375,7 +383,9 @@ export function SourceStudio(props: SourceStudioProps) {
                                 <span class="document-status">
                                   {descriptor.available ? 'available' : 'unavailable'}
                                 </span>
-                                <span class="document-status">{statusOf(descriptor.documentId)}</span>
+                                <span class="document-status">
+                                  {statusOf(descriptor.documentId)}
+                                </span>
                               </span>
                             </button>
                           </Show>
@@ -439,8 +449,13 @@ export function SourceStudio(props: SourceStudioProps) {
             </section>
 
             <Show when={props.authoring?.diagnostics.length}>
-              <section class="border-t border-[var(--wb-border)] pt-5" aria-labelledby="working-diagnostics-heading">
-                <h3 id="working-diagnostics-heading">Working candidate diagnostics — not accepted</h3>
+              <section
+                class="border-t border-[var(--wb-border)] pt-5"
+                aria-labelledby="working-diagnostics-heading"
+              >
+                <h3 id="working-diagnostics-heading">
+                  Working candidate diagnostics — not accepted
+                </h3>
                 <p class="screen-note">
                   These diagnostics describe the current candidate or external tree. The accepted
                   projection above remains the last valid source.
@@ -462,7 +477,10 @@ export function SourceStudio(props: SourceStudioProps) {
 
             <Show when={props.authoring?.externalCandidate}>
               {(candidate) => (
-                <section class="border-t border-[var(--wb-border)] pt-5" aria-labelledby="external-candidate-heading">
+                <section
+                  class="border-t border-[var(--wb-border)] pt-5"
+                  aria-labelledby="external-candidate-heading"
+                >
                   <h3 id="external-candidate-heading">External candidate</h3>
                   <p class="screen-note">
                     {candidate().valid
@@ -472,7 +490,9 @@ export function SourceStudio(props: SourceStudioProps) {
                   <dl class="projection-metrics">
                     <div>
                       <dt>Candidate hash</dt>
-                      <dd><code>{candidate().candidateHash}</code></dd>
+                      <dd>
+                        <code>{candidate().candidateHash}</code>
+                      </dd>
                     </div>
                     <div>
                       <dt>Changed documents</dt>
@@ -481,7 +501,15 @@ export function SourceStudio(props: SourceStudioProps) {
                   </dl>
                   <Show when={props.onReconcileAuthoring !== undefined}>
                     <div class="flex flex-wrap gap-2">
-                      <For each={['keep-working', 'accept-external', 'apply-proposed-disjoint-merge'] as const}>
+                      <For
+                        each={
+                          [
+                            'keep-working',
+                            'accept-external',
+                            'apply-proposed-disjoint-merge',
+                          ] as const
+                        }
+                      >
                         {(choice) => (
                           <button
                             type="button"
@@ -506,13 +534,17 @@ export function SourceStudio(props: SourceStudioProps) {
             </Show>
 
             <Show when={(props.authoring?.conflicts.length ?? 0) > 0}>
-              <section class="border-t border-[var(--wb-border)] pt-5" aria-labelledby="conflicts-heading">
+              <section
+                class="border-t border-[var(--wb-border)] pt-5"
+                aria-labelledby="conflicts-heading"
+              >
                 <h3 id="conflicts-heading">Dual conflict — same-path edits require resolution</h3>
                 <ul class="diagnostic-list" aria-label="Authoring conflicts">
                   <For each={props.authoring?.conflicts ?? []}>
                     {(conflict) => (
                       <li class="diagnostic diagnostic-error">
-                        <code>{conflict.logicalPath}</code> has independent working and external hashes.
+                        <code>{conflict.logicalPath}</code> has independent working and external
+                        hashes.
                       </li>
                     )}
                   </For>
@@ -520,7 +552,10 @@ export function SourceStudio(props: SourceStudioProps) {
               </section>
             </Show>
 
-            <section class="operation-center border-t border-[var(--wb-border)] pt-5" aria-labelledby="operation-center-heading">
+            <section
+              class="operation-center border-t border-[var(--wb-border)] pt-5"
+              aria-labelledby="operation-center-heading"
+            >
               <div class="operation-heading">
                 <div>
                   <p class="region-kicker">Operation Center</p>
@@ -549,7 +584,10 @@ export function SourceStudio(props: SourceStudioProps) {
                 </ul>
               </Show>
             </section>
-            <section class="revision-history border-t border-[var(--wb-border)] pt-5" aria-labelledby="revision-history-heading">
+            <section
+              class="revision-history border-t border-[var(--wb-border)] pt-5"
+              aria-labelledby="revision-history-heading"
+            >
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p class="region-kicker">Native history</p>
@@ -567,7 +605,9 @@ export function SourceStudio(props: SourceStudioProps) {
               </div>
               <Show
                 when={(props.revisionHistory?.revisions.length ?? 0) > 0}
-                fallback={<p class="screen-note">No native revisions are available for this project.</p>}
+                fallback={
+                  <p class="screen-note">No native revisions are available for this project.</p>
+                }
               >
                 <ol class="grid gap-2" aria-label="Native revision history">
                   <For each={props.revisionHistory?.revisions ?? []}>
@@ -630,7 +670,9 @@ export function SourceStudio(props: SourceStudioProps) {
                   <dl class="projection-metrics" aria-label="Selected native revision">
                     <div>
                       <dt>Selected revision</dt>
-                      <dd><code>{revision().revisionId}</code></dd>
+                      <dd>
+                        <code>{revision().revisionId}</code>
+                      </dd>
                     </div>
                     <div>
                       <dt>Accepted at</dt>
@@ -641,13 +683,18 @@ export function SourceStudio(props: SourceStudioProps) {
               </Show>
               <Show when={props.revisionDiff}>
                 {(diff) => (
-                  <div class="grid gap-2" aria-label="Native revision diff">
+                  <section class="grid gap-2" aria-labelledby="native-revision-diff-heading">
+                    <h4 id="native-revision-diff-heading" class="screen-note">
+                      Native revision diff
+                    </h4>
                     <p class="screen-note">
                       Diff {diff().fromRevisionId} → {diff().toRevisionId}
                     </p>
                     <Show
                       when={diff().changes.length > 0}
-                      fallback={<p class="screen-note">The selected revisions have no changed paths.</p>}
+                      fallback={
+                        <p class="screen-note">The selected revisions have no changed paths.</p>
+                      }
                     >
                       <ul class="diagnostic-list">
                         <For each={diff().changes}>
@@ -656,14 +703,18 @@ export function SourceStudio(props: SourceStudioProps) {
                               <code>{change.logicalPath}</code>
                               <span class="screen-note">
                                 {' '}
-                                {change.beforeHash === null ? 'added' : change.afterHash === null ? 'removed' : 'changed'}
+                                {change.beforeHash === null
+                                  ? 'added'
+                                  : change.afterHash === null
+                                    ? 'removed'
+                                    : 'changed'}
                               </span>
                             </li>
                           )}
                         </For>
                       </ul>
                     </Show>
-                  </div>
+                  </section>
                 )}
               </Show>
             </section>

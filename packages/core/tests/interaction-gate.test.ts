@@ -1,8 +1,7 @@
 // ============================================================================
 // Interaction Gate — Test Suite
 // ============================================================================
-import { describe, expect, it, vi } from 'vitest';
-import type { InteractionGate, WaiverRecord } from '../src/pipeline/interaction-gate.ts';
+import { describe, expect, it } from 'vitest';
 import { InteractionManager } from '../src/pipeline/interaction-gate.ts';
 import type { Clock } from '../src/ports/runtime-services.ts';
 
@@ -53,11 +52,11 @@ describe('InteractionManager', () => {
       mgr.recordWaiver('gate:E0:validation', 'minor tone issue, accepted');
       const waiver = mgr.getWaiver('gate:E0:validation');
       expect(waiver).toBeDefined();
-      expect(waiver!.gateId).toBe('gate:E0:validation');
-      expect(waiver!.reason).toBe('minor tone issue, accepted');
-      expect(waiver!.signedBy).toBe('auto');
+      expect(waiver?.gateId).toBe('gate:E0:validation');
+      expect(waiver?.reason).toBe('minor tone issue, accepted');
+      expect(waiver?.signedBy).toBe('auto');
       // Timestamp comes from the injected clock — deterministic, never wall-clock
-      expect(waiver!.signedAt).toBe(FIXED_NOW);
+      expect(waiver?.signedAt).toBe(FIXED_NOW);
     });
 
     it('waiver timestamps are deterministic under the injected clock', () => {
@@ -65,8 +64,8 @@ describe('InteractionManager', () => {
       const second = new InteractionManager(fixedClock);
       first.recordWaiver('gate:E0:validation', 'accepted');
       second.recordWaiver('gate:E0:validation', 'accepted');
-      expect(first.getWaiver('gate:E0:validation')!.signedAt).toBe(FIXED_NOW);
-      expect(second.getWaiver('gate:E0:validation')!.signedAt).toBe(FIXED_NOW);
+      expect(first.getWaiver('gate:E0:validation')?.signedAt).toBe(FIXED_NOW);
+      expect(second.getWaiver('gate:E0:validation')?.signedAt).toBe(FIXED_NOW);
       // Same gate + same clock → byte-identical waiver records
       expect(first.getWaiver('gate:E0:validation')).toEqual(second.getWaiver('gate:E0:validation'));
     });
@@ -74,13 +73,13 @@ describe('InteractionManager', () => {
     it('honors the timestamp supplied by the injected clock', () => {
       const mgr = new InteractionManager({ now: () => '2026-02-02T02:02:02.000Z' });
       mgr.recordWaiver('gate:E0:validation', 'accepted');
-      expect(mgr.getWaiver('gate:E0:validation')!.signedAt).toBe('2026-02-02T02:02:02.000Z');
+      expect(mgr.getWaiver('gate:E0:validation')?.signedAt).toBe('2026-02-02T02:02:02.000Z');
     });
 
     it('defaults to a deterministic epoch timestamp without a clock', () => {
       const mgr = new InteractionManager();
       mgr.recordWaiver('gate:E0:validation', 'accepted');
-      expect(mgr.getWaiver('gate:E0:validation')!.signedAt).toBe('1970-01-01T00:00:00.000Z');
+      expect(mgr.getWaiver('gate:E0:validation')?.signedAt).toBe('1970-01-01T00:00:00.000Z');
     });
 
     it('records a waiver with custom signedBy', () => {
@@ -88,7 +87,7 @@ describe('InteractionManager', () => {
       mgr.recordWaiver('gate:E1:validation', 'looks fine', 'author-jane');
       const waiver = mgr.getWaiver('gate:E1:validation');
       expect(waiver).toBeDefined();
-      expect(waiver!.signedBy).toBe('author-jane');
+      expect(waiver?.signedBy).toBe('author-jane');
     });
 
     it('hasWaiver returns true after recording', () => {
@@ -200,8 +199,8 @@ describe('InteractionManager', () => {
 
       // Waiver record is saved
       const waiver = mgr.getWaiver('gate:E0:validation');
-      expect(waiver!.signedBy).toBe('author-jane');
-      expect(waiver!.reason).toBe('author reviewed and accepted');
+      expect(waiver?.signedBy).toBe('author-jane');
+      expect(waiver?.reason).toBe('author reviewed and accepted');
     });
 
     it('multiple independent gates tracked separately', () => {

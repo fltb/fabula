@@ -1,13 +1,6 @@
 import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
-import type {
-  AcceptedSceneRecord,
-  CommitResult,
-  ReadResult,
-  StateEvent,
-  StateSnapshotRecord,
-  StateStreamKey,
-} from '@novalistically/core';
+import type { CommitResult, ReadResult } from '@novalistically/core';
 import { describe, expect, it } from 'vitest';
 import { FileRenderCacheRepository } from '../src/cache/file-render-cache-repository.js';
 import { FileExecutionRepository } from '../src/execution/file-execution-repository.js';
@@ -94,13 +87,13 @@ async function exerciseExecutionCloneIsolation<T extends { value: unknown }>(
 
   mutate(initial);
   mutate(result.value);
-  expect(payload((await read())!.value).marker, `${label}: store survives caller mutation`).toBe(
+  expect(payload((await read())?.value).marker, `${label}: store survives caller mutation`).toBe(
     'pristine',
   );
 
   const first = await read();
   if (first) mutate(first.value);
-  expect(payload((await read())!.value).marker, `${label}: store survives reader mutation`).toBe(
+  expect(payload((await read())?.value).marker, `${label}: store survives reader mutation`).toBe(
     'pristine',
   );
 }

@@ -1,6 +1,5 @@
 import type {
   ReferenceChunkV1,
-  ReferenceCitationV1,
   ReferenceContentV1,
   ReferenceItemV1,
   ReferenceJobV1,

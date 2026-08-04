@@ -397,7 +397,7 @@ describe('POV/narrator boundary', () => {
   });
 
   it('POV focalizer must be active for live reference', () => {
-    const povRef: ReferenceEntry = {
+    const _povRef: ReferenceEntry = {
       targetEntityId: 'narrator',
       mode: 'live',
       kind: 'pov_focalizer',
@@ -688,7 +688,7 @@ describe('WorldState domain scanning', () => {
     const index = computeReferenceIndex(ws);
     const heroRefs = index.byEntity.hero;
     expect(heroRefs).toBeDefined();
-    expect(heroRefs!.some((r) => r.kind === 'declaration' && r.mode === 'identity')).toBe(true);
+    expect(heroRefs?.some((r) => r.kind === 'declaration' && r.mode === 'identity')).toBe(true);
   });
 
   it('scans multiple entities', () => {

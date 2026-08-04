@@ -9,10 +9,7 @@ import {
   computeSourceHash,
 } from '@novalistically/core/source';
 import { describe, expect, it } from 'vitest';
-import {
-  ProjectWriteCoordinator,
-  StandaloneMutationBlockedError,
-} from '../src/index.js';
+import { ProjectWriteCoordinator, StandaloneMutationBlockedError } from '../src/index.js';
 import { FileProjectSourceLoaderImpl } from '../src/source/file-project-source-loader.js';
 import { FileProjectSourceWriterImpl } from '../src/source/file-project-source-writer.js';
 import { SourceConflictError, SourceInputError, SourcePathError } from '../src/source/types.js';
@@ -180,7 +177,7 @@ describe('file project source boundary', () => {
   it('runs writer CAS and final snapshot through an injected loader with a custom parse hook', async () => {
     const root = project();
     const loader = new FileProjectSourceLoaderImpl({
-      parse: (content, logicalPath) => ({ normalized: true, logicalPath }),
+      parse: (_content, logicalPath) => ({ normalized: true, logicalPath }),
     });
     const writer = new FileProjectSourceWriterImpl({ loader });
     const current = loader.load(root);
@@ -410,5 +407,4 @@ describe('file project source boundary', () => {
     );
     await coordinator.releaseWorkbenchAuthority(authorityToken);
   });
-
 });

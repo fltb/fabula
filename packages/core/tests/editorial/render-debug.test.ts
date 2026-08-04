@@ -3,12 +3,6 @@ import { expect, it } from 'vitest';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
 import { renderNovel } from '../../src/api.ts';
 import type { ProjectSourceSnapshotV1, SourceDocumentV1 } from '../../src/contracts/source.ts';
-import {
-  MemoryExecutionRepository,
-  MemoryRenderCacheRepository,
-  MemoryStateLogRepository,
-  MemoryStateSnapshotRepository,
-} from '../../src/testing/memory-repositories.ts';
 import type { AnalysisResult } from '../../src/types/analysis.ts';
 import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.ts';
 import { createRuntimeServices } from '../fixtures/runtime-services.ts';

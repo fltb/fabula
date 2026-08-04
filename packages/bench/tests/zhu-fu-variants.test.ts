@@ -13,6 +13,12 @@ import { runVariantBench } from '../src/variants.ts';
 
 const ROOT = path.resolve(import.meta.dirname, '..', '..', '..');
 
+function requireValue<T>(value: T | null | undefined, label: string): T {
+  expect(value, `missing ${label}`).toBeDefined();
+  if (value === null || value === undefined) throw new Error(`Missing ${label}`);
+  return value;
+}
+
 /** Parse one logical document's YAML from an immutable fixture snapshot. */
 function loadYamlFrom(snapshot: ProjectSourceSnapshotV1, logicalPath: string): unknown {
   const entries = sourceEntryMap(snapshot);
@@ -66,12 +72,16 @@ describe('zhu-fu-variants / branch-A (honest answer)', () => {
     // Check postconditions reflect honesty, not guilt
     const posts = (e0.expectedPostconditions as Array<Record<string, unknown>>) ?? [];
     const knowledgePost = posts.find((p) => p.entity === 'narrator' && p.attribute === 'knowledge');
-    expect(knowledgePost?.value).toBe('gave_honest_answer_to_xianglins_wife');
+    expect(requireValue(knowledgePost, 'knowledge post').value).toBe(
+      'gave_honest_answer_to_xianglins_wife',
+    );
 
     const emotionalPost = posts.find(
       (p) => p.entity === 'narrator' && p.attribute === 'emotionalState',
     );
-    expect(emotionalPost?.value).toBe('truthful_but_uncertain');
+    expect(requireValue(emotionalPost, 'emotional state post').value).toBe(
+      'truthful_but_uncertain',
+    );
   });
 
   it('should load E1 with different emotional resolution', () => {
@@ -86,7 +96,9 @@ describe('zhu-fu-variants / branch-A (honest answer)', () => {
     const emotionalPost = posts.find(
       (p) => p.entity === 'narrator' && p.attribute === 'emotionalState',
     );
-    expect(emotionalPost?.value).toBe('melancholy_but_not_guilty');
+    expect(requireValue(emotionalPost, 'emotional state post').value).toBe(
+      'melancholy_but_not_guilty',
+    );
   });
 
   it('should have 7 event files', () => {
@@ -136,12 +148,12 @@ describe('zhu-fu-variants / branch-B (He Laoliu survives)', () => {
 
     const posts = (e4.expectedPostconditions as Array<Record<string, unknown>>) ?? [];
     const heLaoliuStatus = posts.find((p) => p.entity === 'he_laoliu' && p.attribute === 'status');
-    expect(heLaoliuStatus?.value).toBe('alive');
+    expect(requireValue(heLaoliuStatus, 'He Laoliu status post').value).toBe('alive');
 
     const locationPost = posts.find(
       (p) => p.entity === 'xianglins_wife' && p.attribute === 'location',
     );
-    expect(locationPost?.value).toBe('he_family_hollow');
+    expect(requireValue(locationPost, 'location post').value).toBe('he_family_hollow');
   });
 
   it('should load E5 with quiet years narrative', () => {
@@ -157,7 +169,7 @@ describe('zhu-fu-variants / branch-B (He Laoliu survives)', () => {
     const hasSecondChild = posts.find(
       (p) => p.entity === 'xianglins_wife' && p.attribute === 'has_second_child',
     );
-    expect(hasSecondChild?.value).toBe(true);
+    expect(requireValue(hasSecondChild, 'second child post').value).toBe(true);
   });
 
   it('should load E6 with natural death resolution', () => {
@@ -172,12 +184,14 @@ describe('zhu-fu-variants / branch-B (He Laoliu survives)', () => {
     const heDeathCause = posts.find(
       (p) => p.entity === 'he_laoliu' && p.attribute === 'cause_of_death',
     );
-    expect(heDeathCause?.value).toBe('old_age');
+    expect(requireValue(heDeathCause, 'death cause post').value).toBe('old_age');
 
     const xlDeathLocation = posts.find(
       (p) => p.entity === 'xianglins_wife' && p.attribute === 'death_location',
     );
-    expect(xlDeathLocation?.value).toBe('own_home_he_family_hollow');
+    expect(requireValue(xlDeathLocation, 'death location post').value).toBe(
+      'own_home_he_family_hollow',
+    );
   });
 
   it('should have 7 event files (E0-E3 from base, E4-E6 new)', () => {
@@ -263,10 +277,11 @@ describe('zhu-fu-variants / error-injection (28 files)', () => {
       unknown
     >;
     const injected = (data.injected as Array<Record<string, unknown>>) ?? [];
-    expect(injected[0]?.entityId).toBe('E3');
-    expect(injected[0]?.attribute).toBe('narrationTime');
-    expect(injected[0]?.expectedValidator).toBe('timeline');
-    expect(injected[0]?.expectedSeverity).toBe('warning');
+    const firstInjected = requireValue(injected[0], 'timeline injection');
+    expect(firstInjected.entityId).toBe('E3');
+    expect(firstInjected.attribute).toBe('narrationTime');
+    expect(firstInjected.expectedValidator).toBe('timeline');
+    expect(firstInjected.expectedSeverity).toBe('warning');
   });
 });
 
@@ -320,8 +335,9 @@ describe('zhu-fu-variants / extreme-damage (5 files)', () => {
       unknown
     >;
     const injected = (data.injected as Array<Record<string, unknown>>) ?? [];
-    expect(String(injected[0]?.description).toLowerCase()).toContain('circular');
-    expect(injected[0]?.expectedValidator).toBe('causality');
+    const firstInjected = requireValue(injected[0], 'circular dependency injection');
+    expect(String(firstInjected.description).toLowerCase()).toContain('circular');
+    expect(firstInjected.expectedValidator).toBe('causality');
   });
 
   it('should have missing state provider test file', () => {
@@ -657,51 +673,49 @@ describe('zhu-fu-variants / registry field availability', () => {
   });
 
   it('xianglins_wife entity has aliases in registry state', () => {
-    const entity = registry.resolve('xianglins_wife');
-    expect(entity).not.toBeNull();
-    const aliases = entity!.state['aliases'];
+    const entity = requireValue(registry.resolve('xianglins_wife'), 'xianglins_wife entity');
+    const aliases = entity.state.aliases;
     expect(Array.isArray(aliases)).toBe(true);
+    if (!Array.isArray(aliases)) throw new Error('Expected aliases to be an array');
     expect(aliases).toContain('祥林嫂');
     expect(aliases).toContain('祥林的妻子');
   });
 
   it('xianglins_wife entity has gender in registry state', () => {
-    const entity = registry.resolve('xianglins_wife');
-    expect(entity).not.toBeNull();
-    expect(entity!.state['gender']).toBe('女');
+    const entity = requireValue(registry.resolve('xianglins_wife'), 'xianglins_wife entity');
+    expect(entity.state.gender).toBe('女');
   });
 
   it('xianglins_wife entity has appearance in registry state', () => {
-    const entity = registry.resolve('xianglins_wife');
-    expect(entity).not.toBeNull();
-    expect(typeof entity!.state['appearance']).toBe('string');
-    expect((entity!.state['appearance'] as string).length).toBeGreaterThan(10);
+    const entity = requireValue(registry.resolve('xianglins_wife'), 'xianglins_wife entity');
+    const appearance = entity.state.appearance;
+    expect(typeof appearance).toBe('string');
+    if (typeof appearance !== 'string') throw new Error('Expected appearance to be a string');
+    expect(appearance.length).toBeGreaterThan(10);
   });
 
   it('xianglins_wife entity has age in registry state', () => {
-    const entity = registry.resolve('xianglins_wife');
-    expect(entity).not.toBeNull();
-    expect(entity!.state['age']).toBe('约二十六七岁到四十岁');
+    const entity = requireValue(registry.resolve('xianglins_wife'), 'xianglins_wife entity');
+    expect(entity.state.age).toBe('约二十六七岁到四十岁');
   });
 
   it('xianglins_wife entity has profession in registry state', () => {
-    const entity = registry.resolve('xianglins_wife');
-    expect(entity).not.toBeNull();
-    expect(entity!.state['profession']).toBe('佣工');
+    const entity = requireValue(registry.resolve('xianglins_wife'), 'xianglins_wife entity');
+    expect(entity.state.profession).toBe('佣工');
   });
 
   it('registry state exposes promoted definition fields without fabrication', () => {
-    const entity = registry.resolve('xianglins_wife');
-    expect(entity).not.toBeNull();
+    const entity = requireValue(registry.resolve('xianglins_wife'), 'xianglins_wife entity');
     // initialState moved to event introduction boundaries in the current
     // contract — the registry must not fabricate those fields from top-level
     // definition data.
-    expect(entity!.state['location']).toBeUndefined();
-    expect(entity!.state['status']).toBeUndefined();
-    expect(entity!.state['condition']).toBeUndefined();
+    expect(entity.state.location).toBeUndefined();
+    expect(entity.state.status).toBeUndefined();
+    expect(entity.state.condition).toBeUndefined();
     // Promoted top-level fields survive into state.
-    const traits = entity!.state['traits'];
+    const traits = entity.state.traits;
     expect(Array.isArray(traits)).toBe(true);
+    if (!Array.isArray(traits)) throw new Error('Expected traits to be an array');
     expect(traits).toContain('hardworking');
   });
 });
@@ -1006,7 +1020,8 @@ describe('zhu-fu-variants / gate: malformed reference rejection', () => {
     const result = eventFileSchema.safeParse(malformed);
     expect(result.success).toBe(false);
     // Missing sceneBrief (required string)
-    expect(result.error?.issues.some((i) => i.path.includes('sceneBrief'))).toBe(true);
+    if (result.success) throw new Error('Expected malformed event file to be rejected');
+    expect(result.error.issues.some((i) => i.path.includes('sceneBrief'))).toBe(true);
   });
 
   it('rejects event file with invalid character reference (non-string entity)', () => {
@@ -1104,7 +1119,8 @@ describe('zhu-fu-variants / gate: missing-provenance rejection', () => {
     };
     const result = provenanceManifestSchema.safeParse(invalid);
     expect(result.success).toBe(false);
-    expect(result.error?.issues.some((i) => i.path.includes('edition'))).toBe(true);
+    if (result.success) throw new Error('Expected provenance entry without edition to be rejected');
+    expect(result.error.issues.some((i) => i.path.includes('edition'))).toBe(true);
   });
 
   it('accepts manifest with no entries (min not enforced)', () => {

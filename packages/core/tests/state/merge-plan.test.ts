@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  type CompileMergePlanParams,
   compileMergePlan,
   isTransactionLegal,
   reconcileMergePlan,
@@ -10,9 +9,7 @@ import type {
   BranchPath,
   CoverageManifest,
   DiscourseBridge,
-  DiscourseNode,
   DiscourseSnapshot,
-  MergePlan,
   MergePolicy,
   NarrativeEllipsis,
   NarrativeNode,

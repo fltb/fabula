@@ -169,9 +169,7 @@ describe('initial state — initialFacts applied as baseline', () => {
       CATALOG_CONTEXT,
     );
     // Baseline fact should be in the initial state before E1
-    expect(boundaries.stateBeforeByEventId.get('E1')?.entities['world']?.['status']).toBe(
-      'created',
-    );
+    expect(boundaries.stateBeforeByEventId.get('E1')?.entities.world?.status).toBe('created');
   });
 
   it('event postcondition overrides baseline initialFact for same entity+attribute', () => {
@@ -190,11 +188,9 @@ describe('initial state — initialFacts applied as baseline', () => {
       CATALOG_CONTEXT,
     );
     // Before E1: baseline value
-    expect(boundaries.stateBeforeByEventId.get('E1')?.entities['world']?.['status']).toBe(
-      'created',
-    );
+    expect(boundaries.stateBeforeByEventId.get('E1')?.entities.world?.status).toBe('created');
     // After E1 (finalState): E1's value overrides
-    expect(boundaries.finalState.entities['world']?.['status']).toBe('changed');
+    expect(boundaries.finalState.entities.world?.status).toBe('changed');
   });
 
   it('no initial facts → empty baseline state', () => {
@@ -221,9 +217,13 @@ describe('initial state — initialFacts applied as baseline', () => {
       HERO_ACTIVATION_ADJACENCY,
       CATALOG_CONTEXT,
     );
-    const beforeState = boundaries.stateBeforeByEventId.get('E1')!;
-    expect(beforeState.entities['world']?.['status']).toBe('created');
-    expect(beforeState.entities['world']?.['era']).toBe('ancient');
-    expect(beforeState.entities['villain']?.['name']).toBe('darklord');
+    const beforeState = boundaries.stateBeforeByEventId.get('E1');
+    expect(beforeState).toBeDefined();
+    if (!beforeState) {
+      throw new Error('Expected state before E1');
+    }
+    expect(beforeState.entities.world?.status).toBe('created');
+    expect(beforeState.entities.world?.era).toBe('ancient');
+    expect(beforeState.entities.villain?.name).toBe('darklord');
   });
 });

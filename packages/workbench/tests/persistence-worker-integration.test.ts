@@ -507,7 +507,10 @@ describe('real persistence worker project memberships', () => {
         }),
       ).rejects.toMatchObject({ code: 'INVALID_INPUT', retryable: false });
       await expect(
-        untypedClient.request('loadProjectMembership', { userId: '', projectId: projectA.projectId }),
+        untypedClient.request('loadProjectMembership', {
+          userId: '',
+          projectId: projectA.projectId,
+        }),
       ).rejects.toMatchObject({ code: 'INVALID_INPUT', retryable: false });
       await expect(
         untypedClient.request('listProjectMemberships', { projectId: '' }),
@@ -635,9 +638,7 @@ describe('real persistence worker project memberships', () => {
       await expect(
         harness.client.request('listProjectMemberships', { projectId: projectA.projectId }),
       ).resolves.toEqual([]);
-      await expect(
-        harness.client.request('listProjectMemberships', {}),
-      ).resolves.toEqual([
+      await expect(harness.client.request('listProjectMemberships', {})).resolves.toEqual([
         {
           userId: 'member-1',
           projectId: projectB.projectId,

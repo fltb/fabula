@@ -47,7 +47,9 @@ export interface CapabilityPersistence {
   revokeCapability(input: { capabilityId: string; reason?: string }): Promise<{ revoked: true }>;
   /** Durable, hash-only capability token-digest registry. */
   createVerifier(record: CapabilityVerifierRecord): Promise<CapabilityVerifierReadState>;
-  loadVerifierByTokenHash(input: { tokenHash: string }): Promise<CapabilityVerifierReadState | null>;
+  loadVerifierByTokenHash(input: {
+    tokenHash: string;
+  }): Promise<CapabilityVerifierReadState | null>;
   revokeVerifier(input: { deviceId: string; revokedAt: string }): Promise<{ revoked: true }>;
 }
 

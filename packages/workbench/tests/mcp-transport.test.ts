@@ -442,6 +442,10 @@ describe('MCP Streamable HTTP endpoint', () => {
       expect.objectContaining({ name: 'nova_authoring_status' }),
     ]);
     // Discovery walked the finite scope union: read/render first, author last.
-    expect(calls.map((call) => call.scopes)).toEqual([['mcp:read'], ['mcp:render'], ['mcp:author']]);
+    expect(calls.map((call) => call.scopes)).toEqual([
+      ['mcp:read'],
+      ['mcp:render'],
+      ['mcp:author'],
+    ]);
   });
 });

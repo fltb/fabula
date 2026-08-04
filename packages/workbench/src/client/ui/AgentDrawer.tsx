@@ -1,5 +1,5 @@
 import { Dialog } from '@kobalte/core/dialog';
-import { Show, createEffect, createSignal, on, onCleanup } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
 import type {
   AgentApplyResponseV1,
   AgentClient,
@@ -16,8 +16,8 @@ import {
   displayAgentPause,
   displayAgentStale,
 } from '../agent-client.js';
-import type { EditorAssistantContextV1 } from '../editor-assistant-contract.js';
 import { AgentDiff } from '../agent-diff.js';
+import type { EditorAssistantContextV1 } from '../editor-assistant-contract.js';
 
 export interface AgentDrawerProps {
   readonly open: boolean;
@@ -165,10 +165,7 @@ export function AgentDrawer(props: AgentDrawerProps) {
     const contextChanged =
       requestedContext !== null &&
       (context === null || contextIdentity(context) !== contextIdentity(requestedContext));
-    if (
-      contextChanged &&
-      (current.status === 'proposed' || current.status === 'applying')
-    ) {
+    if (contextChanged && (current.status === 'proposed' || current.status === 'applying')) {
       requestSerial += 1;
       requestController?.abort();
       setState({ status: 'stale', reason: 'context-changed' });
@@ -186,7 +183,10 @@ export function AgentDrawer(props: AgentDrawerProps) {
     return current === 'queued' || current === 'streaming' || current === 'applying';
   };
 
-  const setProgress = (serial: number, event: { status: 'queued' | 'streaming'; requestId?: string | null }) => {
+  const setProgress = (
+    serial: number,
+    event: { status: 'queued' | 'streaming'; requestId?: string | null },
+  ) => {
     if (serial !== requestSerial) return;
     setState(
       event.status === 'queued'
@@ -332,7 +332,6 @@ export function AgentDrawer(props: AgentDrawerProps) {
     return current.status === 'failed' ? current : null;
   };
 
-
   const currentState = () => state();
 
   return (
@@ -380,7 +379,9 @@ export function AgentDrawer(props: AgentDrawerProps) {
             fallback={
               <div class="grid gap-[var(--wb-space-2)] rounded-[var(--wb-radius-md)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] p-[var(--wb-space-4)]">
                 <strong>Select an editor range</strong>
-                <p class="screen-note">Place the caret or select text in a source, scene, or form before asking.</p>
+                <p class="screen-note">
+                  Place the caret or select text in a source, scene, or form before asking.
+                </p>
               </div>
             }
           >
@@ -397,7 +398,8 @@ export function AgentDrawer(props: AgentDrawerProps) {
                   {context().selection.to}
                 </span>
                 <span class="text-[0.75rem] text-[var(--wb-muted)]">
-                  The Host will re-read this working document; source bytes stay outside this drawer.
+                  The Host will re-read this working document; source bytes stay outside this
+                  drawer.
                 </span>
               </div>
             )}
@@ -431,11 +433,7 @@ export function AgentDrawer(props: AgentDrawerProps) {
                 Ask for a proposal
               </button>
               <Show when={isBusy()}>
-                <button
-                  type="button"
-                  class="text-button"
-                  onClick={stopRequest}
-                >
+                <button type="button" class="text-button" onClick={stopRequest}>
                   Stop waiting
                 </button>
               </Show>
@@ -457,10 +455,14 @@ export function AgentDrawer(props: AgentDrawerProps) {
               <p class="m-0">The Host is preparing a reviewable diff. Nothing is applied yet.</p>
             </Show>
             <Show when={currentState().status === 'applying'}>
-              <p class="m-0">The explicit Apply action is being checked against the latest working vector.</p>
+              <p class="m-0">
+                The explicit Apply action is being checked against the latest working vector.
+              </p>
             </Show>
             <Show when={currentState().status === 'applied'}>
-              <p class="m-0">The proposal entered the working layer. Accepted source is unchanged until submit.</p>
+              <p class="m-0">
+                The proposal entered the working layer. Accepted source is unchanged until submit.
+              </p>
             </Show>
             <Show when={pausedState()}>
               {(paused) => (

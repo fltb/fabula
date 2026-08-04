@@ -7,7 +7,6 @@ import {
 } from '../../src/state/thread-replay.js';
 import type {
   ThreadId,
-  ThreadLifecycle,
   ThreadRunId,
   ThreadRuntimeState,
   ThreadTransaction,
@@ -23,7 +22,7 @@ describe('Thread Lifecycle Transitions', () => {
       provenance: 'E0',
     };
     applyThreadTransaction(threads, tx1);
-    expect(threads.T1!.status).toBe('planned');
+    expect(threads.T1?.status).toBe('planned');
 
     const tx2: ThreadTransaction = {
       thread: 'T1',
@@ -32,7 +31,7 @@ describe('Thread Lifecycle Transitions', () => {
       provenance: 'E1',
     };
     applyThreadTransaction(threads, tx2);
-    expect(threads.T1!.status).toBe('active');
+    expect(threads.T1?.status).toBe('active');
   });
 
   it('active → blocked is valid', () => {
@@ -49,7 +48,7 @@ describe('Thread Lifecycle Transitions', () => {
       status: 'blocked',
       provenance: 'E1',
     });
-    expect(threads.T1!.status).toBe('blocked');
+    expect(threads.T1?.status).toBe('blocked');
   });
 
   it('blocked → active is valid (unblock)', () => {
@@ -72,7 +71,7 @@ describe('Thread Lifecycle Transitions', () => {
       status: 'active',
       provenance: 'E2',
     });
-    expect(threads.T1!.status).toBe('active');
+    expect(threads.T1?.status).toBe('active');
   });
 
   it('active → completed is valid', () => {
@@ -89,7 +88,7 @@ describe('Thread Lifecycle Transitions', () => {
       status: 'completed',
       provenance: 'E1',
     });
-    expect(threads.T1!.status).toBe('completed');
+    expect(threads.T1?.status).toBe('completed');
   });
 
   it('active → abandoned is valid', () => {
@@ -106,7 +105,7 @@ describe('Thread Lifecycle Transitions', () => {
       status: 'abandoned',
       provenance: 'E1',
     });
-    expect(threads.T1!.status).toBe('abandoned');
+    expect(threads.T1?.status).toBe('abandoned');
   });
 
   it('completed → planned (reopen) is valid', () => {
@@ -129,8 +128,8 @@ describe('Thread Lifecycle Transitions', () => {
       status: 'planned',
       provenance: 'E2',
     });
-    expect(threads.T1!.status).toBe('planned');
-    expect(threads.T1!.currentRunId).toBe('run-2');
+    expect(threads.T1?.status).toBe('planned');
+    expect(threads.T1?.currentRunId).toBe('run-2');
   });
 
   it('retired is terminal — no transitions out', () => {
@@ -147,7 +146,7 @@ describe('Thread Lifecycle Transitions', () => {
       status: 'retired',
       provenance: 'E1',
     });
-    expect(threads.T1!.status).toBe('retired');
+    expect(threads.T1?.status).toBe('retired');
 
     // Attempting any transition from retired should throw
     expect(() => {
@@ -188,7 +187,7 @@ describe('Thread Lifecycle Transitions', () => {
       goalSet: [{ goalId: 'find_clue', status: 'active' }],
       provenance: 'E0',
     });
-    expect(threads.T1!.goalStates.find_clue).toBe('active');
+    expect(threads.T1?.goalStates.find_clue).toBe('active');
 
     applyThreadTransaction(threads, {
       thread: 'T1',
@@ -196,7 +195,7 @@ describe('Thread Lifecycle Transitions', () => {
       goalSet: [{ goalId: 'find_clue', status: 'achieved' }],
       provenance: 'E1',
     });
-    expect(threads.T1!.goalStates.find_clue).toBe('achieved');
+    expect(threads.T1?.goalStates.find_clue).toBe('achieved');
   });
 
   it('milestone state updates are tracked', () => {
@@ -207,7 +206,7 @@ describe('Thread Lifecycle Transitions', () => {
       milestoneSet: [{ milestoneId: 'first_breakthrough', status: 'achieved' }],
       provenance: 'E0',
     });
-    expect(threads.T1!.milestoneStates.first_breakthrough).toBe('achieved');
+    expect(threads.T1?.milestoneStates.first_breakthrough).toBe('achieved');
   });
 
   it('binding updates accumulate', () => {
@@ -224,8 +223,8 @@ describe('Thread Lifecycle Transitions', () => {
       bindingsAfter: { antagonist: 'fourth_uncle' },
       provenance: 'E1',
     });
-    expect(threads.T1!.bindings.protagonist).toBe('xianglins_wife');
-    expect(threads.T1!.bindings.antagonist).toBe('fourth_uncle');
+    expect(threads.T1?.bindings.protagonist).toBe('xianglins_wife');
+    expect(threads.T1?.bindings.antagonist).toBe('fourth_uncle');
   });
 
   it('semantic state hash changes on state update', () => {
@@ -236,7 +235,7 @@ describe('Thread Lifecycle Transitions', () => {
       status: 'active',
       provenance: 'E0',
     });
-    const hash1 = threads.T1!.semanticStateHash;
+    const hash1 = threads.T1?.semanticStateHash;
 
     applyThreadTransaction(threads, {
       thread: 'T1',
@@ -244,7 +243,7 @@ describe('Thread Lifecycle Transitions', () => {
       goalSet: [{ goalId: 'progress', status: 'active' }],
       provenance: 'E1',
     });
-    const hash2 = threads.T1!.semanticStateHash;
+    const hash2 = threads.T1?.semanticStateHash;
     expect(hash2).not.toBe(hash1);
   });
 });
@@ -259,8 +258,8 @@ describe('Legacy ThreadProgressEntry conversion', () => {
     expect(tx.thread).toBe('T1');
     expect(tx.status).toBe('active');
     expect(tx.goalSet).toHaveLength(1);
-    expect(tx.goalSet![0].goalId).toBe('progress');
-    expect(tx.goalSet![0].status).toBe('active');
+    expect(tx.goalSet?.[0].goalId).toBe('progress');
+    expect(tx.goalSet?.[0].status).toBe('active');
     expect(tx.advancement).toBe('Found clue');
     expect(tx.provenance).toBe('E1');
   });
@@ -272,7 +271,7 @@ describe('Legacy ThreadProgressEntry conversion', () => {
     );
 
     expect(tx.status).toBe('completed');
-    expect(tx.goalSet![0].status).toBe('achieved');
+    expect(tx.goalSet?.[0].status).toBe('achieved');
   });
 });
 

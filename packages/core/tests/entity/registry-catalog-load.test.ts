@@ -10,7 +10,7 @@
 // ============================================================================
 
 import path from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { loadCanonicalProject } from '../../src/entity/project-runtime.js';
 import type { InMemoryEntityRegistry } from '../../src/entity/registry.js';
 import { materializeFixtureSnapshot } from '../fixtures/fixture-snapshots.ts';
@@ -43,46 +43,51 @@ describe('registry catalog-driven load', () => {
     it('characters have lifecycle: "active"', () => {
       const entity = registry.resolve('xianglins_wife');
       expect(entity).not.toBeNull();
-      expect(entity!.lifecycle).toBe('active');
+      expect(entity?.lifecycle).toBe('active');
     });
 
     it('characters have typeRef with typeId and schemaVersion', () => {
       const entity = registry.resolve('xianglins_wife');
-      expect(entity!.typeRef).toEqual({ typeId: 'character', schemaVersion: 1 });
+      expect(entity?.typeRef).toEqual({ typeId: 'character', schemaVersion: 1 });
     });
 
     it('characters have aliases in state from promoted field', () => {
       const entity = registry.resolve('xianglins_wife');
-      const aliases = entity!.state['aliases'];
-      expect(Array.isArray(aliases)).toBe(true);
-      expect((aliases as string[]).length).toBeGreaterThanOrEqual(1);
+      const aliases = entity?.state.aliases;
+      if (!Array.isArray(aliases)) {
+        throw new Error('expected aliases to be an array');
+      }
+      expect(aliases.length).toBeGreaterThanOrEqual(1);
     });
 
     it('characters have gender in state from promoted field', () => {
       const entity = registry.resolve('xianglins_wife');
-      expect(entity!.state['gender']).toBe('女');
+      expect(entity?.state.gender).toBe('女');
     });
 
     it('characters have appearance in state from promoted field', () => {
       const entity = registry.resolve('xianglins_wife');
-      expect(typeof entity!.state['appearance']).toBe('string');
-      expect((entity!.state['appearance'] as string).length).toBeGreaterThan(10);
+      const appearance = entity?.state.appearance;
+      if (typeof appearance !== 'string') {
+        throw new Error('expected appearance to be a string');
+      }
+      expect(appearance.length).toBeGreaterThan(10);
     });
 
     it('characters have age in state from promoted field', () => {
       const entity = registry.resolve('xianglins_wife');
-      expect(entity!.state['age']).toBe('约二十六七岁到四十岁');
+      expect(entity?.state.age).toBe('约二十六七岁到四十岁');
     });
 
     it('characters have profession in state from promoted field', () => {
       const entity = registry.resolve('xianglins_wife');
-      expect(entity!.state['profession']).toBe('佣工');
+      expect(entity?.state.profession).toBe('佣工');
     });
 
     it('characters preserve initialState values (location) alongside promoted fields', () => {
       const entity = registry.resolve('fourth_aunt');
       expect(entity).not.toBeNull();
-      expect(entity!.state['location']).toBe('fourth_master_lu_house');
+      expect(entity?.state.location).toBe('fourth_master_lu_house');
     });
 
     it('loads location entities with lifecycle and typeRef', () => {
@@ -101,8 +106,8 @@ describe('registry catalog-driven load', () => {
         expect(rule.lifecycle).toBe('active');
         expect(rule.typeRef).toEqual({ typeId: 'rule', schemaVersion: 1 });
         // Rules get category and type from definition fields (no longer hardcoded 2-field)
-        expect(rule.state['category']).toBeDefined();
-        expect(rule.state['type']).toBeDefined();
+        expect(rule.state.category).toBeDefined();
+        expect(rule.state.type).toBeDefined();
       }
     });
 

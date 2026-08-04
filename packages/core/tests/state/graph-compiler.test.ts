@@ -18,37 +18,17 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type CompileNode, compileGraph } from '../../src/state/graph-compiler.ts';
-import type {
-  DiscourseGraph,
-  GraphAbsenceWitness,
-  GraphCacheEntry,
-  GraphCompileError,
-  GraphProviderOutput,
-  StoryGraph,
-} from '../../src/types/graph.ts';
+import type { GraphAbsenceWitness, GraphProviderOutput } from '../../src/types/graph.ts';
 import {
-  AmbiguousOutputError,
   AssertionMismatchError,
-  BranchCoverageError,
-  BranchIncompatibilityError,
   CrossClockEdgeError,
   DuplicateBranchProviderError,
   DuplicateDiscoursePositionError,
-  DynamicLifecycleError,
   EdgeOriginCycleError,
-  EllipsisSummaryError,
   FutureTimeError,
   InitialRootMisuseError,
-  MergeInputError,
-  MissingOutputError,
-  NoOutputEdgeError,
-  ProvenanceError,
-  ReadMismatchError,
   SelfPredecessorError,
-  SemanticOutputDependencyError,
-  StaleProviderSelectionError,
   UnknownPredecessorError,
-  UnknownReadIdError,
   UnorderedStoryConflictError,
 } from '../../src/types/graph.ts';
 
@@ -325,7 +305,7 @@ describe('GraphCompiler', () => {
           r.type === 'output' && r.canonicalKey === 'entity:char/hero/name',
       );
       expect(outputRes).toBeDefined();
-      expect(outputRes!.outputId).toBe('o2');
+      expect(outputRes?.outputId).toBe('o2');
     });
 
     it('creates AbsenceWitness when no matching output exists', () => {
@@ -792,7 +772,7 @@ describe('GraphCompiler', () => {
       const outputRes = resolutions.find((r): r is GraphProviderOutput => r.type === 'output');
       expect(outputRes).toBeDefined();
       // Must resolve to 'main' branch output, not 'alternate'
-      expect(outputRes!.outputId).toBe('m1');
+      expect(outputRes?.outputId).toBe('m1');
     });
 
     it('future coordinate output produces AbsenceWitness for earlier read (future absence)', () => {
@@ -858,7 +838,7 @@ describe('GraphCompiler', () => {
       const outputRes = resolutions.find((r): r is GraphProviderOutput => r.type === 'output');
       expect(outputRes).toBeDefined();
       // day_10 must be selected (not day_2), proving numeric comparison
-      expect(outputRes!.outputId).toBe('o2');
+      expect(outputRes?.outputId).toBe('o2');
     });
 
     it('initial root provides state for any story day', () => {
@@ -893,7 +873,7 @@ describe('GraphCompiler', () => {
       const resolutions = result.storyGraphs[0].resolutions;
       const outputRes = resolutions.find((r): r is GraphProviderOutput => r.type === 'output');
       expect(outputRes).toBeDefined();
-      expect(outputRes!.outputId).toBe('init');
+      expect(outputRes?.outputId).toBe('init');
     });
 
     it('provider edges connect provider-node to reader-node (not readId)', () => {
@@ -1048,7 +1028,7 @@ describe('GraphCompiler', () => {
       const resolutions = result.storyGraphs[0].resolutions;
       const outputRes = resolutions.find((r): r is GraphProviderOutput => r.type === 'output');
       expect(outputRes).toBeDefined();
-      expect(outputRes!.outputId).toBe('o_a');
+      expect(outputRes?.outputId).toBe('o_a');
     });
 
     it('cross-clock explicit edge creates ordering without temporal comparison', () => {
@@ -1079,7 +1059,7 @@ describe('GraphCompiler', () => {
       const resolutions = result.storyGraphs[0].resolutions;
       const outputRes = resolutions.find((r): r is GraphProviderOutput => r.type === 'output');
       expect(outputRes).toBeDefined();
-      expect(outputRes!.outputId).toBe('o_cal');
+      expect(outputRes?.outputId).toBe('o_cal');
     });
 
     it('no arbitrary provider tie-break for incomparable maximal candidates', () => {

@@ -16,10 +16,19 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto';
-import { mkdirSync, watch, type FSWatcher } from 'node:fs';
-import { access, chmod, mkdir, readFile, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { type FSWatcher, mkdirSync, watch } from 'node:fs';
+import {
+  access,
+  chmod,
+  mkdir,
+  readFile,
+  realpath,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
-import YAML from 'yaml';
 import {
   normalizeWorkbenchConfiguration,
   WORKBENCH_CONFIGURATION_VERSION_V2,
@@ -28,12 +37,14 @@ import {
   type WorkbenchProjectConfigurationV2,
   type WorkbenchRevisionMirrorConfigurationV2,
 } from '@novalistically/workbench-protocol';
+import YAML from 'yaml';
 import {
-  WORKBENCH_CONFIGURATION_VERSION,
   type ConfigOperationDiagnosticV1,
+  WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchConfigurationV1,
   type WorkbenchNetworkConfigurationV1,
 } from '../contracts/configuration.js';
+
 export { normalizeWorkbenchConfiguration };
 
 // ─── Host home resolution ────────────────────────────────────────────────────
@@ -79,11 +90,14 @@ const REFERENCE_LIMIT_KEYS = [
   'extractionTimeoutMs',
   'mcpImportChunkBytes',
 ] as const;
-const CONFIGURATION_KEYS_V1 = ['version', 'projects', 'defaultProjectId', 'provider', 'network'] as const;
-const CONFIGURATION_KEYS_V2 = [
-  ...CONFIGURATION_KEYS_V1,
-  'referenceLimits',
+const CONFIGURATION_KEYS_V1 = [
+  'version',
+  'projects',
+  'defaultProjectId',
+  'provider',
+  'network',
 ] as const;
+const CONFIGURATION_KEYS_V2 = [...CONFIGURATION_KEYS_V1, 'referenceLimits'] as const;
 
 /** Stable plain-object projection; key order is the canonical V2 YAML order. */
 function toPlain(configuration: WorkbenchConfigurationV2): Record<string, unknown> {
@@ -121,7 +135,8 @@ function toPlain(configuration: WorkbenchConfigurationV2): Record<string, unknow
       maxItemsPerProject: configuration.referenceLimits.maxItemsPerProject,
       maxPendingJobsPerProject: configuration.referenceLimits.maxPendingJobsPerProject,
       maxChunksPerProject: configuration.referenceLimits.maxChunksPerProject,
-      maxExtractedCharactersPerProject: configuration.referenceLimits.maxExtractedCharactersPerProject,
+      maxExtractedCharactersPerProject:
+        configuration.referenceLimits.maxExtractedCharactersPerProject,
       maxChunkCharacters: configuration.referenceLimits.maxChunkCharacters,
       chunkOverlapCharacters: configuration.referenceLimits.chunkOverlapCharacters,
       extractionTimeoutMs: configuration.referenceLimits.extractionTimeoutMs,
@@ -137,9 +152,10 @@ export function serializeConfigurationYaml(configuration: WorkbenchConfiguration
 
 /** Content-hash revision of a configuration's canonical V2 YAML bytes. */
 export function configurationRevision(configuration: WorkbenchConfigurationInput): string {
-  return createHash('sha256').update(serializeConfigurationYaml(configuration), 'utf8').digest('hex');
+  return createHash('sha256')
+    .update(serializeConfigurationYaml(configuration), 'utf8')
+    .digest('hex');
 }
-
 
 // ─── Strict shape validation ─────────────────────────────────────────────────
 
@@ -147,7 +163,10 @@ const PROJECT_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
 const LOOPBACK_MODES: readonly string[] = ['loopback', 'lan', 'unix'];
 
 export type ConfigurationShapeResult =
-  | { readonly ok: true; readonly configuration: WorkbenchConfigurationV1 | WorkbenchConfigurationV2 }
+  | {
+      readonly ok: true;
+      readonly configuration: WorkbenchConfigurationV1 | WorkbenchConfigurationV2;
+    }
   | { readonly ok: false; readonly diagnostics: readonly ConfigOperationDiagnosticV1[] };
 
 function diagnostic(code: string, message: string): ConfigOperationDiagnosticV1 {
@@ -193,7 +212,9 @@ function nullableStringField(
   const raw = value[key];
   if (raw === null) return null;
   if (typeof raw !== 'string') {
-    diagnostics.push(diagnostic('CONFIG_INVALID', `Field "${where}.${key}" must be a string or null.`));
+    diagnostics.push(
+      diagnostic('CONFIG_INVALID', `Field "${where}.${key}" must be a string or null.`),
+    );
     return null;
   }
   return raw;
@@ -219,7 +240,9 @@ function validateConfigurationV2Shape(value: Record<string, unknown>): Configura
   const diagnostics: ConfigOperationDiagnosticV1[] = [];
   rejectUnknownKeys(value, CONFIGURATION_KEYS_V2, 'workbench.yaml', diagnostics);
   if (value.version !== WORKBENCH_CONFIGURATION_VERSION_V2) {
-    diagnostics.push(diagnostic('CONFIG_INVALID', 'Unsupported configuration version; expected 2.'));
+    diagnostics.push(
+      diagnostic('CONFIG_INVALID', 'Unsupported configuration version; expected 2.'),
+    );
   }
   const sourceProjects: WorkbenchProjectConfigurationV2[] = [];
   const baseProjects: Array<{ projectId: string; displayName: string; root: string }> = [];
@@ -238,23 +261,39 @@ function validateConfigurationV2Shape(value: Record<string, unknown>): Configura
       const root = stringField(entry, 'root', where, diagnostics);
       const mirror = entry.revisionMirror;
       if (projectId === null || displayName === null || root === null || !isRecord(mirror)) {
-        if (!isRecord(mirror)) diagnostics.push(diagnostic('CONFIG_INVALID', `Field "${where}.revisionMirror" must be a mapping.`));
+        if (!isRecord(mirror))
+          diagnostics.push(
+            diagnostic('CONFIG_INVALID', `Field "${where}.revisionMirror" must be a mapping.`),
+          );
         return;
       }
       rejectUnknownKeys(mirror, ['mode', 'ref'], `${where}.revisionMirror`, diagnostics);
       const mode = stringField(mirror, 'mode', `${where}.revisionMirror`, diagnostics);
       let revisionMirror: WorkbenchRevisionMirrorConfigurationV2 | null = null;
       if (mode === 'disabled') {
-        if ('ref' in mirror) diagnostics.push(diagnostic('CONFIG_INVALID', `${where}.revisionMirror.ref is not allowed when disabled.`));
+        if ('ref' in mirror)
+          diagnostics.push(
+            diagnostic(
+              'CONFIG_INVALID',
+              `${where}.revisionMirror.ref is not allowed when disabled.`,
+            ),
+          );
         revisionMirror = { mode: 'disabled' };
       } else if (mode === 'git-best-effort') {
         if (mirror.ref !== 'refs/heads/workbench') {
-          diagnostics.push(diagnostic('CONFIG_INVALID', `${where}.revisionMirror.ref must be refs/heads/workbench.`));
+          diagnostics.push(
+            diagnostic(
+              'CONFIG_INVALID',
+              `${where}.revisionMirror.ref must be refs/heads/workbench.`,
+            ),
+          );
         } else {
           revisionMirror = { mode: 'git-best-effort', ref: 'refs/heads/workbench' };
         }
       } else if (mode !== null) {
-        diagnostics.push(diagnostic('CONFIG_INVALID', `${where}.revisionMirror.mode is unsupported.`));
+        diagnostics.push(
+          diagnostic('CONFIG_INVALID', `${where}.revisionMirror.mode is unsupported.`),
+        );
       }
       if (revisionMirror === null) return;
       baseProjects.push({ projectId, displayName, root });
@@ -280,7 +319,9 @@ function validateConfigurationV2Shape(value: Record<string, unknown>): Configura
       if (key === 'enabled') continue;
       const item = limits[key];
       if (typeof item !== 'number' || !Number.isSafeInteger(item) || item < 0) {
-        diagnostics.push(diagnostic('CONFIG_INVALID', `referenceLimits.${key} must be a non-negative integer.`));
+        diagnostics.push(
+          diagnostic('CONFIG_INVALID', `referenceLimits.${key} must be a non-negative integer.`),
+        );
       }
     }
   }
@@ -336,11 +377,12 @@ export function parseConfigurationYaml(content: string): ConfigurationShapeResul
  * before any file write.
  */
 export function validateConfigurationShape(value: unknown): ConfigurationShapeResult {
-
   if (!isRecord(value)) {
     return {
       ok: false,
-      diagnostics: [diagnostic('CONFIG_INVALID', 'workbench.yaml must be a mapping at the top level.')],
+      diagnostics: [
+        diagnostic('CONFIG_INVALID', 'workbench.yaml must be a mapping at the top level.'),
+      ],
     };
   }
   if (value.version === WORKBENCH_CONFIGURATION_VERSION_V2) {
@@ -383,7 +425,9 @@ export function validateConfigurationShape(value: unknown): ConfigurationShapeRe
         return;
       }
       if (displayName.trim() === '') {
-        diagnostics.push(diagnostic('CONFIG_INVALID', `Field "${where}.displayName" must not be empty.`));
+        diagnostics.push(
+          diagnostic('CONFIG_INVALID', `Field "${where}.displayName" must not be empty.`),
+        );
         return;
       }
       if (!isAbsolute(root)) {
@@ -435,7 +479,10 @@ export function validateConfigurationShape(value: unknown): ConfigurationShapeRe
   let provider: WorkbenchConfigurationV1['provider'] = null;
   if (value.provider === undefined) {
     diagnostics.push(
-      diagnostic('CONFIG_INVALID', 'Field "provider" is required; write null or a provider mapping explicitly.'),
+      diagnostic(
+        'CONFIG_INVALID',
+        'Field "provider" is required; write null or a provider mapping explicitly.',
+      ),
     );
   } else if (value.provider === null) {
     provider = null;
@@ -452,10 +499,17 @@ export function validateConfigurationShape(value: unknown): ConfigurationShapeRe
           diagnostic('CONFIG_INVALID', 'provider.baseUrl must be an http(s) URL or null.'),
         );
       }
-      provider = { kind: 'ai-sdk', baseUrl: baseUrl.length === 0 ? null : baseUrl, model: model.length === 0 ? null : model };
+      provider = {
+        kind: 'ai-sdk',
+        baseUrl: baseUrl.length === 0 ? null : baseUrl,
+        model: model.length === 0 ? null : model,
+      };
     } else if (kind !== 'ai-sdk' && kind !== null) {
       diagnostics.push(
-        diagnostic('CONFIG_INVALID', `Unsupported provider kind "${kind}"; only "ai-sdk" is valid.`),
+        diagnostic(
+          'CONFIG_INVALID',
+          `Unsupported provider kind "${kind}"; only "ai-sdk" is valid.`,
+        ),
       );
     }
   }
@@ -554,7 +608,11 @@ export async function validateConfigurationTopology(
     canonicalRoots.push({ projectId: project.projectId, root: canonicalRoot });
     try {
       const nova = YAML.parse(await readFile(join(canonicalRoot, 'nova.yaml'), 'utf8'));
-      if (!isRecord(nova) || typeof nova.project !== 'string' || nova.project !== project.projectId) {
+      if (
+        !isRecord(nova) ||
+        typeof nova.project !== 'string' ||
+        nova.project !== project.projectId
+      ) {
         diagnostics.push({
           code: 'PROJECT_ID_MISMATCH',
           message: `Project "${project.projectId}" does not match its nova.yaml project id.`,
@@ -634,7 +692,11 @@ export class ConfigurationFileStore {
   #disposed = false;
 
   constructor(options: ConfigurationFileStoreOptions) {
-    if (typeof options.filePath !== 'string' || options.filePath.length === 0 || !isAbsolute(options.filePath)) {
+    if (
+      typeof options.filePath !== 'string' ||
+      options.filePath.length === 0 ||
+      !isAbsolute(options.filePath)
+    ) {
       throw new TypeError('ConfigurationFileStore requires an absolute filePath');
     }
     this.#filePath = options.filePath;

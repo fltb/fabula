@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { expect, it } from 'vitest';
 import { z } from 'zod';
 import type { AnalysisResult } from '../../src/types/analysis.ts';
 import { ResultAggregator } from '../../src/validator/index.ts';

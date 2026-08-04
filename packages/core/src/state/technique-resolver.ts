@@ -241,7 +241,7 @@ export function resolveNarrativeTechniques(input: {
 
       if (!(assertionId in input.assertions)) {
         throw new ConfigError(
-          `voiceDissonance: assertion "${assertionId}" not found in ` + `runtime assertion catalog`,
+          `voiceDissonance: assertion "${assertionId}" not found in runtime assertion catalog`,
           { phase: 'technique-resolution', eventId: eid },
         );
       }

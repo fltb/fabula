@@ -292,12 +292,12 @@ describe('graph-render-assembly ordering', () => {
       // E1 wrote hero.status = 'alive', so E2's state-before should see it
       const e2Before = runtime.boundaries.stateBeforeByEventId.get('E2');
       expect(e2Before).toBeDefined();
-      expect(e2Before!.entities['hero']?.['status']).toBe('alive');
+      expect(e2Before?.entities.hero?.status).toBe('alive');
 
       // E1's state-before should NOT have hero.status (nothing wrote it yet)
       const e1Before = runtime.boundaries.stateBeforeByEventId.get('E1');
       expect(e1Before).toBeDefined();
-      expect(e1Before!.entities['hero']?.['status']).toBeUndefined();
+      expect(e1Before?.entities.hero?.status).toBeUndefined();
 
       // ── Discourse order: E2 → E1 (ledger chapter sequence) ──
       expect(runtime.graphs.discourseGraph.sceneSequence).toEqual([
@@ -329,11 +329,11 @@ describe('graph-render-assembly ordering', () => {
       // E1 has surfaceMode → resolved contract list contains it
       const e1Techniques = runtime.graphs.techniquesByEventId.get('E1');
       expect(e1Techniques).toBeDefined();
-      expect(e1Techniques!.length).toBeGreaterThanOrEqual(1);
-      const surface = e1Techniques!.find((t) => t.kind === 'surfaceMode');
+      expect(e1Techniques?.length).toBeGreaterThanOrEqual(1);
+      const surface = e1Techniques?.find((t) => t.kind === 'surfaceMode');
       expect(surface).toBeDefined();
-      expect(surface!.instruction).toBe('Write in simple, declarative sentences');
-      expect(surface!.requiredEvidence).toContain('subordination');
+      expect(surface?.instruction).toBe('Write in simple, declarative sentences');
+      expect(surface?.requiredEvidence).toContain('subordination');
 
       // E2 has no technique directives → no entry in the map
       expect(runtime.graphs.techniquesByEventId.has('E2')).toBe(false);

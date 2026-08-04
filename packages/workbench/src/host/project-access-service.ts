@@ -6,15 +6,15 @@
  * implicit host-wide override. The service owns the only catalog projection,
  * so callers cannot turn an arbitrary project id into a resource lookup.
  */
-import type { BrowserProjectSummaryV1, BrowserSessionPrincipalV1 } from '../contracts/browser-api.js';
-import {
-  PROJECT_ACCESS_ROLE_GRANTS,
-  PROJECT_ACCESS_ROLES,
-} from '../contracts/configuration.js';
+import type {
+  BrowserProjectSummaryV1,
+  BrowserSessionPrincipalV1,
+} from '../contracts/browser-api.js';
 import type { ProjectAccessRole } from '../contracts/configuration.js';
+import { PROJECT_ACCESS_ROLE_GRANTS, PROJECT_ACCESS_ROLES } from '../contracts/configuration.js';
 
-export { PROJECT_ACCESS_ROLE_GRANTS, PROJECT_ACCESS_ROLES };
 export type { ProjectAccessRole };
+export { PROJECT_ACCESS_ROLE_GRANTS, PROJECT_ACCESS_ROLES };
 export type ProjectAccessRequiredRole = ProjectAccessRole | 'owner';
 export type ProjectAccessPrincipalRole = ProjectAccessRole | 'owner';
 export interface ProjectAccessRequest {
@@ -27,7 +27,6 @@ export interface ProjectAccessRequest {
 function isProjectMembershipPort(source: ProjectMembershipSource): source is ProjectMembershipPort {
   return !Array.isArray(source) && typeof source === 'object' && source !== null;
 }
-
 
 /** ACL entry. The server, never a request body, supplies this value. */
 export interface ProjectMembership {
@@ -48,10 +47,7 @@ export interface ProjectAccessProject {
   readonly open?: boolean;
 }
 
-export type ProjectAccessDenyReason =
-  | 'UNKNOWN_PROJECT'
-  | 'PROJECT_CLOSED'
-  | 'INSUFFICIENT_ROLE';
+export type ProjectAccessDenyReason = 'UNKNOWN_PROJECT' | 'PROJECT_CLOSED' | 'INSUFFICIENT_ROLE';
 
 export interface ProjectAccessGrant {
   readonly userId: string;
@@ -60,19 +56,30 @@ export interface ProjectAccessGrant {
 }
 
 export type ProjectAccessResult =
-  | { readonly ok: true; readonly grant: ProjectAccessGrant; readonly project: ProjectAccessProject }
+  | {
+      readonly ok: true;
+      readonly grant: ProjectAccessGrant;
+      readonly project: ProjectAccessProject;
+    }
   | { readonly ok: false; readonly reason: ProjectAccessDenyReason };
 
 export interface ProjectMembershipPort {
-  getMembership(userId: string, projectId: string): ProjectAccessRole | null | Promise<ProjectAccessRole | null>;
-  listMemberships?(userId: string): readonly ProjectMembership[] | Promise<readonly ProjectMembership[]>;
+  getMembership(
+    userId: string,
+    projectId: string,
+  ): ProjectAccessRole | null | Promise<ProjectAccessRole | null>;
+  listMemberships?(
+    userId: string,
+  ): readonly ProjectMembership[] | Promise<readonly ProjectMembership[]>;
 }
 
 export type ProjectMembershipSource = ProjectMembershipPort | readonly ProjectMembership[];
 
 export interface ProjectAccessServiceOptions {
   /** Canonical configured project source, never a caller-provided project id. */
-  readonly projects: readonly ProjectAccessProject[] | (() => readonly ProjectAccessProject[] | Promise<readonly ProjectAccessProject[]>);
+  readonly projects:
+    | readonly ProjectAccessProject[]
+    | (() => readonly ProjectAccessProject[] | Promise<readonly ProjectAccessProject[]>);
   /** ACL source. Missing membership means no access for non-owners. */
   readonly memberships?: ProjectMembershipSource;
   /** Owner identity source. A principal with role owner is also an owner. */
@@ -82,10 +89,7 @@ export interface ProjectAccessServiceOptions {
 }
 
 function isProjectAccessRole(value: unknown): value is ProjectAccessRole {
-  return (
-    typeof value === 'string' &&
-    (PROJECT_ACCESS_ROLES as readonly string[]).includes(value)
-  );
+  return typeof value === 'string' && (PROJECT_ACCESS_ROLES as readonly string[]).includes(value);
 }
 
 function roleAtLeast(
@@ -98,9 +102,7 @@ function roleAtLeast(
 }
 
 function principalRole(
-  principal:
-    | Pick<BrowserSessionPrincipalV1, 'role'>
-    | { role?: ProjectAccessPrincipalRole },
+  principal: Pick<BrowserSessionPrincipalV1, 'role'> | { role?: ProjectAccessPrincipalRole },
 ): ProjectAccessPrincipalRole | null {
   const role = principal.role;
   if (role === 'owner') return role;
@@ -124,7 +126,9 @@ export class ProjectAccessService {
   async #projects(): Promise<readonly ProjectAccessProject[]> {
     const source = this.#options.projects;
     const projects = typeof source === 'function' ? await source() : source;
-    return projects.filter((project) => typeof project.projectId === 'string' && project.projectId.length > 0);
+    return projects.filter(
+      (project) => typeof project.projectId === 'string' && project.projectId.length > 0,
+    );
   }
 
   async #ownerUserId(): Promise<string | null> {
@@ -146,16 +150,18 @@ export class ProjectAccessService {
     if (memberships === undefined) return null;
     const role = isProjectMembershipPort(memberships)
       ? await memberships.getMembership(userId, projectId)
-      : memberships.find(
+      : (memberships.find(
           (membership) => membership.userId === userId && membership.projectId === projectId,
-        )?.role ?? null;
+        )?.role ?? null);
     return isProjectAccessRole(role) ? role : null;
   }
 
   async #isOpen(project: ProjectAccessProject): Promise<boolean> {
     if (project.state !== undefined) return project.state === 'open';
     if (project.open !== undefined) return project.open;
-    return this.#options.isOpen === undefined ? true : await this.#options.isOpen(project.projectId);
+    return this.#options.isOpen === undefined
+      ? true
+      : await this.#options.isOpen(project.projectId);
   }
   /** Resolve ACL, project identity, and lifecycle state without touching a resource. */
   async authorize(input: ProjectAccessRequest): Promise<ProjectAccessResult> {
@@ -167,14 +173,20 @@ export class ProjectAccessService {
     ) {
       return { ok: false, reason: 'UNKNOWN_PROJECT' };
     }
-    const project = (await this.#projects()).find((candidate) => candidate.projectId === input.projectId);
+    const project = (await this.#projects()).find(
+      (candidate) => candidate.projectId === input.projectId,
+    );
     if (project === undefined) return { ok: false, reason: 'UNKNOWN_PROJECT' };
     const role = await this.#role(input.userId, input.projectId, input.principalRole);
     if (role === null || !roleAtLeast(role, input.requiredRole)) {
       return { ok: false, reason: 'INSUFFICIENT_ROLE' };
     }
     if (!(await this.#isOpen(project))) return { ok: false, reason: 'PROJECT_CLOSED' };
-    return { ok: true, grant: { userId: input.userId, projectId: project.projectId, role }, project };
+    return {
+      ok: true,
+      grant: { userId: input.userId, projectId: project.projectId, role },
+      project,
+    };
   }
 
   canAccessProject(
@@ -186,7 +198,9 @@ export class ProjectAccessService {
   }
 
   /** List only projects visible to this server-derived principal. */
-  async listProjects(principal: Pick<BrowserSessionPrincipalV1, 'userId' | 'role'>): Promise<readonly BrowserProjectSummaryV1[]> {
+  async listProjects(
+    principal: Pick<BrowserSessionPrincipalV1, 'userId' | 'role'>,
+  ): Promise<readonly BrowserProjectSummaryV1[]> {
     const role = principalRole(principal);
     const projects = await this.#projects();
     const visible: BrowserProjectSummaryV1[] = [];
@@ -211,18 +225,29 @@ export class ProjectAccessService {
   }
 
   /** Resolve a project, then invoke the resource callback only when authorized and open. */
-  async resolve<T>(input: ProjectAccessRequest & {
-    readonly resource: (grant: ProjectAccessGrant, project: ProjectAccessProject) => Promise<T> | T;
-  }): Promise<
+  async resolve<T>(
+    input: ProjectAccessRequest & {
+      readonly resource: (
+        grant: ProjectAccessGrant,
+        project: ProjectAccessProject,
+      ) => Promise<T> | T;
+    },
+  ): Promise<
     | { readonly ok: true; readonly value: T; readonly grant: ProjectAccessGrant }
     | { readonly ok: false; readonly reason: ProjectAccessDenyReason }
   > {
     const access = await this.authorize(input);
     if (!access.ok) return access;
-    return { ok: true, value: await input.resource(access.grant, access.project), grant: access.grant };
+    return {
+      ok: true,
+      value: await input.resource(access.grant, access.project),
+      grant: access.grant,
+    };
   }
 }
 
-export function createProjectAccessService(options: ProjectAccessServiceOptions): ProjectAccessService {
+export function createProjectAccessService(
+  options: ProjectAccessServiceOptions,
+): ProjectAccessService {
   return new ProjectAccessService(options);
 }

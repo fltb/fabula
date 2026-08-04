@@ -194,7 +194,10 @@ describe('editorial revision render — resolved accepted bases in Pass 1', () =
 
     // Actual Pass-1 request content — not plan hashes.
     expect(captured.pass1Prompts).toHaveLength(1);
-    const userPrompt = captured.pass1Prompts[0]!;
+    const userPrompt = captured.pass1Prompts[0];
+    if (userPrompt === undefined) {
+      throw new Error('expected a captured Pass-1 user prompt');
+    }
     expect(userPrompt).toContain('Previous Accepted Prose (Non-authoritative)');
     expect(userPrompt).toContain(BASE_PROSE);
     expect(userPrompt).toContain('Editorial Revision Instructions');
@@ -205,14 +208,17 @@ describe('editorial revision render — resolved accepted bases in Pass 1', () =
     );
 
     // The promoted revision is parented on the resolved accepted base.
-    const promoted = result.results[0]!.revisionId!;
+    const promoted = result.results[0]?.revisionId;
+    if (promoted === undefined || promoted === null) {
+      throw new Error('expected a promoted revision ID');
+    }
     const record = await execution.readSceneRevision({
       projectId: PROJECT_ID,
       eventId: 'E1',
       revisionId: promoted,
     });
     expect(record).not.toBeNull();
-    expect(record!.value.parentRevisionId).toBe('rev-base-1');
+    expect(record?.value.parentRevisionId).toBe('rev-base-1');
     const accepted = await execution.readAcceptedScene({ projectId: PROJECT_ID, eventId: 'E1' });
     expect(accepted?.value.revisionId).toBe(promoted);
     expect(accepted?.value.proseHash).toBe(hash(REVISED_PROSE));
@@ -274,7 +280,7 @@ describe('editorial revision render — resolved accepted bases in Pass 1', () =
 
     expect(preview.errors).toHaveLength(0);
     expect(preview.prompts).toHaveLength(1);
-    const userPrompt = preview.prompts[0]!.userPrompt;
+    const userPrompt = preview.prompts[0]?.userPrompt;
     expect(userPrompt).toContain('Previous Accepted Prose (Non-authoritative)');
     expect(userPrompt).toContain(BASE_PROSE);
     expect(userPrompt).toContain('Editorial Revision Instructions');
@@ -410,8 +416,8 @@ describe('editorial revision render — resolved accepted bases in Pass 1', () =
       revisionId: 'deterministic-rev-1',
     });
     expect(recA).not.toBeNull();
-    expect(recA!.value).toEqual(recB!.value);
-    const envelope = recA!.value.value;
+    expect(recA?.value).toEqual(recB?.value);
+    const envelope = recA?.value.value;
     if (typeof envelope === 'object' && envelope !== null && 'createdAt' in envelope) {
       expect(envelope.createdAt).toBe(FIXED_NOW);
     }

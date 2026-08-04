@@ -13,7 +13,10 @@ const FIELD =
   'mt-[var(--wb-space-2)] block min-h-10 w-full rounded-[var(--wb-radius-sm)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] px-[var(--wb-space-3)] py-[var(--wb-space-2)] text-[var(--wb-ink)] shadow-sm outline-none transition placeholder:text-[var(--wb-muted)] focus:border-[var(--wb-focus)] focus-visible:outline focus-visible:outline-3 focus-visible:outline-[var(--wb-focus)] focus-visible:outline-offset-1';
 
 export const RUNTIME_HEALTH_COPY: Readonly<
-  Record<RuntimeHealth, { readonly title: string; readonly description: string; readonly marker: string }>
+  Record<
+    RuntimeHealth,
+    { readonly title: string; readonly description: string; readonly marker: string }
+  >
 > = {
   loading: {
     title: 'Checking Host status',
@@ -56,11 +59,15 @@ export interface RuntimeStatePanelProps {
 }
 
 const RUNTIME_STATE_COPY: Readonly<
-  Record<RuntimeState, { readonly title: string; readonly description: string; readonly marker: string }>
+  Record<
+    RuntimeState,
+    { readonly title: string; readonly description: string; readonly marker: string }
+  >
 > = {
   setup: {
     title: 'Set up this Workbench',
-    description: 'Create the owner, validate a project, connect a provider, and review the listener policy.',
+    description:
+      'Create the owner, validate a project, connect a provider, and review the listener policy.',
     marker: '1',
   },
   'bootstrap-owner': {
@@ -85,12 +92,14 @@ const RUNTIME_STATE_COPY: Readonly<
   },
   'configuration-restart-required': {
     title: 'Restart required',
-    description: 'The configuration was accepted, but the listener must restart before it is active.',
+    description:
+      'The configuration was accepted, but the listener must restart before it is active.',
     marker: '↻',
   },
   'fatal-host-error': {
     title: 'Workbench Host error',
-    description: 'The Host could not complete this request. No credentials, paths, or source were displayed.',
+    description:
+      'The Host could not complete this request. No credentials, paths, or source were displayed.',
     marker: '!',
   },
 };
@@ -122,7 +131,11 @@ export function RuntimeStatePanel(props: RuntimeStatePanelProps): JSX.Element {
           {props.message ?? (props.health ? healthCopy()?.description : copy().description)}
         </p>
         <Show when={props.onAction && props.actionLabel}>
-          <button class={`${PRIMARY_BUTTON} mt-[var(--wb-space-5)]`} type="button" onClick={props.onAction}>
+          <button
+            class={`${PRIMARY_BUTTON} mt-[var(--wb-space-5)]`}
+            type="button"
+            onClick={props.onAction}
+          >
             {props.actionLabel}
           </button>
         </Show>
@@ -134,7 +147,10 @@ export function RuntimeStatePanel(props: RuntimeStatePanelProps): JSX.Element {
 export interface LoginFormProps {
   readonly pending?: boolean;
   readonly error?: string | null;
-  readonly onSubmit: (input: { readonly userId: string; readonly password: string }) => Promise<void> | void;
+  readonly onSubmit: (input: {
+    readonly userId: string;
+    readonly password: string;
+  }) => Promise<void> | void;
 }
 export function LoginForm(props: LoginFormProps): JSX.Element {
   const [userId, setUserId] = createSignal('owner');
@@ -164,14 +180,20 @@ export function LoginForm(props: LoginFormProps): JSX.Element {
         <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">
           Fabula / Workbench
         </p>
-        <h1 id="login-heading" class="font-[var(--font-display)] text-3xl font-bold text-[var(--wb-ink)]">
+        <h1
+          id="login-heading"
+          class="font-[var(--font-display)] text-3xl font-bold text-[var(--wb-ink)]"
+        >
           Sign in
         </h1>
         <p class="mt-[var(--wb-space-3)] text-sm leading-relaxed text-[var(--wb-muted)]">
           Authenticate with the local Host. This browser keeps the session in memory only.
         </p>
         <form class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]" onSubmit={submit}>
-          <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="login-user-id">
+          <label
+            class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+            for="login-user-id"
+          >
             User ID
             <input
               class={FIELD}
@@ -182,7 +204,10 @@ export function LoginForm(props: LoginFormProps): JSX.Element {
               onInput={(event) => setUserId(event.currentTarget.value)}
             />
           </label>
-          <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="login-password">
+          <label
+            class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+            for="login-password"
+          >
             Password
             <input
               class={FIELD}
@@ -224,11 +249,15 @@ export function ProjectPicker(props: ProjectPickerProps): JSX.Element {
         <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">
           Workbench / Project access
         </p>
-        <h1 id="project-picker-heading" class="font-[var(--font-display)] text-3xl font-bold text-[var(--wb-ink)]">
+        <h1
+          id="project-picker-heading"
+          class="font-[var(--font-display)] text-3xl font-bold text-[var(--wb-ink)]"
+        >
           Choose a project
         </h1>
         <p class="mt-[var(--wb-space-3)] text-sm leading-relaxed text-[var(--wb-muted)]">
-          Project paths stay on the Host. This picker uses only safe labels returned for your session.
+          Project paths stay on the Host. This picker uses only safe labels returned for your
+          session.
         </p>
         <Show
           when={!props.pending && props.projects.length > 0}
@@ -244,7 +273,10 @@ export function ProjectPicker(props: ProjectPickerProps): JSX.Element {
             </div>
           }
         >
-          <ul class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-3)]" aria-label="Available projects">
+          <ul
+            class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-3)]"
+            aria-label="Available projects"
+          >
             <For each={props.projects}>
               {(project) => (
                 <li>
@@ -254,7 +286,9 @@ export function ProjectPicker(props: ProjectPickerProps): JSX.Element {
                     onClick={() => props.onSelect(project.projectId)}
                   >
                     <span>
-                      <strong class="block text-base text-[var(--wb-ink)]">{project.displayName}</strong>
+                      <strong class="block text-base text-[var(--wb-ink)]">
+                        {project.displayName}
+                      </strong>
                       <span class="mt-1 block text-xs text-[var(--wb-muted)]">
                         {project.open ? 'Open on Host' : 'Available on Host'}
                       </span>
@@ -278,10 +312,16 @@ export function ProjectPicker(props: ProjectPickerProps): JSX.Element {
   );
 }
 
-export function AdminOutlet(props: { readonly authorized: boolean; readonly onSignIn?: () => void }): JSX.Element {
+export function AdminOutlet(props: {
+  readonly authorized: boolean;
+  readonly onSignIn?: () => void;
+}): JSX.Element {
   return props.authorized ? (
     <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-10)]">
-      <RuntimeStatePanel state="workspace" message="Owner dashboard routes are ready for the integration shell." />
+      <RuntimeStatePanel
+        state="workspace"
+        message="Owner dashboard routes are ready for the integration shell."
+      />
     </main>
   ) : (
     <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-10)]">

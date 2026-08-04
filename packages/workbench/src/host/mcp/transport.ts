@@ -52,7 +52,6 @@ interface PresentedCredentials {
   readonly token: string;
 }
 
-
 function responseJson(status: number, value: unknown): Response {
   return new Response(JSON.stringify(value), {
     status,
@@ -95,7 +94,6 @@ function mcpTool(definition: McpToolDefinition): {
     inputSchema: definition.inputSchema,
   };
 }
-
 
 /**
  * Authenticate discovery traffic (tools/list, batches, malformed bodies,
@@ -185,7 +183,7 @@ export function createMcpStreamableEndpoint(
 
       const resolved = resolveRegistry
         ? await resolveRegistry(request, projectId, route)
-        : registry ?? null;
+        : (registry ?? null);
       if (resolved === null) {
         return responseJson(404, { error: { code: 'PROJECT_NOT_FOUND' } });
       }

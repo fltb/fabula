@@ -65,9 +65,7 @@ export class GreyLineValidator implements Validator {
       // — imagery appears in narrativeChecks evidence —
       const imagery = gl.imagery;
       if (imagery && narrativeChecks.length > 0) {
-        const imageryFound = narrativeChecks.some(
-          (nc) => nc.evidence && nc.evidence.includes(imagery),
-        );
+        const imageryFound = narrativeChecks.some((nc) => nc.evidence?.includes(imagery));
         if (!imageryFound) {
           issues.push(
             makeIssue(

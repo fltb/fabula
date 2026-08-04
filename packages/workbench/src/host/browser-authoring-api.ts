@@ -13,22 +13,14 @@
  */
 import { randomUUID } from 'node:crypto';
 import type { Context, Handler } from 'hono';
-import type { BrowserSessionPrincipalV1 } from '../contracts/browser-api.js';
-import type {
-  AuthoringCoordinator,
-  AuthoringRevisionPort,
-  AuthoringRevisionSummary,
-} from './authoring/types.js';
-import type {
-  BrowserPrincipalResolver,
-  BrowserProjectAuthorization,
-  BrowserProjectCatalog,
-} from './browser-read-api.js';
-import type { ProjectAccessRequiredRole, ProjectAccessService } from './project-access-service.js';
-import type { HostListenerEnv, MutationHttpMethod } from './listener.js';
-import type { HostServer } from './server.js';
 import {
   AUTHORING_CONTRACT_VERSION,
+  type AuthoringActivityEventV1,
+  type AuthoringFailureCodeV1,
+  type AuthoringOperationReceiptV1,
+  type AuthoringReconcileChoiceV1,
+  type AuthoringStateV1,
+  type AuthoringSubmitReceiptV1,
   BROWSER_AUTHORING_EVENTS_PATH,
   BROWSER_AUTHORING_OPERATION_PATH,
   BROWSER_AUTHORING_OPERATIONS_PATH,
@@ -39,27 +31,33 @@ import {
   BROWSER_AUTHORING_REVISIONS_PATH,
   BROWSER_AUTHORING_STATE_PATH,
   BROWSER_AUTHORING_SUBMIT_PATH,
-  type AuthoringActivityEventV1,
-  type AuthoringFailureCodeV1,
-  type AuthoringOperationReceiptV1,
-  type AuthoringReconcileChoiceV1,
-  type AuthoringStateV1,
-  type AuthoringSubmitReceiptV1,
-  type BrowserAuthoringRevisionDiffV1,
-  type BrowserAuthoringRevisionListV1,
-  type BrowserAuthoringRevisionRestoreRequestV1,
-  type BrowserAuthoringRevisionRestoreResultV1,
-  type BrowserAuthoringRevisionV1,
   type BrowserAuthoringReconcileRequestV1,
   type BrowserAuthoringReconcileResultV1,
+  type BrowserAuthoringRevisionDiffV1,
+  type BrowserAuthoringRevisionListV1,
+  type BrowserAuthoringRevisionRestoreResultV1,
+  type BrowserAuthoringRevisionV1,
   type BrowserAuthoringSubmitRequestV1,
   type BrowserAuthoringSubmitResultV1,
 } from '../contracts/authoring.js';
+import type { BrowserSessionPrincipalV1 } from '../contracts/browser-api.js';
 import { BROWSER_API_BASE_PATH, BROWSER_SESSION_HEADER } from '../contracts/browser-api.js';
+import type {
+  AuthoringCoordinator,
+  AuthoringRevisionPort,
+  AuthoringRevisionSummary,
+} from './authoring/types.js';
+import type {
+  BrowserPrincipalResolver,
+  BrowserProjectAuthorization,
+  BrowserProjectCatalog,
+} from './browser-read-api.js';
+import type { HostListenerEnv, MutationHttpMethod } from './listener.js';
+import type { ProjectAccessRequiredRole, ProjectAccessService } from './project-access-service.js';
+import type { HostServer } from './server.js';
 import { getYjsTicketService, type YjsTicketService } from './yjs/index.js';
 /** `GET /api/v1/projects/:projectId/source/:documentId/yjs-ticket`. */
-export const BROWSER_YJS_TICKET_PATH =
-  `${BROWSER_API_BASE_PATH}/projects/:projectId/source/:documentId/yjs-ticket`;
+export const BROWSER_YJS_TICKET_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/source/:documentId/yjs-ticket`;
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
 const EVENT_HEADERS = {
@@ -81,7 +79,6 @@ export interface BrowserAuthoringRevisionRegistry {
   get(projectId: string): AuthoringRevisionPort | null | Promise<AuthoringRevisionPort | null>;
 }
 
-
 /** Safe operation stream source. Implementations own subscription lifecycle. */
 export interface BrowserAuthoringEventSource {
   subscribe(projectId: string, listener: (event: AuthoringActivityEventV1) => void): () => void;
@@ -98,10 +95,7 @@ export interface BrowserAuthoringCapabilityResolver {
     readonly principal: BrowserSessionPrincipalV1;
     readonly projectId: string;
     readonly kind: BrowserAuthoringCapabilityKind;
-  }): Promise<
-    | { readonly capabilityId: string; readonly scopes: readonly string[] }
-    | null
-  >;
+  }): Promise<{ readonly capabilityId: string; readonly scopes: readonly string[] } | null>;
 }
 
 export interface BrowserAuthoringCoordinatorRegistry {
@@ -180,16 +174,26 @@ function parseStrictObject(
   value: unknown,
   required: readonly string[],
   optional: readonly string[] = [],
-): { readonly ok: true; readonly value: Record<string, unknown> } | {
-  readonly ok: false;
-  readonly code: 'UNKNOWN_FIELD' | 'INVALID_INPUT';
-  readonly message: string;
-} {
+):
+  | { readonly ok: true; readonly value: Record<string, unknown> }
+  | {
+      readonly ok: false;
+      readonly code: 'UNKNOWN_FIELD' | 'INVALID_INPUT';
+      readonly message: string;
+    } {
   if (!isRecord(value)) {
-    return { ok: false, code: 'INVALID_INPUT', message: 'The authoring request must be an object.' };
+    return {
+      ok: false,
+      code: 'INVALID_INPUT',
+      message: 'The authoring request must be an object.',
+    };
   }
   if (value.version !== AUTHORING_CONTRACT_VERSION) {
-    return { ok: false, code: 'INVALID_INPUT', message: 'The authoring request version is unsupported.' };
+    return {
+      ok: false,
+      code: 'INVALID_INPUT',
+      message: 'The authoring request version is unsupported.',
+    };
   }
   const allowed = [...required, ...optional];
   const unknown = Object.keys(value).find((key) => !allowed.includes(key));
@@ -230,14 +234,17 @@ function mapReceiptFailure(receipt: AuthoringOperationReceiptV1): {
     'UNKNOWN_FIELD',
     'INTERNAL',
   ];
-  const mapped = typeof code === 'string' && known.includes(code as AuthoringFailureCodeV1)
-    ? (code as AuthoringFailureCodeV1)
-    : 'INTERNAL';
+  const mapped =
+    typeof code === 'string' && known.includes(code as AuthoringFailureCodeV1)
+      ? (code as AuthoringFailureCodeV1)
+      : 'INTERNAL';
   return { code: mapped, message: `The ${receipt.kind} operation was ${receipt.status}.` };
 }
 
 function isSuccessfulReceipt(receipt: AuthoringOperationReceiptV1): boolean {
-  return receipt.status === 'queued' || receipt.status === 'running' || receipt.status === 'completed';
+  return (
+    receipt.status === 'queued' || receipt.status === 'running' || receipt.status === 'completed'
+  );
 }
 
 async function readJson(c: Context<HostListenerEnv>): Promise<unknown> {
@@ -283,19 +290,20 @@ class BrowserAuthoringApiImpl {
         response: authoringError('PROJECT_NOT_FOUND', 'A project id is required.'),
       };
     }
-    const authorized = this.options.access === undefined
-      ? await this.options.authorization.canAccessProject(
-        resolution.principal.userId,
-        projectId,
-        requiredRole,
-      )
-      : (
-        await this.options.access.authorize({
-          userId: resolution.principal.userId,
-          projectId,
-          requiredRole,
-        })
-      ).ok;
+    const authorized =
+      this.options.access === undefined
+        ? await this.options.authorization.canAccessProject(
+            resolution.principal.userId,
+            projectId,
+            requiredRole,
+          )
+        : (
+            await this.options.access.authorize({
+              userId: resolution.principal.userId,
+              projectId,
+              requiredRole,
+            })
+          ).ok;
     if (!authorized) {
       return {
         ok: false,
@@ -306,17 +314,17 @@ class BrowserAuthoringApiImpl {
     if (!projects.some((project) => project.projectId === projectId)) {
       return {
         ok: false,
-        response: authoringError('PROJECT_NOT_FOUND', 'The project is not in this session catalogue.'),
+        response: authoringError(
+          'PROJECT_NOT_FOUND',
+          'The project is not in this session catalogue.',
+        ),
       };
     }
     const coordinator = await this.options.coordinators.get(projectId);
     if (coordinator === null || coordinator.projectId !== projectId) {
       return {
         ok: false,
-        response: authoringError(
-          'PROJECT_NOT_READY',
-          'Authoring is not ready for this project.',
-        ),
+        response: authoringError('PROJECT_NOT_READY', 'Authoring is not ready for this project.'),
       };
     }
     return { ok: true, principal: resolution.principal, projectId, coordinator };
@@ -325,13 +333,13 @@ class BrowserAuthoringApiImpl {
   async capability(
     access: Extract<AccessResult, { readonly ok: true }>,
     kind: BrowserAuthoringCapabilityKind,
-  ): Promise<
-    | { readonly capabilityId: string; readonly scopes: readonly string[] }
-    | Response
-  > {
+  ): Promise<{ readonly capabilityId: string; readonly scopes: readonly string[] } | Response> {
     const resolver = this.options.capabilities;
     if (resolver === undefined || resolver === null) {
-      return authoringError('AUTHORING_UNAVAILABLE', 'Browser authoring capability is unavailable.');
+      return authoringError(
+        'AUTHORING_UNAVAILABLE',
+        'Browser authoring capability is unavailable.',
+      );
     }
     const grant = await resolver.resolve({
       principal: access.principal,
@@ -344,7 +352,10 @@ class BrowserAuthoringApiImpl {
       grant.scopes.length === 0 ||
       grant.scopes.some((scope) => !nonEmptyString(scope))
     ) {
-      return authoringError('SUBMIT_BLOCKED', 'The session has no authoring capability for this operation.');
+      return authoringError(
+        'SUBMIT_BLOCKED',
+        'The session has no authoring capability for this operation.',
+      );
     }
     return grant;
   }
@@ -420,13 +431,14 @@ function revisionService(
   }
   const revision = registry.get(access.projectId);
   if (revision instanceof Promise) {
-    throw new Error('Asynchronous revision registries must be resolved by the Host before registration.');
+    throw new Error(
+      'Asynchronous revision registries must be resolved by the Host before registration.',
+    );
   }
   return revision === null
     ? authoringError('PROJECT_NOT_READY', 'Native revision history is not ready for this project.')
     : revision;
 }
-
 
 function revisionMetadata(revision: AuthoringRevisionSummary): BrowserAuthoringRevisionV1 {
   return {
@@ -507,7 +519,10 @@ function revisionDiffHandler(api: BrowserAuthoringApiImpl): Handler<HostListener
         service.get(access.projectId, toRevisionId),
       ]);
       if (from === null || to === null) {
-        return authoringError('REVISION_NOT_FOUND', 'The requested native revision does not exist.');
+        return authoringError(
+          'REVISION_NOT_FOUND',
+          'The requested native revision does not exist.',
+        );
       }
       const result = await service.diff(access.projectId, fromRevisionId, toRevisionId);
       return json({
@@ -543,7 +558,8 @@ function revisionRestoreHandler(api: BrowserAuthoringApiImpl): Handler<HostListe
     }
     const expectedAcceptedRevisionId =
       body.expectedAcceptedRevisionId === undefined ? null : body.expectedAcceptedRevisionId;
-    const expectedSourceHash = body.expectedSourceHash === undefined ? null : body.expectedSourceHash;
+    const expectedSourceHash =
+      body.expectedSourceHash === undefined ? null : body.expectedSourceHash;
     if (!optionalHash(expectedAcceptedRevisionId) || !optionalHash(expectedSourceHash)) {
       return authoringError('INVALID_INPUT', 'Restore CAS fields must be strings or null.');
     }
@@ -603,7 +619,10 @@ function submitHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv> {
     if (!nonEmptyString(body.expectedWorkspaceDigest)) {
       return authoringError('INVALID_INPUT', 'expectedWorkspaceDigest must be non-empty.');
     }
-    if (body.message !== undefined && (typeof body.message !== 'string' || body.message.length > 240)) {
+    if (
+      body.message !== undefined &&
+      (typeof body.message !== 'string' || body.message.length > 240)
+    ) {
       return authoringError('INVALID_INPUT', 'message must be at most 240 characters.');
     }
     const grant = await api.capability(access, 'submit');
@@ -655,7 +674,10 @@ function reconcileHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv
       return authoringError('INVALID_INPUT', 'choice is not a supported reconcile action.');
     }
     if (!optionalHash(body.candidateHash) || !optionalHash(body.expectedAcceptedSourceHash)) {
-      return authoringError('INVALID_INPUT', 'candidateHash and expectedAcceptedSourceHash must be hashes or null.');
+      return authoringError(
+        'INVALID_INPUT',
+        'candidateHash and expectedAcceptedSourceHash must be hashes or null.',
+      );
     }
     if (body.choice !== 'keep-working' && body.candidateHash === null) {
       return authoringError('INVALID_INPUT', 'This reconcile action requires candidateHash.');
@@ -673,7 +695,10 @@ function reconcileHandler(api: BrowserAuthoringApiImpl): Handler<HostListenerEnv
       });
       if (!isSuccessfulReceipt(receipt)) {
         const failure = mapReceiptFailure(receipt);
-        return json({ status: 'rejected', failure } satisfies BrowserAuthoringReconcileResultV1, 409);
+        return json(
+          { status: 'rejected', failure } satisfies BrowserAuthoringReconcileResultV1,
+          409,
+        );
       }
       return json({ status: 'queued', receipt } satisfies BrowserAuthoringReconcileResultV1, 202);
     } catch {
@@ -764,7 +789,8 @@ export function createBrowserAuthoringApi(
   return {
     register(host: HostServer): void {
       for (const route of reads) host.registerReadRoute(route.path, route.handler);
-      for (const route of mutations) host.registerMutationRoute(route.method, route.path, route.handler);
+      for (const route of mutations)
+        host.registerMutationRoute(route.method, route.path, route.handler);
     },
   };
 }
@@ -773,9 +799,9 @@ export type {
   AuthoringActivityEventV1,
   AuthoringOperationReceiptV1,
   AuthoringStateV1,
+  AuthoringSubmitReceiptV1,
   BrowserAuthoringReconcileRequestV1,
   BrowserAuthoringReconcileResultV1,
   BrowserAuthoringSubmitRequestV1,
   BrowserAuthoringSubmitResultV1,
-  AuthoringSubmitReceiptV1,
 };

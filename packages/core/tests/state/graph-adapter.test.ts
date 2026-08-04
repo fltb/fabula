@@ -142,9 +142,9 @@ describe('compileNarrativeGraphs', () => {
 
     const e1Contracts = graphs.techniquesByEventId.get('E1');
     expect(e1Contracts).toHaveLength(1);
-    expect(e1Contracts![0].kind).toBe('surfaceMode');
-    expect(e1Contracts![0].instruction).toBe('Write in simple, declarative sentences');
-    expect(e1Contracts![0].requiredEvidence).toBe('Prose uses short clauses');
+    expect(e1Contracts?.[0].kind).toBe('surfaceMode');
+    expect(e1Contracts?.[0].instruction).toBe('Write in simple, declarative sentences');
+    expect(e1Contracts?.[0].requiredEvidence).toBe('Prose uses short clauses');
     expect(graphs.techniquesByEventId.has('E2')).toBe(false);
   });
 
@@ -274,7 +274,7 @@ describe('compileNarrativeGraphs', () => {
 
     const e1Contracts = graphs.techniquesByEventId.get('E1');
     expect(e1Contracts).toBeDefined();
-    expect(e1Contracts!.some((c) => c.kind === 'absentApparatus')).toBe(true);
+    expect(e1Contracts?.some((c) => c.kind === 'absentApparatus')).toBe(true);
   });
 
   it('throws ConfigError for cross-event absentApparatus readId at closure', () => {

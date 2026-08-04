@@ -17,11 +17,11 @@ describe('zhu-fu fixture — loadProject', () => {
   it('loads project config with genre, synopsis, tense', () => {
     const data = mapper.loadProject();
     expect(data.config).toBeTruthy();
-    expect(data.config!.project).toBe('zhu-fu');
-    expect(data.config!.title).toBe('祝福');
-    expect(data.config!.genre).toBe('literary');
-    expect(data.config!.tense).toBe('past');
-    expect(data.config!.synopsis).toBeTruthy();
+    expect(data.config?.project).toBe('zhu-fu');
+    expect(data.config?.title).toBe('祝福');
+    expect(data.config?.genre).toBe('literary');
+    expect(data.config?.tense).toBe('past');
+    expect(data.config?.synopsis).toBeTruthy();
   });
 
   it('loads 8 characters as array', () => {
@@ -29,12 +29,12 @@ describe('zhu-fu fixture — loadProject', () => {
     expect(data.characters).toHaveLength(8);
     const xw = data.characters.find((c) => c.id === 'xianglins_wife');
     expect(xw).toBeTruthy();
-    expect(xw!.appearance).toBeTruthy();
-    expect(xw!.aliases).toBeInstanceOf(Array);
-    expect(xw!.aliases.length).toBeGreaterThanOrEqual(2);
-    expect(xw!.gender).toBe('女');
-    expect(xw!.age).toBeTruthy();
-    expect(xw!.profession).toBeTruthy();
+    expect(xw?.appearance).toBeTruthy();
+    expect(xw?.aliases).toBeInstanceOf(Array);
+    expect(xw?.aliases.length).toBeGreaterThanOrEqual(2);
+    expect(xw?.gender).toBe('女');
+    expect(xw?.age).toBeTruthy();
+    expect(xw?.profession).toBeTruthy();
   });
 
   it('loads 4 locations', () => {
@@ -58,7 +58,7 @@ describe('zhu-fu fixture — loadProject', () => {
   it('loads world initial state with threads and timeAnchors', () => {
     const data = mapper.loadProject();
     expect(data.worldInitialState).toBeTruthy();
-    expect(data.worldInitialState!.threads.length).toBeGreaterThanOrEqual(3);
+    expect(data.worldInitialState?.threads.length).toBeGreaterThanOrEqual(3);
     expect(data.timeAnchors.length).toBeGreaterThanOrEqual(5);
   });
 });

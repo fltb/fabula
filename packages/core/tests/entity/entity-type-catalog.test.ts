@@ -210,7 +210,7 @@ describe('EntityTypeCatalog', () => {
 
   describe('attribute coverage', () => {
     it('character type has all expected attributes', () => {
-      const charAttrs = catalog.types['character']?.attributes;
+      const charAttrs = catalog.types.character?.attributes;
       expect(charAttrs).toBeDefined();
 
       const expected = [
@@ -236,53 +236,53 @@ describe('EntityTypeCatalog', () => {
         'discourseMode',
       ];
       for (const attr of expected) {
-        expect(charAttrs![attr]).toBeDefined();
+        expect(charAttrs?.[attr]).toBeDefined();
       }
     });
 
     it('location type has all expected attributes', () => {
-      const locAttrs = catalog.types['location']?.attributes;
+      const locAttrs = catalog.types.location?.attributes;
       expect(locAttrs).toBeDefined();
-      expect(locAttrs!['access']).toBeDefined();
-      expect(locAttrs!['containment']).toBeDefined();
-      expect(locAttrs!['time_period']).toBeDefined();
+      expect(locAttrs?.access).toBeDefined();
+      expect(locAttrs?.containment).toBeDefined();
+      expect(locAttrs?.time_period).toBeDefined();
     });
 
     it('item type has all expected attributes', () => {
-      const itemAttrs = catalog.types['item']?.attributes;
+      const itemAttrs = catalog.types.item?.attributes;
       expect(itemAttrs).toBeDefined();
-      expect(itemAttrs!['quantity']).toBeDefined();
-      expect(itemAttrs!['condition']).toBeDefined();
-      expect(itemAttrs!['ownership']).toBeDefined();
-      expect(itemAttrs!['location']).toBeDefined();
+      expect(itemAttrs?.quantity).toBeDefined();
+      expect(itemAttrs?.condition).toBeDefined();
+      expect(itemAttrs?.ownership).toBeDefined();
+      expect(itemAttrs?.location).toBeDefined();
     });
 
     it('faction type has membership attribute', () => {
-      const facAttrs = catalog.types['faction']?.attributes;
+      const facAttrs = catalog.types.faction?.attributes;
       expect(facAttrs).toBeDefined();
-      expect(facAttrs!['membership']).toBeDefined();
+      expect(facAttrs?.membership).toBeDefined();
     });
 
     it('concept type has all expected attributes', () => {
-      const conAttrs = catalog.types['concept']?.attributes;
+      const conAttrs = catalog.types.concept?.attributes;
       expect(conAttrs).toBeDefined();
-      expect(conAttrs!['stability']).toBeDefined();
-      expect(conAttrs!['value']).toBeDefined();
-      expect(conAttrs!['description']).toBeDefined();
+      expect(conAttrs?.stability).toBeDefined();
+      expect(conAttrs?.value).toBeDefined();
+      expect(conAttrs?.description).toBeDefined();
     });
 
     it('rule type has all expected attributes', () => {
-      const ruleAttrs = catalog.types['rule']?.attributes;
+      const ruleAttrs = catalog.types.rule?.attributes;
       expect(ruleAttrs).toBeDefined();
-      expect(ruleAttrs!['category']).toBeDefined();
-      expect(ruleAttrs!['type']).toBeDefined();
-      expect(ruleAttrs!['applicability']).toBeDefined();
-      expect(ruleAttrs!['effectiveness']).toBeDefined();
-      expect(ruleAttrs!['evidence']).toBeDefined();
+      expect(ruleAttrs?.category).toBeDefined();
+      expect(ruleAttrs?.type).toBeDefined();
+      expect(ruleAttrs?.applicability).toBeDefined();
+      expect(ruleAttrs?.effectiveness).toBeDefined();
+      expect(ruleAttrs?.evidence).toBeDefined();
     });
 
     it('each kind has at least one attribute definition', () => {
-      for (const [kind, def] of Object.entries(catalog.types)) {
+      for (const [_kind, def] of Object.entries(catalog.types)) {
         const attrCount = Object.keys(def.attributes).length;
         expect(attrCount).toBeGreaterThanOrEqual(1);
       }
@@ -302,36 +302,36 @@ describe('EntityTypeCatalog', () => {
 
   describe('marital_status — the zhu-fu fix', () => {
     it('marital_status is defined on character type', () => {
-      const charAttrs = catalog.types['character']?.attributes;
+      const charAttrs = catalog.types.character?.attributes;
       expect(charAttrs).toBeDefined();
-      expect(charAttrs!['marital_status']).toBeDefined();
+      expect(charAttrs?.marital_status).toBeDefined();
     });
 
     it('marital_status has writePolicy "mutable" (NOT immutable)', () => {
-      const maritalStatus = catalog.types['character']?.attributes['marital_status'];
-      expect(maritalStatus!.writePolicy).toBe('mutable');
-      expect(maritalStatus!.writePolicy).not.toBe('immutable');
+      const maritalStatus = catalog.types.character?.attributes.marital_status;
+      expect(maritalStatus?.writePolicy).toBe('mutable');
+      expect(maritalStatus?.writePolicy).not.toBe('immutable');
     });
 
     it('marital_status has semanticRole "lifecycle"', () => {
-      const maritalStatus = catalog.types['character']?.attributes['marital_status'];
-      expect(maritalStatus!.semanticRole).toBe('lifecycle');
+      const maritalStatus = catalog.types.character?.attributes.marital_status;
+      expect(maritalStatus?.semanticRole).toBe('lifecycle');
     });
   });
 
   describe('type immutability', () => {
     it('rule category and type are immutable (identity)', () => {
-      const ruleAttrs = catalog.types['rule']?.attributes;
-      expect(ruleAttrs!['category'].writePolicy).toBe('immutable');
-      expect(ruleAttrs!['category'].semanticRole).toBe('identity');
-      expect(ruleAttrs!['type'].writePolicy).toBe('immutable');
-      expect(ruleAttrs!['type'].semanticRole).toBe('identity');
+      const ruleAttrs = catalog.types.rule?.attributes;
+      expect(ruleAttrs?.category.writePolicy).toBe('immutable');
+      expect(ruleAttrs?.category.semanticRole).toBe('identity');
+      expect(ruleAttrs?.type.writePolicy).toBe('immutable');
+      expect(ruleAttrs?.type.semanticRole).toBe('identity');
     });
 
     it('character gender is immutable (identity)', () => {
-      const gender = catalog.types['character']?.attributes['gender'];
-      expect(gender!.writePolicy).toBe('immutable');
-      expect(gender!.semanticRole).toBe('identity');
+      const gender = catalog.types.character?.attributes.gender;
+      expect(gender?.writePolicy).toBe('immutable');
+      expect(gender?.semanticRole).toBe('identity');
     });
   });
 
@@ -341,25 +341,25 @@ describe('EntityTypeCatalog', () => {
       for (const kind of kinds) {
         const def = catalog.types[kind];
         expect(def).toBeDefined();
-        expect(def!.kind).toBe(kind);
+        expect(def?.kind).toBe(kind);
       }
     });
 
     it('returns undefined for unknown kind', () => {
-      expect(catalog.types['unknown']).toBeUndefined();
+      expect(catalog.types.unknown).toBeUndefined();
     });
   });
 
   describe('attribute id lookup by kind', () => {
     it('returns attribute IDs for each kind', () => {
-      const charAttrs = Object.keys(catalog.types['character']!.attributes);
+      const charAttrs = Object.keys(catalog.types.character?.attributes);
       expect(charAttrs).toContain('gender');
       expect(charAttrs).toContain('marital_status');
       expect(charAttrs).toContain('location');
     });
 
     it('returns no attributes for unknown kind', () => {
-      expect(catalog.types['unknown']?.attributes).toBeUndefined();
+      expect(catalog.types.unknown?.attributes).toBeUndefined();
     });
   });
 

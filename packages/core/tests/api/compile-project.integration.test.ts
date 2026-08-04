@@ -56,10 +56,11 @@ describe('compileProject (snapshot integration)', () => {
     const firstEvent = compilation.events[0];
     const targetId = firstEvent.pov?.character;
     expect(targetId).toBeTruthy();
-    const entity = compilation.entities.resolve(targetId!);
+    if (!targetId) throw new Error('Expected an authored POV character');
+    const entity = compilation.entities.resolve(targetId);
     expect(entity).not.toBeNull();
-    expect(entity!.id).toBe(targetId);
-    expect(entity!.name.length).toBeGreaterThan(0);
+    expect(entity?.id).toBe(targetId);
+    expect(entity?.name.length).toBeGreaterThan(0);
   });
   it('includes runtime events at least as broad as authored events', () => {
     expect(compilation.runtimeEvents.length).toBeGreaterThanOrEqual(compilation.events.length);

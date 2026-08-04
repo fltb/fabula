@@ -242,8 +242,8 @@ describe('scene revision archive (create-once via CAS)', () => {
 
     const loaded = await readEnvelope(repository, revUuid);
     expect(loaded).not.toBeNull();
-    expect(loaded!.revisionId).toBe(revUuid);
-    expect(loaded!.prose).toBe('Scene revision prose content.');
+    expect(loaded?.revisionId).toBe(revUuid);
+    expect(loaded?.prose).toBe('Scene revision prose content.');
     // Stored value stays JSON-safe and schema-clean after the repository round-trip.
     expect(sceneRevisionEnvelopeV1Schema.safeParse(loaded).success).toBe(true);
   });
@@ -274,7 +274,7 @@ describe('scene revision archive (create-once via CAS)', () => {
 
     // The original immutable revision is unaffected.
     const loaded = await readEnvelope(repository, revUuid);
-    expect(loaded!.prose).toBe('First revision.');
+    expect(loaded?.prose).toBe('First revision.');
   });
 });
 
@@ -303,8 +303,8 @@ describe('immutable revision vs accepted scene separation', () => {
     // Revision 1 is still readable from the archive.
     const loaded1 = await readEnvelope(repository, uuid1);
     expect(loaded1).not.toBeNull();
-    expect(loaded1!.revisionId).toBe(uuid1);
-    expect(loaded1!.prose).toBe('Version 1.');
+    expect(loaded1?.revisionId).toBe(uuid1);
+    expect(loaded1?.prose).toBe('Version 1.');
 
     // The accepted scene and resolved artifact point to revision 2.
     const accepted = await repository.readAcceptedScene({
@@ -312,15 +312,15 @@ describe('immutable revision vs accepted scene separation', () => {
       eventId: TEST_EVENT_ID,
     });
     expect(accepted).not.toBeNull();
-    expect(accepted!.value.revisionId).toBe(uuid2);
+    expect(accepted?.value.revisionId).toBe(uuid2);
 
     const artifact = await repository.resolveAcceptedArtifact({
       projectId: PROJECT_ID,
       eventId: TEST_EVENT_ID,
     });
     expect(artifact).not.toBeNull();
-    expect(artifact!.revisionId).toBe(uuid2);
-    expect(artifact!.prose).toBe('Version 2.');
+    expect(artifact?.revisionId).toBe(uuid2);
+    expect(artifact?.prose).toBe('Version 2.');
   });
 });
 
@@ -355,21 +355,21 @@ describe('blocked revision does not displace the accepted scene', () => {
     // Both revisions remain archived.
     const loaded1 = await readEnvelope(repository, uuid1);
     const loaded2 = await readEnvelope(repository, uuid2);
-    expect(loaded1!.prose).toBe('Accepted version.');
-    expect(loaded2!.releaseDecision.status).toBe('blocked');
-    expect(loaded2!.released).toBe(false);
+    expect(loaded1?.prose).toBe('Accepted version.');
+    expect(loaded2?.releaseDecision.status).toBe('blocked');
+    expect(loaded2?.released).toBe(false);
 
     // The accepted scene still resolves to the accepted revision.
     const accepted = await repository.readAcceptedScene({
       projectId: PROJECT_ID,
       eventId: TEST_EVENT_ID,
     });
-    expect(accepted!.value.revisionId).toBe(uuid1);
+    expect(accepted?.value.revisionId).toBe(uuid1);
     const artifact = await repository.resolveAcceptedArtifact({
       projectId: PROJECT_ID,
       eventId: TEST_EVENT_ID,
     });
-    expect(artifact!.prose).toBe('Accepted version.');
+    expect(artifact?.prose).toBe('Accepted version.');
   });
 });
 
@@ -416,12 +416,12 @@ describe('accepted-scene CAS conflict leaves immutable revision readable', () =>
     // The archived revision remains readable and the accepted scene is intact.
     const loaded = await readEnvelope(repository, uuid2);
     expect(loaded).not.toBeNull();
-    expect(loaded!.revisionId).toBe(uuid2);
+    expect(loaded?.revisionId).toBe(uuid2);
     const accepted = await repository.readAcceptedScene({
       projectId: PROJECT_ID,
       eventId: TEST_EVENT_ID,
     });
-    expect(accepted!.value.revisionId).toBe(uuid1);
+    expect(accepted?.value.revisionId).toBe(uuid1);
   });
 });
 
@@ -494,7 +494,7 @@ describe('malformed envelope rejected at the schema boundary', () => {
     await archive(repository, envelope);
 
     const loaded = await readEnvelope(repository, revUuid);
-    expect(loaded!.proseHash).toBe(hash(loaded!.prose));
-    expect(loaded!.sceneHash).toBeTruthy();
+    expect(loaded?.proseHash).toBe(hash(loaded?.prose));
+    expect(loaded?.sceneHash).toBeTruthy();
   });
 });

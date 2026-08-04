@@ -1,17 +1,15 @@
-import { createContext, createSignal, useContext, type Accessor, type JSX } from 'solid-js';
+import { type Accessor, createContext, createSignal, type JSX, useContext } from 'solid-js';
 import {
   EDITOR_ASSISTANT_CONTEXT_VERSION,
   type EditorAssistantContextV1,
-  type EditorAssistantContextVersion,
-  type EditorAssistantSelectionRangeV1,
 } from './editor-assistant-contract.js';
 
-export { EDITOR_ASSISTANT_CONTEXT_VERSION } from './editor-assistant-contract.js';
 export type {
   EditorAssistantContextV1,
   EditorAssistantContextVersion,
   EditorAssistantSelectionRangeV1,
 } from './editor-assistant-contract.js';
+export { EDITOR_ASSISTANT_CONTEXT_VERSION } from './editor-assistant-contract.js';
 
 export interface EditorAssistantContextValue {
   /** The current editor selection context, or null when no editor is active. */
@@ -30,12 +28,12 @@ export interface EditorAssistantContextValue {
 export const EditorAssistantContext = createContext<EditorAssistantContextValue>();
 
 function isSafeIdentifier(value: unknown): value is string {
-  return (
-    typeof value === 'string' &&
-    value.length > 0 &&
-    value.length <= 256 &&
-    !/[\u0000-\u001f\u007f]/.test(value)
-  );
+  if (typeof value !== 'string' || value.length === 0 || value.length > 256) return false;
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f)) return false;
+  }
+  return true;
 }
 
 /** Runtime guard used by editor adapters before publishing context. */
@@ -67,7 +65,9 @@ export function isEditorAssistantContext(value: unknown): value is EditorAssista
 
 function copyContext(context: EditorAssistantContextV1): EditorAssistantContextV1 {
   if (!isEditorAssistantContext(context)) {
-    throw new TypeError('Editor assistant context must contain safe document identity and selection.');
+    throw new TypeError(
+      'Editor assistant context must contain safe document identity and selection.',
+    );
   }
   return {
     version: EDITOR_ASSISTANT_CONTEXT_VERSION,

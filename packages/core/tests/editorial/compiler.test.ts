@@ -842,8 +842,11 @@ describe('compileEditorialRun', () => {
     const baseOutput = compileEditorialRun(base);
     const modOutput = compileEditorialRun(modified);
 
-    const baseE001 = baseOutput.scenes.find((s) => s.eventId === 'E001')!;
-    const modE001 = modOutput.scenes.find((s) => s.eventId === 'E001')!;
+    const baseE001 = baseOutput.scenes.find((s) => s.eventId === 'E001');
+    const modE001 = modOutput.scenes.find((s) => s.eventId === 'E001');
+    if (baseE001 === undefined || modE001 === undefined) {
+      throw new Error('expected E001 scenes in both outputs');
+    }
 
     expect(baseE001.sourceHash).not.toBe(modE001.sourceHash);
     expect(baseE001.editorialBasisHash).not.toBe(modE001.editorialBasisHash);
@@ -860,8 +863,11 @@ describe('compileEditorialRun', () => {
     const outputA = compileEditorialRun(defaultCompileInput({ latestRevisions: baseRev }));
     const outputB = compileEditorialRun(defaultCompileInput({ latestRevisions: newRev }));
 
-    const sceneA = outputA.scenes.find((s) => s.eventId === 'E001')!;
-    const sceneB = outputB.scenes.find((s) => s.eventId === 'E001')!;
+    const sceneA = outputA.scenes.find((s) => s.eventId === 'E001');
+    const sceneB = outputB.scenes.find((s) => s.eventId === 'E001');
+    if (sceneA === undefined || sceneB === undefined) {
+      throw new Error('expected E001 scenes in both outputs');
+    }
     expect(sceneA.editorialBasisHash).not.toBe(sceneB.editorialBasisHash);
   });
 

@@ -4,13 +4,7 @@ import {
   assertClockCompatibility,
   getThreadTimeDomain,
 } from '../../src/state/thread-replay.js';
-import type {
-  ThreadId,
-  ThreadRunId,
-  ThreadRuntimeState,
-  ThreadTransaction,
-  TimeDomain,
-} from '../../src/types/index.js';
+import type { ThreadRunId, ThreadRuntimeState, TimeDomain } from '../../src/types/index.js';
 
 describe('Clock Isolation — TimeDomain', () => {
   it('getThreadTimeDomain defaults to story when no catalog', () => {
@@ -72,8 +66,8 @@ describe('Story-domain thread behavior', () => {
     });
 
     expect(threads.T_story).toBeDefined();
-    expect(threads.T_story!.status).toBe('active');
-    expect(threads.T_story!.goalStates.progress).toBe('active');
+    expect(threads.T_story?.status).toBe('active');
+    expect(threads.T_story?.goalStates.progress).toBe('active');
   });
 
   it('multiple story transactions accumulate state', () => {
@@ -97,8 +91,8 @@ describe('Story-domain thread behavior', () => {
       provenance: 'E2',
     });
 
-    expect(threads.T_arc!.goalStates.setup).toBe('achieved');
-    expect(threads.T_arc!.goalStates.conflict).toBe('active');
+    expect(threads.T_arc?.goalStates.setup).toBe('achieved');
+    expect(threads.T_arc?.goalStates.conflict).toBe('active');
   });
 });
 
@@ -123,7 +117,7 @@ describe('Discourse-domain thread behavior', () => {
       provenance: 'E10',
     });
 
-    expect(threads.T_mystery!.goalStates.reveal).toBe('achieved');
+    expect(threads.T_mystery?.goalStates.reveal).toBe('achieved');
   });
 
   it('discourse threads can be completed before story events', () => {
@@ -140,7 +134,7 @@ describe('Discourse-domain thread behavior', () => {
       provenance: 'E10',
     });
 
-    expect(threads.T_flashback!.status).toBe('completed');
+    expect(threads.T_flashback?.status).toBe('completed');
 
     // Story-time event E5 from earlier can still add bindings
     applyThreadTransaction(threads, {
@@ -151,8 +145,8 @@ describe('Discourse-domain thread behavior', () => {
     });
 
     // Completed status preserved (no transition attempted since it's the same status)
-    expect(threads.T_flashback!.status).toBe('completed');
-    expect(threads.T_flashback!.bindings.key_witness).toBe('old_man');
+    expect(threads.T_flashback?.status).toBe('completed');
+    expect(threads.T_flashback?.bindings.key_witness).toBe('old_man');
   });
 });
 
@@ -170,9 +164,9 @@ describe('Backward compatibility — ThreadProgressEntry', () => {
       advancement: 'Started the journey',
     });
 
-    expect(threads.T_legacy!.status).toBe('active');
-    expect(threads.T_legacy!.goalStates.progress).toBe('active');
-    expect(threads.T_legacy!.currentRunId).toBe('legacy-T_legacy');
+    expect(threads.T_legacy?.status).toBe('active');
+    expect(threads.T_legacy?.goalStates.progress).toBe('active');
+    expect(threads.T_legacy?.currentRunId).toBe('legacy-T_legacy');
   });
 
   it('multiple legacy entries on the same thread accumulate', () => {
@@ -198,8 +192,8 @@ describe('Backward compatibility — ThreadProgressEntry', () => {
       advancement: 'Second step',
     });
 
-    expect(threads.T_legacy!.status).toBe('active');
-    expect(threads.T_legacy!.goalStates.progress).toBe('active');
+    expect(threads.T_legacy?.status).toBe('active');
+    expect(threads.T_legacy?.goalStates.progress).toBe('active');
   });
 
   it('legacy entry with complete progress creates completed state', () => {
@@ -214,8 +208,8 @@ describe('Backward compatibility — ThreadProgressEntry', () => {
       advancement: 'Thread complete',
     });
 
-    expect(threads.T_done!.status).toBe('completed');
-    expect(threads.T_done!.goalStates.progress).toBe('achieved');
+    expect(threads.T_done?.status).toBe('completed');
+    expect(threads.T_done?.goalStates.progress).toBe('achieved');
   });
 });
 
@@ -231,7 +225,11 @@ describe('No scalar progress storage', () => {
       provenance: 'E0',
     });
 
-    const state = threads.T_check!;
+    const state = threads.T_check;
+    expect(state).toBeDefined();
+    if (!state) {
+      throw new Error('Expected T_check thread state');
+    }
 
     // There should be NO 'progress' or 'total' numeric fields on the state
     expect(state).not.toHaveProperty('progress');

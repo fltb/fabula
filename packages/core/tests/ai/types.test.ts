@@ -186,7 +186,7 @@ describe('LLMProvider interface', () => {
   it('can be implemented by a minimal provider', () => {
     const provider: LLMProvider = {
       name: 'minimal',
-      async complete(req: CompletionRequest): Promise<CompletionResponse> {
+      async complete(_req: CompletionRequest): Promise<CompletionResponse> {
         return {
           id: '1',
           model: 'minimal',
@@ -202,7 +202,7 @@ describe('LLMProvider interface', () => {
   it('can optionally implement completeStream', () => {
     const provider: LLMProvider = {
       name: 'streaming',
-      async complete(req) {
+      async complete(_req) {
         return {
           id: '1',
           model: 's',

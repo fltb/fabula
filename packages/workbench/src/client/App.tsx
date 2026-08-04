@@ -292,9 +292,7 @@ export function Workspace(props: WorkspaceProps) {
         </div>
         <div class="state-copy">
           <p class="region-kicker">Projection status</p>
-          <p>
-            {copy().description}
-          </p>
+          <p>{copy().description}</p>
         </div>
       </section>
 

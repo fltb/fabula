@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { AuthoringStateRecord } from '../src/contracts/persistence.js';
 import {
-  createAuthoringCoordinator,
   type AuthoringCoordinatorAssembly,
+  createAuthoringCoordinator,
 } from '../src/host/authoring/coordinator.js';
 import type { AuthoringWorkingDocumentStore } from '../src/host/authoring/document-store.js';
 import type { AuthoringCandidateStore } from '../src/host/authoring/filesystem-observer.js';
@@ -119,7 +119,15 @@ describe('AuthoringCoordinator durable recovery', () => {
   it('awaits durable restoration before exposing an unresolved submit as recovery-required', async () => {
     const saves: AuthoringStateRecord[] = [];
     const coordinator = await createAuthoringCoordinator(
-      assembly(record({ pendingSubmitId: 'submit-1' }), { async get() { return null; } }, saves),
+      assembly(
+        record({ pendingSubmitId: 'submit-1' }),
+        {
+          async get() {
+            return null;
+          },
+        },
+        saves,
+      ),
     );
 
     expect(coordinator.getState()).toMatchObject({
@@ -133,7 +141,15 @@ describe('AuthoringCoordinator durable recovery', () => {
   it('fails closed when durable candidate metadata lacks its private staging bundle', async () => {
     const saves: AuthoringStateRecord[] = [];
     const coordinator = await createAuthoringCoordinator(
-      assembly(record({ candidateHash: 'candidate-1' }), { async get() { return null; } }, saves),
+      assembly(
+        record({ candidateHash: 'candidate-1' }),
+        {
+          async get() {
+            return null;
+          },
+        },
+        saves,
+      ),
     );
 
     expect(coordinator.getState()).toMatchObject({

@@ -26,7 +26,7 @@ export class CharacterStateValidator implements Validator {
 
     for (const pc of input.event.preconditions) {
       const entity = input.entities.resolve(pc.entityId);
-      if (!entity || entity.kind !== 'character') continue;
+      if (entity?.kind !== 'character') continue;
 
       // Catalog-driven: check all lifecycle attributes for death/cessation signals
       const lifecycleAttrs = getAttributesBySemanticRole(

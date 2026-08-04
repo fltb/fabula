@@ -125,7 +125,7 @@ export function makeAnalysisResult(
  * Useful when you need full control over the AnalysisResult shape.
  */
 export function makeCustomEntry(
-  eventId: string,
+  _eventId: string,
   prose: string,
   analysis: AnalysisResult,
 ): MockPass2Entry {

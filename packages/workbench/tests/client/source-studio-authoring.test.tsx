@@ -12,7 +12,9 @@ const source: SourceStudioStateV1 = {
   projectId: 'proj-a',
   accepted: null,
   working: {
-    documents: [{ projectId: 'proj-a', documentId: 'nova.yaml', kind: 'raw-yaml', available: true }],
+    documents: [
+      { projectId: 'proj-a', documentId: 'nova.yaml', kind: 'raw-yaml', available: true },
+    ],
   },
   generatedAt: '2099-01-01T00:00:00.000Z',
 };
@@ -61,13 +63,20 @@ describe('Source Studio authoring identities', () => {
           phase: 'candidate-invalid',
           submitBlockReason: 'candidate-invalid',
           diagnostics: [
-            { code: 'YAML_INVALID', severity: 'error', message: 'invalid YAML', logicalPath: 'nova.yaml' },
+            {
+              code: 'YAML_INVALID',
+              severity: 'error',
+              message: 'invalid YAML',
+              logicalPath: 'nova.yaml',
+            },
           ],
         }}
         operations={[]}
       />
     ));
-    expect(screen.getByRole('heading', { name: 'Working candidate diagnostics — not accepted' })).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Working candidate diagnostics — not accepted' }),
+    ).toBeInTheDocument();
     expect(screen.getByText('invalid YAML')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Submit working layer' })).not.toBeInTheDocument();
   });

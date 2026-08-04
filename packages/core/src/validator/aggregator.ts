@@ -239,7 +239,7 @@ export class ResultAggregator {
     issues: ValidationIssue[],
     analysis: AnalysisResult | null | undefined,
   ): ValidationIssue[] {
-    if (!analysis || !analysis.observations) return issues;
+    if (!analysis?.observations) return issues;
     const observations = analysis.observations;
 
     // Single-requirement validators with a non-array (single-object) field get
@@ -462,7 +462,7 @@ export class ResultAggregator {
           existing.attributes = [...existingAttrs];
         }
         // Merge instructions
-        existing.instruction = existing.instruction + '\n\n' + req.instruction;
+        existing.instruction = `${existing.instruction}\n\n${req.instruction}`;
       }
     }
     const requirements = [...merged.values()];

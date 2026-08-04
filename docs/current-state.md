@@ -1,7 +1,7 @@
 # 当前系统状态（源码核验）
 
 **时间**：2026-08-04 CST
-**当前实现检查点**：`main` 的 `5c73aab`（native revisions、project-scoped MCP reference packet 与 optional Git mirror；全量门禁需在后续基线重跑）
+**当前实现检查点**：`main` 当前工作树（native revisions、project-scoped MCP reference packet、optional Git mirror；全部工程门禁已重跑通过）
 **权威顺序**：当前源码、package manifests、可复现门禁结果；本页优先于历史计划、阶段报告和归档设计。
 
 > 本页描述已经由源码或门禁证明的现状，不把设计目标、未接线类型或历史测量当作已交付能力。历史文档应保留其当时的证据与日期，并链接到本页，而不应改写历史。
@@ -10,15 +10,14 @@
 
 | 门禁 | 结果 |
 |---|---|
-| `npm test` | 通过：根 Vitest 2,881 tests、Workbench Host 367 tests、Workbench Client 36 tests |
+| `npm test` | 通过：根 Vitest 2,902 tests、Workbench Host 521 tests、Workbench Client 93 tests |
 | `npm run typecheck` | 通过 |
 | `npm run typecheck:dead-code` | 通过 |
 | `npm run build` | 通过 |
 | `npm run bundle-check` | 通过 |
 | `node scripts/check-public-api.mjs` | 通过 |
-| `npm run lint -- --max-diagnostics=2000` | 已执行；当前工作树基线仍有 232 errors，未以全仓格式化掩盖。受影响的 MCP/CLI/协议文件已通过定向 Biome 检查。 |
+| `npm run lint -- --max-diagnostics=2000` | 通过：Biome 检查 722 files，0 errors、0 warnings。 |
 
-Lint 基线需要独立修复；它不是已通过门禁，不能宣传为零错误。
 
 ## 包与依赖边界
 
@@ -37,7 +36,7 @@ Lint 基线需要独立修复；它不是已通过门禁，不能宣传为零错
 ## Source、状态与渲染边界
 
 - Core 输入是 `ProjectSourceSnapshotV1` 和注入的语义端口；source hash 表示内容，不是 Git 历史。
-- Node Host 与 Workbench Host 才拥有文件、持久化和 authoring Git。Workbench 只提交显式 `AuthoringManifest`，不得把 `.nova/**`、缓存、responses、journals、Yjs、SQLite、output 或 derived 工件纳入作者提交。
+- Node Host 与 Workbench Host 才拥有文件与持久化；Workbench Host 的 native immutable revisions 是 authoring acceptance model，可选 Git 仅镜像已接受 revision。Workbench 只接受显式 `AuthoringManifest`，不得把 `.nova/**`、缓存、responses、journals、Yjs、SQLite、output 或 derived 工件纳入 authoring bundle。
 - canonical render runtime 先编译 story/discourse 边界，再生成场景契约。`StateManager` 的内存快照是 recovery primitive；当前 `getCurrentState()` / `getStateAt()` 仍通过 `ReplayEngine` 重放，不能宣传为已接入的快照恢复加速。
 - canonical release assembly 以 discourse scene sequence 为主；仍存在按 `narrativeOrder` 排序的 runtime/legacy 路径。因此“`narrativeOrder` 从不使用”是不准确的；它不能作为因果 replay 顺序才是已核验不变量。
 - Pass 1 是散文生成，Pass 2 是结构化分析。当前 AnalysisResult envelope 包含 `eventId`、`protocol`、`observations` 与 `analysis`；解析会校验协议、active fields、observations/payload 配对和证据。Pass 2 无 regex fallback；反馈尝试耗尽时场景会记录错误并进入 review/release 决策路径，不能泛化为所有外层处理立即终止。
@@ -71,8 +70,8 @@ chapters/chapter_NN/E*.yaml
 | Grey line | 类型与验证器存在，但不是默认 built-in validator。 |
 | Thread 类型/声明 catalog | 有 schema/type；未成为通用项目加载与执行路径。部分 metadata 仍是 schema-only。 |
 | Knowledge、relationship 与 rule | 各自有 schema/局部 replay 或 context 支持；文档必须区分 wire schema、runtime materialization 和未接线的 declaration semantics。 |
-| Planner | 已从当前实现移除；历史 S8 目标不是当前能力。 |
-| Live bench reference runner | 非空运行仍受未导入 helper 的当前缺陷阻塞；不要把 mock/reference fixture 结果表述为人工或 live-LLM 证据。 |
+| Narrative Planner | 已从当前实现移除；历史 S8 目标不是当前能力。当前 `SurfacePlanner` 仅负责已写场景的渲染分组与串行 lane 规划，不生成 `NarrativeEvent`。 |
+| Live bench/reference evidence | 已批准的 reference fixture 是 mock/generated，不是人工或 live-LLM 证据。凭据驱动的 live smoke runner 是独立路径，需要有效 provider 凭据；当前基线没有将其运行结果作为证据。 |
 | 历史 Stage 3 与 corpus 数字 | 仅代表各自日期的快照；Dream of Red Chamber 当前 fixture 为四章 E01–E36，不应复用旧的 12/20-event 状态。 |
 
 ## 文档解释规则

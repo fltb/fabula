@@ -4,13 +4,8 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { RuleConstraintViolationError } from '../../src/errors.js';
 import { applyRuleTransaction, evaluateConstraints } from '../../src/state/rule-replay.js';
-import type {
-  RuleConstraint,
-  RuleEvaluationRecord,
-  RuleRuntimeState,
-} from '../../src/types/index.js';
+import type { RuleConstraint, RuleRuntimeState } from '../../src/types/index.js';
 
 function makeRuleState(overrides: Partial<RuleRuntimeState> = {}): RuleRuntimeState {
   return {

@@ -9,19 +9,19 @@
  * leak Host state.
  */
 
+import { type ChildProcess, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { spawn, type ChildProcess } from 'node:child_process';
-import type { Duplex } from 'node:stream';
 import { resolve } from 'node:path';
+import type { Duplex } from 'node:stream';
 import { TextDecoder } from 'node:util';
 
 import {
-  HOST_PROTOCOL_VERSION_V1,
   HOST_CONTROL_MAX_FRAME_BYTES,
+  HOST_PROTOCOL_VERSION_V1,
   type HostBuildIdentityV1,
   type HostControlFrameV1,
-  type HostReadyMessageV1,
   type HostFatalMessageV1,
+  type HostReadyMessageV1,
   type HostStoppedMessageV1,
 } from '@novalistically/workbench-protocol';
 
@@ -179,7 +179,8 @@ class SupervisorControlParser {
           frame.build.packageId.length > 256 ||
           typeof (build as unknown as Record<string, unknown>).buildId !== 'string' ||
           !/^[A-Za-z0-9._-]{1,128}$/.test(frame.build.buildId) ||
-          (build as unknown as Record<string, unknown>).protocolVersion !== HOST_PROTOCOL_VERSION_V1 ||
+          (build as unknown as Record<string, unknown>).protocolVersion !==
+            HOST_PROTOCOL_VERSION_V1 ||
           typeof frame.pid !== 'number' ||
           !Number.isInteger(frame.pid) ||
           frame.pid < 1 ||
@@ -225,7 +226,10 @@ class SupervisorControlParser {
         return;
       }
       case 'shutdown':
-        this.#fail('CONTROL_DIRECTION_INVALID', 'supervisor-to-child frame received on control input');
+        this.#fail(
+          'CONTROL_DIRECTION_INVALID',
+          'supervisor-to-child frame received on control input',
+        );
         return;
       default:
         this.#fail('CONTROL_TYPE_UNKNOWN', `unknown control frame type: ${type}`);
@@ -314,24 +318,20 @@ export class HostSupervisor {
     this.#readyPromise = readyPromise;
 
     const childEnv: Record<string, string> = {
-      ...process.env as Record<string, string>,
+      ...(process.env as Record<string, string>),
       ...this.#extraEnv,
       WORKBENCH_MODE: this.#mode,
       WORKBENCH_DEV: this.#dev ? 'true' : 'false',
       WORKBENCH_CONTROL_FD3: '3',
     };
 
-    const child = spawn(
-      this.#descriptor.paths.nodePath,
-      [this.#descriptor.paths.hostEntry],
-      {
-        cwd: resolve(this.#descriptor.paths.hostEntry, '..', '..', '..'),
-        env: childEnv,
-        // fd3 is a bidirectional pipe: child writes ready/fatal/stopped and
-        // reads shutdown. Stdout/stderr remain ordinary diagnostics.
-        stdio: ['inherit', 'inherit', 'inherit', 'pipe'],
-      },
-    );
+    const child = spawn(this.#descriptor.paths.nodePath, [this.#descriptor.paths.hostEntry], {
+      cwd: resolve(this.#descriptor.paths.hostEntry, '..', '..', '..'),
+      env: childEnv,
+      // fd3 is a bidirectional pipe: child writes ready/fatal/stopped and
+      // reads shutdown. Stdout/stderr remain ordinary diagnostics.
+      stdio: ['inherit', 'inherit', 'inherit', 'pipe'],
+    });
     this.#child = child;
     const control = child.stdio[3] as Duplex | null | undefined;
     if (control === null || control === undefined) {
@@ -375,7 +375,10 @@ export class HostSupervisor {
             frame.build.buildId !== this.#descriptor.build.buildId ||
             frame.build.protocolVersion !== this.#descriptor.build.protocolVersion
           ) {
-            failProtocol('HOST_BUILD_MISMATCH', 'Host ready frame does not match launch descriptor');
+            failProtocol(
+              'HOST_BUILD_MISMATCH',
+              'Host ready frame does not match launch descriptor',
+            );
             return;
           }
           clearTimeout(startupTimer);
@@ -559,7 +562,11 @@ export class HostSupervisor {
 
   #cleanup(): void {
     if (this.#control !== null) {
-      try { this.#control.destroy(); } catch { /* ignore */ }
+      try {
+        this.#control.destroy();
+      } catch {
+        /* ignore */
+      }
       this.#control = null;
     }
     this.#parser = null;
@@ -567,9 +574,7 @@ export class HostSupervisor {
 }
 
 /** Convenience: create and start a supervisor in one call. */
-export async function createSupervisor(
-  options: HostSupervisorOptions,
-): Promise<HostSupervisor> {
+export async function createSupervisor(options: HostSupervisorOptions): Promise<HostSupervisor> {
   const supervisor = new HostSupervisor(options);
   await supervisor.start();
   return supervisor;

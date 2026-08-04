@@ -4,7 +4,6 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import { z } from 'zod';
 import { mapToNarrativeEllipsis } from '../../src/entity/mapper.ts';
 import {
   ellipsisProvenanceSchema,

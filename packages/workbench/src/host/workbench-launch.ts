@@ -30,21 +30,20 @@ import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import type { LLMProvider } from '@novalistically/core';
 import { MockProvider } from '@novalistically/core/testing';
-import {
-  createFileCoreRuntimeServices,
-  FileProjectSourceLoader,
-} from '@novalistically/node-host';
+import { createFileCoreRuntimeServices, FileProjectSourceLoader } from '@novalistically/node-host';
 import {
   DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
   normalizeWorkbenchConfiguration,
   type WorkbenchConfigurationInput,
   type WorkbenchProjectConfigurationV2,
 } from '@novalistically/workbench-protocol';
-import { AUTHORING_CONTRACT_VERSION, type AuthoringActivityEventV1 } from '../contracts/authoring.js';
 import {
-  BROWSER_API_VERSION,
-  type BrowserProjectSummaryV1,
-  type BrowserSessionPrincipalV1,
+  AUTHORING_CONTRACT_VERSION,
+  type AuthoringActivityEventV1,
+} from '../contracts/authoring.js';
+import type {
+  BrowserProjectSummaryV1,
+  BrowserSessionPrincipalV1,
 } from '../contracts/browser-api.js';
 import type {
   ConfigChangeRequestV1,
@@ -86,8 +85,6 @@ import {
   type ProjectAuthoringTreeWatcher,
 } from './authoring/project-tree-watcher.js';
 import type { AuthoringCoordinatorEvent } from './authoring/types.js';
-import { createWorkbenchReferencePort } from './mcp/reference-port.js';
-import { projectCanonicalGraphRuntime } from './graph-projection.js';
 import { type BrowserAgentProject, createBrowserAgentApi } from './browser-agent-api.js';
 import {
   type BrowserAuthoringEventSource,
@@ -95,13 +92,16 @@ import {
 } from './browser-authoring-api.js';
 import { createBrowserPrincipalResolver } from './browser-read-api.js';
 import { ConfigurationFileStore } from './configuration-file-store.js';
-import {
-  ConfigurationChangeService,
-  type ActiveConfiguration,
-} from './configuration-service.js';
+import { type ActiveConfiguration, ConfigurationChangeService } from './configuration-service.js';
 import { createProjectCoreRuntime } from './core-runtime.js';
+import { projectCanonicalGraphRuntime } from './graph-projection.js';
 import {
+  createAdminMcpRegistry,
   createDeviceVerifierPersistence,
+  createMcpAuthorizationPort,
+  createMcpDevicePairingService,
+  createMcpStreamableEndpoint,
+  createProjectSessionMcpRegistry,
   MCP_ADMIN_SCOPE,
   MCP_AUTHOR_SCOPE,
   MCP_READ_SCOPE,
@@ -109,14 +109,10 @@ import {
   MCP_REFERENCE_WRITE_SCOPE,
   MCP_RENDER_SCOPE,
   MCP_SUBMIT_SCOPE,
-  createAdminMcpRegistry,
-  createMcpAuthorizationPort,
-  createMcpDevicePairingService,
-  createMcpStreamableEndpoint,
-  createProjectSessionMcpRegistry,
   type McpAdminPort,
   type McpDevicePairingService,
 } from './mcp/index.js';
+import { createWorkbenchReferencePort } from './mcp/reference-port.js';
 import {
   createProjectAccessService,
   type ProjectAccessRequiredRole,
@@ -653,7 +649,8 @@ export async function startWorkbench(
           displayName: project.displayName,
         }));
       },
-      ownerUserId: async () => (await persistence.client.request('loadOwner', undefined))?.userId ?? null,
+      ownerUserId: async () =>
+        (await persistence.client.request('loadOwner', undefined))?.userId ?? null,
       isOpen: (projectId) => sessions.get(projectId) !== null,
     });
 
@@ -844,8 +841,9 @@ export async function startWorkbench(
       ) => projectAccess.canAccessProject(userId, projectId, requiredRole),
     };
     const catalog = {
-      listProjects: (current: BrowserSessionPrincipalV1): Promise<readonly BrowserProjectSummaryV1[]> =>
-        projectAccess.listProjects(current),
+      listProjects: (
+        current: BrowserSessionPrincipalV1,
+      ): Promise<readonly BrowserProjectSummaryV1[]> => projectAccess.listProjects(current),
     };
     const browser: HostServerOptions['browser'] =
       configuredProjects.length === 0
@@ -1202,7 +1200,10 @@ export interface LaunchAdminPortOptions {
   readonly status: SetupStatusBuilder;
 }
 
-function adminFailure(code: string, message: string): { readonly error: { readonly code: string; readonly message: string } } {
+function adminFailure(
+  code: string,
+  message: string,
+): { readonly error: { readonly code: string; readonly message: string } } {
   return { error: { code, message } };
 }
 
@@ -1268,14 +1269,13 @@ function v1Candidate(
     projects,
     defaultProjectId,
     provider: active?.configuration.provider ?? null,
-    network:
-      active?.configuration.network ?? {
-        mode: 'loopback',
-        port: 8787,
-        allowedHosts: [],
-        allowedOrigins: [],
-        unixSocket: null,
-      },
+    network: active?.configuration.network ?? {
+      mode: 'loopback',
+      port: 8787,
+      allowedHosts: [],
+      allowedOrigins: [],
+      unixSocket: null,
+    },
   };
 }
 
@@ -1301,9 +1301,7 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
   }
 
   /** Safe project view (no root path) for a configured project, or null. */
-  async function projectView(
-    projectId: string,
-  ): Promise<WorkbenchProjectSafeViewV1 | null> {
+  async function projectView(projectId: string): Promise<WorkbenchProjectSafeViewV1 | null> {
     const active = await configuration.readActive();
     if (active === null) return null;
     const project = active.configuration.projects.find((entry) => entry.projectId === projectId);
@@ -1409,10 +1407,7 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
           version: 1,
           projectId: input.projectId,
           project: null,
-          ...adminFailure(
-            'PROJECT_NOT_FOUND',
-            `Project "${input.projectId}" is not registered.`,
-          ),
+          ...adminFailure('PROJECT_NOT_FOUND', `Project "${input.projectId}" is not registered.`),
         };
       }
       const candidate = v1Candidate(
@@ -1437,10 +1432,7 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
         return {
           version: 1,
           projectId: input.projectId,
-          ...adminFailure(
-            'PROJECT_NOT_FOUND',
-            `Project "${input.projectId}" is not registered.`,
-          ),
+          ...adminFailure('PROJECT_NOT_FOUND', `Project "${input.projectId}" is not registered.`),
         };
       }
       let closedRuntime = false;
@@ -1482,7 +1474,8 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
             projects.filter((project) => project.projectId !== input.projectId),
             active,
             active?.configuration.defaultProjectId === input.projectId
-              ? (projects.find((project) => project.projectId !== input.projectId)?.projectId ?? null)
+              ? (projects.find((project) => project.projectId !== input.projectId)?.projectId ??
+                  null)
               : undefined,
           ),
           expectedRevision: active?.revision ?? null,
@@ -1532,10 +1525,7 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
           version: 1,
           projectId: input.projectId,
           open: false,
-          ...adminFailure(
-            'PROJECT_NOT_FOUND',
-            `Project "${input.projectId}" is not registered.`,
-          ),
+          ...adminFailure('PROJECT_NOT_FOUND', `Project "${input.projectId}" is not registered.`),
         };
       }
       await runtime.open({
@@ -1553,10 +1543,7 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
             version: 1,
             projectId: input.projectId,
             open: false,
-            ...adminFailure(
-              'PROJECT_NOT_FOUND',
-              `Project "${input.projectId}" is not open.`,
-            ),
+            ...adminFailure('PROJECT_NOT_FOUND', `Project "${input.projectId}" is not open.`),
           };
         }
       } catch (error) {
@@ -1587,10 +1574,7 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
         return {
           version: 1,
           projectId: input.projectId,
-          ...adminFailure(
-            'PROJECT_NOT_FOUND',
-            `Project "${input.projectId}" is not registered.`,
-          ),
+          ...adminFailure('PROJECT_NOT_FOUND', `Project "${input.projectId}" is not registered.`),
         };
       }
       if (!runtime.isOpen(input.projectId)) {
@@ -1658,7 +1642,9 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
     }),
     inviteCreate: async (input) => {
       const active = await configuration.readActive();
-      if (!active?.configuration.projects.some((project) => project.projectId === input.projectId)) {
+      if (
+        !active?.configuration.projects.some((project) => project.projectId === input.projectId)
+      ) {
         return {
           version: 1,
           ...adminFailure('PROJECT_NOT_FOUND', 'The project is not registered.'),
@@ -1757,7 +1743,12 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
           persistence.request('loadSourceRevisionOperation', { operationId: handle }),
         ]);
       if (configurationOperation !== null) {
-        return { version: 1, operationHandle: handle, kind: 'configuration', operation: configurationOperation };
+        return {
+          version: 1,
+          operationHandle: handle,
+          kind: 'configuration',
+          operation: configurationOperation,
+        };
       }
       if (audit !== null) {
         return { version: 1, operationHandle: handle, kind: 'audit', operation: audit };
@@ -1769,7 +1760,12 @@ export function createLaunchAdminPort(options: LaunchAdminPortOptions): McpAdmin
         return { version: 1, operationHandle: handle, kind: 'submission', operation: submission };
       }
       if (revisionOperation !== null) {
-        return { version: 1, operationHandle: handle, kind: 'revision', operation: revisionOperation };
+        return {
+          version: 1,
+          operationHandle: handle,
+          kind: 'revision',
+          operation: revisionOperation,
+        };
       }
       return { version: 1, operationHandle: handle, kind: null, operation: null };
     },

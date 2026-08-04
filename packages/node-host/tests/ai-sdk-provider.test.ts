@@ -10,6 +10,7 @@
 //   - Constructor throws when routing.default is missing
 // ============================================================================
 
+import type * as AiModule from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Module mocks ─────────────────────────────────────────────────────────
@@ -18,14 +19,27 @@ vi.mock('@ai-sdk/openai-compatible', () => ({
   createOpenAICompatible: vi.fn(() => vi.fn()),
 }));
 
+type GenerateTextResult = {
+  readonly text: string;
+  readonly response: { readonly id: string };
+  readonly usage: {
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+    readonly totalTokens: number;
+  };
+  readonly finishReason: 'stop';
+};
+
+type GenerateTextMock = (options: unknown) => Promise<GenerateTextResult>;
+
 const { mockGenerateText } = vi.hoisted(() => ({
-  mockGenerateText: vi.fn<any>(),
+  mockGenerateText: vi.fn<GenerateTextMock>(),
 }));
 
 vi.mock('ai', async () => {
-  const actual = await vi.importActual('ai');
+  const actual = await vi.importActual<AiModule>('ai');
   return {
-    ...(actual as any),
+    ...actual,
     generateText: mockGenerateText,
   };
 });

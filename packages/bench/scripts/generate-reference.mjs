@@ -14,13 +14,15 @@ import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { renderNovel } from '../../core/dist/editorial.js';
+import { sanitizeError } from '../../core/dist/index.js';
+import { provenanceManifestSchema, responseReferenceSchema } from '../../core/dist/tooling.js';
 import {
-  provenanceManifestSchema,
-  renderNovel,
-  responseReferenceSchema,
-  sanitizeError,
-} from '../../core/dist/index.js';
-import { AiSdkProvider } from '../../node-host/dist/index.js';
+  AiSdkProvider,
+  createFileCoreRuntimeServices,
+  FileProjectSourceLoader,
+} from '../../node-host/dist/index.js';
+import { buildLiveSmokeRecord, collectReferenceIssueIdentities } from '../dist/index.js';
 import 'dotenv/config';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -75,6 +77,7 @@ async function main() {
       `Failed to copy fixture to temp directory: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
+  const source = new FileProjectSourceLoader().load(workDir);
 
   // ── Render via public API ───────────────────────────────────────────
   console.log(`\nLive smoke for ${projectName} (model: ${model}, seed: ${SEED})`);
@@ -87,13 +90,13 @@ async function main() {
     result = await renderNovel(
       {
         version: 1,
-        projectDir: workDir,
+        source,
         model,
         selector: { type: 'all' },
         mutation: { operationId: randomUUID(), actorId: 'smoke-runner' },
         maxRounds: 1,
       },
-      { provider },
+      { provider, services: createFileCoreRuntimeServices(workDir, { provider }) },
     );
   } catch (err) {
     // Write fatal-error.json even when renderNovel threw

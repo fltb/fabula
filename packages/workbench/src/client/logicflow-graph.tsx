@@ -13,7 +13,7 @@
 import LogicFlow from '@logicflow/core';
 import { MiniMap } from '@logicflow/extension';
 import { createEffect, onCleanup, onMount } from 'solid-js';
-import { toLogicFlowData, type GraphCanvasModelV1 } from './graph-view-model';
+import { type GraphCanvasModelV1, toLogicFlowData } from './graph-view-model';
 
 import '@logicflow/core/dist/style/index.css';
 import '@logicflow/extension/lib/style/index.css';
@@ -61,7 +61,7 @@ function showMiniMap(instance: LogicFlow): void {
 
 /** @logicflow/core has no instance destroy; teardown is listener + DOM. */
 export function LogicFlowGraph(props: LogicFlowGraphProps) {
-  let container: HTMLDivElement | undefined;
+  let container: HTMLElement | undefined;
   let lf: LogicFlow | undefined;
   let handleNodeClick: ((event: NodeClickEvent) => void) | undefined;
   let handleRendered: (() => void) | undefined;
@@ -141,10 +141,9 @@ export function LogicFlowGraph(props: LogicFlowGraphProps) {
   });
 
   return (
-    <div
+    <section
       ref={container}
       class="graph-canvas"
-      role="group"
       aria-label={props.label}
       data-domain={props.model.domain}
     />

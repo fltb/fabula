@@ -17,10 +17,8 @@ import {
   type YjsPersistencePort,
   type YjsSyncFrame,
 } from '../src/host/server.js';
-import {
-  createYjsTicketService,
-  type YjsTicketService,
-} from '../src/host/yjs/index.js';
+import { createYjsTicketService, type YjsTicketService } from '../src/host/yjs/index.js';
+
 type YjsAuthRequest = Parameters<YjsAuthPort['resolve']>[0];
 
 const USER_ID = 'user-1';
@@ -189,11 +187,7 @@ function upgradeUrl(port: number, params: Record<string, string>): string {
   return `ws://127.0.0.1:${port}${HOST_YJS_UPGRADE_PATH}?${query}`;
 }
 
-function ticketUrl(
-  fixture: ServerFixture,
-  projectId: string,
-  documentId: string,
-): string {
+function ticketUrl(fixture: ServerFixture, projectId: string, documentId: string): string {
   const ticket = fixture.tickets.mint({
     sessionId: 'session-1',
     userId: USER_ID,
@@ -319,9 +313,7 @@ describe('Host Yjs WebSocket upgrade integration', () => {
   it('authenticates, accepts a real loopback connection, and exchanges updates', async () => {
     const fixture = await createFixture();
     trackClose(() => fixture.close());
-    const client = new SocketClient(
-      ticketUrl(fixture, 'project-a', 'definitions/characters.yaml'),
-    );
+    const client = new SocketClient(ticketUrl(fixture, 'project-a', 'definitions/characters.yaml'));
     await client.open();
     try {
       // A fresh document has no persisted state; the client initiates sync.
@@ -369,7 +361,6 @@ describe('Host Yjs WebSocket upgrade integration', () => {
   });
 
   it('reconnects into the persisted state', async () => {
-
     const fixture = await createFixture();
     trackClose(() => fixture.close());
     const url = (): string => ticketUrl(fixture, 'project-a', 'definitions/characters.yaml');
@@ -628,9 +619,7 @@ describe('Host Yjs WebSocket upgrade integration', () => {
   it('closes every socket and the ws server when the Host closes', async () => {
     const fixture = await createFixture();
     trackClose(() => fixture.close());
-    const client = new SocketClient(
-      ticketUrl(fixture, 'project-a', 'definitions/characters.yaml'),
-    );
+    const client = new SocketClient(ticketUrl(fixture, 'project-a', 'definitions/characters.yaml'));
     await client.open();
     const { promise: closed, resolve: resolveClosed } = Promise.withResolvers<void>();
     client.onClose(resolveClosed);
@@ -639,7 +628,6 @@ describe('Host Yjs WebSocket upgrade integration', () => {
     expect(fixture.gateway.size).toBe(0);
     expect(fixture.server.status().running).toBe(false);
   });
-
 
   it('speaks the exact y-websocket wire format', () => {
     const update = updateWithText('wire');

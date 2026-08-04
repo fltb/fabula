@@ -108,83 +108,83 @@ describe('All 20 validators implement the new interface', () => {
     const v = new TimelineValidator();
     const input = makePostInput({ prose: sampleProse });
     expect(typeof v.validatePost).toBe('function');
-    expect(Array.isArray(v.validatePost!(input))).toBe(true);
+    expect(Array.isArray(v.validatePost?.(input))).toBe(true);
   });
 
   it('CharacterStateValidator implements validatePre', () => {
     const v = new CharacterStateValidator();
     const input = makePreInput();
     expect(typeof v.validatePre).toBe('function');
-    expect(Array.isArray(v.validatePre!(input))).toBe(true);
+    expect(Array.isArray(v.validatePre?.(input))).toBe(true);
   });
 
   it('KnowledgeValidator implements validatePost', () => {
     const v = new KnowledgeValidator();
     const input = makePostInput({ prose: sampleProse });
     expect(typeof v.validatePost).toBe('function');
-    expect(Array.isArray(v.validatePost!(input))).toBe(true);
+    expect(Array.isArray(v.validatePost?.(input))).toBe(true);
   });
 
   it('WorldRuleValidator implements validatePost', () => {
     const v = new WorldRuleValidator();
     const input = makePostInput({ prose: sampleProse });
     expect(typeof v.validatePost).toBe('function');
-    expect(Array.isArray(v.validatePost!(input))).toBe(true);
+    expect(Array.isArray(v.validatePost?.(input))).toBe(true);
   });
 
   it('CausalityValidator implements validatePre', () => {
     const v = new CausalityValidator();
     const input = makePreInput();
     expect(typeof v.validatePre).toBe('function');
-    expect(Array.isArray(v.validatePre!(input))).toBe(true);
+    expect(Array.isArray(v.validatePre?.(input))).toBe(true);
   });
 
   it('ForeshadowingValidator implements validatePost', () => {
     const v = new ForeshadowingValidator();
     const input = makePostInput({ prose: sampleProse });
     expect(typeof v.validatePost).toBe('function');
-    expect(Array.isArray(v.validatePost!(input))).toBe(true);
+    expect(Array.isArray(v.validatePost?.(input))).toBe(true);
   });
 
   it('POVValidator implements validatePost', () => {
     const v = new POVValidator();
     const input = makePostInput({ prose: sampleProse });
     expect(typeof v.validatePost).toBe('function');
-    expect(Array.isArray(v.validatePost!(input))).toBe(true);
+    expect(Array.isArray(v.validatePost?.(input))).toBe(true);
   });
 
   it('FactualDetailValidator implements validatePre', () => {
     const v = new FactualDetailValidator();
     const input = makePreInput();
     expect(typeof v.validatePre).toBe('function');
-    expect(Array.isArray(v.validatePre!(input))).toBe(true);
+    expect(Array.isArray(v.validatePre?.(input))).toBe(true);
   });
 
   it('VoiceDriftDetector implements validatePost', () => {
     const v = new VoiceDriftDetector();
     const input = makePostInput({ prose: sampleProse });
     expect(typeof v.validatePost).toBe('function');
-    expect(Array.isArray(v.validatePost!(input))).toBe(true);
+    expect(Array.isArray(v.validatePost?.(input))).toBe(true);
   });
 
   it('BranchMergeValidator implements validatePost', () => {
     const v = new BranchMergeValidator();
     const input = makePostInput({ prose: sampleProse });
     expect(typeof v.validatePost).toBe('function');
-    expect(Array.isArray(v.validatePost!(input))).toBe(true);
+    expect(Array.isArray(v.validatePost?.(input))).toBe(true);
   });
 
   it('ReachabilityValidator implements validatePost', () => {
     const v = new ReachabilityValidator();
     const input = makePostInput({ prose: sampleProse });
     expect(typeof v.validatePost).toBe('function');
-    expect(Array.isArray(v.validatePost!(input))).toBe(true);
+    expect(Array.isArray(v.validatePost?.(input))).toBe(true);
   });
   it('PronounValidator implements validatePost', () => {
     const v = new PronounValidator();
     const input = makePostInput({ prose: sampleProse });
     expect(typeof v.validatePost).toBe('function');
-    expect(Array.isArray(v.validatePost!(input))).toBe(true);
+    expect(Array.isArray(v.validatePost?.(input))).toBe(true);
   });
 });
 
@@ -224,7 +224,7 @@ describe('validatePost actually checks the prose', () => {
         },
       },
     });
-    const issues = v.validatePost!(input);
+    const issues = v.validatePost?.(input);
     expect(issues.length).toBeGreaterThan(0);
     expect(issues.some((i) => i.message.includes('Time period mismatch'))).toBe(true);
   });
@@ -261,7 +261,7 @@ describe('validatePost actually checks the prose', () => {
         },
       },
     });
-    const issues = v.validatePost!(input);
+    const issues = v.validatePost?.(input);
     // Should detect the leak from analysis
     expect(issues.length).toBeGreaterThan(0);
     expect(issues.some((i) => i.message.includes('POV leak'))).toBe(true);
@@ -285,7 +285,7 @@ describe('validatePost actually checks the prose', () => {
       ],
     });
     const input = makePreInput({ event });
-    const issues = v.validatePre!(input);
+    const issues = v.validatePre?.(input);
     // factual_detail has no post-render logic — validatePre handles entity attr consistency
     // and should find no issues for this input
     expect(Array.isArray(issues)).toBe(true);
@@ -326,7 +326,7 @@ describe('validatePost actually checks the prose', () => {
         },
       },
     });
-    const issues = v.validatePost!(input);
+    const issues = v.validatePost?.(input);
     expect(issues.length).toBeGreaterThan(0);
     expect(issues.some((i) => i.severity === 'error')).toBe(true);
     expect(issues.some((i) => i.message.includes('Pronoun consistency'))).toBe(true);

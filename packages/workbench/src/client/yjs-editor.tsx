@@ -1,12 +1,18 @@
-import { onCleanup, onMount } from 'solid-js';
-import * as Y from 'yjs';
-import { EditorState } from '@codemirror/state';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { keymap, drawSelection, highlightActiveLine, lineNumbers, EditorView } from '@codemirror/view';
 import { yaml } from '@codemirror/lang-yaml';
+import { EditorState } from '@codemirror/state';
+import {
+  drawSelection,
+  EditorView,
+  highlightActiveLine,
+  keymap,
+  lineNumbers,
+} from '@codemirror/view';
+import { onCleanup, onMount } from 'solid-js';
 import { yCollab } from 'y-codemirror.next';
-import type { SourceStudioDocumentDescriptorV1 } from '../contracts/source-studio.js';
+import * as Y from 'yjs';
 import { BROWSER_SESSION_HEADER } from '../contracts/browser-api.js';
+import type { SourceStudioDocumentDescriptorV1 } from '../contracts/source-studio.js';
 
 export type YjsEditorConnectionStatus =
   | 'idle'
@@ -80,7 +86,9 @@ function encodeSyncFrame(syncType: number, payload: Uint8Array): Uint8Array {
   return frame;
 }
 
-function parseSyncFrame(bytes: Uint8Array): { readonly syncType: number; readonly payload: Uint8Array } | null {
+function parseSyncFrame(
+  bytes: Uint8Array,
+): { readonly syncType: number; readonly payload: Uint8Array } | null {
   const cursor = { offset: 0 };
   const messageType = readVarUint(bytes, cursor);
   if (messageType !== MESSAGE_SYNC) return null;
@@ -144,7 +152,7 @@ async function requestYjsTicket(
  * fetch, submit or provider request is made from editor transactions.
  */
 export function YjsEditor(props: YjsEditorProps) {
-  let host: HTMLDivElement | undefined;
+  let host: HTMLElement | undefined;
 
   onMount(() => {
     const document = new Y.Doc();
@@ -258,7 +266,13 @@ export function YjsEditor(props: YjsEditorProps) {
     onCleanup(() => controller.close());
   });
 
-  return <div ref={host} class="min-h-0 flex-1 overflow-auto" aria-label={`Editing ${props.descriptor.documentId}`} />;
+  return (
+    <section
+      ref={host}
+      class="min-h-0 flex-1 overflow-auto"
+      aria-label={`Editing ${props.descriptor.documentId}`}
+    />
+  );
 }
 
 export { encodeSyncFrame, parseSyncFrame };

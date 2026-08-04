@@ -49,7 +49,8 @@ export class ConcurrencyPool {
 
   private _drain(): void {
     while (this.active < this.limit && this.queue.length > 0) {
-      const next = this.queue.shift()!;
+      const next = this.queue.shift();
+      if (next === undefined) break;
       next();
     }
   }

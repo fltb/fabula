@@ -107,7 +107,7 @@ describe('detectConflicts', () => {
     const conflicts = detectConflicts([manifestA, manifestB]);
     const dimConflict = conflicts.find((c) => c.dimension === 'dim-x');
     expect(dimConflict).toBeDefined();
-    expect(dimConflict!.reason).toContain('exclusive authority');
+    expect(dimConflict?.reason).toContain('exclusive authority');
   });
 
   it('returns empty when no conflicts exist', () => {

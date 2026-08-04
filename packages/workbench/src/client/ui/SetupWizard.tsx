@@ -1,20 +1,26 @@
 import { Dialog } from '@kobalte/core/dialog';
 import type { JSX } from 'solid-js';
-import { createSignal, For, onMount, Show, Switch, Match } from 'solid-js';
+import { createSignal, For, Match, onMount, Show, Switch } from 'solid-js';
 import type { ConfigOperationReceiptV1, WorkbenchSetupStatusV1 } from '../../contracts/index.js';
+import type { RuntimeState } from '../runtime-client.js';
 import {
   isSetupApiError,
   type SetupClient,
+  type SetupField,
   type SetupFinishResult,
   type SetupNetworkInput,
-  type SetupProviderInput,
   type SetupProjectInput,
-  type SetupField,
+  type SetupProviderInput,
 } from '../setup-client.js';
-import type { RuntimeState } from '../runtime-client.js';
 import { FIELD, PANEL, PRIMARY_BUTTON, QUIET_BUTTON, RuntimeStatePanel } from './RuntimeStates.js';
 
-export type SetupStep = 'owner' | 'project' | 'source-validation' | 'provider' | 'network' | 'review';
+export type SetupStep =
+  | 'owner'
+  | 'project'
+  | 'source-validation'
+  | 'provider'
+  | 'network'
+  | 'review';
 
 export const SETUP_STEPS: readonly { readonly id: SetupStep; readonly label: string }[] = [
   { id: 'owner', label: 'Owner' },
@@ -71,7 +77,8 @@ export function validateProjectFields(
     errors.projectId = 'Use 1–64 letters, numbers, hyphens, or underscores.';
   }
   if (trim(displayName).length === 0) errors.projectDisplayName = 'Enter a project name.';
-  else if (trim(displayName).length > 120) errors.projectDisplayName = 'Use 120 characters or fewer.';
+  else if (trim(displayName).length > 120)
+    errors.projectDisplayName = 'Use 120 characters or fewer.';
   const candidate = trim(root);
   if (candidate.length === 0) errors.projectRoot = 'Enter the project path on the Host.';
   else if (!(candidate.startsWith('/') || /^[A-Za-z]:[\\/]/.test(candidate))) {
@@ -120,7 +127,7 @@ export function validateNetworkFields(
 }
 
 function initialStep(status: WorkbenchSetupStatusV1 | null | undefined): SetupStep {
-  if (!status || !status.ownerCreated) return 'owner';
+  if (!status?.ownerCreated) return 'owner';
   if (status.projects.length === 0) return 'project';
   if (status.phase === 'provider-pending') return 'provider';
   if (status.phase === 'network-pending') return 'network';
@@ -168,12 +175,17 @@ function fieldError(errors: SetupFieldErrors, key: keyof SetupFieldErrors): stri
 }
 
 export function SetupWizard(props: SetupWizardProps): JSX.Element {
-  const [status, setStatus] = createSignal<WorkbenchSetupStatusV1 | null>(props.initialStatus ?? null);
+  const [status, setStatus] = createSignal<WorkbenchSetupStatusV1 | null>(
+    props.initialStatus ?? null,
+  );
   const [statusLoading, setStatusLoading] = createSignal(props.initialStatus === undefined);
   const [step, setStep] = createSignal<SetupStep>(initialStep(props.initialStatus));
   const [pending, setPending] = createSignal(false);
   const [errors, setErrors] = createSignal<SetupFieldErrors>({});
-  const [serverError, setServerError] = createSignal<{ readonly field: SetupField; readonly message: string } | null>(null);
+  const [serverError, setServerError] = createSignal<{
+    readonly field: SetupField;
+    readonly message: string;
+  } | null>(null);
   const [receipt, setReceipt] = createSignal<ConfigOperationReceiptV1 | null>(null);
 
   const [confirmOpen, setConfirmOpen] = createSignal(false);
@@ -352,7 +364,9 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
     clearErrors();
     setPending(true);
     try {
-      const result: SetupFinishResult = await props.client.finish(status()?.configurationRevision ?? null);
+      const result: SetupFinishResult = await props.client.finish(
+        status()?.configurationRevision ?? null,
+      );
       setReceipt(result.receipt);
       setConfirmOpen(false);
       props.onComplete?.(result.receipt);
@@ -376,22 +390,32 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
   };
 
   const inputError = (key: keyof SetupFieldErrors) => fieldError(errors(), key);
-  const describedBy = (key: keyof SetupFieldErrors, id: string) => (inputError(key) ? id : undefined);
+  const describedBy = (key: keyof SetupFieldErrors, id: string) =>
+    inputError(key) ? id : undefined;
 
   return (
     <main class="min-h-screen bg-[var(--wb-canvas)] px-[var(--wb-space-4)] py-[var(--wb-space-8)] sm:px-[var(--wb-space-6)]">
       <Show
         when={!statusLoading()}
         fallback={
-          <RuntimeStatePanel state="setup" health="loading" message="Checking whether this Host needs setup…" />
+          <RuntimeStatePanel
+            state="setup"
+            health="loading"
+            message="Checking whether this Host needs setup…"
+          />
         }
       >
         <section class="mx-auto grid w-full max-w-5xl gap-[var(--wb-space-6)] lg:grid-cols-[14rem_minmax(0,1fr)]">
-          <aside class="rounded-[var(--wb-radius-md)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] p-[var(--wb-space-4)]" aria-label="Setup progress">
+          <aside
+            class="rounded-[var(--wb-radius-md)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] p-[var(--wb-space-4)]"
+            aria-label="Setup progress"
+          >
             <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">
               Fabula / Workbench
             </p>
-            <h1 class="font-[var(--font-display)] text-2xl font-bold text-[var(--wb-ink)]">First launch</h1>
+            <h1 class="font-[var(--font-display)] text-2xl font-bold text-[var(--wb-ink)]">
+              First launch
+            </h1>
             <ol class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-2)]">
               <For each={SETUP_STEPS}>
                 {(candidate, index) => (
@@ -406,7 +430,10 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                       }`}
                       aria-current={candidate.id === step() ? 'step' : undefined}
                     >
-                      <span aria-hidden="true" class="grid h-6 w-6 place-items-center rounded-full border border-current text-xs">
+                      <span
+                        aria-hidden="true"
+                        class="grid h-6 w-6 place-items-center rounded-full border border-current text-xs"
+                      >
                         {index() < stepIndex(step()) ? '✓' : index() + 1}
                       </span>
                       <span>{candidate.label}</span>
@@ -419,45 +446,132 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
 
           <section class={`${PANEL} min-h-[32rem]`} aria-labelledby="setup-step-heading">
             <Show when={serverError()?.field === step() || serverError()?.field === 'host'}>
-              <p class="mb-[var(--wb-space-5)] rounded-[var(--wb-radius-sm)] border border-[var(--wb-error-border)] bg-[var(--wb-error-surface)] px-[var(--wb-space-3)] py-[var(--wb-space-3)] text-sm text-[var(--wb-danger)]" role="alert" data-testid="setup-server-error">
+              <p
+                class="mb-[var(--wb-space-5)] rounded-[var(--wb-radius-sm)] border border-[var(--wb-error-border)] bg-[var(--wb-error-surface)] px-[var(--wb-space-3)] py-[var(--wb-space-3)] text-sm text-[var(--wb-danger)]"
+                role="alert"
+                data-testid="setup-server-error"
+              >
                 {serverError()?.message}
               </p>
             </Show>
 
             <Switch>
               <Match when={step() === 'owner'}>
-                <StepHeading eyebrow="Step 1 / Owner" title="Create the owner account" description="This account controls the local Host. The password is sent once over the setup endpoint and is never echoed." />
-                <form class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]" onSubmit={(event) => { event.preventDefault(); void runOwner(); }}>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-display-name">
+                <StepHeading
+                  eyebrow="Step 1 / Owner"
+                  title="Create the owner account"
+                  description="This account controls the local Host. The password is sent once over the setup endpoint and is never echoed."
+                />
+                <form
+                  class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void runOwner();
+                  }}
+                >
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-display-name"
+                  >
                     Display name
-                    <input class={FIELD} id="setup-display-name" value={ownerDisplayName()} onInput={(event) => setOwnerDisplayName(event.currentTarget.value)} aria-invalid={Boolean(inputError('displayName'))} aria-describedby={describedBy('displayName', 'setup-display-name-error')} />
+                    <input
+                      class={FIELD}
+                      id="setup-display-name"
+                      value={ownerDisplayName()}
+                      onInput={(event) => setOwnerDisplayName(event.currentTarget.value)}
+                      aria-invalid={Boolean(inputError('displayName'))}
+                      aria-describedby={describedBy('displayName', 'setup-display-name-error')}
+                    />
                     <FieldError id="setup-display-name-error" message={inputError('displayName')} />
                   </label>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-owner-password">
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-owner-password"
+                  >
                     Password
-                    <input class={FIELD} id="setup-owner-password" type="password" autocomplete="new-password" value={ownerPassword()} onInput={(event) => setOwnerPassword(event.currentTarget.value)} aria-invalid={Boolean(inputError('ownerPassword'))} aria-describedby={describedBy('ownerPassword', 'setup-owner-password-error')} />
-                    <FieldError id="setup-owner-password-error" message={inputError('ownerPassword')} />
+                    <input
+                      class={FIELD}
+                      id="setup-owner-password"
+                      type="password"
+                      autocomplete="new-password"
+                      value={ownerPassword()}
+                      onInput={(event) => setOwnerPassword(event.currentTarget.value)}
+                      aria-invalid={Boolean(inputError('ownerPassword'))}
+                      aria-describedby={describedBy('ownerPassword', 'setup-owner-password-error')}
+                    />
+                    <FieldError
+                      id="setup-owner-password-error"
+                      message={inputError('ownerPassword')}
+                    />
                   </label>
                   <StepActions pending={pending()} nextLabel="Create owner" onBack={undefined} />
                 </form>
               </Match>
 
               <Match when={step() === 'project'}>
-                <StepHeading eyebrow="Step 2 / Project" title="Register a project" description="Enter the project path on the Host. It is validated server-side and cleared from this browser after source validation." />
-                <form class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]" onSubmit={(event) => { event.preventDefault(); void runProjectValidation(); }}>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-project-id">
+                <StepHeading
+                  eyebrow="Step 2 / Project"
+                  title="Register a project"
+                  description="Enter the project path on the Host. It is validated server-side and cleared from this browser after source validation."
+                />
+                <form
+                  class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void runProjectValidation();
+                  }}
+                >
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-project-id"
+                  >
                     Project identifier
-                    <input class={FIELD} id="setup-project-id" value={projectId()} onInput={(event) => setProjectId(event.currentTarget.value)} aria-invalid={Boolean(inputError('projectId'))} aria-describedby={describedBy('projectId', 'setup-project-id-error')} />
+                    <input
+                      class={FIELD}
+                      id="setup-project-id"
+                      value={projectId()}
+                      onInput={(event) => setProjectId(event.currentTarget.value)}
+                      aria-invalid={Boolean(inputError('projectId'))}
+                      aria-describedby={describedBy('projectId', 'setup-project-id-error')}
+                    />
                     <FieldError id="setup-project-id-error" message={inputError('projectId')} />
                   </label>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-project-display-name">
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-project-display-name"
+                  >
                     Display name
-                    <input class={FIELD} id="setup-project-display-name" value={projectDisplayName()} onInput={(event) => setProjectDisplayName(event.currentTarget.value)} aria-invalid={Boolean(inputError('projectDisplayName'))} aria-describedby={describedBy('projectDisplayName', 'setup-project-display-name-error')} />
-                    <FieldError id="setup-project-display-name-error" message={inputError('projectDisplayName')} />
+                    <input
+                      class={FIELD}
+                      id="setup-project-display-name"
+                      value={projectDisplayName()}
+                      onInput={(event) => setProjectDisplayName(event.currentTarget.value)}
+                      aria-invalid={Boolean(inputError('projectDisplayName'))}
+                      aria-describedby={describedBy(
+                        'projectDisplayName',
+                        'setup-project-display-name-error',
+                      )}
+                    />
+                    <FieldError
+                      id="setup-project-display-name-error"
+                      message={inputError('projectDisplayName')}
+                    />
                   </label>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-project-root">
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-project-root"
+                  >
                     Project path on Host
-                    <input class={FIELD} id="setup-project-root" type="text" autocomplete="off" value={projectRoot()} onInput={(event) => setProjectRoot(event.currentTarget.value)} aria-invalid={Boolean(inputError('projectRoot'))} aria-describedby={describedBy('projectRoot', 'setup-project-root-error')} />
+                    <input
+                      class={FIELD}
+                      id="setup-project-root"
+                      type="text"
+                      autocomplete="off"
+                      value={projectRoot()}
+                      onInput={(event) => setProjectRoot(event.currentTarget.value)}
+                      aria-invalid={Boolean(inputError('projectRoot'))}
+                      aria-describedby={describedBy('projectRoot', 'setup-project-root-error')}
+                    />
                     <FieldError id="setup-project-root-error" message={inputError('projectRoot')} />
                   </label>
                   <StepActions pending={pending()} nextLabel="Validate project" onBack={goBack} />
@@ -465,73 +579,219 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
               </Match>
 
               <Match when={step() === 'source-validation'}>
-                <StepHeading eyebrow="Step 3 / Source validation" title="Confirm the authoring source" description="The Host now checks the project authoring topology. Accepted source remains Host-owned; this wizard never reads raw source into the browser." />
+                <StepHeading
+                  eyebrow="Step 3 / Source validation"
+                  title="Confirm the authoring source"
+                  description="The Host now checks the project authoring topology. Accepted source remains Host-owned; this wizard never reads raw source into the browser."
+                />
                 <div class="mt-[var(--wb-space-8)] rounded-[var(--wb-radius-md)] border border-[var(--wb-ready-border)] bg-[var(--wb-ready-surface)] p-[var(--wb-space-5)]">
-                  <p class="text-sm font-semibold text-[var(--wb-success)]">Project path validated by Host</p>
-                  <p class="mt-[var(--wb-space-2)] text-sm leading-relaxed text-[var(--wb-ink-soft)]">Save the validated project registration to continue. The path itself is intentionally not repeated here.</p>
+                  <p class="text-sm font-semibold text-[var(--wb-success)]">
+                    Project path validated by Host
+                  </p>
+                  <p class="mt-[var(--wb-space-2)] text-sm leading-relaxed text-[var(--wb-ink-soft)]">
+                    Save the validated project registration to continue. The path itself is
+                    intentionally not repeated here.
+                  </p>
                 </div>
-                <StepActions pending={pending()} nextLabel="Save validated source" onBack={goBack} onNext={() => void runSourceValidation()} />
+                <StepActions
+                  pending={pending()}
+                  nextLabel="Save validated source"
+                  onBack={goBack}
+                  onNext={() => void runSourceValidation()}
+                />
               </Match>
 
               <Match when={step() === 'provider'}>
-                <StepHeading eyebrow="Step 4 / Provider" title="Connect the provider" description="Endpoint and model are validated first. The credential is then handed directly to the Host credential store and cleared from this browser." />
-                <form class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]" onSubmit={(event) => { event.preventDefault(); void runProvider(); }}>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-provider-url">
+                <StepHeading
+                  eyebrow="Step 4 / Provider"
+                  title="Connect the provider"
+                  description="Endpoint and model are validated first. The credential is then handed directly to the Host credential store and cleared from this browser."
+                />
+                <form
+                  class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void runProvider();
+                  }}
+                >
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-provider-url"
+                  >
                     Provider endpoint
-                    <input class={FIELD} id="setup-provider-url" type="url" autocomplete="off" value={providerBaseUrl()} onInput={(event) => setProviderBaseUrl(event.currentTarget.value)} aria-invalid={Boolean(inputError('providerBaseUrl'))} aria-describedby={describedBy('providerBaseUrl', 'setup-provider-url-error')} />
-                    <FieldError id="setup-provider-url-error" message={inputError('providerBaseUrl')} />
+                    <input
+                      class={FIELD}
+                      id="setup-provider-url"
+                      type="url"
+                      autocomplete="off"
+                      value={providerBaseUrl()}
+                      onInput={(event) => setProviderBaseUrl(event.currentTarget.value)}
+                      aria-invalid={Boolean(inputError('providerBaseUrl'))}
+                      aria-describedby={describedBy('providerBaseUrl', 'setup-provider-url-error')}
+                    />
+                    <FieldError
+                      id="setup-provider-url-error"
+                      message={inputError('providerBaseUrl')}
+                    />
                   </label>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-provider-model">
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-provider-model"
+                  >
                     Model
-                    <input class={FIELD} id="setup-provider-model" autocomplete="off" value={providerModel()} onInput={(event) => setProviderModel(event.currentTarget.value)} aria-invalid={Boolean(inputError('providerModel'))} aria-describedby={describedBy('providerModel', 'setup-provider-model-error')} />
-                    <FieldError id="setup-provider-model-error" message={inputError('providerModel')} />
+                    <input
+                      class={FIELD}
+                      id="setup-provider-model"
+                      autocomplete="off"
+                      value={providerModel()}
+                      onInput={(event) => setProviderModel(event.currentTarget.value)}
+                      aria-invalid={Boolean(inputError('providerModel'))}
+                      aria-describedby={describedBy('providerModel', 'setup-provider-model-error')}
+                    />
+                    <FieldError
+                      id="setup-provider-model-error"
+                      message={inputError('providerModel')}
+                    />
                   </label>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-provider-key">
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-provider-key"
+                  >
                     Provider credential
-                    <input class={FIELD} id="setup-provider-key" type="password" autocomplete="new-password" value={providerApiKey()} onInput={(event) => setProviderApiKey(event.currentTarget.value)} aria-invalid={Boolean(inputError('providerApiKey'))} aria-describedby={describedBy('providerApiKey', 'setup-provider-key-error')} />
-                    <FieldError id="setup-provider-key-error" message={inputError('providerApiKey')} />
+                    <input
+                      class={FIELD}
+                      id="setup-provider-key"
+                      type="password"
+                      autocomplete="new-password"
+                      value={providerApiKey()}
+                      onInput={(event) => setProviderApiKey(event.currentTarget.value)}
+                      aria-invalid={Boolean(inputError('providerApiKey'))}
+                      aria-describedby={describedBy('providerApiKey', 'setup-provider-key-error')}
+                    />
+                    <FieldError
+                      id="setup-provider-key-error"
+                      message={inputError('providerApiKey')}
+                    />
                   </label>
-                  <StepActions pending={pending()} nextLabel="Validate and save provider" onBack={goBack} />
+                  <StepActions
+                    pending={pending()}
+                    nextLabel="Validate and save provider"
+                    onBack={goBack}
+                  />
                 </form>
               </Match>
 
               <Match when={step() === 'network'}>
-                <StepHeading eyebrow="Step 5 / Network" title="Choose the listener policy" description="Loopback is the safe first-launch default. LAN and Unix policies are explicit and may require a controlled restart." />
-                <form class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]" onSubmit={(event) => { event.preventDefault(); void runNetwork(); }}>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-network-mode">
+                <StepHeading
+                  eyebrow="Step 5 / Network"
+                  title="Choose the listener policy"
+                  description="Loopback is the safe first-launch default. LAN and Unix policies are explicit and may require a controlled restart."
+                />
+                <form
+                  class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-4)]"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void runNetwork();
+                  }}
+                >
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-network-mode"
+                  >
                     Listener mode
-                    <select class={FIELD} id="setup-network-mode" value={networkMode()} onChange={(event) => setNetworkMode(event.currentTarget.value as SetupNetworkInput['mode'])}>
+                    <select
+                      class={FIELD}
+                      id="setup-network-mode"
+                      value={networkMode()}
+                      onChange={(event) =>
+                        setNetworkMode(event.currentTarget.value as SetupNetworkInput['mode'])
+                      }
+                    >
                       <option value="loopback">Loopback (this machine)</option>
                       <option value="lan">LAN (trusted network)</option>
                       <option value="unix">Unix socket</option>
                     </select>
                   </label>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-network-port">
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-network-port"
+                  >
                     Port
-                    <input class={FIELD} id="setup-network-port" inputmode="numeric" value={networkPort()} onInput={(event) => setNetworkPort(event.currentTarget.value)} aria-invalid={Boolean(inputError('networkPort'))} aria-describedby={describedBy('networkPort', 'setup-network-port-error')} />
+                    <input
+                      class={FIELD}
+                      id="setup-network-port"
+                      inputmode="numeric"
+                      value={networkPort()}
+                      onInput={(event) => setNetworkPort(event.currentTarget.value)}
+                      aria-invalid={Boolean(inputError('networkPort'))}
+                      aria-describedby={describedBy('networkPort', 'setup-network-port-error')}
+                    />
                     <FieldError id="setup-network-port-error" message={inputError('networkPort')} />
                   </label>
                   <Show when={networkMode() === 'unix'}>
-                    <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-unix-socket-name">
+                    <label
+                      class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                      for="setup-unix-socket-name"
+                    >
                       Unix socket name
-                      <input class={FIELD} id="setup-unix-socket-name" autocomplete="off" value={unixSocketName()} onInput={(event) => setUnixSocketName(event.currentTarget.value)} aria-invalid={Boolean(inputError('unixSocketName'))} aria-describedby={describedBy('unixSocketName', 'setup-unix-socket-name-error')} />
-                      <FieldError id="setup-unix-socket-name-error" message={inputError('unixSocketName')} />
+                      <input
+                        class={FIELD}
+                        id="setup-unix-socket-name"
+                        autocomplete="off"
+                        value={unixSocketName()}
+                        onInput={(event) => setUnixSocketName(event.currentTarget.value)}
+                        aria-invalid={Boolean(inputError('unixSocketName'))}
+                        aria-describedby={describedBy(
+                          'unixSocketName',
+                          'setup-unix-socket-name-error',
+                        )}
+                      />
+                      <FieldError
+                        id="setup-unix-socket-name-error"
+                        message={inputError('unixSocketName')}
+                      />
                     </label>
                   </Show>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-allowed-hosts">
-                    Allowed hosts <span class="font-normal text-[var(--wb-muted)]">(comma separated, optional)</span>
-                    <input class={FIELD} id="setup-allowed-hosts" value={allowedHosts()} onInput={(event) => setAllowedHosts(event.currentTarget.value)} />
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-allowed-hosts"
+                  >
+                    Allowed hosts{' '}
+                    <span class="font-normal text-[var(--wb-muted)]">
+                      (comma separated, optional)
+                    </span>
+                    <input
+                      class={FIELD}
+                      id="setup-allowed-hosts"
+                      value={allowedHosts()}
+                      onInput={(event) => setAllowedHosts(event.currentTarget.value)}
+                    />
                   </label>
-                  <label class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]" for="setup-allowed-origins">
-                    Allowed origins <span class="font-normal text-[var(--wb-muted)]">(comma separated, optional)</span>
-                    <input class={FIELD} id="setup-allowed-origins" value={allowedOrigins()} onInput={(event) => setAllowedOrigins(event.currentTarget.value)} />
+                  <label
+                    class="grid gap-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink-soft)]"
+                    for="setup-allowed-origins"
+                  >
+                    Allowed origins{' '}
+                    <span class="font-normal text-[var(--wb-muted)]">
+                      (comma separated, optional)
+                    </span>
+                    <input
+                      class={FIELD}
+                      id="setup-allowed-origins"
+                      value={allowedOrigins()}
+                      onInput={(event) => setAllowedOrigins(event.currentTarget.value)}
+                    />
                   </label>
                   <StepActions pending={pending()} nextLabel="Validate listener" onBack={goBack} />
                 </form>
               </Match>
 
               <Match when={step() === 'review'}>
-                <StepHeading eyebrow="Step 6 / Review" title="Review and apply setup" description="Only safe labels and validation outcomes are shown. Secrets and Host paths are never repeated in this review." />
+                <StepHeading
+                  eyebrow="Step 6 / Review"
+                  title="Review and apply setup"
+                  description="Only safe labels and validation outcomes are shown. Secrets and Host paths are never repeated in this review."
+                />
                 <dl class="mt-[var(--wb-space-6)] grid gap-[var(--wb-space-3)] sm:grid-cols-2">
                   <ReviewItem label="Owner" value={ownerDisplayName() || 'Owner account created'} />
                   <ReviewItem label="Project" value={projectDisplayName() || 'Validated project'} />
@@ -541,7 +801,9 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                   <ReviewItem label="Credentials" value="Stored by Host; not shown" />
                 </dl>
                 <div class="mt-[var(--wb-space-8)] flex flex-wrap items-center justify-between gap-[var(--wb-space-3)]">
-                  <button class={QUIET_BUTTON} type="button" onClick={goBack} disabled={pending()}>Back</button>
+                  <button class={QUIET_BUTTON} type="button" onClick={goBack} disabled={pending()}>
+                    Back
+                  </button>
                   <Dialog open={confirmOpen()} onOpenChange={setConfirmOpen}>
                     <Dialog.Trigger class={PRIMARY_BUTTON} disabled={pending()}>
                       {pending() ? 'Applying…' : 'Review and apply'}
@@ -549,11 +811,26 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                     <Dialog.Portal>
                       <Dialog.Overlay class="fixed inset-0 z-40 bg-[var(--wb-overlay)]" />
                       <Dialog.Content class="fixed left-1/2 top-1/2 z-50 w-[min(32rem,calc(100vw-var(--wb-space-6)))] -translate-x-1/2 -translate-y-1/2 rounded-[var(--wb-radius-lg)] border border-[var(--wb-border-strong)] bg-[var(--wb-surface)] p-[var(--wb-space-6)] shadow-[var(--wb-shadow-drawer)] focus-visible:outline focus-visible:outline-3 focus-visible:outline-[var(--wb-focus)]">
-                        <Dialog.Title class="font-[var(--font-display)] text-2xl font-bold text-[var(--wb-ink)]">Apply Workbench setup?</Dialog.Title>
-                        <Dialog.Description class="mt-[var(--wb-space-3)] text-sm leading-relaxed text-[var(--wb-muted)]">This commits the validated, secret-free configuration. Provider credentials remain in the Host credential store, and the listener may require a restart.</Dialog.Description>
+                        <Dialog.Title class="font-[var(--font-display)] text-2xl font-bold text-[var(--wb-ink)]">
+                          Apply Workbench setup?
+                        </Dialog.Title>
+                        <Dialog.Description class="mt-[var(--wb-space-3)] text-sm leading-relaxed text-[var(--wb-muted)]">
+                          This commits the validated, secret-free configuration. Provider
+                          credentials remain in the Host credential store, and the listener may
+                          require a restart.
+                        </Dialog.Description>
                         <div class="mt-[var(--wb-space-6)] flex justify-end gap-[var(--wb-space-3)]">
-                          <Dialog.CloseButton class={QUIET_BUTTON} type="button">Cancel</Dialog.CloseButton>
-                          <button class={PRIMARY_BUTTON} type="button" disabled={pending()} onClick={() => void runFinish()}>Apply setup</button>
+                          <Dialog.CloseButton class={QUIET_BUTTON} type="button">
+                            Cancel
+                          </Dialog.CloseButton>
+                          <button
+                            class={PRIMARY_BUTTON}
+                            type="button"
+                            disabled={pending()}
+                            onClick={() => void runFinish()}
+                          >
+                            Apply setup
+                          </button>
                         </div>
                       </Dialog.Content>
                     </Dialog.Portal>
@@ -561,8 +838,15 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
                 </div>
                 <Show when={receipt()}>
                   {(current) => (
-                    <p class="mt-[var(--wb-space-5)] text-sm text-[var(--wb-success)]" role="status" data-testid="setup-receipt">
-                      Setup {current().status === 'restart-required' ? 'accepted; restart required.' : 'accepted.'}
+                    <p
+                      class="mt-[var(--wb-space-5)] text-sm text-[var(--wb-success)]"
+                      role="status"
+                      data-testid="setup-receipt"
+                    >
+                      Setup{' '}
+                      {current().status === 'restart-required'
+                        ? 'accepted; restart required.'
+                        : 'accepted.'}
                     </p>
                   )}
                 </Show>
@@ -575,27 +859,58 @@ export function SetupWizard(props: SetupWizardProps): JSX.Element {
   );
 }
 
-function StepHeading(props: { readonly eyebrow: string; readonly title: string; readonly description: string }): JSX.Element {
+function StepHeading(props: {
+  readonly eyebrow: string;
+  readonly title: string;
+  readonly description: string;
+}): JSX.Element {
   return (
     <header>
-      <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">{props.eyebrow}</p>
-      <h2 id="setup-step-heading" class="font-[var(--font-display)] text-3xl font-bold leading-tight tracking-[-0.025em] text-[var(--wb-ink)]">{props.title}</h2>
-      <p class="mt-[var(--wb-space-3)] max-w-2xl text-sm leading-relaxed text-[var(--wb-muted)]">{props.description}</p>
+      <p class="mb-[var(--wb-space-1)] text-[0.625rem] font-extrabold uppercase tracking-[0.12em] text-[var(--wb-muted)]">
+        {props.eyebrow}
+      </p>
+      <h2
+        id="setup-step-heading"
+        class="font-[var(--font-display)] text-3xl font-bold leading-tight tracking-[-0.025em] text-[var(--wb-ink)]"
+      >
+        {props.title}
+      </h2>
+      <p class="mt-[var(--wb-space-3)] max-w-2xl text-sm leading-relaxed text-[var(--wb-muted)]">
+        {props.description}
+      </p>
     </header>
   );
 }
 
 function FieldError(props: { readonly id: string; readonly message?: string }): JSX.Element {
-  return <Show when={props.message}><span id={props.id} class="text-xs font-medium text-[var(--wb-danger)]" role="alert">{props.message}</span></Show>;
+  return (
+    <Show when={props.message}>
+      <span id={props.id} class="text-xs font-medium text-[var(--wb-danger)]" role="alert">
+        {props.message}
+      </span>
+    </Show>
+  );
 }
 
-function StepActions(props: { readonly pending: boolean; readonly nextLabel: string; readonly onBack?: () => void; readonly onNext?: () => void }): JSX.Element {
+function StepActions(props: {
+  readonly pending: boolean;
+  readonly nextLabel: string;
+  readonly onBack?: () => void;
+  readonly onNext?: () => void;
+}): JSX.Element {
   return (
     <div class="mt-[var(--wb-space-3)] flex flex-wrap justify-between gap-[var(--wb-space-3)]">
       <Show when={props.onBack}>
-        <button class={QUIET_BUTTON} type="button" onClick={props.onBack} disabled={props.pending}>Back</button>
+        <button class={QUIET_BUTTON} type="button" onClick={props.onBack} disabled={props.pending}>
+          Back
+        </button>
       </Show>
-      <button class={`${PRIMARY_BUTTON} ml-auto`} type={props.onNext ? 'button' : 'submit'} onClick={props.onNext} disabled={props.pending}>
+      <button
+        class={`${PRIMARY_BUTTON} ml-auto`}
+        type={props.onNext ? 'button' : 'submit'}
+        onClick={props.onNext}
+        disabled={props.pending}
+      >
         {props.pending ? 'Checking Host…' : props.nextLabel}
       </button>
     </div>
@@ -605,9 +920,12 @@ function StepActions(props: { readonly pending: boolean; readonly nextLabel: str
 function ReviewItem(props: { readonly label: string; readonly value: string }): JSX.Element {
   return (
     <div class="rounded-[var(--wb-radius-sm)] border border-[var(--wb-border)] bg-[var(--wb-surface-muted)] p-[var(--wb-space-3)]">
-      <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-[var(--wb-muted)]">{props.label}</dt>
-      <dd class="mt-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink)]">{props.value}</dd>
+      <dt class="text-[0.625rem] font-extrabold uppercase tracking-[0.1em] text-[var(--wb-muted)]">
+        {props.label}
+      </dt>
+      <dd class="mt-[var(--wb-space-1)] text-sm font-semibold text-[var(--wb-ink)]">
+        {props.value}
+      </dd>
     </div>
   );
 }
-

@@ -1,9 +1,13 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { WorkbenchSetupStatusV1 } from '../../src/contracts/index';
 import { SetupApiError, type SetupClient } from '../../src/client/setup-client';
-import { SetupWizard, validateNetworkFields, validateProjectFields } from '../../src/client/ui/SetupWizard';
+import {
+  SetupWizard,
+  validateNetworkFields,
+  validateProjectFields,
+} from '../../src/client/ui/SetupWizard';
+import type { WorkbenchSetupStatusV1 } from '../../src/contracts/index';
 
 const status: WorkbenchSetupStatusV1 = {
   version: 1,
@@ -84,7 +88,12 @@ describe('setup wizard state and validation', () => {
 
     const client = createClient({
       validateProject: vi.fn(async () => {
-        throw new SetupApiError(400, 'PROJECT_INVALID_ROOT', 'project', 'safe project validation error');
+        throw new SetupApiError(
+          400,
+          'PROJECT_INVALID_ROOT',
+          'project',
+          'safe project validation error',
+        );
       }),
     });
     const user = userEvent.setup();
@@ -112,7 +121,13 @@ describe('setup wizard state and validation', () => {
       })),
     });
     const user = userEvent.setup();
-    render(() => <SetupWizard client={client} initialStatus={{ ...status, ownerCreated: false, phase: 'unconfigured' }} onOwnerCreated={onOwnerCreated} />);
+    render(() => (
+      <SetupWizard
+        client={client}
+        initialStatus={{ ...status, ownerCreated: false, phase: 'unconfigured' }}
+        onOwnerCreated={onOwnerCreated}
+      />
+    ));
 
     await user.type(screen.getByLabelText('Password'), 'a-safe-password-123');
     await user.click(screen.getByRole('button', { name: 'Create owner' }));

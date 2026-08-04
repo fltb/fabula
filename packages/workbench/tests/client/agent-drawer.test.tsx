@@ -1,7 +1,7 @@
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSignal } from 'solid-js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
   AgentApplyResponseV1,
   AgentClient,
@@ -33,10 +33,12 @@ function clientFor(response: AgentProposalResponseV1): AgentClient & {
 } {
   return {
     propose: vi.fn(async () => response),
-    applyProposal: vi.fn(async (): Promise<AgentApplyResponseV1> => ({
-      status: 'applied',
-      suggestionId: 'suggestion-a',
-    })),
+    applyProposal: vi.fn(
+      async (): Promise<AgentApplyResponseV1> => ({
+        status: 'applied',
+        suggestionId: 'suggestion-a',
+      }),
+    ),
   };
 }
 
@@ -50,7 +52,9 @@ describe('AgentDrawer proposal workflow', () => {
 
     await user.type(screen.getByLabelText('What should change?'), 'Make the opening precise.');
     await user.click(screen.getByRole('button', { name: 'Ask for a proposal' }));
-    await waitFor(() => expect(screen.getByText('Changes waiting for your review')).toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByText('Changes waiting for your review')).toBeInTheDocument(),
+    );
     expect(client.applyProposal).not.toHaveBeenCalled();
     expect(screen.getByText('clear')).toBeInTheDocument();
 

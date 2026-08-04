@@ -13,7 +13,6 @@ import type {
   NarrativeNodeAnchor,
   SourceManifest,
   ThreadAnchor,
-  WorkIndex,
 } from '../../src/state/corpus-index.ts';
 import {
   ANCHORED_WORKS,

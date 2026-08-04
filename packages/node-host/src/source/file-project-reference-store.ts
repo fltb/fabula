@@ -1,17 +1,18 @@
 import { createHash, randomUUID } from 'node:crypto';
 import {
-  type Dirent,
   createReadStream,
+  type Dirent,
+  promises as fs,
   lstatSync,
   mkdirSync,
   readdirSync,
+  type Stats,
   unlinkSync,
 } from 'node:fs';
-import { promises as fs } from 'node:fs';
 import type { FileHandle } from 'node:fs/promises';
-import { Readable } from 'node:stream';
 import * as path from 'node:path';
-
+import { Readable } from 'node:stream';
+import { contained } from '../execution/types.js';
 import {
   type FileProjectReferenceStore as FileProjectReferenceStoreContract,
   type FileProjectReferenceStoreOptions,
@@ -26,7 +27,6 @@ import {
   type ReferenceLibraryVerificationReport,
   SourceInputError,
 } from './types.js';
-import { contained } from '../execution/types.js';
 
 const MANIFEST_PATH = path.join('references', 'library.json');
 
@@ -34,7 +34,23 @@ const MANIFEST_PATH = path.join('references', 'library.json');
 const MEDIA_TYPE_RE = /^[a-z][a-z0-9!#$&^_.+-]*\/[a-z][a-z0-9!#$&^_.+-]*(\+[a-z][a-z0-9]+)?$/i;
 
 /** Disallowed filename characters in reference object keys and manifest paths. */
-const UNSAFE_FILENAME_RE = /[\0/\\:*?"<>|]/;
+function hasUnsafeFilenameCharacter(value: string): boolean {
+  for (const character of value) {
+    switch (character) {
+      case '/':
+      case '\\':
+      case ':':
+      case '*':
+      case '?':
+      case '"':
+      case '<':
+      case '>':
+      case '|':
+        return true;
+    }
+  }
+  return false;
+}
 
 /** SHA-256 hex length. */
 const HASH_LEN = 64;
@@ -91,13 +107,19 @@ function assertSafePath(root: string, relPath: string): void {
   }
 }
 
-const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/u;
+function containsControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || (code >= 0x7f && code <= 0x9f)) return true;
+  }
+  return false;
+}
 
 function assertSafeText(value: unknown, label: string, required = true): asserts value is string {
   if (typeof value !== 'string' || (required && value.length === 0)) {
     throw new SourceInputError(`${label} must be a${required ? ' non-empty' : 'n'} string`);
   }
-  if (CONTROL_RE.test(value)) {
+  if (containsControlCharacter(value)) {
     throw new SourceInputError(`${label} contains control characters`);
   }
 }
@@ -110,7 +132,7 @@ function assertValidReferenceId(referenceId: unknown): asserts referenceId is st
   if (referenceId.includes('/') || referenceId.includes('\\')) {
     throw new SourceInputError('Reference ID must not contain path separators');
   }
-  if (UNSAFE_FILENAME_RE.test(referenceId)) {
+  if (hasUnsafeFilenameCharacter(referenceId)) {
     throw new SourceInputError('Reference ID contains unsafe characters');
   }
 }
@@ -123,7 +145,7 @@ function assertValidOriginalName(name: unknown, label = 'Original name'): assert
   if (name.includes('/') || name.includes('\\')) {
     throw new SourceInputError(`${label} must not contain path separators`);
   }
-  if (UNSAFE_FILENAME_RE.test(name)) {
+  if (hasUnsafeFilenameCharacter(name)) {
     throw new SourceInputError(`${label} contains unsafe characters`);
   }
 }
@@ -145,9 +167,7 @@ function assertSafeProjectId(projectId: unknown): asserts projectId is string {
 function assertLimit(value: unknown, label: string): asserts value is number {
   if (
     value !== undefined &&
-    (typeof value !== 'number' ||
-      !Number.isSafeInteger(value) ||
-      value < 0)
+    (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0)
   ) {
     throw new SourceInputError(`${label} must be a non-negative safe integer`);
   }
@@ -299,9 +319,7 @@ async function readManifest(
   assertRecord(parsed, 'Reference manifest');
   assertExactKeys(parsed, MANIFEST_KEYS, 'Reference manifest');
   if (parsed.version !== 1) {
-    throw new SourceInputError(
-      `Unsupported manifest version: ${parsed.version}. Expected 1.`,
-    );
+    throw new SourceInputError(`Unsupported manifest version: ${parsed.version}. Expected 1.`);
   }
   assertSafeProjectId(parsed.projectId);
   if (
@@ -318,7 +336,9 @@ async function readManifest(
   const items = parsed.items.map((item, index) => {
     const parsedItem = parseManifestItem(item, index);
     if (seen.has(parsedItem.referenceId)) {
-      throw new SourceInputError(`Manifest contains duplicate referenceId: ${parsedItem.referenceId}`);
+      throw new SourceInputError(
+        `Manifest contains duplicate referenceId: ${parsedItem.referenceId}`,
+      );
     }
     seen.add(parsedItem.referenceId);
     return parsedItem;
@@ -332,7 +352,6 @@ async function readManifest(
   const hash = sha256Hex(canonicalJson(result));
   return { manifest: result, hash };
 }
-
 
 /**
  * Atomically write the manifest. Uses the project-root journal pattern
@@ -378,11 +397,10 @@ async function writeManifest(
   const journal = path.join(referencesDir, '.library.journal.json');
   const content = canonicalJson(manifest);
   const relative = path.relative(referencesDir, manifestPath);
-  await fs.writeFile(
-    journal,
-    JSON.stringify({ version: 1, target: relative, content }),
-    { encoding: 'utf8', mode: 0o600 },
-  );
+  await fs.writeFile(journal, JSON.stringify({ version: 1, target: relative, content }), {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
   const temporary = `${manifestPath}.${process.pid}.${Date.now().toString(36)}.tmp`;
   try {
     await fs.writeFile(temporary, content, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
@@ -663,7 +681,11 @@ export class FileProjectReferenceStore implements FileProjectReferenceStoreContr
     ] as const) {
       assertLimit(value, key);
     }
-    if (input.maxBytes !== undefined && input.maxFileBytes !== undefined && input.maxBytes !== input.maxFileBytes) {
+    if (
+      input.maxBytes !== undefined &&
+      input.maxFileBytes !== undefined &&
+      input.maxBytes !== input.maxFileBytes
+    ) {
       throw new SourceInputError('maxBytes and maxFileBytes must match when both are supplied');
     }
     if (
@@ -701,9 +723,7 @@ export class FileProjectReferenceStore implements FileProjectReferenceStoreContr
     }
     const maxFileBytes = input.maxBytes ?? input.maxFileBytes ?? this.#maxFileBytes;
     const maxBytesPerProject =
-      input.maxBytesPerProject ??
-      input.maxProjectBytes ??
-      this.#maxBytesPerProject;
+      input.maxBytesPerProject ?? input.maxProjectBytes ?? this.#maxBytesPerProject;
     const referencesDir = path.resolve(root, 'references');
     assertSafePath(root, 'references');
     mkdirSync(referencesDir, { recursive: true, mode: 0o700 });
@@ -772,7 +792,7 @@ export class FileProjectReferenceStore implements FileProjectReferenceStoreContr
     const item = current.manifest.items.find((entry) => entry.referenceId === referenceId);
     if (item === undefined) throw new SourceInputError(`Reference not found: ${referenceId}`);
     const objPath = objectPath(root, item.contentHash);
-    let stat;
+    let stat: Stats;
     try {
       stat = lstatSync(objPath);
     } catch (error) {
@@ -853,7 +873,10 @@ export class FileProjectReferenceStore implements FileProjectReferenceStoreContr
     return { manifest: newManifest, manifestHash };
   }
 
-  async verify(projectId: string, projectRoot: string): Promise<ReferenceLibraryVerificationReport> {
+  async verify(
+    projectId: string,
+    projectRoot: string,
+  ): Promise<ReferenceLibraryVerificationReport> {
     const root = path.resolve(projectRoot);
     const current = await readManifest(root);
     if (current === null) return { manifest: null, missing: [], corrupt: [], orphan: [] };

@@ -547,7 +547,7 @@ describe('catalog-driven write enforcement', () => {
       }),
     ];
     const state = replay(events);
-    expect(state.entities['hero']?.status).toBeUndefined();
+    expect(state.entities.hero?.status).toBeUndefined();
   });
 
   it('rejects an introduction transition that omits a requiredAt:introduction attribute', () => {
@@ -641,8 +641,8 @@ describe('catalog-driven write enforcement', () => {
       }),
     ];
     const state = replay(events);
-    expect(state.entities['hero']?.mentor).toBe('sidekick');
-    expect(state.entities['hero']?.bonded_weapon).toBe('sword');
+    expect(state.entities.hero?.mentor).toBe('sidekick');
+    expect(state.entities.hero?.bonded_weapon).toBe('sword');
   });
 
   it('rejects an ordinary event write to an event-introduced entity before its transition', () => {
@@ -808,8 +808,8 @@ describe('catalog-driven write enforcement', () => {
       }),
     ];
     const state = replay(events);
-    expect(state.entities['hero']?.lifecycle).toBe('inactive');
-    expect(state.entities['sidekick']?.lifecycle).toBe('inactive');
+    expect(state.entities.hero?.lifecycle).toBe('inactive');
+    expect(state.entities.sidekick?.lifecycle).toBe('inactive');
   });
 
   it('rejects a participant that is not live', () => {
@@ -1139,9 +1139,9 @@ describe('source/replay equivalence — identical rule text, different phase', (
 describe('entity lifecycle transitions', () => {
   it('activates an event-introduced entity with lifecycle active and required fields', () => {
     const state = replay([heroActivation(), makeEvent(1, 1, { postconditions: [] })]);
-    expect(state.entities['hero']?.lifecycle).toBe('active');
-    expect(state.entities['hero']?.name).toBe('Aragorn');
-    expect(state.entities['hero']?.status).toBe('alive');
+    expect(state.entities.hero?.lifecycle).toBe('active');
+    expect(state.entities.hero?.name).toBe('Aragorn');
+    expect(state.entities.hero?.status).toBe('alive');
   });
 
   it('active → inactive → active round trip', () => {
@@ -1155,8 +1155,8 @@ describe('entity lifecycle transitions', () => {
       }),
     ];
     const state = replay(events);
-    expect(state.entities['hero']?.lifecycle).toBe('active');
-    expect(state.entities['hero']?.status).toBe('alive');
+    expect(state.entities.hero?.lifecycle).toBe('active');
+    expect(state.entities.hero?.status).toBe('alive');
   });
 
   it('inactive entities retain their state', () => {
@@ -1167,8 +1167,8 @@ describe('entity lifecycle transitions', () => {
       }),
     ];
     const state = replay(events);
-    expect(state.entities['hero']?.lifecycle).toBe('inactive');
-    expect(state.entities['hero']?.name).toBe('Aragorn');
+    expect(state.entities.hero?.lifecycle).toBe('inactive');
+    expect(state.entities.hero?.name).toBe('Aragorn');
   });
 
   it('active → retired is allowed and terminal', () => {
@@ -1179,7 +1179,7 @@ describe('entity lifecycle transitions', () => {
       }),
     ];
     const state = replay(events);
-    expect(state.entities['hero']?.lifecycle).toBe('retired');
+    expect(state.entities.hero?.lifecycle).toBe('retired');
   });
 
   it('inactive → retired is allowed', () => {
@@ -1193,7 +1193,7 @@ describe('entity lifecycle transitions', () => {
       }),
     ];
     const state = replay(events);
-    expect(state.entities['hero']?.lifecycle).toBe('retired');
+    expect(state.entities.hero?.lifecycle).toBe('retired');
   });
 
   it('domain writes (e.g. status: dead) do not touch lifecycle', () => {
@@ -1204,8 +1204,8 @@ describe('entity lifecycle transitions', () => {
       }),
     ];
     const state = replay(events);
-    expect(state.entities['hero']?.status).toBe('dead');
-    expect(state.entities['hero']?.lifecycle).toBe('active');
+    expect(state.entities.hero?.status).toBe('dead');
+    expect(state.entities.hero?.lifecycle).toBe('active');
   });
 });
 
@@ -1240,8 +1240,8 @@ describe('story-boundaries integration', () => {
       }),
     ];
     const result = boundaryRun(events);
-    expect(result.finalState.entities['hero']?.lifecycle).toBe('inactive');
-    expect(result.finalState.entities['hero']?.status).toBe('alive');
+    expect(result.finalState.entities.hero?.lifecycle).toBe('inactive');
+    expect(result.finalState.entities.hero?.status).toBe('alive');
   });
 
   it('produces identical lifecycle state to ReplayEngine for introduce/retire sequences', () => {
@@ -1260,9 +1260,9 @@ describe('story-boundaries integration', () => {
     ];
     const boundary = boundaryRun(events);
     const engineState = replay(events);
-    expect(boundary.finalState.entities['hero']?.lifecycle).toBe('retired');
-    expect(engineState.entities['hero']?.lifecycle).toBe('retired');
-    expect(boundary.finalState.entities['hero']).toEqual(engineState.entities['hero']);
+    expect(boundary.finalState.entities.hero?.lifecycle).toBe('retired');
+    expect(engineState.entities.hero?.lifecycle).toBe('retired');
+    expect(boundary.finalState.entities.hero).toEqual(engineState.entities.hero);
   });
 
   it('rejects retired-entity modification identically in both paths', () => {

@@ -2,19 +2,16 @@
 // Comprehensive Unit Tests — All 11 Validators + ResultAggregator
 // ============================================================================
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { compileEntityTypeCatalog } from '../src/entity/entity-catalog-compiler.js';
 import { InMemoryEntityRegistry } from '../src/entity/index.js';
-import type { StoryOrderIndex } from '../src/state/dag.js';
-import type { PointStoryCoordinate, SceneStoryCoordinate } from '../src/types/entity.js';
+import type { SceneStoryCoordinate } from '../src/types/entity.js';
 import type {
   AttributeDefinitionSource,
   Entity,
   EntityRegistry,
   EntityTypeCatalog,
-  EntityTypeCatalogSource,
   EntityTypeDefinitionSource,
-  ForeshadowEntry,
   NarrativeEvent,
   PostRenderInput,
   PreRenderInput,
@@ -27,7 +24,6 @@ import {
   BranchMergeValidator,
   CausalityValidator,
   CharacterStateValidator,
-  FactualDetailValidator,
   ForeshadowingValidator,
   KnowledgeValidator,
   POVValidator,
@@ -1440,7 +1436,7 @@ describe('ResultAggregator', () => {
       requiresLLM = false;
       validate = () => [];
     }
-    const aggregator = new ResultAggregator([new MockValidator() as any]);
+    const aggregator = new ResultAggregator([new MockValidator()]);
     const validators = aggregator.listValidators();
     expect(validators).toHaveLength(1);
     expect(validators[0].name).toBe('mock');

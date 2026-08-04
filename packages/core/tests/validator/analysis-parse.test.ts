@@ -39,30 +39,30 @@ describe('parseAnalysisJSON', () => {
   it('parses valid JSON string', () => {
     const result = parseAnalysisJSON(validJSONStr);
     expect(result).not.toBeNull();
-    expect(result!.eventId).toBe('E1');
-    expect(result!.analysis.quality.proseScore).toBe(8);
-    expect(result!.analysis.postconditions.covered).toEqual(['char.status']);
+    expect(result?.eventId).toBe('E1');
+    expect(result?.analysis.quality.proseScore).toBe(8);
+    expect(result?.analysis.postconditions.covered).toEqual(['char.status']);
   });
 
   it('strips markdown code fences with json tag', () => {
-    const fenced = '```json\n' + validJSONStr + '\n```';
+    const fenced = `\`\`\`json\n${validJSONStr}\n\`\`\``;
     const result = parseAnalysisJSON(fenced);
     expect(result).not.toBeNull();
-    expect(result!.eventId).toBe('E1');
+    expect(result?.eventId).toBe('E1');
   });
 
   it('strips markdown code fences without tag', () => {
-    const fenced = '```\n' + validJSONStr + '\n```';
+    const fenced = `\`\`\`\n${validJSONStr}\n\`\`\``;
     const result = parseAnalysisJSON(fenced);
     expect(result).not.toBeNull();
-    expect(result!.eventId).toBe('E1');
+    expect(result?.eventId).toBe('E1');
   });
 
   it('handles code fences with trailing whitespace', () => {
-    const fenced = '```json\n' + validJSONStr + '\n```  \n';
+    const fenced = `\`\`\`json\n${validJSONStr}\n\`\`\`  \n`;
     const result = parseAnalysisJSON(fenced);
     expect(result).not.toBeNull();
-    expect(result!.eventId).toBe('E1');
+    expect(result?.eventId).toBe('E1');
   });
 
   it('returns null for invalid JSON', () => {
@@ -97,10 +97,10 @@ describe('parseAnalysisJSON', () => {
   });
 
   it('handles LLM output with extra text before/after code fence', () => {
-    const messy = 'Here is the analysis:\n```json\n' + validJSONStr + '\n```\nHope this helps!';
+    const messy = `Here is the analysis:\n\`\`\`json\n${validJSONStr}\n\`\`\`\nHope this helps!`;
     const result = parseAnalysisJSON(messy);
     expect(result).not.toBeNull();
-    expect(result!.eventId).toBe('E1');
+    expect(result?.eventId).toBe('E1');
   });
 });
 
@@ -191,7 +191,7 @@ describe('expected protocol fail-closed matching', () => {
     const expected = makeProtocol(PROSE);
     const result = parseAnalysisJSON(resultWithProtocol(expected), undefined, expected, PROSE);
     expect(result).not.toBeNull();
-    expect(result!.protocol).toEqual(expected);
+    expect(result?.protocol).toEqual(expected);
   });
 
   it.each([

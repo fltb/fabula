@@ -137,9 +137,7 @@ export function validateCatalogWrite(
   // ——— Activation source + live write timing ———
   const isLive = fact.entityId in state.entities;
   const isIntroductionWrite =
-    phaseContext.phase === 'initial' ||
-    (phaseContext.eventId !== undefined &&
-      phaseContext.eventId.startsWith(INTRODUCTION_EVENT_PREFIX));
+    phaseContext.phase === 'initial' || phaseContext.eventId?.startsWith(INTRODUCTION_EVENT_PREFIX);
 
   if (phaseContext.phase === 'initial') {
     if (declaration.introduction.type !== 'initial') {
@@ -617,7 +615,7 @@ function routeLegacyReestablishment(
   const relState = relationships[tx.relationshipId];
   if (!relState || !tx.epochId) return tx;
   const existingEpoch = relState.epochs[tx.epochId];
-  if (!existingEpoch || existingEpoch.lifecycle !== 'dissolved') return tx;
+  if (existingEpoch?.lifecycle !== 'dissolved') return tx;
 
   // Legacy re-establishment after dissolution: create a new epoch with a
   // deterministically derived ID that is collision-free even with sparse epochs.
@@ -631,7 +629,7 @@ function routeLegacyReestablishment(
     if (key.startsWith(`${epochPrefix}_`)) {
       const suffix = key.slice(epochPrefix.length + 1);
       const num = parseInt(suffix, 10);
-      if (!isNaN(num) && num > maxSuffix) {
+      if (!Number.isNaN(num) && num > maxSuffix) {
         maxSuffix = num;
       }
     }

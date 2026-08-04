@@ -1,6 +1,6 @@
 # Workbench Host 运行、配置与作者提交
 
-Workbench 是作者笔记本上的本机 Host。它拥有项目文件、SQLite、Yjs 工作层、提供商凭据和能力令牌；浏览器、MCP 客户端与 Agent 只使用版本化的无秘密 DTO。Native immutable revision 是 authoring acceptance authority；可选 Git 仅镜像已接受 revision，Core 不读取这些资源。
+Workbench 是作者笔记本上的本机 Host。它拥有项目文件、SQLite、Yjs 工作层、提供商凭据和能力令牌；浏览器、MCP 客户端与 Agent 只使用版本化的无秘密 DTO。Native immutable revision 是 authoring acceptance model；可选 Git 仅镜像已接受 revision，不参与 acceptance、restore 或 recovery，Core 不读取这些资源。
 
 ## 启动边界
 
@@ -40,7 +40,7 @@ fnm exec --using=26.5.0 -- npm run -w @novalistically/workbench start:workbench
 - `provider` 的 endpoint 或 model；
 - `network` listener policy。
 
-收到 `restart-required` 后停止并重新启动 Host；不要假定浏览器、Yjs、MCP、Agent 或受控 Git 会热切换到一半配置。外部 YAML 编辑若无效或删除 busy 项目，会保留最后一个有效运行配置并返回诊断。
+收到 `restart-required` 后停止并重新启动 Host；不要假定浏览器、Yjs、MCP、Agent 或 Git mirror 会热切换到一半配置。外部 YAML 编辑若无效或删除 busy 项目，会保留最后一个有效运行配置并返回诊断。
 
 提供商 API key **不在** `.env`、YAML、浏览器、MCP 工具输出或审计记录中。首次设置或所有者 Provider 页面将其写入 Host 的凭据存储；`HostProviderFactory` 从不回退读取 `NOVALISTICALLY_AI_API_KEY`。环境变量仅控制启动位置、listener 与显式开发 mock；不要把生产 key 放进 `.env.example`。
 
@@ -87,8 +87,8 @@ Agent 先产生 Host 保存的提议，直到用户显式 apply 才会申请服�
 | --- | --- | --- |
 | `WORKSPACE_STALE` | Yjs 工作层、文档向量或候选摘要已变 | 重新读取，重新应用编辑或重新生成提议。 |
 | `ACCEPTED_HASH_MISMATCH` | 另一个提交已改变 accepted source | 刷新 source 与工作层，再基于新 hash 提交。 |
-| `CANDIDATE_INVALID` | 完整候选未通过 Core/source 验证 | 修复返回的 YAML/source 诊断；不要强制 Git 提交。 |
-| `CONFLICT_REQUIRES_RESOLUTION` | 外部文件候选或受控 Git 工作树不满足精确协调 | 按上一节清理并显式 reconcile。 |
+| `CANDIDATE_INVALID` | 完整候选未通过 Core/source 验证 | 修复返回的 YAML/source 诊断；不要绕过 Host 的 native revision acceptance。 |
+| `CONFLICT_REQUIRES_RESOLUTION` | 外部文件候选无法与当前 accepted/working identity 精确协调 | 按上一节清理并显式 reconcile。 |
 | `SUBMIT_BLOCKED` | 能力被撤销、过期、权限不足或 session gate 拒绝 | 重新认证/授权；不要复用 token。 |
 | `DOCUMENT_NOT_FOUND` | 文档不在允许的作者 catalog | 先刷新 catalog；不能用原始路径代替 document id。 |
 | `PROJECT_NOT_READY` | 项目 bundle 尚未开放或刚关闭 | 打开已配置项目，或按 `restart-required` 重启。 |

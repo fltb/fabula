@@ -102,9 +102,9 @@ describe('NarrativeKnowledgeBoundary', () => {
         allowlistedClaims: ['frodo:p_ring', 'frodo:p_mordor'],
       };
       const filtered = applyKnowledgeBoundary(ledger, boundary);
-      expect(filtered.bySubject['frodo']).toContain('p_ring');
-      expect(filtered.bySubject['frodo']).toContain('p_mordor');
-      expect(filtered.byProposition['p_ring']).toContain('frodo');
+      expect(filtered.bySubject.frodo).toContain('p_ring');
+      expect(filtered.bySubject.frodo).toContain('p_mordor');
+      expect(filtered.byProposition.p_ring).toContain('frodo');
     });
   });
 

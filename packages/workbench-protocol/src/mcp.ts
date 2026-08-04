@@ -165,7 +165,12 @@ function schema(
   properties: Record<string, McpJsonSchemaProperty>,
   required: readonly string[] = [],
 ): McpJsonSchemaV1 {
-  return { type: 'object', additionalProperties: false, properties, ...(required.length > 0 ? { required } : {}) };
+  return {
+    type: 'object',
+    additionalProperties: false,
+    properties,
+    ...(required.length > 0 ? { required } : {}),
+  };
 }
 const boundedMetadataText = {
   type: 'string',
@@ -271,8 +276,16 @@ const referenceContentProperty = objectProperty(
       maximum: REFERENCE_MCP_LIMITS_V1.maxReferenceBytes,
     },
     range: referenceRangeProperty,
-    dataBase64: { type: 'string', minLength: 1, maxLength: REFERENCE_MCP_LIMITS_V1.maxChunkBase64Length },
-    nextOffset: { type: ['integer', 'null'], minimum: 0, maximum: REFERENCE_MCP_LIMITS_V1.maxOffset },
+    dataBase64: {
+      type: 'string',
+      minLength: 1,
+      maxLength: REFERENCE_MCP_LIMITS_V1.maxChunkBase64Length,
+    },
+    nextOffset: {
+      type: ['integer', 'null'],
+      minimum: 0,
+      maximum: REFERENCE_MCP_LIMITS_V1.maxOffset,
+    },
   },
   [
     'version',
@@ -285,7 +298,7 @@ const referenceContentProperty = objectProperty(
     'nextOffset',
   ],
 );
-const referenceCitationProperty = objectProperty(
+const _referenceCitationProperty = objectProperty(
   {
     version: referenceVersion,
     citationId: referenceId,
@@ -315,7 +328,11 @@ const referenceJobProperty = objectProperty(
     jobId: referenceId,
     operation: { type: 'string', enum: ['import', 'delete', 'retry'] },
     status: { type: 'string', enum: ['queued', 'running', 'succeeded', 'failed', 'cancelled'] },
-    referenceId: { type: ['string', 'null'], minLength: 1, maxLength: REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength },
+    referenceId: {
+      type: ['string', 'null'],
+      minLength: 1,
+      maxLength: REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+    },
     bytesReceived: {
       type: 'integer',
       minimum: 0,
@@ -326,7 +343,12 @@ const referenceJobProperty = objectProperty(
       minimum: 0,
       maximum: REFERENCE_MCP_LIMITS_V1.maxReferenceBytes,
     },
-    contentHash: { type: ['string', 'null'], minLength: 64, maxLength: 64, pattern: '^[0-9a-f]{64}$' },
+    contentHash: {
+      type: ['string', 'null'],
+      minLength: 64,
+      maxLength: 64,
+      pattern: '^[0-9a-f]{64}$',
+    },
     errorCode: nullableMetadataText,
     errorMessage: nullableMetadataText,
     createdAt: boundedMetadataText,
@@ -354,10 +376,10 @@ function referenceResult(
 ): McpJsonSchemaV1 {
   return schema(
     {
-      result: objectProperty(
-        { version: referenceVersion, ...properties },
-        ['version', ...required],
-      ),
+      result: objectProperty({ version: referenceVersion, ...properties }, [
+        'version',
+        ...required,
+      ]),
     },
     ['result'],
   );
@@ -368,7 +390,11 @@ const adminRole = { type: 'string', enum: ['reader', 'author', 'maintainer'] };
 const adminTtlMs = { type: 'integer', minimum: 1, maximum: 2_592_000_000 };
 const adminProjectId = { type: 'string', minLength: 1, maxLength: 4096 };
 const adminProjectProperty = objectProperty(
-  { projectId: adminProjectId, displayName: { type: 'string', minLength: 1, maxLength: 4096 }, root: { type: 'string', minLength: 1, maxLength: 4096 } },
+  {
+    projectId: adminProjectId,
+    displayName: { type: 'string', minLength: 1, maxLength: 4096 },
+    root: { type: 'string', minLength: 1, maxLength: 4096 },
+  },
   ['projectId', 'displayName', 'root'],
 );
 const adminConfigurationProperty = objectProperty(
@@ -378,7 +404,11 @@ const adminConfigurationProperty = objectProperty(
     defaultProjectId: { type: ['string', 'null'], maxLength: 4096 },
     provider: {
       ...objectProperty(
-        { kind: { type: 'string', const: 'ai-sdk' }, baseUrl: { type: ['string', 'null'], maxLength: 4096 }, model: { type: ['string', 'null'], maxLength: 4096 } },
+        {
+          kind: { type: 'string', const: 'ai-sdk' },
+          baseUrl: { type: ['string', 'null'], maxLength: 4096 },
+          model: { type: ['string', 'null'], maxLength: 4096 },
+        },
         ['kind', 'baseUrl', 'model'],
       ),
       type: ['object', 'null'],
@@ -423,7 +453,11 @@ function inputFor(name: string): McpJsonSchemaV1 {
       {
         version: authoringVersion,
         documentId: string,
-        offset: { type: 'integer', minimum: 0, maximum: AUTHORING_DOCUMENT_LIMITS_V1.maxDocumentBytes },
+        offset: {
+          type: 'integer',
+          minimum: 0,
+          maximum: AUTHORING_DOCUMENT_LIMITS_V1.maxDocumentBytes,
+        },
         limit: {
           type: 'integer',
           minimum: 1,
@@ -447,9 +481,20 @@ function inputFor(name: string): McpJsonSchemaV1 {
           minItems: 1,
           items: objectProperty(
             {
-              start: { type: 'integer', minimum: 0, maximum: AUTHORING_DOCUMENT_LIMITS_V1.maxDocumentBytes },
-              end: { type: 'integer', minimum: 0, maximum: AUTHORING_DOCUMENT_LIMITS_V1.maxDocumentBytes },
-              replacementText: { type: 'string', maxLength: AUTHORING_DOCUMENT_LIMITS_V1.maxEditBytes },
+              start: {
+                type: 'integer',
+                minimum: 0,
+                maximum: AUTHORING_DOCUMENT_LIMITS_V1.maxDocumentBytes,
+              },
+              end: {
+                type: 'integer',
+                minimum: 0,
+                maximum: AUTHORING_DOCUMENT_LIMITS_V1.maxDocumentBytes,
+              },
+              replacementText: {
+                type: 'string',
+                maxLength: AUTHORING_DOCUMENT_LIMITS_V1.maxEditBytes,
+              },
             },
             ['start', 'end', 'replacementText'],
           ),
@@ -485,7 +530,13 @@ function inputFor(name: string): McpJsonSchemaV1 {
         expectedWorkspaceDigest: string,
         expectedAcceptedSourceHash: nullableString,
       },
-      ['version', 'documentId', 'logicalPath', 'expectedWorkspaceDigest', 'expectedAcceptedSourceHash'],
+      [
+        'version',
+        'documentId',
+        'logicalPath',
+        'expectedWorkspaceDigest',
+        'expectedAcceptedSourceHash',
+      ],
     );
   }
   if (name === 'nova_authoring_document_delete') {
@@ -510,10 +561,10 @@ function inputFor(name: string): McpJsonSchemaV1 {
     );
   }
   if (name === 'nova_operation_get') {
-    return schema(
-      { version: authoringVersion, operationHandle: string },
-      ['version', 'operationHandle'],
-    );
+    return schema({ version: authoringVersion, operationHandle: string }, [
+      'version',
+      'operationHandle',
+    ]);
   }
   if (name === 'nova_authoring_conflict_read') {
     return schema({ version: authoringVersion }, ['version']);
@@ -558,10 +609,7 @@ function inputFor(name: string): McpJsonSchemaV1 {
         referenceChunks: {
           type: 'array',
           maxItems: REFERENCE_MCP_LIMITS_V1.maxCitations,
-          items: objectProperty(
-            { referenceId, chunkId: referenceId },
-            ['referenceId', 'chunkId'],
-          ),
+          items: objectProperty({ referenceId, chunkId: referenceId }, ['referenceId', 'chunkId']),
         },
       },
       ['sceneSelector'],
@@ -574,10 +622,11 @@ function inputFor(name: string): McpJsonSchemaV1 {
     return schema({ version: authoringVersion, revisionId: string }, ['version', 'revisionId']);
   }
   if (name === 'nova_revision_diff') {
-    return schema(
-      { version: authoringVersion, fromRevisionId: string, toRevisionId: string },
-      ['version', 'fromRevisionId', 'toRevisionId'],
-    );
+    return schema({ version: authoringVersion, fromRevisionId: string, toRevisionId: string }, [
+      'version',
+      'fromRevisionId',
+      'toRevisionId',
+    ]);
   }
   if (name === 'nova_revision_restore') {
     return schema(
@@ -591,16 +640,10 @@ function inputFor(name: string): McpJsonSchemaV1 {
     );
   }
   if (name === 'nova_reference_list') {
-    return schema(
-      { version: referenceVersion, pageSize, cursor },
-      ['version'],
-    );
+    return schema({ version: referenceVersion, pageSize, cursor }, ['version']);
   }
   if (name === 'nova_reference_get') {
-    return schema(
-      { version: referenceVersion, referenceId },
-      ['version', 'referenceId'],
-    );
+    return schema({ version: referenceVersion, referenceId }, ['version', 'referenceId']);
   }
   if (name === 'nova_reference_search') {
     return schema(
@@ -619,16 +662,19 @@ function inputFor(name: string): McpJsonSchemaV1 {
     );
   }
   if (name === 'nova_reference_chunk_get') {
-    return schema(
-      { version: referenceVersion, referenceId, chunkId: referenceId },
-      ['version', 'referenceId', 'chunkId'],
-    );
+    return schema({ version: referenceVersion, referenceId, chunkId: referenceId }, [
+      'version',
+      'referenceId',
+      'chunkId',
+    ]);
   }
   if (name === 'nova_reference_content_read') {
-    return schema(
-      { version: referenceVersion, referenceId, offset, limit: rangeLength },
-      ['version', 'referenceId', 'offset', 'limit'],
-    );
+    return schema({ version: referenceVersion, referenceId, offset, limit: rangeLength }, [
+      'version',
+      'referenceId',
+      'offset',
+      'limit',
+    ]);
   }
   if (name === 'nova_reference_import_begin') {
     return schema(
@@ -696,22 +742,17 @@ function inputFor(name: string): McpJsonSchemaV1 {
     );
   }
   if (name === 'nova_reference_import_commit') {
-    return schema(
-      { version: referenceVersion, jobId: referenceId, contentHash: hash },
-      ['version', 'jobId', 'contentHash'],
-    );
+    return schema({ version: referenceVersion, jobId: referenceId, contentHash: hash }, [
+      'version',
+      'jobId',
+      'contentHash',
+    ]);
   }
   if (name === 'nova_reference_job_get' || name === 'nova_reference_retry') {
-    return schema(
-      { version: referenceVersion, jobId: referenceId },
-      ['version', 'jobId'],
-    );
+    return schema({ version: referenceVersion, jobId: referenceId }, ['version', 'jobId']);
   }
   if (name === 'nova_reference_delete') {
-    return schema(
-      { version: referenceVersion, referenceId },
-      ['version', 'referenceId'],
-    );
+    return schema({ version: referenceVersion, referenceId }, ['version', 'referenceId']);
   }
   if (name === 'nova_admin_config_get') {
     return schema({});
@@ -721,13 +762,26 @@ function inputFor(name: string): McpJsonSchemaV1 {
   }
   if (name === 'nova_admin_config_preview' || name === 'nova_admin_config_apply') {
     return schema(
-      { version: adminVersion, expectedRevision: nullableString, configuration: adminConfigurationProperty },
+      {
+        version: adminVersion,
+        expectedRevision: nullableString,
+        configuration: adminConfigurationProperty,
+      },
       ['version', 'expectedRevision', 'configuration'],
     );
   }
-  if (name === 'nova_admin_project_validate' || name === 'nova_admin_project_create' || name === 'nova_admin_project_update') {
+  if (
+    name === 'nova_admin_project_validate' ||
+    name === 'nova_admin_project_create' ||
+    name === 'nova_admin_project_update'
+  ) {
     return schema(
-      { version: adminVersion, projectId: adminProjectId, displayName: { type: 'string', minLength: 1, maxLength: 4096 }, root: { type: 'string', minLength: 1, maxLength: 4096 } },
+      {
+        version: adminVersion,
+        projectId: adminProjectId,
+        displayName: { type: 'string', minLength: 1, maxLength: 4096 },
+        root: { type: 'string', minLength: 1, maxLength: 4096 },
+      },
       ['version', 'projectId', 'displayName', 'root'],
     );
   }
@@ -749,10 +803,11 @@ function inputFor(name: string): McpJsonSchemaV1 {
     );
   }
   if (name === 'nova_admin_membership_revoke') {
-    return schema(
-      { version: adminVersion, userId: adminProjectId, projectId: adminProjectId },
-      ['version', 'userId', 'projectId'],
-    );
+    return schema({ version: adminVersion, userId: adminProjectId, projectId: adminProjectId }, [
+      'version',
+      'userId',
+      'projectId',
+    ]);
   }
   if (name === 'nova_admin_invite_create') {
     return schema(
@@ -779,10 +834,15 @@ function inputFor(name: string): McpJsonSchemaV1 {
     return schema({ version: adminVersion, deviceId: adminProjectId }, ['version', 'deviceId']);
   }
   if (name === 'nova_admin_operation_list') {
-    return schema({ version: adminVersion, limit: { type: 'integer', minimum: 1, maximum: 100 } }, ['version']);
+    return schema({ version: adminVersion, limit: { type: 'integer', minimum: 1, maximum: 100 } }, [
+      'version',
+    ]);
   }
   if (name === 'nova_admin_operation_get') {
-    return schema({ version: adminVersion, operationHandle: adminProjectId }, ['version', 'operationHandle']);
+    return schema({ version: adminVersion, operationHandle: adminProjectId }, [
+      'version',
+      'operationHandle',
+    ]);
   }
   return EMPTY_SCHEMA;
 }
@@ -888,12 +948,57 @@ const submitToolNames = new Set<string>([
 const authoring = authoringNames.map((name) =>
   descriptor(name, submitToolNames.has(name) ? ['mcp:submit'] : ['mcp:author']),
 );
-const references = ['nova_reference_list', 'nova_reference_get', 'nova_reference_search', 'nova_reference_chunk_get', 'nova_reference_content_read', 'nova_reference_import_begin', 'nova_reference_import_chunk', 'nova_reference_import_commit', 'nova_reference_job_get', 'nova_reference_retry', 'nova_reference_delete'].map((name) =>
-  descriptor(name, name.includes('import') || name.includes('retry') || name.includes('delete') ? ['mcp:reference:write'] : ['mcp:reference:read']),
+const references = [
+  'nova_reference_list',
+  'nova_reference_get',
+  'nova_reference_search',
+  'nova_reference_chunk_get',
+  'nova_reference_content_read',
+  'nova_reference_import_begin',
+  'nova_reference_import_chunk',
+  'nova_reference_import_commit',
+  'nova_reference_job_get',
+  'nova_reference_retry',
+  'nova_reference_delete',
+].map((name) =>
+  descriptor(
+    name,
+    name.includes('import') || name.includes('retry') || name.includes('delete')
+      ? ['mcp:reference:write']
+      : ['mcp:reference:read'],
+  ),
 );
-const admin = ['nova_admin_config_get', 'nova_admin_config_preview', 'nova_admin_config_apply', 'nova_admin_project_list', 'nova_admin_project_validate', 'nova_admin_project_create', 'nova_admin_project_update', 'nova_admin_project_delete', 'nova_admin_project_open', 'nova_admin_project_close', 'nova_admin_project_recover', 'nova_admin_membership_list', 'nova_admin_membership_upsert', 'nova_admin_membership_revoke', 'nova_admin_invite_list', 'nova_admin_invite_create', 'nova_admin_invite_revoke', 'nova_admin_device_list', 'nova_admin_device_pair_begin', 'nova_admin_device_revoke', 'nova_admin_operation_list', 'nova_admin_operation_get'].map((name) => descriptor(name, ['mcp:admin']));
+const admin = [
+  'nova_admin_config_get',
+  'nova_admin_config_preview',
+  'nova_admin_config_apply',
+  'nova_admin_project_list',
+  'nova_admin_project_validate',
+  'nova_admin_project_create',
+  'nova_admin_project_update',
+  'nova_admin_project_delete',
+  'nova_admin_project_open',
+  'nova_admin_project_close',
+  'nova_admin_project_recover',
+  'nova_admin_membership_list',
+  'nova_admin_membership_upsert',
+  'nova_admin_membership_revoke',
+  'nova_admin_invite_list',
+  'nova_admin_invite_create',
+  'nova_admin_invite_revoke',
+  'nova_admin_device_list',
+  'nova_admin_device_pair_begin',
+  'nova_admin_device_revoke',
+  'nova_admin_operation_list',
+  'nova_admin_operation_get',
+].map((name) => descriptor(name, ['mcp:admin']));
 
-export const MCP_TOOL_CATALOG_V1: readonly McpToolDescriptorV1[] = [...project, ...authoring, ...references, ...admin];
+export const MCP_TOOL_CATALOG_V1: readonly McpToolDescriptorV1[] = [
+  ...project,
+  ...authoring,
+  ...references,
+  ...admin,
+];
 
 function strictProperty(property: McpJsonSchemaProperty): boolean {
   if (typeof property !== 'object' || property === null || !('type' in property)) return false;
@@ -911,7 +1016,9 @@ function strictSchema(schema: McpJsonSchemaV1): boolean {
   return Object.values(schema.properties).every(strictProperty);
 }
 
-export function assertMcpToolCatalogParity(catalog: readonly McpToolDescriptorV1[] = MCP_TOOL_CATALOG_V1): void {
+export function assertMcpToolCatalogParity(
+  catalog: readonly McpToolDescriptorV1[] = MCP_TOOL_CATALOG_V1,
+): void {
   const seen = new Set<string>();
   for (const item of catalog) {
     if (item.version !== 1 || seen.has(item.name)) {
@@ -922,17 +1029,11 @@ export function assertMcpToolCatalogParity(catalog: readonly McpToolDescriptorV1
       throw new TypeError(`MCP schema for ${item.name} is not strict`);
     }
     for (const forbidden of ['actorId', 'operationId']) {
-      if (
-        forbidden in item.inputSchema.properties ||
-        forbidden in item.outputSchema.properties
-      ) {
+      if (forbidden in item.inputSchema.properties || forbidden in item.outputSchema.properties) {
         throw new TypeError(`MCP schema for ${item.name} accepts server identity`);
       }
     }
-    if (
-      item.scopes.length === 0 ||
-      item.scopes.some((scope) => !MCP_SCOPES_V1.includes(scope))
-    ) {
+    if (item.scopes.length === 0 || item.scopes.some((scope) => !MCP_SCOPES_V1.includes(scope))) {
       throw new TypeError(`MCP scope drift: ${item.name}`);
     }
   }

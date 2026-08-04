@@ -111,9 +111,9 @@ const CATALOG: EntityTypeCatalog = compileEntityTypeCatalog(CATALOG_SOURCE);
 
 function makeEntity(kind: EntityKind, state: Record<string, unknown> = {}): Entity {
   return {
-    id: 'char_test_' + kind,
+    id: `char_test_${kind}`,
     kind,
-    name: 'Test ' + kind,
+    name: `Test ${kind}`,
     definitionFile: `/definitions/${kind}s/test.yml`,
     lifecycle: 'active',
     typeRef: { typeId: kind, schemaVersion: 1 },

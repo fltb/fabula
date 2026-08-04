@@ -190,7 +190,7 @@ export function layoutGraphView(view: WorkbenchGraphViewV1): GraphCanvasModelV1 
       const orderB = nodeB ? coordinateOrder(nodeB) : Number.POSITIVE_INFINITY;
       return orderA !== orderB ? orderA - orderB : a.localeCompare(b);
     });
-    sorted.forEach((id, row) => rowByNode.set(id, row));
+    for (const [row, id] of sorted.entries()) rowByNode.set(id, row);
   }
   const nodes = view.nodes.map((node) => {
     const layer = layers.get(node.id) ?? 0;
@@ -216,9 +216,7 @@ export function layoutGraphView(view: WorkbenchGraphViewV1): GraphCanvasModelV1 
 }
 
 /** Lay both canonical domains out independently. */
-export function layoutProjection(
-  projection: WorkbenchGraphProjectionV1,
-): Readonly<{
+export function layoutProjection(projection: WorkbenchGraphProjectionV1): Readonly<{
   readonly story: GraphCanvasModelV1;
   readonly discourse: GraphCanvasModelV1;
 }> {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createSetupClient, SetupApiError } from '../../src/client/setup-client';
 import type { BrowserFetch } from '../../src/client/browser-read-client';
+import { createSetupClient, SetupApiError } from '../../src/client/setup-client';
 
 const json = (value: unknown, status = 200): Response =>
   new Response(JSON.stringify(value), {
@@ -59,7 +59,11 @@ describe('createSetupClient', () => {
       message: 'The Host could not validate this project.',
     });
     try {
-      await client.validateProject({ projectId: 'project-a', displayName: 'A Project', root: '/private/project-root' });
+      await client.validateProject({
+        projectId: 'project-a',
+        displayName: 'A Project',
+        root: '/private/project-root',
+      });
     } catch (error) {
       expect(error).toBeInstanceOf(SetupApiError);
       expect(String(error)).not.toContain('/private/project-root');
@@ -79,5 +83,4 @@ describe('createSetupClient', () => {
       message: 'The Workbench Host could not be reached.',
     });
   });
-
 });

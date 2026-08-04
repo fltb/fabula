@@ -286,9 +286,9 @@ describe('RenderPipeline — expressiveness Pass 1 prompt coverage', () => {
 
     // Read the Pass 1 user message from the provider ledger
     const pass1Request = provider.calls[0];
-    const userMessage = pass1Request.messages.find((m: Message) => m.role === 'user')!.content;
+    const userMessage = pass1Request.messages.find((m: Message) => m.role === 'user')?.content;
     const event = makeEvent();
-    const context = makeContext();
+    const _context = makeContext();
 
     // ── Scene brief (→ sceneSpec.goal in context JSON) ──────────────
     expect(userMessage).toContain(SENTINEL_SCENE_BRIEF);
@@ -360,10 +360,19 @@ describe('RenderPipeline — expressiveness Pass 1 prompt coverage', () => {
     expect(userMessage).toContain(SENTINEL_THREAD);
 
     // ── introduces field is preserved on the event object ──────────
-    expect(event.introduces).toBeDefined();
-    expect(event.introduces!).toHaveLength(1);
-    expect(event.introduces![0].id).toBe('entity_2');
-    expect(event.introduces![0].initialState.name).toBe(SENTINEL_INTRODUCES_NAME);
+    const introduces = event.introduces;
+    expect(introduces).toBeDefined();
+    if (introduces === undefined) {
+      throw new Error('Expected event.introduces to be present');
+    }
+    expect(introduces).toHaveLength(1);
+    const introduction = introduces[0];
+    expect(introduction).toBeDefined();
+    if (introduction === undefined) {
+      throw new Error('Expected one introduction entry');
+    }
+    expect(introduction.id).toBe('entity_2');
+    expect(introduction.initialState.name).toBe(SENTINEL_INTRODUCES_NAME);
   });
 });
 

@@ -667,10 +667,16 @@ export function calibrateProject(
 
   const kinds = [...scan.kinds.keys()].sort();
   for (const kind of kinds) {
-    const attrs = scan.kinds.get(kind)!;
+    const attrs = scan.kinds.get(kind);
+    if (!attrs) {
+      throw new Error(`Expected attributes for entity kind ${kind}`);
+    }
     lines.push(`kind ${kind}`);
     for (const attr of [...attrs.keys()].sort()) {
-      const obs = attrs.get(attr)!;
+      const obs = attrs.get(attr);
+      if (!obs) {
+        throw new Error(`Expected observation for ${kind}.${attr}`);
+      }
       const shapeList = [...obs.shapes].sort();
       const literals = shapeList.filter((s) => VALUE_TYPES.includes(s as ValueType));
       const unrepresentable = shapeList.filter(

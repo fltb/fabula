@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
   aggregateAbsenceEvaluation,
-  type BuildAbsenceWitnessParams,
   buildAbsenceWitness,
   resolveAbsenceBasis,
 } from '../../src/state/absence-resolver.ts';

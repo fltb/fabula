@@ -14,9 +14,9 @@
  * are handed once to the credential store and never echoed.
  */
 
-import { randomUUID } from 'node:crypto';
 import type { Context, Handler } from 'hono';
 import type { BrowserSessionPrincipalV1 } from '../contracts/browser-api.js';
+import type { ProjectAccessRole } from '../contracts/configuration.js';
 import {
   type AdminDevicePairRequestV1,
   type AdminInviteCreateRequestV1,
@@ -33,17 +33,16 @@ import {
   BROWSER_ADMIN_PROJECTS_PATH,
   BROWSER_ADMIN_PROVIDER_PATH,
   type ConfigOperationReceiptV1,
+  PROJECT_ACCESS_ROLES,
   WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchAdminErrorCode,
   type WorkbenchAdminOverviewV1,
-  type WorkbenchConfigurationV2,
   type WorkbenchConfigurationV1,
+  type WorkbenchConfigurationV2,
   type WorkbenchDeviceSafeViewV1,
   type WorkbenchInviteSafeViewV1,
   type WorkbenchProjectSafeViewV1,
 } from '../contracts/configuration.js';
-import { PROJECT_ACCESS_ROLES } from '../contracts/configuration.js';
-import type { ProjectAccessRole } from '../contracts/configuration.js';
 
 import type {
   AuditRecord,
@@ -55,14 +54,8 @@ import type { BrowserPrincipalResolver } from './browser-read-api.js';
 import type { ConfigurationChangeService } from './configuration-service.js';
 import type { HostListenerMode, MutationHttpMethod } from './listener.js';
 import type { ProviderCredentialStore } from './providers/credential-store.js';
-import { isValidProviderId } from './providers/credential-store.js';
 import type { HostListenerEnv, HostServer } from './server.js';
-import {
-  maskEndpoint,
-  maskModel,
-  resolveNetworkRequest,
-  type SetupStatusBuilder,
-} from './setup-api.js';
+import { resolveNetworkRequest, type SetupStatusBuilder } from './setup-api.js';
 import type { RuntimeAdminPort } from './workbench-runtime.js';
 
 /** `/api/v1/admin/projects/validate` — one-way project root validation. */
@@ -126,12 +119,8 @@ function parseRequest(
   return body;
 }
 function isProjectAccessRole(value: unknown): value is ProjectAccessRole {
-  return (
-    typeof value === 'string' &&
-    (PROJECT_ACCESS_ROLES as readonly string[]).includes(value)
-  );
+  return typeof value === 'string' && (PROJECT_ACCESS_ROLES as readonly string[]).includes(value);
 }
-
 
 /** MCP device pairing port; structurally identical to the 1D pairing service. */
 export interface McpDeviceAdminPort {
@@ -163,12 +152,14 @@ export interface McpDeviceAdminPort {
 }
 
 export interface MembershipAdminPort {
-  list(input?: { projectId?: string }): Promise<readonly {
-    userId: string;
-    projectId: string;
-    role: ProjectAccessRole;
-    capabilityVersion?: number;
-  }[]>;
+  list(input?: { projectId?: string }): Promise<
+    readonly {
+      userId: string;
+      projectId: string;
+      role: ProjectAccessRole;
+      capabilityVersion?: number;
+    }[]
+  >;
   upsert(input: { userId: string; projectId: string; role: ProjectAccessRole }): Promise<{
     userId: string;
     projectId: string;
@@ -439,7 +430,10 @@ function projectCreateHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
         if (current.projects.some((project) => project.projectId === projectId)) return current;
         return {
           ...current,
-          projects: [...current.projects, { projectId, displayName, root, revisionMirror: { mode: 'disabled' } }],
+          projects: [
+            ...current.projects,
+            { projectId, displayName, root, revisionMirror: { mode: 'disabled' } },
+          ],
           defaultProjectId: current.defaultProjectId ?? projectId,
         };
       },
@@ -876,7 +870,9 @@ function devicesIssueHandler(api: AdminApiImpl): Handler<HostListenerEnv> {
     if (kind === 'project') {
       const loaded = await api.requireConfiguration();
       if (!loaded.ok) return loaded.response;
-      if (!loaded.active.configuration.projects.some((project) => project.projectId === projectId)) {
+      if (
+        !loaded.active.configuration.projects.some((project) => project.projectId === projectId)
+      ) {
         return adminError('PROJECT_NOT_FOUND', 'The project is not registered.');
       }
     }
@@ -1135,7 +1131,11 @@ export function createAdminApi(options: AdminApiOptions): AdminApiSurface {
     },
     { method: 'POST', path: BROWSER_ADMIN_INVITES_PATH, handler: inviteCreateHandler(api) },
     { method: 'PUT', path: BROWSER_ADMIN_MEMBERSHIPS_PATH, handler: membershipUpsertHandler(api) },
-    { method: 'DELETE', path: BROWSER_ADMIN_MEMBERSHIPS_PATH, handler: membershipRevokeHandler(api) },
+    {
+      method: 'DELETE',
+      path: BROWSER_ADMIN_MEMBERSHIPS_PATH,
+      handler: membershipRevokeHandler(api),
+    },
     {
       method: 'DELETE',
       path: `${BROWSER_ADMIN_SESSIONS_PATH}/:sessionId`,

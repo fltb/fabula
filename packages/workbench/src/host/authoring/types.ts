@@ -18,10 +18,7 @@
  * in for another.
  */
 
-import type {
-  AuthoringOperationReceiptV1,
-  AuthoringStateV1,
-} from '../../contracts/authoring.js';
+import type { AuthoringOperationReceiptV1, AuthoringStateV1 } from '../../contracts/authoring.js';
 import type { YjsDocumentKey } from '../../contracts/persistence.js';
 
 // ─── Document materialization ───────────────────────────────────────────────
@@ -181,15 +178,21 @@ export interface AuthoringRevisionPort {
    * tree was loaded as a baseline.
    */
   recover(projectId: string): Promise<
-    | { readonly status: 'completed'; readonly revisionId: string; readonly materializedRevisionId: string }
+    | {
+        readonly status: 'completed';
+        readonly revisionId: string;
+        readonly materializedRevisionId: string;
+      }
     | { readonly status: 'recovery-required'; readonly reason: string }
     | { readonly status: 'stale'; readonly reason: string }
     | { readonly status: 'initial-load'; readonly revisionId: string; readonly sourceHash: string }
   >;
 
-
   /** List revisions, oldest first. Cursor is opaque. */
-  list(projectId: string, cursor?: string): Promise<{
+  list(
+    projectId: string,
+    cursor?: string,
+  ): Promise<{
     readonly revisions: readonly AuthoringRevisionSummary[];
     readonly nextCursor?: string;
   }>;
@@ -256,10 +259,7 @@ export interface AuthoringRevisionContentStore {
   }): Promise<void>;
 
   /** Retrieve a previously stored bundle, or null when missing. */
-  get(input: {
-    readonly projectId: string;
-    readonly bundleHash: string;
-  }): Promise<{
+  get(input: { readonly projectId: string; readonly bundleHash: string }): Promise<{
     readonly entries: readonly { readonly logicalPath: string; readonly content: string }[];
   } | null>;
 }

@@ -144,7 +144,11 @@ describe('LocalAuthService over the real persistence worker', () => {
     const owner = await service.bootstrapOwner({ password: 'owner-password' });
     expect(owner.user.role).toBe('owner');
 
-    const invite = await service.createInvite({ projectId: 'project-1', role: 'reader', ttlMs: 1000 });
+    const invite = await service.createInvite({
+      projectId: 'project-1',
+      role: 'reader',
+      ttlMs: 1000,
+    });
     now += 100;
     const accepted = await service.acceptInvite({
       inviteId: invite.inviteId,
@@ -170,7 +174,11 @@ describe('LocalAuthService over the real persistence worker', () => {
     expect(reused.status).toBe('already-consumed');
 
     // Expired invite.
-    const short = await service.createInvite({ projectId: 'project-1', role: 'author', ttlMs: 100 });
+    const short = await service.createInvite({
+      projectId: 'project-1',
+      role: 'author',
+      ttlMs: 100,
+    });
     now += 500;
     const expired = await service.acceptInvite({ inviteId: short.inviteId, password: 'x' });
     expect(expired.status).toBe('expired');

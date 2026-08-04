@@ -34,10 +34,10 @@ import type {
   AgentPresencePort,
 } from './edit-service.js';
 import {
-  errorCodeOf,
-  errorMessageOf,
   type AgentTaskRequest,
   type AgentTaskService,
+  errorCodeOf,
+  errorMessageOf,
 } from './task-service.js';
 
 /** Version of the suggestion contract. */
@@ -433,8 +433,7 @@ export class AgentSuggestionService {
     ) {
       throw new TypeError('AgentSuggestionService prompt port must implement build');
     }
-    const maxDocument =
-      options.maxDocumentCharacters ?? AGENT_SUGGESTION_MAX_DOCUMENT_CHARACTERS;
+    const maxDocument = options.maxDocumentCharacters ?? AGENT_SUGGESTION_MAX_DOCUMENT_CHARACTERS;
     if (!Number.isInteger(maxDocument) || maxDocument <= 0) {
       throw new TypeError('maxDocumentCharacters must be a positive integer');
     }
@@ -469,7 +468,8 @@ export class AgentSuggestionService {
         return {
           status: 'failed',
           errorCode: 'agent.suggestion.input-too-large',
-          message: `Document text exceeds the ${this.#maxDocumentCharacters} character ` +
+          message:
+            `Document text exceeds the ${this.#maxDocumentCharacters} character ` +
             'suggestion limit.',
         };
       }
@@ -690,9 +690,7 @@ export class AgentSuggestionService {
 
   #validateApplyInput(input: AgentSuggestionApplyInput): void {
     if (input === null || typeof input !== 'object') {
-      throw new AgentSuggestionInputError(
-        'AgentSuggestionService requires an apply input object.',
-      );
+      throw new AgentSuggestionInputError('AgentSuggestionService requires an apply input object.');
     }
     for (const key of Object.keys(input)) {
       if (!APPLY_FIELDS.includes(key as (typeof APPLY_FIELDS)[number])) {

@@ -820,7 +820,7 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       );
       const ops = records
         .filter((record) => record !== null)
-        .map((record) => record!.value.value as unknown as EditorialOperationV1)
+        .map((record) => record?.value.value as unknown as EditorialOperationV1)
         .sort((a, b) => a.startedAt.localeCompare(b.startedAt));
 
       expect(ops.map((op) => op.operationId)).toEqual([idA, idB, idC]);
@@ -918,9 +918,9 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       // Two workers both observe the stale running record at version 1.
       const stale = await repo.readOperation({ projectId: PROJECT_ID, operationId: opId });
       expect(stale).not.toBeNull();
-      expect(stale!.revision).toBe(1);
+      expect(stale?.revision).toBe(1);
 
-      const staleOperation = stale!.value.value as unknown as EditorialOperationV1;
+      const staleOperation = stale?.value.value as unknown as EditorialOperationV1;
       const recovered: EditorialOperationV1 = {
         ...staleOperation,
         status: 'interrupted',
@@ -933,7 +933,7 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       const recoveryInput = {
         projectId: PROJECT_ID,
         operationId: opId,
-        expectedVersion: stale!.revision,
+        expectedVersion: stale?.revision,
         value: recordOf(recovered),
       };
 
@@ -1375,7 +1375,7 @@ describe('OperationStore — semantic lifecycle over CoreExecutionRepository', (
       expect(loaded.leaseExpiresAt).toBe(registered.leaseExpiresAt);
       // The persisted record value is JSON-safe.
       const record = await repo.readOperation({ projectId: PROJECT_ID, operationId: opId });
-      expect(JSON.parse(JSON.stringify(record!.value.value))).toEqual(record!.value.value);
+      expect(JSON.parse(JSON.stringify(record?.value.value))).toEqual(record?.value.value);
     });
 
     it('operation survives register → succeed → get round-trip', async () => {

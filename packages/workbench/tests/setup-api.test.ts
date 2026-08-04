@@ -27,7 +27,6 @@ import {
   BROWSER_SETUP_PROVIDERS_CREDENTIAL_PATH,
   BROWSER_SETUP_PROVIDERS_VALIDATE_PATH,
   createSetupApi,
-  type SetupApiSurface,
 } from '../src/host/setup-api.js';
 import { createRealPersistence } from './helpers/real-persistence.js';
 

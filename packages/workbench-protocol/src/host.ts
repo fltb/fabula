@@ -35,7 +35,11 @@ export interface HostShutdownMessageV1 {
   readonly requestId: string;
   readonly deadlineMs: number;
 }
-export type HostControlFrameV1 = HostReadyMessageV1 | HostStoppedMessageV1 | HostFatalMessageV1 | HostShutdownMessageV1;
+export type HostControlFrameV1 =
+  | HostReadyMessageV1
+  | HostStoppedMessageV1
+  | HostFatalMessageV1
+  | HostShutdownMessageV1;
 export type HostControlDirectionV1 = 'child-to-supervisor' | 'supervisor-to-child';
 
 export interface HostHealthPayloadV1 {

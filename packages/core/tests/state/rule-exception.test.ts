@@ -58,7 +58,7 @@ describe('RuleException — structure', () => {
       effect: { type: 'exempt' },
     };
     expect(exc.condition).toBeDefined();
-    expect(exc.condition!.type).toBe('fact');
+    expect(exc.condition?.type).toBe('fact');
   });
 });
 

@@ -28,11 +28,12 @@ afterEach(() => vi.restoreAllMocks());
 
 describe('Agent browser client', () => {
   it('sends only versioned editor identity and instruction to the guarded Host', async () => {
-    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
-      new Response(JSON.stringify({ status: 'proposed', proposal }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () =>
+        new Response(JSON.stringify({ status: 'proposed', proposal }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
     );
     const client = createAgentClient({
       fetch,
@@ -94,11 +95,12 @@ describe('Agent browser client', () => {
 
   it('redacts arbitrary Host/provider detail from transport errors', async () => {
     const secret = 'sk-provider-secret-should-not-render';
-    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
-      new Response(
-        JSON.stringify({ error: { code: 'PROVIDER_TIMEOUT', message: `${secret} details` } }),
-        { status: 502, headers: { 'content-type': 'application/json' } },
-      ),
+    const fetch = vi.fn<typeof globalThis.fetch>(
+      async () =>
+        new Response(
+          JSON.stringify({ error: { code: 'PROVIDER_TIMEOUT', message: `${secret} details` } }),
+          { status: 502, headers: { 'content-type': 'application/json' } },
+        ),
     );
     const client = createAgentClient({ fetch });
 
@@ -130,11 +132,15 @@ describe('Agent browser client', () => {
       );
     const client = createAgentClient({ fetch });
 
-    await expect(client.propose({ version: 1, context, instruction: 'Rewrite.' })).resolves.toMatchObject({
+    await expect(
+      client.propose({ version: 1, context, instruction: 'Rewrite.' }),
+    ).resolves.toMatchObject({
       status: 'paused',
       replanRequired: true,
     });
-    await expect(client.propose({ version: 1, context, instruction: 'Rewrite.' })).resolves.toMatchObject({
+    await expect(
+      client.propose({ version: 1, context, instruction: 'Rewrite.' }),
+    ).resolves.toMatchObject({
       status: 'stale',
       replanRequired: true,
     });

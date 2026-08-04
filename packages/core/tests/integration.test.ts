@@ -27,21 +27,33 @@ import { EntityMapper, InMemoryEntityRegistry } from '../src/entity/index.js';
 import { calculateISS, detectAntiPatterns } from '../src/iss/index.js';
 import { ReplayEngine, StateManager } from '../src/state/index.js';
 import type {
+  CharacterDefinition,
   EntityCatalogContext,
+  EventFile,
   Fact,
   GoalLifecycle,
-  MilestoneLifecycle,
+  LocationDefinition,
   NarrativeEvent,
   PreRenderInput,
+  RelationshipDefinition,
+  RuleDefinition,
   ThreadId,
   ThreadLifecycle,
   ThreadRunId,
-  ThreadRuntimeState,
+  WorldInitialState,
   WorldState,
 } from '../src/types/index.js';
 import { POVValidator, ResultAggregator, TimelineValidator } from '../src/validator/index.js';
 import { materializeFixtureSnapshot } from './fixtures/fixture-snapshots.ts';
 
+function must<T>(value: T | null | undefined, message: string): T {
+  if (value === null || value === undefined) throw new Error(message);
+  return value;
+}
+
+type FixtureCharacter = Pick<CharacterDefinition, 'id'> & { character?: string };
+type FixtureLocation = Pick<LocationDefinition, 'id'> & { location?: string };
+type FixtureRule = Pick<RuleDefinition, 'ruleId'> & { rule?: string };
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
@@ -186,42 +198,47 @@ describe('1. Full Pipeline', () => {
 
   it('1a. EntityMapper loads the fixture project data', () => {
     // ── Project config ───────────────────────────────────────────
-    expect(projectData.config).not.toBeNull();
-    expect(projectData.config!.project).toBe('arcane_aftermath');
-    expect(projectData.config!.title).toBe('Arcane 后传：灰色市场');
-    expect(projectData.config!.author).toBe('Test Author');
+    const config = must(projectData.config, 'Expected project config');
+    expect(config.project).toBe('arcane_aftermath');
+    expect(config.title).toBe('Arcane 后传：灰色市场');
+    expect(config.author).toBe('Test Author');
 
     // ── Characters ──────────────────────────────────────────────
     // Characters — use .id (YAML now has this field)
     expect(projectData.characters.length).toBeGreaterThanOrEqual(3);
-    const rawChars = projectData.characters.map((c: any) => c.character || c.id);
+    const rawChars = projectData.characters.map((c: FixtureCharacter) => c.character ?? c.id);
     expect(rawChars).toContain('camille');
     expect(rawChars).toContain('seraphine');
     expect(rawChars).toContain('gear');
 
     // ── Locations ───────────────────────────────────────────────
     expect(projectData.locations.length).toBe(2);
-    const locIds = projectData.locations.map((l: any) => l.location || l.id);
+    const locIds = projectData.locations.map((l: FixtureLocation) => l.location ?? l.id);
     expect(locIds).toContain('piltover_enforcer_headquarters');
     expect(locIds).toContain('zaun_gray_exchange');
 
     // ── Rules ──────────────────────────────────────────────────
     // YAML uses `rule:` not `ruleId:`
     expect(projectData.rules.length).toBe(2);
-    const rawRules = projectData.rules.map((r: any) => r.rule || r.ruleId);
+    const rawRules = projectData.rules.map((r: FixtureRule) => r.rule ?? r.ruleId);
     expect(rawRules).toContain('hextech_crystal_scarcity');
     expect(rawRules).toContain('shimmer_addiction_timeline');
 
     // ── Relationships ──────────────────────────────────────────
     expect(projectData.relationships.length).toBe(1);
-    const rel = projectData.relationships[0] as any;
+    const rel: RelationshipDefinition = must(
+      projectData.relationships[0],
+      'Expected fixture relationship',
+    );
     expect(rel.type).toBe('professional_mentor_asset');
 
     // ── World initial state (now flat structure) ─────────
-    expect(projectData.worldInitialState).not.toBeNull();
-    const wis = projectData.worldInitialState as any;
+    const wis: WorldInitialState = must(
+      projectData.worldInitialState,
+      'Expected world initial state',
+    );
     expect(wis.timeAnchors).toBeDefined();
-    expect(wis.timeAnchors.length).toBeGreaterThanOrEqual(3);
+    expect(wis.timeAnchors?.length).toBeGreaterThanOrEqual(3);
     expect(wis.threads).toHaveLength(3);
     expect(wis.worldFacts).toBeDefined();
     expect(wis.worldFacts.length).toBeGreaterThanOrEqual(5);
@@ -230,14 +247,14 @@ describe('1. Full Pipeline', () => {
 
     // ── Chapter 1 ─────────────────────────────────────────────
     expect(projectData.chapters.size).toBe(1);
-    const ch1 = projectData.chapters.get(1)!;
-    expect(ch1.metadata).not.toBeNull();
+    const ch1 = must(projectData.chapters.get(1), 'Expected chapter 1');
+    const metadata = must(ch1.metadata, 'Expected chapter 1 metadata');
     // YAML now uses camelCase `title`
-    expect(ch1.metadata!.title).toBe('Chapter 1: The Signal');
+    expect(metadata.title).toBe('Chapter 1: The Signal');
 
     // Both E1a and E1b now load (duplicate-key issue was fixed in fixture rewrite)
     expect(ch1.events.length).toBe(2);
-    const evt = ch1.events[0] as any;
+    const evt: EventFile = must(ch1.events[0], 'Expected first chapter event');
     expect(evt.event).toBe('E1a');
     expect(evt.narrativeOrder).toBe(1);
   });
@@ -280,7 +297,10 @@ describe('1. Full Pipeline', () => {
     expect(projectData.worldInitialState?.worldFacts.length).toBeGreaterThan(0);
 
     // E1a event — fixture now uses camelCase so narrativeOrder is defined
-    const e1a = events.find((e) => e.id === 'E1a')!;
+    const e1a = must(
+      events.find((e) => e.id === 'E1a'),
+      'Expected E1a event',
+    );
     expect(e1a.pov.character).toBe('seraphine');
     expect(e1a.pov.type).toBe('third_person_limited');
     expect(e1a.narrativeOrder).toBe(1);
@@ -361,7 +381,7 @@ describe('1. Full Pipeline', () => {
 
     // State
     const state = sm.getCurrentState();
-    expect(state.threads['T1']).toEqual({
+    expect(state.threads.T1).toEqual({
       threadId: 'T1' as ThreadId,
       status: 'active' as ThreadLifecycle,
       currentRunId: 'legacy-T1' as ThreadRunId,
@@ -371,7 +391,7 @@ describe('1. Full Pipeline', () => {
       milestoneStates: {},
       semanticStateHash: 'hx9s670',
     });
-    expect(state.threads['T2']).toEqual({
+    expect(state.threads.T2).toEqual({
       threadId: 'T2' as ThreadId,
       status: 'active' as ThreadLifecycle,
       currentRunId: 'legacy-T2' as ThreadRunId,
@@ -381,8 +401,8 @@ describe('1. Full Pipeline', () => {
       milestoneStates: {},
       semanticStateHash: 'hbe9vjr',
     });
-    expect(state.entities['seraphine']?.['detected_anomaly']).toBe(true);
-    expect(state.entities['camille']?.['case_status']).toBe('accepted');
+    expect(state.entities.seraphine?.detected_anomaly).toBe(true);
+    expect(state.entities.camille?.case_status).toBe('accepted');
 
     // Persistence round-trip and recovery are covered by the semantic state
     // repository suites (state.test.ts / memory-contract-repositories.test.ts);
@@ -535,44 +555,84 @@ describe('2. Entity Completeness', () => {
     const data = new EntityMapper(SNAPSHOT).loadProject();
 
     // Camille
-    const camille = data.characters.find((c: any) => c.id === 'camille') as any;
+    const camille = data.characters.find((c) => c.id === 'camille');
     expect(camille).toBeDefined();
+    if (!camille) {
+      throw new Error('Expected Camille character');
+    }
+    const camilleInitialState = camille.initialState;
+    expect(camilleInitialState).toBeDefined();
+    if (!camilleInitialState) {
+      throw new Error('Expected Camille initial state');
+    }
     expect(camille.traits).toContain('calculating');
     expect(camille.traits).toContain('ruthless_when_necessary');
     expect(camille.traits).toContain('hidden_moral_code');
-    expect(camille.initialState.location).toBe('piltover_enforcer_headquarters');
+    expect(camilleInitialState.location).toBe('piltover_enforcer_headquarters');
 
     // Seraphine
-    const seraphine = data.characters.find((c: any) => c.id === 'seraphine') as any;
+    const seraphine = data.characters.find((c) => c.id === 'seraphine');
     expect(seraphine).toBeDefined();
+    if (!seraphine) {
+      throw new Error('Expected Seraphine character');
+    }
+    const seraphineInitialState = seraphine.initialState;
+    expect(seraphineInitialState).toBeDefined();
+    if (!seraphineInitialState) {
+      throw new Error('Expected Seraphine initial state');
+    }
     expect(seraphine.traits).toContain('empathetic');
     expect(seraphine.traits).toContain('musical');
-    expect(seraphine.initialState.location).toBe('piltover_enforcer_headquarters');
+    expect(seraphineInitialState.location).toBe('piltover_enforcer_headquarters');
 
     // Gear (NPC)
-    const gear = data.characters.find((c: any) => c.id === 'gear') as any;
+    const gear = data.characters.find((c) => c.id === 'gear');
     expect(gear).toBeDefined();
+    if (!gear) {
+      throw new Error('Expected Gear character');
+    }
+    const gearInitialState = gear.initialState;
+    expect(gearInitialState).toBeDefined();
+    if (!gearInitialState) {
+      throw new Error('Expected Gear initial state');
+    }
     expect(gear.traits).toContain('greedy');
     expect(gear.traits).toContain('shimmer_addicted');
-    expect(gear.initialState.condition).toBe('shimmer_damaged');
-    expect(gear.initialState.location).toBe('zaun_gray_exchange');
+    expect(gearInitialState.condition).toBe('shimmer_damaged');
+    expect(gearInitialState.location).toBe('zaun_gray_exchange');
   });
 
   it('2b. Locations have descriptions and initial state', () => {
     const data = new EntityMapper(SNAPSHOT).loadProject();
 
-    const hq = data.locations.find((l: any) => l.id === 'piltover_enforcer_headquarters') as any;
+    const hq = data.locations.find((l) => l.id === 'piltover_enforcer_headquarters');
     expect(hq).toBeDefined();
+    if (!hq) {
+      throw new Error('Expected headquarters location');
+    }
     expect(hq.name).toBe('Piltover Enforcer Headquarters');
     expect(hq.description).toBeDefined();
     expect(hq.description.length).toBeGreaterThan(0);
-    expect(hq.initialState.status).toBe('operational');
+    const hqInitialState = hq.initialState;
+    expect(hqInitialState).toBeDefined();
+    if (!hqInitialState) {
+      throw new Error('Expected headquarters initial state');
+    }
+    expect(hqInitialState.status).toBe('operational');
 
-    const exchange = data.locations.find((l: any) => l.id === 'zaun_gray_exchange') as any;
+    const exchange = data.locations.find((l) => l.id === 'zaun_gray_exchange');
     expect(exchange).toBeDefined();
+    if (!exchange) {
+      throw new Error('Expected exchange location');
+    }
     expect(exchange.name).toBe('Gray Market Exchange');
     expect(exchange.description).toBeDefined();
-    expect(exchange.initialState.controlledBy).toBe('zaun_underground');
+    const exchangeInitialState = exchange.initialState;
+    expect(exchangeInitialState).toBeDefined();
+    if (!exchangeInitialState) {
+      throw new Error('Expected exchange initial state');
+    }
+    expect(exchangeInitialState.controlledBy).toBe('zaun_underground');
   });
 });
 
@@ -581,15 +641,15 @@ describe('2. Entity Completeness', () => {
 describe('3. Event Integrity', () => {
   it('3a. E1a has narrativeOrder = 1', () => {
     const data = new EntityMapper(SNAPSHOT).loadProject();
-    const ch1 = data.chapters.get(1)!;
-    const e1a = ch1.events[0] as any;
+    const ch1 = must(data.chapters.get(1), 'Expected chapter 1');
+    const e1a = must(ch1.events[0], 'Expected E1a event');
     expect(e1a.narrativeOrder).toBe(1);
   });
 
   it('3b. E1a has proper POV assignment (seraphine, third_person_limited)', () => {
     const data = new EntityMapper(SNAPSHOT).loadProject();
-    const ch1 = data.chapters.get(1)!;
-    const e1a = ch1.events[0] as any;
+    const ch1 = must(data.chapters.get(1), 'Expected chapter 1');
+    const e1a = must(ch1.events[0], 'Expected E1a event');
     expect(e1a.pov.character).toBe('seraphine');
     expect(e1a.pov.type).toBe('third_person_limited');
   });
@@ -597,16 +657,16 @@ describe('3. Event Integrity', () => {
   it('3c. Scene type is valid (linear)', () => {
     const validTypes = ['linear', 'flashback', 'flashforward', 'dream', 'parallel'];
     const data = new EntityMapper(SNAPSHOT).loadProject();
-    const ch1 = data.chapters.get(1)!;
+    const ch1 = must(data.chapters.get(1), 'Expected chapter 1');
     for (const evt of ch1.events) {
-      expect(validTypes).toContain((evt as any).sceneType);
+      expect(validTypes).toContain(evt.sceneType);
     }
   });
 
   it('3d. Preconditions reference known fixture entities', () => {
     const data = new EntityMapper(SNAPSHOT).loadProject();
-    const ch1 = data.chapters.get(1)!;
-    const e1a = ch1.events[0] as any;
+    const ch1 = must(data.chapters.get(1), 'Expected chapter 1');
+    const e1a = must(ch1.events[0], 'Expected E1a event');
     expect(e1a.preconditions).toBeDefined();
     expect(e1a.preconditions.length).toBeGreaterThanOrEqual(2);
     for (const pc of e1a.preconditions) {
@@ -653,7 +713,7 @@ describe('4. State Transitions', () => {
     });
     sm.commit(e1a);
     const state = sm.getCurrentState();
-    expect(state.entities['seraphine']?.['detected_anomaly']).toBe(true);
+    expect(state.entities.seraphine?.detected_anomaly).toBe(true);
   });
 
   it('4b. After E1b: camille has taken the case', () => {
@@ -678,7 +738,7 @@ describe('4. State Transitions', () => {
     });
     sm.commit(e1b);
     const state = sm.getCurrentState();
-    expect(state.entities['camille']?.['case_status']).toBe('accepted');
+    expect(state.entities.camille?.case_status).toBe('accepted');
   });
 
   it('4c. Thread T1, T2, T3 have progress after events', () => {
@@ -706,7 +766,7 @@ describe('4. State Transitions', () => {
     sm2.commit(e1b);
 
     const state = sm2.getCurrentState();
-    expect(state.threads['T1']).toEqual({
+    expect(state.threads.T1).toEqual({
       threadId: 'T1' as ThreadId,
       status: 'active' as ThreadLifecycle,
       currentRunId: 'legacy-T1' as ThreadRunId,
@@ -716,7 +776,7 @@ describe('4. State Transitions', () => {
       milestoneStates: {},
       semanticStateHash: 'hx9s670',
     });
-    expect(state.threads['T2']).toEqual({
+    expect(state.threads.T2).toEqual({
       threadId: 'T2' as ThreadId,
       status: 'active' as ThreadLifecycle,
       currentRunId: 'legacy-T2' as ThreadRunId,
@@ -726,7 +786,7 @@ describe('4. State Transitions', () => {
       milestoneStates: {},
       semanticStateHash: 'hbe9vjr',
     });
-    expect(state.threads['T3']).toEqual({
+    expect(state.threads.T3).toEqual({
       threadId: 'T3' as ThreadId,
       status: 'active' as ThreadLifecycle,
       currentRunId: 'legacy-T3' as ThreadRunId,
@@ -781,27 +841,25 @@ describe('4. State Transitions', () => {
 
     // At order 0: only the baseline activation facts — no event-derived state
     expect(
-      replay.getStateAt(allEvents, 0, BASELINE_REPLAY_OPTIONS).entities['seraphine']?.[
-        'detected_anomaly'
-      ],
+      replay.getStateAt(allEvents, 0, BASELINE_REPLAY_OPTIONS).entities.seraphine?.detected_anomaly,
     ).toBeUndefined();
 
     // At order 1: seraphine detected anomaly
     const at1 = replay.getStateAt(allEvents, 1, BASELINE_REPLAY_OPTIONS);
-    expect(at1.entities['seraphine']?.['detected_anomaly']).toBe(true);
-    expect(at1.threads['T1']).toBeDefined();
-    expect(at1.threads['T1'].status).toBe('active');
+    expect(at1.entities.seraphine?.detected_anomaly).toBe(true);
+    expect(at1.threads.T1).toBeDefined();
+    expect(at1.threads.T1.status).toBe('active');
 
     // At order 2: camille accepted case
     const at2 = replay.getStateAt(allEvents, 2, BASELINE_REPLAY_OPTIONS);
-    expect(at2.entities['camille']?.['case_status']).toBe('accepted');
-    expect(at2.threads['T1']).toBeDefined();
-    expect(at2.threads['T1'].status).toBe('active');
+    expect(at2.entities.camille?.case_status).toBe('accepted');
+    expect(at2.threads.T1).toBeDefined();
+    expect(at2.threads.T1.status).toBe('active');
 
     // Optimized path with snapshot
-    const snap = replay.getStateAt(allEvents, 0, BASELINE_REPLAY_OPTIONS);
+    const _snap = replay.getStateAt(allEvents, 0, BASELINE_REPLAY_OPTIONS);
     const at1opt = replay.getStateAt(allEvents, 1, BASELINE_REPLAY_OPTIONS);
-    expect(at1opt.entities['seraphine']?.['detected_anomaly']).toBe(true);
+    expect(at1opt.entities.seraphine?.detected_anomaly).toBe(true);
   });
 });
 
@@ -1202,14 +1260,14 @@ describe('7. Context Compilation', () => {
     // Character snapshot for seraphine
     const snap = pkg.characterSnapshots.find((cs) => cs.id === 'seraphine');
     expect(snap).toBeDefined();
-    expect(snap!.traits).toContain('empathetic');
-    expect(snap!.currentState).toBeDefined();
+    expect(snap?.traits).toContain('empathetic');
+    expect(snap?.currentState).toBeDefined();
 
     // Thread status
     const t1 = pkg.activeThreads.find((t) => t.id === 'T1');
     expect(t1).toBeDefined();
-    expect(t1!.progress).toBe(0);
-    expect(t1!.total).toBe(1);
+    expect(t1?.progress).toBe(0);
+    expect(t1?.total).toBe(1);
   });
 
   it('7b. Context package includes system context, scene spec, character snapshots', () => {

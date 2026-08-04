@@ -950,16 +950,6 @@ h3 {
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-  }
-}
 /* ── Graph / Route ───────────────────────────────────────────── */
 
 .screen-empty {
@@ -1234,15 +1224,15 @@ h3 {
   font-size: 0.75rem;
 }
 
-.graph-access-summary .projection-metrics {
-  margin-top: var(--wb-space-3);
-}
-
 .projection-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
   gap: var(--wb-space-3);
   margin: var(--wb-space-4) 0;
+}
+
+.graph-access-summary .projection-metrics {
+  margin-top: var(--wb-space-3);
 }
 
 .projection-metrics div {
@@ -1274,5 +1264,15 @@ h3 {
 
   .graph-toolbar {
     align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root *,
+  :root *::before,
+  :root *::after {
+    scroll-behavior: auto;
+    transition: none;
+    animation: none;
   }
 }

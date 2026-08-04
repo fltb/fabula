@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
-import * as path from 'node:path';
 import { tmpdir } from 'node:os';
+import * as path from 'node:path';
 import {
   DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
-  REFERENCE_MCP_LIMITS_V1,
   type McpReferencePort,
+  REFERENCE_MCP_LIMITS_V1,
 } from '@novalistically/workbench-protocol';
 import { createWorkbenchReferencePort } from '../src/host/mcp/reference-port.js';
 
@@ -15,7 +15,11 @@ function hash(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
 
-async function fixture(): Promise<{ readonly projectRoot: string; readonly jobsRoot: string; readonly port: McpReferencePort }> {
+async function fixture(): Promise<{
+  readonly projectRoot: string;
+  readonly jobsRoot: string;
+  readonly port: McpReferencePort;
+}> {
   const projectRoot = await fs.mkdtemp(path.join(tmpdir(), 'workbench-reference-project-'));
   const jobsRoot = await fs.mkdtemp(path.join(tmpdir(), 'workbench-reference-jobs-'));
   roots.push(projectRoot, jobsRoot);
@@ -35,11 +39,21 @@ async function fixture(): Promise<{ readonly projectRoot: string; readonly jobsR
   return {
     projectRoot,
     jobsRoot,
-    port: createWorkbenchReferencePort({ projectId: 'project-a', projectRoot, jobsRoot, referenceLimits }),
+    port: createWorkbenchReferencePort({
+      projectId: 'project-a',
+      projectRoot,
+      jobsRoot,
+      referenceLimits,
+    }),
   };
 }
 
-async function importBytes(port: McpReferencePort, referenceId: string, data: Uint8Array, idempotencyKey = referenceId): Promise<string> {
+async function importBytes(
+  port: McpReferencePort,
+  referenceId: string,
+  data: Uint8Array,
+  idempotencyKey = referenceId,
+): Promise<string> {
   const contentHash = hash(data);
   const began = await port.importBegin({
     version: 1,
@@ -85,13 +99,20 @@ describe('Workbench Host reference MCP port', () => {
     expect(listed.items).toHaveLength(1);
     expect(listed.items[0]?.referenceId).toBe('guide');
     expect(listed.nextCursor).toBeNull();
-    expect((await port.search({ version: 1, query: 'AUTHOR', filters: { tag: 'guide' } })).items).toHaveLength(1);
+    expect(
+      (await port.search({ version: 1, query: 'AUTHOR', filters: { tag: 'guide' } })).items,
+    ).toHaveLength(1);
     expect((await port.get({ version: 1, referenceId: 'guide' }))?.item.displayName).toBe('guide');
 
     const chunk = await port.getChunk({ version: 1, referenceId: 'guide', chunkId: 'guide:0' });
     expect(chunk?.chunk.range.offset).toBe(0);
     expect(chunk?.chunk.chunkHash).toBe(hash(bytes));
-    const content = await port.readContent({ version: 1, referenceId: 'guide', offset: 3, limit: 3 });
+    const content = await port.readContent({
+      version: 1,
+      referenceId: 'guide',
+      offset: 3,
+      limit: 3,
+    });
     expect(content.content.dataBase64).toBe(Buffer.from('def').toString('base64'));
     expect(content.content.range).toEqual({ version: 1, offset: 3, length: 3 });
 
@@ -178,8 +199,13 @@ describe('Workbench Host reference MCP port', () => {
       },
     });
     expect((await restarted.jobGet({ version: 1, jobId }))?.job.status).toBe('succeeded');
-    expect((await restarted.getChunk({ version: 1, referenceId: 'restart', chunkId: 'restart:0' }))?.chunk.contentHash).toBe(hash(bytes));
-    expect((await restarted.get({ version: 1, referenceId: 'restart' }))?.item.byteLength).toBe(bytes.byteLength);
+    expect(
+      (await restarted.getChunk({ version: 1, referenceId: 'restart', chunkId: 'restart:0' }))
+        ?.chunk.contentHash,
+    ).toBe(hash(bytes));
+    expect((await restarted.get({ version: 1, referenceId: 'restart' }))?.item.byteLength).toBe(
+      bytes.byteLength,
+    );
   });
 
   it('rejects late chunk writes after commit has transitioned a job to running', async () => {
@@ -209,7 +235,6 @@ describe('Workbench Host reference MCP port', () => {
       }),
     ).rejects.toThrow(/not accepting chunks/);
   });
-
 
   it('recovers an orphaned chunk written before its durable job update', async () => {
     const { jobsRoot, port } = await fixture();
@@ -262,11 +287,17 @@ describe('Workbench Host reference MCP port', () => {
       chunkHash: failedHash,
       dataBase64: Buffer.from(failedData).toString('base64'),
     });
-    const failed = await port.importCommit({ version: 1, jobId: began.job.jobId, contentHash: '0'.repeat(64) });
+    const failed = await port.importCommit({
+      version: 1,
+      jobId: began.job.jobId,
+      contentHash: '0'.repeat(64),
+    });
     expect(failed.job.status).toBe('failed');
     const retried = await port.retry({ version: 1, jobId: began.job.jobId });
     expect(retried.job.status).toBe('succeeded');
-    await expect(port.retry({ version: 1, jobId: began.job.jobId })).rejects.toThrow(/failed durable job/);
+    await expect(port.retry({ version: 1, jobId: began.job.jobId })).rejects.toThrow(
+      /failed durable job/,
+    );
 
     const other = createWorkbenchReferencePort({
       projectId: 'project-a',
@@ -292,11 +323,15 @@ describe('Workbench Host reference MCP port', () => {
     ]);
     const deleted = await port.delete({ version: 1, referenceId: 'retry' });
     expect(deleted.job.status).toBe('succeeded');
-    expect((await port.get({ version: 1, referenceId: 'retry' }))).toBeNull();
+    expect(await port.get({ version: 1, referenceId: 'retry' })).toBeNull();
     const firstPage = await port.list({ version: 1, pageSize: 1 });
     expect(firstPage.items.map((item) => item.referenceId)).toEqual(['one']);
     expect(firstPage.nextCursor).not.toBeNull();
-    const secondPage = await port.list({ version: 1, pageSize: 1, cursor: firstPage.nextCursor ?? undefined });
+    const secondPage = await port.list({
+      version: 1,
+      pageSize: 1,
+      cursor: firstPage.nextCursor ?? undefined,
+    });
     expect(secondPage.items.map((item) => item.referenceId)).toEqual(['two']);
   });
 

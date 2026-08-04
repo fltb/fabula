@@ -5,10 +5,10 @@ import type {
   AuthoringStateV1,
   AuthoringSubmitReceiptV1,
 } from '../contracts/authoring.js';
-import {
-  type AuthoringEventSubscription,
-  type BrowserAuthoringApiError,
-  type BrowserAuthoringClient,
+import type {
+  AuthoringEventSubscription,
+  BrowserAuthoringApiError,
+  BrowserAuthoringClient,
 } from './authoring-client.js';
 
 export interface ProjectEventClientSnapshot {

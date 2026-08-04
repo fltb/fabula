@@ -2,15 +2,13 @@ import { describe, expect, it } from 'vitest';
 import type { MockProviderOptions } from '../../src/ai/providers/mock.ts';
 import { MockProvider } from '../../src/ai/providers/mock.ts';
 import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
-import type { Pass2RejectionCategory, RenderJob } from '../../src/pipeline/render.ts';
+import type { RenderJob } from '../../src/pipeline/render.ts';
 import { RenderPipeline } from '../../src/pipeline/render.ts';
 import type {
   ContextPackage,
-  KnowledgeBoundary,
   NarrativeEvent,
   SceneSpecification,
   SystemContext,
-  WorldState,
 } from '../../src/types/index.ts';
 import { ResultAggregator } from '../../src/validator/aggregator.ts';
 import {
@@ -44,7 +42,7 @@ const ANALYSIS_PAYLOAD: Record<string, unknown> = {
   checklistResults: [],
 };
 
-const VALID_ANALYSIS_JSON = JSON.stringify({
+const _VALID_ANALYSIS_JSON = JSON.stringify({
   eventId: 'evt_test',
   protocol: makeProtocol('prose'),
   observations: makeObservations(ANALYSIS_PAYLOAD, 'prose'),
@@ -182,9 +180,9 @@ describe('dynamic schema path with aggregator', () => {
     const result = await pipeline.renderScene(makeJob('test'));
 
     expect(result.analysis).not.toBeNull();
-    expect(result.analysis!.eventId).toBe('test');
+    expect(result.analysis?.eventId).toBe('test');
     // All 14 blocks should be present in the parsed analysis
-    const a = result.analysis!.analysis;
+    const a = result.analysis?.analysis;
     expect(a).toHaveProperty('postconditions');
     expect(a).toHaveProperty('preconditions');
     expect(a).toHaveProperty('pov');

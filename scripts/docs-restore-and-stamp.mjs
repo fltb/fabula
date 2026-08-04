@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Fix docs headers: restore original content from HEAD by old name, then re-insert one canonical 时间 line.
 import { execSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 
 const RENAMES = [
   ['docs/report/drc-stress-report-final.md', 'docs/report/drc-stress-report-final-2026-07-27.md'],

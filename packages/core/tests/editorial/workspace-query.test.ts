@@ -69,8 +69,8 @@ describe('EditorialWorkspace — snapshot query facade', () => {
 
       const doc = ws.getSource('nova.yaml');
       expect(doc).not.toBeNull();
-      expect(doc!.logicalPath).toBe('nova.yaml');
-      expect(doc!.contentHash).toBe(hash('title: "Test Novel"\n'));
+      expect(doc?.logicalPath).toBe('nova.yaml');
+      expect(doc?.contentHash).toBe(hash('title: "Test Novel"\n'));
     });
 
     it('returns null for a missing document', () => {
@@ -136,7 +136,7 @@ describe('EditorialWorkspace — snapshot query facade', () => {
       const result = qs.getSource('nonexistent.yaml');
       expect(result.ok).toBe(false);
       expect(result.error).toBeDefined();
-      expect(result.error!.code).toBe('SOURCE_DOCUMENT_NOT_FOUND');
+      expect(result.error?.code).toBe('SOURCE_DOCUMENT_NOT_FOUND');
     });
 
     it('returns a pure source analysis for a candidate change', () => {
@@ -152,13 +152,14 @@ describe('EditorialWorkspace — snapshot query facade', () => {
 
       const result = qs.analyze([change]);
       expect(result.ok).toBe(true);
-      const analysis = result.data!;
+      const analysis = result.data;
+      if (!analysis) throw new Error('Expected source analysis result');
       expect(analysis.current.sourceHash).toBe(base.sourceHash);
       expect(analysis.changes).toHaveLength(1);
       const candidate = analysis.candidate.documents.find((d) => d.logicalPath === 'nova.yaml');
       expect(candidate).toBeDefined();
-      expect(candidate!.content).toBe('title: "Updated"\n');
-      expect(base.documents.find((d) => d.logicalPath === 'nova.yaml')!.content).toBe(
+      expect(candidate?.content).toBe('title: "Updated"\n');
+      expect(base.documents.find((d) => d.logicalPath === 'nova.yaml')?.content).toBe(
         'title: "Test Novel"\n',
       );
     });

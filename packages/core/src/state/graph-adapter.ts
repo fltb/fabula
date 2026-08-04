@@ -334,15 +334,23 @@ export function compileStoryRuntimeGraph(input: {
   );
 
   // 8. Build StoryOrderIndex for the selected events.
+  const coordinatesByEventId = new Map(
+    selectedEvents.map((event) => {
+      const coordinate = temporalContext.coordinatesByEventId.get(event.id);
+      if (coordinate === undefined) {
+        throw new ConfigError(`Event "${event.id}" has no resolved story coordinate`, {
+          phase: 'narrative-graphs',
+          eventId: event.id,
+        });
+      }
+      return [event.id, coordinate] as const;
+    }),
+  );
   const order = buildStoryOrderIndex(
     INITIAL_STORY_ROOT_ID,
     selectedEvents.map((e) => e.id),
     storyAdjacency,
-    new Map(
-      selectedEvents
-        .map((e) => [e.id, temporalContext.coordinatesByEventId.get(e.id)!] as const)
-        .filter(([, coord]) => coord !== undefined),
-    ),
+    coordinatesByEventId,
   );
   const projectedStoryNodes = projectStoryNodes(storyNodes, selectedEvents);
 
@@ -534,7 +542,13 @@ export function storyGraphToEventAdjacency(
     if (!selectedIds.has(edge.predecessor) || !selectedIds.has(edge.dependent)) {
       continue;
     }
-    const successors = adjacency.get(edge.predecessor)!;
+    const successors = adjacency.get(edge.predecessor);
+    if (successors === undefined) {
+      throw new ConfigError(
+        `Story graph adjacency has no entry for selected predecessor "${edge.predecessor}"`,
+        { phase: 'narrative-graphs', eventId: edge.predecessor },
+      );
+    }
     if (!successors.includes(edge.dependent)) successors.push(edge.dependent);
   }
   return adjacency;

@@ -3,7 +3,11 @@ import type { CoreRuntimeServices, ProjectCompilation } from '@novalistically/co
 import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
 import { afterEach, describe, expect, it, type Mock, vi } from 'vitest';
 import * as Y from 'yjs';
-import { AUTHORING_CONTRACT_VERSION, type AuthoringOperationReceiptV1, type AuthoringStateV1 } from '../src/contracts/authoring.js';
+import {
+  AUTHORING_CONTRACT_VERSION,
+  type AuthoringOperationReceiptV1,
+  type AuthoringStateV1,
+} from '../src/contracts/authoring.js';
 import type { WorkingDocumentState } from '../src/contracts/index.js';
 import {
   type AgentCapabilityGrant,
@@ -182,7 +186,6 @@ function receipt(
   };
 }
 
-
 // ─── Harness ─────────────────────────────────────────────────────────────────
 
 interface McpHarness {
@@ -348,7 +351,7 @@ describe('MCP authoring coordinator port', () => {
       projectId: PROJECT_ID,
       scopes: ['mcp:author'],
     });
-    const adapterGrant = h.capabilities.issued.at(-1)!.grant;
+    const adapterGrant = h.capabilities.issued.at(-1)?.grant;
     // Session-queued effect: the durable audit proves the mutation ran inside
     // the capability-gated serialized operation queue.
     expect(h.audit.records).toContainEqual(
@@ -537,7 +540,7 @@ describe('MCP authoring coordinator port', () => {
       },
       h.caller,
     );
-    const adapterGrant = h.capabilities.issued.at(-1)!.grant;
+    const adapterGrant = h.capabilities.issued.at(-1)?.grant;
     expect(h.capabilities.issueCalls.at(-1)).toEqual({
       userId: 'device-owner',
       projectId: PROJECT_ID,
@@ -656,7 +659,7 @@ describe('MCP authoring coordinator port', () => {
       },
       h.caller,
     );
-    const adapterGrant = h.capabilities.issued.at(-1)!.grant;
+    const adapterGrant = h.capabilities.issued.at(-1)?.grant;
     expect(h.capabilities.issueCalls.at(-1)).toEqual({
       userId: 'device-owner',
       projectId: PROJECT_ID,

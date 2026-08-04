@@ -6,9 +6,15 @@
 // ============================================================================
 
 import { describe, expect, it, vi } from 'vitest';
-import type { BatchConfig, BatchProgressEvent } from '../src/batch-renderer.ts';
+import type { BatchProgressEvent } from '../src/batch-renderer.ts';
 import { BatchRenderPipeline } from '../src/batch-renderer.ts';
 import type { RenderJob, RenderPipeline, RenderSceneResult } from '../src/pipeline/render.ts';
+import type { ContextPackage, NarrativeEvent, WorldState } from '../src/types/index.js';
+
+function must<T>(value: T | undefined, message: string): T {
+  if (value === undefined) throw new Error(message);
+  return value;
+}
 
 // ============================================================================
 // Mock helpers
@@ -18,33 +24,59 @@ import type { RenderJob, RenderPipeline, RenderSceneResult } from '../src/pipeli
  * Create a minimal RenderJob stub for testing.
  */
 function makeJob(id: string): RenderJob {
+  const event: NarrativeEvent = {
+    kind: 'event',
+    id,
+    event: id,
+    narrativeOrder: 0,
+    title: `Test ${id}`,
+    storyTime: { type: 'indeterminate', mode: 'unspecified' },
+    sceneType: 'linear',
+    pov: { character: 'narrator', type: 'omniscient' },
+    sceneBrief: `Test scene ${id}`,
+    beats: [`Test scene ${id}`],
+    preconditions: [],
+    postconditions: [],
+    threadProgress: [],
+    foreshadowing: [],
+    relationshipEffects: [],
+    ruleEffects: [],
+    source: 'event_file',
+    branchExistence: { type: 'all' },
+    participants: { entities: [] },
+  };
+  const stateBefore: WorldState = {
+    entities: {},
+    relationships: {},
+    knowledge: {},
+    threads: {},
+    rules: {},
+    facts: [],
+  };
+  const context: ContextPackage = {
+    eventId: id,
+    systemContext: { genre: '', style: '', narrativeRules: [] },
+    sceneSpec: {
+      goal: '',
+      beats: [''],
+      povType: 'omniscient',
+      povCharacter: 'narrator',
+      conflict: '',
+      expectedOutcome: '',
+    },
+    characterSnapshots: [],
+    relationshipContext: [],
+    worldFacts: [],
+    knowledgeBoundary: { characterId: 'narrator', knownFacts: [] },
+    activeThreads: [],
+    volumeSummary: '',
+    markdown: '',
+    narrativeTechniques: [],
+  };
   return {
-    event: {
-      id,
-      narrativeOrder: 0,
-      preconditions: [],
-      postconditions: [],
-      threads: [],
-      foreshadowing: [],
-      relationships: [],
-      ruleEffects: [],
-    },
-    stateBefore: { entities: {}, threads: {}, relationships: {} },
-    context: {
-      event: {} as any,
-      stateBefore: {} as any,
-      characters: [],
-      scene: { location: '', cast: [], wordCount: 0, timeOfDay: '' },
-      activeFactions: [],
-      activeKnowledge: [],
-      activeThreads: [],
-      foreshadowing: [],
-      recentEvents: [],
-      relationships: [],
-      relevanceScores: [],
-      rules: [],
-      worldFacts: [],
-    },
+    event,
+    stateBefore,
+    context,
     chapter: 1,
     contract: {
       sceneId: id,
@@ -63,9 +95,11 @@ function makeJob(id: string): RenderJob {
     },
     surfaceDependency: {
       groupId: 'default',
-      policy: 'parallel' as const,
+      policy: 'parallel',
       manifestHash: 'a00',
     },
+    graphHash: 'a00',
+    sourceContentHash: 'a00',
   };
 }
 
@@ -273,17 +307,20 @@ describe('BatchRenderPipeline', () => {
 
     // 15 jobs / batchSize=5 = 3 batches → 3 progress calls
     expect(progressCalls).toHaveLength(3);
-    expect(progressCalls[0]!.batchIndex).toBe(0);
-    expect(progressCalls[0]!.completedInBatch).toBe(5);
-    expect(progressCalls[0]!.totalCompleted).toBe(5);
-    expect(progressCalls[0]!.totalJobs).toBe(15);
-    expect(progressCalls[0]!.totalBatches).toBe(3);
+    const firstProgress = must(progressCalls[0], 'Expected first progress callback');
+    expect(firstProgress.batchIndex).toBe(0);
+    expect(firstProgress.completedInBatch).toBe(5);
+    expect(firstProgress.totalCompleted).toBe(5);
+    expect(firstProgress.totalJobs).toBe(15);
+    expect(firstProgress.totalBatches).toBe(3);
 
-    expect(progressCalls[1]!.batchIndex).toBe(1);
-    expect(progressCalls[1]!.totalCompleted).toBe(10);
+    const secondProgress = must(progressCalls[1], 'Expected second progress callback');
+    expect(secondProgress.batchIndex).toBe(1);
+    expect(secondProgress.totalCompleted).toBe(10);
 
-    expect(progressCalls[2]!.batchIndex).toBe(2);
-    expect(progressCalls[2]!.totalCompleted).toBe(15);
+    const thirdProgress = must(progressCalls[2], 'Expected third progress callback');
+    expect(thirdProgress.batchIndex).toBe(2);
+    expect(thirdProgress.totalCompleted).toBe(15);
   });
 
   // ── Lifecycle hooks ──────────────────────────────────────────────
@@ -311,16 +348,20 @@ describe('BatchRenderPipeline', () => {
     });
 
     expect(beforeCalls).toHaveLength(2);
-    expect(beforeCalls[0]!.index).toBe(0);
-    expect(beforeCalls[0]!.jobs).toHaveLength(5);
-    expect(beforeCalls[1]!.index).toBe(1);
-    expect(beforeCalls[1]!.jobs).toHaveLength(5);
+    const firstBefore = must(beforeCalls[0], 'Expected first before callback');
+    expect(firstBefore.index).toBe(0);
+    expect(firstBefore.jobs).toHaveLength(5);
+    const secondBefore = must(beforeCalls[1], 'Expected second before callback');
+    expect(secondBefore.index).toBe(1);
+    expect(secondBefore.jobs).toHaveLength(5);
 
     expect(afterCalls).toHaveLength(2);
-    expect(afterCalls[0]!.index).toBe(0);
-    expect(afterCalls[0]!.results).toHaveLength(5);
-    expect(afterCalls[1]!.index).toBe(1);
-    expect(afterCalls[1]!.results).toHaveLength(5);
+    const firstAfter = must(afterCalls[0], 'Expected first after callback');
+    expect(firstAfter.index).toBe(0);
+    expect(firstAfter.results).toHaveLength(5);
+    const secondAfter = must(afterCalls[1], 'Expected second after callback');
+    expect(secondAfter.index).toBe(1);
+    expect(secondAfter.results).toHaveLength(5);
   });
 
   // ── Abort / early termination ────────────────────────────────────
@@ -424,7 +465,7 @@ describe('BatchRenderPipeline', () => {
 
   it('stops when a batch returns all-errors and failFast=true', async () => {
     const jobs = Array.from({ length: 10 }, (_, i) => makeJob(`E${i + 1}`));
-    const { pipeline, renderAll } = createFailingPipeline(1, 'All jobs failed');
+    const { pipeline } = createFailingPipeline(1, 'All jobs failed');
 
     const renderer = new BatchRenderPipeline(pipeline);
     const result = await renderer.renderBatched(jobs, { batchSize: 5, windowSize: 2 });
@@ -578,7 +619,8 @@ describe('BatchRenderPipeline', () => {
     expect(result.results).toHaveLength(9);
     // Results must follow input job order, not batch-completion order
     for (let i = 0; i < 9; i++) {
-      expect(result.results[i]!.eventId).toBe(`E${i + 1}`);
+      const sceneResult = must(result.results[i], `Expected result ${i}`);
+      expect(sceneResult.eventId).toBe(`E${i + 1}`);
     }
     expect(result.completed).toBe(true);
   });

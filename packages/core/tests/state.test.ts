@@ -4,7 +4,6 @@
 // ============================================================================
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createEmptyBranchPath } from '../src/branch/index.js';
 import type { JsonValue } from '../src/contracts/json.js';
 import { compileEntityTypeCatalog } from '../src/entity/entity-catalog-compiler.js';
 import type { StateEvent, StateStreamKey } from '../src/ports/state-repository.js';
@@ -344,7 +343,7 @@ describe('EventStore', () => {
 
       const found = store.getById(e1.id);
       expect(found).toBeDefined();
-      expect(found!.id).toBe(e1.id);
+      expect(found?.id).toBe(e1.id);
     });
 
     it('should return undefined for missing ID', () => {
@@ -357,7 +356,7 @@ describe('EventStore', () => {
       for (const event of events) store.commit(event);
 
       const found = store.getById(events[1].id);
-      expect(found!.narrativeOrder).toBe(2);
+      expect(found?.narrativeOrder).toBe(2);
     });
   });
 
@@ -630,7 +629,7 @@ describe('SnapshotEngine', () => {
 
       const found = engine.findNearest(55);
       expect(found).not.toBeNull();
-      expect(found!.eventCount).toBe(40);
+      expect(found?.eventCount).toBe(40);
     });
 
     it('should return the exact snapshot when target matches', () => {
@@ -646,7 +645,7 @@ describe('SnapshotEngine', () => {
       engine.createSnapshot(20, 'evt_20', state);
 
       const found = engine.findNearest(20);
-      expect(found!.eventCount).toBe(20);
+      expect(found?.eventCount).toBe(20);
     });
 
     it('should return null when no snapshots exist', () => {
@@ -682,7 +681,7 @@ describe('SnapshotEngine', () => {
       engine.createSnapshot(40, 'evt_40', state);
 
       const found = engine.findNearest(999);
-      expect(found!.eventCount).toBe(40);
+      expect(found?.eventCount).toBe(40);
     });
   });
 
@@ -837,8 +836,8 @@ describe('SnapshotEngine', () => {
         schemaVersion: 1,
       });
       expect(nearest).not.toBeNull();
-      expect(nearest!.sequence).toBe(40);
-      expect(nearest!.state).toEqual(state);
+      expect(nearest?.sequence).toBe(40);
+      expect(nearest?.state).toEqual(state);
     });
 
     it('should treat a missing snapshot as absent (safe full replay)', async () => {
@@ -979,11 +978,11 @@ describe('ReplayEngine', () => {
       const state = engine.replay(events);
 
       expect(state.threads.mystery).toBeDefined();
-      expect(state.threads.mystery!.status).toBe('active');
-      expect(state.threads.mystery!.goalStates.progress).toBe('active');
+      expect(state.threads.mystery?.status).toBe('active');
+      expect(state.threads.mystery?.goalStates.progress).toBe('active');
       expect(state.threads.romance).toBeDefined();
-      expect(state.threads.romance!.status).toBe('active');
-      expect(state.threads.romance!.goalStates.progress).toBe('active');
+      expect(state.threads.romance?.status).toBe('active');
+      expect(state.threads.romance?.goalStates.progress).toBe('active');
     });
 
     it('should update relationship state', () => {
@@ -1035,7 +1034,12 @@ describe('ReplayEngine', () => {
       const relKey = 'rel_camille_npc_gear';
       expect(state.relationships[relKey]).toBeDefined();
       const relState = state.relationships[relKey];
-      const activeEpoch = relState.epochs[relState.activeEpochId!];
+      const activeEpochId = relState.activeEpochId;
+      expect(activeEpochId).toBeDefined();
+      if (activeEpochId === undefined) {
+        throw new Error('Expected an active relationship epoch');
+      }
+      const activeEpoch = relState.epochs[activeEpochId];
       expect(activeEpoch.dimensions['global::type'].value).toBe('friend');
       expect(activeEpoch.dimensions['global::intensity'].value).toBe(5);
     });
@@ -1379,8 +1383,8 @@ describe('StateManager', () => {
 
       expect(state.entities.camille.age).toBe(26);
       expect(state.threads.main).toBeDefined();
-      expect(state.threads.main!.status).toBe('active');
-      expect(state.threads.main!.goalStates.progress).toBe('active');
+      expect(state.threads.main?.status).toBe('active');
+      expect(state.threads.main?.goalStates.progress).toBe('active');
     });
 
     it('should honor branch path filtering', () => {

@@ -1,8 +1,8 @@
-import type { ProjectReferencePacketV1 } from '../reference.ts';
 import type { CompletionResponse, LLMProvider, Message } from '../ai/types.ts';
 import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
 import type { TypedEventBus } from '../event-bus.ts';
 import type { CoreRuntimeServices } from '../ports/runtime-services.ts';
+import type { ProjectReferencePacketV1 } from '../reference.ts';
 import type { AnalysisResult } from './analysis.ts';
 import type { BranchPath, BranchSet } from './branch.ts';
 import type { GameDialogueChoice } from './game-dialogue.ts';

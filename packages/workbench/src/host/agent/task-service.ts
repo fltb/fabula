@@ -179,9 +179,10 @@ export class AgentTaskService {
       const code = errorCodeOf(error);
       return {
         status: 'failed',
-        errorCode: code === 'agent.task.provider-failed' && request.signal?.aborted
-          ? 'agent.task.aborted'
-          : code,
+        errorCode:
+          code === 'agent.task.provider-failed' && request.signal?.aborted
+            ? 'agent.task.aborted'
+            : code,
         message: errorMessageOf(error),
       };
     }

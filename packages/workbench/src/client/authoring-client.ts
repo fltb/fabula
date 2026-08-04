@@ -1,5 +1,9 @@
 import {
   AUTHORING_CONTRACT_VERSION,
+  type AuthoringActivityEventV1,
+  type AuthoringFailureV1,
+  type AuthoringOperationReceiptV1,
+  type AuthoringStateV1,
   BROWSER_AUTHORING_EVENTS_PATH,
   BROWSER_AUTHORING_OPERATION_PATH,
   BROWSER_AUTHORING_OPERATIONS_PATH,
@@ -10,10 +14,6 @@ import {
   BROWSER_AUTHORING_REVISIONS_PATH,
   BROWSER_AUTHORING_STATE_PATH,
   BROWSER_AUTHORING_SUBMIT_PATH,
-  type AuthoringActivityEventV1,
-  type AuthoringFailureV1,
-  type AuthoringOperationReceiptV1,
-  type AuthoringStateV1,
   type BrowserAuthoringReconcileRequestV1,
   type BrowserAuthoringReconcileResultV1,
   type BrowserAuthoringRevisionDiffV1,
@@ -58,7 +58,10 @@ export interface BrowserAuthoringClient {
   listOperations(projectId: string): Promise<BrowserAuthoringOperationsV1>;
   getOperation(projectId: string, operationId: string): Promise<AuthoringOperationReceiptV1>;
   listRevisions(projectId: string, cursor?: string): Promise<BrowserAuthoringRevisionListV1>;
-  getRevision(projectId: string, revisionId: string): Promise<{
+  getRevision(
+    projectId: string,
+    revisionId: string,
+  ): Promise<{
     readonly version: typeof AUTHORING_CONTRACT_VERSION;
     readonly projectId: string;
     readonly revision: BrowserAuthoringRevisionV1;
@@ -73,7 +76,9 @@ export interface BrowserAuthoringClient {
     request: BrowserAuthoringRevisionRestoreRequestV1,
   ): Promise<BrowserAuthoringRevisionRestoreResultV1>;
   submit(request: BrowserAuthoringSubmitRequestV1): Promise<BrowserAuthoringSubmitResultV1>;
-  reconcile(request: BrowserAuthoringReconcileRequestV1): Promise<BrowserAuthoringReconcileResultV1>;
+  reconcile(
+    request: BrowserAuthoringReconcileRequestV1,
+  ): Promise<BrowserAuthoringReconcileResultV1>;
   subscribeEvents(
     projectId: string,
     handlers: {
@@ -102,7 +107,11 @@ function failureFrom(value: unknown): { readonly code: string; readonly message:
     return { code: nested.code, message: nested.message };
   }
   const failure = value.failure;
-  if (isRecord(failure) && typeof failure.code === 'string' && typeof failure.message === 'string') {
+  if (
+    isRecord(failure) &&
+    typeof failure.code === 'string' &&
+    typeof failure.message === 'string'
+  ) {
     return { code: failure.code, message: failure.message };
   }
   return null;
@@ -267,9 +276,14 @@ export function createBrowserAuthoringClient(
       });
 
       const finishError = (error: unknown): void => {
-        const typed = error instanceof BrowserAuthoringApiError
-          ? error
-          : new BrowserAuthoringApiError(0, null, 'The authoring event stream stopped unexpectedly.');
+        const typed =
+          error instanceof BrowserAuthoringApiError
+            ? error
+            : new BrowserAuthoringApiError(
+                0,
+                null,
+                'The authoring event stream stopped unexpectedly.',
+              );
         if (!settled) {
           settled = true;
           rejectReady(typed);
@@ -294,11 +308,16 @@ export function createBrowserAuthoringClient(
             throw new BrowserAuthoringApiError(
               response.status,
               failure?.code ?? null,
-              failure?.message ?? `Host authoring event stream failed with HTTP ${response.status}.`,
+              failure?.message ??
+                `Host authoring event stream failed with HTTP ${response.status}.`,
             );
           }
           if (response.body === null) {
-            throw new BrowserAuthoringApiError(503, 'AUTHORING_UNAVAILABLE', 'The authoring event stream has no body.');
+            throw new BrowserAuthoringApiError(
+              503,
+              'AUTHORING_UNAVAILABLE',
+              'The authoring event stream has no body.',
+            );
           }
           settled = true;
           resolveReady();
@@ -318,7 +337,10 @@ export function createBrowserAuthoringClient(
               boundary = buffer.indexOf('\n\n');
             }
           }
-          if (!closed) finishError(new BrowserAuthoringApiError(0, null, 'The authoring event stream closed.'));
+          if (!closed)
+            finishError(
+              new BrowserAuthoringApiError(0, null, 'The authoring event stream closed.'),
+            );
         } catch (error) {
           if (!closed) finishError(error);
         }
@@ -332,7 +354,9 @@ export function createBrowserAuthoringClient(
           controller.abort();
           if (!settled) {
             settled = true;
-            rejectReady(new BrowserAuthoringApiError(0, null, 'The authoring event stream was closed.'));
+            rejectReady(
+              new BrowserAuthoringApiError(0, null, 'The authoring event stream was closed.'),
+            );
           }
         },
       };

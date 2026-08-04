@@ -2,7 +2,7 @@
 // ResultAggregator — integration tests for validatePost flow
 // ============================================================================
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import type {
   EntityRegistry,
   NarrativeEvent,

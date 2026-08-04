@@ -1,30 +1,29 @@
 import { createHash } from 'node:crypto';
+import { AUTHORING_DOCUMENT_LIMITS_V1 } from '@novalistically/workbench-protocol';
 import * as Y from 'yjs';
 import {
   AUTHORING_CONTRACT_VERSION,
   type AuthoringFailureV1,
   type McpAuthoringApplyInputV1,
   type McpAuthoringApplyOutputV1,
+  type McpAuthoringConflictReadOutputV1,
+  type McpAuthoringDocumentCreateInputV1,
+  type McpAuthoringDocumentDeleteInputV1,
+  type McpAuthoringDocumentEditInputV1,
   type McpAuthoringDocumentGetInputV1,
   type McpAuthoringDocumentGetOutputV1,
+  type McpAuthoringDocumentListInputV1,
+  type McpAuthoringDocumentListOutputV1,
+  type McpAuthoringDocumentMoveInputV1,
+  type McpAuthoringDocumentMutationOutputV1,
+  type McpAuthoringDocumentReadInputV1,
+  type McpAuthoringDocumentReadOutputV1,
   type McpAuthoringSubmitInputV1,
   type McpAuthoringSubmitOutputV1,
   type McpConflictResolveInputV1,
-  type McpConflictResolveOutputV1,
   type McpOperationGetInputV1,
   type McpOperationGetOutputV1,
-  type McpAuthoringDocumentListInputV1,
-  type McpAuthoringDocumentListOutputV1,
-  type McpAuthoringDocumentReadInputV1,
-  type McpAuthoringDocumentReadOutputV1,
-  type McpAuthoringDocumentEditInputV1,
-  type McpAuthoringDocumentCreateInputV1,
-  type McpAuthoringDocumentMoveInputV1,
-  type McpAuthoringDocumentDeleteInputV1,
-  type McpAuthoringDocumentMutationOutputV1,
-  type McpAuthoringConflictReadOutputV1,
 } from '../../contracts/authoring.js';
-import { AUTHORING_DOCUMENT_LIMITS_V1 } from '@novalistically/workbench-protocol';
 import type { AgentCapabilityService } from '../agent/capability-service.js';
 import type { McpAuthorizedCaller } from '../mcp/auth.js';
 import type { McpAuthoringCoordinatorPort } from '../mcp/registry.js';
@@ -42,7 +41,9 @@ function failure(code: AuthoringFailureV1['code'], message: string): AuthoringFa
 function applyTextUpdate(
   current: Uint8Array | null,
   replacementText: string | undefined,
-  edits: readonly { readonly start: number; readonly end: number; readonly replacementText: string }[] | undefined,
+  edits:
+    | readonly { readonly start: number; readonly end: number; readonly replacementText: string }[]
+    | undefined,
 ): Uint8Array {
   const doc = new Y.Doc();
   if (current !== null) Y.applyUpdate(doc, current);
@@ -93,8 +94,10 @@ export function createMcpAuthoringCoordinatorPort(options: {
     run: (operationId: string) => Promise<McpAuthoringDocumentMutationOutputV1>,
   ): Promise<McpAuthoringDocumentMutationOutputV1 | AuthoringFailureV1> => {
     const grant = await issue(caller, ['mcp:author']);
-    let output: McpAuthoringDocumentMutationOutputV1 | AuthoringFailureV1 =
-      failure('INTERNAL', 'The document mutation did not run.');
+    let output: McpAuthoringDocumentMutationOutputV1 | AuthoringFailureV1 = failure(
+      'INTERNAL',
+      'The document mutation did not run.',
+    );
     const result = await session.enqueueOperation({
       kind,
       capabilityId: grant.grant.capabilityId,
@@ -102,12 +105,18 @@ export function createMcpAuthoringCoordinatorPort(options: {
       run: async (context) => {
         const state = coordinator.getState();
         if (state.acceptedSourceHash !== input.expectedAcceptedSourceHash) {
-          output = failure('ACCEPTED_HASH_MISMATCH', 'The accepted source changed; re-read before mutating.');
+          output = failure(
+            'ACCEPTED_HASH_MISMATCH',
+            'The accepted source changed; re-read before mutating.',
+          );
           return;
         }
         const digest = await documents.workspaceDigest();
         if (digest?.digest !== input.expectedWorkspaceDigest) {
-          output = failure('WORKSPACE_STALE', 'The working layer changed; re-read before mutating.');
+          output = failure(
+            'WORKSPACE_STALE',
+            'The working layer changed; re-read before mutating.',
+          );
           return;
         }
         try {
@@ -122,8 +131,10 @@ export function createMcpAuthoringCoordinatorPort(options: {
         }
       },
     });
-    if (result.status === 'denied') return failure('SUBMIT_BLOCKED', 'The authoring capability is no longer valid.');
-    if (result.status === 'failed') return failure('INTERNAL', 'The Host could not apply the document mutation.');
+    if (result.status === 'denied')
+      return failure('SUBMIT_BLOCKED', 'The authoring capability is no longer valid.');
+    if (result.status === 'failed')
+      return failure('INTERNAL', 'The Host could not apply the document mutation.');
     return output;
   };
 
@@ -151,7 +162,10 @@ export function createMcpAuthoringCoordinatorPort(options: {
       if (descriptor === null || descriptor.state === 'tombstone') {
         return failure('DOCUMENT_NOT_FOUND', 'The working document is unavailable.');
       }
-      const state = await documents.load({ projectId: session.projectId, documentId: input.documentId });
+      const state = await documents.load({
+        projectId: session.projectId,
+        documentId: input.documentId,
+      });
       let content: string;
       let stateVectorHash: string;
       if (state === null) {
@@ -188,30 +202,49 @@ export function createMcpAuthoringCoordinatorPort(options: {
     async editDocument(input: McpAuthoringDocumentEditInputV1, caller: McpAuthorizedCaller) {
       const descriptor = documents.descriptor(input.documentId);
       if (descriptor === null || descriptor.state === 'tombstone') {
-        return { status: 'rejected', failure: failure('DOCUMENT_NOT_FOUND', 'The working document is unavailable.') };
+        return {
+          status: 'rejected',
+          failure: failure('DOCUMENT_NOT_FOUND', 'The working document is unavailable.'),
+        };
       }
       if ((input.replacementText === undefined) === (input.edits === undefined)) {
-        return { status: 'rejected', failure: failure('INVALID_INPUT', 'Provide exactly one of replacementText or edits.') };
+        return {
+          status: 'rejected',
+          failure: failure('INVALID_INPUT', 'Provide exactly one of replacementText or edits.'),
+        };
       }
       if (input.edits !== undefined) {
         let previousEnd = 0;
         for (const edit of input.edits) {
-          if (!Number.isInteger(edit.start) || !Number.isInteger(edit.end) || edit.start < previousEnd || edit.end < edit.start) {
-            return { status: 'rejected', failure: failure('INVALID_INPUT', 'edits must be sorted, non-overlapping spans.') };
+          if (
+            !Number.isInteger(edit.start) ||
+            !Number.isInteger(edit.end) ||
+            edit.start < previousEnd ||
+            edit.end < edit.start
+          ) {
+            return {
+              status: 'rejected',
+              failure: failure('INVALID_INPUT', 'edits must be sorted, non-overlapping spans.'),
+            };
           }
           previousEnd = edit.end;
         }
       }
-      return this.apply({
-        version: AUTHORING_CONTRACT_VERSION,
-        projectId: session.projectId,
-        documentId: input.documentId,
-        expectedWorkspaceDigest: input.expectedWorkspaceDigest,
-        expectedAcceptedSourceHash: input.expectedAcceptedSourceHash,
-        expectedStateVectorHash: input.expectedStateVectorHash,
-        ...(input.replacementText === undefined ? {} : { replacementText: input.replacementText }),
-        ...(input.edits === undefined ? {} : { edits: input.edits }),
-      }, caller);
+      return this.apply(
+        {
+          version: AUTHORING_CONTRACT_VERSION,
+          projectId: session.projectId,
+          documentId: input.documentId,
+          expectedWorkspaceDigest: input.expectedWorkspaceDigest,
+          expectedAcceptedSourceHash: input.expectedAcceptedSourceHash,
+          expectedStateVectorHash: input.expectedStateVectorHash,
+          ...(input.replacementText === undefined
+            ? {}
+            : { replacementText: input.replacementText }),
+          ...(input.edits === undefined ? {} : { edits: input.edits }),
+        },
+        caller,
+      );
     },
 
     async createDocument(input: McpAuthoringDocumentCreateInputV1, caller: McpAuthorizedCaller) {
@@ -235,10 +268,19 @@ export function createMcpAuthoringCoordinatorPort(options: {
 
     async moveDocument(input: McpAuthoringDocumentMoveInputV1, caller: McpAuthorizedCaller) {
       return lifecycle('mcp.authoring.document.move', input, caller, async (operationId) => {
-        const descriptor = await documents.moveDocument({ documentId: input.documentId, logicalPath: input.logicalPath });
+        const descriptor = await documents.moveDocument({
+          documentId: input.documentId,
+          logicalPath: input.logicalPath,
+        });
         await coordinator.refreshWorkingState();
         const digest = await documents.workspaceDigest();
-        return { status: 'applied', operationId, documentId: descriptor.documentId, logicalPath: descriptor.logicalPath, workspaceDigest: digest?.digest ?? '' };
+        return {
+          status: 'applied',
+          operationId,
+          documentId: descriptor.documentId,
+          logicalPath: descriptor.logicalPath,
+          workspaceDigest: digest?.digest ?? '',
+        };
       });
     },
 
@@ -247,7 +289,13 @@ export function createMcpAuthoringCoordinatorPort(options: {
         const descriptor = await documents.deleteDocument(input.documentId);
         await coordinator.refreshWorkingState();
         const digest = await documents.workspaceDigest();
-        return { status: 'applied', operationId, documentId: descriptor.documentId, logicalPath: descriptor.logicalPath, workspaceDigest: digest?.digest ?? '' };
+        return {
+          status: 'applied',
+          operationId,
+          documentId: descriptor.documentId,
+          logicalPath: descriptor.logicalPath,
+          workspaceDigest: digest?.digest ?? '',
+        };
       });
     },
 
@@ -330,7 +378,10 @@ export function createMcpAuthoringCoordinatorPort(options: {
           ) {
             output = {
               status: 'stale',
-              failure: failure('WORKSPACE_STALE', 'The working document changed; re-read before applying.'),
+              failure: failure(
+                'WORKSPACE_STALE',
+                'The working document changed; re-read before applying.',
+              ),
             };
             return;
           }

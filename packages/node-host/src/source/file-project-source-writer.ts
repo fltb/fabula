@@ -1,11 +1,19 @@
 import { randomUUID } from 'node:crypto';
-import { lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  realpathSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import type { ProjectSourceSnapshotV1, SourceChangeV1 } from '@novalistically/core';
 import { computeSourceDocumentHash } from '@novalistically/core/source';
 import {
-  ProjectWriteCoordinator,
   type ProjectAuthorityTokenV1,
+  ProjectWriteCoordinator,
 } from '../authority/project-write-coordinator.js';
 import { isMissing } from '../execution/types.js';
 import { FileProjectSourceLoaderImpl } from './file-project-source-loader.js';
@@ -103,8 +111,7 @@ export class FileProjectSourceWriter implements FileProjectSourceWriterContract 
   ): Promise<ProjectSourceSnapshotV1> {
     const root = realpathSync(resolve(projectRoot));
     const coordinator =
-      this.coordinator ??
-      new ProjectWriteCoordinator(root, this.authorityToken?.projectId);
+      this.coordinator ?? new ProjectWriteCoordinator(root, this.authorityToken?.projectId);
     if (coordinator.projectRoot !== root) {
       throw new SourcePathError('Source writer coordinator root does not match project root');
     }

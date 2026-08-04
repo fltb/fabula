@@ -39,7 +39,9 @@ describe('FileProjectReferenceStore', () => {
     const full = await store.readContent('project-a', root, 'guide');
     expect(Array.from(await bytes(full.content))).toEqual(Array.from(content));
     const range = await store.readRange('project-a', root, 'guide', 1, 4);
-    expect(Array.from(await bytes(range.content))).toEqual(Array.from(new TextEncoder().encode('bcd')));
+    expect(Array.from(await bytes(range.content))).toEqual(
+      Array.from(new TextEncoder().encode('bcd')),
+    );
     expect(range.byteLength).toBe(3);
   });
 
@@ -48,12 +50,15 @@ describe('FileProjectReferenceStore', () => {
     const store = new FileProjectReferenceStore();
     const content = new TextEncoder().encode('abcdef');
     const imported = await store.import(input(content), 'project-a', root);
-    const item = imported.manifest.items[0]!;
+    const item = imported.manifest.items[0];
+    if (item === undefined) throw new Error('Expected imported manifest item');
     const objectPath = join(root, 'references', 'objects', item.objectKey);
     chmodSync(objectPath, 0o600);
     writeFileSync(objectPath, 'ABCDEF');
 
-    await expect(store.readContent('project-a', root, 'guide')).rejects.toThrow(/integrity mismatch/);
+    await expect(store.readContent('project-a', root, 'guide')).rejects.toThrow(
+      /integrity mismatch/,
+    );
     const report = await store.verify('project-a', root);
     expect(report.corrupt).toContain(item.contentHash);
   });
@@ -72,6 +77,8 @@ describe('FileProjectReferenceStore', () => {
     await expect(
       store.readContent('project-a', root, 'guide', { start: 5, endExclusive: 7 }),
     ).rejects.toThrow(SourceInputError);
-    expect(readFileSync(join(root, 'references', 'library.json'), 'utf8')).toContain(imported.manifest.items[0]!.referenceId);
+    expect(readFileSync(join(root, 'references', 'library.json'), 'utf8')).toContain(
+      imported.manifest.items[0]?.referenceId,
+    );
   });
 });

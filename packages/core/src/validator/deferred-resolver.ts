@@ -29,8 +29,8 @@ export function resolveDeferredFacts(
   // not be coerced into one — the aggregator preflight reports their
   // uncertainty instead.
   const observations = analysis.observations ?? {};
-  const observation = observations['narrativeChecks'];
-  if (!observation || observation.disposition !== 'produced') return issues;
+  const observation = observations.narrativeChecks;
+  if (observation?.disposition !== 'produced') return issues;
 
   // Only resolve when narrativeChecks are present in the Pass 2 analysis
   const raw = (analysis.analysis as Record<string, unknown>).narrativeChecks;

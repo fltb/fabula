@@ -266,7 +266,7 @@ describe('Validator registration via PluginHooks', () => {
       ...createBuiltInValidators(),
       ...validatorRegistry.list(),
     ]);
-    const result = aggregator.validatePre(
+    const _result = aggregator.validatePre(
       event,
       createMinimalWorld(),
       new InMemoryEntityRegistry(),
@@ -312,8 +312,11 @@ describe('Provider registration via PluginHooks', () => {
     };
     manager.register(hook);
     await manager.initialize();
-    const provider = providerRegistry.providers['mock-provider']!;
+    const provider = providerRegistry.providers['mock-provider'];
     expect(provider).toBeDefined();
+    if (provider === undefined) {
+      throw new Error('Expected the registered mock provider');
+    }
     expect(provider.name).toBe('mock-provider');
     const response = await provider.complete({ messages: [{ role: 'user', content: 'test' }] });
     expect(response.content).toBe('mock response');
@@ -857,7 +860,7 @@ describe('End-to-end plugin integration', () => {
       ...createBuiltInValidators(),
       ...validatorRegistry.list(),
     ]);
-    const result = aggregator.validatePre(
+    const _result = aggregator.validatePre(
       event,
       createMinimalWorld(),
       new InMemoryEntityRegistry(),
@@ -866,7 +869,11 @@ describe('End-to-end plugin integration', () => {
     );
 
     // Run the provider
-    const provider = providerRegistry.providers['integrated-provider']!;
+    const provider = providerRegistry.providers['integrated-provider'];
+    expect(provider).toBeDefined();
+    if (provider === undefined) {
+      throw new Error('Expected the integrated provider');
+    }
     const response = await provider.complete({ messages: [{ role: 'user', content: 'hello' }] });
     expect(response.content).toBe('mock response');
   });

@@ -281,15 +281,14 @@ describe('buildReleaseDiagnostic', () => {
     expect(successful.prose.trim().length).toBeGreaterThan(0);
     expect(successful.analysis).not.toBeNull();
     expect(successful.validation).not.toBeNull();
-    expect(successful.validation!.passed).toBe(true);
+    expect(successful.validation?.passed).toBe(true);
     expect(successful.needsReview).toBe(false);
 
     // Build the release decision fields
     const released =
       successful.prose.trim().length > 0 &&
       successful.analysis !== null &&
-      successful.validation !== null &&
-      successful.validation.passed &&
+      successful.validation?.passed &&
       !successful.needsReview;
     expect(released).toBe(true);
   });
@@ -303,8 +302,7 @@ describe('buildReleaseDiagnostic', () => {
     const released =
       blocked.prose.trim().length > 0 &&
       blocked.analysis !== null &&
-      blocked.validation !== null &&
-      blocked.validation.passed &&
+      blocked.validation?.passed &&
       !blocked.needsReview;
     expect(released).toBe(false);
   });
@@ -331,8 +329,7 @@ describe('buildReleaseDiagnostic', () => {
     const released =
       result.prose.trim().length > 0 &&
       result.analysis !== null &&
-      result.validation !== null &&
-      result.validation.passed &&
+      result.validation?.passed &&
       !result.needsReview;
     expect(released).toBe(true);
     // Warning-only does not block release when passed is true

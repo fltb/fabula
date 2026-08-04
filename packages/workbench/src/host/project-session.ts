@@ -30,6 +30,13 @@ import {
   type ProjectStatusResult,
   sanitizeError,
 } from '@novalistically/core';
+import type {
+  PresenceUpdateV1,
+  ProjectPresenceV1,
+  ProjectSessionProjectionV1,
+  ProjectSourceDiagnosticV1,
+  SessionPresenceSurfaceV1,
+} from '@novalistically/workbench-protocol';
 import {
   type AgentAuditEffect,
   type AgentCapabilityFailureCode,
@@ -38,13 +45,7 @@ import {
   buildAuditEffect,
 } from './agent/index.js';
 import type { ProjectCoreRuntime } from './core-runtime.js';
-import type {
-  PresenceUpdateV1,
-  ProjectPresenceV1,
-  ProjectSessionProjectionV1,
-  ProjectSourceDiagnosticV1,
-  SessionPresenceSurfaceV1,
-} from '@novalistically/workbench-protocol';
+
 export type {
   PresenceUpdateV1,
   ProjectPresenceV1,

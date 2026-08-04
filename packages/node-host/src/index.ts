@@ -1,15 +1,15 @@
-export {
-  ProjectAuthorityTokenError,
-  ProjectAuthorityUnavailableError,
-  ProjectWriteCoordinator,
-  StandaloneMutationBlockedError,
-  computeProjectRootFingerprint,
-} from './authority/project-write-coordinator.js';
 export type {
   ProjectAuthorityLeaseV1,
   ProjectAuthorityTokenV1,
   ProjectWriteCoordinatorOptions,
   WorkbenchAuthorityReadyOptions,
+} from './authority/project-write-coordinator.js';
+export {
+  computeProjectRootFingerprint,
+  ProjectAuthorityTokenError,
+  ProjectAuthorityUnavailableError,
+  ProjectWriteCoordinator,
+  StandaloneMutationBlockedError,
 } from './authority/project-write-coordinator.js';
 
 /** Public semantic adapters for the Node Host boundary. */
@@ -35,23 +35,21 @@ export {
 export { writeFileValidationReport } from './reports/file-validation-reporter.js';
 export type { FileCoreRuntimeOptions } from './runtime.js';
 export { createFileCoreRuntimeServices } from './runtime.js';
+export { FileProjectReferenceStore } from './source/file-project-reference-store.js';
 export {
   FileProjectSourceLoader,
   FileProjectSourceLoaderImpl,
 } from './source/file-project-source-loader.js';
+export type { FileProjectSourceWriterAuthorityOptions } from './source/file-project-source-writer.js';
 export {
   FileProjectSourceWriter,
   FileProjectSourceWriterImpl,
 } from './source/file-project-source-writer.js';
-export type { FileProjectSourceWriterAuthorityOptions } from './source/file-project-source-writer.js';
-export type {
-  FileProjectSourceLoaderOptions,
-  FileProjectSourceWriterOptions,
-} from './source/types.js';
-export { FileProjectReferenceStore } from './source/file-project-reference-store.js';
 export type {
   FileProjectReferenceStore as FileProjectReferenceStoreContract,
   FileProjectReferenceStoreOptions,
+  FileProjectSourceLoaderOptions,
+  FileProjectSourceWriterOptions,
   ReferenceContent,
   ReferenceContentRangeV1,
   ReferenceContentReadOptions,

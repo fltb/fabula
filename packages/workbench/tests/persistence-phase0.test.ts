@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, expect, it } from 'vitest';
+import type { AuditRecord } from '../src/contracts/persistence.js';
 import { persistenceSchema } from '../src/persistence/schema.js';
 import { createWorkerDatabase, migrate } from '../src/persistence/worker.js';
-import type { AuditRecord } from '../src/contracts/persistence.js';
 import { createRealPersistence } from './helpers/real-persistence.js';
 
 /** Re-applies ONLY the version-1 migration DDL, mirroring the worker's loop. */
@@ -16,7 +16,7 @@ function applyV1Only(databasePath: string): void {
       'CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, description TEXT NOT NULL, applied_at TEXT NOT NULL);',
     );
     const v1 = persistenceSchema[0];
-    if (!v1 || v1.version !== 1) throw new Error('V1 migration missing from persistence schema');
+    if (v1?.version !== 1) throw new Error('V1 migration missing from persistence schema');
     for (const table of v1.tables) {
       const composite = table.primaryKey;
       const columns = table.columns
@@ -88,9 +88,9 @@ describe('Phase 0 persistence contracts', () => {
         expect(versions).toEqual([1, 2, 3, 4]);
 
         // V1 rows survive every later migration untouched.
-        const user = db
-          .prepare('SELECT * FROM users WHERE user_id=?')
-          .get('owner-1') as Record<string, unknown> | undefined;
+        const user = db.prepare('SELECT * FROM users WHERE user_id=?').get('owner-1') as
+          | Record<string, unknown>
+          | undefined;
         expect(user?.role).toBe('owner');
         expect(user?.password_hash).toBe(passwordHash);
         const doc = db
@@ -136,9 +136,7 @@ describe('Phase 0 persistence contracts', () => {
       // schema_migrations table is ahead of everything this build knows.
       const future = new DatabaseSync(databasePath);
       future
-        .prepare(
-          'INSERT INTO schema_migrations(version, description, applied_at) VALUES (?, ?, ?)',
-        )
+        .prepare('INSERT INTO schema_migrations(version, description, applied_at) VALUES (?, ?, ?)')
         .run(99, 'written by a future Host', '2027-01-01T00:00:00.000Z');
       future.close();
 
@@ -181,12 +179,16 @@ describe('Phase 0 persistence contracts', () => {
         ).map((row) => row.version);
         expect(versions).toEqual([1, 2, 3, 4]);
         const capabilityDdl = db
-          .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='capability_verifiers'")
+          .prepare(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='capability_verifiers'",
+          )
           .get() as { sql: string };
         expect(capabilityDdl.sql).toContain('token_hash');
         expect(capabilityDdl.sql).toContain('client_label');
         const mcpDdl = db
-          .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='mcp_device_verifiers'")
+          .prepare(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='mcp_device_verifiers'",
+          )
           .get() as { sql: string };
         expect(mcpDdl.sql).toContain('verifier');
         expect(mcpDdl.sql).toContain('kind');
@@ -216,9 +218,9 @@ describe('Phase 0 persistence contracts', () => {
         }),
       ).rejects.toMatchObject({ code: 'UNKNOWN_FIELD', retryable: false });
       // A payload for an operation that takes none also fails closed.
-      await expect(client.request('getAuthState', { ownerUserId: 'owner-1' })).rejects.toMatchObject(
-        { code: 'UNKNOWN_FIELD', retryable: false },
-      );
+      await expect(
+        client.request('getAuthState', { ownerUserId: 'owner-1' }),
+      ).rejects.toMatchObject({ code: 'UNKNOWN_FIELD', retryable: false });
       // Unknown operations remain a typed failure, never a bogus success.
       await expect(client.request('dropTable', { name: 'users' })).rejects.toMatchObject({
         code: 'UNKNOWN_OPERATION',
@@ -295,7 +297,9 @@ describe('Phase 0 persistence contracts', () => {
         }),
       ).resolves.toBeNull();
       expect(
-        JSON.stringify(await harness.client.request('listDeviceVerifiers', { store: 'capability' })),
+        JSON.stringify(
+          await harness.client.request('listDeviceVerifiers', { store: 'capability' }),
+        ),
       ).not.toContain(tokenHash);
     } finally {
       await harness.dispose();
@@ -341,9 +345,9 @@ describe('Phase 0 persistence contracts', () => {
       await harness.client.request('appendAudit', { ...audit, at: '2026-01-02T00:00:00.000Z' });
       const listed = await harness.client.request('listAudit', { limit: 10 });
       expect(listed).toEqual([audit]);
-      await expect(harness.client.request('listAudit', { limit: 10, surface: 'mcp' })).resolves.toEqual(
-        [],
-      );
+      await expect(
+        harness.client.request('listAudit', { limit: 10, surface: 'mcp' }),
+      ).resolves.toEqual([]);
 
       // Dashboard session listing.
       await harness.client.request('createSession', {

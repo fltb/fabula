@@ -98,12 +98,7 @@ export interface WorkbenchConfigurationV1 {
 }
 
 /** Origin of a configuration change, recorded in receipts and audit. */
-export type ConfigChangeOriginV1 =
-  | 'setup'
-  | 'dashboard'
-  | 'mcp'
-  | 'filesystem'
-  | 'dotenv-import';
+export type ConfigChangeOriginV1 = 'setup' | 'dashboard' | 'mcp' | 'filesystem' | 'dotenv-import';
 
 /**
  * Revision-CAS configuration change request. `expectedRevision: null` is

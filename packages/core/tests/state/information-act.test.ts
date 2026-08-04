@@ -4,13 +4,11 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  applyClaimTransaction,
   evaluate,
   hasSufficientWarrant,
   recordInformationAct,
 } from '../../src/state/knowledge-replay.js';
 import type {
-  ClaimAssessment,
   ClaimEvidenceRecord,
   EpistemicLedger,
   InformationAct,
@@ -18,7 +16,6 @@ import type {
   PropositionCatalog,
   WorldState,
 } from '../../src/types/index.js';
-import { claimKey } from '../../src/types/knowledge.js';
 
 const emptyWorld: WorldState = {
   entities: {},

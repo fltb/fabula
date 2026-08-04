@@ -11,8 +11,18 @@ export interface ProjectPresenceV1 {
   readonly since: string;
 }
 export type PresenceUpdateV1 =
-  | { readonly kind: 'join'; readonly actorId: string; readonly surface: SessionPresenceSurfaceV1; readonly at: string }
-  | { readonly kind: 'leave'; readonly actorId: string; readonly surface: SessionPresenceSurfaceV1; readonly at: string };
+  | {
+      readonly kind: 'join';
+      readonly actorId: string;
+      readonly surface: SessionPresenceSurfaceV1;
+      readonly at: string;
+    }
+  | {
+      readonly kind: 'leave';
+      readonly actorId: string;
+      readonly surface: SessionPresenceSurfaceV1;
+      readonly at: string;
+    };
 export interface ProjectSessionProjectionV1 {
   readonly version: 1;
   readonly projectId: string;

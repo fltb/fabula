@@ -169,7 +169,7 @@ describe('RenderPipeline — checklist + source context Pass 1 wiring', () => {
     await pipeline.renderScene(makeJob());
 
     const pass1Request = provider.calls[0];
-    const userMessage = pass1Request.messages.find((m) => m.role === 'user')!.content;
+    const userMessage = pass1Request.messages.find((m) => m.role === 'user')?.content;
 
     expect(userMessage).toContain('## Narrative Coverage Requirements');
     expect(userMessage).toContain('imagery: must reference moonlight');

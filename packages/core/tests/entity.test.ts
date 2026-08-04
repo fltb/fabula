@@ -39,9 +39,9 @@ describe('EntityMapper.loadProject()', () => {
 
   it('should load nova.yaml config', () => {
     expect(data.config).not.toBeNull();
-    expect(data.config!.project).toBe('arcane_aftermath');
-    expect(data.config!.title).toBe('Arcane 后传：灰色市场');
-    expect(data.config!.author).toBe('Test Author');
+    expect(data.config?.project).toBe('arcane_aftermath');
+    expect(data.config?.title).toBe('Arcane 后传：灰色市场');
+    expect(data.config?.author).toBe('Test Author');
   });
 
   it('should load all character definitions (camille, seraphine, npc_gear)', () => {
@@ -51,9 +51,9 @@ describe('EntityMapper.loadProject()', () => {
     // Verify partial content of the first character
     const camille = data.characters.find((c) => c.id === 'camille');
     expect(camille).toBeDefined();
-    expect(camille!.name).toBe('Camille');
-    expect(camille!['traits']).toContain('calculating');
-    expect(camille!.initialState).toBeDefined();
+    expect(camille?.name).toBe('Camille');
+    expect(camille?.traits).toContain('calculating');
+    expect(camille?.initialState).toBeDefined();
   });
 
   it('should load relationship definitions', () => {
@@ -77,8 +77,11 @@ describe('EntityMapper.loadProject()', () => {
 
   it('should load world initial state with threads and time anchors', () => {
     expect(data.worldInitialState).not.toBeNull();
-    const wis = data.worldInitialState!;
+    const wis = data.worldInitialState;
     expect(wis).toBeDefined();
+    if (!wis) {
+      throw new Error('Expected world initial state');
+    }
 
     // Threads
     const threads = wis.threads;
@@ -100,12 +103,12 @@ describe('EntityMapper.loadProject()', () => {
     const ch1 = data.chapters.get(1);
     expect(ch1).toBeDefined();
     // Chapter metadata
-    expect(ch1!.metadata).not.toBeNull();
+    expect(ch1?.metadata).not.toBeNull();
     // Events — note: the fixture YAML has `narrative_order` in snake_case
     // so only files that pass parse successfully are included.
     // At minimum E1a should load; E1b may be missing due to YAML parse issues.
-    expect(ch1!.events.length).toBeGreaterThanOrEqual(1);
-    const eventIds = ch1!.events.map((e) => e.event);
+    expect(ch1?.events.length).toBeGreaterThanOrEqual(1);
+    const eventIds = ch1?.events.map((e) => e.event);
     expect(eventIds).toContain('E1a');
   });
 
@@ -129,7 +132,10 @@ describe('EntityMapper.loadProject()', () => {
 
     const e1b = data.chapters.get(1)?.events.find((event) => event.event === 'E1b');
     expect(e1b?.storyTime).toEqual({ offset: { amount: 1, unit: 'hour' } });
-    const mappedE1b = mapper.mapToNarrativeEvent(e1b!);
+    if (!e1b) {
+      throw new Error('Expected E1b event');
+    }
+    const mappedE1b = mapper.mapToNarrativeEvent(e1b);
     expect(mappedE1b.storyTime).toEqual({ type: 'offset', amount: 1, unit: 'hour' });
 
     const temporalContext = resolveTemporalContext([mappedE1b], data.timeAnchors);
@@ -647,21 +653,21 @@ describe('InMemoryEntityRegistry', () => {
 
       const camille = registry.resolve('camille');
       expect(camille).not.toBeNull();
-      expect(camille!.kind).toBe('character');
-      expect(camille!.name).toBe('Camille');
-      expect(camille!.state).toHaveProperty('traits');
-      expect(camille!.state.traits).toContain('calculating');
+      expect(camille?.kind).toBe('character');
+      expect(camille?.name).toBe('Camille');
+      expect(camille?.state).toHaveProperty('traits');
+      expect(camille?.state.traits).toContain('calculating');
 
       const seraphine = registry.resolve('seraphine');
       expect(seraphine).not.toBeNull();
-      expect(seraphine!.kind).toBe('character');
+      expect(seraphine?.kind).toBe('character');
     });
 
     it('should resolve entities by ID', () => {
       const registry = createFixtureRegistry();
       const entity = registry.resolve('seraphine');
       expect(entity).not.toBeNull();
-      expect(entity!.id).toBe('seraphine');
+      expect(entity?.id).toBe('seraphine');
     });
 
     it('resolve() should return null for unknown IDs', () => {
@@ -689,7 +695,7 @@ describe('InMemoryEntityRegistry', () => {
       const registry = createFixtureRegistry();
       const alive = registry.findByAttribute('status', 'alive');
       expect(alive.length).toBeGreaterThanOrEqual(2);
-      expect(alive.every((e) => e.state['status'] === 'alive')).toBe(true);
+      expect(alive.every((e) => e.state.status === 'alive')).toBe(true);
     });
 
     it('resolveRefs() should batch resolve', () => {
@@ -749,8 +755,8 @@ describe('InMemoryEntityRegistry', () => {
         typeRef: { typeId: 'character', schemaVersion: 1 },
         state: { updated: true },
       });
-      expect(registry.resolve('dup')!.name).toBe('Overwritten');
-      expect(registry.resolve('dup')!.state).toEqual({ updated: true });
+      expect(registry.resolve('dup')?.name).toBe('Overwritten');
+      expect(registry.resolve('dup')?.state).toEqual({ updated: true });
     });
 
     it('updateState() should merge state updates', () => {
@@ -766,7 +772,10 @@ describe('InMemoryEntityRegistry', () => {
 
       registry.updateState('mutable', { location: 'piltover', health: 80, mood: 'tired' });
 
-      const updated = registry.resolve('mutable')!;
+      const updated = registry.resolve('mutable');
+      if (!updated) {
+        throw new Error('Expected mutable entity');
+      }
       expect(updated.state).toEqual({
         status: 'alive',
         location: 'piltover',
@@ -1479,6 +1488,6 @@ describe('InMemoryEntityRegistry — edge cases', () => {
       state: {},
     });
     registry.updateState('empty_state', {});
-    expect(registry.resolve('empty_state')!.state).toEqual({});
+    expect(registry.resolve('empty_state')?.state).toEqual({});
   });
 });

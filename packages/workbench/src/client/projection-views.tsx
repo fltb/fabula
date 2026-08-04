@@ -1,5 +1,5 @@
 import { Tabs } from '@kobalte/core/tabs';
-import { For, Show, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import type {
   BrowserProjectOverviewV1,
   WorkbenchGraphDomainV1,
@@ -12,10 +12,10 @@ import {
   describeCoordinate,
   describeOrigin,
   emptyRouteSelector,
+  type GraphCanvasModelV1,
   isRouteLeaf,
   layoutGraphView,
   nextRouteSelector,
-  type GraphCanvasModelV1,
 } from './graph-view-model';
 import { LogicFlowGraph, type LogicFlowGraphControls } from './logicflow-graph';
 
@@ -125,11 +125,7 @@ function GraphDomainPanel(props: GraphDomainPanelProps) {
   const label = () => domainLabel(props.domain);
   return (
     <div class="graph-domain-panel">
-      <div
-        class="graph-toolbar"
-        role="toolbar"
-        aria-label={`${label()} graph viewport`}
-      >
+      <div class="graph-toolbar" role="toolbar" aria-label={`${label()} graph viewport`}>
         <span class="graph-toolbar-note">
           {label()} · {props.view.nodes.length} nodes · {props.view.edges.length} edges
         </span>
@@ -185,9 +181,7 @@ function GraphDomainPanel(props: GraphDomainPanelProps) {
         role="status"
         aria-live="polite"
         aria-label={
-          props.selectedNode
-            ? `Selected node: ${props.selectedNode}`
-            : 'No node selected'
+          props.selectedNode ? `Selected node: ${props.selectedNode}` : 'No node selected'
         }
       >
         {props.selectedNode
@@ -322,11 +316,7 @@ export function GraphRoute(props: GraphRouteProps) {
                 <h3 id="route-selector-heading">Route choices</h3>
               </div>
               <Show when={props.fetchingRoute}>
-                <span
-                  class="graph-fetching"
-                  role="status"
-                  aria-label="Reloading projection"
-                >
+                <span class="graph-fetching" role="status" aria-label="Reloading projection">
                   Reloading projection…
                 </span>
               </Show>

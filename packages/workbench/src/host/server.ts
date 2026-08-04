@@ -662,7 +662,8 @@ export function createHostServer(options: HostServerOptions = {}): HostServer {
     registerPublicStaticRoute: (path, handler) => listener.registerPublicStaticRoute(path, handler),
     registerPublicAuthPostRoute: (path, handler) =>
       listener.registerPublicAuthPostRoute(path, handler),
-    registerSetupRoute: (method, path, handler) => listener.registerSetupRoute(method, path, handler),
+    registerSetupRoute: (method, path, handler) =>
+      listener.registerSetupRoute(method, path, handler),
     isMutationAllowed: (host, origin) => listener.isMutationAllowed(host, origin),
   };
 }

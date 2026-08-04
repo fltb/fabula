@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { AgentRegistry } from '../src/agent/registry.ts';
 import type { Agent, AgentConfig, AgentPacket, AgentRole } from '../src/agent/types.ts';
 
+function must<T>(value: T | undefined, message: string): T {
+  if (value === undefined) throw new Error(message);
+  return value;
+}
+
 // ============================================================================
 // Helpers — reusable mock agents
 // ============================================================================
@@ -69,7 +74,8 @@ describe('AgentRegistry', () => {
       const agents = roles.map((r) => createMockAgent(`${r}Agent`, r));
       for (const agent of agents) reg.register(agent);
       for (const r of roles) {
-        expect(reg.get(r)?.role).toBe(r);
+        const registered = must(reg.get(r), `Expected agent for role ${r}`);
+        expect(registered.role).toBe(r);
       }
     });
   });
@@ -174,8 +180,8 @@ describe('Agent routing', () => {
     reg.register(createMockAgent('SummaryBuilder', 'summary'));
     reg.register(createMockAgent('ReviewChecker', 'review'));
 
-    const pass1Agent = reg.get('pass1')!;
-    const pass2Agent = reg.get('pass2')!;
+    const pass1Agent = must(reg.get('pass1'), 'Expected pass1 agent');
+    const pass2Agent = must(reg.get('pass2'), 'Expected pass2 agent');
 
     expect(pass1Agent.name).toBe('Pass1Renderer');
     expect(pass2Agent.name).toBe('Pass2Analyzer');
@@ -217,7 +223,7 @@ describe('Mock injection', () => {
     });
     reg.register(mockAgent); // replace
 
-    const retrieved = reg.get('pass2')!;
+    const retrieved = must(reg.get('pass2'), 'Expected mocked pass2 agent');
     expect(retrieved.name).toBe('MockPass2');
     expect(retrieved.getConfig().model).toBe('mock-model');
     expect(retrieved.getConfig().temperature).toBe(0.0);
@@ -251,11 +257,17 @@ describe('Config override', () => {
 
     const configs = agents.map((a) => ({ name: a.name, config: a.getConfig() }));
 
-    const pass1Cfg = configs.find((c) => c.name === 'CheapPass1')!.config;
+    const pass1Cfg = must(
+      configs.find((c) => c.name === 'CheapPass1')?.config,
+      'Expected CheapPass1 config',
+    );
     expect(pass1Cfg.model).toBe('gpt-4o-mini');
     expect(pass1Cfg.temperature).toBe(0.8);
 
-    const pass2Cfg = configs.find((c) => c.name === 'ExpensivePass2')!.config;
+    const pass2Cfg = must(
+      configs.find((c) => c.name === 'ExpensivePass2')?.config,
+      'Expected ExpensivePass2 config',
+    );
     expect(pass2Cfg.model).toBe('gpt-4o');
     expect(pass2Cfg.seed).toBe(42);
   });

@@ -29,7 +29,19 @@ export function getAgentDiffBlocks(proposal: AgentProposalV1): readonly AgentDif
 function safeDiffText(value: string): string {
   // Keep control characters from changing the drawer's structure. The Host
   // bounds proposal text; this is an additional display-only guard.
-  return value.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '�');
+  let sanitized = '';
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    const isControl =
+      codePoint !== undefined &&
+      (codePoint <= 0x08 ||
+        codePoint === 0x0b ||
+        codePoint === 0x0c ||
+        (codePoint >= 0x0e && codePoint <= 0x1f) ||
+        codePoint === 0x7f);
+    sanitized += isControl ? '�' : character;
+  }
+  return sanitized;
 }
 
 /** Renders proposal-only block diffs and an explicit human Apply action. */

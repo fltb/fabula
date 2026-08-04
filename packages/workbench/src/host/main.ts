@@ -4,10 +4,10 @@
  * supervisors. Importing this module remains side-effect free.
  */
 
-import { fstatSync, createReadStream, writeSync } from 'node:fs';
-import { TextDecoder } from 'node:util';
+import { createReadStream, fstatSync, writeSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { TextDecoder } from 'node:util';
 import {
   HOST_CONTROL_MAX_FRAME_BYTES,
   HOST_PROTOCOL_VERSION_V1,
@@ -186,7 +186,11 @@ class HostControlParser {
   }
 }
 
-async function verifyHostHealth(endpoint: string, healthPath: string, running: boolean): Promise<void> {
+async function verifyHostHealth(
+  endpoint: string,
+  healthPath: string,
+  running: boolean,
+): Promise<void> {
   if (endpoint.startsWith('http+unix://')) {
     if (!running) throw new Error('Host listener is not running');
     return;
@@ -238,13 +242,15 @@ function buildIdentity(): HostBuildIdentityV1 {
   };
 }
 
-
 function deadlineDuration(deadlineMs: number | undefined): number {
   if (deadlineMs === undefined) return 5_000;
   return Math.min(Math.max(deadlineMs, 1), 30_000);
 }
 
-async function closeWithDeadline(close: () => Promise<void>, deadlineMs?: number): Promise<boolean> {
+async function closeWithDeadline(
+  close: () => Promise<void>,
+  deadlineMs?: number,
+): Promise<boolean> {
   let timedOut = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -310,7 +316,11 @@ async function main(): Promise<void> {
   let terminalStopped: HostStoppedMessageV1 | null = null;
   let fatalSent = false;
 
-  const closeRuntime = (requestId: string, reason: string, deadlineMs?: number): Promise<HostStoppedMessageV1> => {
+  const closeRuntime = (
+    requestId: string,
+    reason: string,
+    deadlineMs?: number,
+  ): Promise<HostStoppedMessageV1> => {
     if (terminalStopped !== null) return Promise.resolve(terminalStopped);
     if (shutdownTask !== null) return shutdownTask;
     shuttingDown = true;

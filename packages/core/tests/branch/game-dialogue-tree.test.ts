@@ -107,7 +107,7 @@ function resolveContext(
 // Factories
 // ---------------------------------------------------------------------------
 
-const ALL_BRANCH: BranchSet = { type: 'all' };
+const _ALL_BRANCH: BranchSet = { type: 'all' };
 
 const ROOT_POV = { character: 'narrator', type: 'omniscient' as const };
 const BRANCH_POV = { character: 'hero', type: 'third_person_limited' as const };
@@ -157,7 +157,7 @@ function defaultContext(): TemporalContext {
 // YAML-backed integration constants
 // ---------------------------------------------------------------------------
 
-const PROJECT_DIR = '/game-dialogue-tree';
+const _PROJECT_DIR = '/game-dialogue-tree';
 
 function event(
   id: string,
@@ -266,12 +266,13 @@ describe('compileGameDialogueTree()', () => {
     };
 
     expect(tree).not.toBeNull();
-    expect(tree!.leafPaths).toEqual([huntPath, refusePath]);
-    expect(tree!.eventScopes.get('E0')).toEqual({ type: 'all' });
-    expect(tree!.eventScopes.get('E1a')).toEqual({ type: 'paths', paths: [huntPath] });
-    expect(tree!.eventScopes.get('E1b')).toEqual({ type: 'paths', paths: [refusePath] });
-    expect(tree!.representativePathByEventId.get('E0')).toEqual(huntPath);
-    expect(tree!.transitionEvents).toMatchObject([
+    if (!tree) throw new Error('Expected compiled dialogue tree fixture');
+    expect(tree.leafPaths).toEqual([huntPath, refusePath]);
+    expect(tree.eventScopes.get('E0')).toEqual({ type: 'all' });
+    expect(tree.eventScopes.get('E1a')).toEqual({ type: 'paths', paths: [huntPath] });
+    expect(tree.eventScopes.get('E1b')).toEqual({ type: 'paths', paths: [refusePath] });
+    expect(tree.representativePathByEventId.get('E0')).toEqual(huntPath);
+    expect(tree.transitionEvents).toMatchObject([
       {
         id: 'system:branch-choice:E0:accept_hunt',
         branchExistence: { type: 'paths', paths: [huntPath] },
@@ -283,7 +284,13 @@ describe('compileGameDialogueTree()', () => {
         causalPredecessors: ['E0'],
       },
     ]);
-    expect(tree!.transitionEvents[0]!.postconditions[0]).toMatchObject({
+    const firstTransition = tree.transitionEvents[0];
+    expect(firstTransition).toBeDefined();
+    if (!firstTransition) throw new Error('Expected first transition fixture');
+    const firstPostcondition = firstTransition.postconditions[0];
+    expect(firstPostcondition).toBeDefined();
+    if (!firstPostcondition) throw new Error('Expected first transition postcondition fixture');
+    expect(firstPostcondition).toMatchObject({
       id: 'hero.chose_hunt',
       value: true,
       validity: { branches: { type: 'paths', paths: [huntPath] } },
@@ -292,13 +299,16 @@ describe('compileGameDialogueTree()', () => {
 
   it('returns null when authored events are linear', () => {
     const events = gameTreeEvents();
-    events[0]!.choices = undefined;
+    const firstEvent = events[0];
+    expect(firstEvent).toBeDefined();
+    if (!firstEvent) throw new Error('Expected root event fixture');
+    firstEvent.choices = undefined;
     const temporalContext = resolveContext(events, DEFAULT_ANCHORS);
     expect(compileGameDialogueTree(events, temporalContext)).toBeNull();
   });
 
   it('uses project time anchors for named choice timestamps', () => {
-    const events = gameTreeEvents();
+    const _events = gameTreeEvents();
     // Re-define events with story_beginning as the anchor reference
     const contextEvents: NarrativeEvent[] = [
       makeEvent(
@@ -338,29 +348,40 @@ describe('compileGameDialogueTree()', () => {
       // Missing target event
       () => {
         const events = gameTreeEvents();
+        const rootEvent = events[0];
+        if (!rootEvent) throw new Error('Expected root event fixture');
+        const choices = rootEvent.choices;
+        if (!choices) throw new Error('Expected root event choices fixture');
+        const [firstChoice, secondChoice] = choices;
+        if (!firstChoice || !secondChoice) throw new Error('Expected two root choices fixture');
         // Copy choices to avoid mutating the shared CHOOSE_HUNT constant
         events[0] = {
-          ...events[0],
-          choices: [
-            { ...events[0]!.choices![0]!, targetEvent: 'missing' },
-            events[0]!.choices![1]!,
-          ],
+          ...rootEvent,
+          choices: [{ ...firstChoice, targetEvent: 'missing' }, secondChoice],
         };
         return events;
       },
       // Self-targeting choice
       () => {
         const events = gameTreeEvents();
+        const rootEvent = events[0];
+        if (!rootEvent) throw new Error('Expected root event fixture');
+        const choices = rootEvent.choices;
+        if (!choices) throw new Error('Expected root event choices fixture');
+        const [firstChoice, secondChoice] = choices;
+        if (!firstChoice || !secondChoice) throw new Error('Expected two root choices fixture');
         events[0] = {
-          ...events[0],
-          choices: [{ ...events[0]!.choices![0]!, targetEvent: 'E0' }, events[0]!.choices![1]!],
+          ...rootEvent,
+          choices: [{ ...firstChoice, targetEvent: 'E0' }, secondChoice],
         };
         return events;
       },
       // Multiple incoming edges to the same target
       () => {
         const events = gameTreeEvents();
-        events[0]!.choices = [
+        const rootEvent = events[0];
+        if (!rootEvent) throw new Error('Expected root event fixture');
+        rootEvent.choices = [
           {
             id: 'to_a',
             label: 'To A',
@@ -376,7 +397,9 @@ describe('compileGameDialogueTree()', () => {
             effects: [],
           },
         ];
-        events[1]!.choices = [
+        const branchEvent = events[1];
+        if (!branchEvent) throw new Error('Expected first branch event fixture');
+        branchEvent.choices = [
           {
             id: 'merge',
             label: 'Merge',
@@ -404,7 +427,9 @@ describe('compileGameDialogueTree()', () => {
       // Cycle
       () => {
         const events = gameTreeEvents();
-        events[0]!.choices = [
+        const rootEvent = events[0];
+        if (!rootEvent) throw new Error('Expected root event fixture');
+        rootEvent.choices = [
           {
             id: 'to_a',
             label: 'To A',
@@ -413,7 +438,9 @@ describe('compileGameDialogueTree()', () => {
             effects: [],
           },
         ];
-        events[1]!.choices = [
+        const branchEvent = events[1];
+        if (!branchEvent) throw new Error('Expected first branch event fixture');
+        branchEvent.choices = [
           {
             id: 'loop',
             label: 'Loop',
@@ -502,11 +529,18 @@ describe('game dialogue replay integration', () => {
     // Runtime events: authored events + branch-choice transitions composed by
     // the canonical kernel (no genesis event exists in the current contract).
     const events = ir.runtimeEvents;
-    const target = events.find((item) => item.id === 'E1a')!;
-    const transition = events.find((item) => item.id === 'system:branch-choice:E0:accept_hunt')!;
+    const target = events.find((item) => item.id === 'E1a');
+    const transition = events.find((item) => item.id === 'system:branch-choice:E0:accept_hunt');
+    expect(target).toBeDefined();
+    expect(transition).toBeDefined();
+    if (!target) throw new Error('Expected E1a runtime event fixture');
+    if (!transition) throw new Error('Expected branch transition event fixture');
+    const targetPrecondition = target.preconditions[0];
+    expect(targetPrecondition).toBeDefined();
+    if (!targetPrecondition) throw new Error('Expected target precondition fixture');
 
     expect(target.branchExistence).toEqual({ type: 'paths', paths: [acceptPath] });
-    expect(target.preconditions[0]!.validity.branches).toEqual({
+    expect(targetPrecondition.validity.branches).toEqual({
       type: 'paths',
       paths: [acceptPath],
     });
@@ -535,7 +569,7 @@ describe('game dialogue replay integration', () => {
       initialThreads: ir.initialThreads,
     });
 
-    expect(boundaries.stateBeforeByEventId.get('E1a')!.entities.hero!.chose_hunt).toBe(true);
+    expect(boundaries.stateBeforeByEventId.get('E1a')?.entities.hero?.chose_hunt).toBe(true);
     expect(replayed).toEqual(boundaries.finalState);
     expect(
       new ReplayEngine(ir.catalogContext).replay(events, {
@@ -543,7 +577,7 @@ describe('game dialogue replay integration', () => {
         timeAnchors: ir.data.timeAnchors,
         initialFacts: ir.initialFacts,
         initialThreads: ir.initialThreads,
-      }).entities.hero!.chose_hunt,
+      }).entities.hero?.chose_hunt,
     ).toBe(false);
   });
 

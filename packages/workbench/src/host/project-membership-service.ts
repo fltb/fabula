@@ -5,17 +5,20 @@
  * access all use this one worker-backed port. It never keeps an in-memory ACL
  * and it exposes only the safe membership projection returned by persistence.
  */
+
+import type { ProjectAccessRole } from '../contracts/configuration.js';
 import type {
   ProjectMembershipState,
-  UpsertProjectMembershipInput,
   RevokeProjectMembershipInput,
+  UpsertProjectMembershipInput,
 } from '../contracts/persistence.js';
-import type { ProjectAccessRole } from '../contracts/configuration.js';
 import type { PersistenceWorkerClient } from '../persistence/worker-client.js';
 
 export interface ProjectMembershipAdminService {
   list(input?: { projectId?: string }): Promise<readonly ProjectMembershipState[]>;
-  upsert(input: Pick<UpsertProjectMembershipInput, 'userId' | 'projectId' | 'role'>): Promise<ProjectMembershipState>;
+  upsert(
+    input: Pick<UpsertProjectMembershipInput, 'userId' | 'projectId' | 'role'>,
+  ): Promise<ProjectMembershipState>;
   revoke(input: Pick<RevokeProjectMembershipInput, 'userId' | 'projectId'>): Promise<void>;
 }
 
@@ -41,7 +44,8 @@ export function createProjectMembershipService(
     list,
     async upsert(input): Promise<ProjectMembershipState> {
       const result = await client.request('upsertProjectMembership', input);
-      if (result.membership === null) throw new Error('Persistence returned no active membership after upsert.');
+      if (result.membership === null)
+        throw new Error('Persistence returned no active membership after upsert.');
       return result.membership;
     },
     async revoke(input): Promise<void> {

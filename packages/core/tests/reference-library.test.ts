@@ -1,18 +1,28 @@
 import { describe, expect, it } from 'vitest';
+import { sha256Bytes } from '../src/cache/pure-sha256.ts';
 import {
+  buildReferencePacket,
   DeterministicReferenceExtractor,
   ReferenceExtractionError,
-  buildReferencePacket,
 } from '../src/reference.ts';
-import { sha256Bytes } from '../src/cache/pure-sha256.ts';
 
 describe('deterministic reference ingestion', () => {
   it('chunks verified bytes deterministically and emits bounded non-authoritative metadata', () => {
     const content = new TextEncoder().encode('alpha beta gamma delta');
     const contentHash = sha256Bytes(content);
     const extractor = new DeterministicReferenceExtractor({ chunkBytes: 6, maxQuoteLength: 4 });
-    const first = extractor.extract({ referenceId: 'guide', mediaType: 'text/plain', content, contentHash });
-    const second = extractor.extract({ referenceId: 'guide', mediaType: 'text/plain', content, contentHash });
+    const first = extractor.extract({
+      referenceId: 'guide',
+      mediaType: 'text/plain',
+      content,
+      contentHash,
+    });
+    const second = extractor.extract({
+      referenceId: 'guide',
+      mediaType: 'text/plain',
+      content,
+      contentHash,
+    });
 
     expect(first).toEqual(second);
     expect(first).toHaveLength(4);
@@ -62,12 +72,17 @@ describe('deterministic reference ingestion', () => {
     const content = new TextEncoder().encode('abcdef');
     const hash = sha256Bytes(content);
     const extractor = new DeterministicReferenceExtractor({ chunkBytes: 2, maxChunks: 2 });
-    expect(() => extractor.extract({ referenceId: 'x', mediaType: 'text/plain', content, contentHash: '0'.repeat(64) })).toThrow(
-      ReferenceExtractionError,
-    );
-    expect(() => extractor.extract({ referenceId: 'x', mediaType: 'text/plain', content, contentHash: hash })).toThrow(
-      /more than 2 chunks/,
-    );
+    expect(() =>
+      extractor.extract({
+        referenceId: 'x',
+        mediaType: 'text/plain',
+        content,
+        contentHash: '0'.repeat(64),
+      }),
+    ).toThrow(ReferenceExtractionError);
+    expect(() =>
+      extractor.extract({ referenceId: 'x', mediaType: 'text/plain', content, contentHash: hash }),
+    ).toThrow(/more than 2 chunks/);
   });
 });
 
@@ -97,11 +112,13 @@ describe('bounded render reference packet', () => {
   });
 
   it('rejects over-limit and authoritative citations', () => {
-    expect(() => buildReferencePacket('project-a', [citation, { ...citation, citationId: 'citation-2' }], { maxCitations: 1 })).toThrow(
-      /citation count exceeds 1/,
-    );
-    expect(() => buildReferencePacket('project-a', [{ ...citation, authoritative: true as never }])).toThrow(
-      /non-authoritative/,
-    );
+    expect(() =>
+      buildReferencePacket('project-a', [citation, { ...citation, citationId: 'citation-2' }], {
+        maxCitations: 1,
+      }),
+    ).toThrow(/citation count exceeds 1/);
+    expect(() =>
+      buildReferencePacket('project-a', [{ ...citation, authoritative: true as never }]),
+    ).toThrow(/non-authoritative/);
   });
 });

@@ -162,8 +162,8 @@ describe('DAG ordering: causal-order replay vs DAG-position state queries', () =
     const state = engine.replay([T, B, A, C]);
     // Causal order: T(day_0) → A(day_1) → C(day_5) → B(day_9);
     // B applies last → status="first" overrides A's "second"
-    expect(state.entities['hero']?.['status']).toBe('first');
-    expect(state.entities['hero']?.['location']).toBe('end');
+    expect(state.entities.hero?.status).toBe('first');
+    expect(state.entities.hero?.location).toBe('end');
   });
 
   it('getStateAt with position produces consistent state', () => {
@@ -181,15 +181,15 @@ describe('DAG ordering: causal-order replay vs DAG-position state queries', () =
 
     // Live activation: the introduction transition makes hero live at day_0
     const state1 = engine.getStateAt([T, B, A, C], 1);
-    expect(state1.entities['hero']?.['name']).toBe('Hero');
+    expect(state1.entities.hero?.name).toBe('Hero');
 
     const state4 = engine.getStateAt([T, B, A, C], 4);
-    expect(state4.entities['hero']?.['status']).toBe('first');
-    expect(state4.entities['hero']?.['location']).toBe('end');
+    expect(state4.entities.hero?.status).toBe('first');
+    expect(state4.entities.hero?.location).toBe('end');
 
     // getStateAt matches replay() for full position
     const fullReplay = engine.replay([T, B, A, C]);
-    expect(state4.entities['hero']?.['status']).toBe(fullReplay.entities['hero']?.['status']);
+    expect(state4.entities.hero?.status).toBe(fullReplay.entities.hero?.status);
   });
 });
 
@@ -255,10 +255,10 @@ describe('DAG determinism: identical inputs produce equal outputs independent of
     // Topological causal ordering preserved: T → A → C → B, with B (day_9)
     // causally latest so its status="first" overrides A's "second".
     expect(first.orderedEventIds).toEqual([T.id, 'A', 'C', 'B']);
-    expect(first.stateAfterByEventId.get('B')?.entities['hero']?.['status']).toBe('first');
-    expect(first.finalState.entities['hero']?.['status']).toBe('first');
-    expect(first.finalState.entities['hero']?.['location']).toBe('end');
-    expect(first.finalState.entities['hero']?.['name']).toBe('Hero');
+    expect(first.stateAfterByEventId.get('B')?.entities.hero?.status).toBe('first');
+    expect(first.finalState.entities.hero?.status).toBe('first');
+    expect(first.finalState.entities.hero?.location).toBe('end');
+    expect(first.finalState.entities.hero?.name).toBe('Hero');
   });
   it('replays legacy rule effects to identical WorldState at different clock times', () => {
     const T = heroIntroduction();

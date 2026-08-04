@@ -123,7 +123,12 @@ describe('admin project deletion rollback', () => {
 describe('admin owner membership routes', () => {
   it('registers list, upsert, and revoke routes through the owner guard', async () => {
     const listed = [
-      { userId: 'member-1', projectId: project.projectId, role: 'reader' as const, capabilityVersion: 7 },
+      {
+        userId: 'member-1',
+        projectId: project.projectId,
+        role: 'reader' as const,
+        capabilityVersion: 7,
+      },
     ];
     const memberships: MembershipAdminPort = {
       list: vi.fn(async () => listed),

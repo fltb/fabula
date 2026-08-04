@@ -62,8 +62,8 @@ describe('EpistemicLedger', () => {
 
       expect(updated.claims[key]).toBeDefined();
       expect(updated.claims[key].assessment).toEqual(assessment);
-      expect(updated.bySubject['frodo']).toContain('p_ring_location');
-      expect(updated.byProposition['p_ring_location']).toContain('frodo');
+      expect(updated.bySubject.frodo).toContain('p_ring_location');
+      expect(updated.byProposition.p_ring_location).toContain('frodo');
     });
 
     it('rejects duplicate claim write', () => {

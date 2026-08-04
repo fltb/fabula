@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createEmptyBranchPath } from '../branch/index.js';
+import { ConfigError } from '../errors.js';
 import type {
   BranchPath,
   EntityCatalogContext,
@@ -24,6 +25,20 @@ export interface ReplayOptions {
   initialFacts?: readonly Fact[];
   initialThreads?: readonly { id: string }[];
   timeAnchors?: readonly TimeAnchor[];
+}
+
+function requireCompiledEvent(
+  eventsById: ReadonlyMap<string, NarrativeEvent>,
+  eventId: string,
+): NarrativeEvent {
+  const event = eventsById.get(eventId);
+  if (event === undefined) {
+    throw new ConfigError(`Compiled story order references unknown event "${eventId}"`, {
+      eventId,
+      phase: 'replay',
+    });
+  }
+  return event;
 }
 
 export class ReplayEngine {
@@ -82,7 +97,7 @@ export class ReplayEngine {
     // Replay up to position ordinary events
     const eventsById = new Map(compiled.selectedEvents.map((e) => [e.id, e]));
     for (const eventId of compiled.order.topologicalOrder.slice(0, position)) {
-      applyNarrativeEvent(state, eventsById.get(eventId)!, {
+      applyNarrativeEvent(state, requireCompiledEvent(eventsById, eventId), {
         catalogs: this.catalogs,
         branchPath,
         lifecycleChangesByCoordinate,
@@ -123,7 +138,7 @@ export class ReplayEngine {
     // Replay ordinary events in topological order
     const eventsById = new Map(compiled.selectedEvents.map((e) => [e.id, e]));
     for (const eventId of compiled.order.topologicalOrder) {
-      applyNarrativeEvent(state, eventsById.get(eventId)!, {
+      applyNarrativeEvent(state, requireCompiledEvent(eventsById, eventId), {
         catalogs: this.catalogs,
         branchPath,
         lifecycleChangesByCoordinate,

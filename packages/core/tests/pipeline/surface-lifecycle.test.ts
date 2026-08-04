@@ -71,7 +71,11 @@ function source(ids: string[], surface?: string): ProjectSourceSnapshotV1 {
     'chapters/chapter_01/_chapter.yaml': `chapter: 1\ntitle: Chapter 1\nsummary: Lifecycle\nintent: Test\nplannedScenes: ${ids.length}\n`,
   };
   ids.forEach((id, i) => {
-    docs[`chapters/chapter_01/${id}.yaml`] = events[i]!;
+    const event = events[i];
+    if (event === undefined) {
+      throw new Error(`Missing generated event document for ${id}`);
+    }
+    docs[`chapters/chapter_01/${id}.yaml`] = event;
   });
   const documents: SourceDocumentV1[] = Object.entries(docs)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
@@ -147,9 +151,12 @@ describe('Surface Lifecycle — immutable source snapshot scheduling', () => {
     );
     expect(result.results).toHaveLength(2);
     expect(result.results.every((r) => !r.released)).toBe(true);
-    expect(
-      result.results[1]?.errors.some((e) => e.includes('not accepted and no surface source')),
-    ).toBe(true);
+    const blocked = result.results[1];
+    expect(blocked).toBeDefined();
+    if (blocked === undefined) {
+      throw new Error('Expected the blocked descendant result');
+    }
+    expect(blocked.errors.some((e) => e.includes('not accepted and no surface source'))).toBe(true);
     expect(result.publication.status).toBe('stale');
   });
   it('fallback_without_surface renders when predecessor is blocked', async () => {
@@ -163,8 +170,15 @@ describe('Surface Lifecycle — immutable source snapshot scheduling', () => {
       },
       { provider, services: services(provider) },
     );
-    expect(result.results[0]?.released).toBe(false);
-    expect(result.results[1]?.released).toBe(true);
+    const firstResult = result.results[0];
+    const secondResult = result.results[1];
+    expect(firstResult).toBeDefined();
+    expect(secondResult).toBeDefined();
+    if (firstResult === undefined || secondResult === undefined) {
+      throw new Error('Expected both fallback render results');
+    }
+    expect(firstResult.released).toBe(false);
+    expect(secondResult.released).toBe(true);
     expect(result.publication.status).toBe('stale');
   });
   it('subset render with missing predecessor is blocked', async () => {
@@ -179,10 +193,13 @@ describe('Surface Lifecycle — immutable source snapshot scheduling', () => {
       },
       { provider, services: services(provider) },
     );
-    expect(result.results[0]?.released).toBe(false);
-    expect(
-      result.results[0]?.errors.some((e) => e.includes('not accepted and no surface source')),
-    ).toBe(true);
+    const blocked = result.results[0];
+    expect(blocked).toBeDefined();
+    if (blocked === undefined) {
+      throw new Error('Expected the blocked selected result');
+    }
+    expect(blocked.released).toBe(false);
+    expect(blocked.errors.some((e) => e.includes('not accepted and no surface source'))).toBe(true);
   });
   it('batch and non-batch produce equivalent release outcomes', async () => {
     const s = source(['E1', 'E2'], serial(['E1', 'E2']));
@@ -231,8 +248,15 @@ describe('Surface Lifecycle — immutable source snapshot scheduling', () => {
       },
       { provider, services: services(provider) },
     );
-    expect(result.results[0]?.released).toBe(false);
-    expect(result.results[1]?.released).toBe(true);
+    const firstResult = result.results[0];
+    const secondResult = result.results[1];
+    expect(firstResult).toBeDefined();
+    expect(secondResult).toBeDefined();
+    if (firstResult === undefined || secondResult === undefined) {
+      throw new Error('Expected both parallel render results');
+    }
+    expect(firstResult.released).toBe(false);
+    expect(secondResult.released).toBe(true);
   });
 
   it('surface manifest generatedAt is deterministic under the injected clock', () => {
@@ -267,9 +291,15 @@ describe('Surface Lifecycle — immutable source snapshot scheduling', () => {
       { provider, services: services(provider, execution) },
     );
     expect(result.errors).toHaveLength(0);
-    const operation = await execution.readOperation({ projectId: 'test-project', operationId });
+    const operation = await execution.readOperation({
+      projectId: 'test-project',
+      operationId,
+    });
     expect(operation).not.toBeNull();
-    const payload = operation!.value.value as {
+    if (operation === null) {
+      throw new Error('Expected the operation record');
+    }
+    const payload = operation.value.value as {
       startedAt: string;
       heartbeatAt: string;
       leaseExpiresAt: string;
@@ -342,8 +372,13 @@ describe('Accepted promotion CAS — no false current on concurrent head', () =>
       { provider: first, services: services(first, execution, cache) },
     );
     expect(cold.errors).toHaveLength(0);
-    expect(cold.results[0]?.disposition).toBe('candidate_promoted');
-    expect(cold.results[0]?.released).toBe(true);
+    const coldResult = cold.results[0];
+    expect(coldResult).toBeDefined();
+    if (coldResult === undefined) {
+      throw new Error('Expected the initial render result');
+    }
+    expect(coldResult.disposition).toBe('candidate_promoted');
+    expect(coldResult.released).toBe(true);
     expect(cold.publication.status).toBe('current');
 
     // A fresh cache forces a cold re-render with new prose. The accepted head
@@ -363,13 +398,22 @@ describe('Accepted promotion CAS — no false current on concurrent head', () =>
       },
     );
     expect(rerun.errors).toHaveLength(0);
-    expect(rerun.results[0]?.released).toBe(true);
-    expect(rerun.results[0]?.disposition).toBe('candidate_promoted');
+    const rerunResult = rerun.results[0];
+    expect(rerunResult).toBeDefined();
+    if (rerunResult === undefined) {
+      throw new Error('Expected the rerender result');
+    }
+    expect(rerunResult.released).toBe(true);
+    expect(rerunResult.disposition).toBe('candidate_promoted');
     expect(rerun.publication.status).toBe('current');
 
     const head = await execution.readAcceptedScene({ projectId: 'test-project', eventId: 'E1' });
-    expect(head?.revision).toBe(2);
-    expect(head?.value.prose).toBe(PROSE_B);
+    expect(head).not.toBeNull();
+    if (head === null) {
+      throw new Error('Expected the accepted scene head');
+    }
+    expect(head.revision).toBe(2);
+    expect(head.value.prose).toBe(PROSE_B);
   });
 
   it('concurrent accepted-head write surfaces a stale candidate, not current', async () => {
@@ -385,7 +429,12 @@ describe('Accepted promotion CAS — no false current on concurrent head', () =>
       },
       { provider: first, services: services(first, execution, cache) },
     );
-    expect(cold.results[0]?.disposition).toBe('candidate_promoted');
+    const coldResult = cold.results[0];
+    expect(coldResult).toBeDefined();
+    if (coldResult === undefined) {
+      throw new Error('Expected the initial concurrent render result');
+    }
+    expect(coldResult.disposition).toBe('candidate_promoted');
     expect(cold.publication.status).toBe('current');
 
     // Between this run's read and its accepted-scene CAS, a concurrent writer
@@ -406,11 +455,20 @@ describe('Accepted promotion CAS — no false current on concurrent head', () =>
       },
     );
 
-    expect(conflicted.results[0]?.disposition).toBe('candidate_stale');
-    expect(conflicted.results[0]?.promoted).toBe(false);
-    expect(conflicted.results[0]?.released).toBe(false);
-    expect(conflicted.results[0]?.revisionId).toBeNull();
-    expect(conflicted.results[0]?.releaseDecision?.status).toBe('blocked');
+    const conflictedResult = conflicted.results[0];
+    expect(conflictedResult).toBeDefined();
+    if (conflictedResult === undefined) {
+      throw new Error('Expected the conflicted render result');
+    }
+    expect(conflictedResult.disposition).toBe('candidate_stale');
+    expect(conflictedResult.promoted).toBe(false);
+    expect(conflictedResult.released).toBe(false);
+    expect(conflictedResult.revisionId).toBeNull();
+    expect(conflictedResult.releaseDecision).not.toBeNull();
+    if (conflictedResult.releaseDecision === null) {
+      throw new Error('Expected a blocked release decision');
+    }
+    expect(conflictedResult.releaseDecision.status).toBe('blocked');
     expect(conflicted.publication.status).toBe('stale');
     expect(conflicted.errors.some((message) => message.includes('ACCEPTED_HEAD_CONFLICT'))).toBe(
       true,
@@ -419,15 +477,31 @@ describe('Accepted promotion CAS — no false current on concurrent head', () =>
     // The contested candidate was never accepted: the concurrent head survives
     // verbatim and is not overwritten by the failed promotion.
     const head = await execution.readAcceptedScene({ projectId: 'test-project', eventId: 'E1' });
-    expect(head?.revision).toBe(2);
-    expect(head?.value.prose).toBe(PROSE_C);
-    expect(head?.value.revisionId).toBe('concurrent-revision');
+    expect(head).not.toBeNull();
+    if (head === null) {
+      throw new Error('Expected the concurrent accepted scene head');
+    }
+    expect(head.revision).toBe(2);
+    expect(head.value.prose).toBe(PROSE_C);
+    expect(head.value.revisionId).toBe('concurrent-revision');
 
     const operation = await execution.readOperation({
       projectId: 'test-project',
       operationId: conflicted.operationId,
     });
     expect(operation).not.toBeNull();
-    expect((operation?.value as { value?: { status?: unknown } })?.value?.status).toBe('failed');
+    if (operation === null) {
+      throw new Error('Expected the failed operation record');
+    }
+    const operationValue = operation.value.value;
+    if (
+      typeof operationValue !== 'object' ||
+      operationValue === null ||
+      Array.isArray(operationValue)
+    ) {
+      throw new Error('Expected an object operation payload');
+    }
+    const operationStatus = (operationValue as { status?: unknown }).status;
+    expect(operationStatus).toBe('failed');
   });
 });

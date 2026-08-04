@@ -1,34 +1,35 @@
 import { DatabaseSync } from 'node:sqlite';
 import { type MessagePort, parentPort, workerData } from 'node:worker_threads';
 import { Kysely, SqliteDialect } from 'kysely';
+import { AUTHORING_PHASE_VALUES } from '../contracts/authoring.js';
+import { PROJECT_ACCESS_ROLES } from '../contracts/configuration.js';
 import type {
   AuditRecord,
   AuditSurface,
-  AuthUserRecord,
   AuthoringConflictRecord,
   AuthoringStateRecord,
   AuthoringWorkingDocumentRecord,
-  ConfigurationOperationRecord,
-  ConsumeInviteResult,
+  AuthUserRecord,
   CapabilityVerifierReadState,
   CapabilityVerifierRecord,
-  McpDeviceVerifierReadState,
-  McpDeviceVerifierRecord,
-  DeviceVerifierStore,
+  ConfigurationOperationRecord,
+  ConsumeInviteResult,
   GitSubmissionJournal,
   GitSubmissionPhase,
   GitSubmissionReceipt,
   InviteState,
+  McpDeviceVerifierReadState,
+  McpDeviceVerifierRecord,
   NativeRevisionPhase,
   NativeRevisionTerminalPhase,
   PasswordHashRecord,
   PersistenceOperation,
   PersistencePayloads,
   PersistenceResults,
-  ProjectMembershipState,
   ProjectMembershipMutationResult,
-  RevokeInviteResult,
+  ProjectMembershipState,
   RevisionMirrorExportRecord,
+  RevokeInviteResult,
   SourceHeadCasResult,
   SourceHeadRecord,
   SourceMaterializationEntryRecord,
@@ -38,7 +39,6 @@ import type {
   SourceRevisionRecord,
   UserRole,
 } from '../contracts/persistence.js';
-import { AUTHORING_PHASE_VALUES } from '../contracts/authoring.js';
 import {
   GIT_SUBMISSION_PHASE_COMPLETE,
   GIT_SUBMISSION_PHASE_CONFLICT,
@@ -47,15 +47,14 @@ import {
   NATIVE_REVISION_PHASE_VALUES,
   NATIVE_REVISION_TERMINAL_PHASE_VALUES,
 } from '../contracts/persistence.js';
-import { PROJECT_ACCESS_ROLES } from '../contracts/configuration.js';
 
 import { createKyselySqliteDatabase, type KyselySqliteBridge } from './kysely-sqlite-bridge.js';
 import type { PersistenceRequest, PersistenceResponse } from './messages.js';
 import { serializePersistenceError } from './messages.js';
 import {
-  persistenceSchema,
   type PersistenceMigrationStep,
   type PersistenceTable,
+  persistenceSchema,
 } from './schema.js';
 
 export interface WorkerOptions {
@@ -122,7 +121,6 @@ function renderTableSql(table: PersistenceTable): string {
     composite && composite.length > 0 ? `, PRIMARY KEY (${composite.join(', ')})` : '';
   return `${columns}${primaryKeyClause}`;
 }
-
 
 function migrate(db: WorkerDatabase): void {
   db.exec('PRAGMA foreign_keys = ON;');
@@ -194,7 +192,9 @@ function applyMigrationStep(db: WorkerDatabase, step: PersistenceMigrationStep):
         }
       }
       db.exec(`CREATE TABLE IF NOT EXISTS ${table.name} (${renderTableSql(table)})`);
-      db.exec(`INSERT INTO ${table.name} (${copyCols}) SELECT ${copyCols} FROM ${oldTable}${filterSql}`);
+      db.exec(
+        `INSERT INTO ${table.name} (${copyCols}) SELECT ${copyCols} FROM ${oldTable}${filterSql}`,
+      );
       break;
     }
     case 'create-index': {
@@ -269,7 +269,10 @@ function mapProjectMembershipRow(row: Record<string, unknown>): ProjectMembershi
   };
 }
 
-function membershipInputError(code: 'INVALID_INPUT' | 'USER_NOT_FOUND' | 'PROJECT_NOT_FOUND', message: string): never {
+function membershipInputError(
+  code: 'INVALID_INPUT' | 'USER_NOT_FOUND' | 'PROJECT_NOT_FOUND',
+  message: string,
+): never {
   throw { code, message, retryable: false };
 }
 
@@ -464,9 +467,7 @@ function mapSourceRevisionRow(row: Record<string, unknown>): SourceRevisionRecor
   return {
     revisionId: text(row.revision_id),
     projectId: text(row.project_id),
-    ...(row.parent_revision_id != null
-      ? { parentRevisionId: text(row.parent_revision_id) }
-      : {}),
+    ...(row.parent_revision_id != null ? { parentRevisionId: text(row.parent_revision_id) } : {}),
     operationId: text(row.operation_id),
     sourceHash: text(row.source_hash),
     bundleHash: text(row.bundle_hash),
@@ -587,7 +588,6 @@ function mapRevisionMirrorExportRow(row: Record<string, unknown>): RevisionMirro
   };
 }
 
-
 /**
  * Exact per-operation payload field allowlist. The typed client makes unknown
  * fields impossible at compile time; this runtime check fails closed for
@@ -630,7 +630,15 @@ const KNOWN_PAYLOAD_FIELDS: Record<PersistenceOperation, readonly string[]> = {
   listProjectMemberships: ['projectId'],
   upsertProjectMembership: ['userId', 'projectId', 'role', 'at'],
   revokeProjectMembership: ['userId', 'projectId', 'at'],
-  upsertCapability: ['capabilityId', 'userId', 'projectId', 'scope', 'version', 'expiresAt', 'revokedAt'],
+  upsertCapability: [
+    'capabilityId',
+    'userId',
+    'projectId',
+    'scope',
+    'version',
+    'expiresAt',
+    'revokedAt',
+  ],
   loadCapability: ['capabilityId'],
   revokeCapability: ['capabilityId', 'reason'],
   listProjects: [],
@@ -659,7 +667,14 @@ const KNOWN_PAYLOAD_FIELDS: Record<PersistenceOperation, readonly string[]> = {
     'diagnostic',
     'updatedAt',
   ],
-  completeGitSubmission: ['submitId', 'projectId', 'commit', 'sourceHash', 'receiptHash', 'acceptedAt'],
+  completeGitSubmission: [
+    'submitId',
+    'projectId',
+    'commit',
+    'sourceHash',
+    'receiptHash',
+    'acceptedAt',
+  ],
   loadGitSubmission: ['submitId'],
   loadUiPreferences: ['userId'],
   saveUiPreferences: ['userId', 'values', 'updatedAt'],
@@ -882,11 +897,10 @@ function requireVerifierStore(operation: string, payload: unknown): 'mcp' | 'cap
   return store;
 }
 
-
 function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
   const db = createWorkerDatabase(options.databasePath);
   migrate(db);
-  let queued = 0;
+  let _queued = 0;
   let dbClosed = false;
   let closePromise: Promise<void> | undefined;
   const closeDatabase = async (): Promise<void> => {
@@ -895,7 +909,7 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
     await db.close();
   };
   let queue = Promise.resolve();
-  const respond = (request: PersistenceRequest, response: PersistenceResponse): void =>
+  const respond = (_request: PersistenceRequest, response: PersistenceResponse): void =>
     port.postMessage(response);
   const execute = (request: PersistenceRequest): unknown => {
     const known = KNOWN_PAYLOAD_FIELDS[request.operation];
@@ -1194,11 +1208,13 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
           )
           .run(x.consumedAt, x.inviteId, x.consumedAt);
         if (Number(result.changes) === 1) {
-          const consumed = db.prepare('SELECT * FROM invites WHERE invite_id=?').get(x.inviteId) as Record<
-            string,
-            unknown
-          >;
-          return { status: 'accepted', invite: mapInviteRow(consumed) } satisfies ConsumeInviteResult;
+          const consumed = db
+            .prepare('SELECT * FROM invites WHERE invite_id=?')
+            .get(x.inviteId) as Record<string, unknown>;
+          return {
+            status: 'accepted',
+            invite: mapInviteRow(consumed),
+          } satisfies ConsumeInviteResult;
         }
         if (row.consumed_at != null)
           return { status: 'already-consumed' } satisfies ConsumeInviteResult;
@@ -1216,15 +1232,20 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
       case 'revokeInvite': {
         const x = p as PersistencePayloads['revokeInvite'];
         if (typeof x.inviteId !== 'string' || x.inviteId.length === 0 || x.inviteId.length > 256) {
-          throw { code: 'INVALID_INPUT', message: 'inviteId must be a non-empty identifier.', retryable: false };
+          throw {
+            code: 'INVALID_INPUT',
+            message: 'inviteId must be a non-empty identifier.',
+            retryable: false,
+          };
         }
         const deleted = db
           .prepare('DELETE FROM invites WHERE invite_id=? AND consumed_at IS NULL')
           .run(x.inviteId);
-        if (Number(deleted.changes) === 1) return { status: 'revoked' } satisfies RevokeInviteResult;
-        const row = db.prepare('SELECT consumed_at FROM invites WHERE invite_id=?').get(x.inviteId) as
-          | Record<string, unknown>
-          | undefined;
+        if (Number(deleted.changes) === 1)
+          return { status: 'revoked' } satisfies RevokeInviteResult;
+        const row = db
+          .prepare('SELECT consumed_at FROM invites WHERE invite_id=?')
+          .get(x.inviteId) as Record<string, unknown> | undefined;
         return row === undefined
           ? ({ status: 'not-found' } satisfies RevokeInviteResult)
           : ({ status: 'already-consumed' } satisfies RevokeInviteResult);
@@ -1243,7 +1264,9 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
       case 'listProjectMemberships': {
         const x = p as PersistencePayloads['listProjectMemberships'];
         const projectId =
-          x.projectId === undefined ? undefined : requireMembershipIdentifier(x.projectId, 'projectId');
+          x.projectId === undefined
+            ? undefined
+            : requireMembershipIdentifier(x.projectId, 'projectId');
         const rows = db
           .prepare(
             projectId === undefined
@@ -1266,12 +1289,16 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
               : membershipInputError('INVALID_INPUT', 'at must be a non-empty timestamp.');
         db.exec('BEGIN IMMEDIATE');
         try {
-          const user = db.prepare('SELECT capability_version FROM users WHERE user_id=?').get(userId) as
-            | Record<string, unknown>
-            | undefined;
-          if (user === undefined) membershipInputError('USER_NOT_FOUND', 'The user does not exist.');
-          const project = db.prepare('SELECT project_id FROM projects WHERE project_id=?').get(projectId);
-          if (project === undefined) membershipInputError('PROJECT_NOT_FOUND', 'The project does not exist.');
+          const user = db
+            .prepare('SELECT capability_version FROM users WHERE user_id=?')
+            .get(userId) as Record<string, unknown> | undefined;
+          if (user === undefined)
+            membershipInputError('USER_NOT_FOUND', 'The user does not exist.');
+          const project = db
+            .prepare('SELECT project_id FROM projects WHERE project_id=?')
+            .get(projectId);
+          if (project === undefined)
+            membershipInputError('PROJECT_NOT_FOUND', 'The project does not exist.');
           const existing = db
             .prepare('SELECT revision FROM project_memberships WHERE user_id=? AND project_id=?')
             .get(userId, projectId) as Record<string, unknown> | undefined;
@@ -1322,12 +1349,16 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
               : membershipInputError('INVALID_INPUT', 'at must be a non-empty timestamp.');
         db.exec('BEGIN IMMEDIATE');
         try {
-          const user = db.prepare('SELECT capability_version FROM users WHERE user_id=?').get(userId) as
-            | Record<string, unknown>
-            | undefined;
-          if (user === undefined) membershipInputError('USER_NOT_FOUND', 'The user does not exist.');
-          const project = db.prepare('SELECT project_id FROM projects WHERE project_id=?').get(projectId);
-          if (project === undefined) membershipInputError('PROJECT_NOT_FOUND', 'The project does not exist.');
+          const user = db
+            .prepare('SELECT capability_version FROM users WHERE user_id=?')
+            .get(userId) as Record<string, unknown> | undefined;
+          if (user === undefined)
+            membershipInputError('USER_NOT_FOUND', 'The user does not exist.');
+          const project = db
+            .prepare('SELECT project_id FROM projects WHERE project_id=?')
+            .get(projectId);
+          if (project === undefined)
+            membershipInputError('PROJECT_NOT_FOUND', 'The project does not exist.');
           db.prepare(
             'UPDATE project_memberships SET revoked_at=?, revision=revision+1 WHERE user_id=? AND project_id=?',
           ).run(at, userId, projectId);
@@ -1636,9 +1667,10 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
           x.updatedAt,
         );
         return mapAuthoringStateRow(
-          db
-            .prepare('SELECT * FROM authoring_state WHERE project_id=?')
-            .get(x.projectId) as Record<string, unknown>,
+          db.prepare('SELECT * FROM authoring_state WHERE project_id=?').get(x.projectId) as Record<
+            string,
+            unknown
+          >,
         );
       }
       case 'loadAuthoringState': {
@@ -1797,9 +1829,7 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
         const x = p as PersistencePayloads['listSessions'];
         const rows = (
           x.userId != null
-            ? db
-                .prepare('SELECT * FROM sessions WHERE user_id=? ORDER BY expires_at')
-                .all(x.userId)
+            ? db.prepare('SELECT * FROM sessions WHERE user_id=? ORDER BY expires_at').all(x.userId)
             : db.prepare('SELECT * FROM sessions ORDER BY expires_at').all()
         ) as Record<string, unknown>[];
         return rows.map((row) => ({
@@ -1846,10 +1876,7 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
           .prepare(
             'SELECT * FROM source_revisions WHERE project_id=? AND (? IS NULL OR revision_id<?) ORDER BY revision_id DESC LIMIT ?',
           )
-          .all(x.projectId, x.cursor ?? null, x.cursor ?? null, limit) as Record<
-          string,
-          unknown
-        >[];
+          .all(x.projectId, x.cursor ?? null, x.cursor ?? null, limit) as Record<string, unknown>[];
         return rows.map(mapSourceRevisionRow);
       }
       case 'createSourceRevisionOperation': {
@@ -1920,9 +1947,9 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
       }
       case 'getSourceHead': {
         const x = p as PersistencePayloads['getSourceHead'];
-        const row = db
-          .prepare('SELECT * FROM source_heads WHERE project_id=?')
-          .get(x.projectId) as Record<string, unknown> | undefined;
+        const row = db.prepare('SELECT * FROM source_heads WHERE project_id=?').get(x.projectId) as
+          | Record<string, unknown>
+          | undefined;
         return row ? mapSourceHeadRow(row) : null;
       }
       case 'casSourceHead': {
@@ -1942,9 +1969,10 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
             x.expectedAcceptedSourceHash ?? null,
           );
         const head = mapSourceHeadRow(
-          db
-            .prepare('SELECT * FROM source_heads WHERE project_id=?')
-            .get(x.projectId) as Record<string, unknown>,
+          db.prepare('SELECT * FROM source_heads WHERE project_id=?').get(x.projectId) as Record<
+            string,
+            unknown
+          >,
         );
         const applied = Number(result.changes) === 1;
         return { applied, head } satisfies SourceHeadCasResult;
@@ -1966,9 +1994,7 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
         );
         return mapSourceMaterializationRow(
           db
-            .prepare(
-              'SELECT * FROM source_materializations WHERE project_id=? AND revision_id=?',
-            )
+            .prepare('SELECT * FROM source_materializations WHERE project_id=? AND revision_id=?')
             .get(x.projectId, x.revisionId) as Record<string, unknown>,
         );
       }
@@ -1989,9 +2015,7 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
         );
         return mapSourceMaterializationRow(
           db
-            .prepare(
-              'SELECT * FROM source_materializations WHERE project_id=? AND revision_id=?',
-            )
+            .prepare('SELECT * FROM source_materializations WHERE project_id=? AND revision_id=?')
             .get(x.projectId, x.revisionId) as Record<string, unknown>,
         );
       }
@@ -2027,16 +2051,16 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
         );
         return mapAuthoringWorkingDocumentRow(
           db
-            .prepare('SELECT * FROM authoring_working_documents WHERE project_id=? AND document_id=?')
+            .prepare(
+              'SELECT * FROM authoring_working_documents WHERE project_id=? AND document_id=?',
+            )
             .get(x.projectId, x.documentId) as Record<string, unknown>,
         );
       }
       case 'loadAuthoringWorkingDocument': {
         const x = p as PersistencePayloads['loadAuthoringWorkingDocument'];
         const row = db
-          .prepare(
-            'SELECT * FROM authoring_working_documents WHERE project_id=? AND document_id=?',
-          )
+          .prepare('SELECT * FROM authoring_working_documents WHERE project_id=? AND document_id=?')
           .get(x.projectId, x.documentId) as Record<string, unknown> | undefined;
         return row ? mapAuthoringWorkingDocumentRow(row) : null;
       }
@@ -2051,10 +2075,9 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
       }
       case 'deleteAuthoringWorkingDocument': {
         const x = p as PersistencePayloads['deleteAuthoringWorkingDocument'];
-        db.prepare('DELETE FROM authoring_working_documents WHERE project_id=? AND document_id=?').run(
-          x.projectId,
-          x.documentId,
-        );
+        db.prepare(
+          'DELETE FROM authoring_working_documents WHERE project_id=? AND document_id=?',
+        ).run(x.projectId, x.documentId);
         return { removed: true };
       }
       case 'createRevisionMirrorExport': {
@@ -2120,7 +2143,7 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
     }
   };
   const handleMessage = (request: PersistenceRequest): void => {
-    queued += 1;
+    _queued += 1;
     queue = queue.then(async () => {
       try {
         let response: PersistenceResponse;
@@ -2147,7 +2170,7 @@ function start(port: MessagePort, options: WorkerOptions): WorkerDisposer {
           // queue alive so later requests are not silently wedged behind it.
         }
       } finally {
-        queued -= 1;
+        _queued -= 1;
       }
     });
   };

@@ -509,7 +509,7 @@ describe('RenderPipeline — AbortSignal propagation', () => {
 
     const pass1Req = capturedRequests.find((r) => r.taskType === 'pass1');
     expect(pass1Req).toBeDefined();
-    expect(pass1Req!.signal).toBe(controller.signal);
+    expect(pass1Req?.signal).toBe(controller.signal);
   });
 
   it('passes signal into Pass 2 requests', async () => {
@@ -542,7 +542,7 @@ describe('RenderPipeline — AbortSignal propagation', () => {
 
     const pass2Req = capturedRequests.find((r) => r.taskType === 'pass2');
     expect(pass2Req).toBeDefined();
-    expect(pass2Req!.signal).toBe(controller.signal);
+    expect(pass2Req?.signal).toBe(controller.signal);
   });
 
   it('per-call signal overrides pipeline-level signal', async () => {
@@ -605,7 +605,7 @@ describe('evaluateProseCandidate', () => {
     });
 
     expect(result.analysis).not.toBeNull();
-    expect(result.analysis!.eventId).toBe('evt_revision');
+    expect(result.analysis?.eventId).toBe('evt_revision');
     expect(result.pass2Rejection).toBeNull();
     expect(result.errors).toEqual([]);
     expect(result.feedbackErrors).toEqual([]);
@@ -765,7 +765,7 @@ describe('evaluateProseCandidate', () => {
 
 describe('BatchRenderPipeline — signal propagation', () => {
   it('passes external signal from BatchConfig to pipeline renderAll', async () => {
-    const mod = await import('../../src/pipeline/render.ts');
+    const _mod = await import('../../src/pipeline/render.ts');
     const { BatchRenderPipeline } = await import('../../src/batch-renderer.ts');
 
     const controller = new AbortController();
@@ -955,8 +955,8 @@ describe('RenderPipeline — signal in each provider phase', () => {
       expect(sig).toBe(controller.signal);
     }
     // Verify at least one pass1, one pass2, and one verify request
-    const verifySignals = capturedSignals.filter((_, i) => {
-      const phase =
+    const _verifySignals = capturedSignals.filter((_, i) => {
+      const _phase =
         i < capturedSignals.length - 1 && capturedSignals.length > 2 ? 'mixed' : 'unknown';
       return true; // All must carry the signal — fine-grained check below
     });
@@ -1041,14 +1041,14 @@ describe('RenderPipeline — no calls after abort', () => {
 
 describe('BatchRenderPipeline — stops scheduling after abort', () => {
   it('does not submit new batches after external abort fires', async () => {
-    const mod = await import('../../src/pipeline/render.ts');
+    const _mod = await import('../../src/pipeline/render.ts');
     const { BatchRenderPipeline } = await import('../../src/batch-renderer.ts');
 
     const controller = new AbortController();
     let renderCallCount = 0;
 
     const capturingPipeline = {
-      renderAll: vi.fn().mockImplementation(async (_jobs: RenderJob[], signal?: AbortSignal) => {
+      renderAll: vi.fn().mockImplementation(async (_jobs: RenderJob[], _signal?: AbortSignal) => {
         renderCallCount++;
         // Abort after first batch
         controller.abort();

@@ -80,8 +80,8 @@ describe('Thread Identity', () => {
     };
 
     expect(decl.threadId).toBe('T1');
-    expect(decl.initialBindings!.protagonist).toBe('xianglins_wife');
-    expect(decl.initialGoalStates![0].status).toBe('active');
+    expect(decl.initialBindings?.protagonist).toBe('xianglins_wife');
+    expect(decl.initialGoalStates?.[0].status).toBe('active');
   });
 
   it('ThreadDeclarationCatalog indexes by threadId', () => {
@@ -189,7 +189,7 @@ describe('Thread Identity', () => {
     expect(tx.thread).toBe('T1');
     expect(tx.status).toBe('completed');
     expect(tx.goalSet).toHaveLength(1);
-    expect(tx.goalSet![0].goalId).toBe('solve_case');
+    expect(tx.goalSet?.[0].goalId).toBe('solve_case');
     expect(tx.provenance).toBe('E5');
     expect(tx.advancement).toContain('Sherlock');
   });

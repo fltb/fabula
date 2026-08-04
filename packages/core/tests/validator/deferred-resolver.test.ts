@@ -3,7 +3,7 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import type { AnalysisResult, NarrativeEvent, ValidationIssue } from '../../src/types/index.js';
+import type { AnalysisResult, NarrativeEvent } from '../../src/types/index.js';
 import { resolveDeferredFacts } from '../../src/validator/deferred-resolver.js';
 import { makeObservations, makeProtocol } from '../fixtures/mock-pass2-helpers.js';
 

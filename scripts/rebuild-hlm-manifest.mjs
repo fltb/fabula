@@ -64,7 +64,7 @@ for (let i = 0; i < chapterTexts.length; i++) {
   }
 
   locations.push({
-    chapterId: 'ch' + String(i + 1).padStart(2, '0'),
+    chapterId: `ch${String(i + 1).padStart(2, '0')}`,
     title: firstLine,
     startByte: currentPos,
     endByte: currentPos + chBytes,

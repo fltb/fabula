@@ -25,12 +25,7 @@ import type { RenderJob } from '../src/pipeline/render.ts';
 // ——— Pipeline ———
 import { RenderPipeline } from '../src/pipeline/render.ts';
 // ——— Plugin system ———
-import {
-  detectConflicts,
-  PluginHooksManager,
-  PluginLoader,
-  ValidatorRegistry,
-} from '../src/plugin/index.js';
+import { PluginHooksManager, PluginLoader, ValidatorRegistry } from '../src/plugin/index.js';
 import type {
   PluginContext,
   PluginHooks,
@@ -43,7 +38,6 @@ import { emptyWorldState } from '../src/state/story-boundaries.js';
 import type {
   CompiledSceneContract,
   EntityCatalogContext,
-  EntityRegistry,
   EntityTypeDefinitionSource,
   EpochId,
   NarrativeEvent,
@@ -55,7 +49,6 @@ import type {
 import { convertRelationshipChange } from '../src/types/relationship.js';
 // ——— Validation ———
 import { ResultAggregator } from '../src/validator/aggregator.ts';
-import { createBuiltInValidators } from '../src/validator/builtins.ts';
 import { makeAnalysisResult } from './fixtures/mock-pass2-helpers.ts';
 import { createRuntimeServices } from './fixtures/runtime-services.ts';
 
@@ -212,7 +205,7 @@ describe('plugin activation — render with hooks', () => {
       validatorPolicyId: 'test-policy-v1',
     });
 
-    const sysCtx: SystemContext = {
+    const _sysCtx: SystemContext = {
       genre: 'literary',
       style: 'neutral',
       narrativeRules: [],
@@ -314,8 +307,10 @@ describe('plugin activation — render with hooks', () => {
 
     // Prose and analysis from MockPass2Provider are present
     expect(resultA.prose.length).toBeGreaterThan(0);
-    expect(resultA.analysis).not.toBeNull();
-    expect(resultA.analysis!.eventId).toBe('E0');
+    const analysis = resultA.analysis;
+    expect(analysis).not.toBeNull();
+    if (!analysis) throw new Error('Expected successful analysis fixture');
+    expect(analysis.eventId).toBe('E0');
 
     // ── Scenario B: normal pipeline failure preserved (no entry) ────
     const badProvider = new MockPass2Provider({
@@ -509,7 +504,12 @@ describe('plugin activation — legacy relationship re-establishment', () => {
     // The dissolved epoch must remain dissolved
     expect(rel.epochs.epoch_alice_bob_1.lifecycle).toBe('dissolved');
     // The active epoch must be the new one
-    const activeEpoch = rel.epochs[rel.activeEpochId!]!;
+    const activeEpochId = rel.activeEpochId;
+    expect(activeEpochId).toBeDefined();
+    if (!activeEpochId) throw new Error('Expected active epoch ID fixture');
+    const activeEpoch = rel.epochs[activeEpochId];
+    expect(activeEpoch).toBeDefined();
+    if (!activeEpoch) throw new Error('Expected active epoch fixture');
     expect(activeEpoch.lifecycle).toBe('active');
     expect(activeEpoch.epochId).not.toBe('epoch_alice_bob_1');
   });
@@ -545,10 +545,18 @@ describe('plugin activation — legacy relationship re-establishment', () => {
     // lifecycleAfter 'dissolved' — the re-route guard checks for 'active'
     // lifecycleAfter, so the epoch stays dissolved and no new epoch is created.
     applyRelationshipTransaction(relationships, dissolve2);
-    const relState = relationships[dissolve1.relationshipId]!;
+    const relState = relationships[dissolve1.relationshipId];
+    expect(relState).toBeDefined();
+    if (!relState) throw new Error('Expected dissolved relationship fixture');
     // Only one epoch (no re-route for dissolved→dissolved)
     expect(Object.keys(relState.epochs)).toHaveLength(1);
-    expect(relState.epochs[dissolve1.epochId!]!.lifecycle).toBe('dissolved');
+    const dissolvedEpochId = dissolve1.epochId;
+    expect(dissolvedEpochId).toBeDefined();
+    if (!dissolvedEpochId) throw new Error('Expected dissolved epoch ID fixture');
+    const dissolvedEpoch = relState.epochs[dissolvedEpochId];
+    expect(dissolvedEpoch).toBeDefined();
+    if (!dissolvedEpoch) throw new Error('Expected dissolved epoch fixture');
+    expect(dissolvedEpoch.lifecycle).toBe('dissolved');
   });
 
   it('rejects explicit non-legacy dissolved→active transition', () => {
@@ -653,7 +661,9 @@ describe('plugin activation — legacy relationship re-establishment', () => {
       { catalogs: REL_CATALOG_CONTEXT },
     );
 
-    const rel = state.relationships.rel_alice_bob!;
+    const rel = state.relationships.rel_alice_bob;
+    expect(rel).toBeDefined();
+    if (!rel) throw new Error('Expected sparse relationship fixture');
     expect(Object.keys(rel.epochs)).toHaveLength(2);
 
     // Step 5: Inject epoch _4 directly (non-compat provenance) to create a
@@ -680,7 +690,10 @@ describe('plugin activation — legacy relationship re-establishment', () => {
     // Verify sparse setup: epochs _1, _2, _4 (no _3)
     expect(Object.keys(rel.epochs)).toHaveLength(3);
     expect(rel.epochs.epoch_alice_bob_3).toBeUndefined();
-    expect(rel.epochs.epoch_alice_bob_4!.lifecycle).toBe('dissolved');
+    const dissolvedEpoch4 = rel.epochs.epoch_alice_bob_4;
+    expect(dissolvedEpoch4).toBeDefined();
+    if (!dissolvedEpoch4) throw new Error('Expected sparse epoch 4 fixture');
+    expect(dissolvedEpoch4.lifecycle).toBe('dissolved');
 
     // Step 6: Legacy reinforce — routes through routeLegacyReestablishment.
     // OLD (count-based): 3 + 1 = 4 → COLLISION with epoch _4
@@ -702,9 +715,15 @@ describe('plugin activation — legacy relationship re-establishment', () => {
     // epoch _5 must exist and be active
     const epoch5Id = 'epoch_alice_bob_5';
     expect(rel.epochs[epoch5Id]).toBeDefined();
-    expect(rel.epochs[epoch5Id]!.lifecycle).toBe('active');
+    const activeEpoch5 = rel.epochs[epoch5Id];
+    expect(activeEpoch5).toBeDefined();
+    if (!activeEpoch5) throw new Error('Expected sparse epoch 5 fixture');
+    expect(activeEpoch5.lifecycle).toBe('active');
     expect(rel.activeEpochId).toBe(epoch5Id);
     // epoch _4 must remain dissolved (guaranteeing no overwrite)
-    expect(rel.epochs.epoch_alice_bob_4!.lifecycle).toBe('dissolved');
+    const remainingEpoch4 = rel.epochs.epoch_alice_bob_4;
+    expect(remainingEpoch4).toBeDefined();
+    if (!remainingEpoch4) throw new Error('Expected remaining epoch 4 fixture');
+    expect(remainingEpoch4.lifecycle).toBe('dissolved');
   });
 });

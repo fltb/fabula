@@ -1,7 +1,7 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { BrowserProjectSummaryV1 } from '../../src/contracts/index';
 import { ProjectPicker, RuntimeStatePanel } from '../../src/client/ui/RuntimeStates';
+import type { BrowserProjectSummaryV1 } from '../../src/contracts/index';
 
 const project = (overrides: Partial<BrowserProjectSummaryV1> = {}): BrowserProjectSummaryV1 => ({
   version: 1,
@@ -25,14 +25,24 @@ describe('runtime state views', () => {
 
   it('renders disconnected and unauthorized project picker states with recovery actions', () => {
     const disconnected = render(() => (
-      <ProjectPicker projects={[]} health="disconnected" onSelect={() => undefined} onRetry={() => undefined} />
+      <ProjectPicker
+        projects={[]}
+        health="disconnected"
+        onSelect={() => undefined}
+        onRetry={() => undefined}
+      />
     ));
     expect(screen.getByRole('heading', { name: 'Host connection lost' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
     disconnected.unmount();
 
     render(() => (
-      <RuntimeStatePanel state="project-picker" health="unauthorized" actionLabel="Sign in" onAction={() => undefined} />
+      <RuntimeStatePanel
+        state="project-picker"
+        health="unauthorized"
+        actionLabel="Sign in"
+        onAction={() => undefined}
+      />
     ));
     expect(screen.getByRole('heading', { name: 'Sign-in required' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();

@@ -170,9 +170,7 @@ export class HostProviderFactory {
       kind: 'ai-sdk',
       configured,
       endpoint:
-        this.#configuration === null
-          ? null
-          : maskProviderEndpoint(this.#configuration.baseUrl),
+        this.#configuration === null ? null : maskProviderEndpoint(this.#configuration.baseUrl),
       // Model ids are non-secret configuration labels, never credentials.
       model: this.#configuration?.model ?? null,
       lastValidation: this.#lastValidation,
@@ -213,9 +211,7 @@ export class HostProviderFactory {
    * diagnostics (empty on success) and updates the readiness validation
    * state; an injected override always validates.
    */
-  async validate(
-    signal?: AbortSignal,
-  ): Promise<readonly ConfigOperationDiagnosticV1[]> {
+  async validate(signal?: AbortSignal): Promise<readonly ConfigOperationDiagnosticV1[]> {
     const stamp = (lastValidation: WorkbenchProjectValidationV1): void => {
       this.#lastValidation = lastValidation;
       this.#lastValidatedAt = new Date().toISOString();
@@ -238,9 +234,7 @@ export class HostProviderFactory {
     }
     if (signal?.aborted) {
       stamp('unvalidated');
-      return [
-        { code: 'PROVIDER_VALIDATION_FAILED', message: 'Provider validation cancelled' },
-      ];
+      return [{ code: 'PROVIDER_VALIDATION_FAILED', message: 'Provider validation cancelled' }];
     }
     try {
       await abortable(provider.complete({ ...VALIDATION_PROBE, signal }), signal);

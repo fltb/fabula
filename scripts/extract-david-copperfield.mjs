@@ -242,7 +242,7 @@ allPass &&= g6;
 // Gate 7: hash matches
 const reRead = readFileSync(OUTPUT_FILE, 'utf-8');
 const g7 = sha256(reRead) === sourceHash;
-results.push({ gate: 'hash matches file', pass: g7, detail: sourceHash.substring(0, 16) + '...' });
+results.push({ gate: 'hash matches file', pass: g7, detail: `${sourceHash.substring(0, 16)}...` });
 allPass &&= g7;
 
 // Gate 8: total wordCount > 100000

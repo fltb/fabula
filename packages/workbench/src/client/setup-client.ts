@@ -153,14 +153,17 @@ const SAFE_MESSAGES: Readonly<Record<WorkbenchSetupErrorCode, string>> = {
   UNKNOWN_FIELD: 'The Host rejected an unsupported setup field.',
 };
 
-const CODE_SET = new Set<WorkbenchSetupErrorCode>(Object.keys(SAFE_MESSAGES) as WorkbenchSetupErrorCode[]);
+const CODE_SET = new Set<WorkbenchSetupErrorCode>(
+  Object.keys(SAFE_MESSAGES) as WorkbenchSetupErrorCode[],
+);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function safeCode(value: unknown): WorkbenchSetupErrorCode | null {
-  if (!isRecord(value) || !isRecord(value.error) || typeof value.error.code !== 'string') return null;
+  if (!isRecord(value) || !isRecord(value.error) || typeof value.error.code !== 'string')
+    return null;
   return CODE_SET.has(value.error.code as WorkbenchSetupErrorCode)
     ? (value.error.code as WorkbenchSetupErrorCode)
     : null;

@@ -61,9 +61,7 @@ export interface YjsPersistencePort {
 }
 
 /** Adapt the typed persistence worker client to the Yjs persistence port. */
-export function createYjsPersistencePort(
-  client: PersistenceWorkerClient,
-): YjsPersistencePort {
+export function createYjsPersistencePort(client: PersistenceWorkerClient): YjsPersistencePort {
   return {
     loadWorkingDocument(key) {
       return client.request('loadWorkingDocument', key);
@@ -638,7 +636,8 @@ export function createYjsGateway(options: YjsGatewayOptions): YjsGateway {
   const auth = options.auth;
   const sessions = options.sessions;
   const now = options.now ?? (() => new Date().toISOString());
-  const core = options.core ?? createYjsWorkingDocumentCore({ persistence: options.persistence, now });
+  const core =
+    options.core ?? createYjsWorkingDocumentCore({ persistence: options.persistence, now });
   /** projectId → (userId → open connection count) for presence refcounting. */
   const presence = new Map<string, Map<string, number>>();
   const connections = new Set<YjsGatewayConnectionImpl>();

@@ -5,6 +5,8 @@
  * module; Hono route handlers (a later slice) consume only its results.
  */
 import { randomUUID } from 'node:crypto';
+import type { ProjectAccessRole } from '../../contracts/configuration.js';
+import { PROJECT_ACCESS_ROLES } from '../../contracts/configuration.js';
 import type {
   AcceptInviteUserResult,
   AuthBackoffState,
@@ -14,8 +16,6 @@ import type {
   PasswordHashRecord,
   SessionState,
 } from '../../contracts/persistence.js';
-import { PROJECT_ACCESS_ROLES } from '../../contracts/configuration.js';
-import type { ProjectAccessRole } from '../../contracts/configuration.js';
 
 import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
 import { type BackoffPolicy, backoffDelayMs, DEFAULT_BACKOFF_POLICY } from './backoff.js';

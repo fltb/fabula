@@ -10,9 +10,7 @@
 // Usage: node scripts/extract-work-index.mjs <work-id>
 //   work-id: dream-of-red-chamber | david-copperfield | four-generations-87
 // ============================================================================
-
-import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -225,7 +223,7 @@ const WORK_CONFIG = {
 const workId = process.argv[2];
 if (!workId || !WORK_CONFIG[workId]) {
   console.error('Usage: node scripts/extract-work-index.mjs <work-id>');
-  console.error('  work-id: ' + Object.keys(WORK_CONFIG).join(' | '));
+  console.error(`  work-id: ${Object.keys(WORK_CONFIG).join(' | ')}`);
   process.exit(1);
 }
 

@@ -13,9 +13,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { PromptAssembler } from '../../src/context/prompt-assembler.ts';
+import type { ProjectReferencePacketV1 } from '../../src/reference.ts';
 import type { ContextPackage, StyleGuidance } from '../../src/types/index.ts';
 import type { StyleMetrics, SurfaceReferencePacket } from '../../src/types/render-surface.ts';
-import type { ProjectReferencePacketV1 } from '../../src/reference.ts';
 
 // ============================================================================
 // Helpers — minimal compliant instances
@@ -180,7 +180,7 @@ describe('PromptAssembler — disclosure & surface sections', () => {
         /## Surface Reference \(Non-authoritative\)[\s\S]*?(?=\n## |$)/,
       );
       expect(sectionMatch).not.toBeNull();
-      const section = sectionMatch![0];
+      const section = sectionMatch?.[0];
 
       // Must contain non-authoritative disclaimer
       expect(section).toMatch(/YAML|scene.contract|non.authoritative|reference.only/i);
@@ -219,12 +219,12 @@ describe('PromptAssembler — disclosure & surface sections', () => {
         referencePacket: MOCK_LIBRARY_PACKET,
       });
       expect(result.userPrompt).toContain('## Reference Library (Non-authoritative)');
-      expect(result.userPrompt).toContain(MOCK_LIBRARY_PACKET.citations[0]!.quote);
-      expect(result.userPrompt).toContain(MOCK_LIBRARY_PACKET.citations[0]!.locator);
+      expect(result.userPrompt).toContain(MOCK_LIBRARY_PACKET.citations[0]?.quote);
+      expect(result.userPrompt).toContain(MOCK_LIBRARY_PACKET.citations[0]?.locator);
 
       const contextBlockMatch = result.userPrompt.match(/```json\n([\s\S]*?)```/);
       expect(contextBlockMatch).not.toBeNull();
-      expect(JSON.parse(contextBlockMatch![1])).not.toHaveProperty('referencePacket');
+      expect(JSON.parse(contextBlockMatch?.[1])).not.toHaveProperty('referencePacket');
     });
   });
 
@@ -246,7 +246,7 @@ describe('PromptAssembler — disclosure & surface sections', () => {
       expect(contextBlockMatch).not.toBeNull();
 
       // Parse the JSON to verify it has no disclosure or surface fields
-      const contextJson = JSON.parse(contextBlockMatch![1]);
+      const contextJson = JSON.parse(contextBlockMatch?.[1]);
       expect(contextJson).not.toHaveProperty('logicalDisclosureSummary');
       expect(contextJson).not.toHaveProperty('previousSceneSummary');
       expect(contextJson).not.toHaveProperty('surfaceReferencePacket');
@@ -261,7 +261,7 @@ describe('PromptAssembler — disclosure & surface sections', () => {
 
       const contextBlockMatch = result.userPrompt.match(/```json\n([\s\S]*?)```/);
       expect(contextBlockMatch).not.toBeNull();
-      const contextJson = JSON.parse(contextBlockMatch![1]);
+      const contextJson = JSON.parse(contextBlockMatch?.[1]);
 
       // Surface data is ONLY in the standalone section, never in the
       // ContextPackage JSON that Pass 2 consumes as authoritative context
@@ -275,7 +275,7 @@ describe('PromptAssembler — disclosure & surface sections', () => {
       // LogicalDisclosureSummaryCompiler which only emits safe
       // aggregate counts, never raw proposition text, IDs, or
       // Knowledge entries (§3.3).
-      const result = assembler.assemble(MINIMAL_CONTEXT, {
+      const _result = assembler.assemble(MINIMAL_CONTEXT, {
         styleGuidance: MINIMAL_STYLE,
         logicalDisclosureSummary: MOCK_DISCLOSURE_SUMMARY,
       });
@@ -361,7 +361,7 @@ describe('PromptAssembler — disclosure & surface sections', () => {
       // The ContextPackage JSON in Pass 2 must NOT contain surface data
       const contextBlockMatch = pass2Prompt.userPrompt.match(/```json\n([\s\S]*?)```/);
       expect(contextBlockMatch).not.toBeNull();
-      const contextJson = JSON.parse(contextBlockMatch![1]);
+      const contextJson = JSON.parse(contextBlockMatch?.[1]);
 
       expect(contextJson).not.toHaveProperty('surfaceReferencePacket');
       expect(contextJson).not.toHaveProperty('surfaceReference');

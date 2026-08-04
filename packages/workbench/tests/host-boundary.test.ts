@@ -8,10 +8,7 @@ import {
   loadArtifactManifest,
   verifyManifestIntegrity,
 } from '../src/host/artifact-manifest.js';
-import {
-  buildLaunchDescriptor,
-  LaunchDescriptorError,
-} from '../src/host/launch-descriptor.js';
+import { buildLaunchDescriptor, LaunchDescriptorError } from '../src/host/launch-descriptor.js';
 import { HostSupervisor } from '../src/host/supervisor.js';
 
 const owned: string[] = [];
@@ -66,18 +63,23 @@ describe('Host artifact manifests and launch descriptors', () => {
     writeFileSync(join(outputRoot, 'host.js'), 'tampered');
     expect(verifyManifestIntegrity(manifest)).toEqual({
       ok: false,
-      errors: [expect.stringContaining('Size mismatch for host.js'), expect.stringContaining('Hash mismatch for host.js')],
+      errors: [
+        expect.stringContaining('Size mismatch for host.js'),
+        expect.stringContaining('Hash mismatch for host.js'),
+      ],
     });
   });
 
   it('rejects artifact paths that escape the output root', () => {
     const root = fixtureRoot();
-    expect(() => buildArtifactManifest({
-      outputRoot: join(root, 'dist', 'host'),
-      packageId: '@novalistically/workbench',
-      entryPoints: { host: '../host.js' },
-      outputFiles: [],
-    })).toThrow(/escapes output root/);
+    expect(() =>
+      buildArtifactManifest({
+        outputRoot: join(root, 'dist', 'host'),
+        packageId: '@novalistically/workbench',
+        entryPoints: { host: '../host.js' },
+        outputFiles: [],
+      }),
+    ).toThrow(/escapes output root/);
   });
 
   it('fails descriptor construction when a required artifact is missing', () => {
@@ -92,11 +94,17 @@ describe('Host artifact manifests and launch descriptors', () => {
     });
     const manifestPath = join(outputRoot, 'artifact-manifest.json');
     writeFileSync(manifestPath, JSON.stringify(manifest));
-    expect(() => buildLaunchDescriptor({
-      manifestPath,
-      env: { HOME: root, XDG_CONFIG_HOME: join(root, 'config'), XDG_STATE_HOME: join(root, 'state') },
-      assetsRootOverride: join(root, 'dist', 'client'),
-    })).toThrow(LaunchDescriptorError);
+    expect(() =>
+      buildLaunchDescriptor({
+        manifestPath,
+        env: {
+          HOME: root,
+          XDG_CONFIG_HOME: join(root, 'config'),
+          XDG_STATE_HOME: join(root, 'state'),
+        },
+        assetsRootOverride: join(root, 'dist', 'client'),
+      }),
+    ).toThrow(LaunchDescriptorError);
   });
 });
 
@@ -104,8 +112,15 @@ describe('Host supervisor fd3 protocol', () => {
   it('uses only fd3 for ready and shutdown frames and bounds lifecycle', async () => {
     const root = fixtureRoot();
     const fakeHost = join(root, 'fake-host.mjs');
-    const build = { version: 1 as const, packageId: '@novalistically/workbench', buildId: 'test-build', protocolVersion: 1 as const };
-    writeFileSync(fakeHost, `
+    const build = {
+      version: 1 as const,
+      packageId: '@novalistically/workbench',
+      buildId: 'test-build',
+      protocolVersion: 1 as const,
+    };
+    writeFileSync(
+      fakeHost,
+      `
       import { createReadStream, writeSync } from 'node:fs';
       const build = ${JSON.stringify(build)};
       writeSync(3, Buffer.from(JSON.stringify({ version: 1, type: 'ready', endpoint: 'http://127.0.0.1:0', build, pid: process.pid, listenerMode: 'listener', bootstrapRequired: false }) + '\\n'));
@@ -121,14 +136,25 @@ describe('Host supervisor fd3 protocol', () => {
         }
         buffer = buffer.split('\\n').at(-1) ?? '';
       });
-    `);
+    `,
+    );
     chmodSync(fakeHost, 0o700);
     const descriptor = {
       version: 1 as const,
       manifestPath: join(root, 'manifest.json'),
       manifest: {} as never,
-      hostEntry: { path: 'fake-host.mjs', hash: createHash('sha256').update(readFileSync(fakeHost)).digest('hex'), size: readFileSync(fakeHost).byteLength, entryPointFor: 'host' },
-      workerEntry: { path: 'worker.js', hash: '0'.repeat(64), size: 0, entryPointFor: 'persistence-worker' },
+      hostEntry: {
+        path: 'fake-host.mjs',
+        hash: createHash('sha256').update(readFileSync(fakeHost)).digest('hex'),
+        size: readFileSync(fakeHost).byteLength,
+        entryPointFor: 'host',
+      },
+      workerEntry: {
+        path: 'worker.js',
+        hash: '0'.repeat(64),
+        size: 0,
+        entryPointFor: 'persistence-worker',
+      },
       paths: {
         nodePath: process.execPath,
         hostEntry: fakeHost,
@@ -142,12 +168,25 @@ describe('Host supervisor fd3 protocol', () => {
       mode: 'listener' as const,
       dev: true,
     };
-    const supervisor = new HostSupervisor({ descriptor, startupTimeoutMs: 2_000, terminationGraceMs: 500 });
+    const supervisor = new HostSupervisor({
+      descriptor,
+      startupTimeoutMs: 2_000,
+      terminationGraceMs: 500,
+    });
     await expect(supervisor.start()).resolves.toMatchObject({ listenerMode: 'listener', build });
-    await expect(supervisor.shutdown('test-shutdown', 500)).resolves.toEqual({ requestId: 'test-shutdown', reason: 'shutdown' });
+    await expect(supervisor.shutdown('test-shutdown', 500)).resolves.toEqual({
+      requestId: 'test-shutdown',
+      reason: 'shutdown',
+    });
     expect(supervisor.state).toBe('stopped');
-    await expect(supervisor.restart('test-restart', 500)).resolves.toMatchObject({ listenerMode: 'listener', build });
-    await expect(supervisor.shutdown('test-restart-stop', 500)).resolves.toEqual({ requestId: 'test-restart-stop', reason: 'shutdown' });
+    await expect(supervisor.restart('test-restart', 500)).resolves.toMatchObject({
+      listenerMode: 'listener',
+      build,
+    });
+    await expect(supervisor.shutdown('test-restart-stop', 500)).resolves.toEqual({
+      requestId: 'test-restart-stop',
+      reason: 'shutdown',
+    });
     expect(supervisor.state).toBe('stopped');
   });
 });

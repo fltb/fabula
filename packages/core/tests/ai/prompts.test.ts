@@ -3,11 +3,9 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import type { SceneRenderInput } from '../../src/ai/prompts/scene-render.ts';
 import { buildSceneRenderPrompt } from '../../src/ai/prompts/scene-render.ts';
 import type { ThreadStatusInput } from '../../src/ai/prompts/thread-status.ts';
 import { buildThreadStatusPrompt } from '../../src/ai/prompts/thread-status.ts';
-import type { Message } from '../../src/ai/types.ts';
 import type { ContextPackage, StyleGuidance } from '../../src/types/index.ts';
 
 // ============================================================================

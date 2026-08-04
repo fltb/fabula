@@ -104,7 +104,7 @@ function makeResult(
 
 function makeProducedResult(prose: string, eventId = 'E0'): AnalysisResult {
   const payload = makePayload();
-  payload['checklistResults'] = []; // checklistResults is required by the combined schema
+  payload.checklistResults = []; // checklistResults is required by the combined schema
   return makeResult(makeObservations(payload, prose), payload, prose, eventId);
 }
 
@@ -136,7 +136,7 @@ function makeAmbiguousResult(prose: string, eventId = 'E0'): AnalysisResult {
   const payload = makePayload();
   const { conflictAnalysis: _dropped, ...rest } = payload;
   const observations = makeObservations(rest, prose);
-  observations['conflictAnalysis'] = {
+  observations.conflictAnalysis = {
     disposition: 'ambiguous',
     alternatives: [
       {
@@ -150,7 +150,7 @@ function makeAmbiguousResult(prose: string, eventId = 'E0'): AnalysisResult {
     ],
     evidence: [PROSE.slice(0, 10)],
   };
-  observations['checklistResults'] = {
+  observations.checklistResults = {
     disposition: 'abstained',
     reason: 'no narrative checklist was declared for this scene',
     evidence: [],
@@ -312,8 +312,8 @@ describe('observation ↔ payload pairing', () => {
     const result = makeProducedResult(PROSE);
     const parse = parseWithErrors(result, { expectedProtocol: result.protocol, prose: PROSE });
     expect(parse.result).not.toBeNull();
-    expect(parse.result!.eventId).toBe('E0');
-    expect(parse.result!.observations['tenseDetected']).toEqual({
+    expect(parse.result?.eventId).toBe('E0');
+    expect(parse.result?.observations.tenseDetected).toEqual({
       disposition: 'produced',
       evidence: [PROSE.slice(0, 24)],
     });
@@ -321,7 +321,7 @@ describe('observation ↔ payload pairing', () => {
 
   it('rejects a produced observation whose canonical payload is missing', () => {
     const result = makeProducedResult(PROSE);
-    delete result.analysis['tenseDetected']; // produced claims a payload it does not deliver
+    delete result.analysis.tenseDetected; // produced claims a payload it does not deliver
     const parse = parseWithErrors(result, { prose: PROSE });
     expect(parse.result).toBeNull();
     expect(issueMessages(parse).join('\n')).toContain('requires a schema-valid payload');
@@ -331,8 +331,8 @@ describe('observation ↔ payload pairing', () => {
     const result = makeAllAbstainedResult(PROSE);
     const parse = parseWithErrors(result, { prose: PROSE });
     expect(parse.result).not.toBeNull();
-    expect(parse.result!.analysis).toEqual({});
-    for (const obs of Object.values(parse.result!.observations)) {
+    expect(parse.result?.analysis).toEqual({});
+    for (const obs of Object.values(parse.result?.observations)) {
       expect(obs.disposition).toBe('abstained');
       if (obs.disposition === 'abstained') {
         expect(obs.reason.length).toBeGreaterThan(0);
@@ -342,8 +342,8 @@ describe('observation ↔ payload pairing', () => {
 
   it('rejects an abstained observation while a canonical payload is present', () => {
     const result = makeAllAbstainedResult(PROSE);
-    result.analysis['quality'] = makePayload()['quality']; // abstained but payload present
-    result.observations['quality'] = {
+    result.analysis.quality = makePayload().quality; // abstained but payload present
+    result.observations.quality = {
       disposition: 'abstained',
       reason: 'cannot measure',
       evidence: [],
@@ -359,17 +359,17 @@ describe('observation ↔ payload pairing', () => {
     const result = makeAmbiguousResult(PROSE);
     const parse = parseWithErrors(result, { prose: PROSE });
     expect(parse.result).not.toBeNull();
-    const obs = parse.result!.observations['conflictAnalysis'];
+    const obs = parse.result?.observations.conflictAnalysis;
     expect(obs.disposition).toBe('ambiguous');
     if (obs.disposition === 'ambiguous') {
       expect(obs.alternatives.length).toBeGreaterThanOrEqual(2);
     }
-    expect(parse.result!.analysis['conflictAnalysis']).toBeUndefined();
+    expect(parse.result?.analysis.conflictAnalysis).toBeUndefined();
   });
 
   it('rejects an ambiguous observation with a single alternative', () => {
     const result = makeAmbiguousResult(PROSE);
-    result.observations['conflictAnalysis'] = {
+    result.observations.conflictAnalysis = {
       disposition: 'ambiguous',
       alternatives: [{ summary: 'only one reading', evidence: [PROSE.slice(0, 10)] }],
       evidence: [],
@@ -380,7 +380,7 @@ describe('observation ↔ payload pairing', () => {
 
   it('rejects an ambiguous observation while a canonical payload is present', () => {
     const result = makeAmbiguousResult(PROSE);
-    result.analysis['conflictAnalysis'] = { primaryType: 'none', resolutionAchieved: true };
+    result.analysis.conflictAnalysis = { primaryType: 'none', resolutionAchieved: true };
     const parse = parseWithErrors(result, { prose: PROSE });
     expect(parse.result).toBeNull();
     expect(issueMessages(parse).join('\n')).toContain(
@@ -390,7 +390,7 @@ describe('observation ↔ payload pairing', () => {
 
   it('rejects an observation for an unknown analysis field', () => {
     const result = makeProducedResult(PROSE);
-    result.observations['bogusField'] = { disposition: 'produced', evidence: [PROSE.slice(0, 10)] };
+    result.observations.bogusField = { disposition: 'produced', evidence: [PROSE.slice(0, 10)] };
     const parse = parseWithErrors(result, { prose: PROSE });
     expect(parse.result).toBeNull();
     expect(issueMessages(parse).join('\n')).toContain('unknown analysis field');
@@ -398,7 +398,7 @@ describe('observation ↔ payload pairing', () => {
 
   it('rejects a payload field without a matching observation', () => {
     const result = makeProducedResult(PROSE);
-    delete result.observations['pov']; // payload still carries pov
+    delete result.observations.pov; // payload still carries pov
     const parse = parseWithErrors(result, { prose: PROSE });
     expect(parse.result).toBeNull();
     expect(issueMessages(parse).join('\n')).toContain('no matching observations');
@@ -406,8 +406,8 @@ describe('observation ↔ payload pairing', () => {
 
   it('rejects a missing observation for a required active field', () => {
     const result = makeProducedResult(PROSE);
-    delete result.observations['pov'];
-    delete result.analysis['pov']; // field absent entirely — still must carry an observation
+    delete result.observations.pov;
+    delete result.analysis.pov; // field absent entirely — still must carry an observation
     const parse = parseWithErrors(result, { prose: PROSE });
     expect(parse.result).toBeNull();
     expect(issueMessages(parse).join('\n')).toContain('Missing observation for active field');
@@ -421,7 +421,7 @@ describe('observation ↔ payload pairing', () => {
 describe('exact-quote evidence', () => {
   it('rejects an evidence quote that is not an exact substring of the prose', () => {
     const result = makeProducedResult(PROSE);
-    result.observations['pov'] = {
+    result.observations.pov = {
       disposition: 'produced',
       evidence: ['this paraphrase is not in the prose at all'],
     };
@@ -432,7 +432,7 @@ describe('exact-quote evidence', () => {
 
   it('checks every alternative evidence in an ambiguous observation', () => {
     const result = makeAmbiguousResult(PROSE);
-    const obs = result.observations['conflictAnalysis'];
+    const obs = result.observations.conflictAnalysis;
     if (obs.disposition === 'ambiguous') {
       obs.alternatives[0].evidence = ['fabricated quote that never appears'];
     }
@@ -443,7 +443,7 @@ describe('exact-quote evidence', () => {
 
   it('does not require exact quotes when the parser has no prose', () => {
     const result = makeProducedResult(PROSE);
-    result.observations['pov'] = {
+    result.observations.pov = {
       disposition: 'produced',
       evidence: ['any string at all is fine without prose'],
     };
@@ -523,7 +523,7 @@ describe('retry-with-feedback', () => {
     // Produced observation for tenseDetected, but the canonical payload is
     // missing — pairing fails on every sub-attempt no matter the feedback.
     const result = makeProducedResult(PROSE);
-    delete result.analysis['tenseDetected'];
+    delete result.analysis.tenseDetected;
     const entry: MockPass2Entry = { prose: PROSE, analysis: result };
 
     const pipeline = buildPipeline(entry, 1);
@@ -695,8 +695,8 @@ describe('sentinel absence', () => {
     const built: BuildAnalysisPromptResult = buildAnalysisPrompt(input(), material(PROSE));
     const echoed = extractExpectedProtocol(built.messages);
     expect(echoed).not.toBeNull();
-    expect(echoed!.analysisPromptHash).toBe(built.protocol.analysisPromptHash);
-    expect(echoed!.analysisPromptHash).not.toBe('<analysis-prompt-hash>');
+    expect(echoed?.analysisPromptHash).toBe(built.protocol.analysisPromptHash);
+    expect(echoed?.analysisPromptHash).not.toBe('<analysis-prompt-hash>');
     expect(echoed).toEqual(built.protocol);
   });
 });
@@ -1015,7 +1015,7 @@ describe('disposition semantics', () => {
     const validation = aggregator.validatePost(PROSE, event, world, result, { pov: 'error' });
     const povIssue = validation.errors.find((e) => e.validator === 'pov');
     expect(povIssue).toBeDefined();
-    expect(povIssue!.kind).toBe('analysis_uncertainty');
+    expect(povIssue?.kind).toBe('analysis_uncertainty');
     expect(validation.warnings.length).toBeGreaterThan(0);
     for (const warning of validation.warnings) {
       expect(warning.severity).toBe('warning');

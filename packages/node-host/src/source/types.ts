@@ -46,6 +46,7 @@ export class SourceInputError extends Error {
     this.name = 'SourceInputError';
   }
 }
+
 import type { ReferenceLibraryItemV1 as ProtocolReferenceLibraryItemV1 } from '@novalistically/workbench-protocol';
 
 /** The portable reference manifest is the only index stored beside project YAML. */

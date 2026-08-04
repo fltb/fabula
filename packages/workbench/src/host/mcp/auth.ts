@@ -25,21 +25,19 @@
  * {@link mcpAuthFailureStatus}.
  */
 import { MCP_ADMIN_SCOPE, PROJECT_ACCESS_ROLE_GRANTS } from '../../contracts/configuration.js';
-
+import type { AuthUserRecord } from '../../contracts/persistence.js';
 import type {
   AgentCapabilityFailureCode,
   AgentCapabilityGrant,
   AgentCapabilityService,
 } from '../agent/index.js';
 import type { LocalAuthService } from '../auth/index.js';
-import type { AuthUserRecord } from '../../contracts/persistence.js';
-import type { McpDevicePairingService } from './device-pairing.js';
-
 import type {
   ProjectAccessPrincipalRole,
   ProjectAccessRole,
   ProjectAccessService,
 } from '../project-access-service.js';
+import type { McpDevicePairingService } from './device-pairing.js';
 
 /** Server-derived identity for one authorized MCP request. No token, no digest. */
 export interface McpAuthorizedCaller {
@@ -56,7 +54,6 @@ export interface McpAuthorizedCaller {
   /** Present for device-credential callers; browser callers carry no device identity. */
   readonly device?: { readonly deviceId: string };
 }
-
 
 /**
  * Typed, nonsecret MCP authentication denials. Codes split into two status
@@ -124,7 +121,6 @@ export interface McpAuthorizationPortOptions {
   /** Timestamp source for session expiry checks; defaults to the host clock. */
   readonly now?: () => string;
 }
-
 
 const FAILURE_MESSAGES: Record<McpAuthFailureCode, string> = {
   SESSION_NOT_FOUND: 'The session is missing, revoked, or unknown.',
@@ -211,10 +207,7 @@ function requiredProjectRole(
     if (scope === MCP_ADMIN_SCOPE) return 'admin';
     const scopeRole = MCP_SCOPE_REQUIRED_ROLE[scope];
     if (scopeRole === undefined) return null;
-    if (
-      PROJECT_ACCESS_ROLE_GRANTS[scopeRole].rank >
-      PROJECT_ACCESS_ROLE_GRANTS[required].rank
-    ) {
+    if (PROJECT_ACCESS_ROLE_GRANTS[scopeRole].rank > PROJECT_ACCESS_ROLE_GRANTS[required].rank) {
       required = scopeRole;
     }
   }
@@ -267,7 +260,6 @@ export function createMcpAuthorizationPort(
       }
       const projectRequiredRole = requiredRole === 'admin' ? 'reader' : requiredRole;
 
-
       if (sessionId === null) {
         // Device mode: the credential is its own grant; no browser session.
         if (options.devices === undefined || options.owner === undefined) {
@@ -292,7 +284,8 @@ export function createMcpAuthorizationPort(
           projectRequiredRole,
           'owner',
         );
-        if (deviceProjectGrant === null) return { ok: false, failure: failure('INSUFFICIENT_ROLE') };
+        if (deviceProjectGrant === null)
+          return { ok: false, failure: failure('INSUFFICIENT_ROLE') };
 
         return {
           ok: true,
@@ -314,7 +307,6 @@ export function createMcpAuthorizationPort(
             },
           },
         };
-
       }
 
       if (sessionId.length === 0) {
@@ -330,7 +322,6 @@ export function createMcpAuthorizationPort(
         projectRequiredRole,
       );
       if (sessionProjectGrant === null) return { ok: false, failure: failure('INSUFFICIENT_ROLE') };
-
 
       const validation = await options.capabilities.validate({ token, projectId, scopes });
       if (!validation.ok) {

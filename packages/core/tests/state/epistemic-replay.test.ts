@@ -160,10 +160,10 @@ describe('EpistemicLedger wiring during replay', () => {
     const state = engine.replay([]);
 
     expect(state.epistemicLedger).toBeDefined();
-    expect(state.epistemicLedger!.claims).toEqual({});
-    expect(state.epistemicLedger!.bySubject).toEqual({});
-    expect(state.epistemicLedger!.byProposition).toEqual({});
-    expect(state.epistemicLedger!.actLog).toEqual([]);
+    expect(state.epistemicLedger?.claims).toEqual({});
+    expect(state.epistemicLedger?.bySubject).toEqual({});
+    expect(state.epistemicLedger?.byProposition).toEqual({});
+    expect(state.epistemicLedger?.actLog).toEqual([]);
   });
 
   it('initializes propositionCatalog after replay of empty events', () => {
@@ -171,9 +171,9 @@ describe('EpistemicLedger wiring during replay', () => {
     const state = engine.replay([]);
 
     expect(state.propositionCatalog).toBeDefined();
-    expect(state.propositionCatalog!.version).toBe(0);
-    expect(state.propositionCatalog!.propositions).toEqual({});
-    expect(state.propositionCatalog!.dependencyGraph).toEqual({});
+    expect(state.propositionCatalog?.version).toBe(0);
+    expect(state.propositionCatalog?.propositions).toEqual({});
+    expect(state.propositionCatalog?.dependencyGraph).toEqual({});
   });
 
   it('replay works end-to-end without the legacy knowledge shim', () => {

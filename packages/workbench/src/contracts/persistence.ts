@@ -348,13 +348,7 @@ export interface AuthoringStateRecord {
 // ─── V2: append-only audit ──────────────────────────────────────────────────
 
 /** Which surface produced an audited effect. */
-export type AuditSurface =
-  | 'browser'
-  | 'agent'
-  | 'mcp'
-  | 'filesystem'
-  | 'submit'
-  | 'system';
+export type AuditSurface = 'browser' | 'agent' | 'mcp' | 'filesystem' | 'submit' | 'system';
 
 /**
  * One append-only audit entry. Records provenance (actor/surface/operation),
@@ -448,8 +442,7 @@ export const NATIVE_REVISION_TERMINAL_PHASE_VALUES = [
   'conflict',
   'recovery-required',
 ] as const;
-export type NativeRevisionTerminalPhase =
-  (typeof NATIVE_REVISION_TERMINAL_PHASE_VALUES)[number];
+export type NativeRevisionTerminalPhase = (typeof NATIVE_REVISION_TERMINAL_PHASE_VALUES)[number];
 export type WorkingDocumentPhase = 'active' | 'tombstone';
 export type MaterializationEntryState = 'pending' | 'applied' | 'external';
 export type RevisionMirrorExportState = 'pending' | 'exported' | 'failed';
@@ -548,16 +541,18 @@ export interface RevisionMirrorExportRecord {
   updatedAt: string;
 }
 
-type PersistenceOperationKeyParity =
-  [Exclude<keyof PersistencePayloads, keyof PersistenceResults>,
-   Exclude<keyof PersistenceResults, keyof PersistencePayloads>] extends [never, never]
-    ? true
-    : false;
+type PersistenceOperationKeyParity = [
+  Exclude<keyof PersistencePayloads, keyof PersistenceResults>,
+  Exclude<keyof PersistenceResults, keyof PersistencePayloads>,
+] extends [never, never]
+  ? true
+  : false;
 type AssertPersistenceOperationKeyParity<T extends true> = T;
 /** Operation keys shared by the payload and result maps. */
-export type PersistenceOperation = AssertPersistenceOperationKeyParity<PersistenceOperationKeyParity> extends true
-  ? keyof PersistencePayloads & keyof PersistenceResults
-  : never;
+export type PersistenceOperation =
+  AssertPersistenceOperationKeyParity<PersistenceOperationKeyParity> extends true
+    ? keyof PersistencePayloads & keyof PersistenceResults
+    : never;
 
 export interface PersistencePayloads {
   persistYjsUpdate: PersistYjsUpdateInput;

@@ -10,8 +10,8 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync, statSync } from 'node:fs';
-import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { arch, platform } from 'node:os';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 
 import { HOST_PROTOCOL_VERSION_V1 } from '@novalistically/workbench-protocol';
 
@@ -64,9 +64,7 @@ export function buildManifestIdentity(
   buildId: string | undefined,
 ): ArtifactManifestBuildIdentityV1 {
   const id =
-    buildId !== undefined && /^[A-Za-z0-9._-]{1,128}$/.test(buildId)
-      ? buildId
-      : 'development';
+    buildId !== undefined && /^[A-Za-z0-9._-]{1,128}$/.test(buildId) ? buildId : 'development';
   return {
     version: 1,
     packageId,
@@ -109,12 +107,7 @@ function artifactPath(outputRoot: string, entryPath: string): string {
   const root = resolve(outputRoot);
   const absolute = resolve(root, entryPath);
   const rel = relative(root, absolute);
-  if (
-    rel.length === 0 ||
-    isAbsolute(rel) ||
-    rel === '..' ||
-    rel.startsWith(`..${sep}`)
-  ) {
+  if (rel.length === 0 || isAbsolute(rel) || rel === '..' || rel.startsWith(`..${sep}`)) {
     throw new ArtifactManifestError(
       'MANIFEST_PATH_INVALID',
       `Artifact output path escapes output root: ${entryPath}`,
@@ -133,15 +126,16 @@ export interface BuildManifestOptions {
   readonly outputFiles: readonly string[];
 }
 
-export function buildArtifactManifest(
-  options: BuildManifestOptions,
-): HostArtifactManifestV1 {
+export function buildArtifactManifest(options: BuildManifestOptions): HostArtifactManifestV1 {
   const outputRoot = resolve(options.outputRoot);
   const outputs: ArtifactManifestEntryV1[] = [];
   const entryByPath = new Map<string, string>();
   for (const [name, filePath] of Object.entries(options.entryPoints)) {
     if (!/^[A-Za-z0-9._-]{1,128}$/.test(name)) {
-      throw new ArtifactManifestError('MANIFEST_ENTRY_INVALID', `Invalid artifact entry point: ${name}`);
+      throw new ArtifactManifestError(
+        'MANIFEST_ENTRY_INVALID',
+        `Invalid artifact entry point: ${name}`,
+      );
     }
     entryByPath.set(relativeArtifactPath(outputRoot, filePath), name);
   }
@@ -202,10 +196,7 @@ export function loadArtifactManifest(manifestPath: string): HostArtifactManifest
   return validateArtifactManifest(raw, manifestPath);
 }
 
-function validateArtifactManifest(
-  value: unknown,
-  source: string,
-): HostArtifactManifestV1 {
+function validateArtifactManifest(value: unknown, source: string): HostArtifactManifestV1 {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     throw new ArtifactManifestError(
       'MANIFEST_INVALID',
@@ -221,15 +212,9 @@ function validateArtifactManifest(
     );
   }
   if (typeof obj.manifestId !== 'string' || obj.manifestId.length === 0) {
-    throw new ArtifactManifestError(
-      'MANIFEST_INVALID',
-      'manifestId must be a non-empty string',
-    );
+    throw new ArtifactManifestError('MANIFEST_INVALID', 'manifestId must be a non-empty string');
   }
-  if (
-    typeof obj.buildTimestamp !== 'string' ||
-    Number.isNaN(Date.parse(obj.buildTimestamp))
-  ) {
+  if (typeof obj.buildTimestamp !== 'string' || Number.isNaN(Date.parse(obj.buildTimestamp))) {
     throw new ArtifactManifestError(
       'MANIFEST_INVALID',
       'buildTimestamp must be an ISO timestamp string',
@@ -244,26 +229,17 @@ function validateArtifactManifest(
 
   const build = obj.build;
   if (typeof build !== 'object' || build === null) {
-    throw new ArtifactManifestError(
-      'MANIFEST_INVALID',
-      'build must be an object',
-    );
+    throw new ArtifactManifestError('MANIFEST_INVALID', 'build must be an object');
   }
   const b = build as Record<string, unknown>;
   if (
     Object.keys(b).sort().join(',') !==
-      'arch,buildId,nodeVersion,packageId,platform,protocolVersion,version'
+    'arch,buildId,nodeVersion,packageId,platform,protocolVersion,version'
   ) {
-    throw new ArtifactManifestError(
-      'MANIFEST_INVALID',
-      'build contains unknown or missing fields',
-    );
+    throw new ArtifactManifestError('MANIFEST_INVALID', 'build contains unknown or missing fields');
   }
   if (b.version !== 1) {
-    throw new ArtifactManifestError(
-      'MANIFEST_INVALID',
-      'build.version must be 1',
-    );
+    throw new ArtifactManifestError('MANIFEST_INVALID', 'build.version must be 1');
   }
   if (typeof b.packageId !== 'string' || b.packageId.length === 0) {
     throw new ArtifactManifestError(
@@ -272,10 +248,7 @@ function validateArtifactManifest(
     );
   }
   if (typeof b.buildId !== 'string' || b.buildId.length === 0) {
-    throw new ArtifactManifestError(
-      'MANIFEST_INVALID',
-      'build.buildId must be a non-empty string',
-    );
+    throw new ArtifactManifestError('MANIFEST_INVALID', 'build.buildId must be a non-empty string');
   }
   if (b.protocolVersion !== HOST_PROTOCOL_VERSION_V1) {
     throw new ArtifactManifestError(
@@ -284,38 +257,23 @@ function validateArtifactManifest(
     );
   }
   if (typeof b.nodeVersion !== 'string') {
-    throw new ArtifactManifestError(
-      'MANIFEST_INVALID',
-      'build.nodeVersion must be a string',
-    );
+    throw new ArtifactManifestError('MANIFEST_INVALID', 'build.nodeVersion must be a string');
   }
   if (typeof b.platform !== 'string') {
-    throw new ArtifactManifestError(
-      'MANIFEST_INVALID',
-      'build.platform must be a string',
-    );
+    throw new ArtifactManifestError('MANIFEST_INVALID', 'build.platform must be a string');
   }
   if (typeof b.arch !== 'string') {
-    throw new ArtifactManifestError(
-      'MANIFEST_INVALID',
-      'build.arch must be a string',
-    );
+    throw new ArtifactManifestError('MANIFEST_INVALID', 'build.arch must be a string');
   }
 
   if (!Array.isArray(obj.outputs)) {
-    throw new ArtifactManifestError(
-      'MANIFEST_INVALID',
-      'outputs must be an array',
-    );
+    throw new ArtifactManifestError('MANIFEST_INVALID', 'outputs must be an array');
   }
   const validatedOutputs: ArtifactManifestEntryV1[] = [];
   const outputPaths = new Set<string>();
   for (const entry of obj.outputs) {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-      throw new ArtifactManifestError(
-        'MANIFEST_INVALID',
-        'each output entry must be an object',
-      );
+      throw new ArtifactManifestError('MANIFEST_INVALID', 'each output entry must be an object');
     }
     const e = entry as Record<string, unknown>;
     const keys = Object.keys(e).sort().join(',');
@@ -421,14 +379,10 @@ export function verifyManifestIntegrity(
       const stat = statSync(absPath);
       const actualHash = createHash('sha256').update(readFileSync(absPath)).digest('hex');
       if (stat.size !== entry.size) {
-        errors.push(
-          `Size mismatch for ${entry.path}: expected ${entry.size}, got ${stat.size}`,
-        );
+        errors.push(`Size mismatch for ${entry.path}: expected ${entry.size}, got ${stat.size}`);
       }
       if (actualHash !== entry.hash) {
-        errors.push(
-          `Hash mismatch for ${entry.path}: expected ${entry.hash}, got ${actualHash}`,
-        );
+        errors.push(`Hash mismatch for ${entry.path}: expected ${entry.hash}, got ${actualHash}`);
       }
     } catch (error) {
       errors.push(`Cannot read ${entry.path}: ${(error as Error).message}`);

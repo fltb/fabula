@@ -12,9 +12,9 @@ import type {
   BrowserGraphRouteSelectorV1,
   BrowserProjectListV1,
   BrowserProjectOverviewV1,
-  BrowserSessionPrincipalV1,
-  BrowserProjectReferenceListV1,
   BrowserProjectReferenceListQueryV1,
+  BrowserProjectReferenceListV1,
+  BrowserSessionPrincipalV1,
   SourceStudioStateV1,
   WorkbenchGraphProjectionV1,
 } from '../contracts/index.js';

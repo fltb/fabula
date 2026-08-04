@@ -384,7 +384,7 @@ function applyOperation(state: RuleRuntimeState, tx: RuleTransaction, nodeId: st
     case 'remove_exception':
       if (tx.exception) {
         state.exceptions = state.exceptions.filter(
-          (e) => e.exceptionId !== tx.exception!.exceptionId,
+          (e) => e.exceptionId !== tx.exception?.exceptionId,
         );
       }
       break;

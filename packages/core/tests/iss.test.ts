@@ -2,10 +2,10 @@
 // ISS (Input Structure Score) Tests
 // ============================================================================
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { InMemoryEntityRegistry } from '../src/entity/index.js';
 import { calculateISS, detectAntiPatterns, validateStrict } from '../src/iss/index.js';
-import type { Entity, NarrativeEvent, RuleDefinition } from '../src/types/index.js';
+import type { NarrativeEvent, RuleDefinition } from '../src/types/index.js';
 
 function makeEvent(overrides: Partial<NarrativeEvent> = {}): NarrativeEvent {
   return {
@@ -134,8 +134,11 @@ describe('calculateISS', () => {
       rules,
     });
 
-    const entityDim = result.dimensions.find((d) => d.name === DIM_ENTITY)!;
+    const entityDim = result.dimensions.find((d) => d.name === DIM_ENTITY);
     expect(entityDim).toBeDefined();
+    if (!entityDim) {
+      throw new Error('Expected entity dimension');
+    }
     expect(entityDim.score).toBeLessThan(entityDim.max);
   });
 
@@ -162,8 +165,11 @@ describe('calculateISS', () => {
       rules,
     });
 
-    const ruleDim = result.dimensions.find((d) => d.name === DIM_RULE)!;
+    const ruleDim = result.dimensions.find((d) => d.name === DIM_RULE);
     expect(ruleDim).toBeDefined();
+    if (!ruleDim) {
+      throw new Error('Expected rule dimension');
+    }
     expect(ruleDim.score).toBe(0);
   });
 
@@ -195,8 +201,11 @@ describe('calculateISS', () => {
       rules,
     });
 
-    const postDim = result.dimensions.find((d) => d.name === DIM_POSTCOND)!;
+    const postDim = result.dimensions.find((d) => d.name === DIM_POSTCOND);
     expect(postDim).toBeDefined();
+    if (!postDim) {
+      throw new Error('Expected postcondition dimension');
+    }
     expect(postDim.score).toBeLessThan(postDim.max);
   });
 });
@@ -232,7 +241,7 @@ describe('detectAntiPatterns', () => {
       rules,
     });
 
-    const emptyIssues = issues.filter(
+    const _emptyIssues = issues.filter(
       (i) =>
         i.message.includes('空场景') ||
         i.message.includes('empty') ||

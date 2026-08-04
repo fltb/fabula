@@ -29,6 +29,19 @@ export {
   DEFAULT_CAPABILITY_TTL_MS,
 } from './capability-service.js';
 export type {
+  AgentAuditAppendInput,
+  AgentAuditListQuery,
+  AgentDurableAuditOptions,
+} from './durable-audit.js';
+export {
+  AGENT_AUDIT_MAX_DETAIL_CHARACTERS,
+  AGENT_AUDIT_MAX_LIST_LIMIT,
+  AgentAuditInputError,
+  AgentDurableAudit,
+  createAgentDurableAudit,
+  createDurableAuditSink,
+} from './durable-audit.js';
+export type {
   AgentAppliedTicket,
   AgentCommandServiceOptions,
   AgentDocumentPort,
@@ -47,22 +60,6 @@ export {
   createAgentCommandService,
   MAX_TRACKED_EFFECT_TICKETS,
 } from './edit-service.js';
-export type {
-  AgentTaskProvider,
-  AgentTaskRequest,
-  AgentTaskResult,
-  AgentTaskServiceOptions,
-} from './task-service.js';
-export {
-  AGENT_TASK_MAX_OUTPUT_CHARACTERS,
-  AGENT_TASK_MAX_PROMPT_CHARACTERS,
-  AGENT_TASK_MAX_TEMPERATURE,
-  AGENT_TASK_MIN_TEMPERATURE,
-  AgentTaskInputError,
-  AgentTaskService,
-  errorCodeOf,
-  errorMessageOf,
-} from './task-service.js';
 export type {
   AgentSuggestionApplyInput,
   AgentSuggestionChangeV1,
@@ -90,15 +87,18 @@ export {
   validateSuggestionChanges,
 } from './suggestion-service.js';
 export type {
-  AgentAuditAppendInput,
-  AgentAuditListQuery,
-  AgentDurableAuditOptions,
-} from './durable-audit.js';
+  AgentTaskProvider,
+  AgentTaskRequest,
+  AgentTaskResult,
+  AgentTaskServiceOptions,
+} from './task-service.js';
 export {
-  AGENT_AUDIT_MAX_DETAIL_CHARACTERS,
-  AGENT_AUDIT_MAX_LIST_LIMIT,
-  AgentAuditInputError,
-  AgentDurableAudit,
-  createAgentDurableAudit,
-  createDurableAuditSink,
-} from './durable-audit.js';
+  AGENT_TASK_MAX_OUTPUT_CHARACTERS,
+  AGENT_TASK_MAX_PROMPT_CHARACTERS,
+  AGENT_TASK_MAX_TEMPERATURE,
+  AGENT_TASK_MIN_TEMPERATURE,
+  AgentTaskInputError,
+  AgentTaskService,
+  errorCodeOf,
+  errorMessageOf,
+} from './task-service.js';

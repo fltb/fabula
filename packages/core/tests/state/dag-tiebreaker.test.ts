@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildStoryOrderIndex } from '../../src/state/dag.ts';
 import type { Fact, NarrativeEvent } from '../../src/types/index.ts';
 
-function fact(entityId: string, attribute: string, value: unknown): Fact {
+function _fact(entityId: string, attribute: string, value: unknown): Fact {
   return {
     id: `${entityId}.${attribute}`,
     entityId,
@@ -51,8 +51,8 @@ describe('narrativeOrder is not used as tiebreaker', () => {
     // E_alpha has narrativeOrder=5, E_zeta has narrativeOrder=1
     // Old behavior: E_zeta first (narrativeOrder 1 < 5)
     // New behavior: E_alpha first (lexicographic "E_alpha" < "E_zeta")
-    const alpha = event('E_alpha', 1, 5);
-    const zeta = event('E_zeta', 1, 1);
+    const _alpha = event('E_alpha', 1, 5);
+    const _zeta = event('E_zeta', 1, 1);
     // Same storyTime → no temporal constraint → event ID tiebreaker
     const order = buildStoryOrderIndex(null, ['E_alpha', 'E_zeta'], new Map(), new Map());
     // "E_alpha" < "E_zeta" lexicographically
@@ -64,8 +64,8 @@ describe('narrativeOrder is not used as tiebreaker', () => {
   it('narrativeOrder does not override storyTime ordering', () => {
     // Event with low narrativeOrder but late storyTime should come AFTER
     // event with high narrativeOrder but early storyTime
-    const early = event('early', 1, 10); // storyTime day_1, narrativeOrder 10
-    const late = event('late', 5, 1); // storyTime day_5, narrativeOrder 1
+    const _early = event('early', 1, 10); // storyTime day_1, narrativeOrder 10
+    const _late = event('late', 5, 1); // storyTime day_5, narrativeOrder 1
     // Different storyTime → temporal edge from early to late
     const adjacency = new Map<string, string[]>([['early', ['late']]]);
     const order = buildStoryOrderIndex(null, ['early', 'late'], adjacency, new Map());

@@ -417,7 +417,12 @@ describe('boundary/replay equivalence', () => {
       event('E1', 1, [], [fact('active')]),
       { ...event('E2', 2), preconditions: [fact('active')] },
     ];
-    const events2 = [events[1]!]; // No provider for precondition
+    const event2 = events[1];
+    expect(event2).toBeDefined();
+    if (!event2) {
+      throw new Error('Expected E2 event');
+    }
+    const events2 = [event2]; // No provider for precondition
     // E2 needs 'active' but no event wrote it
     expect(() =>
       compileStoryBoundaries(events2, ACTIVATION_FACTS, new Map(), CATALOG_CONTEXT),

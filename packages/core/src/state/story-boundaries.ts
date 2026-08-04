@@ -3,6 +3,7 @@
 // ============================================================================
 
 import { createEmptyBranchPath } from '../branch/index.js';
+import { ConfigError } from '../errors.js';
 import type { BranchPath } from '../types/branch.js';
 import type {
   EntityCatalogContext,
@@ -49,6 +50,20 @@ export function emptyWorldState(): WorldState {
 
 function copyState(state: WorldState): WorldState {
   return structuredClone(state);
+}
+
+function requireCompiledEvent(
+  eventsById: ReadonlyMap<string, NarrativeEvent>,
+  eventId: string,
+): NarrativeEvent {
+  const event = eventsById.get(eventId);
+  if (event === undefined) {
+    throw new ConfigError(`Compiled story order references unknown event "${eventId}"`, {
+      eventId,
+      phase: 'story-boundaries',
+    });
+  }
+  return event;
 }
 
 function applyBaseline(
@@ -119,7 +134,7 @@ export function compileStoryBoundaries(
 
   // Per-target computation
   for (const targetId of order.topologicalOrder) {
-    const event = eventsById.get(targetId)!;
+    const event = requireCompiledEvent(eventsById, targetId);
     const state = emptyWorldState();
     const lifecycleGuard = applyBaseline(state, initialFacts, threadList, selectedBranch, catalogs);
 
@@ -127,7 +142,7 @@ export function compileStoryBoundaries(
     for (const candidateId of order.topologicalOrder) {
       if (candidateId === targetId) break;
       if (isProvenBefore(candidateId, targetId, order)) {
-        applyNarrativeEvent(state, eventsById.get(candidateId)!, {
+        applyNarrativeEvent(state, requireCompiledEvent(eventsById, candidateId), {
           catalogs,
           branchPath: selectedBranch,
           lifecycleChangesByCoordinate: lifecycleGuard,
@@ -160,7 +175,7 @@ export function compileStoryBoundaries(
     catalogs,
   );
   for (const eventId of order.topologicalOrder) {
-    applyNarrativeEvent(finalState, eventsById.get(eventId)!, {
+    applyNarrativeEvent(finalState, requireCompiledEvent(eventsById, eventId), {
       catalogs,
       branchPath: selectedBranch,
       lifecycleChangesByCoordinate: finalLifecycleGuard,

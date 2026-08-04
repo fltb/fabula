@@ -203,7 +203,7 @@ function validateLifecycleTransition(
   };
 
   const valid = allowed[from];
-  if (!valid || !valid.includes(to)) {
+  if (!valid?.includes(to)) {
     throw new ConfigError(
       `Invalid epoch lifecycle transition: ${from} → ${to} (effect ${effectId})`,
       { eventId: effectId, phase: 'replay' },

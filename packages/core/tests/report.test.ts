@@ -5,9 +5,25 @@
 import { describe, expect, it } from 'vitest';
 import type { PipelineRunResult } from '../src/report/writer.js';
 import { ReportWriter } from '../src/report/writer.js';
-import type { Blocker, NextAction, StatusReport, ThreadSnapshot } from '../src/types/index.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
+type ReportJson = {
+  validation: {
+    total: {
+      errors: number;
+      warnings: number;
+    };
+  };
+  render: {
+    events: Array<{
+      eventId: string;
+      renderTimeMs?: number;
+    }>;
+  };
+  iss: {
+    overall: number;
+  } | null;
+};
 
 function makeSampleResult(overrides?: Partial<PipelineRunResult>): PipelineRunResult {
   return {
@@ -227,13 +243,13 @@ describe('ReportWriter', () => {
     });
 
     it('includes correct issue counts in validation totals', () => {
-      const json = new ReportWriter(makeSampleResult()).toJSON() as Record<string, any>;
+      const json = new ReportWriter(makeSampleResult()).toJSON() as ReportJson;
       expect(json.validation.total.errors).toBe(2); // 1 L1 error + 1 L2 error
       expect(json.validation.total.warnings).toBe(1); // 1 L1 warning
     });
 
     it('includes render events with timing data', () => {
-      const json = new ReportWriter(makeSampleResult()).toJSON() as Record<string, any>;
+      const json = new ReportWriter(makeSampleResult()).toJSON() as ReportJson;
       expect(json.render.events).toHaveLength(2);
       expect(json.render.events[0].eventId).toBe('E1');
       expect(json.render.events[0].renderTimeMs).toBe(2500);
@@ -241,14 +257,16 @@ describe('ReportWriter', () => {
     });
 
     it('includes ISS data when present', () => {
-      const json = new ReportWriter(makeSampleResult()).toJSON() as Record<string, any>;
-      expect(json.iss).not.toBeNull();
-      expect(json.iss.overall).toBe(72);
+      const json = new ReportWriter(makeSampleResult()).toJSON() as ReportJson;
+      const iss = json.iss;
+      expect(iss).not.toBeNull();
+      if (!iss) throw new Error('Expected ISS data in JSON report');
+      expect(iss.overall).toBe(72);
     });
 
     it('includes ISS as null when absent', () => {
       const result = makeSampleResult({ iss: undefined });
-      const json = new ReportWriter(result).toJSON() as Record<string, any>;
+      const json = new ReportWriter(result).toJSON() as ReportJson;
       expect(json.iss).toBeNull();
     });
   });

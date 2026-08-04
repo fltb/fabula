@@ -14,7 +14,6 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  canonicalJson,
   clearStyleProfileRegistry,
   compileSceneContract,
   registerStyleProfile,
@@ -25,12 +24,9 @@ import { SurfacePlanner } from '../../src/render/surface-planner.js';
 import {
   type AttemptKey,
   type CompiledSceneContract,
-  type ContinuityPacket,
   type LogicalRenderKey,
-  type RenderGroupManifest,
   type StyleProfile,
   SurfacePlannerError,
-  type SurfacePlanProposal,
   type SurfaceReferencePacket,
   type SurfaceRenderKey,
   type SurfaceValidationKey,
@@ -426,20 +422,34 @@ describe('SurfacePlanner', () => {
       expect(r1.surfaceDependencyGraph.serialLanes).toHaveLength(0);
 
       // Proposal exists because continuous transitions form a chain
-      expect(r1.proposal).toBeDefined();
-      expect(r2.proposal).toBeDefined();
-      expect(r1.proposal!.hash).toBe(r2.proposal!.hash);
-      expect(r1.proposal!.hash).toMatch(/^[0-9a-f]{64}$/);
+      const proposal1 = r1.proposal;
+      const proposal2 = r2.proposal;
+      expect(proposal1).toBeDefined();
+      expect(proposal2).toBeDefined();
+      if (proposal1 === undefined || proposal2 === undefined) {
+        throw new Error('Expected deterministic serial proposal');
+      }
+      expect(proposal1.hash).toBe(proposal2.hash);
+      expect(proposal1.hash).toMatch(/^[0-9a-f]{64}$/);
 
       // Proposal groups are serial_surface, not parallel
-      for (const group of r1.proposal!.groups) {
+      for (const group of proposal1.groups) {
         expect(group.surfacePolicy.type).toBe('serial_surface');
       }
 
       // Warnings reference the proposal lanes
-      expect(r1.warnings).toBeDefined();
-      expect(r1.warnings!.length).toBeGreaterThan(0);
-      expect(r1.warnings![0]).toContain('Suggested serial lane');
+      const warnings = r1.warnings;
+      expect(warnings).toBeDefined();
+      if (warnings === undefined) {
+        throw new Error('Expected suggest-mode warnings');
+      }
+      expect(warnings.length).toBeGreaterThan(0);
+      const firstWarning = warnings[0];
+      expect(firstWarning).toBeDefined();
+      if (firstWarning === undefined) {
+        throw new Error('Expected a suggest-mode warning');
+      }
+      expect(firstWarning).toContain('Suggested serial lane');
     });
 
     it('auto mode produces deterministic results', () => {
@@ -752,12 +762,15 @@ describe('SurfacePlanner', () => {
       );
 
       const result = planner.plan();
-      const gate = result.validationGateGraph.gates['S1'];
+      const gate = result.validationGateGraph.gates.S1;
 
       expect(gate).toBeDefined();
-      expect(gate!.status).toBe('pending');
-      expect(gate!.attemptCount).toBe(0);
-      expect(gate!.maxRetries).toBeGreaterThan(0);
+      if (gate === undefined) {
+        throw new Error('Expected a validation gate for S1');
+      }
+      expect(gate.status).toBe('pending');
+      expect(gate.attemptCount).toBe(0);
+      expect(gate.maxRetries).toBeGreaterThan(0);
     });
 
     it('fallback_without_surface must be explicitly stated in group policy', () => {
@@ -1157,8 +1170,8 @@ describe('SurfacePlanner', () => {
       }
 
       // Proposal holds the suggested serial grouping
-      expect(result.proposal).toBeDefined();
-      const proposal = result.proposal!;
+      if (result.proposal === undefined) throw new Error('Expected a serial-lane proposal');
+      const proposal = result.proposal;
 
       // Two chains: [S1, S2] continuous, [S4] continuous (S3 is hard_cut)
       // suggestSerialLanes only creates lanes for chains of length ≥2
@@ -1262,7 +1275,7 @@ describe('SurfacePlanner', () => {
 
       // Proposal: serial
       expect(result.proposal).toBeDefined();
-      expect(result.proposal!.lanes.length).toBeGreaterThan(0);
+      expect(result.proposal?.lanes.length).toBeGreaterThan(0);
     });
 
     it('proposal is undefined when no suggestion is generated', () => {
@@ -1288,7 +1301,7 @@ describe('SurfacePlanner', () => {
 
       // Warnings still mention suggest mode is a proposal
       expect(result.warnings).toBeDefined();
-      expect(result.warnings!.length).toBeGreaterThan(0);
+      expect(result.warnings?.length).toBeGreaterThan(0);
     });
 
     it('manual mode has no proposal', () => {
@@ -1341,7 +1354,7 @@ describe('SurfacePlanner', () => {
 
       expect(r1.proposal).toBeDefined();
       expect(r2.proposal).toBeDefined();
-      expect(r1.proposal!.hash).toBe(r2.proposal!.hash);
+      expect(r1.proposal?.hash).toBe(r2.proposal?.hash);
 
       // Proposal hash differs when scene transition changes
       const contractsChanged = makeContracts(['S1', 'S2'], 'main', ['hard_cut', 'hard_cut']);
@@ -1376,7 +1389,7 @@ describe('SurfacePlanner', () => {
       const r2 = new SurfacePlanner(options).plan();
 
       expect(r1.proposal).toBeDefined();
-      expect(r1.proposal!.hash).toBe(r2.proposal!.hash);
+      expect(r1.proposal?.hash).toBe(r2.proposal?.hash);
     });
   });
 

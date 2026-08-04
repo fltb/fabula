@@ -1,5 +1,11 @@
 import { BROWSER_SESSION_HEADER } from '../../contracts/browser-api.js';
 import {
+  type AdminDevicePairRequestV1,
+  type AdminInviteCreateRequestV1,
+  type AdminNetworkUpdateRequestV1,
+  type AdminProjectSaveRequestV1,
+  type AdminProviderUpdateRequestV1,
+  type AdminSetCredentialRequestV1,
   BROWSER_ADMIN_DEVICES_PATH,
   BROWSER_ADMIN_INVITES_PATH,
   BROWSER_ADMIN_NETWORK_PATH,
@@ -7,15 +13,9 @@ import {
   BROWSER_ADMIN_OVERVIEW_PATH,
   BROWSER_ADMIN_PROJECTS_PATH,
   BROWSER_ADMIN_PROVIDER_PATH,
-  WORKBENCH_CONFIGURATION_VERSION,
-  type AdminDevicePairRequestV1,
-  type AdminInviteCreateRequestV1,
-  type AdminNetworkUpdateRequestV1,
-  type AdminProjectSaveRequestV1,
-  type AdminProviderUpdateRequestV1,
-  type ProjectAccessRole,
-  type AdminSetCredentialRequestV1,
   type ConfigOperationReceiptV1,
+  type ProjectAccessRole,
+  WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchAdminErrorCode,
   type WorkbenchAdminOverviewV1,
   type WorkbenchConfigurationVersion,
@@ -234,11 +234,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function decodedAdminError(value: unknown): { code: WorkbenchAdminErrorCode; message: string } | null {
+function decodedAdminError(
+  value: unknown,
+): { code: WorkbenchAdminErrorCode; message: string } | null {
   if (!isRecord(value) || !isRecord(value.error)) return null;
   const code = value.error.code;
   const message = value.error.message;
-  if (typeof code !== 'string' || !ADMIN_ERROR_CODES.has(code as WorkbenchAdminErrorCode)) return null;
+  if (typeof code !== 'string' || !ADMIN_ERROR_CODES.has(code as WorkbenchAdminErrorCode))
+    return null;
   if (typeof message !== 'string') return null;
   return { code: code as WorkbenchAdminErrorCode, message };
 }
@@ -264,7 +267,9 @@ function fixedVersionBody(fields: Record<string, unknown>): Record<string, unkno
   return { version: WORKBENCH_CONFIGURATION_VERSION, ...fields };
 }
 
-function responseHasVersion(value: unknown): value is { readonly version: WorkbenchConfigurationVersion } {
+function responseHasVersion(
+  value: unknown,
+): value is { readonly version: WorkbenchConfigurationVersion } {
   return isRecord(value) && value.version === WORKBENCH_CONFIGURATION_VERSION;
 }
 
@@ -336,7 +341,11 @@ export function createAdminClient(options: AdminClientOptions = {}): AdminClient
       return request<AdminProjectValidationResponseV1>(
         BROWSER_ADMIN_PROJECTS_VALIDATE_PATH,
         'POST',
-        fixedVersionBody({ projectId: input.projectId, displayName: input.displayName, root: input.root }),
+        fixedVersionBody({
+          projectId: input.projectId,
+          displayName: input.displayName,
+          root: input.root,
+        }),
       );
     },
     createProject: (input) => {
@@ -344,7 +353,11 @@ export function createAdminClient(options: AdminClientOptions = {}): AdminClient
       return request<AdminProjectMutationResponseV1>(
         BROWSER_ADMIN_PROJECTS_PATH,
         'POST',
-        fixedVersionBody({ projectId: input.projectId, displayName: input.displayName, root: input.root }),
+        fixedVersionBody({
+          projectId: input.projectId,
+          displayName: input.displayName,
+          root: input.root,
+        }),
       );
     },
     updateProject: (input) => {
@@ -353,7 +366,11 @@ export function createAdminClient(options: AdminClientOptions = {}): AdminClient
       return request<AdminProjectMutationResponseV1>(
         path,
         'PUT',
-        fixedVersionBody({ projectId: input.projectId, displayName: input.displayName, root: input.root }),
+        fixedVersionBody({
+          projectId: input.projectId,
+          displayName: input.displayName,
+          root: input.root,
+        }),
       );
     },
     deleteProject: (projectId) => {
@@ -399,10 +416,7 @@ export function createAdminClient(options: AdminClientOptions = {}): AdminClient
     },
     clearProviderCredential: () => {
       assertMutationAllowed();
-      return request<AdminCredentialResponseV1>(
-        BROWSER_ADMIN_PROVIDER_CREDENTIAL_PATH,
-        'DELETE',
-      );
+      return request<AdminCredentialResponseV1>(BROWSER_ADMIN_PROVIDER_CREDENTIAL_PATH, 'DELETE');
     },
     updateNetwork: (input) => {
       assertMutationAllowed();

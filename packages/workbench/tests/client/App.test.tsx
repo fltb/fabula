@@ -141,7 +141,9 @@ describe('Workbench Host availability states', () => {
   it('shows an honest unavailable state by default and supports an empty Host response', () => {
     const unavailable = render(() => <App />);
     const unavailableWorkspace = screen.getByTestId('workspace-state');
-    expect(within(unavailableWorkspace).getByText(/read API is not configured/i)).toBeInTheDocument();
+    expect(
+      within(unavailableWorkspace).getByText(/read API is not configured/i),
+    ).toBeInTheDocument();
     expect(unavailableWorkspace.closest('main')?.querySelector('.host-status')).toHaveTextContent(
       'Host unavailable',
     );

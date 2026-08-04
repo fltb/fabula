@@ -135,7 +135,7 @@ describe('LogicalDisclosureSummaryCompiler', () => {
       const pinMatch = result.match(/\[PIN:([a-f0-9]+)\]/);
 
       expect(pinMatch).not.toBeNull();
-      expect(pinMatch![1].length).toBe(12);
+      expect(pinMatch?.[1].length).toBe(12);
     });
 
     it('reports reveals when present', () => {

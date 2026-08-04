@@ -9,7 +9,7 @@ import {
   includesPath,
   isLinearNarrative,
 } from '../src/branch/index.js';
-import type { BranchPoint, BranchSet, Condition } from '../src/types/index.js';
+import type { BranchSet, Condition } from '../src/types/index.js';
 
 // ─── Shared fixtures ────────────────────────────────────────────────────────
 

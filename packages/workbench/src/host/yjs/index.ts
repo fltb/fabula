@@ -31,6 +31,6 @@ export {
   createYjsGateway,
   createYjsPersistencePort,
   createYjsTicketService,
-  getYjsTicketService,
   createYjsWorkingDocumentCore,
+  getYjsTicketService,
 } from './gateway.js';

@@ -9,6 +9,7 @@ import { RelevanceEngine } from '../src/context/relevance.js';
 import { InMemoryEntityRegistry } from '../src/entity/registry.js';
 import type {
   Entity,
+  EntityKind,
   NarrativeEvent,
   RelevanceContext,
   ThreadId,
@@ -16,10 +17,15 @@ import type {
   WorldState,
 } from '../src/types/index.js';
 
-function makeEntity(id: string, kind: string, state: Record<string, unknown>): Entity {
+function must<T>(value: T | undefined, message: string): T {
+  if (value === undefined) throw new Error(message);
+  return value;
+}
+
+function makeEntity(id: string, kind: EntityKind, state: Record<string, unknown>): Entity {
   return {
     id,
-    kind: kind as any,
+    kind,
     name: id,
     definitionFile: `definitions/${kind}s/${id}.yaml`,
     lifecycle: 'active',
@@ -179,13 +185,17 @@ describe('RelevanceEngine', () => {
 
     const scores = engine.scoreEntities(context);
 
-    const aliceScore = scores.find((s) => s.entity === 'alice');
-    const bobScore = scores.find((s) => s.entity === 'bob');
+    const aliceScore = must(
+      scores.find((s) => s.entity === 'alice'),
+      'Expected Alice score',
+    );
+    const bobScore = must(
+      scores.find((s) => s.entity === 'bob'),
+      'Expected Bob score',
+    );
 
-    expect(aliceScore).toBeDefined();
-    expect(bobScore).toBeDefined();
-    expect(aliceScore!.basis.participation).toBeGreaterThan(0);
-    expect(bobScore!.basis.participation).toBeGreaterThan(0);
+    expect(aliceScore.basis.participation).toBeGreaterThan(0);
+    expect(bobScore.basis.participation).toBeGreaterThan(0);
   });
 
   it('should sort by score descending', () => {
@@ -219,7 +229,10 @@ describe('RelevanceEngine', () => {
     };
 
     const scores = engine.scoreEntities(context);
-    const aliceScore = scores.find((s) => s.entity === 'alice')!;
+    const aliceScore = must(
+      scores.find((s) => s.entity === 'alice'),
+      'Expected Alice score',
+    );
     expect(aliceScore.basis.recencyPenalty).toBeGreaterThan(0);
   });
 
@@ -269,7 +282,10 @@ describe('RelevanceEngine', () => {
     };
 
     const scores = engine.scoreEntities(context);
-    const aliceScore = scores.find((s) => s.entity === 'alice')!;
+    const aliceScore = must(
+      scores.find((s) => s.entity === 'alice'),
+      'Expected Alice score',
+    );
     expect(aliceScore.basis.specificityBonus).toBeGreaterThan(0);
   });
 });

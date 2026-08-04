@@ -1,16 +1,16 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { WorkbenchAdminOverviewV1 } from '../../src/contracts/index.js';
+import { AccessDevicesPage } from '../../src/client/admin/AccessDevicesPage';
+import { AdminShell } from '../../src/client/admin/AdminShell';
 import {
-  createAdminClient,
   type AdminApiError,
   type AdminFetch,
+  createAdminClient,
 } from '../../src/client/admin/admin-client';
-import { AdminShell } from '../../src/client/admin/AdminShell';
-import { AccessDevicesPage } from '../../src/client/admin/AccessDevicesPage';
 import { ProviderPage } from '../../src/client/admin/ProviderPage';
 import { SystemPage } from '../../src/client/admin/SystemPage';
+import type { WorkbenchAdminOverviewV1 } from '../../src/contracts/index.js';
 
 const overview: WorkbenchAdminOverviewV1 = {
   version: 1,
@@ -79,17 +79,42 @@ describe('owner admin client contracts', () => {
     const calls: Array<{ input: RequestInfo | URL; init?: RequestInit }> = [];
     const fetch: AdminFetch = async (input, init) => {
       calls.push({ input, init });
-      return json({ version: 1, project: null, provider: overview.setup.provider, receipt: { status: 'applied', activeRevision: 'a', candidateRevision: 'b', changedFields: [], diagnostics: [] } });
+      return json({
+        version: 1,
+        project: null,
+        provider: overview.setup.provider,
+        receipt: {
+          status: 'applied',
+          activeRevision: 'a',
+          candidateRevision: 'b',
+          changedFields: [],
+          diagnostics: [],
+        },
+      });
     };
     const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
 
     await client.createProject({ projectId: 'p-1', displayName: 'One', root: '/private/project' });
     expect(calls[0]?.input).toBe('/api/v1/admin/projects');
-    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({ version: 1, projectId: 'p-1', displayName: 'One', root: '/private/project' });
+    expect(JSON.parse(String(calls[0]?.init?.body))).toEqual({
+      version: 1,
+      projectId: 'p-1',
+      displayName: 'One',
+      root: '/private/project',
+    });
 
-    await client.updateProvider({ kind: 'ai-sdk', baseUrl: 'https://provider.test', model: 'model-a' });
+    await client.updateProvider({
+      kind: 'ai-sdk',
+      baseUrl: 'https://provider.test',
+      model: 'model-a',
+    });
     expect(calls[1]?.input).toBe('/api/v1/admin/providers/ai-sdk');
-    expect(JSON.parse(String(calls[1]?.init?.body))).toEqual({ version: 1, kind: 'ai-sdk', baseUrl: 'https://provider.test', model: 'model-a' });
+    expect(JSON.parse(String(calls[1]?.init?.body))).toEqual({
+      version: 1,
+      kind: 'ai-sdk',
+      baseUrl: 'https://provider.test',
+      model: 'model-a',
+    });
     expect(String(calls[1]?.init?.body)).not.toContain('patch');
   });
 
@@ -114,8 +139,12 @@ describe('owner admin surfaces', () => {
     const client = createAdminClient({ fetch, initialAuthorization: 'user' });
     render(() => <AdminShell client={client} authorization="user" />);
 
-    expect(screen.getByRole('heading', { name: 'Owner authorization required' })).toBeInTheDocument();
-    expect(screen.getByText(/only the owner can view or change Host administration/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Owner authorization required' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/only the owner can view or change Host administration/i),
+    ).toBeInTheDocument();
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -137,7 +166,9 @@ describe('owner admin surfaces', () => {
       });
     };
     const client = createAdminClient({ fetch, initialAuthorization: 'owner' });
-    render(() => <AccessDevicesPage overview={inviteOverview} client={client} authorization="owner" />);
+    render(() => (
+      <AccessDevicesPage overview={inviteOverview} client={client} authorization="owner" />
+    ));
 
     const createButton = screen.getByRole('button', { name: 'Create invite' });
     expect(createButton).toBeDisabled();
@@ -148,7 +179,12 @@ describe('owner admin surfaces', () => {
 
     const request = calls.find((call) => String(call.input) === '/api/v1/admin/invites');
     const body = String(request?.init?.body ?? '');
-    expect(JSON.parse(body)).toEqual({ version: 1, projectId: 'p-1', role: 'reader', ttlMs: 86400000 });
+    expect(JSON.parse(body)).toEqual({
+      version: 1,
+      projectId: 'p-1',
+      role: 'reader',
+      ttlMs: 86400000,
+    });
     expect(body).not.toMatch(/"role":"(?:user|owner)"/);
   });
 

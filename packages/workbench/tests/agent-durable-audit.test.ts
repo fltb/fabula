@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { AuditRecord, AuditSurface } from '../src/contracts/index.js';
-import type { SessionAuditRecord } from '../src/host/project-session.js';
+import type { AuditSurface } from '../src/contracts/index.js';
 import {
   type AgentAuditAppendInput,
   AgentAuditInputError,
@@ -8,6 +7,7 @@ import {
   createAgentDurableAudit,
   createDurableAuditSink,
 } from '../src/host/agent/index.js';
+import type { SessionAuditRecord } from '../src/host/project-session.js';
 import { createRealPersistence, type RealPersistenceHarness } from './helpers/real-persistence.js';
 
 let activeHarness: RealPersistenceHarness | undefined;
@@ -160,15 +160,15 @@ describe('AgentDurableAudit strict no-secret boundary', () => {
     await expect(
       audit.append(makeAppendInput({ surface: 'admin' as AuditSurface })),
     ).rejects.toThrow(AgentAuditInputError);
-    await expect(
-      audit.append(makeAppendInput({ outcome: 'pending' as never })),
-    ).rejects.toThrow(AgentAuditInputError);
+    await expect(audit.append(makeAppendInput({ outcome: 'pending' as never }))).rejects.toThrow(
+      AgentAuditInputError,
+    );
     await expect(audit.append(makeAppendInput({ operationKind: '' }))).rejects.toThrow(
       AgentAuditInputError,
     );
-    await expect(
-      audit.append(makeAppendInput({ operationKind: 'x\ny' })),
-    ).rejects.toThrow(AgentAuditInputError);
+    await expect(audit.append(makeAppendInput({ operationKind: 'x\ny' }))).rejects.toThrow(
+      AgentAuditInputError,
+    );
     await expect(await audit.list({ limit: 10 })).toHaveLength(0);
   });
 
@@ -178,15 +178,15 @@ describe('AgentDurableAudit strict no-secret boundary', () => {
     await expect(
       audit.append(makeAppendInput({ baseSourceHash: 'sk-secret-not-a-hash' })),
     ).rejects.toThrow(AgentAuditInputError);
-    await expect(
-      audit.append(makeAppendInput({ baseSourceHash: 'A'.repeat(64) })),
-    ).rejects.toThrow(AgentAuditInputError);
+    await expect(audit.append(makeAppendInput({ baseSourceHash: 'A'.repeat(64) }))).rejects.toThrow(
+      AgentAuditInputError,
+    );
     await expect(
       audit.append(makeAppendInput({ workspaceDigest: 'zz'.repeat(32) })),
     ).rejects.toThrow(AgentAuditInputError);
-    await expect(
-      audit.append(makeAppendInput({ gitReceiptHash: 'not-hex' })),
-    ).rejects.toThrow(AgentAuditInputError);
+    await expect(audit.append(makeAppendInput({ gitReceiptHash: 'not-hex' }))).rejects.toThrow(
+      AgentAuditInputError,
+    );
     expect(await audit.list({ limit: 10 })).toHaveLength(0);
   });
 
@@ -208,9 +208,9 @@ describe('AgentDurableAudit strict no-secret boundary', () => {
   it('rejects oversized detail and control characters', async () => {
     const { harness, audit } = createFixture();
     activeHarness = harness;
-    await expect(
-      audit.append(makeAppendInput({ detail: 'd'.repeat(2_000) })),
-    ).rejects.toThrow(AgentAuditInputError);
+    await expect(audit.append(makeAppendInput({ detail: 'd'.repeat(2_000) }))).rejects.toThrow(
+      AgentAuditInputError,
+    );
     await expect(
       audit.append(makeAppendInput({ detail: 'raw token: fc_abc\u0000' })),
     ).rejects.toThrow(AgentAuditInputError);

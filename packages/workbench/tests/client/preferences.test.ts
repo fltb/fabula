@@ -24,7 +24,9 @@ function memoryStorage(seed?: Record<string, string>) {
   const writes: Array<{ key: string; value: string }> = [];
   const storage: WorkbenchPreferencesStorage = {
     getItem(key: string) {
-      return entries.has(key) ? entries.get(key)! : null;
+      const value = entries.get(key);
+      if (value === undefined) return null;
+      return value;
     },
     setItem(key: string, value: string) {
       writes.push({ key, value });
@@ -82,12 +84,12 @@ describe('workbench client preferences', () => {
     });
     expect(saveWorkbenchPreferences(custom, storage)).toBe(true);
     expect(writes).toHaveLength(1);
-    expect(writes[0]!.key).toBe(WORKBENCH_PREFERENCES_STORAGE_KEY);
+    expect(writes[0]?.key).toBe(WORKBENCH_PREFERENCES_STORAGE_KEY);
     const loaded = loadWorkbenchPreferences(storage);
     expect(loaded).toEqual(custom);
     expect(loaded).not.toBe(custom);
     expect(Object.isFrozen(loaded)).toBe(true);
-    const stored = JSON.parse(writes[0]!.value) as Record<string, unknown>;
+    const stored = JSON.parse(writes[0]?.value) as Record<string, unknown>;
     expect(Object.keys(stored).sort()).toEqual([
       'agentShelfOpen',
       'inspectorPinned',
@@ -104,7 +106,7 @@ describe('workbench client preferences', () => {
     const custom = snapshot({ selectedNavigationView: 'review-hub' });
     expect(saveWorkbenchPreferences(custom, a.storage)).toBe(true);
     expect(saveWorkbenchPreferences(custom, b.storage)).toBe(true);
-    expect(a.writes[0]!.value).toBe(b.writes[0]!.value);
+    expect(a.writes[0]?.value).toBe(b.writes[0]?.value);
   });
 
   it('overwrites a prior blob on save and keeps the same storage key', () => {

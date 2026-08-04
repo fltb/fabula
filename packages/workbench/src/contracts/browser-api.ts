@@ -14,8 +14,8 @@ import type {
   ReferenceItemV1,
 } from '@novalistically/workbench-protocol';
 import type { UserRole } from './persistence.js';
-export type { ProjectAccessRole } from './configuration.js';
 
+export type { ProjectAccessRole } from './configuration.js';
 
 /** Version of the browser read API contract carried by every response DTO. */
 export const BROWSER_API_VERSION = 1 as const;

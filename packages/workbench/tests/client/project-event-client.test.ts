@@ -1,17 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
-  AuthoringActivityEventV1,
-  AuthoringOperationReceiptV1,
-  AuthoringStateV1,
-} from '../../src/contracts/authoring.js';
+  BrowserAuthoringClient,
+  BrowserAuthoringOperationsV1,
+} from '../../src/client/authoring-client.js';
 import {
   createProjectEventClient,
   type ProjectEventClientSnapshot,
 } from '../../src/client/project-event-client.js';
 import type {
-  BrowserAuthoringClient,
-  BrowserAuthoringOperationsV1,
-} from '../../src/client/authoring-client.js';
+  AuthoringOperationReceiptV1,
+  AuthoringStateV1,
+} from '../../src/contracts/authoring.js';
 
 const state: AuthoringStateV1 = {
   version: 2,
@@ -66,7 +65,12 @@ describe('project authoring event client', () => {
       getState: async () => state,
       listOperations: async () => operations(),
       getOperation: async () => receipt,
-      listRevisions: async () => ({ version: 2 as const, projectId: 'project-a', revisions: [], generatedAt: state.generatedAt }),
+      listRevisions: async () => ({
+        version: 2 as const,
+        projectId: 'project-a',
+        revisions: [],
+        generatedAt: state.generatedAt,
+      }),
       getRevision: async () => ({
         version: 2 as const,
         projectId: 'project-a',

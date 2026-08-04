@@ -133,30 +133,50 @@ const isJsonValue = (value: unknown): boolean => {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return true;
   if (typeof value === 'number') return Number.isFinite(value);
   if (Array.isArray(value)) return value.every(isJsonValue);
-  return isObject(value) && Object.values(value).every(isJsonValue);
+  if (typeof value !== 'object') return false;
+  return Object.values(value).every(isJsonValue);
 };
 
-const hasMatchingKey = (value: unknown, key: StateStreamKey): value is StateStreamKey =>
-  isObject(value) &&
-  value.projectId === key.projectId &&
-  value.streamId === key.streamId &&
-  value.branchId === key.branchId;
+const hasMatchingKey = (value: unknown, key: StateStreamKey): value is StateStreamKey => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  return (
+    'projectId' in value &&
+    value.projectId === key.projectId &&
+    'streamId' in value &&
+    value.streamId === key.streamId &&
+    'branchId' in value &&
+    value.branchId === key.branchId
+  );
+};
 
-const isStateEvent = (value: unknown, sequence: number): value is StateEvent =>
-  isObject(value) &&
-  typeof value.eventId === 'string' &&
-  value.eventId.length > 0 &&
-  value.sequence === sequence &&
-  typeof value.type === 'string' &&
-  value.type.length > 0 &&
-  isJsonValue(value.payload);
+const isStateEvent = (value: unknown, sequence: number): value is StateEvent => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  return (
+    'eventId' in value &&
+    typeof value.eventId === 'string' &&
+    value.eventId.length > 0 &&
+    'sequence' in value &&
+    value.sequence === sequence &&
+    'type' in value &&
+    typeof value.type === 'string' &&
+    value.type.length > 0 &&
+    'payload' in value &&
+    isJsonValue(value.payload)
+  );
+};
 
-const isStoredStateLog = (value: unknown, key: StateStreamKey): value is StoredStateLog =>
-  isObject(value) &&
-  value.version === 1 &&
-  hasMatchingKey(value.key, key) &&
-  Array.isArray(value.events) &&
-  value.events.every((event, index) => isStateEvent(event, index + 1));
+const isStoredStateLog = (value: unknown, key: StateStreamKey): value is StoredStateLog => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  return (
+    'version' in value &&
+    value.version === 1 &&
+    'key' in value &&
+    hasMatchingKey(value.key, key) &&
+    'events' in value &&
+    Array.isArray(value.events) &&
+    value.events.every((event, index) => isStateEvent(event, index + 1))
+  );
+};
 
 export class FileStateSnapshotRepository implements StateSnapshotRepository {
   readonly #root: string;
@@ -225,26 +245,45 @@ export class FileStateSnapshotRepository implements StateSnapshotRepository {
     }
     try {
       const parsed: unknown = JSON.parse(raw);
-      if (!isObject(parsed) || parsed.version !== 1 || !Array.isArray(parsed.records)) return [];
+      if (!isStoredSnapshotCollection(parsed)) return [];
       return parsed.records.filter((record) => isStateSnapshotRecord(record, key));
     } catch {
       return [];
     }
   }
 }
-const isObject = (value: unknown): value is Record<string, any> =>
-  typeof value === 'object' && value !== null;
 
-const isStateSnapshotRecord = (value: unknown, key: StateStreamKey): value is StateSnapshotRecord =>
-  isObject(value) &&
-  value.version === 1 &&
-  isObject(value.key) &&
-  hasMatchingKey(value.key, key) &&
-  typeof value.schema === 'string' &&
-  typeof value.schemaVersion === 'number' &&
-  Number.isInteger(value.schemaVersion) &&
-  typeof value.sequence === 'number' &&
-  Number.isInteger(value.sequence) &&
-  isJsonValue(value.state) &&
-  typeof value.snapshotHash === 'string' &&
-  value.snapshotHash.length > 0;
+const isStoredSnapshotCollection = (
+  value: unknown,
+): value is { readonly version: 1; readonly records: readonly unknown[] } => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  return (
+    'version' in value && value.version === 1 && 'records' in value && Array.isArray(value.records)
+  );
+};
+
+const isStateSnapshotRecord = (
+  value: unknown,
+  key: StateStreamKey,
+): value is StateSnapshotRecord => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  return (
+    'version' in value &&
+    value.version === 1 &&
+    'key' in value &&
+    hasMatchingKey(value.key, key) &&
+    'schema' in value &&
+    typeof value.schema === 'string' &&
+    'schemaVersion' in value &&
+    typeof value.schemaVersion === 'number' &&
+    Number.isInteger(value.schemaVersion) &&
+    'sequence' in value &&
+    typeof value.sequence === 'number' &&
+    Number.isInteger(value.sequence) &&
+    'state' in value &&
+    isJsonValue(value.state) &&
+    'snapshotHash' in value &&
+    typeof value.snapshotHash === 'string' &&
+    value.snapshotHash.length > 0
+  );
+};

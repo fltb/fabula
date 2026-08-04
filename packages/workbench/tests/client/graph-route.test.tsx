@@ -67,14 +67,17 @@ describe('GraphRoute', () => {
     render(() => <GraphRoute projection={GRAPH_PROJECTION_FIXTURE} />);
 
     expect(screen.getByRole('tab', { name: 'Story' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: 'Discourse' })).toHaveAttribute('aria-selected', 'false');
-    expect(screen.getByRole('group', { name: 'Story graph canvas' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Discourse' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    expect(screen.getByRole('region', { name: 'Story graph canvas' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: 'Discourse' }));
 
     expect(screen.getByRole('tab', { name: 'Discourse' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('group', { name: 'Discourse graph canvas' })).toBeInTheDocument();
-    expect(screen.queryByRole('group', { name: 'Story graph canvas' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Discourse graph canvas' })).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Story graph canvas' })).not.toBeInTheDocument();
 
     const data = latestInstance().render.mock.calls[0]?.[0];
     expect(data.nodes.map((node: { id: string }) => node.id)).toEqual(['D1', 'D2', 'D3']);
@@ -88,9 +91,7 @@ describe('GraphRoute', () => {
       <GraphRoute projection={GRAPH_PROJECTION_FIXTURE} onRouteChange={onRouteChange} />
     ));
 
-    expect(
-      screen.getByRole('button', { name: 'Choose Flee the village' }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose Flee the village' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Choose Flee the village' }));
 
     expect(onRouteChange).toHaveBeenCalledTimes(1);
@@ -109,18 +110,16 @@ describe('GraphRoute', () => {
     render(() => <GraphRoute projection={GRAPH_PROJECTION_FIXTURE} fetchingRoute />);
 
     expect(screen.getByRole('status', { name: /reloading projection/i })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Choose Flee the village' }),
-    ).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Choose Flee the village' })).toBeDisabled();
   });
 
   it('keeps route choices visible but inert when no refetch callback is wired', () => {
     render(() => <GraphRoute projection={GRAPH_PROJECTION_FIXTURE} />);
 
+    expect(screen.getByRole('button', { name: 'Choose Flee the village' })).toBeDisabled();
     expect(
-      screen.getByRole('button', { name: 'Choose Flee the village' }),
-    ).toBeDisabled();
-    expect(screen.getByText(/Route switching is not connected in this workspace yet\./)).toBeInTheDocument();
+      screen.getByText(/Route switching is not connected in this workspace yet\./),
+    ).toBeInTheDocument();
   });
 
   it('shows a leaf route without any choice controls', () => {
@@ -136,9 +135,7 @@ describe('GraphRoute', () => {
 
   it('surfaces canvas node selection to the callback and status region', () => {
     const onNodeSelect = vi.fn();
-    render(() => (
-      <GraphRoute projection={GRAPH_PROJECTION_FIXTURE} onNodeSelect={onNodeSelect} />
-    ));
+    render(() => <GraphRoute projection={GRAPH_PROJECTION_FIXTURE} onNodeSelect={onNodeSelect} />);
 
     const nodeClick = latestNodeClickHandler();
     expect(nodeClick).toBeTypeOf('function');
@@ -179,9 +176,7 @@ describe('GraphRoute', () => {
       screen.queryByRole('button', { name: /add|create|delete|edit|save|rename/i }),
     ).not.toBeInTheDocument();
 
-    const options = mocks.LogicFlow.mock.calls[0]?.[0] as
-      | Record<string, unknown>
-      | undefined;
+    const options = mocks.LogicFlow.mock.calls[0]?.[0] as Record<string, unknown> | undefined;
     expect(options?.isSilentMode).toBe(true);
     expect(options?.adjustNodePosition).toBe(false);
   });

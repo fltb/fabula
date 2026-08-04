@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import {
+  type BrowserFetch,
+  createBrowserAuthoringClient,
+} from '../../src/client/authoring-client.js';
+import { createProjectEventClient } from '../../src/client/project-event-client.js';
 import type {
   AuthoringActivityEventV1,
   AuthoringOperationReceiptV1,
   AuthoringStateV1,
 } from '../../src/contracts/authoring.js';
-import {
-  createBrowserAuthoringClient,
-  type BrowserFetch,
-} from '../../src/client/authoring-client.js';
-import { createProjectEventClient } from '../../src/client/project-event-client.js';
 
 const state: AuthoringStateV1 = {
   version: 2,
@@ -93,7 +93,12 @@ describe('browser authoring client', () => {
       calls.push({ input, init });
       const url = String(input);
       if (url.includes('/revisions/restore')) {
-        return json({ version: 2, status: 'accepted', revisionId: 'revision-2', receiptHash: 'receipt-2' });
+        return json({
+          version: 2,
+          status: 'accepted',
+          revisionId: 'revision-2',
+          receiptHash: 'receipt-2',
+        });
       }
       if (url.includes('/revisions?')) {
         return json({
@@ -122,9 +127,11 @@ describe('browser authoring client', () => {
     await expect(client.getRevision('proj-a', revision.revisionId)).resolves.toMatchObject({
       revision,
     });
-    await expect(client.diffRevisions('proj-a', 'revision-1', 'revision-2')).resolves.toMatchObject({
-      changes: [],
-    });
+    await expect(client.diffRevisions('proj-a', 'revision-1', 'revision-2')).resolves.toMatchObject(
+      {
+        changes: [],
+      },
+    );
     await client.restoreRevision({
       version: 2,
       projectId: 'proj-a',
@@ -148,18 +155,45 @@ describe('browser authoring client', () => {
       presence: [{ actorId: 'owner-1', surface: 'browser', since: '2099-01-01T00:00:00.000Z' }],
       at: '2099-01-01T00:00:00.000Z',
     };
-    let requests = 0;
+    const requests = 0;
     const fakeClient = {
       getState: async () => state,
-      listOperations: async () => ({ version: 2 as const, projectId: 'proj-a', operations: [], generatedAt: state.generatedAt }),
+      listOperations: async () => ({
+        version: 2 as const,
+        projectId: 'proj-a',
+        operations: [],
+        generatedAt: state.generatedAt,
+      }),
       getOperation: async () => operation,
       submit: async () => ({ status: 'queued' as const, receipt: operation }),
       reconcile: async () => ({ status: 'queued' as const, receipt: operation }),
       subscribeEvents: () => ({ ready: Promise.resolve(), close: () => undefined }),
-      listRevisions: async () => ({ version: 2 as const, projectId: 'proj-a', revisions: [], generatedAt: state.generatedAt }),
-      getRevision: async () => ({ version: 2 as const, projectId: 'proj-a', revision, generatedAt: state.generatedAt }),
-      diffRevisions: async () => ({ version: 2 as const, projectId: 'proj-a', fromRevisionId: 'a', toRevisionId: 'b', changes: [], generatedAt: state.generatedAt }),
-      restoreRevision: async () => ({ version: 2 as const, status: 'accepted' as const, revisionId: 'revision-2', receiptHash: 'receipt-2' }),
+      listRevisions: async () => ({
+        version: 2 as const,
+        projectId: 'proj-a',
+        revisions: [],
+        generatedAt: state.generatedAt,
+      }),
+      getRevision: async () => ({
+        version: 2 as const,
+        projectId: 'proj-a',
+        revision,
+        generatedAt: state.generatedAt,
+      }),
+      diffRevisions: async () => ({
+        version: 2 as const,
+        projectId: 'proj-a',
+        fromRevisionId: 'a',
+        toRevisionId: 'b',
+        changes: [],
+        generatedAt: state.generatedAt,
+      }),
+      restoreRevision: async () => ({
+        version: 2 as const,
+        status: 'accepted' as const,
+        revisionId: 'revision-2',
+        receiptHash: 'receipt-2',
+      }),
     };
     const client = createProjectEventClient({ projectId: 'proj-a', client: fakeClient });
     await client.start();

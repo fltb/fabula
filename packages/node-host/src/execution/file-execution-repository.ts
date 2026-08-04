@@ -168,16 +168,19 @@ export class FileExecutionRepository implements CoreExecutionRepository {
   async readStored<T>(file: string): Promise<StoredRecord<T> | null> {
     try {
       const parsed: unknown = JSON.parse(await fs.readFile(file, 'utf8'));
-      return isRecord(parsed) &&
-        parsed.version === 1 &&
-        typeof parsed.revision === 'number' &&
-        'value' in parsed
-        ? (parsed as StoredRecord<T>)
-        : null;
+      return isStoredRecord<T>(parsed) ? parsed : null;
     } catch {
       return null;
     }
   }
 }
-const isRecord = (value: unknown): value is Record<string, any> =>
-  typeof value === 'object' && value !== null;
+const isStoredRecord = <T>(value: unknown): value is StoredRecord<T> => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  return (
+    'version' in value &&
+    value.version === 1 &&
+    'revision' in value &&
+    typeof value.revision === 'number' &&
+    'value' in value
+  );
+};

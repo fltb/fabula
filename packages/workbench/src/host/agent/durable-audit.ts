@@ -37,7 +37,14 @@ const SURFACES: readonly AuditSurface[] = [
 const OUTCOMES = ['completed', 'failed', 'denied'] as const;
 const HASH64 = /^[0-9a-f]{64}$/;
 const RECEIPT_HASH = /^[0-9a-f]{32,128}$/;
-const CONTROL_CHARS = /[\x00-\x1f\x7f]/;
+
+function containsControlCharacters(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
+}
 
 const APPEND_FIELDS = [
   'surface',
@@ -98,7 +105,7 @@ export class AgentAuditInputError extends Error {
 }
 
 function assertNoControlCharacters(value: string, field: string): void {
-  if (CONTROL_CHARS.test(value)) {
+  if (containsControlCharacters(value)) {
     throw new AgentAuditInputError(`${field} must not contain control characters.`);
   }
 }
@@ -173,9 +180,7 @@ export class AgentDurableAudit {
         ? {}
         : { capabilityVersion: input.capabilityVersion }),
       ...(input.baseSourceHash === undefined ? {} : { baseSourceHash: input.baseSourceHash }),
-      ...(input.resultSourceHash === undefined
-        ? {}
-        : { resultSourceHash: input.resultSourceHash }),
+      ...(input.resultSourceHash === undefined ? {} : { resultSourceHash: input.resultSourceHash }),
       ...(input.workspaceDigest === undefined ? {} : { workspaceDigest: input.workspaceDigest }),
       ...(input.submitId === undefined ? {} : { submitId: input.submitId }),
       ...(input.gitReceiptHash === undefined ? {} : { gitReceiptHash: input.gitReceiptHash }),

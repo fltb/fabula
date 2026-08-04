@@ -50,8 +50,14 @@ function waitFor(condition: () => boolean, timeoutMs = 2000): Promise<void> {
   return new Promise((resolve, reject) => {
     const started = Date.now();
     const tick = (): void => {
-      if (condition()) return resolve();
-      if (Date.now() - started > timeoutMs) return reject(new Error('waitFor timed out'));
+      if (condition()) {
+        resolve();
+        return;
+      }
+      if (Date.now() - started > timeoutMs) {
+        reject(new Error('waitFor timed out'));
+        return;
+      }
       setTimeout(tick, 5);
     };
     tick();
@@ -223,7 +229,9 @@ describe('strict configuration shape validation', () => {
     expect(dup.ok).toBe(false);
     if (!dup.ok) expect(dup.diagnostics.map((d) => d.code)).toContain('PROJECT_DUPLICATE_ID');
 
-    const relative = parseConfigurationYaml(serializeConfigurationYaml(baseConfiguration('relative/path')));
+    const relative = parseConfigurationYaml(
+      serializeConfigurationYaml(baseConfiguration('relative/path')),
+    );
     expect(relative.ok).toBe(false);
     if (!relative.ok) {
       expect(relative.diagnostics.map((d) => d.code)).toContain('PROJECT_INVALID_ROOT');
@@ -234,7 +242,13 @@ describe('strict configuration shape validation', () => {
     const badPort = parseConfigurationYaml(
       serializeConfigurationYaml(
         baseConfiguration(root, {
-          network: { mode: 'loopback', port: 99999, allowedHosts: [], allowedOrigins: [], unixSocket: null },
+          network: {
+            mode: 'loopback',
+            port: 99999,
+            allowedHosts: [],
+            allowedOrigins: [],
+            unixSocket: null,
+          },
         }),
       ),
     );
@@ -244,7 +258,13 @@ describe('strict configuration shape validation', () => {
     const unixWithoutSocket = parseConfigurationYaml(
       serializeConfigurationYaml(
         baseConfiguration(root, {
-          network: { mode: 'unix', port: 8787, allowedHosts: [], allowedOrigins: [], unixSocket: null },
+          network: {
+            mode: 'unix',
+            port: 8787,
+            allowedHosts: [],
+            allowedOrigins: [],
+            unixSocket: null,
+          },
         }),
       ),
     );
@@ -256,7 +276,13 @@ describe('strict configuration shape validation', () => {
     const loopbackWithSocket = parseConfigurationYaml(
       serializeConfigurationYaml(
         baseConfiguration(root, {
-          network: { mode: 'loopback', port: 8787, allowedHosts: [], allowedOrigins: [], unixSocket: '/run/x.sock' },
+          network: {
+            mode: 'loopback',
+            port: 8787,
+            allowedHosts: [],
+            allowedOrigins: [],
+            unixSocket: '/run/x.sock',
+          },
         }),
       ),
     );

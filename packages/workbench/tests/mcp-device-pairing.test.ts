@@ -1,13 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import {
-  AgentCapabilityService,
-  createCapabilityPersistence,
-} from '../src/host/agent/index.js';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { AgentCapabilityService, createCapabilityPersistence } from '../src/host/agent/index.js';
 import {
   createDeviceVerifierPersistence,
   createMcpDevicePairingService,
-  DEVICE_CREDENTIAL_PREFIX,
   DevicePairingInputError,
   MAX_DEVICE_TTL_MS,
   type McpDevicePairingService,
@@ -178,10 +174,20 @@ describe('McpDevicePairingService over the real persistence worker', () => {
       }),
     ).resolves.toEqual({ ok: false, code: 'SCOPE_INVALID' });
     await expect(
-      devices.claim({ pairingCode: pairing.pairingCode, clientLabel: 'cli', scopes: [], ttlMs: 60_000 }),
+      devices.claim({
+        pairingCode: pairing.pairingCode,
+        clientLabel: 'cli',
+        scopes: [],
+        ttlMs: 60_000,
+      }),
     ).resolves.toEqual({ ok: false, code: 'INVALID_INPUT' });
     await expect(
-      devices.claim({ pairingCode: pairing.pairingCode, clientLabel: '  ', scopes: ['mcp:read'], ttlMs: 60_000 }),
+      devices.claim({
+        pairingCode: pairing.pairingCode,
+        clientLabel: '  ',
+        scopes: ['mcp:read'],
+        ttlMs: 60_000,
+      }),
     ).resolves.toEqual({ ok: false, code: 'INVALID_INPUT' });
     await expect(
       devices.claim({

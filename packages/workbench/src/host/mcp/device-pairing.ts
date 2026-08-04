@@ -29,17 +29,13 @@
  */
 
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
+import type { ProjectAccessRole } from '../../contracts/configuration.js';
+import { PROJECT_ACCESS_ROLE_GRANTS, PROJECT_ACCESS_ROLES } from '../../contracts/configuration.js';
 import type {
   McpDeviceVerifierReadState,
   McpDeviceVerifierRecord,
 } from '../../contracts/persistence.js';
-import {
-  PROJECT_ACCESS_ROLE_GRANTS,
-  PROJECT_ACCESS_ROLES,
-} from '../../contracts/configuration.js';
-import type { ProjectAccessRole } from '../../contracts/configuration.js';
-
+import type { PersistenceWorkerClient } from '../../persistence/worker-client.js';
 
 /** How many random bytes make up the one-time device credential (256 bits). */
 export const DEVICE_CREDENTIAL_BYTES = 32;
@@ -78,9 +74,7 @@ function isMcpDeviceVerifierReadState(value: unknown): value is McpDeviceVerifie
   const row = value as Record<string, unknown>;
   return (
     typeof row.deviceId === 'string' &&
-    ((row.kind === 'project' &&
-      typeof row.projectId === 'string' &&
-      row.projectId.length > 0) ||
+    ((row.kind === 'project' && typeof row.projectId === 'string' && row.projectId.length > 0) ||
       (row.kind === 'admin' && row.projectId === undefined)) &&
     typeof row.ownerUserId === 'string' &&
     Array.isArray(row.scopes) &&
@@ -115,7 +109,6 @@ function requireMcpDeviceVerifierReadStates(value: unknown): McpDeviceVerifierRe
   return value.map(requireMcpDeviceVerifierReadState);
 }
 
-
 /** Typed domain adapter over the persistence worker; keeps SQL out of this layer. */
 export function createDeviceVerifierPersistence(
   client: PersistenceWorkerClient,
@@ -133,8 +126,7 @@ export function createDeviceVerifierPersistence(
       requireMcpDeviceVerifierReadStates(
         await client.request('listDeviceVerifiers', { store: 'mcp' }),
       ),
-    revokeVerifier: (input) =>
-      client.request('revokeDeviceVerifier', { ...input, store: 'mcp' }),
+    revokeVerifier: (input) => client.request('revokeDeviceVerifier', { ...input, store: 'mcp' }),
   };
 }
 
@@ -241,17 +233,12 @@ export interface McpDevicePairingService {
 }
 
 function isProjectAccessRole(value: unknown): value is ProjectAccessRole {
-  return (
-    typeof value === 'string' &&
-    (PROJECT_ACCESS_ROLES as readonly string[]).includes(value)
-  );
+  return typeof value === 'string' && (PROJECT_ACCESS_ROLES as readonly string[]).includes(value);
 }
-
 
 const CREATE_PAIRING_FIELDS = ['ownerUserId', 'kind', 'projectId', 'role', 'ttlMs'] as const;
 const CLAIM_FIELDS = ['pairingCode', 'clientLabel', 'scopes', 'ttlMs'] as const;
 const VERIFY_FIELDS = ['credential', 'scopes', 'projectId', 'route'] as const;
-
 
 function rejectUnknownKeys(value: object, allowed: readonly string[], method: string): void {
   for (const key of Object.keys(value)) {
@@ -300,8 +287,7 @@ export function createMcpDevicePairingService(
       if (input.kind !== 'project' && input.kind !== 'admin') {
         throw new DevicePairingInputError('kind must be project or admin.');
       }
-      const role =
-        input.kind === 'project' ? (input.role ?? 'reader') : undefined;
+      const role = input.kind === 'project' ? (input.role ?? 'reader') : undefined;
       if (input.role !== undefined && !isProjectAccessRole(input.role)) {
         throw new DevicePairingInputError('role is invalid.');
       }
@@ -373,7 +359,8 @@ export function createMcpDevicePairingService(
       if (intent.kind === 'admin') {
         if (scopes.length !== 1 || scopes[0] !== 'mcp:admin') return claimFailure('SCOPE_INVALID');
       } else {
-        const allowed = PROJECT_ACCESS_ROLE_GRANTS[intent.role ?? 'reader'].scopes as readonly string[];
+        const allowed = PROJECT_ACCESS_ROLE_GRANTS[intent.role ?? 'reader']
+          .scopes as readonly string[];
         if (scopes.some((scope) => !allowed.includes(scope))) return claimFailure('SCOPE_INVALID');
       }
       pending.delete(codeHash);

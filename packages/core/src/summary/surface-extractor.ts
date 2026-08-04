@@ -73,14 +73,14 @@ export class SurfaceReferenceExtractor {
       } else {
         // Anchor not found — fall back to tail
         excerptMode = 'tail';
-        excerpt = prose.length <= maxBudget ? prose : '\u2026' + prose.slice(-(maxBudget - 1));
+        excerpt = prose.length <= maxBudget ? prose : `\u2026${prose.slice(-(maxBudget - 1))}`;
       }
     } else if (prose.length <= maxBudget) {
       excerptMode = 'full';
       excerpt = prose;
     } else {
       excerptMode = 'tail';
-      excerpt = '\u2026' + prose.slice(-(maxBudget - 1));
+      excerpt = `\u2026${prose.slice(-(maxBudget - 1))}`;
     }
 
     // ── Compute style metrics ─────────────────────────────────────────

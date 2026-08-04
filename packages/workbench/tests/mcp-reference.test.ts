@@ -1,11 +1,11 @@
+import type { McpReferencePort } from '@novalistically/workbench-protocol';
 import { describe, expect, it, vi } from 'vitest';
+import type { McpAuthorizedCaller } from '../src/host/mcp/auth.js';
 import {
+  createProjectSessionMcpRegistry,
   MCP_REFERENCE_READ_SCOPE,
   MCP_REFERENCE_WRITE_SCOPE,
-  createProjectSessionMcpRegistry,
 } from '../src/host/mcp/registry.js';
-import type { McpAuthorizedCaller } from '../src/host/mcp/auth.js';
-import type { McpReferencePort } from '@novalistically/workbench-protocol';
 import type { ProjectSession } from '../src/host/project-session.js';
 
 const item = {
@@ -98,7 +98,10 @@ describe('reference MCP registry binding', () => {
     const reference = referencePort();
     const session = { projectId: 'project-a' } as ProjectSession;
     const registry = createProjectSessionMcpRegistry(session, { reference, family: 'project' });
-    const result = await registry.run('nova_reference_list', caller, { version: 1, projectRoot: '/private/project' });
+    const result = await registry.run('nova_reference_list', caller, {
+      version: 1,
+      projectRoot: '/private/project',
+    });
     expect(result).toMatchObject({ ok: false, error: { code: 'UNKNOWN_FIELD' } });
     expect(reference.list).not.toHaveBeenCalled();
   });
@@ -120,7 +123,10 @@ describe('reference MCP registry binding', () => {
       ...caller,
       grant: { ...caller.grant, scopes: [MCP_REFERENCE_READ_SCOPE, MCP_REFERENCE_WRITE_SCOPE] },
     };
-    const result = await registry.run('nova_reference_import_begin', writeCaller, { ...base, title: { nested: true } });
+    const result = await registry.run('nova_reference_import_begin', writeCaller, {
+      ...base,
+      title: { nested: true },
+    });
     expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
     expect(reference.importBegin).not.toHaveBeenCalled();
   });

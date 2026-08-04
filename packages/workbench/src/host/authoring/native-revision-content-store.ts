@@ -62,7 +62,9 @@ function validateBundle(value: unknown): {
   };
 }
 
-function canonicalBundle(entries: readonly { readonly logicalPath: string; readonly content: string }[]): string {
+function canonicalBundle(
+  entries: readonly { readonly logicalPath: string; readonly content: string }[],
+): string {
   const sorted = [...entries].sort((left, right) =>
     left.logicalPath < right.logicalPath ? -1 : left.logicalPath > right.logicalPath ? 1 : 0,
   );
@@ -76,7 +78,9 @@ function canonicalBundle(entries: readonly { readonly logicalPath: string; reado
   });
 }
 
-function bundleHashFor(entries: readonly { readonly logicalPath: string; readonly content: string }[]): string {
+function _bundleHashFor(
+  entries: readonly { readonly logicalPath: string; readonly content: string }[],
+): string {
   return createHash('sha256').update(canonicalBundle(entries), 'utf8').digest('hex');
 }
 
@@ -89,7 +93,16 @@ function bundleHashFor(entries: readonly { readonly logicalPath: string; readonl
 function objectPath(basePath: string, projectId: string, bundleHash: string): string {
   assertBundleHash(bundleHash);
   const firstTwo = bundleHash.slice(0, 2);
-  return join(basePath, 'projects', projectId, 'source-revisions', 'objects', 'sha256', firstTwo, `${bundleHash}.json`);
+  return join(
+    basePath,
+    'projects',
+    projectId,
+    'source-revisions',
+    'objects',
+    'sha256',
+    firstTwo,
+    `${bundleHash}.json`,
+  );
 }
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
@@ -127,13 +140,24 @@ export function createFileRevisionContentStore(
       if (actualHash !== bundleHash) {
         throw new TypeError('Source revision bundle hash does not match canonical bundle content');
       }
-      const dir = join(base, 'projects', projectId, 'source-revisions', 'objects', 'sha256', bundleHash.slice(0, 2));
+      const dir = join(
+        base,
+        'projects',
+        projectId,
+        'source-revisions',
+        'objects',
+        'sha256',
+        bundleHash.slice(0, 2),
+      );
       const target = objectPath(base, projectId, bundleHash);
 
       // Check existing bytes too: idempotency must never accept corruption.
       try {
         const existing = validateBundle(JSON.parse(await readFile(target, 'utf8')) as unknown);
-        if (createHash('sha256').update(canonicalBundle(existing.entries), 'utf8').digest('hex') !== bundleHash) {
+        if (
+          createHash('sha256').update(canonicalBundle(existing.entries), 'utf8').digest('hex') !==
+          bundleHash
+        ) {
           throw new TypeError('Stored source revision bundle hash mismatch');
         }
         return;
@@ -163,7 +187,10 @@ export function createFileRevisionContentStore(
         throw error;
       }
       const parsed = validateBundle(JSON.parse(raw) as unknown);
-      if (createHash('sha256').update(canonicalBundle(parsed.entries), 'utf8').digest('hex') !== bundleHash) {
+      if (
+        createHash('sha256').update(canonicalBundle(parsed.entries), 'utf8').digest('hex') !==
+        bundleHash
+      ) {
         throw new TypeError('Stored source revision bundle hash mismatch');
       }
       return parsed;

@@ -18,8 +18,8 @@ import type { IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 import { createAdaptorServer, type ServerType } from '@hono/node-server';
-import { BROWSER_SETUP_BASE_PATH } from '../contracts/configuration.js';
 import { type Context, type Handler, Hono, type MiddlewareHandler } from 'hono';
+import { BROWSER_SETUP_BASE_PATH } from '../contracts/configuration.js';
 
 export type HostListenerMode = 'loopback' | 'lan' | 'unix';
 export type EffectiveProtocol = 'http' | 'https';
@@ -221,7 +221,11 @@ export interface HostListener {
    * allowlist-guarded — the setup surface itself enforces unconfigured +
    * loopback at request time. Registration must happen before `start()`.
    */
-  registerSetupRoute(method: SetupHttpMethod, path: string, handler: Handler<HostListenerEnv>): void;
+  registerSetupRoute(
+    method: SetupHttpMethod,
+    path: string,
+    handler: Handler<HostListenerEnv>,
+  ): void;
   /** Register an unguarded static route; only Host static composition uses it. */
   registerPublicStaticRoute(path: string, handler: Handler<HostListenerEnv>): void;
   /** Register exactly one public auth POST route. */

@@ -31,9 +31,13 @@ describe('DRC Stress Report — stability (nested scene + response fallback)', (
       );
       fs.writeFileSync(
         path.join(chaptersDir, 'E01.yaml'),
-        ['event: E01', 'title: 甄士隱夢幻識通靈', 'chapter: 1', 'metadata:', '  type: main'].join(
-          '\n',
-        ) + '\n',
+        `${[
+          'event: E01',
+          'title: 甄士隱夢幻識通靈',
+          'chapter: 1',
+          'metadata:',
+          '  type: main',
+        ].join('\n')}\n`,
       );
 
       // No reference/original dir → excerptStatus = 'N/A (no reference)'.
@@ -63,10 +67,10 @@ describe('DRC Stress Report — stability (nested scene + response fallback)', (
       fs.mkdirSync(respDir2, { recursive: true });
       fs.writeFileSync(
         path.join(respDir2, 'E01.json'),
-        JSON.stringify({
+        `${JSON.stringify({
           prose:
             '甄士隱夢幻識通靈 賈雨村風塵怀閨秀 此開卷第一回也作者自云曾歷過一番夢幻之後故將真事隱去而借通靈說此石頭記一書也',
-        }) + '\n',
+        })}\n`,
       );
 
       // ── Run 3: also response-only (different prose) ───────────────────
@@ -75,10 +79,10 @@ describe('DRC Stress Report — stability (nested scene + response fallback)', (
       fs.mkdirSync(respDir3, { recursive: true });
       fs.writeFileSync(
         path.join(respDir3, 'E01.json'),
-        JSON.stringify({
+        `${JSON.stringify({
           prose:
             '甄士隱夢幻識通靈 賈雨村風塵怀閨秀 列位看官你道此書從何而起說來雖近荒唐細玩頗有趣味',
-        }) + '\n',
+        })}\n`,
       );
 
       // ── Invoke the real script ─────────────────────────────────────────

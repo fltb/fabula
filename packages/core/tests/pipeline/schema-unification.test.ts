@@ -160,7 +160,7 @@ describe('parseAnalysisJSON unified strict schema', () => {
   it('parses valid JSON with all 15 blocks', () => {
     const result = parseAnalysisJSON(JSON.stringify(ALL_FIELDS_VALID));
     expect(result).not.toBeNull();
-    expect(result!.eventId).toBe('E1');
+    expect(result?.eventId).toBe('E1');
   });
 
   it('returns null for JSON missing a required block', () => {
@@ -257,6 +257,6 @@ describe('parseAnalysisJSONWithErrors unified strict schema', () => {
     const dynamicResult = parseAnalysisJSONWithErrors(JSON.stringify(ALL_FIELDS_VALID));
     expect(staticResult).not.toBeNull();
     expect(dynamicResult.result).not.toBeNull();
-    expect(staticResult!.eventId).toBe(dynamicResult.result!.eventId);
+    expect(staticResult?.eventId).toBe(dynamicResult.result?.eventId);
   });
 });

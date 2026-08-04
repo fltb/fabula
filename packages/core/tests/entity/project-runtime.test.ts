@@ -76,8 +76,12 @@ describe('loadCanonicalProject — canonical kernel', () => {
       ir1.runtimeEvents.map((event) => event.id),
     );
     // Mutating one call's output cannot leak into the cached entry.
-    ir1.authoredEvents[0]!.title = 'mutated';
-    expect(ir2.authoredEvents[0]!.title).not.toBe('mutated');
+    const firstEvent = ir1.authoredEvents[0];
+    if (firstEvent === undefined) {
+      throw new Error('expected at least one authored event');
+    }
+    firstEvent.title = 'mutated';
+    expect(ir2.authoredEvents[0]?.title).not.toBe('mutated');
   });
   it('rebuilds when one relevant authored source byte changes', () => {
     const base = snapshot();
@@ -85,20 +89,23 @@ describe('loadCanonicalProject — canonical kernel', () => {
     const entries = Object.fromEntries(
       base.documents.map((document) => [document.logicalPath, document.content]),
     );
-    entries['chapters/chapter_01/E0.yaml'] = entries['chapters/chapter_01/E0.yaml']!.replace(
+    entries['chapters/chapter_01/E0.yaml'] = entries['chapters/chapter_01/E0.yaml']?.replace(
       'title: Encounter',
       'title: Encounter!',
     );
     const changed = makeSnapshot(entries);
     expect(changed.sourceHash).not.toBe(base.sourceHash);
     const irB = loadCanonicalProject(changed);
-    const e0 = irA.authoredEvents.find((event) => event.id === 'E0')!;
-    const e0Changed = irB.authoredEvents.find((event) => event.id === 'E0')!;
+    const e0 = irA.authoredEvents.find((event) => event.id === 'E0');
+    const e0Changed = irB.authoredEvents.find((event) => event.id === 'E0');
+    if (e0 === undefined || e0Changed === undefined) {
+      throw new Error('expected E0 in both runtimes');
+    }
     expect(e0Changed.title).toBe('Encounter!');
     expect(e0Changed.title).not.toBe(e0.title);
     // The unchanged bytes still resolve to the original runtime (no poisoning).
     expect(
-      loadCanonicalProject(base).authoredEvents.find((event) => event.id === 'E0')!.title,
+      loadCanonicalProject(base).authoredEvents.find((event) => event.id === 'E0')?.title,
     ).toBe('Encounter');
   });
   it('never caches a failed mapping and ignores diagnostics for cache identity', () => {
@@ -116,7 +123,7 @@ describe('loadCanonicalProject — canonical kernel', () => {
     expect(() => loadCanonicalProject(bad)).toThrow(ConfigError);
     // The valid runtime was not poisoned by the failed candidate.
     expect(
-      loadCanonicalProject(valid).authoredEvents.find((event) => event.id === 'E0')!.title,
+      loadCanonicalProject(valid).authoredEvents.find((event) => event.id === 'E0')?.title,
     ).toBe('Encounter');
     // Diagnostics on identical bytes do not alter identity or compiled output.
     const noisy: ProjectSourceSnapshotV1 = {
@@ -136,7 +143,7 @@ describe('loadCanonicalProject — canonical kernel', () => {
     };
     expect(noisy.sourceHash).toBe(valid.sourceHash);
     expect(
-      loadCanonicalProject(noisy).authoredEvents.find((event) => event.id === 'E0')!.title,
+      loadCanonicalProject(noisy).authoredEvents.find((event) => event.id === 'E0')?.title,
     ).toBe('Encounter');
   });
   it('never synthesizes genesis and stays package-private', () => {
@@ -161,9 +168,14 @@ describe('loadCanonicalProject — canonical kernel', () => {
     expect(irA).not.toBe(irB);
     expect(irA.data).not.toBe(irB.data);
     expect(irA.registry).not.toBe(irB.registry);
-    const e0 = irA.authoredEvents.find((event) => event.id === 'E0')!;
+    const e0 = irA.authoredEvents.find((event) => event.id === 'E0');
+    if (e0 === undefined) {
+      throw new Error('expected E0 in the first runtime');
+    }
     e0.title = 'mutated';
-    expect(irB.authoredEvents.find((event) => event.id === 'E0')!.title).not.toBe('mutated');
+    const cachedE0 = irB.authoredEvents.find((event) => event.id === 'E0');
+    if (cachedE0 === undefined) throw new Error('expected E0 in the cached runtime');
+    expect(cachedE0.title).not.toBe('mutated');
     const changed = loadCanonicalProject(snapshot('Changed'));
     expect(changed.sourceHash).not.toBe(irA.sourceHash);
   });

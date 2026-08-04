@@ -36,24 +36,24 @@
  */
 
 import { createHash } from 'node:crypto';
-import * as Y from 'yjs';
-import { computeSourceDocumentHash, compareLogicalPaths } from '@novalistically/core/source';
 import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
+import { compareLogicalPaths, computeSourceDocumentHash } from '@novalistically/core/source';
+import * as Y from 'yjs';
+import {
+  AUTHORING_CONTRACT_VERSION,
+  type AuthoringDocumentDigestV1,
+  type AuthoringWorkspaceDigestV1,
+} from '../../contracts/authoring.js';
 import type {
   AuthoringWorkingDocumentRecord,
   WorkingDocumentPhase,
   WorkingDocumentState,
   YjsDocumentKey,
 } from '../../contracts/persistence.js';
-import {
-  AUTHORING_CONTRACT_VERSION,
-  type AuthoringDocumentDigestV1,
-  type AuthoringWorkspaceDigestV1,
-} from '../../contracts/authoring.js';
-import type { AuthoringDocumentMaterializer } from './types.js';
-import type { YjsWorkingDocumentCore } from '../yjs/gateway.js';
 import type { AgentAppliedTicket, AgentDocumentPort } from '../agent/edit-service.js';
+import type { YjsWorkingDocumentCore } from '../yjs/gateway.js';
 import { classifyAuthoringPath, ROOT_AUTHORING_FILES } from './manifest.js';
+import type { AuthoringDocumentMaterializer } from './types.js';
 
 /** The Yjs text type every working document uses (prose and raw YAML alike). */
 export const WORKING_TEXT_TYPE = 'prose';
@@ -237,7 +237,9 @@ function createAuthoringDocumentStoreImpl(
     throw new TypeError('AuthoringWorkingDocumentStore requires a non-empty projectId');
   }
   if (core === null || typeof core !== 'object' || typeof core.enqueue !== 'function') {
-    throw new TypeError('AuthoringWorkingDocumentStore requires an injected YjsWorkingDocumentCore');
+    throw new TypeError(
+      'AuthoringWorkingDocumentStore requires an injected YjsWorkingDocumentCore',
+    );
   }
   const now = options.now ?? (() => new Date().toISOString());
   const presenceGeneration = options.presenceGeneration ?? (() => 0);
@@ -268,7 +270,11 @@ function createAuthoringDocumentStoreImpl(
       );
     }
     for (const record of records) {
-      if (record.projectId !== projectId || record.documentId.length === 0 || record.logicalPath.length === 0) {
+      if (
+        record.projectId !== projectId ||
+        record.documentId.length === 0 ||
+        record.logicalPath.length === 0
+      ) {
         continue;
       }
       catalog.set(record.documentId, {
@@ -276,9 +282,10 @@ function createAuthoringDocumentStoreImpl(
         logicalPath: record.logicalPath,
         kind: record.kind === 'prose' ? 'prose' : 'raw-yaml',
         state: record.state === 'tombstone' ? 'tombstone' : 'active',
-        catalogRevision: Number.isInteger(record.catalogRevision) && record.catalogRevision > 0
-          ? record.catalogRevision
-          : 1,
+        catalogRevision:
+          Number.isInteger(record.catalogRevision) && record.catalogRevision > 0
+            ? record.catalogRevision
+            : 1,
       });
     }
   }
@@ -366,7 +373,6 @@ function createAuthoringDocumentStoreImpl(
     return false;
   }
 
-
   // The working layer changed through ANY writer (browser gateway or this
   // store): refresh the known-working set and notify change listeners.
   const unsubscribePersist = core.onPersist((key) => {
@@ -393,11 +399,14 @@ function createAuthoringDocumentStoreImpl(
         acceptedContentHashes.delete(logicalPath);
         acceptedContents.delete(logicalPath);
         for (const [documentId, entry] of catalog) {
-          if (entry.logicalPath === logicalPath && entry.state !== 'tombstone') catalog.delete(documentId);
+          if (entry.logicalPath === logicalPath && entry.state !== 'tombstone')
+            catalog.delete(documentId);
         }
       }
       for (const document of snapshot.documents) {
-        const existing = [...catalog.values()].find((entry) => entry.logicalPath === document.logicalPath);
+        const existing = [...catalog.values()].find(
+          (entry) => entry.logicalPath === document.logicalPath,
+        );
         if (existing === undefined) {
           const entry: CatalogEntry = {
             documentId: document.logicalPath,
@@ -458,7 +467,9 @@ function createAuthoringDocumentStoreImpl(
       if (!classification.ok) {
         throw new AuthoringDocumentStoreError('document.invalid_path', classification.message);
       }
-      const existing = [...catalog.values()].find((entry) => entry.logicalPath === input.logicalPath);
+      const existing = [...catalog.values()].find(
+        (entry) => entry.logicalPath === input.logicalPath,
+      );
       if (existing !== undefined) {
         if (existing.state === 'tombstone') {
           existing.state = 'active';
@@ -466,13 +477,20 @@ function createAuthoringDocumentStoreImpl(
           await persistCatalog(existing);
           return this.descriptor(existing.documentId) as AuthoringDocumentDescriptor;
         }
-        throw new AuthoringDocumentStoreError('document.already_exists', 'A working document already uses that logical path.');
+        throw new AuthoringDocumentStoreError(
+          'document.already_exists',
+          'A working document already uses that logical path.',
+        );
       }
-      const documentId = typeof input.documentId === 'string' && input.documentId.length > 0
-        ? input.documentId
-        : `document-${catalog.size + 1}`;
+      const documentId =
+        typeof input.documentId === 'string' && input.documentId.length > 0
+          ? input.documentId
+          : `document-${catalog.size + 1}`;
       if (catalog.has(documentId)) {
-        throw new AuthoringDocumentStoreError('document.already_exists', 'The allocated document identity already exists.');
+        throw new AuthoringDocumentStoreError(
+          'document.already_exists',
+          'The allocated document identity already exists.',
+        );
       }
       const entry: CatalogEntry = {
         documentId,
@@ -485,7 +503,11 @@ function createAuthoringDocumentStoreImpl(
       const key = keyOf(documentId);
       await core.enqueue(key, async () => {
         const created = await core.getOrCreate(key);
-        if (created === null) throw new AuthoringDocumentStoreError('document.storage_unavailable', 'Working document storage is unavailable');
+        if (created === null)
+          throw new AuthoringDocumentStoreError(
+            'document.storage_unavailable',
+            'Working document storage is unavailable',
+          );
         if (created.stored === null) await core.persist(key, created.doc);
       });
       await persistCatalog(entry);
@@ -499,13 +521,19 @@ function createAuthoringDocumentStoreImpl(
       }
       const entry = catalog.get(input.documentId);
       if (entry === undefined || entry.state !== 'active') {
-        throw new AuthoringDocumentStoreError('document.not_found', 'The working document is unavailable.');
+        throw new AuthoringDocumentStoreError(
+          'document.not_found',
+          'The working document is unavailable.',
+        );
       }
       const existing = [...catalog.values()].find(
         (candidate) => candidate.state === 'active' && candidate.logicalPath === input.logicalPath,
       );
       if (existing !== undefined && existing.documentId !== input.documentId) {
-        throw new AuthoringDocumentStoreError('document.already_exists', 'A working document already uses that logical path.');
+        throw new AuthoringDocumentStoreError(
+          'document.already_exists',
+          'A working document already uses that logical path.',
+        );
       }
       entry.logicalPath = input.logicalPath;
       entry.catalogRevision += 1;
@@ -516,17 +544,22 @@ function createAuthoringDocumentStoreImpl(
     async deleteDocument(documentId) {
       const entry = catalog.get(documentId);
       if (entry === undefined || entry.state !== 'active') {
-        throw new AuthoringDocumentStoreError('document.not_found', 'The working document is unavailable.');
+        throw new AuthoringDocumentStoreError(
+          'document.not_found',
+          'The working document is unavailable.',
+        );
       }
       if ((ROOT_AUTHORING_FILES as readonly string[]).includes(entry.logicalPath)) {
-        throw new AuthoringDocumentStoreError('document.required', 'Required authoring documents cannot be deleted.');
+        throw new AuthoringDocumentStoreError(
+          'document.required',
+          'Required authoring documents cannot be deleted.',
+        );
       }
       entry.state = 'tombstone';
       entry.catalogRevision += 1;
       await persistCatalog(entry);
       return this.descriptor(documentId) as AuthoringDocumentDescriptor;
     },
-
 
     descriptors() {
       return [...catalog.values()]
@@ -537,7 +570,8 @@ function createAuthoringDocumentStoreImpl(
           logicalPath: entry.logicalPath,
           kind: entry.kind,
           state: entry.state,
-          available: entry.state === 'active' &&
+          available:
+            entry.state === 'active' &&
             (core.peek(keyOf(entry.documentId)) !== null || knownWorking.has(entry.documentId)),
         }));
     },
@@ -551,7 +585,8 @@ function createAuthoringDocumentStoreImpl(
         logicalPath: entry.logicalPath,
         kind: entry.kind,
         state: entry.state,
-        available: entry.state === 'active' &&
+        available:
+          entry.state === 'active' &&
           (core.peek(keyOf(documentId)) !== null || knownWorking.has(documentId)),
       };
     },
@@ -635,7 +670,10 @@ function createAuthoringDocumentStoreImpl(
           'applyScopedUpdate requires a non-empty documentId',
         );
       }
-      if (!(input.expectedBaseVector instanceof Uint8Array) || !(input.update instanceof Uint8Array)) {
+      if (
+        !(input.expectedBaseVector instanceof Uint8Array) ||
+        !(input.update instanceof Uint8Array)
+      ) {
         throw new AuthoringDocumentStoreError(
           'document.invalid_key',
           'applyScopedUpdate requires expectedBaseVector and update as Uint8Array',
@@ -644,7 +682,10 @@ function createAuthoringDocumentStoreImpl(
       const key = keyOf(input.documentId);
       return core.enqueue(key, async () => {
         if (core.closed) {
-          throw new AuthoringDocumentStoreError('document.store_closed', 'Document store is closed');
+          throw new AuthoringDocumentStoreError(
+            'document.store_closed',
+            'Document store is closed',
+          );
         }
         const created = await core.getOrCreate(key);
         if (created === null) {
@@ -655,7 +696,11 @@ function createAuthoringDocumentStoreImpl(
         }
         const liveVector = Y.encodeStateVector(created.doc);
         if (!vectorsEqual(liveVector, input.expectedBaseVector)) {
-          return { ok: false as const, reason: 'stale-vector' as const, liveStateVector: liveVector };
+          return {
+            ok: false as const,
+            reason: 'stale-vector' as const,
+            liveStateVector: liveVector,
+          };
         }
         // Atomic human-presence generation guard: a human that started or
         // stopped editing between the caller's observation and this mutation
@@ -679,9 +724,9 @@ function createAuthoringDocumentStoreImpl(
             'Scoped agent update failed Yjs validation',
           );
         }
-        let state: WorkingDocumentState;
+        let _state: WorkingDocumentState;
         try {
-          state = await core.persist(key, merged);
+          _state = await core.persist(key, merged);
         } catch {
           throw new AuthoringDocumentStoreError(
             'document.storage_unavailable',
@@ -711,7 +756,10 @@ function createAuthoringDocumentStoreImpl(
           'applyCompensatingUpdate requires a non-empty documentId',
         );
       }
-      if (!(input.expectedVector instanceof Uint8Array) || !(input.compensatingUpdate instanceof Uint8Array)) {
+      if (
+        !(input.expectedVector instanceof Uint8Array) ||
+        !(input.compensatingUpdate instanceof Uint8Array)
+      ) {
         throw new AuthoringDocumentStoreError(
           'document.invalid_key',
           'applyCompensatingUpdate requires expectedVector and compensatingUpdate as Uint8Array',
@@ -720,7 +768,10 @@ function createAuthoringDocumentStoreImpl(
       const key = keyOf(input.documentId);
       return core.enqueue(key, async () => {
         if (core.closed) {
-          throw new AuthoringDocumentStoreError('document.store_closed', 'Document store is closed');
+          throw new AuthoringDocumentStoreError(
+            'document.store_closed',
+            'Document store is closed',
+          );
         }
         const created = await core.getOrCreate(key);
         if (created === null) {
@@ -731,7 +782,11 @@ function createAuthoringDocumentStoreImpl(
         }
         const liveVector = Y.encodeStateVector(created.doc);
         if (!vectorsEqual(liveVector, input.expectedVector)) {
-          return { ok: false as const, reason: 'stale-vector' as const, liveStateVector: liveVector };
+          return {
+            ok: false as const,
+            reason: 'stale-vector' as const,
+            liveStateVector: liveVector,
+          };
         }
         if (presenceGeneration() !== input.expectedHumanPresenceGeneration) {
           return {

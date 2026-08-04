@@ -35,10 +35,8 @@ import {
 import type {
   DisclosureAction,
   DiscourseContextProjection,
-  DiscoursePosition,
   DiscourseState,
   Hint,
-  ModelReaderProfile,
   NarratorAssertion,
   NarratorProfile,
   PlannedDiscourseLedger,
@@ -368,8 +366,8 @@ describe('all 7 disclosure actions', () => {
     const state = replayDiscourseState(ledger, 2, 'main');
     const policy = state.activeWithholds.find((w) => w.policyId === 'wp1');
     expect(policy).toBeDefined();
-    expect(policy!.active).toBe(false);
-    expect(policy!.endPosition).toBe(2);
+    expect(policy?.active).toBe(false);
+    expect(policy?.endPosition).toBe(2);
   });
 });
 
@@ -1464,7 +1462,7 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
 
     const ctx = compileDiscourseBoundaries([event], ledger, assertions, profiles, 'main');
 
-    const compiled = ctx['scene_1'];
+    const compiled = ctx.scene_1;
 
     // stateBefore is empty (pre-range — position 0 is the first action)
     expect(compiled.stateBefore.reveals).toEqual([]);
@@ -1493,7 +1491,7 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
 
     const ctx = compileDiscourseBoundaries([event], ledger, assertions, {}, 'main');
 
-    const compiled = ctx['scene_1'];
+    const compiled = ctx.scene_1;
 
     // stateBefore empty, stateAfter has the reveal
     expect(compiled.stateBefore.reveals).toEqual([]);
@@ -1514,12 +1512,12 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
     });
     const ctx = compileDiscourseBoundaries([event], ledger, {}, {}, 'main');
     // Scene has no entries — cursor defaults to -1 (no action interval)
-    expect(ctx['scene_1']).toBeDefined();
-    expect(ctx['scene_1']!.cursor).toBe(-1);
-    expect(ctx['scene_1']!.currentActionIds).toEqual([]);
+    expect(ctx.scene_1).toBeDefined();
+    expect(ctx.scene_1?.cursor).toBe(-1);
+    expect(ctx.scene_1?.currentActionIds).toEqual([]);
     // Initial discourse state starts at position 0
-    expect(ctx['scene_1']!.stateBefore.position).toBe(0);
-    expect(ctx['scene_1']!.stateAfter.position).toBe(0);
+    expect(ctx.scene_1?.stateBefore.position).toBe(0);
+    expect(ctx.scene_1?.stateAfter.position).toBe(0);
   });
 
   it('hint target excluded from projection when ledger has hint alongside reveal', () => {
@@ -1534,7 +1532,7 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
 
     const ctx = compileDiscourseBoundaries([event], ledger, assertions, {}, 'main');
 
-    const compiled = ctx['scene_1'];
+    const compiled = ctx.scene_1;
     const proj = compiled.projection;
 
     // Hint is visible in projection (surface only)
@@ -1580,7 +1578,7 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
     const ctx = compileDiscourseBoundaries([scene1, scene2], ledger, assertions, profiles, 'main');
 
     // scene_1 at position 0: stateBefore empty, stateAfter has r1 only
-    const compiled1 = ctx['scene_1'];
+    const compiled1 = ctx.scene_1;
     expect(compiled1.stateBefore.reveals).toEqual([]);
     expect(compiled1.stateAfter.reveals).toContain('r1');
     expect(compiled1.stateAfter.openClaims).toEqual([]);
@@ -1589,7 +1587,7 @@ describe('compiled discourse boundary projection from stateAfter (§12)', () => 
 
     // scene_2 at position 1: stateBefore includes r1 from scene_1,
     // stateAfter includes both r1 and c1
-    const compiled2 = ctx['scene_2'];
+    const compiled2 = ctx.scene_2;
     expect(compiled2.stateBefore.reveals).toContain('r1');
     expect(compiled2.stateAfter.reveals).toContain('r1');
     expect(compiled2.stateAfter.openClaims).toContain('c1');

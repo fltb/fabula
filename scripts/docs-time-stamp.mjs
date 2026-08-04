@@ -2,7 +2,6 @@
 // Strict docs time-stamping. Run from repo root.
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 const SKIP_RENAME = new Set([
   'docs/handoffs/2026-07-27-drc-stress-session.md', // already has date prefix

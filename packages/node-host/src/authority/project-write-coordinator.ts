@@ -66,10 +66,7 @@ export class ProjectAuthorityTokenError extends Error {
 
 export class StandaloneMutationBlockedError extends ProjectAuthorityUnavailableError {
   constructor(lease: ProjectAuthorityLeaseV1) {
-    super(
-      `Standalone mutation is unavailable while Workbench authority is ${lease.state}`,
-      lease,
-    );
+    super(`Standalone mutation is unavailable while Workbench authority is ${lease.state}`, lease);
     this.name = 'StandaloneMutationBlockedError';
   }
 }
@@ -181,15 +178,24 @@ export class ProjectWriteCoordinator {
       const current = await this.#readLeaseUnlocked();
       if (current) {
         if (current.rootFingerprint !== fingerprint || current.projectId !== this.#projectId) {
-          throw new ProjectAuthorityUnavailableError('Project authority lease identity mismatch', current);
+          throw new ProjectAuthorityUnavailableError(
+            'Project authority lease identity mismatch',
+            current,
+          );
         }
         if (!isExpired(current, this.#now(), this.#heartbeatTtlMs)) {
-          throw new ProjectAuthorityUnavailableError('Project already has Workbench authority', current);
+          throw new ProjectAuthorityUnavailableError(
+            'Project already has Workbench authority',
+            current,
+          );
         }
         // Stale leases are reclaimable only with an explicit failed matching
         // health probe. No caller, including standalone CLI, reaches this path.
         if (!this.#healthProbe) {
-          throw new ProjectAuthorityUnavailableError('Expired authority requires a health probe', current);
+          throw new ProjectAuthorityUnavailableError(
+            'Expired authority requires a health probe',
+            current,
+          );
         }
         let healthy = true;
         try {
@@ -197,7 +203,11 @@ export class ProjectWriteCoordinator {
         } catch {
           healthy = false;
         }
-        if (healthy) throw new ProjectAuthorityUnavailableError('Existing Workbench authority is healthy', current);
+        if (healthy)
+          throw new ProjectAuthorityUnavailableError(
+            'Existing Workbench authority is healthy',
+            current,
+          );
         await this.#removeLeaseUnlocked(current.instanceId);
       }
       const token: ProjectAuthorityTokenV1 = {
@@ -261,7 +271,11 @@ export class ProjectWriteCoordinator {
 
   /** Instance-CAS release; unlike token release it is safe during shutdown. */
   async release(instanceNonce: string): Promise<void> {
-    if (typeof instanceNonce !== 'string' || instanceNonce.length === 0 || instanceNonce.length > 256)
+    if (
+      typeof instanceNonce !== 'string' ||
+      instanceNonce.length === 0 ||
+      instanceNonce.length > 256
+    )
       throw new TypeError('Invalid instance nonce');
     await prepareDirectory(this.#projectRoot, this.#lockDirectory);
     await withDirectoryLock(this.#projectRoot, this.#lockDirectory, async () => {
@@ -309,7 +323,6 @@ export class ProjectWriteCoordinator {
     });
   }
 
-
   async #updateLease(
     authorityToken: ProjectAuthorityTokenV1,
     update: Partial<Pick<ProjectAuthorityLeaseV1, 'state' | 'endpoint' | 'build'>>,
@@ -338,8 +351,7 @@ export class ProjectWriteCoordinator {
 
   async #assertTokenShape(token: ProjectAuthorityTokenV1): Promise<void> {
     if (
-      !token ||
-      token.version !== 1 ||
+      token?.version !== 1 ||
       token.projectId !== this.#projectId ||
       token.rootFingerprint !== (await this.rootFingerprint()) ||
       !token.instanceNonce ||

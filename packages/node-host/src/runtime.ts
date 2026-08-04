@@ -81,22 +81,14 @@ export function createFileCoreRuntimeServices(
   projectRoot: string,
   options: FileCoreRuntimeOptions,
 ): CoreRuntimeServices {
-  const artifactRoot = options.artifactRoot
-    ? path.resolve(options.artifactRoot)
-    : undefined;
+  const artifactRoot = options.artifactRoot ? path.resolve(options.artifactRoot) : undefined;
   const repositoryRoot = artifactRoot ?? projectRoot;
   return {
-    execution: new FileExecutionRepository(
-      repositoryRoot,
-      artifactRoot ? 'execution' : undefined,
-    ),
+    execution: new FileExecutionRepository(repositoryRoot, artifactRoot ? 'execution' : undefined),
     renderCache: new FileRenderCacheRepository(repositoryRoot, {
       relativeDirectory: artifactRoot ? 'render-cache' : undefined,
     }),
-    stateLog: new FileStateLogRepository(
-      repositoryRoot,
-      artifactRoot ? 'state-log' : undefined,
-    ),
+    stateLog: new FileStateLogRepository(repositoryRoot, artifactRoot ? 'state-log' : undefined),
     stateSnapshots: new FileStateSnapshotRepository(
       repositoryRoot,
       artifactRoot ? 'state-snapshots' : undefined,

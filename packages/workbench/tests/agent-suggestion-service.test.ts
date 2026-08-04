@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 import type {
+  CompletionRequest,
+  CompletionResponse,
   CoreExecutionRepository,
   CoreRuntimeServices,
   LLMProvider,
@@ -15,23 +17,22 @@ import {
   AgentCapabilityService,
   type AgentDocumentPort,
   type AgentPresencePort,
+  type AgentSuggestionChangeV1,
+  type AgentSuggestionInput,
+  AgentSuggestionInputError,
+  type AgentSuggestionResult,
+  type AgentSuggestionService,
+  type AgentSuggestionV1,
+  type AgentTaskProvider,
+  AgentTaskService,
+  type AgentTextSelectionV1,
   createAgentCommandService,
   createAgentSuggestionService,
   createCapabilityPersistence,
-  type AgentSuggestionChangeV1,
-  type AgentSuggestionResult,
-  type AgentSuggestionService,
-  type AgentSuggestionInput,
-  type AgentSuggestionV1,
-  type AgentTaskProvider,
-  type AgentTextSelectionV1,
-  AgentSuggestionInputError,
-  AgentTaskService,
   parseSuggestionChanges,
   suggestionHashOf,
   validateSuggestionChanges,
 } from '../src/host/agent/index.js';
-import type { CompletionRequest, CompletionResponse } from '@novalistically/core';
 import { createProjectCoreRuntime } from '../src/host/core-runtime.js';
 import {
   createProjectSession,
@@ -209,7 +210,7 @@ class FakeTaskProvider implements AgentTaskProvider {
 
   constructor(private readonly next: () => CompletionResponse | Error) {}
 
-  async complete(request: CompletionRequest): Promise<CompletionResponse> {
+  async complete(_request: CompletionRequest): Promise<CompletionResponse> {
     this.calls += 1;
     const result = this.next();
     if (result instanceof Error) throw result;
@@ -280,9 +281,7 @@ function createFixture(options: FixtureOptions = {}): Fixture {
     presence: options.presence,
     newEffectId: () => `fx-${++effectSequence}`,
   });
-  const provider = new FakeTaskProvider(
-    options.providerResult ?? (() => diffResponse()),
-  );
+  const provider = new FakeTaskProvider(options.providerResult ?? (() => diffResponse()));
   const tasks = new AgentTaskService({ provider });
   const suggestions = createAgentSuggestionService({
     documents,
@@ -307,12 +306,14 @@ function issueCapability(capabilityService: AgentCapabilityService, projectId = 
   return capabilityService.issue({ userId: 'agent-1', projectId, scopes: ['edit:prose'] });
 }
 
-function makeGenerateInput(options: {
-  readonly documentText?: string;
-  readonly baseVector?: Uint8Array;
-  readonly selection?: AgentTextSelectionV1;
-  readonly instruction?: string;
-} = {}): AgentSuggestionInput {
+function makeGenerateInput(
+  options: {
+    readonly documentText?: string;
+    readonly baseVector?: Uint8Array;
+    readonly selection?: AgentTextSelectionV1;
+    readonly instruction?: string;
+  } = {},
+): AgentSuggestionInput {
   const documentText = options.documentText ?? 'original prose';
   return {
     projectId: 'project-a',
@@ -331,10 +332,7 @@ function expectProposal(
   return result as Extract<AgentSuggestionResult, { status: 'proposal' }>;
 }
 
-function expectDenied(
-  result: { status: string },
-  reason: AgentCapabilityFailureCode,
-): void {
+function expectDenied(result: { status: string }, reason: AgentCapabilityFailureCode): void {
   expect(result).toEqual({ status: 'denied', reason });
 }
 
@@ -488,9 +486,7 @@ describe('AgentSuggestionService generation', () => {
       fixture.suggestions.generate(makeGenerateInput({ selection: { from: 10, to: 4 } })),
     ).rejects.toThrow(AgentSuggestionInputError);
     await expect(
-      fixture.suggestions.generate(
-        makeGenerateInput({ selection: { from: 0, to: 999 } }),
-      ),
+      fixture.suggestions.generate(makeGenerateInput({ selection: { from: 0, to: 999 } })),
     ).rejects.toThrow(AgentSuggestionInputError);
     expect(fixture.provider.calls).toBe(0);
   });
@@ -536,22 +532,20 @@ describe('parseSuggestionChanges', () => {
   });
 
   it('rejects unsorted, duplicate-offset, and overlapping edits', () => {
-    const unsorted =
-      '[{"from":5,"length":1,"text":"a"},{"from":0,"length":1,"text":"b"}]';
+    const unsorted = '[{"from":5,"length":1,"text":"a"},{"from":0,"length":1,"text":"b"}]';
     expect(parseSuggestionChanges(unsorted)).toBeNull();
-    const duplicate =
-      '[{"from":0,"length":1,"text":"a"},{"from":0,"length":1,"text":"b"}]';
+    const duplicate = '[{"from":0,"length":1,"text":"a"},{"from":0,"length":1,"text":"b"}]';
     expect(parseSuggestionChanges(duplicate)).toBeNull();
-    const overlapping =
-      '[{"from":0,"length":5,"text":"a"},{"from":3,"length":1,"text":"b"}]';
+    const overlapping = '[{"from":0,"length":5,"text":"a"},{"from":3,"length":1,"text":"b"}]';
     expect(parseSuggestionChanges(overlapping)).toBeNull();
   });
 
   it('enforces the per-change text cap and the change count cap', () => {
     const longText = `[{"from":0,"length":1,"text":"${'z'.repeat(9_000)}"}]`;
     expect(parseSuggestionChanges(longText)).toBeNull();
-    const many = `[${Array.from({ length: 300 }, (_, i) =>
-      `{"from":${i},"length":0,"text":"x"}`,
+    const many = `[${Array.from(
+      { length: 300 },
+      (_, i) => `{"from":${i},"length":0,"text":"x"}`,
     ).join(',')}]`;
     expect(parseSuggestionChanges(many)).toBeNull();
     expect(

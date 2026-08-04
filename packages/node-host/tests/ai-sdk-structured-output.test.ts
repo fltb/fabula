@@ -7,6 +7,7 @@
 // is returned as raw text — pipeline owns validation and retry-with-feedback.
 // ============================================================================
 
+import type * as AiModule from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Module mocks ─────────────────────────────────────────────────────────
@@ -17,14 +18,31 @@ vi.mock('@ai-sdk/openai-compatible', () => ({
   createOpenAICompatible: vi.fn(() => vi.fn()),
 }));
 
+type GenerateTextResult = {
+  readonly text: string;
+  readonly response: { readonly id: string };
+  readonly usage: {
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+    readonly totalTokens: number;
+  };
+  readonly finishReason: 'stop';
+};
+
+type GenerateTextOptions = Record<string, unknown> & {
+  readonly output?: { readonly responseFormat?: unknown };
+};
+
+type GenerateTextMock = (options: GenerateTextOptions) => Promise<GenerateTextResult>;
+
 const { mockGenerateText } = vi.hoisted(() => ({
-  mockGenerateText: vi.fn<any>(),
+  mockGenerateText: vi.fn<GenerateTextMock>(),
 }));
 
 vi.mock('ai', async () => {
-  const actual = await vi.importActual('ai');
+  const actual = await vi.importActual<AiModule>('ai');
   return {
-    ...(actual as any),
+    ...actual,
     generateText: mockGenerateText,
   };
 });
@@ -32,7 +50,7 @@ vi.mock('ai', async () => {
 // ── SUT ──────────────────────────────────────────────────────────────────
 
 import type { CompletionRequest } from '@novalistically/core';
-import { generateText, Output } from 'ai';
+import { Output } from 'ai';
 import { AiSdkProvider } from '../src/providers/ai-sdk.ts';
 
 // ============================================================================
@@ -201,7 +219,7 @@ describe('AiSdkProvider — structured output mode', () => {
   // ── Regression: structured output would fail if dropped ─────────────
 
   it('fails as regression test if output is removed from Pass 2 call', async () => {
-    const expectedOutput = Output.json();
+    const _expectedOutput = Output.json();
 
     mockGenerateText.mockResolvedValueOnce(successResponse(JSON.stringify(VALID_ANALYSIS)));
 
@@ -213,7 +231,11 @@ describe('AiSdkProvider — structured output mode', () => {
     expect(args).toHaveProperty('output');
 
     // Verify the output spec has the correct responseFormat shape
-    const outputResponseFormat = await args.output.responseFormat;
+    const output = args.output;
+    if (!output) {
+      throw new Error('Pass 2 generateText call did not include an output specification');
+    }
+    const outputResponseFormat = await output.responseFormat;
     expect(outputResponseFormat).toEqual({ type: 'json' });
   });
 });

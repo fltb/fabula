@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Regenerate 红楼梦 event YAMLs with per-file validation
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
@@ -27,8 +27,8 @@ const CHAPTERS = [
 ];
 
 // Process chapters in batches
-const BATCH_SIZE = 5;
-const targetChapters = process.argv[2] ? [parseInt(process.argv[2])] : CHAPTERS;
+const _BATCH_SIZE = 5;
+const targetChapters = process.argv[2] ? [parseInt(process.argv[2], 10)] : CHAPTERS;
 
 for (let i = 0; i < targetChapters.length; i++) {
   const chNum = targetChapters[i];
@@ -136,7 +136,7 @@ styleGuidance:
 
       // Validate YAML parsing
       const parsed = YAML.parse(yamlStr);
-      if (!parsed || !parsed.event) throw new Error('Missing event field');
+      if (!parsed?.event) throw new Error('Missing event field');
 
       // Write file
       const slug = parsed.title

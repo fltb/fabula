@@ -122,7 +122,6 @@ async function callAdminMcpTool(
   };
 }
 
-
 /** Crash the worker deterministically: its database parent directory is missing. */
 function crashingDatabasePath(): string {
   return join(newTempDir('fabula-launch-crash-'), 'missing', 'db.sqlite');

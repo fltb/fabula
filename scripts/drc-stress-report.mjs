@@ -31,7 +31,7 @@ const REPO_ROOT = join(__dirname, '..');
 const HAN_RE = /[\u4e00-\u9fff\u3400-\u4dbf\uf900-\ufaff]/g;
 
 /** Count Han characters in a string. */
-function hanCount(text) {
+function _hanCount(text) {
   let count = 0;
   HAN_RE.lastIndex = 0;
   while (HAN_RE.exec(text) !== null) count++;
@@ -74,7 +74,7 @@ function bigramContainment(renderChars, originalChars) {
 /** Format a number as a percentage string for the report. */
 function pct(v) {
   if (v === null || v === undefined) return 'N/A';
-  return (v * 100).toFixed(1) + '%';
+  return `${(v * 100).toFixed(1)}%`;
 }
 
 /** Format a number with locale separators. */
@@ -398,7 +398,7 @@ function writeReport(reportPath, rows, aggregates, stabilitySection) {
     lines.push(stabilitySection);
   }
 
-  writeFileSync(reportPath, lines.join('\n') + '\n', 'utf-8');
+  writeFileSync(reportPath, `${lines.join('\n')}\n`, 'utf-8');
   console.log(`Report written: ${reportPath}`);
 }
 

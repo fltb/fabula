@@ -9,17 +9,11 @@ export const AGENT_CLIENT_CONTRACT_VERSION = 1 as const;
 export type AgentClientContractVersion = typeof AGENT_CLIENT_CONTRACT_VERSION;
 
 /** Guarded Host endpoint for contextual proposal generation. */
-export const BROWSER_AGENT_PROPOSAL_PATH =
-  `${BROWSER_API_BASE_PATH}/projects/:projectId/agent/proposals`;
+export const BROWSER_AGENT_PROPOSAL_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/agent/proposals`;
 /** Guarded Host endpoint for the explicit human apply mutation. */
-export const BROWSER_AGENT_APPLY_PATH =
-  `${BROWSER_AGENT_PROPOSAL_PATH}/:suggestionId/apply`;
+export const BROWSER_AGENT_APPLY_PATH = `${BROWSER_AGENT_PROPOSAL_PATH}/:suggestionId/apply`;
 
-export type AgentPauseReason =
-  | 'human-typing'
-  | 'human-presence'
-  | 'lease'
-  | 'rebase-required';
+export type AgentPauseReason = 'human-typing' | 'human-presence' | 'lease' | 'rebase-required';
 
 export type AgentStaleReason = 'stale-vector' | 'context-changed' | 'rebase-required';
 
@@ -166,7 +160,14 @@ const MAX_INSTRUCTION_CHARACTERS = 4_000;
 const MAX_CHANGES = 256;
 const MAX_CHANGE_TEXT_CHARACTERS = 8_192;
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
-const IDENTIFIER_PATTERN = /^[^\u0000-\u001f\u007f]{1,256}$/;
+
+function hasUnsafeControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint !== undefined && (codePoint <= 0x1f || codePoint === 0x7f)) return true;
+  }
+  return false;
+}
 
 const FAILURE_COPY: Readonly<Record<string, string>> = {
   'agent.host-failed': 'The Host could not prepare an assistant proposal.',
@@ -178,14 +179,14 @@ const FAILURE_COPY: Readonly<Record<string, string>> = {
   'agent.suggestion.invalid-changes': 'The proposal is outside the current document context.',
   'agent.suggestion.materialize-invalid': 'The Host could not prepare this proposal for apply.',
   'agent.task.aborted': 'The assistant request was stopped.',
-  'SESSION_NOT_FOUND': 'Your Host session is no longer available. Sign in again.',
-  'SESSION_EXPIRED': 'Your Host session expired. Sign in again.',
-  'PROJECT_NOT_FOUND': 'This project is no longer available in the Host.',
-  'DOCUMENT_NOT_FOUND': 'This editor document is no longer available.',
-  'HUMAN_EDITING': 'The editor is currently being edited; replan before applying.',
-  'WORKSPACE_STALE': 'The working document changed; re-read the editor context.',
-  'CONFLICT_REQUIRES_RESOLUTION': 'The working document has a conflict that needs review.',
-  'INVALID_INPUT': 'The Host rejected this assistant request.',
+  SESSION_NOT_FOUND: 'Your Host session is no longer available. Sign in again.',
+  SESSION_EXPIRED: 'Your Host session expired. Sign in again.',
+  PROJECT_NOT_FOUND: 'This project is no longer available in the Host.',
+  DOCUMENT_NOT_FOUND: 'This editor document is no longer available.',
+  HUMAN_EDITING: 'The editor is currently being edited; replan before applying.',
+  WORKSPACE_STALE: 'The working document changed; re-read the editor context.',
+  CONFLICT_REQUIRES_RESOLUTION: 'The working document has a conflict that needs review.',
+  INVALID_INPUT: 'The Host rejected this assistant request.',
 };
 
 function safeErrorCode(value: unknown): string {
@@ -231,15 +232,19 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function safeIdentifier(value: unknown): string | null {
-  return typeof value === 'string' && IDENTIFIER_PATTERN.test(value) ? value : null;
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > 256 ||
+    hasUnsafeControlCharacter(value)
+  ) {
+    return null;
+  }
+  return value;
 }
 
 function safeOptionalIdentifier(value: unknown): string | null {
   return value === null || value === undefined ? null : safeIdentifier(value);
-}
-
-function safeVector(value: unknown): string | null {
-  return typeof value === 'string' && IDENTIFIER_PATTERN.test(value) ? value : null;
 }
 
 function safeSelection(value: unknown): EditorAssistantSelectionRangeV1 | null {
@@ -265,7 +270,7 @@ function validateContext(context: EditorAssistantContextV1): void {
     context.version !== AGENT_CLIENT_CONTRACT_VERSION ||
     safeIdentifier(context.projectId) === null ||
     safeIdentifier(context.documentId) === null ||
-    safeVector(context.baseVector) === null ||
+    safeIdentifier(context.baseVector) === null ||
     safeSelection(context.selection) === null ||
     (context.sceneId !== undefined && safeIdentifier(context.sceneId) === null)
   ) {
@@ -315,13 +320,12 @@ function normalizeChange(value: unknown): AgentProposalChangeV1 | null {
   };
 }
 
-
 function normalizeProposal(value: unknown, context: EditorAssistantContextV1): AgentProposalV1 {
   if (!isObject(value)) throw new AgentClientError(502, 'agent.suggestion.invalid-response');
   const suggestionId = safeIdentifier(value.suggestionId ?? value.proposalId);
   const projectId = safeIdentifier(value.projectId);
   const documentId = safeIdentifier(value.documentId);
-  const baseVector = safeVector(
+  const baseVector = safeIdentifier(
     value.baseVector ?? value.baseVectorDigest ?? value.baseVectorHash ?? value.stateVectorHash,
   );
   const selection = safeSelection(value.selection);
@@ -360,7 +364,10 @@ function normalizeProposal(value: unknown, context: EditorAssistantContextV1): A
     changes.push(change);
   }
   const baseTextHash = value.baseTextHash;
-  if (baseTextHash !== undefined && (typeof baseTextHash !== 'string' || !HASH_PATTERN.test(baseTextHash))) {
+  if (
+    baseTextHash !== undefined &&
+    (typeof baseTextHash !== 'string' || !HASH_PATTERN.test(baseTextHash))
+  ) {
     throw new AgentClientError(502, 'agent.suggestion.invalid-response');
   }
   const generatedAt = value.generatedAt;
@@ -406,7 +413,10 @@ function normalizeStaleReason(value: unknown): AgentStaleReason {
   }
 }
 
-function normalizeResponse(value: unknown, context: EditorAssistantContextV1): AgentProposalResponseV1 {
+function normalizeResponse(
+  value: unknown,
+  context: EditorAssistantContextV1,
+): AgentProposalResponseV1 {
   if (!isObject(value) || typeof value.status !== 'string') {
     throw new AgentClientError(502, 'agent.suggestion.invalid-response');
   }
@@ -439,7 +449,7 @@ function normalizeResponse(value: unknown, context: EditorAssistantContextV1): A
         status: 'stale',
         reason: normalizeStaleReason(value.reason),
         replanRequired: true,
-        currentVector: safeVector(
+        currentVector: safeIdentifier(
           value.currentVector ?? value.currentVectorDigest ?? value.currentVectorHash,
         ),
       };
@@ -453,13 +463,19 @@ function normalizeResponse(value: unknown, context: EditorAssistantContextV1): A
   }
 }
 
-function normalizeApplyResponse(value: unknown, request: AgentApplyRequestV1): AgentApplyResponseV1 {
+function normalizeApplyResponse(
+  value: unknown,
+  request: AgentApplyRequestV1,
+): AgentApplyResponseV1 {
   if (!isObject(value) || typeof value.status !== 'string') {
     throw new AgentClientError(502, 'agent.suggestion.invalid-response');
   }
   switch (value.status) {
     case 'applied':
-      return { status: 'applied', suggestionId: safeIdentifier(value.suggestionId) ?? request.proposal.suggestionId };
+      return {
+        status: 'applied',
+        suggestionId: safeIdentifier(value.suggestionId) ?? request.proposal.suggestionId,
+      };
     case 'queued':
       return {
         status: 'queued',
@@ -480,7 +496,7 @@ function normalizeApplyResponse(value: unknown, request: AgentApplyRequestV1): A
         status: 'stale',
         reason: normalizeStaleReason(value.reason),
         replanRequired: true,
-        currentVector: safeVector(
+        currentVector: safeIdentifier(
           value.currentVector ?? value.currentVectorDigest ?? value.currentVectorHash,
         ),
       };
@@ -587,7 +603,8 @@ export function createAgentClient(options: AgentClientOptions = {}): AgentClient
   const headers = (): Headers => {
     const value = new Headers({ accept: 'application/json', 'content-type': 'application/json' });
     const sessionId = options.getSessionId?.();
-    if (typeof sessionId === 'string' && sessionId.length > 0) value.set(BROWSER_SESSION_HEADER, sessionId);
+    if (typeof sessionId === 'string' && sessionId.length > 0)
+      value.set(BROWSER_SESSION_HEADER, sessionId);
     return value;
   };
 
@@ -618,7 +635,7 @@ export function createAgentClient(options: AgentClientOptions = {}): AgentClient
             instruction: request.instruction.trim(),
           } satisfies AgentProposalRequestV1),
         });
-      } catch (error) {
+      } catch (_error) {
         if (requestOptions.signal?.aborted) throw new AgentClientError(499, 'agent.task.aborted');
         throw new AgentClientError(0, 'agent.host-failed');
       }
@@ -663,7 +680,7 @@ export function createAgentClient(options: AgentClientOptions = {}): AgentClient
             } satisfies AgentApplyRequestV1),
           },
         );
-      } catch (error) {
+      } catch (_error) {
         if (requestOptions.signal?.aborted) throw new AgentClientError(499, 'agent.task.aborted');
         throw new AgentClientError(0, 'agent.host-failed');
       }

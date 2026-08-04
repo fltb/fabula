@@ -15,11 +15,10 @@ import * as fs from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { previewEditorialRun, renderNovel } from '../src/api.ts';
+import { previewEditorialRun } from '../src/api.ts';
 import { ContextCompiler } from '../src/context/compiler.ts';
 import type { ProjectSourceSnapshotV1 } from '../src/contracts/source.ts';
 import { InMemoryEntityRegistry } from '../src/entity/registry.ts';
-import type { CompiledDiscourseRenderContext } from '../src/state/discourse-context.ts';
 import { compileDiscourseBoundaries } from '../src/state/discourse-context.ts';
 import { compilePlannedDiscourseLedger } from '../src/state/discourse-ledger.ts';
 import { areProjectionsIdentical } from '../src/state/discourse-replay.ts';
@@ -29,7 +28,6 @@ import type {
   NarratorAssertion,
   NarratorProfile,
   PlannedDiscourseLedger,
-  PlannedDiscourseLedgerSource,
   PlannedLedgerEntry,
 } from '../src/types/discourse.ts';
 import type {
@@ -218,8 +216,9 @@ describe('ContextCompiler strict discourse branch selection', () => {
       { 'test-narrator': TEST_NARRATOR_PROFILE },
       'main',
     );
-    const ctx = result['E1']!;
+    const ctx = result.E1;
     expect(ctx).toBeDefined();
+    if (!ctx) throw new Error('Expected main branch context fixture');
     expect(ctx.currentActionIds).toContain('main-e1');
     expect(ctx.cursor).toBe(0);
     expect(ctx.ledgerHash).toBeTruthy();
@@ -229,8 +228,10 @@ describe('ContextCompiler strict discourse branch selection', () => {
       discourseContext: ctx,
       narratorProfiles: { 'test-narrator': TEST_NARRATOR_PROFILE },
     });
-    expect(pkg.discourseProjection).toBeDefined();
-    const auth = pkg.discourseProjection!.authorizedTargets;
+    const projection = pkg.discourseProjection;
+    expect(projection).toBeDefined();
+    if (!projection) throw new Error('Expected main branch projection fixture');
+    const auth = projection.authorizedTargets;
     expect(auth.map((a) => a.assertionId)).toContain('main-secret');
     expect(auth.map((a) => a.assertionId)).not.toContain('alt-secret');
   });
@@ -243,15 +244,18 @@ describe('ContextCompiler strict discourse branch selection', () => {
       { 'test-narrator': TEST_NARRATOR_PROFILE },
       'alternate',
     );
-    const ctx = result['E1']!;
+    const ctx = result.E1;
     expect(ctx).toBeDefined();
+    if (!ctx) throw new Error('Expected alternate branch context fixture');
 
     const pkg = compiler.compile(event, state, registry, {
       discourseContext: ctx,
       narratorProfiles: { 'test-narrator': TEST_NARRATOR_PROFILE },
     });
-    expect(pkg.discourseProjection).toBeDefined();
-    const auth = pkg.discourseProjection!.authorizedTargets;
+    const projection = pkg.discourseProjection;
+    expect(projection).toBeDefined();
+    if (!projection) throw new Error('Expected alternate branch projection fixture');
+    const auth = projection.authorizedTargets;
     expect(auth.map((a) => a.assertionId)).toContain('alt-secret');
     expect(auth.map((a) => a.assertionId)).not.toContain('main-secret');
   });
@@ -264,15 +268,18 @@ describe('ContextCompiler strict discourse branch selection', () => {
       { 'test-narrator': TEST_NARRATOR_PROFILE },
       'main',
     );
-    const ctx = result['E1']!;
+    const ctx = result.E1;
     expect(ctx).toBeDefined();
+    if (!ctx) throw new Error('Expected single branch context fixture');
 
     const pkg = compiler.compile(event, state, registry, {
       discourseContext: ctx,
       narratorProfiles: { 'test-narrator': TEST_NARRATOR_PROFILE },
     });
-    expect(pkg.discourseProjection).toBeDefined();
-    const auth = pkg.discourseProjection!.authorizedTargets;
+    const projection = pkg.discourseProjection;
+    expect(projection).toBeDefined();
+    if (!projection) throw new Error('Expected single branch projection fixture');
+    const auth = projection.authorizedTargets;
     expect(auth.map((a) => a.assertionId)).toContain('main-secret');
   });
 
@@ -291,12 +298,14 @@ describe('ContextCompiler strict discourse branch selection', () => {
       'main',
     );
     // Scene in chapters but no ledger entries — cursor derives from scene sequence
-    expect(result['E1']).toBeDefined();
-    expect(result['E1']!.cursor).toBe(-1);
-    expect(result['E1']!.currentActionIds).toEqual([]);
+    const sceneContext = result.E1;
+    expect(sceneContext).toBeDefined();
+    if (!sceneContext) throw new Error('Expected no-action scene context fixture');
+    expect(sceneContext.cursor).toBe(-1);
+    expect(sceneContext.currentActionIds).toEqual([]);
     // Initial discourse state starts at position 0
-    expect(result['E1']!.stateBefore.position).toBe(0);
-    expect(result['E1']!.stateAfter.position).toBe(0);
+    expect(sceneContext.stateBefore.position).toBe(0);
+    expect(sceneContext.stateAfter.position).toBe(0);
   });
 
   it('produces no discourse projection when no compiled discourse context', () => {
@@ -435,9 +444,11 @@ describe('compileDiscourseBoundaries strict preflight', () => {
       'main',
     );
     // E2 has no ledger entries but is in chapters — cursor derives from previous scene's action
-    expect(ctx['E2']).toBeDefined();
-    expect(ctx['E2']!.cursor).toBe(0);
-    expect(ctx['E2']!.currentActionIds).toEqual([]);
+    const sceneContext = ctx.E2;
+    expect(sceneContext).toBeDefined();
+    if (!sceneContext) throw new Error('Expected E2 scene context fixture');
+    expect(sceneContext.cursor).toBe(0);
+    expect(sceneContext.currentActionIds).toEqual([]);
   });
 
   it('rejects non-increasing chapter numbers in ledger', () => {
@@ -478,9 +489,11 @@ describe('compileDiscourseBoundaries strict preflight', () => {
       'main',
     );
     // E2 has no entries — cursor derives from E1's action interval end
-    expect(ctx['E2']).toBeDefined();
-    expect(ctx['E2']!.cursor).toBe(0);
-    expect(ctx['E2']!.currentActionIds).toEqual([]);
+    const sceneContext = ctx.E2;
+    expect(sceneContext).toBeDefined();
+    if (!sceneContext) throw new Error('Expected E2 scene context fixture');
+    expect(sceneContext.cursor).toBe(0);
+    expect(sceneContext.currentActionIds).toEqual([]);
   });
 
   it('accepts sparse positions across different scenes', () => {
@@ -507,9 +520,18 @@ describe('compileDiscourseBoundaries strict preflight', () => {
     // E2 has no actions — cursor from E1's action interval end
     // E3 has actions at position 1
     expect(Object.keys(ctx)).toHaveLength(3);
-    expect(ctx['E1']!.currentActionIds).toEqual(['e1']);
-    expect(ctx['E2']!.currentActionIds).toEqual([]);
-    expect(ctx['E3']!.currentActionIds).toEqual(['e3']);
+    const e1Context = ctx.E1;
+    const e2Context = ctx.E2;
+    const e3Context = ctx.E3;
+    expect(e1Context).toBeDefined();
+    expect(e2Context).toBeDefined();
+    expect(e3Context).toBeDefined();
+    if (!e1Context || !e2Context || !e3Context) {
+      throw new Error('Expected sparse scene context fixtures');
+    }
+    expect(e1Context.currentActionIds).toEqual(['e1']);
+    expect(e2Context.currentActionIds).toEqual([]);
+    expect(e3Context.currentActionIds).toEqual(['e3']);
   });
 
   it('accepts continuous range for single scene with multiple actions', () => {
@@ -530,8 +552,11 @@ describe('compileDiscourseBoundaries strict preflight', () => {
       { 'test-narrator': TEST_NARRATOR_PROFILE },
       'main',
     );
-    expect(ctx['E1']!.currentActionIds).toEqual(['e1a', 'e1b']);
-    expect(ctx['E1']!.cursor).toBe(0); // firstPos = 0
+    const sceneContext = ctx.E1;
+    expect(sceneContext).toBeDefined();
+    if (!sceneContext) throw new Error('Expected continuous scene context fixture');
+    expect(sceneContext.currentActionIds).toEqual(['e1a', 'e1b']);
+    expect(sceneContext.cursor).toBe(0); // firstPos = 0
   });
 
   it('passes valid retraction of active claim', () => {
@@ -561,7 +586,10 @@ describe('compileDiscourseBoundaries strict preflight', () => {
       {},
       'main',
     );
-    expect(ctx['E1']!.currentActionIds).toEqual(['c1', 'r1']);
+    const sceneContext = ctx.E1;
+    expect(sceneContext).toBeDefined();
+    if (!sceneContext) throw new Error('Expected retraction scene context fixture');
+    expect(sceneContext.currentActionIds).toEqual(['c1', 'r1']);
   });
 
   it('rejects retraction without prior active claim or reveal', () => {
@@ -625,7 +653,7 @@ describe('compileDiscourseBoundaries strict preflight', () => {
       { 'test-narrator': TEST_NARRATOR_PROFILE },
       'main',
     );
-    expect(ctx['E1']).toBeDefined();
+    expect(ctx.E1).toBeDefined();
   });
 
   it('rejects duplicate discourse positions on same branch', () => {
@@ -987,9 +1015,9 @@ describe('renderNovel discourse-branch validation', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('shared post-merge projection identity', () => {
-  const compiler = new ContextCompiler();
-  const state = makeWorldState();
-  const registry = makeRegistry();
+  const _compiler = new ContextCompiler();
+  const _state = makeWorldState();
+  const _registry = makeRegistry();
 
   it('main and alternate branches produce different projections for same event', () => {
     const event = makeEvent({ id: 'E1', narratorProfileRef: 'test-narrator' });
@@ -1009,8 +1037,18 @@ describe('shared post-merge projection identity', () => {
       'alternate',
     );
 
-    const mainProj = mainCtx['E1']!.projection;
-    const altProj = altCtx['E1']!.projection;
+    const mainSceneContext = mainCtx.E1;
+    const altSceneContext = altCtx.E1;
+    expect(mainSceneContext).toBeDefined();
+    expect(altSceneContext).toBeDefined();
+    if (!mainSceneContext || !altSceneContext) {
+      throw new Error('Expected branch scene context fixtures');
+    }
+    const mainProj = mainSceneContext.projection;
+    const altProj = altSceneContext.projection;
+    expect(mainProj).toBeDefined();
+    expect(altProj).toBeDefined();
+    if (!mainProj || !altProj) throw new Error('Expected branch projection fixtures');
     expect(areProjectionsIdentical(mainProj, altProj)).toBe(false);
     expect(mainProj.authorizedTargets).not.toEqual(altProj.authorizedTargets);
   });
@@ -1033,8 +1071,18 @@ describe('shared post-merge projection identity', () => {
       'main',
     );
 
-    const firstProj = firstCtx['E1']!.projection;
-    const secondProj = secondCtx['E1']!.projection;
+    const firstSceneContext = firstCtx.E1;
+    const secondSceneContext = secondCtx.E1;
+    expect(firstSceneContext).toBeDefined();
+    expect(secondSceneContext).toBeDefined();
+    if (!firstSceneContext || !secondSceneContext) {
+      throw new Error('Expected deterministic scene context fixtures');
+    }
+    const firstProj = firstSceneContext.projection;
+    const secondProj = secondSceneContext.projection;
+    expect(firstProj).toBeDefined();
+    expect(secondProj).toBeDefined();
+    if (!firstProj || !secondProj) throw new Error('Expected deterministic projection fixtures');
     // Same branch, same ledger, same assertions — projections are deterministic
     expect(areProjectionsIdentical(firstProj, secondProj)).toBe(true);
   });
@@ -1072,8 +1120,18 @@ describe('shared post-merge projection identity', () => {
       'main',
     );
 
-    const projA = ctxA['E1']!.projection;
-    const projB = ctxB['E1']!.projection;
+    const projASceneContext = ctxA.E1;
+    const projBSceneContext = ctxB.E1;
+    expect(projASceneContext).toBeDefined();
+    expect(projBSceneContext).toBeDefined();
+    if (!projASceneContext || !projBSceneContext) {
+      throw new Error('Expected assertion-catalog scene context fixtures');
+    }
+    const projA = projASceneContext.projection;
+    const projB = projBSceneContext.projection;
+    expect(projA).toBeDefined();
+    expect(projB).toBeDefined();
+    if (!projA || !projB) throw new Error('Expected assertion-catalog projection fixtures');
     // Proposition text appears in accessibleClaims.surface for claim actions
     expect(areProjectionsIdentical(projA, projB)).toBe(false);
   });
@@ -1098,9 +1156,16 @@ describe('shared post-merge projection identity', () => {
 
     // Both branches read from the same multi-branch ledger, so ledgerHash is the same.
     // But the cursor and currentActionIds differ because different branches.
-    expect(mainCtx['E1']!.branch).toBe('main');
-    expect(altCtx['E1']!.branch).toBe('alternate');
-    expect(mainCtx['E1']!.currentActionIds).not.toEqual(altCtx['E1']!.currentActionIds);
+    const mainSceneContext = mainCtx.E1;
+    const altSceneContext = altCtx.E1;
+    expect(mainSceneContext).toBeDefined();
+    expect(altSceneContext).toBeDefined();
+    if (!mainSceneContext || !altSceneContext) {
+      throw new Error('Expected branch switch scene context fixtures');
+    }
+    expect(mainSceneContext.branch).toBe('main');
+    expect(altSceneContext.branch).toBe('alternate');
+    expect(mainSceneContext.currentActionIds).not.toEqual(altSceneContext.currentActionIds);
   });
 
   it('projection stateBefore and stateAfter are consistent for scenes with actions', () => {
@@ -1114,7 +1179,9 @@ describe('shared post-merge projection identity', () => {
       'main',
     );
 
-    const compiled = ctx['E1']!;
+    const compiled = ctx.E1;
+    expect(compiled).toBeDefined();
+    if (!compiled) throw new Error('Expected action scene context fixture');
     // For a scene WITH actions, stateBefore is pre-action and stateAfter is post-action
     expect(compiled.stateBefore.position).toBeLessThanOrEqual(compiled.stateAfter.position);
     // stateBefore has no reveals for this scene's actions
@@ -1137,7 +1204,9 @@ describe('shared post-merge projection identity', () => {
       'main',
     );
 
-    const compiled = ctx['E2']!;
+    const compiled = ctx.E2;
+    expect(compiled).toBeDefined();
+    if (!compiled) throw new Error('Expected no-action scene context fixture');
     // E2 has no actions — stateBefore === stateAfter (no actions applied)
     expect(compiled.stateBefore.position).toBe(compiled.stateAfter.position);
   });

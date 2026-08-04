@@ -22,8 +22,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { readdirSync, lstatSync, readFileSync, unlinkSync } from 'node:fs';
-import { mkdir, open, readFile, rename, unlink, lstat, writeFile, rm } from 'node:fs/promises';
+import { lstatSync, readdirSync, readFileSync, type Stats, unlinkSync } from 'node:fs';
+import { lstat, mkdir, open, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { ProjectSourceSnapshotV1 } from '@novalistically/core';
 import { computeSourceDocumentHash } from '@novalistically/core/source';
@@ -86,7 +86,7 @@ async function readLockRecord(lockPath: string): Promise<LockRecord | null> {
   }
 }
 
-async function acquireLock(root: string, lockDirectory: string): Promise<() => Promise<void>> {
+async function acquireLock(_root: string, lockDirectory: string): Promise<() => Promise<void>> {
   await mkdir(lockDirectory, { recursive: true, mode: 0o700 });
   const lockPath = join(lockDirectory, '.write.lock');
   const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS;
@@ -238,12 +238,13 @@ function collectFilesRecursive(root: string, dir: string, prefix: string): strin
   for (const name of entries.sort()) {
     const fullPath = join(dir, name);
     const logicalPath = prefix ? `${prefix}/${name}` : name;
-    let stat;
+    let stat: Stats | null = null;
     try {
       stat = lstatSync(fullPath);
     } catch {
       continue;
     }
+    if (stat === null) continue;
     if (stat.isSymbolicLink()) continue; // Never follow symlinks.
     if (stat.isDirectory()) {
       // Skip preserved directories entirely.

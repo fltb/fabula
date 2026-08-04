@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { start } from '../src/persistence/worker.js';
 import { PersistenceWorkerClient } from '../src/persistence/worker-client.js';
 
-type Listener = (event: { data: any }) => void;
+type Listener = (event: { data: unknown }) => void;
 function port() {
   let listener: Listener | undefined;
   return {
@@ -13,7 +13,18 @@ function port() {
     removeEventListener() {
       listener = undefined;
     },
-    postMessage(request: any) {
+    postMessage(request: unknown) {
+      if (
+        request === null ||
+        typeof request !== 'object' ||
+        !('correlationId' in request) ||
+        typeof request.correlationId !== 'string' ||
+        !('operation' in request) ||
+        typeof request.operation !== 'string' ||
+        !('payload' in request)
+      ) {
+        return;
+      }
       queueMicrotask(() =>
         listener?.({
           data: {
@@ -79,9 +90,9 @@ it('rejects verifier operations that omit their explicit store', async () => {
   const disposer = start(workerPort as unknown as MessagePort, { databasePath: ':memory:' });
   try {
     let sequence = 0;
-    const request = (operation: string, payload: unknown): Promise<any> => {
+    const request = (operation: string, payload: unknown): Promise<unknown> => {
       const correlationId = `missing-store-${++sequence}`;
-      const { promise, resolve } = Promise.withResolvers<any>();
+      const { promise, resolve } = Promise.withResolvers<unknown>();
       pending.set(correlationId, resolve);
       for (const listener of [...listeners]) listener({ correlationId, operation, payload });
       return promise.finally(() => pending.delete(correlationId));

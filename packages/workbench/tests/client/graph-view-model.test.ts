@@ -1,20 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { WORKBENCH_GRAPH_VIEW_VERSION } from '../../src/contracts/graph.js';
-import type {
-  WorkbenchGraphEdgeV1,
-  WorkbenchRouteViewV1,
-} from '../../src/contracts/index.js';
 import {
-  GRAPH_LAYOUT,
   describeCoordinate,
   describeOrigin,
   emptyRouteSelector,
+  GRAPH_LAYOUT,
   isRouteLeaf,
   layoutGraphView,
   layoutProjection,
   nextRouteSelector,
   toLogicFlowData,
 } from '../../src/client/graph-view-model';
+import { WORKBENCH_GRAPH_VIEW_VERSION } from '../../src/contracts/graph.js';
+import type { WorkbenchGraphEdgeV1, WorkbenchRouteViewV1 } from '../../src/contracts/index.js';
 import {
   DISCOURSE_VIEW_FIXTURE,
   GRAPH_PROJECTION_FIXTURE,
@@ -46,7 +43,8 @@ describe('layoutGraphView', () => {
       expect(
         GRAPH_PROJECTION_FIXTURE.story.edges.some(
           (candidate) =>
-            candidate.predecessor === edge.sourceNodeId && candidate.dependent === edge.targetNodeId,
+            candidate.predecessor === edge.sourceNodeId &&
+            candidate.dependent === edge.targetNodeId,
         ),
       ).toBe(true);
     }

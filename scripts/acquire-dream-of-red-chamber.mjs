@@ -282,7 +282,7 @@ try {
 
 // Run corpus tests to verify manifest integrity
 try {
-  const result = execSync(
+  const _result = execSync(
     'npx vitest run --config vitest.config.ts packages/core/tests/state/corpus-index.test.ts 2>&1',
     { cwd: REPO_ROOT, timeout: 30000 },
   );

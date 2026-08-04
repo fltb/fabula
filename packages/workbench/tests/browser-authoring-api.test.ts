@@ -1,6 +1,5 @@
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
-import type { AuthoringCoordinator, AuthoringRevisionPort } from '../src/host/authoring/types.js';
 import {
   AUTHORING_CONTRACT_VERSION,
   type AuthoringOperationReceiptV1,
@@ -8,12 +7,13 @@ import {
 } from '../src/contracts/authoring.js';
 import type { BrowserSessionPrincipalV1 } from '../src/contracts/browser-api.js';
 import { BROWSER_SESSION_HEADER } from '../src/contracts/browser-api.js';
-import type { HostServer } from '../src/host/server.js';
+import type { AuthoringCoordinator } from '../src/host/authoring/types.js';
 import {
-  createBrowserAuthoringApi,
   type BrowserAuthoringApiOptions,
+  createBrowserAuthoringApi,
 } from '../src/host/browser-authoring-api.js';
 import { createProjectAccessService } from '../src/host/project-access-service.js';
+import type { HostServer } from '../src/host/server.js';
 
 const principal: BrowserSessionPrincipalV1 = {
   version: 1,
@@ -54,10 +54,12 @@ const receipt: AuthoringOperationReceiptV1 = {
   updatedAt: '2099-01-01T00:00:00.000Z',
 };
 
-function harness(input: {
-  readonly principal?: BrowserSessionPrincipalV1;
-  readonly access?: BrowserAuthoringApiOptions['access'];
-} = {}) {
+function harness(
+  input: {
+    readonly principal?: BrowserSessionPrincipalV1;
+    readonly access?: BrowserAuthoringApiOptions['access'];
+  } = {},
+) {
   const currentPrincipal = input.principal ?? principal;
   const submit = vi.fn(async () => receipt);
   const reconcile = vi.fn(async () => ({ ...receipt, kind: 'reconcile-external' as const }));
@@ -174,10 +176,9 @@ describe('browser authoring API', () => {
     const stateResponse = await app.request('/api/v1/projects/proj-a/authoring/state');
     expect(stateResponse.status).toBe(200);
 
-    const ticketResponse = await app.request(
-      '/api/v1/projects/proj-a/source/doc-1/yjs-ticket',
-      { headers: { [BROWSER_SESSION_HEADER]: 'reader-session' } },
-    );
+    const ticketResponse = await app.request('/api/v1/projects/proj-a/source/doc-1/yjs-ticket', {
+      headers: { [BROWSER_SESSION_HEADER]: 'reader-session' },
+    });
     expect(ticketResponse.status).toBe(403);
 
     const submitResponse = await app.request('/api/v1/projects/proj-a/authoring/submit', {

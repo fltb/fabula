@@ -455,7 +455,7 @@ function buildOrderFromEdges(
       nodeIdSet.has(edge.predecessor) &&
       nodeIdSet.has(edge.dependent)
     ) {
-      adj.get(edge.predecessor)!.push(edge.dependent);
+      adj.get(edge.predecessor)?.push(edge.dependent);
     }
   }
 
@@ -510,6 +510,16 @@ function findMaximalProvider(
   outputToNode: ReadonlyMap<string, CompileNode>,
   preProviderOrder: StoryOrderIndex,
 ): OutputDescriptor | null {
+  const requireOutputNode = (outputId: string): CompileNode => {
+    const outputNode = outputToNode.get(outputId);
+    if (outputNode === undefined) {
+      throw new DagProviderError(`Compiled output "${outputId}" has no owning graph node`, {
+        phase: 'graph-provider',
+        stateKey: outputId,
+      });
+    }
+    return outputNode;
+  };
   // Filter compatible outputs by key and branch
   const candidates = outputs.filter((o) => {
     if (o.canonicalKey !== canonicalKey) return false;
@@ -521,9 +531,7 @@ function findMaximalProvider(
 
   // Filter by visibility via pre-provider order
   const visible = candidates.filter((o) => {
-    const outputNode = outputToNode.get(o.outputId);
-    if (!outputNode) return false;
-    // stateAfter: own output is visible without needing an edge
+    const outputNode = requireOutputNode(o.outputId);
     if (readPhase === 'stateAfter' && outputNode.id === owningNode.id) return true;
     // All other cases: requires isProvenBefore
     return isProvenBefore(outputNode.id, owningNode.id, preProviderOrder);
@@ -536,11 +544,11 @@ function findMaximalProvider(
   // when visible is non-empty.
   const maximal: OutputDescriptor[] = [];
   for (const candidate of visible) {
-    const candidateNode = outputToNode.get(candidate.outputId)!;
+    const candidateNode = requireOutputNode(candidate.outputId);
     let dominated = false;
     for (const other of visible) {
       if (other === candidate) continue;
-      const otherNode = outputToNode.get(other.outputId)!;
+      const otherNode = requireOutputNode(other.outputId);
       // Candidate is dominated if it is proven-before (earlier than) another
       // visible candidate — the later (maximal) provider should win.
       if (isProvenBefore(candidateNode.id, otherNode.id, preProviderOrder)) {
@@ -767,7 +775,7 @@ function detectCycles(state: CompileState): void {
   const adj = new Map<string, string[]>();
   for (const edge of state.edges) {
     if (!adj.has(edge.predecessor)) adj.set(edge.predecessor, []);
-    adj.get(edge.predecessor)!.push(edge.dependent);
+    adj.get(edge.predecessor)?.push(edge.dependent);
   }
 
   // DFS cycle detection

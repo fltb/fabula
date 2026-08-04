@@ -6,25 +6,16 @@ import type {
   SourceStudioStateV1,
   WorkbenchGraphProjectionV1,
 } from '../contracts/index.js';
+import { type AdminClient, createAdminClient } from './admin/admin-client.js';
+import { type AgentClient, createAgentClient } from './agent-client.js';
+import { type BrowserAuthoringClient, createBrowserAuthoringClient } from './authoring-client.js';
 import {
-  BrowserReadApiError,
-  createBrowserReadClient,
   type BrowserFetch,
+  BrowserReadApiError,
   type BrowserReadClient,
+  createBrowserReadClient,
 } from './browser-read-client.js';
 import { createSetupClient, type SetupClient } from './setup-client.js';
-import {
-  createAdminClient,
-  type AdminClient,
-} from './admin/admin-client.js';
-import {
-  createAgentClient,
-  type AgentClient,
-} from './agent-client.js';
-import {
-  createBrowserAuthoringClient,
-  type BrowserAuthoringClient,
-} from './authoring-client.js';
 
 export const AUTH_ENDPOINTS = Object.freeze({
   login: '/api/v1/auth/login',
@@ -40,7 +31,13 @@ export type RuntimeState =
   | 'configuration-restart-required'
   | 'fatal-host-error';
 
-export type RuntimeHealth = 'loading' | 'empty' | 'disconnected' | 'unauthorized' | 'fatal' | 'ready';
+export type RuntimeHealth =
+  | 'loading'
+  | 'empty'
+  | 'disconnected'
+  | 'unauthorized'
+  | 'fatal'
+  | 'ready';
 
 export type RuntimeErrorCode =
   | 'DISCONNECTED'
@@ -95,7 +92,10 @@ export interface RuntimeWorkspace {
 
 export interface ProjectClient {
   list(): Promise<BrowserProjectListV1>;
-  loadWorkspace(projectId: string, selector?: BrowserGraphRouteSelectorV1): Promise<RuntimeWorkspace>;
+  loadWorkspace(
+    projectId: string,
+    selector?: BrowserGraphRouteSelectorV1,
+  ): Promise<RuntimeWorkspace>;
 }
 
 export interface RuntimeClient {
@@ -170,10 +170,9 @@ async function postAuth(
 }
 
 /** Create memory-only auth and project adapters over the safe browser APIs. */
-export function createRuntimeClient(options: {
-  readonly fetch?: BrowserFetch;
-  readonly baseUrl?: string;
-} = {}): RuntimeClient {
+export function createRuntimeClient(
+  options: { readonly fetch?: BrowserFetch; readonly baseUrl?: string } = {},
+): RuntimeClient {
   const execute = options.fetch ?? globalThis.fetch;
   if (typeof execute !== 'function') throw new Error('Browser Fetch API is unavailable.');
   const prefix = options.baseUrl ?? '';
@@ -228,7 +227,8 @@ export function createRuntimeClient(options: {
       }
     },
     async getSession() {
-      if (sessionId === null) throw new RuntimeApiError(401, 'UNAUTHORIZED', RUNTIME_ERROR_MESSAGES.UNAUTHORIZED);
+      if (sessionId === null)
+        throw new RuntimeApiError(401, 'UNAUTHORIZED', RUNTIME_ERROR_MESSAGES.UNAUTHORIZED);
       try {
         return await read.getSession();
       } catch (error) {
@@ -276,7 +276,8 @@ export function createRuntimeClient(options: {
 
 export function runtimeErrorMessage(error: unknown): string {
   if (error instanceof RuntimeApiError) return error.message;
-  if (error instanceof BrowserReadApiError) return RUNTIME_ERROR_MESSAGES[runtimeCode(error.status)];
+  if (error instanceof BrowserReadApiError)
+    return RUNTIME_ERROR_MESSAGES[runtimeCode(error.status)];
   return RUNTIME_ERROR_MESSAGES.FATAL;
 }
 

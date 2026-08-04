@@ -10,7 +10,7 @@ import {
   computeSourceDocumentHash,
 } from '../../src/source/source-identity.ts';
 
-const hash = (value: string) => 'a'.repeat(64);
+const hash = (_value: string) => 'a'.repeat(64);
 
 const document = (logicalPath: string, content: string): SourceDocumentV1 => ({
   version: 1,

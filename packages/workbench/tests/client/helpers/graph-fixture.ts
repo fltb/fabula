@@ -4,13 +4,13 @@
  * exactly like `projectCanonicalGraphRuntime` output.
  */
 
+import { type GraphCanvasModelV1, layoutGraphView } from '../../../src/client/graph-view-model';
 import { WORKBENCH_GRAPH_VIEW_VERSION } from '../../../src/contracts/graph.js';
 import type {
   WorkbenchGraphProjectionV1,
   WorkbenchGraphViewV1,
   WorkbenchRouteViewV1,
 } from '../../../src/contracts/index.js';
-import { layoutGraphView, type GraphCanvasModelV1 } from '../../../src/client/graph-view-model';
 
 function deepFreeze<T>(value: T): T {
   if (value === null || (typeof value !== 'object' && typeof value !== 'function')) {

@@ -48,8 +48,9 @@ export function resolveProfile(input: StyleResolverInput): SimpleStyleProfile {
     for (const level of levels) {
       if (level[key] !== undefined) {
         // Deep clone for avoid[] to ensure immutability
-        if (key === 'avoid' && Array.isArray(level.avoid)) {
-          (merged as Record<string, unknown>)[key] = [...level.avoid!];
+        const avoid = level.avoid;
+        if (key === 'avoid' && Array.isArray(avoid)) {
+          (merged as Record<string, unknown>)[key] = [...avoid];
         } else {
           (merged as Record<string, unknown>)[key] = level[key];
         }

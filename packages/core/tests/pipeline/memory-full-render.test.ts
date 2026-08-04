@@ -236,7 +236,7 @@ describe('immutable source snapshot — renderNovel full contract', () => {
     // Cache records (renderedAt, recordHash, full output) are identical.
     expect(a.captured).toHaveLength(1);
     expect(a.captured[0]).toEqual(b.captured[0]);
-    const recordOutput = a.captured[0]!.output;
+    const recordOutput = a.captured[0]?.output;
     if (typeof recordOutput === 'object' && recordOutput !== null && 'renderedAt' in recordOutput) {
       expect(recordOutput.renderedAt).toBe(FIXED_NOW);
     }
@@ -274,13 +274,18 @@ describe('immutable source snapshot — renderNovel full contract', () => {
     };
     const early = await capture('2026-01-01T00:00:00.000Z');
     const late = await capture('2026-12-31T23:59:59.000Z');
-    const earlyOutput = early!.output;
-    const lateOutput = late!.output;
-    if (typeof earlyOutput === 'object' && earlyOutput !== null && 'renderedAt' in earlyOutput) {
-      expect(earlyOutput.renderedAt).toBe('2026-01-01T00:00:00.000Z');
+    if (early === null || late === null) {
+      throw new Error('expected render cache records for both injected clocks');
     }
-    if (typeof lateOutput === 'object' && lateOutput !== null && 'renderedAt' in lateOutput) {
-      expect(lateOutput.renderedAt).toBe('2026-12-31T23:59:59.000Z');
+    const earlyOutput = early.output;
+    const lateOutput = late.output;
+    if (typeof earlyOutput !== 'object' || earlyOutput === null || !('renderedAt' in earlyOutput)) {
+      throw new Error('expected early render cache output to include renderedAt');
     }
+    if (typeof lateOutput !== 'object' || lateOutput === null || !('renderedAt' in lateOutput)) {
+      throw new Error('expected late render cache output to include renderedAt');
+    }
+    expect(earlyOutput.renderedAt).toBe('2026-01-01T00:00:00.000Z');
+    expect(lateOutput.renderedAt).toBe('2026-12-31T23:59:59.000Z');
   });
 });

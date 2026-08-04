@@ -10,6 +10,7 @@
 
 import * as crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { MockPass2Provider } from '../../src/ai/providers/mock-pass2.ts';
 import { reviewFeedbackProjection, sortReviewFeedback } from '../../src/editorial/compiler.ts';
 import {
   buildEventRevisionStates,
@@ -23,7 +24,13 @@ import {
 import type { AcceptedSceneRecord } from '../../src/ports/execution-repository.ts';
 import type { Clock, IdGenerator } from '../../src/ports/runtime-services.ts';
 import { ReviewManager } from '../../src/review/manager.ts';
-import { MemoryExecutionRepository } from '../../src/testing/memory-repositories.ts';
+import { reviewLedgerV1Schema } from '../../src/schemas/review.ts';
+import {
+  MemoryExecutionRepository,
+  MemoryRenderCacheRepository,
+  MemoryStateLogRepository,
+  MemoryStateSnapshotRepository,
+} from '../../src/testing/memory-repositories.ts';
 import type { EditorialRuntime, RevisionRequest } from '../../src/types/editorial.ts';
 import type {
   NewReviewComment,
@@ -84,8 +91,18 @@ function runtime(
   execution: MemoryExecutionRepository,
   services?: { clock: Clock; ids: IdGenerator },
 ): EditorialRuntime {
-  const injected = services ? { execution, ...services } : { execution };
-  return { services: injected } as unknown as EditorialRuntime;
+  return {
+    services: {
+      execution,
+      renderCache: new MemoryRenderCacheRepository(),
+      stateLog: new MemoryStateLogRepository(),
+      stateSnapshots: new MemoryStateSnapshotRepository(),
+      promptTemplates: { get: async () => null },
+      clock: services?.clock ?? { now: () => NOW },
+      ids: services?.ids ?? { next: () => crypto.randomUUID() },
+      llm: new MockPass2Provider(),
+    },
+  };
 }
 
 describe('editorial revision feedback', () => {
@@ -261,8 +278,8 @@ describe('editorial revision feedback', () => {
       id: 'E1',
       lineRange: [1, 3],
       lineBasis: {
-        revisionId: lineReview.target.lineBasis!.revisionId,
-        proseHash: lineReview.target.lineBasis!.proseHash,
+        revisionId: lineReview.target.lineBasis?.revisionId,
+        proseHash: lineReview.target.lineBasis?.proseHash,
       },
     });
   });
@@ -293,7 +310,7 @@ describe('editorial revision feedback', () => {
       { projectId: PROJECT_ID, mutation, input: line(revisionId, hash('line one\nline two')) },
       runtime(execution),
     );
-    expect(added.id).toMatch(/^rev_/);
+    expect(added.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
 
     // Same prose hash but a different revision ID is stale.
     await expect(
@@ -437,7 +454,10 @@ describe('editorial revision feedback', () => {
     await manager.applyComments([chapterReview.id], application('E2'), new Set([chapterReview.id]));
     comments = await manager.getComments();
     expect(comments.find((entry) => entry.id === chapterReview.id)?.status).toBe('addressed');
-    const novel = comments.find((entry) => entry.id === novelReview.id)!;
+    const novel = comments.find((entry) => entry.id === novelReview.id);
+    if (novel === undefined) {
+      throw new Error('expected the novel review to remain in the ledger');
+    }
     expect(novel.status).toBe('open');
     expect(novel.applications).toEqual([]);
 
@@ -446,7 +466,10 @@ describe('editorial revision feedback', () => {
     await manager.applyComments([novelReview.id], application('E1'), new Set([novelReview.id]));
     await manager.applyComments([novelReview.id], application('E2'), new Set([novelReview.id]));
     comments = await manager.getComments();
-    const addressedNovel = comments.find((entry) => entry.id === novelReview.id)!;
+    const addressedNovel = comments.find((entry) => entry.id === novelReview.id);
+    if (addressedNovel === undefined) {
+      throw new Error('expected the addressed novel review in the ledger');
+    }
     expect(addressedNovel.status).toBe('addressed');
     expect(addressedNovel.applications.map((entry) => entry.eventId)).toEqual(['E1', 'E2']);
   });
@@ -540,8 +563,10 @@ describe('editorial revision feedback', () => {
     // The injected identities are exactly what reached the review ledger via
     // repository compare-and-swap — no fallback IDs or timestamps leaked in.
     const record = await execution.readReview({ projectId: PROJECT_ID, reviewId: 'ledger' });
-    expect(record).not.toBeNull();
-    const ledger = record!.value.value as { comments: Array<{ id: string; createdAt: string }> };
+    if (record === null) {
+      throw new Error('expected the review ledger record');
+    }
+    const ledger = reviewLedgerV1Schema.parse(record.value.value);
     expect(ledger.comments.map((entry) => entry.id)).toEqual(['rev_facade_1', 'rev_facade_2']);
     expect(ledger.comments.every((entry) => entry.createdAt === now)).toBe(true);
   });

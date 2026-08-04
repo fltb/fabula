@@ -50,7 +50,9 @@ describe('ProjectWriteCoordinator authority lease', () => {
     await expect(coordinator.withWorkbenchMutation(token, () => undefined)).rejects.toBeInstanceOf(
       ProjectAuthorityTokenError,
     );
-    await expect(coordinator.withStandaloneMutation(() => 'standalone')).resolves.toBe('standalone');
+    await expect(coordinator.withStandaloneMutation(() => 'standalone')).resolves.toBe(
+      'standalone',
+    );
   });
 
   it('reclaims an expired lease only after an explicit failed health probe', async () => {

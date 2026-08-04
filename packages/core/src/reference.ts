@@ -1,7 +1,21 @@
 import { sha256Bytes } from './cache/pure-sha256.ts';
 
 const HASH_RE = /^[0-9a-f]{64}$/;
-const CONTROL_RE = /[\u0000\u0001-\u0008\u000b\u000c\u000e-\u001f\u007f]/u;
+
+function hasControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (
+      (code >= 0 && code <= 8) ||
+      (code >= 11 && code <= 12) ||
+      (code >= 14 && code <= 31) ||
+      code === 127
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
 const DEFAULT_CHUNK_BYTES = 64 * 1024;
 const DEFAULT_MAX_CHUNKS = 4096;
 const DEFAULT_MAX_QUOTE_LENGTH = 4096;
@@ -78,7 +92,11 @@ export class ReferenceExtractionError extends Error {
   override readonly name = 'ReferenceExtractionError';
 }
 
-function requireBound(value: number | undefined, label: string, minimum: number): number | undefined {
+function requireBound(
+  value: number | undefined,
+  label: string,
+  minimum: number,
+): number | undefined {
   if (value === undefined) return undefined;
   if (!Number.isSafeInteger(value) || value < minimum) {
     throw new ReferenceExtractionError(`${label} must be a safe integer >= ${minimum}`);
@@ -87,18 +105,30 @@ function requireBound(value: number | undefined, label: string, minimum: number)
 }
 
 function requireText(value: string, label: string): void {
-  if (value.length === 0 || CONTROL_RE.test(value)) {
-    throw new ReferenceExtractionError(`${label} must be non-empty text without control characters`);
+  if (value.length === 0 || hasControlCharacter(value)) {
+    throw new ReferenceExtractionError(
+      `${label} must be non-empty text without control characters`,
+    );
   }
+}
+
+function requiredArrayValue<T>(values: readonly T[], index: number, label: string): T {
+  const value = values[index];
+  if (value === undefined) {
+    throw new ReferenceExtractionError(`${label} invariant was violated`);
+  }
+  return value;
 }
 
 function isTextMediaType(mediaType: string): boolean {
   const normalized = mediaType.toLowerCase();
-  return normalized.startsWith('text/') ||
+  return (
+    normalized.startsWith('text/') ||
     normalized.includes('json') ||
     normalized.includes('xml') ||
     normalized.includes('yaml') ||
-    normalized.includes('javascript');
+    normalized.includes('javascript')
+  );
 }
 
 /**
@@ -117,9 +147,9 @@ export class DeterministicReferenceExtractor implements ReferenceExtractorV1 {
   constructor(options: ReferenceExtractorOptionsV1 = {}) {
     this.#chunkBytes = requireBound(options.chunkBytes, 'chunkBytes', 1) ?? DEFAULT_CHUNK_BYTES;
     this.#maxChunks = requireBound(options.maxChunks, 'maxChunks', 1) ?? DEFAULT_MAX_CHUNKS;
-    this.#maxQuoteLength = requireBound(options.maxQuoteLength, 'maxQuoteLength', 0) ?? DEFAULT_MAX_QUOTE_LENGTH;
-    this.#chunkOverlapBytes =
-      requireBound(options.chunkOverlapBytes, 'chunkOverlapBytes', 0) ?? 0;
+    this.#maxQuoteLength =
+      requireBound(options.maxQuoteLength, 'maxQuoteLength', 0) ?? DEFAULT_MAX_QUOTE_LENGTH;
+    this.#chunkOverlapBytes = requireBound(options.chunkOverlapBytes, 'chunkOverlapBytes', 0) ?? 0;
     if (this.#chunkOverlapBytes >= this.#chunkBytes) {
       throw new ReferenceExtractionError('chunkOverlapBytes must be smaller than chunkBytes');
     }
@@ -150,7 +180,8 @@ export class DeterministicReferenceExtractor implements ReferenceExtractorV1 {
     }
     const chunkBytes = requireBound(input.chunkBytes, 'chunkBytes', 1) ?? this.#chunkBytes;
     const maxChunks = requireBound(input.maxChunks, 'maxChunks', 1) ?? this.#maxChunks;
-    const maxQuoteLength = requireBound(input.maxQuoteLength, 'maxQuoteLength', 0) ?? this.#maxQuoteLength;
+    const maxQuoteLength =
+      requireBound(input.maxQuoteLength, 'maxQuoteLength', 0) ?? this.#maxQuoteLength;
     const chunkOverlapBytes =
       requireBound(input.chunkOverlapBytes, 'chunkOverlapBytes', 0) ?? this.#chunkOverlapBytes;
     const chunkCharacters =
@@ -167,7 +198,12 @@ export class DeterministicReferenceExtractor implements ReferenceExtractorV1 {
       );
     }
     const isText = isTextMediaType(input.mediaType);
-    const makeChunk = (ordinal: number, offset: number, bytes: Uint8Array, quote: string | null): ReferenceChunkV1 => {
+    const makeChunk = (
+      ordinal: number,
+      offset: number,
+      bytes: Uint8Array,
+      quote: string | null,
+    ): ReferenceChunkV1 => {
       const end = offset + bytes.length;
       return {
         version: 1,
@@ -195,13 +231,25 @@ export class DeterministicReferenceExtractor implements ReferenceExtractorV1 {
       const characters = Array.from(text);
       const encoder = new TextEncoder();
       const offsets = [0];
-      for (const character of characters) offsets.push(offsets[offsets.length - 1]! + encoder.encode(character).length);
+      for (const character of characters)
+        offsets.push(
+          requiredArrayValue(offsets, offsets.length - 1, 'character offset') +
+            encoder.encode(character).length,
+        );
       const chunks: ReferenceChunkV1[] = [];
       for (let start = 0, ordinal = 0; start < characters.length; ordinal += 1) {
-        if (ordinal >= maxChunks) throw new ReferenceExtractionError(`reference produces more than ${maxChunks} chunks`);
+        if (ordinal >= maxChunks)
+          throw new ReferenceExtractionError(`reference produces more than ${maxChunks} chunks`);
         const end = Math.min(start + chunkCharacters, characters.length);
         const excerpt = characters.slice(start, end).join('');
-        chunks.push(makeChunk(ordinal, offsets[start]!, encoder.encode(excerpt), excerpt.slice(0, maxQuoteLength)));
+        chunks.push(
+          makeChunk(
+            ordinal,
+            requiredArrayValue(offsets, start, 'chunk start offset'),
+            encoder.encode(excerpt),
+            excerpt.slice(0, maxQuoteLength),
+          ),
+        );
         if (end === characters.length) break;
         start = end - chunkOverlapCharacters;
       }
@@ -213,7 +261,10 @@ export class DeterministicReferenceExtractor implements ReferenceExtractorV1 {
       if (ordinal >= maxChunks) {
         throw new ReferenceExtractionError(`reference produces more than ${maxChunks} chunks`);
       }
-      const bytes = input.content.slice(offset, Math.min(offset + chunkBytes, input.content.length));
+      const bytes = input.content.slice(
+        offset,
+        Math.min(offset + chunkBytes, input.content.length),
+      );
       const end = offset + bytes.length;
       const quote = isText ? new TextDecoder().decode(bytes).slice(0, maxQuoteLength) : null;
       chunks.push(makeChunk(ordinal, offset, bytes, quote));
@@ -225,7 +276,9 @@ export class DeterministicReferenceExtractor implements ReferenceExtractorV1 {
 }
 
 /** Convenience function for callers that do not need an extractor instance. */
-export function extractReferenceChunks(input: ReferenceExtractionInputV1): readonly ReferenceChunkV1[] {
+export function extractReferenceChunks(
+  input: ReferenceExtractionInputV1,
+): readonly ReferenceChunkV1[] {
   return new DeterministicReferenceExtractor().extract(input);
 }
 
@@ -243,27 +296,36 @@ export function buildReferencePacket(
   requireText(projectId, 'projectId');
   if (!Array.isArray(citations)) throw new ReferenceExtractionError('citations must be an array');
   const maxCitations = requireBound(options.maxCitations, 'maxCitations', 0) ?? 32;
-  const maxQuoteLength = requireBound(options.maxQuoteLength, 'maxQuoteLength', 0) ?? DEFAULT_MAX_QUOTE_LENGTH;
+  const maxQuoteLength =
+    requireBound(options.maxQuoteLength, 'maxQuoteLength', 0) ?? DEFAULT_MAX_QUOTE_LENGTH;
   if (citations.length > maxCitations) {
     throw new ReferenceExtractionError(`citation count exceeds ${maxCitations}`);
   }
   const seen = new Set<string>();
   const bounded = citations.map((citation, index) => {
     if (citation.version !== 1 || citation.authoritative !== false) {
-      throw new ReferenceExtractionError(`citation ${index} must be version 1 and non-authoritative`);
+      throw new ReferenceExtractionError(
+        `citation ${index} must be version 1 and non-authoritative`,
+      );
     }
     for (const [label, value] of [
       ['citationId', citation.citationId],
       ['referenceId', citation.referenceId],
       ['chunkId', citation.chunkId],
       ['locator', citation.locator],
-    ] as const) requireText(value, `citation ${index} ${label}`);
-    if (seen.has(citation.citationId)) throw new ReferenceExtractionError(`duplicate citationId: ${citation.citationId}`);
+    ] as const)
+      requireText(value, `citation ${index} ${label}`);
+    if (seen.has(citation.citationId))
+      throw new ReferenceExtractionError(`duplicate citationId: ${citation.citationId}`);
     seen.add(citation.citationId);
     if (!HASH_RE.test(citation.contentHash) || !HASH_RE.test(citation.chunkHash)) {
       throw new ReferenceExtractionError(`citation ${index} has invalid hash`);
     }
-    if (typeof citation.quote !== 'string' || citation.quote.length === 0 || CONTROL_RE.test(citation.quote)) {
+    if (
+      typeof citation.quote !== 'string' ||
+      citation.quote.length === 0 ||
+      hasControlCharacter(citation.quote)
+    ) {
       throw new ReferenceExtractionError(`citation ${index} quote is invalid`);
     }
     return {

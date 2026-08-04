@@ -96,7 +96,10 @@ describe('strict YAML compiler', () => {
       schema: eventFileSchema,
       snapshot: source,
     });
-    const mapped = new EntityMapper(source).mapToNarrativeEvent(parsed!);
+    if (!parsed) {
+      throw new Error('Expected structured event to parse');
+    }
+    const mapped = new EntityMapper(source).mapToNarrativeEvent(parsed);
     expect(mapped.storyTime).toEqual({
       type: 'relative',
       anchor: 'arrival',

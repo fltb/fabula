@@ -22,7 +22,6 @@ import type {
   NarrativeEvent,
   SceneSpecification,
   SystemContext,
-  WorldState,
 } from '../../src/types/index.ts';
 import { ResultAggregator } from '../../src/validator/aggregator.ts';
 import { createBuiltInValidators } from '../../src/validator/builtins.ts';
@@ -160,26 +159,26 @@ describe('dynamic schema path', () => {
       result.analysis,
       `${result.errors.join('\n')}\n${JSON.stringify(result.requestRecords.at(-1))}`,
     ).not.toBeNull();
-    const a = result.analysis!.analysis;
+    const a = result.analysis?.analysis;
 
     // 1. postconditions
     expect(a).toHaveProperty('postconditions');
-    expect(a['postconditions']).toEqual({ covered: [], dropped: [] });
+    expect(a.postconditions).toEqual({ covered: [], dropped: [] });
 
     // 2. preconditions
     expect(a).toHaveProperty('preconditions');
-    expect(a['preconditions']).toEqual({ violated: [] });
+    expect(a.preconditions).toEqual({ violated: [] });
 
     // 3. pov
     expect(a).toHaveProperty('pov');
-    expect(a['pov']).toMatchObject({ consistent: true });
+    expect(a.pov).toMatchObject({ consistent: true });
 
     // 4. inventedDetails
     expect(a).toHaveProperty('inventedDetails');
 
     // 5. quality
     expect(a).toHaveProperty('quality');
-    expect(a['quality']).toHaveProperty('proseScore');
+    expect(a.quality).toHaveProperty('proseScore');
 
     // 6. threadProgressAchieved
     expect(a).toHaveProperty('threadProgressAchieved');
@@ -198,7 +197,7 @@ describe('dynamic schema path', () => {
 
     // 11. tenseDetected
     expect(a).toHaveProperty('tenseDetected');
-    expect(a['tenseDetected']).toBe('past');
+    expect(a.tenseDetected).toBe('past');
 
     // 12. conflictAnalysis
     expect(a).toHaveProperty('conflictAnalysis');
@@ -390,7 +389,7 @@ describe('analysis contract', () => {
     const schemaFields = Object.keys(contract.combinedSchema.shape);
     for (const sf of schemaFields) {
       const hasDirect = reqFields.has(sf);
-      const hasDotted = [...reqFields].some((f) => f.startsWith(sf + '.'));
+      const hasDotted = [...reqFields].some((f) => f.startsWith(`${sf}.`));
       expect(hasDirect || hasDotted).toBe(true);
     }
   });
@@ -496,7 +495,7 @@ describe('analysis contract', () => {
     expect(contract.requirements.some((r) => r.field === 'pluginTestField')).toBe(true);
 
     // Combined schema includes plugin field
-    expect(contract.combinedSchema.shape['pluginTestField']).toBeDefined();
+    expect(contract.combinedSchema.shape.pluginTestField).toBeDefined();
 
     // getAnalysisRequirements also has it (delegates to contract)
     const reqs = aggregator.getAnalysisRequirements();
@@ -504,7 +503,7 @@ describe('analysis contract', () => {
 
     // getCombinedValidationSchema also has it (delegates to contract)
     const schema = aggregator.getCombinedValidationSchema();
-    expect(schema.shape['pluginTestField']).toBeDefined();
+    expect(schema.shape.pluginTestField).toBeDefined();
   });
 
   it('activeRules from context are passed to Pass 2 analysis input', async () => {
@@ -537,7 +536,7 @@ describe('analysis contract', () => {
     // The prompt render-analysis.ts includes Active World Rules section when
     // input.activeRules is non-empty — the mock won't surface it in output,
     // but the pipeline should not crash and analysis should be valid.
-    expect(result.analysis!.eventId).toBe('test');
+    expect(result.analysis?.eventId).toBe('test');
   });
 
   it('pipeline uses analysisContract schema when provided', async () => {
@@ -560,7 +559,7 @@ describe('analysis contract', () => {
 
     const result = await pipeline.renderScene(makeJob('test'));
     expect(result.analysis, result.errors.join('\n')).not.toBeNull();
-    expect(result.analysis!.eventId).toBe('test');
+    expect(result.analysis?.eventId).toBe('test');
   });
 
   it('override off excludes requirement fields from contract', () => {

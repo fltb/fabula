@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { NarrativeEvent, PreRenderInput } from '../../src/types/index.js';
 import { PacingValidator } from '../../src/validator/pacing.js';
 
+type ArcPosition = NonNullable<NarrativeEvent['arcPosition']>;
+
 function makeEvent(overrides: Partial<NarrativeEvent> & { id: string }): NarrativeEvent {
   return {
     event: overrides.id,
@@ -62,7 +64,7 @@ describe('PacingValidator', () => {
     const others = Array.from({ length: 10 }, (_, i) => {
       const n = i + 1;
       if (n === 8) return null;
-      const arc: string | undefined =
+      const arc: ArcPosition | undefined =
         n < 8
           ? n <= 2
             ? 'opening'
@@ -72,8 +74,8 @@ describe('PacingValidator', () => {
             : n <= 9
               ? 'falling'
               : 'denouement';
-      return makeEvent({ id: `E${n}`, narrativeOrder: n, arcPosition: arc as any });
-    }).filter(Boolean) as NarrativeEvent[];
+      return makeEvent({ id: `E${n}`, narrativeOrder: n, arcPosition: arc });
+    }).filter((event): event is NarrativeEvent => event !== null);
 
     const input = makeInput(event, others);
     const issues = new PacingValidator().validatePre(input);
@@ -90,7 +92,7 @@ describe('PacingValidator', () => {
       const n = i + 1;
       if (n === 2) return null;
       return makeEvent({ id: `E${n}`, narrativeOrder: n });
-    }).filter(Boolean) as NarrativeEvent[];
+    }).filter((event): event is NarrativeEvent => event !== null);
 
     const input = makeInput(event, others);
     const issues = new PacingValidator().validatePre(input);

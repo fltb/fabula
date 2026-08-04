@@ -22,8 +22,8 @@ export class ReachabilityValidator implements Validator {
     const allThreads = input.worldState.threads;
     for (const [threadId, threadData] of Object.entries(allThreads)) {
       const goalStates = threadData.goalStates ?? {};
-      const totalGoals = Object.keys(goalStates!).length;
-      const achievedGoals = Object.values(goalStates!).filter((s) => s === 'achieved').length;
+      const totalGoals = Object.keys(goalStates).length;
+      const achievedGoals = Object.values(goalStates).filter((s) => s === 'achieved').length;
       if (achievedGoals < totalGoals && input.chapter > event.narrativeOrder) {
         const behind = totalGoals - achievedGoals;
         if (behind > 2 && input.chapter > 5) {

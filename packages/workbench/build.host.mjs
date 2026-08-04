@@ -2,8 +2,8 @@
 
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
 import { arch, platform } from 'node:os';
+import { dirname, relative, resolve } from 'node:path';
 import { build } from 'esbuild';
 
 const root = dirname(new URL(import.meta.url).pathname);
@@ -72,7 +72,9 @@ const entryPoints = {
   mcp: 'host/mcp/index.js',
   'persistence-worker': 'persistence/worker.js',
 };
-const entryByPath = new Map(Object.entries(entryPoints).map(([name, outputPath]) => [outputPath, name]));
+const entryByPath = new Map(
+  Object.entries(entryPoints).map(([name, outputPath]) => [outputPath, name]),
+);
 const outputs = outputFiles.map((path) => {
   const bytes = readFileSync(resolve(outdir, path));
   return {

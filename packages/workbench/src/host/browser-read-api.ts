@@ -23,18 +23,18 @@ import {
   BROWSER_GRAPH_ROUTE_QUERY,
   BROWSER_PROJECT_GRAPHS_PATH,
   BROWSER_PROJECT_OVERVIEW_PATH,
+  BROWSER_PROJECT_REFERENCES_PATH,
   BROWSER_PROJECTS_PATH,
   BROWSER_SESSION_HEADER,
   BROWSER_SESSION_PATH,
   type BrowserApiErrorV1,
   type BrowserGraphRouteSelectorV1,
-  BROWSER_PROJECT_REFERENCES_PATH,
   type BrowserProjectListV1,
   type BrowserProjectOverviewV1,
+  type BrowserProjectReferenceListQueryV1,
+  type BrowserProjectReferenceListV1,
   type BrowserProjectSummaryV1,
   type BrowserSessionPrincipalV1,
-  type BrowserProjectReferenceListV1,
-  type BrowserProjectReferenceListQueryV1,
 } from '../contracts/browser-api.js';
 import type { WorkbenchGraphProjectionV1 } from '../contracts/graph.js';
 import type { UserState } from '../contracts/persistence.js';
@@ -42,10 +42,9 @@ import {
   BROWSER_PROJECT_SOURCE_PATH,
   type SourceStudioStateV1,
 } from '../contracts/source-studio.js';
-import type { ProjectAccessRequiredRole, ProjectAccessService } from './project-access-service.js';
-
 import type { LocalAuthService } from './auth/service.js';
 import type { HostListenerEnv } from './listener.js';
+import type { ProjectAccessRequiredRole, ProjectAccessService } from './project-access-service.js';
 
 // ─── Injected ports ──────────────────────────────────────────────────────────
 
@@ -114,7 +113,11 @@ export function createBrowserPrincipalResolver(
  * Denial is 403 before any project data is loaded.
  */
 export interface BrowserProjectAuthorization {
-  canAccessProject(userId: string, projectId: string, requiredRole?: ProjectAccessRequiredRole): boolean | Promise<boolean>;
+  canAccessProject(
+    userId: string,
+    projectId: string,
+    requiredRole?: ProjectAccessRequiredRole,
+  ): boolean | Promise<boolean>;
 }
 
 /**
@@ -181,7 +184,6 @@ export interface BrowserReadApiOptions {
   /** Optional until the durable reference port is configured for the project. */
   readonly references?: BrowserReferenceLibrarySource;
 }
-
 
 /** One GET route the surface exposes, mounted through the guarded read seam. */
 export interface BrowserReadRoute {
@@ -409,9 +411,10 @@ async function projectIsListed(
   principal: BrowserSessionPrincipalV1,
   projectId: string,
 ): Promise<boolean> {
-  const projects = api.options.access !== undefined
-    ? await api.options.access.listProjects(principal)
-    : await api.options.catalog.listProjects(principal);
+  const projects =
+    api.options.access !== undefined
+      ? await api.options.access.listProjects(principal)
+      : await api.options.catalog.listProjects(principal);
   return projects.some((project) => project.projectId === projectId);
 }
 
@@ -603,7 +606,10 @@ function referencesHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
       return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
     }
     if (api.options.references === undefined) {
-      return errorResponse('REFERENCE_UNAVAILABLE', 'The reference library is not enabled for this project.');
+      return errorResponse(
+        'REFERENCE_UNAVAILABLE',
+        'The reference library is not enabled for this project.',
+      );
     }
     const rawPageSize = c.req.query('pageSize');
     const rawCursor = c.req.query('cursor');
@@ -626,11 +632,17 @@ function referencesHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
     try {
       const references = await api.options.references.loadReferences(projectId, query);
       if (references === null) {
-        return errorResponse('REFERENCE_UNAVAILABLE', 'The reference library is not enabled for this project.');
+        return errorResponse(
+          'REFERENCE_UNAVAILABLE',
+          'The reference library is not enabled for this project.',
+        );
       }
       return c.json(references);
     } catch {
-      return errorResponse('REFERENCE_UNAVAILABLE', 'The reference library could not be loaded by the host.');
+      return errorResponse(
+        'REFERENCE_UNAVAILABLE',
+        'The reference library could not be loaded by the host.',
+      );
     }
   };
 }

@@ -15,16 +15,16 @@
 
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import type { Context, Handler } from 'hono';
+import type { Handler } from 'hono';
 import {
+  type AdminNetworkUpdateRequestV1,
   BROWSER_SETUP_BASE_PATH,
   BROWSER_SETUP_STATUS_PATH,
-  WORKBENCH_CONFIGURATION_VERSION,
-  type AdminNetworkUpdateRequestV1,
   type ConfigOperationReceiptV1,
   type SetupFinishRequestV1,
   type SetupSaveCredentialRequestV1,
   type SetupSaveProjectRequestV1,
+  WORKBENCH_CONFIGURATION_VERSION,
   type WorkbenchAdminOverviewV1,
   type WorkbenchConfigurationV1,
   type WorkbenchNetworkReadViewV1,
@@ -102,13 +102,11 @@ function parseRequest(
   return body;
 }
 
-function firstDiagnostic(diagnostics: readonly { code: string; message: string }[]): string {
+function _firstDiagnostic(diagnostics: readonly { code: string; message: string }[]): string {
   return diagnostics[0]?.code ?? 'CONFIG_INVALID';
 }
 
-function firstDiagnosticMessage(
-  diagnostics: readonly { code: string; message: string }[],
-): string {
+function firstDiagnosticMessage(diagnostics: readonly { code: string; message: string }[]): string {
   return diagnostics[0]?.message ?? 'The configuration is invalid.';
 }
 
@@ -156,7 +154,10 @@ export interface SetupStatusBuilder {
     readonly draft?: SetupDraftView | null;
     readonly restartRequired: boolean;
     readonly workerReady: boolean;
-    readonly ownerProfile: { readonly displayName: string; readonly capabilityVersion: number } | null;
+    readonly ownerProfile: {
+      readonly displayName: string;
+      readonly capabilityVersion: number;
+    } | null;
   }): Promise<WorkbenchAdminOverviewV1>;
 }
 
@@ -186,9 +187,7 @@ function deriveSetupPhase(input: {
  * readiness and auth state are re-derived on every call; the phase is derived
  * from the same facts so it cannot drift from the file.
  */
-export function createSetupStatusBuilder(
-  options: SetupStatusBuilderOptions,
-): SetupStatusBuilder {
+export function createSetupStatusBuilder(options: SetupStatusBuilderOptions): SetupStatusBuilder {
   const now = options.now ?? (() => new Date().toISOString());
 
   async function build(draft?: SetupDraftView | null): Promise<WorkbenchSetupStatusV1> {
@@ -260,7 +259,10 @@ export function createSetupStatusBuilder(
     readonly draft?: SetupDraftView | null;
     readonly restartRequired: boolean;
     readonly workerReady: boolean;
-    readonly ownerProfile: { readonly displayName: string; readonly capabilityVersion: number } | null;
+    readonly ownerProfile: {
+      readonly displayName: string;
+      readonly capabilityVersion: number;
+    } | null;
   }): Promise<WorkbenchAdminOverviewV1> {
     const setup = await build(input.draft ?? null);
     const hostStatus: WorkbenchAdminOverviewV1['hostStatus'] = !setup.configurationPresent
@@ -297,7 +299,11 @@ export interface SetupApiOptions extends SetupStatusBuilderOptions {
 }
 
 export interface SetupApiSurface {
-  readonly routes: readonly { readonly method: SetupHttpMethod; readonly path: string; readonly handler: Handler<HostListenerEnv> }[];
+  readonly routes: readonly {
+    readonly method: SetupHttpMethod;
+    readonly path: string;
+    readonly handler: Handler<HostListenerEnv>;
+  }[];
   register(host: HostServer): void;
 }
 
@@ -339,16 +345,12 @@ function isLoopback(mode: HostListenerMode): boolean {
  */
 export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
   const statusBuilder = createSetupStatusBuilder(options);
-  const newId = options.newId ?? randomUUID;
+  const _newId = options.newId ?? randomUUID;
   let draft: SetupDraftState | null = null;
 
   async function guardMutation(): Promise<Response | null> {
     if (!isLoopback(options.listenerMode())) {
-      return setupError(
-        'SETUP_DISABLED',
-        'Setup is only available on the loopback listener.',
-        403,
-      );
+      return setupError('SETUP_DISABLED', 'Setup is only available on the loopback listener.', 403);
     }
     const present = await options.configuration.readActive();
     if (present !== null) {
@@ -413,13 +415,13 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       const denied = await guardMutation();
       if (denied !== null) return denied;
       const body = await bodyObject(c.req.raw);
-      const parsed = parseRequest(
-        body,
-        ['projectId', 'displayName', 'root'],
-        'projects/validate',
-      );
+      const parsed = parseRequest(body, ['projectId', 'displayName', 'root'], 'projects/validate');
       if (parsed === null) {
-        return setupError('UNKNOWN_FIELD', 'projects/validate accepts only projectId, displayName, root.', 400);
+        return setupError(
+          'UNKNOWN_FIELD',
+          'projects/validate accepts only projectId, displayName, root.',
+          400,
+        );
       }
       const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : '';
       const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';
@@ -438,7 +440,11 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
           first !== undefined && first.code in SETUP_ERROR_STATUS
             ? (first.code as WorkbenchSetupErrorCode)
             : 'CONFIG_INVALID';
-        return setupError(code, firstDiagnosticMessage(result.diagnostics), SETUP_ERROR_STATUS[code]);
+        return setupError(
+          code,
+          firstDiagnosticMessage(result.diagnostics),
+          SETUP_ERROR_STATUS[code],
+        );
       }
       return json({
         version: WORKBENCH_CONFIGURATION_VERSION,
@@ -455,14 +461,22 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       const body = await bodyObject(c.req.raw);
       const parsed = parseRequest(body, ['projectId', 'displayName', 'root'], 'projects');
       if (parsed === null) {
-        return setupError('UNKNOWN_FIELD', 'projects accepts only projectId, displayName, root.', 400);
+        return setupError(
+          'UNKNOWN_FIELD',
+          'projects accepts only projectId, displayName, root.',
+          400,
+        );
       }
       const projectId = typeof parsed.projectId === 'string' ? parsed.projectId : '';
       const displayName = typeof parsed.displayName === 'string' ? parsed.displayName : '';
       const root = typeof parsed.root === 'string' ? parsed.root : '';
       const base = draft ?? structuredClone(EMPTY_DRAFT);
       if (base.configuration.projects.some((project) => project.projectId === projectId)) {
-        return setupError('PROJECT_DUPLICATE_ID', `Project "${projectId}" is already registered.`, 409);
+        return setupError(
+          'PROJECT_DUPLICATE_ID',
+          `Project "${projectId}" is already registered.`,
+          409,
+        );
       }
       const candidate: WorkbenchConfigurationV1 = {
         ...base.configuration,
@@ -476,7 +490,11 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
           first !== undefined && first.code in SETUP_ERROR_STATUS
             ? (first.code as WorkbenchSetupErrorCode)
             : 'CONFIG_INVALID';
-        return setupError(code, firstDiagnosticMessage(result.diagnostics), SETUP_ERROR_STATUS[code]);
+        return setupError(
+          code,
+          firstDiagnosticMessage(result.diagnostics),
+          SETUP_ERROR_STATUS[code],
+        );
       }
       draft = { ...base, configuration: candidate };
       return json({
@@ -495,9 +513,14 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       const body = await bodyObject(c.req.raw);
       const parsed = parseRequest(body, ['kind', 'baseUrl', 'model'], 'providers/validate');
       if (parsed === null || parsed.kind !== 'ai-sdk') {
-        return setupError('CONFIG_INVALID', 'providers/validate accepts only kind "ai-sdk", baseUrl, model.', 400);
+        return setupError(
+          'CONFIG_INVALID',
+          'providers/validate accepts only kind "ai-sdk", baseUrl, model.',
+          400,
+        );
       }
-      const baseUrl = parsed.baseUrl === null || typeof parsed.baseUrl === 'string' ? parsed.baseUrl : null;
+      const baseUrl =
+        parsed.baseUrl === null || typeof parsed.baseUrl === 'string' ? parsed.baseUrl : null;
       const model = parsed.model === null || typeof parsed.model === 'string' ? parsed.model : null;
       if (baseUrl !== null && baseUrl !== '' && !/^https?:\/\//.test(baseUrl)) {
         return setupError('CONFIG_INVALID', 'baseUrl must be an http(s) URL or null.', 400);
@@ -514,7 +537,11 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
           },
         },
       };
-      return json({ version: WORKBENCH_CONFIGURATION_VERSION, kind: 'ai-sdk', validation: 'valid' });
+      return json({
+        version: WORKBENCH_CONFIGURATION_VERSION,
+        kind: 'ai-sdk',
+        validation: 'valid',
+      });
     };
   }
 
@@ -525,12 +552,20 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
       const body = await bodyObject(c.req.raw);
       const parsed = parseRequest(body, ['providerId', 'apiKey'], 'providers/credential');
       if (parsed === null) {
-        return setupError('UNKNOWN_FIELD', 'providers/credential accepts only providerId and apiKey.', 400);
+        return setupError(
+          'UNKNOWN_FIELD',
+          'providers/credential accepts only providerId and apiKey.',
+          400,
+        );
       }
       const providerId = typeof parsed.providerId === 'string' ? parsed.providerId : '';
       const apiKey = typeof parsed.apiKey === 'string' ? parsed.apiKey : '';
       if (!isValidProviderId(providerId) || apiKey.length === 0) {
-        return setupError('CREDENTIAL_INVALID', 'A valid providerId and a non-empty apiKey are required.', 400);
+        return setupError(
+          'CREDENTIAL_INVALID',
+          'A valid providerId and a non-empty apiKey are required.',
+          400,
+        );
       }
       try {
         await options.credentials.set(providerId, apiKey);
@@ -556,7 +591,11 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
         'network',
       );
       if (parsed === null) {
-        return setupError('UNKNOWN_FIELD', 'network accepts only mode, port, allowedHosts, allowedOrigins, unixSocketName.', 400);
+        return setupError(
+          'UNKNOWN_FIELD',
+          'network accepts only mode, port, allowedHosts, allowedOrigins, unixSocketName.',
+          400,
+        );
       }
       const resolved = resolveNetworkRequest(parsed, options.unixSocketDir);
       if (!resolved.ok) return setupError('NETWORK_INVALID', resolved.message, 400);
@@ -605,7 +644,11 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
           first !== undefined && first.code in SETUP_ERROR_STATUS
             ? (first.code as WorkbenchSetupErrorCode)
             : 'CONFIG_INVALID';
-        return setupError(code, firstDiagnosticMessage(validated.diagnostics), SETUP_ERROR_STATUS[code]);
+        return setupError(
+          code,
+          firstDiagnosticMessage(validated.diagnostics),
+          SETUP_ERROR_STATUS[code],
+        );
       }
       const receipt = await options.configuration.apply({
         candidate,
@@ -613,7 +656,11 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
         origin: 'setup',
       });
       if (receipt.status === 'stale') {
-        return setupError('CONFIG_STALE', 'The configuration changed during setup; re-read and retry.', 409);
+        return setupError(
+          'CONFIG_STALE',
+          'The configuration changed during setup; re-read and retry.',
+          409,
+        );
       }
       if (receipt.status === 'invalid') {
         return setupError('CONFIG_INVALID', firstDiagnosticMessage(receipt.diagnostics), 400);
@@ -626,10 +673,22 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
   const routes: SetupApiSurface['routes'] = [
     { method: 'GET', path: BROWSER_SETUP_STATUS_PATH, handler: statusHandler() },
     { method: 'POST', path: BROWSER_SETUP_OWNER_PATH, handler: ownerHandler() },
-    { method: 'POST', path: BROWSER_SETUP_PROJECTS_VALIDATE_PATH, handler: validateProjectHandler() },
+    {
+      method: 'POST',
+      path: BROWSER_SETUP_PROJECTS_VALIDATE_PATH,
+      handler: validateProjectHandler(),
+    },
     { method: 'POST', path: BROWSER_SETUP_PROJECTS_PATH, handler: saveProjectHandler() },
-    { method: 'POST', path: BROWSER_SETUP_PROVIDERS_VALIDATE_PATH, handler: validateProviderHandler() },
-    { method: 'POST', path: BROWSER_SETUP_PROVIDERS_CREDENTIAL_PATH, handler: saveCredentialHandler() },
+    {
+      method: 'POST',
+      path: BROWSER_SETUP_PROVIDERS_VALIDATE_PATH,
+      handler: validateProviderHandler(),
+    },
+    {
+      method: 'POST',
+      path: BROWSER_SETUP_PROVIDERS_CREDENTIAL_PATH,
+      handler: saveCredentialHandler(),
+    },
     { method: 'POST', path: BROWSER_SETUP_NETWORK_PATH, handler: applyNetworkHandler() },
     { method: 'POST', path: BROWSER_SETUP_FINISH_PATH, handler: finishHandler() },
   ];
@@ -648,10 +707,12 @@ export function createSetupApi(options: SetupApiOptions): SetupApiSurface {
 export function resolveNetworkRequest(
   request: Record<string, unknown>,
   unixSocketDir: string | undefined,
-): { readonly ok: true; readonly network: WorkbenchConfigurationV1['network'] } | {
-  readonly ok: false;
-  readonly message: string;
-} {
+):
+  | { readonly ok: true; readonly network: WorkbenchConfigurationV1['network'] }
+  | {
+      readonly ok: false;
+      readonly message: string;
+    } {
   const mode = request.mode;
   if (mode !== 'loopback' && mode !== 'lan' && mode !== 'unix') {
     return { ok: false, message: 'network.mode must be loopback, lan or unix.' };
@@ -707,4 +768,10 @@ export function resolveNetworkRequest(
   };
 }
 
-export type { SetupSaveProjectRequestV1 as SetupProjectInput, SetupSaveCredentialRequestV1 as SetupCredentialInput, AdminNetworkUpdateRequestV1 as SetupNetworkInput, SetupFinishRequestV1 as SetupFinishInput, ConfigOperationReceiptV1 };
+export type {
+  AdminNetworkUpdateRequestV1 as SetupNetworkInput,
+  ConfigOperationReceiptV1,
+  SetupFinishRequestV1 as SetupFinishInput,
+  SetupSaveCredentialRequestV1 as SetupCredentialInput,
+  SetupSaveProjectRequestV1 as SetupProjectInput,
+};

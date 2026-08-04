@@ -24,7 +24,6 @@ import type {
   NarrativeEvent,
   SceneSpecification,
   SystemContext,
-  WorldState,
 } from '../../src/types/index.ts';
 import { ResultAggregator } from '../../src/validator/aggregator.ts';
 import {
@@ -202,10 +201,14 @@ describe('dynamic schema path with aggregator', () => {
     const { pipeline } = makePipelineWithAggregator(entry);
     const result = await pipeline.renderScene(makeJob('test'));
 
-    expect(result.analysis).not.toBeNull();
-    expect(result.analysis!.eventId).toBe('test');
+    const analysis = result.analysis;
+    expect(analysis).not.toBeNull();
+    if (analysis === null) {
+      throw new Error('Expected parsed analysis');
+    }
+    expect(analysis.eventId).toBe('test');
     // All 14 blocks should be present in the parsed analysis
-    const a = result.analysis!.analysis;
+    const a = analysis.analysis;
     expect(a).toHaveProperty('postconditions');
     expect(a).toHaveProperty('preconditions');
     expect(a).toHaveProperty('pov');
@@ -451,7 +454,7 @@ describe('RenderPipeline provider call ledger', () => {
   // ── Bounded error in failureReason ─────────────────────────────────
 
   it('caps long failure reasons at MAX_REASON_LENGTH', async () => {
-    const longMsg = 'E: ' + '_'.repeat(300);
+    const longMsg = `E: ${'_'.repeat(300)}`;
     const { pipeline } = makePipeline({
       failOnCall: 1,
       failMessage: longMsg,
@@ -461,9 +464,15 @@ describe('RenderPipeline provider call ledger', () => {
     const result = await pipeline.renderScene(makeJob('evt_bounded'));
     const failEntry = result.providerCalls.find((e) => e.outcome === 'failure');
     expect(failEntry).toBeDefined();
-    expect(failEntry!.failureReason).toBeDefined();
+    if (failEntry === undefined) {
+      throw new Error('Expected a provider failure ledger entry');
+    }
+    expect(failEntry.failureReason).toBeDefined();
+    if (failEntry.failureReason === undefined) {
+      throw new Error('Expected the provider failure reason');
+    }
 
-    const reason = failEntry!.failureReason!;
+    const reason = failEntry.failureReason;
     // Must be shorter than the original long message
     expect(reason.length).toBeLessThan(longMsg.length);
     // Must be capped at 200 chars (MAX_REASON_LENGTH) plus possible ellipsis
@@ -477,7 +486,7 @@ describe('RenderPipeline provider call ledger', () => {
     const { pipeline } = makePipeline({
       // Return empty string for JSON-object-format calls (Pass2), prose for Pass1
       generator: (req) => {
-        if (req.responseFormat?.type === 'json_object') {
+        if (req.responseFormat !== undefined && req.responseFormat.type === 'json_object') {
           return '';
         }
         return 'Some prose for Pass 1.';
@@ -697,7 +706,7 @@ describe('RenderPipeline provider call ledger', () => {
   it('Pass2 empty retry injects feedback to mutate request identity', async () => {
     const { pipeline } = makePipeline({
       generator: (req) => {
-        if (req.responseFormat?.type === 'json_object') {
+        if (req.responseFormat !== undefined && req.responseFormat.type === 'json_object') {
           return ''; // Pass2 returns empty
         }
         return 'Some prose.';
@@ -809,7 +818,8 @@ describe('RenderPipeline provider call ledger', () => {
   it('needsReview true when Pass2 exhausted does not return analysis', async () => {
     const { pipeline } = makePipeline({
       generator: (req) => {
-        if (req.responseFormat?.type === 'json_object') return '';
+        if (req.responseFormat !== undefined && req.responseFormat.type === 'json_object')
+          return '';
         return 'Some prose.';
       },
     });

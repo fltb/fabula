@@ -4,7 +4,6 @@
 // ============================================================================
 
 import { describe, expect, it } from 'vitest';
-import type { ConfigError } from '../../src/errors.ts';
 import { resolveNarrativeTechniques } from '../../src/state/technique-resolver.ts';
 import type { NarratorAssertion } from '../../src/types/discourse.ts';
 import type { NarrativeEvent } from '../../src/types/event.ts';
@@ -191,7 +190,9 @@ describe('resolveNarrativeTechniques', () => {
       });
 
       expect(result.has('E1')).toBe(true);
-      const contracts = result.get('E1')!;
+      const contracts = result.get('E1');
+      expect(contracts).toBeDefined();
+      if (!contracts) throw new Error('Expected E1 technique contracts fixture');
       expect(contracts).toHaveLength(1);
       expect(contracts[0].kind).toBe('surfaceMode');
       expect(contracts[0].instruction).toBe('Use vivid sensory language');
@@ -217,7 +218,9 @@ describe('resolveNarrativeTechniques', () => {
       });
 
       expect(result.has('E1')).toBe(true);
-      const contracts = result.get('E1')!;
+      const contracts = result.get('E1');
+      expect(contracts).toBeDefined();
+      if (!contracts) throw new Error('Expected E1 technique contracts fixture');
       expect(contracts).toHaveLength(1);
       expect(contracts[0].kind).toBe('metanarrativeLevel');
     });
@@ -249,7 +252,9 @@ describe('resolveNarrativeTechniques', () => {
       });
 
       expect(result.has('E3')).toBe(true);
-      const contracts = result.get('E3')!;
+      const contracts = result.get('E3');
+      expect(contracts).toBeDefined();
+      if (!contracts) throw new Error('Expected E3 technique contracts fixture');
       expect(contracts.some((c) => c.kind === 'causalDiscontinuity')).toBe(true);
     });
 
@@ -397,7 +402,9 @@ describe('resolveNarrativeTechniques', () => {
       });
 
       expect(result.has('E4')).toBe(true);
-      const contracts = result.get('E4')!;
+      const contracts = result.get('E4');
+      expect(contracts).toBeDefined();
+      if (!contracts) throw new Error('Expected E4 technique contracts fixture');
       expect(contracts.some((c) => c.kind === 'causalMultiplicity')).toBe(true);
     });
 
@@ -426,7 +433,9 @@ describe('resolveNarrativeTechniques', () => {
         assertions: {},
       });
 
-      const contracts = result.get('E3')!;
+      const contracts = result.get('E3');
+      expect(contracts).toBeDefined();
+      if (!contracts) throw new Error('Expected E3 technique contracts fixture');
       expect(contracts.some((c) => c.kind === 'causalMultiplicity')).toBe(true);
     });
 
@@ -509,7 +518,9 @@ describe('resolveNarrativeTechniques', () => {
       });
 
       expect(result.has('E1')).toBe(true);
-      const contracts = result.get('E1')!;
+      const contracts = result.get('E1');
+      expect(contracts).toBeDefined();
+      if (!contracts) throw new Error('Expected E1 technique contracts fixture');
       expect(contracts.some((c) => c.kind === 'irresolvableIndeterminacy')).toBe(true);
     });
 
@@ -595,7 +606,9 @@ describe('resolveNarrativeTechniques', () => {
       });
 
       expect(result.has('E1')).toBe(true);
-      const contracts = result.get('E1')!;
+      const contracts = result.get('E1');
+      expect(contracts).toBeDefined();
+      if (!contracts) throw new Error('Expected E1 technique contracts fixture');
       expect(contracts.some((c) => c.kind === 'absentApparatus')).toBe(true);
     });
 
@@ -666,7 +679,9 @@ describe('resolveNarrativeTechniques', () => {
       });
 
       expect(result.has('E1')).toBe(true);
-      const contracts = result.get('E1')!;
+      const contracts = result.get('E1');
+      expect(contracts).toBeDefined();
+      if (!contracts) throw new Error('Expected E1 technique contracts fixture');
       expect(contracts.some((c) => c.kind === 'voiceDissonance')).toBe(true);
     });
 
@@ -787,7 +802,9 @@ describe('resolveNarrativeTechniques', () => {
       });
 
       expect(result.has('E1')).toBe(true);
-      const contracts = result.get('E1')!;
+      const contracts = result.get('E1');
+      expect(contracts).toBeDefined();
+      if (!contracts) throw new Error('Expected E1 technique contracts fixture');
       expect(contracts.some((c) => c.kind === 'multiplicity')).toBe(true);
     });
 
@@ -882,7 +899,9 @@ describe('resolveNarrativeTechniques', () => {
       });
 
       expect(result.has('E1')).toBe(true);
-      const contracts = result.get('E1')!;
+      const contracts = result.get('E1');
+      expect(contracts).toBeDefined();
+      if (!contracts) throw new Error('Expected E1 technique contracts fixture');
       // surfaceMode and metanarrativeLevel both pass (no external refs)
       const kinds = contracts.map((c) => c.kind);
       expect(kinds).toContain('surfaceMode');
@@ -970,7 +989,9 @@ describe('resolveNarrativeTechniques', () => {
       });
 
       expect(result.has('E1')).toBe(true);
-      const contracts = result.get('E1')!;
+      const contracts = result.get('E1');
+      expect(contracts).toBeDefined();
+      if (!contracts) throw new Error('Expected E1 technique contracts fixture');
       expect(contracts.some((c) => c.kind === 'irresolvableIndeterminacy')).toBe(true);
     });
   });

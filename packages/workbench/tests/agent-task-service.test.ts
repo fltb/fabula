@@ -1,12 +1,12 @@
-import { describe, expect, it } from 'vitest';
 import type { CompletionRequest, CompletionResponse, LLMProvider } from '@novalistically/core';
+import { describe, expect, it } from 'vitest';
 import {
-  type AgentTaskProvider,
-  type AgentTaskRequest,
-  AgentTaskInputError,
-  AgentTaskService,
   AGENT_TASK_MAX_OUTPUT_CHARACTERS,
   AGENT_TASK_MAX_PROMPT_CHARACTERS,
+  AgentTaskInputError,
+  type AgentTaskProvider,
+  type AgentTaskRequest,
+  AgentTaskService,
 } from '../src/host/agent/index.js';
 
 // ─── Test doubles ────────────────────────────────────────────────────────────

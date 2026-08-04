@@ -517,8 +517,14 @@ describe('startWorkbench setup runtime', () => {
           headers,
         });
         expect(state.status).toBe(200);
-        expect((await state.json()) as { phase: string }).toMatchObject({
-          phase: 'recovery-required',
+        expect(
+          (await state.json()) as {
+            phase: string;
+            externalCandidate: { candidateHash: string } | null;
+          },
+        ).toMatchObject({
+          phase: 'external-pending',
+          externalCandidate: { candidateHash: expect.any(String) },
         });
       });
 

@@ -26,7 +26,7 @@ function copyFixture(): string {
 }
 
 describe('project authoring runtime', () => {
-  it('stages observer candidates in the same store and reconciles them through controlled Git', async () => {
+  it('stages observer candidates and reconciles them through native revisions', async () => {
     const root = copyFixture();
     const persistence = createRealPersistence();
     try {

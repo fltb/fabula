@@ -14,6 +14,7 @@ import type {
 } from '@novalistically/core/editorial';
 import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { MCP_TOOL_CATALOG_V1 } from '@novalistically/workbench-protocol';
 import {
   AgentCapabilityService,
   createCapabilityPersistence,
@@ -1822,6 +1823,26 @@ describe('createProjectSessionMcpRegistry', () => {
     expect(seen).toHaveLength(2);
     expect(seen[0]).toEqual({ surface: 'preview', input: FAKE_CONFIG_REQUEST });
     expect(seen[1]).toMatchObject({ surface: 'apply' });
+  });
+  it('advertises provider null in the admin config schema and accepts that valid envelope', async () => {
+    const descriptor = MCP_TOOL_CATALOG_V1.find((tool) => tool.name === MCP_TOOL_ADMIN_CONFIG_APPLY);
+    if (descriptor === undefined) throw new Error('Missing admin config apply descriptor');
+    expect(descriptor.inputSchema.properties.configuration.properties?.provider.type).toEqual([
+      'object',
+      'null',
+    ]);
+
+    const { session } = fakeSession({ source: FIXTURE });
+    const registry = createProjectSessionMcpRegistry(session, { admin: fakeAdmin() });
+    const caller = callerFor(
+      grantWith({ userId: 'u1', projectId: 'p1', scopes: [MCP_ADMIN_SCOPE] }),
+    );
+    await expect(
+      registry.run(MCP_TOOL_ADMIN_CONFIG_APPLY, caller, {
+        ...FAKE_CONFIG_REQUEST,
+        configuration: { ...FAKE_CONFIG_REQUEST.configuration, provider: null },
+      }),
+    ).resolves.toMatchObject({ ok: true });
   });
   it('routes every owner-admin family through its injected service port', async () => {
     const { session } = fakeSession({ source: FIXTURE });

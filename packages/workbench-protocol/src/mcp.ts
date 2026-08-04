@@ -363,6 +363,40 @@ function referenceResult(
   );
 }
 
+const adminVersion = { type: 'number', const: 1 };
+const adminRole = { type: 'string', enum: ['reader', 'author', 'maintainer'] };
+const adminTtlMs = { type: 'integer', minimum: 1, maximum: 2_592_000_000 };
+const adminProjectId = { type: 'string', minLength: 1, maxLength: 4096 };
+const adminProjectProperty = objectProperty(
+  { projectId: adminProjectId, displayName: { type: 'string', minLength: 1, maxLength: 4096 }, root: { type: 'string', minLength: 1, maxLength: 4096 } },
+  ['projectId', 'displayName', 'root'],
+);
+const adminConfigurationProperty = objectProperty(
+  {
+    version: adminVersion,
+    projects: { type: 'array', items: adminProjectProperty },
+    defaultProjectId: { type: ['string', 'null'], maxLength: 4096 },
+    provider: {
+      ...objectProperty(
+        { kind: { type: 'string', const: 'ai-sdk' }, baseUrl: { type: ['string', 'null'], maxLength: 4096 }, model: { type: ['string', 'null'], maxLength: 4096 } },
+        ['kind', 'baseUrl', 'model'],
+      ),
+      type: ['object', 'null'],
+    },
+    network: objectProperty(
+      {
+        mode: { type: 'string', enum: ['loopback', 'lan', 'unix'] },
+        port: { type: 'integer', minimum: 1, maximum: 65535 },
+        allowedHosts: { type: 'array', items: { type: 'string', maxLength: 4096 } },
+        allowedOrigins: { type: 'array', items: { type: 'string', maxLength: 4096 } },
+        unixSocket: { type: ['string', 'null'], maxLength: 4096 },
+      },
+      ['mode', 'port', 'allowedHosts', 'allowedOrigins', 'unixSocket'],
+    ),
+  },
+  ['version', 'projects', 'defaultProjectId', 'provider', 'network'],
+);
+
 function inputFor(name: string): McpJsonSchemaV1 {
   if (name === 'nova_source_get') {
     return schema(
@@ -670,8 +704,76 @@ function inputFor(name: string): McpJsonSchemaV1 {
       ['version', 'referenceId'],
     );
   }
-  if (name.startsWith('nova_admin_')) {
-    return schema({ expectedRevision: nullableString, id: string });
+  if (name === 'nova_admin_config_get') {
+    return schema({});
+  }
+  if (name === 'nova_admin_project_list' || name === 'nova_admin_device_list') {
+    return schema({ version: adminVersion }, ['version']);
+  }
+  if (name === 'nova_admin_config_preview' || name === 'nova_admin_config_apply') {
+    return schema(
+      { version: adminVersion, expectedRevision: nullableString, configuration: adminConfigurationProperty },
+      ['version', 'expectedRevision', 'configuration'],
+    );
+  }
+  if (name === 'nova_admin_project_validate' || name === 'nova_admin_project_create' || name === 'nova_admin_project_update') {
+    return schema(
+      { version: adminVersion, projectId: adminProjectId, displayName: { type: 'string', minLength: 1, maxLength: 4096 }, root: { type: 'string', minLength: 1, maxLength: 4096 } },
+      ['version', 'projectId', 'displayName', 'root'],
+    );
+  }
+  if (
+    name === 'nova_admin_project_delete' ||
+    name === 'nova_admin_project_open' ||
+    name === 'nova_admin_project_close' ||
+    name === 'nova_admin_project_recover'
+  ) {
+    return schema({ version: adminVersion, projectId: adminProjectId }, ['version', 'projectId']);
+  }
+  if (name === 'nova_admin_membership_list' || name === 'nova_admin_invite_list') {
+    return schema({ version: adminVersion, projectId: adminProjectId }, ['version']);
+  }
+  if (name === 'nova_admin_membership_upsert') {
+    return schema(
+      { version: adminVersion, userId: adminProjectId, projectId: adminProjectId, role: adminRole },
+      ['version', 'userId', 'projectId', 'role'],
+    );
+  }
+  if (name === 'nova_admin_membership_revoke') {
+    return schema(
+      { version: adminVersion, userId: adminProjectId, projectId: adminProjectId },
+      ['version', 'userId', 'projectId'],
+    );
+  }
+  if (name === 'nova_admin_invite_create') {
+    return schema(
+      { version: adminVersion, projectId: adminProjectId, role: adminRole, ttlMs: adminTtlMs },
+      ['version', 'projectId', 'role', 'ttlMs'],
+    );
+  }
+  if (name === 'nova_admin_invite_revoke') {
+    return schema({ version: adminVersion, inviteId: adminProjectId }, ['version', 'inviteId']);
+  }
+  if (name === 'nova_admin_device_pair_begin') {
+    return schema(
+      {
+        version: adminVersion,
+        kind: { type: 'string', enum: ['project', 'admin'] },
+        projectId: adminProjectId,
+        role: adminRole,
+        ttlMs: adminTtlMs,
+      },
+      ['version'],
+    );
+  }
+  if (name === 'nova_admin_device_revoke') {
+    return schema({ version: adminVersion, deviceId: adminProjectId }, ['version', 'deviceId']);
+  }
+  if (name === 'nova_admin_operation_list') {
+    return schema({ version: adminVersion, limit: { type: 'integer', minimum: 1, maximum: 100 } }, ['version']);
+  }
+  if (name === 'nova_admin_operation_get') {
+    return schema({ version: adminVersion, operationHandle: adminProjectId }, ['version', 'operationHandle']);
   }
   return EMPTY_SCHEMA;
 }

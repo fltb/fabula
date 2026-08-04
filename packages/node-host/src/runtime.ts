@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import * as path from 'node:path';
 import type {
   Clock,
   CoreRuntimeServices,
@@ -20,6 +21,11 @@ export interface FileCoreRuntimeOptions {
   readonly promptTemplates?: readonly PromptTemplate[];
   readonly now?: () => string;
   readonly nextId?: (kind?: string) => string;
+  /**
+   * Explicit Workbench-owned artifact root. Standalone callers omit this and
+   * retain the project-local `.nova` defaults.
+   */
+  readonly artifactRoot?: string;
 }
 
 class StaticPromptTemplateCatalog implements PromptTemplateCatalog {
@@ -75,11 +81,26 @@ export function createFileCoreRuntimeServices(
   projectRoot: string,
   options: FileCoreRuntimeOptions,
 ): CoreRuntimeServices {
+  const artifactRoot = options.artifactRoot
+    ? path.resolve(options.artifactRoot)
+    : undefined;
+  const repositoryRoot = artifactRoot ?? projectRoot;
   return {
-    execution: new FileExecutionRepository(projectRoot),
-    renderCache: new FileRenderCacheRepository(projectRoot),
-    stateLog: new FileStateLogRepository(projectRoot),
-    stateSnapshots: new FileStateSnapshotRepository(projectRoot),
+    execution: new FileExecutionRepository(
+      repositoryRoot,
+      artifactRoot ? 'execution' : undefined,
+    ),
+    renderCache: new FileRenderCacheRepository(repositoryRoot, {
+      relativeDirectory: artifactRoot ? 'render-cache' : undefined,
+    }),
+    stateLog: new FileStateLogRepository(
+      repositoryRoot,
+      artifactRoot ? 'state-log' : undefined,
+    ),
+    stateSnapshots: new FileStateSnapshotRepository(
+      repositoryRoot,
+      artifactRoot ? 'state-snapshots' : undefined,
+    ),
     promptTemplates: new StaticPromptTemplateCatalog(options.promptTemplates ?? []),
     clock: new HostClock(options.now ?? (() => new Date().toISOString())),
     ids: new HostIdGenerator(options.nextId ?? ((kind) => `${kind ?? 'id'}_${randomUUID()}`)),

@@ -9,6 +9,10 @@ import {
   computeSourceHash,
 } from '@novalistically/core/source';
 import { describe, expect, it } from 'vitest';
+import {
+  ProjectWriteCoordinator,
+  StandaloneMutationBlockedError,
+} from '../src/index.js';
 import { FileProjectSourceLoaderImpl } from '../src/source/file-project-source-loader.js';
 import { FileProjectSourceWriterImpl } from '../src/source/file-project-source-writer.js';
 import { SourceConflictError, SourceInputError, SourcePathError } from '../src/source/types.js';
@@ -348,4 +352,63 @@ describe('file project source boundary', () => {
     symlinkSync(outside, join(root, 'definitions', 'characters', 'linked'));
     expect(() => new FileProjectSourceLoaderImpl().load(root)).toThrow(SourcePathError);
   });
+  it('refuses direct source mutation while authority is starting or ready, then allows it after release', async () => {
+    const root = project();
+    const loader = new FileProjectSourceLoaderImpl();
+    const current = loader.load(root);
+    const before = current.documents.find((document) => document.logicalPath === 'nova.yaml');
+    if (!before) throw new Error('fixture missing nova.yaml');
+    const change = {
+      logicalPath: before.logicalPath,
+      beforeContent: before.content,
+      beforeHash: before.contentHash,
+      afterContent: 'project: authority-guarded\n',
+      afterHash: computeSourceDocumentHash('project: authority-guarded\n'),
+    };
+    const coordinator = new ProjectWriteCoordinator(root, { projectId: 'fixture' });
+    const authorityToken = await coordinator.acquireWorkbenchAuthority('workbench-starting');
+    const writer = new FileProjectSourceWriterImpl();
+
+    await expect(writer.apply(root, current.sourceHash, [change])).rejects.toBeInstanceOf(
+      StandaloneMutationBlockedError,
+    );
+    await coordinator.markReady(authorityToken, { endpoint: 'http://127.0.0.1:4310' });
+    await expect(writer.apply(root, current.sourceHash, [change])).rejects.toBeInstanceOf(
+      StandaloneMutationBlockedError,
+    );
+
+    await coordinator.releaseWorkbenchAuthority(authorityToken);
+    const next = await writer.apply(root, current.sourceHash, [change]);
+    expect(next.documents.find((document) => document.logicalPath === 'nova.yaml')?.content).toBe(
+      'project: authority-guarded\n',
+    );
+  });
+
+  it('uses the matching Workbench authority token for source materialization', async () => {
+    const root = project();
+    const loader = new FileProjectSourceLoaderImpl();
+    const current = loader.load(root);
+    const before = current.documents.find((document) => document.logicalPath === 'nova.yaml');
+    if (!before) throw new Error('fixture missing nova.yaml');
+    const change = {
+      logicalPath: before.logicalPath,
+      beforeContent: before.content,
+      beforeHash: before.contentHash,
+      afterContent: 'project: workbench-authorized\n',
+      afterHash: computeSourceDocumentHash('project: workbench-authorized\n'),
+    };
+    const coordinator = new ProjectWriteCoordinator(root, { projectId: 'fixture' });
+    const authorityToken = await coordinator.acquireWorkbenchAuthority('workbench-materializer');
+    const writer = new FileProjectSourceWriterImpl({
+      coordinator,
+      authorityToken,
+    });
+
+    const next = await writer.apply(root, current.sourceHash, [change]);
+    expect(next.documents.find((document) => document.logicalPath === 'nova.yaml')?.content).toBe(
+      'project: workbench-authorized\n',
+    );
+    await coordinator.releaseWorkbenchAuthority(authorityToken);
+  });
+
 });

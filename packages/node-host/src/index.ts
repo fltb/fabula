@@ -1,3 +1,17 @@
+export {
+  ProjectAuthorityTokenError,
+  ProjectAuthorityUnavailableError,
+  ProjectWriteCoordinator,
+  StandaloneMutationBlockedError,
+  computeProjectRootFingerprint,
+} from './authority/project-write-coordinator.js';
+export type {
+  ProjectAuthorityLeaseV1,
+  ProjectAuthorityTokenV1,
+  ProjectWriteCoordinatorOptions,
+  WorkbenchAuthorityReadyOptions,
+} from './authority/project-write-coordinator.js';
+
 /** Public semantic adapters for the Node Host boundary. */
 
 export { FileRenderCacheRepository } from './cache/file-render-cache-repository.js';
@@ -28,11 +42,27 @@ export {
   FileProjectSourceWriter,
   FileProjectSourceWriterImpl,
 } from './source/file-project-source-writer.js';
+export type { FileProjectSourceWriterAuthorityOptions } from './source/file-project-source-writer.js';
 export type {
   FileProjectSourceLoaderOptions,
   FileProjectSourceWriterOptions,
 } from './source/types.js';
-export { SourceConflictError, SourcePathError } from './source/types.js';
+export { FileProjectReferenceStore } from './source/file-project-reference-store.js';
+export type {
+  FileProjectReferenceStore as FileProjectReferenceStoreContract,
+  FileProjectReferenceStoreOptions,
+  ReferenceContent,
+  ReferenceContentRangeV1,
+  ReferenceContentReadOptions,
+  ReferenceContentReadV1,
+  ReferenceLibraryDeleteInput,
+  ReferenceLibraryImportInput,
+  ReferenceLibraryItemV1,
+  ReferenceLibraryManifestV1,
+  ReferenceLibraryReadV1,
+  ReferenceLibraryVerificationReport,
+} from './source/types.js';
+export { SourceConflictError, SourceInputError, SourcePathError } from './source/types.js';
 export {
   FileStateLogRepository,
   FileStateSnapshotRepository,

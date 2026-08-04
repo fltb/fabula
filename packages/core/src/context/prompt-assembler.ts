@@ -4,9 +4,9 @@
 
 import type { Message } from '../ai/types.ts';
 import type { PromptDecoration } from '../plugin/types.ts';
+import type { ProjectReferencePacketV1 } from '../reference.ts';
 import type { ContextPackage, GameDialogueChoice, StyleGuidance } from '../types/index.ts';
 import type { SurfaceReferencePacket } from '../types/render-surface.ts';
-import type { ProjectReferencePacketV1 } from '../reference.ts';
 
 export interface AssembledPrompt {
   systemPrompt: string;
@@ -296,7 +296,9 @@ export class PromptAssembler {
       parts.push('');
       parts.push('## Reference Library (Non-authoritative)');
       parts.push('The following citations are supplementary research, not canonical story facts.');
-      parts.push('In case of conflict, YAML, the compiled scene contract, and the narrative context package take precedence.');
+      parts.push(
+        'In case of conflict, YAML, the compiled scene contract, and the narrative context package take precedence.',
+      );
       for (const citation of options.referencePacket.citations) {
         parts.push('');
         parts.push(`### Citation: ${citation.citationId}`);

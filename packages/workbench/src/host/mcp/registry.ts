@@ -25,11 +25,21 @@ import {
   validateNovel,
 } from '@novalistically/core';
 import {
+  type EditorialRenderRequestV1,
+  type EditorialRuntime,
+  getSourceDocument,
+  listSourceDocuments,
+  previewSourceChange,
+  type RenderNovelResult,
+  renderNovel,
+  type SceneSelector,
+  type SourceChangeV1,
+} from '@novalistically/core/editorial';
+import {
   AUTHORING_DOCUMENT_LIMITS_V1,
-  REFERENCE_MCP_LIMITS_V1,
+  MCP_TOOL_CATALOG_V1,
   type McpJsonSchemaProperty,
   type McpJsonSchemaV1,
-  MCP_TOOL_CATALOG_V1,
   type McpReferenceChunkGetInputV1,
   type McpReferenceContentReadInputV1,
   type McpReferenceDeleteInputV1,
@@ -43,6 +53,7 @@ import {
   type McpReferenceRetryInputV1,
   type McpReferenceSearchInputV1,
   type McpToolDescriptorV1,
+  REFERENCE_MCP_LIMITS_V1,
   type ReferenceChunkV1,
   type ReferenceContentV1,
   type ReferenceItemV1,
@@ -50,24 +61,23 @@ import {
   type ReferenceRangeV1,
 } from '@novalistically/workbench-protocol';
 import {
-  type EditorialRenderRequestV1,
-  type EditorialRuntime,
-  getSourceDocument,
-  listSourceDocuments,
-  previewSourceChange,
-  type RenderNovelResult,
-  renderNovel,
-  type SceneSelector,
-  type SourceChangeV1,
-} from '@novalistically/core/editorial';
-import {
   AUTHORING_CONTRACT_VERSION,
-  type AuthoringStateV1,
   type AuthoringFailureV1,
+  type AuthoringStateV1,
   type McpAuthoringApplyInputV1,
   type McpAuthoringApplyOutputV1,
+  type McpAuthoringConflictReadOutputV1,
+  type McpAuthoringDocumentCreateInputV1,
+  type McpAuthoringDocumentDeleteInputV1,
+  type McpAuthoringDocumentEditInputV1,
   type McpAuthoringDocumentGetInputV1,
   type McpAuthoringDocumentGetOutputV1,
+  type McpAuthoringDocumentListInputV1,
+  type McpAuthoringDocumentListOutputV1,
+  type McpAuthoringDocumentMoveInputV1,
+  type McpAuthoringDocumentMutationOutputV1,
+  type McpAuthoringDocumentReadInputV1,
+  type McpAuthoringDocumentReadOutputV1,
   type McpAuthoringStatusInputV1,
   type McpAuthoringStatusOutputV1,
   type McpAuthoringSubmitInputV1,
@@ -76,30 +86,18 @@ import {
   type McpConflictResolveOutputV1,
   type McpOperationGetInputV1,
   type McpOperationGetOutputV1,
-  type McpAuthoringDocumentListInputV1,
-  type McpAuthoringDocumentListOutputV1,
-  type McpAuthoringDocumentReadInputV1,
-  type McpAuthoringDocumentReadOutputV1,
-  type McpAuthoringDocumentEditInputV1,
-  type McpAuthoringDocumentCreateInputV1,
-  type McpAuthoringDocumentMoveInputV1,
-  type McpAuthoringDocumentDeleteInputV1,
-  type McpAuthoringDocumentMutationOutputV1,
-  type McpAuthoringConflictReadOutputV1,
 } from '../../contracts/authoring.js';
 import {
-  PROJECT_ACCESS_ROLES,
-
   type ConfigChangeRequestV1,
   type ConfigOperationReceiptV1,
+  PROJECT_ACCESS_ROLES,
   type ProjectAccessRole,
   type WorkbenchConfigurationV1,
 } from '../../contracts/configuration.js';
 
 function coreProjectId(source: ProjectSourceSnapshotV1): string {
   const document = source.documents.find((entry) => entry.logicalPath === 'nova.yaml');
-  const value =
-    document?.parseResult.status === 'parsed' ? document.parseResult.value : undefined;
+  const value = document?.parseResult.status === 'parsed' ? document.parseResult.value : undefined;
   if (
     typeof value === 'object' &&
     value !== null &&
@@ -112,6 +110,7 @@ function coreProjectId(source: ProjectSourceSnapshotV1): string {
   }
   return 'default-project';
 }
+
 import type { AuthoringRevisionPort } from '../authoring/types.js';
 import type { ProjectSession, SessionOperationResult } from '../project-session.js';
 import type { McpAuthorizedCaller } from './auth.js';
@@ -125,14 +124,14 @@ function toolDescriptor(name: string): McpToolDescriptorV1 {
 }
 function toolScope(name: string): string {
   const [scope] = toolDescriptor(name).scopes;
-  if (scope === undefined) throw new Error(`MCP tool has no scope in the protocol catalog: ${name}`);
+  if (scope === undefined)
+    throw new Error(`MCP tool has no scope in the protocol catalog: ${name}`);
   return scope;
 }
 
-function toolMetadata(name: string): Pick<
-  McpToolDefinition,
-  'name' | 'description' | 'requiredScopes' | 'inputSchema'
-> {
+function toolMetadata(
+  name: string,
+): Pick<McpToolDefinition, 'name' | 'description' | 'requiredScopes' | 'inputSchema'> {
   const descriptor = toolDescriptor(name);
   return {
     name: descriptor.name,
@@ -410,7 +409,6 @@ function parseObject(input: unknown, message: string): ParseOutcome {
   return { ok: true, value: input as Record<string, unknown> };
 }
 
-
 function requiredString(
   value: Record<string, unknown>,
   key: string,
@@ -437,7 +435,9 @@ function boundedString(
   value: Record<string, unknown>,
   key: string,
   maxLength: number,
-): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const candidate = value[key];
   if (typeof candidate !== 'string' || candidate.length > maxLength) {
     return {
@@ -579,7 +579,9 @@ const NO_REFERENCE_PORT = mcpToolError(
 function parseAdminVersionedInput(
   input: unknown,
   allowed: readonly string[],
-): { readonly ok: true; readonly value: Record<string, unknown> } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: Record<string, unknown> }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const parsed = parseObject(input, 'Input must be an object.');
   if (!parsed.ok) return parsed;
   const unknown = rejectUnknownKeys(parsed.value, allowed);
@@ -594,7 +596,9 @@ function adminString(
   value: Record<string, unknown>,
   key: string,
   maxLength = 4096,
-): { readonly ok: true; readonly value: string } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: string }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const result = requiredString(value, key);
   if (!result.ok) return result;
   if (result.value.length > maxLength) {
@@ -607,11 +611,16 @@ function adminOptionalString(
   value: Record<string, unknown>,
   key: string,
   maxLength = 4096,
-): { readonly ok: true; readonly value: string | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: string | undefined }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const candidate = value[key];
   if (candidate === undefined) return { ok: true, value: undefined };
   if (typeof candidate !== 'string' || candidate.length === 0 || candidate.length > maxLength) {
-    return { ok: false, result: invalidInput(`${key} must be a bounded non-empty string when present.`) };
+    return {
+      ok: false,
+      result: invalidInput(`${key} must be a bounded non-empty string when present.`),
+    };
   }
   return { ok: true, value: candidate };
 }
@@ -619,9 +628,14 @@ function adminOptionalString(
 function adminRole(
   value: Record<string, unknown>,
   key = 'role',
-): { readonly ok: true; readonly value: ProjectAccessRole } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: ProjectAccessRole }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const candidate = value[key];
-  if (typeof candidate !== 'string' || !(PROJECT_ACCESS_ROLES as readonly string[]).includes(candidate)) {
+  if (
+    typeof candidate !== 'string' ||
+    !(PROJECT_ACCESS_ROLES as readonly string[]).includes(candidate)
+  ) {
     return { ok: false, result: invalidInput(`${key} must be reader, author, or maintainer.`) };
   }
   return { ok: true, value: candidate as ProjectAccessRole };
@@ -629,7 +643,9 @@ function adminRole(
 
 function adminOptionalRole(
   value: Record<string, unknown>,
-): { readonly ok: true; readonly value: ProjectAccessRole | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: ProjectAccessRole | undefined }
+  | { readonly ok: false; readonly result: McpToolResult } {
   if (value.role === undefined) return { ok: true, value: undefined };
   return adminRole(value);
 }
@@ -640,7 +656,9 @@ function adminInteger(
   minimum: number,
   maximum: number,
   required = true,
-): { readonly ok: true; readonly value: number | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: number | undefined }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const candidate = value[key];
   if (candidate === undefined && !required) return { ok: true, value: undefined };
   if (
@@ -656,7 +674,9 @@ function adminInteger(
 
 function parseAdminProjectSave(
   input: unknown,
-): { readonly ok: true; readonly value: McpAdminProjectSaveInput } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: McpAdminProjectSaveInput }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const parsed = parseAdminVersionedInput(input, ['version', 'projectId', 'displayName', 'root']);
   if (!parsed.ok) return parsed;
   const projectId = adminString(parsed.value, 'projectId');
@@ -665,12 +685,22 @@ function parseAdminProjectSave(
   if (!projectId.ok) return projectId;
   if (!displayName.ok) return displayName;
   if (!root.ok) return root;
-  return { ok: true, value: { version: 1, projectId: projectId.value, displayName: displayName.value, root: root.value } };
+  return {
+    ok: true,
+    value: {
+      version: 1,
+      projectId: projectId.value,
+      displayName: displayName.value,
+      root: root.value,
+    },
+  };
 }
 
 function parseAdminProjectId(
   input: unknown,
-): { readonly ok: true; readonly value: McpAdminProjectIdInput } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: McpAdminProjectIdInput }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const parsed = parseAdminVersionedInput(input, ['version', 'projectId']);
   if (!parsed.ok) return parsed;
   const projectId = adminString(parsed.value, 'projectId');
@@ -680,13 +710,18 @@ function parseAdminProjectId(
 function parseToolInput(
   input: unknown,
   allowed: readonly string[],
-): { readonly ok: true; readonly value: Record<string, unknown> } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: Record<string, unknown> }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const parsed = parseObject(input, 'Input must be an object.');
   if (!parsed.ok) return parsed;
   const unknown = rejectUnknownKeys(parsed.value, allowed);
   if (unknown) return { ok: false, result: unknown };
   if (parsed.value.version !== AUTHORING_MCP_CONTRACT_VERSION) {
-    return { ok: false, result: invalidInput(`version must be ${AUTHORING_MCP_CONTRACT_VERSION}.`) };
+    return {
+      ok: false,
+      result: invalidInput(`version must be ${AUTHORING_MCP_CONTRACT_VERSION}.`),
+    };
   }
   return parsed;
 }
@@ -694,13 +729,18 @@ function parseToolInput(
 function parseReferenceInput(
   input: unknown,
   allowed: readonly string[],
-): { readonly ok: true; readonly value: Record<string, unknown> } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: Record<string, unknown> }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const parsed = parseObject(input, 'Input must be an object.');
   if (!parsed.ok) return parsed;
   const unknown = rejectUnknownKeys(parsed.value, allowed);
   if (unknown) return { ok: false, result: unknown };
   if (parsed.value.version !== REFERENCE_MCP_CONTRACT_VERSION) {
-    return { ok: false, result: invalidInput(`version must be ${REFERENCE_MCP_CONTRACT_VERSION}.`) };
+    return {
+      ok: false,
+      result: invalidInput(`version must be ${REFERENCE_MCP_CONTRACT_VERSION}.`),
+    };
   }
   return parsed;
 }
@@ -710,11 +750,22 @@ function referenceString(
   key: string,
   maxLength: number,
   required = true,
-): { readonly ok: true; readonly value: string | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: string | undefined }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const candidate = value[key];
   if (candidate === undefined && !required) return { ok: true, value: undefined };
-  if (typeof candidate !== 'string' || (required && candidate.length === 0) || candidate.length > maxLength) {
-    return { ok: false, result: invalidInput(`${key} must be ${required ? 'a non-empty ' : 'a '}string of at most ${maxLength} characters.`) };
+  if (
+    typeof candidate !== 'string' ||
+    (required && candidate.length === 0) ||
+    candidate.length > maxLength
+  ) {
+    return {
+      ok: false,
+      result: invalidInput(
+        `${key} must be ${required ? 'a non-empty ' : 'a '}string of at most ${maxLength} characters.`,
+      ),
+    };
   }
   return { ok: true, value: candidate };
 }
@@ -725,11 +776,21 @@ function referenceInteger(
   minimum: number,
   maximum: number,
   required = true,
-): { readonly ok: true; readonly value: number | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: number | undefined }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const candidate = value[key];
   if (candidate === undefined && !required) return { ok: true, value: undefined };
-  if (typeof candidate !== 'number' || !Number.isSafeInteger(candidate) || candidate < minimum || candidate > maximum) {
-    return { ok: false, result: invalidInput(`${key} must be an integer between ${minimum} and ${maximum}.`) };
+  if (
+    typeof candidate !== 'number' ||
+    !Number.isSafeInteger(candidate) ||
+    candidate < minimum ||
+    candidate > maximum
+  ) {
+    return {
+      ok: false,
+      result: invalidInput(`${key} must be an integer between ${minimum} and ${maximum}.`),
+    };
   }
   return { ok: true, value: candidate };
 }
@@ -739,20 +800,35 @@ function referenceStringList(
   key: string,
   maxLength: number,
   maxCount: number,
-): { readonly ok: true; readonly value: string[] | undefined } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: string[] | undefined }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const candidate = value[key];
   if (candidate === undefined) return { ok: true, value: undefined };
   if (!Array.isArray(candidate) || candidate.length > maxCount) {
-    return { ok: false, result: invalidInput(`${key} must be an array of at most ${maxCount} strings.`) };
+    return {
+      ok: false,
+      result: invalidInput(`${key} must be an array of at most ${maxCount} strings.`),
+    };
   }
-  if (!candidate.every((entry) => typeof entry === 'string' && entry.length > 0 && entry.length <= maxLength)) {
-    return { ok: false, result: invalidInput(`${key} entries must be non-empty strings of at most ${maxLength} characters.`) };
+  if (
+    !candidate.every(
+      (entry) => typeof entry === 'string' && entry.length > 0 && entry.length <= maxLength,
+    )
+  ) {
+    return {
+      ok: false,
+      result: invalidInput(
+        `${key} entries must be non-empty strings of at most ${maxLength} characters.`,
+      ),
+    };
   }
   return { ok: true, value: candidate as string[] };
 }
 
 function safeObject(value: unknown, label: string): Record<string, unknown> {
-  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error(`${label} is not an object`);
+  if (typeof value !== 'object' || value === null || Array.isArray(value))
+    throw new Error(`${label} is not an object`);
   return value as Record<string, unknown>;
 }
 
@@ -763,7 +839,8 @@ function safeText(value: unknown, label: string, allowNull = false): string | nu
 }
 
 function safeHash(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value)) throw new Error(`${label} is invalid`);
+  if (typeof value !== 'string' || !/^[0-9a-f]{64}$/.test(value))
+    throw new Error(`${label} is invalid`);
   return value;
 }
 
@@ -771,10 +848,17 @@ function safeReferenceItem(value: unknown): ReferenceItemV1 {
   const item = safeObject(value, 'Reference item');
   const authors = item.authors;
   const tags = item.tags;
-  if (!Array.isArray(authors) || !authors.every((entry) => typeof entry === 'string')) throw new Error('Reference authors are invalid');
-  if (!Array.isArray(tags) || !tags.every((entry) => typeof entry === 'string')) throw new Error('Reference tags are invalid');
+  if (!Array.isArray(authors) || !authors.every((entry) => typeof entry === 'string'))
+    throw new Error('Reference authors are invalid');
+  if (!Array.isArray(tags) || !tags.every((entry) => typeof entry === 'string'))
+    throw new Error('Reference tags are invalid');
   const byteLength = item.byteLength;
-  if (typeof byteLength !== 'number' || !Number.isSafeInteger(byteLength) || byteLength < 0 || byteLength > REFERENCE_MCP_LIMITS_V1.maxReferenceBytes) {
+  if (
+    typeof byteLength !== 'number' ||
+    !Number.isSafeInteger(byteLength) ||
+    byteLength < 0 ||
+    byteLength > REFERENCE_MCP_LIMITS_V1.maxReferenceBytes
+  ) {
     throw new Error('Reference byteLength is invalid');
   }
   return {
@@ -823,14 +907,18 @@ function safeReferenceJob(value: unknown): ReferenceJobV1 {
 
 function safeReferenceRange(value: unknown): ReferenceRangeV1 {
   const range = safeObject(value, 'Reference range');
-  if (typeof range.offset !== 'number' || typeof range.length !== 'number') throw new Error('Reference range is invalid');
+  if (typeof range.offset !== 'number' || typeof range.length !== 'number')
+    throw new Error('Reference range is invalid');
   return { version: 1, offset: range.offset, length: range.length };
 }
 
 function safeReferenceContent(value: unknown): ReferenceContentV1 {
   const content = safeObject(value, 'Reference content');
   const dataBase64 = safeText(content.dataBase64, 'dataBase64')!;
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(dataBase64) || dataBase64.length > REFERENCE_MCP_LIMITS_V1.maxChunkBase64Length) {
+  if (
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(dataBase64) ||
+    dataBase64.length > REFERENCE_MCP_LIMITS_V1.maxChunkBase64Length
+  ) {
     throw new Error('Reference content encoding is invalid');
   }
   return {
@@ -845,14 +933,14 @@ function safeReferenceContent(value: unknown): ReferenceContentV1 {
   };
 }
 
-
 /** Strict `string | null` field; null only when explicitly allowed. */
 
 function safeReferenceChunk(value: unknown): ReferenceChunkV1 {
   const chunk = safeObject(value, 'Reference chunk');
   const quote = safeText(chunk.quote, 'quote', true);
   const locator = safeText(chunk.locator, 'locator')!;
-  if (locator.includes('/') || locator.includes('\\')) throw new Error('Reference locator contains a path');
+  if (locator.includes('/') || locator.includes('\\'))
+    throw new Error('Reference locator contains a path');
   return {
     version: 1,
     referenceId: safeText(chunk.referenceId, 'referenceId')!,
@@ -869,7 +957,9 @@ function safeReferenceChunk(value: unknown): ReferenceChunkV1 {
 function nullableStringField(
   value: Record<string, unknown>,
   key: string,
-): { readonly ok: true; readonly value: string | null } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: string | null }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const candidate = value[key];
   if (candidate === null) return { ok: true, value: null };
   if (typeof candidate !== 'string') {
@@ -886,9 +976,7 @@ function authoringApplyResult(outcome: McpAuthoringApplyOutputV1): McpToolResult
 
 /** Map a coordinator submit/resolve outcome: queued/completed are results, rejected is a typed failure. */
 function authoringAsyncResult(
-  outcome:
-    | McpAuthoringSubmitOutputV1
-    | McpConflictResolveOutputV1,
+  outcome: McpAuthoringSubmitOutputV1 | McpConflictResolveOutputV1,
 ): McpToolResult {
   if (outcome.status === 'rejected') {
     return mcpToolError(outcome.failure.code, outcome.failure.message);
@@ -921,7 +1009,9 @@ function nativeRevisionResult(
 function stringList(
   value: Record<string, unknown>,
   key: string,
-): { readonly ok: true; readonly value: string[] } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: string[] }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const candidate = value[key];
   if (!Array.isArray(candidate)) {
     return { ok: false, result: invalidInput(`${key} must be an array of strings.`) };
@@ -940,7 +1030,9 @@ function stringList(
  */
 function parseConfigChangeRequest(
   value: Record<string, unknown>,
-): { readonly ok: true; readonly value: ConfigChangeRequestV1 } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: ConfigChangeRequestV1 }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const unknown = rejectUnknownKeys(value, ['version', 'expectedRevision', 'configuration']);
   if (unknown) return { ok: false, result: unknown };
   if (value.version !== CONFIG_CONTRACT_VERSION) {
@@ -950,20 +1042,30 @@ function parseConfigChangeRequest(
   if (typeof expectedRevision !== 'string' && expectedRevision !== null) {
     return { ok: false, result: invalidInput('expectedRevision must be a string or null.') };
   }
-  if (typeof value.configuration !== 'object' || value.configuration === null || Array.isArray(value.configuration)) {
+  if (
+    typeof value.configuration !== 'object' ||
+    value.configuration === null ||
+    Array.isArray(value.configuration)
+  ) {
     return { ok: false, result: invalidInput('configuration must be an object.') };
   }
   const configuration = parseConfiguration(value.configuration as Record<string, unknown>);
   if (!configuration.ok) return configuration;
   return {
     ok: true,
-    value: { version: CONFIG_CONTRACT_VERSION, expectedRevision, configuration: configuration.value },
+    value: {
+      version: CONFIG_CONTRACT_VERSION,
+      expectedRevision,
+      configuration: configuration.value,
+    },
   };
 }
 
 function parseConfiguration(
   value: Record<string, unknown>,
-): { readonly ok: true; readonly value: WorkbenchConfigurationV1 } | { readonly ok: false; readonly result: McpToolResult } {
+):
+  | { readonly ok: true; readonly value: WorkbenchConfigurationV1 }
+  | { readonly ok: false; readonly result: McpToolResult } {
   const unknown = rejectUnknownKeys(value, [
     'version',
     'projects',
@@ -981,7 +1083,10 @@ function parseConfiguration(
   const projects: WorkbenchConfigurationV1['projects'][number][] = [];
   for (const entry of value.projects) {
     if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) {
-      return { ok: false, result: invalidInput('each configuration.projects entry must be an object.') };
+      return {
+        ok: false,
+        result: invalidInput('each configuration.projects entry must be an object.'),
+      };
     }
     const record = entry as Record<string, unknown>;
     const entryUnknown = rejectUnknownKeys(record, ['projectId', 'displayName', 'root']);
@@ -996,13 +1101,19 @@ function parseConfiguration(
   }
   const defaultProjectId = value.defaultProjectId;
   if (typeof defaultProjectId !== 'string' && defaultProjectId !== null) {
-    return { ok: false, result: invalidInput('configuration.defaultProjectId must be a string or null.') };
+    return {
+      ok: false,
+      result: invalidInput('configuration.defaultProjectId must be a string or null.'),
+    };
   }
   const provider = value.provider;
   let parsedProvider: WorkbenchConfigurationV1['provider'] = null;
   if (provider !== null) {
     if (typeof provider !== 'object' || provider === null || Array.isArray(provider)) {
-      return { ok: false, result: invalidInput('configuration.provider must be an object or null.') };
+      return {
+        ok: false,
+        result: invalidInput('configuration.provider must be an object or null.'),
+      };
     }
     const providerRecord = provider as Record<string, unknown>;
     const providerUnknown = rejectUnknownKeys(providerRecord, ['kind', 'baseUrl', 'model']);
@@ -1030,10 +1141,20 @@ function parseConfiguration(
   if (networkUnknown) return { ok: false, result: networkUnknown };
   const mode = networkRecord.mode;
   if (mode !== 'loopback' && mode !== 'lan' && mode !== 'unix') {
-    return { ok: false, result: invalidInput('configuration.network.mode must be loopback, lan, or unix.') };
+    return {
+      ok: false,
+      result: invalidInput('configuration.network.mode must be loopback, lan, or unix.'),
+    };
   }
-  if (typeof networkRecord.port !== 'number' || !Number.isInteger(networkRecord.port) || networkRecord.port < 1) {
-    return { ok: false, result: invalidInput('configuration.network.port must be a positive integer.') };
+  if (
+    typeof networkRecord.port !== 'number' ||
+    !Number.isInteger(networkRecord.port) ||
+    networkRecord.port < 1
+  ) {
+    return {
+      ok: false,
+      result: invalidInput('configuration.network.port must be a positive integer.'),
+    };
   }
   const allowedHosts = stringList(networkRecord, 'allowedHosts');
   if (!allowedHosts.ok) return allowedHosts;
@@ -1058,7 +1179,6 @@ function parseConfiguration(
     },
   };
 }
-
 
 /**
  * Build the canonical Workbench MCP tool registry over one ProjectSession.
@@ -1185,7 +1305,11 @@ export function createProjectSessionMcpRegistry(
         const parsed = parseObject(input, 'Input must be an object.');
         if (!parsed.ok) return parsed.result;
         // Fail closed: no actorId/operationId (or any other server field) may reach the queue.
-        const unknown = rejectUnknownKeys(parsed.value, ['sceneSelector', 'model', 'referenceChunks']);
+        const unknown = rejectUnknownKeys(parsed.value, [
+          'sceneSelector',
+          'model',
+          'referenceChunks',
+        ]);
         if (unknown) return unknown;
         let selector: SceneSelector;
         let model: string | undefined;
@@ -1204,7 +1328,10 @@ export function createProjectSessionMcpRegistry(
             return invalidInput('referenceChunks must be a bounded array.');
           }
           if (!caller.grant.scopes.includes(MCP_REFERENCE_READ_SCOPE)) {
-            return mcpToolError('SCOPE_MISMATCH', 'Reference-backed renders require mcp:reference:read.');
+            return mcpToolError(
+              'SCOPE_MISMATCH',
+              'Reference-backed renders require mcp:reference:read.',
+            );
           }
           for (const value of parsed.value.referenceChunks) {
             const candidate = parseObject(value, 'Each reference chunk must be an object.');
@@ -1266,8 +1393,13 @@ export function createProjectSessionMcpRegistry(
                     projectId: coreProjectId(source),
                     citations: await Promise.all(
                       references.map(async ({ referenceId, chunkId }, index) => {
-                        const result = await referencePacket.getChunk({ version: 1, referenceId, chunkId });
-                        if (result === null) throw new InputShapeError('Reference chunk was not found.');
+                        const result = await referencePacket.getChunk({
+                          version: 1,
+                          referenceId,
+                          chunkId,
+                        });
+                        if (result === null)
+                          throw new InputShapeError('Reference chunk was not found.');
                         const chunk = result.chunk;
                         if (chunk.quote === null || chunk.quote.length === 0) {
                           throw new InputShapeError('Reference chunk has no text quote.');
@@ -1293,7 +1425,9 @@ export function createProjectSessionMcpRegistry(
                 selector,
                 mutation: { operationId: context.operationId, actorId: context.actorId },
                 ...(model !== undefined ? { model } : {}),
-                ...(resolvedReferencePacket === undefined ? {} : { referencePacket: resolvedReferencePacket }),
+                ...(resolvedReferencePacket === undefined
+                  ? {}
+                  : { referencePacket: resolvedReferencePacket }),
               },
               { services: session.runtime.services },
             );
@@ -1307,8 +1441,19 @@ export function createProjectSessionMcpRegistry(
       run: async (_caller, input) => {
         const parsed = parseReferenceInput(input, ['version', 'pageSize', 'cursor']);
         if (!parsed.ok) return parsed.result;
-        const pageSize = referenceInteger(parsed.value, 'pageSize', 1, REFERENCE_MCP_LIMITS_V1.maxPageSize, false);
-        const cursor = referenceString(parsed.value, 'cursor', REFERENCE_MCP_LIMITS_V1.maxCursorLength, false);
+        const pageSize = referenceInteger(
+          parsed.value,
+          'pageSize',
+          1,
+          REFERENCE_MCP_LIMITS_V1.maxPageSize,
+          false,
+        );
+        const cursor = referenceString(
+          parsed.value,
+          'cursor',
+          REFERENCE_MCP_LIMITS_V1.maxCursorLength,
+          false,
+        );
         if (!pageSize.ok) return pageSize.result;
         if (!cursor.ok) return cursor.result;
         const reference = options.reference;
@@ -1330,7 +1475,11 @@ export function createProjectSessionMcpRegistry(
       run: async (_caller, input) => {
         const parsed = parseReferenceInput(input, ['version', 'referenceId']);
         if (!parsed.ok) return parsed.result;
-        const referenceId = referenceString(parsed.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const referenceId = referenceString(
+          parsed.value,
+          'referenceId',
+          REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+        );
         if (!referenceId.ok) return referenceId.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
@@ -1343,11 +1492,32 @@ export function createProjectSessionMcpRegistry(
     {
       ...toolMetadata('nova_reference_search'),
       run: async (_caller, input) => {
-        const parsed = parseReferenceInput(input, ['version', 'query', 'pageSize', 'cursor', 'filters']);
+        const parsed = parseReferenceInput(input, [
+          'version',
+          'query',
+          'pageSize',
+          'cursor',
+          'filters',
+        ]);
         if (!parsed.ok) return parsed.result;
-        const query = referenceString(parsed.value, 'query', REFERENCE_MCP_LIMITS_V1.maxQueryLength);
-        const pageSize = referenceInteger(parsed.value, 'pageSize', 1, REFERENCE_MCP_LIMITS_V1.maxPageSize, false);
-        const cursor = referenceString(parsed.value, 'cursor', REFERENCE_MCP_LIMITS_V1.maxCursorLength, false);
+        const query = referenceString(
+          parsed.value,
+          'query',
+          REFERENCE_MCP_LIMITS_V1.maxQueryLength,
+        );
+        const pageSize = referenceInteger(
+          parsed.value,
+          'pageSize',
+          1,
+          REFERENCE_MCP_LIMITS_V1.maxPageSize,
+          false,
+        );
+        const cursor = referenceString(
+          parsed.value,
+          'cursor',
+          REFERENCE_MCP_LIMITS_V1.maxCursorLength,
+          false,
+        );
         if (!query.ok) return query.result;
         if (!pageSize.ok) return pageSize.result;
         if (!cursor.ok) return cursor.result;
@@ -1355,11 +1525,30 @@ export function createProjectSessionMcpRegistry(
         if (parsed.value.filters !== undefined) {
           const filterRecord = parseObject(parsed.value.filters, 'filters must be an object.');
           if (!filterRecord.ok) return filterRecord.result;
-          const unknown = rejectUnknownKeys(filterRecord.value, ['referenceId', 'mediaType', 'tag']);
+          const unknown = rejectUnknownKeys(filterRecord.value, [
+            'referenceId',
+            'mediaType',
+            'tag',
+          ]);
           if (unknown) return unknown;
-          const referenceId = referenceString(filterRecord.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength, false);
-          const mediaType = referenceString(filterRecord.value, 'mediaType', REFERENCE_MCP_LIMITS_V1.maxMediaTypeLength, false);
-          const tag = referenceString(filterRecord.value, 'tag', REFERENCE_MCP_LIMITS_V1.maxTagLength, false);
+          const referenceId = referenceString(
+            filterRecord.value,
+            'referenceId',
+            REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+            false,
+          );
+          const mediaType = referenceString(
+            filterRecord.value,
+            'mediaType',
+            REFERENCE_MCP_LIMITS_V1.maxMediaTypeLength,
+            false,
+          );
+          const tag = referenceString(
+            filterRecord.value,
+            'tag',
+            REFERENCE_MCP_LIMITS_V1.maxTagLength,
+            false,
+          );
           if (!referenceId.ok) return referenceId.result;
           if (!mediaType.ok) return mediaType.result;
           if (!tag.ok) return tag.result;
@@ -1390,15 +1579,30 @@ export function createProjectSessionMcpRegistry(
       run: async (_caller, input) => {
         const parsed = parseReferenceInput(input, ['version', 'referenceId', 'chunkId']);
         if (!parsed.ok) return parsed.result;
-        const referenceId = referenceString(parsed.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
-        const chunkId = referenceString(parsed.value, 'chunkId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const referenceId = referenceString(
+          parsed.value,
+          'referenceId',
+          REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+        );
+        const chunkId = referenceString(
+          parsed.value,
+          'chunkId',
+          REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+        );
         if (!referenceId.ok) return referenceId.result;
         if (!chunkId.ok) return chunkId.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
-        const result = await reference.getChunk({ version: 1, referenceId: referenceId.value!, chunkId: chunkId.value! });
+        const result = await reference.getChunk({
+          version: 1,
+          referenceId: referenceId.value!,
+          chunkId: chunkId.value!,
+        });
         return result === null
-          ? mcpToolError('REFERENCE_CHUNK_NOT_FOUND', 'The requested reference chunk does not exist.')
+          ? mcpToolError(
+              'REFERENCE_CHUNK_NOT_FOUND',
+              'The requested reference chunk does not exist.',
+            )
           : mcpToolOk({ version: 1, chunk: safeReferenceChunk(result.chunk) });
       },
     },
@@ -1407,15 +1611,34 @@ export function createProjectSessionMcpRegistry(
       run: async (_caller, input) => {
         const parsed = parseReferenceInput(input, ['version', 'referenceId', 'offset', 'limit']);
         if (!parsed.ok) return parsed.result;
-        const referenceId = referenceString(parsed.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
-        const offset = referenceInteger(parsed.value, 'offset', 0, REFERENCE_MCP_LIMITS_V1.maxOffset);
-        const limit = referenceInteger(parsed.value, 'limit', 1, REFERENCE_MCP_LIMITS_V1.maxRangeBytes);
+        const referenceId = referenceString(
+          parsed.value,
+          'referenceId',
+          REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+        );
+        const offset = referenceInteger(
+          parsed.value,
+          'offset',
+          0,
+          REFERENCE_MCP_LIMITS_V1.maxOffset,
+        );
+        const limit = referenceInteger(
+          parsed.value,
+          'limit',
+          1,
+          REFERENCE_MCP_LIMITS_V1.maxRangeBytes,
+        );
         if (!referenceId.ok) return referenceId.result;
         if (!offset.ok) return offset.result;
         if (!limit.ok) return limit.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
-        const result = await reference.readContent({ version: 1, referenceId: referenceId.value!, offset: offset.value!, limit: limit.value! });
+        const result = await reference.readContent({
+          version: 1,
+          referenceId: referenceId.value!,
+          offset: offset.value!,
+          limit: limit.value!,
+        });
         return mcpToolOk({ version: 1, content: safeReferenceContent(result.content) });
       },
     },
@@ -1423,28 +1646,96 @@ export function createProjectSessionMcpRegistry(
       ...toolMetadata('nova_reference_import_begin'),
       run: async (_caller, input) => {
         const parsed = parseReferenceInput(input, [
-          'version', 'referenceId', 'originalName', 'displayName', 'mediaType', 'byteLength', 'contentHash',
-          'title', 'authors', 'sourceUrl', 'license', 'tags', 'idempotencyKey',
+          'version',
+          'referenceId',
+          'originalName',
+          'displayName',
+          'mediaType',
+          'byteLength',
+          'contentHash',
+          'title',
+          'authors',
+          'sourceUrl',
+          'license',
+          'tags',
+          'idempotencyKey',
         ]);
         if (!parsed.ok) return parsed.result;
-        const referenceId = referenceString(parsed.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
-        const originalName = referenceString(parsed.value, 'originalName', REFERENCE_MCP_LIMITS_V1.maxNameLength);
-        const displayName = referenceString(parsed.value, 'displayName', REFERENCE_MCP_LIMITS_V1.maxNameLength, false);
-        const mediaType = referenceString(parsed.value, 'mediaType', REFERENCE_MCP_LIMITS_V1.maxMediaTypeLength);
+        const referenceId = referenceString(
+          parsed.value,
+          'referenceId',
+          REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+        );
+        const originalName = referenceString(
+          parsed.value,
+          'originalName',
+          REFERENCE_MCP_LIMITS_V1.maxNameLength,
+        );
+        const displayName = referenceString(
+          parsed.value,
+          'displayName',
+          REFERENCE_MCP_LIMITS_V1.maxNameLength,
+          false,
+        );
+        const mediaType = referenceString(
+          parsed.value,
+          'mediaType',
+          REFERENCE_MCP_LIMITS_V1.maxMediaTypeLength,
+        );
         const contentHash = referenceString(parsed.value, 'contentHash', 64);
-        const idempotencyKey = referenceString(parsed.value, 'idempotencyKey', REFERENCE_MCP_LIMITS_V1.maxIdempotencyKeyLength);
-        const byteLength = referenceInteger(parsed.value, 'byteLength', 0, REFERENCE_MCP_LIMITS_V1.maxReferenceBytes);
-        const title = referenceString(parsed.value, 'title', REFERENCE_MCP_LIMITS_V1.maxMetadataTextLength, false);
-        const sourceUrl = referenceString(parsed.value, 'sourceUrl', REFERENCE_MCP_LIMITS_V1.maxMetadataTextLength, false);
-        const license = referenceString(parsed.value, 'license', REFERENCE_MCP_LIMITS_V1.maxMetadataTextLength, false);
-        const authors = referenceStringList(parsed.value, 'authors', REFERENCE_MCP_LIMITS_V1.maxAuthorLength, REFERENCE_MCP_LIMITS_V1.maxAuthorCount);
-        const tags = referenceStringList(parsed.value, 'tags', REFERENCE_MCP_LIMITS_V1.maxTagLength, REFERENCE_MCP_LIMITS_V1.maxTagCount);
-        if (!referenceId.ok) return referenceId.result; if (!originalName.ok) return originalName.result;
-        if (!displayName.ok) return displayName.result; if (!mediaType.ok) return mediaType.result;
-        if (!contentHash.ok) return contentHash.result; if (!idempotencyKey.ok) return idempotencyKey.result;
+        const idempotencyKey = referenceString(
+          parsed.value,
+          'idempotencyKey',
+          REFERENCE_MCP_LIMITS_V1.maxIdempotencyKeyLength,
+        );
+        const byteLength = referenceInteger(
+          parsed.value,
+          'byteLength',
+          0,
+          REFERENCE_MCP_LIMITS_V1.maxReferenceBytes,
+        );
+        const title = referenceString(
+          parsed.value,
+          'title',
+          REFERENCE_MCP_LIMITS_V1.maxMetadataTextLength,
+          false,
+        );
+        const sourceUrl = referenceString(
+          parsed.value,
+          'sourceUrl',
+          REFERENCE_MCP_LIMITS_V1.maxMetadataTextLength,
+          false,
+        );
+        const license = referenceString(
+          parsed.value,
+          'license',
+          REFERENCE_MCP_LIMITS_V1.maxMetadataTextLength,
+          false,
+        );
+        const authors = referenceStringList(
+          parsed.value,
+          'authors',
+          REFERENCE_MCP_LIMITS_V1.maxAuthorLength,
+          REFERENCE_MCP_LIMITS_V1.maxAuthorCount,
+        );
+        const tags = referenceStringList(
+          parsed.value,
+          'tags',
+          REFERENCE_MCP_LIMITS_V1.maxTagLength,
+          REFERENCE_MCP_LIMITS_V1.maxTagCount,
+        );
+        if (!referenceId.ok) return referenceId.result;
+        if (!originalName.ok) return originalName.result;
+        if (!displayName.ok) return displayName.result;
+        if (!mediaType.ok) return mediaType.result;
+        if (!contentHash.ok) return contentHash.result;
+        if (!idempotencyKey.ok) return idempotencyKey.result;
         if (!byteLength.ok) return byteLength.result;
-        if (!title.ok) return title.result; if (!sourceUrl.ok) return sourceUrl.result; if (!license.ok) return license.result;
-        if (!authors.ok) return authors.result; if (!tags.ok) return tags.result;
+        if (!title.ok) return title.result;
+        if (!sourceUrl.ok) return sourceUrl.result;
+        if (!license.ok) return license.result;
+        if (!authors.ok) return authors.result;
+        if (!tags.ok) return tags.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
         const result = await reference.importBegin({
@@ -1468,21 +1759,52 @@ export function createProjectSessionMcpRegistry(
     {
       ...toolMetadata('nova_reference_import_chunk'),
       run: async (_caller, input) => {
-        const parsed = parseReferenceInput(input, ['version', 'jobId', 'offset', 'byteLength', 'chunkHash', 'dataBase64']);
+        const parsed = parseReferenceInput(input, [
+          'version',
+          'jobId',
+          'offset',
+          'byteLength',
+          'chunkHash',
+          'dataBase64',
+        ]);
         if (!parsed.ok) return parsed.result;
-        const jobId = referenceString(parsed.value, 'jobId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const jobId = referenceString(
+          parsed.value,
+          'jobId',
+          REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+        );
         const chunkHash = referenceString(parsed.value, 'chunkHash', 64);
-        const dataBase64 = referenceString(parsed.value, 'dataBase64', REFERENCE_MCP_LIMITS_V1.maxChunkBase64Length);
-        const offset = referenceInteger(parsed.value, 'offset', 0, REFERENCE_MCP_LIMITS_V1.maxOffset);
-        const byteLength = referenceInteger(parsed.value, 'byteLength', 1, REFERENCE_MCP_LIMITS_V1.maxChunkBytes);
-        if (!jobId.ok) return jobId.result; if (!chunkHash.ok) return chunkHash.result;
-        if (!dataBase64.ok) return dataBase64.result; if (!offset.ok) return offset.result;
+        const dataBase64 = referenceString(
+          parsed.value,
+          'dataBase64',
+          REFERENCE_MCP_LIMITS_V1.maxChunkBase64Length,
+        );
+        const offset = referenceInteger(
+          parsed.value,
+          'offset',
+          0,
+          REFERENCE_MCP_LIMITS_V1.maxOffset,
+        );
+        const byteLength = referenceInteger(
+          parsed.value,
+          'byteLength',
+          1,
+          REFERENCE_MCP_LIMITS_V1.maxChunkBytes,
+        );
+        if (!jobId.ok) return jobId.result;
+        if (!chunkHash.ok) return chunkHash.result;
+        if (!dataBase64.ok) return dataBase64.result;
+        if (!offset.ok) return offset.result;
         if (!byteLength.ok) return byteLength.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
         const result = await reference.importChunk({
-          version: 1, jobId: jobId.value!, offset: offset.value!, byteLength: byteLength.value!,
-          chunkHash: chunkHash.value!, dataBase64: dataBase64.value!,
+          version: 1,
+          jobId: jobId.value!,
+          offset: offset.value!,
+          byteLength: byteLength.value!,
+          chunkHash: chunkHash.value!,
+          dataBase64: dataBase64.value!,
         });
         return mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
       },
@@ -1492,12 +1814,21 @@ export function createProjectSessionMcpRegistry(
       run: async (_caller, input) => {
         const parsed = parseReferenceInput(input, ['version', 'jobId', 'contentHash']);
         if (!parsed.ok) return parsed.result;
-        const jobId = referenceString(parsed.value, 'jobId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const jobId = referenceString(
+          parsed.value,
+          'jobId',
+          REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+        );
         const contentHash = referenceString(parsed.value, 'contentHash', 64);
-        if (!jobId.ok) return jobId.result; if (!contentHash.ok) return contentHash.result;
+        if (!jobId.ok) return jobId.result;
+        if (!contentHash.ok) return contentHash.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
-        const result = await reference.importCommit({ version: 1, jobId: jobId.value!, contentHash: contentHash.value! });
+        const result = await reference.importCommit({
+          version: 1,
+          jobId: jobId.value!,
+          contentHash: contentHash.value!,
+        });
         return mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
       },
     },
@@ -1506,12 +1837,18 @@ export function createProjectSessionMcpRegistry(
       run: async (_caller, input) => {
         const parsed = parseReferenceInput(input, ['version', 'jobId']);
         if (!parsed.ok) return parsed.result;
-        const jobId = referenceString(parsed.value, 'jobId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const jobId = referenceString(
+          parsed.value,
+          'jobId',
+          REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+        );
         if (!jobId.ok) return jobId.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
         const result = await reference.jobGet({ version: 1, jobId: jobId.value! });
-        return result === null ? mcpToolError('REFERENCE_JOB_NOT_FOUND', 'The requested reference job does not exist.') : mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
+        return result === null
+          ? mcpToolError('REFERENCE_JOB_NOT_FOUND', 'The requested reference job does not exist.')
+          : mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
       },
     },
     {
@@ -1519,7 +1856,11 @@ export function createProjectSessionMcpRegistry(
       run: async (_caller, input) => {
         const parsed = parseReferenceInput(input, ['version', 'jobId']);
         if (!parsed.ok) return parsed.result;
-        const jobId = referenceString(parsed.value, 'jobId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const jobId = referenceString(
+          parsed.value,
+          'jobId',
+          REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+        );
         if (!jobId.ok) return jobId.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
@@ -1532,12 +1873,20 @@ export function createProjectSessionMcpRegistry(
       run: async (_caller, input) => {
         const parsed = parseReferenceInput(input, ['version', 'referenceId']);
         if (!parsed.ok) return parsed.result;
-        const referenceId = referenceString(parsed.value, 'referenceId', REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength);
+        const referenceId = referenceString(
+          parsed.value,
+          'referenceId',
+          REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+        );
         if (!referenceId.ok) return referenceId.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
         const result = await reference.delete({ version: 1, referenceId: referenceId.value! });
-        return mcpToolOk({ version: 1, job: safeReferenceJob(result.job), deletedReferenceId: result.deletedReferenceId });
+        return mcpToolOk({
+          version: 1,
+          job: safeReferenceJob(result.job),
+          deletedReferenceId: result.deletedReferenceId,
+        });
       },
     },
     {
@@ -1579,8 +1928,15 @@ export function createProjectSessionMcpRegistry(
         if (!documentId.ok) return documentId.result;
         const offset = parsed.value.offset;
         const limit = parsed.value.limit;
-        if (offset !== undefined && (!Number.isInteger(offset) || (offset as number) < 0)) return invalidInput('offset must be a non-negative integer.');
-        if (limit !== undefined && (!Number.isInteger(limit) || (limit as number) < 1 || (limit as number) > AUTHORING_DOCUMENT_LIMITS_V1.maxReadCharacters)) return invalidInput('limit is outside the bounded read range.');
+        if (offset !== undefined && (!Number.isInteger(offset) || (offset as number) < 0))
+          return invalidInput('offset must be a non-negative integer.');
+        if (
+          limit !== undefined &&
+          (!Number.isInteger(limit) ||
+            (limit as number) < 1 ||
+            (limit as number) > AUTHORING_DOCUMENT_LIMITS_V1.maxReadCharacters)
+        )
+          return invalidInput('limit is outside the bounded read range.');
         const result = await coordinator.readDocument({
           version: AUTHORING_CONTRACT_VERSION,
           documentId: documentId.value,
@@ -1593,104 +1949,191 @@ export function createProjectSessionMcpRegistry(
     {
       ...toolMetadata('nova_authoring_document_edit'),
       run: async (caller, input) => {
-        const parsed = parseToolInput(input, ['version', 'documentId', 'expectedWorkspaceDigest', 'expectedAcceptedSourceHash', 'expectedStateVectorHash', 'replacementText', 'edits']);
+        const parsed = parseToolInput(input, [
+          'version',
+          'documentId',
+          'expectedWorkspaceDigest',
+          'expectedAcceptedSourceHash',
+          'expectedStateVectorHash',
+          'replacementText',
+          'edits',
+        ]);
         if (!parsed.ok) return parsed.result;
         const coordinator = options.coordinator;
         if (coordinator?.editDocument === undefined) return NO_AUTHORING_COORDINATOR;
         const documentId = requiredString(parsed.value, 'documentId');
         const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
         const vector = requiredString(parsed.value, 'expectedStateVectorHash');
-        if (!documentId.ok) return documentId.result; if (!digest.ok) return digest.result; if (!vector.ok) return vector.result;
+        if (!documentId.ok) return documentId.result;
+        if (!digest.ok) return digest.result;
+        if (!vector.ok) return vector.result;
         const expectedAccepted = nullableStringField(parsed.value, 'expectedAcceptedSourceHash');
         if (!expectedAccepted.ok) return expectedAccepted.result;
         const replacement = parsed.value.replacementText;
         const editsValue = parsed.value.edits;
-        if ((replacement === undefined) === (editsValue === undefined)) return invalidInput('Provide exactly one of replacementText or edits.');
-        if (replacement !== undefined && (typeof replacement !== 'string' || new TextEncoder().encode(replacement).byteLength > AUTHORING_DOCUMENT_LIMITS_V1.maxEditBytes)) return invalidInput('replacementText exceeds the edit limit.');
-        let edits: Array<{ readonly start: number; readonly end: number; readonly replacementText: string }> | undefined;
+        if ((replacement === undefined) === (editsValue === undefined))
+          return invalidInput('Provide exactly one of replacementText or edits.');
+        if (
+          replacement !== undefined &&
+          (typeof replacement !== 'string' ||
+            new TextEncoder().encode(replacement).byteLength >
+              AUTHORING_DOCUMENT_LIMITS_V1.maxEditBytes)
+        )
+          return invalidInput('replacementText exceeds the edit limit.');
+        let edits:
+          | Array<{
+              readonly start: number;
+              readonly end: number;
+              readonly replacementText: string;
+            }>
+          | undefined;
         if (editsValue !== undefined) {
-          if (!Array.isArray(editsValue) || editsValue.length === 0) return invalidInput('edits must be a non-empty array.');
-          let previousEnd = 0; let bytes = 0; edits = [];
+          if (!Array.isArray(editsValue) || editsValue.length === 0)
+            return invalidInput('edits must be a non-empty array.');
+          let previousEnd = 0;
+          let bytes = 0;
+          edits = [];
           for (const raw of editsValue) {
             const item = parseObject(raw, 'each edit must be an object.');
             if (!item.ok) return item.result;
             const unknown = rejectUnknownKeys(item.value, ['start', 'end', 'replacementText']);
             if (unknown) return unknown;
-            const start = item.value.start; const end = item.value.end; const text = item.value.replacementText;
-            if (!Number.isInteger(start) || !Number.isInteger(end) || (start as number) < previousEnd || (end as number) < (start as number) || typeof text !== 'string') return invalidInput('edits must be sorted, non-overlapping spans.');
+            const start = item.value.start;
+            const end = item.value.end;
+            const text = item.value.replacementText;
+            if (
+              !Number.isInteger(start) ||
+              !Number.isInteger(end) ||
+              (start as number) < previousEnd ||
+              (end as number) < (start as number) ||
+              typeof text !== 'string'
+            )
+              return invalidInput('edits must be sorted, non-overlapping spans.');
             bytes += new TextEncoder().encode(text).byteLength;
-            if (bytes > AUTHORING_DOCUMENT_LIMITS_V1.maxEditBytes) return invalidInput('edits exceed the edit limit.');
+            if (bytes > AUTHORING_DOCUMENT_LIMITS_V1.maxEditBytes)
+              return invalidInput('edits exceed the edit limit.');
             previousEnd = end as number;
             edits.push({ start: start as number, end: end as number, replacementText: text });
           }
         }
-        const result = await coordinator.editDocument({
-          version: AUTHORING_CONTRACT_VERSION,
-          documentId: documentId.value,
-          expectedWorkspaceDigest: digest.value,
-          expectedAcceptedSourceHash: expectedAccepted.value,
-          expectedStateVectorHash: vector.value,
-          ...(replacement === undefined ? {} : { replacementText: replacement as string }),
-          ...(edits === undefined ? {} : { edits }),
-        }, caller);
+        const result = await coordinator.editDocument(
+          {
+            version: AUTHORING_CONTRACT_VERSION,
+            documentId: documentId.value,
+            expectedWorkspaceDigest: digest.value,
+            expectedAcceptedSourceHash: expectedAccepted.value,
+            expectedStateVectorHash: vector.value,
+            ...(replacement === undefined ? {} : { replacementText: replacement as string }),
+            ...(edits === undefined ? {} : { edits }),
+          },
+          caller,
+        );
         return authoringApplyResult(result);
       },
     },
     {
       ...toolMetadata('nova_authoring_document_create'),
       run: async (caller, input) => {
-        const parsed = parseToolInput(input, ['version', 'logicalPath', 'kind', 'expectedWorkspaceDigest', 'expectedAcceptedSourceHash']);
+        const parsed = parseToolInput(input, [
+          'version',
+          'logicalPath',
+          'kind',
+          'expectedWorkspaceDigest',
+          'expectedAcceptedSourceHash',
+        ]);
         if (!parsed.ok) return parsed.result;
         const coordinator = options.coordinator;
         if (coordinator?.createDocument === undefined) return NO_AUTHORING_COORDINATOR;
-        const path = requiredString(parsed.value, 'logicalPath'); const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
-        if (!path.ok) return path.result; if (!digest.ok) return digest.result;
+        const path = requiredString(parsed.value, 'logicalPath');
+        const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
+        if (!path.ok) return path.result;
+        if (!digest.ok) return digest.result;
         const accepted = nullableStringField(parsed.value, 'expectedAcceptedSourceHash');
         if (!accepted.ok) return accepted.result;
         const kind = parsed.value.kind;
-        if (kind !== undefined && kind !== 'prose' && kind !== 'raw-yaml') return invalidInput('kind must be prose or raw-yaml.');
-        const result = await coordinator.createDocument({ version: AUTHORING_CONTRACT_VERSION, logicalPath: path.value, expectedWorkspaceDigest: digest.value, expectedAcceptedSourceHash: accepted.value, ...(kind === undefined ? {} : { kind }) }, caller);
+        if (kind !== undefined && kind !== 'prose' && kind !== 'raw-yaml')
+          return invalidInput('kind must be prose or raw-yaml.');
+        const result = await coordinator.createDocument(
+          {
+            version: AUTHORING_CONTRACT_VERSION,
+            logicalPath: path.value,
+            expectedWorkspaceDigest: digest.value,
+            expectedAcceptedSourceHash: accepted.value,
+            ...(kind === undefined ? {} : { kind }),
+          },
+          caller,
+        );
         return 'code' in result ? mcpToolError(result.code, result.message) : mcpToolOk(result);
       },
     },
     {
       ...toolMetadata('nova_authoring_document_move'),
       run: async (caller, input) => {
-        const parsed = parseToolInput(input, ['version', 'documentId', 'logicalPath', 'expectedWorkspaceDigest', 'expectedAcceptedSourceHash']);
+        const parsed = parseToolInput(input, [
+          'version',
+          'documentId',
+          'logicalPath',
+          'expectedWorkspaceDigest',
+          'expectedAcceptedSourceHash',
+        ]);
         if (!parsed.ok) return parsed.result;
         const coordinator = options.coordinator;
         if (coordinator?.moveDocument === undefined) return NO_AUTHORING_COORDINATOR;
-        const id = requiredString(parsed.value, 'documentId'); const path = requiredString(parsed.value, 'logicalPath'); const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
-        if (!id.ok) return id.result; if (!path.ok) return path.result; if (!digest.ok) return digest.result;
+        const id = requiredString(parsed.value, 'documentId');
+        const path = requiredString(parsed.value, 'logicalPath');
+        const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
+        if (!id.ok) return id.result;
+        if (!path.ok) return path.result;
+        if (!digest.ok) return digest.result;
         const accepted = nullableStringField(parsed.value, 'expectedAcceptedSourceHash');
         if (!accepted.ok) return accepted.result;
-        const result = await coordinator.moveDocument({ version: AUTHORING_CONTRACT_VERSION, documentId: id.value, logicalPath: path.value, expectedWorkspaceDigest: digest.value, expectedAcceptedSourceHash: accepted.value }, caller);
+        const result = await coordinator.moveDocument(
+          {
+            version: AUTHORING_CONTRACT_VERSION,
+            documentId: id.value,
+            logicalPath: path.value,
+            expectedWorkspaceDigest: digest.value,
+            expectedAcceptedSourceHash: accepted.value,
+          },
+          caller,
+        );
         return 'code' in result ? mcpToolError(result.code, result.message) : mcpToolOk(result);
       },
     },
     {
       ...toolMetadata('nova_authoring_document_delete'),
       run: async (caller, input) => {
-        const parsed = parseToolInput(input, ['version', 'documentId', 'expectedWorkspaceDigest', 'expectedAcceptedSourceHash']);
+        const parsed = parseToolInput(input, [
+          'version',
+          'documentId',
+          'expectedWorkspaceDigest',
+          'expectedAcceptedSourceHash',
+        ]);
         if (!parsed.ok) return parsed.result;
         const coordinator = options.coordinator;
         if (coordinator?.deleteDocument === undefined) return NO_AUTHORING_COORDINATOR;
-        const id = requiredString(parsed.value, 'documentId'); const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
-        if (!id.ok) return id.result; if (!digest.ok) return digest.result;
+        const id = requiredString(parsed.value, 'documentId');
+        const digest = requiredString(parsed.value, 'expectedWorkspaceDigest');
+        if (!id.ok) return id.result;
+        if (!digest.ok) return digest.result;
         const accepted = nullableStringField(parsed.value, 'expectedAcceptedSourceHash');
         if (!accepted.ok) return accepted.result;
-        const result = await coordinator.deleteDocument({ version: AUTHORING_CONTRACT_VERSION, documentId: id.value, expectedWorkspaceDigest: digest.value, expectedAcceptedSourceHash: accepted.value }, caller);
+        const result = await coordinator.deleteDocument(
+          {
+            version: AUTHORING_CONTRACT_VERSION,
+            documentId: id.value,
+            expectedWorkspaceDigest: digest.value,
+            expectedAcceptedSourceHash: accepted.value,
+          },
+          caller,
+        );
         return 'code' in result ? mcpToolError(result.code, result.message) : mcpToolOk(result);
       },
     },
     {
       ...toolMetadata('nova_authoring_submit'),
       run: async (caller, input) => {
-        const parsed = parseToolInput(input, [
-          'version',
-          'expectedWorkspaceDigest',
-          'message',
-        ]);
+        const parsed = parseToolInput(input, ['version', 'expectedWorkspaceDigest', 'message']);
         if (!parsed.ok) return parsed.result;
         const coordinator = options.coordinator;
         if (coordinator === undefined) return NO_AUTHORING_COORDINATOR;
@@ -1702,10 +2145,7 @@ export function createProjectSessionMcpRegistry(
         } catch (error) {
           return mcpToolError('INVALID_INPUT', (error as Error).message);
         }
-        if (
-          message !== undefined &&
-          message.length > 4096
-        ) {
+        if (message !== undefined && message.length > 4096) {
           return invalidInput('message must be at most 4096 characters.');
         }
         const request: McpAuthoringSubmitInputV1 = {
@@ -1742,19 +2182,13 @@ export function createProjectSessionMcpRegistry(
         if (coordinator === undefined || coordinator.readConflict === undefined) {
           return NO_AUTHORING_COORDINATOR;
         }
-        return mcpToolOk(
-          await coordinator.readConflict({ version: AUTHORING_CONTRACT_VERSION }),
-        );
+        return mcpToolOk(await coordinator.readConflict({ version: AUTHORING_CONTRACT_VERSION }));
       },
     },
     {
       ...toolMetadata('nova_conflict_resolve'),
       run: async (caller, input) => {
-        const parsed = parseToolInput(input, [
-          'version',
-          'choice',
-          'candidateHash',
-        ]);
+        const parsed = parseToolInput(input, ['version', 'choice', 'candidateHash']);
         if (!parsed.ok) return parsed.result;
         const coordinator = options.coordinator;
         if (coordinator === undefined) return NO_AUTHORING_COORDINATOR;
@@ -1764,7 +2198,9 @@ export function createProjectSessionMcpRegistry(
           choice !== 'accept-external' &&
           choice !== 'apply-proposed-disjoint-merge'
         ) {
-          return invalidInput('choice must be keep-working, accept-external, or apply-proposed-disjoint-merge.');
+          return invalidInput(
+            'choice must be keep-working, accept-external, or apply-proposed-disjoint-merge.',
+          );
         }
         const candidateHash = nullableStringField(parsed.value, 'candidateHash');
         if (!candidateHash.ok) return candidateHash.result;
@@ -1966,7 +2402,12 @@ export function createProjectSessionMcpRegistry(
         if (!projectId.ok) return projectId.result;
         const method = options.admin?.membershipList;
         if (method === undefined) return NO_ADMIN_SERVICE;
-        return mcpToolOk(await method({ version: 1, ...(projectId.value === undefined ? {} : { projectId: projectId.value }) }));
+        return mcpToolOk(
+          await method({
+            version: 1,
+            ...(projectId.value === undefined ? {} : { projectId: projectId.value }),
+          }),
+        );
       },
     },
     {
@@ -1982,7 +2423,14 @@ export function createProjectSessionMcpRegistry(
         if (!role.ok) return role.result;
         const method = options.admin?.membershipUpsert;
         if (method === undefined) return NO_ADMIN_SERVICE;
-        return mcpToolOk(await method({ version: 1, userId: userId.value, projectId: projectId.value, role: role.value }));
+        return mcpToolOk(
+          await method({
+            version: 1,
+            userId: userId.value,
+            projectId: projectId.value,
+            role: role.value,
+          }),
+        );
       },
     },
     {
@@ -1996,7 +2444,9 @@ export function createProjectSessionMcpRegistry(
         if (!projectId.ok) return projectId.result;
         const method = options.admin?.membershipRevoke;
         if (method === undefined) return NO_ADMIN_SERVICE;
-        return mcpToolOk(await method({ version: 1, userId: userId.value, projectId: projectId.value }));
+        return mcpToolOk(
+          await method({ version: 1, userId: userId.value, projectId: projectId.value }),
+        );
       },
     },
     {
@@ -2008,7 +2458,12 @@ export function createProjectSessionMcpRegistry(
         if (!projectId.ok) return projectId.result;
         const method = options.admin?.inviteList;
         if (method === undefined) return NO_ADMIN_SERVICE;
-        return mcpToolOk(await method({ version: 1, ...(projectId.value === undefined ? {} : { projectId: projectId.value }) }));
+        return mcpToolOk(
+          await method({
+            version: 1,
+            ...(projectId.value === undefined ? {} : { projectId: projectId.value }),
+          }),
+        );
       },
     },
     {
@@ -2021,10 +2476,18 @@ export function createProjectSessionMcpRegistry(
         const ttlMs = adminInteger(parsed.value, 'ttlMs', 1, 30 * 24 * 60 * 60 * 1000);
         if (!projectId.ok) return projectId.result;
         if (!role.ok) return role.result;
-        if (!ttlMs.ok || ttlMs.value === undefined) return ttlMs.ok ? invalidInput('ttlMs is required.') : ttlMs.result;
+        if (!ttlMs.ok || ttlMs.value === undefined)
+          return ttlMs.ok ? invalidInput('ttlMs is required.') : ttlMs.result;
         const method = options.admin?.inviteCreate;
         if (method === undefined) return NO_ADMIN_SERVICE;
-        return mcpToolOk(await method({ version: 1, projectId: projectId.value, role: role.value, ttlMs: ttlMs.value }));
+        return mcpToolOk(
+          await method({
+            version: 1,
+            projectId: projectId.value,
+            role: role.value,
+            ttlMs: ttlMs.value,
+          }),
+        );
       },
     },
     {
@@ -2052,10 +2515,17 @@ export function createProjectSessionMcpRegistry(
     {
       ...toolMetadata('nova_admin_device_pair_begin'),
       run: async (_caller, input) => {
-        const parsed = parseAdminVersionedInput(input, ['version', 'kind', 'projectId', 'role', 'ttlMs']);
+        const parsed = parseAdminVersionedInput(input, [
+          'version',
+          'kind',
+          'projectId',
+          'role',
+          'ttlMs',
+        ]);
         if (!parsed.ok) return parsed.result;
         const kind = parsed.value.kind;
-        if (kind !== undefined && kind !== 'project' && kind !== 'admin') return invalidInput('kind must be project or admin.');
+        if (kind !== undefined && kind !== 'project' && kind !== 'admin')
+          return invalidInput('kind must be project or admin.');
         const projectId = adminOptionalString(parsed.value, 'projectId');
         const role = adminOptionalRole(parsed.value);
         const ttlMs = adminInteger(parsed.value, 'ttlMs', 1, 30 * 24 * 60 * 60 * 1000, false);
@@ -2063,7 +2533,10 @@ export function createProjectSessionMcpRegistry(
         if (!role.ok) return role.result;
         if (!ttlMs.ok) return ttlMs.result;
         const resolvedKind = kind ?? (projectId.value === undefined ? 'admin' : 'project');
-        if (resolvedKind === 'admin' && (projectId.value !== undefined || role.value !== undefined)) {
+        if (
+          resolvedKind === 'admin' &&
+          (projectId.value !== undefined || role.value !== undefined)
+        ) {
           return invalidInput('admin device pairing cannot carry projectId or role.');
         }
         if (resolvedKind === 'project' && projectId.value === undefined) {
@@ -2110,7 +2583,12 @@ export function createProjectSessionMcpRegistry(
         if (!limit.ok) return limit.result;
         const method = options.admin?.operationList;
         if (method === undefined) return NO_ADMIN_SERVICE;
-        return mcpToolOk(await method({ version: 1, ...(limit.value === undefined ? {} : { limit: limit.value }) }));
+        return mcpToolOk(
+          await method({
+            version: 1,
+            ...(limit.value === undefined ? {} : { limit: limit.value }),
+          }),
+        );
       },
     },
     {
@@ -2161,7 +2639,9 @@ export function createProjectSessionMcpRegistry(
   return {
     projectId: session.projectId,
     session,
-    availableScopes: [...new Set(selectedDefinitions.flatMap((definition) => definition.requiredScopes))],
+    availableScopes: [
+      ...new Set(selectedDefinitions.flatMap((definition) => definition.requiredScopes)),
+    ],
     list(permittedScopes) {
       return selectedDefinitions.filter((definition) =>
         definition.requiredScopes.every((scope) => permittedScopes.includes(scope)),

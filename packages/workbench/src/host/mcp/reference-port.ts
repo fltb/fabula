@@ -371,7 +371,7 @@ export function createWorkbenchReferencePort(
     new DeterministicReferenceExtractor({
       ...(isTextMediaType(mediaType)
         ? {
-            chunkCharacters: limits.maxChunkCharacters,
+            chunkCharacters: configuredExtractionChunkBytes,
             chunkOverlapCharacters: limits.chunkOverlapCharacters,
           }
         : { chunkBytes: configuredExtractionChunkBytes }),

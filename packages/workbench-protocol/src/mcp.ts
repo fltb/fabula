@@ -554,6 +554,14 @@ function inputFor(name: string): McpJsonSchemaV1 {
           },
           required: ['type'],
         },
+        referenceChunks: {
+          type: 'array',
+          maxItems: REFERENCE_MCP_LIMITS_V1.maxCitations,
+          items: objectProperty(
+            { referenceId, chunkId: referenceId },
+            ['referenceId', 'chunkId'],
+          ),
+        },
       },
       ['sceneSelector'],
     );

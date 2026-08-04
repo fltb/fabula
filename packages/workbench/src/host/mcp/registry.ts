@@ -1167,7 +1167,7 @@ export function createProjectSessionMcpRegistry(
         const parsed = parseObject(input, 'Input must be an object.');
         if (!parsed.ok) return parsed.result;
         // Fail closed: no actorId/operationId (or any other server field) may reach the queue.
-        const unknown = rejectUnknownKeys(parsed.value, ['sceneSelector', 'model']);
+        const unknown = rejectUnknownKeys(parsed.value, ['sceneSelector', 'model', 'referenceChunks']);
         if (unknown) return unknown;
         let selector: SceneSelector;
         let model: string | undefined;
@@ -1177,9 +1177,97 @@ export function createProjectSessionMcpRegistry(
         } catch (error) {
           return mcpToolError('INVALID_INPUT', (error as Error).message);
         }
+        const references: Array<{ readonly referenceId: string; readonly chunkId: string }> = [];
+        if (parsed.value.referenceChunks !== undefined) {
+          if (
+            !Array.isArray(parsed.value.referenceChunks) ||
+            parsed.value.referenceChunks.length > REFERENCE_MCP_LIMITS_V1.maxCitations
+          ) {
+            return invalidInput('referenceChunks must be a bounded array.');
+          }
+          if (!caller.grant.scopes.includes(MCP_REFERENCE_READ_SCOPE)) {
+            return mcpToolError('SCOPE_MISMATCH', 'Reference-backed renders require mcp:reference:read.');
+          }
+          for (const value of parsed.value.referenceChunks) {
+            const candidate = parseObject(value, 'Each reference chunk must be an object.');
+            if (!candidate.ok) return candidate.result;
+            const chunkUnknown = rejectUnknownKeys(candidate.value, ['referenceId', 'chunkId']);
+            if (chunkUnknown) return chunkUnknown;
+            const referenceId = referenceString(
+              candidate.value,
+              'referenceId',
+              REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+            );
+            const chunkId = referenceString(
+              candidate.value,
+              'chunkId',
+              REFERENCE_MCP_LIMITS_V1.maxReferenceIdLength,
+            );
+            if (!referenceId.ok) return referenceId.result;
+            if (!chunkId.ok) return chunkId.result;
+            references.push({ referenceId: referenceId.value!, chunkId: chunkId.value! });
+          }
+        }
         const source = session.source;
         if (source === null) return NO_ACCEPTED_SOURCE;
+        const referencePacket =
+          references.length === 0
+            ? undefined
+            : (() => {
+                const reference = options.reference;
+                if (reference === undefined) return null;
+                return reference;
+              })();
+        if (referencePacket === null) return NO_REFERENCE_PORT;
 
+        let resolvedReferencePacket:
+          | {
+              readonly version: 1;
+              readonly projectId: string;
+              readonly citations: readonly {
+                readonly version: 1;
+                readonly citationId: string;
+                readonly referenceId: string;
+                readonly chunkId: string;
+                readonly contentHash: string;
+                readonly chunkHash: string;
+                readonly quote: string;
+                readonly locator: string;
+                readonly authoritative: false;
+              }[];
+            }
+          | undefined;
+        if (referencePacket !== undefined) {
+          try {
+            const citations = await Promise.all(
+              references.map(async ({ referenceId, chunkId }, index) => {
+                const result = await referencePacket.getChunk({ version: 1, referenceId, chunkId });
+                if (result === null) throw new InputShapeError('Reference chunk was not found.');
+                const chunk = result.chunk;
+                if (chunk.quote === null || chunk.quote.length === 0) {
+                  throw new InputShapeError('Reference chunk has no text quote.');
+                }
+                return {
+                  version: 1 as const,
+                  citationId: `${chunk.referenceId}:${chunk.chunkId}:${index}`,
+                  referenceId: chunk.referenceId,
+                  chunkId: chunk.chunkId,
+                  contentHash: chunk.contentHash,
+                  chunkHash: chunk.chunkHash,
+                  quote: chunk.quote,
+                  locator: chunk.locator,
+                  authoritative: false as const,
+                };
+              }),
+            );
+            if (new Set(references.map((value) => `${value.referenceId}\u0000${value.chunkId}`)).size !== references.length) {
+              return invalidInput('referenceChunks must not contain duplicates.');
+            }
+            resolvedReferencePacket = { version: 1, projectId: session.projectId, citations };
+          } catch (error) {
+            return mcpToolError('INVALID_INPUT', error instanceof Error ? error.message : 'Reference chunk could not be resolved.');
+          }
+        }
         const operation = await session.enqueueOperation({
           kind: 'render',
           capabilityId: caller.grant.capabilityId,
@@ -1188,6 +1276,7 @@ export function createProjectSessionMcpRegistry(
           payload: {
             selector,
             ...(model !== undefined ? { model } : {}),
+            ...(resolvedReferencePacket === undefined ? {} : { referencePacket: resolvedReferencePacket }),
           },
           run: async (context) =>
             render(
@@ -1197,6 +1286,7 @@ export function createProjectSessionMcpRegistry(
                 selector,
                 mutation: { operationId: context.operationId, actorId: context.actorId },
                 ...(model !== undefined ? { model } : {}),
+                ...(resolvedReferencePacket === undefined ? {} : { referencePacket: resolvedReferencePacket }),
               },
               { services: session.runtime.services },
             ),

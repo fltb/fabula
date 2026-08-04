@@ -210,6 +210,37 @@ describe('Workbench Host reference MCP port', () => {
     ).rejects.toThrow(/not accepting chunks/);
   });
 
+
+  it('recovers an orphaned chunk written before its durable job update', async () => {
+    const { jobsRoot, port } = await fixture();
+    const bytes = new TextEncoder().encode('abc');
+    const began = await port.importBegin({
+      version: 1,
+      referenceId: 'orphan',
+      originalName: 'orphan.txt',
+      mediaType: 'text/plain',
+      byteLength: bytes.byteLength,
+      contentHash: hash(bytes),
+      idempotencyKey: 'orphan',
+    });
+    await fs.writeFile(
+      path.join(jobsRoot, 'project-a', began.job.jobId, 'chunks', '0.bin'),
+      bytes,
+      { flag: 'wx', mode: 0o600 },
+    );
+    const resumed = await port.importChunk({
+      version: 1,
+      jobId: began.job.jobId,
+      offset: 0,
+      byteLength: bytes.byteLength,
+      chunkHash: hash(bytes),
+      dataBase64: Buffer.from(bytes).toString('base64'),
+    });
+    expect(resumed.job.bytesReceived).toBe(bytes.byteLength);
+    await expect(
+      port.importCommit({ version: 1, jobId: began.job.jobId, contentHash: hash(bytes) }),
+    ).resolves.toMatchObject({ job: { status: 'succeeded' } });
+  });
   it('fails a bad commit durably, retries only that failed job, deletes, and serializes concurrent imports', async () => {
     const { projectRoot, jobsRoot, port } = await fixture();
     const failedData = new TextEncoder().encode('bad');

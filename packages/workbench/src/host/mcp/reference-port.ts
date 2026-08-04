@@ -795,7 +795,21 @@ export function createWorkbenchReferencePort(
         return { version: 1, job: publicJob(job) };
       }
       const chunks = [...job.inputChunks, { offset: input.offset, byteLength: input.byteLength, chunkHash: input.chunkHash }];
-      await fs.writeFile(path.join(jobDirectory(jobsDirectory, job.jobId), 'chunks', `${input.offset}.bin`), bytes, { flag: 'wx', mode: 0o600 });
+      const chunkPath = path.join(
+        jobDirectory(jobsDirectory, job.jobId),
+        'chunks',
+        `${input.offset}.bin`,
+      );
+      try {
+        await fs.writeFile(chunkPath, bytes, { flag: 'wx', mode: 0o600 });
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+        const recovered = await fs.readFile(chunkPath);
+        if (recovered.byteLength !== bytes.byteLength || digest(recovered) !== input.chunkHash) {
+          await fs.unlink(chunkPath);
+          await fs.writeFile(chunkPath, bytes, { flag: 'wx', mode: 0o600 });
+        }
+      }
       const updated = changed(job, { inputChunks: chunks, bytesReceived: chunks.reduce((total, chunk) => total + chunk.byteLength, 0) });
       await writeJob(jobsDirectory, updated);
       return { version: 1, job: publicJob(updated) };

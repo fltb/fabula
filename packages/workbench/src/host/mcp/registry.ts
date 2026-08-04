@@ -83,23 +83,6 @@ import {
   type ProjectAccessRole,
   type WorkbenchConfigurationV1,
 } from '../../contracts/configuration.js';
-
-function coreProjectId(source: ProjectSourceSnapshotV1): string {
-  const document = source.documents.find((entry) => entry.logicalPath === 'nova.yaml');
-  const value = document?.parseResult.status === 'parsed' ? document.parseResult.value : undefined;
-  if (
-    typeof value === 'object' &&
-    value !== null &&
-    !Array.isArray(value) &&
-    'project' in value &&
-    typeof value.project === 'string' &&
-    value.project.length > 0
-  ) {
-    return value.project;
-  }
-  return 'default-project';
-}
-
 import type { AuthoringRevisionPort } from '../authoring/types.js';
 import type { ProjectSession, SessionOperationResult } from '../project-session.js';
 import type { McpAuthorizedCaller } from './auth.js';
@@ -1389,7 +1372,7 @@ export function createProjectSessionMcpRegistry(
                 ? undefined
                 : {
                     version: 1 as const,
-                    projectId: coreProjectId(source),
+                    projectId: session.projectId,
                     citations: await Promise.all(
                       references.map(async ({ referenceId, chunkId }, index) => {
                         const result = await referencePacket.getChunk({

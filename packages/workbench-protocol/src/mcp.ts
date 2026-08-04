@@ -554,6 +554,7 @@ function inputFor(name: string): McpJsonSchemaV1 {
           },
           required: ['type'],
         },
+        model: string,
         referenceChunks: {
           type: 'array',
           maxItems: REFERENCE_MCP_LIMITS_V1.maxCitations,

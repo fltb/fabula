@@ -34,11 +34,46 @@ describe('typed Workbench CLI client', () => {
     await expect(client.status()).resolves.toEqual({ status: 'ok' });
     expect(requestUrl).toBe('http://127.0.0.1:8787/mcp/projects/novel%2Fone');
     expect(requestInit?.method).toBe('POST');
-    expect(new Headers(requestInit?.headers).get('authorization')).toBe('Bearer opaque-device-token');
+    expect(new Headers(requestInit?.headers).get('authorization')).toBe(
+      'Bearer opaque-device-token',
+    );
     expect(JSON.parse(String(requestInit?.body))).toMatchObject({
       jsonrpc: '2.0',
       method: 'tools/call',
       params: { name: 'nova_status', arguments: {} },
+    });
+  });
+
+  it('serializes render reference selectors without Host-resolved chunk fields', async () => {
+    let requestBody = '';
+    const client = new WorkbenchClient({
+      projectId: 'novel',
+      credential: 'opaque-device-token',
+      fetch: async (_input, init) => {
+        requestBody = String(init?.body);
+        return response({
+          jsonrpc: '2.0',
+          id: 1,
+          result: { content: [{ type: 'text', text: JSON.stringify({ status: 'queued' }) }] },
+        });
+      },
+    });
+
+    await expect(
+      client.render({
+        sceneSelector: { type: 'all' },
+        referenceChunks: [{ referenceId: 'guide', chunkId: 'guide:0' }],
+      }),
+    ).resolves.toEqual({ status: 'queued' });
+
+    expect(JSON.parse(requestBody)).toMatchObject({
+      params: {
+        name: 'nova_render',
+        arguments: {
+          sceneSelector: { type: 'all' },
+          referenceChunks: [{ referenceId: 'guide', chunkId: 'guide:0' }],
+        },
+      },
     });
   });
 
@@ -79,7 +114,9 @@ describe('typed Workbench CLI client', () => {
           id: 1,
           result: {
             isError: true,
-            content: [{ type: 'text', text: JSON.stringify({ code: 'WORKSPACE_STALE', message: 'retry' }) }],
+            content: [
+              { type: 'text', text: JSON.stringify({ code: 'WORKSPACE_STALE', message: 'retry' }) },
+            ],
           },
         }),
     });

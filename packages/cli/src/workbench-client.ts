@@ -328,6 +328,11 @@ export interface WorkbenchRenderInputV1 extends WorkbenchJsonObject {
     readonly eventIds?: readonly string[];
   };
   readonly model?: string;
+  /** Host resolves these selectors after it validates the queued capability. */
+  readonly referenceChunks?: readonly {
+    readonly referenceId: string;
+    readonly chunkId: string;
+  }[];
 }
 export interface WorkbenchAuthoringDocumentListInputV1 extends WorkbenchJsonObject {
   readonly version: 2;

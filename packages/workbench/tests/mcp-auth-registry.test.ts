@@ -1,5 +1,5 @@
-import { readdirSync, readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
@@ -13,58 +13,59 @@ import type {
   RenderNovelResult,
 } from '@novalistically/core/editorial';
 import { buildSourceSnapshot, computeSourceDocumentHash } from '@novalistically/core/source';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { MCP_TOOL_CATALOG_V1 } from '@novalistically/workbench-protocol';
+import { MCP_TOOL_CATALOG_V1, type McpReferencePort } from '@novalistically/workbench-protocol';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  AuthoringStateV1,
+  McpAuthoringApplyOutputV1,
+  McpAuthoringSubmitOutputV1,
+  McpOperationGetOutputV1,
+} from '../src/contracts/authoring.js';
+import type { ConfigOperationReceiptV1 } from '../src/contracts/configuration.js';
 import {
+  type AgentCapabilityGrant,
   AgentCapabilityService,
   createCapabilityPersistence,
-  type AgentCapabilityGrant,
 } from '../src/host/agent/index.js';
+import type { AuthoringRevisionPort } from '../src/host/authoring/types.js';
+import {
+  createMcpAuthorizationPort,
+  MCP_AUTH_FAILURE_STATUS,
+  type McpAuthFailureCode,
+  type McpAuthorizationResult,
+  type McpAuthorizeInput,
+  mcpAuthFailureStatus,
+} from '../src/host/mcp/auth.js';
 import {
   createDeviceVerifierPersistence,
   createMcpDevicePairingService,
   type McpDevicePairingService,
 } from '../src/host/mcp/index.js';
 import {
-  createMcpAuthorizationPort,
-  MCP_AUTH_FAILURE_STATUS,
-  type McpAuthFailureCode,
-  type McpAuthorizeInput,
-  type McpAuthorizationResult,
-  mcpAuthFailureStatus,
-} from '../src/host/mcp/auth.js';
-import {
   createProjectSessionMcpRegistry,
   MCP_ADMIN_SCOPE,
   MCP_AUTHOR_SCOPE,
   MCP_READ_SCOPE,
+  MCP_REFERENCE_READ_SCOPE,
   MCP_RENDER_SCOPE,
   MCP_SUBMIT_SCOPE,
   type McpAdminConfigurationPort,
+  type McpAdminPort,
   type McpAuthoringCoordinatorPort,
   type McpJsonInputSchema,
   type McpJsonSchemaProperty,
   type McpToolResult,
-  type McpAdminPort,
 } from '../src/host/mcp/registry.js';
-import type {
-  AuthoringStateV1,
-  McpAuthoringApplyOutputV1,
-  McpAuthoringSubmitOutputV1,
-  McpConflictResolveOutputV1,
-  McpOperationGetOutputV1,
-} from '../src/contracts/authoring.js';
-import type { ConfigOperationReceiptV1 } from '../src/contracts/configuration.js';
+import { ProjectAccessService } from '../src/host/project-access-service.js';
 import type {
   ProjectSession,
   ProjectSessionProjectionV1,
   SessionOperation,
   SessionOperationResult,
 } from '../src/host/project-session.js';
-import type { AuthoringRevisionPort } from '../src/host/authoring/types.js';
-import { ProjectAccessService } from '../src/host/project-access-service.js';
 
 import { createRealPersistence, type RealPersistenceHarness } from './helpers/real-persistence.js';
+
 const MCP_TOOL_AUTHORING_STATUS = 'nova_authoring_status';
 const MCP_TOOL_AUTHORING_DOCUMENT_READ = 'nova_authoring_document_read';
 const MCP_TOOL_AUTHORING_DOCUMENT_EDIT = 'nova_authoring_document_edit';
@@ -320,9 +321,7 @@ const FAKE_RECEIPT_OK: ConfigOperationReceiptV1 = {
   diagnostics: [],
 };
 
-function fakeAdmin(
-  overrides: Partial<McpAdminConfigurationPort> = {},
-): McpAdminConfigurationPort {
+function fakeAdmin(overrides: Partial<McpAdminConfigurationPort> = {}): McpAdminConfigurationPort {
   return {
     preview: async () => FAKE_RECEIPT_OK,
     apply: async () => ({ ...FAKE_RECEIPT_OK, status: 'restart-required' }),
@@ -334,7 +333,6 @@ function fakeAdmin(
 type FixtureMcpAuthorizeInput = Omit<McpAuthorizeInput, 'route'> & {
   readonly route?: McpAuthorizeInput['route'];
 };
-
 
 describe('McpAuthorizationPort', () => {
   let harness: RealPersistenceHarness;
@@ -578,7 +576,7 @@ describe('McpAuthorizationPort', () => {
     }
   });
 
-  it('rejects a reader\'s mcp:author capability with INSUFFICIENT_ROLE', async () => {
+  it("rejects a reader's mcp:author capability with INSUFFICIENT_ROLE", async () => {
     const sessionId = await createSession('u1');
     const issued = await capabilities.issue({
       userId: 'u1',
@@ -597,7 +595,7 @@ describe('McpAuthorizationPort', () => {
     expect(result.failure.code).toBe('INSUFFICIENT_ROLE');
   });
 
-  it('rejects a reader\'s mcp:submit capability with INSUFFICIENT_ROLE', async () => {
+  it("rejects a reader's mcp:submit capability with INSUFFICIENT_ROLE", async () => {
     const sessionId = await createSession('u1');
     const issued = await capabilities.issue({
       userId: 'u1',
@@ -616,7 +614,7 @@ describe('McpAuthorizationPort', () => {
     expect(result.failure.code).toBe('INSUFFICIENT_ROLE');
   });
 
-  it('accepts a reader\'s mcp:read capability', async () => {
+  it("accepts a reader's mcp:read capability", async () => {
     const sessionId = await createSession('u1');
     const issued = await capabilities.issue({
       userId: 'u1',
@@ -796,7 +794,12 @@ describe('McpAuthorizationPort device mode', () => {
     const revoked = await pairedDevice([MCP_READ_SCOPE]);
     await devices.revoke('device-2');
     await expect(
-      port().authorize({ sessionId: null, token: revoked, projectId: 'p1', scopes: [MCP_READ_SCOPE] }),
+      port().authorize({
+        sessionId: null,
+        token: revoked,
+        projectId: 'p1',
+        scopes: [MCP_READ_SCOPE],
+      }),
     ).resolves.toMatchObject({ ok: false, failure: { code: 'TOKEN_REVOKED' } });
 
     const expiredCredential = await pairedDevice([MCP_READ_SCOPE], 1000);
@@ -829,9 +832,18 @@ describe('McpAuthorizationPort device mode', () => {
   });
 
   it('never treats a capability token as a device credential or vice versa', async () => {
-    const issued = await capabilities.issue({ userId: 'owner-1', projectId: 'p1', scopes: ['edit:prose'] });
+    const issued = await capabilities.issue({
+      userId: 'owner-1',
+      projectId: 'p1',
+      scopes: ['edit:prose'],
+    });
     await expect(
-      port().authorize({ sessionId: null, token: issued.token, projectId: 'p1', scopes: [MCP_READ_SCOPE] }),
+      port().authorize({
+        sessionId: null,
+        token: issued.token,
+        projectId: 'p1',
+        scopes: [MCP_READ_SCOPE],
+      }),
     ).resolves.toMatchObject({ ok: false, failure: { code: 'TOKEN_INVALID' } });
 
     const credential = await pairedDevice([MCP_READ_SCOPE]);
@@ -1178,6 +1190,114 @@ describe('createProjectSessionMcpRegistry', () => {
     expect(requests[0].request.source).toBe(FIXTURE);
     // The render runtime is the session's shared Core runtime services.
     expect(requests[0].runtime).toEqual({ services: session.runtime.services });
+  });
+
+  it('resolves render reference chunks only after queue authorization with a project-bound tenant', async () => {
+    const requests: EditorialRenderRequestV1[] = [];
+    let queueAuthorized = false;
+    const getChunk = vi.fn(async () => {
+      expect(queueAuthorized).toBe(true);
+      return {
+        version: 1 as const,
+        chunk: {
+          version: 1 as const,
+          referenceId: 'guide',
+          chunkId: 'guide:0',
+          ordinal: 0,
+          range: { version: 1 as const, offset: 0, length: 14 },
+          byteLength: 14,
+          contentHash: 'a'.repeat(64),
+          chunkHash: 'b'.repeat(64),
+          locator: 'guide.txt#0',
+          quote: 'A bounded quote',
+        },
+      };
+    });
+    const unsupported = async (): Promise<never> => {
+      throw new Error('Reference operation is not exercised by this test.');
+    };
+    const reference: McpReferencePort = {
+      list: unsupported,
+      get: unsupported,
+      search: unsupported,
+      getChunk,
+      readContent: unsupported,
+      importBegin: unsupported,
+      importChunk: unsupported,
+      importCommit: unsupported,
+      jobGet: unsupported,
+      retry: unsupported,
+      delete: unsupported,
+    };
+    const source = withContent(
+      FIXTURE,
+      'nova.yaml',
+      fixtureDocument('nova.yaml').content.replace('project: zhu-fu', 'project: p1'),
+    );
+    const { session, operations } = fakeSession({
+      source,
+      enqueue: async (operation) => {
+        expect(getChunk).not.toHaveBeenCalled();
+        expect(operation.scope).toEqual([MCP_RENDER_SCOPE, MCP_REFERENCE_READ_SCOPE]);
+        queueAuthorized = true;
+        const result = await operation.run({
+          projectId: 'p1',
+          operationId: 'srv-op-reference',
+          actorId: 'u1',
+          capabilityVersion: 2,
+          scopes: [MCP_RENDER_SCOPE, MCP_REFERENCE_READ_SCOPE],
+        });
+        return { status: 'completed', operationId: 'srv-op-reference', result };
+      },
+    });
+    const registry = createProjectSessionMcpRegistry(session, {
+      reference,
+      render: async (request) => {
+        requests.push(request);
+        return {
+          operationId: request.mutation.operationId,
+          results: [],
+          errors: [],
+          editorialErrors: [],
+          publication: { status: 'current', outputPath: 'out.md', novelHash: null, reasons: [] },
+        };
+      },
+    });
+    const caller = callerFor(
+      grantWith({
+        userId: 'u1',
+        projectId: 'p1',
+        scopes: [MCP_RENDER_SCOPE, MCP_REFERENCE_READ_SCOPE],
+        version: 2,
+      }),
+    );
+
+    const result = await registry.run('nova_render', caller, {
+      sceneSelector: { type: 'all' },
+      referenceChunks: [{ referenceId: 'guide', chunkId: 'guide:0' }],
+    });
+
+    if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`);
+    expect(operations).toHaveLength(1);
+    expect(getChunk).toHaveBeenCalledTimes(1);
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.referencePacket).toEqual({
+      version: 1,
+      projectId: 'p1',
+      citations: [
+        {
+          version: 1,
+          citationId: 'guide:guide:0:0',
+          referenceId: 'guide',
+          chunkId: 'guide:0',
+          contentHash: 'a'.repeat(64),
+          chunkHash: 'b'.repeat(64),
+          quote: 'A bounded quote',
+          locator: 'guide.txt#0',
+          authoritative: false,
+        },
+      ],
+    });
   });
 
   it('rejects client-supplied actorId/operationId and invalid render input without touching the queue', async () => {
@@ -1641,9 +1761,7 @@ describe('createProjectSessionMcpRegistry', () => {
         ...FAKE_CONFIG_REQUEST,
         configuration: {
           ...FAKE_CONFIG_REQUEST.configuration,
-          projects: [
-            { projectId: 'p1', displayName: 'P', root: '/srv/p1', token: 'secret' },
-          ],
+          projects: [{ projectId: 'p1', displayName: 'P', root: '/srv/p1', token: 'secret' }],
         },
       }),
       'UNKNOWN_FIELD',
@@ -1670,7 +1788,10 @@ describe('createProjectSessionMcpRegistry', () => {
         return applied[applied.length - 1];
       },
       submit: async (input) => {
-        submitted.push({ status: 'rejected', failure: { code: 'SUBMIT_BLOCKED', message: 'blocked' } });
+        submitted.push({
+          status: 'rejected',
+          failure: { code: 'SUBMIT_BLOCKED', message: 'blocked' },
+        });
         return submitted[submitted.length - 1];
       },
     });
@@ -1753,33 +1874,78 @@ describe('createProjectSessionMcpRegistry', () => {
     const { session } = fakeSession({ source: FIXTURE });
     let restoreInput: Parameters<AuthoringRevisionPort['restore']>[0] | null = null;
     const revision: AuthoringRevisionPort = {
-      loadAccepted: async () => ({ revisionId: 'head-1', sourceHash: 'source-1', bundleHash: 'bundle-1' }),
-      submit: async () => ({ status: 'accepted', revisionId: 'child-1', receiptHash: 'receipt-child' }),
-      recover: async () => ({ status: 'completed', revisionId: 'head-1', materializedRevisionId: 'head-1' }),
-      list: async () => ({
-        revisions: [{ revisionId: 'rev-1', sourceHash: 'source-1', bundleHash: 'bundle-1', createdAt: '2026-08-02T00:00:00.000Z', acceptedAt: '2026-08-02T00:00:00.000Z' }],
+      loadAccepted: async () => ({
+        revisionId: 'head-1',
+        sourceHash: 'source-1',
+        bundleHash: 'bundle-1',
       }),
-      get: async (_projectId, revisionId) => revisionId === 'rev-1'
-        ? { revisionId, sourceHash: 'source-1', bundleHash: 'bundle-1', createdAt: '2026-08-02T00:00:00.000Z', acceptedAt: '2026-08-02T00:00:00.000Z' }
-        : null,
-      diff: async () => ({ changes: [{ logicalPath: 'nova.yaml', beforeHash: 'before', afterHash: 'after' }] }),
+      submit: async () => ({
+        status: 'accepted',
+        revisionId: 'child-1',
+        receiptHash: 'receipt-child',
+      }),
+      recover: async () => ({
+        status: 'completed',
+        revisionId: 'head-1',
+        materializedRevisionId: 'head-1',
+      }),
+      list: async () => ({
+        revisions: [
+          {
+            revisionId: 'rev-1',
+            sourceHash: 'source-1',
+            bundleHash: 'bundle-1',
+            createdAt: '2026-08-02T00:00:00.000Z',
+            acceptedAt: '2026-08-02T00:00:00.000Z',
+          },
+        ],
+      }),
+      get: async (_projectId, revisionId) =>
+        revisionId === 'rev-1'
+          ? {
+              revisionId,
+              sourceHash: 'source-1',
+              bundleHash: 'bundle-1',
+              createdAt: '2026-08-02T00:00:00.000Z',
+              acceptedAt: '2026-08-02T00:00:00.000Z',
+            }
+          : null,
+      diff: async () => ({
+        changes: [{ logicalPath: 'nova.yaml', beforeHash: 'before', afterHash: 'after' }],
+      }),
       restore: async (input) => {
         restoreInput = input;
         return { status: 'accepted', revisionId: 'child-1', receiptHash: 'receipt-child' };
       },
     };
     const registry = createProjectSessionMcpRegistry(session, { revision });
-    const reader = callerFor(grantWith({ userId: 'u1', projectId: 'p1', scopes: [MCP_READ_SCOPE] }));
-    const maintainer = callerFor(grantWith({ userId: 'u1', projectId: 'p1', scopes: [MCP_SUBMIT_SCOPE] }));
-    await expect(registry.run('nova_revision_list', reader, { version: 2 })).resolves.toMatchObject({ ok: true });
-    await expect(registry.run('nova_revision_get', reader, { version: 2, revisionId: 'rev-1' })).resolves.toMatchObject({ ok: true });
-    await expect(registry.run('nova_revision_diff', reader, { version: 2, fromRevisionId: 'rev-1', toRevisionId: 'head-1' })).resolves.toMatchObject({ ok: true });
-    await expect(registry.run('nova_revision_restore', maintainer, {
-      version: 2,
-      revisionId: 'rev-1',
-      expectedAcceptedRevisionId: 'head-1',
-      expectedSourceHash: 'source-1',
-    })).resolves.toMatchObject({ ok: true, data: { revisionId: 'child-1' } });
+    const reader = callerFor(
+      grantWith({ userId: 'u1', projectId: 'p1', scopes: [MCP_READ_SCOPE] }),
+    );
+    const maintainer = callerFor(
+      grantWith({ userId: 'u1', projectId: 'p1', scopes: [MCP_SUBMIT_SCOPE] }),
+    );
+    await expect(registry.run('nova_revision_list', reader, { version: 2 })).resolves.toMatchObject(
+      { ok: true },
+    );
+    await expect(
+      registry.run('nova_revision_get', reader, { version: 2, revisionId: 'rev-1' }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      registry.run('nova_revision_diff', reader, {
+        version: 2,
+        fromRevisionId: 'rev-1',
+        toRevisionId: 'head-1',
+      }),
+    ).resolves.toMatchObject({ ok: true });
+    await expect(
+      registry.run('nova_revision_restore', maintainer, {
+        version: 2,
+        revisionId: 'rev-1',
+        expectedAcceptedRevisionId: 'head-1',
+        expectedSourceHash: 'source-1',
+      }),
+    ).resolves.toMatchObject({ ok: true, data: { revisionId: 'child-1' } });
     expect(restoreInput).toMatchObject({
       projectId: 'p1',
       revisionId: 'rev-1',
@@ -1807,7 +1973,6 @@ describe('createProjectSessionMcpRegistry', () => {
       grantWith({ userId: 'u1', projectId: 'p1', scopes: [MCP_ADMIN_SCOPE] }),
     );
 
-
     const preview = await registry.run(MCP_TOOL_ADMIN_CONFIG_PREVIEW, caller, FAKE_CONFIG_REQUEST);
     expect(preview.ok).toBe(true);
     if (!preview.ok) return;
@@ -1823,7 +1988,9 @@ describe('createProjectSessionMcpRegistry', () => {
     expect(seen[1]).toMatchObject({ surface: 'apply' });
   });
   it('advertises provider null in the admin config schema and accepts that valid envelope', async () => {
-    const descriptor = MCP_TOOL_CATALOG_V1.find((tool) => tool.name === MCP_TOOL_ADMIN_CONFIG_APPLY);
+    const descriptor = MCP_TOOL_CATALOG_V1.find(
+      (tool) => tool.name === MCP_TOOL_ADMIN_CONFIG_APPLY,
+    );
     if (descriptor === undefined) throw new Error('Missing admin config apply descriptor');
     expect(descriptor.inputSchema.properties.configuration.properties?.provider.type).toEqual([
       'object',
@@ -1870,7 +2037,9 @@ describe('createProjectSessionMcpRegistry', () => {
       operationGet: async () => ({ operation: null }),
     };
     const registry = createProjectSessionMcpRegistry(session, { family: 'admin', admin });
-    const caller = callerFor(grantWith({ userId: 'owner-1', projectId: 'p1', scopes: [MCP_ADMIN_SCOPE] }));
+    const caller = callerFor(
+      grantWith({ userId: 'owner-1', projectId: 'p1', scopes: [MCP_ADMIN_SCOPE] }),
+    );
     const invoke = async (name: string, input: unknown) => {
       const result = await registry.run(name, caller, input);
       expect(result.ok).toBe(true);
@@ -1878,13 +2047,36 @@ describe('createProjectSessionMcpRegistry', () => {
     };
     await invoke('nova_admin_config_get', {});
     await invoke('nova_admin_project_list', { version: 1 });
-    await invoke('nova_admin_project_create', { version: 1, projectId: 'p2', displayName: 'Project Two', root: '/srv/p2' });
-    await invoke('nova_admin_membership_upsert', { version: 1, userId: 'u2', projectId: 'p1', role: 'author' });
-    await invoke('nova_admin_invite_create', { version: 1, projectId: 'p1', role: 'reader', ttlMs: 3600000 });
-    await invoke('nova_admin_device_pair_begin', { version: 1, kind: 'project', projectId: 'p1', role: 'reader', ttlMs: 3600000 });
+    await invoke('nova_admin_project_create', {
+      version: 1,
+      projectId: 'p2',
+      displayName: 'Project Two',
+      root: '/srv/p2',
+    });
+    await invoke('nova_admin_membership_upsert', {
+      version: 1,
+      userId: 'u2',
+      projectId: 'p1',
+      role: 'author',
+    });
+    await invoke('nova_admin_invite_create', {
+      version: 1,
+      projectId: 'p1',
+      role: 'reader',
+      ttlMs: 3600000,
+    });
+    await invoke('nova_admin_device_pair_begin', {
+      version: 1,
+      kind: 'project',
+      projectId: 'p1',
+      role: 'reader',
+      ttlMs: 3600000,
+    });
     await invoke('nova_admin_operation_list', { version: 1, limit: 10 });
     expect(calls).toHaveLength(7);
-    await expect(registry.run('nova_admin_project_open', caller, { version: 1, projectId: 7 })).resolves.toMatchObject({
+    await expect(
+      registry.run('nova_admin_project_open', caller, { version: 1, projectId: 7 }),
+    ).resolves.toMatchObject({
       ok: false,
       error: { code: 'INVALID_INPUT' },
     });

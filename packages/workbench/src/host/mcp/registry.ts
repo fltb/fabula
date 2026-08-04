@@ -1220,66 +1220,55 @@ export function createProjectSessionMcpRegistry(
               })();
         if (referencePacket === null) return NO_REFERENCE_PORT;
 
-        let resolvedReferencePacket:
-          | {
-              readonly version: 1;
-              readonly projectId: string;
-              readonly citations: readonly {
-                readonly version: 1;
-                readonly citationId: string;
-                readonly referenceId: string;
-                readonly chunkId: string;
-                readonly contentHash: string;
-                readonly chunkHash: string;
-                readonly quote: string;
-                readonly locator: string;
-                readonly authoritative: false;
-              }[];
-            }
-          | undefined;
-        if (referencePacket !== undefined) {
-          try {
-            const citations = await Promise.all(
-              references.map(async ({ referenceId, chunkId }, index) => {
-                const result = await referencePacket.getChunk({ version: 1, referenceId, chunkId });
-                if (result === null) throw new InputShapeError('Reference chunk was not found.');
-                const chunk = result.chunk;
-                if (chunk.quote === null || chunk.quote.length === 0) {
-                  throw new InputShapeError('Reference chunk has no text quote.');
-                }
-                return {
-                  version: 1 as const,
-                  citationId: `${chunk.referenceId}:${chunk.chunkId}:${index}`,
-                  referenceId: chunk.referenceId,
-                  chunkId: chunk.chunkId,
-                  contentHash: chunk.contentHash,
-                  chunkHash: chunk.chunkHash,
-                  quote: chunk.quote,
-                  locator: chunk.locator,
-                  authoritative: false as const,
-                };
-              }),
-            );
-            if (new Set(references.map((value) => `${value.referenceId}\u0000${value.chunkId}`)).size !== references.length) {
-              return invalidInput('referenceChunks must not contain duplicates.');
-            }
-            resolvedReferencePacket = { version: 1, projectId: session.projectId, citations };
-          } catch (error) {
-            return mcpToolError('INVALID_INPUT', error instanceof Error ? error.message : 'Reference chunk could not be resolved.');
-          }
+        if (
+          new Set(references.map((value) => `${value.referenceId}\u0000${value.chunkId}`)).size !==
+          references.length
+        ) {
+          return invalidInput('referenceChunks must not contain duplicates.');
         }
         const operation = await session.enqueueOperation({
           kind: 'render',
           capabilityId: caller.grant.capabilityId,
-          scope: [MCP_RENDER_SCOPE],
+          scope:
+            references.length === 0
+              ? [MCP_RENDER_SCOPE]
+              : [MCP_RENDER_SCOPE, MCP_REFERENCE_READ_SCOPE],
           expectedVersion: caller.grant.version,
           payload: {
             selector,
             ...(model !== undefined ? { model } : {}),
-            ...(resolvedReferencePacket === undefined ? {} : { referencePacket: resolvedReferencePacket }),
+            ...(references.length === 0 ? {} : { referenceChunks: references }),
           },
-          run: async (context) =>
-            render(
+          run: async (context) => {
+            const resolvedReferencePacket =
+              referencePacket === undefined
+                ? undefined
+                : {
+                    version: 1 as const,
+                    projectId: session.projectId,
+                    citations: await Promise.all(
+                      references.map(async ({ referenceId, chunkId }, index) => {
+                        const result = await referencePacket.getChunk({ version: 1, referenceId, chunkId });
+                        if (result === null) throw new InputShapeError('Reference chunk was not found.');
+                        const chunk = result.chunk;
+                        if (chunk.quote === null || chunk.quote.length === 0) {
+                          throw new InputShapeError('Reference chunk has no text quote.');
+                        }
+                        return {
+                          version: 1 as const,
+                          citationId: `${chunk.referenceId}:${chunk.chunkId}:${index}`,
+                          referenceId: chunk.referenceId,
+                          chunkId: chunk.chunkId,
+                          contentHash: chunk.contentHash,
+                          chunkHash: chunk.chunkHash,
+                          quote: chunk.quote,
+                          locator: chunk.locator,
+                          authoritative: false as const,
+                        };
+                      }),
+                    ),
+                  };
+            return render(
               {
                 version: 1,
                 source,
@@ -1289,7 +1278,8 @@ export function createProjectSessionMcpRegistry(
                 ...(resolvedReferencePacket === undefined ? {} : { referencePacket: resolvedReferencePacket }),
               },
               { services: session.runtime.services },
-            ),
+            );
+          },
         });
         return mapOperationResult(operation);
       },

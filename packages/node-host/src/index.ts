@@ -22,6 +22,7 @@ export type {
   RenderCacheRepository,
 } from './cache/types.js';
 export { FileExecutionRepository } from './execution/file-execution-repository.js';
+export { withDirectoryLock } from './execution/types.js';
 export type { LoadedNodePlugin } from './plugins/node-plugin-catalog.js';
 export { NodePluginCatalog } from './plugins/node-plugin-catalog.js';
 export type { AiSdkProviderOptions } from './providers/ai-sdk.js';

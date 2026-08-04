@@ -2053,12 +2053,11 @@ export function createProjectSessionMcpRegistry(
     },
   ];
 
-  const selectedDefinitions =
-    options.family === 'admin'
-      ? definitions.filter((definition) => definition.name.startsWith('nova_admin_'))
-      : options.family === 'project'
-        ? definitions.filter((definition) => !definition.name.startsWith('nova_admin_'))
-        : definitions;
+  const selectedDefinitions = definitions.filter((definition) => {
+    if (options.family === 'admin') return definition.name.startsWith('nova_admin_');
+    if (options.family === 'project' && definition.name.startsWith('nova_admin_')) return false;
+    return options.reference !== undefined || !definition.name.startsWith('nova_reference_');
+  });
   const byName = new Map(selectedDefinitions.map((definition) => [definition.name, definition]));
 
   return {

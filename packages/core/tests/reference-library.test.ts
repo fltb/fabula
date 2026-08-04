@@ -28,6 +28,36 @@ describe('deterministic reference ingestion', () => {
     expect(first.every((chunk) => chunk.quote === null || chunk.quote.length <= 4)).toBe(true);
   });
 
+  it('repeats the configured overlap while preserving byte offsets and hashes', () => {
+    const content = new TextEncoder().encode('abcdefghij');
+    const contentHash = sha256Bytes(content);
+    const chunks = new DeterministicReferenceExtractor({
+      chunkBytes: 4,
+      chunkOverlapBytes: 1,
+    }).extract({ referenceId: 'guide', mediaType: 'text/plain', content, contentHash });
+    expect(chunks.map((chunk) => chunk.range)).toEqual([
+      { version: 1, offset: 0, length: 4 },
+      { version: 1, offset: 3, length: 4 },
+      { version: 1, offset: 6, length: 4 },
+    ]);
+    expect(chunks.map((chunk) => chunk.quote)).toEqual(['abcd', 'defg', 'ghij']);
+  });
+
+  it('uses Unicode character overlap while preserving exact UTF-8 byte ranges', () => {
+    const content = new TextEncoder().encode('áβ猫z');
+    const contentHash = sha256Bytes(content);
+    const chunks = new DeterministicReferenceExtractor({
+      chunkCharacters: 2,
+      chunkOverlapCharacters: 1,
+    }).extract({ referenceId: 'guide', mediaType: 'text/plain', content, contentHash });
+    expect(chunks.map((chunk) => chunk.range)).toEqual([
+      { version: 1, offset: 0, length: 4 },
+      { version: 1, offset: 2, length: 5 },
+      { version: 1, offset: 4, length: 4 },
+    ]);
+    expect(chunks.map((chunk) => chunk.quote)).toEqual(['áβ', 'β猫', '猫z']);
+  });
+
   it('rejects a content hash mismatch and bounded chunk explosion', () => {
     const content = new TextEncoder().encode('abcdef');
     const hash = sha256Bytes(content);
@@ -36,7 +66,7 @@ describe('deterministic reference ingestion', () => {
       ReferenceExtractionError,
     );
     expect(() => extractor.extract({ referenceId: 'x', mediaType: 'text/plain', content, contentHash: hash })).toThrow(
-      /chunks; limit is 2/,
+      /more than 2 chunks/,
     );
   });
 });

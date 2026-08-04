@@ -124,4 +124,15 @@ describe('reference MCP registry binding', () => {
     expect(result).toMatchObject({ ok: false, error: { code: 'INVALID_INPUT' } });
     expect(reference.importBegin).not.toHaveBeenCalled();
   });
+
+  it('omits every reference tool when the Host has no enabled reference port', () => {
+    const session = { projectId: 'project-a' } as ProjectSession;
+    const registry = createProjectSessionMcpRegistry(session, { family: 'project' });
+    expect(registry.get('nova_reference_list')).toBeNull();
+    expect(registry.list([MCP_REFERENCE_READ_SCOPE, MCP_REFERENCE_WRITE_SCOPE])).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: expect.stringMatching(/^nova_reference_/) }),
+      ]),
+    );
+  });
 });

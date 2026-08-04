@@ -35,6 +35,7 @@ import {
   FileProjectSourceLoader,
 } from '@novalistically/node-host';
 import {
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
   normalizeWorkbenchConfiguration,
   type WorkbenchConfigurationInput,
   type WorkbenchProjectConfigurationV2,
@@ -85,6 +86,7 @@ import {
   type ProjectAuthoringTreeWatcher,
 } from './authoring/project-tree-watcher.js';
 import type { AuthoringCoordinatorEvent } from './authoring/types.js';
+import { createWorkbenchReferencePort } from './mcp/reference-port.js';
 import { projectCanonicalGraphRuntime } from './graph-projection.js';
 import { type BrowserAgentProject, createBrowserAgentApi } from './browser-agent-api.js';
 import {
@@ -103,6 +105,8 @@ import {
   MCP_ADMIN_SCOPE,
   MCP_AUTHOR_SCOPE,
   MCP_READ_SCOPE,
+  MCP_REFERENCE_READ_SCOPE,
+  MCP_REFERENCE_WRITE_SCOPE,
   MCP_RENDER_SCOPE,
   MCP_SUBMIT_SCOPE,
   createAdminMcpRegistry,
@@ -637,9 +641,9 @@ export async function startWorkbench(
               revisionMirror: { mode: 'disabled' },
             },
           ]);
-    // Browser and MCP reference routes stay unmounted until the Host has a
-    // durable job/chunk-index adapter. The portable object store alone cannot
-    // satisfy restart-safe import, retry, or derived-chunk reads.
+    // Reference routes are mounted only after a durable Host-owned job/chunk
+    // adapter is available; the portable manifest and objects remain under
+    // each configured project root.
     const memberships = createProjectMembershipService(persistence.client);
     const projectAccess = createProjectAccessService({
       projects: async () => {
@@ -684,6 +688,22 @@ export async function startWorkbench(
     };
     const agentProjects = new Map<string, BrowserAgentProject>();
     const listeners = new Map<string, Set<(event: AuthoringActivityEventV1) => void>>();
+    const referencePortFor = async (projectId: string) => {
+      const project = projectConfiguration.get(projectId);
+      if (project === undefined) return undefined;
+      const current = await configurationService.readActive();
+      const referenceLimits =
+        current?.configuration.referenceLimits ??
+        activeConfiguration?.referenceLimits ??
+        DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2;
+      if (!referenceLimits.enabled) return undefined;
+      return createWorkbenchReferencePort({
+        projectId,
+        projectRoot: project.root,
+        jobsRoot: join(config.hostHome, 'reference-jobs'),
+        referenceLimits,
+      });
+    };
     const eventSource: BrowserAuthoringEventSource = {
       subscribe(projectId, listener) {
         const current = listeners.get(projectId) ?? new Set();
@@ -943,7 +963,14 @@ export async function startWorkbench(
         : createMcpStreamableEndpoint({
             route: 'project',
             authorization: mcpAuthorization,
-            availableScopes: [MCP_READ_SCOPE, MCP_RENDER_SCOPE, MCP_AUTHOR_SCOPE, MCP_SUBMIT_SCOPE],
+            availableScopes: [
+              MCP_READ_SCOPE,
+              MCP_RENDER_SCOPE,
+              MCP_AUTHOR_SCOPE,
+              MCP_SUBMIT_SCOPE,
+              MCP_REFERENCE_READ_SCOPE,
+              MCP_REFERENCE_WRITE_SCOPE,
+            ],
             projectIdResolver: (request) => {
               const pathname = new URL(request.url).pathname;
               const prefix = '/mcp/projects/';
@@ -973,6 +1000,7 @@ export async function startWorkbench(
                   documents: projectAuthoring.documents,
                   capabilities,
                 }),
+                reference: await referencePortFor(projectId),
               });
             },
           });

@@ -47,6 +47,12 @@ export interface ReferenceExtractionInputV1 {
   /** SHA-256 of the exact bytes supplied to the extractor. */
   readonly contentHash: string;
   readonly chunkBytes?: number;
+  /** Number of trailing bytes repeated at the beginning of the next chunk. */
+  readonly chunkOverlapBytes?: number;
+  /** Text-only chunk width measured in Unicode code points. */
+  readonly chunkCharacters?: number;
+  /** Text-only overlap measured in Unicode code points. */
+  readonly chunkOverlapCharacters?: number;
   readonly maxChunks?: number;
   readonly maxQuoteLength?: number;
 }
@@ -58,6 +64,12 @@ export interface ReferenceExtractorV1 {
 
 export interface ReferenceExtractorOptionsV1 {
   readonly chunkBytes?: number;
+  /** Number of trailing bytes repeated at the beginning of the next chunk. */
+  readonly chunkOverlapBytes?: number;
+  /** Text-only chunk width measured in Unicode code points. */
+  readonly chunkCharacters?: number;
+  /** Text-only overlap measured in Unicode code points. */
+  readonly chunkOverlapCharacters?: number;
   readonly maxChunks?: number;
   readonly maxQuoteLength?: number;
 }
@@ -98,11 +110,30 @@ export class DeterministicReferenceExtractor implements ReferenceExtractorV1 {
   readonly #chunkBytes: number;
   readonly #maxChunks: number;
   readonly #maxQuoteLength: number;
+  readonly #chunkOverlapBytes: number;
+  readonly #chunkCharacters: number | undefined;
+  readonly #chunkOverlapCharacters: number;
 
   constructor(options: ReferenceExtractorOptionsV1 = {}) {
     this.#chunkBytes = requireBound(options.chunkBytes, 'chunkBytes', 1) ?? DEFAULT_CHUNK_BYTES;
     this.#maxChunks = requireBound(options.maxChunks, 'maxChunks', 1) ?? DEFAULT_MAX_CHUNKS;
     this.#maxQuoteLength = requireBound(options.maxQuoteLength, 'maxQuoteLength', 0) ?? DEFAULT_MAX_QUOTE_LENGTH;
+    this.#chunkOverlapBytes =
+      requireBound(options.chunkOverlapBytes, 'chunkOverlapBytes', 0) ?? 0;
+    if (this.#chunkOverlapBytes >= this.#chunkBytes) {
+      throw new ReferenceExtractionError('chunkOverlapBytes must be smaller than chunkBytes');
+    }
+    this.#chunkCharacters = requireBound(options.chunkCharacters, 'chunkCharacters', 1);
+    this.#chunkOverlapCharacters =
+      requireBound(options.chunkOverlapCharacters, 'chunkOverlapCharacters', 0) ?? 0;
+    if (
+      this.#chunkCharacters !== undefined &&
+      this.#chunkOverlapCharacters >= this.#chunkCharacters
+    ) {
+      throw new ReferenceExtractionError(
+        'chunkOverlapCharacters must be smaller than chunkCharacters',
+      );
+    }
   }
 
   extract(input: ReferenceExtractionInputV1): readonly ReferenceChunkV1[] {
@@ -120,18 +151,25 @@ export class DeterministicReferenceExtractor implements ReferenceExtractorV1 {
     const chunkBytes = requireBound(input.chunkBytes, 'chunkBytes', 1) ?? this.#chunkBytes;
     const maxChunks = requireBound(input.maxChunks, 'maxChunks', 1) ?? this.#maxChunks;
     const maxQuoteLength = requireBound(input.maxQuoteLength, 'maxQuoteLength', 0) ?? this.#maxQuoteLength;
-    const count = input.content.length === 0 ? 0 : Math.ceil(input.content.length / chunkBytes);
-    if (count > maxChunks) {
-      throw new ReferenceExtractionError(`reference produces ${count} chunks; limit is ${maxChunks}`);
+    const chunkOverlapBytes =
+      requireBound(input.chunkOverlapBytes, 'chunkOverlapBytes', 0) ?? this.#chunkOverlapBytes;
+    const chunkCharacters =
+      requireBound(input.chunkCharacters, 'chunkCharacters', 1) ?? this.#chunkCharacters;
+    const chunkOverlapCharacters =
+      requireBound(input.chunkOverlapCharacters, 'chunkOverlapCharacters', 0) ??
+      this.#chunkOverlapCharacters;
+    if (chunkOverlapBytes >= chunkBytes) {
+      throw new ReferenceExtractionError('chunkOverlapBytes must be smaller than chunkBytes');
+    }
+    if (chunkCharacters !== undefined && chunkOverlapCharacters >= chunkCharacters) {
+      throw new ReferenceExtractionError(
+        'chunkOverlapCharacters must be smaller than chunkCharacters',
+      );
     }
     const isText = isTextMediaType(input.mediaType);
-    const chunks: ReferenceChunkV1[] = [];
-    for (let ordinal = 0; ordinal < count; ordinal += 1) {
-      const offset = ordinal * chunkBytes;
-      const bytes = input.content.slice(offset, Math.min(offset + chunkBytes, input.content.length));
+    const makeChunk = (ordinal: number, offset: number, bytes: Uint8Array, quote: string | null): ReferenceChunkV1 => {
       const end = offset + bytes.length;
-      const quote = isText ? new TextDecoder().decode(bytes).slice(0, maxQuoteLength) : null;
-      chunks.push({
+      return {
         version: 1,
         referenceId: input.referenceId,
         chunkId: `${input.referenceId}:${ordinal}`,
@@ -142,7 +180,45 @@ export class DeterministicReferenceExtractor implements ReferenceExtractorV1 {
         chunkHash: sha256Bytes(bytes),
         locator: `byte:${offset}-${end}`,
         quote,
-      });
+      };
+    };
+    if (chunkCharacters !== undefined) {
+      if (!isText) {
+        throw new ReferenceExtractionError('chunkCharacters is only valid for text media types');
+      }
+      let text: string;
+      try {
+        text = new TextDecoder('utf-8', { fatal: true }).decode(input.content);
+      } catch {
+        throw new ReferenceExtractionError('text reference is not valid UTF-8');
+      }
+      const characters = Array.from(text);
+      const encoder = new TextEncoder();
+      const offsets = [0];
+      for (const character of characters) offsets.push(offsets[offsets.length - 1]! + encoder.encode(character).length);
+      const chunks: ReferenceChunkV1[] = [];
+      for (let start = 0, ordinal = 0; start < characters.length; ordinal += 1) {
+        if (ordinal >= maxChunks) throw new ReferenceExtractionError(`reference produces more than ${maxChunks} chunks`);
+        const end = Math.min(start + chunkCharacters, characters.length);
+        const excerpt = characters.slice(start, end).join('');
+        chunks.push(makeChunk(ordinal, offsets[start]!, encoder.encode(excerpt), excerpt.slice(0, maxQuoteLength)));
+        if (end === characters.length) break;
+        start = end - chunkOverlapCharacters;
+      }
+      return chunks;
+    }
+    const chunks: ReferenceChunkV1[] = [];
+    let offset = 0;
+    for (let ordinal = 0; offset < input.content.length; ordinal += 1) {
+      if (ordinal >= maxChunks) {
+        throw new ReferenceExtractionError(`reference produces more than ${maxChunks} chunks`);
+      }
+      const bytes = input.content.slice(offset, Math.min(offset + chunkBytes, input.content.length));
+      const end = offset + bytes.length;
+      const quote = isText ? new TextDecoder().decode(bytes).slice(0, maxQuoteLength) : null;
+      chunks.push(makeChunk(ordinal, offset, bytes, quote));
+      if (end === input.content.length) break;
+      offset = end - chunkOverlapBytes;
     }
     return chunks;
   }

@@ -68,5 +68,26 @@ describe('Editorial product boundary', () => {
       type: 'events',
       eventIds: ['E001'],
     });
+    const referencePacket = {
+      version: 1,
+      projectId: 'project-a',
+      citations: [
+        {
+          version: 1,
+          citationId: 'guide-0',
+          referenceId: 'guide',
+          chunkId: 'guide:0',
+          contentHash: HASH,
+          chunkHash: 'b'.repeat(64),
+          quote: 'Supplementary research only.',
+          locator: 'byte:0-28',
+          authoritative: false,
+        },
+      ],
+    };
+    expect(editorialRenderRequestV1Schema.parse({ ...request, referencePacket })).toEqual({
+      ...request,
+      referencePacket,
+    });
   });
 });

@@ -57,6 +57,7 @@ import { SurfacePlanner } from '../render/surface-planner.ts';
 import { ReviewManager } from '../review/manager.ts';
 import { resolveDiscourseBranch } from '../state/discourse-sequence.ts';
 import type { CompiledNarrativeRuntime } from '../state/narrative-runtime.ts';
+import { buildReferencePacket } from '../reference.ts';
 import { LogicalDisclosureSummaryCompiler, SurfaceReferenceExtractor } from '../summary/index.ts';
 import type { BranchPath } from '../types/branch.ts';
 import type { SystemContext } from '../types/context.ts';
@@ -223,6 +224,7 @@ function buildRenderJobs(
   plan: EditorialCompileOutput,
   init: ProjectInitialization,
   request: Omit<EditorialRenderRequestV1, 'mutation'>,
+  projectId: string,
   sourceHash: string,
   model: string,
   runtime: CompiledNarrativeRuntime,
@@ -230,6 +232,17 @@ function buildRenderJobs(
   reviewComments: readonly ReviewComment[],
 ): RenderJob[] {
   const jobs: RenderJob[] = [];
+  const referencePacket =
+    request.referencePacket === undefined
+      ? undefined
+      : request.referencePacket.projectId !== projectId
+        ? (() => {
+            throw new EditorialOperationError(
+              'REFERENCE_PROJECT_MISMATCH',
+              `Reference packet belongs to ${request.referencePacket?.projectId}, not ${projectId}.`,
+            );
+          })()
+        : buildReferencePacket(request.referencePacket.projectId, request.referencePacket.citations);
   const boundaries = runtime.boundaries;
   const discourseContextByEventId = runtime.discourseContextsByEventId;
   const techniquesByEventId = runtime.graphs.techniquesByEventId;
@@ -331,6 +344,7 @@ function buildRenderJobs(
       graphHash,
       sourceContentHash: sourceHash,
       logicalDisclosureSummary,
+      referencePacket,
       surfaceDependency: {
         groupId: event.id,
         policy: 'parallel' as const,
@@ -1074,6 +1088,7 @@ export async function executeEditorialRender(
     plan,
     init,
     request,
+    projectId,
     request.source.sourceHash,
     resolvedModel,
     compiledRuntime,
@@ -1564,6 +1579,7 @@ export async function previewEditorialRun(
     plan,
     init,
     request,
+    projectId,
     request.source.sourceHash,
     resolvedModel,
     compiledRuntime,

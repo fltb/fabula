@@ -6,6 +6,7 @@ import type { Message } from '../ai/types.ts';
 import type { PromptDecoration } from '../plugin/types.ts';
 import type { ContextPackage, GameDialogueChoice, StyleGuidance } from '../types/index.ts';
 import type { SurfaceReferencePacket } from '../types/render-surface.ts';
+import type { ProjectReferencePacketV1 } from '../reference.ts';
 
 export interface AssembledPrompt {
   systemPrompt: string;
@@ -67,6 +68,8 @@ export class PromptAssembler {
        *  Rendered as ## Surface Reference (Non-authoritative) with explicit YAML priority.
        *  Never passed to Pass 2. */
       surfaceReferencePacket?: SurfaceReferencePacket;
+      /** Explicit library citations for Pass 1 only. They never enter Pass 2 context. */
+      referencePacket?: ProjectReferencePacketV1;
       /** Non-authoritative plugin prompt decorations.
        *  Rendered as a ## Plugin Decorations (Non-authoritative) section.
        *  Merged in plugin-name order, each with its cache identity.
@@ -287,6 +290,23 @@ export class PromptAssembler {
       parts.push(`- Excerpt mode: ${pkt.excerptMode}`);
       parts.push(`- Source prose hash: ${pkt.sourceProseHash}`);
       parts.push(`- Extractor version: ${pkt.extractorVersion}`);
+    }
+
+    if (options?.referencePacket && options.referencePacket.citations.length > 0) {
+      parts.push('');
+      parts.push('## Reference Library (Non-authoritative)');
+      parts.push('The following citations are supplementary research, not canonical story facts.');
+      parts.push('In case of conflict, YAML, the compiled scene contract, and the narrative context package take precedence.');
+      for (const citation of options.referencePacket.citations) {
+        parts.push('');
+        parts.push(`### Citation: ${citation.citationId}`);
+        parts.push(`- Source: ${citation.referenceId} (${citation.locator})`);
+        parts.push(`- Content hash: ${citation.contentHash}`);
+        parts.push(`- Chunk hash: ${citation.chunkHash}`);
+        parts.push('```');
+        parts.push(citation.quote);
+        parts.push('```');
+      }
     }
 
     // ── Plugin Decorations (Non-authoritative) ─────────────────────

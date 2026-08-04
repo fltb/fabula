@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildLogicalKeyMaterial,
   canonicalJson,
+  buildSurfaceKeyMaterial,
   computeEvidenceHash,
   computeSourceContentHash,
   getCachedRender,
@@ -102,6 +103,19 @@ describe('pure render cache identity', () => {
         targetLengthWords: 10,
       }),
     );
+  });
+
+  it('changes the surface cache identity for changed reference packet citations', () => {
+    const base = {
+      logicalKeyString: 'logical-key',
+      groupManifestHash: 'manifest',
+      surfacePolicyHash: 'parallel',
+      sourceProseHashes: [],
+      extractorVersion: '1',
+    };
+    expect(
+      buildSurfaceKeyMaterial({ ...base, referencePacketHash: 'a'.repeat(64) }),
+    ).not.toBe(buildSurfaceKeyMaterial({ ...base, referencePacketHash: 'b'.repeat(64) }));
   });
 
   it('hits same bytes and misses changed source', async () => {

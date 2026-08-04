@@ -57,6 +57,7 @@ export function buildSurfaceKeyMaterial(input: {
   surfacePolicyHash: string;
   sourceProseHashes: string[];
   extractorVersion: string;
+  referencePacketHash?: string;
 }): string {
   return sha256Canonical(input);
 }

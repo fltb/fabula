@@ -1,3 +1,4 @@
+import type { ProjectReferencePacketV1 } from '../reference.ts';
 import type { CompletionResponse, LLMProvider, Message } from '../ai/types.ts';
 import type { ProjectSourceSnapshotV1 } from '../contracts/source.ts';
 import type { TypedEventBus } from '../event-bus.ts';
@@ -152,6 +153,8 @@ export interface EditorialRenderRequestV1 {
   waivers?: readonly WaiverRecordV1[];
   batch?: { batchSize?: number; windowSize?: number; failFast?: boolean };
   maxRounds?: number;
+  /** Explicit, bounded, non-authoritative citations for Pass 1 only. */
+  referencePacket?: ProjectReferencePacketV1;
 }
 export type RenderGameDialogueTreeRequestV1 = Omit<
   EditorialRenderRequestV1,
@@ -189,6 +192,7 @@ export type EditorialErrorCode =
   | 'REVISION_BLOCKED'
   | 'REVISION_STALE'
   | 'PUBLICATION_INCOMPLETE'
+  | 'REFERENCE_PROJECT_MISMATCH'
   | 'INVALID_SOURCE_CHANGE';
 
 export interface EditorialError {

@@ -58,6 +58,7 @@ import type {
   ValidationResult,
   WorldState,
 } from '../types/index.ts';
+import type { ProjectReferencePacketV1 } from '../reference.ts';
 import { compareAnalysisBlocks } from '../util/compare-analysis.ts';
 import { ConcurrencyPool } from '../util/pool.ts';
 import type { AnalysisContract, ResultAggregator } from '../validator/aggregator.ts';
@@ -162,6 +163,8 @@ export interface RenderJob {
    * Produced by LogicalDisclosureSummaryCompiler before context compilation.
    */
   logicalDisclosureSummary?: string;
+  /** Explicit bounded library citations for Pass 1 only. */
+  referencePacket?: ProjectReferencePacketV1;
 
   /**
    * Non-authoritative prose excerpt + style packet from a prior render.
@@ -471,6 +474,9 @@ export class RenderPipeline {
         ? [job.surfaceReferencePacket.sourceProseHash]
         : [],
       extractorVersion: '1',
+      referencePacketHash: job.referencePacket
+        ? sha256Canonical(job.referencePacket)
+        : undefined,
     });
     const cacheKey = sha256Canonical({ logical: logicalKeyStr, surface: surfaceKeyStr });
     const cacheDiagnostics: CacheDiagnostics[] = [];
@@ -806,6 +812,7 @@ export class RenderPipeline {
             .join('\n'),
           logicalDisclosureSummary: job.logicalDisclosureSummary,
           surfaceReferencePacket: job.surfaceReferencePacket,
+          referencePacket: job.referencePacket,
           decorations: pass1Decorations.length > 0 ? [...pass1Decorations] : undefined,
           gameDialogue: job.gameDialogue,
           previousAcceptedProse: job.revisionContext?.baseProse,

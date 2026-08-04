@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest';
 import { PromptAssembler } from '../../src/context/prompt-assembler.ts';
 import type { ContextPackage, StyleGuidance } from '../../src/types/index.ts';
 import type { StyleMetrics, SurfaceReferencePacket } from '../../src/types/render-surface.ts';
+import type { ProjectReferencePacketV1 } from '../../src/reference.ts';
 
 // ============================================================================
 // Helpers — minimal compliant instances
@@ -73,6 +74,24 @@ const MOCK_SURFACE_PACKET: SurfaceReferencePacket = {
   sourceProseHash: 'a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890',
   accepted: true,
   extractorVersion: 'v1.0',
+};
+
+const MOCK_LIBRARY_PACKET: ProjectReferencePacketV1 = {
+  version: 1,
+  projectId: 'project-a',
+  citations: [
+    {
+      version: 1,
+      citationId: 'guide-0',
+      referenceId: 'guide',
+      chunkId: 'guide:0',
+      contentHash: 'a'.repeat(64),
+      chunkHash: 'b'.repeat(64),
+      quote: 'A supplementary research quote.',
+      locator: 'byte:0-31',
+      authoritative: false,
+    },
+  ],
 };
 
 // ============================================================================
@@ -190,6 +209,22 @@ describe('PromptAssembler — disclosure & surface sections', () => {
       expect(result.userPrompt).toContain('## Surface Reference (Non-authoritative)');
       expect(result.userPrompt).toContain(MOCK_DISCLOSURE_SUMMARY);
       expect(result.userPrompt).toContain(MOCK_SURFACE_PACKET.excerpt);
+    });
+  });
+
+  describe('reference library section injection', () => {
+    it('injects bounded citations outside the authoritative context package', () => {
+      const result = assembler.assemble(MINIMAL_CONTEXT, {
+        styleGuidance: MINIMAL_STYLE,
+        referencePacket: MOCK_LIBRARY_PACKET,
+      });
+      expect(result.userPrompt).toContain('## Reference Library (Non-authoritative)');
+      expect(result.userPrompt).toContain(MOCK_LIBRARY_PACKET.citations[0]!.quote);
+      expect(result.userPrompt).toContain(MOCK_LIBRARY_PACKET.citations[0]!.locator);
+
+      const contextBlockMatch = result.userPrompt.match(/```json\n([\s\S]*?)```/);
+      expect(contextBlockMatch).not.toBeNull();
+      expect(JSON.parse(contextBlockMatch![1])).not.toHaveProperty('referencePacket');
     });
   });
 

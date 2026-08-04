@@ -316,6 +316,28 @@ const waiverRecordSchema = z
   })
   .strict();
 
+const referenceCitationSchema = z
+  .object({
+    version: z.literal(1),
+    citationId: nonEmptyString.max(256),
+    referenceId: nonEmptyString.max(128),
+    chunkId: nonEmptyString.max(256),
+    contentHash: contentHashSchema,
+    chunkHash: contentHashSchema,
+    quote: z.string().min(1).max(4096),
+    locator: nonEmptyString.max(512),
+    authoritative: z.literal(false),
+  })
+  .strict();
+
+const projectReferencePacketSchema = z
+  .object({
+    version: z.literal(1),
+    projectId: nonEmptyString.max(256),
+    citations: z.array(referenceCitationSchema).max(32),
+  })
+  .strict();
+
 const editorialRenderRequestV1Schema = z
   .object({
     version: z.literal(1),
@@ -337,6 +359,7 @@ const editorialRenderRequestV1Schema = z
       .strict()
       .optional(),
     maxRounds: z.number().int().positive().optional(),
+    referencePacket: projectReferencePacketSchema.optional(),
   })
   .strict() satisfies z.ZodType<EditorialRenderRequestV1>;
 

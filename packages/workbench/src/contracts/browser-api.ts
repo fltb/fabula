@@ -9,7 +9,10 @@
  * stay browser-local and are deliberately absent here.
  */
 
-import type { ProjectSessionProjectionV1 } from '@novalistically/workbench-protocol';
+import type {
+  ProjectSessionProjectionV1,
+  ReferenceItemV1,
+} from '@novalistically/workbench-protocol';
 import type { UserRole } from './persistence.js';
 export type { ProjectAccessRole } from './configuration.js';
 
@@ -39,6 +42,8 @@ export const BROWSER_PROJECTS_PATH = `${BROWSER_API_BASE_PATH}/projects`;
 export const BROWSER_PROJECT_OVERVIEW_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/overview`;
 /** `GET /api/v1/projects/:projectId/graphs` — canonical graph for one route. */
 export const BROWSER_PROJECT_GRAPHS_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/graphs`;
+/** `GET /api/v1/projects/:projectId/references` — safe reference catalog. */
+export const BROWSER_PROJECT_REFERENCES_PATH = `${BROWSER_API_BASE_PATH}/projects/:projectId/references`;
 
 /** Query parameter carrying the strict route selector on the graphs endpoint. */
 export const BROWSER_GRAPH_ROUTE_QUERY = 'route';
@@ -125,6 +130,20 @@ export interface BrowserProjectOverviewV1 {
  * the graph itself is produced by the injected host projector.
  */
 export type BrowserGraphRouteSelectorV1 = WorkbenchRouteSelectorV1;
+
+/** Safe, path-free reference catalog returned by one authorized project route. */
+export interface BrowserProjectReferenceListV1 {
+  readonly version: BrowserApiVersion;
+  readonly projectId: string;
+  readonly items: readonly ReferenceItemV1[];
+  readonly nextCursor: string | null;
+}
+
+/** Bounded cursor query accepted by the project reference-list endpoint. */
+export interface BrowserProjectReferenceListQueryV1 {
+  readonly pageSize?: number;
+  readonly cursor?: string;
+}
 
 /** Typed browser read API error codes, grouped by HTTP status class. */
 export type BrowserApiErrorCode =

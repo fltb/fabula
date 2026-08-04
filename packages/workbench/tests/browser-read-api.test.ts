@@ -3,6 +3,7 @@ import {
   BROWSER_GRAPH_ROUTE_QUERY,
   BROWSER_PROJECT_GRAPHS_PATH,
   BROWSER_PROJECT_OVERVIEW_PATH,
+  BROWSER_PROJECT_REFERENCES_PATH,
   BROWSER_PROJECTS_PATH,
   BROWSER_SESSION_HEADER,
   BROWSER_SESSION_PATH,
@@ -599,6 +600,49 @@ describe('source studio route', () => {
       headers: authHeaders,
     });
     await expectError(res, 503, 'SOURCE_UNAVAILABLE');
+    await handle.close();
+  });
+});
+
+describe('reference library route', () => {
+  it('serves only path-free paginated items after authorization and catalog gates', async () => {
+    const options = browserOptions();
+    options.references = {
+      loadReferences: async (projectId, query) => ({
+        version: 1,
+        projectId,
+        items: [
+          {
+            version: 1,
+            referenceId: 'guide',
+            displayName: 'Guide',
+            originalName: 'guide.txt',
+            mediaType: 'text/plain',
+            contentHash: 'a'.repeat(64),
+            byteLength: 3,
+            title: null,
+            authors: [],
+            sourceUrl: null,
+            license: null,
+            tags: [],
+            createdAt: '2026-08-03T00:00:00.000Z',
+            updatedAt: '2026-08-03T00:00:00.000Z',
+          },
+        ],
+        nextCursor: query.cursor === undefined ? 'next' : null,
+      }),
+    };
+    const server = trackServer(createHostServer({ port: 0, browser: options }));
+    const handle = await server.start();
+    const res = await server.app.request(
+      `${BROWSER_PROJECT_REFERENCES_PATH.replace(':projectId', 'proj-a')}?pageSize=1`,
+      { headers: authHeaders },
+    );
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain('"nextCursor":"next"');
+    expect(body).not.toContain('objectKey');
+    expect(body).not.toContain('/references/');
     await handle.close();
   });
 });

@@ -28,10 +28,13 @@ import {
   BROWSER_SESSION_PATH,
   type BrowserApiErrorV1,
   type BrowserGraphRouteSelectorV1,
+  BROWSER_PROJECT_REFERENCES_PATH,
   type BrowserProjectListV1,
   type BrowserProjectOverviewV1,
   type BrowserProjectSummaryV1,
   type BrowserSessionPrincipalV1,
+  type BrowserProjectReferenceListV1,
+  type BrowserProjectReferenceListQueryV1,
 } from '../contracts/browser-api.js';
 import type { WorkbenchGraphProjectionV1 } from '../contracts/graph.js';
 import type { UserState } from '../contracts/persistence.js';
@@ -157,6 +160,14 @@ export interface BrowserSourceStudioSource {
   loadSourceStudio(projectId: string): Promise<SourceStudioStateV1 | null>;
 }
 
+/** Browser-safe reference catalog source for one project. */
+export interface BrowserReferenceLibrarySource {
+  loadReferences(
+    projectId: string,
+    query: BrowserProjectReferenceListQueryV1,
+  ): Promise<BrowserProjectReferenceListV1 | null>;
+}
+
 /** All injected ports of the browser read surface. */
 export interface BrowserReadApiOptions {
   readonly principal: BrowserPrincipalResolver;
@@ -167,6 +178,8 @@ export interface BrowserReadApiOptions {
   readonly overview: BrowserProjectOverviewSource;
   readonly graph: BrowserGraphProjector;
   readonly source: BrowserSourceStudioSource;
+  /** Optional until the durable reference port is configured for the project. */
+  readonly references?: BrowserReferenceLibrarySource;
 }
 
 
@@ -575,6 +588,53 @@ function sourceStudioHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> 
   };
 }
 
+function referencesHandler(api: BrowserReadApiImpl): Handler<HostListenerEnv> {
+  return async (c) => {
+    const principal = await resolveOrDeny(api, c);
+    if (principal instanceof Response) return principal;
+    const projectId = c.req.param('projectId');
+    if (projectId === undefined || projectId.length === 0) {
+      return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+    }
+    if (!(await canAccess(api, principal, projectId))) {
+      return errorResponse('PROJECT_MISMATCH', 'The session is not authorized for this project.');
+    }
+    if (!(await projectIsListed(api, principal, projectId))) {
+      return errorResponse('PROJECT_NOT_FOUND', "The project is not in this session's catalog.");
+    }
+    if (api.options.references === undefined) {
+      return errorResponse('REFERENCE_UNAVAILABLE', 'The reference library is not enabled for this project.');
+    }
+    const rawPageSize = c.req.query('pageSize');
+    const rawCursor = c.req.query('cursor');
+    const pageSize =
+      rawPageSize === undefined
+        ? undefined
+        : /^[1-9][0-9]*$/.test(rawPageSize)
+          ? Number(rawPageSize)
+          : NaN;
+    if (
+      (pageSize !== undefined && (!Number.isSafeInteger(pageSize) || pageSize > 50)) ||
+      (rawCursor !== undefined && (rawCursor.length === 0 || rawCursor.length > 256))
+    ) {
+      return errorResponse('REFERENCE_INVALID', 'Reference pagination query is invalid.');
+    }
+    const query: BrowserProjectReferenceListQueryV1 = {
+      ...(pageSize === undefined ? {} : { pageSize }),
+      ...(rawCursor === undefined ? {} : { cursor: rawCursor }),
+    };
+    try {
+      const references = await api.options.references.loadReferences(projectId, query);
+      if (references === null) {
+        return errorResponse('REFERENCE_UNAVAILABLE', 'The reference library is not enabled for this project.');
+      }
+      return c.json(references);
+    } catch {
+      return errorResponse('REFERENCE_UNAVAILABLE', 'The reference library could not be loaded by the host.');
+    }
+  };
+}
+
 class BrowserReadApiImpl {
   constructor(readonly options: BrowserReadApiOptions) {}
 }
@@ -594,6 +654,9 @@ export function createBrowserReadApi(options: BrowserReadApiOptions): BrowserRea
       { path: BROWSER_PROJECT_OVERVIEW_PATH, handler: overviewHandler(api) },
       { path: BROWSER_PROJECT_GRAPHS_PATH, handler: graphsHandler(api) },
       { path: BROWSER_PROJECT_SOURCE_PATH, handler: sourceStudioHandler(api) },
+      ...(options.references === undefined
+        ? []
+        : [{ path: BROWSER_PROJECT_REFERENCES_PATH, handler: referencesHandler(api) }]),
     ],
   };
 }

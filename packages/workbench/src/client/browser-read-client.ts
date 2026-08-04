@@ -2,6 +2,7 @@ import {
   BROWSER_GRAPH_ROUTE_QUERY,
   BROWSER_PROJECT_GRAPHS_PATH,
   BROWSER_PROJECT_OVERVIEW_PATH,
+  BROWSER_PROJECT_REFERENCES_PATH,
   BROWSER_PROJECTS_PATH,
   BROWSER_SESSION_HEADER,
   BROWSER_SESSION_PATH,
@@ -12,6 +13,8 @@ import type {
   BrowserProjectListV1,
   BrowserProjectOverviewV1,
   BrowserSessionPrincipalV1,
+  BrowserProjectReferenceListV1,
+  BrowserProjectReferenceListQueryV1,
   SourceStudioStateV1,
   WorkbenchGraphProjectionV1,
 } from '../contracts/index.js';
@@ -42,6 +45,10 @@ export interface BrowserReadClient {
   listProjects(): Promise<BrowserProjectListV1>;
   getOverview(projectId: string): Promise<BrowserProjectOverviewV1>;
   getSourceStudio(projectId: string): Promise<SourceStudioStateV1>;
+  listReferences(
+    projectId: string,
+    query?: BrowserProjectReferenceListQueryV1,
+  ): Promise<BrowserProjectReferenceListV1>;
   getGraphs(
     projectId: string,
     selector: BrowserGraphRouteSelectorV1,
@@ -64,6 +71,10 @@ const BROWSER_ERROR_CODES = new Set<BrowserApiErrorV1['error']['code']>([
   'INVALID_ROUTE_SELECTOR',
   'GRAPH_UNAVAILABLE',
   'SOURCE_UNAVAILABLE',
+  'REFERENCE_NOT_FOUND',
+  'REFERENCE_INVALID',
+  'REFERENCE_UNAVAILABLE',
+  'REFERENCE_CONFLICT',
 ]);
 
 function browserError(value: unknown): BrowserApiErrorV1 | null {
@@ -127,6 +138,17 @@ export function createBrowserReadClient(options: BrowserReadClientOptions = {}):
       request(BROWSER_PROJECT_OVERVIEW_PATH.replace(':projectId', encodeURIComponent(projectId))),
     getSourceStudio: (projectId) =>
       request(BROWSER_PROJECT_SOURCE_PATH.replace(':projectId', encodeURIComponent(projectId))),
+    listReferences: (projectId, query = {}) => {
+      const path = BROWSER_PROJECT_REFERENCES_PATH.replace(
+        ':projectId',
+        encodeURIComponent(projectId),
+      );
+      const params = new URLSearchParams();
+      if (query.pageSize !== undefined) params.set('pageSize', String(query.pageSize));
+      if (query.cursor !== undefined) params.set('cursor', query.cursor);
+      const suffix = params.size === 0 ? '' : `?${params.toString()}`;
+      return request(`${path}${suffix}`);
+    },
     getGraphs: (projectId, selector) => {
       const path = BROWSER_PROJECT_GRAPHS_PATH.replace(':projectId', encodeURIComponent(projectId));
       return request(

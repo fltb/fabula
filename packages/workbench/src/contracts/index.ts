@@ -89,6 +89,8 @@ export type {
   BrowserProjectActivityV1,
   BrowserProjectListV1,
   BrowserProjectOverviewV1,
+  BrowserProjectReferenceListV1,
+  BrowserProjectReferenceListQueryV1,
   BrowserProjectSummaryV1,
   BrowserSessionPrincipalV1,
 } from './browser-api.js';

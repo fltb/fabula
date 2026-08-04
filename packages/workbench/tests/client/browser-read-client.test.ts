@@ -70,6 +70,18 @@ describe('createBrowserReadClient', () => {
     expect(requested).toBe('/api/v1/projects/proj%2Fa/source');
   });
 
+  it('encodes only documented pagination for reference library reads', async () => {
+    let requested = '';
+    const client = createBrowserReadClient({
+      fetch: async (input) => {
+        requested = String(input);
+        return json({ version: 1, projectId: 'proj-a', items: [], nextCursor: null });
+      },
+    });
+    await client.listReferences('proj/a', { pageSize: 2, cursor: 'next' });
+    expect(requested).toBe('/api/v1/projects/proj%2Fa/references?pageSize=2&cursor=next');
+  });
+
   it('decodes SOURCE_UNAVAILABLE as a typed Host error', async () => {
     const client = createBrowserReadClient({
       fetch: async () =>

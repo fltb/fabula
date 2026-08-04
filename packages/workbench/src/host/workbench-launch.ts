@@ -907,6 +907,19 @@ export async function startWorkbench(
                 };
               },
             },
+            references: {
+              loadReferences: async (projectId, query) => {
+                const reference = await referencePortFor(projectId);
+                if (reference === undefined) return null;
+                const listed = await reference.list({ version: 1, ...query });
+                return {
+                  version: 1,
+                  projectId,
+                  items: listed.items,
+                  nextCursor: listed.nextCursor,
+                };
+              },
+            },
           };
     const yjs =
       configuredProjects.length === 0

@@ -30,7 +30,10 @@ import { fileURLToPath } from 'node:url';
 import { Worker } from 'node:worker_threads';
 import type { LLMProvider } from '@novalistically/core';
 import { MockProvider } from '@novalistically/core/testing';
-import { createFileCoreRuntimeServices, FileProjectSourceLoader } from '@novalistically/node-host';
+import {
+  createFileCoreRuntimeServices,
+  FileProjectSourceLoader,
+} from '@novalistically/node-host';
 import {
   normalizeWorkbenchConfiguration,
   type WorkbenchConfigurationInput,
@@ -634,6 +637,9 @@ export async function startWorkbench(
               revisionMirror: { mode: 'disabled' },
             },
           ]);
+    // Browser and MCP reference routes stay unmounted until the Host has a
+    // durable job/chunk-index adapter. The portable object store alone cannot
+    // satisfy restart-safe import, retry, or derived-chunk reads.
     const memberships = createProjectMembershipService(persistence.client);
     const projectAccess = createProjectAccessService({
       projects: async () => {

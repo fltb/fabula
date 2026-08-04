@@ -141,7 +141,15 @@ export type BrowserApiErrorCode =
   /** 503 — the injected graph projector could not produce the requested route. */
   | 'GRAPH_UNAVAILABLE'
   /** 503 — the injected Source Studio source could not produce project state. */
-  | 'SOURCE_UNAVAILABLE';
+  | 'SOURCE_UNAVAILABLE'
+  /** 404 — the requested reference or import job does not exist. */
+  | 'REFERENCE_NOT_FOUND'
+  /** 400 — the reference request is malformed or exceeds a documented bound. */
+  | 'REFERENCE_INVALID'
+  /** 503 — the project's reference library is unavailable. */
+  | 'REFERENCE_UNAVAILABLE'
+  /** 409 — an import lifecycle operation conflicts with the current job state. */
+  | 'REFERENCE_CONFLICT';
 /** Secret-free error envelope for every non-2xx browser read response. */
 export interface BrowserApiErrorV1 {
   readonly error: {

@@ -100,8 +100,13 @@ export interface HostYjsOptions {
 export interface HostServerMcpOptions {
   /** Prebuilt authenticated Streamable HTTP MCP endpoint to mount. */
   readonly endpoint: McpStreamableEndpoint;
-  /** Exact guarded route path; defaults to the MCP module's `DEFAULT_MCP_STREAMABLE_PATH` (`/mcp`). */
+  /** Exact guarded route path; defaults to the MCP module's `/mcp`. */
   readonly path?: string;
+  /** Additional exact guarded MCP mounts, such as the separate admin route. */
+  readonly routes?: readonly {
+    readonly path: string;
+    readonly endpoint: McpStreamableEndpoint;
+  }[];
 }
 
 export interface HostServerOptions extends HostListenerConfig {
@@ -168,7 +173,7 @@ export interface HostServer {
 export const HOST_YJS_UPGRADE_PATH = '/yjs';
 
 /** Query parameters carrying the server-derived connection scope. */
-const YJS_QUERY_SESSION = 'session';
+const YJS_QUERY_TICKET = 'ticket';
 const YJS_QUERY_PROJECT = 'project';
 const YJS_QUERY_DOCUMENT = 'document';
 
@@ -296,10 +301,9 @@ type ExtractedYjsScope =
   | { readonly ok: false; readonly status: number; readonly message: string };
 
 /**
- * Server-side scope extraction from the upgrade URL. The session credential
- * and the requested project/document are derived from the request only;
- * every value is re-validated by the gateway auth port before any frame can
- * be exchanged.
+ * Server-side scope extraction from the upgrade URL. The one-time Yjs ticket
+ * and requested project/document are derived from the request; every value is
+ * re-validated by the gateway auth port before any frame can be exchanged.
  */
 function extractYjsScope(request: IncomingMessage): ExtractedYjsScope {
   let url: URL;
@@ -311,11 +315,11 @@ function extractYjsScope(request: IncomingMessage): ExtractedYjsScope {
   if (url.pathname !== HOST_YJS_UPGRADE_PATH) {
     return { ok: false, status: 404, message: `no upgrade surface at ${url.pathname}` };
   }
-  const sessionId = url.searchParams.get(YJS_QUERY_SESSION);
+  const ticket = url.searchParams.get(YJS_QUERY_TICKET);
   const projectId = url.searchParams.get(YJS_QUERY_PROJECT);
   const documentId = url.searchParams.get(YJS_QUERY_DOCUMENT);
-  if (sessionId === null || sessionId.length === 0) {
-    return { ok: false, status: 401, message: 'missing session credential' };
+  if (ticket === null || ticket.length === 0) {
+    return { ok: false, status: 401, message: 'missing yjs ticket' };
   }
   if (projectId === null || projectId.length === 0) {
     return { ok: false, status: 400, message: 'missing project scope' };
@@ -323,7 +327,7 @@ function extractYjsScope(request: IncomingMessage): ExtractedYjsScope {
   if (documentId === null || documentId.length === 0) {
     return { ok: false, status: 400, message: 'missing document scope' };
   }
-  return { ok: true, request: { sessionId, projectId, documentId } };
+  return { ok: true, request: { ticket, projectId, documentId } };
 }
 
 function denialStatus(
@@ -607,15 +611,14 @@ export function createHostServer(options: HostServerOptions = {}): HostServer {
   // seam so no second, less-guarded upgrade path can exist beside it.
   const upgrade = yjs === null ? options.upgrade : createYjsUpgradeHandler(yjs);
   const listener = createHostListener({ ...options, upgrade });
-  // Mount the prebuilt authenticated MCP endpoint through the guarded MCP
-  // route while the listener is still unstarted: registration happens during
-  // construction so the surface exists before `start()` and an unconfigured
-  // Host never registers an MCP route at all.
   const mcp = options.mcp;
   if (mcp !== undefined) {
     listener.registerMcpRoute(mcp.path ?? DEFAULT_MCP_STREAMABLE_PATH, (context) =>
       mcp.endpoint.handle(context.req.raw),
     );
+    for (const route of mcp.routes ?? []) {
+      listener.registerMcpRoute(route.path, (context) => route.endpoint.handle(context.req.raw));
+    }
   }
   // Mount the injected browser read surface through the guarded read route
   // while the listener is still unstarted: registration happens during

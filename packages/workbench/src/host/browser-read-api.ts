@@ -191,6 +191,10 @@ const BROWSER_ERROR_STATUS: Readonly<Record<BrowserApiErrorV1['error']['code'], 
   INVALID_ROUTE_SELECTOR: 400,
   GRAPH_UNAVAILABLE: 503,
   SOURCE_UNAVAILABLE: 503,
+  REFERENCE_NOT_FOUND: 404,
+  REFERENCE_INVALID: 400,
+  REFERENCE_UNAVAILABLE: 503,
+  REFERENCE_CONFLICT: 409,
 };
 
 function errorResponse(code: BrowserApiErrorV1['error']['code'], message: string): Response {

@@ -174,9 +174,14 @@ export const contained = (root: string, target: string): boolean =>
   target === root || target.startsWith(`${root}${path.sep}`);
 
 export async function assertSafeParents(root: string, target: string): Promise<void> {
-  const realRoot = await fs.realpath(root);
-  const relative = path.relative(realRoot, target);
-  if (relative.startsWith('..') || path.isAbsolute(relative))
+  // `fs.realpath(root)` may canonicalize a normal macOS temp path from
+  // `/var/...` to `/private/var/...`. Compare lexical paths first, then walk
+  // the corresponding real root so that this alias is not mistaken for an
+  // escape while symlinked descendants are still rejected.
+  const lexicalRoot = path.resolve(root);
+  const realRoot = await fs.realpath(lexicalRoot);
+  const relative = path.relative(lexicalRoot, path.resolve(target));
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative))
     throw new Error('Repository path escapes project root');
   let current = realRoot;
   for (const part of relative.split(path.sep).filter(Boolean)) {

@@ -32,11 +32,12 @@ const isWithin = (root: string, target: string): boolean => {
 };
 
 const assertSafeDirectory = async (root: string, directory: string): Promise<void> => {
-  const realRoot = await fs.realpath(root);
-  if (!isWithin(realRoot, directory)) {
+  const lexicalRoot = path.resolve(root);
+  const realRoot = await fs.realpath(lexicalRoot);
+  if (!isWithin(lexicalRoot, directory)) {
     throw new Error('Plugin directory escapes project root');
   }
-  const relative = path.relative(realRoot, directory);
+  const relative = path.relative(lexicalRoot, directory);
   let current = realRoot;
   for (const part of relative.split(path.sep).filter(Boolean)) {
     current = path.join(current, part);

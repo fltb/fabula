@@ -111,7 +111,7 @@ export class FileRenderCacheRepository implements RenderCacheRepository {
 
   async #assertSafeParents(): Promise<void> {
     const root = await fs.realpath(this.#projectRoot);
-    const relative = path.relative(root, this.#cacheDirectory);
+    const relative = path.relative(this.#projectRoot, this.#cacheDirectory);
     let current = root;
     for (const part of relative.split(path.sep).filter(Boolean)) {
       current = path.join(current, part);

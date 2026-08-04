@@ -9,7 +9,7 @@ import type { YjsWorkingDocumentCore } from '../yjs/gateway.js';
 import { type AuthoringCoordinatorPersistence, createAuthoringCoordinator } from './coordinator.js';
 import { type AuthoringWorkingDocumentStore, createAuthoringDocumentStore } from './document-store.js';
 import { type AuthoringFilesystemObserver, createAuthoringFilesystemObserver, createFileCandidateStore, createFileTreeLoader } from './filesystem-observer.js';
-import { createGitRevisionMirror } from '../git/submit-service.js';
+import { createGitRevisionMirror } from '../git/revision-mirror.js';
 import { ControlledGitRunner } from '../git/runner.js';
 import { createFileRevisionContentStore } from './native-revision-content-store.js';
 import { createFileSourceViewMaterializer } from './source-view-materializer.js';

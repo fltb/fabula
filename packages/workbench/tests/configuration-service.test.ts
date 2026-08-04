@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { WorkbenchConfigurationV1 } from '../src/contracts/configuration.js';
 import {
   ConfigurationFileStore,
-  resolveConfigurationFilePath,
+  normalizeWorkbenchConfiguration,
   serializeConfigurationYaml,
 } from '../src/host/configuration-file-store.js';
 import {
@@ -16,6 +16,12 @@ import {
 
 async function tempProjectRoot(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'fabula-project-root-'));
+}
+
+async function projectRoot(projectId = 'demo'): Promise<string> {
+  const root = await tempProjectRoot();
+  await writeFile(join(root, 'nova.yaml'), `project: ${projectId}\n`, 'utf8');
+  return root;
 }
 
 function baseConfiguration(
@@ -40,7 +46,7 @@ function baseConfiguration(
 
 async function harness(overrides: { busyProjects?: string[] } = {}) {
   const home = await tempProjectRoot();
-  const root = await tempProjectRoot();
+  const root = await projectRoot();
   const store = new ConfigurationFileStore({
     filePath: join(home, 'config', 'workbench.yaml'),
   });
@@ -73,27 +79,37 @@ describe('computeChangedFields / requiresRestart', () => {
 describe('ConfigurationChangeService apply', () => {
   it('persists the first setup under expectedRevision null and requires restart', async () => {
     const { service } = await harness();
-    const candidate = baseConfiguration(await tempProjectRoot());
+    const candidate = baseConfiguration(await projectRoot());
     const receipt = await service.apply({ candidate, expectedRevision: null, origin: 'setup' });
     expect(receipt.status).toBe('restart-required');
     expect(receipt.activeRevision).toBe(receipt.candidateRevision);
-    expect(receipt.changedFields).toEqual(['projects', 'defaultProjectId', 'provider', 'network']);
+    expect(receipt.changedFields).toEqual([
+      'projects',
+      'defaultProjectId',
+      'provider',
+      'network',
+      'referenceLimits',
+    ]);
     expect(receipt.diagnostics).toEqual([]);
     expect(await service.readActive()).toEqual({
-      configuration: candidate,
+      configuration: normalizeWorkbenchConfiguration(candidate),
       revision: receipt.activeRevision,
     });
+    const active = await service.readActive();
+    expect(active?.configuration.version).toBe(2);
+    expect(active?.configuration.projects[0]?.revisionMirror).toEqual({ mode: 'disabled' });
+    expect(active?.configuration.referenceLimits.enabled).toBe(true);
   });
 
   it('rejects expectedRevision null once the file exists (CAS)', async () => {
     const { service } = await harness();
     await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot()),
+      candidate: baseConfiguration(await projectRoot()),
       expectedRevision: null,
       origin: 'setup',
     });
     const receipt = await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot(), { defaultProjectId: null }),
+      candidate: baseConfiguration(await projectRoot(), { defaultProjectId: null }),
       expectedRevision: null,
       origin: 'dotenv-import',
     });
@@ -104,13 +120,13 @@ describe('ConfigurationChangeService apply', () => {
   it('rejects a wrong expectedRevision and never modifies the file', async () => {
     const { store, service } = await harness();
     const first = await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot()),
+      candidate: baseConfiguration(await projectRoot()),
       expectedRevision: null,
       origin: 'setup',
     });
     const before = await readFile(store.filePath, 'utf8');
     const receipt = await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot(), { defaultProjectId: null }),
+      candidate: baseConfiguration(await projectRoot(), { defaultProjectId: null }),
       expectedRevision: 'not-the-revision',
       origin: 'dashboard',
     });
@@ -122,12 +138,12 @@ describe('ConfigurationChangeService apply', () => {
   it('serializes concurrent applies so only one same-revision caller wins', async () => {
     const { service } = await harness();
     const first = await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot()),
+      candidate: baseConfiguration(await projectRoot()),
       expectedRevision: null,
       origin: 'setup',
     });
-    const winning = baseConfiguration(await tempProjectRoot(), { defaultProjectId: null });
-    const losing = baseConfiguration(await tempProjectRoot(), {
+    const winning = baseConfiguration(await projectRoot(), { defaultProjectId: null });
+    const losing = baseConfiguration(await projectRoot(), {
       provider: { kind: 'ai-sdk', baseUrl: null, model: null },
     });
 
@@ -171,13 +187,13 @@ describe('ConfigurationChangeService apply', () => {
   it('returns invalid with diagnostics for a malformed candidate without writing', async () => {
     const { store, service } = await harness();
     await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot()),
+      candidate: baseConfiguration(await projectRoot()),
       expectedRevision: null,
       origin: 'setup',
     });
     const before = await readFile(store.filePath, 'utf8');
     const receipt = await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot(), {
+      candidate: baseConfiguration(await projectRoot(), {
         network: {
           mode: 'loopback',
           port: 99999,
@@ -197,10 +213,10 @@ describe('ConfigurationChangeService apply', () => {
   it('refuses to remove a busy project', async () => {
     const { service, busy } = await harness();
     await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot(), {
+      candidate: baseConfiguration(await projectRoot(), {
         projects: [
-          { projectId: 'demo', displayName: 'Demo', root: await tempProjectRoot() },
-          { projectId: 'other', displayName: 'Other', root: await tempProjectRoot() },
+          { projectId: 'demo', displayName: 'Demo', root: await projectRoot() },
+          { projectId: 'other', displayName: 'Other', root: await projectRoot('other') },
         ],
         defaultProjectId: 'demo',
       }),
@@ -210,7 +226,7 @@ describe('ConfigurationChangeService apply', () => {
     busy.add('demo');
     const active = await service.readActive();
     const receipt = await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot(), {
+      candidate: baseConfiguration(await projectRoot(), {
         projects: [],
         defaultProjectId: null,
       }),
@@ -224,12 +240,12 @@ describe('ConfigurationChangeService apply', () => {
   it('reports restart-required for startup-bound configuration changes and persists them', async () => {
     const { service } = await harness();
     const first = await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot()),
+      candidate: baseConfiguration(await projectRoot()),
       expectedRevision: null,
       origin: 'setup',
     });
     const receipt = await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot(), {
+      candidate: baseConfiguration(await projectRoot(), {
         network: {
           mode: 'lan',
           port: 8787,
@@ -248,7 +264,7 @@ describe('ConfigurationChangeService apply', () => {
 
   it('requires restart when provider construction changes', async () => {
     const { service } = await harness();
-    const root = await tempProjectRoot();
+    const root = await projectRoot();
     const first = await service.apply({
       candidate: baseConfiguration(root),
       expectedRevision: null,
@@ -277,7 +293,7 @@ describe('ConfigurationChangeService watcher path', () => {
     const edited = baseConfiguration(root, {
       projects: [
         ...baseConfiguration(root).projects,
-        { projectId: 'second', displayName: 'Second', root: await tempProjectRoot() },
+        { projectId: 'second', displayName: 'Second', root: await projectRoot('second') },
       ],
     });
     await writeFile(store.filePath, serializeConfigurationYaml(edited), 'utf8');
@@ -293,7 +309,7 @@ describe('ConfigurationChangeService watcher path', () => {
   it('reports CONFIG_INVALID when parsed YAML omits defaultProjectId or provider', async () => {
     const { store, service } = await harness();
     await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot()),
+      candidate: baseConfiguration(await projectRoot()),
       expectedRevision: null,
       origin: 'setup',
     });
@@ -319,7 +335,7 @@ describe('ConfigurationChangeService watcher path', () => {
   it('keeps the last valid active revision when the hand-edited file is invalid', async () => {
     const { store, service } = await harness();
     const first = await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot()),
+      candidate: baseConfiguration(await projectRoot()),
       expectedRevision: null,
       origin: 'setup',
     });
@@ -334,7 +350,7 @@ describe('ConfigurationChangeService watcher path', () => {
   it('suppresses its own writes (self-write suppression)', async () => {
     const { service } = await harness();
     await service.apply({
-      candidate: baseConfiguration(await tempProjectRoot()),
+      candidate: baseConfiguration(await projectRoot()),
       expectedRevision: null,
       origin: 'setup',
     });

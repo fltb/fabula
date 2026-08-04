@@ -38,7 +38,7 @@ function applyV1Only(databasePath: string): void {
 }
 
 describe('Phase 0 persistence contracts', () => {
-  it('migrates a V1 database to V2 without losing any V1 rows', async () => {
+  it('migrates a V1 database through V4 without losing any V1 rows', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'fabula-phase0-v1-'));
     try {
       const databasePath = join(dir, 'workbench.sqlite');
@@ -76,7 +76,7 @@ describe('Phase 0 persistence contracts', () => {
         .run();
       v1db.close();
 
-      // The real worker migration now upgrades the V1 database to V2.
+      // The real worker migration now upgrades the V1 database through V4.
       const db = createWorkerDatabase(databasePath);
       try {
         migrate(db);
@@ -85,7 +85,7 @@ describe('Phase 0 persistence contracts', () => {
             version: number;
           }[]
         ).map((row) => row.version);
-        expect(versions).toEqual([1, 2]);
+        expect(versions).toEqual([1, 2, 3, 4]);
 
         // V1 rows survive the V2 migration untouched.
         const user = db
@@ -112,6 +112,10 @@ describe('Phase 0 persistence contracts', () => {
           'authoring_state',
           'audit_log',
           'device_verifiers',
+          'source_revisions',
+          'project_memberships',
+          'capability_verifiers',
+          'mcp_device_verifiers',
         ]) {
           expect(tables).toContain(table);
         }
@@ -165,7 +169,7 @@ describe('Phase 0 persistence contracts', () => {
     }
   });
 
-  it('boots a fresh database through both migrations in order', async () => {
+  it('boots a fresh database through migrations 1–4 in order', async () => {
     const harness = createRealPersistence();
     try {
       const db = new DatabaseSync(harness.databasePath, { readOnly: true });
@@ -175,12 +179,17 @@ describe('Phase 0 persistence contracts', () => {
             version: number;
           }[]
         ).map((row) => row.version);
-        expect(versions).toEqual([1, 2]);
-        const ddl = db
-          .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='device_verifiers'")
+        expect(versions).toEqual([1, 2, 3, 4]);
+        const capabilityDdl = db
+          .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='capability_verifiers'")
           .get() as { sql: string };
-        expect(ddl.sql).toContain('token_hash');
-        expect(ddl.sql).toContain('client_label');
+        expect(capabilityDdl.sql).toContain('token_hash');
+        expect(capabilityDdl.sql).toContain('client_label');
+        const mcpDdl = db
+          .prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='mcp_device_verifiers'")
+          .get() as { sql: string };
+        expect(mcpDdl.sql).toContain('verifier');
+        expect(mcpDdl.sql).toContain('kind');
       } finally {
         db.close();
       }
@@ -235,6 +244,7 @@ describe('Phase 0 persistence contracts', () => {
     try {
       const tokenHash = 'a'.repeat(64);
       const created = await harness.client.request('createDeviceVerifier', {
+        store: 'capability',
         deviceId: 'dev-1',
         tokenHash,
         scope: ['mcp:author'],
@@ -252,12 +262,15 @@ describe('Phase 0 persistence contracts', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
       });
 
-      const byHash = await harness.client.request('loadDeviceVerifierByTokenHash', { tokenHash });
+      const byHash = await harness.client.request('loadDeviceVerifierByTokenHash', {
+        tokenHash,
+        store: 'capability',
+      });
       expect(byHash).not.toBeNull();
       expect('tokenHash' in (byHash ?? {})).toBe(false);
       expect(JSON.stringify(byHash)).not.toContain(tokenHash);
 
-      const all = await harness.client.request('listDeviceVerifiers', undefined);
+      const all = await harness.client.request('listDeviceVerifiers', { store: 'capability' });
       expect(all).toHaveLength(1);
       expect(JSON.stringify(all[0])).not.toContain(tokenHash);
 
@@ -265,17 +278,24 @@ describe('Phase 0 persistence contracts', () => {
       await harness.client.request('revokeDeviceVerifier', {
         deviceId: 'dev-1',
         revokedAt: '2026-01-02T00:00:00.000Z',
+        store: 'capability',
       });
-      const revoked = await harness.client.request('loadDeviceVerifierByTokenHash', { tokenHash });
+      const revoked = await harness.client.request('loadDeviceVerifierByTokenHash', {
+        tokenHash,
+        store: 'capability',
+      });
       expect(revoked).toMatchObject({ revokedAt: '2026-01-02T00:00:00.000Z' });
       expect(JSON.stringify(revoked)).not.toContain(tokenHash);
 
       // Unknown hashes resolve to null; the raw credential itself never round-trips.
       await expect(
-        harness.client.request('loadDeviceVerifierByTokenHash', { tokenHash: 'b'.repeat(64) }),
+        harness.client.request('loadDeviceVerifierByTokenHash', {
+          tokenHash: 'b'.repeat(64),
+          store: 'capability',
+        }),
       ).resolves.toBeNull();
       expect(
-        JSON.stringify(await harness.client.request('listDeviceVerifiers', undefined)),
+        JSON.stringify(await harness.client.request('listDeviceVerifiers', { store: 'capability' })),
       ).not.toContain(tokenHash);
     } finally {
       await harness.dispose();

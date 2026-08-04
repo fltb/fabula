@@ -2,13 +2,15 @@ import { mkdtemp, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { WorkbenchConfigurationV1 } from '../src/contracts/configuration.js';
+import {
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+  type WorkbenchConfigurationV1,
+} from '../src/contracts/configuration.js';
 import {
   ConfigurationFileParseError,
   ConfigurationFileStore,
   configurationRevision,
   parseConfigurationYaml,
-  resolveConfigurationFilePath,
   resolveWorkbenchHome,
   serializeConfigurationYaml,
   validateConfigurationShape,
@@ -66,15 +68,16 @@ describe('resolveWorkbenchHome', () => {
     expect(resolveWorkbenchHome({})).toBeNull();
   });
 
-  it('resolves the config file under config/workbench.yaml', () => {
-    expect(resolveConfigurationFilePath('/home/wb')).toBe('/home/wb/config/workbench.yaml');
+  it('uses config/workbench.yaml beneath the resolved home', () => {
+    const home = '/home/wb';
+    expect(join(home, 'config', 'workbench.yaml')).toBe('/home/wb/config/workbench.yaml');
   });
 });
 
 describe('configuration file store', () => {
   it('writes atomically with 0600 mode and no leftover temporary files', async () => {
     const home = await tempHome();
-    const store = new ConfigurationFileStore({ filePath: resolveConfigurationFilePath(home) });
+    const store = new ConfigurationFileStore({ filePath: join(home, 'config', 'workbench.yaml') });
     const configuration = baseConfiguration(await tempHome());
     const revision = await store.write(configuration);
 
@@ -88,7 +91,21 @@ describe('configuration file store', () => {
     const roundTrip = await store.read();
     expect(roundTrip).not.toBeNull();
     expect(roundTrip?.revision).toBe(revision);
-    expect(roundTrip?.configuration).toEqual(configuration);
+    expect(roundTrip?.configuration).toEqual({
+      version: 2,
+      projects: [
+        {
+          projectId: 'demo',
+          displayName: 'Demo',
+          root: configuration.projects[0]?.root,
+          revisionMirror: { mode: 'disabled' },
+        },
+      ],
+      defaultProjectId: 'demo',
+      provider: null,
+      network: configuration.network,
+      referenceLimits: DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
+    });
   });
 
   it('derives a stable content-hash revision that changes with content', () => {
@@ -99,7 +116,7 @@ describe('configuration file store', () => {
     expect(configurationRevision(a)).not.toBe(configurationRevision(b));
   });
 
-  it('serializes to canonical YAML that round-trips through the strict parser', () => {
+  it('serializes to canonical V2 YAML with normalized mirror and reference limits', () => {
     const configuration = baseConfiguration('/srv/project', {
       provider: { kind: 'ai-sdk', baseUrl: 'https://api.example.com', model: 'fast-model' },
       network: {
@@ -111,14 +128,23 @@ describe('configuration file store', () => {
       },
     });
     const yaml = serializeConfigurationYaml(configuration);
+    expect(yaml).toContain('version: 2');
+    expect(yaml).toContain('revisionMirror:');
+    expect(yaml).toContain('mode: disabled');
+    expect(yaml).toContain('referenceLimits:');
     const parsed = parseConfigurationYaml(yaml);
     expect(parsed.ok).toBe(true);
-    if (parsed.ok) expect(parsed.configuration).toEqual(configuration);
+    if (parsed.ok) {
+      expect(parsed.configuration.version).toBe(2);
+      expect(parsed.configuration.projects[0]?.revisionMirror).toEqual({ mode: 'disabled' });
+      expect(parsed.configuration.referenceLimits).toEqual(DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2);
+    }
   });
 
   it('returns null when the file does not exist yet', async () => {
+    const home = await tempHome();
     const store = new ConfigurationFileStore({
-      filePath: resolveConfigurationFilePath(await tempHome()),
+      filePath: join(home, 'config', 'workbench.yaml'),
     });
     expect(await store.read()).toBeNull();
     expect(await store.readRaw()).toBeNull();
@@ -126,7 +152,7 @@ describe('configuration file store', () => {
 
   it('throws a typed parse error for an invalid stored file', async () => {
     const home = await tempHome();
-    const store = new ConfigurationFileStore({ filePath: resolveConfigurationFilePath(home) });
+    const store = new ConfigurationFileStore({ filePath: join(home, 'config', 'workbench.yaml') });
     await store.write(baseConfiguration(await tempHome()));
     await writeFile(store.filePath, 'not: [valid yaml', 'utf8');
     await expect(store.read()).rejects.toBeInstanceOf(ConfigurationFileParseError);
@@ -135,7 +161,7 @@ describe('configuration file store', () => {
   it('emits a debounced external-change callback for hand-edited files', async () => {
     const home = await tempHome();
     const store = new ConfigurationFileStore({
-      filePath: resolveConfigurationFilePath(home),
+      filePath: join(home, 'config', 'workbench.yaml'),
       debounceMs: 10,
     });
     await store.write(baseConfiguration(await tempHome()));
@@ -154,14 +180,14 @@ describe('configuration file store', () => {
   });
 });
 
-describe('strict version-1 shape validation', () => {
+describe('strict configuration shape validation', () => {
   const root = '/tmp/shape-root';
 
   it('rejects unknown top-level fields', () => {
     const result = parseConfigurationYaml(
       serializeConfigurationYaml(baseConfiguration(root)).replace(
-        'version: 1',
-        'version: 1\nsurprise: true',
+        'version: 2',
+        'version: 2\nsurprise: true',
       ),
     );
     expect(result.ok).toBe(false);

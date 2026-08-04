@@ -144,7 +144,7 @@ describe('LocalAuthService over the real persistence worker', () => {
     const owner = await service.bootstrapOwner({ password: 'owner-password' });
     expect(owner.user.role).toBe('owner');
 
-    const invite = await service.createInvite({ ttlMs: 1000 });
+    const invite = await service.createInvite({ projectId: 'project-1', role: 'reader', ttlMs: 1000 });
     now += 100;
     const accepted = await service.acceptInvite({
       inviteId: invite.inviteId,
@@ -154,13 +154,23 @@ describe('LocalAuthService over the real persistence worker', () => {
     if (accepted.status !== 'accepted') throw new Error('expected accepted');
     expect(accepted.user.role).toBe('user');
     expect(accepted.session.userId).toBe(accepted.user.userId);
+    await expect(
+      harness.client.request('listProjectMemberships', { projectId: 'project-1' }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        userId: accepted.user.userId,
+        projectId: 'project-1',
+        role: 'reader',
+        revision: 1,
+      }),
+    ]);
 
     // Second consumption of the same invite is rejected atomically.
     const reused = await service.acceptInvite({ inviteId: invite.inviteId, password: 'another' });
     expect(reused.status).toBe('already-consumed');
 
     // Expired invite.
-    const short = await service.createInvite({ ttlMs: 100 });
+    const short = await service.createInvite({ projectId: 'project-1', role: 'author', ttlMs: 100 });
     now += 500;
     const expired = await service.acceptInvite({ inviteId: short.inviteId, password: 'x' });
     expect(expired.status).toBe('expired');
@@ -171,7 +181,7 @@ describe('LocalAuthService over the real persistence worker', () => {
 
   it('keeps an invite usable when atomic user creation fails', async () => {
     const owner = await service.bootstrapOwner({ password: 'owner-password' });
-    const invite = await service.createInvite();
+    const invite = await service.createInvite({ projectId: 'project-1', role: 'maintainer' });
     const collidingService = new LocalAuthService({
       persistence: createAuthPersistence(harness.client),
       now: () => now,
@@ -240,7 +250,7 @@ describe('LocalAuthService over the real persistence worker', () => {
 
   it('only permits resetting the owner account', async () => {
     const owner = await service.bootstrapOwner({ password: 'owner-password' });
-    const invite = await service.createInvite();
+    const invite = await service.createInvite({ projectId: 'project-1', role: 'reader' });
     const accepted = await service.acceptInvite({
       inviteId: invite.inviteId,
       password: 'user-password',

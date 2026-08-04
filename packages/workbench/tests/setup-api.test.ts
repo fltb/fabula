@@ -1,16 +1,14 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   BROWSER_SETUP_STATUS_PATH,
+  DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2,
   type WorkbenchConfigurationV1,
 } from '../src/contracts/configuration.js';
 import { createAuthPersistence, LocalAuthService } from '../src/host/auth/index.js';
-import {
-  ConfigurationFileStore,
-  resolveConfigurationFilePath,
-} from '../src/host/configuration-file-store.js';
+import { ConfigurationFileStore } from '../src/host/configuration-file-store.js';
 import { ConfigurationChangeService } from '../src/host/configuration-service.js';
 import type { HostListenerMode } from '../src/host/listener.js';
 import {
@@ -71,10 +69,11 @@ async function createHarness(options: { preconfigured?: boolean } = {}): Promise
   disposers.push(() => persistence.dispose());
   const auth = new LocalAuthService({ persistence: createAuthPersistence(persistence.client) });
   const home = await mkdtemp(join(tmpdir(), 'fabula-setup-api-'));
-  const store = new ConfigurationFileStore({ filePath: resolveConfigurationFilePath(home) });
+  const store = new ConfigurationFileStore({ filePath: join(home, 'config', 'workbench.yaml') });
   const configuration = new ConfigurationChangeService({ store });
   const credentials = createProviderCredentialStore({ configDir: home });
   const projectRoot = await mkdtemp(join(tmpdir(), 'fabula-setup-project-'));
+  await writeFile(join(projectRoot, 'nova.yaml'), 'project: demo\n', 'utf8');
   let mode: HostListenerMode = 'loopback';
   const surface = createSetupApi({
     configuration,
@@ -293,6 +292,9 @@ describe('setup wizard flow', () => {
       baseUrl: 'https://api.example.com',
       model: 'model-x',
     });
+    expect(active?.configuration.version).toBe(2);
+    expect(active?.configuration.projects[0]?.revisionMirror).toEqual({ mode: 'disabled' });
+    expect(active?.configuration.referenceLimits).toEqual(DEFAULT_WORKBENCH_REFERENCE_LIMITS_V2);
 
     // A later finish is refused: the Host is configured now.
     const again = await jsonRequest(server, 'POST', BROWSER_SETUP_FINISH_PATH, {

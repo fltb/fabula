@@ -1497,6 +1497,8 @@ describe('createProjectSessionMcpRegistry', () => {
     expect(registry.availableScopes).toEqual([
       MCP_READ_SCOPE,
       MCP_RENDER_SCOPE,
+      'mcp:reference:read',
+      'mcp:reference:write',
       MCP_AUTHOR_SCOPE,
       MCP_SUBMIT_SCOPE,
       MCP_ADMIN_SCOPE,

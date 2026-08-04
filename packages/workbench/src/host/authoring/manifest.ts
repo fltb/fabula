@@ -342,14 +342,18 @@ export type ManifestCheck =
     };
 
 export interface AuthoringManifestOptions {
+  /** Scenes already accepted at the current native revision do not need a new proof. */
+  readonly pathsInHead?: ReadonlySet<string>;
   /** Host-verified adopt claims keyed by event id for newly introduced scenes. */
   readonly adoptClaims?: ReadonlyMap<string, AdoptSceneClaim>;
 }
 
 export class AuthoringManifest {
+  private readonly pathsInHead: ReadonlySet<string>;
   private readonly adoptClaims: ReadonlyMap<string, AdoptSceneClaim>;
 
   constructor(options: AuthoringManifestOptions = {}) {
+    this.pathsInHead = options.pathsInHead ?? new Set();
     this.adoptClaims = options.adoptClaims ?? new Map();
   }
 
@@ -359,7 +363,7 @@ export class AuthoringManifest {
     if (!pathResult.ok) {
       return { ok: false, code: pathResult.code, message: pathResult.message, path: entry.path };
     }
-    if (pathResult.kind === 'scene-md') {
+    if (pathResult.kind === 'scene-md' && !this.pathsInHead.has(entry.path)) {
       const sceneMatch = SCENE_FILE_PATTERN.exec(entry.path);
       const eventId = sceneMatch?.[1] ?? '';
       const claim = this.adoptClaims.get(eventId);

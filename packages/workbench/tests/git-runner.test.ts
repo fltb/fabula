@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -144,7 +144,7 @@ describe('authoring preconditions (divergence safeguards)', () => {
     await seedCommit(runner, dir);
     const preflight = await runner.requireAuthoringPreconditions({ cwd: dir });
     expect(preflight.ok).toBe(true);
-    expect(preflight.repoRoot).toBe(dir);
+    expect(preflight.repoRoot).toBe(realpathSync(dir));
     expect(preflight.ref).toBe(WORKBENCH_AUTHORING_REF);
     expect(preflight.checks.length).toBeGreaterThan(0);
     for (const check of preflight.checks) {

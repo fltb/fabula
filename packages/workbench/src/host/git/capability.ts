@@ -228,14 +228,16 @@ export async function probeGitCapability(
     await chmod(join(hostileHooks, 'post-commit'), 0o755);
     await writeFile(join(hostileGlobalHooks, 'post-commit'), `#!/bin/sh\necho ran >> ${marker}\n`);
     await chmod(join(hostileGlobalHooks, 'post-commit'), 0o755);
-    const hostileConfig: Array<Promise<GitRunResult>> = [
-      run(['-C', repo, 'config', 'filter.workbench-hostile.clean', filterScript]),
-      run(['-C', repo, 'config', 'filter.workbench-hostile.smudge', filterScript]),
-      run(['-C', repo, 'config', 'core.hooksPath', hostileHooks]),
-      run(['-C', repo, 'config', 'user.name', 'Probe']),
-      run(['-C', repo, 'config', 'user.email', 'probe@workbench.test']),
-    ];
-    const hostileConfigResults = await Promise.all(hostileConfig);
+    const hostileConfigResults: GitRunResult[] = [];
+    for (const args of [
+      ['-C', repo, 'config', 'filter.workbench-hostile.clean', filterScript],
+      ['-C', repo, 'config', 'filter.workbench-hostile.smudge', filterScript],
+      ['-C', repo, 'config', 'core.hooksPath', hostileHooks],
+      ['-C', repo, 'config', 'user.name', 'Probe'],
+      ['-C', repo, 'config', 'user.email', 'probe@workbench.test'],
+    ] as const) {
+      hostileConfigResults.push(await run(args));
+    }
     if (hostileConfigResults.some((result) => result.exitCode !== 0)) {
       record(
         CHECK.byteIsolation,

@@ -9,7 +9,7 @@ import {
   ManifestValidationError,
   sceneBytesMatchClaim,
   validateAdoptClaim,
-} from '../src/host/git/manifest.js';
+} from '../src/host/authoring/manifest.js';
 
 const utf8 = (content: string): Uint8Array => new TextEncoder().encode(content);
 const sha256 = (content: string): string =>

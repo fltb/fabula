@@ -785,7 +785,9 @@ export function createWorkbenchReferencePort(
     return withDirectoryLock(jobsRoot, jobsDirectory, async () => {
       const job = await readJob(jobsDirectory, input.jobId);
       if (job === null) throw new ReferencePortInputError('Reference job not found', 'JOB_NOT_FOUND');
-      if (job.operation !== 'import' || (job.status !== 'queued' && job.status !== 'running')) throw new ReferencePortInputError('Import job is not accepting chunks', 'JOB_STATE_INVALID');
+      if (job.operation !== 'import' || job.status !== 'queued') {
+        throw new ReferencePortInputError('Import job is not accepting chunks', 'JOB_STATE_INVALID');
+      }
       if (input.offset + input.byteLength > (job.totalBytes ?? 0)) throw new ReferencePortInputError('Chunk exceeds declared content length');
       const existing = job.inputChunks.find((chunk) => chunk.offset === input.offset);
       if (existing !== undefined) {

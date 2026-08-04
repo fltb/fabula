@@ -182,6 +182,34 @@ describe('Workbench Host reference MCP port', () => {
     expect((await restarted.get({ version: 1, referenceId: 'restart' }))?.item.byteLength).toBe(bytes.byteLength);
   });
 
+  it('rejects late chunk writes after commit has transitioned a job to running', async () => {
+    const { jobsRoot, port } = await fixture();
+    const bytes = new TextEncoder().encode('a');
+    const began = await port.importBegin({
+      version: 1,
+      referenceId: 'late',
+      originalName: 'late.txt',
+      mediaType: 'text/plain',
+      byteLength: bytes.byteLength,
+      contentHash: hash(bytes),
+      idempotencyKey: 'late',
+    });
+    const jobFile = path.join(jobsRoot, 'project-a', began.job.jobId, 'job.json');
+    const durable = JSON.parse(await fs.readFile(jobFile, 'utf8')) as Record<string, unknown>;
+    durable.status = 'running';
+    await fs.writeFile(jobFile, `${JSON.stringify(durable)}\n`, 'utf8');
+    await expect(
+      port.importChunk({
+        version: 1,
+        jobId: began.job.jobId,
+        offset: 0,
+        byteLength: bytes.byteLength,
+        chunkHash: hash(bytes),
+        dataBase64: Buffer.from(bytes).toString('base64'),
+      }),
+    ).rejects.toThrow(/not accepting chunks/);
+  });
+
   it('fails a bad commit durably, retries only that failed job, deletes, and serializes concurrent imports', async () => {
     const { projectRoot, jobsRoot, port } = await fixture();
     const failedData = new TextEncoder().encode('bad');

@@ -6,6 +6,7 @@ import { keymap, drawSelection, highlightActiveLine, lineNumbers, EditorView } f
 import { yaml } from '@codemirror/lang-yaml';
 import { yCollab } from 'y-codemirror.next';
 import type { SourceStudioDocumentDescriptorV1 } from '../contracts/source-studio.js';
+import { BROWSER_SESSION_HEADER } from '../contracts/browser-api.js';
 
 export type YjsEditorConnectionStatus =
   | 'idle'
@@ -27,7 +28,7 @@ export interface YjsEditorController {
 export interface YjsEditorProps {
   /** Host-issued descriptor; no document bytes are accepted as props. */
   readonly descriptor: SourceStudioDocumentDescriptorV1;
-  /** Transient authenticated session credential, read only while connecting. */
+  /** Transient session credential used only to request a one-time Yjs ticket. */
   readonly sessionId: string | null | undefined;
   /** Same-origin Host URL; defaults to the current page origin. */
   readonly baseUrl?: string;
@@ -97,17 +98,44 @@ async function bytesFromSocketData(data: unknown): Promise<Uint8Array> {
   }
   throw new Error('unsupported yjs WebSocket payload');
 }
-
-function yjsUrl(baseUrl: string | undefined, descriptor: SourceStudioDocumentDescriptorV1, sessionId: string): string {
+function yjsUrl(
+  baseUrl: string | undefined,
+  descriptor: SourceStudioDocumentDescriptorV1,
+  ticket: string,
+): string {
   const source = baseUrl ?? (typeof location === 'undefined' ? 'http://localhost/' : location.href);
   const url = new URL(source);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.pathname = '/yjs';
   url.search = '';
-  url.searchParams.set('session', sessionId);
+  url.searchParams.set('ticket', ticket);
   url.searchParams.set('project', descriptor.projectId);
   url.searchParams.set('document', descriptor.documentId);
   return url.toString();
+}
+
+async function requestYjsTicket(
+  baseUrl: string | undefined,
+  descriptor: SourceStudioDocumentDescriptorV1,
+  sessionId: string,
+): Promise<string> {
+  const source = baseUrl ?? (typeof location === 'undefined' ? 'http://localhost/' : location.href);
+  const url = new URL(source);
+  url.pathname = `/api/v1/projects/${encodeURIComponent(descriptor.projectId)}/source/${encodeURIComponent(descriptor.documentId)}/yjs-ticket`;
+  url.search = '';
+  const response = await fetch(url, { headers: { [BROWSER_SESSION_HEADER]: sessionId } });
+  if (!response.ok) throw new Error('yjs ticket unavailable');
+  const body: unknown = await response.json();
+  if (
+    typeof body !== 'object' ||
+    body === null ||
+    !('ticket' in body) ||
+    typeof body.ticket !== 'string' ||
+    body.ticket.length === 0
+  ) {
+    throw new Error('invalid yjs ticket');
+  }
+  return body.ticket;
 }
 
 /**
@@ -183,46 +211,48 @@ export function YjsEditor(props: YjsEditorProps) {
       status('unavailable');
     } else {
       status('connecting');
-      try {
-        socket = new WebSocket(yjsUrl(props.baseUrl, props.descriptor, props.sessionId));
-        socket.binaryType = 'arraybuffer';
-        socket.addEventListener('open', () => {
-          if (closed || socket === null) return;
-          status('connected');
-          socket.send(encodeSyncFrame(SYNC_STEP_1, Y.encodeStateVector(document)));
-          for (const update of pending.splice(0)) {
-            if (socket.readyState !== WebSocket.OPEN) {
-              pending.unshift(update);
-              break;
-            }
-            socket.send(encodeSyncFrame(SYNC_UPDATE, update));
-          }
-        });
-        socket.addEventListener('message', (event) => {
-          void bytesFromSocketData(event.data)
-            .then((bytes) => {
-              if (closed) return;
-              const frame = parseSyncFrame(bytes);
-              if (frame === null) return;
-              if (frame.syncType === SYNC_STEP_2 || frame.syncType === SYNC_UPDATE) {
-                Y.applyUpdate(document, frame.payload, REMOTE_ORIGIN);
-                props.onWorkingChange?.();
+      void requestYjsTicket(props.baseUrl, props.descriptor, props.sessionId)
+        .then((ticket) => {
+          if (closed) return;
+          socket = new WebSocket(yjsUrl(props.baseUrl, props.descriptor, ticket));
+          socket.binaryType = 'arraybuffer';
+          socket.addEventListener('open', () => {
+            if (closed || socket === null) return;
+            status('connected');
+            socket.send(encodeSyncFrame(SYNC_STEP_1, Y.encodeStateVector(document)));
+            for (const update of pending.splice(0)) {
+              if (socket.readyState !== WebSocket.OPEN) {
+                pending.unshift(update);
+                break;
               }
-            })
-            .catch(() => {
-              if (!closed) status('disconnected');
-            });
+              socket.send(encodeSyncFrame(SYNC_UPDATE, update));
+            }
+          });
+          socket.addEventListener('message', (event) => {
+            void bytesFromSocketData(event.data)
+              .then((bytes) => {
+                if (closed) return;
+                const frame = parseSyncFrame(bytes);
+                if (frame === null) return;
+                if (frame.syncType === SYNC_STEP_2 || frame.syncType === SYNC_UPDATE) {
+                  Y.applyUpdate(document, frame.payload, REMOTE_ORIGIN);
+                  props.onWorkingChange?.();
+                }
+              })
+              .catch(() => {
+                if (!closed) status('disconnected');
+              });
+          });
+          socket.addEventListener('close', () => {
+            if (!closed) status('disconnected');
+          });
+          socket.addEventListener('error', () => {
+            if (!closed) status('disconnected');
+          });
+        })
+        .catch(() => {
+          if (!closed) status('unavailable');
         });
-        socket.addEventListener('close', () => {
-          if (!closed) status('disconnected');
-        });
-        socket.addEventListener('error', () => {
-          if (!closed) status('disconnected');
-        });
-      } catch {
-        socket = null;
-        status('unavailable');
-      }
     }
 
     onCleanup(() => controller.close());

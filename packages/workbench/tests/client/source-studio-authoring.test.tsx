@@ -18,10 +18,12 @@ const source: SourceStudioStateV1 = {
 };
 
 const authoring: AuthoringStateV1 = {
-  version: 1,
+  version: 2,
   projectId: 'proj-a',
   phase: 'working-dirty',
+  acceptedRevisionId: null,
   acceptedSourceHash: 'accepted-hash',
+  pendingOperationId: null,
   workingDirty: true,
   workspaceDigest: 'workspace-hash',
   externalCandidate: null,
@@ -41,8 +43,9 @@ describe('Source Studio authoring identities', () => {
     ));
     await user.click(screen.getByRole('button', { name: 'Submit working layer' }));
     expect(onSubmitAuthoring).toHaveBeenCalledWith({
-      version: 1,
+      version: 2,
       projectId: 'proj-a',
+      expectedAcceptedRevisionId: null,
       expectedAcceptedSourceHash: 'accepted-hash',
       expectedWorkspaceDigest: 'workspace-hash',
     });

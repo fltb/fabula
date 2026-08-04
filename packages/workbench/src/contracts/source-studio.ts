@@ -9,7 +9,7 @@
  * accepted source.
  */
 
-import type { ProjectSessionProjectionV1 } from '../host/project-session.js';
+import type { ProjectSessionProjectionV1 } from '@novalistically/workbench-protocol';
 import type { BrowserApiVersion } from './browser-api.js';
 import { BROWSER_API_BASE_PATH } from './browser-api.js';
 

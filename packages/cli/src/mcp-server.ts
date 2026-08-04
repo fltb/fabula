@@ -1,3 +1,4 @@
+import { type McpJsonSchemaV1, MCP_TOOL_CATALOG_V1, type McpToolDescriptorV1 } from '@novalistically/workbench-protocol';
 import {
   getProjectStatus,
   listEntities,
@@ -35,7 +36,33 @@ export interface HostBoundMcpContext {
 
 export interface HostBoundMcpTool {
   readonly name: string;
+  readonly description: string;
+  readonly requiredScopes: readonly string[];
+  readonly inputSchema: McpJsonSchemaV1;
   readonly run: (input: unknown) => Promise<unknown>;
+}
+
+function toolDescriptor(name: string): McpToolDescriptorV1 {
+  const descriptor = MCP_TOOL_CATALOG_V1.find(
+    (candidate: McpToolDescriptorV1) => candidate.name === name,
+  );
+  if (descriptor === undefined) {
+    throw new Error(`MCP tool is missing from the protocol catalog: ${name}`);
+  }
+  return descriptor;
+}
+
+function toolMetadata(name: string): Pick<
+  HostBoundMcpTool,
+  'name' | 'description' | 'requiredScopes' | 'inputSchema'
+> {
+  const descriptor = toolDescriptor(name);
+  return {
+    name: descriptor.name,
+    description: descriptor.description,
+    requiredScopes: descriptor.scopes,
+    inputSchema: descriptor.inputSchema,
+  };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -54,7 +81,7 @@ function selector(value: unknown): SceneSelector {
   if (
     input.type === 'events' &&
     Array.isArray(input.eventIds) &&
-    input.eventIds.every((id) => typeof id === 'string')
+    input.eventIds.every((id: unknown) => typeof id === 'string')
   ) {
     return { type: 'events', eventIds: input.eventIds };
   }
@@ -66,7 +93,7 @@ export function createHostBoundMcpTools(context: HostBoundMcpContext): readonly 
   const render = context.render ?? renderNovel;
   return [
     {
-      name: 'nova_status',
+      ...toolMetadata('nova_status'),
       run: async () => {
         const source = context.currentSource();
         const validation = await validateNovel(source);
@@ -77,40 +104,40 @@ export function createHostBoundMcpTools(context: HostBoundMcpContext): readonly 
       },
     },
     {
-      name: 'nova_validate',
+      ...toolMetadata('nova_validate'),
       run: async () => validateNovel(context.currentSource()),
     },
     {
-      name: 'nova_source_list',
+      ...toolMetadata('nova_source_list'),
       run: async () => listSourceDocuments(context.currentSource()),
     },
     {
-      name: 'nova_source_get',
-      run: async (input) => {
+      ...toolMetadata('nova_source_get'),
+      run: async (input: unknown) => {
         const { logicalPath } = asRecord(input);
         if (typeof logicalPath !== 'string') throw new Error('logicalPath must be a string');
         return getSourceDocument(context.currentSource(), logicalPath);
       },
     },
     {
-      name: 'nova_source_preview',
-      run: async (input) => {
+      ...toolMetadata('nova_source_preview'),
+      run: async (input: unknown) => {
         const { changes } = asRecord(input);
         if (!Array.isArray(changes)) throw new Error('changes must be an array');
         return previewSourceChange(context.currentSource(), changes as SourceChangeV1[]);
       },
     },
     {
-      name: 'nova_entity_get',
-      run: async (input) => {
+      ...toolMetadata('nova_entity_get'),
+      run: async (input: unknown) => {
         const { entityId } = asRecord(input);
         if (typeof entityId !== 'string') throw new Error('entityId must be a string');
         return showEntity(context.currentSource(), entityId);
       },
     },
     {
-      name: 'nova_entity_list',
-      run: async (input) => {
+      ...toolMetadata('nova_entity_list'),
+      run: async (input: unknown) => {
         const { kind } = asRecord(input);
         if (kind !== undefined && typeof kind !== 'string')
           throw new Error('kind must be a string');
@@ -118,13 +145,13 @@ export function createHostBoundMcpTools(context: HostBoundMcpContext): readonly 
       },
     },
     {
-      name: 'nova_render',
-      run: async (input) => {
+      ...toolMetadata('nova_render'),
+      run: async (input: unknown) => {
         const request = asRecord(input);
         // Fail closed: mutation identity is host-derived. Client-supplied
         // actorId/operationId (or any other field) are rejected as unknown.
         const unknown = Object.keys(request).find(
-          (key) => key !== 'sceneSelector' && key !== 'model',
+          (key: string) => key !== 'sceneSelector' && key !== 'model',
         );
         if (unknown !== undefined) {
           throw new Error(

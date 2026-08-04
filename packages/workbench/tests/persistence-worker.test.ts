@@ -54,6 +54,62 @@ describe('persistence worker client contract', () => {
   });
 });
 
+it('rejects verifier operations that omit their explicit store', async () => {
+  const listeners = new Set<(message: unknown) => void>();
+  const pending = new Map<string, (message: unknown) => void>();
+  const workerPort = {
+    addListener(_type: 'message', listener: (message: unknown) => void) {
+      listeners.add(listener);
+    },
+    removeListener(_type: 'message', listener: (message: unknown) => void) {
+      listeners.delete(listener);
+    },
+    postMessage(message: unknown) {
+      if (
+        message != null &&
+        typeof message === 'object' &&
+        'correlationId' in message &&
+        typeof message.correlationId === 'string'
+      ) {
+        pending.get(message.correlationId)?.(message);
+      }
+    },
+    close() {},
+  };
+  const disposer = start(workerPort as unknown as MessagePort, { databasePath: ':memory:' });
+  try {
+    let sequence = 0;
+    const request = (operation: string, payload: unknown): Promise<any> => {
+      const correlationId = `missing-store-${++sequence}`;
+      const { promise, resolve } = Promise.withResolvers<any>();
+      pending.set(correlationId, resolve);
+      for (const listener of [...listeners]) listener({ correlationId, operation, payload });
+      return promise.finally(() => pending.delete(correlationId));
+    };
+    const payload = {
+      deviceId: 'device-1',
+      tokenHash: 'a'.repeat(64),
+      scope: ['mcp:read'],
+      expiresAt: '2026-01-02T00:00:00.000Z',
+      clientLabel: 'test',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    for (const [operation, operationPayload] of [
+      ['createDeviceVerifier', payload],
+      ['loadDeviceVerifierByTokenHash', { tokenHash: payload.tokenHash }],
+      ['listDeviceVerifiers', undefined],
+      ['revokeDeviceVerifier', { deviceId: payload.deviceId, revokedAt: payload.createdAt }],
+    ] as const) {
+      await expect(request(operation, operationPayload)).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'INVALID_INPUT' },
+      });
+    }
+  } finally {
+    await disposer.dispose();
+  }
+});
+
 describe('persistence worker serial execution', () => {
   it('keeps the serial queue alive when a response cannot be delivered', async () => {
     // The worker's side of the port: requests are injected directly. The

@@ -94,6 +94,7 @@ function registry(definitions: readonly McpToolDefinition[]): McpToolRegistry {
 describe('MCP Streamable HTTP endpoint', () => {
   it('rejects missing session/token headers before JSON-RPC negotiation', async () => {
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([tool('nova_status', [MCP_READ_SCOPE])]),
       authorization: authorization(async () => ({ ok: true, caller })),
     });
@@ -109,6 +110,7 @@ describe('MCP Streamable HTTP endpoint', () => {
 
   it('returns an HTTP authorization denial before exposing tools', async () => {
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([tool('nova_status', [MCP_READ_SCOPE])]),
       authorization: authorization(async () => ({
         ok: false,
@@ -126,6 +128,7 @@ describe('MCP Streamable HTTP endpoint', () => {
   it('does not retry discovery after a non-scope authorization failure', async () => {
     const calls: Parameters<McpAuthorizationPort['authorize']>[0][] = [];
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([tool('nova_status', [MCP_READ_SCOPE])]),
       authorization: authorization(async (input) => {
         calls.push(input);
@@ -141,6 +144,7 @@ describe('MCP Streamable HTTP endpoint', () => {
 
   it('lists only tool definitions covered by the server-derived capability', async () => {
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([
         tool('nova_status', [MCP_READ_SCOPE]),
         tool('nova_render', [MCP_RENDER_SCOPE]),
@@ -174,6 +178,7 @@ describe('MCP Streamable HTTP endpoint', () => {
       return originalRun(currentCaller, input);
     };
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([tool('nova_status', [MCP_READ_SCOPE]), render]),
       authorization: authorization(async (input) => {
         calls.push(input);
@@ -187,7 +192,7 @@ describe('MCP Streamable HTTP endpoint', () => {
     const payload = (await response.json()) as { result?: { content?: Array<{ text: string }> } };
 
     expect(response.status).toBe(200);
-    expect(calls.map((call) => call.scopes)).toEqual([[MCP_RENDER_SCOPE], [MCP_RENDER_SCOPE]]);
+    expect(calls.map((call) => call.scopes)).toEqual([[MCP_READ_SCOPE], [MCP_RENDER_SCOPE]]);
     expect(seenCaller).toEqual(caller);
     expect(JSON.parse(payload.result?.content?.[0]?.text ?? '{}')).toEqual({
       name: 'nova_render',
@@ -197,6 +202,7 @@ describe('MCP Streamable HTTP endpoint', () => {
 
   it('accepts a case-insensitive bearer scheme with a single credential', async () => {
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([tool('nova_status', [MCP_READ_SCOPE])]),
       authorization: authorization(async (input) => {
         expect(input.token).toBe(TOKEN);
@@ -223,6 +229,7 @@ describe('MCP Streamable HTTP endpoint', () => {
   it('rejects multiple credential tokens in the authorization header', async () => {
     let authorized = false;
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([tool('nova_status', [MCP_READ_SCOPE])]),
       authorization: authorization(async () => {
         authorized = true;
@@ -252,6 +259,7 @@ describe('MCP Streamable HTTP endpoint', () => {
     const renderGrant = { ...caller, grant: { ...caller.grant, scopes: [MCP_RENDER_SCOPE] } };
     const calls: Parameters<McpAuthorizationPort['authorize']>[0][] = [];
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([
         tool('nova_status', [MCP_READ_SCOPE]),
         tool('nova_render', [MCP_RENDER_SCOPE]),
@@ -282,6 +290,7 @@ describe('MCP Streamable HTTP endpoint', () => {
     expect(calls.map((call) => call.scopes)).toEqual([
       [MCP_READ_SCOPE],
       [MCP_RENDER_SCOPE],
+      [MCP_READ_SCOPE],
       [MCP_RENDER_SCOPE],
       [MCP_RENDER_SCOPE],
     ]);
@@ -293,6 +302,7 @@ describe('MCP Streamable HTTP endpoint', () => {
 
   it('returns a JSON-RPC TOOL_NOT_FOUND CallToolResult for unknown tool names', async () => {
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([tool('nova_status', [MCP_READ_SCOPE])]),
       authorization: authorization(async () => ({ ok: true, caller })),
     });
@@ -314,6 +324,7 @@ describe('MCP Streamable HTTP endpoint', () => {
 
   it('mounts through the Host guarded MCP route rather than direct Hono access', async () => {
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([tool('nova_status', [MCP_READ_SCOPE])]),
       authorization: authorization(async () => ({ ok: true, caller })),
     });
@@ -351,6 +362,7 @@ describe('MCP Streamable HTTP endpoint', () => {
     };
     const seen: Parameters<McpAuthorizationPort['authorize']>[0][] = [];
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([tool('nova_status', [MCP_READ_SCOPE])]),
       authorization: authorization(async (input) => {
         seen.push(input);
@@ -395,6 +407,7 @@ describe('MCP Streamable HTTP endpoint', () => {
     };
     const calls: Parameters<McpAuthorizationPort['authorize']>[0][] = [];
     const endpoint = createMcpStreamableEndpoint({
+      route: 'project',
       registry: registry([
         tool('nova_status', [MCP_READ_SCOPE]),
         tool('nova_render', [MCP_RENDER_SCOPE]),

@@ -13,6 +13,7 @@ import {
   type AdminNetworkUpdateRequestV1,
   type AdminProjectSaveRequestV1,
   type AdminProviderUpdateRequestV1,
+  type ProjectAccessRole,
   type AdminSetCredentialRequestV1,
   type ConfigOperationReceiptV1,
   type WorkbenchAdminErrorCode,
@@ -46,6 +47,19 @@ export type AdminProviderInput = Omit<AdminProviderUpdateRequestV1, 'version'>;
 export type AdminNetworkInput = Omit<AdminNetworkUpdateRequestV1, 'version'>;
 /** One invite write; the Host creates and stores any redemption material. */
 export type AdminInviteInput = Omit<AdminInviteCreateRequestV1, 'version'>;
+/** One MCP device pairing issue; project and admin bindings are explicit. */
+export type AdminDevicePairingInput =
+  | {
+      readonly kind: 'project';
+      readonly projectId: string;
+      readonly role?: ProjectAccessRole;
+      readonly ttlMs?: number;
+    }
+  | {
+      readonly kind: 'admin';
+      readonly ttlMs?: number;
+    };
+
 /** One MCP device claim; the returned credential is displayed only once by the UI. */
 export type AdminDeviceClaimInput = Omit<AdminDevicePairRequestV1, 'version'>;
 
@@ -183,7 +197,7 @@ export interface AdminClient {
   updateNetwork(input: AdminNetworkInput): Promise<AdminNetworkMutationResponseV1>;
   createInvite(input: AdminInviteInput): Promise<AdminInviteResponseV1>;
   revokeSession(sessionId: string): Promise<AdminSessionRevokeResponseV1>;
-  issueDevicePairing(): Promise<AdminDeviceIssueResponseV1>;
+  issueDevicePairing(input: AdminDevicePairingInput): Promise<AdminDeviceIssueResponseV1>;
   claimDevice(input: AdminDeviceClaimInput): Promise<AdminDeviceClaimResponseV1>;
   revokeDevice(deviceId: string): Promise<AdminDeviceRevokeResponseV1>;
 }
@@ -423,9 +437,22 @@ export function createAdminClient(options: AdminClientOptions = {}): AdminClient
         'DELETE',
       );
     },
-    issueDevicePairing: () => {
+    issueDevicePairing: (input) => {
       assertMutationAllowed();
-      return request<AdminDeviceIssueResponseV1>(BROWSER_ADMIN_DEVICES_ISSUE_PATH, 'POST');
+      return request<AdminDeviceIssueResponseV1>(
+        BROWSER_ADMIN_DEVICES_ISSUE_PATH,
+        'POST',
+        fixedVersionBody({
+          kind: input.kind,
+          ...(input.kind === 'project'
+            ? {
+                projectId: input.projectId,
+                ...(input.role === undefined ? {} : { role: input.role }),
+              }
+            : {}),
+          ...(input.ttlMs === undefined ? {} : { ttlMs: input.ttlMs }),
+        }),
+      );
     },
     claimDevice: (input) => {
       assertMutationAllowed();

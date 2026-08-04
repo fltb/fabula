@@ -8,7 +8,7 @@
 // setup or imports when WORKBENCH_CONFIG_IMPORT=1 (enforced by the Host
 // configuration service, not by this launcher).
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, fstatSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
@@ -38,7 +38,22 @@ if (mode !== 'workbench' && mode !== 'listener') {
   process.exit(2);
 }
 const env = { ...process.env, WORKBENCH_MODE: mode, WORKBENCH_DEV: 'false' };
-const child = spawn(process.execPath, ['dist/host/host/main.js'], { env, stdio: 'inherit' });
+const inheritedControlFd3 = (() => {
+  try {
+    fstatSync(3);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+const childEnv = {
+  ...env,
+  WORKBENCH_CONTROL_FD3: inheritedControlFd3 ? '3' : 'disabled',
+};
+const child = spawn(process.execPath, ['dist/host/host/main.js'], {
+  env: childEnv,
+  stdio: ['inherit', 'inherit', 'inherit', inheritedControlFd3 ? 'inherit' : 'ignore'],
+});
 const shutdown = (signal) => child.kill(signal);
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));

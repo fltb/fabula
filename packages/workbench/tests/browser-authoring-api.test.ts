@@ -1,7 +1,11 @@
 import { Hono } from 'hono';
 import { describe, expect, it, vi } from 'vitest';
-import type { AuthoringCoordinator } from '../src/host/authoring/types.js';
-import { AUTHORING_CONTRACT_VERSION, type AuthoringOperationReceiptV1, type AuthoringStateV1 } from '../src/contracts/authoring.js';
+import type { AuthoringCoordinator, AuthoringRevisionPort } from '../src/host/authoring/types.js';
+import {
+  AUTHORING_CONTRACT_VERSION,
+  type AuthoringOperationReceiptV1,
+  type AuthoringStateV1,
+} from '../src/contracts/authoring.js';
 import type { BrowserSessionPrincipalV1 } from '../src/contracts/browser-api.js';
 import { BROWSER_SESSION_HEADER } from '../src/contracts/browser-api.js';
 import type { HostServer } from '../src/host/server.js';

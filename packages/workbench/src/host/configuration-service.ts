@@ -19,19 +19,20 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import type { Stats } from 'node:fs';
-import { stat } from 'node:fs/promises';
 import type {
   ConfigChangeOriginV1,
   ConfigOperationDiagnosticV1,
   ConfigOperationReceiptV1,
-  WorkbenchConfigurationV1,
+  WorkbenchConfigurationInput,
+  WorkbenchConfigurationV2,
 } from '../contracts/configuration.js';
 import {
   type ConfigurationFileStore,
   configurationRevision,
+  normalizeWorkbenchConfiguration,
   parseConfigurationYaml,
   validateConfigurationShape,
+  validateConfigurationTopology,
 } from './configuration-file-store.js';
 
 /** Optional durable record of one configuration operation (metadata only). */
@@ -66,7 +67,7 @@ export interface ConfigurationServiceOptions {
 }
 
 export interface ActiveConfiguration {
-  readonly configuration: WorkbenchConfigurationV1;
+  readonly configuration: WorkbenchConfigurationV2;
   readonly revision: string;
 }
 
@@ -78,7 +79,7 @@ export type ConfigurationCandidateResult =
     };
 
 export interface ConfigurationApplyInput {
-  readonly candidate: WorkbenchConfigurationV1;
+  readonly candidate: WorkbenchConfigurationInput;
   readonly expectedRevision: string | null;
   readonly origin: ConfigChangeOriginV1;
   /** Authenticated actor id when the change has one (dashboard/MCP/setup owner). */
@@ -93,11 +94,11 @@ function arraysEqual(a: readonly string[], b: readonly string[]): boolean {
 
 /** Stable ordered changed-field paths between two configurations. */
 export function computeChangedFields(
-  previous: WorkbenchConfigurationV1 | null,
-  next: WorkbenchConfigurationV1,
+  previous: WorkbenchConfigurationInput | null,
+  next: WorkbenchConfigurationInput,
 ): readonly string[] {
   if (previous === null) {
-    return ['projects', 'defaultProjectId', 'provider', 'network'];
+    return ['projects', 'defaultProjectId', 'provider', 'network', 'referenceLimits'];
   }
   const changed: string[] = [];
   const previousIds = new Set(previous.projects.map((project) => project.projectId));
@@ -110,11 +111,23 @@ export function computeChangedFields(
   }
   for (const project of next.projects) {
     const other = previous.projects.find((entry) => entry.projectId === project.projectId);
-    if (
-      other !== undefined &&
-      (other.displayName !== project.displayName || other.root !== project.root)
-    ) {
-      changed.push(`projects.${project.projectId}`);
+    if (other !== undefined) {
+      const otherMirror: WorkbenchConfigurationV2['projects'][number]['revisionMirror'] =
+        previous.version === 2 && 'revisionMirror' in other
+          ? (other.revisionMirror as WorkbenchConfigurationV2['projects'][number]['revisionMirror'])
+          : { mode: 'disabled' };
+      const nextMirror: WorkbenchConfigurationV2['projects'][number]['revisionMirror'] =
+        next.version === 2 && 'revisionMirror' in project
+          ? (project.revisionMirror as WorkbenchConfigurationV2['projects'][number]['revisionMirror'])
+          : { mode: 'disabled' };
+      const mirrorChanged =
+        otherMirror.mode !== nextMirror.mode ||
+        (otherMirror.mode === 'git-best-effort' &&
+          nextMirror.mode === 'git-best-effort' &&
+          otherMirror.ref !== nextMirror.ref);
+      if (other.displayName !== project.displayName || other.root !== project.root || mirrorChanged) {
+        changed.push(`projects.${project.projectId}`);
+      }
     }
   }
   if (previous.defaultProjectId !== next.defaultProjectId) changed.push('defaultProjectId');
@@ -209,27 +222,13 @@ export class ConfigurationChangeService {
    * wizard's per-step validation and by admin project validation.
    */
   async validateCandidate(
-    candidate: WorkbenchConfigurationV1,
+    candidate: WorkbenchConfigurationInput,
   ): Promise<ConfigurationCandidateResult> {
     const shaped = validateConfigurationShape(candidate);
     if (!shaped.ok) return { ok: false, diagnostics: shaped.diagnostics };
-    const diagnostics: ConfigOperationDiagnosticV1[] = [];
-    for (const project of candidate.projects) {
-      let info: Stats | null;
-      try {
-        info = await stat(project.root);
-      } catch {
-        info = null;
-      }
-      if (info === null || !info.isDirectory()) {
-        diagnostics.push({
-          code: 'PROJECT_NOT_ACCESSIBLE',
-          message: `Project "${project.projectId}" root is not an accessible directory.`,
-        });
-      }
-    }
+    const diagnostics = await validateConfigurationTopology(shaped.configuration);
     if (diagnostics.length > 0) return { ok: false, diagnostics };
-    return { ok: true, revision: configurationRevision(candidate) };
+    return { ok: true, revision: configurationRevision(shaped.configuration) };
   }
 
   /**
@@ -349,10 +348,11 @@ export class ConfigurationChangeService {
       );
     }
 
-    const changedFields = computeChangedFields(current?.configuration ?? null, input.candidate);
+    const normalizedCandidate = normalizeWorkbenchConfiguration(input.candidate);
+    const changedFields = computeChangedFields(current?.configuration ?? null, normalizedCandidate);
     const status = requiresRestart(changedFields) ? 'restart-required' : 'applied';
-    const writtenRevision = await this.#store.write(input.candidate);
-    this.#lastActive = { configuration: input.candidate, revision: writtenRevision };
+    const writtenRevision = await this.#store.write(normalizedCandidate);
+    this.#lastActive = { configuration: normalizedCandidate, revision: writtenRevision };
     return this.#receipt(
       status,
       writtenRevision,
@@ -408,7 +408,7 @@ export class ConfigurationChangeService {
         undefined,
       );
     }
-    const candidate = parsed.configuration;
+    const candidate = normalizeWorkbenchConfiguration(parsed.configuration);
     const candidateRevision = configurationRevision(candidate);
     const validated = await this.validateCandidate(candidate);
     if (!validated.ok) {

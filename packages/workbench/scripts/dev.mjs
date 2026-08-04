@@ -7,7 +7,7 @@
 // win. The Host configuration service decides whether dotenv values only
 // pre-fill initial setup or force an import (WORKBENCH_CONFIG_IMPORT=1).
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, fstatSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -86,7 +86,23 @@ const env = {
 
 const built = spawnSync('npm', ['run', 'build:host'], { cwd: root, env, stdio: 'inherit' });
 if (built.status !== 0) process.exit(built.status ?? 1);
-const host = spawn('node', ['dist/host/host/main.js'], { cwd: root, env, stdio: 'inherit' });
+const inheritedControlFd3 = (() => {
+  try {
+    fstatSync(3);
+    return true;
+  } catch {
+    return false;
+  }
+})();
+const hostEnv = {
+  ...env,
+  WORKBENCH_CONTROL_FD3: inheritedControlFd3 ? '3' : 'disabled',
+};
+const host = spawn(process.execPath, ['dist/host/host/main.js'], {
+  cwd: root,
+  env: hostEnv,
+  stdio: ['inherit', 'inherit', 'inherit', inheritedControlFd3 ? 'inherit' : 'ignore'],
+});
 const vite = spawn('npx', ['vite', '--config', 'vite.config.ts'], {
   cwd: root,
   env,

@@ -5,9 +5,11 @@ import type { HostServer } from '../server.js';
 import {
   type McpAuthorizationPort,
   type McpAuthorizationResult,
+  type McpRouteKind,
   mcpAuthFailureStatus,
 } from './auth.js';
 import {
+  MCP_ADMIN_SCOPE,
   MCP_READ_SCOPE,
   MCP_RENDER_SCOPE,
   type McpToolDefinition,
@@ -24,10 +26,24 @@ export interface McpStreamableEndpoint {
   /** Fetch-native handler, mounted by Hono as `endpoint.handle(c.req.raw)`. */
   handle(request: Request): Promise<Response>;
 }
-
 export interface CreateMcpStreamableEndpointOptions {
-  readonly registry: McpToolRegistry;
+  /** Static registry for a fixed endpoint; omitted when resolving per request. */
+  readonly registry?: McpToolRegistry;
   readonly authorization: McpAuthorizationPort;
+  /** Resolve a project/admin registry only after route authorization succeeds. */
+  readonly resolveRegistry?: (
+    request: Request,
+    projectId: string,
+    route: McpRouteKind,
+  ) => Promise<McpToolRegistry | null>;
+  /** Fixed route identity supplied by the server mount. */
+  readonly route: McpRouteKind;
+  /** Server-derived project identity for fixed endpoints. */
+  readonly projectId?: string;
+  /** Server-derived project identity for dynamic project endpoints. */
+  readonly projectIdResolver?: (request: Request) => string | null;
+  /** Finite scopes used for the pre-registry authorization gate. */
+  readonly availableScopes?: readonly string[];
   readonly serverInfo?: { readonly name: string; readonly version: string };
 }
 
@@ -36,10 +52,6 @@ interface PresentedCredentials {
   readonly token: string;
 }
 
-interface ToolCallEnvelope {
-  readonly method?: unknown;
-  readonly params?: { readonly name?: unknown };
-}
 
 function responseJson(status: number, value: unknown): Response {
   return new Response(JSON.stringify(value), {
@@ -84,19 +96,6 @@ function mcpTool(definition: McpToolDefinition): {
   };
 }
 
-async function requestedToolName(request: Request): Promise<string | null> {
-  if (request.method !== 'POST') return null;
-  try {
-    const envelope = (await request.clone().json()) as ToolCallEnvelope;
-    return envelope.method === 'tools/call' && typeof envelope.params?.name === 'string'
-      ? envelope.params.name
-      : null;
-  } catch {
-    // The SDK owns JSON-RPC syntax errors. This preflight only extracts a
-    // well-formed tool name in order to choose the exact authorization scope.
-    return null;
-  }
-}
 
 /**
  * Authenticate discovery traffic (tools/list, batches, malformed bodies,
@@ -107,6 +106,7 @@ async function authorizeDiscovery(
   authorization: McpAuthorizationPort,
   credentials: PresentedCredentials,
   projectId: string,
+  route: McpRouteKind,
   scopes: readonly string[],
 ): Promise<McpAuthorizationResult> {
   let last: McpAuthorizationResult | null = null;
@@ -115,6 +115,7 @@ async function authorizeDiscovery(
       sessionId: credentials.sessionId,
       token: credentials.token,
       projectId,
+      route,
       scopes: [scope],
     });
     if (result.ok || result.failure.code !== 'SCOPE_MISMATCH') return result;
@@ -146,38 +147,35 @@ function authorizationFailure(status: 401 | 403, code: string): Response {
 export function createMcpStreamableEndpoint(
   options: CreateMcpStreamableEndpointOptions,
 ): McpStreamableEndpoint {
-  const { registry, authorization } = options;
+  const { registry, authorization, resolveRegistry, route } = options;
+  if (registry === undefined && resolveRegistry === undefined) {
+    throw new TypeError('MCP endpoint requires a registry or registry resolver');
+  }
   const serverInfo = options.serverInfo ?? { name: 'fabula-workbench', version: '0.1.0' };
 
   return {
     async handle(request: Request): Promise<Response> {
+      const projectId =
+        options.projectIdResolver?.(request) ?? options.projectId ?? registry?.projectId ?? null;
+      if (projectId === null || projectId.length === 0) {
+        return responseJson(404, { error: { code: 'PROJECT_NOT_FOUND' } });
+      }
       const credentials = extractCredentials(request);
       if (credentials === null) return authorizationFailure(401, 'SESSION_NOT_FOUND');
 
-      // Known tools/call requests preflight with their exact required scopes;
-      // everything else (list, batch, malformed bodies, unknown tool names)
-      // authenticates against the finite MCP tool scopes and accepts the first
-      // success, so a render-only grant still reaches discovery. Unknown tool
-      // names fall through to the SDK, which answers with a JSON-RPC
-      // TOOL_NOT_FOUND CallToolResult instead of an HTTP 404. The handler
-      // rechecks the exact scopes at the effect boundary to close revocation
-      // races.
-      const selectedName = await requestedToolName(request);
-      const selected = selectedName === null ? null : registry.get(selectedName);
-      const discovery =
-        selected !== null && selected.requiredScopes.length > 0
-          ? await authorization.authorize({
-              sessionId: credentials.sessionId,
-              token: credentials.token,
-              projectId: registry.projectId,
-              scopes: selected.requiredScopes,
-            })
-          : await authorizeDiscovery(
-              authorization,
-              credentials,
-              registry.projectId,
-              registry.availableScopes ?? [MCP_READ_SCOPE, MCP_RENDER_SCOPE],
-            );
+      // This is intentionally a finite, registry-independent gate. It
+      // authenticates the route/project ACL before resolving a project session
+      // or constructing its registry, preventing unknown and closed projects
+      // from triggering any registry lookup.
+      const discovery = await authorizeDiscovery(
+        authorization,
+        credentials,
+        projectId,
+        route,
+        options.availableScopes ??
+          registry?.availableScopes ??
+          (route === 'admin' ? [MCP_ADMIN_SCOPE] : [MCP_READ_SCOPE, MCP_RENDER_SCOPE]),
+      );
       if (!discovery.ok) {
         return authorizationFailure(
           mcpAuthFailureStatus(discovery.failure.code),
@@ -185,12 +183,19 @@ export function createMcpStreamableEndpoint(
         );
       }
 
+      const resolved = resolveRegistry
+        ? await resolveRegistry(request, projectId, route)
+        : registry ?? null;
+      if (resolved === null) {
+        return responseJson(404, { error: { code: 'PROJECT_NOT_FOUND' } });
+      }
+
       const server = new Server(serverInfo, { capabilities: { tools: {} } });
       server.setRequestHandler(ListToolsRequestSchema, async () => ({
-        tools: registry.list(discovery.caller.grant.scopes).map(mcpTool),
+        tools: resolved.list(discovery.caller.grant.scopes).map(mcpTool),
       }));
       server.setRequestHandler(CallToolRequestSchema, async (message) => {
-        const definition = registry.get(message.params.name);
+        const definition = resolved.get(message.params.name);
         if (definition === null) {
           return toolResult({
             ok: false,
@@ -200,7 +205,8 @@ export function createMcpStreamableEndpoint(
         const reauthorized = await authorization.authorize({
           sessionId: credentials.sessionId,
           token: credentials.token,
-          projectId: registry.projectId,
+          projectId,
+          route,
           scopes: definition.requiredScopes,
         });
         if (!reauthorized.ok) {
@@ -213,7 +219,7 @@ export function createMcpStreamableEndpoint(
           });
         }
         return toolResult(
-          await registry.run(
+          await resolved.run(
             message.params.name,
             reauthorized.caller,
             message.params.arguments ?? {},

@@ -87,7 +87,7 @@ describe('Phase 0 persistence contracts', () => {
         ).map((row) => row.version);
         expect(versions).toEqual([1, 2, 3, 4]);
 
-        // V1 rows survive the V2 migration untouched.
+        // V1 rows survive every later migration untouched.
         const user = db
           .prepare('SELECT * FROM users WHERE user_id=?')
           .get('owner-1') as Record<string, unknown> | undefined;
@@ -99,7 +99,7 @@ describe('Phase 0 persistence contracts', () => {
         expect(doc).toBeDefined();
         expect(Buffer.from(doc?.document_update as Uint8Array).equals(Buffer.from([2]))).toBe(true);
 
-        // V2 tables exist.
+        // V2–V4 tables exist.
         const tables = (
           db
             .prepare(

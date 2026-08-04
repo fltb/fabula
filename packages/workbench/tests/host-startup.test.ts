@@ -66,6 +66,7 @@ const mcpRegistry: McpToolRegistry = {
 
 function authenticatedMcpEndpoint(): McpStreamableEndpoint {
   return createMcpStreamableEndpoint({
+    route: 'project',
     registry: mcpRegistry,
     authorization: { authorize: async () => ({ ok: true, caller: mcpCaller }) },
   });

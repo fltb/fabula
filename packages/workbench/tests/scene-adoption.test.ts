@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { CoreExecutionRepository } from '@novalistically/core';
 import { describe, expect, it } from 'vitest';
-import { sceneBytesMatchClaim } from '../src/host/git/manifest.js';
+import { sceneBytesMatchClaim } from '../src/host/authoring/manifest.js';
 import { prepareSceneAdoption } from '../src/host/scene-adoption.js';
 
 const PROJECT_ID = 'project-a';

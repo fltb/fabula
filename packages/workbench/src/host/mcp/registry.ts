@@ -40,17 +40,7 @@ import {
   MCP_TOOL_CATALOG_V1,
   type McpJsonSchemaProperty,
   type McpJsonSchemaV1,
-  type McpReferenceChunkGetInputV1,
-  type McpReferenceContentReadInputV1,
-  type McpReferenceDeleteInputV1,
-  type McpReferenceGetInputV1,
-  type McpReferenceImportBeginInputV1,
-  type McpReferenceImportChunkInputV1,
-  type McpReferenceImportCommitInputV1,
-  type McpReferenceJobGetInputV1,
-  type McpReferenceListInputV1,
   type McpReferencePort,
-  type McpReferenceRetryInputV1,
   type McpReferenceSearchInputV1,
   type McpToolDescriptorV1,
   REFERENCE_MCP_LIMITS_V1,
@@ -78,7 +68,6 @@ import {
   type McpAuthoringDocumentMutationOutputV1,
   type McpAuthoringDocumentReadInputV1,
   type McpAuthoringDocumentReadOutputV1,
-  type McpAuthoringStatusInputV1,
   type McpAuthoringStatusOutputV1,
   type McpAuthoringSubmitInputV1,
   type McpAuthoringSubmitOutputV1,
@@ -431,7 +420,7 @@ function optionalString(value: Record<string, unknown>, key: string): string | u
   return candidate;
 }
 
-function boundedString(
+function _boundedString(
   value: Record<string, unknown>,
   key: string,
   maxLength: number,
@@ -832,9 +821,16 @@ function safeObject(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function safeText(value: unknown, label: string): string;
+function safeText(value: unknown, label: string, allowNull: true): string | null;
 function safeText(value: unknown, label: string, allowNull = false): string | null {
   if ((value === null || value === undefined) && allowNull) return null;
   if (typeof value !== 'string' || value.length === 0) throw new Error(`${label} is invalid`);
+  return value;
+}
+
+function requiredParsedValue<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error('Parsed required value is missing');
   return value;
 }
 
@@ -863,10 +859,10 @@ function safeReferenceItem(value: unknown): ReferenceItemV1 {
   }
   return {
     version: 1,
-    referenceId: safeText(item.referenceId, 'referenceId')!,
-    displayName: safeText(item.displayName, 'displayName')!,
-    originalName: safeText(item.originalName, 'originalName')!,
-    mediaType: safeText(item.mediaType, 'mediaType')!,
+    referenceId: safeText(item.referenceId, 'referenceId'),
+    displayName: safeText(item.displayName, 'displayName'),
+    originalName: safeText(item.originalName, 'originalName'),
+    mediaType: safeText(item.mediaType, 'mediaType'),
     contentHash: safeHash(item.contentHash, 'contentHash'),
     byteLength,
     title: safeText(item.title, 'title', true),
@@ -874,8 +870,8 @@ function safeReferenceItem(value: unknown): ReferenceItemV1 {
     sourceUrl: safeText(item.sourceUrl, 'sourceUrl', true),
     license: safeText(item.license, 'license', true),
     tags: [...tags],
-    createdAt: safeText(item.createdAt, 'createdAt')!,
-    updatedAt: safeText(item.updatedAt, 'updatedAt')!,
+    createdAt: safeText(item.createdAt, 'createdAt'),
+    updatedAt: safeText(item.updatedAt, 'updatedAt'),
   };
 }
 
@@ -891,7 +887,7 @@ function safeReferenceJob(value: unknown): ReferenceJobV1 {
   };
   return {
     version: 1,
-    jobId: safeText(job.jobId, 'jobId')!,
+    jobId: safeText(job.jobId, 'jobId'),
     operation: job.operation as ReferenceJobV1['operation'],
     status: job.status as ReferenceJobV1['status'],
     referenceId: safeText(job.referenceId, 'referenceId', true),
@@ -900,8 +896,8 @@ function safeReferenceJob(value: unknown): ReferenceJobV1 {
     contentHash: job.contentHash === null ? null : safeHash(job.contentHash, 'contentHash'),
     errorCode: safeText(job.errorCode, 'errorCode', true),
     errorMessage: redactPath(message),
-    createdAt: safeText(job.createdAt, 'createdAt')!,
-    updatedAt: safeText(job.updatedAt, 'updatedAt')!,
+    createdAt: safeText(job.createdAt, 'createdAt'),
+    updatedAt: safeText(job.updatedAt, 'updatedAt'),
   };
 }
 
@@ -914,7 +910,7 @@ function safeReferenceRange(value: unknown): ReferenceRangeV1 {
 
 function safeReferenceContent(value: unknown): ReferenceContentV1 {
   const content = safeObject(value, 'Reference content');
-  const dataBase64 = safeText(content.dataBase64, 'dataBase64')!;
+  const dataBase64 = safeText(content.dataBase64, 'dataBase64');
   if (
     !/^[A-Za-z0-9+/]+={0,2}$/.test(dataBase64) ||
     dataBase64.length > REFERENCE_MCP_LIMITS_V1.maxChunkBase64Length
@@ -923,8 +919,8 @@ function safeReferenceContent(value: unknown): ReferenceContentV1 {
   }
   return {
     version: 1,
-    referenceId: safeText(content.referenceId, 'referenceId')!,
-    mediaType: safeText(content.mediaType, 'mediaType')!,
+    referenceId: safeText(content.referenceId, 'referenceId'),
+    mediaType: safeText(content.mediaType, 'mediaType'),
     contentHash: safeHash(content.contentHash, 'contentHash'),
     byteLength: content.byteLength as number,
     range: safeReferenceRange(content.range),
@@ -938,13 +934,13 @@ function safeReferenceContent(value: unknown): ReferenceContentV1 {
 function safeReferenceChunk(value: unknown): ReferenceChunkV1 {
   const chunk = safeObject(value, 'Reference chunk');
   const quote = safeText(chunk.quote, 'quote', true);
-  const locator = safeText(chunk.locator, 'locator')!;
+  const locator = safeText(chunk.locator, 'locator');
   if (locator.includes('/') || locator.includes('\\'))
     throw new Error('Reference locator contains a path');
   return {
     version: 1,
-    referenceId: safeText(chunk.referenceId, 'referenceId')!,
-    chunkId: safeText(chunk.chunkId, 'chunkId')!,
+    referenceId: safeText(chunk.referenceId, 'referenceId'),
+    chunkId: safeText(chunk.chunkId, 'chunkId'),
     ordinal: chunk.ordinal as number,
     range: safeReferenceRange(chunk.range),
     byteLength: chunk.byteLength as number,
@@ -1350,7 +1346,10 @@ export function createProjectSessionMcpRegistry(
             );
             if (!referenceId.ok) return referenceId.result;
             if (!chunkId.ok) return chunkId.result;
-            references.push({ referenceId: referenceId.value!, chunkId: chunkId.value! });
+            references.push({
+              referenceId: requiredParsedValue(referenceId.value),
+              chunkId: requiredParsedValue(chunkId.value),
+            });
           }
         }
         const source = session.source;
@@ -1483,7 +1482,10 @@ export function createProjectSessionMcpRegistry(
         if (!referenceId.ok) return referenceId.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
-        const result = await reference.get({ version: 1, referenceId: referenceId.value! });
+        const result = await reference.get({
+          version: 1,
+          referenceId: requiredParsedValue(referenceId.value),
+        });
         return result === null
           ? mcpToolError('REFERENCE_NOT_FOUND', 'The requested reference does not exist.')
           : mcpToolOk({ version: 1, item: safeReferenceItem(result.item) });
@@ -1562,7 +1564,7 @@ export function createProjectSessionMcpRegistry(
         if (reference === undefined) return NO_REFERENCE_PORT;
         const result = await reference.search({
           version: 1,
-          query: query.value!,
+          query: requiredParsedValue(query.value),
           ...(pageSize.value === undefined ? {} : { pageSize: pageSize.value }),
           ...(cursor.value === undefined ? {} : { cursor: cursor.value }),
           ...(filters === undefined ? {} : { filters }),
@@ -1595,8 +1597,8 @@ export function createProjectSessionMcpRegistry(
         if (reference === undefined) return NO_REFERENCE_PORT;
         const result = await reference.getChunk({
           version: 1,
-          referenceId: referenceId.value!,
-          chunkId: chunkId.value!,
+          referenceId: requiredParsedValue(referenceId.value),
+          chunkId: requiredParsedValue(chunkId.value),
         });
         return result === null
           ? mcpToolError(
@@ -1635,9 +1637,9 @@ export function createProjectSessionMcpRegistry(
         if (reference === undefined) return NO_REFERENCE_PORT;
         const result = await reference.readContent({
           version: 1,
-          referenceId: referenceId.value!,
-          offset: offset.value!,
-          limit: limit.value!,
+          referenceId: requiredParsedValue(referenceId.value),
+          offset: requiredParsedValue(offset.value),
+          limit: requiredParsedValue(limit.value),
         });
         return mcpToolOk({ version: 1, content: safeReferenceContent(result.content) });
       },
@@ -1740,18 +1742,18 @@ export function createProjectSessionMcpRegistry(
         if (reference === undefined) return NO_REFERENCE_PORT;
         const result = await reference.importBegin({
           version: 1,
-          referenceId: referenceId.value!,
-          originalName: originalName.value!,
+          referenceId: requiredParsedValue(referenceId.value),
+          originalName: requiredParsedValue(originalName.value),
           ...(displayName.value === undefined ? {} : { displayName: displayName.value }),
-          mediaType: mediaType.value!,
-          byteLength: byteLength.value!,
-          contentHash: contentHash.value!,
+          mediaType: requiredParsedValue(mediaType.value),
+          byteLength: requiredParsedValue(byteLength.value),
+          contentHash: requiredParsedValue(contentHash.value),
           ...(title.value === undefined ? {} : { title: title.value }),
           ...(authors.value === undefined ? {} : { authors: authors.value }),
           ...(sourceUrl.value === undefined ? {} : { sourceUrl: sourceUrl.value }),
           ...(license.value === undefined ? {} : { license: license.value }),
           ...(tags.value === undefined ? {} : { tags: tags.value }),
-          idempotencyKey: idempotencyKey.value!,
+          idempotencyKey: requiredParsedValue(idempotencyKey.value),
         });
         return mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
       },
@@ -1800,11 +1802,11 @@ export function createProjectSessionMcpRegistry(
         if (reference === undefined) return NO_REFERENCE_PORT;
         const result = await reference.importChunk({
           version: 1,
-          jobId: jobId.value!,
-          offset: offset.value!,
-          byteLength: byteLength.value!,
-          chunkHash: chunkHash.value!,
-          dataBase64: dataBase64.value!,
+          jobId: requiredParsedValue(jobId.value),
+          offset: requiredParsedValue(offset.value),
+          byteLength: requiredParsedValue(byteLength.value),
+          chunkHash: requiredParsedValue(chunkHash.value),
+          dataBase64: requiredParsedValue(dataBase64.value),
         });
         return mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
       },
@@ -1826,8 +1828,8 @@ export function createProjectSessionMcpRegistry(
         if (reference === undefined) return NO_REFERENCE_PORT;
         const result = await reference.importCommit({
           version: 1,
-          jobId: jobId.value!,
-          contentHash: contentHash.value!,
+          jobId: requiredParsedValue(jobId.value),
+          contentHash: requiredParsedValue(contentHash.value),
         });
         return mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
       },
@@ -1845,7 +1847,10 @@ export function createProjectSessionMcpRegistry(
         if (!jobId.ok) return jobId.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
-        const result = await reference.jobGet({ version: 1, jobId: jobId.value! });
+        const result = await reference.jobGet({
+          version: 1,
+          jobId: requiredParsedValue(jobId.value),
+        });
         return result === null
           ? mcpToolError('REFERENCE_JOB_NOT_FOUND', 'The requested reference job does not exist.')
           : mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
@@ -1864,7 +1869,10 @@ export function createProjectSessionMcpRegistry(
         if (!jobId.ok) return jobId.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
-        const result = await reference.retry({ version: 1, jobId: jobId.value! });
+        const result = await reference.retry({
+          version: 1,
+          jobId: requiredParsedValue(jobId.value),
+        });
         return mcpToolOk({ version: 1, job: safeReferenceJob(result.job) });
       },
     },
@@ -1881,7 +1889,10 @@ export function createProjectSessionMcpRegistry(
         if (!referenceId.ok) return referenceId.result;
         const reference = options.reference;
         if (reference === undefined) return NO_REFERENCE_PORT;
-        const result = await reference.delete({ version: 1, referenceId: referenceId.value! });
+        const result = await reference.delete({
+          version: 1,
+          referenceId: requiredParsedValue(referenceId.value),
+        });
         return mcpToolOk({
           version: 1,
           job: safeReferenceJob(result.job),

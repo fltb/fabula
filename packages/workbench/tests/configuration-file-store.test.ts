@@ -70,7 +70,8 @@ describe('resolveWorkbenchHome', () => {
 
   it('uses config/workbench.yaml beneath the resolved home', () => {
     const home = '/home/wb';
-    expect(join(home, 'config', 'workbench.yaml')).toBe('/home/wb/config/workbench.yaml');
+    const store = new ConfigurationFileStore({ filePath: join(home, 'config', 'workbench.yaml') });
+    expect(store.filePath).toBe('/home/wb/config/workbench.yaml');
   });
 });
 
